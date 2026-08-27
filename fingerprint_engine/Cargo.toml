@@ -58,6 +58,8 @@ chrono-tz = "0.10"
 openssl = "0.10"
 sha2 = "0.10"
 hmac = "0.12"
+hkdf = "0.12"
+rand_chacha = "0.3"
 qrcode = "0.14"
 base64 = "0.22"
 # Module 3: Graph ASM & Cloud Hunter (DNS CNAME, subdomain takeover, S3/Azure exposure)

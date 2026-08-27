@@ -68,6 +68,8 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
     fingerprint_engine::auth_jwt::init_jwt_secret_from_env()
         .map_err(|msg| std::io::Error::new(std::io::ErrorKind::InvalidInput, msg))?;
+    // Vault + ChaCha8 seed for Ask seals/nonces — env/HKDF only, never blocking getrandom.
+    fingerprint_engine::nl_query::warm_ask_crypto();
     let database_url = std::env::var("DATABASE_URL").unwrap_or_default();
     if database_url.trim().is_empty() {
         return Err("DATABASE_URL is not set (check EnvironmentFile= and weissman_db::env_bootstrap::load_process_environment)".into());

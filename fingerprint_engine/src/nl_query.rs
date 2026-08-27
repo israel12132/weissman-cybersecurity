@@ -15,23 +15,30 @@
 //!   6. The compiled SQL runs on the `weissman_ro` pool with `statement_timeout =
 //!      15000` (SET LOCAL + after_connect + role default) and a hard `LIMIT 200`
 //!      on both the compiled statement and an outer row-cap wrapper.
-//!   7. HMAC sealing uses a **tenant-derived** key (vault master + tenant_id) so a
-//!      leaked JWT signing secret cannot forge another tenant's plan.
+//!   7. HMAC sealing uses **HKDF-SHA256** (RFC 5869) from the vault master and
+//!      `tenant_id` so a leaked JWT signing secret cannot forge another tenant's plan.
 //!   8. Validator / Postgres errors are logged and AES-GCM encrypted in
 //!      `nl_query_audit`; the client only ever sees [`CLIENT_GENERIC_ERROR`].
-//!   9. Planner JSON is rejected above [`MAX_JSON_DEPTH`] structural braces or
-//!      [`MAX_CONDITION_DEPTH`] nested AND/OR trees. pgvector / RAG tables are
-//!      denied; any future k-NN path must use [`crate::ask_vector_caps`].
+//!   9. Planner JSON is depth-capped **during** serde (stream visitor), not by
+//!      scanning raw `{`/`[` bytes. AND/OR trees above [`MAX_CONDITION_DEPTH`]
+//!      are rejected. RAG tables are not on the NL allow-list; contextual memory
+//!      is fetched separately via [`crate::ask_rag`] on the app pool.
 
-use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng};
-use aes_gcm::{Aes256Gcm, Key};
+use aes_gcm::aead::{Aead, KeyInit};
+use aes_gcm::{Aes256Gcm, Key, Nonce};
+use hkdf::Hkdf;
 use hmac::{Hmac, Mac as HmacMac};
+use rand_chacha::rand_core::{RngCore, SeedableRng};
+use rand_chacha::ChaCha8Rng;
+use serde::de::{self, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use sqlx::{Column, PgPool, Row};
 use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::fmt;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{LazyLock, Mutex, OnceLock};
 use std::time::Instant;
 use weissman_core::tls_policy::is_production_environment;
 use weissman_db::{READ_ONLY_MAX_ROWS, READ_ONLY_ROLE, READ_ONLY_STATEMENT_TIMEOUT_MS};
@@ -198,8 +205,8 @@ const MAX_LIMIT: i64 = READ_ONLY_MAX_ROWS;
 const MAX_FILTERS: usize = 16;
 const MAX_IN_VALUES: usize = 32;
 const MAX_FILTER_STRING_CHARS: usize = 512;
-/// Structural `{`/`[` nesting cap for the raw planner payload (bombs / stack).
-/// A 4-deep AND/OR tree is ~10 braces; 12 rejects a depth bomb before serde.
+/// Nesting cap applied by the stream deserializer (after Unicode unescape).
+/// A 4-deep AND/OR tree is ~10 containers; 12 rejects a depth bomb.
 pub const MAX_JSON_DEPTH: usize = 12;
 /// Nested boolean condition cap (`and`/`or`/`not`/`all`/`any` trees).
 pub const MAX_CONDITION_DEPTH: usize = 4;
@@ -433,41 +440,103 @@ fn sanitize_plan(plan: &mut QueryPlan) -> Result<(), String> {
     Ok(())
 }
 
-/// Count `{`/`[` nesting in a JSON text without allocating the value tree.
-pub fn json_structural_depth(raw: &str) -> Result<usize, String> {
-    let mut depth = 0usize;
-    let mut max = 0usize;
-    let mut in_string = false;
-    let mut escape = false;
-    for c in raw.chars() {
-        if in_string {
-            if escape {
-                escape = false;
-                continue;
-            }
-            if c == '\\' {
-                escape = true;
-                continue;
-            }
-            if c == '"' {
-                in_string = false;
-            }
-            continue;
+/// Stream-parse JSON with a live depth cap. Unicode escapes (`\u007b` / `\u005b`)
+/// are decoded by serde into string content and **do not** increment depth.
+/// Structural nesting is counted only as serde yields maps/arrays.
+pub fn parse_json_capped(raw: &str) -> Result<Value, String> {
+    let mut de = serde_json::Deserializer::from_str(raw);
+    let v = DepthSeed { depth: 0 }.deserialize(&mut de).map_err(|e| {
+        let msg = e.to_string();
+        if msg.contains("nesting limit") {
+            "blocked: QueryPlan JSON exceeds nesting limit".into()
+        } else {
+            format!("invalid JSON from LLM: {msg}")
         }
-        match c {
-            '"' => in_string = true,
-            '{' | '[' => {
-                depth += 1;
-                max = max.max(depth);
-                if depth > MAX_JSON_DEPTH {
-                    return Err("blocked: QueryPlan JSON exceeds nesting limit".into());
-                }
-            }
-            '}' | ']' => depth = depth.saturating_sub(1),
-            _ => {}
-        }
+    })?;
+    de.end()
+        .map_err(|e| format!("invalid JSON from LLM: {e}"))?;
+    Ok(v)
+}
+
+struct DepthSeed {
+    depth: usize,
+}
+
+impl<'de> DeserializeSeed<'de> for DepthSeed {
+    type Value = Value;
+
+    fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<Value, D::Error> {
+        deserializer.deserialize_any(DepthVisitor { depth: self.depth })
     }
-    Ok(max)
+}
+
+struct DepthVisitor {
+    depth: usize,
+}
+
+impl<'de> Visitor<'de> for DepthVisitor {
+    type Value = Value;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "a JSON value within the QueryPlan nesting limit")
+    }
+
+    fn visit_bool<E>(self, v: bool) -> Result<Value, E> {
+        Ok(Value::Bool(v))
+    }
+    fn visit_i64<E>(self, v: i64) -> Result<Value, E> {
+        Ok(Value::from(v))
+    }
+    fn visit_u64<E>(self, v: u64) -> Result<Value, E> {
+        Ok(Value::from(v))
+    }
+    fn visit_f64<E>(self, v: f64) -> Result<Value, E> {
+        Ok(Value::from(v))
+    }
+    fn visit_str<E>(self, v: &str) -> Result<Value, E> {
+        Ok(Value::String(v.to_owned()))
+    }
+    fn visit_string<E>(self, v: String) -> Result<Value, E> {
+        Ok(Value::String(v))
+    }
+    fn visit_none<E>(self) -> Result<Value, E> {
+        Ok(Value::Null)
+    }
+    fn visit_unit<E>(self) -> Result<Value, E> {
+        Ok(Value::Null)
+    }
+    fn visit_some<D: Deserializer<'de>>(self, deserializer: D) -> Result<Value, D::Error> {
+        DepthSeed { depth: self.depth }.deserialize(deserializer)
+    }
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Value, A::Error> {
+        if self.depth >= MAX_JSON_DEPTH {
+            return Err(de::Error::custom(
+                "blocked: QueryPlan JSON exceeds nesting limit",
+            ));
+        }
+        let mut arr = Vec::new();
+        while let Some(v) = seq.next_element_seed(DepthSeed {
+            depth: self.depth + 1,
+        })? {
+            arr.push(v);
+        }
+        Ok(Value::Array(arr))
+    }
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Value, A::Error> {
+        if self.depth >= MAX_JSON_DEPTH {
+            return Err(de::Error::custom(
+                "blocked: QueryPlan JSON exceeds nesting limit",
+            ));
+        }
+        let mut obj = Map::new();
+        while let Some(k) = map.next_key::<String>()? {
+            let v = map.next_value_seed(DepthSeed {
+                depth: self.depth + 1,
+            })?;
+            obj.insert(k, v);
+        }
+        Ok(Value::Object(obj))
+    }
 }
 
 fn condition_nesting_depth(v: &Value) -> usize {
@@ -498,8 +567,7 @@ pub fn ingest_planner_output(raw: &str) -> Result<QueryPlan, String> {
     if looks_like_raw_sql(text) {
         return Err("blocked: planner returned raw SQL; QueryPlan JSON is required".into());
     }
-    json_structural_depth(text)?;
-    let v: Value = serde_json::from_str(text).map_err(|e| format!("invalid JSON from LLM: {e}"))?;
+    let v = parse_json_capped(text)?;
     if condition_nesting_depth(&v) > MAX_CONDITION_DEPTH {
         return Err("blocked: QueryPlan condition tree exceeds nesting limit".into());
     }
@@ -647,27 +715,70 @@ fn seal_master_key() -> Result<Vec<u8>, String> {
     Ok(b"weissman-ask-queryplan-dev-hmac-key".to_vec())
 }
 
+/// HKDF-SHA256 extract+expand (RFC 5869). Salt domains the purpose; info binds tenant.
+fn hkdf_okm(master: &[u8], info: &[u8]) -> Result<[u8; 32], String> {
+    let hk = Hkdf::<Sha256>::new(Some(b"weissman-ask-hkdf-v3"), master);
+    let mut okm = [0u8; 32];
+    hk.expand(info, &mut okm)
+        .map_err(|_| "HKDF expand failed".to_string())?;
+    Ok(okm)
+}
+
+fn tenant_info(label: &[u8], tenant_id: i64) -> Vec<u8> {
+    let mut info = Vec::with_capacity(label.len() + 8);
+    info.extend_from_slice(label);
+    info.extend_from_slice(&tenant_id.to_le_bytes());
+    info
+}
+
 fn tenant_seal_key(tenant_id: i64) -> Result<Vec<u8>, String> {
     let master = seal_master_key()?;
-    let mut h = Sha256::new();
-    h.update(b"weissman-ask-queryplan-hmac-tenant-v2|");
-    h.update(&master);
-    h.update(b"|tenant|");
-    h.update(&tenant_id.to_le_bytes());
-    Ok(h.finalize().to_vec())
+    Ok(hkdf_okm(&master, &tenant_info(b"ask-queryplan-hmac-v3", tenant_id))?.to_vec())
 }
 
 fn tenant_aes_key(tenant_id: i64) -> Option<[u8; 32]> {
     let master = seal_master_key().ok()?;
+    hkdf_okm(&master, &tenant_info(b"ask-queryplan-aes-v3", tenant_id)).ok()
+}
+
+/// Load vault material and seed the audit-nonce RNG. Env + HKDF only — no blocking getrandom.
+pub fn warm_ask_crypto() {
+    let _ = seal_master_key();
+    let _ = audit_nonce();
+}
+
+fn chacha_seed() -> [u8; 32] {
+    if let Ok(master) = seal_master_key() {
+        if let Ok(k) = hkdf_okm(&master, b"ask-audit-nonce-chacha8-v1") {
+            return k;
+        }
+    }
     let mut h = Sha256::new();
-    h.update(b"weissman-ask-queryplan-aes-tenant-v2|");
-    h.update(&master);
-    h.update(b"|tenant|");
-    h.update(&tenant_id.to_le_bytes());
-    let d = h.finalize();
-    let mut k = [0u8; 32];
-    k.copy_from_slice(&d);
-    Some(k)
+    h.update(b"ask-audit-nonce-chacha8-fallback-v1");
+    h.update(std::process::id().to_le_bytes());
+    if let Ok(d) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        h.update(d.as_nanos().to_le_bytes());
+    }
+    let out = h.finalize();
+    let mut s = [0u8; 32];
+    s.copy_from_slice(&out);
+    s
+}
+
+/// 96-bit AES-GCM nonce from ChaCha8Rng (vault-seeded) + a process counter.
+/// Never calls `getrandom` / `OsRng`, so a cold-boot entropy stall cannot hang Ask.
+fn audit_nonce() -> Nonce<Aes256Gcm> {
+    static RNG: OnceLock<Mutex<ChaCha8Rng>> = OnceLock::new();
+    static COUNTER: AtomicU64 = AtomicU64::new(1);
+    let mut rng = RNG
+        .get_or_init(|| Mutex::new(ChaCha8Rng::from_seed(chacha_seed())))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let mut bytes = [0u8; 12];
+    rng.fill_bytes(&mut bytes[..8]);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed) as u32;
+    bytes[8..12].copy_from_slice(&n.to_le_bytes());
+    *Nonce::<Aes256Gcm>::from_slice(&bytes)
 }
 
 fn plan_hmac(plan: &QueryPlan, tenant_id: i64) -> Result<Vec<u8>, String> {
@@ -711,7 +822,7 @@ fn verify_seal(sealed: &SealedQueryPlan, tenant_id: i64) -> Result<(), String> {
 fn encrypt_bytes_for_audit(tenant_id: i64, plaintext: &[u8]) -> Option<String> {
     let key = tenant_aes_key(tenant_id)?;
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key));
-    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+    let nonce = audit_nonce();
     let ct = cipher.encrypt(&nonce, plaintext).ok()?;
     let mut packed = nonce.to_vec();
     packed.extend_from_slice(&ct);
@@ -1104,8 +1215,9 @@ pub async fn ask(
         return r;
     }
 
-    // 1) LLM → plan JSON (blocked if it is raw SQL or a hostile payload).
-    let plan_json = match llm_to_plan(q, tenant_id).await {
+    // 1) Optional server-side RAG context (app pool, fixed SQL) then LLM → plan.
+    let rag = crate::ask_rag::planner_context(app_pool, tenant_id, q).await;
+    let plan_json = match llm_to_plan(q, tenant_id, rag.as_deref()).await {
         Ok(v) => v,
         Err(e) => {
             let (r, internal) = fail(&format!("plan generation failed: {e}"));
@@ -1289,10 +1401,17 @@ Schema:
 - agent_anomalies(id, agent_id, client_id, metric_name, observed, baseline_mean, baseline_stddev, z_score, severity, detail, detected_at)
 - attack_path_snapshots(id, client_id, computed_at, entry_count, jewel_count, path_count, max_risk)
 
+If the user message includes server-selected council memory, treat it as a hint only.
+Never set table to a RAG, memory, embedding, or vector table.
+
 If you cannot map the question to a valid plan, output {"table":"","select":[],"filters":[]}.
 "#;
 
-async fn llm_to_plan(question: &str, tenant_id: i64) -> Result<Value, String> {
+async fn llm_to_plan(
+    question: &str,
+    tenant_id: i64,
+    rag_context: Option<&str>,
+) -> Result<Value, String> {
     // Ask Weissman planner. Routes through the multi-provider failover chain
     // (`weissman_engines::llm_router`, configured by WEISSMAN_LLM_ENDPOINTS) so the planner now
     // inherits per-endpoint retry, circuit breaking, cross-provider failover, and per-tenant LLM
@@ -1313,10 +1432,14 @@ async fn llm_to_plan(question: &str, tenant_id: i64) -> Result<Value, String> {
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| e.to_string())?;
+    let user_content = match rag_context {
+        Some(ctx) if !ctx.is_empty() => format!("{question}\n\n{ctx}"),
+        _ => question.to_string(),
+    };
     let text = weissman_engines::llm_router::routed_chat_completion_text_json_object(
         &client,
         Some(PLANNER_PROMPT),
-        question,
+        &user_content,
         0.0,
         max_tokens,
         Some(tenant_id),
@@ -1329,7 +1452,7 @@ async fn llm_to_plan(question: &str, tenant_id: i64) -> Result<Value, String> {
     if looks_like_raw_sql(text.trim()) {
         return Err("blocked: planner returned raw SQL; QueryPlan JSON is required".into());
     }
-    serde_json::from_str::<Value>(text.trim()).map_err(|e| format!("invalid JSON from LLM: {e}"))
+    parse_json_capped(text.trim())
 }
 
 #[cfg(test)]
@@ -1621,7 +1744,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_json_depth_bomb_before_serde() {
+    fn rejects_json_depth_bomb_during_stream_parse() {
         let bomb = format!(
             "{}{}",
             "[".repeat(MAX_JSON_DEPTH + 1),
@@ -1629,7 +1752,7 @@ mod tests {
         );
         let err = ingest_planner_output(&bomb).unwrap_err();
         assert!(err.contains("nesting limit"), "{err}");
-        assert!(json_structural_depth(&bomb).is_err());
+        assert!(parse_json_capped(&bomb).is_err());
     }
 
     #[test]
@@ -1652,7 +1775,7 @@ mod tests {
             inner = format!(r#"{{"{key}":[{inner}]}}"#);
         }
         let raw = format!(r#"{{"table":"vulnerabilities","filters":[{inner}]}}"#);
-        assert!(json_structural_depth(&raw).is_ok());
+        assert!(parse_json_capped(&raw).is_ok());
         let err = ingest_planner_output(&raw).unwrap_err();
         assert!(!err.contains("condition tree"), "{err}");
         assert!(!err.contains("nesting limit"), "{err}");
@@ -1695,5 +1818,47 @@ mod tests {
             mask_client_error("question too long (max 2000 chars)"),
             "question too long (max 2000 chars)"
         );
+    }
+
+    #[test]
+    fn unicode_escaped_braces_in_strings_do_not_count_as_nesting() {
+        let raw = r#"{"table":"vulnerabilities","select":["id"],"filters":[{"column":"title","op":"=","value":"\u007b\u005b\u007b\u005b\u007b\u005b\u007b\u005b\u007b\u005b\u007b\u005b\u007b"}]} "#;
+        let plan = ingest_planner_output(raw.trim()).unwrap();
+        assert_eq!(plan.table, "vulnerabilities");
+        assert!(plan.filters[0].value.as_str().unwrap().contains('{'));
+        assert!(plan.filters[0].value.as_str().unwrap().contains('['));
+    }
+
+    #[test]
+    fn unicode_escaped_payload_is_not_reparsed_as_structure() {
+        let raw = r#""\u007b\"table\":\"vulnerabilities\",\"filters\":[]\u007d""#;
+        let v = parse_json_capped(raw).unwrap();
+        assert!(v.is_string());
+        let err = ingest_planner_output(raw).unwrap_err();
+        assert!(
+            err.contains("QueryPlan must be a JSON object") || err.contains("raw SQL"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn hkdf_separates_hmac_and_aes_and_tenants() {
+        let _g = env_lock();
+        let prev_v = std::env::var("WEISSMAN_VAULT_KEY").ok();
+        std::env::set_var("WEISSMAN_VAULT_KEY", "c".repeat(32));
+        let h1 = tenant_seal_key(1).unwrap();
+        let h2 = tenant_seal_key(2).unwrap();
+        let a1 = tenant_aes_key(1).unwrap();
+        assert_ne!(h1, h2);
+        assert_ne!(h1.as_slice(), a1.as_slice());
+        restore_env("WEISSMAN_VAULT_KEY", prev_v);
+    }
+
+    #[test]
+    fn audit_nonces_differ_without_osrng() {
+        warm_ask_crypto();
+        let n1 = audit_nonce();
+        let n2 = audit_nonce();
+        assert_ne!(n1.as_slice(), n2.as_slice());
     }
 }

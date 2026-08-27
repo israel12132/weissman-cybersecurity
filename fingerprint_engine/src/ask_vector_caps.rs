@@ -1,8 +1,9 @@
-//! Hard caps for any Ask Weissman path that might touch pgvector / RAG memory.
+//! Hard caps for Ask Weissman vector retrieval.
 //!
-//! `supreme_council_memory` and other embedding tables are **not** on the NL allow-list.
-//! These helpers exist so a future vector operator cannot run unbounded ANN: k is clamped
-//! to 5 and neighbors farther than [`MAX_COSINE_DISTANCE`] are dropped.
+//! `supreme_council_memory` is **not** on the NL QueryPlan allow-list and is
+//! REVOKEd from `weissman_ro`. Contextual memory is loaded only by
+//! [`crate::ask_rag`] on the app pool (fixed SQL). k is clamped to 5 and
+//! neighbors farther than [`MAX_COSINE_DISTANCE`] are dropped.
 
 /// Maximum nearest neighbors returned from a vector probe (k-NN).
 pub const MAX_K: i64 = 5;

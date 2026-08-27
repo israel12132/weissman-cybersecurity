@@ -283,6 +283,16 @@ pub fn is_enabled() -> bool {
     shared().is_some()
 }
 
+/// True when `REDIS_URL` is set — Ask Weissman treats this as "Redis is the rate store"
+/// and must fail-closed if the client is missing or a command times out.
+#[must_use]
+pub fn redis_url_configured() -> bool {
+    std::env::var("REDIS_URL")
+        .ok()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
+}
+
 /// Production multi-replica deployments require Redis-backed distributed state.
 #[must_use]
 pub fn distributed_state_required() -> bool {

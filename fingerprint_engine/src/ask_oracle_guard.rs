@@ -1,7 +1,10 @@
 //! Inference / blind-oracle defenses for `POST /api/ask`.
 //!
 //! Two independent gates, both fail-closed for the caller:
-//!   1. Hard per-user rate limit — 10 questions / 60 s (Redis when required, else governor).
+//!   1. Hard per-user rate limit — 10 questions / 60 s. When `REDIS_URL` is set,
+//!      Redis is mandatory: a timeout, hang, or crash is **503**, never a bypass
+//!      onto the in-process governor. Governor is defense-in-depth only after a
+//!      successful Redis increment (or when Redis is not configured in non-prod).
 //!   2. Semantic / enumeration detector — sequential "starts with A / B / C" and
 //!      near-duplicate questions that only flip one letter are treated as automated
 //!      table scanning and rejected.
@@ -55,6 +58,59 @@ fn history() -> &'static Mutex<HashMap<i64, Hist>> {
     H.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// Client-safe 503 — Redis configured but unreachable. Does not name Redis.
+fn ask_store_unavailable_response() -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(json!({
+            "ok": false,
+            "detail": "Ask Weissman is temporarily unavailable.",
+        })),
+    )
+        .into_response()
+}
+
+/// Decision after consulting the distributed Ask counter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RedisAdmit {
+    Continue,
+    RateLimited,
+    Unavailable,
+}
+
+/// Fail-closed Redis gate for `/api/ask`.
+///
+/// * `configured` — `REDIS_URL` is set (Redis is the intended store).
+/// * `enabled` — the Redis client initialized.
+/// * `op` — result of `incr_ask_user_strict` when `enabled`.
+/// * `required` — production multi-replica (must not degrade to memory).
+#[must_use]
+pub fn decide_redis_admit(
+    configured: bool,
+    enabled: bool,
+    op: Option<crate::http::rate_limit_redis::StrictOp<u64>>,
+    required: bool,
+    limit: u64,
+) -> RedisAdmit {
+    if configured {
+        if !enabled {
+            return RedisAdmit::Unavailable;
+        }
+        return match op.unwrap_or(crate::http::rate_limit_redis::StrictOp::Unavailable) {
+            crate::http::rate_limit_redis::StrictOp::Ok(count) if count > limit => {
+                RedisAdmit::RateLimited
+            }
+            crate::http::rate_limit_redis::StrictOp::Ok(_) => RedisAdmit::Continue,
+            crate::http::rate_limit_redis::StrictOp::Unavailable => RedisAdmit::Unavailable,
+        };
+    }
+    if required {
+        RedisAdmit::Unavailable
+    } else {
+        RedisAdmit::Continue
+    }
+}
+
 /// Client-safe 429 — does not confirm whether the trip was rate or oracle detection.
 fn ask_limited_response(retry_after_secs: u64) -> Response {
     let mut resp = (
@@ -78,30 +134,36 @@ fn ask_limited_response(retry_after_secs: u64) -> Response {
 pub async fn admit_ask(user_id: i64, question: &str) -> Result<(), Response> {
     let limit = ask_per_minute().get() as u64;
 
-    if crate::http::rate_limit_redis::is_enabled() {
-        match crate::http::rate_limit_redis::incr_ask_user_strict(user_id).await {
-            crate::http::rate_limit_redis::StrictOp::Ok(count) if count > limit => {
-                tracing::warn!(
-                    target: "nl_query",
-                    user_id,
-                    count,
-                    limit,
-                    "Ask Weissman per-user rate limit exceeded (redis)"
-                );
-                return Err(ask_limited_response(60));
-            }
-            crate::http::rate_limit_redis::StrictOp::Unavailable
-                if crate::http::rate_limit_redis::distributed_state_required() =>
-            {
-                return Err(
-                    crate::http::rate_limit_redis::distributed_store_unavailable_response(),
-                );
-            }
-            crate::http::rate_limit_redis::StrictOp::Ok(_)
-            | crate::http::rate_limit_redis::StrictOp::Unavailable => {}
+    let configured = crate::http::rate_limit_redis::redis_url_configured();
+    let enabled = crate::http::rate_limit_redis::is_enabled();
+    let required = crate::http::rate_limit_redis::distributed_state_required();
+    let op = if enabled {
+        Some(crate::http::rate_limit_redis::incr_ask_user_strict(user_id).await)
+    } else {
+        None
+    };
+    match decide_redis_admit(configured, enabled, op, required, limit) {
+        RedisAdmit::RateLimited => {
+            tracing::warn!(
+                target: "nl_query",
+                user_id,
+                limit,
+                "Ask Weissman per-user rate limit exceeded (redis)"
+            );
+            return Err(ask_limited_response(60));
         }
-    } else if crate::http::rate_limit_redis::distributed_state_required() {
-        return Err(crate::http::rate_limit_redis::distributed_store_unavailable_response());
+        RedisAdmit::Unavailable => {
+            tracing::error!(
+                target: "nl_query",
+                user_id,
+                configured,
+                enabled,
+                required,
+                "Ask Weissman rate limiter unavailable — fail-closed"
+            );
+            return Err(ask_store_unavailable_response());
+        }
+        RedisAdmit::Continue => {}
     }
 
     if let Err(neg) = limiter().check_key(&user_id) {
@@ -400,5 +462,34 @@ mod tests {
         assert!(slots_sequential("1", "2"));
         assert!(!slots_sequential("a", "c"));
         assert!(!slots_sequential("a", "1"));
+    }
+
+    #[test]
+    fn redis_outage_is_fail_closed_when_configured() {
+        use crate::http::rate_limit_redis::StrictOp;
+        assert_eq!(
+            decide_redis_admit(true, true, Some(StrictOp::Unavailable), false, 10),
+            RedisAdmit::Unavailable
+        );
+        assert_eq!(
+            decide_redis_admit(true, false, None, false, 10),
+            RedisAdmit::Unavailable
+        );
+        assert_eq!(
+            decide_redis_admit(true, true, Some(StrictOp::Ok(11)), false, 10),
+            RedisAdmit::RateLimited
+        );
+        assert_eq!(
+            decide_redis_admit(true, true, Some(StrictOp::Ok(3)), false, 10),
+            RedisAdmit::Continue
+        );
+        assert_eq!(
+            decide_redis_admit(false, false, None, false, 10),
+            RedisAdmit::Continue
+        );
+        assert_eq!(
+            decide_redis_admit(false, false, None, true, 10),
+            RedisAdmit::Unavailable
+        );
     }
 }

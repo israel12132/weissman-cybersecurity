@@ -117,6 +117,7 @@ pub mod leak_hunter_engine;
 pub mod liminal_boundary_engine;
 pub mod liquid_matrix_engine;
 pub mod ask_oracle_guard;
+pub mod ask_rag;
 pub mod ask_vector_caps;
 pub mod nl_query;
 pub mod notifications;

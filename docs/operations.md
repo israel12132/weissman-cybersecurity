@@ -44,7 +44,7 @@ rest (AES-256-GCM). **Production fails closed at startup if no key material is s
 | Var | Default | Effect |
 |-----|---------|--------|
 | `WEISSMAN_INTEGRATIONS_VAULT_KEY` | unset → JWT-derived | Dedicated key (passphrase ≥32 chars). Recommended over the JWT-derived fallback |
-| `WEISSMAN_VAULT_KEY` | unset → JWT-derived (non-prod only) | Dedicated key (64 hex = 32 bytes or passphrase ≥32). Production Ask QueryPlan HMAC + `nl_query_audit` AES-256-GCM **require** this; tenant keys are `SHA-256(vault \|\| tenant_id)`. Also keys the CEO genesis vault |
+| `WEISSMAN_VAULT_KEY` | unset → JWT-derived (non-prod only) | Dedicated key (64 hex = 32 bytes or passphrase ≥32). Production Ask QueryPlan HMAC + `nl_query_audit` AES-256-GCM **require** this; tenant keys are HKDF-SHA256 (RFC 5869) from the vault + `tenant_id`. Also keys the CEO genesis vault |
 | `WEISSMAN_VAULT_KEY_PREVIOUS` | unset | Comma-separated rotated-out hex keys kept in the decrypt keyring so rotation never orphans data |
 | `WEISSMAN_JWT_SECRET_PREVIOUS` | unset | Existing JWT rotation keyring; also derives previous vault keys when the JWT-derived fallback is in use |
 
@@ -297,7 +297,7 @@ docker compose exec postgres psql -U postgres -d weissman -c "
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Boot fails: `migration #N was previously applied but has been modified` | The migration SQL file was edited after deploy | Restore the original file bytes (so SHA-384 matches `_sqlx_migrations`), and put new SQL in a **new** timestamped migration. Never rewrite checksums at runtime. `20260826120000` was restored this way; the INSERT-only policy fix is `20260826180000`. |
-| `/api/ask` returns 503 `Ask Weissman is temporarily unavailable.` | `WEISSMAN_READ_ONLY_DATABASE_URL` unset or `weissman_ro` pool failed | Provision `weissman_ro`, set the env var, restart backend. The client body is generic on purpose — do not leak env names |
+| `/api/ask` returns 503 `Ask Weissman is temporarily unavailable.` | `WEISSMAN_READ_ONLY_DATABASE_URL` unset, `weissman_ro` pool failed, **or Redis down while `REDIS_URL` is set** (Ask rate limiter is fail-closed) | Restore Redis or the RO DSN. The client body is generic — do not leak env/store names |
 | `/api/ask` returns 429 | Per-user 10/min cap or anti-oracle similarity trip | Wait `Retry-After`. Do not raise `WEISSMAN_ASK_PER_MINUTE` above 10 |
 | `/api/auth/signup` returns `503` | `WEISSMAN_SELF_SERVE_SIGNUP` not `true` | Set the env var (and configure SMTP for production) |
 | Council retrieval falls back to "in-app cosine" path | LLM embeddings unreachable | Verify `OPENAI_BASE_URL` + key; check `target = council_rag` warnings |
