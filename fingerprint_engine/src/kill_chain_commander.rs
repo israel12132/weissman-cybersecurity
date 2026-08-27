@@ -380,6 +380,28 @@ fn parse_primary_domain(domains_raw: &str) -> Option<String> {
             Value::String(s) if !s.trim().is_empty() => {
                 return Some(s.trim().trim_start_matches("*.").to_ascii_lowercase());
             }
+            Value::Object(o) => {
+                for k in ["primary", "domain", "name", "host"] {
+                    if let Some(s) = o.get(k).and_then(Value::as_str) {
+                        if !s.trim().is_empty() {
+                            return Some(
+                                s.trim().trim_start_matches("*.").to_ascii_lowercase(),
+                            );
+                        }
+                    }
+                }
+                if let Some(arr) = o.get("domains").and_then(Value::as_array) {
+                    for item in arr {
+                        if let Some(s) = item.as_str() {
+                            if !s.trim().is_empty() {
+                                return Some(
+                                    s.trim().trim_start_matches("*.").to_ascii_lowercase(),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
             _ => {}
         }
     }
@@ -411,7 +433,7 @@ fn match_asset<'a>(
         if let Some(a) = assets.iter().find(|a| {
             let lab = a.label.to_ascii_lowercase();
             let key = a.graph_key.to_ascii_lowercase();
-            lab.contains(h) || key.contains(h) || h.contains(&lab) && lab.len() > 3
+            lab.contains(h) || key.contains(h) || (h.contains(&lab) && lab.len() > 3)
         }) {
             return Some(a);
         }
@@ -686,7 +708,7 @@ fn stage_label(stage: &str) -> &'static str {
         "identity" => "Identity",
         "privilege" => "Privilege",
         "impact" => "Impact",
-        _ => stage,
+        _ => "Unknown",
     }
 }
 
@@ -1233,7 +1255,7 @@ pub async fn load_snapshot(
 
     let job_rows = if let Some(cid) = client_id {
         sqlx::query(
-            r#"SELECT id, kind, status, COALESCE(payload, '{}'::jsonb) AS payload, created_at
+            r#"SELECT id::text AS id, kind, status, COALESCE(payload, '{}'::jsonb) AS payload, created_at
                  FROM weissman_async_jobs
                 WHERE tenant_id = $1
                   AND (
@@ -1254,10 +1276,9 @@ pub async fn load_snapshot(
     let jobs: Vec<LiveJob> = job_rows
         .into_iter()
         .map(|r| {
-            let id_uuid: uuid::Uuid = r.try_get("id").unwrap_or_else(|_| uuid::Uuid::nil());
             let payload: Value = r.try_get("payload").unwrap_or(Value::Null);
             LiveJob {
-                id: id_uuid.to_string(),
+                id: r.try_get::<String, _>("id").unwrap_or_default(),
                 kind: r.try_get("kind").unwrap_or_default(),
                 status: r.try_get("status").unwrap_or_default(),
                 engine: payload
@@ -1607,6 +1628,10 @@ mod tests {
         assert_eq!(
             parse_primary_domain(r#"{"primary":"acme.test"}"#).as_deref(),
             Some("acme.test")
+        );
+        assert_eq!(
+            parse_primary_domain(r#"{"domains":["portal.acme.test"]}"#).as_deref(),
+            Some("portal.acme.test")
         );
     }
 
