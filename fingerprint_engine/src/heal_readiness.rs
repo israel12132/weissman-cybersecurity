@@ -16,9 +16,9 @@ use serde::Serialize;
 /// into a scored, bilingual report.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ReadinessSignals {
-    /// Tenant `llm_base_url` / `llm_model` configured — the fix synthesizer has an endpoint.
+    /// Tenant `llm_base_url` / `llm_model` **or** process env (`WEISSMAN_LLM_*` / `OPENAI_*`).
     pub llm_configured: bool,
-    /// `WEISSMAN_LLM_API_KEY` present — Bearer for authenticated / hosted LLM endpoints.
+    /// `WEISSMAN_LLM_API_KEY` or `OPENAI_API_KEY` present — Bearer for hosted LLM endpoints.
     pub llm_auth_present: bool,
     /// A Docker socket is reachable (`/var/run/docker.sock` or `DOCKER_HOST`).
     pub docker_socket: bool,
@@ -172,8 +172,8 @@ pub fn evaluate_readiness(s: &ReadinessSignals) -> ReadinessReport {
                 "אסימון Bearer לנקודות קצה מאומתות או מתארחות של LLM.",
             ),
             (
-                "Set WEISSMAN_LLM_API_KEY if your LLM endpoint requires authentication.",
-                "הגדירו WEISSMAN_LLM_API_KEY אם נקודת הקצה של ה-LLM דורשת אימות.",
+                "Set WEISSMAN_LLM_API_KEY or OPENAI_API_KEY if your LLM endpoint requires authentication.",
+                "הגדירו WEISSMAN_LLM_API_KEY או OPENAI_API_KEY אם נקודת הקצה של ה-LLM דורשת אימות.",
             ),
         ),
     ];

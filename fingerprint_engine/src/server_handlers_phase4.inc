@@ -576,7 +576,12 @@ async fn api_heal_readiness(
         |k: &str| std::env::var(k).map(|v| !v.trim().is_empty()).unwrap_or(false);
 
     let signals = crate::heal_readiness::ReadinessSignals {
-        llm_configured: cfg.contains_key("llm_base_url") || cfg.contains_key("llm_model"),
+        llm_configured: cfg.contains_key("llm_base_url")
+            || cfg.contains_key("llm_model")
+            || env_nonempty("WEISSMAN_LLM_BASE_URL")
+            || env_nonempty("WEISSMAN_LLM_MODEL")
+            || env_nonempty("OPENAI_BASE_URL")
+            || env_nonempty("OPENAI_API_KEY"),
         llm_auth_present: weissman_engines::openai_chat::llm_api_key_from_env().is_some(),
         docker_socket: std::path::Path::new("/var/run/docker.sock").exists()
             || env_nonempty("DOCKER_HOST"),

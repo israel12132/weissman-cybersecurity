@@ -125,7 +125,7 @@ async fn cfg_string_tx(
     tenant_id: i64,
     key: &str,
 ) -> Option<String> {
-    sqlx::query_scalar::<_, String>(
+    let raw = sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
     )
     .bind(tenant_id)
@@ -133,8 +133,11 @@ async fn cfg_string_tx(
     .fetch_optional(&mut **tx)
     .await
     .ok()
-    .flatten()
-    .filter(|s| !s.is_empty())
+    .flatten();
+    if key == "llm_base_url" {
+        return weissman_engines::openai_chat::overlay_tenant_llm_base_url(raw.as_deref());
+    }
+    raw.filter(|s| !s.is_empty())
 }
 
 #[derive(Clone, Default)]
@@ -157,7 +160,12 @@ async fn load_tenant_runtime_config(
     let cfg = TenantRuntimeConfig {
         github_token: cfg_string_tx(&mut tx, tenant_id, "github_token").await,
         llm_base_url: cfg_string_tx(&mut tx, tenant_id, "llm_base_url").await,
-        llm_model: cfg_string_tx(&mut tx, tenant_id, "llm_model").await,
+        llm_model: {
+            let db = cfg_string_tx(&mut tx, tenant_id, "llm_model")
+                .await
+                .unwrap_or_default();
+            Some(weissman_engines::openai_chat::resolve_llm_model(&db))
+        },
         oast_listener_url: cfg_string_tx(&mut tx, tenant_id, "oast_listener_url").await,
         oast_domain: cfg_string_tx(&mut tx, tenant_id, "oast_domain").await,
         oast_api_key: cfg_string_tx(&mut tx, tenant_id, "oast_api_key").await,

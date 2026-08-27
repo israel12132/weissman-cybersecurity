@@ -384,11 +384,11 @@ async fn dispatch_engine_match(
         "semantic_ai_fuzz" => {
             let config = weissman_core::models::semantic::SemanticConfig {
                 llm_base_url: if ctx.llm_base_url.trim().is_empty() {
-                    "http://127.0.0.1:8000/v1".to_string()
+                    weissman_engines::openai_chat::resolve_llm_base_url("")
                 } else {
-                    ctx.llm_base_url.clone()
+                    weissman_engines::openai_chat::resolve_llm_base_url(&ctx.llm_base_url)
                 },
-                llm_model: ctx.llm_model.clone(),
+                llm_model: weissman_engines::openai_chat::resolve_llm_model(&ctx.llm_model),
                 llm_temperature: 0.7,
                 max_sequence_depth: 5,
             };

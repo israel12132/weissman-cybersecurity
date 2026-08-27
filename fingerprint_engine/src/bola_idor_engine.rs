@@ -178,11 +178,7 @@ async fn llm_harvest_resource_ids(
     path_hint: &str,
     tenant_id: Option<i64>,
 ) -> Vec<String> {
-    let base = std::env::var("WEISSMAN_LLM_BASE_URL")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| weissman_engines::openai_chat::DEFAULT_LLM_BASE_URL.to_string());
-    let base = weissman_engines::openai_chat::normalize_openai_base_url(&base);
+    let base = weissman_engines::openai_chat::resolve_llm_base_url("");
     let model = weissman_engines::openai_chat::resolve_llm_model("");
     const SYS: &str = r#"You extract API resource identifiers from HTTP response data. Output ONLY JSON: {"ids":["..."]} with no markdown fences. Include UUIDs, 24-hex Mongo-style ObjectIds, Hashids-style opaque strings (mixed alnum, length 8–32), and numeric resource IDs that clearly identify a user or tenant. Max 24 entries. If none, {"ids":[]}."#;
     let excerpt: String = body_snippet.chars().take(6000).collect();

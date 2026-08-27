@@ -525,6 +525,7 @@ pub async fn run_cycle(
     .unwrap_or_default();
     let _ = tx.commit().await;
 
+    let llm_base = weissman_engines::openai_chat::resolve_llm_base_url(&llm_base);
     if !llm_base.trim().is_empty() {
         let signal_summary = signals
             .iter()

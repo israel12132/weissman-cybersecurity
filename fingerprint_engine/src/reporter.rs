@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
 use serde_json::json;
-use weissman_engines::openai_chat::{self, DEFAULT_LLM_BASE_URL};
+use weissman_engines::openai_chat;
 
 const SYSTEM_TRIAGE: &str = r#"You are a principal application security analyst writing an internal bug bounty triage.
 
@@ -130,11 +130,7 @@ async fn fetch_bug_report_triage(
         return None;
     }
 
-    let base_url = std::env::var("WEISSMAN_LLM_BASE_URL")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| DEFAULT_LLM_BASE_URL.to_string());
-    let base_url = openai_chat::normalize_openai_base_url(&base_url);
+    let base_url = openai_chat::resolve_llm_base_url("");
     let model = openai_chat::resolve_llm_model("");
 
     let user = json!({
