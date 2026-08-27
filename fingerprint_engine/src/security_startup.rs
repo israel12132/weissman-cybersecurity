@@ -270,6 +270,16 @@ mod tests {
     }
 
     #[test]
+    fn production_jwt_secret_floor_remains_48_characters() {
+        let src = include_str!("security_startup.rs");
+        assert!(
+            src.contains("WEISSMAN_JWT_SECRET must be at least 48 characters in production"),
+            "production JWT secret floor must stay >= 48 characters"
+        );
+        assert!(src.contains("t.len() < 48"));
+    }
+
+    #[test]
     fn non_production_env_skips_all_guards() {
         // The guard is a no-op outside production regardless of weak secrets, so
         // dev/CI default boot is never blocked by these checks.

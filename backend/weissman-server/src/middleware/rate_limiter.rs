@@ -1,7 +1,8 @@
-//! Multi-tier edge rate limits: strict buckets for login / signup / Paddle webhook, default for API.
+//! Multi-tier edge rate limits: login (failure stuffing + volumetric ceiling), signup, Paddle, API.
 //!
 //! Env: `WEISSMAN_RATE_LIMIT_PER_SEC`, `WEISSMAN_RATE_LIMIT_BURST` (default API).
-//! Login: `WEISSMAN_LOGIN_PER_MINUTE` (default 8), `WEISSMAN_LOGIN_BURST` (default 12).
+//! Login volume: `WEISSMAN_LOGIN_PER_MINUTE` (default 120, min 32), `WEISSMAN_LOGIN_BURST` (default 64).
+//! Login stuffing: `WEISSMAN_LOGIN_FAIL_PER_MINUTE` (default 20) — failed attempts only.
 //! Signup: `WEISSMAN_SIGNUP_PER_MINUTE` (default 4), `WEISSMAN_SIGNUP_BURST` (default 6).
 //! Paddle webhook: `WEISSMAN_PADDLE_WEBHOOK_PER_MINUTE` (default 120), burst 240.
 
@@ -33,8 +34,8 @@ fn limiter_login() -> Arc<RateLimiter<IpKey, DefaultKeyedStateStore<IpKey>, Defa
     static L: OnceLock<Arc<RateLimiter<IpKey, DefaultKeyedStateStore<IpKey>, DefaultClock>>> =
         OnceLock::new();
     L.get_or_init(|| {
-        let per_min = nz_u32("WEISSMAN_LOGIN_PER_MINUTE", 8, 2, 60);
-        let burst = nz_u32("WEISSMAN_LOGIN_BURST", 12, 2, 120);
+        let per_min = nz_u32("WEISSMAN_LOGIN_PER_MINUTE", 120, 32, 600);
+        let burst = nz_u32("WEISSMAN_LOGIN_BURST", 64, 32, 240);
         let q = Quota::per_minute(per_min).allow_burst(burst);
         Arc::new(RateLimiter::keyed(q))
     })
@@ -120,15 +121,31 @@ pub async fn edge_multi_rate_limit_middleware(request: Request<Body>, next: Next
     let ip_str = ip.to_string();
     let limited = match (method.as_str(), path.as_str()) {
         ("POST", "/api/login") => {
-            if limiter_login().check_key(&key).is_err() {
-                fingerprint_engine::http::rate_limit_metrics::record_login_denied(
-                    &ip_str,
-                    "/api/login",
-                );
-                true
-            } else {
-                fingerprint_engine::http::rate_limit_metrics::record_login_allowed(&ip_str);
-                false
+            // Stuffing defense is failure-based (inner lockout). This edge bucket is only a
+            // bcrypt-cost ceiling, floored so CI/cockpit/agent bursts from one NAT succeed.
+            match fingerprint_engine::http::check_ip_failure_status(&ip_str).await {
+                fingerprint_engine::http::LockoutStatus::Locked(secs) => {
+                    fingerprint_engine::http::rate_limit_metrics::record_login_denied(
+                        &ip_str,
+                        "/api/login",
+                    );
+                    return fingerprint_engine::http::ip_locked_response(secs);
+                }
+                fingerprint_engine::http::LockoutStatus::DistributedStoreUnavailable => {
+                    return fingerprint_engine::http::rate_limit_redis::distributed_store_unavailable_response();
+                }
+                fingerprint_engine::http::LockoutStatus::Allowed => {
+                    if limiter_login().check_key(&key).is_err() {
+                        fingerprint_engine::http::rate_limit_metrics::record_login_denied(
+                            &ip_str,
+                            "/api/login",
+                        );
+                        true
+                    } else {
+                        fingerprint_engine::http::rate_limit_metrics::record_login_allowed(&ip_str);
+                        false
+                    }
+                }
             }
         }
         ("POST", "/api/onboarding/register")
@@ -253,5 +270,87 @@ mod tests {
     fn client_ip_none_without_connect_info() {
         let req = Request::builder().body(()).unwrap();
         assert_eq!(client_ip(&req), None);
+    }
+
+    #[test]
+    fn login_volume_floor_cannot_be_configured_below_ci_burst() {
+        let k = "WEISSMAN_TEST_LOGIN_FLOOR";
+        std::env::set_var(k, "8");
+        // Old 8/min stuffing-as-volume config must clamp above a CI/cockpit parallel burst.
+        assert_eq!(nz_u32(k, 120, 32, 600).get(), 32);
+        std::env::remove_var(k);
+        assert_eq!(nz_u32(k, 120, 32, 600).get(), 120);
+    }
+
+    #[tokio::test]
+    async fn edge_allows_parallel_login_posts_from_one_ip() {
+        use axum::extract::connect_info::MockConnectInfo;
+        use axum::routing::post;
+        use axum::Router;
+        use tower::ServiceExt;
+
+        let ip = SocketAddr::from(([198, 51, 100, 80], 51000));
+        fingerprint_engine::http::clear_ip_failures(&ip.ip().to_string()).await;
+        let app = Router::new()
+            .route(
+                "/api/login",
+                post(|| async { (StatusCode::OK, axum::Json(serde_json::json!({"ok": true}))) }),
+            )
+            .layer(axum::middleware::from_fn(edge_multi_rate_limit_middleware))
+            .layer(MockConnectInfo(ip));
+        const N: usize = 32;
+        let mut handles = Vec::with_capacity(N);
+        for _ in 0..N {
+            let app = app.clone();
+            handles.push(tokio::spawn(async move {
+                let req = Request::builder()
+                    .method("POST")
+                    .uri("/api/login")
+                    .header("content-type", "application/json")
+                    .body(Body::from("{}"))
+                    .unwrap();
+                app.oneshot(req).await.unwrap().status()
+            }));
+        }
+        let mut codes = Vec::with_capacity(N);
+        for h in handles {
+            codes.push(h.await.expect("join"));
+        }
+        assert!(
+            codes.iter().all(|c| *c == StatusCode::OK),
+            "edge must not 429 a burst of legitimate logins; got {codes:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn edge_429s_stuffing_failures_from_one_ip() {
+        use axum::extract::connect_info::MockConnectInfo;
+        use axum::routing::post;
+        use axum::Router;
+        use tower::ServiceExt;
+
+        let ip = SocketAddr::from(([198, 51, 100, 81], 51000));
+        let ip_s = ip.ip().to_string();
+        fingerprint_engine::http::clear_ip_failures(&ip_s).await;
+        let budget = fingerprint_engine::http::login_lockout::ip_fail_max();
+        for _ in 0..budget {
+            fingerprint_engine::http::record_ip_failure(&ip_s).await;
+        }
+        let app = Router::new()
+            .route(
+                "/api/login",
+                post(|| async { (StatusCode::OK, axum::Json(serde_json::json!({"ok": true}))) }),
+            )
+            .layer(axum::middleware::from_fn(edge_multi_rate_limit_middleware))
+            .layer(MockConnectInfo(ip));
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/login")
+            .header("content-type", "application/json")
+            .body(Body::from("{}"))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+        fingerprint_engine::http::clear_ip_failures(&ip_s).await;
     }
 }

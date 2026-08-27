@@ -16,9 +16,19 @@ async fn api_auth_mfa_verify(
     body: axum::extract::Json<MfaVerifyBody>,
 ) -> Response {
     let ip = extract_client_ip(&headers, addr);
+    match crate::http::check_ip_failure_status(&ip).await {
+        crate::http::LockoutStatus::Locked(secs) => {
+            return crate::http::ip_locked_response(secs);
+        }
+        crate::http::LockoutStatus::DistributedStoreUnavailable => {
+            return crate::http::rate_limit_redis::distributed_store_unavailable_response();
+        }
+        crate::http::LockoutStatus::Allowed => {}
+    }
     let pending = body.mfa_token.trim();
     let code = body.code.trim();
     let Some(ctx) = crate::auth_jwt::verify_mfa_pending_token(pending) else {
+        crate::http::record_ip_failure(&ip).await;
         return (
             StatusCode::UNAUTHORIZED,
             Json(json!({"ok": false, "detail": "Invalid or expired MFA session"})),
@@ -96,7 +106,7 @@ async fn api_auth_mfa_verify(
             .into_response();
     }
     if !crate::auth_mfa::verify_code(&secret, code) {
-        crate::http::record_failure(ctx.tenant_id, &email).await;
+        crate::http::record_login_failure(ctx.tenant_id, &email, &ip).await;
         return (
             StatusCode::UNAUTHORIZED,
             Json(json!({"ok": false, "detail": "Invalid verification code"})),
