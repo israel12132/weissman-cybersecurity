@@ -19,25 +19,35 @@ async fn api_deep_fuzz(
         )
             .into_response();
     }
-    let target = body.target.as_deref().unwrap_or("").trim();
-    if target.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "target required"}))).into_response();
-    }
+    let client_id = body.client_id.or(auth.assigned_client_id);
+    let resolved = match crate::client_scan_target::resolve_scan_target(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        client_id,
+        body.target.as_deref(),
+    )
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => return e.into_response(),
+    };
+    let target = resolved.target.clone();
     // Rules-of-engagement scope gate (blocks out-of-scope hosts + RFC1918/metadata addresses).
     // Without it this offensive engine could be pointed at any host on the internet or intranet.
     if let Err(detail) = crate::security_hardening::validate_scan_target_in_scope(
         state.app_pool.as_ref(),
         auth.tenant_id,
-        target,
-        body.client_id,
+        &target,
+        client_id,
     )
     .await
     {
         return (StatusCode::FORBIDDEN, Json(json!({"ok": false, "detail": detail}))).into_response();
     }
     let mut map = serde_json::Map::new();
-    map.insert("target".into(), json!(target));
-    if let Some(cid) = body.client_id {
+    map.insert("target".into(), json!(target.clone()));
+    map.insert("target_source".into(), json!(resolved.source.as_str()));
+    if let Some(cid) = client_id {
         map.insert("client_id".into(), json!(cid));
     }
     if let Some(paths) = body.discovered_paths.clone() {
@@ -50,7 +60,7 @@ async fn api_deep_fuzz(
     crate::edge_swarm_intel::enrich_scan_payload_with_edge_node(
         state.app_pool.as_ref(),
         auth.tenant_id,
-        target,
+        &target,
         &mut payload,
     )
     .await;
@@ -349,27 +359,39 @@ async fn api_timing_scan_run(
         )
             .into_response();
     }
-    let target = body.target.as_deref().unwrap_or("").trim();
-    if target.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "target required"}))).into_response();
-    }
+    let client_id = body
+        .client_id
+        .as_ref()
+        .and_then(|c| c.trim().parse::<i64>().ok())
+        .or(auth.assigned_client_id);
+    let resolved = match crate::client_scan_target::resolve_scan_target(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        client_id,
+        body.target.as_deref(),
+    )
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => return e.into_response(),
+    };
+    let target = resolved.target.clone();
     if let Err(detail) = crate::security_hardening::validate_scan_target_in_scope(
         state.app_pool.as_ref(),
         auth.tenant_id,
-        target,
-        body.client_id.as_ref().and_then(|c| c.trim().parse::<i64>().ok()),
+        &target,
+        client_id,
     )
     .await
     {
         return (StatusCode::FORBIDDEN, Json(json!({"ok": false, "detail": detail}))).into_response();
     }
-    let client_id_resp = body.client_id.clone();
+    let client_id_resp = client_id;
     let mut map = serde_json::Map::new();
     map.insert("target".into(), json!(target));
-    if let Some(ref cid) = body.client_id {
-        if !cid.is_empty() {
-            map.insert("client_id".into(), json!(cid));
-        }
+    map.insert("target_source".into(), json!(resolved.source.as_str()));
+    if let Some(cid) = client_id {
+        map.insert("client_id".into(), json!(cid));
     }
     let payload = Value::Object(map);
     match crate::async_jobs::enqueue(
@@ -420,27 +442,39 @@ async fn api_ai_redteam_run(
         )
             .into_response();
     }
-    let target = body.target.as_deref().unwrap_or("").trim();
-    if target.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "target required"}))).into_response();
-    }
+    let client_id = body
+        .client_id
+        .as_ref()
+        .and_then(|c| c.trim().parse::<i64>().ok())
+        .or(auth.assigned_client_id);
+    let resolved = match crate::client_scan_target::resolve_scan_target(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        client_id,
+        body.target.as_deref(),
+    )
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => return e.into_response(),
+    };
+    let target = resolved.target.clone();
     if let Err(detail) = crate::security_hardening::validate_scan_target_in_scope(
         state.app_pool.as_ref(),
         auth.tenant_id,
-        target,
-        body.client_id.as_ref().and_then(|c| c.trim().parse::<i64>().ok()),
+        &target,
+        client_id,
     )
     .await
     {
         return (StatusCode::FORBIDDEN, Json(json!({"ok": false, "detail": detail}))).into_response();
     }
-    let client_id_resp = body.client_id.clone();
+    let client_id_resp = client_id;
     let mut map = serde_json::Map::new();
     map.insert("target".into(), json!(target));
-    if let Some(ref cid) = body.client_id {
-        if !cid.is_empty() {
-            map.insert("client_id".into(), json!(cid));
-        }
+    map.insert("target_source".into(), json!(resolved.source.as_str()));
+    if let Some(cid) = client_id {
+        map.insert("client_id".into(), json!(cid));
     }
     if let Some(ref ep) = body.ai_endpoint {
         if !ep.trim().is_empty() {

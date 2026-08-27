@@ -890,6 +890,7 @@
     "server_error": "שגיאת שרת (HTTP {{status}}). נסה שוב או פנה לתמיכה.",
     "rate_limited": "יותר מדי בקשות. נסה שוב בעוד {{seconds}} שניות.",
     "not_found": "המשאב לא נמצא.",
+    "no_default_scan_target": "אין יעד סריקה ברירת-מחדל. הוסיפו דומיין בהגדרות הלקוח (או אמתו נכס ב-Asset Snapshot) ואז נסו שוב.",
     "unknown_route": "הדף לא נמצא.",
     "app_load_failed": "טעינת מרכז הפיקוד נכשלה",
     "application_error": "שגיאת יישום",

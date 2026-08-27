@@ -12,6 +12,7 @@ import { useEngineHistory } from '../hooks/useEngineHistory'
 import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import KubernetesSecurityPanel from './KubernetesSecurityPanel'
+import { scanIntakeErrorMessage } from '../lib/apiError'
 import Button from '../components/ui/Button'
 import ScopedClientControl from '../components/clients/ScopedClientControl'
 
@@ -84,7 +85,7 @@ function CloudEnginePanel({ tab, clientId, target, showToast, t, onFindingsUpdat
     setFindings([])
     try {
       const { ok, data: d } = await postScan({ engine: tab.engine, client_id: Number(clientId), ...(target ? { target } : {}) })
-      if (!ok) { setStatus('error'); showToast('error', d.detail || t('pages.cloudControlTower.scan_failed')); return }
+      if (!ok) { setStatus('error'); showToast('error', scanIntakeErrorMessage(d, d.status, t)); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.cloudControlTower.queued', { label: tab.label, jobId }))
       if (jobId) setPendingJobId(jobId)

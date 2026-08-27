@@ -51,10 +51,17 @@ pub enum EntitlementTier {
 #[derive(Debug, Clone)]
 pub enum RouteError {
     BadRequest(String),
+    /// Bound client has no domain / verified asset to use as the scan target.
+    NoDefaultScanTarget {
+        detail: String,
+    },
     PaymentRequired {
         detail: String,
     },
     Forbidden {
+        detail: String,
+    },
+    TargetOutOfScope {
         detail: String,
     },
     /// 429: AI-heavy daily quota exceeded. `reset_at_unix` is the next UTC midnight.
@@ -73,9 +80,13 @@ impl RouteError {
     #[must_use]
     pub fn status_code(&self) -> StatusCode {
         match self {
-            RouteError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            RouteError::BadRequest(_) | RouteError::NoDefaultScanTarget { .. } => {
+                StatusCode::BAD_REQUEST
+            }
             RouteError::PaymentRequired { .. } => StatusCode::PAYMENT_REQUIRED,
-            RouteError::Forbidden { .. } => StatusCode::FORBIDDEN,
+            RouteError::Forbidden { .. } | RouteError::TargetOutOfScope { .. } => {
+                StatusCode::FORBIDDEN
+            }
             RouteError::QuotaExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
             RouteError::Internal { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -85,8 +96,10 @@ impl RouteError {
     pub fn detail(&self) -> &str {
         match self {
             RouteError::BadRequest(s) => s.as_str(),
+            RouteError::NoDefaultScanTarget { detail } => detail.as_str(),
             RouteError::PaymentRequired { detail } => detail.as_str(),
             RouteError::Forbidden { detail } => detail.as_str(),
+            RouteError::TargetOutOfScope { detail } => detail.as_str(),
             RouteError::QuotaExceeded { detail, .. } => detail.as_str(),
             RouteError::Internal { detail } => detail.as_str(),
         }
@@ -96,11 +109,34 @@ impl RouteError {
     pub fn error_code(&self) -> &'static str {
         match self {
             RouteError::BadRequest(_) => "bad_request",
+            RouteError::NoDefaultScanTarget { .. } => {
+                crate::client_scan_target::ERROR_CODE_NO_DEFAULT
+            }
             RouteError::PaymentRequired { .. } => "payment_required",
             RouteError::Forbidden { .. } => "forbidden",
+            RouteError::TargetOutOfScope { .. } => {
+                crate::client_scan_target::ERROR_CODE_OUT_OF_SCOPE
+            }
             RouteError::QuotaExceeded { .. } => "quota_exceeded",
             RouteError::Internal { .. } => "internal_error",
         }
+    }
+
+    /// JSON body for HTTP scan-intake errors (`code` + `error_code` for older and newer clients).
+    #[must_use]
+    pub fn json_body(&self) -> Value {
+        let mut body = json!({
+            "ok": false,
+            "detail": self.detail(),
+            "code": self.error_code(),
+            "error_code": self.error_code(),
+        });
+        if matches!(self, RouteError::NoDefaultScanTarget { .. }) {
+            if let Some(obj) = body.as_object_mut() {
+                obj.insert("action".into(), json!("add_client_domain"));
+            }
+        }
+        body
     }
 
     /// Quota-related metadata for `Retry-After` header / JSON body.
@@ -114,6 +150,22 @@ impl RouteError {
                 ..
             } => Some((*reset_at_unix, *limit, *used)),
             _ => None,
+        }
+    }
+}
+
+impl From<crate::client_scan_target::ScanTargetError> for RouteError {
+    fn from(e: crate::client_scan_target::ScanTargetError) -> Self {
+        match e {
+            crate::client_scan_target::ScanTargetError::NoDefault { detail } => {
+                RouteError::NoDefaultScanTarget { detail }
+            }
+            crate::client_scan_target::ScanTargetError::OutOfScope { detail } => {
+                RouteError::TargetOutOfScope { detail }
+            }
+            crate::client_scan_target::ScanTargetError::Internal { detail } => {
+                RouteError::Internal { detail }
+            }
         }
     }
 }
@@ -935,6 +987,7 @@ pub async fn hydrate_stored_job_payload(
         "target",
         "client_id",
         "engine",
+        "target_source",
         "validated_scope",
         "oast_interaction_token",
         "repo_url",
@@ -997,29 +1050,34 @@ pub async fn route_scan_job(
 
     // ── BLOCKER #1: Strict scope validation ──────────────────────────────────
     //
-    // Every scan with a target MUST be inside the client's approved scope
-    // unless the engine is explicitly exempt (`pipeline` operates on repo
-    // URLs, `zero_day_radar` is intel-only). In all other cases:
-    //   - target must be non-empty AND
-    //   - client_id must be supplied AND
-    //   - target must resolve to / match an approved domain or IP range
-    //
-    // `enforce_scope_strict` system_config can be set to `false` for a
-    // tenant to opt out (e.g. red-team-as-a-service mode). Default = strict.
+    // Tenant lock ≠ scan target. A bound `client_id` without an explicit target
+    // loads the client's default domain (Client Configuration) or first verified
+    // asset (Asset Snapshot). Crude "target required" 400s are not returned when
+    // a default exists. No domain/asset → structured `no_default_scan_target`.
+    // Explicit targets must belong to that customer's domains/assets.
     let enforce_strict = enforce_scope_strict(pool, tenant_id)
         .await
         .map_err(|e| RouteError::Internal { detail: e })?;
+    let mut target_source: Option<&'static str> = None;
     let scope_outcome = if enforce_scope_validation_for_engine(engine) {
-        if ctx.target.is_empty() {
-            return Err(RouteError::BadRequest(format!(
-                "target required for engine '{engine}' (scope-enforced)"
-            )));
-        }
-        if enforce_strict && client_id.is_none() {
+        if ctx.target.is_empty() && enforce_strict && client_id.is_none() {
             return Err(RouteError::BadRequest(format!(
                 "client_id required for engine '{engine}' (scope is enforced per-client)"
             )));
         }
+        let resolved = crate::client_scan_target::resolve_scan_target(
+            pool,
+            tenant_id,
+            client_id,
+            if ctx.target.is_empty() {
+                None
+            } else {
+                Some(ctx.target.as_str())
+            },
+        )
+        .await?;
+        ctx.target = resolved.target;
+        target_source = Some(resolved.source.as_str());
         Some(
             crate::security_hardening::validate_scan_target_in_scope(
                 pool,
@@ -1050,6 +1108,7 @@ pub async fn route_scan_job(
         if let Some(t) = oast {
             payload = inject_oast_token(payload, t);
         }
+        stamp_target_source(&mut payload, target_source);
         return Ok((def.job_kind.to_string(), seal_payload_for_queue(payload)));
     }
 
@@ -1062,10 +1121,17 @@ pub async fn route_scan_job(
     if let Some(scope) = scope_outcome.as_ref() {
         payload = inject_scope_validation(payload, scope);
     }
+    stamp_target_source(&mut payload, target_source);
     Ok((
         "command_center_engine".to_string(),
         seal_payload_for_queue(payload),
     ))
+}
+
+fn stamp_target_source(payload: &mut Value, source: Option<&str>) {
+    if let (Some(src), Some(obj)) = (source, payload.as_object_mut()) {
+        obj.insert("target_source".into(), json!(src));
+    }
 }
 
 #[cfg(test)]
@@ -1164,5 +1230,20 @@ mod tests {
         let sealed = seal_payload_for_queue(raw);
         assert!(sealed.get("github_token").is_none());
         assert_eq!(sealed.get("depth").and_then(Value::as_str), Some("1"));
+    }
+
+    #[test]
+    fn no_default_scan_target_error_is_structured() {
+        let e = RouteError::NoDefaultScanTarget {
+            detail: crate::client_scan_target::NO_DEFAULT_DETAIL.to_string(),
+        };
+        assert_eq!(e.status_code(), StatusCode::BAD_REQUEST);
+        assert_eq!(e.error_code(), "no_default_scan_target");
+        let body = e.json_body();
+        assert_eq!(body["ok"], json!(false));
+        assert_eq!(body["error_code"], json!("no_default_scan_target"));
+        assert_eq!(body["code"], json!("no_default_scan_target"));
+        assert_eq!(body["action"], json!("add_client_domain"));
+        assert!(body["detail"].as_str().unwrap().contains("Add a domain"));
     }
 }

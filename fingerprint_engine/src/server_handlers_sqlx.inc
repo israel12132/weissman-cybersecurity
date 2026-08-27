@@ -1626,34 +1626,6 @@ struct EngineExportQuery {
     job_id: Option<String>,
 }
 
-async fn resolve_probe_target_from_client(
-    pool: &PgPool,
-    tenant_id: i64,
-    client_id: i64,
-) -> Option<String> {
-    let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await else {
-        return None;
-    };
-    let domains: Option<String> = sqlx::query_scalar(
-        "SELECT domains FROM clients WHERE tenant_id = $1 AND id = $2",
-    )
-    .bind(tenant_id)
-    .bind(client_id)
-    .fetch_optional(&mut *tx)
-    .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    let raw = domains?;
-    let parsed = serde_json::from_str::<Vec<String>>(&raw).ok()?;
-    let first = parsed.into_iter().find(|s| !s.trim().is_empty())?;
-    if first.starts_with("http://") || first.starts_with("https://") {
-        Some(first)
-    } else {
-        Some(format!("https://{}", first))
-    }
-}
-
 async fn api_top_tier_health_probe_start(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -1675,27 +1647,18 @@ async fn api_top_tier_health_probe_start(
         .target
         .as_deref()
         .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string);
-    let target = if let Some(t) = target_raw {
-        t
-    } else if let Some(cid) = body.client_id {
-        match resolve_probe_target_from_client(state.app_pool.as_ref(), auth.tenant_id, cid).await {
-            Some(t) => t,
-            None => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(json!({"detail": "target required (or provide client_id with at least one domain)"})),
-                )
-                    .into_response();
-            }
-        }
-    } else {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"detail": "target required"})),
-        )
-            .into_response();
+        .filter(|s| !s.is_empty());
+    let client_id = body.client_id.or(auth.assigned_client_id);
+    let target = match crate::client_scan_target::resolve_scan_target(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        client_id,
+        target_raw,
+    )
+    .await
+    {
+        Ok(r) => r.target,
+        Err(e) => return e.into_response(),
     };
 
     let payload = json!({

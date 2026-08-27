@@ -960,6 +960,7 @@
     "server_error": "Server error (HTTP {{status}}). Retry or contact support if it persists.",
     "rate_limited": "Too many requests. Retry in {{seconds}}s.",
     "not_found": "Resource not found.",
+    "no_default_scan_target": "No default scan target. Add a domain in Client Configuration (or verify an asset in the Asset Snapshot), then retry.",
     "unknown_route": "Page not found.",
     "app_load_failed": "Command Center failed to load",
     "application_error": "Application error",

@@ -648,23 +648,13 @@ async fn api_clients_scan_run_all(
                 .into_response();
         }
     };
-    let domains: Vec<String> = serde_json::from_str::<Vec<String>>(&domains_raw)
-        .unwrap_or_default()
+    let domains: Vec<String> = crate::client_scan_target::parse_domain_entries(&domains_raw)
         .into_iter()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
+        .map(|e| e.as_target_url())
         .collect();
 
     if domains.is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({
-                "ok": false,
-                "code": "no_domains",
-                "detail": "Add at least one authorized domain to this client before running scans.",
-            })),
-        )
-            .into_response();
+        return crate::client_scan_target::ScanTargetError::no_default().into_response();
     }
 
     // Curated baseline bundle that produces customer-actionable findings without burning
@@ -1588,7 +1578,7 @@ async fn api_scan(
         {
             Ok(x) => x,
             Err(e) => {
-                let mut body_json = json!({"detail": e.detail(), "code": e.error_code()});
+                let mut body_json = e.json_body();
                 let mut response_headers = axum::http::HeaderMap::new();
                 if let Some((reset_at, limit, used)) = e.quota_metadata() {
                     let retry_after = (reset_at - chrono::Utc::now().timestamp()).max(1);
@@ -1607,16 +1597,22 @@ async fn api_scan(
                 return resp;
             }
         };
-    if let Some(t) = scan_body
+    let resolved_target = payload
         .get("target")
         .and_then(Value::as_str)
-        .map(|s| s.trim())
+        .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
-    {
+        .unwrap_or_default();
+    let target_source = payload
+        .get("target_source")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    if !resolved_target.is_empty() {
         crate::edge_swarm_intel::enrich_scan_payload_with_edge_node(
             state.app_pool.as_ref(),
             auth.tenant_id,
-            t,
+            &resolved_target,
             &mut payload,
         )
         .await;
@@ -1634,10 +1630,13 @@ async fn api_scan(
         Ok(job_id) => (
             StatusCode::ACCEPTED,
             Json(json!({
+                "ok": true,
                 "job_id": job_id.to_string(),
                 "status_url": format!("/api/jobs/{}", job_id),
                 "engine": engine,
                 "job_kind": job_kind,
+                "target": resolved_target,
+                "target_source": target_source,
                 "message": "queued; poll GET /api/jobs/:job_id for status and result",
             })),
         )
@@ -2010,49 +2009,24 @@ async fn api_scan_all_engines(
     }
 
     // Get target from client if not provided
-    let target = if let Some(ref t) = body.target {
-        t.clone()
-    } else {
-        let domains_result: Option<String> = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-            Ok(mut tx) => {
-                let r = sqlx::query_scalar::<_, String>(
-                    "SELECT domains FROM clients WHERE id = $1 AND tenant_id = $2",
-                )
-                .bind(body.client_id)
-                .bind(auth.tenant_id)
-                .fetch_optional(&mut *tx)
-                .await
-                .ok()
-                .flatten();
-                let _ = tx.commit().await;
-                r
-            }
-            Err(_) => None,
-        };
-
-        domains_result
-            .and_then(|d| {
-                serde_json::from_str::<Vec<String>>(&d)
-                    .ok()
-                    .and_then(|arr| arr.first().cloned())
-            })
-            .unwrap_or_default()
+    let client_id = auth.assigned_client_id.unwrap_or(body.client_id);
+    let resolved = match crate::client_scan_target::resolve_scan_target(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        Some(client_id),
+        body.target.as_deref(),
+    )
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => return e.into_response(),
     };
-
-    // A blank target would otherwise enqueue a no-op scan that still consumes quota AND skip the
-    // scope check. Reject it, and always run scope validation before enqueueing.
-    if target.trim().is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"ok": false, "detail": "No scan target resolved for this client"})),
-        )
-            .into_response();
-    }
+    let target = resolved.target.clone();
     if let Err(detail) = crate::security_hardening::validate_scan_target_in_scope(
         state.app_pool.as_ref(),
         auth.tenant_id,
         &target,
-        Some(body.client_id),
+        Some(client_id),
     )
     .await
     {
@@ -2062,8 +2036,9 @@ async fn api_scan_all_engines(
 
     // Queue scan-all-engines job
     let payload = json!({
-        "client_id": body.client_id,
+        "client_id": client_id,
         "target": target,
+        "target_source": resolved.source.as_str(),
         "engines": engines,
     });
 
