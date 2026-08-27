@@ -267,29 +267,21 @@ export default function FindingClusters() {
                   className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-10 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
                 />
               </div>
-              <div className="flex items-center gap-1 shrink-0" role="group" aria-label={t(`${NS}.filter_boost`)}>
-                {[
-                  ['all', t(`${NS}.filter_all`)],
-                  ['boosted', t(`${NS}.filter_boosted`)],
-                  [BOOST_CROSS, t(`${NS}.boost_cross_plane`)],
-                  [BOOST_MULTI, t(`${NS}.boost_multi_engine`)],
-                ].map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setBoostFilter(id)}
-                    aria-pressed={boostFilter === id}
-                    className={[
-                      'px-2.5 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider border transition-colors',
-                      boostFilter === id
-                        ? 'bg-rose-500/15 text-rose-200 border-rose-500/30'
-                        : 'text-[var(--text-muted)] border-[var(--border-default)] hover:text-[var(--text-secondary)]',
-                    ].join(' ')}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <FilterPills
+                label={t(`${NS}.filter_boost`)}
+                pills={[
+                  ['all', t(`${NS}.filter_all`), '#94a3b8'],
+                  ['boosted', t(`${NS}.filter_boosted`), '#fb7185'],
+                  [BOOST_CROSS, t(`${NS}.boost_cross_plane`), '#f43f5e'],
+                  [BOOST_MULTI, t(`${NS}.boost_multi_engine`), '#f59e0b'],
+                ].map(([id, label, color]) => ({
+                  id: `cluster-boost-${id}`,
+                  label,
+                  active: boostFilter === id,
+                  color,
+                  onClick: () => setBoostFilter(id),
+                }))}
+              />
             </div>
 
             {filtered.length === 0 ? (
