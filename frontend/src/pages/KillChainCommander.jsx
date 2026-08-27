@@ -23,6 +23,7 @@ import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import Button from '../components/ui/Button'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../utils/apiFetch'
+import { fairAleLabel, fairSleLabel } from '../lib/riskFormat'
 import { useClient } from '../context/ClientContext'
 import ScopedClientControl from '../components/clients/ScopedClientControl'
 import EngineRealityBadge from '../components/EngineRealityBadge'
@@ -171,6 +172,9 @@ export default function KillChainCommander() {
 
   const liveFindings = stages.reduce((n, s) => n + (s.finding_count || 0), 0)
   const formula = pricing.formula || {}
+  const fair = snap?.headline_risk || pricing.fair || {}
+  const aleLabel = fairAleLabel(fair)
+  const fairPriced = Boolean(aleLabel)
 
   return (
     <PageShell
@@ -242,16 +246,20 @@ export default function KillChainCommander() {
           <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <ExecutiveWidget
-                label={t(`${NS}.kpi_findings`)}
-                value={liveFindings}
-                accent="#ef4444"
-                hint={t(`${NS}.kpi_findings_hint`, { n: snap?.findings_considered ?? 0 })}
+                label={t(`${NS}.kpi_fair`)}
+                value={aleLabel || t(`${NS}.cannot_price`)}
+                accent={fairPriced ? '#ef4444' : '#fbbf24'}
+                hint={
+                  fairPriced
+                    ? t(`${NS}.kpi_fair_hint_priced`, { sle: fairSleLabel(fair) || '—' })
+                    : (fair.cannot_price_reason || t(`${NS}.kpi_fair_hint_cannot`))
+                }
               />
               <ExecutiveWidget
-                label={t(`${NS}.kpi_risk`)}
+                label={t(`${NS}.kpi_micro`)}
                 value={(Number(pricing.total_risk_points) || 0).toFixed(1)}
                 accent="#f97316"
-                hint={formula.expression || t(`${NS}.formula_short`)}
+                hint={t(`${NS}.kpi_micro_hint`)}
               />
               <ExecutiveWidget
                 label={t(`${NS}.kpi_residual`)}
@@ -389,6 +397,20 @@ export default function KillChainCommander() {
                 <h2 className="text-xs font-mono uppercase tracking-[0.18em] text-amber-300/80 flex items-center gap-2">
                   <ShieldAlert className="w-3.5 h-3.5" /> {t(`${NS}.pricing_title`)}
                 </h2>
+                <p className="text-lg font-semibold tabular-nums" data-testid="kill-chain-fair-headline">
+                  {aleLabel || t(`${NS}.cannot_price`)}
+                </p>
+                <p className="text-[11px] font-mono text-[var(--text-muted)] leading-relaxed">
+                  {fair.expression || t(`${NS}.fair_method`)}
+                </p>
+                {!fairPriced && (
+                  <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                    {fair.cannot_price_reason || t(`${NS}.kpi_fair_hint_cannot`)}
+                  </p>
+                )}
+                <h3 className="text-[10px] font-mono uppercase tracking-[0.18em] text-cyan-300/80 pt-2">
+                  {t(`${NS}.micro_formula_title`)}
+                </h3>
                 <p className="text-sm text-[var(--text-primary)] font-mono">
                   {formula.expression || t(`${NS}.formula_short`)}
                 </p>

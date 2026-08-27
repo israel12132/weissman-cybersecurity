@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fmtUsd, postureGradeColor, postureScoreColor } from './riskFormat'
+import { fmtUsd, fairAleLabel, fairSleLabel, postureGradeColor, postureScoreColor } from './riskFormat'
 
 describe('fmtUsd', () => {
   it('formats millions, thousands, and plain values', () => {
@@ -11,6 +11,26 @@ describe('fmtUsd', () => {
     expect(fmtUsd(-1_200_000)).toBe('$-1.20M')
     expect(fmtUsd(null)).toBe('$0')
     expect(fmtUsd('nope')).toBe('$0')
+  })
+})
+
+describe('fairAleLabel / fairSleLabel', () => {
+  it('formats priced FAIR ALE/SLE and never treats Micro-Severity as USD', () => {
+    const fair = {
+      method: 'fair_usd_blast_radius',
+      priced: true,
+      ale_annualised_usd: 180_000,
+      sle_worst_usd: 98_000,
+    }
+    expect(fairAleLabel(fair)).toBe('$180.0K')
+    expect(fairSleLabel(fair)).toBe('$98.0K')
+    expect(fairAleLabel({ method: 'micro_severity_product', score: 25 })).toBeNull()
+  })
+  it('fail-visible cannot-price never invents $0', () => {
+    expect(fairAleLabel({ priced: false, cannot_price_reason: 'Cannot price' })).toBeNull()
+    expect(fairAleLabel({ priced: true, ale_annualised_usd: 0 })).toBeNull()
+    expect(fairAleLabel(null)).toBeNull()
+    expect(fairSleLabel({ priced: false })).toBeNull()
   })
 })
 

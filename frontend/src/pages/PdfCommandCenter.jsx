@@ -14,6 +14,7 @@ import EmptyState from '../components/ui/EmptyState'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import Button from '../components/ui/Button'
 import { apiFetch } from '../utils/apiFetch'
+import { fairAleLabel, fairSleLabel } from '../lib/riskFormat'
 import { useClient } from '../context/ClientContext'
 import ScopedClientControl from '../components/clients/ScopedClientControl'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
@@ -64,6 +65,9 @@ export default function PdfCommandCenter() {
   const corpus = Array.isArray(snap?.corpus) ? snap.corpus : []
   const frameworks = Array.isArray(snap?.frameworks) ? snap.frameworks : []
   const findings = snap?.findings || {}
+  const fair = snap?.headline_risk || snap?.fair || snap?.scoring?.fair || {}
+  const aleLabel = fairAleLabel(fair)
+  const fairPriced = Boolean(aleLabel)
 
   const filteredCorpus = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -178,7 +182,17 @@ export default function PdfCommandCenter() {
           <EmptyState icon="alert" title={t(`${NS}.load_failed`)} description={error} />
         ) : (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              <ExecutiveWidget
+                label={t(`${NS}.kpi_fair`)}
+                value={aleLabel || t(`${NS}.cannot_price`)}
+                accent={fairPriced ? '#ef4444' : '#fbbf24'}
+                hint={
+                  fairPriced
+                    ? t(`${NS}.kpi_fair_hint`, { sle: fairSleLabel(fair) || '—' })
+                    : (fair.cannot_price_reason || t(`${NS}.cannot_price_hint`))
+                }
+              />
               <ExecutiveWidget label={t(`${NS}.kpi_artifacts`)} value={corpus.length} accent="#f59e0b" />
               <ExecutiveWidget label={t(`${NS}.kpi_findings`)} value={findings.total ?? 0} accent="#ef4444" hint={`C ${findings.critical ?? 0} · H ${findings.high ?? 0}`} />
               <ExecutiveWidget label={t(`${NS}.kpi_frameworks`)} value={frameworks.length} accent="#22d3ee" />
@@ -188,6 +202,7 @@ export default function PdfCommandCenter() {
                 accent="#a78bfa"
               />
             </div>
+            <p className="text-[10px] font-mono text-[var(--text-muted)]">{t(`${NS}.micro_severity_note`)}</p>
 
             {empty && (
               <EmptyState

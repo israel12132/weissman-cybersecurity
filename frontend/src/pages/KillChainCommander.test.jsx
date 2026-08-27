@@ -17,6 +17,9 @@ vi.mock('react-i18next', () => ({
       if (k === 'pages.killChainCommander.domain_hint' && d && typeof d === 'object') {
         return d.domain
       }
+      if (k === 'pages.killChainCommander.kpi_fair_hint_priced' && d && typeof d === 'object') {
+        return `SLE ${d.sle}`
+      }
       if (typeof d === 'string') return d
       if (d && typeof d === 'object' && d.defaultValue) return d.defaultValue
       return k
@@ -87,16 +90,33 @@ const emptySnap = {
   ],
   edges: [],
   pricing: {
-    formula: { expression: 'severity_weight × asset_criticality × exposure', severity_weights: { critical: 5 }, exposure: { internet_facing: 2 } },
+    formula: {
+      name: 'Micro-Severity (SOC analyst local ranking)',
+      expression: 'severity_weight × asset_criticality × exposure',
+      severity_weights: { critical: 5 },
+      exposure: { internet_facing: 2 },
+      usd_overlay: 'Not residual financial risk. Not a USD blast-radius.',
+    },
     total_risk_points: 0,
     residual_if_top3_fixed: 0,
     residual_reduction_pct: 0,
     top3_fixes: [],
+    total_priced_usd: null,
+    fair: {
+      method: 'fair_usd_blast_radius',
+      priced: false,
+      cannot_price_reason: 'Cannot price — no FAIR blast-radius snapshot (asset valuations / risk graph missing). Weissman will not invent a dollar figure.',
+    },
   },
   jobs: [],
   honesty: { live_evidence_only: true, no_fabricated_apt: true, fail_closed_empty: true, client_bound: true, formula_published: true },
   empty_reason: 'No live findings for this customer. Run engines against the assigned domain, then return — Weissman will not fabricate a kill chain.',
   findings_considered: 0,
+  headline_risk: {
+    method: 'fair_usd_blast_radius',
+    priced: false,
+    cannot_price_reason: 'Cannot price — no FAIR blast-radius snapshot (asset valuations / risk graph missing). Weissman will not invent a dollar figure.',
+  },
 }
 
 const liveSnap = {
@@ -152,6 +172,21 @@ const liveSnap = {
     top3_fixes: [
       { id: 2, finding_id: 'F-2', title: 'Unauthenticated SQL injection on /login', stage: 'foothold', risk_points: 25 },
     ],
+    total_priced_usd: 88200,
+    fair: {
+      method: 'fair_usd_blast_radius',
+      priced: true,
+      ale_annualised_usd: 88200,
+      sle_worst_usd: 245000,
+      cannot_price_reason: null,
+    },
+  },
+  headline_risk: {
+    method: 'fair_usd_blast_radius',
+    priced: true,
+    ale_annualised_usd: 88200,
+    sle_worst_usd: 245000,
+    cannot_price_reason: null,
   },
 }
 
@@ -183,6 +218,31 @@ describe('KillChainCommander', () => {
     expect(screen.getAllByText(/Public subdomain www.example.com/i).length).toBeGreaterThan(0)
     expect(screen.getByText('T1190')).toBeTruthy()
     expect(screen.getAllByText('severity_weight × asset_criticality × exposure').length).toBeGreaterThan(0)
+    expect(screen.getByText('pages.killChainCommander.micro_formula_title')).toBeTruthy()
+    expect(screen.getAllByText('$88.2K').length).toBeGreaterThan(0)
+    expect(screen.getByTestId('kill-chain-fair-headline').textContent).toBe('$88.2K')
+    expect(screen.queryByText('$31')).toBeNull()
+  })
+
+  it('CEO headline is FAIR ALE, never the Micro-Severity product', async () => {
+    apiFetch.mockResolvedValue(liveSnap)
+    render(<MemoryRouter><KillChainCommander /></MemoryRouter>)
+    await waitFor(() => {
+      expect(screen.getByTestId('kill-chain-fair-headline').textContent).toBe('$88.2K')
+    })
+    expect(screen.getByText('pages.killChainCommander.kpi_fair')).toBeTruthy()
+    expect(screen.getByText('pages.killChainCommander.kpi_micro')).toBeTruthy()
+    expect(screen.getByText('31.0')).toBeTruthy()
+  })
+
+  it('fail-visible cannot-price when FAIR inputs are missing', async () => {
+    apiFetch.mockResolvedValue(emptySnap)
+    render(<MemoryRouter><KillChainCommander /></MemoryRouter>)
+    await waitFor(() => {
+      expect(screen.getByTestId('kill-chain-fair-headline').textContent).toMatch(/cannot_price/i)
+    })
+    expect(screen.queryByText(/\$88/)).toBeNull()
+    expect(screen.getAllByText(/will not invent a dollar figure/i).length).toBeGreaterThan(0)
   })
 
   it('hides the client picker for assigned-client-only sessions', async () => {

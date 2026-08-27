@@ -17,6 +17,25 @@ export function fmtUsd(n) {
   return `$${v.toLocaleString()}`
 }
 
+/**
+ * FAIR ALE compact label for cockpit / PDF / kill-chain CEO tiles.
+ * Unpriced or empty inputs → null (fail-visible). Never invents $0.
+ */
+export function fairAleLabel(fair) {
+  if (!fair || fair.priced !== true) return null
+  const n = Number(fair.ale_annualised_usd)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return fmtUsd(n)
+}
+
+/** FAIR worst-case SLE compact label. Null when FAIR cannot price. */
+export function fairSleLabel(fair) {
+  if (!fair || fair.priced !== true) return null
+  const n = Number(fair.sle_worst_usd)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return fmtUsd(n)
+}
+
 /** Colour for a letter grade A–F on the posture scale (unknown → cyan). */
 export function postureGradeColor(grade) {
   return (
