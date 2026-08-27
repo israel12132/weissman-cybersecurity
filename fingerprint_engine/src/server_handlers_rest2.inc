@@ -712,6 +712,34 @@ async fn api_openapi_spec() -> Response {
                     "properties": {
                         "status": { "type": "string", "enum": ["OPEN","ACKNOWLEDGED","IN_PROGRESS","FIXED","FALSE_POSITIVE"] }
                     }
+                },
+                "ScanRequest": {
+                    "type": "object",
+                    "required": ["engine"],
+                    "properties": {
+                        "engine": { "type": "string", "example": "osint" },
+                        "target": { "type": "string", "description": "Required for target-bound engines. Empty string is rejected with code=target_required." },
+                        "client_id": { "type": "integer" }
+                    }
+                },
+                "ScanError": {
+                    "type": "object",
+                    "properties": {
+                        "detail": { "type": "string" },
+                        "code": { "type": "string", "enum": ["target_required", "bad_request", "payment_required", "forbidden", "quota_exceeded", "internal_error"] }
+                    }
+                },
+                "JobsDiagnostics": {
+                    "type": "object",
+                    "properties": {
+                        "ok": { "type": "boolean" },
+                        "redis": { "type": "boolean", "description": "Alias of redis_ok" },
+                        "redis_ok": { "type": "boolean" },
+                        "workers": { "type": "integer", "description": "Alias of live_workers" },
+                        "live_workers": { "type": "integer" },
+                        "pending_no_envelope": { "type": "integer" },
+                        "stuck_reason": { "type": ["string", "null"], "description": "First blocker code, or null when the queue looks healthy" }
+                    }
                 }
             }
         },
@@ -878,10 +906,45 @@ async fn api_openapi_spec() -> Response {
             },
             "/api/command-center/scan": {
                 "post": {
-                    "summary": "Trigger a full platform scan",
+                    "summary": "Enqueue a Command Center engine scan",
+                    "description": "Empty target returns HTTP 400 with code=target_required for engines that need a target. Never a 500/crash.",
                     "tags": ["Scan"],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/ScanRequest" }
+                            }
+                        }
+                    },
                     "responses": {
-                        "200": { "description": "Scan started" }
+                        "200": { "description": "Scan started" },
+                        "202": { "description": "Scan job queued" },
+                        "400": {
+                            "description": "Empty target returns HTTP 400 with code=target_required",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ScanError" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/jobs/diagnostics": {
+                "get": {
+                    "summary": "Async job queue diagnostics",
+                    "description": "Shape lock: redis, workers, pending_no_envelope, stuck_reason.",
+                    "tags": ["Jobs"],
+                    "responses": {
+                        "200": {
+                            "description": "Queue health",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/JobsDiagnostics" }
+                                }
+                            }
+                        }
                     }
                 }
             },

@@ -73,6 +73,39 @@ impl fmt::Display for RoeViolation {
     }
 }
 
+impl RoeViolation {
+    /// Stable machine code for UI / audit JSON.
+    #[must_use]
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::CompileTimeDisabled => "compile_time_disabled",
+            Self::MissingTenantContext => "missing_tenant_context",
+            Self::IndustrialOtDisabled => "industrial_ot_disabled",
+            Self::ProbeNotAuthorized => "probe_not_authorized",
+            Self::RoeModeInsufficient => "roe_mode_insufficient",
+            Self::TargetNotInScope => "target_not_in_scope",
+            Self::ContractExpired => "contract_expired",
+            Self::ContractSignatureInvalid => "contract_signature_invalid",
+            Self::NoActiveEngagement => "no_active_engagement",
+        }
+    }
+
+    /// Client/config control an admin must change. Never auto-flipped by the engine.
+    #[must_use]
+    pub fn control(self) -> &'static str {
+        match self {
+            Self::CompileTimeDisabled => "high_risk_engines",
+            Self::MissingTenantContext => "tenant_id/client_id",
+            Self::IndustrialOtDisabled => "industrial_ot_enabled",
+            Self::ProbeNotAuthorized => "critical_infra_probe_authorized",
+            Self::RoeModeInsufficient => "roe_mode",
+            Self::TargetNotInScope => "critical_infra_targets",
+            Self::ContractExpired | Self::ContractSignatureInvalid => "critical_infra_contract",
+            Self::NoActiveEngagement => "engagement.critical_infra_authorized",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RoeAuthority {
     SignedContract,
@@ -216,6 +249,44 @@ pub async fn log_violation(
         .await;
         let _ = tx.commit().await;
     }
+}
+
+/// Structured fail-closed engine result: `roe_blocked=true`, no findings, never invented protocol hits.
+/// Dispatch must return this on RoE failure. The RoE agent can enrich the payload; the shape is locked.
+#[must_use]
+pub fn blocked_engine_result(
+    engine_id: &str,
+    target: &str,
+    client_id: Option<i64>,
+    violation: RoeViolation,
+) -> crate::engine_result::EngineResult {
+    let control_value = match violation {
+        RoeViolation::IndustrialOtDisabled => json!(false),
+        RoeViolation::CompileTimeDisabled => json!(false),
+        _ => json!(null),
+    };
+    let roe = json!({
+        "roe_blocked": true,
+        "control": violation.control(),
+        "control_value": control_value,
+        "auto_enable": false,
+        "never_auto_enabled": true,
+        "violation": violation.to_string(),
+        "violation_code": violation.code(),
+        "engine_id": engine_id,
+        "target": target,
+        "client_id": client_id,
+        "who_must_enable": "tenant_admin",
+        "would_run_if_authorized": format!(
+            "Live {engine_id} probe if RoE gates pass — never invented ICS findings"
+        ),
+    });
+    crate::engine_result::EngineResult::roe_blocked(
+        format!(
+            "RoE blocked: {violation} — critical infrastructure engine '{engine_id}' did not run against '{target}'. Not an empty scan."
+        ),
+        roe,
+    )
 }
 
 // The helpers below are used only by `preflight_live`, which is gated on the

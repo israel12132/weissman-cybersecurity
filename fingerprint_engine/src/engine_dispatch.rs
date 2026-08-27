@@ -195,9 +195,12 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
                     violation,
                 )
                 .await;
-                return EngineResult::error(format!(
-                    "RoE VIOLATION: {violation} — critical infrastructure engine '{canonical}' blocked for target '{target}'"
-                ));
+                return crate::critical_infra::roe::blocked_engine_result(
+                    canonical,
+                    target,
+                    ctx.client_id,
+                    violation,
+                );
             }
         }
         let mut result = crate::critical_infra::dispatch(canonical, target, &ctx).await;

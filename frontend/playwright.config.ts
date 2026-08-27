@@ -29,7 +29,8 @@ const VIDEO_MODE = (process.env.CI ? 'off' : 'retain-on-failure') as const
  *  - chromium-live: real backend at WEISSMAN_E2E_BASE (Docker / run_e2e_stack.sh)
  */
 export default defineConfig({
-  testDir: './tests-e2e',
+  testDir: '.',
+  testMatch: /(?:^|\/)(?:tests-e2e|e2e)\/.*\.(spec|test)\.ts$/,
   timeout: 180_000,
   // Hard ceiling on the ENTIRE run. `timeout` above bounds ONE test and can never bound the
   // suite: the live selection is 110 serial tests (100 appNav routes + 6 named + 3 journey), so
@@ -99,7 +100,7 @@ export default defineConfig({
     : [
         {
           name: 'chromium-mock',
-          testIgnore: /live-(journey|feature)\.spec\.ts/,
+          testIgnore: /live-(journey|ui-crawl|feature)\.spec\.ts|auth\.setup\.ts/,
           use: {
             baseURL: MOCK_BASE,
             trace: 'on-first-retry',
