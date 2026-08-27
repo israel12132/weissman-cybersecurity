@@ -95,6 +95,9 @@ impl RouteError {
     #[must_use]
     pub fn error_code(&self) -> &'static str {
         match self {
+            RouteError::BadRequest(msg) if is_target_required_message(msg) => {
+                TARGET_REQUIRED_ERROR_CODE
+            }
             RouteError::BadRequest(_) => "bad_request",
             RouteError::PaymentRequired { .. } => "payment_required",
             RouteError::Forbidden { .. } => "forbidden",
@@ -116,6 +119,13 @@ impl RouteError {
             _ => None,
         }
     }
+}
+
+/// Stable machine code for HTTP 400 when a target-requiring engine is called with an empty target.
+pub const TARGET_REQUIRED_ERROR_CODE: &str = "target_required";
+
+fn is_target_required_message(msg: &str) -> bool {
+    msg.to_ascii_lowercase().contains("target required")
 }
 
 /// Default daily quota for AI-heavy scans when the tenant has no explicit `ai_daily_scan_quota`.
@@ -660,6 +670,20 @@ fn validate_requires(
     Ok(())
 }
 
+/// Same `Requires::NonEmptyTarget` check the scan HTTP router uses. Empty/whitespace
+/// target returns `target_required` — never an internal error or a panic.
+pub fn reject_empty_target(engine: &str, target: &str) -> Result<(), RouteError> {
+    let ctx = ScanBodyFields {
+        target: target.trim().to_string(),
+        client_id: None,
+        ai_endpoint: None,
+        repo_url: None,
+        base_payload: String::new(),
+        extras: std::collections::HashMap::new(),
+    };
+    validate_requires(&[Requires::NonEmptyTarget], &ctx, engine)
+}
+
 #[derive(Clone, Copy)]
 enum PayloadKind {
     DeepFuzz,
@@ -1151,6 +1175,23 @@ mod tests {
         assert!(!enforce_scope_validation_for_engine("pipeline"));
         assert!(!enforce_scope_validation_for_engine("zero_day_radar"));
         assert!(enforce_scope_validation_for_engine("osint"));
+    }
+
+    #[test]
+    fn empty_target_is_stable_target_required_code_not_a_crash() {
+        let err = reject_empty_target("osint", "").unwrap_err();
+        assert_eq!(err.error_code(), TARGET_REQUIRED_ERROR_CODE);
+        assert_eq!(err.status_code(), StatusCode::BAD_REQUEST);
+        assert!(err.detail().contains("target required"));
+        assert!(reject_empty_target("asm", "   ").is_err());
+        assert!(reject_empty_target("osint", "https://scope.example").is_ok());
+        // Unrelated validation stays bad_request so clients can branch on the machine code.
+        let other = RouteError::BadRequest("engine required".into());
+        assert_eq!(other.error_code(), "bad_request");
+        let repo = RouteError::BadRequest(
+            "repo_url or target (repository URL) required for iac_misconfig".into(),
+        );
+        assert_eq!(repo.error_code(), "bad_request");
     }
 
     #[test]

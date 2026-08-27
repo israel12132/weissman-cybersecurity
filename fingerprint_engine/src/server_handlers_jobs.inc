@@ -333,6 +333,12 @@ async fn api_async_jobs_diagnostics(
         }));
     }
 
+    let stuck_reason = blockers
+        .first()
+        .and_then(|b| b.get("code"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+
     (
         StatusCode::OK,
         Json(json!({
@@ -341,8 +347,10 @@ async fn api_async_jobs_diagnostics(
             "tenant_id": auth.tenant_id,
             "client_id": scoped_client,
             "redis_ok": redis_ok,
+            "redis": redis_ok,
             "job_bus_enabled": bus_enabled,
             "live_workers": live_workers,
+            "workers": live_workers,
             "pending": pending,
             "running": counts.as_ref().and_then(|r| r.try_get::<i64,_>("running").ok()).unwrap_or(0),
             "completed": counts.as_ref().and_then(|r| r.try_get::<i64,_>("completed").ok()).unwrap_or(0),
@@ -352,6 +360,7 @@ async fn api_async_jobs_diagnostics(
             "pending_stale": pending_stale,
             "oldest_pending": oldest,
             "blockers": blockers,
+            "stuck_reason": stuck_reason,
         })),
     )
         .into_response()

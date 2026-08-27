@@ -3,6 +3,10 @@
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
+/// Fields GET `/api/jobs/diagnostics` must emit (canonical + UI aliases).
+pub const DIAGNOSTICS_REQUIRED_FIELDS: &[&str] =
+    &["redis", "workers", "pending_no_envelope", "stuck_reason"];
+
 /// Human-readable stuck reason for a live job row, or `None` if it looks healthy.
 #[must_use]
 pub fn job_stuck_reason(
@@ -99,6 +103,26 @@ mod tests {
 
     #[test]
     fn completed_is_never_stuck() {
-        assert!(job_stuck_reason("completed", &json!({}), Some(Utc::now()), None, 1, 3, Some("w")).is_none());
+        assert!(job_stuck_reason(
+            "completed",
+            &json!({}),
+            Some(Utc::now()),
+            None,
+            1,
+            3,
+            Some("w")
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn diagnostics_contract_names_the_fields_the_ui_reads() {
+        for key in ["redis", "workers", "pending_no_envelope", "stuck_reason"] {
+            assert!(
+                DIAGNOSTICS_REQUIRED_FIELDS.contains(&key),
+                "{key} must stay on the diagnostics contract"
+            );
+        }
+        assert!(DIAGNOSTICS_REQUIRED_FIELDS.contains(&"stuck_reason"));
     }
 }

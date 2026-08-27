@@ -20,6 +20,12 @@ pub struct EngineResult {
     /// Module 3: edges for Attack Surface Graph.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub graph_edges: Option<Vec<super::cloud_hunter::GraphEdge>>,
+    /// Honest RoE fail-closed flag. Never set on a successful or empty-looking ICS scan.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub roe_blocked: bool,
+    /// Structured RoE payload (`control`, `never_auto_enabled`, enable path). Absent when the engine ran.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub roe: Option<serde_json::Value>,
 }
 
 impl EngineResult {
@@ -33,6 +39,8 @@ impl EngineResult {
             summary: msg,
             graph_nodes: None,
             graph_edges: None,
+            roe_blocked: false,
+            roe: None,
         }
     }
     pub fn ok_with_graph(
@@ -50,6 +58,8 @@ impl EngineResult {
             summary: msg,
             graph_nodes: Some(graph_nodes),
             graph_edges: Some(graph_edges),
+            roe_blocked: false,
+            roe: None,
         }
     }
     pub fn error(message: impl Into<String>) -> Self {
@@ -62,6 +72,24 @@ impl EngineResult {
             summary: msg,
             graph_nodes: None,
             graph_edges: None,
+            roe_blocked: false,
+            roe: None,
+        }
+    }
+
+    /// Structured RoE block: no findings, `status=roe_blocked`, never looks like a completed empty scan.
+    pub fn roe_blocked(message: impl Into<String>, roe: serde_json::Value) -> Self {
+        let msg = message.into();
+        Self {
+            status: "roe_blocked".to_string(),
+            findings: vec![],
+            message: msg.clone(),
+            success: false,
+            summary: msg,
+            graph_nodes: None,
+            graph_edges: None,
+            roe_blocked: true,
+            roe: Some(roe),
         }
     }
 }
@@ -77,6 +105,8 @@ impl From<weissman_engines::EngineResult> for EngineResult {
             summary: r.message,
             graph_nodes: None,
             graph_edges: None,
+            roe_blocked: false,
+            roe: None,
         }
     }
 }
@@ -92,6 +122,8 @@ impl From<Vec<serde_json::Value>> for EngineResult {
             summary: msg,
             graph_nodes: None,
             graph_edges: None,
+            roe_blocked: false,
+            roe: None,
         }
     }
 }
@@ -161,5 +193,32 @@ mod tests {
         assert!(!obj.contains_key("summary"));
         assert!(!obj.contains_key("graph_nodes"));
         assert!(!obj.contains_key("graph_edges"));
+        assert!(!obj.contains_key("roe_blocked"));
+        assert!(!obj.contains_key("roe"));
+    }
+
+    #[test]
+    fn roe_blocked_serializes_control_payload_and_no_findings() {
+        let r = EngineResult::roe_blocked(
+            "RoE blocked: industrial_ot_enabled is false",
+            serde_json::json!({
+                "roe_blocked": true,
+                "control": "industrial_ot_enabled",
+                "control_value": false,
+                "auto_enable": false,
+                "never_auto_enabled": true,
+            }),
+        );
+        assert_eq!(r.status, "roe_blocked");
+        assert!(r.roe_blocked);
+        assert!(!r.success);
+        assert!(r.findings.is_empty());
+        let v: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&r).unwrap()).unwrap();
+        assert_eq!(v["status"], "roe_blocked");
+        assert_eq!(v["roe_blocked"], true);
+        assert_eq!(v["findings"], serde_json::json!([]));
+        assert_eq!(v["roe"]["control"], "industrial_ot_enabled");
+        assert_eq!(v["roe"]["auto_enable"], false);
     }
 }
