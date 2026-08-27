@@ -9,8 +9,17 @@
 //!   ask which customer they are; the account is bound at provisioning. Every
 //!   API/WS/DB path is forced onto that client.
 //!
-//! Enforcement is layered: JWT `cid` claim, live DB revalidation, HTTP
-//! middleware (path/query/body), Postgres RLS via `app.current_client_id`.
+//! Enforcement is layered and **must not** depend on handlers remembering
+//! [`bind_requested_client`]:
+//!
+//! * JWT `cid` is the sole customer-session anchor ([`AuthContext::assigned_client_id`]).
+//! * [`crate::http::client_scope::TenantScopeGuard`] overwrites body/query/path
+//!   `client_id` for scoped sessions.
+//! * Every `begin_tenant_tx` stamps `SET LOCAL app.current_tenant_id` **and**
+//!   `app.current_client_id` (FORCE RLS). A forgotten `WHERE client_id = $1`
+//!   cannot leak another customer.
+//! * Staff impersonation is a **new JWT** from `/api/auth/scope-switch`, never
+//!   a client-side picker that keeps the old token and sends another id.
 
 use crate::auth_jwt::AuthContext;
 use axum::http::{Method, StatusCode};
@@ -35,17 +44,50 @@ pub fn is_client_role(role: &str) -> bool {
     role.trim().eq_ignore_ascii_case(CLIENT_ROLE)
 }
 
+/// JWT `cid` is set (or portal role). Request rewriting + RLS GUC apply.
+/// Includes staff who impersonated via scope-switch.
 #[inline]
 #[must_use]
 pub fn is_client_scoped(auth: &AuthContext) -> bool {
-    auth.agent_id.is_none()
-        && (auth.assigned_client_id.is_some() || is_client_role(&auth.role))
+    auth.agent_id.is_none() && (auth.assigned_client_id.is_some() || is_client_role(&auth.role))
 }
 
+/// Provisioned customer-portal identity (`role=client`). Cannot scope-switch.
+#[inline]
+#[must_use]
+pub fn is_portal_identity(auth: &AuthContext) -> bool {
+    auth.agent_id.is_none() && is_client_role(&auth.role)
+}
+
+/// Staff/owner JWT whose `cid` is an impersonation, not a portal lock.
+#[inline]
+#[must_use]
+pub fn is_impersonating(auth: &AuthContext) -> bool {
+    auth.agent_id.is_none() && auth.assigned_client_id.is_some() && !is_portal_identity(auth)
+}
+
+/// Human operator who is not a portal identity. Remains true while impersonating
+/// so they can call scope-switch (exit or pick another grant).
 #[inline]
 #[must_use]
 pub fn is_staff(auth: &AuthContext) -> bool {
-    auth.agent_id.is_none() && !is_client_scoped(auth)
+    auth.agent_id.is_none() && !is_portal_identity(auth)
+}
+
+/// Portal users with a single assigned customer cannot call scope-switch (403).
+#[inline]
+#[must_use]
+pub fn can_scope_switch(auth: &AuthContext) -> bool {
+    is_staff(auth)
+}
+
+/// Dedicated impersonation API — not a data plane that takes `client_id`.
+#[must_use]
+pub fn is_scope_switch_path(path: &str) -> bool {
+    path == "/api/auth/scope-switch"
+        || path == "/api/auth/scope-targets"
+        || path.starts_with("/api/auth/scope-switch/")
+        || path.starts_with("/api/auth/scope-targets/")
 }
 
 #[inline]
@@ -72,15 +114,17 @@ pub fn capabilities_json(auth: &AuthContext) -> Value {
     json!({
         "assigned_client_id": auth.assigned_client_id,
         "allowed_client_ids": allowed,
-        "is_owner": is_platform_owner(auth),
+        "is_owner": is_platform_owner(auth) && !is_portal_identity(auth),
         "is_staff": is_staff(auth),
-        "is_client_user": is_client_scoped(auth),
+        "is_client_user": is_portal_identity(auth),
+        "impersonating": is_impersonating(auth),
+        "can_scope_switch": can_scope_switch(auth),
         "can_create_clients": can_create_clients(auth),
         "can_delete_clients": can_delete_clients(auth),
-        // Hide the picker when the session is locked to zero or one customer.
-        // A future multi-assignment list (allowed.len() > 1) still shows a
-        // filtered picker — never other tenants' clients.
-        "client_picker_hidden": is_client_scoped(auth) && allowed.len() <= 1,
+        // Hide the global picker only for a locked portal identity.
+        // Staff impersonation uses /api/auth/scope-switch (new JWT), never a
+        // client-side picker that keeps the old token and sends another id.
+        "client_picker_hidden": is_portal_identity(auth) && allowed.len() <= 1,
     })
 }
 
@@ -153,6 +197,33 @@ pub fn inject_query_client_id(query: Option<&str>, cid: i64) -> Option<String> {
         None | Some("") => format!("client_id={cid}"),
         Some(q) => format!("{q}&client_id={cid}"),
     })
+}
+
+/// Overwrite a `/:client_id` path segment with the JWT `cid`. Scoped sessions
+/// never honor a UI-supplied path id (architect: ignore/overwrite, not 404).
+#[must_use]
+pub fn force_path_client_id(path: &str, cid: i64) -> Option<String> {
+    if cid <= 0 {
+        return None;
+    }
+    for prefix in CLIENT_ID_PATH_PREFIXES {
+        if let Some(rest) = path.strip_prefix(prefix) {
+            let mut parts = rest.splitn(2, '/');
+            let token = parts.next().unwrap_or("");
+            if token.parse::<i64>().ok().filter(|id| *id > 0).is_none() {
+                return None;
+            }
+            let rewritten = match parts.next() {
+                Some(suffix) => format!("{prefix}{cid}/{suffix}"),
+                None => format!("{prefix}{cid}"),
+            };
+            if rewritten != path {
+                return Some(rewritten);
+            }
+            return None;
+        }
+    }
+    None
 }
 
 /// Force `client_id=<cid>` in the query string: insert if missing, overwrite if
@@ -340,10 +411,12 @@ pub fn is_client_create_path(method: &Method, path: &str) -> bool {
 #[must_use]
 pub fn is_client_delete_path(method: &Method, path: &str) -> bool {
     *method == Method::DELETE
-        && path
-            .strip_prefix("/api/clients/")
-            .is_some_and(|rest| rest.split('/').next().is_some_and(|t| t.parse::<i64>().is_ok())
-                && !rest.contains('/'))
+        && path.strip_prefix("/api/clients/").is_some_and(|rest| {
+            rest.split('/')
+                .next()
+                .is_some_and(|t| t.parse::<i64>().is_ok())
+                && !rest.contains('/')
+        })
 }
 
 fn denied(auth: &AuthContext, detail: &str, code: &str) -> Response {
@@ -430,6 +503,14 @@ mod tests {
         assert!(!is_client_scoped(&ctx("analyst", false, None)));
         assert!(is_staff(&ctx("operator", false, None)));
         assert!(!is_staff(&ctx("client", false, Some(1))));
+        assert!(is_portal_identity(&ctx("client", false, Some(1))));
+        assert!(!is_portal_identity(&ctx("operator", false, Some(9))));
+        assert!(is_impersonating(&ctx("operator", false, Some(9))));
+        assert!(!is_impersonating(&ctx("client", false, Some(1))));
+        // Impersonating staff remain staff so they can scope-switch again.
+        assert!(is_staff(&ctx("operator", false, Some(9))));
+        assert!(can_scope_switch(&ctx("operator", false, Some(9))));
+        assert!(!can_scope_switch(&ctx("client", false, Some(1))));
     }
 
     #[test]
@@ -445,6 +526,20 @@ mod tests {
         assert_eq!(extract_path_client_id("/api/clients"), None);
         assert_eq!(extract_path_client_id("/api/findings"), None);
         assert_eq!(extract_path_client_id("/api/clients/not-a-number"), None);
+    }
+
+    #[test]
+    fn force_path_overwrites_spoofed_client_id() {
+        assert_eq!(
+            force_path_client_id("/api/clients/99/findings", 5).as_deref(),
+            Some("/api/clients/5/findings")
+        );
+        assert_eq!(
+            force_path_client_id("/api/clients/99", 5).as_deref(),
+            Some("/api/clients/5")
+        );
+        assert_eq!(force_path_client_id("/api/clients/5/findings", 5), None);
+        assert_eq!(force_path_client_id("/api/findings", 5), None);
     }
 
     #[test]
@@ -513,18 +608,35 @@ mod tests {
         let caps = capabilities_json(&portal);
         assert_eq!(caps["client_picker_hidden"], json!(true));
         assert_eq!(caps["allowed_client_ids"], json!([4]));
+        assert_eq!(caps["can_scope_switch"], json!(false));
+        assert_eq!(caps["is_client_user"], json!(true));
+        assert_eq!(caps["impersonating"], json!(false));
         let staff = ctx("operator", false, None);
         let staff_caps = capabilities_json(&staff);
         assert_eq!(staff_caps["client_picker_hidden"], json!(false));
         assert_eq!(staff_caps["allowed_client_ids"], json!([]));
+        assert_eq!(staff_caps["can_scope_switch"], json!(true));
+        let impersonating = ctx("operator", false, Some(4));
+        let imp = capabilities_json(&impersonating);
+        assert_eq!(imp["impersonating"], json!(true));
+        assert_eq!(imp["is_client_user"], json!(false));
+        assert_eq!(imp["is_staff"], json!(true));
+        assert_eq!(imp["can_scope_switch"], json!(true));
+        assert_eq!(imp["client_picker_hidden"], json!(false));
     }
 
     #[test]
     fn create_and_delete_path_detectors() {
         assert!(is_client_create_path(&Method::POST, "/api/clients"));
-        assert!(!is_client_create_path(&Method::POST, "/api/clients/1/scan/run-all"));
+        assert!(!is_client_create_path(
+            &Method::POST,
+            "/api/clients/1/scan/run-all"
+        ));
         assert!(is_client_delete_path(&Method::DELETE, "/api/clients/12"));
-        assert!(!is_client_delete_path(&Method::DELETE, "/api/clients/12/config"));
+        assert!(!is_client_delete_path(
+            &Method::DELETE,
+            "/api/clients/12/config"
+        ));
         assert!(!is_client_delete_path(&Method::POST, "/api/clients/12"));
     }
 

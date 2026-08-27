@@ -283,6 +283,14 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/audit-logs", get(api_audit_logs))
         .route("/api/audit/export", get(api_audit_export))
         .route("/api/auth/me", get(api_auth_me))
+        .route(
+            "/api/auth/scope-switch",
+            post(crate::scope_switch::api_scope_switch),
+        )
+        .route(
+            "/api/auth/scope-targets",
+            get(crate::scope_switch::api_scope_targets),
+        )
         // ── Admin user management (CEO/Superadmin only) ───────────────────────
         .route(
             "/api/admin/users",

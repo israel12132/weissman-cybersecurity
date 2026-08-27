@@ -36,19 +36,37 @@ export function allowedClientIds(session) {
  * the visible catalog is a single auto-bound client (no choice to present).
  */
 export function shouldHideClientPicker(session, clients = []) {
+  // Server flag is authoritative. Portal lock = true; staff impersonation = false
+  // so the control is a scope-switcher (new JWT), never a client_id spoof picker.
   if (session?.client_picker_hidden === true) return true
+  if (session?.can_scope_switch === true) return false
+  if (session?.client_picker_hidden === false && session?.can_scope_switch === false) {
+    const allowed = allowedClientIds(session)
+    if (allowed.length === 1) return true
+  }
   const allowed = allowedClientIds(session)
   if (allowed.length === 1) return true
   if (isClientUser(session) && allowed.length <= 1) return true
   // A single visible customer is auto-bound — never render a one-option dropdown.
   // Length 0 is "catalog still loading" for staff: keep the control, do not flash unbound.
-  if (Array.isArray(clients) && clients.length === 1) return true
+  if (Array.isArray(clients) && clients.length === 1 && session?.can_scope_switch !== true) return true
   return false
 }
 
-/** Restrict a catalog to the session's allowed customers. Empty allowed = tenant-wide. */
+export function canScopeSwitch(session) {
+  if (session?.can_scope_switch === true) return true
+  if (session?.can_scope_switch === false) return false
+  if (isClientUser(session)) return false
+  return isStaffUser(session)
+}
+
+/** Restrict a catalog to the session's allowed customers. Empty allowed = tenant-wide.
+ * Staff with can_scope_switch see every grantable customer (scope-targets), not
+ * only the JWT cid they currently impersonate.
+ */
 export function filterVisibleClients(session, clients = []) {
   const list = Array.isArray(clients) ? clients : []
+  if (session?.can_scope_switch === true) return list
   const allowed = allowedClientIds(session)
   if (!allowed.length) return list
   const set = new Set(allowed.map(String))
@@ -57,6 +75,15 @@ export function filterVisibleClients(session, clients = []) {
 
 /** Effective bound id: assigned client, else the only visible catalog row. */
 export function boundClientId(session, clients = [], current = null) {
+  if (session?.can_scope_switch === true) {
+    const assigned = assignedClientId(session)
+    if (assigned != null) return assigned
+    if (current != null && current !== '') {
+      const n = Number(current)
+      if (Number.isFinite(n) && n > 0) return n
+    }
+    return null
+  }
   const allowed = allowedClientIds(session)
   if (allowed.length === 1) return allowed[0]
   const visible = filterVisibleClients(session, clients)
@@ -76,7 +103,9 @@ export function boundClientId(session, clients = [], current = null) {
 export function isClientUser(session) {
   if (!session || session.ok === false) return false
   if (session.is_client_user === true) return true
-  if (assignedClientId(session)) return true
+  if (session.is_client_user === false) return false
+  if (session.impersonating === true || session.can_scope_switch === true) return false
+  if (session.is_staff === true) return false
   return normRole(session) === 'client'
 }
 
@@ -126,6 +155,9 @@ export function isPortalBlockedPath(to) {
 }
 
 export function sessionIdentityLabel(session, t) {
+  if (session?.impersonating === true) {
+    return t('profile.impersonating')
+  }
   if (isPlatformOwner(session)) return t('profile.owner')
   if (isClientUser(session)) return t('profile.client_portal')
   if (isStaffUser(session)) return t('profile.staff')

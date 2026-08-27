@@ -11,6 +11,7 @@ import {
   shouldHideClientPicker,
   filterVisibleClients,
   boundClientId,
+  canScopeSwitch,
 } from './clientScope.js'
 
 const owner = { ok: true, role: 'ceo', is_owner: true, can_create_clients: true, can_delete_clients: true }
@@ -69,6 +70,11 @@ describe('clientScope policy', () => {
     expect(shouldHideClientPicker(portal, [{ id: 7 }, { id: 8 }])).toBe(true)
     expect(shouldHideClientPicker(staff, [{ id: 1 }, { id: 2 }])).toBe(false)
     expect(shouldHideClientPicker(staff, [{ id: 1 }])).toBe(true)
+    expect(shouldHideClientPicker({ ...staff, can_scope_switch: true }, [{ id: 1 }])).toBe(false)
+    expect(shouldHideClientPicker({ ...portal, can_scope_switch: false, client_picker_hidden: true }, [{ id: 7 }])).toBe(true)
+    expect(canScopeSwitch(portal)).toBe(false)
+    expect(canScopeSwitch({ ...staff, can_scope_switch: true })).toBe(true)
+    expect(canScopeSwitch({ ...portal, can_scope_switch: false })).toBe(false)
     expect(boundClientId(portal, [{ id: 7 }, { id: 99 }])).toBe(7)
     expect(filterVisibleClients(portal, [{ id: 7 }, { id: 99 }])).toEqual([{ id: 7 }])
     expect(allowedClientIds(portal)).toEqual([7])
@@ -79,5 +85,22 @@ describe('clientScope policy', () => {
     expect(filterVisibleClients({ ...portal, allowed_client_ids: [3, 4] }, [{ id: 3 }, { id: 4 }, { id: 9 }])).toEqual([{ id: 3 }, { id: 4 }])
     expect(boundClientId({ ...portal, assigned_client_id: null, allowed_client_ids: [3, 4] }, [{ id: 3 }, { id: 4 }], 4)).toBe(4)
     expect(boundClientId({ ...portal, assigned_client_id: null, allowed_client_ids: [3, 4] }, [{ id: 3 }, { id: 4 }], 9)).toBe(3)
+  })
+
+  it('does not treat staff impersonation JWT cid as a portal lock', () => {
+    const impersonating = {
+      ...staff,
+      assigned_client_id: 5,
+      impersonating: true,
+      can_scope_switch: true,
+      is_client_user: false,
+      client_picker_hidden: false,
+    }
+    expect(isClientUser(impersonating)).toBe(false)
+    expect(isStaffUser(impersonating)).toBe(true)
+    expect(canScopeSwitch(impersonating)).toBe(true)
+    expect(shouldHideClientPicker(impersonating, [{ id: 5 }, { id: 9 }])).toBe(false)
+    expect(filterVisibleClients(impersonating, [{ id: 5 }, { id: 9 }])).toEqual([{ id: 5 }, { id: 9 }])
+    expect(boundClientId(impersonating, [{ id: 5 }, { id: 9 }])).toBe(5)
   })
 })

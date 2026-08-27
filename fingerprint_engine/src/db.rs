@@ -1,9 +1,11 @@
 //! Re-exports the authoritative Postgres / RLS layer ([`weissman_db`]). Prefer importing `weissman_db`
 //! directly in new code; this module keeps `crate::db::` and `fingerprint_engine::db::` stable.
 //!
-//! HTTP requests wrap work in [`REQUEST_CLIENT_SCOPE`]. The local [`begin_tenant_tx`]
-//! shadows the glob re-export and stamps `app.current_client_id` so customer-portal
-//! users cannot read another client's rows even when a handler omits a filter.
+//! HTTP requests wrap work in [`REQUEST_CLIENT_SCOPE`] (set by
+//! [`crate::http::client_scope::TenantScopeGuard`] from the JWT `cid`). The local
+//! [`begin_tenant_tx`] shadows the glob re-export and stamps
+//! `SET LOCAL app.current_tenant_id` **and** `app.current_client_id` so a
+//! forgotten `WHERE client_id` filter cannot leak another customer's rows.
 //! Background workers that call [`weissman_db::begin_tenant_tx`] directly leave the
 //! client GUC empty (all customers in the tenant — required for dequeue).
 
