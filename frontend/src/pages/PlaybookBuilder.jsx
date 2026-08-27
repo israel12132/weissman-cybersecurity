@@ -29,6 +29,7 @@ import { confirmDialog } from '../utils/confirmDialog'
 import Button from '../components/ui/Button'
 import PlaybookGraph from '../components/PlaybookGraph'
 import { downloadCsv } from '../lib/exportFindingsCsv'
+import { playbookActionsHaveBlockedWebhook } from '../lib/playbookFlow'
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
 const SEV_COLORS = {
@@ -323,6 +324,10 @@ export default function PlaybookBuilder() {
 
   const save = async () => {
     if (!draft?.name?.trim()) { setStatusMsg({ kind: 'err', text: t('playbooks.name_required') }); return }
+    if (playbookActionsHaveBlockedWebhook(draft.actions || [])) {
+      setStatusMsg({ kind: 'err', text: t('playbooks.webhook_blocked') })
+      return
+    }
     setSaving(true)
     setStatusMsg(null)
     const body = {

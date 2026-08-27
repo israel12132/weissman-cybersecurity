@@ -81,8 +81,8 @@ pub struct AppState {
     pub intel_pool: Arc<PgPool>,
     pub auth_pool: Arc<PgPool>,
     /// Optional read-only pool (separate role with SELECT-only grants).
-    /// When `Some`, `nl_query::ask` will use this for the compiled SQL execution
-    /// step. Defense-in-depth: even if validation breaks, Postgres rejects writes.
+    /// When `Some`, Ask Weissman and Command Center dashboard reads use this
+    /// pool (`weissman_ro`). Defense-in-depth: even if validation breaks, Postgres rejects writes.
     pub read_only_pool: Option<Arc<PgPool>>,
     started_at: Instant,
     timing_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
@@ -113,6 +113,14 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// Dashboard and other read-only surfaces. Prefers `weissman_ro` when configured.
+    #[must_use]
+    pub fn read_pool(&self) -> &PgPool {
+        self.read_only_pool
+            .as_deref()
+            .unwrap_or(self.app_pool.as_ref())
+    }
+
     pub(crate) fn take_sovereign_swarm_rx(
         &self,
     ) -> Option<tokio::sync::mpsc::Receiver<crate::sovereign_c2::SovereignSwarmCmd>> {
@@ -499,7 +507,7 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
     )
     .await
     {
-        Some(tid) => match db::begin_tenant_tx(&state.app_pool, tid).await {
+        Some(tid) => match db::begin_tenant_tx(state.read_pool(), tid).await {
             Ok(mut tx) => {
                 let v: i64 =
                     sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
@@ -1123,7 +1131,7 @@ async fn api_command_center_ticker(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (StatusCode::OK, Json(json!({ "events": [] }))).into_response();
     };
     let rows = sqlx::query(
@@ -1408,14 +1416,14 @@ pub fn new_app_state(
     auth_pool: Arc<PgPool>,
     intel_pool: Arc<PgPool>,
 ) -> Arc<AppState> {
-    // Optional read-only pool for /api/ask. Falls back to None if the env var
+    // Optional read-only pool for /api/ask and Command Center dashboard reads. Falls back to None if the env var
     // isn't set — endpoint will then return 503 with a clear "configure this" hint.
     let read_only_pool: Option<Arc<PgPool>> = match std::env::var("WEISSMAN_READ_ONLY_DATABASE_URL")
         .ok()
         .filter(|s| !s.trim().is_empty())
     {
         Some(url) => match sqlx::postgres::PgPoolOptions::new()
-            .max_connections(5)
+            .max_connections(16)
             .acquire_timeout(std::time::Duration::from_secs(5))
             .connect_lazy(&url)
         {
@@ -1837,7 +1845,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             crate::http::ceo_rbac::ceo_rbac_middleware,
         ))
         .layer(middleware::from_fn(crate::rbac::mutation_rbac_middleware))
-        .layer(middleware::from_fn(crate::http::client_scope::client_scope_middleware))
+        .layer(middleware::from_fn(
+            crate::http::client_scope::client_scope_middleware,
+        ))
         .layer(middleware::from_fn(
             crate::http::sse_context::sse_context_middleware,
         ))

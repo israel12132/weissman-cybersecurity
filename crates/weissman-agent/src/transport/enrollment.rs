@@ -37,11 +37,13 @@ pub async fn enroll(
         client_id,
         capabilities: crate::detections::all_capability_ids(),
     };
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(20))
-        .user_agent(format!("weissman-agent/{}", agent_version))
-        .build()?;
-    let resp = client.post(&url).json(&body).send().await?;
+    let client = crate::transport::tls_pin::http_client(server_url, Duration::from_secs(20))?;
+    let resp = client
+        .post(&url)
+        .header("user-agent", format!("weissman-agent/{agent_version}"))
+        .json(&body)
+        .send()
+        .await?;
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
     if !status.is_success() {
@@ -76,12 +78,10 @@ pub async fn renew_session(
         session_jwt: String,
     }
     let url = format!("{}/api/agents/session", server_url.trim_end_matches('/'));
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(20))
-        .user_agent(format!("weissman-agent/{}", agent_version))
-        .build()?;
+    let client = crate::transport::tls_pin::http_client(server_url, Duration::from_secs(20))?;
     let resp = client
         .post(&url)
+        .header("user-agent", format!("weissman-agent/{agent_version}"))
         .json(&Body {
             agent_id,
             agent_secret,

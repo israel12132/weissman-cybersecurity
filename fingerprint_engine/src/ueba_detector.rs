@@ -11,12 +11,9 @@
 //!      up in the learned set) — those are fired at severity `medium` too, once
 //!      the metric has accumulated ≥ 24 observations.
 //!
-//! The detector NEVER fires while a metric is still learning (`n < 24`). Baselines
-//! are keyed per (agent, metric) — NOT per hour-of-week: with a 7-day sample
-//! window, any given hour-of-week bucket only ever holds ~1 sample, so per-bucket
-//! baselines could never reach the sample threshold and the detector never fired.
-//! Training over the whole rolling window makes both paths reachable while still
-//! honouring the "don't fire until trained" contract.
+//! Numeric z-score stays silent until the metric has ≥ 24 samples. Never-before-seen
+//! ports and processes fire even during the learning window (extreme categorical
+//! novelty). Baselines are keyed per (agent, metric) — NOT per hour-of-week.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -27,6 +24,65 @@ use std::time::Duration;
 
 const LEARN_WINDOW_DAYS: i64 = 7;
 const Z_THRESHOLD: f64 = 3.0;
+
+/// Adaptive z-score floor: quiet hosts (low CV) use a slightly lower bar;
+/// noisy hosts require a higher deviation before we page.
+#[must_use]
+pub fn adaptive_z_threshold(mean: f64, stddev: f64) -> f64 {
+    let cv = if mean.abs() > 1e-9 {
+        (stddev / mean.abs()).abs()
+    } else {
+        stddev.abs()
+    };
+    (Z_THRESHOLD + (cv - 0.15).clamp(-0.5, 2.0)).clamp(2.5, 5.0)
+}
+
+/// Redact usernames, emails, and home paths from UEBA metric JSON before persist.
+#[must_use]
+pub fn scrub_ueba_metrics(metrics: &Value) -> Value {
+    match metrics {
+        Value::Object(map) => {
+            let mut out = serde_json::Map::new();
+            for (k, v) in map {
+                let key_l = k.to_ascii_lowercase();
+                if key_l.contains("user")
+                    || key_l.contains("email")
+                    || key_l.contains("home")
+                    || key_l == "path"
+                    || key_l.ends_with("_path")
+                {
+                    out.insert(k.clone(), Value::String("[redacted]".into()));
+                } else {
+                    out.insert(k.clone(), scrub_ueba_metrics(v));
+                }
+            }
+            Value::Object(out)
+        }
+        Value::Array(arr) => Value::Array(arr.iter().map(scrub_ueba_metrics).collect()),
+        Value::String(s) => Value::String(scrub_pii_string(s)),
+        other => other.clone(),
+    }
+}
+
+fn scrub_pii_string(s: &str) -> String {
+    let mut out = s.to_string();
+    if out.contains('@') && out.contains('.') {
+        out = "[redacted-email]".into();
+    }
+    if let Some(rest) = out.strip_prefix("/home/") {
+        let user = rest.split('/').next().unwrap_or("");
+        if !user.is_empty() {
+            out = out.replacen(&format!("/home/{user}"), "/home/[user]", 1);
+        }
+    }
+    if let Some(rest) = out.strip_prefix("/Users/") {
+        let user = rest.split('/').next().unwrap_or("");
+        if !user.is_empty() {
+            out = out.replacen(&format!("/Users/{user}"), "/Users/[user]", 1);
+        }
+    }
+    out
+}
 const MIN_BASELINE_SAMPLES: i32 = 24;
 /// Canonical `hour_of_week` value baselines are stored under. Baselines are kept
 /// per (agent, metric) — the raw samples still record their real hour-of-week —
@@ -52,7 +108,8 @@ pub async fn ingest_sample(
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| format!("tenant tx: {e}"))?;
-    let raw_size = serde_json::to_string(&p.metrics)
+    let scrubbed = scrub_ueba_metrics(&p.metrics);
+    let raw_size = serde_json::to_string(&scrubbed)
         .map(|s| s.len() as i32)
         .unwrap_or(0);
     let sample_id: i64 = sqlx::query_scalar(
@@ -66,7 +123,7 @@ pub async fn ingest_sample(
     .bind(&p.agent_id)
     .bind(p.client_id)
     .bind(p.hour_of_week)
-    .bind(&p.metrics)
+    .bind(&scrubbed)
     .bind(raw_size)
     .fetch_one(&mut *tx)
     .await
@@ -74,7 +131,7 @@ pub async fn ingest_sample(
 
     // Re-compute baselines for every numeric metric we saw in this sample.
     let mut summary = UebaIngestSummary::default();
-    if let Value::Object(obj) = &p.metrics {
+    if let Value::Object(obj) = &scrubbed {
         // Numeric metrics → baseline + z-score check.
         for (k, v) in obj {
             if let Some(num) = v.as_f64() {
@@ -232,7 +289,8 @@ async fn check_anomaly(
         return Ok(None); // constant baseline — divide-by-zero, can't compute z
     }
     let z = (observed - base.mean) / base.stddev;
-    if z.abs() < Z_THRESHOLD {
+    let threshold = adaptive_z_threshold(base.mean, base.stddev);
+    if z.abs() < threshold {
         return Ok(None);
     }
     let severity = if z.abs() > 6.0 { "high" } else { "medium" };
@@ -346,17 +404,31 @@ async fn check_new_categorical(
     .execute(&mut **tx)
     .await;
 
-    if n_obs < MIN_BASELINE_SAMPLES || new_items.is_empty() {
-        return Ok(None); // still learning OR nothing new
+    if new_items.is_empty() {
+        return Ok(None);
     }
-    let detail = format!("{}: {}", title, new_items.join(", "));
+    let learning = n_obs < MIN_BASELINE_SAMPLES;
+    let extreme_categorical = metric == "open_ports" || metric == "top_processes";
+    if learning && !extreme_categorical {
+        return Ok(None);
+    }
+    let severity = if learning { "high" } else { "medium" };
+    let detail = if learning {
+        format!(
+            "{} (fired during learning — never-before-seen): {}",
+            title,
+            new_items.join(", ")
+        )
+    } else {
+        format!("{}: {}", title, new_items.join(", "))
+    };
     let rec = AnomalyRecord {
         metric: metric.to_string(),
         observed: new_items.len() as f64,
         baseline_mean: 0.0,
         baseline_stddev: 0.0,
         z_score: new_items.len() as f64,
-        severity: "medium".to_string(),
+        severity: severity.to_string(),
         detail: detail.clone(),
     };
     sqlx::query(
@@ -364,7 +436,7 @@ async fn check_new_categorical(
                  (tenant_id, agent_id, client_id, sample_id, metric_name,
                   observed, baseline_mean, baseline_stddev, z_score,
                   severity, detail, detected_at)
-           VALUES ($1, $2, $3, $4, $5, $6, 0, 0, $6, 'medium', $7, now())"#,
+           VALUES ($1, $2, $3, $4, $5, $6, 0, 0, $6, $7, $8, now())"#,
     )
     .bind(tenant_id)
     .bind(&p.agent_id)
@@ -372,6 +444,7 @@ async fn check_new_categorical(
     .bind(sample_id)
     .bind(metric)
     .bind(rec.z_score)
+    .bind(severity)
     .bind(&detail)
     .execute(&mut **tx)
     .await
@@ -404,15 +477,34 @@ pub fn spawn_retention_loop(pool: Arc<PgPool>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     #[test]
     fn z_threshold_constant() {
         assert!(Z_THRESHOLD == 3.0);
     }
     #[test]
-    fn min_samples_protects_learning_window() {
-        // Baselines train per (agent, metric) over the rolling 7-day sample window;
-        // below MIN_BASELINE_SAMPLES observations we never fire, so a metric must
-        // accumulate real history before an anomaly can be raised.
+    fn adaptive_threshold_rises_with_noise() {
+        let quiet = adaptive_z_threshold(100.0, 1.0);
+        let noisy = adaptive_z_threshold(100.0, 80.0);
+        assert!(quiet < noisy);
+        assert!(quiet >= 2.5 && noisy <= 5.0);
+    }
+    #[test]
+    fn scrub_redacts_username_and_email() {
+        let v = json!({
+            "username": "ada",
+            "open_ports": [22, 443],
+            "cmd": "/home/ada/.ssh/id_rsa"
+        });
+        let s = scrub_ueba_metrics(&v);
+        assert_eq!(s["username"], "[redacted]");
+        assert_eq!(s["open_ports"][0], 22);
+        assert!(s["cmd"].as_str().unwrap().contains("/home/[user]"));
+    }
+    #[test]
+    fn min_samples_protects_numeric_learning_window() {
+        // Numeric z-score stays silent until trained. Categorical novelty (new
+        // port / process) is allowed to fire during learning.
         assert!(MIN_BASELINE_SAMPLES >= 24);
     }
     #[test]

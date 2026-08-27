@@ -24,8 +24,8 @@ struct Cli {
     #[arg(long, env = "WEISSMAN_SERVER_URL")]
     server_url: String,
 
-    /// One-time enrollment token issued by the dashboard.
-    #[arg(long, env = "WEISSMAN_ENROLLMENT_TOKEN")]
+    /// One-time enrollment token issued by the dashboard. Optional when `agent.state` exists.
+    #[arg(long, env = "WEISSMAN_ENROLLMENT_TOKEN", default_value = "")]
     enrollment_token: String,
 
     /// Optional: numeric client_id this agent belongs to.
@@ -55,6 +55,19 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     info!(target: "agent", "Weissman endpoint agent starting (version={})", env!("CARGO_PKG_VERSION"));
 
+    if transport::kill::is_latched() {
+        anyhow::bail!(
+            "kill-switch latch present at {} — refusing to start",
+            transport::kill::latch_path().display()
+        );
+    }
+    if transport::kill::debugger_present() && !allow_debugger() {
+        anyhow::bail!("debugger/ptrace attached — refusing to start (WEISSMAN_AGENT_ALLOW_DEBUGGER=1 to override)");
+    }
+    crate::transport::tls_pin::require_pin_or_dev(&cli.server_url)?;
+    transport::kill::protect_path(&transport::state::state_path());
+    transport::kill::protect_path(&transport::spool::spool_path());
+
     let hostname = cli
         .hostname_override
         .clone()
@@ -82,6 +95,12 @@ async fn main() -> anyhow::Result<()> {
             saved.into_enrollment(jwt)
         }
         None => {
+            if cli.enrollment_token.trim().is_empty() {
+                anyhow::bail!(
+                    "no persisted identity at {} and WEISSMAN_ENROLLMENT_TOKEN is empty",
+                    state_path.display()
+                );
+            }
             let fresh = transport::enrollment::enroll(
                 &cli.server_url,
                 &cli.enrollment_token,
@@ -115,6 +134,10 @@ async fn main() -> anyhow::Result<()> {
             fresh
         }
     };
+
+    if !cli.enroll_only {
+        install_self_protect_signals();
+    }
 
     if cli.enroll_only {
         // The installer runs this to validate the token. It used to throw the result away and
@@ -159,6 +182,58 @@ async fn main() -> anyhow::Result<()> {
                     target: "agent", error = %e,
                     "session renewal failed; reusing the current token for this attempt"
                 ),
+            }
+        }
+    }
+}
+
+fn allow_debugger() -> bool {
+    matches!(
+        std::env::var("WEISSMAN_AGENT_ALLOW_DEBUGGER").as_deref(),
+        Ok("1") | Ok("true") | Ok("TRUE")
+    )
+}
+
+fn allow_local_stop() -> bool {
+    matches!(
+        std::env::var("WEISSMAN_AGENT_ALLOW_LOCAL_STOP").as_deref(),
+        Ok("1") | Ok("true") | Ok("TRUE")
+    )
+}
+
+fn install_self_protect_signals() {
+    if allow_local_stop() {
+        return;
+    }
+    tokio::spawn(async move {
+        loop {
+            if tokio::signal::ctrl_c().await.is_err() {
+                break;
+            }
+            tracing::error!(
+                target: "agent",
+                "ignoring SIGINT (self-protect; signed kill-switch or WEISSMAN_AGENT_ALLOW_LOCAL_STOP=1)"
+            );
+        }
+    });
+    #[cfg(unix)]
+    {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut sigterm) => {
+                tokio::spawn(async move {
+                    loop {
+                        if sigterm.recv().await.is_none() {
+                            break;
+                        }
+                        tracing::error!(
+                            target: "agent",
+                            "ignoring SIGTERM (self-protect; signed kill-switch or WEISSMAN_AGENT_ALLOW_LOCAL_STOP=1)"
+                        );
+                    }
+                });
+            }
+            Err(e) => {
+                tracing::warn!(target: "agent", error = %e, "could not install SIGTERM guard")
             }
         }
     }

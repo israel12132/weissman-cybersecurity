@@ -184,6 +184,14 @@ const ALLOWED_OPS: &[&str] = &[
     "is_not_null",
 ];
 const MAX_LIMIT: i64 = 200;
+const ALLOWED_AGGREGATES: &[&str] = &["count", "avg", "sum", "min", "max"];
+
+/// Postgres-side defence: wrap a compiled plan so a slipped LIMIT cannot
+/// return more than [`MAX_LIMIT`] rows even if the inner SQL is wrong.
+#[must_use]
+pub fn wrap_nl_sql(inner: &str) -> String {
+    format!("SELECT * FROM ({inner}) AS weissman_nl_q LIMIT {MAX_LIMIT}")
+}
 
 // ─── Plan structures ─────────────────────────────────────────────────────────
 
@@ -200,6 +208,30 @@ pub struct QueryPlan {
     pub order_desc: bool,
     #[serde(default)]
     pub limit: Option<i64>,
+    /// Allow-listed aggregate: `count` / `avg` / `sum` / `min` / `max`.
+    /// `count` may omit `aggregate_column` (COUNT(*)).
+    #[serde(default)]
+    pub aggregate: Option<String>,
+    #[serde(default)]
+    pub aggregate_column: Option<String>,
+    #[serde(default)]
+    pub group_by: Option<String>,
+}
+
+impl Default for QueryPlan {
+    fn default() -> Self {
+        Self {
+            table: String::new(),
+            select: vec![],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: None,
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -224,8 +256,40 @@ pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String
         .get(plan.table.as_str())
         .ok_or_else(|| format!("table '{}' is not exposed to NL queries", plan.table))?;
 
+    let agg = plan
+        .aggregate
+        .as_deref()
+        .map(str::trim)
+        .map(str::to_ascii_lowercase)
+        .filter(|s| !s.is_empty());
+    if let Some(ref fn_name) = agg {
+        if !ALLOWED_AGGREGATES.contains(&fn_name.as_str()) {
+            return Err(format!("aggregate '{fn_name}' is not allowed"));
+        }
+        if fn_name != "count" {
+            let col = plan
+                .aggregate_column
+                .as_deref()
+                .ok_or_else(|| format!("aggregate '{fn_name}' requires aggregate_column"))?;
+            if !spec.columns.contains(&col) {
+                return Err(format!("aggregate column '{col}' not allowed"));
+            }
+        } else if let Some(col) = plan.aggregate_column.as_deref() {
+            if !col.is_empty() && !spec.columns.contains(&col) {
+                return Err(format!("aggregate column '{col}' not allowed"));
+            }
+        }
+        if let Some(g) = plan.group_by.as_deref() {
+            if !spec.columns.contains(&g) {
+                return Err(format!("group_by '{g}' not allowed"));
+            }
+        }
+    }
+
     // 2) Validate SELECT columns (default to spec.columns if empty).
-    let select_cols: Vec<&str> = if plan.select.is_empty() {
+    let select_cols: Vec<&str> = if agg.is_some() {
+        Vec::new()
+    } else if plan.select.is_empty() {
         spec.columns.iter().copied().collect()
     } else {
         let mut out = Vec::with_capacity(plan.select.len());
@@ -326,21 +390,43 @@ pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String
     }
 
     let order_sql = match order {
-        Some(c) => format!(
+        Some(c) if agg.is_none() => format!(
             " ORDER BY {} {}",
             c,
             if plan.order_desc { "DESC" } else { "ASC" }
         ),
-        None => String::new(),
+        _ => String::new(),
     };
-    let sql = format!(
-        "SELECT {} FROM {} WHERE {}{} LIMIT {}",
-        select_sql,
-        spec.table,
-        where_parts.join(" AND "),
-        order_sql,
-        limit,
-    );
+    let sql = if let Some(fn_name) = agg {
+        let agg_sql = match fn_name.as_str() {
+            "count" => match plan.aggregate_column.as_deref().filter(|c| !c.is_empty()) {
+                Some(c) => format!("COUNT({c}) AS value"),
+                None => "COUNT(*) AS value".to_string(),
+            },
+            other => {
+                let c = plan.aggregate_column.as_deref().unwrap_or("id");
+                format!("{}({c}) AS value", other.to_ascii_uppercase())
+            }
+        };
+        let (select_head, group_sql) = match plan.group_by.as_deref() {
+            Some(g) => (format!("{g}, {agg_sql}"), format!(" GROUP BY {g}")),
+            None => (agg_sql, String::new()),
+        };
+        format!(
+            "SELECT {select_head} FROM {} WHERE {}{group_sql} LIMIT {limit}",
+            spec.table,
+            where_parts.join(" AND "),
+        )
+    } else {
+        format!(
+            "SELECT {} FROM {} WHERE {}{} LIMIT {}",
+            select_sql,
+            spec.table,
+            where_parts.join(" AND "),
+            order_sql,
+            limit,
+        )
+    };
     Ok(Compiled { sql, params })
 }
 
@@ -377,7 +463,8 @@ pub async fn execute_plan(
         .await
         .map_err(|e| format!("set tenant guc: {e}"))?;
 
-    let mut q = sqlx::query(&compiled.sql);
+    let wrapped = wrap_nl_sql(&compiled.sql);
+    let mut q = sqlx::query(&wrapped);
     for p in &compiled.params {
         q = bind_json(q, p);
     }
@@ -392,7 +479,7 @@ pub async fn execute_plan(
     let json_rows: Vec<Value> = rows.iter().map(row_to_json).collect();
     Ok(AskResult {
         plan,
-        sql: compiled.sql,
+        sql: wrapped,
         row_count: json_rows.len(),
         rows: json_rows,
         elapsed_ms,
@@ -410,14 +497,7 @@ pub async fn ask(
 ) -> AskResult {
     let start = Instant::now();
     let bad = |err: &str| AskResult {
-        plan: QueryPlan {
-            table: String::new(),
-            select: vec![],
-            filters: vec![],
-            order_by: None,
-            order_desc: false,
-            limit: None,
-        },
+        plan: QueryPlan::default(),
         sql: String::new(),
         rows: vec![],
         row_count: 0,
@@ -479,9 +559,13 @@ async fn audit_query(
         )
         .bind(tenant_id)
         .bind(user_id)
-        .bind(question.chars().take(2000).collect::<String>())
-        .bind(serde_json::to_value(&res.plan).unwrap_or(json!({})))
-        .bind(&res.sql)
+        .bind(crate::nl_audit_crypto::seal_text(
+            &question.chars().take(2000).collect::<String>(),
+        ))
+        .bind(crate::nl_audit_crypto::seal_plan(
+            &serde_json::to_value(&res.plan).unwrap_or(json!({})),
+        ))
+        .bind(crate::nl_audit_crypto::seal_text(&res.sql))
         .bind(res.row_count as i32)
         .bind(res.elapsed_ms as i32)
         .bind(res.error.clone().unwrap_or_default())
@@ -558,7 +642,10 @@ Schema:
   ],
   "order_by":  "discovered_at",                // optional
   "order_desc": true,                          // optional, default false
-  "limit":     50                              // optional, max 200
+  "limit":     50,                             // optional, max 200
+  "aggregate": "count",                        // optional: count|avg|sum|min|max
+  "aggregate_column": "id",                    // optional; omit for COUNT(*)
+  "group_by":  "severity"                      // optional allow-listed column
 }
 
 Operators allowed: =, !=, <, <=, >, >=, in, like, is_null, is_not_null.
@@ -629,6 +716,9 @@ mod tests {
             order_by: Some("discovered_at".into()),
             order_desc: true,
             limit: Some(50),
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
         };
         let c = compile_plan(&plan, 1).unwrap();
         // Tenant scope ALWAYS first param.
@@ -650,6 +740,9 @@ mod tests {
             order_by: None,
             order_desc: false,
             limit: None,
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
         };
         let err = compile_plan(&plan, 1).unwrap_err();
         assert!(err.contains("not exposed"));
@@ -664,6 +757,9 @@ mod tests {
             order_by: None,
             order_desc: false,
             limit: None,
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
         };
         let err = compile_plan(&plan, 1).unwrap_err();
         assert!(err.contains("not allowed"));
@@ -682,6 +778,9 @@ mod tests {
             order_by: None,
             order_desc: false,
             limit: None,
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
         };
         let err = compile_plan(&plan, 1).unwrap_err();
         assert!(err.contains("operator"));
@@ -696,8 +795,51 @@ mod tests {
             order_by: None,
             order_desc: false,
             limit: Some(99_999),
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
         };
         let c = compile_plan(&plan, 1).unwrap();
         assert!(c.sql.ends_with(&format!("LIMIT {}", MAX_LIMIT)));
+    }
+
+    #[test]
+    fn compile_count_star() {
+        let plan = QueryPlan {
+            table: "vulnerabilities".into(),
+            select: vec![],
+            filters: vec![Filter {
+                column: "severity".into(),
+                op: "=".into(),
+                value: json!("critical"),
+            }],
+            order_by: None,
+            order_desc: false,
+            limit: Some(1),
+            aggregate: Some("count".into()),
+            aggregate_column: None,
+            group_by: None,
+        };
+        let c = compile_plan(&plan, 1).unwrap();
+        assert!(c.sql.contains("COUNT(*) AS value"));
+        assert!(!c.sql.contains("SELECT id,"));
+    }
+
+    #[test]
+    fn wrap_enforces_postgres_limit() {
+        let inner = "SELECT id FROM vulnerabilities WHERE tenant_id = $1 LIMIT 9999";
+        let w = wrap_nl_sql(inner);
+        assert!(w.starts_with("SELECT * FROM ("));
+        assert!(w.ends_with(&format!("LIMIT {MAX_LIMIT}")));
+    }
+
+    #[test]
+    fn rejects_unknown_aggregate() {
+        let plan = QueryPlan {
+            table: "vulnerabilities".into(),
+            aggregate: Some("drop".into()),
+            ..QueryPlan::default()
+        };
+        assert!(compile_plan(&plan, 1).unwrap_err().contains("aggregate"));
     }
 }

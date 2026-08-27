@@ -59,6 +59,33 @@ if [ "${EXPECTED_SHA}" != "${ACTUAL_SHA}" ]; then
     rm -f "${BIN_PATH}.tmp"
     exit 2
 fi
+
+SIG_TMP="${BIN_PATH}.sig.tmp"
+if curl -sSL --fail "${BASE_URL}/weissman-agent.sig" -o "${SIG_TMP}" 2>/dev/null; then
+    if ! command -v cosign >/dev/null 2>&1; then
+        echo "[weissman-agent] signature present but cosign is not installed" >&2
+        rm -f "${BIN_PATH}.tmp" "${SIG_TMP}"
+        exit 6
+    fi
+    PUB="${WEISSMAN_COSIGN_PUB:-${COSIGN_PUBLIC_KEY:-}}"
+    if [ -z "${PUB}" ]; then
+        echo "[weissman-agent] signature present but WEISSMAN_COSIGN_PUB is unset" >&2
+        rm -f "${BIN_PATH}.tmp" "${SIG_TMP}"
+        exit 6
+    fi
+    if ! cosign verify-blob --key "${PUB}" --signature "${SIG_TMP}" "${BIN_PATH}.tmp"; then
+        echo "[weissman-agent] cosign verify-blob failed" >&2
+        rm -f "${BIN_PATH}.tmp" "${SIG_TMP}"
+        exit 6
+    fi
+    mv "${SIG_TMP}" "${BIN_PATH}.sig"
+    echo "[weissman-agent] cosign signature verified"
+elif [ "${WEISSMAN_REQUIRE_COSIGN:-}" = "1" ]; then
+    echo "[weissman-agent] WEISSMAN_REQUIRE_COSIGN=1 but no weissman-agent.sig was published" >&2
+    rm -f "${BIN_PATH}.tmp"
+    exit 6
+fi
+
 mv "${BIN_PATH}.tmp" "${BIN_PATH}"
 chmod 0755 "${BIN_PATH}"
 
@@ -74,6 +101,11 @@ chmod 0755 "${BIN_PATH}"
 # renewal secret, and prefers that over the token on every subsequent start. The token is a
 # bootstrap, used exactly once, which is what "single-use" was always supposed to mean.
 export WEISSMAN_AGENT_STATE_FILE="${INSTALL_DIR}/agent.state"
+if [ -n "${WEISSMAN_AGENT_TLS_PIN_SHA256:-}" ]; then
+    export WEISSMAN_AGENT_TLS_PIN_SHA256
+elif [[ "${WEISSMAN_SERVER}" == https://* ]]; then
+    export WEISSMAN_AGENT_ALLOW_UNPINNED="${WEISSMAN_AGENT_ALLOW_UNPINNED:-1}"
+fi
 ENROLL_OUT=$("${BIN_PATH}" \
     --server-url "${WEISSMAN_SERVER}" \
     --enrollment-token "${WEISSMAN_TOKEN}" \
@@ -95,12 +127,19 @@ umask 077
 # prefers the state file and will not touch the token while that exists. WEISSMAN_AGENT_STATE_FILE
 # must be present here or the service would look for state next to the binary and, not finding it,
 # fall back to the consumed token.
-cat > "${ENV_FILE}" <<EOF
-WEISSMAN_SERVER_URL=${WEISSMAN_SERVER}
-WEISSMAN_AGENT_STATE_FILE=${INSTALL_DIR}/agent.state
-WEISSMAN_ENROLLMENT_TOKEN=${WEISSMAN_TOKEN}
-RUST_LOG=info
-EOF
+{
+  echo "WEISSMAN_SERVER_URL=${WEISSMAN_SERVER}"
+  echo "WEISSMAN_AGENT_STATE_FILE=${INSTALL_DIR}/agent.state"
+  echo "WEISSMAN_AGENT_SPOOL_FILE=${INSTALL_DIR}/agent.spool.jsonl"
+  echo "WEISSMAN_AGENT_KILL_FILE=${INSTALL_DIR}/agent.killed"
+  echo "WEISSMAN_ENROLLMENT_TOKEN=${WEISSMAN_TOKEN}"
+  echo "RUST_LOG=info"
+  if [ -n "${WEISSMAN_AGENT_TLS_PIN_SHA256:-}" ]; then
+    echo "WEISSMAN_AGENT_TLS_PIN_SHA256=${WEISSMAN_AGENT_TLS_PIN_SHA256}"
+  elif [[ "${WEISSMAN_SERVER}" == https://* ]]; then
+    echo "WEISSMAN_AGENT_ALLOW_UNPINNED=${WEISSMAN_AGENT_ALLOW_UNPINNED:-1}"
+  fi
+} > "${ENV_FILE}"
 chmod 600 "${ENV_FILE}"
 
 if [ "${OS}" = "linux" ]; then

@@ -18,6 +18,7 @@ pub enum ExecutionStatus {
     Failed,
     BlockedBlastRadius,
     DuplicateSkipped,
+    PendingHitl,
 }
 
 impl ExecutionStatus {
@@ -32,6 +33,7 @@ impl ExecutionStatus {
             Self::Failed => "failed",
             Self::BlockedBlastRadius => "blocked_blast_radius",
             Self::DuplicateSkipped => "duplicate_skipped",
+            Self::PendingHitl => "pending_hitl",
         }
     }
 
@@ -112,6 +114,9 @@ pub struct BlastRadiusReport {
     pub vpc_tag_mismatch: bool,
     pub blocked: bool,
     pub block_reason: String,
+    /// Crown-jewel isolate must wait for a human (HITL). Distinct from a hard block.
+    #[serde(default)]
+    pub requires_hitl: bool,
 }
 
 /// Result returned to the playbook dispatcher.

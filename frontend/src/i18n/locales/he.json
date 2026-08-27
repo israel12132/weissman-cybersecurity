@@ -329,6 +329,7 @@
     "summary": "{{count}} מדריכים · {{enabled}} פעילים · {{failures}} כשלונות מצטברים",
     "summary_empty": "0 מדריכים",
     "name_required": "שם נדרש",
+    "webhook_blocked": "כתובת ה-webhook חסומה (פרטית, localhost או מטא-דאטה ענן). השתמשו בכתובת HTTPS ציבורית.",
     "updated": "עודכן",
     "created_id": "נוצר (מזהה {{id}})",
     "example_loaded": "תבנית דוגמה נטענה. ערוך ושמור.",

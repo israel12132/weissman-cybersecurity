@@ -25,6 +25,9 @@ pub struct AgentState {
     /// Long-lived renewal credential, issued once at enrollment. Only its hash is on the server.
     pub agent_secret: String,
     pub ws_path: String,
+    /// Persist the kill-switch HMAC key issued at enrollment.
+    #[serde(default)]
+    pub kill_hmac_key: String,
 }
 
 impl AgentState {
@@ -36,6 +39,7 @@ impl AgentState {
             client_id: e.client_id,
             agent_secret: e.agent_secret.clone(),
             ws_path: e.ws_path.clone(),
+            kill_hmac_key: e.kill_hmac_key.clone(),
         }
     }
 
@@ -50,6 +54,7 @@ impl AgentState {
             agent_secret: self.agent_secret,
             ws_path: self.ws_path,
             server_message: None,
+            kill_hmac_key: self.kill_hmac_key,
         }
     }
 }
@@ -125,6 +130,7 @@ mod tests {
             client_id: 2,
             agent_secret: "s3cr3t-renewal-credential".into(),
             ws_path: "/ws/agent".into(),
+            kill_hmac_key: String::new(),
         }
     }
 

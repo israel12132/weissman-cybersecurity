@@ -33,9 +33,11 @@ sysinfo = { version = "0.30", default-features = false }
 hostname = "0.4"
 whoami = "1"
 
-# File hashing.
+# File hashing + kill-switch HMAC + TLS pin verifier.
 sha2 = "0.10"
 hex = "0.4"
+hmac = { version = "0.12", features = ["std"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 
 # Random nonce + uuid.
 uuid = { version = "1", features = ["v4"] }

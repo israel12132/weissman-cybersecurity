@@ -77,6 +77,9 @@ const ROW_LOCK_ALLOWED: &[&str] = &[
     // for every tenant transaction. Both of these begin with `begin_tenant_tx`.
     "fingerprint_engine/src/council_hitl.rs",
     "fingerprint_engine/src/self_improve.rs",
+    // HITL approve takes FOR UPDATE on the execution row; the tx starts with
+    // `begin_tenant_tx` so `lock_timeout` is set.
+    "fingerprint_engine/src/soar/engine.rs",
     // Runs on the AUTH pool with no tenant GUC, so it cannot inherit the bound from
     // `set_tenant_tx`; it calls `advisory_lock::bound_lock_wait` explicitly right after `begin()`.
     "fingerprint_engine/src/auth_refresh.rs",

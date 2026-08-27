@@ -2249,6 +2249,31 @@ async fn execute_job_unscoped(
                 "message": "approved; PR creation handled out-of-process by the PR bot",
             }))
         }
+        "soar_dispatch" => {
+            let event: crate::soar_playbook::PlaybookEvent = serde_json::from_value(
+                p.get("event")
+                    .cloned()
+                    .ok_or_else(|| "payload.event required".to_string())?,
+            )
+            .map_err(|e| format!("payload.event: {e}"))?;
+            let finding_id = p
+                .get("finding_id")
+                .and_then(Value::as_i64)
+                .or(event.finding_id)
+                .ok_or_else(|| "payload.finding_id required".to_string())?;
+            crate::soar::dispatch_record::record_post_persist_dispatch(
+                app_pool.as_ref(),
+                tid,
+                finding_id,
+                event,
+            )
+            .await;
+            Ok(serde_json::json!({
+                "ok": true,
+                "kind": "soar_dispatch",
+                "finding_id": finding_id,
+            }))
+        }
         _ => Err(format!("unknown job kind: {}", job.kind)),
     }
 }

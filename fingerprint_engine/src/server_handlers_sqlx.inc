@@ -29,7 +29,7 @@ async fn api_metrics_dashboard(
             .into_response();
     }
 
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({
@@ -162,7 +162,7 @@ async fn live_security_score_from_vulns(
 }
 
 async fn api_dashboard_stats(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"total_vulnerabilities":0,"active_scans":0,"security_score":0,"assets_monitored":0,"threats_mitigated":0}))).into_response();
     };
     let vuln_count: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
@@ -243,7 +243,7 @@ async fn api_dashboard_exec_kpis(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({ "ok": false, "detail": "Database unavailable" })),
@@ -655,7 +655,7 @@ async fn api_findings_clusters(
     let only_kev = q.get("kev").map(|s| s == "1" || s == "true").unwrap_or(false);
     let client_filter: Option<i64> = q.get("client_id").and_then(|s| s.parse().ok());
 
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false, "detail": "DB unavailable"}))).into_response();
     };
 
@@ -857,7 +857,7 @@ async fn api_findings(
         Err(r) => return r,
     };
 
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({"ok": false, "detail": "Database unavailable", "findings": []})),

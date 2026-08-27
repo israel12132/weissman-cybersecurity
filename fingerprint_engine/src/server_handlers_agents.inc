@@ -265,6 +265,13 @@ async fn api_agents_enroll(
                 .into_response();
         }
     };
+    if let Err(e) = crate::agent_min_version::require_min_version(&body.agent_version) {
+        return (
+            StatusCode::UPGRADE_REQUIRED,
+            Json(json!({"ok": false, "detail": e})),
+        )
+            .into_response();
+    }
     if let Some(cid) = body.client_id {
         if cid != consumed.client_id {
             return (
@@ -328,6 +335,7 @@ async fn api_agents_enroll(
         // Returned exactly once — only its hash is stored. The agent persists it so it can renew
         // its short-lived session JWT without a second (single-use) enrollment token.
         agent_secret,
+        kill_hmac_key: crate::agent_kill::derived_kill_key(&agent_uuid.to_string()),
         ws_path: "/ws/agent".into(),
         server_message: Some(format!("welcome host={}", body.hostname)),
     };
@@ -565,6 +573,50 @@ async fn api_agents_dispatch_task(
         .into_response()
 }
 
+#[derive(serde::Deserialize)]
+struct AgentKillBody {
+    #[serde(default)]
+    reason: String,
+}
+
+async fn api_agents_kill_switch(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    headers: axum::http::HeaderMap,
+    Path(agent_id): Path<String>,
+    Json(body): Json<AgentKillBody>,
+) -> Response {
+    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
+        return r;
+    }
+    let reason = if body.reason.trim().is_empty() {
+        "operator kill-switch".to_string()
+    } else {
+        body.reason.trim().chars().take(240).collect()
+    };
+    let nonce = uuid::Uuid::new_v4().to_string();
+    let issued_at = chrono::Utc::now().timestamp();
+    let signature = crate::agent_kill::sign(&agent_id, &nonce, issued_at, &reason);
+    let msg = crate::endpoint_agents::ServerToAgent::KillSwitch {
+        reason: reason.clone(),
+        nonce: nonce.clone(),
+        issued_at_unix: issued_at,
+        signature: signature.clone(),
+    };
+    let live = state.endpoint_agents.send(&agent_id, msg).await.is_ok();
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "live_dispatched": live,
+            "reason": reason,
+            "nonce": nonce,
+            "issued_at_unix": issued_at,
+        })),
+    )
+        .into_response()
+}
+
 // WebSocket handler. Authentication uses agent session JWT (`typ: agent`) via header or `?token=`.
 async fn ws_agent(
     ws: axum::extract::WebSocketUpgrade,
@@ -623,6 +675,16 @@ async fn ws_agent(
                             let kind = v.get("type").and_then(Value::as_str).unwrap_or("");
                             match kind {
                                 "hello" => {
+                                    let ver = v.get("version").and_then(Value::as_str).unwrap_or("");
+                                    if let Err(e) = crate::agent_min_version::require_min_version(ver) {
+                                        let deny = serde_json::json!({
+                                            "type": "shutdown",
+                                            "reason": e,
+                                        });
+                                        let _ = socket.send(Message::Text(deny.to_string())).await;
+                                        let _ = socket.send(Message::Close(None)).await;
+                                        return;
+                                    }
                                     let aid = v.get("agent_id").and_then(Value::as_str).unwrap_or("").to_string();
                                     if aid.is_empty() {
                                         let _ = socket.send(Message::Close(None)).await;

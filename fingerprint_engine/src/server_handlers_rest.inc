@@ -545,7 +545,7 @@ async fn api_clients_list(
         Ok(v) => v,
         Err(r) => return r,
     };
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({
@@ -785,7 +785,7 @@ async fn api_clients_get(
     if let Err(r) = crate::client_isolation::bind_requested_client(&auth, Some(id)) {
         return r;
     }
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({"ok": false, "detail": "Database unavailable. Retry shortly.", "code": "db_unavailable"})),

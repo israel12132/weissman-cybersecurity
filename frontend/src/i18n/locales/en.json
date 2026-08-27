@@ -339,6 +339,7 @@
     "summary": "{{count}} playbooks · {{enabled}} enabled · {{failures}} failures all-time",
     "summary_empty": "0 playbooks",
     "name_required": "Name required",
+    "webhook_blocked": "Webhook URL is blocked (private, loopback, or cloud metadata). Use a public HTTPS endpoint.",
     "updated": "Updated",
     "created_id": "Created (id {{id}})",
     "example_loaded": "Loaded example template. Tweak and Save.",
