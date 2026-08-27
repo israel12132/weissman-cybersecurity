@@ -62,7 +62,8 @@ pub fn check_and_record(tenant_id: i64) -> HealRateDecision {
 }
 
 /// Pure core (time/limit/window injected, operates on a supplied map) so the sliding-window
-/// semantics are unit-tested without touching the process-global state or the wall clock.
+/// semantics are unit-tested without touching the process-global DashMap or the wall clock.
+#[cfg(test)]
 fn decide(
     map: &mut HashMap<i64, TenantWindow>,
     tenant_id: i64,

@@ -57,7 +57,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/")
-                    .header(header::ACCEPT_ENCODING, "br, gzip")
+                    .header(header::ACCEPT_ENCODING, "br")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -68,9 +68,9 @@ mod tests {
             .get(header::CONTENT_ENCODING)
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
-        assert!(
-            enc == "br" || enc == "gzip",
-            "expected br or gzip, got {enc:?}"
+        assert_eq!(
+            enc, "br",
+            "Accept-Encoding: br must select Brotli quality 4"
         );
     }
 
@@ -117,7 +117,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/sse")
-                    .header(header::ACCEPT_ENCODING, "br, gzip")
+                    .header(header::ACCEPT_ENCODING, "br")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -128,9 +128,9 @@ mod tests {
             .get(header::CONTENT_ENCODING)
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
-        assert!(
-            enc == "br" || enc == "gzip",
-            "Command Center SSE must be Brotli/gzip encoded, got {enc:?}"
+        assert_eq!(
+            enc, "br",
+            "Command Center SSE with Accept-Encoding: br must be Brotli-4"
         );
     }
 }
