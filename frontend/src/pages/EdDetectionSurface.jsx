@@ -11,6 +11,8 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, extractFindingsFromJob, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 const ENGINE = 'edr_evasion'
 const ACCENT = '#a855f7'
@@ -222,10 +224,14 @@ export default function EdDetectionSurface() {
       )}
     >
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        <select value={selectedClientId ?? ''} onChange={(e) => setSelectedClientId(e.target.value || null)} className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs font-mono text-[var(--text-secondary)]">
-          <option value="">{t('pages.edDetection.select_client')}</option>
-          {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <ScopedClientControl
+              value={selectedClientId ?? ''}
+              onChange={(id) => setSelectedClientId(id || null)}
+              clients={clients}
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs font-mono text-[var(--text-secondary)]"
+              placeholder={t('pages.edDetection.select_client')}
+              allowEmpty
+            />
         <input type="text" value={target} onChange={(e) => setTarget(e.target.value)} placeholder={t('pages.edDetection.target_placeholder')} className="flex-1 min-w-[200px] bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs font-mono text-[var(--text-primary)]" />
         <Button variant="unstyled" type="button" onClick={handleScan} disabled={scanning || !selectedClientId} className="px-5 py-2 rounded-xl font-mono text-sm border border-violet-500/40 text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40">
           {scanning ? t('pages.edDetection.scanning') : t('pages.edDetection.run_scan')}

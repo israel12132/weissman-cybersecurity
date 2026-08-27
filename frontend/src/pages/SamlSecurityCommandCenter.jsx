@@ -14,6 +14,8 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 
 const ENGINE_ID = 'saml_attack'
@@ -307,11 +309,14 @@ export default function SamlSecurityCommandCenter() {
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <label className="flex items-center gap-2 text-xs font-mono text-[var(--text-tertiary)]">
           {L.client}
-          <select value={clientId ?? ''} onChange={(e) => setClientId(e.target.value || null)}
-            className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[var(--text-secondary)]">
-            <option value="">{L.selectClient}</option>
-            {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          <ScopedClientControl
+              value={clientId ?? ''}
+              onChange={(id) => setClientId(id || null)}
+              clients={clients}
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[var(--text-secondary)]"
+              placeholder={L.selectClient}
+              allowEmpty
+            />
         </label>
         <Link to="/identity-security" className="text-[11px] font-mono text-violet-300/80 hover:text-violet-200 border border-violet-500/25 rounded-lg px-3 py-1.5">{L.relatedIdentity} →</Link>
       </div>

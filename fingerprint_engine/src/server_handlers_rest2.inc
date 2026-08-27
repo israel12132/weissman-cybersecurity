@@ -466,7 +466,7 @@ async fn api_findings_update_status(
             "finding_id": finding_id,
             "client_id": client_id,
         });
-        if let Err(e) = weissman_db::job_queue::enqueue(
+        if let Err(e) = crate::async_jobs::enqueue(
             state.app_pool.as_ref(),
             auth.tenant_id,
             "remediation_verify",

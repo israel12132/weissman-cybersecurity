@@ -13,6 +13,8 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../utils/apiFetch'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 const ENGINES = {
   chronos: 'chronos',
@@ -321,16 +323,14 @@ export default function SovereignDefenseMatrix() {
 
             <label className="block text-[11px] font-mono text-[var(--text-tertiary)]">
               {t('pages.sovereignDefense.client')}
-              <select
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                className="mt-1 w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white"
-              >
-                <option value="">{t('pages.sovereignDefense.select_client')}</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name || c.id}</option>
-                ))}
-              </select>
+              <ScopedClientControl
+              value={clientId}
+              onChange={(id) => setClientId(id)}
+              clients={clients}
+              className="mt-1 w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white"
+              placeholder={t('pages.sovereignDefense.select_client')}
+              allowEmpty
+            />
             </label>
 
             <label className="block text-[11px] font-mono text-[var(--text-tertiary)]">

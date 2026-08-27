@@ -3,7 +3,7 @@ import { formatApiErrorResponse } from '../lib/apiError.js'
 import { apiFetch } from '../utils/apiFetch'
 import { normalizeIntegrations } from '../lib/engineClientPrefill'
 import { useAuthOptional } from './AuthContext'
-import { assignedClientId, isClientUser } from '../lib/clientScope'
+import { assignedClientId, allowedClientIds, boundClientId, filterVisibleClients, shouldHideClientPicker } from '../lib/clientScope'
 
 const defaultConfig = {
   enabled_engines: ['osint', 'asm', 'nexus_sovereign_swarm', 'bola_idor', 'llm_redteam', 'pki_tls', 'edr_evasion', 'saml_attack', 'zero_day_prediction'],
@@ -28,10 +28,10 @@ function parseConfigFromResponse(data) {
 export function ClientProvider({ children }) {
   const auth = useAuthOptional()
   const session = auth?.session
-  const lockedClientId = isClientUser(session) ? assignedClientId(session) : null
-  const clientScopeLocked = lockedClientId != null
+  const lockedClientId = assignedClientId(session)
+  const allowedIds = useMemo(() => allowedClientIds(session), [session])
 
-  const [clients, setClients] = useState([])
+  const [clientsRaw, setClients] = useState([])
   const [clientsError, setClientsError] = useState(null)
   const [selectedClientId, setSelectedClientIdState] = useState(lockedClientId)
   const [clientConfig, setClientConfigState] = useState(defaultConfig)
@@ -49,22 +49,36 @@ export function ClientProvider({ children }) {
 
   selectedClientIdRef.current = selectedClientId
 
+  const clients = useMemo(
+    () => filterVisibleClients(session, clientsRaw),
+    [session, clientsRaw],
+  )
+  const clientPickerHidden = shouldHideClientPicker(session, clients)
+  // Locked identity = no picker. Staff with a single visible customer, and every
+  // portal session with one assigned client, never switch tenants from the UI.
+  const clientScopeLocked = clientPickerHidden
+
   const setSelectedClientId = useCallback(
     (id) => {
-      if (clientScopeLocked) {
-        setSelectedClientIdState(lockedClientId)
+      if (clientPickerHidden) {
+        setSelectedClientIdState(boundClientId(session, clients, id))
         return
+      }
+      if (allowedIds.length) {
+        const n = Number(id)
+        if (!Number.isFinite(n) || !allowedIds.includes(n)) return
       }
       setSelectedClientIdState(id)
     },
-    [clientScopeLocked, lockedClientId],
+    [clientPickerHidden, session, clients, allowedIds],
   )
 
   useEffect(() => {
-    if (clientScopeLocked && lockedClientId != null) {
-      setSelectedClientIdState(lockedClientId)
+    const bound = boundClientId(session, clients, selectedClientId)
+    if (bound != null && String(bound) !== String(selectedClientId)) {
+      setSelectedClientIdState(bound)
     }
-  }, [clientScopeLocked, lockedClientId])
+  }, [session, clients, selectedClientId])
 
   const dismissConfigError = useCallback(() => setConfigError(null), [])
   const dismissClientsError = useCallback(() => setClientsError(null), [])
@@ -206,6 +220,7 @@ export function ClientProvider({ children }) {
       setSelectedClientId,
       selectedClient,
       clientScopeLocked,
+      clientPickerHidden,
       clientConfig,
       setClientConfig,
       patchConfig,
@@ -229,6 +244,7 @@ export function ClientProvider({ children }) {
       setSelectedClientId,
       selectedClient,
       clientScopeLocked,
+      clientPickerHidden,
       clientConfig,
       setClientConfig,
       patchConfig,

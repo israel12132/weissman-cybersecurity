@@ -20,6 +20,8 @@ import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import EngineScanParamsPanel from '../components/engine/EngineScanParamsPanel'
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid } from 'recharts'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 const TARGET_REQUIRED_IDS = new Set(['osint', 'asm', 'k8s_container', 'scada_ics', 'semantic_ai_fuzz', 'ai_adversarial_redteam'])
 
@@ -345,16 +347,14 @@ export default function BusinessEngineProfile() {
         <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
           <h2 className="text-sm font-semibold text-white">{t('pages.businessEngineProfile.run_heading')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <select
+            <ScopedClientControl
               value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
+              onChange={(id) => setClientId(id)}
+              clients={clients}
               className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]"
-            >
-              <option value="">{t('pages.businessEngineProfile.select_client')}</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+              placeholder={t('pages.businessEngineProfile.select_client')}
+              allowEmpty
+            />
             <input
               value={target}
               onChange={(e) => setTarget(e.target.value)}

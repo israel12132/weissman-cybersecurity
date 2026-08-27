@@ -21,6 +21,58 @@ export function assignedClientId(session) {
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
+/** Allowed customer ids for this session (single assigned client, or explicit list). */
+export function allowedClientIds(session) {
+  const raw = session?.allowed_client_ids
+  if (Array.isArray(raw) && raw.length) {
+    return [...new Set(raw.map((id) => Number(id)).filter((n) => Number.isFinite(n) && n > 0))]
+  }
+  const one = assignedClientId(session)
+  return one != null ? [one] : []
+}
+
+/**
+ * Hide every client picker when the session is locked to one customer, or when
+ * the visible catalog is a single auto-bound client (no choice to present).
+ */
+export function shouldHideClientPicker(session, clients = []) {
+  if (session?.client_picker_hidden === true) return true
+  const allowed = allowedClientIds(session)
+  if (allowed.length === 1) return true
+  if (isClientUser(session) && allowed.length <= 1) return true
+  // A single visible customer is auto-bound — never render a one-option dropdown.
+  // Length 0 is "catalog still loading" for staff: keep the control, do not flash unbound.
+  if (Array.isArray(clients) && clients.length === 1) return true
+  return false
+}
+
+/** Restrict a catalog to the session's allowed customers. Empty allowed = tenant-wide. */
+export function filterVisibleClients(session, clients = []) {
+  const list = Array.isArray(clients) ? clients : []
+  const allowed = allowedClientIds(session)
+  if (!allowed.length) return list
+  const set = new Set(allowed.map(String))
+  return list.filter((c) => set.has(String(c?.id)))
+}
+
+/** Effective bound id: assigned client, else the only visible catalog row. */
+export function boundClientId(session, clients = [], current = null) {
+  const allowed = allowedClientIds(session)
+  if (allowed.length === 1) return allowed[0]
+  const visible = filterVisibleClients(session, clients)
+  if (visible.length === 1) {
+    const n = Number(visible[0].id)
+    return Number.isFinite(n) && n > 0 ? n : current
+  }
+  if (current != null && current !== '') {
+    const n = Number(current)
+    if (Number.isFinite(n) && n > 0) {
+      if (!allowed.length || allowed.includes(n)) return n
+    }
+  }
+  return allowed[0] ?? null
+}
+
 export function isClientUser(session) {
   if (!session || session.ok === false) return false
   if (session.is_client_user === true) return true

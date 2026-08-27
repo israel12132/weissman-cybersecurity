@@ -16,6 +16,8 @@ import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import { downloadBytes } from '../lib/pdfExport'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 const ENGINE_ID = 'smb_netbios'
 const ACCENT = '#3b82f6'
@@ -818,11 +820,14 @@ export default function SmbNetbiosCommandCenter() {
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{L.client}</label>
-            <select value={clientId} onChange={(e) => { setClientId(e.target.value); setTargetTouched(false) }}
-              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono min-w-[180px] focus:outline-none focus:border-blue-500/40">
-              <option value="">{L.selectClient}</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <ScopedClientControl
+              value={clientId}
+              onChange={(id) => { setClientId(id); setTargetTouched(false) }}
+              clients={clients}
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono min-w-[180px] focus:outline-none focus:border-blue-500/40"
+              placeholder={L.selectClient}
+              allowEmpty
+            />
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
             <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{L.target}</label>

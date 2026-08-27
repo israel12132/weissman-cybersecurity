@@ -11,6 +11,8 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 // Command Center GUI for the `bgp_dns_hijacking` engine (DNS & BGP Hijack-Resistance).
 // Every control maps 1:1 to a real engine parameter read from the scan body via ArsenalConfig.
@@ -569,11 +571,14 @@ export default function DnsDomainPosture() {
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.dnsDomainPosture.client', 'Client')}</label>
-            <select value={clientId} onChange={(e) => { setClientId(e.target.value); setTargetTouched(false) }}
-              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40 min-w-[180px]">
-              <option value="">{t('pages.dnsDomainPosture.select_client', '— Select client —')}</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <ScopedClientControl
+              value={clientId}
+              onChange={(id) => { setClientId(id); setTargetTouched(false) }}
+              clients={clients}
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40 min-w-[180px]"
+              placeholder={t('pages.dnsDomainPosture.select_client', '— Select client —')}
+              allowEmpty
+            />
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
             <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.dnsDomainPosture.target_domain', 'Target domain')}</label>

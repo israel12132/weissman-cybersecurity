@@ -14,6 +14,8 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 const ENGINE = 'digital_twin'
 const SCENARIO_IDS = ['xss', 'sqli', 'mitm', 'cors']
@@ -533,11 +535,14 @@ export default function DigitalTwinSimulator() {
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.digitalTwinSimulator.client_label')}</label>
-            <select value={selectedClientId ?? ''} onChange={(e) => setSelectedClientId(e.target.value || null)}
-              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#8b5cf6]/40 min-w-[180px]">
-              <option value="">{t('pages.digitalTwinSimulator.select_client')}</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <ScopedClientControl
+              value={selectedClientId ?? ''}
+              onChange={(id) => setSelectedClientId(id || null)}
+              clients={clients}
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#8b5cf6]/40 min-w-[180px]"
+              placeholder={t('pages.digitalTwinSimulator.select_client')}
+              allowEmpty
+            />
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
             <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.digitalTwinSimulator.target_label')}</label>

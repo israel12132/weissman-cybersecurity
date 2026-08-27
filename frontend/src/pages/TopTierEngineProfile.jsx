@@ -31,6 +31,8 @@ import {
   BarChart,
 } from 'recharts'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 const columnHelper = createColumnHelper()
 
@@ -352,16 +354,14 @@ export default function TopTierEngineProfile() {
         <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
           <h2 className="text-sm font-semibold text-white">{t('pages.topTierEngineProfile.run_live')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <select
+            <ScopedClientControl
               value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
+              onChange={(id) => setClientId(id)}
+              clients={clients}
               className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]"
-            >
-              <option value="">{t('pages.topTierEngineProfile.select_client')}</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+              placeholder={t('pages.topTierEngineProfile.select_client')}
+              allowEmpty
+            />
             <input
               value={target}
               onChange={(e) => setTarget(e.target.value)}

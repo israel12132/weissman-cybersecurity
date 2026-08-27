@@ -369,6 +369,22 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
               </div>
             </div>
           )}
+          {clientScopeLocked ? (
+            <div className="px-4 py-3">
+              {clients[0] ? (
+                <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2">
+                  <div className="text-[12px] font-medium text-[var(--text-primary)] truncate">
+                    {clients[0].name || `Client ${clients[0].id}`}
+                  </div>
+                  <div className="text-[9px] font-mono uppercase tracking-widest text-cyan-400/70 mt-0.5">
+                    {t('nav.portal_locked')}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-[var(--text-muted)]">{t('common.no_data')}</p>
+              )}
+            </div>
+          ) : (
           <ul className="space-y-px pb-1">
             {clients.length === 0 && !clientsError && (
               <li className="px-4 py-2 text-[11px] text-[var(--text-muted)]">{t('common.no_data')}</li>
@@ -438,6 +454,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
               )
             })}
           </ul>
+          )}
         </div>
       </div>
 

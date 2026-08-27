@@ -8,6 +8,8 @@ import { apiFetch } from '../utils/apiFetch';
 import EvidenceNotice from '../components/ui/EvidenceNotice';
 import Button from '../components/ui/Button'
 import { downloadCsv } from '../lib/exportFindingsCsv'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 /**
  * NetworkProtocols — live protocol-exposure posture served by the SOC
@@ -105,16 +107,14 @@ export default function NetworkProtocols() {
 
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.networkProtocols.client_scope')}</span>
-          <select
-            value={selectedClientId}
-            onChange={(e) => setSelectedClientId(e.target.value)}
-            className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
-          >
-            <option value="">{t('pages.networkProtocols.all_clients')}</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+          <ScopedClientControl
+              value={selectedClientId}
+              onChange={(id) => setSelectedClientId(id)}
+              clients={clients}
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
+              placeholder={t('pages.networkProtocols.all_clients')}
+              allowEmpty
+            />
           <span className="text-[10px] font-mono text-[var(--text-disabled)]">
             {t('pages.networkProtocols.source_label', { source: dataSource === 'soc' ? '/api/soc/network-protocols' : dataSource })}
           </span>

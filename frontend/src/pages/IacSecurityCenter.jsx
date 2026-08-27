@@ -15,6 +15,7 @@ import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useClientIntegrations } from '../hooks/useClientIntegrations'
 import { prefillParamsForEngine } from '../lib/engineClientPrefill'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
 
 const ENGINE_ID = 'iac_misconfig'
 
@@ -1953,10 +1954,14 @@ export default function IacSecurityCenter() {
               <Section title={t('iacSecurity.sec_target', 'Target Binding')} icon="🎯" accent="#22d3ee" count={2}>
                 <label className="block space-y-1">
                   <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{t('common.client', 'Client')}</span>
-                  <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-400/40">
-                    <option value="">—</option>
-                    {clients.map((c) => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
-                  </select>
+                  <ScopedClientControl
+              value={selectedClientId}
+              onChange={(id) => setSelectedClientId(id)}
+              clients={clients}
+              className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-400/40"
+              placeholder="—"
+              allowEmpty
+            />
                 </label>
                 <Txt label={t('iacSecurity.host_target', 'Host (exposure mode)')} value={target} onChange={setTarget} placeholder="https://target.example" hint="Probed for publicly leaked IaC files" />
               </Section>

@@ -92,6 +92,7 @@ import {
   CryptoPosture,
   LiveFeed,
   ReportHistory,
+  PdfCommandCenter,
   ExecutiveOverview,
   AgentManagement,
   DarkWebMonitor,
@@ -274,6 +275,7 @@ export default function TacticalApp() {
           <Route path="crypto-posture" element={<CryptoPosture />} />
           <Route path="live-feed" element={<LiveFeed />} />
           <Route path="reports" element={<ReportHistory />} />
+          <Route path="pdf-intelligence" element={<PdfCommandCenter />} />
           <Route path="overview" element={<ExecutiveOverview />} />
           <Route path="dark-web" element={<DarkWebMonitor />} />
           <Route path="target-intel" element={<TargetIntelligence />} />

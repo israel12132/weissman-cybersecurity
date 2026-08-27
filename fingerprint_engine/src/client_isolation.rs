@@ -64,13 +64,23 @@ pub fn can_delete_clients(auth: &AuthContext) -> bool {
 /// from the server policy.
 #[must_use]
 pub fn capabilities_json(auth: &AuthContext) -> Value {
+    let allowed: Vec<i64> = auth
+        .assigned_client_id
+        .into_iter()
+        .filter(|id| *id > 0)
+        .collect();
     json!({
         "assigned_client_id": auth.assigned_client_id,
+        "allowed_client_ids": allowed,
         "is_owner": is_platform_owner(auth),
         "is_staff": is_staff(auth),
         "is_client_user": is_client_scoped(auth),
         "can_create_clients": can_create_clients(auth),
         "can_delete_clients": can_delete_clients(auth),
+        // Hide the picker when the session is locked to zero or one customer.
+        // A future multi-assignment list (allowed.len() > 1) still shows a
+        // filtered picker — never other tenants' clients.
+        "client_picker_hidden": is_client_scoped(auth) && allowed.len() <= 1,
     })
 }
 
@@ -96,10 +106,29 @@ pub fn require_can_delete_client(auth: &AuthContext) -> Result<(), Response> {
     ))
 }
 
-/// Parse a client id from `/api/clients/{id}` or `/api/financial-risk/{id}`.
+/// Path prefixes whose next segment is a customer `client_id`.
+const CLIENT_ID_PATH_PREFIXES: &[&str] = &[
+    "/api/clients/",
+    "/api/financial-risk/",
+    "/api/attack-paths/",
+    "/api/battlespace/topology/",
+    "/api/threat-analysis/",
+    "/api/remediation/priority/",
+    "/api/attack-exposure/",
+    "/api/posture/score/",
+    "/api/compliance/posture/",
+    "/api/remediation/sla-forecast/",
+    "/api/executive-summary/",
+    "/api/remediation/aging/",
+    "/api/arsenal/recommendation/",
+    "/api/sovereign-defense/",
+    "/api/compliance/evidence-pack/",
+];
+
+/// Parse a customer id from known `/:client_id` API paths.
 #[must_use]
 pub fn extract_path_client_id(path: &str) -> Option<i64> {
-    for prefix in ["/api/clients/", "/api/financial-risk/"] {
+    for prefix in CLIENT_ID_PATH_PREFIXES {
         if let Some(rest) = path.strip_prefix(prefix) {
             let token = rest.split('/').next().unwrap_or("");
             if token.is_empty() {
@@ -124,6 +153,37 @@ pub fn inject_query_client_id(query: Option<&str>, cid: i64) -> Option<String> {
         None | Some("") => format!("client_id={cid}"),
         Some(q) => format!("{q}&client_id={cid}"),
     })
+}
+
+/// Force `client_id=<cid>` in the query string: insert if missing, overwrite if
+/// the caller sent a different id. Scoped sessions never honor a UI-supplied id.
+#[must_use]
+pub fn force_query_client_id(query: Option<&str>, cid: i64) -> Option<String> {
+    if cid <= 0 {
+        return None;
+    }
+    let mut parts: Vec<String> = Vec::new();
+    let mut found = false;
+    if let Some(q) = query.filter(|s| !s.is_empty()) {
+        for pair in q.split('&') {
+            if pair.is_empty() {
+                continue;
+            }
+            let key = pair.splitn(2, '=').next().unwrap_or("").trim();
+            if key.eq_ignore_ascii_case("client_id") || key.eq_ignore_ascii_case("clientId") {
+                if !found {
+                    parts.push(format!("client_id={cid}"));
+                    found = true;
+                }
+                continue;
+            }
+            parts.push(pair.to_string());
+        }
+    }
+    if !found {
+        parts.push(format!("client_id={cid}"));
+    }
+    Some(parts.join("&"))
 }
 
 #[must_use]
@@ -202,23 +262,38 @@ pub fn payload_visible_to(auth: &AuthContext, payload: &Value) -> bool {
     json_client_id(payload) == Some(cid)
 }
 
-/// Inject `client_id` into a JSON object for portal users (engines auto-aim).
-/// Returns `Err` when the body already names a different client.
+/// Stamp the bound customer onto a JSON body. A scoped session's UI-supplied
+/// `client_id` is ignored and overwritten — the server never trusts the client.
+/// Nested wrapper objects (`data` / `payload` / `params` / `scan`) that already
+/// name a customer id are overwritten the same way. OAuth-style `client_id`
+/// fields deeper in the tree (Azure/GitHub app ids) are left alone.
 pub fn force_json_client_id(auth: &AuthContext, body: &mut Value) -> Result<(), Response> {
     let Some(cid) = auth.assigned_client_id else {
         return Ok(());
     };
-    match body {
-        Value::Object(map) => {
-            if let Some(existing) = json_client_id(&Value::Object(map.clone())) {
-                if existing != cid {
-                    return Err(not_found(auth));
+    stamp_customer_id(body, cid);
+    Ok(())
+}
+
+fn stamp_customer_id(body: &mut Value, cid: i64) {
+    let Value::Object(map) = body else {
+        return;
+    };
+    map.insert("client_id".to_string(), json!(cid));
+    if map.contains_key("clientId") {
+        map.insert("clientId".to_string(), json!(cid));
+    }
+    for wrap in ["data", "payload", "params", "scan", "body"] {
+        if let Some(inner) = map.get_mut(wrap) {
+            if let Value::Object(inner_map) = inner {
+                if inner_map.contains_key("client_id") || inner_map.contains_key("clientId") {
+                    inner_map.insert("client_id".to_string(), json!(cid));
+                    if inner_map.contains_key("clientId") {
+                        inner_map.insert("clientId".to_string(), json!(cid));
+                    }
                 }
             }
-            map.insert("client_id".to_string(), json!(cid));
-            Ok(())
         }
-        _ => Ok(()),
     }
 }
 
@@ -362,6 +437,11 @@ mod tests {
         assert_eq!(extract_path_client_id("/api/clients/42"), Some(42));
         assert_eq!(extract_path_client_id("/api/clients/42/findings"), Some(42));
         assert_eq!(extract_path_client_id("/api/financial-risk/7"), Some(7));
+        assert_eq!(extract_path_client_id("/api/compliance/posture/3"), Some(3));
+        assert_eq!(
+            extract_path_client_id("/api/sovereign-defense/11/dashboard"),
+            Some(11)
+        );
         assert_eq!(extract_path_client_id("/api/clients"), None);
         assert_eq!(extract_path_client_id("/api/findings"), None);
         assert_eq!(extract_path_client_id("/api/clients/not-a-number"), None);
@@ -390,14 +470,53 @@ mod tests {
     }
 
     #[test]
-    fn json_force_injects_client_id() {
+    fn json_force_overrides_client_id() {
         let portal = ctx("client", false, Some(8));
         let mut body = json!({"engine": "asm", "target": "https://ex.test"});
         force_json_client_id(&portal, &mut body).unwrap();
         assert_eq!(body["client_id"], json!(8));
 
-        let mut bad = json!({"client_id": 99});
-        assert!(force_json_client_id(&portal, &mut bad).is_err());
+        let mut spoofed = json!({"client_id": 99, "engine": "asm"});
+        force_json_client_id(&portal, &mut spoofed).unwrap();
+        assert_eq!(spoofed["client_id"], json!(8));
+
+        let mut nested = json!({"engine": "asm", "data": {"client_id": 3}});
+        force_json_client_id(&portal, &mut nested).unwrap();
+        assert_eq!(nested["client_id"], json!(8));
+        assert_eq!(nested["data"]["client_id"], json!(8));
+
+        let mut oauth = json!({"azure_client_id": "app-guid", "client_id": 1});
+        force_json_client_id(&portal, &mut oauth).unwrap();
+        assert_eq!(oauth["client_id"], json!(8));
+        assert_eq!(oauth["azure_client_id"], json!("app-guid"));
+    }
+
+    #[test]
+    fn force_query_overrides_spoofed_client_id() {
+        assert_eq!(
+            force_query_client_id(Some("limit=10&client_id=99"), 5).as_deref(),
+            Some("limit=10&client_id=5")
+        );
+        assert_eq!(
+            force_query_client_id(None, 5).as_deref(),
+            Some("client_id=5")
+        );
+        assert_eq!(
+            force_query_client_id(Some("client_id=5"), 5).as_deref(),
+            Some("client_id=5")
+        );
+    }
+
+    #[test]
+    fn capabilities_hide_picker_for_scoped_users() {
+        let portal = ctx("client", false, Some(4));
+        let caps = capabilities_json(&portal);
+        assert_eq!(caps["client_picker_hidden"], json!(true));
+        assert_eq!(caps["allowed_client_ids"], json!([4]));
+        let staff = ctx("operator", false, None);
+        let staff_caps = capabilities_json(&staff);
+        assert_eq!(staff_caps["client_picker_hidden"], json!(false));
+        assert_eq!(staff_caps["allowed_client_ids"], json!([]));
     }
 
     #[test]

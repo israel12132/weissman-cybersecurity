@@ -12,6 +12,8 @@ import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import DataTable from '../components/ui/DataTable'
 import { createColumnHelper } from '@tanstack/react-table'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 const columnHelper = createColumnHelper()
 
@@ -637,11 +639,14 @@ export default function CloudPostureCommandCenter() {
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.cloudPostureCommandCenter.field_client_label')}</label>
-            <select value={clientId} onChange={(e) => setClientId(e.target.value)}
-              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-orange-500/40 min-w-[180px]">
-              <option value="">{t('pages.cloudPostureCommandCenter.select_client_placeholder')}</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <ScopedClientControl
+              value={clientId}
+              onChange={(id) => setClientId(id)}
+              clients={clients}
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-orange-500/40 min-w-[180px]"
+              placeholder={t('pages.cloudPostureCommandCenter.select_client_placeholder')}
+              allowEmpty
+            />
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[280px]">
             <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.cloudPostureCommandCenter.field_role_arn_label')}</label>

@@ -275,7 +275,8 @@
     "operations_view": "Operations",
     "open_menu": "Open navigation menu",
     "close_menu": "Close navigation menu",
-    "mobile_label": "Nav"
+    "mobile_label": "Nav",
+    "pdf_intelligence": "PDF Intelligence"
   },
   "ask_weissman": {
     "title": "Ask Weissman",
@@ -1565,7 +1566,10 @@
       "field_created": "Created",
       "field_updated": "Updated",
       "field_heartbeat": "Heartbeat",
-      "field_error": "Last error"
+      "field_error": "Last error",
+      "diagnostics_title": "Queue diagnostics (live)",
+      "diagnostics_line": "Workers {{workers}} · pending {{pending}} · Redis {{redis}}",
+      "field_stuck": "Stuck reason"
     },
     "billing": {
       "title": "Billing & Usage",
@@ -1816,6 +1820,21 @@
           "enable_failed": "Failed to enable MFA",
           "disable_failed": "Failed to disable MFA"
         }
+      },
+      "ownership": {
+        "title": "Where settings live",
+        "intro": "Each control has one owner page. Duplicate toggles were removed so a change cannot silently conflict.",
+        "this_page": "This page — tenant policy",
+        "this_page_hint": "Org identity, password/session/MFA policy, scan timeouts, retention, performance, compliance frameworks.",
+        "integrations": "Integrations hub",
+        "integrations_hint": "SIEM, ticketing, chat, SOAR connectors (canonical: /settings/integrations).",
+        "system_core": "System Core",
+        "system_core_hint": "PDF crypto (RFC 3161), Ghost Network / WAF evasion, semantic LLM endpoint.",
+        "sso": "SSO configuration",
+        "sso_hint": "IdP, OIDC, and SAML — not duplicated here.",
+        "integrations_canonical": "Webhook, SIEM, and email connectors are not edited here. Use the Integrations hub (tenant-wide) or a client’s Integrations tab (per-customer secrets).",
+        "open_integrations": "Open Integrations hub",
+        "open_client_integrations": "Client roster → per-customer secrets"
       }
     },
     "darkWebMonitor": {
@@ -2954,7 +2973,8 @@
       "evidence_notice": "SIEM, ticketing, and webhook integrations configured via GET/PUT /api/integrations. Delivery health reflects last successful outbound call — credentials never echoed to the UI.",
       "delete_failed": "Failed to delete integration",
       "delete_success": "Integration deleted",
-      "delete_title": "Delete integration"
+      "delete_title": "Delete integration",
+      "canonical_note": "Canonical path: /settings/integrations ( /integrations is the same hub). Per-customer API keys live on each client’s Integrations tab — not here."
     },
     "killChainOrchestrator": {
       "title": "Kill Chain Orchestrator",
@@ -5681,6 +5701,37 @@
       "select_client_opt": "— Select —",
       "target": "Target",
       "target_required": "Target required"
+    },
+    "pdfCommandCenter": {
+      "title": "PDF Intelligence Command",
+      "subtitle": "Collect every live report artifact and compose a board-ready regulator pack. Empty corpus fails closed — never a fabricated PDF.",
+      "badge": "LIVE CORPUS",
+      "evidence_notice": "Corpus from GET /api/pdf-intelligence (report_runs + vulnerabilities + compliance_engine mappings). Compose via POST /api/pdf-intelligence/compose. Empty scope returns a visible failure — Weissman will not invent findings.",
+      "all_clients": "All clients in tenant",
+      "search_placeholder": "Search artifacts, paths, kinds…",
+      "load_failed": "Failed to load PDF intelligence snapshot",
+      "export_csv": "Export corpus CSV",
+      "kpi_artifacts": "Artifacts",
+      "kpi_findings": "Live findings",
+      "kpi_frameworks": "Frameworks mapped",
+      "kpi_scope": "Scope",
+      "tenant_wide": "Tenant-wide",
+      "empty_title": "No live evidence to pack",
+      "corpus_title": "Live PDF corpus",
+      "corpus_empty": "No artifacts match this search.",
+      "no_path": "no stored path",
+      "findings_n": "{{count}} findings",
+      "editor_title": "Professional pack editor",
+      "doc_title": "Document title",
+      "doc_title_placeholder": "Board / regulator pack title",
+      "section_on": "Included",
+      "section_off": "Omitted",
+      "compose": "Compose intelligence pack",
+      "composing": "Composing…",
+      "compose_failed": "Compose failed",
+      "frameworks_title": "Live control mappings",
+      "frameworks_empty": "No compliance mappings in this tenant yet. Seed mappings, then return.",
+      "controls_line": "{{mapped}} mapped controls · {{violated}} currently violated"
     }
   },
   "components": {
@@ -6906,7 +6957,8 @@
       "gadget_chains_label": "Safe Gadget Chains (JSON) — framework ID → benign payload only",
       "gadget_chains_hint": "e.g. {\"CommonsCollections4\":\"<safe OOB DNS payload>\",\"Jackson\":\"<safe echo payload>\"}. No weaponized RCE.",
       "gadget_chains_placeholder": "{\"CommonsCollections4\":\"\",\"Jackson\":\"\"}",
-      "poe_footer": "Used by Exploit Synthesis & Memory Lab. Verified Exploitability Matrix appears in PDF report with cryptographic timestamp."
+      "poe_footer": "Used by Exploit Synthesis & Memory Lab. Verified Exploitability Matrix appears in PDF report with cryptographic timestamp.",
+      "ownership_banner": "System Core owns crypto, Ghost Network, and semantic LLM. Tenant policy lives in System Config; connectors live in Integrations."
     },
     "ceo": {
       "integratedCommandDeck": {
@@ -7187,6 +7239,13 @@
       "retry_in": "Retry in",
       "min_abbr": "min",
       "close": "Close"
+    },
+    "scopedClient": {
+      "unbound": "No bound customer",
+      "locked_hint": "This account is locked to one customer. Engines, reports, and jobs auto-bind — the server ignores any other client_id.",
+      "bound_aria": "Bound customer: {{name}}",
+      "locked": "Locked",
+      "select": "Select client"
     }
   },
   "supremeNerveCenter": {

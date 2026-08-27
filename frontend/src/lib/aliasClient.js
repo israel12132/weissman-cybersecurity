@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from './apiBase'
+import { useAuthOptional } from '../context/AuthContext'
+import { assignedClientId } from './clientScope'
 
 /** Append `client_id` query param for tenant-scoped API aliases. */
 export function withClientId(path, clientId) {
@@ -19,12 +21,19 @@ export async function fetchFirstTenantClientId() {
   return Number.isFinite(id) && id > 0 ? id : null
 }
 
-/** React hook: resolves first tenant client id for alias API routes. */
+/** React hook: resolves bound / first tenant client id for alias API routes. */
 export function useFirstTenantClientId() {
-  const [clientId, setClientId] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const auth = useAuthOptional()
+  const assigned = assignedClientId(auth?.session)
+  const [clientId, setClientId] = useState(assigned)
+  const [loading, setLoading] = useState(assigned == null)
 
   useEffect(() => {
+    if (assigned != null) {
+      setClientId(assigned)
+      setLoading(false)
+      return undefined
+    }
     let cancelled = false
     fetchFirstTenantClientId()
       .then((id) => {
@@ -42,7 +51,7 @@ export function useFirstTenantClientId() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [assigned])
 
   return { clientId, loading }
 }

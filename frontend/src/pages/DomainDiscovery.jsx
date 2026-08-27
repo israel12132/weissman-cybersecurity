@@ -10,6 +10,8 @@ import { SkeletonBar } from '../components/ui/Skeleton'
 import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -380,16 +382,14 @@ export default function DomainDiscovery() {
           {/* Client selector */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.domainDiscovery.client')}</span>
-            <select
+            <ScopedClientControl
               value={selectedClientId ?? ''}
-              onChange={(e) => setSelectedClientId(e.target.value || null)}
+              onChange={(id) => setSelectedClientId(id || null)}
+              clients={clients}
               className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-2 py-1 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
-            >
-              <option value="">{t('pages.domainDiscovery.select_client')}</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+              placeholder={t('pages.domainDiscovery.select_client')}
+              allowEmpty
+            />
             <ShellScanActions
               onRefresh={handleRefreshDiscovery}
               onExport={() => exportDomainsCsv(filteredDomains)}

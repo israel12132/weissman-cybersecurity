@@ -38,8 +38,10 @@ async fn api_async_jobs_list(
                   result_json,
                   last_error,
                   attempt_count,
+                  max_attempts,
                   worker_id,
                   heartbeat_at,
+                  run_after,
                   created_at,
                   updated_at
              FROM weissman_async_jobs
@@ -97,6 +99,26 @@ async fn api_async_jobs_list(
             } else {
                 None
             };
+            let attempt_count = r.try_get::<i32, _>("attempt_count").unwrap_or(0);
+            let max_attempts = r.try_get::<i32, _>("max_attempts").unwrap_or(3);
+            let created_at = r
+                .try_get::<chrono::DateTime<Utc>, _>("created_at")
+                .ok();
+            let run_after = r
+                .try_get::<Option<chrono::DateTime<Utc>>, _>("run_after")
+                .ok()
+                .flatten();
+            let last_error = r.try_get::<Option<String>, _>("last_error").ok().flatten();
+            let worker_id = r.try_get::<Option<String>, _>("worker_id").ok().flatten();
+            let stuck = crate::job_diagnostics::job_stuck_reason(
+                &status,
+                &payload,
+                created_at,
+                run_after,
+                attempt_count,
+                max_attempts,
+                worker_id.as_deref(),
+            );
             json!({
                 "id": id_uuid.to_string(),
                 "kind": r.try_get::<String, _>("kind").unwrap_or_default(),
@@ -104,9 +126,11 @@ async fn api_async_jobs_list(
                 "engine": engine,
                 "target": target,
                 "client_id": client_id,
-                "attempt_count": r.try_get::<i32, _>("attempt_count").unwrap_or(0),
-                "last_error": r.try_get::<Option<String>, _>("last_error").ok().flatten(),
-                "worker_id": r.try_get::<Option<String>, _>("worker_id").ok().flatten(),
+                "attempt_count": attempt_count,
+                "max_attempts": max_attempts,
+                "last_error": last_error,
+                "stuck_reason": stuck,
+                "worker_id": worker_id,
                 "heartbeat_at": r.try_get::<chrono::DateTime<Utc>, _>("heartbeat_at").ok().map(|d| d.to_rfc3339()),
                 "created_at": r.try_get::<chrono::DateTime<Utc>, _>("created_at").ok().map(|d| d.to_rfc3339()),
                 "updated_at": updated_at,
@@ -205,5 +229,155 @@ async fn api_async_job_status(
             )
                 .into_response()
         }
+    }
+}
+
+
+/// GET /api/jobs/diagnostics — why the queue is not moving. Live Redis swarm + Postgres.
+async fn api_async_jobs_diagnostics(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let scoped_client = match crate::client_isolation::bind_requested_client(&auth, None) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable"})),
+        )
+            .into_response();
+    };
+
+    let counts = sqlx::query(
+        r#"SELECT
+              COUNT(*) FILTER (WHERE status = 'pending')::bigint AS pending,
+              COUNT(*) FILTER (WHERE status = 'running')::bigint AS running,
+              COUNT(*) FILTER (WHERE status = 'completed')::bigint AS completed,
+              COUNT(*) FILTER (WHERE status IN ('failed','dead'))::bigint AS failed,
+              COUNT(*) FILTER (WHERE status = 'pending' AND NOT (payload ? '_weissman_job_bus'))::bigint AS pending_no_envelope,
+              COUNT(*) FILTER (WHERE status = 'pending' AND run_after IS NOT NULL AND run_after > now())::bigint AS pending_held,
+              COUNT(*) FILTER (WHERE status = 'pending' AND created_at < now() - interval '60 seconds')::bigint AS pending_stale,
+              MIN(created_at) FILTER (WHERE status = 'pending') AS oldest_pending
+           FROM weissman_async_jobs
+          WHERE tenant_id = $1
+            AND (
+                  $2::bigint IS NULL
+                  OR payload->>'client_id' = $2::text
+                  OR (jsonb_typeof(payload->'client_id') = 'number' AND (payload->>'client_id')::bigint = $2)
+                )"#,
+    )
+    .bind(auth.tenant_id)
+    .bind(scoped_client)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+
+    let (redis_ok, live_workers) = swarm_liveness_snapshot().await;
+
+    let pending = counts
+        .as_ref()
+        .and_then(|r| r.try_get::<i64, _>("pending").ok())
+        .unwrap_or(0);
+    let pending_no_envelope = counts
+        .as_ref()
+        .and_then(|r| r.try_get::<i64, _>("pending_no_envelope").ok())
+        .unwrap_or(0);
+    let pending_stale = counts
+        .as_ref()
+        .and_then(|r| r.try_get::<i64, _>("pending_stale").ok())
+        .unwrap_or(0);
+    let oldest = counts
+        .as_ref()
+        .and_then(|r| r.try_get::<Option<chrono::DateTime<Utc>>, _>("oldest_pending").ok())
+        .flatten()
+        .map(|d| d.to_rfc3339());
+
+    let mut blockers: Vec<Value> = Vec::new();
+    if !redis_ok {
+        blockers.push(json!({
+            "code": "redis_down",
+            "detail": "Redis is unreachable. Swarm liveness and some job-bus paths cannot run."
+        }));
+    }
+    if live_workers == 0 {
+        blockers.push(json!({
+            "code": "no_live_worker",
+            "detail": "No weissman-worker process is advertising liveness (weissman:swarm:worker:*). Pending jobs will sit until a worker claims them."
+        }));
+    }
+    if pending_no_envelope > 0 {
+        blockers.push(json!({
+            "code": "missing_envelope",
+            "detail": format!("{pending_no_envelope} pending job(s) were enqueued without a zero-trust envelope and cannot be claimed. Retention will retire them after the grace window.")
+        }));
+    }
+    if pending_stale > 0 && live_workers == 0 {
+        blockers.push(json!({
+            "code": "stale_queue",
+            "detail": format!("{pending_stale} pending job(s) older than 60s with no live worker.")
+        }));
+    }
+    let bus_enabled = std::env::var("WEISSMAN_JOB_ORCHESTRATOR_SECRET")
+        .ok()
+        .filter(|s| s.len() >= 32)
+        .is_some()
+        && redis_ok;
+    if !bus_enabled && pending > 0 {
+        blockers.push(json!({
+            "code": "job_bus_disabled",
+            "detail": "WEISSMAN_JOB_ORCHESTRATOR_SECRET or Redis is not ready. The bus-path worker will not claim unsigned jobs; start weissman-worker and set the orchestrator secret (≥32 chars)."
+        }));
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "live": true,
+            "tenant_id": auth.tenant_id,
+            "client_id": scoped_client,
+            "redis_ok": redis_ok,
+            "job_bus_enabled": bus_enabled,
+            "live_workers": live_workers,
+            "pending": pending,
+            "running": counts.as_ref().and_then(|r| r.try_get::<i64,_>("running").ok()).unwrap_or(0),
+            "completed": counts.as_ref().and_then(|r| r.try_get::<i64,_>("completed").ok()).unwrap_or(0),
+            "failed": counts.as_ref().and_then(|r| r.try_get::<i64,_>("failed").ok()).unwrap_or(0),
+            "pending_no_envelope": pending_no_envelope,
+            "pending_held": counts.as_ref().and_then(|r| r.try_get::<i64,_>("pending_held").ok()).unwrap_or(0),
+            "pending_stale": pending_stale,
+            "oldest_pending": oldest,
+            "blockers": blockers,
+        })),
+    )
+        .into_response()
+}
+
+async fn swarm_liveness_snapshot() -> (bool, usize) {
+    let url = match std::env::var("REDIS_URL") {
+        Ok(u) if !u.trim().is_empty() => u,
+        _ => return (false, 0),
+    };
+    let Ok(client) = redis::Client::open(url.as_str()) else {
+        return (false, 0);
+    };
+    let Ok(mut conn) = redis::aio::ConnectionManager::new(client).await else {
+        return (false, 0);
+    };
+    let ping: Result<String, _> = redis::cmd("PING").query_async(&mut conn).await;
+    if !ping.map(|s| s.eq_ignore_ascii_case("PONG")).unwrap_or(false) {
+        return (false, 0);
+    }
+    let keys: Result<Vec<String>, _> = redis::cmd("KEYS")
+        .arg("weissman:swarm:worker:*")
+        .query_async(&mut conn)
+        .await;
+    match keys {
+        Ok(k) => (true, k.len()),
+        Err(_) => (true, 0),
     }
 }

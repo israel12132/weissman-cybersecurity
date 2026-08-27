@@ -12,6 +12,8 @@ import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, extractFindingsFromJob, uiJobStatus } from '../lib/useJobPoll'
 import SupremeIntelligencePanels, { extractSupremeFromFindings } from '../components/engine/SupremeIntelligencePanels'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 const ACCENT = '#a855f7'
 
@@ -451,10 +453,14 @@ export default function JwtAttackLab() {
       <div className="flex items-end justify-between gap-3 mb-6 flex-wrap">
         <div className="flex items-end gap-3 flex-wrap">
           <Field label={t('pages.jwtLab.client_label')}>
-            <select value={selectedClientId ?? ''} onChange={(e) => setSelectedClientId(e.target.value || null)} className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#a855f7]/40 min-w-[180px]">
-              <option value="">{t('pages.jwtLab.select_client')}</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <ScopedClientControl
+              value={selectedClientId ?? ''}
+              onChange={(id) => setSelectedClientId(id || null)}
+              clients={clients}
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#a855f7]/40 min-w-[180px]"
+              placeholder={t('pages.jwtLab.select_client')}
+              allowEmpty
+            />
           </Field>
           <Field label={t('pages.jwtLab.target_label')}>
             <input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="https://api.example.com" className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#a855f7]/40 min-w-[240px]" />

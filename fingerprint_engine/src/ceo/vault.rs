@@ -543,7 +543,7 @@ pub async fn post_resume_suspended_job(
     trace: Option<&str>,
 ) -> Result<uuid::Uuid, String> {
     let body = json!({ "resume_suspended_id": suspended_id });
-    weissman_db::job_queue::enqueue(pool, tenant_id, "genesis_eternal_fuzz", body, trace)
+    crate::async_jobs::enqueue(pool, tenant_id, "genesis_eternal_fuzz", body, trace.map(|s| s.to_string()))
         .await
         .map_err(|e| e.to_string())
 }
