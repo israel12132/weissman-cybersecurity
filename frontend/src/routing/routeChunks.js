@@ -124,6 +124,7 @@ export const SmbNetbiosCommandCenter = React$lazy(() => import('../pages/SmbNetb
 export const PasswordSprayCommandCenter = React$lazy(() => import('../pages/PasswordSprayCommandCenter'))
 export const SamlSecurityCommandCenter = React$lazy(() => import('../pages/SamlSecurityCommandCenter'))
 export const KillChainOrchestrator = React$lazy(() => import('../pages/KillChainOrchestrator'))
+export const KillChainCommander = React$lazy(() => import(/* webpackChunkName: "page-kill-chain-commander" */ '../pages/KillChainCommander'))
 export const AIAnalysisEngine = React$lazy(() => import('../pages/AIAnalysisEngine'))
 export const ExploitResearchLab = React$lazy(() => import('../pages/ExploitResearchLab'))
 export const Clients = React$lazy(() => import('../pages/Clients'))
