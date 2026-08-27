@@ -80,4 +80,10 @@ describe('clientScope policy', () => {
     expect(boundClientId({ ...portal, assigned_client_id: null, allowed_client_ids: [3, 4] }, [{ id: 3 }, { id: 4 }], 4)).toBe(4)
     expect(boundClientId({ ...portal, assigned_client_id: null, allowed_client_ids: [3, 4] }, [{ id: 3 }, { id: 4 }], 9)).toBe(3)
   })
+
+  it('never honors a spoofed client_id when the session is bound', () => {
+    expect(boundClientId(portal, [{ id: 7, name: 'Acme' }, { id: 99, name: 'Other' }], 99)).toBe(7)
+    expect(shouldHideClientPicker({ ...portal, client_picker_hidden: true }, [{ id: 7 }, { id: 99 }])).toBe(true)
+    expect(filterVisibleClients(portal, [{ id: 7 }, { id: 99 }, { id: 1 }])).toEqual([{ id: 7 }])
+  })
 })
