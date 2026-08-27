@@ -218,6 +218,12 @@ async fn persist_findings_best_effort(
     findings: &[Value],
 ) -> u64 {
     if findings.is_empty() || client_id.is_none() {
+        tracing::info!(
+            target: "findings_persist",
+            tenant_id,
+            engine = %engine,
+            "empty scan result — existing findings left untouched"
+        );
         return 0;
     }
     crate::findings_persist::persist_engine_findings(
@@ -570,15 +576,30 @@ async fn execute_job_unscoped(
             // Center / Vuln Intel / dashboard / CSV export / PDF report all see them. Without
             // this step results live only inside weissman_async_jobs.result_json (effectively
             // invisible to the customer).
-            let persisted = persist_findings_best_effort(
-                app_pool.as_ref(),
-                tid,
-                client_id_opt,
-                engine,
-                target,
-                &result.findings,
-            )
-            .await;
+            let persisted = if crate::findings_persist::scan_may_mutate_findings(
+                &result.status,
+                result.findings.len(),
+            ) {
+                persist_findings_best_effort(
+                    app_pool.as_ref(),
+                    tid,
+                    client_id_opt,
+                    engine,
+                    target,
+                    &result.findings,
+                )
+                .await
+            } else {
+                tracing::info!(
+                    target: "findings_persist",
+                    tenant_id = tid,
+                    engine = %engine,
+                    status = %result.status,
+                    finding_count = result.findings.len(),
+                    "error or empty scan — skip persist so existing findings stay open"
+                );
+                0
+            };
 
             if crate::engine_resilience::should_retry_status(&result.status) {
                 let failure_ctx = json!({
@@ -2233,14 +2254,20 @@ async fn execute_job_unscoped(
         "path_inference" => {
             let client_id = p
                 .get("client_id")
-                .and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+                .and_then(|v| {
+                    v.as_i64()
+                        .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+                })
                 .ok_or_else(|| "payload.client_id required".to_string())?;
             let top_k = p
                 .get("top_k")
                 .and_then(Value::as_u64)
                 .unwrap_or(25)
                 .clamp(1, 200) as usize;
-            let include_fair = p.get("include_fair").and_then(Value::as_bool).unwrap_or(true);
+            let include_fair = p
+                .get("include_fair")
+                .and_then(Value::as_bool)
+                .unwrap_or(true);
             crate::attack_path::mark_graph_dirty(tid, client_id);
             let paths = crate::attack_path::compute_and_store(
                 app_pool.as_ref(),

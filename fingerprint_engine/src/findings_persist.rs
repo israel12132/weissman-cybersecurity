@@ -18,6 +18,12 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use std::sync::LazyLock;
+
+/// Error / empty scans must never close or rewrite existing findings.
+/// Only a successful engine run (`status=ok`) with at least one finding may persist.
+pub fn scan_may_mutate_findings(engine_status: &str, finding_count: usize) -> bool {
+    engine_status.eq_ignore_ascii_case("ok") && finding_count > 0
+}
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::db;
@@ -280,6 +286,8 @@ pub async fn persist_engine_findings(
     findings: &[Value],
 ) -> Result<u64, String> {
     if findings.is_empty() || client_id.is_none() {
+        // Empty result (including a failed/empty error scan) must not touch
+        // existing rows — never auto-FIXED, never wipe analyst status.
         return Ok(0);
     }
     let client_id = client_id.expect("client_id.is_none() checked above");
@@ -947,6 +955,16 @@ mod tests {
             "finding_id must be stable across volatile fields + target case"
         );
         assert!(id1.starts_with("sqli_engine-"));
+    }
+
+    #[test]
+    fn empty_or_error_scan_does_not_mutate_findings() {
+        assert!(!scan_may_mutate_findings("error", 0));
+        assert!(!scan_may_mutate_findings("error", 12));
+        assert!(!scan_may_mutate_findings("ok", 0));
+        assert!(!scan_may_mutate_findings("timeout", 3));
+        assert!(scan_may_mutate_findings("ok", 1));
+        assert!(scan_may_mutate_findings("OK", 4));
     }
 
     #[test]

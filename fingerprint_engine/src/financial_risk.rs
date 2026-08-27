@@ -5,7 +5,9 @@
 //!     For our model `loss_magnitude_pct = max(CVSS impact_score, 0.5)` capped at 1.0.
 //!   * **ARO** (Annualised Rate of Occurrence) ≈ `EPSS × 12` (EPSS is 30-day prob).
 //!     For KEV-listed CVEs we floor at 1.0 (assumed at least one event/year).
-//!   * **ALE** (Annualised Loss Expectancy) = `SLE × ARO × risk_loss_discount`.
+//!   * **ALE** (Annualised Loss Expectancy) = `min(SLE × ARO × discount, asset_value)`.
+//!     Unverified `FIXED` still contributes; only `VERIFIED_FIXED` (and
+//!     `FALSE_POSITIVE`) drop a finding from the blast-radius roll-up.
 //!
 //! Roll-up per client:
 //!   * `total_asset_value_usd` — sum of business_value_usd across all nodes
@@ -157,7 +159,7 @@ pub async fn compute_and_store(
              FROM risk_graph_nodes n
              LEFT JOIN vulnerabilities v
                ON v.risk_node_id = n.id
-              AND COALESCE(v.status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
+              AND COALESCE(v.status,'OPEN') NOT IN ('VERIFIED_FIXED','FALSE_POSITIVE')
             WHERE n.tenant_id = $1 AND n.client_id = $2
             GROUP BY n.id"#,
     )
@@ -194,7 +196,9 @@ pub async fn compute_and_store(
 
         let sle = supreme_weights::single_loss_expectancy(value, cvss);
         let zero_day = supreme_weights::is_zero_day(cvss, epss, kev);
-        let ale = supreme_weights::annual_loss_expectancy(sle, epss, kev, discount, agent, zero_day);
+        let ale = supreme_weights::annual_loss_expectancy(
+            sle, epss, kev, discount, agent, zero_day, value,
+        );
 
         if sle > sle_worst {
             sle_worst = sle;
@@ -355,7 +359,7 @@ fn single_loss_expectancy(asset_value_usd: i64, cvss: f32) -> i64 {
 }
 
 fn annual_loss_expectancy(sle_usd: i64, epss: f32, kev: bool, discount: f32) -> i64 {
-    supreme_weights::annual_loss_expectancy(sle_usd, epss, kev, discount, false, false)
+    supreme_weights::annual_loss_expectancy(sle_usd, epss, kev, discount, false, false, sle_usd)
 }
 
 #[cfg(test)]
@@ -384,14 +388,14 @@ mod tests {
     }
     #[test]
     fn ale_uses_epss_when_no_kev() {
-        // EPSS 0.50 ≈ 6 events/yr × 0.3 discount × $100k = $180k
+        // Uncapped: EPSS 0.50 × 12 × 0.30 × $100k = $180k. FAIR caps at asset value.
         let ale = annual_loss_expectancy(100_000, 0.50, false, 0.30);
-        assert!(ale > 170_000 && ale < 190_000);
+        assert_eq!(ale, 100_000);
     }
     #[test]
-    fn ale_clamps_at_twelve_events_yr() {
-        // EPSS 1.0 × 12 = 12 events; can't go higher.
+    fn ale_clamps_at_asset_value_not_twelve_events() {
+        // Uncapped would be $100k × 12 × 1.0 = $1.2M. Board ALE ≤ asset value.
         let ale = annual_loss_expectancy(100_000, 1.0, true, 1.0);
-        assert_eq!(ale, 1_200_000); // 100k × 12 × 1.0
+        assert_eq!(ale, 100_000);
     }
 }

@@ -21,6 +21,7 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 use std::time::{Duration, Instant};
+use tokio::sync::Mutex as AsyncMutex;
 
 const DEFAULT_TOP_K: usize = 25;
 const CHOKE_POINT_THRESHOLD: f64 = 0.5;
@@ -162,6 +163,51 @@ pub struct WhatIfSpec {
     pub block_ports: Vec<u16>,
 }
 
+/// Thin adjacency overlay — Dijkstra walks the shared read-only graph and
+/// skips ids in this blacklist. Never clones nodes or edges.
+#[derive(Debug, Clone, Default)]
+pub struct GraphOverlay {
+    block_nodes: HashSet<i64>,
+    block_edge_types: Vec<String>,
+    block_ports: Vec<u16>,
+}
+
+impl GraphOverlay {
+    pub fn from_spec(spec: &WhatIfSpec) -> Self {
+        Self {
+            block_nodes: spec.block_node_ids.iter().copied().collect(),
+            block_edge_types: spec
+                .block_edge_types
+                .iter()
+                .map(|s| s.to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect(),
+            block_ports: spec.block_ports.clone(),
+        }
+    }
+
+    pub fn blocks_node(&self, id: i64) -> bool {
+        self.block_nodes.contains(&id)
+    }
+
+    pub fn blocks_edge(&self, node_id: i64, edge_type: &str) -> bool {
+        if self.block_nodes.contains(&node_id) {
+            return true;
+        }
+        if !self.block_edge_types.is_empty() {
+            let et = edge_type.to_ascii_lowercase();
+            if self.block_edge_types.iter().any(|b| et.contains(b)) {
+                return true;
+            }
+        }
+        if !self.block_ports.is_empty() {
+            return is_smb_or_port_edge(edge_type, &self.block_ports);
+        }
+        false
+    }
+}
+
+/// Shared, immutable adjacency loaded from Postgres. What-if never clones this.
 struct LoadedGraph {
     nodes: HashMap<i64, GraphNode>,
     adjacency: HashMap<i64, Vec<(i64, String)>>,
@@ -179,12 +225,44 @@ fn graph_cache() -> &'static DashMap<(i64, i64), Arc<RwLock<CachedGraph>>> {
     S.get_or_init(DashMap::new)
 }
 
+/// Per-client singleflight gates. Only one task reloads the graph / runs
+/// Dijkstra; waiters share the same `Arc` / snapshot instead of a stampede.
+fn graph_flights() -> &'static DashMap<(i64, i64), Arc<AsyncMutex<()>>> {
+    static S: OnceLock<DashMap<(i64, i64), Arc<AsyncMutex<()>>>> = OnceLock::new();
+    S.get_or_init(DashMap::new)
+}
+
+fn infer_flights() -> &'static DashMap<(i64, i64), Arc<AsyncMutex<()>>> {
+    static S: OnceLock<DashMap<(i64, i64), Arc<AsyncMutex<()>>>> = OnceLock::new();
+    S.get_or_init(DashMap::new)
+}
+
+fn flight_gate(
+    map: &DashMap<(i64, i64), Arc<AsyncMutex<()>>>,
+    key: (i64, i64),
+) -> Arc<AsyncMutex<()>> {
+    map.entry(key)
+        .or_insert_with(|| Arc::new(AsyncMutex::new(())))
+        .clone()
+}
+
 fn path_counter() -> &'static AtomicU64 {
     static C: OnceLock<AtomicU64> = OnceLock::new();
     C.get_or_init(|| AtomicU64::new(0))
 }
 
 const GRAPH_CACHE_TTL: Duration = Duration::from_secs(30);
+const INFER_COALESCE_SECS: i64 = 30;
+
+fn cache_fresh(key: &(i64, i64)) -> Option<Arc<LoadedGraph>> {
+    let entry = graph_cache().get(key)?;
+    let g = entry.read().ok()?;
+    if !g.dirty.load(Ordering::Relaxed) && g.loaded_at.elapsed() < GRAPH_CACHE_TTL {
+        Some(g.loaded.clone())
+    } else {
+        None
+    }
+}
 
 async fn cached_graph(
     pool: &PgPool,
@@ -192,12 +270,13 @@ async fn cached_graph(
     client_id: i64,
 ) -> Result<Arc<LoadedGraph>, String> {
     let key = (tenant_id, client_id);
-    if let Some(entry) = graph_cache().get(&key) {
-        if let Ok(g) = entry.read() {
-            if !g.dirty.load(Ordering::Relaxed) && g.loaded_at.elapsed() < GRAPH_CACHE_TTL {
-                return Ok(g.loaded.clone());
-            }
-        }
+    if let Some(hit) = cache_fresh(&key) {
+        return Ok(hit);
+    }
+    let gate = flight_gate(graph_flights(), key);
+    let _guard = gate.lock().await;
+    if let Some(hit) = cache_fresh(&key) {
+        return Ok(hit);
     }
     let (nodes, adjacency, mitre) = load_graph(pool, tenant_id, client_id).await?;
     let loaded = Arc::new(LoadedGraph {
@@ -280,6 +359,7 @@ fn path_ale(jewel: &GraphNode, steps: &[PathStep], nodes: &HashMap<i64, GraphNod
         0.30,
         jewel.agent_present,
         supreme_weights::is_zero_day(cvss, epss, kev),
+        value,
     )
 }
 
@@ -332,13 +412,16 @@ fn finish_path(
     let risk = (likelihood * 10.0 * jewel_value.clamp(0.5, 3.0)).min(10.0);
     let kev_hops = path
         .iter()
-        .filter(|s| nodes.get(&s.node_id).map(|n| n.kev_present).unwrap_or(false))
+        .filter(|s| {
+            nodes
+                .get(&s.node_id)
+                .map(|n| n.kev_present)
+                .unwrap_or(false)
+        })
         .count();
     let jewel = nodes.get(&target);
     let score = path_score_0_100(cost, jewel.map(|n| n.asset_value).unwrap_or(1.0), kev_hops);
-    let ale = jewel
-        .map(|j| path_ale(j, &path, nodes))
-        .unwrap_or(0);
+    let ale = jewel.map(|j| path_ale(j, &path, nodes)).unwrap_or(0);
     AttackPath {
         entry,
         jewel: target,
@@ -356,21 +439,19 @@ fn finish_path(
 }
 
 /// Single-source Dijkstra from `entry` to every jewel. Milli-cost min-heap.
+/// `overlay` is a thin blacklist — the adjacency map is never cloned.
 pub fn dijkstra_from_entry(
     entry: i64,
     jewels: &HashSet<i64>,
     nodes: &HashMap<i64, GraphNode>,
     adjacency: &HashMap<i64, Vec<(i64, String)>>,
     mitre_by_edge: &HashMap<(i64, i64), String>,
-    what_if: Option<&WhatIfSpec>,
+    overlay: Option<&GraphOverlay>,
 ) -> Vec<AttackPath> {
     let Some(entry_node) = nodes.get(&entry) else {
         return Vec::new();
     };
-    if what_if
-        .map(|w| w.block_node_ids.contains(&entry))
-        .unwrap_or(false)
-    {
+    if overlay.map(|w| w.blocks_node(entry)).unwrap_or(false) {
         return Vec::new();
     }
     let mut heap: BinaryHeap<Reverse<(i64, i64, usize)>> = BinaryHeap::new();
@@ -396,7 +477,10 @@ pub fn dijkstra_from_entry(
         };
         let from = nodes.get(&node);
         for (next, etype) in neighbours {
-            if what_if.map(|w| blocked(w, *next, etype)).unwrap_or(false) {
+            if overlay
+                .map(|w| w.blocks_edge(*next, etype))
+                .unwrap_or(false)
+            {
                 continue;
             }
             if *next == entry {
@@ -409,7 +493,7 @@ pub fn dijkstra_from_entry(
                 continue;
             }
             let w = supreme_weights::edge_weight_milli(&node_inputs(from, next_node, etype));
-            let nc = cost.saturating_add(w);
+            let nc = supreme_weights::add_milli_cost(cost, w);
             if best.get(next).is_some_and(|&b| b <= nc) {
                 continue;
             }
@@ -435,10 +519,7 @@ pub fn dijkstra_from_entry(
                 Some(n) => n,
                 None => break,
             };
-            let etype = prev
-                .get(&cur)
-                .map(|(_, e)| e.clone())
-                .unwrap_or_default();
+            let etype = prev.get(&cur).map(|(_, e)| e.clone()).unwrap_or_default();
             steps_rev.push(PathStep {
                 node_id: n.id,
                 graph_key: n.graph_key.clone(),
@@ -469,24 +550,16 @@ pub fn dijkstra_from_entry(
         if steps_rev.first().map(|s| s.node_id) != Some(entry_node.id) {
             continue;
         }
-        out.push(finish_path(entry, jewel, cost, steps_rev, nodes, mitre_by_edge));
+        out.push(finish_path(
+            entry,
+            jewel,
+            cost,
+            steps_rev,
+            nodes,
+            mitre_by_edge,
+        ));
     }
     out
-}
-
-fn blocked(spec: &WhatIfSpec, node_id: i64, edge_type: &str) -> bool {
-    if spec.block_node_ids.contains(&node_id) {
-        return true;
-    }
-    let et = edge_type.to_ascii_lowercase();
-    if spec
-        .block_edge_types
-        .iter()
-        .any(|b| et.contains(&b.to_ascii_lowercase()))
-    {
-        return true;
-    }
-    is_smb_or_port_edge(edge_type, &spec.block_ports)
 }
 
 fn infer_paths(
@@ -494,7 +567,7 @@ fn infer_paths(
     adjacency: &HashMap<i64, Vec<(i64, String)>>,
     mitre_by_edge: &HashMap<(i64, i64), String>,
     top_k: usize,
-    what_if: Option<&WhatIfSpec>,
+    overlay: Option<&GraphOverlay>,
 ) -> (Vec<AttackPath>, Vec<ChokePoint>, usize, usize) {
     let entries: Vec<i64> = nodes
         .values()
@@ -515,7 +588,7 @@ fn infer_paths(
                 nodes,
                 adjacency,
                 mitre_by_edge,
-                what_if,
+                overlay,
             ));
         }
     }
@@ -606,6 +679,7 @@ fn blast_radius_ale(
                 0.30,
                 n.agent_present,
                 false,
+                v.max(1),
             )
         })
         .sum()
@@ -636,8 +710,14 @@ async fn load_graph(
     pool: &PgPool,
     tenant_id: i64,
     client_id: i64,
-) -> Result<(HashMap<i64, GraphNode>, HashMap<i64, Vec<(i64, String)>>, HashMap<(i64, i64), String>), String>
-{
+) -> Result<
+    (
+        HashMap<i64, GraphNode>,
+        HashMap<i64, Vec<(i64, String)>>,
+        HashMap<(i64, i64), String>,
+    ),
+    String,
+> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| format!("tenant tx: {e}"))?;
@@ -799,6 +879,8 @@ async fn persist_snapshot(
 }
 
 /// Public entry point: compute (and persist) the top-K attack paths for a client.
+/// Coalesces concurrent rebuilds for the same `(tenant, client)` — one Dijkstra,
+/// waiters reuse the snapshot that just landed.
 pub async fn compute_and_store(
     pool: &PgPool,
     tenant_id: i64,
@@ -806,6 +888,17 @@ pub async fn compute_and_store(
     top_k: Option<usize>,
 ) -> Result<AttackPathSnapshot, String> {
     let top_k = top_k.unwrap_or(DEFAULT_TOP_K).clamp(1, TENANT_PATH_QUOTA);
+    let key = (tenant_id, client_id);
+    let gate = flight_gate(infer_flights(), key);
+    let _guard = gate.lock().await;
+    if !is_graph_dirty(tenant_id, client_id) {
+        if let Ok(Some(existing)) = latest_snapshot(pool, tenant_id, client_id).await {
+            let age = Utc::now().timestamp() - existing.computed_at_unix;
+            if (0..INFER_COALESCE_SECS).contains(&age) {
+                return Ok(existing);
+            }
+        }
+    }
     let graph = cached_graph(pool, tenant_id, client_id).await?;
     let infer = tokio::task::spawn_blocking(move || {
         infer_paths(&graph.nodes, &graph.adjacency, &graph.mitre, top_k, None)
@@ -820,7 +913,8 @@ pub async fn compute_and_store(
     Ok(snapshot)
 }
 
-/// What-if: recompute paths with nodes / edge types / ports removed. Not persisted.
+/// What-if: Dijkstra on the shared `Arc<LoadedGraph>` plus a thin overlay.
+/// The adjacency map is never cloned. Result is not persisted.
 pub async fn compute_what_if(
     pool: &PgPool,
     tenant_id: i64,
@@ -829,6 +923,7 @@ pub async fn compute_what_if(
     top_k: Option<usize>,
 ) -> Result<AttackPathSnapshot, String> {
     let top_k = top_k.unwrap_or(DEFAULT_TOP_K).clamp(1, TENANT_PATH_QUOTA);
+    let overlay = GraphOverlay::from_spec(&spec);
     let graph = cached_graph(pool, tenant_id, client_id).await?;
     let infer = tokio::task::spawn_blocking(move || {
         infer_paths(
@@ -836,14 +931,20 @@ pub async fn compute_what_if(
             &graph.adjacency,
             &graph.mitre,
             top_k,
-            Some(&spec),
+            Some(&overlay),
         )
     });
     let (paths, choke, entries, jewels) = tokio::time::timeout(INFER_TIMEOUT, infer)
         .await
         .map_err(|_| "what-if inference timed out (15s)".to_string())?
         .map_err(|e| format!("infer join: {e}"))?;
-    Ok(build_snapshot(paths, choke, entries, jewels, is_graph_dirty(tenant_id, client_id)))
+    Ok(build_snapshot(
+        paths,
+        choke,
+        entries,
+        jewels,
+        is_graph_dirty(tenant_id, client_id),
+    ))
 }
 
 /// Read the latest snapshot for this client. Returns `None` if none was ever computed.
@@ -877,9 +978,7 @@ pub async fn latest_snapshot(
     let choke: Vec<ChokePoint> =
         serde_json::from_value(r.try_get::<Value, _>("choke_points").unwrap_or(json!([])))
             .unwrap_or_default();
-    let computed_at: DateTime<Utc> = r
-        .try_get("computed_at")
-        .unwrap_or_else(|_| Utc::now());
+    let computed_at: DateTime<Utc> = r.try_get("computed_at").unwrap_or_else(|_| Utc::now());
     let total_path_ale_usd: i64 = r.try_get("total_path_ale_usd").unwrap_or(0);
     let max_path_score: f32 = r.try_get("max_path_score").unwrap_or(0.0);
     Ok(Some(AttackPathSnapshot {
@@ -996,7 +1095,8 @@ mod tests {
             block_node_ids: vec![2],
             ..Default::default()
         };
-        let paths = dijkstra_from_entry(1, &jewels, &nodes, &adj, &HashMap::new(), Some(&spec));
+        let overlay = GraphOverlay::from_spec(&spec);
+        let paths = dijkstra_from_entry(1, &jewels, &nodes, &adj, &HashMap::new(), Some(&overlay));
         assert!(paths.is_empty());
     }
 
@@ -1013,10 +1113,30 @@ mod tests {
             block_ports: vec![445],
             ..Default::default()
         };
-        let paths = dijkstra_from_entry(1, &jewels, &nodes, &adj, &HashMap::new(), Some(&spec));
+        let overlay = GraphOverlay::from_spec(&spec);
+        let paths = dijkstra_from_entry(1, &jewels, &nodes, &adj, &HashMap::new(), Some(&overlay));
         assert!(paths.is_empty());
         let open = dijkstra_from_entry(1, &jewels, &nodes, &adj, &HashMap::new(), None);
         assert_eq!(open.len(), 1);
+        let empty = GraphOverlay::from_spec(&WhatIfSpec::default());
+        let still_open =
+            dijkstra_from_entry(1, &jewels, &nodes, &adj, &HashMap::new(), Some(&empty));
+        assert_eq!(still_open.len(), 1);
+    }
+
+    #[test]
+    fn overlay_is_thin_blacklist_not_a_graph_clone() {
+        let spec = WhatIfSpec {
+            block_node_ids: vec![2, 9],
+            block_edge_types: vec!["smb".into()],
+            block_ports: vec![445],
+        };
+        let o = GraphOverlay::from_spec(&spec);
+        assert!(o.blocks_node(2));
+        assert!(!o.blocks_node(1));
+        assert!(o.blocks_edge(4, "smb_connects"));
+        assert!(!o.blocks_edge(4, "https"));
+        assert!(std::mem::size_of::<GraphOverlay>() < 256);
     }
 
     #[test]

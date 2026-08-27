@@ -7,10 +7,19 @@
 //! Fixed-point: edge costs are stored as **milli-cost** (`i64`, 1/1000 of a
 //! cost unit) so BinaryHeap comparisons never depend on float rounding.
 
+use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
+
+type HmacSha256 = Hmac<Sha256>;
 
 /// Milli-cost scale (1.000 cost unit = 1000 milli).
 pub const MILLI: i64 = 1000;
+
+/// Saturating milli-cost add — overflow must never panic a worker thread.
+#[inline]
+pub fn add_milli_cost(current_cost: i64, edge_cost: i64) -> i64 {
+    current_cost.checked_add(edge_cost).unwrap_or(i64::MAX)
+}
 /// Dijkstra hop ceiling — combinatorial fuse for graphs with hundreds of thousands of nodes.
 pub const MAX_PATH_DEPTH: usize = 12;
 /// Path aging: edges not re-validated within this many days lose relevance.
@@ -218,6 +227,10 @@ pub fn annual_rate_of_occurrence(epss: f32, kev: bool, zero_day: bool) -> f64 {
 }
 
 /// Annualised Loss Expectancy. Agent-healthy assets receive a risk discount.
+///
+/// Hard FAIR cap: ALE cannot exceed `asset_value_usd`. A destroyed or stolen
+/// asset cannot cost more than its own value unless secondary cascades are
+/// already folded into that value.
 pub fn annual_loss_expectancy(
     sle_usd: i64,
     epss: f32,
@@ -225,6 +238,7 @@ pub fn annual_loss_expectancy(
     discount: f32,
     agent_present: bool,
     zero_day: bool,
+    asset_value_usd: i64,
 ) -> i64 {
     if sle_usd <= 0 {
         return 0;
@@ -234,7 +248,8 @@ pub fn annual_loss_expectancy(
         disc *= 0.55;
     }
     let aro = annual_rate_of_occurrence(epss, kev, zero_day);
-    ((sle_usd as f64) * aro * disc).round() as i64
+    let raw = ((sle_usd as f64) * aro * disc).round() as i64;
+    ale_board_cap(raw, asset_value_usd)
 }
 
 /// Conservative board cap: ALE cannot exceed the asset's absolute value.
@@ -300,7 +315,7 @@ pub fn is_duplicate_vector(cosine_similarity: f32) -> bool {
     cosine_similarity > VECTOR_DEDUP_COSINE
 }
 
-/// SHA-256 of the f32 LE bytes — used to detect vector poisoning.
+/// SHA-256 of the f32 LE bytes — integrity of stored vector bytes.
 pub fn embedding_checksum(v: &[f32]) -> String {
     let mut h = Sha256::new();
     for x in v {
@@ -311,10 +326,97 @@ pub fn embedding_checksum(v: &[f32]) -> String {
 
 pub fn checksum_matches(v: &[f32], expected: &str) -> bool {
     if expected.is_empty() {
-        return true;
+        return false;
     }
     expected.eq_ignore_ascii_case(&embedding_checksum(v))
 }
+
+/// HMAC key for RAG / pentest-memory provenance. Dedicated secret preferred;
+/// falls back to the council signing secret, then the JWT secret. Empty key
+/// means fail-closed: nothing is signed or accepted.
+pub fn rag_provenance_secret() -> Vec<u8> {
+    std::env::var("WEISSMAN_RAG_PROVENANCE_SECRET")
+        .or_else(|_| std::env::var("WEISSMAN_COUNCIL_DEBATE_SIGNING_SECRET"))
+        .or_else(|_| std::env::var("WEISSMAN_JWT_SECRET"))
+        .unwrap_or_default()
+        .trim()
+        .as_bytes()
+        .to_vec()
+}
+
+fn rag_provenance_mac_input(
+    tenant_id: i64,
+    kind: &str,
+    issuer: &str,
+    source: &str,
+    checksum: &str,
+) -> Vec<u8> {
+    let mut buf =
+        Vec::with_capacity(64 + kind.len() + issuer.len() + source.len() + checksum.len());
+    buf.extend_from_slice(b"WEISSMAN_RAG_PROV_V1|");
+    buf.extend_from_slice(tenant_id.to_string().as_bytes());
+    buf.push(b'|');
+    buf.extend_from_slice(kind.as_bytes());
+    buf.push(b'|');
+    buf.extend_from_slice(issuer.as_bytes());
+    buf.push(b'|');
+    buf.extend_from_slice(source.as_bytes());
+    buf.push(b'|');
+    buf.extend_from_slice(checksum.as_bytes());
+    buf
+}
+
+/// Sign a vector row so retrieval can reject unsigned / injected embeddings.
+pub fn sign_rag_provenance(
+    tenant_id: i64,
+    kind: &str,
+    issuer: &str,
+    source: &str,
+    checksum: &str,
+) -> String {
+    let key = rag_provenance_secret();
+    if key.is_empty() || checksum.is_empty() {
+        return String::new();
+    }
+    let Ok(mut mac) = HmacSha256::new_from_slice(&key) else {
+        return String::new();
+    };
+    mac.update(&rag_provenance_mac_input(
+        tenant_id, kind, issuer, source, checksum,
+    ));
+    hex::encode(mac.finalize().into_bytes())
+}
+
+/// Fail-closed HMAC verify. Empty secret, empty MAC, or mismatch → reject.
+pub fn verify_rag_provenance(
+    tenant_id: i64,
+    kind: &str,
+    issuer: &str,
+    source: &str,
+    checksum: &str,
+    provided_hex: &str,
+) -> bool {
+    if provided_hex.is_empty() || checksum.is_empty() {
+        return false;
+    }
+    let key = rag_provenance_secret();
+    if key.is_empty() {
+        return false;
+    }
+    let Ok(sig) = hex::decode(provided_hex.trim()) else {
+        return false;
+    };
+    let Ok(mut mac) = HmacSha256::new_from_slice(&key) else {
+        return false;
+    };
+    mac.update(&rag_provenance_mac_input(
+        tenant_id, kind, issuer, source, checksum,
+    ));
+    mac.verify_slice(&sig).is_ok()
+}
+
+pub const RAG_PROVENANCE_ENGINE: &str = "engine";
+pub const RAG_PROVENANCE_ANALYST: &str = "analyst";
 
 /// Replay-hit reinforcement: multiply retrieval weight after a confirmed win.
 pub fn payload_reinforcement(won_count: i32, replay_hit_rate: f32) -> f64 {
@@ -434,17 +536,27 @@ mod tests {
     #[test]
     fn ale_agent_discount_and_kev_floor() {
         let sle = 100_000;
-        let no_agent = annual_loss_expectancy(sle, 0.0, true, 0.30, false, false);
-        let agent = annual_loss_expectancy(sle, 0.0, true, 0.30, true, false);
+        let no_agent = annual_loss_expectancy(sle, 0.0, true, 0.30, false, false, 100_000);
+        let agent = annual_loss_expectancy(sle, 0.0, true, 0.30, true, false, 100_000);
         assert_eq!(no_agent, 30_000);
         assert!(agent < no_agent);
         assert_eq!(agent, 16_500);
     }
 
     #[test]
-    fn ale_board_cap_never_exceeds_asset() {
+    fn ale_never_exceeds_asset_value() {
+        // Uncapped math is $100k × 12 ARO × 1.0 = $1.2M — FAIR forbids that.
+        let ale = annual_loss_expectancy(100_000, 1.0, true, 1.0, false, false, 100_000);
+        assert_eq!(ale, 100_000);
         assert_eq!(ale_board_cap(1_200_000, 100_000), 100_000);
         assert_eq!(ale_board_cap(20_000, 100_000), 20_000);
+    }
+
+    #[test]
+    fn milli_cost_add_never_panics_on_overflow() {
+        assert_eq!(add_milli_cost(i64::MAX, 1), i64::MAX);
+        assert_eq!(add_milli_cost(i64::MAX - 5, 10), i64::MAX);
+        assert_eq!(add_milli_cost(1_000, 250), 1_250);
     }
 
     #[test]
@@ -480,7 +592,49 @@ mod tests {
         assert_eq!(a.len(), 64);
         assert!(checksum_matches(&v, &a));
         assert!(!checksum_matches(&v, "deadbeef"));
-        assert!(checksum_matches(&v, ""));
+        assert!(!checksum_matches(&v, ""), "empty checksum is fail-closed");
+    }
+
+    #[test]
+    fn rag_provenance_hmac_roundtrip_and_reject() {
+        std::env::set_var(
+            "WEISSMAN_RAG_PROVENANCE_SECRET",
+            "unit-test-rag-provenance-secret-32b!!",
+        );
+        let chk = embedding_checksum(&[0.1, 0.2, 0.3]);
+        let mac = sign_rag_provenance(
+            7,
+            RAG_PROVENANCE_ENGINE,
+            "supreme_council",
+            "oast_success",
+            &chk,
+        );
+        assert!(!mac.is_empty());
+        assert!(verify_rag_provenance(
+            7,
+            RAG_PROVENANCE_ENGINE,
+            "supreme_council",
+            "oast_success",
+            &chk,
+            &mac
+        ));
+        assert!(!verify_rag_provenance(
+            7,
+            RAG_PROVENANCE_ENGINE,
+            "supreme_council",
+            "oast_success",
+            &chk,
+            "deadbeef"
+        ));
+        assert!(!verify_rag_provenance(
+            8,
+            RAG_PROVENANCE_ENGINE,
+            "supreme_council",
+            "oast_success",
+            &chk,
+            &mac
+        ));
+        std::env::remove_var("WEISSMAN_RAG_PROVENANCE_SECRET");
     }
 
     #[test]

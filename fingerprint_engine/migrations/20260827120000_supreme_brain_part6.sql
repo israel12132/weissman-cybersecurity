@@ -66,18 +66,15 @@ ALTER TABLE client_financial_risk_snapshots
     ADD COLUMN IF NOT EXISTS path_ale_usd              BIGINT NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS currency                  TEXT   NOT NULL DEFAULT 'USD';
 
--- ── RAG council memory: HNSW params m=16, ef_construction=64, cosine ───────
+-- ── RAG council memory: provenance + checksum (HNSW rebuilt CONCURRENTLY) ──
 ALTER TABLE supreme_council_memory
     ADD COLUMN IF NOT EXISTS embedding_checksum  TEXT NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS reinforcement       REAL NOT NULL DEFAULT 1.0,
     ADD COLUMN IF NOT EXISTS last_retrieved_at   TIMESTAMPTZ,
-    ADD COLUMN IF NOT EXISTS mitre_technique_id  TEXT NOT NULL DEFAULT '';
-
-DROP INDEX IF EXISTS ix_supreme_council_mem_embedding_hnsw;
-CREATE INDEX IF NOT EXISTS ix_supreme_council_mem_embedding_hnsw
-    ON supreme_council_memory
-    USING hnsw (embedding_vec vector_cosine_ops)
-    WITH (m = 16, ef_construction = 64);
+    ADD COLUMN IF NOT EXISTS mitre_technique_id  TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS provenance_hmac     TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS provenance_kind     TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS provenance_issuer   TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS ix_supreme_council_mem_success_partial
     ON supreme_council_memory (tenant_id, created_at DESC)
@@ -86,19 +83,15 @@ CREATE INDEX IF NOT EXISTS ix_supreme_council_mem_success_partial
 CREATE INDEX IF NOT EXISTS ix_supreme_council_mem_gin_meta
     ON supreme_council_memory USING GIN (orchestrator_instruction);
 
--- ── Pentest winning paths: decay + checksum + last retrieved ───────────────
+-- ── Pentest winning paths: decay + checksum + HMAC provenance ──────────────
 ALTER TABLE pentest_winning_paths
     ADD COLUMN IF NOT EXISTS decay_weight        REAL NOT NULL DEFAULT 1.0,
     ADD COLUMN IF NOT EXISTS embedding_checksum  TEXT NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS last_retrieved_at   TIMESTAMPTZ,
-    ADD COLUMN IF NOT EXISTS mitre_technique_id  TEXT NOT NULL DEFAULT '';
-
-DROP INDEX IF EXISTS ix_pwp_embedding_hnsw;
-CREATE INDEX IF NOT EXISTS ix_pwp_embedding_hnsw
-    ON pentest_winning_paths
-    USING hnsw (target_embedding vector_cosine_ops)
-    WITH (m = 16, ef_construction = 64)
-    WHERE target_embedding IS NOT NULL;
+    ADD COLUMN IF NOT EXISTS mitre_technique_id  TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS provenance_hmac     TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS provenance_kind     TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS provenance_issuer   TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS ix_pwp_success_partial
     ON pentest_winning_paths (tenant_id, engine, last_won_at DESC)
