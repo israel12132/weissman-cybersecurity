@@ -795,6 +795,7 @@ async fn api_intel_suppression_delete(
     let _ = tx.commit().await;
     match res {
         Ok(r) if r.rows_affected() > 0 => {
+            crate::fp_feedback::invalidate_suppression_cache_tenant(auth.tenant_id);
             (StatusCode::OK, Json(json!({"ok": true, "deleted": id}))).into_response()
         }
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),

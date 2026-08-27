@@ -53,6 +53,7 @@ async fn persist_dedup_auto_suppress_and_cross_plane_critical() {
         .await
         .expect("connect");
 
+    ensure_cluster_ingest_schema(&pool).await;
     let (tenant_id, client_id, seeded) = seed_scope(&pool).await;
     reset_scope(&pool, tenant_id, client_id).await;
     eprintln!("alert-fatigue live: tenant={tenant_id} client={client_id} seeded={seeded}");
@@ -191,6 +192,7 @@ async fn persist_dedup_auto_suppress_and_cross_plane_critical() {
     .execute(&pool)
     .await
     .expect("insert suppression");
+    fingerprint_engine::fp_feedback::invalidate_suppression_cache(tenant_id, "asm");
 
     persist_engine_findings(
         &pool,
@@ -305,6 +307,16 @@ async fn persist_dedup_auto_suppress_and_cross_plane_critical() {
     eprintln!("alert-fatigue live contract OK finding_id={finding_id}");
 }
 
+async fn ensure_cluster_ingest_schema(pool: &sqlx::PgPool) {
+    let sql = include_str!(
+        "../../crates/weissman-db/migrations/20260827173000_cluster_ingest_watermark.sql"
+    );
+    sqlx::raw_sql(sql)
+        .execute(pool)
+        .await
+        .expect("apply cluster ingest + watermark schema");
+}
+
 async fn seed_scope(pool: &sqlx::PgPool) -> (i64, i64, bool) {
     if let (Ok(t), Ok(c)) = (
         std::env::var("WEISSMAN_LIVE_TENANT_ID"),
@@ -380,13 +392,7 @@ async fn reset_scope(pool: &sqlx::PgPool, tenant_id: i64, client_id: i64) {
         .bind(tenant_id)
         .execute(pool)
         .await;
-    crate::fp_feedback_invalidate(tenant_id);
-}
-
-// Test binary cannot call fingerprint_engine cache helper without a thin wrap.
-fn fp_feedback_invalidate(tenant_id: i64) {
-    fingerprint_engine::fp_feedback::invalidate_suppression_cache(tenant_id, "asm");
-    fingerprint_engine::fp_feedback::invalidate_suppression_cache(tenant_id, "process_inventory");
+    fingerprint_engine::fp_feedback::invalidate_suppression_cache_tenant(tenant_id);
 }
 
 async fn fetch_vuln(

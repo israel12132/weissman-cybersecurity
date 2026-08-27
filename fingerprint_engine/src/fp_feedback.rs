@@ -41,6 +41,11 @@ pub fn invalidate_suppression_cache(tenant_id: i64, engine: &str) {
     SUPPRESSION_CACHE.remove(&(tenant_id, engine.to_ascii_lowercase()));
 }
 
+/// Drop every cached engine for a tenant (rule delete / test reset).
+pub fn invalidate_suppression_cache_tenant(tenant_id: i64) {
+    SUPPRESSION_CACHE.retain(|k, _| k.0 != tenant_id);
+}
+
 #[inline]
 fn multiplier_from_counts(tp: i32, fp: i32) -> f64 {
     if tp == 0 && fp == 0 {

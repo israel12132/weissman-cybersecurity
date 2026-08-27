@@ -73,6 +73,8 @@ pub fn migrations_dir() -> std::path::PathBuf {
 ///   - File checksum drift → propagated with a clear "edit detected" message.
 ///   - Concurrent index creation failure → the row is NOT inserted; next boot
 ///     re-attempts (the file uses `IF NOT EXISTS` / `IF EXISTS` for idempotency).
+///
+/// Alert-fatigue cluster ingest + watermark: `20260827173000_cluster_ingest_watermark.sql`.
 pub async fn run_migrations(database_url: &str) -> Result<(), sqlx::migrate::MigrateError> {
     let pool = PgPoolOptions::new()
         .max_connections(2)
