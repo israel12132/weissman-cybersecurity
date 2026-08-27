@@ -6,6 +6,12 @@
 //!   * **ARO** (Annualised Rate of Occurrence) ≈ `EPSS × 12` (EPSS is 30-day prob).
 //!     For KEV-listed CVEs we floor at 1.0 (assumed at least one event/year).
 //!   * **ALE** (Annualised Loss Expectancy) = `SLE × ARO × risk_loss_discount`.
+//!     `risk_loss_discount` is the existing likelihood control (FAIR "decay").
+//!
+//! This module is the **only** source of Command Center / PDF Intelligence /
+//! Kill-Chain Commander executive dollars. Do not invent a second FAIR. Do not
+//! convert Micro-Severity (`severity × criticality × exposure`) into USD.
+//! Missing inputs → [`FairHeadline::cannot_price`] (fail-visible), never a made-up figure.
 //!
 //! Roll-up per client:
 //!   * `total_asset_value_usd` — sum of business_value_usd across all nodes
@@ -47,6 +53,243 @@ pub struct TopContributor {
     pub max_epss: f32,
     pub sle_usd: i64,
     pub ale_usd: i64,
+}
+
+/// Canonical executive headline. Method is always FAIR blast-radius — never the
+/// Micro-Severity linear product.
+pub const METHOD_FAIR: &str = "fair_usd_blast_radius";
+pub const CANNOT_PRICE_NO_SNAPSHOT: &str =
+    "Cannot price — no FAIR blast-radius snapshot (asset valuations / risk graph missing). Weissman will not invent a dollar figure.";
+pub const CANNOT_PRICE_NO_ASSETS: &str =
+    "Cannot price — FAIR inputs are empty (no valued risk-graph assets). Weissman will not invent a dollar figure.";
+pub const CANNOT_PRICE_NO_SCOPE: &str =
+    "Cannot price — no client FAIR snapshots in this tenant yet. Set asset values or recompute /api/financial-risk/:id?recompute=1.";
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FairInputsUsed {
+    pub asset_value: bool,
+    pub epss: bool,
+    pub kev: bool,
+    /// Existing FAIR likelihood control (`clients.risk_loss_discount`).
+    pub risk_loss_discount: Option<f32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FairHeadline {
+    pub method: String,
+    pub priced: bool,
+    pub cannot_price_reason: Option<String>,
+    pub ale_annualised_usd: Option<i64>,
+    pub sle_worst_usd: Option<i64>,
+    pub total_asset_value_usd: Option<i64>,
+    pub crown_jewel_value_usd: Option<i64>,
+    pub client_id: Option<i64>,
+    pub computed_at_unix: Option<i64>,
+    pub expression: String,
+    pub inputs: FairInputsUsed,
+}
+
+impl Default for FairHeadline {
+    fn default() -> Self {
+        Self::cannot_price(CANNOT_PRICE_NO_SNAPSHOT)
+    }
+}
+
+impl FairHeadline {
+    #[must_use]
+    pub fn cannot_price(reason: impl Into<String>) -> Self {
+        Self {
+            method: METHOD_FAIR.into(),
+            priced: false,
+            cannot_price_reason: Some(reason.into()),
+            ale_annualised_usd: None,
+            sle_worst_usd: None,
+            total_asset_value_usd: None,
+            crown_jewel_value_usd: None,
+            client_id: None,
+            computed_at_unix: None,
+            expression: "SLE = asset_value × clamp(CVSS/10, 0.5, 1.0); ALE = SLE × clamp(EPSS×12, 0..12) × discount (KEV floors ARO at 1.0/yr)".into(),
+            inputs: FairInputsUsed {
+                asset_value: false,
+                epss: false,
+                kev: false,
+                risk_loss_discount: None,
+            },
+        }
+    }
+
+    /// Fail-visible line for PDF / cockpit / kill-chain CEO tiles.
+    #[must_use]
+    pub fn display_line(&self) -> String {
+        if self.priced {
+            format!(
+                "FAIR USD blast-radius  ALE ${}  ·  worst-case SLE ${}",
+                fmt_usd(self.ale_annualised_usd.unwrap_or(0)),
+                fmt_usd(self.sle_worst_usd.unwrap_or(0)),
+            )
+        } else {
+            self.cannot_price_reason
+                .clone()
+                .unwrap_or_else(|| CANNOT_PRICE_NO_SNAPSHOT.into())
+        }
+    }
+}
+
+/// Convert a stored FAIR snapshot into an executive headline. Zero-valued
+/// snapshots are cannot-price (no fake $0 residual risk).
+#[must_use]
+pub fn headline_from_risk(risk: &ClientFinancialRisk) -> FairHeadline {
+    let has_value = risk.total_asset_value_usd > 0
+        || risk.sle_worst_usd > 0
+        || risk.ale_annualised_usd > 0
+        || risk.crown_jewel_value_usd > 0;
+    if !has_value {
+        let mut h = FairHeadline::cannot_price(CANNOT_PRICE_NO_ASSETS);
+        h.client_id = Some(risk.client_id);
+        h.computed_at_unix = Some(risk.computed_at_unix);
+        h.inputs.risk_loss_discount = Some(risk.risk_loss_discount);
+        return h;
+    }
+    let epss = risk.top_contributors.iter().any(|c| c.max_epss > 0.0);
+    let kev = risk.top_contributors.iter().any(|c| c.kev_present);
+    FairHeadline {
+        method: METHOD_FAIR.into(),
+        priced: true,
+        cannot_price_reason: None,
+        ale_annualised_usd: Some(risk.ale_annualised_usd),
+        sle_worst_usd: Some(risk.sle_worst_usd),
+        total_asset_value_usd: Some(risk.total_asset_value_usd),
+        crown_jewel_value_usd: Some(risk.crown_jewel_value_usd),
+        client_id: Some(risk.client_id),
+        computed_at_unix: Some(risk.computed_at_unix),
+        expression: "SLE = asset_value × clamp(CVSS/10, 0.5, 1.0); ALE = SLE × clamp(EPSS×12, 0..12) × discount (KEV floors ARO at 1.0/yr)".into(),
+        inputs: FairInputsUsed {
+            asset_value: risk.total_asset_value_usd > 0 || risk.default_asset_value_usd > 0,
+            epss,
+            kev,
+            risk_loss_discount: Some(risk.risk_loss_discount),
+        },
+    }
+}
+
+/// Cockpit / PDF / kill-chain scoring envelope. Headline is FAIR only;
+/// Micro-Severity is nested and labeled as SOC ranking — never residual USD.
+#[must_use]
+pub fn executive_scoring_contract(fair: &FairHeadline, micro_local_score: Option<f64>) -> Value {
+    json!({
+        "method": METHOD_FAIR,
+        "fair": fair,
+        "micro_severity": crate::micro_severity::api_object(micro_local_score),
+    })
+}
+
+/// Latest snapshot, computing once when missing. Never invents USD.
+pub async fn headline_for_client(pool: &PgPool, tenant_id: i64, client_id: i64) -> FairHeadline {
+    match latest_snapshot(pool, tenant_id, client_id).await {
+        Ok(Some(s)) => return headline_from_risk(&s),
+        Ok(None) => {}
+        Err(e) => {
+            return FairHeadline::cannot_price(format!(
+                "Cannot price — FAIR snapshot read failed: {e}"
+            ));
+        }
+    }
+    match compute_and_store(pool, tenant_id, client_id).await {
+        Ok(s) => headline_from_risk(&s),
+        Err(e) => {
+            FairHeadline::cannot_price(format!("Cannot price — FAIR computation failed: {e}"))
+        }
+    }
+}
+
+/// Tenant roll-up of **existing** FAIR snapshots. Does not invent dollars for
+/// clients that have never been priced.
+pub async fn headline_for_tenant(pool: &PgPool, tenant_id: i64) -> FairHeadline {
+    let mut tx = match crate::db::begin_tenant_tx(pool, tenant_id).await {
+        Ok(t) => t,
+        Err(e) => {
+            return FairHeadline::cannot_price(format!("Cannot price — database unavailable: {e}"));
+        }
+    };
+    let rows = sqlx::query(
+        r#"SELECT DISTINCT ON (client_id)
+                  client_id, total_asset_value_usd, sle_worst_usd, ale_annualised_usd,
+                  crown_jewel_value_usd, computed_at
+             FROM client_financial_risk_snapshots
+            WHERE tenant_id = $1
+            ORDER BY client_id, computed_at DESC"#,
+    )
+    .bind(tenant_id)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let _ = tx.commit().await;
+    if rows.is_empty() {
+        return FairHeadline::cannot_price(CANNOT_PRICE_NO_SCOPE);
+    }
+    let mut ale: i64 = 0;
+    let mut sle_worst: i64 = 0;
+    let mut assets: i64 = 0;
+    let mut crown: i64 = 0;
+    let mut latest: i64 = 0;
+    let mut any = false;
+    for r in rows {
+        let a: i64 = r.try_get("ale_annualised_usd").unwrap_or(0);
+        let s: i64 = r.try_get("sle_worst_usd").unwrap_or(0);
+        let t: i64 = r.try_get("total_asset_value_usd").unwrap_or(0);
+        let c: i64 = r.try_get("crown_jewel_value_usd").unwrap_or(0);
+        if t > 0 || s > 0 || a > 0 || c > 0 {
+            any = true;
+        }
+        ale = ale.saturating_add(a);
+        if s > sle_worst {
+            sle_worst = s;
+        }
+        assets = assets.saturating_add(t);
+        crown = crown.saturating_add(c);
+        if let Ok(ts) = r.try_get::<chrono::DateTime<chrono::Utc>, _>("computed_at") {
+            latest = latest.max(ts.timestamp());
+        }
+    }
+    if !any {
+        return FairHeadline::cannot_price(CANNOT_PRICE_NO_ASSETS);
+    }
+    FairHeadline {
+        method: METHOD_FAIR.into(),
+        priced: true,
+        cannot_price_reason: None,
+        ale_annualised_usd: Some(ale),
+        sle_worst_usd: Some(sle_worst),
+        total_asset_value_usd: Some(assets),
+        crown_jewel_value_usd: Some(crown),
+        client_id: None,
+        computed_at_unix: if latest > 0 { Some(latest) } else { None },
+        expression: "Portfolio FAIR roll-up of latest client_financial_risk_snapshots (ALE summed, worst-case SLE = max client SLE)".into(),
+        inputs: FairInputsUsed {
+            asset_value: assets > 0,
+            epss: true,
+            kev: true,
+            risk_loss_discount: None,
+        },
+    }
+}
+
+fn fmt_usd(n: i64) -> String {
+    let neg = n < 0;
+    let s = n.abs().to_string();
+    let mut out = String::new();
+    for (i, ch) in s.chars().rev().enumerate() {
+        if i > 0 && i % 3 == 0 {
+            out.push(',');
+        }
+        out.push(ch);
+    }
+    let body: String = out.chars().rev().collect();
+    if neg {
+        format!("-{body}")
+    } else {
+        body
+    }
 }
 
 /// Apply per-client tag → value rules to risk_graph_nodes. Idempotent. Returns
@@ -321,5 +564,117 @@ mod tests {
         // EPSS 1.0 × 12 = 12 events; can't go higher.
         let ale = annual_loss_expectancy(100_000, 1.0, true, 1.0);
         assert_eq!(ale, 1_200_000); // 100k × 12 × 1.0
+    }
+
+    fn sample_risk(ale: i64, sle: i64, assets: i64) -> ClientFinancialRisk {
+        ClientFinancialRisk {
+            client_id: 7,
+            total_asset_value_usd: assets,
+            crown_jewel_value_usd: 0,
+            sle_worst_usd: sle,
+            ale_annualised_usd: ale,
+            top_contributors: vec![TopContributor {
+                node_id: 1,
+                label: "www".into(),
+                graph_key: "host:www".into(),
+                node_type: "host".into(),
+                business_value_usd: assets,
+                crown_jewel: false,
+                kev_present: true,
+                max_cvss: 9.8,
+                max_epss: 0.8,
+                sle_usd: sle,
+                ale_usd: ale,
+            }],
+            default_asset_value_usd: 10_000,
+            risk_loss_discount: 0.30,
+            computed_at_unix: 1_700_000_000,
+        }
+    }
+
+    #[test]
+    fn headline_prices_from_fair_snapshot_not_micro_severity() {
+        let h = headline_from_risk(&sample_risk(180_000, 98_000, 100_000));
+        assert!(h.priced);
+        assert_eq!(h.method, METHOD_FAIR);
+        assert_eq!(h.ale_annualised_usd, Some(180_000));
+        assert_eq!(h.sle_worst_usd, Some(98_000));
+        assert!(h.inputs.epss && h.inputs.kev && h.inputs.asset_value);
+        assert!(h.cannot_price_reason.is_none());
+        let contract = executive_scoring_contract(&h, Some(25.0));
+        assert_eq!(contract["method"], METHOD_FAIR);
+        assert_eq!(contract["fair"]["ale_annualised_usd"], 180_000);
+        assert_eq!(
+            contract["micro_severity"]["method"],
+            crate::micro_severity::METHOD
+        );
+        assert_eq!(
+            contract["micro_severity"]["not_residual_financial_risk"],
+            true
+        );
+        assert_eq!(contract["micro_severity"]["score"], 25.0);
+        // Linear product must not leak into FAIR dollars.
+        assert_ne!(
+            contract["fair"]["ale_annualised_usd"],
+            contract["micro_severity"]["score"]
+        );
+    }
+
+    #[test]
+    fn headline_fail_visible_when_fair_inputs_empty() {
+        let h = headline_from_risk(&sample_risk(0, 0, 0));
+        assert!(!h.priced);
+        assert!(h.ale_annualised_usd.is_none());
+        assert!(h.sle_worst_usd.is_none());
+        assert!(h
+            .cannot_price_reason
+            .as_deref()
+            .unwrap()
+            .contains("Cannot price"));
+        assert!(!h.display_line().contains('$'));
+    }
+
+    #[test]
+    fn cannot_price_never_emits_dollar_fields() {
+        let h = FairHeadline::cannot_price("Cannot price — test");
+        assert!(!h.priced);
+        assert!(h.ale_annualised_usd.is_none());
+        assert_eq!(h.method, METHOD_FAIR);
+        let contract = executive_scoring_contract(&h, Some(99.0));
+        assert!(contract["fair"]["ale_annualised_usd"].is_null());
+        assert!(contract.get("scoring").is_none());
+        assert_eq!(contract["method"], METHOD_FAIR);
+        assert_ne!(
+            contract["method"].as_str(),
+            Some(crate::micro_severity::METHOD)
+        );
+    }
+
+    #[test]
+    fn executive_api_handlers_wire_existing_fair_not_linear_product() {
+        let exec = include_str!("server_handlers_sqlx.inc");
+        assert!(exec.contains("crate::financial_risk::headline_for_client"));
+        assert!(exec.contains("crate::financial_risk::headline_for_tenant"));
+        assert!(exec.contains("\"headline_risk\": fair"));
+        assert!(exec.contains("executive_scoring_contract"));
+        assert!(
+            !exec.contains("micro_severity::score("),
+            "exec-kpis must not convert Micro-Severity product into USD"
+        );
+
+        let pdf = include_str!("server_handlers_pdf_intelligence.inc");
+        assert!(pdf.contains("\"fair\": snap.fair"));
+        assert!(pdf.contains("\"headline_risk\": snap.fair"));
+        assert!(pdf.contains("executive_scoring_contract"));
+        assert!(!pdf.contains("micro_severity::score("));
+
+        let kcc = include_str!("kill_chain_commander.rs");
+        assert!(kcc.contains("headline_for_client"));
+        assert!(kcc.contains("apply_fair_headline"));
+        assert!(kcc.contains("priced_usd: None"));
+        assert!(
+            !kcc.contains("USD_DIVISOR"),
+            "kill-chain must not convert linear product into USD"
+        );
     }
 }

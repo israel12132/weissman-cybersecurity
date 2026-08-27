@@ -5,6 +5,8 @@ import { RefreshCw, TrendingDown, TrendingUp, Minus } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
 import { EngineRealitySummary } from '../EngineRealityBadge'
 import Button from '../ui/Button'
+import { useClient } from '../../context/ClientContext'
+import { fairAleLabel, fairSleLabel } from '../../lib/riskFormat'
 
 const REFRESH_MS = 15_000
 
@@ -128,6 +130,7 @@ function MiniSpark({ values, color = '#22d3ee', height = 24 }) {
 
 export default function ExecKpiStrip() {
   const { t } = useTranslation()
+  const { selectedClientId } = useClient()
   const [kpis, setKpis] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
@@ -135,7 +138,8 @@ export default function ExecKpiStrip() {
 
   const refresh = async () => {
     try {
-      const d = await apiFetch('/api/dashboard/exec-kpis')
+      const qs = selectedClientId ? `?client_id=${encodeURIComponent(selectedClientId)}` : ''
+      const d = await apiFetch(`/api/dashboard/exec-kpis${qs}`)
       if (!cancelRef.current) {
         setKpis(d)
         setErr(null)
@@ -161,7 +165,7 @@ export default function ExecKpiStrip() {
       window.removeEventListener('focus', onFocus)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [selectedClientId])
 
   if (loading && !kpis) {
     return (
@@ -186,8 +190,14 @@ export default function ExecKpiStrip() {
 
   const sev = kpis?.severity || {}
   const delta = kpis?.severity_delta_24h || {}
-  const score = kpis?.security_score ?? 0
-  const scoreColor = score >= 80 ? '#22c55e' : score >= 60 ? '#fbbf24' : score >= 40 ? '#f97316' : '#ef4444'
+  const fair = kpis?.headline_risk || kpis?.scoring?.fair || {}
+  const scoringMethod = kpis?.scoring?.method || fair.method || ''
+  const aleLabel = fairAleLabel(fair)
+  const fairPriced = Boolean(fair.priced) && Boolean(aleLabel)
+  const score = kpis?.scoring?.micro_severity?.score ?? kpis?.security_score ?? 0
+  const scoreColor = fairPriced
+    ? (Number(fair.ale_annualised_usd) >= 1_000_000 ? '#ef4444' : Number(fair.ale_annualised_usd) >= 250_000 ? '#f97316' : '#22c55e')
+    : '#fbbf24'
   const agents = kpis?.agents || {}
   const jobs = kpis?.jobs || {}
   const assets = kpis?.assets || {}
@@ -221,6 +231,10 @@ export default function ExecKpiStrip() {
               registered: fmtCount(agents.registered || 0),
             })}
           </span>
+          <span className="text-[var(--text-disabled)] hidden md:inline">|</span>
+          <span className="hidden md:inline">
+            {t('components.cockpitTabs.execKpiStrip.micro_severity_ticker', { score })}
+          </span>
           <span className="text-[var(--text-disabled)] hidden lg:inline">|</span>
           <Link
             to="/engine-reliability"
@@ -246,17 +260,33 @@ export default function ExecKpiStrip() {
       {/* KPI strip — Bloomberg-style dense row */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-px bg-[var(--row-hover-bg)] mx-0">
         <Tile
-          label={t('components.cockpitTabs.execKpiStrip.score')}
+          label={t('components.cockpitTabs.execKpiStrip.fair_ale')}
           value={
-            <span className="flex items-baseline gap-0.5">
-              <span style={{ color: scoreColor }}>{fmtCount(score)}</span>
-              <span className="text-[10px] text-[var(--text-muted)] font-mono font-normal">/100</span>
-            </span>
+            fairPriced && aleLabel ? (
+              <span className="flex items-baseline gap-0.5">
+                <span style={{ color: scoreColor }}>{aleLabel}</span>
+              </span>
+            ) : (
+              <span className="text-[0.95rem] font-semibold leading-tight text-amber-200">
+                {t('components.cockpitTabs.execKpiStrip.cannot_price')}
+              </span>
+            )
           }
           color={scoreColor}
-          to="/findings"
-          ariaLabel={t('components.cockpitTabs.execKpiStrip.score_aria', { score })}
-          footer={kpis?.scoring?.method || t('components.cockpitTabs.execKpiStrip.severity_weighted')}
+          to="/financial-risk"
+          ariaLabel={
+            fairPriced
+              ? t('components.cockpitTabs.execKpiStrip.fair_ale_aria', { value: aleLabel })
+              : t('components.cockpitTabs.execKpiStrip.cannot_price_aria')
+          }
+          footer={
+            fairPriced
+              ? t('components.cockpitTabs.execKpiStrip.fair_sle_footer', {
+                  sle: fairSleLabel(fair) || '—',
+                  method: scoringMethod,
+                })
+              : (fair.cannot_price_reason || t('components.cockpitTabs.execKpiStrip.cannot_price_footer'))
+          }
           intensity={2}
           showDivider
         />

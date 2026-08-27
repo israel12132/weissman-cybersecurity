@@ -760,6 +760,12 @@ async fn api_reports_executive(
     };
     let _ = tx.commit().await;
 
+    let fair = if let Some(cid) = q.client_id {
+        crate::financial_risk::headline_for_client(&state.app_pool, auth.tenant_id, cid).await
+    } else {
+        crate::financial_risk::headline_for_tenant(&state.app_pool, auth.tenant_id).await
+    };
+
     let posture = crate::compliance_engine::compute_posture(&mappings, &cloud_rules, &vuln_tuples);
     let soc2 = posture.iter().find(|p| p.framework == "SOC2").map(|p| p.compliance_percent).unwrap_or(100);
     let iso = posture
@@ -784,6 +790,7 @@ async fn api_reports_executive(
         soc2_pct: soc2,
         iso_pct: iso,
         gdpr_pct: gdpr,
+        fair_line: Some(fair.display_line()),
     };
     let pdf = match crate::executive_pdf::render_executive_board_pdf(&params) {
         Ok(b) => b,

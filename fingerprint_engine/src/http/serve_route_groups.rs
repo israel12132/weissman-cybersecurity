@@ -638,6 +638,11 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/reports/executive", get(api_reports_executive))
         .route("/api/pdf-intelligence", get(api_pdf_intelligence))
         .route("/api/pdf-intelligence/compose", post(api_pdf_intelligence_compose))
+        .route("/api/kill-chain-commander", get(api_kill_chain_commander))
+        .route(
+            "/api/kill-chain-commander/compose",
+            post(api_kill_chain_commander_compose),
+        )
         .route(
             "/api/sovereign/phantom-trap",
             post(api_sovereign_phantom_trap),

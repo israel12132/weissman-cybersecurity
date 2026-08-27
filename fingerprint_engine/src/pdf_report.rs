@@ -918,6 +918,7 @@ pub fn build_executive_board_pdf(
     soc2_pct: u8,
     iso_pct: u8,
     gdpr_pct: u8,
+    fair_line: Option<&str>,
 ) -> Result<Vec<u8>, String> {
     let date = israel_now();
     let mut b = PdfBuilder::new();
@@ -949,6 +950,16 @@ pub fn build_executive_board_pdf(
         &format!(
             "Agentless cloud misconfigurations (latest scan): {}",
             cloud_finding_count
+        ),
+    );
+    b.set_fill_rgb(0.95, 0.75, 0.2);
+    b.text(
+        11,
+        &truncate_ascii(
+            fair_line.unwrap_or(
+                "Cannot price — FAIR blast-radius not supplied. Weissman will not invent a dollar figure.",
+            ),
+            110,
         ),
     );
 
@@ -1464,7 +1475,10 @@ pub fn build_intelligence_pack_pdf(
     b.set_fill_rgb(0.2, 0.75, 0.95);
     b.text(14, &truncate_ascii(doc_title, 90));
     b.set_fill_rgb(0.55, 0.62, 0.72);
-    b.text(11, &format!("Organization: {}", truncate_ascii(org_label, 80)));
+    b.text(
+        11,
+        &format!("Organization: {}", truncate_ascii(org_label, 80)),
+    );
     if let Some(c) = client_opt {
         b.text(11, &format!("Scope (client): {}", truncate_ascii(c, 80)));
     }
@@ -1500,7 +1514,10 @@ pub fn build_intelligence_pack_pdf(
     }
     b.set_fill_rgb(0.45, 0.5, 0.55);
     b.ensure_space(24.0);
-    b.text(8, "(c) Weissman Cybersecurity — Confidential. Live evidence only.");
+    b.text(
+        8,
+        "(c) Weissman Cybersecurity — Confidential. Live evidence only.",
+    );
     let streams = b.finish();
     encode_helvetica_pdf(streams)
 }

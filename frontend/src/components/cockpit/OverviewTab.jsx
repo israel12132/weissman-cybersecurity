@@ -23,6 +23,7 @@ import {
   Cloud,
 } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
+import { fairAleLabel, fairSleLabel } from '../../lib/riskFormat'
 import LiveActivityFeed from './LiveActivityFeed'
 import MitreCoverageHeatmap from './MitreCoverageHeatmap'
 import TopMoversPanel from './TopMoversPanel'
@@ -151,6 +152,8 @@ export default function OverviewTab() {
   const [incidentCount, setIncidentCount] = useState(0)
   const [trendSpark, setTrendSpark] = useState([])
   const [resolvedSpark, setResolvedSpark] = useState([])
+  const [fair, setFair] = useState(null)
+  const [microScore, setMicroScore] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -158,12 +161,13 @@ export default function OverviewTab() {
     const load = async (isBackground = false) => {
       if (!isBackground) setLoading(true)
       try {
+        const qs = selectedClientId ? `?client_id=${encodeURIComponent(selectedClientId)}` : ''
         const [statsData, findingsData, kpisData, incidentsData] = await Promise.all([
           apiFetch('/api/dashboard/stats').catch(() => null),
           selectedClientId
             ? apiFetch(`/api/clients/${selectedClientId}/findings`).catch(() => null)
             : null,
-          apiFetch('/api/dashboard/exec-kpis').catch(() => null),
+          apiFetch(`/api/dashboard/exec-kpis${qs}`).catch(() => null),
           apiFetch('/api/soc/incidents').catch(() => null),
         ])
         if (cancelled) return
@@ -185,6 +189,8 @@ export default function OverviewTab() {
         }
         if (kpisData) {
           const k = kpisData
+          setFair(k.headline_risk || k.scoring?.fair || null)
+          if (k.security_score != null) setMicroScore(Number(k.security_score) || 0)
           const discovered = k?.trend?.discovered
           const resolved = k?.trend?.resolved
           if (Array.isArray(discovered) && discovered.length > 1) {
@@ -233,7 +239,9 @@ export default function OverviewTab() {
     (f.severity || '').toLowerCase().includes('medium') || (f.severity || '').toLowerCase().includes('med'),
   ).length
   const zeroDayCount = findings.filter((f) => (f.source || '').includes('zero_day')).length
-  const score = selectedClientId ? (stats.security_score ?? 0) : 0
+  const score = selectedClientId ? microScore : 0
+  const aleLabel = fairAleLabel(fair)
+  const fairPriced = Boolean(aleLabel)
 
   const severityBarData = [
     { name: t('components.cockpitTabs.overview.severity.critical'), count: critical, color: '#ef4444' },
@@ -373,18 +381,25 @@ export default function OverviewTab() {
         <div className={GLASS_CARD}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-white/50 uppercase tracking-widest">
-              {t('components.cockpitTabs.overview.system_health')}
+              {t('components.cockpitTabs.overview.fair_ale')}
             </span>
-            <Activity className="w-4 h-4 text-emerald-400/80" />
+            <Activity className="w-4 h-4 text-rose-400/80" />
           </div>
-          <p className="text-2xl font-bold mt-1 tabular-nums" style={{
-            color: score >= 70 ? '#4ade80' : score >= 40 ? '#fbbf24' : '#ef4444',
-          }}>
-            {loading ? '—' : `${score}%`}
+          <p
+            className="text-2xl font-bold mt-1 tabular-nums"
+            style={{ color: fairPriced ? '#ef4444' : '#fbbf24' }}
+            data-testid="overview-fair-headline"
+          >
+            {loading ? '—' : aleLabel || t('components.cockpitTabs.overview.cannot_price')}
+          </p>
+          <p className="text-[10px] text-white/40 font-mono mt-2 leading-relaxed">
+            {fairPriced
+              ? t('components.cockpitTabs.overview.fair_sle_hint', { sle: fairSleLabel(fair) || '—' })
+              : (fair?.cannot_price_reason || t('components.cockpitTabs.overview.cannot_price_hint'))}
           </p>
           <SparklineOrEmpty
             data={resolvedSpark}
-            color={score >= 70 ? '#4ade80' : score >= 40 ? '#fbbf24' : '#ef4444'}
+            color={fairPriced ? '#ef4444' : '#fbbf24'}
             emptyLabel={t('components.cockpitTabs.overview.no_trend')}
           />
         </div>
@@ -394,9 +409,12 @@ export default function OverviewTab() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className={`${GLASS_CARD} flex flex-col items-center justify-center min-h-[320px]`}>
           <h3 className="text-xs font-semibold text-white/50 uppercase tracking-widest mb-4">
-            {t('components.cockpitTabs.overview.security_risk_grade')}
+            {t('components.cockpitTabs.overview.micro_severity_grade')}
           </h3>
           <RiskGauge score={score} />
+          <p className="text-[10px] text-white/40 font-mono mt-3 text-center">
+            {t('components.cockpitTabs.overview.micro_severity_hint')}
+          </p>
         </div>
         <div className={`${GLASS_CARD} min-h-[320px]`}>
           <h3 className="text-xs font-semibold text-white/50 uppercase tracking-widest mb-4">

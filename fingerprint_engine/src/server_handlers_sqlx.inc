@@ -213,6 +213,9 @@ async fn api_dashboard_stats(State(state): State<Arc<AppState>>, Extension(auth)
 /// doesn't fire 7 parallel requests on every focus change. Wiz / Falcon / Snyk all
 /// expose a similar endpoint — it's table stakes for a real-time dashboard.
 ///
+/// Headline residual dollars come **only** from [`crate::financial_risk`] FAIR SLE/ALE.
+/// `security_score` is Micro-Severity (SOC local ranking), never residual financial risk.
+///
 /// Shape (stable contract; new fields are additive):
 /// ```jsonc
 /// {
@@ -226,7 +229,8 @@ async fn api_dashboard_stats(State(state): State<Arc<AppState>>, Extension(auth)
 ///   "scan_velocity": { "scans_24h": 42, "avg_scan_secs": 18.4 },
 ///   "mttr_hours": 6.8,
 ///   "security_score": 73,
-///   "scoring": { "method": "weighted_severity", "weights": { ... } },
+///   "headline_risk": { "method": "fair_usd_blast_radius", "priced": true, "ale_annualised_usd": 180000 },
+///   "scoring": { "method": "fair_usd_blast_radius", "fair": { ... }, "micro_severity": { ... } },
 ///   "trend": { // 24 hourly buckets, newest last
 ///     "labels": ["00:00","01:00", ...],
 ///     "discovered": [3, 1, 0, ...],
@@ -242,7 +246,13 @@ async fn api_dashboard_stats(State(state): State<Arc<AppState>>, Extension(auth)
 async fn api_dashboard_exec_kpis(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
+    let requested = q.get("client_id").and_then(|s| s.parse::<i64>().ok());
+    let scoped_client = match crate::client_isolation::bind_requested_client(&auth, requested) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -488,7 +498,7 @@ async fn api_dashboard_exec_kpis(
     .unwrap_or_default();
     let _ = tx.commit().await;
 
-    // ── Security score (weighted, clamped 0..100) ──────────────────────────────────
+    // ── Micro-Severity (SOC local 0..100) — never residual financial risk ───────
     let score = {
         let crit = sev_get(&sev_now, "critical");
         let high = sev_get(&sev_now, "high");
@@ -496,6 +506,15 @@ async fn api_dashboard_exec_kpis(
         let raw = 100i64 - crit * 25 - high * 10 - med * 3;
         raw.max(0).min(100)
     };
+
+    // Headline residual dollars: existing FAIR blast-radius only. Missing inputs
+    // fail visible (cannot price) — never a made-up USD figure.
+    let fair = if let Some(cid) = scoped_client {
+        crate::financial_risk::headline_for_client(&state.app_pool, auth.tenant_id, cid).await
+    } else {
+        crate::financial_risk::headline_for_tenant(&state.app_pool, auth.tenant_id).await
+    };
+    let scoring = crate::financial_risk::executive_scoring_contract(&fair, None);
 
     // ── Helpers for the response payload ──────────────────────────────────────────
     let sev_obj = json!({
@@ -566,11 +585,8 @@ async fn api_dashboard_exec_kpis(
             },
             "mttr_hours":     (mttr_hours * 10.0).round() / 10.0,
             "security_score": score,
-            "scoring": {
-                "method":  "weighted_severity",
-                "weights": { "critical": 25, "high": 10, "medium": 3 },
-                "max":     100
-            },
+            "headline_risk": fair,
+            "scoring": scoring,
             "trend": {
                 "labels":     labels,
                 "discovered": series_disc,
