@@ -376,7 +376,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn agent_required_engines_emit_agent_required_finding() {
+    async fn agent_required_engines_queue_without_invented_findings() {
         let cases = [
             ("acoustic_exfil", run_acoustic_exfil_result("host").await),
             ("em_exfil_engine", run_em_exfil_engine_result("host").await),
@@ -400,14 +400,17 @@ mod tests {
             ),
         ];
         for (engine_id, r) in cases {
-            assert_eq!(r.status, "ok");
-            assert_eq!(r.findings.len(), 1);
-            let f = &r.findings[0];
-            assert_eq!(f["type"], engine_id);
-            assert_eq!(f["category"], "agent_required");
-            assert_eq!(f["severity"], "info");
-            assert_eq!(f["agent_required"], true);
-            assert!(r.message.contains("agent-based collector required"));
+            assert!(
+                r.is_waiting_for_agent(),
+                "{engine_id} must park as waiting_for_agent"
+            );
+            assert!(
+                r.findings.is_empty(),
+                "{engine_id} must not invent findings"
+            );
+            assert!(!r.success);
+            assert!(r.message.contains(engine_id));
+            assert!(r.message.contains("endpoint agent"));
         }
     }
 }

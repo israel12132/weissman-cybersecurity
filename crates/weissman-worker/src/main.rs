@@ -421,7 +421,77 @@ async fn process_one(
 
     match outcome {
         Ok(v) => {
-            if bus_on {
+            let waiting_for_agent = v
+                .get("status")
+                .and_then(|s| s.as_str())
+                .map(|s| s.eq_ignore_ascii_case("waiting_for_agent"))
+                .unwrap_or(false)
+                || v.get("queued_for_agent")
+                    .and_then(|b| b.as_bool())
+                    .unwrap_or(false);
+            if waiting_for_agent {
+                if let Some(l) = lease_out.take() {
+                    let _ = l.release().await;
+                }
+                let has_task = v
+                    .get("agent_task_id")
+                    .and_then(|x| x.as_str())
+                    .map(|s| !s.is_empty())
+                    .unwrap_or(false);
+                if !has_task {
+                    let msg = v
+                        .get("message")
+                        .and_then(|m| m.as_str())
+                        .unwrap_or("host task was not enqueued — no waiting_for_agent park without a real queue row");
+                    match job_queue::fail_owned_job_terminal(pool, job.id, &wid, msg, &v).await {
+                        Ok(true) => warn!(
+                            target: "weissman_worker",
+                            job_id = %job.id,
+                            "agent-required run failed visibly — no endpoint_agent_tasks row (select a client)"
+                        ),
+                        Ok(false) => warn!(
+                            target: "weissman_worker",
+                            job_id = %job.id,
+                            "terminal fail discarded — this worker no longer owns the job"
+                        ),
+                        Err(e) => {
+                            error!(target: "weissman_worker", job_id = %job.id, error = %e, "terminal fail for missing agent task failed");
+                            let _ = job_queue::fail_job(
+                                pool,
+                                &job,
+                                &wid,
+                                &e.to_string(),
+                                BASE_BACKOFF_SECS,
+                            )
+                            .await;
+                        }
+                    }
+                } else {
+                    match job_queue::park_job_waiting_for_agent(pool, job.id, &wid, &v).await {
+                        Ok(true) => info!(
+                            target: "weissman_worker",
+                            job_id = %job.id,
+                            "parked job waiting_for_agent — host task queued, no invented findings"
+                        ),
+                        Ok(false) => warn!(
+                            target: "weissman_worker",
+                            job_id = %job.id,
+                            "waiting_for_agent park discarded — this worker no longer owns the job"
+                        ),
+                        Err(e) => {
+                            error!(target: "weissman_worker", job_id = %job.id, error = %e, "park waiting_for_agent failed");
+                            let _ = job_queue::fail_job(
+                                pool,
+                                &job,
+                                &wid,
+                                &e.to_string(),
+                                BASE_BACKOFF_SECS,
+                            )
+                            .await;
+                        }
+                    }
+                }
+            } else if bus_on {
                 if let Err(e) = bus
                     .on_job_completed(job.id, job.tenant_id, &wid, &v, lease_out.take())
                     .await

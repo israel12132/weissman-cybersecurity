@@ -76,7 +76,11 @@ mod tests {
 
     #[test]
     fn agent_required_list_is_non_empty_and_unique() {
-        assert!(AGENT_REQUIRED_ENGINES.len() >= 40);
+        assert_eq!(
+            AGENT_REQUIRED_ENGINES.len(),
+            48,
+            "canonical agent-required catalog (engine_reality_audit)"
+        );
         let mut seen = std::collections::HashSet::new();
         for id in AGENT_REQUIRED_ENGINES {
             assert!(seen.insert(*id), "duplicate agent engine id: {id}");

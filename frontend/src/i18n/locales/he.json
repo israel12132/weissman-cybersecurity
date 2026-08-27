@@ -875,7 +875,9 @@
     "time_hours": "לפני {{count}}שע׳",
     "time_days": "לפני {{count}}י",
     "no_filter_title": "אין סוכנים תואמים",
-    "no_filter_body": "נסה מסנן סטטוס אחר."
+    "no_filter_body": "נסה מסנן סטטוס אחר.",
+    "queue_heading": "תור מנועי agent-required",
+    "kpi_queue_waiting": "ממתין לסוכן"
   },
   "system_config": {
     "title": "הגדרות מערכת",
@@ -1137,11 +1139,24 @@
     "no_findings_filtered": "אין ממצאים התואמים לחיפוש ולסינון החומרה הנוכחיים."
   },
   "agentRequired": {
-    "empty_title": "נדרש סוכן קצה",
-    "empty_body": "יש להתקין את Weissman Agent על נקודת הקצה כדי לצפות בנתונים אלה. סריקות מרוחקות לא יכולות לצפות באותות מקומיים של מנוע זה.",
+    "empty_title": "ממתין לסוכן קצה",
+    "empty_body": "המנוע הזה לא ממציא ממצאי host. הרצת המנוע מכניסה משימה אמיתית לתור; תוצאות יופיעו רק אחרי שסוכן Weissman מתחבר ומדווח ראיות.",
     "install_cta": "פתח ניהול סוכנים",
-    "install_hint": "צור enrollment token בניהול סוכנים, הרץ את סקרipt ההתקנה על המארח, ורענן לאחר שהסוכן מתחבר.",
-    "engine_id": "מנוע"
+    "install_hint": "צור טוקן רישום בניהול סוכנים, הרץ את סקריפט ההתקנה על המארח, והמשימות בתור יתרוקנו אוטומטית כשהסוכן מתחבר.",
+    "engine_id": "מנוע",
+    "queue_title": "תור מנועי agent-required",
+    "queue_offline_body": "אין סוכן קצה מחובר. הרצת המנוע מכניסה משימת host אמיתית לתור — היא לא תושלם עם ממצאים מזויפים.",
+    "queue_online_body": "{{count}} סוכן/י קצה מחוברים. משימות host בתור מתרוקנות כשהקולטים מדווחים ראיות.",
+    "queue_empty": "אין משימות host ממתינות. הרץ את המנוע כדי להכניס עבודה לסוכן הבא שיתחבר.",
+    "waiting_count": "{{count}} ממתינים",
+    "fleet_loading": "צי…",
+    "fleet_online": "{{count}} מחוברים",
+    "fleet_offline": "אין סוכן מחובר",
+    "kpi_pending": "ממתין",
+    "kpi_running": "על הסוכן",
+    "kpi_waiting": "בתור",
+    "kpi_live": "סוכנים מחוברים",
+    "job_waiting": "הסריקה ממתינה לסוכן קצה. ממצאי host יוזרמו כשהקולט מתחבר — שום דבר לא מזויף."
   },
   "weissmanFindings": {
     "title": "ממצאים",
@@ -1543,6 +1558,7 @@
       "status_completed": "הושלם",
       "status_failed": "נכשל",
       "status_cancelled": "בוטל",
+      "status_waiting_for_agent": "ממתין לסוכן",
       "evidence_notice": "תור משימות אסינכרוני חי מ-GET /api/jobs (מוגבל לטננט). למנכ\"ל: נפילה ל-/api/ceo/jobs/live כשהרשימה הסטנדרטית לא זמינה. ללא טלמטריה מדומה.",
       "last_updated": "סנכרון אחרון {{time}}",
       "export_csv": "ייצוא CSV",
@@ -1553,6 +1569,7 @@
       "filter_completed": "הושלם",
       "filter_failed": "נכשל",
       "filter_cancelled": "בוטל",
+      "filter_waiting_for_agent": "ממתין לסוכן",
       "col_target": "יעד",
       "copy_id": "העתק מזהה משימה",
       "detail_title": "פרטי משימה",

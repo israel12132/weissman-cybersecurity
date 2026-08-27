@@ -4,7 +4,7 @@
 //!
 //!   * `real_probe`     — canonical engine with a live dispatch arm (real network/host I/O)
 //!   * `alias`          — a retag that resolves to another canonical engine (same detection logic)
-//!   * `agent_required` — remote-impossible; returns an info finding until the endpoint agent runs
+//!   * `agent_required` — remote-impossible; queued until the endpoint agent runs
 //!   * `special`        — reserved for async-only engines without a sync dispatch arm
 //!
 //! Mirrors `scripts/engine_reality_audit.mjs` exactly, but computed at runtime in Rust.
@@ -85,7 +85,7 @@ pub fn to_json() -> serde_json::Value {
         "legend": {
             "real_probe": "Live probe — real network/host detection",
             "alias": "Alias — same detection as its canonical engine, different name",
-            "agent_required": "Requires the endpoint agent; info-only from a remote scan",
+            "agent_required": "Queued until an enrolled endpoint agent is online — never invents host findings",
             "special": "poe_synthesis — runs via the async-job path"
         },
     });
@@ -130,6 +130,7 @@ mod tests {
         // Buckets must partition the catalog exactly (no id left unclassified).
         assert_eq!(real + alias + agent + special, caps.len());
         assert!(real > 0 && alias > 0 && agent > 0);
+        assert_eq!(agent, 48, "canonical agent-required catalog");
         assert_eq!(special, 0);
         // Aliases must carry a canonical target; real probes must not.
         for c in &caps {

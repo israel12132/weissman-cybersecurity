@@ -4,11 +4,16 @@
 //! call `run_agent_required_engine` internally without being listed in the canonical agent list.
 
 use super::EngineRunContext;
-use crate::engine_result::EngineResult;
+use crate::engine_probes::is_invented_agent_placeholder;
+use crate::engine_result::{EngineResult, WAITING_FOR_AGENT};
 
 pub use weissman_core::models::engine_agent::{is_agent_required_engine, AGENT_REQUIRED_ENGINES};
 
-/// Dispatch an agent-required engine to the endpoint fleet (or return a status finding).
+/// Dispatch an agent-required engine to the endpoint fleet (or return a queue status).
+///
+/// Never invents host findings. When a client/pool is present the work is inserted into
+/// `endpoint_agent_tasks` and the scan job is parked as `waiting_for_agent` until the agent
+/// reports. Missing client/pool fails visibly — it is not empty success.
 pub async fn run_agent_required_engine(
     engine_id: &str,
     target: &str,
@@ -31,58 +36,58 @@ pub async fn run_agent_required_engine(
         )
         .await;
     }
-    let f = serde_json::json!({
-        "type": engine_id,
-        "category": "agent_required",
-        "title": format!("{} requires an enrolled endpoint agent", engine_id),
-        "severity": "info",
-        "mitre_attack": "",
-        "description": "This detection runs on the host. Enrol the Weissman Endpoint Agent on this client and re-run the engine.",
-        "target": target,
-        "remediation": "Go to Dashboard → Agents → Generate token → run the install command on the affected host.",
-        "agent_required": true,
-    });
-    EngineResult::ok(vec![f], format!("{}: requires endpoint agent", engine_id))
+    EngineResult::waiting_for_agent(format!(
+        "{}: cannot enqueue host task without client_id + database (select a client and re-run)",
+        engine_id
+    ))
 }
 
-/// Merge remote-surface findings with agent dispatch / guidance for hybrid engines.
+/// Merge remote-surface findings with agent dispatch / queue state for hybrid engines.
 pub(crate) fn merge_agent_hybrid(
     remote: EngineResult,
     agent: EngineResult,
     engine_id: &str,
 ) -> EngineResult {
-    let mut findings = remote.findings;
-    for f in agent.findings {
+    let mut findings: Vec<serde_json::Value> = Vec::new();
+    for f in remote
+        .findings
+        .into_iter()
+        .chain(agent.findings.iter().cloned())
+    {
+        if is_invented_agent_placeholder(&f) {
+            continue;
+        }
         let dup = findings.iter().any(|existing| {
             existing.get("title").and_then(|v| v.as_str())
                 == f.get("title").and_then(|v| v.as_str())
+                && f.get("title").is_some()
         });
         if !dup {
             findings.push(f);
         }
     }
-    if findings.is_empty() {
-        return EngineResult {
-            status: agent.status,
-            findings: Vec::new(),
-            message: agent.message,
-            success: agent.success,
-            summary: agent.summary,
-            graph_nodes: agent.graph_nodes,
-            graph_edges: agent.graph_edges,
-        };
+
+    if agent.status.eq_ignore_ascii_case("error") && agent.agent_task_id.is_none() {
+        let mut out = EngineResult::error(agent.message.clone());
+        out.findings = findings;
+        return out;
     }
-    let has_agent_guidance = findings.iter().any(|f| {
-        f.get("agent_required")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false)
-    });
-    let msg = if has_agent_guidance {
-        format!(
-            "{}: {} finding(s) — remote surface probed; endpoint agent recommended for host-resident validation",
-            engine_id,
-            findings.len()
-        )
+
+    let queued = agent.is_waiting_for_agent() || agent.agent_task_id.is_some();
+    let msg = if queued {
+        let live = agent.live_dispatched.unwrap_or(false);
+        if findings.is_empty() {
+            agent.message.clone()
+        } else {
+            format!(
+                "{}: {} remote-surface finding(s); host detection queued for endpoint agent (live={})",
+                engine_id,
+                findings.len(),
+                live
+            )
+        }
+    } else if findings.is_empty() {
+        agent.message.clone()
     } else {
         format!(
             "{}: {} finding(s) (remote surface + agent)",
@@ -90,7 +95,18 @@ pub(crate) fn merge_agent_hybrid(
             findings.len()
         )
     };
-    EngineResult::ok(findings, msg)
+
+    let mut out = if queued {
+        EngineResult::waiting_for_agent(msg)
+    } else {
+        EngineResult::ok(findings.clone(), msg)
+    };
+    if queued {
+        out.findings = findings;
+    }
+    out.agent_task_id = agent.agent_task_id.clone();
+    out.live_dispatched = agent.live_dispatched;
+    out
 }
 
 async fn dispatch_to_agent(
@@ -128,76 +144,104 @@ async fn dispatch_to_agent(
     {
         Ok(pair) => pair,
         Err(e) => {
-            return EngineResult::ok(
-                vec![],
-                format!("agent task enqueue failed for {}: {}", engine, e),
-            );
+            return EngineResult::error(format!("agent task enqueue failed for {}: {}", engine, e));
         }
     };
-    let f = serde_json::json!({
-        "type": engine,
-        "category": "agent_dispatched",
-        "title": if live_dispatched {
-            format!("{}: task dispatched to online agent", engine)
-        } else {
-            format!("{}: task queued for next online agent", engine)
-        },
-        "severity": "info",
-        "mitre_attack": "",
-        "description": format!(
-            "Detection task {} routed to {} agent for client {}. Findings will stream to the dashboard as the agent reports them.",
-            task,
-            if live_dispatched { "live" } else { "next" },
-            client_id
-        ),
-        "target": target,
-        "task_id": task.to_string(),
-        "live_dispatched": live_dispatched,
-        "remediation": "View streaming findings under Dashboard → Findings, filtered by source = agent.",
-    });
-    EngineResult::ok(vec![f], format!("{}: task {} dispatched", engine, task))
+    let msg = if live_dispatched {
+        format!(
+            "{}: dispatched to online agent (task {}) — waiting for host evidence",
+            engine, task
+        )
+    } else {
+        format!(
+            "{}: queued for next online agent (task {}) — no host finding until the collector connects",
+            engine, task
+        )
+    };
+    EngineResult::waiting_for_agent(msg).with_agent_task(task.to_string(), live_dispatched)
 }
 
 #[cfg(test)]
 mod tests {
+    use super::EngineRunContext;
     use super::*;
     use serde_json::json;
 
     #[test]
-    fn merge_empty_both_returns_agent_shell() {
+    fn merge_empty_both_preserves_waiting_status() {
         let remote = EngineResult::ok(vec![], "remote-msg");
-        let agent = EngineResult::ok(vec![], "agent-msg");
+        let agent = EngineResult::waiting_for_agent("queued-msg").with_agent_task("t1", false);
         let merged = merge_agent_hybrid(remote, agent, "ENG");
         assert!(merged.findings.is_empty());
-        assert_eq!(merged.message, "agent-msg");
-        assert_eq!(merged.status, "ok");
-        assert!(merged.success);
+        assert_eq!(merged.status, WAITING_FOR_AGENT);
+        assert!(!merged.success);
+        assert_eq!(merged.agent_task_id.as_deref(), Some("t1"));
+        assert_eq!(merged.live_dispatched, Some(false));
+        assert!(merged.message.contains("queued-msg"));
     }
 
     #[test]
-    fn merge_dedupes_by_title_and_builds_plain_message() {
-        let remote = EngineResult::ok(vec![json!({"title": "A"})], "r");
-        let agent = EngineResult::ok(vec![json!({"title": "A"}), json!({"title": "B"})], "a");
+    fn merge_keeps_live_remote_findings_and_parks_host() {
+        let remote = EngineResult::ok(vec![json!({"title": "A", "remote_surface": true})], "r");
+        let agent = EngineResult::waiting_for_agent("queued").with_agent_task("t2", true);
         let merged = merge_agent_hybrid(remote, agent, "ENG");
-        assert_eq!(merged.findings.len(), 2);
+        assert_eq!(merged.findings.len(), 1);
+        assert_eq!(merged.status, WAITING_FOR_AGENT);
+        assert_eq!(merged.agent_task_id.as_deref(), Some("t2"));
+        assert!(merged.message.contains("1 remote-surface finding"));
+        assert!(merged.message.contains("live=true"));
+    }
+
+    #[test]
+    fn merge_strips_invented_agent_placeholders() {
+        let remote = EngineResult::ok(vec![json!({"title": "A"})], "r");
+        let agent = EngineResult::ok(
+            vec![
+                json!({"title": "fake", "agent_required": true, "category": "agent_required"}),
+                json!({"title": "B"}),
+            ],
+            "a",
+        );
+        let merged = merge_agent_hybrid(remote, agent, "ENG");
         let titles: Vec<&str> = merged
             .findings
             .iter()
             .filter_map(|f| f.get("title").and_then(|v| v.as_str()))
             .collect();
         assert_eq!(titles, vec!["A", "B"]);
-        assert_eq!(merged.message, "ENG: 2 finding(s) (remote surface + agent)");
+        assert_eq!(merged.status, "ok");
     }
 
     #[test]
-    fn merge_flags_agent_guidance_in_message() {
-        let remote = EngineResult::ok(vec![], "r");
-        let agent = EngineResult::ok(vec![json!({"title": "X", "agent_required": true})], "a");
+    fn merge_dedupes_by_title() {
+        let remote = EngineResult::ok(vec![json!({"title": "A"})], "r");
+        let agent = EngineResult::ok(vec![json!({"title": "A"}), json!({"title": "B"})], "a");
         let merged = merge_agent_hybrid(remote, agent, "ENG");
+        assert_eq!(merged.findings.len(), 2);
+    }
+
+    #[test]
+    fn merge_agent_error_keeps_remote_findings_and_does_not_succeed() {
+        let remote = EngineResult::ok(
+            vec![json!({"title": "perimeter", "remote_surface": true})],
+            "r",
+        );
+        let agent = EngineResult::error("agent task enqueue failed for ENG: db down");
+        let merged = merge_agent_hybrid(remote, agent, "ENG");
+        assert_eq!(merged.status, "error");
+        assert!(!merged.success);
         assert_eq!(merged.findings.len(), 1);
-        assert!(merged
-            .message
-            .contains("endpoint agent recommended for host-resident validation"));
-        assert!(merged.message.starts_with("ENG: 1 finding(s)"));
+        assert_eq!(merged.findings[0]["title"], "perimeter");
+    }
+
+    #[tokio::test]
+    async fn missing_client_does_not_invent_host_findings() {
+        let ctx = EngineRunContext::default();
+        let r = run_agent_required_engine("process_hollowing", "host.local", &ctx).await;
+        assert!(r.is_waiting_for_agent());
+        assert!(r.findings.is_empty());
+        assert!(r.agent_task_id.is_none());
+        assert!(!r.success);
+        assert!(r.message.contains("client_id"));
     }
 }

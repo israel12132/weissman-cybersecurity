@@ -16,6 +16,7 @@ import { apiUrl } from '../lib/apiBase'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import Button from '../components/ui/Button'
 import { useApiQuery } from '../hooks/useApiQuery'
+import AgentQueuePanel from '../components/engine/AgentQueuePanel'
 
 const columnHelper = createColumnHelper()
 
@@ -277,6 +278,8 @@ export default function AgentManagement() {
             <Kpi label={t('agents.kpi_capabilities')} value={metrics.capsTotal} color="#a78bfa" sub={t('agents.kpi_clients', { count: metrics.clientsSeen })} />
           </div>
         )}
+
+        <AgentQueuePanel compact />
 
         <section className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] backdrop-blur-md p-5 space-y-4">
           <h2 className="text-xs font-mono uppercase tracking-widest text-[var(--text-tertiary)]">{t('agents.issue_token')}</h2>

@@ -257,7 +257,7 @@ where
                     attempts,
                     strategy: variant.clone(),
                     elapsed_ms: start.elapsed().as_millis() as u64,
-                    status: String::from("ok"),
+                    status: result.status.clone(),
                     recovered: attempts > 1,
                     error: None,
                     failure_class: last_class.map(|c| c.as_str().to_string()),
@@ -339,6 +339,7 @@ mod tests {
     fn retry_only_on_error_status() {
         assert!(should_retry_status("error"));
         assert!(!should_retry_status("ok"));
+        assert!(!should_retry_status("waiting_for_agent"));
     }
 
     #[tokio::test]
@@ -384,6 +385,28 @@ mod tests {
         assert_eq!(result.status, "ok");
         assert_eq!(telem.attempts, 1);
         assert!(!telem.recovered);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn waiting_for_agent_is_not_retried() {
+        let calls = Arc::new(AtomicU32::new(0));
+        let c = calls.clone();
+        let (result, telem) = run_with_resilience(
+            "process_hollowing",
+            "host.local",
+            Duration::from_secs(2),
+            move |_v, _hint| {
+                c.fetch_add(1, Ordering::SeqCst);
+                async move { EngineResult::waiting_for_agent("queued for endpoint agent") }
+            },
+        )
+        .await;
+        assert_eq!(result.status, "waiting_for_agent");
+        assert!(!result.success);
+        assert!(result.findings.is_empty());
+        assert_eq!(telem.status, "waiting_for_agent");
+        assert_eq!(telem.attempts, 1);
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 

@@ -21,12 +21,13 @@ const columnHelper = createColumnHelper()
 const STATUS_COLORS = {
   queued: 'text-yellow-400 bg-yellow-900/20 border-yellow-500/30',
   running: 'text-blue-400 bg-blue-900/20 border-blue-500/30',
+  waiting_for_agent: 'text-amber-300 bg-amber-900/20 border-amber-500/30',
   completed: 'text-green-400 bg-green-900/20 border-green-500/30',
   failed: 'text-red-400 bg-red-900/20 border-red-500/30',
   cancelled: 'text-[var(--text-tertiary)] bg-[var(--bg-1)]/20 border-[var(--border-strong)]/30',
 }
 
-const STATUS_KEYS = ['all', 'queued', 'running', 'completed', 'failed', 'cancelled']
+const STATUS_KEYS = ['all', 'queued', 'running', 'waiting_for_agent', 'completed', 'failed', 'cancelled']
 
 function exportJobsCsv(jobs, _t) {
   const header = ['id', 'kind', 'status', 'target', 'engine', 'client_id', 'created_at', 'updated_at', 'attempt_count', 'last_error']
@@ -128,7 +129,7 @@ export default function JobsDashboard() {
   }, [jobs, search, statusFilter])
 
   const statusCounts = useMemo(() => {
-    const counts = { queued: 0, running: 0, completed: 0, failed: 0, cancelled: 0 }
+    const counts = { queued: 0, running: 0, waiting_for_agent: 0, completed: 0, failed: 0, cancelled: 0 }
     for (const j of jobs) {
       const s = normalizeJobStatus(j.status)
       if (counts[s] != null) counts[s] += 1
@@ -216,11 +217,14 @@ export default function JobsDashboard() {
       columnHelper.accessor((j) => normalizeJobStatus(j.status), {
         id: 'status',
         header: t('pages.jobsDashboard.col_status'),
-        cell: (ctx) => (
-          <span className={`px-2 py-1 text-xs border rounded ${getStatusBadgeClass(ctx.row.original.status)}`}>
-            {ctx.getValue() || 'unknown'}
-          </span>
-        ),
+        cell: (ctx) => {
+          const status = ctx.getValue() || 'unknown'
+          return (
+            <span className={`px-2 py-1 text-xs border rounded ${getStatusBadgeClass(ctx.row.original.status)}`}>
+              {t(`pages.jobsDashboard.status_${status}`, { defaultValue: status })}
+            </span>
+          )
+        },
       }),
       columnHelper.accessor((j) => j.created_at || '', {
         id: 'created',
@@ -301,8 +305,8 @@ export default function JobsDashboard() {
           </>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              {['queued', 'running', 'completed', 'failed', 'cancelled'].map((status) => (
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              {['queued', 'running', 'waiting_for_agent', 'completed', 'failed', 'cancelled'].map((status) => (
                 <Button variant="unstyled"
                   key={status}
                   type="button"

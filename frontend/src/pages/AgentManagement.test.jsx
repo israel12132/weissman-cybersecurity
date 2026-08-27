@@ -40,6 +40,10 @@ vi.mock('../hooks/useFindingsWorkbench', () => ({
     setSearchQuery: vi.fn(),
   }),
 }))
+vi.mock('../components/engine/AgentQueuePanel', () => ({
+  __esModule: true,
+  default: () => <div data-testid="agent-queue-panel-stub" />,
+}))
 
 import AgentManagement from './AgentManagement.jsx'
 

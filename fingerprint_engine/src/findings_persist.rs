@@ -283,6 +283,15 @@ pub async fn persist_engine_findings(
         return Ok(0);
     }
     let client_id = client_id.expect("client_id.is_none() checked above");
+    let stripped: Vec<Value> = findings
+        .iter()
+        .filter(|f| !crate::engine_probes::is_invented_agent_placeholder(f))
+        .cloned()
+        .collect();
+    if stripped.is_empty() {
+        return Ok(0);
+    }
+    let findings = &stripped[..];
 
     // Cap the batch so a single misbehaving/huge engine result can't open an unbounded write
     // transaction (and a giant findings_json blob). Tunable; the excess is logged, not silently lost.

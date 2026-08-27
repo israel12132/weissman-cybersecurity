@@ -475,6 +475,55 @@ async fn api_agents_status(
         .into_response()
 }
 
+async fn api_agents_queue(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+    let client_id = q.get("client_id").and_then(|s| s.parse::<i64>().ok());
+    let engine = q
+        .get("engine")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(100)
+        .clamp(1, 500);
+    match crate::endpoint_agents::list_agent_queue(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        client_id,
+        engine.as_deref(),
+        limit,
+    )
+    .await
+    {
+        Ok(snap) => (
+            StatusCode::OK,
+            Json(json!({
+                "ok": true,
+                "pending": snap.pending,
+                "running": snap.running,
+                "done": snap.done,
+                "failed": snap.failed,
+                "expired": snap.expired,
+                "waiting": snap.pending + snap.running,
+                "tasks": snap.tasks,
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "detail": scrub_internal_error(&e), "tasks": []})),
+        )
+            .into_response(),
+    }
+}
+
 #[derive(serde::Deserialize)]
 struct DispatchAgentTaskBody {
     client_id: i64,
@@ -677,7 +726,22 @@ async fn ws_agent(
                                     .await
                                     {
                                         for t in pending {
-                                            let _ = tx_to_agent.send(t).await;
+                                            let task_uuid = match &t {
+                                                crate::endpoint_agents::ServerToAgent::Task { task_id, .. } => {
+                                                    task_id.parse::<uuid::Uuid>().ok()
+                                                }
+                                                _ => None,
+                                            };
+                                            if tx_to_agent.send(t).await.is_ok() {
+                                                if let Some(tu) = task_uuid {
+                                                    let _ = crate::endpoint_agents::mark_task_dispatched(
+                                                        app_pool.as_ref(),
+                                                        tenant_id,
+                                                        &tu,
+                                                    )
+                                                    .await;
+                                                }
+                                            }
                                         }
                                     }
                                 }

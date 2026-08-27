@@ -97,7 +97,7 @@ export default function MorphingEngineChrome({
         </p>
       )}
       {engineId && caps.requires_agent_gate ? (
-        <AgentRequiredGate engineId={engineId}>{children}</AgentRequiredGate>
+        <AgentRequiredGate engineId={engineId} clientId={hubClientId}>{children}</AgentRequiredGate>
       ) : (
         children
       )}

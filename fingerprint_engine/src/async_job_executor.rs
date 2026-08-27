@@ -570,13 +570,21 @@ async fn execute_job_unscoped(
             // Center / Vuln Intel / dashboard / CSV export / PDF report all see them. Without
             // this step results live only inside weissman_async_jobs.result_json (effectively
             // invisible to the customer).
+            // Persist only evidence-backed findings. Invented agent_required / agent_dispatched
+            // placeholders are stripped in persist_engine_findings; remote-surface rows may remain.
+            let to_persist: Vec<_> = result
+                .findings
+                .iter()
+                .filter(|f| !crate::engine_probes::is_invented_agent_placeholder(f))
+                .cloned()
+                .collect();
             let persisted = persist_findings_best_effort(
                 app_pool.as_ref(),
                 tid,
                 client_id_opt,
                 engine,
                 target,
-                &result.findings,
+                &to_persist,
             )
             .await;
 
@@ -600,12 +608,34 @@ async fn execute_job_unscoped(
                 }
             }
 
+            if result.is_waiting_for_agent() {
+                crate::supreme_nerve_center::run_phase(
+                    &job.id.to_string(),
+                    "waiting_for_agent",
+                    Some("host task queued — no invented findings"),
+                );
+                let telem = json!({
+                    "job_id": job.id.to_string(),
+                    "status": crate::engine_result::WAITING_FOR_AGENT,
+                    "message": result.message,
+                    "engine": engine,
+                    "queued_for_agent": true,
+                    "agent_task_id": result.agent_task_id,
+                    "live_dispatched": result.live_dispatched,
+                    "findings_count": to_persist.len(),
+                });
+                channels.emit_telemetry(tid, &telem.to_string());
+            }
+
             Ok(json!({
                 "engine": engine,
                 "status": result.status,
-                "findings": result.findings,
+                "findings": to_persist,
                 "findings_persisted": persisted,
                 "message": result.message,
+                "queued_for_agent": result.is_waiting_for_agent(),
+                "agent_task_id": result.agent_task_id,
+                "live_dispatched": result.live_dispatched,
                 "resilience": last_engine_telemetry.as_ref().map(|t| t.to_json()),
             }))
         }

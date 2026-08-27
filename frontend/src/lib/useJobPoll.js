@@ -99,6 +99,6 @@ export function uiJobStatus(backendStatus) {
   const s = normalizeJobStatus(backendStatus)
   if (s === 'completed') return 'completed'
   if (s === 'failed' || s === 'dead' || s === 'cancelled') return 'error'
-  if (s === 'running' || s === 'queued') return 'running'
+  if (s === 'running' || s === 'queued' || s === 'waiting_for_agent') return 'running'
   return 'idle'
 }

@@ -1,7 +1,7 @@
 // Engine reality audit — derives, directly from source, exactly what each catalog engine ID is:
 //   real_probe       : canonical engine with a live dispatch arm (real network/host I/O)
 //   alias            : retag that resolves to another canonical engine (same detection logic)
-//   agent_required   : remote-impossible; returns an info finding pointing to the endpoint agent
+//   agent_required   : remote-impossible; queued on endpoint_agent_tasks until an agent is online
 //   special          : poe_synthesis (routed via the async job path, not the dispatch match)
 //   no_path          : in the catalog but with no execution path (should be ZERO; CI-gated)
 //

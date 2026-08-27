@@ -3,6 +3,9 @@
 
 use serde::Serialize;
 
+/// Job / engine status when a host-resident detection is queued for an endpoint agent.
+pub const WAITING_FOR_AGENT: &str = "waiting_for_agent";
+
 #[derive(Debug, Clone, Serialize)]
 pub struct EngineResult {
     pub status: String,
@@ -20,6 +23,12 @@ pub struct EngineResult {
     /// Module 3: edges for Attack Surface Graph.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub graph_edges: Option<Vec<super::cloud_hunter::GraphEdge>>,
+    /// Real `endpoint_agent_tasks.task_uuid` when this run enqueued host work.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_task_id: Option<String>,
+    /// True when the task was pushed to a currently-online agent WebSocket.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub live_dispatched: Option<bool>,
 }
 
 impl EngineResult {
@@ -33,6 +42,8 @@ impl EngineResult {
             summary: msg,
             graph_nodes: None,
             graph_edges: None,
+            agent_task_id: None,
+            live_dispatched: None,
         }
     }
     pub fn ok_with_graph(
@@ -50,6 +61,8 @@ impl EngineResult {
             summary: msg,
             graph_nodes: Some(graph_nodes),
             graph_edges: Some(graph_edges),
+            agent_task_id: None,
+            live_dispatched: None,
         }
     }
     pub fn error(message: impl Into<String>) -> Self {
@@ -62,7 +75,37 @@ impl EngineResult {
             summary: msg,
             graph_nodes: None,
             graph_edges: None,
+            agent_task_id: None,
+            live_dispatched: None,
         }
+    }
+
+    /// Host-resident work is queued. Findings must stay empty (or remote-surface only after merge).
+    pub fn waiting_for_agent(message: impl Into<String>) -> Self {
+        let msg = message.into();
+        Self {
+            status: WAITING_FOR_AGENT.to_string(),
+            findings: vec![],
+            message: msg.clone(),
+            success: false,
+            summary: msg,
+            graph_nodes: None,
+            graph_edges: None,
+            agent_task_id: None,
+            live_dispatched: None,
+        }
+    }
+
+    #[must_use]
+    pub fn with_agent_task(mut self, task_id: impl Into<String>, live: bool) -> Self {
+        self.agent_task_id = Some(task_id.into());
+        self.live_dispatched = Some(live);
+        self
+    }
+
+    #[must_use]
+    pub fn is_waiting_for_agent(&self) -> bool {
+        self.status.eq_ignore_ascii_case(WAITING_FOR_AGENT)
     }
 }
 
@@ -77,6 +120,8 @@ impl From<weissman_engines::EngineResult> for EngineResult {
             summary: r.message,
             graph_nodes: None,
             graph_edges: None,
+            agent_task_id: None,
+            live_dispatched: None,
         }
     }
 }
@@ -92,6 +137,8 @@ impl From<Vec<serde_json::Value>> for EngineResult {
             summary: msg,
             graph_nodes: None,
             graph_edges: None,
+            agent_task_id: None,
+            live_dispatched: None,
         }
     }
 }
@@ -161,5 +208,24 @@ mod tests {
         assert!(!obj.contains_key("summary"));
         assert!(!obj.contains_key("graph_nodes"));
         assert!(!obj.contains_key("graph_edges"));
+        assert!(!obj.contains_key("agent_task_id"));
+        assert!(!obj.contains_key("live_dispatched"));
+    }
+
+    #[test]
+    fn waiting_for_agent_is_honest_empty_queue_state() {
+        let r = EngineResult::waiting_for_agent("queued").with_agent_task("task-1", false);
+        assert_eq!(r.status, WAITING_FOR_AGENT);
+        assert!(r.is_waiting_for_agent());
+        assert!(!r.success);
+        assert!(r.findings.is_empty());
+        assert_eq!(r.agent_task_id.as_deref(), Some("task-1"));
+        assert_eq!(r.live_dispatched, Some(false));
+        let v: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&r).unwrap()).unwrap();
+        assert_eq!(v["status"], WAITING_FOR_AGENT);
+        assert_eq!(v["agent_task_id"], "task-1");
+        assert_eq!(v["live_dispatched"], false);
+        assert_eq!(v["findings"].as_array().unwrap().len(), 0);
     }
 }

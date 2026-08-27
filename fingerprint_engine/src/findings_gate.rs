@@ -242,6 +242,9 @@ fn extract_description(f: &Value) -> String {
 /// Validate raw engine JSON, normalize evidence fields, and produce a gated finding.
 /// Returns `None` when actionable severities lack proof (evidence gate).
 pub fn gate_finding(engine: &str, target: &str, mut raw: Value) -> Option<PersistableFinding> {
+    if crate::engine_probes::is_invented_agent_placeholder(&raw) {
+        return None;
+    }
     let now = chrono::Utc::now().to_rfc3339();
     let severity = normalize_severity(raw.get("severity").and_then(Value::as_str));
 
@@ -444,6 +447,17 @@ mod tests {
         });
         let gated = gate_finding("osint", "https://example.com", raw).expect("gated");
         assert!(gated.evidence().proof().contains("api.example.com"));
+    }
+
+    #[test]
+    fn gate_rejects_invented_agent_placeholders() {
+        let raw = json!({
+            "severity": "info",
+            "title": "requires endpoint agent",
+            "agent_required": true,
+            "category": "agent_required"
+        });
+        assert!(gate_finding("process_hollowing", "host", raw).is_none());
     }
 
     #[test]
