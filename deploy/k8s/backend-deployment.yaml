@@ -122,6 +122,11 @@ spec:
                 secretKeyRef:
                   name: weissman-secrets
                   key: metrics_token
+            - name: WEISSMAN_RAG_PROVENANCE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: rag_provenance_secret
             - name: WEISSMAN_MIGRATIONS_DIR
               value: "/srv/migrations"
           readinessProbe:

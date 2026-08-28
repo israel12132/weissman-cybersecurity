@@ -214,6 +214,23 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
         );
     }
 
+    // Server + worker: dedicated RAG provenance HMAC. 64 hex chars (32 bytes), vault-loaded.
+    // No JWT / council-signing fallback in production — that would let a stolen token-signing
+    // key also mint council memory vectors.
+    let rag = std::env::var("WEISSMAN_RAG_PROVENANCE_SECRET").unwrap_or_default();
+    let rag = rag.trim();
+    if !crate::supreme_weights::is_rag_provenance_hex64(rag) {
+        return Err(
+            "WEISSMAN_RAG_PROVENANCE_SECRET must be a dedicated 64-character hex value in production (openssl rand -hex 32); load it from the vault with no JWT/council fallback"
+                .into(),
+        );
+    }
+    if let Ok(jwt) = std::env::var("WEISSMAN_JWT_SECRET") {
+        if rag.eq_ignore_ascii_case(jwt.trim()) {
+            return Err("WEISSMAN_RAG_PROVENANCE_SECRET must not equal WEISSMAN_JWT_SECRET".into());
+        }
+    }
+
     Ok(())
 }
 

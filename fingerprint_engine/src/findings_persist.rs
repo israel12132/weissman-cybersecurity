@@ -24,6 +24,47 @@ use std::sync::LazyLock;
 pub fn scan_may_mutate_findings(engine_status: &str, finding_count: usize) -> bool {
     engine_status.eq_ignore_ascii_case("ok") && finding_count > 0
 }
+
+fn severity_hfv_rank(s: &str) -> u8 {
+    match s.trim().to_ascii_lowercase().as_str() {
+        "critical" | "crit" => 4,
+        "high" => 3,
+        "medium" | "med" => 2,
+        "low" => 1,
+        _ => 0,
+    }
+}
+
+/// High-water finding value while the row is open. A `VERIFIED_FIXED` row always
+/// yields `None` so a later regression starts a clean lifecycle at live severity.
+#[must_use]
+pub fn hfv_watermark_after_scan(
+    existing_watermark: Option<&str>,
+    incoming_severity: &str,
+    existing_status: &str,
+) -> Option<String> {
+    if existing_status.eq_ignore_ascii_case("VERIFIED_FIXED") {
+        // Verified close wipes the peak so a later regression starts a clean lifecycle.
+        return None;
+    }
+    let a = existing_watermark.unwrap_or("").trim();
+    let b = incoming_severity.trim();
+    if severity_hfv_rank(a) >= severity_hfv_rank(b) && !a.is_empty() {
+        Some(a.to_string())
+    } else if !b.is_empty() {
+        Some(b.to_string())
+    } else if !a.is_empty() {
+        Some(a.to_string())
+    } else {
+        None
+    }
+}
+
+/// Full HFV reset after a live-verified close. Next lifecycle starts with no peak.
+#[must_use]
+pub fn hfv_watermark_on_verified_fixed() -> Option<&'static str> {
+    None
+}
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::db;
@@ -585,11 +626,12 @@ pub async fn persist_engine_findings(
                  (run_id, tenant_id, client_id, finding_id, title, severity, source,
                   description, status, proof, poc_commitment_sha256, raw_data, discovered_at,
                   signature_hash, epss_score, kev_listed, kev_known_ransomware, kev_due_date,
-                  intel_enriched_at, confidence_multiplier, effective_risk, poc_sealed)
+                  intel_enriched_at, confidence_multiplier, effective_risk, poc_sealed,
+                  watermark_severity)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now(),
                        $13, $14, $15, $16, $17,
                        CASE WHEN $14 IS NOT NULL OR $15 THEN now() ELSE NULL END,
-                       $18, $19, $20)
+                       $18, $19, $20, $6)
                ON CONFLICT (tenant_id, client_id, finding_id) DO UPDATE SET
                    run_id               = EXCLUDED.run_id,
                    title                = EXCLUDED.title,
@@ -606,6 +648,18 @@ pub async fn persist_engine_findings(
                    confidence_multiplier = EXCLUDED.confidence_multiplier,
                    effective_risk       = EXCLUDED.effective_risk,
                    poc_sealed           = vulnerabilities.poc_sealed OR EXCLUDED.poc_sealed,
+                   watermark_severity   = CASE
+                       WHEN vulnerabilities.status IN ('VERIFIED_FIXED')
+                           THEN NULL
+                       WHEN CASE lower(COALESCE(NULLIF(vulnerabilities.watermark_severity, ''), vulnerabilities.severity))
+                              WHEN 'critical' THEN 4 WHEN 'high' THEN 3
+                              WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END
+                            >= CASE lower(EXCLUDED.severity)
+                              WHEN 'critical' THEN 4 WHEN 'high' THEN 3
+                              WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END
+                           THEN COALESCE(NULLIF(vulnerabilities.watermark_severity, ''), vulnerabilities.severity)
+                       ELSE EXCLUDED.severity
+                   END,
                    updated_at           = now(),
                    last_seen_at         = now(),
                    seen_count           = vulnerabilities.seen_count + 1
@@ -976,6 +1030,37 @@ mod tests {
             build_finding_id("eng", target, &a),
             build_finding_id("eng", target, &b),
             "different vulnerability signature must yield a different finding_id"
+        );
+    }
+
+    #[test]
+    fn hfv_watermark_rises_and_does_not_fall() {
+        assert_eq!(
+            hfv_watermark_after_scan(Some("medium"), "critical", "OPEN").as_deref(),
+            Some("critical")
+        );
+        assert_eq!(
+            hfv_watermark_after_scan(Some("critical"), "low", "OPEN").as_deref(),
+            Some("critical")
+        );
+        assert_eq!(
+            hfv_watermark_after_scan(None, "high", "OPEN").as_deref(),
+            Some("high")
+        );
+    }
+
+    #[test]
+    fn hfv_watermark_resets_on_verified_fixed() {
+        assert!(hfv_watermark_on_verified_fixed().is_none());
+        assert_eq!(
+            hfv_watermark_after_scan(None, "critical", "VERIFIED_FIXED"),
+            None,
+            "clean watermark after verified close; incoming scan must not restore the old peak"
+        );
+        assert_eq!(
+            hfv_watermark_after_scan(Some("critical"), "low", "VERIFIED_FIXED"),
+            None,
+            "stale peak on a verified row is discarded, not carried into the next lifecycle"
         );
     }
 }

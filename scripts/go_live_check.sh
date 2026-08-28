@@ -88,7 +88,7 @@ if ./scripts/k8s-kind-smoke.sh >/dev/null 2>&1; then
 else
   bad "k8s manifest smoke"
 fi
-for key in destructive_confirm_secret job_orchestrator_secret metrics_token; do
+for key in destructive_confirm_secret job_orchestrator_secret metrics_token rag_provenance_secret; do
   if grep -q "$key:" deploy/k8s/secret.example.yaml; then
     ok "k8s secret template: $key"
   else
@@ -103,7 +103,7 @@ section "Production secrets contract"
 # the manual `cp PRODUCTION.env.template .env` path has a line to fill. (Empty is correct
 # in the template — the launcher generates the values.)
 for var in WEISSMAN_JWT_SECRET WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET WEISSMAN_JOB_ORCHESTRATOR_SECRET \
-           WEISSMAN_METRICS_TOKEN REDIS_PASSWORD POSTGRES_PASSWORD DB_APP_PASSWORD DB_AUTH_PASSWORD; do
+           WEISSMAN_METRICS_TOKEN WEISSMAN_RAG_PROVENANCE_SECRET REDIS_PASSWORD POSTGRES_PASSWORD DB_APP_PASSWORD DB_AUTH_PASSWORD; do
   if grep -q "^${var}=" PRODUCTION.env.template; then
     ok "PRODUCTION.env.template lists $var"
   else

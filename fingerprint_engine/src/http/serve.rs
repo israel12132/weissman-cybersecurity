@@ -1427,6 +1427,7 @@ pub fn new_app_state(
         },
         None => None,
     };
+    crate::nl_query::spawn_audit_worker(app_pool.clone());
     let (timing_tx, _) = tokio::sync::broadcast::channel::<String>(256);
     let (redteam_tx, _) = tokio::sync::broadcast::channel::<String>(256);
     let (radar_tx, _) = tokio::sync::broadcast::channel::<String>(256);

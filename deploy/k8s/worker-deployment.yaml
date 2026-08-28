@@ -69,6 +69,11 @@ spec:
                 secretKeyRef:
                   name: weissman-secrets
                   key: job_orchestrator_secret
+            - name: WEISSMAN_RAG_PROVENANCE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: rag_provenance_secret
           # Liveness stays a pure process check: a wedged *process* is worth restarting, but the
           # failure these probes were split for — every claim erroring against the database — is
           # not fixed by a restart, and putting it on liveness would crash-loop the whole fleet

@@ -331,17 +331,44 @@ pub fn checksum_matches(v: &[f32], expected: &str) -> bool {
     expected.eq_ignore_ascii_case(&embedding_checksum(v))
 }
 
-/// HMAC key for RAG / pentest-memory provenance. Dedicated secret preferred;
-/// falls back to the council signing secret, then the JWT secret. Empty key
-/// means fail-closed: nothing is signed or accepted.
+/// True when `s` is exactly 32 bytes encoded as 64 ASCII hex characters.
+#[must_use]
+pub fn is_rag_provenance_hex64(s: &str) -> bool {
+    let t = s.trim();
+    t.len() == 64 && t.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// HMAC key for RAG / pentest-memory provenance.
+///
+/// Production (`WEISSMAN_ENV=production`): **only** `WEISSMAN_RAG_PROVENANCE_SECRET`
+/// (64 hex, loaded from the vault). No fallback to JWT or council signing keys.
+/// Empty key means fail-closed: nothing is signed or accepted.
+///
+/// Non-production: dedicated secret, then council signing secret, then JWT —
+/// so local labs still retrieve signed vectors without a vault.
 pub fn rag_provenance_secret() -> Vec<u8> {
-    std::env::var("WEISSMAN_RAG_PROVENANCE_SECRET")
-        .or_else(|_| std::env::var("WEISSMAN_COUNCIL_DEBATE_SIGNING_SECRET"))
-        .or_else(|_| std::env::var("WEISSMAN_JWT_SECRET"))
+    let dedicated = std::env::var("WEISSMAN_RAG_PROVENANCE_SECRET")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    if weissman_core::tls_policy::is_production_environment() {
+        return dedicated.unwrap_or_default().into_bytes();
+    }
+    dedicated
+        .or_else(|| {
+            std::env::var("WEISSMAN_COUNCIL_DEBATE_SIGNING_SECRET")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        })
+        .or_else(|| {
+            std::env::var("WEISSMAN_JWT_SECRET")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        })
         .unwrap_or_default()
-        .trim()
-        .as_bytes()
-        .to_vec()
+        .into_bytes()
 }
 
 fn rag_provenance_mac_input(
@@ -635,6 +662,20 @@ mod tests {
             &mac
         ));
         std::env::remove_var("WEISSMAN_RAG_PROVENANCE_SECRET");
+    }
+
+    #[test]
+    fn rag_provenance_hex64_rejects_wrong_shapes() {
+        assert!(is_rag_provenance_hex64(
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        ));
+        assert!(!is_rag_provenance_hex64("short"));
+        assert!(!is_rag_provenance_hex64(
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde"
+        ));
+        assert!(!is_rag_provenance_hex64(
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg"
+        ));
     }
 
     #[test]

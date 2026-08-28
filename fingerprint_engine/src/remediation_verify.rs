@@ -95,6 +95,10 @@ pub async fn run_verification(
     sqlx::query(
         r#"UPDATE vulnerabilities
               SET status = $1,
+                  watermark_severity = CASE
+                      WHEN $1 = 'VERIFIED_FIXED' THEN NULL
+                      ELSE watermark_severity
+                  END,
                   raw_data = jsonb_set(
                       COALESCE(raw_data, '{}'::jsonb),
                       '{remediation_verification}',

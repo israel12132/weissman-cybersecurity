@@ -20,12 +20,215 @@
 //! Tenant scoping: every plan is rewritten to include `tenant_id = $tenant`
 //! before compilation. Users never see another tenant's data.
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
 use sqlx::{Column, PgPool, Row};
 use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock, OnceLock};
 use std::time::Instant;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::error::TrySendError;
+
+/// Bounded Ask Weissman audit lane. try_send so a slow DB never blocks the analyst.
+const NL_AUDIT_MPSC_CAPACITY: usize = 1024;
+
+struct NlAuditEvent {
+    tenant_id: i64,
+    user_id: Option<i64>,
+    question: String,
+    plan_json: Value,
+    sql: String,
+    rows_returned: i32,
+    elapsed_ms: i32,
+    error: String,
+}
+
+static NL_AUDIT_TX: OnceLock<mpsc::Sender<NlAuditEvent>> = OnceLock::new();
+
+/// Start the background writer that appends SHA-256-chained `nl_query_audit` rows.
+/// Safe to call more than once; later calls are no-ops.
+pub fn spawn_audit_worker(pool: Arc<PgPool>) {
+    if NL_AUDIT_TX.get().is_some() {
+        return;
+    }
+    let (tx, mut rx) = mpsc::channel::<NlAuditEvent>(NL_AUDIT_MPSC_CAPACITY);
+    if NL_AUDIT_TX.set(tx).is_err() {
+        return;
+    }
+    tokio::spawn(async move {
+        while let Some(ev) = rx.recv().await {
+            persist_nl_audit(&pool, ev).await;
+        }
+    });
+}
+
+fn question_fingerprint(question: &str) -> String {
+    hex::encode(Sha256::digest(question.as_bytes()))
+}
+
+/// SIEM-visible emergency log when the audit MPSC is full or closed.
+/// Dropping the DB write must never be silent — that is an audit-tamper signal.
+fn report_audit_channel_saturated(ev: &NlAuditEvent, kind: &str) {
+    tracing::error!(
+        target: "nl_query_audit",
+        tenant_id = ev.tenant_id,
+        user_id = ev.user_id,
+        question_sha256 = %question_fingerprint(&ev.question),
+        elapsed_ms = ev.elapsed_ms,
+        rows_returned = ev.rows_returned,
+        has_error = !ev.error.is_empty(),
+        drop_kind = kind,
+        "Ask Weissman audit MPSC saturated — event dropped to keep /api/ask hot. Possible audit flood / trace-wiping. SIEM must page."
+    );
+}
+
+fn try_enqueue_nl_audit(
+    tx: &mpsc::Sender<NlAuditEvent>,
+    ev: NlAuditEvent,
+) -> Result<(), NlAuditEvent> {
+    match tx.try_send(ev) {
+        Ok(()) => Ok(()),
+        Err(TrySendError::Full(ev)) => {
+            report_audit_channel_saturated(&ev, "full");
+            Err(ev)
+        }
+        Err(TrySendError::Closed(ev)) => {
+            report_audit_channel_saturated(&ev, "closed");
+            Err(ev)
+        }
+    }
+}
+
+fn enqueue_audit(tenant_id: i64, user_id: Option<i64>, question: &str, res: &AskResult) {
+    let ev = NlAuditEvent {
+        tenant_id,
+        user_id,
+        question: question.chars().take(2000).collect(),
+        plan_json: serde_json::to_value(&res.plan).unwrap_or(json!({})),
+        sql: res.sql.clone(),
+        rows_returned: res.row_count as i32,
+        elapsed_ms: res.elapsed_ms as i32,
+        error: res.error.clone().unwrap_or_default(),
+    };
+    match NL_AUDIT_TX.get() {
+        Some(tx) => {
+            let _ = try_enqueue_nl_audit(tx, ev);
+        }
+        None => {
+            tracing::error!(
+                target: "nl_query_audit",
+                tenant_id,
+                question_sha256 = %question_fingerprint(question),
+                "Ask Weissman audit worker not started; event not queued"
+            );
+        }
+    }
+}
+
+fn nl_audit_canonical(
+    prev_hash: &str,
+    tenant_id: i64,
+    user_id: Option<i64>,
+    question: &str,
+    sql: &str,
+    error: &str,
+    asked_at: DateTime<Utc>,
+) -> String {
+    format!(
+        "nlqav1|{prev_hash}|{tenant_id}|{}|{question}|{sql}|{error}|{}",
+        user_id.unwrap_or(0),
+        asked_at.to_rfc3339()
+    )
+}
+
+async fn persist_nl_audit(pool: &PgPool, ev: NlAuditEvent) {
+    let asked_at = Utc::now();
+    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, ev.tenant_id).await else {
+        tracing::error!(
+            target: "nl_query_audit",
+            tenant_id = ev.tenant_id,
+            "Ask Weissman audit persist: tenant tx failed"
+        );
+        return;
+    };
+    if let Err(e) = weissman_db::advisory_lock::advisory_xact_lock_text(
+        &mut *tx,
+        &format!("nlqa:{}", ev.tenant_id),
+    )
+    .await
+    {
+        tracing::error!(
+            target: "nl_query_audit",
+            tenant_id = ev.tenant_id,
+            error = %e,
+            "Ask Weissman audit persist: advisory lock failed"
+        );
+        let _ = tx.rollback().await;
+        return;
+    }
+    let prev_hash: String = sqlx::query_scalar(
+        r#"SELECT COALESCE(event_hash, '') FROM nl_query_audit
+           WHERE tenant_id = $1 AND event_hash <> ''
+           ORDER BY id DESC LIMIT 1"#,
+    )
+    .bind(ev.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or_default();
+    let event_hash = hex::encode(Sha256::digest(
+        nl_audit_canonical(
+            &prev_hash,
+            ev.tenant_id,
+            ev.user_id,
+            &ev.question,
+            &ev.sql,
+            &ev.error,
+            asked_at,
+        )
+        .as_bytes(),
+    ));
+    if let Err(e) = sqlx::query(
+        "INSERT INTO nl_query_audit
+            (tenant_id, user_id, asked_at, question, plan_json, compiled_sql,
+             rows_returned, elapsed_ms, error, prev_hash, event_hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+    )
+    .bind(ev.tenant_id)
+    .bind(ev.user_id)
+    .bind(asked_at)
+    .bind(&ev.question)
+    .bind(&ev.plan_json)
+    .bind(&ev.sql)
+    .bind(ev.rows_returned)
+    .bind(ev.elapsed_ms)
+    .bind(&ev.error)
+    .bind(&prev_hash)
+    .bind(&event_hash)
+    .execute(&mut *tx)
+    .await
+    {
+        tracing::error!(
+            target: "nl_query_audit",
+            tenant_id = ev.tenant_id,
+            error = %e,
+            "Ask Weissman audit persist: insert failed"
+        );
+        let _ = tx.rollback().await;
+        return;
+    }
+    if let Err(e) = tx.commit().await {
+        tracing::error!(
+            target: "nl_query_audit",
+            tenant_id = ev.tenant_id,
+            error = %e,
+            "Ask Weissman audit persist: commit failed"
+        );
+    }
+}
 
 // ─── Allow-list schema ───────────────────────────────────────────────────────
 #[derive(Debug, Clone)]
@@ -66,6 +269,7 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
                 "kev_due_date",
                 "seen_count",
                 "signature_hash",
+                "watermark_severity",
             ],
             order_by: &["discovered_at", "epss_score", "seen_count", "id"],
             joins: &[],
@@ -402,7 +606,7 @@ pub async fn execute_plan(
 
 /// Run a free-form question end-to-end: LLM → plan → validate → execute.
 pub async fn ask(
-    app_pool: &PgPool,
+    _app_pool: &PgPool,
     ro_pool: &PgPool,
     tenant_id: i64,
     user_id: Option<i64>,
@@ -437,7 +641,7 @@ pub async fn ask(
         Ok(v) => v,
         Err(e) => {
             let r = bad(&format!("plan generation failed: {e}"));
-            audit_query(app_pool, tenant_id, user_id, question, &r).await;
+            enqueue_audit(tenant_id, user_id, question, &r);
             return r;
         }
     };
@@ -445,7 +649,7 @@ pub async fn ask(
         Ok(p) => p,
         Err(e) => {
             let r = bad(&format!("plan is not a valid QueryPlan JSON: {e}"));
-            audit_query(app_pool, tenant_id, user_id, question, &r).await;
+            enqueue_audit(tenant_id, user_id, question, &r);
             return r;
         }
     };
@@ -459,36 +663,8 @@ pub async fn ask(
         Err(e) => bad(&e),
     };
 
-    audit_query(app_pool, tenant_id, user_id, question, &res).await;
+    enqueue_audit(tenant_id, user_id, question, &res);
     res
-}
-
-async fn audit_query(
-    app_pool: &PgPool,
-    tenant_id: i64,
-    user_id: Option<i64>,
-    question: &str,
-    res: &AskResult,
-) {
-    if let Ok(mut tx) = crate::db::begin_tenant_tx(app_pool, tenant_id).await {
-        let _ = sqlx::query(
-            "INSERT INTO nl_query_audit
-                (tenant_id, user_id, asked_at, question, plan_json, compiled_sql,
-                 rows_returned, elapsed_ms, error)
-             VALUES ($1, $2, now(), $3, $4, $5, $6, $7, $8)",
-        )
-        .bind(tenant_id)
-        .bind(user_id)
-        .bind(question.chars().take(2000).collect::<String>())
-        .bind(serde_json::to_value(&res.plan).unwrap_or(json!({})))
-        .bind(&res.sql)
-        .bind(res.row_count as i32)
-        .bind(res.elapsed_ms as i32)
-        .bind(res.error.clone().unwrap_or_default())
-        .execute(&mut *tx)
-        .await;
-        let _ = tx.commit().await;
-    }
 }
 
 fn bind_json<'a>(
@@ -699,5 +875,40 @@ mod tests {
         };
         let c = compile_plan(&plan, 1).unwrap();
         assert!(c.sql.ends_with(&format!("LIMIT {}", MAX_LIMIT)));
+    }
+
+    #[test]
+    fn mpsc_full_is_detected_and_try_enqueue_returns_err() {
+        let (tx, _rx) = mpsc::channel::<NlAuditEvent>(1);
+        let ev = || NlAuditEvent {
+            tenant_id: 1,
+            user_id: Some(9),
+            question: "show critical kev".into(),
+            plan_json: json!({}),
+            sql: "SELECT 1".into(),
+            rows_returned: 0,
+            elapsed_ms: 3,
+            error: String::new(),
+        };
+        assert!(try_enqueue_nl_audit(&tx, ev()).is_ok());
+        assert!(
+            try_enqueue_nl_audit(&tx, ev()).is_err(),
+            "second try_send on capacity-1 must be Full"
+        );
+    }
+
+    #[test]
+    fn nl_audit_canonical_is_stable() {
+        let ts = DateTime::parse_from_rfc3339("2026-08-28T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let a = nl_audit_canonical("prev", 7, Some(1), "q", "sql", "", ts);
+        let b = nl_audit_canonical("prev", 7, Some(1), "q", "sql", "", ts);
+        assert_eq!(a, b);
+        assert!(a.starts_with("nlqav1|"));
+        assert_ne!(
+            a,
+            nl_audit_canonical("other", 7, Some(1), "q", "sql", "", ts)
+        );
     }
 }

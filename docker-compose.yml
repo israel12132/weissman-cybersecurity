@@ -151,6 +151,9 @@ services:
       WEISSMAN_PUBLIC_BASE_URL: ${WEISSMAN_PUBLIC_BASE_URL:-http://localhost}
       # Required secrets — set in `.env` (see .env.example). Compose refuses to start without them.
       WEISSMAN_JWT_SECRET: "${WEISSMAN_JWT_SECRET:?Set WEISSMAN_JWT_SECRET in .env (openssl rand -base64 48)}"
+      # RAG vector HMAC. Required 64 hex in production (security_startup.rs). Empty here so
+      # local compose still starts; production .env must set a vault-issued value.
+      WEISSMAN_RAG_PROVENANCE_SECRET: ${WEISSMAN_RAG_PROVENANCE_SECRET:-}
       # Optional: require X-Weissman-Destructive-Confirm header (exact match) for Auto-Heal, containment execute, deception cloud deploy
       WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ${WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET:-}
       # Zero-trust job bus HMAC signing (server signs, worker verifies — they MUST match).
@@ -219,6 +222,7 @@ services:
       WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
       REDIS_URL: redis://redis:6379/0
       WEISSMAN_JWT_SECRET: "${WEISSMAN_JWT_SECRET:?Set WEISSMAN_JWT_SECRET in .env}"
+      WEISSMAN_RAG_PROVENANCE_SECRET: ${WEISSMAN_RAG_PROVENANCE_SECRET:-}
       # Must be byte-identical to the backend's value — the worker verifies job envelopes the server signed.
       WEISSMAN_JOB_ORCHESTRATOR_SECRET: ${WEISSMAN_JOB_ORCHESTRATOR_SECRET:-}
       WEISSMAN_BILLING_STRICT: ${WEISSMAN_BILLING_STRICT:-0}

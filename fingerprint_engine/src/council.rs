@@ -1057,7 +1057,7 @@ pub async fn persist_supreme_council_win(
     );
     if !checksum.is_empty() && provenance_hmac.is_empty() {
         return Err(
-            "RAG provenance HMAC unavailable — set WEISSMAN_RAG_PROVENANCE_SECRET (or JWT secret)"
+            "RAG provenance HMAC unavailable — set WEISSMAN_RAG_PROVENANCE_SECRET (64 hex in production; no JWT fallback)"
                 .into(),
         );
     }
