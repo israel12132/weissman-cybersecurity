@@ -3,18 +3,23 @@
 
 use super::pe::{
     DOS_MAGIC, IMAGE_DATA_DIRECTORY, IMAGE_DOS_HEADER, IMAGE_EXPORT_DIRECTORY, IMAGE_FILE_HEADER,
-    IMAGE_NT_HEADERS64, IMAGE_OPTIONAL_HEADER64, NT_SIGNATURE, OPTIONAL_MAGIC_PE32PLUS,
+    IMAGE_NT_HEADERS64, IMAGE_OPTIONAL_HEADER64, IMAGE_SCN_CNT_CODE, IMAGE_SCN_MEM_EXECUTE,
+    IMAGE_SECTION_HEADER, NT_SIGNATURE, OPTIONAL_MAGIC_PE32PLUS,
 };
 use super::ssn::{encode_clean_stub, encode_jmp_hook_stub, STUB_LEN};
 
 const E_LFANEW: usize = 0x80;
+const SECTION_TABLE_RVA: usize = E_LFANEW + 264; // after IMAGE_NT_HEADERS64
 const EXPORT_RVA: u32 = 0x200;
 const FUNCS_RVA: u32 = 0x2C0;
 const NAMES_RVA: u32 = 0x2E0;
 const ORDS_RVA: u32 = 0x2F0;
 const STRINGS_RVA: u32 = 0x300;
 const STUBS_RVA: u32 = 0x400;
+const TEXT_SIZE: u32 = (STUB_LEN * 3) as u32; // three syscall stubs, nothing past them
 const IMAGE_SIZE: usize = 0x800;
+const IMAGE_SCN_MEM_READ: u32 = 0x4000_0000;
+const IMAGE_SCN_CNT_INITIALIZED_DATA: u32 = 0x0000_0040;
 
 const EXPORTS: &[&str] = &[
     "NtAllocateVirtualMemory",
@@ -70,7 +75,7 @@ pub fn synthetic_ntdll(hook_allocate: bool) -> Vec<u8> {
         signature: NT_SIGNATURE,
         file_header: IMAGE_FILE_HEADER {
             machine: 0x8664,
-            number_of_sections: 0,
+            number_of_sections: 2,
             time_date_stamp: 0,
             pointer_to_symbol_table: 0,
             number_of_symbols: 0,
@@ -81,11 +86,11 @@ pub fn synthetic_ntdll(hook_allocate: bool) -> Vec<u8> {
             magic: OPTIONAL_MAGIC_PE32PLUS,
             major_linker_version: 0,
             minor_linker_version: 0,
-            size_of_code: 0,
-            size_of_initialized_data: 0,
+            size_of_code: TEXT_SIZE,
+            size_of_initialized_data: 0x200,
             size_of_uninitialized_data: 0,
             address_of_entry_point: 0,
-            base_of_code: 0,
+            base_of_code: STUBS_RVA,
             image_base: 0x1800_0000_0000,
             section_alignment: 0x1000,
             file_alignment: 0x200,
@@ -111,6 +116,45 @@ pub fn synthetic_ntdll(hook_allocate: bool) -> Vec<u8> {
         },
     };
     write_val(&mut buf, E_LFANEW, nt);
+
+    // .rdata holds the EAT; .text holds syscall stubs. Halo's Gate must not
+    // walk from a stub into .rdata or the poison page after .text.
+    let mut rdata_name = [0u8; 8];
+    rdata_name[..6].copy_from_slice(b".rdata");
+    write_val(
+        &mut buf,
+        SECTION_TABLE_RVA,
+        IMAGE_SECTION_HEADER {
+            name: rdata_name,
+            virtual_size: 0x200,
+            virtual_address: 0x200,
+            size_of_raw_data: 0x200,
+            pointer_to_raw_data: 0x200,
+            pointer_to_relocations: 0,
+            pointer_to_linenumbers: 0,
+            number_of_relocations: 0,
+            number_of_linenumbers: 0,
+            characteristics: IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ,
+        },
+    );
+    let mut text_name = [0u8; 8];
+    text_name[..5].copy_from_slice(b".text");
+    write_val(
+        &mut buf,
+        SECTION_TABLE_RVA + 40,
+        IMAGE_SECTION_HEADER {
+            name: text_name,
+            virtual_size: TEXT_SIZE,
+            virtual_address: STUBS_RVA,
+            size_of_raw_data: TEXT_SIZE,
+            pointer_to_raw_data: STUBS_RVA,
+            pointer_to_relocations: 0,
+            pointer_to_linenumbers: 0,
+            number_of_relocations: 0,
+            number_of_linenumbers: 0,
+            characteristics: IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ,
+        },
+    );
 
     let export = IMAGE_EXPORT_DIRECTORY {
         characteristics: 0,
@@ -148,6 +192,11 @@ pub fn synthetic_ntdll(hook_allocate: bool) -> Vec<u8> {
         let start = stub_rva as usize;
         buf[start..start + STUB_LEN].copy_from_slice(&stub);
     }
+
+    // Poison: a clean-looking stub immediately after .text. Halo's Gate must
+    // ignore it — otherwise a section-edge hook would recover a fabricated SSN.
+    let poison_off = (STUBS_RVA + TEXT_SIZE) as usize;
+    buf[poison_off..poison_off + STUB_LEN].copy_from_slice(&encode_clean_stub(0x99));
 
     buf
 }
@@ -188,5 +237,10 @@ mod tests {
             pe.cstr_at(pe.u32_at(exp.address_of_names, 0).unwrap()),
             Some("NtAllocateVirtualMemory")
         );
+        let text = pe.text_section_span().expect(".text");
+        assert_eq!(text.rva_start, STUBS_RVA as usize);
+        assert_eq!(text.rva_end, (STUBS_RVA + TEXT_SIZE) as usize);
+        assert!(text.contains_bytes(STUBS_RVA as usize, STUB_LEN));
+        assert!(!text.contains_bytes((STUBS_RVA + TEXT_SIZE) as usize, 8));
     }
 }

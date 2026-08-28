@@ -11,11 +11,18 @@
 //!
 //! User-mode EDR hooks typically overwrite the first bytes with `jmp rel32` (`0xE9`)
 //! or `jmp qword ptr [rip]` (`FF 25`). Halo's Gate then walks neighboring 32-byte
-//! stubs (ntdll lays them out in SSN order) and reconstructs the hooked SSN as
-//! `neighbor_ssn ∓ index`.
+//! stubs (ntdll lays syscall stubs out in SSN order inside `.text`) and reconstructs
+//! the hooked SSN as `neighbor_ssn ∓ index`.
+//!
+//! Neighbor reads are **strictly confined** to the PE `.text` section parsed from
+//! headers. EAT names are alphabetical, not address-sorted; a stub at a page or
+//! section edge must never cause a `±32` walk to touch unmapped memory.
+
+use crate::direct_syscalls::pe::TextSpan;
 
 pub const STUB_LEN: usize = 32;
 pub const MAX_HALOS_DEPTH: usize = 100;
+const PROLOGUE_LEN: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResolvedSsn {
@@ -55,38 +62,57 @@ pub fn is_user_mode_hook(stub: &[u8]) -> bool {
 }
 
 /// Halo's Gate: recover the SSN of a hooked stub from clean neighbors at ±32-byte stride.
+///
+/// `text` is the `.text` section of the same PE. Neighbors that would leave that
+/// window (page/section edge) are skipped — they are never read.
 #[must_use]
-pub fn halos_gate_recover(image: &[u8], func_offset: usize) -> Option<u16> {
+pub fn halos_gate_recover(image: &[u8], func_offset: usize, text: TextSpan) -> Option<u16> {
     for idx in 1..=MAX_HALOS_DEPTH {
         let delta = idx * STUB_LEN;
         if let Some(upper) = func_offset.checked_add(delta) {
-            if let Some(stub) = image.get(upper..upper.saturating_add(8)) {
-                if let Some(ssn) = hells_gate_ssn(stub) {
-                    return ssn.checked_sub(idx as u16);
-                }
+            if let Some(ssn) = read_hells_gate_in_text(image, upper, text) {
+                return ssn.checked_sub(idx as u16);
             }
         }
         if func_offset >= delta {
             let lower = func_offset - delta;
-            if let Some(stub) = image.get(lower..lower.saturating_add(8)) {
-                if let Some(ssn) = hells_gate_ssn(stub) {
-                    return ssn.checked_add(idx as u16);
-                }
+            if let Some(ssn) = read_hells_gate_in_text(image, lower, text) {
+                return ssn.checked_add(idx as u16);
             }
         }
     }
     None
 }
 
+fn read_hells_gate_in_text(image: &[u8], rva: usize, text: TextSpan) -> Option<u16> {
+    if !text.contains_bytes(rva, PROLOGUE_LEN) {
+        return None;
+    }
+    let stub = image.get(rva..rva + PROLOGUE_LEN)?;
+    hells_gate_ssn(stub)
+}
+
 /// Resolve an SSN from a function RVA inside a mapped PE image.
+///
+/// Returns `None` when the RVA is not fully inside `.text` — the caller must
+/// not dereference a stub that sits on a section/page edge.
 #[must_use]
-pub fn resolve_stub_ssn(image: &[u8], func_offset: usize) -> Option<ResolvedSsn> {
-    let stub = image.get(func_offset..)?;
+pub fn resolve_stub_ssn(image: &[u8], func_offset: usize, text: TextSpan) -> Option<ResolvedSsn> {
+    if !text.contains_bytes(func_offset, 1) {
+        return None;
+    }
+    // Read at most what `.text` still covers so a stub on the last bytes of
+    // the section cannot overshoot into the next (possibly unmapped) page.
+    let max_len = text.rva_end.saturating_sub(func_offset);
+    let stub = image.get(func_offset..func_offset.saturating_add(max_len))?;
+    if stub.is_empty() {
+        return None;
+    }
     if let Some(ssn) = hells_gate_ssn(stub) {
         return Some(ResolvedSsn { ssn, hooked: false });
     }
     if is_user_mode_hook(stub) || stub.first() != Some(&0x4C) {
-        let ssn = halos_gate_recover(image, func_offset)?;
+        let ssn = halos_gate_recover(image, func_offset, text)?;
         return Some(ResolvedSsn { ssn, hooked: true });
     }
     None
@@ -142,15 +168,22 @@ mod tests {
         assert_eq!(hells_gate_ssn(&stub), None);
     }
 
+    fn text(image: &[u8]) -> TextSpan {
+        TextSpan {
+            rva_start: 0,
+            rva_end: image.len(),
+        }
+    }
+
     #[test]
     fn halos_gate_recovers_ssn_from_upper_neighbor() {
         let mut image = vec![0u8; STUB_LEN * 4];
         image[..STUB_LEN].copy_from_slice(&encode_jmp_hook_stub());
         image[STUB_LEN..STUB_LEN * 2].copy_from_slice(&encode_clean_stub(0x19));
         image[STUB_LEN * 2..STUB_LEN * 3].copy_from_slice(&encode_clean_stub(0x1A));
-        let recovered = halos_gate_recover(&image, 0).expect("neighbor SSN");
+        let recovered = halos_gate_recover(&image, 0, text(&image)).expect("neighbor SSN");
         assert_eq!(recovered, 0x18);
-        let resolved = resolve_stub_ssn(&image, 0).expect("resolved");
+        let resolved = resolve_stub_ssn(&image, 0, text(&image)).expect("resolved");
         assert_eq!(resolved.ssn, 0x18);
         assert!(resolved.hooked);
     }
@@ -160,7 +193,7 @@ mod tests {
         let mut image = vec![0u8; STUB_LEN * 4];
         image[..STUB_LEN].copy_from_slice(&encode_clean_stub(0x30));
         image[STUB_LEN..STUB_LEN * 2].copy_from_slice(&encode_jmp_hook_stub());
-        let recovered = halos_gate_recover(&image, STUB_LEN).expect("neighbor SSN");
+        let recovered = halos_gate_recover(&image, STUB_LEN, text(&image)).expect("neighbor SSN");
         assert_eq!(recovered, 0x31);
     }
 
@@ -168,6 +201,29 @@ mod tests {
     fn halos_gate_gives_up_without_neighbors() {
         let mut image = vec![0u8; STUB_LEN];
         image.copy_from_slice(&encode_jmp_hook_stub());
-        assert!(halos_gate_recover(&image, 0).is_none());
+        assert!(halos_gate_recover(&image, 0, text(&image)).is_none());
+    }
+
+    #[test]
+    fn halos_gate_does_not_read_outside_text_section() {
+        // Layout: [poison clean SSN 0x99][hooked][poison clean SSN 0x02]
+        // `.text` covers only the hooked stub. Poison neighbors would yield
+        // the wrong SSN if Halo's Gate walked past the section edge.
+        let mut image = vec![0u8; STUB_LEN * 3];
+        image[..STUB_LEN].copy_from_slice(&encode_clean_stub(0x99));
+        image[STUB_LEN..STUB_LEN * 2].copy_from_slice(&encode_jmp_hook_stub());
+        image[STUB_LEN * 2..STUB_LEN * 3].copy_from_slice(&encode_clean_stub(0x02));
+        let text = TextSpan {
+            rva_start: STUB_LEN,
+            rva_end: STUB_LEN * 2,
+        };
+        assert!(halos_gate_recover(&image, STUB_LEN, text).is_none());
+        assert!(resolve_stub_ssn(&image, STUB_LEN, text).is_none());
+        // A stub whose prologue would cross .text end is not resolved.
+        let edge = TextSpan {
+            rva_start: STUB_LEN,
+            rva_end: STUB_LEN + 4,
+        };
+        assert!(resolve_stub_ssn(&image, STUB_LEN, edge).is_none());
     }
 }

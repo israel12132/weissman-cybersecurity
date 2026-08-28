@@ -14,6 +14,53 @@ pub const DIR_EXPORT: usize = 0;
 pub const MAX_IMAGE_SIZE: usize = 16 * 1024 * 1024;
 pub const MAX_EXPORT_NAMES: u32 = 16_384;
 pub const MAX_NAME_LEN: usize = 256;
+pub const MAX_SECTIONS: u16 = 96;
+pub const IMAGE_SIZEOF_SECTION_HEADER: usize = 40;
+pub const IMAGE_SCN_CNT_CODE: u32 = 0x0000_0020;
+pub const IMAGE_SCN_MEM_EXECUTE: u32 = 0x2000_0000;
+
+/// Inclusive-start / exclusive-end RVA window of ntdll `.text`.
+/// Halo's Gate neighbor walks must stay strictly inside this span.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextSpan {
+    pub rva_start: usize,
+    pub rva_end: usize,
+}
+
+impl TextSpan {
+    /// True when `[rva, rva+len)` lies entirely inside `.text` (no wrap, no overshoot).
+    #[must_use]
+    pub fn contains_bytes(&self, rva: usize, len: usize) -> bool {
+        let Some(end) = rva.checked_add(len) else {
+            return false;
+        };
+        rva >= self.rva_start && end <= self.rva_end
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IMAGE_SECTION_HEADER {
+    pub name: [u8; 8],
+    pub virtual_size: u32,
+    pub virtual_address: u32,
+    pub size_of_raw_data: u32,
+    pub pointer_to_raw_data: u32,
+    pub pointer_to_relocations: u32,
+    pub pointer_to_linenumbers: u32,
+    pub number_of_relocations: u16,
+    pub number_of_linenumbers: u16,
+    pub characteristics: u32,
+}
+
+/// One PE section after bounds-checked parse.
+#[derive(Debug, Clone, Copy)]
+pub struct Section {
+    pub name: [u8; 8],
+    pub virtual_address: u32,
+    pub virtual_size: u32,
+    pub characteristics: u32,
+}
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -159,6 +206,78 @@ impl<'a> PeView<'a> {
         read_u32(self.bytes, opt_off + 56)
     }
 
+    pub fn size_of_headers(&self) -> Option<u32> {
+        let e_lfanew = read_i32(self.bytes, 0x3C)? as usize;
+        let opt_off = e_lfanew + 4 + mem::size_of::<IMAGE_FILE_HEADER>();
+        // IMAGE_OPTIONAL_HEADER64.size_of_headers is at offset 60.
+        read_u32(self.bytes, opt_off + 60)
+    }
+
+    fn section_table_offset(&self) -> Option<(usize, u16)> {
+        let e_lfanew = read_i32(self.bytes, 0x3C)? as usize;
+        let file_hdr = e_lfanew + 4;
+        let number_of_sections = read_u16(self.bytes, file_hdr + 2)?;
+        if number_of_sections == 0 || number_of_sections > MAX_SECTIONS {
+            return None;
+        }
+        let size_of_optional_header = read_u16(self.bytes, file_hdr + 16)? as usize;
+        let table = file_hdr
+            .checked_add(mem::size_of::<IMAGE_FILE_HEADER>())?
+            .checked_add(size_of_optional_header)?;
+        Some((table, number_of_sections))
+    }
+
+    /// Bounds-checked section table. Used to locate `.text` and to copy live
+    /// ntdll without reading unmapped gaps between sections.
+    pub fn sections(&self) -> Option<Vec<Section>> {
+        let (table, nsec) = self.section_table_offset()?;
+        let mut out = Vec::with_capacity(nsec as usize);
+        for i in 0..nsec as usize {
+            let off = table.checked_add(i.checked_mul(IMAGE_SIZEOF_SECTION_HEADER)?)?;
+            if off.checked_add(IMAGE_SIZEOF_SECTION_HEADER)? > self.bytes.len() {
+                return None;
+            }
+            let mut name = [0u8; 8];
+            name.copy_from_slice(self.bytes.get(off..off + 8)?);
+            out.push(Section {
+                name,
+                virtual_size: read_u32(self.bytes, off + 8)?,
+                virtual_address: read_u32(self.bytes, off + 12)?,
+                characteristics: read_u32(self.bytes, off + 36)?,
+            });
+        }
+        Some(out)
+    }
+
+    /// `.text` RVA window from PE headers. Prefers the named `.text` section;
+    /// falls back to the first executable/code section. `None` if the image
+    /// has no usable code section — callers must fail closed (no Halo's Gate).
+    pub fn text_section_span(&self) -> Option<TextSpan> {
+        let sections = self.sections()?;
+        let chosen = sections
+            .iter()
+            .find(|s| section_name_is(s.name, b".text"))
+            .or_else(|| {
+                sections
+                    .iter()
+                    .find(|s| s.characteristics & (IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_EXECUTE) != 0)
+            })?;
+        let start = chosen.virtual_address as usize;
+        let size = chosen.virtual_size as usize;
+        if size == 0 {
+            return None;
+        }
+        let end = start.checked_add(size)?;
+        let end = end.min(self.bytes.len());
+        if start >= end || start >= self.bytes.len() {
+            return None;
+        }
+        Some(TextSpan {
+            rva_start: start,
+            rva_end: end,
+        })
+    }
+
     pub fn export_directory(&self) -> Option<IMAGE_EXPORT_DIRECTORY> {
         let e_lfanew = read_i32(self.bytes, 0x3C)? as usize;
         let opt_off = e_lfanew + 4 + mem::size_of::<IMAGE_FILE_HEADER>();
@@ -223,6 +342,13 @@ pub fn read_i32(buf: &[u8], off: usize) -> Option<i32> {
     Some(read_u32(buf, off)? as i32)
 }
 
+fn section_name_is(name: [u8; 8], want: &[u8]) -> bool {
+    if want.len() > 8 {
+        return false;
+    }
+    name[..want.len()] == *want && name[want.len()..].iter().all(|&b| b == 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -235,5 +361,23 @@ mod tests {
         assert_eq!(mem::size_of::<IMAGE_NT_HEADERS64>(), 264);
         assert_eq!(mem::size_of::<IMAGE_EXPORT_DIRECTORY>(), 40);
         assert_eq!(mem::size_of::<IMAGE_DATA_DIRECTORY>(), 8);
+        assert_eq!(
+            mem::size_of::<IMAGE_SECTION_HEADER>(),
+            IMAGE_SIZEOF_SECTION_HEADER
+        );
+    }
+
+    #[test]
+    fn text_span_rejects_overshoot() {
+        let span = TextSpan {
+            rva_start: 0x400,
+            rva_end: 0x460,
+        };
+        assert!(span.contains_bytes(0x400, 8));
+        assert!(span.contains_bytes(0x458, 8));
+        assert!(!span.contains_bytes(0x45C, 8)); // would cross .text end
+        assert!(!span.contains_bytes(0x3E0, 8)); // before .text
+        assert!(!span.contains_bytes(0x460, 8));
+        assert!(!span.contains_bytes(usize::MAX, 1));
     }
 }

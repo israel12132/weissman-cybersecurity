@@ -7,8 +7,8 @@
 //!
 //! Pipeline:
 //! 1. PEB walk (`GS:[0x60]`) locates `ntdll.dll` without `GetModuleHandle`.
-//! 2. Export Address Table is parsed; Nt/Zw names are identified by djb2 hash
-//!    (no plaintext API list in the resolver entries).
+//! 2. Export Address Table is parsed; Nt/Zw names are identified by truncated
+//!    SHA-256 (no plaintext API list in the resolver entries).
 //! 3. Clean stubs yield the SSN via Hell's Gate (`mov eax, SSN`).
 //! 4. Hooked stubs (`jmp` / `0xE9`) recover the SSN via Halo's Gate neighbor scan.
 //! 5. Windows x64 `syscall` is issued with the Microsoft calling convention.
@@ -23,37 +23,39 @@ pub mod ssn;
 use crate::direct_syscalls::pe::MAX_IMAGE_SIZE;
 use crate::direct_syscalls::pe::{PeView, MAX_EXPORT_NAMES};
 use crate::direct_syscalls::ssn::resolve_stub_ssn;
+use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 use std::ffi::c_void;
-use std::sync::OnceLock;
+use std::sync::{LazyLock, OnceLock};
 
-/// djb2 (Bernstein) hash — used so the resolver table stores hashes, not API names.
+/// Truncated SHA-256 (first 8 bytes, little-endian) of an EAT name.
+///
+/// djb2 and MurmurHash3 are not second-preimage resistant: an injected export
+/// whose name collides with `NtAllocateVirtualMemory` would hijack the SSN.
+/// SHA-256 truncated to 64 bits, plus fail-closed duplicate-hash rejection at
+/// parse time, closes that resolver-bypass class.
 #[must_use]
-pub const fn djb2(bytes: &[u8]) -> u32 {
-    let mut hash: u32 = 5381;
-    let mut i = 0;
-    while i < bytes.len() {
-        hash = hash.wrapping_mul(33).wrapping_add(bytes[i] as u32);
-        i += 1;
-    }
-    hash
+pub fn hash_api_name(name: &str) -> u64 {
+    let digest = Sha256::digest(name.as_bytes());
+    let mut buf = [0u8; 8];
+    buf.copy_from_slice(&digest[..8]);
+    u64::from_le_bytes(buf)
 }
 
-/// Hash a UTF-8 API name (runtime path used when walking the EAT).
-#[must_use]
-pub fn hash_api_name(name: &str) -> u32 {
-    djb2(name.as_bytes())
-}
-
-pub const NT_ALLOCATE_VIRTUAL_MEMORY: u32 = djb2(b"NtAllocateVirtualMemory");
-pub const NT_PROTECT_VIRTUAL_MEMORY: u32 = djb2(b"NtProtectVirtualMemory");
-pub const NT_QUERY_SYSTEM_INFORMATION: u32 = djb2(b"NtQuerySystemInformation");
-pub const NT_QUERY_INFORMATION_PROCESS: u32 = djb2(b"NtQueryInformationProcess");
-pub const NT_CLOSE: u32 = djb2(b"NtClose");
+pub static NT_ALLOCATE_VIRTUAL_MEMORY: LazyLock<u64> =
+    LazyLock::new(|| hash_api_name("NtAllocateVirtualMemory"));
+pub static NT_PROTECT_VIRTUAL_MEMORY: LazyLock<u64> =
+    LazyLock::new(|| hash_api_name("NtProtectVirtualMemory"));
+pub static NT_QUERY_SYSTEM_INFORMATION: LazyLock<u64> =
+    LazyLock::new(|| hash_api_name("NtQuerySystemInformation"));
+pub static NT_QUERY_INFORMATION_PROCESS: LazyLock<u64> =
+    LazyLock::new(|| hash_api_name("NtQueryInformationProcess"));
+pub static NT_CLOSE: LazyLock<u64> = LazyLock::new(|| hash_api_name("NtClose"));
 
 /// One resolved Nt/Zw export.
 #[derive(Debug, Clone, Copy)]
 pub struct SyscallEntry {
-    pub hash: u32,
+    pub hash: u64,
     pub ssn: u16,
     pub hooked: bool,
     pub rva: u32,
@@ -74,6 +76,7 @@ impl SyscallResolver {
         if export.number_of_names == 0 || export.number_of_names > MAX_EXPORT_NAMES {
             return None;
         }
+        let text = pe.text_section_span()?;
         let mut entries = Vec::new();
         for i in 0..export.number_of_names as usize {
             let name_rva = match pe.u32_at(export.address_of_names, i) {
@@ -95,7 +98,7 @@ impl SyscallResolver {
                 Some(v) => v,
                 None => continue,
             };
-            let Some(resolved) = resolve_stub_ssn(pe.bytes(), func_rva as usize) else {
+            let Some(resolved) = resolve_stub_ssn(pe.bytes(), func_rva as usize, text) else {
                 continue;
             };
             entries.push(SyscallEntry {
@@ -105,6 +108,26 @@ impl SyscallResolver {
                 rva: func_rva,
             });
         }
+        Self::from_entries(entries)
+    }
+
+    fn from_entries(entries: Vec<SyscallEntry>) -> Option<Self> {
+        if entries.is_empty() {
+            return None;
+        }
+        // Fail closed on hash collisions: two distinct exports with the same
+        // truncated SHA-256 must never resolve — that is the injection bypass.
+        let mut seen: HashSet<u64> = HashSet::new();
+        let mut poisoned: HashSet<u64> = HashSet::new();
+        for e in &entries {
+            if !seen.insert(e.hash) {
+                poisoned.insert(e.hash);
+            }
+        }
+        let entries: Vec<SyscallEntry> = entries
+            .into_iter()
+            .filter(|e| !poisoned.contains(&e.hash))
+            .collect();
         if entries.is_empty() {
             return None;
         }
@@ -118,25 +141,47 @@ impl SyscallResolver {
     #[cfg(all(windows, target_arch = "x86_64"))]
     pub unsafe fn from_live_ntdll() -> Option<Self> {
         let base = peb::ntdll_base()?;
-        // Read SizeOfImage from the optional header (offset documented in pe.rs).
-        let header_span = 0x200usize;
+        // Read enough of the headers to parse SizeOfImage + the section table.
+        let header_span = 0x400usize;
         let header = std::slice::from_raw_parts(base, header_span);
         let pe_hdr = PeView::new(header)?;
         let size = pe_hdr.size_of_image()? as usize;
         if size < header_span || size > MAX_IMAGE_SIZE {
             return None;
         }
-        let image = std::slice::from_raw_parts(base, size);
-        Self::from_pe_bytes(image)
+        let hdr_size = (pe_hdr.size_of_headers()? as usize).max(0x200).min(size);
+        // Copy headers + each listed section. Gaps between sections are left
+        // zeroed and are never read from the process — those pages may be
+        // unmapped and would AV a SizeOfImage-wide from_raw_parts walk.
+        let mut image = vec![0u8; size];
+        let hdr_copy = hdr_size.min(size);
+        image[..hdr_copy].copy_from_slice(std::slice::from_raw_parts(base, hdr_copy));
+        let pe = PeView::new(&image)?;
+        if let Some(sections) = pe.sections() {
+            for sec in sections {
+                let va = sec.virtual_address as usize;
+                let sz = sec.virtual_size as usize;
+                if sz == 0 || va >= size {
+                    continue;
+                }
+                let copy_len = sz.min(size - va);
+                if copy_len == 0 {
+                    continue;
+                }
+                let src = std::slice::from_raw_parts(base.add(va), copy_len);
+                image[va..va + copy_len].copy_from_slice(src);
+            }
+        }
+        Self::from_pe_bytes(&image)
     }
 
     #[must_use]
-    pub fn resolve_by_hash(&self, hash: u32) -> Option<SyscallEntry> {
+    pub fn resolve_by_hash(&self, hash: u64) -> Option<SyscallEntry> {
         self.entries.iter().copied().find(|e| e.hash == hash)
     }
 
     #[must_use]
-    pub fn resolve_ssn(&self, hash: u32) -> Option<u16> {
+    pub fn resolve_ssn(&self, hash: u64) -> Option<u16> {
         self.resolve_by_hash(hash).map(|e| e.ssn)
     }
 
@@ -209,7 +254,7 @@ pub unsafe fn weissman_allocate_virtual_memory(
         let Some(resolver) = global_resolver() else {
             return dispatch::STATUS_UNSUCCESSFUL;
         };
-        let Some(entry) = resolver.resolve_by_hash(NT_ALLOCATE_VIRTUAL_MEMORY) else {
+        let Some(entry) = resolver.resolve_by_hash(*NT_ALLOCATE_VIRTUAL_MEMORY) else {
             return dispatch::STATUS_UNSUCCESSFUL;
         };
         dispatch::syscall6(
@@ -263,16 +308,45 @@ mod tests {
     use std::time::{Duration, Instant};
 
     #[test]
-    fn djb2_matches_runtime_hash() {
+    fn sha256_truncated_hash_is_stable_and_distinct() {
         assert_eq!(
-            NT_ALLOCATE_VIRTUAL_MEMORY,
+            *NT_ALLOCATE_VIRTUAL_MEMORY,
             hash_api_name("NtAllocateVirtualMemory")
         );
-        assert_eq!(NT_CLOSE, hash_api_name("NtClose"));
+        assert_eq!(*NT_CLOSE, hash_api_name("NtClose"));
         assert_ne!(
-            NT_ALLOCATE_VIRTUAL_MEMORY,
+            *NT_ALLOCATE_VIRTUAL_MEMORY,
             hash_api_name("ZwAllocateVirtualMemory")
         );
+        assert_ne!(
+            hash_api_name("NtAllocateVirtualMemory"),
+            hash_api_name("NtAllocateVirtualMemoryX")
+        );
+    }
+
+    #[test]
+    fn duplicate_hashes_fail_closed() {
+        let a = SyscallEntry {
+            hash: 0x1111,
+            ssn: 0x18,
+            hooked: false,
+            rva: 0x400,
+        };
+        let b = SyscallEntry {
+            hash: 0x1111,
+            ssn: 0x99,
+            hooked: false,
+            rva: 0x500,
+        };
+        let c = SyscallEntry {
+            hash: 0x2222,
+            ssn: 0x1A,
+            hooked: false,
+            rva: 0x600,
+        };
+        let resolver = SyscallResolver::from_entries(vec![a, b, c]).expect("keep unique");
+        assert!(resolver.resolve_by_hash(0x1111).is_none());
+        assert_eq!(resolver.resolve_ssn(0x2222), Some(0x1A));
     }
 
     #[test]
@@ -282,14 +356,14 @@ mod tests {
         assert_eq!(resolver.len(), 3);
         assert_eq!(resolver.hooked_count(), 0);
         assert_eq!(
-            resolver.resolve_ssn(NT_ALLOCATE_VIRTUAL_MEMORY),
+            resolver.resolve_ssn(*NT_ALLOCATE_VIRTUAL_MEMORY),
             Some(FIXTURE_SSN_ALLOCATE)
         );
         assert_eq!(
             resolver.resolve_ssn(hash_api_name("NtProtectVirtualMemory")),
             Some(FIXTURE_SSN_PROTECT)
         );
-        assert_eq!(resolver.resolve_ssn(NT_CLOSE), Some(FIXTURE_SSN_CLOSE));
+        assert_eq!(resolver.resolve_ssn(*NT_CLOSE), Some(FIXTURE_SSN_CLOSE));
     }
 
     #[test]
@@ -297,7 +371,7 @@ mod tests {
         let img = synthetic_ntdll(true);
         let resolver = SyscallResolver::from_pe_bytes(&img).expect("resolver");
         let entry = resolver
-            .resolve_by_hash(NT_ALLOCATE_VIRTUAL_MEMORY)
+            .resolve_by_hash(*NT_ALLOCATE_VIRTUAL_MEMORY)
             .expect("allocate");
         assert!(entry.hooked, "JMP hook must be flagged");
         assert_eq!(entry.ssn, FIXTURE_SSN_ALLOCATE);
@@ -316,7 +390,7 @@ mod tests {
         let start = Instant::now();
         for _ in 0..10_000 {
             let ssn = resolver
-                .resolve_ssn(NT_ALLOCATE_VIRTUAL_MEMORY)
+                .resolve_ssn(*NT_ALLOCATE_VIRTUAL_MEMORY)
                 .expect("ssn");
             assert_eq!(ssn, FIXTURE_SSN_ALLOCATE);
         }
@@ -358,7 +432,7 @@ mod tests {
         assert_eq!(
             resolver
                 .expect("resolver")
-                .resolve_ssn(NT_ALLOCATE_VIRTUAL_MEMORY),
+                .resolve_ssn(*NT_ALLOCATE_VIRTUAL_MEMORY),
             Some(FIXTURE_SSN_ALLOCATE)
         );
     }

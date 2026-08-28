@@ -45,7 +45,7 @@ fn scan(engine: &str) -> anyhow::Result<Vec<Value>> {
             hooked
                 .iter()
                 .take(32)
-                .map(|e| json!({ "hash": e.hash, "ssn": e.ssn, "rva": e.rva }))
+                .map(|e| json!({ "hash": format!("{:016x}", e.hash), "ssn": e.ssn, "rva": e.rva }))
                 .collect(),
         ),
     );

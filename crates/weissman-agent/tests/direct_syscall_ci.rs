@@ -40,7 +40,7 @@ fn hells_gate_halos_gate_parse_and_resolve_is_fast() {
     for _ in 0..LATENCY_SAMPLES {
         let start = Instant::now();
         let entry = resolver
-            .resolve_by_hash(NT_ALLOCATE_VIRTUAL_MEMORY)
+            .resolve_by_hash(*NT_ALLOCATE_VIRTUAL_MEMORY)
             .expect("allocate hash");
         lookup_samples.push(start.elapsed());
         assert!(entry.hooked);
