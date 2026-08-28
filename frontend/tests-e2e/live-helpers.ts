@@ -37,6 +37,30 @@ const RETRY_AFTER_TOTAL_BUDGET_MS = 90_000
 // passes straight through and fails fast.
 const isShed = (status: number) => status === 429 || status === 503
 
+/** Honor Retry-After header, then JSON `retry_after_seconds`. Login 429s default to 60s. */
+async function shedWaitMs(
+  r: { url(): string; headers(): Record<string, string>; json(): Promise<unknown> },
+  fallbackMs: number,
+): Promise<number> {
+  const header = Number(r.headers()['retry-after'])
+  if (Number.isFinite(header) && header > 0) {
+    return Math.min(header * 1000, RETRY_AFTER_CAP_MS)
+  }
+  try {
+    const body = (await r.json()) as { retry_after_seconds?: unknown }
+    const hint = Number(body?.retry_after_seconds)
+    if (Number.isFinite(hint) && hint > 0) {
+      return Math.min(hint * 1000, RETRY_AFTER_CAP_MS)
+    }
+  } catch {
+    /* body already consumed or not JSON */
+  }
+  if (r.url().includes('/api/login')) {
+    return Math.min(60_000, RETRY_AFTER_CAP_MS)
+  }
+  return Math.min(fallbackMs, RETRY_AFTER_CAP_MS)
+}
+
 /**
  * Retry a live-stack API call while the platform sheds it (429). The live E2E drives ALL browser +
  * harness traffic through one IP (127.0.0.1), so legitimate bursts trip limits no single real
@@ -51,10 +75,7 @@ export async function apiRequestWithRetry(
   let r = await fn()
   let spentMs = 0
   for (let attempt = 0; attempt < retries && isShed(r.status()); attempt += 1) {
-    const ra = Number(r.headers()['retry-after'])
-    const waitMs = Number.isFinite(ra) && ra > 0
-      ? Math.min(ra * 1000, RETRY_AFTER_CAP_MS)
-      : 400 * (attempt + 1)
+    const waitMs = await shedWaitMs(r, 1500 * (attempt + 1))
     if (spentMs + waitMs > RETRY_AFTER_TOTAL_BUDGET_MS) break
     spentMs += waitMs
     await new Promise((res) => setTimeout(res, waitMs))
@@ -130,14 +151,18 @@ export async function pollJobTerminal(
   const headers = authHeaders(auth)
   const terminal = new Set(['completed', 'done', 'failed', 'error', 'dead', 'cancelled'])
   for (let i = 0; i < maxAttempts; i += 1) {
-    const r = await request.get(`${LIVE_BASE}/api/jobs/${jobId}`, { headers })
+    const r = await apiRequestWithRetry(() =>
+      request.get(`${LIVE_BASE}/api/jobs/${jobId}`, { headers }),
+    )
     if (r.ok()) {
       const data = await r.json()
       const st = String(data.status || data.state || '').toLowerCase()
       if (terminal.has(st)) return st
     }
     if (clientId != null) {
-      const fr = await request.get(`${LIVE_BASE}/api/findings?client_id=${clientId}&limit=1`, { headers })
+      const fr = await apiRequestWithRetry(() =>
+        request.get(`${LIVE_BASE}/api/findings?client_id=${clientId}&limit=1`, { headers }),
+      )
       if (fr.ok()) {
         const fp = await fr.json()
         const rows = Array.isArray(fp.findings) ? fp.findings : []
@@ -190,10 +215,7 @@ export async function uiLogin(page: Page) {
   let loginResp = await submitOnce()
   let shedSpentMs = 0
   for (let attempt = 0; attempt < 3 && isShed(loginResp.status()); attempt += 1) {
-    const ra = Number(loginResp.headers()['retry-after'])
-    const waitMs = Number.isFinite(ra) && ra > 0
-      ? Math.min(ra * 1000, RETRY_AFTER_CAP_MS)
-      : 1_000 * (attempt + 1)
+    const waitMs = await shedWaitMs(loginResp, 1_000 * (attempt + 1))
     if (shedSpentMs + waitMs > RETRY_AFTER_TOTAL_BUDGET_MS) break
     shedSpentMs += waitMs
     // eslint-disable-next-line no-console
