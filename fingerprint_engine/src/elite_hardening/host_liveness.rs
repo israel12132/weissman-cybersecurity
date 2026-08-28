@@ -9,7 +9,10 @@
 //!   * a TLS handshake (certificate verification is irrelevant — the peer spoke)
 //!   * an HTTP response of any status (including 4xx/5xx)
 //!   * a TCP banner (the peer sent bytes)
-//!   * a `weissman-agent` heartbeat (`last_seen_at` within 3 minutes)
+//!   * a `weissman-agent` heartbeat for **this target host** (`last_seen_at`
+//!     within 3 minutes). A sibling agent on the same `client_id` is **not**
+//!     proof — that was a false `VERIFIED_FIXED` when the vulnerable host was
+//!     offline.
 
 use serde_json::{json, Value};
 use sqlx::PgPool;
@@ -146,7 +149,7 @@ pub async fn prove_host_live(
         return HostLiveness::proven("tcp_banner");
     }
 
-    if agent_heartbeat_live(pool, tenant_id, client_id).await {
+    if agent_heartbeat_live(pool, tenant_id, client_id, &ep.host).await {
         return HostLiveness::proven("weissman_agent");
     }
 
@@ -220,31 +223,96 @@ async fn tcp_banner_live(host: &str, port: u16) -> bool {
         .unwrap_or(false)
 }
 
-async fn agent_heartbeat_live(pool: &PgPool, tenant_id: i64, client_id: Option<i64>) -> bool {
+/// Bind an agent row to the scan target. Sibling hosts on the same client
+/// must not count. FQDN vs short-name is allowed only when one side is a
+/// single label equal to the other's left-most label.
+#[must_use]
+pub fn agent_host_binds_target(
+    hostname: &str,
+    device_name: &str,
+    agent_uuid: &str,
+    target_host: &str,
+) -> bool {
+    let target = normalize_host_label(target_host);
+    if target.is_empty() {
+        return false;
+    }
+    let host = normalize_host_label(hostname);
+    let device = normalize_host_label(device_name);
+    let uuid = agent_uuid.trim().to_ascii_lowercase();
+    if !host.is_empty() && host == target {
+        return true;
+    }
+    if !device.is_empty() && device == target {
+        return true;
+    }
+    if !uuid.is_empty() && uuid == target {
+        return true;
+    }
+    short_or_fqdn_same_machine(&host, &target)
+}
+
+fn normalize_host_label(s: &str) -> String {
+    s.trim()
+        .trim_matches(|c| c == '[' || c == ']')
+        .trim_end_matches('.')
+        .to_ascii_lowercase()
+}
+
+fn left_label(s: &str) -> &str {
+    s.split('.').next().unwrap_or(s)
+}
+
+fn is_single_label(s: &str) -> bool {
+    !s.is_empty() && !s.contains('.')
+}
+
+fn short_or_fqdn_same_machine(hostname: &str, target: &str) -> bool {
+    if hostname.is_empty() || target.is_empty() {
+        return false;
+    }
+    let h = left_label(hostname);
+    let t = left_label(target);
+    if h.is_empty() || h != t {
+        return false;
+    }
+    // `web01` ↔ `web01.corp.local`. Never `web01.a.com` ↔ `web01.b.com`.
+    is_single_label(hostname) || is_single_label(target)
+}
+
+async fn agent_heartbeat_live(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: Option<i64>,
+    target_host: &str,
+) -> bool {
     let Some(client_id) = client_id else {
         return false;
     };
+    let target = normalize_host_label(target_host);
+    if target.is_empty() {
+        return false;
+    }
     let mut tx = match crate::db::begin_tenant_tx(pool, tenant_id).await {
         Ok(t) => t,
         Err(_) => return false,
     };
-    let row: Option<(i32,)> = sqlx::query_as(
-        r#"SELECT 1
+    let rows: Vec<(String, String, String)> = sqlx::query_as(
+        r#"SELECT hostname, device_name, agent_uuid::text
              FROM endpoint_agents
             WHERE tenant_id = $1
               AND client_id = $2
               AND status = 'online'
-              AND last_seen_at > now() - interval '3 minutes'
-            LIMIT 1"#,
+              AND last_seen_at > now() - interval '3 minutes'"#,
     )
     .bind(tenant_id)
     .bind(client_id)
-    .fetch_optional(&mut *tx)
+    .fetch_all(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    .unwrap_or_default();
     let _ = tx.commit().await;
-    row.is_some()
+    rows.iter()
+        .any(|(hn, device, uuid)| agent_host_binds_target(hn, device, uuid, &target))
 }
 
 /// Resolve a host:port to a socket for tests and TLS connect.
@@ -326,5 +394,54 @@ mod tests {
     #[test]
     fn agent_heartbeat_window_is_three_minutes() {
         assert_eq!(AGENT_HEARTBEAT_MAX_AGE_SQL, "3 minutes");
+    }
+
+    #[test]
+    fn sibling_host_on_same_client_is_not_liveness() {
+        assert!(!agent_host_binds_target(
+            "web-healthy.corp.local",
+            "healthy",
+            "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "web-offline.corp.local",
+        ));
+    }
+
+    #[test]
+    fn exact_hostname_or_uuid_binds_target() {
+        assert!(agent_host_binds_target(
+            "web-offline.corp.local",
+            "",
+            "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "web-offline.corp.local",
+        ));
+        assert!(agent_host_binds_target(
+            "ignored",
+            "",
+            "cccccccc-cccc-cccc-cccc-cccccccccccc",
+            "cccccccc-cccc-cccc-cccc-cccccccccccc",
+        ));
+        assert!(agent_host_binds_target("", "grid-01", "", "grid-01",));
+    }
+
+    #[test]
+    fn short_name_and_fqdn_are_the_same_machine() {
+        assert!(agent_host_binds_target("web01", "", "", "web01.corp.local"));
+        assert!(agent_host_binds_target("web01.corp.local", "", "", "web01"));
+    }
+
+    #[test]
+    fn same_left_label_different_domains_do_not_bind() {
+        assert!(!agent_host_binds_target(
+            "web01.a.example",
+            "",
+            "",
+            "web01.b.example",
+        ));
+    }
+
+    #[test]
+    fn empty_target_never_binds() {
+        assert!(!agent_host_binds_target("web01", "web01", "uuid", ""));
+        assert!(!agent_host_binds_target("web01", "", "", "   "));
     }
 }
