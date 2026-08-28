@@ -58,6 +58,14 @@ pub fn invalidate_suppression_cache_tenant_local(tenant_id: i64) {
     SUPPRESSION_CACHE.retain(|k, _| k.0 != tenant_id);
 }
 
+/// Drop every cached rule set on this replica. Redis Pub/Sub is at-most-once:
+/// a reconnect gap can drop `CACHE_BUST_SUPPRESSION` events, so the subscriber
+/// must force the next persist to reload from Postgres rather than serve a
+/// stale empty/old globset. Does not re-publish.
+pub fn invalidate_suppression_cache_all_local() {
+    SUPPRESSION_CACHE.clear();
+}
+
 #[inline]
 fn multiplier_from_counts(tp: i32, fp: i32) -> f64 {
     if tp == 0 && fp == 0 {
@@ -428,7 +436,11 @@ pub async fn bump_suppression_hits(
 
 #[cfg(test)]
 mod tests {
-    use super::{is_suppressed_by, multiplier_from_counts, SuppressionRule};
+    use super::{
+        invalidate_suppression_cache_all_local, invalidate_suppression_cache_tenant_local,
+        is_suppressed_by, multiplier_from_counts, CachedRules, SuppressionRule, SUPPRESSION_CACHE,
+    };
+    use std::time::Instant;
 
     fn rule(sig: &str, glob: Option<&str>) -> SuppressionRule {
         SuppressionRule {
@@ -523,5 +535,42 @@ mod tests {
         assert!(m(0.0, 3.0) < 0.5);
         assert!(m(0.0, 3.0) >= 0.1);
         assert!(m(4.0, 1.0) > 0.5);
+    }
+
+    fn cache_empty(tenant_id: i64, engine: &str) {
+        SUPPRESSION_CACHE.insert(
+            (tenant_id, engine.to_ascii_lowercase()),
+            CachedRules {
+                loaded_at: Instant::now(),
+                rules: Vec::new(),
+            },
+        );
+    }
+
+    #[test]
+    fn tenant_bust_leaves_other_tenants_cached() {
+        let a = 9_001_i64;
+        let b = 9_002_i64;
+        cache_empty(a, "asm");
+        cache_empty(b, "asm");
+        invalidate_suppression_cache_tenant_local(a);
+        assert!(!SUPPRESSION_CACHE.contains_key(&(a, "asm".into())));
+        assert!(SUPPRESSION_CACHE.contains_key(&(b, "asm".into())));
+        SUPPRESSION_CACHE.remove(&(b, "asm".into()));
+    }
+
+    /// Redis Pub/Sub is at-most-once. After a dropped subscription, reconnect
+    /// must empty the DashMap so every tenant reloads from Postgres.
+    #[test]
+    fn redis_reconnect_evicts_every_local_tenant_cache() {
+        let a = 9_011_i64;
+        let b = 9_012_i64;
+        cache_empty(a, "asm");
+        cache_empty(b, "nmap");
+        invalidate_suppression_cache_all_local();
+        assert!(
+            SUPPRESSION_CACHE.is_empty(),
+            "reconnect eviction must not leave a stale tenant"
+        );
     }
 }

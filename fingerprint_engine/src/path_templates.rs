@@ -176,6 +176,88 @@ pub fn path_segments(raw: &str) -> Vec<String> {
         .collect()
 }
 
+const PERSISTED_TARGET_SQL: &str = r#"SELECT DISTINCT COALESCE(
+                    NULLIF(raw_data->>'target', ''),
+                    NULLIF(raw_data->>'target_url', ''),
+                    NULLIF(raw_data->'raw'->>'url', ''),
+                    NULLIF(raw_data->'raw'->>'target_url', ''),
+                    NULLIF(raw_data->>'url', '')
+                )
+             FROM vulnerabilities
+            WHERE tenant_id = $1
+              AND COALESCE(
+                    NULLIF(raw_data->>'target', ''),
+                    NULLIF(raw_data->>'target_url', ''),
+                    NULLIF(raw_data->'raw'->>'url', ''),
+                    NULLIF(raw_data->'raw'->>'target_url', ''),
+                    NULLIF(raw_data->>'url', '')
+                  ) IS NOT NULL
+            LIMIT 2000"#;
+
+async fn observe_persisted_targets(
+    pool: &PgPool,
+    tenant_id: i64,
+    index: &PathTemplateIndex,
+) -> bool {
+    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
+        return false;
+    };
+    let mut loaded_query = false;
+    // Cluster targets are already route-normalized (`…/users/{id}`). Reloading
+    // them after a reboot is what closes the cold-start hole: the next sibling
+    // (`carol`) must not mint a new finding_id.
+    match sqlx::query_scalar::<_, String>(
+        r#"SELECT target FROM weissman_finding_clusters
+            WHERE tenant_id = $1 AND target <> ''
+            ORDER BY last_seen_at DESC NULLS LAST
+            LIMIT 2000"#,
+    )
+    .bind(tenant_id)
+    .fetch_all(&mut *tx)
+    .await
+    {
+        Ok(rows) => {
+            loaded_query = true;
+            for t in rows {
+                index.observe_url(&t);
+            }
+        }
+        Err(e) => {
+            tracing::warn!(
+                target: "path_templates",
+                tenant_id,
+                error = %e,
+                "cluster targets unavailable for trie pre-warm"
+            );
+        }
+    }
+    match sqlx::query_scalar::<_, String>(PERSISTED_TARGET_SQL)
+        .bind(tenant_id)
+        .fetch_all(&mut *tx)
+        .await
+    {
+        Ok(rows) => {
+            loaded_query = true;
+            for t in rows {
+                index.observe_url(&t);
+            }
+        }
+        Err(e) => {
+            tracing::warn!(
+                target: "path_templates",
+                tenant_id,
+                error = %e,
+                "vulnerability targets unavailable for trie pre-warm"
+            );
+        }
+    }
+    if !loaded_query {
+        let _ = tx.rollback().await;
+        return false;
+    }
+    tx.commit().await.is_ok()
+}
+
 /// Warm (or reuse) the in-memory index from cluster + finding targets.
 pub async fn index_for_tenant(pool: &PgPool, tenant_id: i64) -> Arc<PathTemplateIndex> {
     if let Some(hit) = TENANT_INDEX.get(&tenant_id) {
@@ -184,46 +266,52 @@ pub async fn index_for_tenant(pool: &PgPool, tenant_id: i64) -> Arc<PathTemplate
         }
     }
     let index = Arc::new(PathTemplateIndex::new());
-    if let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await {
-        if let Ok(rows) = sqlx::query_scalar::<_, String>(
-            r#"SELECT target FROM weissman_finding_clusters
-                WHERE tenant_id = $1 AND target <> ''
-                ORDER BY last_seen_at DESC NULLS LAST
-                LIMIT 2000"#,
-        )
-        .bind(tenant_id)
-        .fetch_all(&mut *tx)
-        .await
-        {
-            for t in rows {
-                index.observe_url(&t);
-            }
-        }
-        if let Ok(rows) = sqlx::query_scalar::<_, String>(
-            r#"SELECT DISTINCT raw_data->>'target'
-                 FROM vulnerabilities
-                WHERE tenant_id = $1
-                  AND raw_data->>'target' IS NOT NULL
-                LIMIT 2000"#,
-        )
-        .bind(tenant_id)
-        .fetch_all(&mut *tx)
-        .await
-        {
-            for t in rows {
-                index.observe_url(&t);
-            }
-        }
-        let _ = tx.commit().await;
+    let loaded = observe_persisted_targets(pool, tenant_id, index.as_ref()).await;
+    // A failed tenant TX must not cache an empty trie for LEARN_TTL — that is
+    // the cold-start leak (raw `/users/alice` hashed before siblings are known).
+    if loaded {
+        TENANT_INDEX.insert(
+            tenant_id,
+            CachedIndex {
+                loaded_at: Instant::now(),
+                index: index.clone(),
+            },
+        );
     }
-    TENANT_INDEX.insert(
-        tenant_id,
-        CachedIndex {
-            loaded_at: Instant::now(),
-            index: index.clone(),
-        },
-    );
     index
+}
+
+/// Load every active tenant's trie from persisted targets. Uses
+/// [`weissman_db::active_tenant_ids`] (never a raw `tenants` scan).
+pub async fn prewarm_all_tenants(pool: &PgPool) {
+    let ids = match weissman_db::active_tenant_ids(pool).await {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(
+                target: "path_templates",
+                error = %e,
+                "path-template pre-warm could not list tenants"
+            );
+            return;
+        }
+    };
+    let n = ids.len();
+    for tid in ids {
+        let _ = index_for_tenant(pool, tid).await;
+    }
+    tracing::info!(
+        target: "path_templates",
+        tenants = n,
+        "path-template trie pre-warmed from persisted cluster/finding targets"
+    );
+}
+
+/// Boot hook: pre-warm in the background so the first persist after reboot does
+/// not hash raw high-cardinality paths against an empty trie.
+pub fn spawn_prewarm(pool: Arc<PgPool>) {
+    tokio::spawn(async move {
+        prewarm_all_tenants(pool.as_ref()).await;
+    });
 }
 
 /// Drop the cached trie (tests / tenant delete).
@@ -274,5 +362,39 @@ mod tests {
             Some(&idx),
         );
         assert_eq!(n, "https://api.corp/api/v1/users/alice");
+    }
+
+    #[test]
+    fn reboot_from_persisted_id_template_still_collapses_next_sibling() {
+        // After a cold start the trie is rebuilt from cluster.target rows, which
+        // persist already-normalized (`…/users/{id}`). Carol must not mint a
+        // new finding_id just because the process forgot alice/bob.
+        let reloaded = PathTemplateIndex::from_urls(&["https://api.corp/api/v1/users/{id}"]);
+        let carol = normalize_target_ctx(
+            "https://api.corp/api/v1/users/carol",
+            &IdentityHint::default(),
+            Some(&reloaded),
+        );
+        assert_eq!(carol, "https://api.corp/api/v1/users/{id}");
+        let public = normalize_target_ctx(
+            "https://api.corp/api/v1/public/image/new@corp.com",
+            &IdentityHint::default(),
+            Some(&reloaded),
+        );
+        assert_eq!(public, "https://api.corp/api/v1/public/image/{id}");
+    }
+
+    #[test]
+    fn boot_hooks_prewarm_the_trie_on_server_and_worker() {
+        let serve = include_str!("http/serve.rs");
+        assert!(
+            serve.contains("path_templates::spawn_prewarm"),
+            "Axum boot must pre-warm the per-tenant trie"
+        );
+        let worker = include_str!("../../crates/weissman-worker/src/main.rs");
+        assert!(
+            worker.contains("path_templates::spawn_prewarm"),
+            "worker boot must pre-warm the per-tenant trie"
+        );
     }
 }

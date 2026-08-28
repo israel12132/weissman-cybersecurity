@@ -96,10 +96,14 @@ async fn run_subscriber() -> Result<(), String> {
     let client = redis_client().ok_or("REDIS_URL unset")?;
     let mut pubsub = client.get_async_pubsub().await.map_err(|e| e.to_string())?;
     pubsub.subscribe(CHANNEL).await.map_err(|e| e.to_string())?;
+    // Pub/Sub is at-most-once. Events published while this replica was
+    // disconnected are gone; drop the local DashMap so persist reloads rules
+    // from Postgres instead of serving a stale 30s snapshot.
+    crate::fp_feedback::invalidate_suppression_cache_all_local();
     tracing::info!(
         target: "suppression_cache_sync",
         channel = CHANNEL,
-        "CACHE_BUST_SUPPRESSION subscriber active"
+        "CACHE_BUST_SUPPRESSION subscriber active (local suppression cache evicted)"
     );
     let mut stream = pubsub.on_message();
     while let Some(msg) = stream.next().await {
@@ -129,6 +133,7 @@ pub fn spawn_suppression_cache_redis_sync() {
                     "subscriber disconnected; retrying"
                 );
             }
+            crate::fp_feedback::invalidate_suppression_cache_all_local();
             tokio::time::sleep(Duration::from_secs(SUBSCRIBER_RETRY_SECS)).await;
         }
     });
@@ -149,5 +154,16 @@ mod tests {
         let back: CacheBustEvent = serde_json::from_str(&json).unwrap();
         assert_eq!(back.tenant_id, 7);
         assert_eq!(back.engine, e.engine);
+    }
+
+    #[test]
+    fn subscriber_evicts_local_cache_on_subscribe_and_retry() {
+        let src = include_str!("suppression_cache_sync.rs");
+        assert!(
+            src.matches("invalidate_suppression_cache_all_local()")
+                .count()
+                >= 2,
+            "subscribe success and the reconnect loop must both drop the DashMap"
+        );
     }
 }

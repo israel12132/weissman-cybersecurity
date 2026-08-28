@@ -413,6 +413,100 @@ async fn persist_dedup_auto_suppress_and_cross_plane_critical() {
     eprintln!("alert-fatigue live contract OK finding_id={finding_id}");
 }
 
+/// Cold-start: after a reboot the in-memory trie is empty. Pre-warming from
+/// persisted cluster/finding targets must collapse the next sibling onto the
+/// existing `{id}` identity instead of minting `/users/carol` as a new finding.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires live Postgres (TEST_DATABASE_URL)"]
+async fn cold_start_prewarm_collapses_next_sibling() {
+    let url = db_url().expect("TEST_DATABASE_URL / DATABASE_URL");
+    fingerprint_engine::db::run_migrations(url.trim())
+        .await
+        .expect("migrations");
+    let pool = PgPoolOptions::new()
+        .max_connections(8)
+        .acquire_timeout(Duration::from_secs(10))
+        .connect(url.trim())
+        .await
+        .expect("connect");
+
+    ensure_cluster_ingest_schema(&pool).await;
+    let (tenant_id, client_id, _) = seed_scope(&pool).await;
+    reset_scope(&pool, tenant_id, client_id).await;
+    fingerprint_engine::path_templates::invalidate_tenant(tenant_id);
+
+    let alice = "https://api.corp/api/v1/users/alice_prewarm";
+    let bob = "https://api.corp/api/v1/users/bob_prewarm";
+    let carol = "https://api.corp/api/v1/users/carol_prewarm";
+    persist_engine_findings(
+        &pool,
+        tenant_id,
+        Some(client_id),
+        "asm",
+        alice,
+        &[
+            finding("XSS in user profile (prewarm)", "xss-prewarm", alice, "low"),
+            finding("XSS in user profile (prewarm)", "xss-prewarm", bob, "low"),
+        ],
+    )
+    .await
+    .expect("persist alice+bob");
+
+    let before: String = sqlx::query_scalar(
+        r#"SELECT finding_id FROM vulnerabilities
+            WHERE tenant_id = $1 AND client_id = $2 AND source = 'asm'
+              AND title = 'XSS in user profile (prewarm)'
+            ORDER BY id LIMIT 1"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .fetch_one(&pool)
+    .await
+    .expect("alice/bob finding_id");
+
+    fingerprint_engine::path_templates::invalidate_tenant(tenant_id);
+    fingerprint_engine::path_templates::prewarm_all_tenants(&pool).await;
+
+    persist_engine_findings(
+        &pool,
+        tenant_id,
+        Some(client_id),
+        "asm",
+        carol,
+        &[finding(
+            "XSS in user profile (prewarm)",
+            "xss-prewarm",
+            carol,
+            "low",
+        )],
+    )
+    .await
+    .expect("persist carol after pre-warm");
+
+    let rows: Vec<(String, i32)> = sqlx::query_as(
+        r#"SELECT finding_id, seen_count FROM vulnerabilities
+            WHERE tenant_id = $1 AND client_id = $2 AND source = 'asm'
+              AND title = 'XSS in user profile (prewarm)'"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .fetch_all(&pool)
+    .await
+    .expect("prewarm identities");
+    assert_eq!(
+        rows.len(),
+        1,
+        "carol must not mint a new finding_id after trie pre-warm, got {rows:?}"
+    );
+    assert_eq!(rows[0].0, before);
+    assert!(
+        rows[0].1 >= 2,
+        "carol must upsert the existing identity, seen_count={}",
+        rows[0].1
+    );
+    eprintln!("cold-start prewarm OK finding_id={}", rows[0].0);
+}
+
 async fn ensure_cluster_ingest_schema(pool: &sqlx::PgPool) {
     let sql = include_str!(
         "../../crates/weissman-db/migrations/20260827173000_cluster_ingest_watermark.sql"
@@ -506,6 +600,7 @@ async fn reset_scope(pool: &sqlx::PgPool, tenant_id: i64, client_id: i64) {
         .execute(pool)
         .await;
     fingerprint_engine::fp_feedback::invalidate_suppression_cache_tenant(tenant_id);
+    fingerprint_engine::path_templates::invalidate_tenant(tenant_id);
 }
 
 async fn fetch_vuln(
