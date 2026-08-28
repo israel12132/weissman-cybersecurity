@@ -26,6 +26,22 @@ pub const UNCHAINED: &str = "";
 const CHANNEL_CAP: usize = 8192;
 const SWEEP_SECS: u64 = 5;
 
+/// Unchained rows in BIGSERIAL order. Never `asked_at`.
+const PENDING_SQL: &str = "SELECT id, user_id, question, compiled_sql, rows_returned, elapsed_ms,
+                COALESCE(error, '')
+           FROM nl_query_audit
+          WHERE tenant_id = $1 AND event_hash = $2
+          ORDER BY id ASC
+          FOR UPDATE";
+
+const TIP_SQL: &str = "SELECT id, COALESCE(event_hash, '') FROM nl_query_audit
+          WHERE tenant_id = $1 AND event_hash <> $2
+          ORDER BY id DESC LIMIT 1";
+
+const UPDATE_SQL: &str = "UPDATE nl_query_audit
+                SET prev_hash = $3, event_hash = $4
+              WHERE id = $1 AND tenant_id = $2 AND event_hash = $5";
+
 static CHAIN_TX: OnceLock<mpsc::Sender<i64>> = OnceLock::new();
 
 /// Best-effort notify. A full channel or a process that has not yet spawned
@@ -109,9 +125,26 @@ async fn sweep_all(pool: &PgPool) -> Result<(), sqlx::Error> {
     Ok(())
 }
 
+/// Rows the worker may append to the existing chain: strictly after the tip's
+/// `BIGSERIAL` `id`. A late-committed lower id cannot be spliced behind a hash
+/// that is already on disk — that would fail any integrity walk `ORDER BY id`.
+/// Timestamps (`asked_at`) are never consulted (clock skew / out-of-order
+/// insert). `pending_asc` must already be sorted by `id` ascending.
+#[must_use]
+pub(crate) fn pending_after_tip(pending_ids_asc: &[i64], tip_id: Option<i64>) -> Vec<i64> {
+    match tip_id {
+        None => pending_ids_asc.to_vec(),
+        Some(tip) => pending_ids_asc
+            .iter()
+            .copied()
+            .filter(|id| *id > tip)
+            .collect(),
+    }
+}
+
 /// Serialize chaining for one tenant. HTTP inserts are never blocked: they
-/// write a new row without locking, and this pass picks empty hashes in `id`
-/// order after taking `FOR UPDATE` on those unchained rows.
+/// write a new row without locking, and this pass picks empty hashes in
+/// `BIGSERIAL` `id` order after taking `FOR UPDATE` on those unchained rows.
 async fn chain_tenant(pool: &PgPool, tenant_id: i64) -> Result<(), sqlx::Error> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
     weissman_db::advisory_lock::advisory_xact_lock_text(
@@ -137,32 +170,42 @@ async fn chain_tenant(pool: &PgPool, tenant_id: i64) -> Result<(), sqlx::Error> 
 
     // Architect requirement: row-level FOR UPDATE lives on the worker, not
     // the HTTP path. Bound by begin_tenant_tx lock_timeout.
-    let rows: Vec<(i64, Option<i64>, String, String, i32, i32, String)> = sqlx::query_as(
-        "SELECT id, user_id, question, compiled_sql, rows_returned, elapsed_ms,
-                COALESCE(error, '')
-           FROM nl_query_audit
-          WHERE tenant_id = $1 AND event_hash = $2
-          ORDER BY id
-          FOR UPDATE",
-    )
-    .bind(tenant_id)
-    .bind(UNCHAINED)
-    .fetch_all(&mut *tx)
-    .await?;
+    // Total order is BIGSERIAL `id ASC` — never `asked_at` (clock skew).
+    let rows: Vec<(i64, Option<i64>, String, String, i32, i32, String)> =
+        sqlx::query_as(PENDING_SQL)
+            .bind(tenant_id)
+            .bind(UNCHAINED)
+            .fetch_all(&mut *tx)
+            .await?;
 
-    let mut prev_hash: String = sqlx::query_scalar(
-        "SELECT COALESCE(event_hash, '') FROM nl_query_audit
-          WHERE tenant_id = $1 AND event_hash <> $2
-          ORDER BY id DESC LIMIT 1",
-    )
-    .bind(tenant_id)
-    .bind(UNCHAINED)
-    .fetch_optional(&mut *tx)
-    .await?
-    .flatten()
-    .unwrap_or_default();
+    let tip: Option<(i64, String)> = sqlx::query_as(TIP_SQL)
+        .bind(tenant_id)
+        .bind(UNCHAINED)
+        .fetch_optional(&mut *tx)
+        .await?;
+
+    let (tip_id, mut prev_hash) = match tip {
+        Some((id, h)) => (Some(id), h),
+        None => (None, String::new()),
+    };
+    let allowed = pending_after_tip(&rows.iter().map(|(id, ..)| *id).collect::<Vec<_>>(), tip_id);
+    if allowed.len() < rows.len() {
+        tracing::error!(
+            target: "nl_audit_chain",
+            tenant_id,
+            tip_id,
+            pending = rows.len(),
+            chainable = allowed.len(),
+            "late-committed nl_query_audit id is behind the chained tip; \
+             left unchained so integrity walks ORDER BY id stay valid"
+        );
+    }
+    let allowed: HashSet<i64> = allowed.into_iter().collect();
 
     for (id, user_id, sealed_q, sealed_sql, rows_returned, elapsed_ms, error) in rows {
+        if !allowed.contains(&id) {
+            continue;
+        }
         let canonical = nl_audit_crypto::canonical_nl_audit_payload(
             &prev_hash,
             tenant_id,
@@ -174,18 +217,14 @@ async fn chain_tenant(pool: &PgPool, tenant_id: i64) -> Result<(), sqlx::Error> 
             &error,
         );
         let event_hash = nl_audit_crypto::event_hash(&canonical);
-        sqlx::query(
-            "UPDATE nl_query_audit
-                SET prev_hash = $3, event_hash = $4
-              WHERE id = $1 AND tenant_id = $2 AND event_hash = $5",
-        )
-        .bind(id)
-        .bind(tenant_id)
-        .bind(&prev_hash)
-        .bind(&event_hash)
-        .bind(UNCHAINED)
-        .execute(&mut *tx)
-        .await?;
+        sqlx::query(UPDATE_SQL)
+            .bind(id)
+            .bind(tenant_id)
+            .bind(&prev_hash)
+            .bind(&event_hash)
+            .bind(UNCHAINED)
+            .execute(&mut *tx)
+            .await?;
         prev_hash = event_hash;
     }
 
@@ -225,6 +264,28 @@ mod tests {
     }
 
     #[test]
+    fn worker_sql_orders_pending_by_monotonic_id_not_timestamp() {
+        assert!(
+            PENDING_SQL.contains("ORDER BY id ASC"),
+            "pending chain must walk BIGSERIAL id"
+        );
+        assert!(
+            !PENDING_SQL.contains("asked_at") && !TIP_SQL.contains("asked_at"),
+            "SQL must not order the audit chain by asked_at"
+        );
+        assert!(TIP_SQL.contains("ORDER BY id DESC LIMIT 1"));
+        assert!(PENDING_SQL.contains("FOR UPDATE"));
+    }
+
+    #[test]
+    fn pending_after_tip_skips_late_ids_behind_the_chain() {
+        assert_eq!(pending_after_tip(&[5, 6, 7], None), vec![5, 6, 7]);
+        assert_eq!(pending_after_tip(&[5, 6, 7], Some(6)), vec![7]);
+        assert_eq!(pending_after_tip(&[5], Some(6)), Vec::<i64>::new());
+        assert_eq!(pending_after_tip(&[10, 11], Some(9)), vec![10, 11]);
+    }
+
+    #[test]
     fn sequential_hashes_depend_on_prev() {
         let a = nl_audit_crypto::event_hash(&nl_audit_crypto::canonical_nl_audit_payload(
             "",
@@ -259,5 +320,97 @@ mod tests {
         assert_ne!(b, b_genesis);
         assert_eq!(a.len(), 64);
         assert_eq!(b.len(), 64);
+    }
+
+    #[tokio::test]
+    async fn chains_in_id_order_when_asked_at_is_inverted() {
+        let url = match std::env::var("TEST_DATABASE_URL") {
+            Ok(u) if !u.trim().is_empty() => u,
+            _ => {
+                eprintln!(
+                    "SKIP chains_in_id_order_when_asked_at_is_inverted: no TEST_DATABASE_URL"
+                );
+                return;
+            }
+        };
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(2)
+            .acquire_timeout(std::time::Duration::from_secs(5))
+            .connect(&url)
+            .await
+            .expect("connect TEST_DATABASE_URL");
+        let tenant_id: i64 =
+            sqlx::query_scalar("SELECT id FROM tenants WHERE slug = 'default' LIMIT 1")
+                .fetch_optional(&pool)
+                .await
+                .expect("lookup default tenant")
+                .expect("default tenant must exist");
+
+        let mut tx = crate::db::begin_tenant_tx(&pool, tenant_id)
+            .await
+            .expect("tenant tx");
+        let marker = format!(
+            "nlqa-order-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        );
+        let id_early: i64 = sqlx::query_scalar(
+            "INSERT INTO nl_query_audit
+                 (tenant_id, question, compiled_sql, asked_at, event_hash, prev_hash)
+             VALUES ($1, $2, 's-a', now() + interval '1 hour', '', '')
+             RETURNING id",
+        )
+        .bind(tenant_id)
+        .bind(format!("{marker}-a"))
+        .fetch_one(&mut *tx)
+        .await
+        .expect("insert later-timestamp first row");
+        let id_late: i64 = sqlx::query_scalar(
+            "INSERT INTO nl_query_audit
+                 (tenant_id, question, compiled_sql, asked_at, event_hash, prev_hash)
+             VALUES ($1, $2, 's-b', now() - interval '1 hour', '', '')
+             RETURNING id",
+        )
+        .bind(tenant_id)
+        .bind(format!("{marker}-b"))
+        .fetch_one(&mut *tx)
+        .await
+        .expect("insert earlier-timestamp second row");
+        tx.commit().await.expect("commit inserts");
+        assert!(id_early < id_late, "BIGSERIAL must assign increasing ids");
+
+        chain_tenant(&pool, tenant_id).await.expect("chain");
+
+        let mut tx = crate::db::begin_tenant_tx(&pool, tenant_id)
+            .await
+            .expect("read tx");
+        let rows: Vec<(i64, String, String)> = sqlx::query_as(
+            "SELECT id, prev_hash, event_hash FROM nl_query_audit
+              WHERE tenant_id = $1 AND question LIKE $2
+              ORDER BY id ASC",
+        )
+        .bind(tenant_id)
+        .bind(format!("{marker}%"))
+        .fetch_all(&mut *tx)
+        .await
+        .expect("read chain");
+        let _ = sqlx::query("DELETE FROM nl_query_audit WHERE tenant_id = $1 AND question LIKE $2")
+            .bind(tenant_id)
+            .bind(format!("{marker}%"))
+            .execute(&mut *tx)
+            .await;
+        tx.commit().await.expect("cleanup");
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].0, id_early);
+        assert_eq!(rows[1].0, id_late);
+        assert_eq!(
+            rows[1].1, rows[0].2,
+            "later id must hash-link to earlier id"
+        );
+        assert_eq!(rows[0].2.len(), 64);
+        assert_ne!(rows[0].2, UNCHAINED);
+        assert_ne!(rows[1].2, UNCHAINED);
     }
 }

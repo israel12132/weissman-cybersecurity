@@ -90,6 +90,7 @@ rest (AES-256-GCM). **Production fails closed at startup if no key material is s
 |-----|--------|
 | `WEISSMAN_TRUST_PROXY_HEADERS` | Enables use of `X-Forwarded-For` / `X-Real-IP` for audit + rate limit client identity |
 | `WEISSMAN_TRUST_PROXY_CIDRS` | Optional comma-separated trusted proxy CIDRs; when set, only peers in this list are allowed to supply forwarded client IP |
+| `WEISSMAN_PRIVILEGE_HEADER_TRUSTED_CIDRS` | TCP peers allowed to send `X-Weissman-Destructive-Confirm` / `Dual-Approve` / `Llm-Handshake`. Empty in production rejects those headers (JSON body still works). RFC1918 is not implicit. |
 
 ---
 

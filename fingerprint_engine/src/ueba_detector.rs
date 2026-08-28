@@ -13,9 +13,10 @@
 //!
 //! Numeric z-score stays silent until the metric has ≥ 24 samples. Never-before-seen
 //! ports and processes fire after the learning window **and** after a short onboarding
-//! grace (15–30 minutes from `endpoint_agents.enrolled_at`, default 20). During grace the
-//! detector still writes observed ports/processes into `learned_set` so the first live
-//! map of the host becomes the baseline instead of an SOC alert storm.
+//! grace (15–30 minutes from `endpoint_agents.enrolled_at`, default 20). During grace,
+//! items are **not** blindly written into `learned_set`: they must pass signature
+//! deny-lists, live threat-intel, and the Global Fleet Whitelist / fleet consensus
+//! (`ueba_onboarding`). Failures page the SOC as an onboarding hijack.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -423,13 +424,38 @@ async fn check_new_categorical(
         .cloned()
         .collect();
 
-    // Add observed → learned_set and bump the per-metric observation count on
-    // EVERY sample (not just when the set changes) so `n` reflects how much history
-    // we've accumulated — that is what the learning gate below reads. Stored in a
-    // single per-(agent,metric) row under GLOBAL_BUCKET so it can actually train.
-    for x in observed {
-        learned.insert(x.clone());
+    let mut hijack: Vec<String> = Vec::new();
+    if onboarding_grace && (metric == "open_ports" || metric == "top_processes") {
+        let grace = onboarding_grace_secs();
+        for item in &new_items {
+            let sig = crate::ueba_onboarding::signature_denies(metric, item);
+            let ti = crate::ueba_onboarding::threat_intel_hit(tx, tenant_id, metric, item).await;
+            let fleet = crate::ueba_onboarding::fleet_consensus_hit(
+                tx,
+                tenant_id,
+                &p.agent_id,
+                metric,
+                item,
+                grace,
+            )
+            .await;
+            let wl = crate::ueba_onboarding::on_global_whitelist(metric, item);
+            match crate::ueba_onboarding::decide_onboarding_item(metric, item, sig, ti, wl, fleet) {
+                crate::ueba_onboarding::OnboardingDecision::Learn => {
+                    learned.insert(item.clone());
+                }
+                crate::ueba_onboarding::OnboardingDecision::RejectAndAlert => {
+                    hijack.push(item.clone());
+                }
+            }
+        }
+        // Existing learned items stay. Rejected hijack items never enter the set.
+    } else {
+        for x in observed {
+            learned.insert(x.clone());
+        }
     }
+
     let learned_vec: Vec<String> = learned.into_iter().collect();
     let _ = sqlx::query(
         r#"INSERT INTO agent_metric_baselines
@@ -449,11 +475,45 @@ async fn check_new_categorical(
     .execute(&mut **tx)
     .await;
 
-    if new_items.is_empty() {
+    if new_items.is_empty() && hijack.is_empty() {
         return Ok(None);
     }
     if onboarding_grace && (metric == "open_ports" || metric == "top_processes") {
-        return Ok(None);
+        if hijack.is_empty() {
+            return Ok(None);
+        }
+        let detail = format!(
+            "Onboarding hijack: process/port failed signature, threat-intel, or fleet whitelist: {}",
+            hijack.join(", ")
+        );
+        let rec = AnomalyRecord {
+            metric: metric.to_string(),
+            observed: hijack.len() as f64,
+            baseline_mean: 0.0,
+            baseline_stddev: 0.0,
+            z_score: hijack.len() as f64,
+            severity: "high".to_string(),
+            detail: detail.clone(),
+        };
+        sqlx::query(
+            r#"INSERT INTO agent_anomalies
+                     (tenant_id, agent_id, client_id, sample_id, metric_name,
+                      observed, baseline_mean, baseline_stddev, z_score,
+                      severity, detail, detected_at)
+               VALUES ($1, $2, $3, $4, $5, $6, 0, 0, $6, $7, $8, now())"#,
+        )
+        .bind(tenant_id)
+        .bind(&p.agent_id)
+        .bind(p.client_id)
+        .bind(sample_id)
+        .bind(metric)
+        .bind(hijack.len() as f64)
+        .bind("high")
+        .bind(&detail)
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| format!("insert onboarding hijack: {e}"))?;
+        return Ok(Some(rec));
     }
     let learning = n_obs < MIN_BASELINE_SAMPLES;
     let extreme_categorical = metric == "open_ports" || metric == "top_processes";
@@ -552,9 +612,9 @@ mod tests {
     }
     #[test]
     fn min_samples_protects_numeric_learning_window() {
-        // Numeric z-score stays silent until trained. Categorical novelty for
-        // ports/processes is suppressed during onboarding grace, then may fire
-        // during the remaining learning window.
+        // Numeric z-score stays silent until trained. During onboarding grace,
+        // ports/processes must pass fleet whitelist + TI + signatures before they
+        // enter learned_set; hijacks still page.
         assert!(MIN_BASELINE_SAMPLES >= 24);
     }
 

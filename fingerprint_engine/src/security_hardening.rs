@@ -864,5 +864,10 @@ mod tests {
             n >= 5,
             "strip include must appear on public proxy locations, got {n}"
         );
+        let serve = include_str!("http/serve.rs");
+        assert!(
+            serve.contains("privilege_header_proxy_middleware"),
+            "Axum must reject privilege headers from non-proxy TCP peers"
+        );
     }
 }

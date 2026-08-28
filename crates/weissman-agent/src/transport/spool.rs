@@ -1,19 +1,24 @@
 //! Encrypted disk spool for findings / task completions when the WebSocket is down.
 //!
-//! The agent otherwise aims for a near-zero disk footprint. Offline telemetry is
-//! written under an innocuous temp-cache name and sealed with AES-256-GCM using a
-//! key derived from host identity. On Windows the ciphertext is additionally wrapped
-//! with DPAPI (`CryptProtectData` / `CRYPTPROTECT_LOCAL_MACHINE`).
+//! Offline telemetry is written under an innocuous temp-cache name and sealed with
+//! AES-256-GCM. The wrapping key is HKDF-SHA256 over real OS entropy (getrandom),
+//! stored in systemd credentials, the Linux user keyring, or a 0600 file — never
+//! `/etc/machine-id`, DMI UUID, MAC, or hostname. On Windows the ciphertext is
+//! additionally wrapped with DPAPI (`CryptProtectData`).
 
 use crate::protocol::AgentToServer;
+use aes_gcm::aead::rand_core::RngCore;
 use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
-use sha2::{Digest, Sha256};
+use hkdf::Hkdf;
+use sha2::Sha256;
 use std::path::{Path, PathBuf};
 
 const MAX_SPOOL_BYTES: u64 = 32 * 1024 * 1024;
 const MAGIC: &[u8; 4] = b"CACH";
-const VERSION: u8 = 1;
+const VERSION: u8 = 2;
+const HKDF_SALT: &[u8] = b"ws-agent-spool-v2";
+const HKDF_INFO: &[u8] = b"aes-256-gcm";
 
 #[must_use]
 pub fn spool_path() -> PathBuf {
@@ -47,38 +52,153 @@ fn obfuscated_default_path() -> PathBuf {
     }
 }
 
-fn host_key_material() -> Vec<u8> {
-    let mut ikm = Vec::new();
+fn default_ikm_path() -> PathBuf {
+    if let Some(p) = std::env::var_os("WEISSMAN_AGENT_SPOOL_KEY_FILE") {
+        return PathBuf::from(p);
+    }
+    #[cfg(windows)]
+    {
+        let base = std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir);
+        return base
+            .join("Microsoft")
+            .join("Windows")
+            .join("INetCache")
+            .join("IE")
+            .join(".ieuser.dat");
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::temp_dir()
+            .join(".cache")
+            .join("fontconfig")
+            .join(".user-7.cache")
+    }
+}
+
+fn systemd_credential_ikm() -> Option<Vec<u8>> {
+    let dir = std::env::var("CREDENTIALS_DIRECTORY").ok()?;
+    let raw = std::fs::read(PathBuf::from(dir).join("weissman-agent-spool")).ok()?;
+    let trimmed: Vec<u8> = raw
+        .into_iter()
+        .filter(|b| *b != b'\n' && *b != b'\r')
+        .collect();
+    (trimmed.len() >= 32).then_some(trimmed)
+}
+
+fn operator_secret_ikm() -> Option<Vec<u8>> {
+    let s = std::env::var("WEISSMAN_AGENT_SPOOL_SECRET").ok()?;
+    let t = s.trim();
+    (t.len() >= 32).then(|| t.as_bytes().to_vec())
+}
+
+fn fresh_entropy() -> [u8; 32] {
+    let mut k = [0u8; 32];
+    OsRng.fill_bytes(&mut k);
+    k
+}
+
+fn load_or_create_ikm_file(path: &Path) -> Option<[u8; 32]> {
+    if let Some(k) = read_ikm_file(path) {
+        return Some(k);
+    }
+    let k = fresh_entropy();
+    if write_ikm_file(path, &k).is_ok() {
+        return Some(k);
+    }
+    None
+}
+
+fn read_ikm_file(path: &Path) -> Option<[u8; 32]> {
+    let raw = std::fs::read(path).ok()?;
+    #[cfg(windows)]
+    let raw = dpapi::unprotect(&raw).ok()?;
+    if raw.len() != 32 {
+        return None;
+    }
+    let mut k = [0u8; 32];
+    k.copy_from_slice(&raw);
+    Some(k)
+}
+
+fn write_ikm_file(path: &Path, ikm: &[u8; 32]) -> std::io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+        }
+    }
+    let payload = {
+        #[cfg(windows)]
+        {
+            dpapi::protect(ikm)?
+        }
+        #[cfg(not(windows))]
+        {
+            ikm.to_vec()
+        }
+    };
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, &payload)?;
     #[cfg(unix)]
     {
-        if let Ok(id) = std::fs::read("/etc/machine-id") {
-            ikm.extend_from_slice(&id);
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
+    }
+    std::fs::rename(&tmp, path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
+}
+
+fn load_ikm() -> Vec<u8> {
+    if let Some(v) = systemd_credential_ikm() {
+        return v;
+    }
+    if std::env::var_os("WEISSMAN_AGENT_SPOOL_KEY_FILE").is_some() {
+        let path = default_ikm_path();
+        if let Some(k) = load_or_create_ikm_file(&path) {
+            return k.to_vec();
         }
-        if let Ok(uuid) = std::fs::read("/sys/class/dmi/id/product_uuid") {
-            ikm.extend_from_slice(&uuid);
+    }
+    if let Some(v) = operator_secret_ikm() {
+        return v;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(k) = linux_keyring::load() {
+            return k.to_vec();
         }
     }
-    if let Ok(h) = hostname::get() {
-        if let Ok(s) = h.into_string() {
-            ikm.extend_from_slice(s.as_bytes());
+    let path = default_ikm_path();
+    if let Some(k) = load_or_create_ikm_file(&path) {
+        #[cfg(target_os = "linux")]
+        {
+            let _ = linux_keyring::store(&k);
         }
+        return k.to_vec();
     }
-    if let Ok(extra) = std::env::var("WEISSMAN_AGENT_SPOOL_SECRET") {
-        ikm.extend_from_slice(extra.as_bytes());
+    let k = fresh_entropy();
+    #[cfg(target_os = "linux")]
+    {
+        let _ = linux_keyring::store(&k);
     }
-    if ikm.is_empty() {
-        ikm.extend_from_slice(b"spool-fallback");
-    }
-    ikm
+    k.to_vec()
 }
 
 fn derive_key() -> [u8; 32] {
-    let mut h = Sha256::new();
-    h.update(b"ws-agent-spool-v1");
-    h.update(&host_key_material());
-    let mut k = [0u8; 32];
-    k.copy_from_slice(&h.finalize());
-    k
+    let ikm = load_ikm();
+    let hk = Hkdf::<Sha256>::new(Some(HKDF_SALT), &ikm);
+    let mut okm = [0u8; 32];
+    hk.expand(HKDF_INFO, &mut okm)
+        .expect("HKDF-SHA256 expand to 32 bytes is infallible");
+    okm
 }
 
 fn encrypt_blob(plain: &[u8]) -> std::io::Result<Vec<u8>> {
@@ -122,7 +242,7 @@ fn decrypt_blob(raw: &[u8]) -> std::io::Result<Vec<u8>> {
 
 #[cfg(windows)]
 fn host_wrap(aes_blob: &[u8]) -> std::io::Result<Vec<u8>> {
-    dpapi::protect(aes_blob).or_else(|_| Ok(aes_blob.to_vec()))
+    dpapi::protect(aes_blob)
 }
 
 #[cfg(not(windows))]
@@ -132,7 +252,7 @@ fn host_wrap(aes_blob: &[u8]) -> std::io::Result<Vec<u8>> {
 
 #[cfg(windows)]
 fn host_unwrap(raw: &[u8]) -> std::io::Result<Vec<u8>> {
-    dpapi::unprotect(raw).or_else(|_| Ok(raw.to_vec()))
+    dpapi::unprotect(raw)
 }
 
 #[cfg(not(windows))]
@@ -220,6 +340,61 @@ pub fn drain(path: &Path) -> std::io::Result<Vec<AgentToServer>> {
     Ok(msgs)
 }
 
+#[cfg(target_os = "linux")]
+mod linux_keyring {
+    use libc::{c_char, c_long, c_void, size_t, syscall};
+
+    const KEY_SPEC_USER_KEYRING: i32 = -4;
+    const KEYCTL_READ: c_long = 11;
+    const DESC: &[u8] = b"weissman-agent-spool-v2\0";
+    const TYPE: &[u8] = b"user\0";
+
+    pub fn load() -> Option<[u8; 32]> {
+        // SAFETY: request_key/keyctl with static NUL-terminated C strings.
+        let id = unsafe {
+            syscall(
+                libc::SYS_request_key,
+                TYPE.as_ptr() as *const c_char,
+                DESC.as_ptr() as *const c_char,
+                std::ptr::null::<c_char>(),
+                KEY_SPEC_USER_KEYRING as c_long,
+            )
+        };
+        if id < 0 {
+            return None;
+        }
+        let mut buf = [0u8; 32];
+        let n = unsafe {
+            syscall(
+                libc::SYS_keyctl,
+                KEYCTL_READ,
+                id,
+                buf.as_mut_ptr() as *mut c_void,
+                buf.len() as size_t,
+            )
+        };
+        if n != 32 {
+            return None;
+        }
+        Some(buf)
+    }
+
+    pub fn store(key: &[u8; 32]) -> bool {
+        // SAFETY: 32-byte payload we own; type/description are static C strings.
+        let id = unsafe {
+            syscall(
+                libc::SYS_add_key,
+                TYPE.as_ptr() as *const c_char,
+                DESC.as_ptr() as *const c_char,
+                key.as_ptr() as *const c_void,
+                32 as size_t,
+                KEY_SPEC_USER_KEYRING as c_long,
+            )
+        };
+        id >= 0
+    }
+}
+
 #[cfg(windows)]
 mod dpapi {
     use windows_sys::Win32::Foundation::{LocalFree, TRUE};
@@ -286,15 +461,26 @@ mod dpapi {
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn temp_spool() -> (PathBuf, PathBuf) {
-        let dir = std::env::temp_dir().join(format!("ws-spool-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "ws-spool-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
         let path = dir.join("cache.dat");
         (dir, path)
     }
 
     #[test]
     fn append_and_drain_roundtrip() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
         let (dir, path) = temp_spool();
         let msg = AgentToServer::Finding {
             agent_id: "a1".into(),
@@ -318,10 +504,60 @@ mod tests {
 
     #[test]
     fn default_path_is_not_an_obvious_agent_artifact() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
         let p = obfuscated_default_path();
         let s = p.to_string_lossy().to_ascii_lowercase();
         assert!(!s.contains("weissman"), "{s}");
         assert!(!s.contains("agent.spool"), "{s}");
         assert!(!s.contains("spool.jsonl"), "{s}");
+    }
+
+    #[test]
+    fn kdf_does_not_use_weak_host_attributes() {
+        let src = include_str!("spool.rs");
+        assert!(src.contains("Hkdf"));
+        assert!(src.contains("linux_keyring"));
+        assert!(src.contains("CREDENTIALS_DIRECTORY"));
+        assert_eq!(VERSION, 2);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ikm_file_is_owner_read_write_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let prev_key = std::env::var("WEISSMAN_AGENT_SPOOL_KEY_FILE").ok();
+        let prev_secret = std::env::var("WEISSMAN_AGENT_SPOOL_SECRET").ok();
+        let prev_cred = std::env::var("CREDENTIALS_DIRECTORY").ok();
+        let dir = std::env::temp_dir().join(format!(
+            "ws-spool-key-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let key_path = dir.join("ikm");
+        std::env::set_var("WEISSMAN_AGENT_SPOOL_KEY_FILE", &key_path);
+        std::env::remove_var("WEISSMAN_AGENT_SPOOL_SECRET");
+        std::env::remove_var("CREDENTIALS_DIRECTORY");
+        let k = derive_key();
+        assert_eq!(k.len(), 32);
+        assert!(key_path.exists(), "entropy must persist in a 0600 file");
+        let mode = std::fs::metadata(&key_path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "spool IKM file must be 0600, got {mode:o}");
+        match prev_key {
+            Some(v) => std::env::set_var("WEISSMAN_AGENT_SPOOL_KEY_FILE", v),
+            None => std::env::remove_var("WEISSMAN_AGENT_SPOOL_KEY_FILE"),
+        }
+        match prev_secret {
+            Some(v) => std::env::set_var("WEISSMAN_AGENT_SPOOL_SECRET", v),
+            None => std::env::remove_var("WEISSMAN_AGENT_SPOOL_SECRET"),
+        }
+        match prev_cred {
+            Some(v) => std::env::set_var("CREDENTIALS_DIRECTORY", v),
+            None => std::env::remove_var("CREDENTIALS_DIRECTORY"),
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

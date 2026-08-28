@@ -1878,6 +1878,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .layer(middleware::from_fn(
             crate::request_trace::trace_http_middleware,
         ))
+        .layer(middleware::from_fn(
+            crate::http::privilege_header_proxy_middleware,
+        ))
         .with_state(state);
     // Frontend is built with base: '/command-center/' so assets at /command-center/assets/...
     let app = if let Some(dir) = static_dir {
