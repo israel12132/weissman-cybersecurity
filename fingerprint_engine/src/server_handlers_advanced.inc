@@ -1140,11 +1140,18 @@ async fn api_apply_asset_tag_rules(
 // ─── Ask Weissman (NL → safe SQL) ──────────────────────────────────────────
 
 #[derive(serde::Deserialize)]
-struct AskBody { question: String }
+struct AskBody {
+    #[serde(default)]
+    question: String,
+    /// Service-to-service only. Requires `plan_hmac` or `X-Weissman-QueryPlan-Hmac`.
+    plan: Option<crate::nl_query::QueryPlan>,
+    plan_hmac: Option<String>,
+}
 
 async fn api_ask(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
+    headers: axum::http::HeaderMap,
     Json(body): Json<AskBody>,
 ) -> Response {
     if let Err(r) = crate::rbac::require_analyst(&auth) {
@@ -1159,13 +1166,63 @@ async fn api_ask(
             }))).into_response();
         }
     };
-    let result = crate::nl_query::ask(
-        &state.app_pool,
-        ro_pool.as_ref(),
-        auth.tenant_id,
-        Some(auth.user_id),
-        &body.question,
-    ).await;
+    let header_hmac = headers
+        .get("X-Weissman-QueryPlan-Hmac")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    let signed_plan = if let Some(plan) = body.plan {
+        let hmac = body
+            .plan_hmac
+            .as_deref()
+            .or(header_hmac.as_deref())
+            .unwrap_or("");
+        if hmac.is_empty() {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({
+                    "ok": false,
+                    "code": "queryplan_hmac_required",
+                    "detail": "direct QueryPlan is service-to-service only and requires a vault HMAC"
+                })),
+            )
+                .into_response();
+        }
+        if let Err(e) = crate::nl_query::verify_query_plan_hmac(&plan, hmac) {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({
+                    "ok": false,
+                    "code": "queryplan_hmac_invalid",
+                    "detail": e
+                })),
+            )
+                .into_response();
+        }
+        Some((plan, hmac.to_string()))
+    } else {
+        None
+    };
+    let result = if let Some((plan, hmac)) = signed_plan {
+        crate::nl_query::ask(
+            &state.app_pool,
+            ro_pool.as_ref(),
+            auth.tenant_id,
+            Some(auth.user_id),
+            "",
+            Some((plan, hmac.as_str())),
+        )
+        .await
+    } else {
+        crate::nl_query::ask(
+            &state.app_pool,
+            ro_pool.as_ref(),
+            auth.tenant_id,
+            Some(auth.user_id),
+            &body.question,
+            None,
+        )
+        .await
+    };
     (StatusCode::OK, Json(json!({"ok": result.error.is_none(), "result": result}))).into_response()
 }
 

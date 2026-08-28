@@ -4,9 +4,7 @@
 use fingerprint_engine::attack_chain_planner::{default_technique_library, plan};
 use fingerprint_engine::engine_probes::empty_ok;
 use fingerprint_engine::identity_engine::run_autonomous_privilege_escalation;
-use fingerprint_engine::nl_query::{
-    compile_plan, ingest_question, Filter, QueryPlan, QuestionIngest,
-};
+use fingerprint_engine::nl_query::{compile_plan, ingest_question, Filter, QueryPlan};
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
@@ -140,18 +138,23 @@ fn nl_query_blocks_sql_and_code_injection() {
 #[test]
 fn nl_query_json_plan_is_the_only_compile_path() {
     let json = r#"{"table":"vulnerabilities","select":["id","severity"],"filters":[{"column":"severity","op":"=","value":"critical"}],"limit":25}"#;
-    match ingest_question(json).expect("json plan") {
-        QuestionIngest::Plan(plan) => {
-            let compiled = compile_plan(&plan, 42).expect("compile");
-            assert!(compiled
-                .sql
-                .starts_with("SELECT id, severity FROM vulnerabilities WHERE tenant_id = $1"));
-            assert_eq!(compiled.params[0], Value::from(42));
-            assert!(compiled.sql.contains("severity = $2"));
-            assert!(!compiled.sql.contains("DROP"));
-        }
-        other => panic!("expected QueryPlan, got {other:?}"),
-    }
+    assert!(
+        ingest_question(json).is_err(),
+        "unsigned JSON QueryPlan must not skip HMAC"
+    );
+    let plan: QueryPlan = serde_json::from_str(json).expect("plan");
+    let key = [0x42u8; 32];
+    let mac = fingerprint_engine::nl_query::sign_query_plan_with_key(&plan, &key).expect("sign");
+    let admitted =
+        fingerprint_engine::nl_query::ingest_signed_query_plan_with_key(plan, &mac, &key)
+            .expect("hmac");
+    let compiled = compile_plan(&admitted, 42).expect("compile");
+    assert!(compiled
+        .sql
+        .starts_with("SELECT id, severity FROM vulnerabilities WHERE tenant_id = $1"));
+    assert_eq!(compiled.params[0], Value::from(42));
+    assert!(compiled.sql.contains("severity = $2"));
+    assert!(!compiled.sql.contains("DROP"));
 }
 
 #[test]
@@ -175,18 +178,15 @@ fn nl_query_unknown_table_never_becomes_sql() {
 #[test]
 fn ingest_and_compile_latency_is_sub_millisecond() {
     let json = r#"{"table":"vulnerabilities","select":["id"],"filters":[],"limit":10}"#;
+    let plan: QueryPlan = serde_json::from_str(json).expect("plan");
     let start = Instant::now();
     for _ in 0..1_000 {
-        let ingested = ingest_question(json).unwrap();
-        let QuestionIngest::Plan(plan) = ingested else {
-            panic!("expected plan");
-        };
         compile_plan(&plan, 1).unwrap();
     }
     let elapsed = start.elapsed();
     let per = elapsed / 1_000;
     assert!(
         per < Duration::from_millis(1),
-        "QueryPlan ingest+compile per-call {per:?} (batch {elapsed:?}) must be sub-millisecond"
+        "compile_plan per-call {per:?} (batch {elapsed:?}) must be sub-millisecond"
     );
 }

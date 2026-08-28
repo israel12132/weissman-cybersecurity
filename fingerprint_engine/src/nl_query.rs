@@ -20,12 +20,17 @@
 //! Tenant scoping: every plan is rewritten to include `tenant_id = $tenant`
 //! before compilation. Users never see another tenant's data.
 
+use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
 use sqlx::{Column, PgPool, Row};
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use std::time::Instant;
+
+type HmacSha256 = Hmac<Sha256>;
+const QUERYPLAN_HMAC_DOMAIN: &[u8] = b"weissman-queryplan-v1\0";
 
 // ─── Allow-list schema ───────────────────────────────────────────────────────
 #[derive(Debug, Clone)]
@@ -210,7 +215,42 @@ pub struct Filter {
     pub value: Value,
 }
 
-// ─── Plan → safe SQL ─────────────────────────────────────────────────────────
+// ─── Plan → typed AST → bound SQL ────────────────────────────────────────────
+//
+// Security boundary: user/LLM strings never reach SQL except as sqlx bound
+// parameters. Table/column/operator tokens are interned `&'static str` from
+// SCHEMA / FilterOp. The wordlist in `reject_raw_sql_or_injection` is only a
+// pre-LLM filter for natural language — it is not the injection control.
+
+#[derive(Debug, Clone, Copy)]
+enum FilterOp {
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    In,
+    Like,
+    IsNull,
+    IsNotNull,
+}
+
+struct AstFilter {
+    column: &'static str,
+    op: FilterOp,
+    value: Value,
+}
+
+struct PlanAst {
+    table: &'static str,
+    select: Vec<&'static str>,
+    filters: Vec<AstFilter>,
+    order_by: Option<&'static str>,
+    order_desc: bool,
+    limit: i64,
+    tenant_id: i64,
+}
 
 #[derive(Debug)]
 pub struct Compiled {
@@ -218,75 +258,110 @@ pub struct Compiled {
     pub params: Vec<Value>,
 }
 
-pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String> {
-    // 1) Validate table.
+fn is_sql_ident(s: &str) -> bool {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_lowercase() || c == '_' => {
+            chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+        }
+        _ => false,
+    }
+}
+
+fn intern_ident(allowed: &[&'static str], raw: &str, what: &str) -> Result<&'static str, String> {
+    if !is_sql_ident(raw) {
+        return Err(format!("{what} '{raw}' not allowed"));
+    }
+    allowed
+        .iter()
+        .copied()
+        .find(|&c| c == raw)
+        .ok_or_else(|| format!("{what} '{raw}' not allowed"))
+}
+
+fn parse_filter_op(raw: &str) -> Result<FilterOp, String> {
+    let op_norm = raw.trim().to_ascii_lowercase();
+    if !ALLOWED_OPS.contains(&op_norm.as_str()) {
+        return Err(format!("operator '{raw}' not allowed"));
+    }
+    Ok(match op_norm.as_str() {
+        "=" => FilterOp::Eq,
+        "!=" => FilterOp::Ne,
+        "<" => FilterOp::Lt,
+        "<=" => FilterOp::Le,
+        ">" => FilterOp::Gt,
+        ">=" => FilterOp::Ge,
+        "in" => FilterOp::In,
+        "like" => FilterOp::Like,
+        "is_null" => FilterOp::IsNull,
+        "is_not_null" => FilterOp::IsNotNull,
+        other => return Err(format!("unsupported query operator '{other}'")),
+    })
+}
+
+fn plan_to_ast(plan: &QueryPlan, tenant_id: i64) -> Result<PlanAst, String> {
+    if !is_sql_ident(&plan.table) {
+        return Err(format!("table '{}' is not a valid identifier", plan.table));
+    }
     let spec = SCHEMA
         .get(plan.table.as_str())
         .ok_or_else(|| format!("table '{}' is not exposed to NL queries", plan.table))?;
 
-    // 2) Validate SELECT columns (default to spec.columns if empty).
-    let select_cols: Vec<&str> = if plan.select.is_empty() {
+    let select = if plan.select.is_empty() {
         spec.columns.iter().copied().collect()
     } else {
         let mut out = Vec::with_capacity(plan.select.len());
         for c in &plan.select {
-            if !spec.columns.contains(&c.as_str()) {
-                return Err(format!(
-                    "column '{}' not allowed on table '{}'",
-                    c, spec.table
-                ));
-            }
-            out.push(c.as_str());
+            out.push(intern_ident(spec.columns, c, "column")?);
         }
         out
     };
 
-    // 3) Validate ORDER BY (optional).
-    let order = match &plan.order_by {
-        Some(c) => {
-            let allowed: &[&str] = if spec.order_by.is_empty() {
-                spec.columns
-            } else {
-                spec.order_by
-            };
-            if !allowed.contains(&c.as_str()) {
-                return Err(format!("order_by '{}' not allowed on '{}'", c, spec.table));
-            }
-            Some(c.as_str())
-        }
+    let order_allowed: &[&str] = if spec.order_by.is_empty() {
+        spec.columns
+    } else {
+        spec.order_by
+    };
+    let order_by = match &plan.order_by {
+        Some(c) => Some(intern_ident(order_allowed, c, "order_by")?),
         None => None,
     };
 
-    // 4) Validate LIMIT (cap at MAX_LIMIT).
-    let limit = plan.limit.unwrap_or(50).clamp(1, MAX_LIMIT);
+    let mut filters = Vec::with_capacity(plan.filters.len());
+    for f in &plan.filters {
+        let column = intern_ident(spec.columns, &f.column, "filter column")?;
+        let op = parse_filter_op(&f.op)?;
+        filters.push(AstFilter {
+            column,
+            op,
+            value: f.value.clone(),
+        });
+    }
 
-    // 5) Build SQL fragments.
-    let select_sql = select_cols.join(", ");
+    Ok(PlanAst {
+        table: spec.table,
+        select,
+        filters,
+        order_by,
+        order_desc: plan.order_desc,
+        limit: plan.limit.unwrap_or(50).clamp(1, MAX_LIMIT),
+        tenant_id,
+    })
+}
+
+fn ast_to_sql(ast: &PlanAst) -> Result<Compiled, String> {
+    let select_sql = ast.select.join(", ");
     let mut where_parts: Vec<String> = Vec::new();
     let mut params: Vec<Value> = Vec::new();
 
-    // Tenant scope is FORCED — non-negotiable. $1 always = tenant_id.
     where_parts.push("tenant_id = $1".to_string());
-    params.push(Value::from(tenant_id));
+    params.push(Value::from(ast.tenant_id));
 
-    // Filters.
-    for f in &plan.filters {
-        if !spec.columns.contains(&f.column.as_str()) {
-            return Err(format!("filter column '{}' not allowed", f.column));
-        }
-        let op_norm = f.op.trim().to_ascii_lowercase();
-        if !ALLOWED_OPS.contains(&op_norm.as_str()) {
-            return Err(format!("operator '{}' not allowed", f.op));
-        }
-        match op_norm.as_str() {
-            "is_null" => {
-                where_parts.push(format!("{} IS NULL", f.column));
-            }
-            "is_not_null" => {
-                where_parts.push(format!("{} IS NOT NULL", f.column));
-            }
-            "in" => {
-                // value must be array.
+    for f in &ast.filters {
+        match f.op {
+            FilterOp::IsNull => where_parts.push(format!("{} IS NULL", f.column)),
+            FilterOp::IsNotNull => where_parts.push(format!("{} IS NOT NULL", f.column)),
+            FilterOp::In => {
                 let arr = f
                     .value
                     .as_array()
@@ -301,12 +376,11 @@ pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String
                 }
                 where_parts.push(format!("{} IN ({})", f.column, placeholders.join(", ")));
             }
-            "like" => {
+            FilterOp::Like => {
                 let s = f
                     .value
                     .as_str()
                     .ok_or_else(|| "LIKE value must be string".to_string())?;
-                // Wrap in % unless the user already supplied them.
                 let pattern = if s.contains('%') {
                     s.to_string()
                 } else {
@@ -315,48 +389,65 @@ pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String
                 params.push(Value::String(pattern));
                 where_parts.push(format!("{} ILIKE ${}", f.column, params.len()));
             }
-            sql_op @ ("=" | "!=" | "<" | "<=" | ">" | ">=") => {
+            FilterOp::Eq
+            | FilterOp::Ne
+            | FilterOp::Lt
+            | FilterOp::Le
+            | FilterOp::Gt
+            | FilterOp::Ge => {
+                let sql_op = match f.op {
+                    FilterOp::Eq => "=",
+                    FilterOp::Ne => "!=",
+                    FilterOp::Lt => "<",
+                    FilterOp::Le => "<=",
+                    FilterOp::Gt => ">",
+                    FilterOp::Ge => ">=",
+                    _ => unreachable!(),
+                };
                 params.push(f.value.clone());
                 where_parts.push(format!("{} {} ${}", f.column, sql_op, params.len()));
             }
-            // Self-defending: if a new operator is ever added to ALLOWED_OPS without a match arm
-            // here, reject the query instead of panicking the request.
-            other => return Err(format!("unsupported query operator '{other}'")),
         }
     }
 
-    let order_sql = match order {
+    let order_sql = match ast.order_by {
         Some(c) => format!(
             " ORDER BY {} {}",
             c,
-            if plan.order_desc { "DESC" } else { "ASC" }
+            if ast.order_desc { "DESC" } else { "ASC" }
         ),
         None => String::new(),
     };
     let sql = format!(
         "SELECT {} FROM {} WHERE {}{} LIMIT {}",
         select_sql,
-        spec.table,
+        ast.table,
         where_parts.join(" AND "),
         order_sql,
-        limit,
+        ast.limit,
     );
     Ok(Compiled { sql, params })
 }
 
-// ─── Question ingest (raw SQL / injection rejected; JSON QueryPlan accepted) ─
+/// Compile a QueryPlan to parameterised SQL. This is the **only** function that
+/// emits SQL for `/api/ask`.
+pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String> {
+    ast_to_sql(&plan_to_ast(plan, tenant_id)?)
+}
+
+// ─── Question ingest (raw SQL / injection rejected; signed QueryPlan is S2S) ─
 
 /// Result of admitting a user question before any LLM call or SQL execution.
 #[derive(Debug, Clone)]
 pub enum QuestionIngest {
-    /// Caller supplied a JSON QueryPlan — skip the LLM, compile directly.
-    Plan(QueryPlan),
     /// Natural language that must be compiled to a QueryPlan by the planner LLM.
     NaturalLanguage(String),
 }
 
-/// Admit a question: JSON QueryPlan is parsed here; raw SQL and injection
-/// payloads are rejected; everything else is natural language for the planner.
+/// Admit a **user** question. Direct JSON QueryPlan in the question string is
+/// rejected — that path is service-to-service and requires
+/// [`ingest_signed_query_plan`]. Raw SQL and injection payloads are rejected;
+/// everything else is natural language for the planner.
 pub fn ingest_question(question: &str) -> Result<QuestionIngest, String> {
     let q = question.trim();
     if q.is_empty() {
@@ -366,12 +457,91 @@ pub fn ingest_question(question: &str) -> Result<QuestionIngest, String> {
         return Err("question too long (max 2000 chars)".into());
     }
     if q.starts_with('{') {
-        let plan: QueryPlan = serde_json::from_str(q)
-            .map_err(|e| format!("plan is not a valid QueryPlan JSON: {e}"))?;
-        return Ok(QuestionIngest::Plan(plan));
+        return Err(
+            "direct QueryPlan JSON is service-to-service only and requires a vault HMAC".into(),
+        );
     }
     reject_raw_sql_or_injection(q)?;
     Ok(QuestionIngest::NaturalLanguage(q.to_string()))
+}
+
+/// HMAC-SHA256 over canonical QueryPlan JSON, keyed from the sovereign vault.
+pub fn queryplan_hmac_key() -> Result<[u8; 32], String> {
+    for (name, min_len) in [
+        ("WEISSMAN_QUERYPLAN_HMAC_SECRET", 32usize),
+        ("WEISSMAN_VAULT_KEY", 32),
+        ("WEISSMAN_INTEGRATIONS_VAULT_KEY", 32),
+    ] {
+        if let Ok(raw) = std::env::var(name) {
+            let t = raw.trim();
+            if t.len() >= min_len {
+                return Ok(derive_queryplan_key(t));
+            }
+        }
+    }
+    Err(
+        "query plan HMAC key unavailable (set WEISSMAN_VAULT_KEY or WEISSMAN_QUERYPLAN_HMAC_SECRET)"
+            .into(),
+    )
+}
+
+fn derive_queryplan_key(material: &str) -> [u8; 32] {
+    let mut h = Sha256::new();
+    h.update(b"weissman-queryplan-hmac-v1|");
+    h.update(material.as_bytes());
+    let digest = h.finalize();
+    let mut k = [0u8; 32];
+    k.copy_from_slice(&digest);
+    k
+}
+
+/// Canonical bytes signed by S2S callers (deterministic serde field order).
+pub fn canonical_query_plan_bytes(plan: &QueryPlan) -> Result<Vec<u8>, String> {
+    serde_json::to_vec(plan).map_err(|e| format!("canonicalize plan: {e}"))
+}
+
+/// Sign a QueryPlan with an explicit 32-byte key (tests + S2S helpers).
+pub fn sign_query_plan_with_key(plan: &QueryPlan, key: &[u8; 32]) -> Result<String, String> {
+    let mut mac = HmacSha256::new_from_slice(key).map_err(|e| e.to_string())?;
+    mac.update(QUERYPLAN_HMAC_DOMAIN);
+    mac.update(&canonical_query_plan_bytes(plan)?);
+    Ok(hex::encode(mac.finalize().into_bytes()))
+}
+
+pub fn sign_query_plan(plan: &QueryPlan) -> Result<String, String> {
+    sign_query_plan_with_key(plan, &queryplan_hmac_key()?)
+}
+
+pub fn verify_query_plan_hmac_with_key(
+    plan: &QueryPlan,
+    hmac_hex: &str,
+    key: &[u8; 32],
+) -> Result<(), String> {
+    let expected_hex = sign_query_plan_with_key(plan, key)?;
+    let expected = hex::decode(&expected_hex).unwrap_or_default();
+    if !crate::security_hardening::constant_time_hmac_hex_eq(&expected, hmac_hex) {
+        return Err("query plan HMAC is invalid".into());
+    }
+    Ok(())
+}
+
+pub fn verify_query_plan_hmac(plan: &QueryPlan, hmac_hex: &str) -> Result<(), String> {
+    verify_query_plan_hmac_with_key(plan, hmac_hex, &queryplan_hmac_key()?)
+}
+
+/// Admit a service-to-service QueryPlan after vault HMAC verification.
+pub fn ingest_signed_query_plan(plan: QueryPlan, hmac_hex: &str) -> Result<QueryPlan, String> {
+    verify_query_plan_hmac(&plan, hmac_hex)?;
+    Ok(plan)
+}
+
+pub fn ingest_signed_query_plan_with_key(
+    plan: QueryPlan,
+    hmac_hex: &str,
+    key: &[u8; 32],
+) -> Result<QueryPlan, String> {
+    verify_query_plan_hmac_with_key(&plan, hmac_hex, key)?;
+    Ok(plan)
 }
 
 /// Reject raw SQL, classic injection, and code-exec payloads. Natural language
@@ -408,7 +578,7 @@ pub fn reject_raw_sql_or_injection(question: &str) -> Result<(), String> {
     ];
     if SQL_MARKERS.iter().any(|m| compact.contains(m)) {
         return Err(
-            "raw SQL is rejected; questions must be natural language or a JSON QueryPlan".into(),
+            "raw SQL is rejected; questions must be natural language (JSON QueryPlan is S2S HMAC only)".into(),
         );
     }
 
@@ -425,7 +595,8 @@ pub fn reject_raw_sql_or_injection(question: &str) -> Result<(), String> {
     ];
     if CODE_MARKERS.iter().any(|m| lower.contains(m)) {
         return Err(
-            "injection payload rejected; queries must compile through QueryPlan JSON".into(),
+            "injection payload rejected; queries must compile through a vault-HMAC QueryPlan"
+                .into(),
         );
     }
     Ok(())
@@ -488,12 +659,14 @@ pub async fn execute_plan(
 }
 
 /// Run a free-form question end-to-end: LLM → plan → validate → execute.
+/// Direct QueryPlan execution requires [`signed_plan`] (vault HMAC).
 pub async fn ask(
     app_pool: &PgPool,
     ro_pool: &PgPool,
     tenant_id: i64,
     user_id: Option<i64>,
     question: &str,
+    signed_plan: Option<(QueryPlan, &str)>,
 ) -> AskResult {
     let start = Instant::now();
     let bad = |err: &str| AskResult {
@@ -512,41 +685,53 @@ pub async fn ask(
         error: Some(err.to_string()),
     };
     let q = question.trim();
-    if q.is_empty() {
-        return bad("question is empty");
-    }
     if q.len() > 2000 {
         return bad("question too long (max 2000 chars)");
     }
 
-    // 0) Admit the question: JSON QueryPlan skips the LLM; raw SQL is rejected.
-    let ingested = match ingest_question(q) {
-        Ok(v) => v,
-        Err(e) => {
-            let r = bad(&e);
+    let plan: QueryPlan = if let Some((plan, hmac)) = signed_plan {
+        if !q.is_empty() {
+            let r = bad("signed QueryPlan must not be mixed with a natural-language question");
             audit_query(app_pool, tenant_id, user_id, question, &r).await;
             return r;
         }
-    };
-
-    let plan: QueryPlan = match ingested {
-        QuestionIngest::Plan(plan) => plan,
-        QuestionIngest::NaturalLanguage(nl) => {
-            // 1) LLM → plan JSON.
-            let plan_json = match llm_to_plan(&nl, tenant_id).await {
-                Ok(v) => v,
-                Err(e) => {
-                    let r = bad(&format!("plan generation failed: {e}"));
-                    audit_query(app_pool, tenant_id, user_id, question, &r).await;
-                    return r;
-                }
-            };
-            match serde_json::from_value(plan_json) {
-                Ok(p) => p,
-                Err(e) => {
-                    let r = bad(&format!("plan is not a valid QueryPlan JSON: {e}"));
-                    audit_query(app_pool, tenant_id, user_id, question, &r).await;
-                    return r;
+        match ingest_signed_query_plan(plan, hmac) {
+            Ok(p) => p,
+            Err(e) => {
+                let r = bad(&e);
+                audit_query(app_pool, tenant_id, user_id, question, &r).await;
+                return r;
+            }
+        }
+    } else {
+        if q.is_empty() {
+            return bad("question is empty");
+        }
+        let ingested = match ingest_question(q) {
+            Ok(v) => v,
+            Err(e) => {
+                let r = bad(&e);
+                audit_query(app_pool, tenant_id, user_id, question, &r).await;
+                return r;
+            }
+        };
+        match ingested {
+            QuestionIngest::NaturalLanguage(nl) => {
+                let plan_json = match llm_to_plan(&nl, tenant_id).await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        let r = bad(&format!("plan generation failed: {e}"));
+                        audit_query(app_pool, tenant_id, user_id, question, &r).await;
+                        return r;
+                    }
+                };
+                match serde_json::from_value(plan_json) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        let r = bad(&format!("plan is not a valid QueryPlan JSON: {e}"));
+                        audit_query(app_pool, tenant_id, user_id, question, &r).await;
+                        return r;
+                    }
                 }
             }
         }
@@ -823,19 +1008,36 @@ mod tests {
     }
 
     #[test]
-    fn ingest_allows_natural_language_and_queryplan_json() {
+    fn ingest_allows_natural_language_and_rejects_unsigned_plan_json() {
         match ingest_question("show me selected critical findings on prod").unwrap() {
             QuestionIngest::NaturalLanguage(s) => assert!(s.contains("selected")),
-            other => panic!("expected NL, got {other:?}"),
         }
         let json = r#"{"table":"vulnerabilities","select":["id","title"],"filters":[],"limit":10}"#;
-        match ingest_question(json).unwrap() {
-            QuestionIngest::Plan(p) => {
-                assert_eq!(p.table, "vulnerabilities");
-                assert_eq!(p.select, vec!["id", "title"]);
-            }
-            other => panic!("expected Plan, got {other:?}"),
-        }
+        let err = ingest_question(json).unwrap_err();
+        assert!(
+            err.contains("HMAC") || err.contains("service-to-service"),
+            "unsigned JSON plan must be rejected, got {err}"
+        );
+    }
+
+    #[test]
+    fn signed_query_plan_hmac_is_required_and_verified() {
+        let plan = QueryPlan {
+            table: "vulnerabilities".into(),
+            select: vec!["id".into(), "title".into()],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: Some(10),
+        };
+        let key = [0x11u8; 32];
+        let mac = sign_query_plan_with_key(&plan, &key).expect("sign");
+        let admitted =
+            ingest_signed_query_plan_with_key(plan.clone(), &mac, &key).expect("valid hmac");
+        assert_eq!(admitted.table, "vulnerabilities");
+        assert!(verify_query_plan_hmac_with_key(&plan, "deadbeef", &key).is_err());
+        let compiled = compile_plan(&admitted, 1).expect("compile");
+        assert!(compiled.sql.contains("tenant_id = $1"));
     }
 
     #[test]
