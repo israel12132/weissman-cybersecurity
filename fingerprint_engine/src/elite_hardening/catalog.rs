@@ -196,7 +196,11 @@ pub const CONTROLS: &[Control] = &[
     c!(93, 10, "weissman_ro SELECT-only, statement_timeout 15s"),
     c!(94, 10, "RLS on 80+ multi-tenant tables"),
     c!(95, 10, "DDL keyword kill in QueryPlan compile"),
-    c!(96, 10, "Full nl_query_audit (async nlqa1 chain)"),
+    c!(
+        96,
+        10,
+        "Full nl_query_audit (async nlqa1 chain + JSON fallback)"
+    ),
     c!(97, 10, "Hard LIMIT on every Ask query"),
     c!(98, 10, "GUC app.current_tenant_id session isolation"),
     c!(99, 10, "Parameterized SQL only"),

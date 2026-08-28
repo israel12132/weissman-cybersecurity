@@ -100,7 +100,7 @@ fn live_status(id: u16) -> ControlStatus {
         14 => ControlStatus::ok("WSS inner AES-256-GCM after Welcome"),
         15 => ControlStatus::ok("Scan source IP / proxy rotation via stealth proxy swarm"),
         16 => ControlStatus::ok(
-            "DNS cascade DoH → DoT → WEISSMAN_DNS_INTERNAL_RESOLVERS; public UDP off unless WEISSMAN_DNS_ALLOW_UDP=1",
+            "DNS cascade DoH → DoT → WEISSMAN_DNS_INTERNAL_RESOLVERS; public UDP off unless WEISSMAN_DNS_ALLOW_UDP=1; DoT→UDP emits critical SOC event",
         ),
         17 => ControlStatus::ok("Scanner header strip on active payloads"),
         18 => ControlStatus::ok("Asset-class adaptive tenant_scan_limit"),
@@ -188,7 +188,7 @@ fn live_status(id: u16) -> ControlStatus {
         94 => ControlStatus::ok("FORCE RLS on tenant tables"),
         95 => ControlStatus::ok("DDL/DML keywords rejected at compile"),
         96 => ControlStatus::ok(
-            "nl_query_audit every ask via async nlqa1 SHA-256 chain (Tokio mPSC worker; Ask path never locks)",
+            "nl_query_audit every ask via async nlqa1 SHA-256 chain (Tokio mPSC worker; Ask path never locks; channel-full JSON fallback to tracing/SIEM, never silent-drop)",
         ),
         97 => ControlStatus::ok("LIMIT required, cap 200"),
         98 => ControlStatus::ok("GUC app.current_tenant_id in same TX"),

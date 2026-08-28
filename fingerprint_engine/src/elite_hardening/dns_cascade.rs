@@ -17,6 +17,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
 use super::stealth_ops::{doh_lookup_detailed, strip_doh_txt, DohLookup};
+use serde_json::{json, Value};
 
 const DOT_UPSTREAMS: &[(&str, &str, u16)] = &[
     ("1.1.1.1", "cloudflare-dns.com", 853),
@@ -89,6 +90,10 @@ pub async fn lookup_detailed(name: &str, record_type: &str) -> CascadeResult {
     let internal = internal_udp_resolvers();
     if !internal.is_empty() {
         if let Some(answers) = udp_lookup_at(host, rr, &internal).await {
+            // DoH and DoT both failed to produce a definitive answer. Falling
+            // back to internal UDP is an approved last hop — and a SOC-visible
+            // signal that TCP/853 may be jammed for eavesdropping.
+            emit_udp_downgrade_soc(host, rr);
             return CascadeResult {
                 answers,
                 method: "udp_internal",
@@ -124,6 +129,36 @@ pub fn internal_udp_resolvers() -> Vec<IpAddr> {
         .filter_map(|t| t.parse::<IpAddr>().ok())
         .filter(|ip| !is_well_known_public_recursive(*ip))
         .collect()
+}
+
+pub const DNS_UDP_DOWNGRADE_EVENT: &str = "dns_dot_udp_downgrade";
+
+/// SOC payload for a DoT (TCP/853) failure that caused internal-UDP fallback.
+#[must_use]
+pub fn udp_downgrade_soc_payload(name: &str, rr: &str) -> Value {
+    json!({
+        "event": DNS_UDP_DOWNGRADE_EVENT,
+        "severity": "critical",
+        "reason": "dot_port_853_failed_fell_back_to_internal_udp",
+        "name": name,
+        "rr": rr,
+        "mitre": "T1040",
+    })
+}
+
+/// Immediate High/Critical security event for SIEM when DNS is downgraded
+/// from DoT to organisation-internal UDP after port 853 failed.
+pub fn emit_udp_downgrade_soc(name: &str, rr: &str) {
+    let payload = udp_downgrade_soc_payload(name, rr);
+    tracing::error!(
+        target: "security_event",
+        event = DNS_UDP_DOWNGRADE_EVENT,
+        severity = "critical",
+        name = %name,
+        rr = %rr,
+        audit_json = %payload,
+        "DNS DoT (TCP/853) failed; falling back to organisation-internal UDP — possible active network tampering or eavesdrop"
+    );
 }
 
 struct DotLookup {
@@ -577,5 +612,15 @@ mod tests {
         let decoded = decode_answers(&msg, 0x2222, 1).unwrap();
         assert!(decoded.definitive);
         assert!(decoded.answers.is_empty());
+    }
+
+    #[test]
+    fn udp_downgrade_soc_event_is_critical() {
+        let p = udp_downgrade_soc_payload("mx.internal.test", "MX");
+        assert_eq!(p["event"], DNS_UDP_DOWNGRADE_EVENT);
+        assert_eq!(p["severity"], "critical");
+        assert_eq!(p["reason"], "dot_port_853_failed_fell_back_to_internal_udp");
+        assert_eq!(p["name"], "mx.internal.test");
+        assert_eq!(p["rr"], "MX");
     }
 }

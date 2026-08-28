@@ -53,8 +53,18 @@ if (!readFileSync(hfv, 'utf8').includes('failed_scan_cannot_close')) fail('hack_
 if (!readFileSync(hfv, 'utf8').includes('host_liveness_required_to_close')) {
   fail('hack_fix_verify missing host liveness rule')
 }
-if (!readFileSync(liveness, 'utf8').includes('weissman_agent')) fail('host_liveness missing agent proof')
+if (!readFileSync(liveness, 'utf8').includes('agent_host_binds_target')) {
+  fail('host_liveness missing per-host agent bind (client_id heartbeat is a false close)')
+}
 if (!readFileSync(cascade, 'utf8').includes('udp_internal')) fail('dns_cascade missing internal UDP stage')
+if (!readFileSync(cascade, 'utf8').includes('dns_dot_udp_downgrade')) {
+  fail('dns_cascade missing DoT→UDP critical SOC event')
+}
+const nlqa = join(ROOT, 'fingerprint_engine/src/elite_hardening/nlqa_chain.rs')
+if (!existsSync(nlqa)) fail(`missing ${nlqa}`)
+if (!readFileSync(nlqa, 'utf8').includes('nlqa1_audit_fallback')) {
+  fail('nlqa1 missing JSON fallback when mPSC is full')
+}
 
 const routeSrc = readFileSync(routes, 'utf8')
 if (!routeSrc.includes('/api/elite-hardening/status')) fail('API route not registered')
