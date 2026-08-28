@@ -631,31 +631,44 @@ fn audit_query(
     match NLQA_TX.get() {
         Some(tx) => {
             if let Err(e) = tx.try_send(ev) {
-                tracing::error!(
-                    target: "nlqa1",
-                    error = %e,
-                    "Ask audit channel full or closed — request not blocked, event dropped"
-                );
+                let (ev, reason) = match e {
+                    mpsc::error::TrySendError::Full(ev) => (ev, "channel_full"),
+                    mpsc::error::TrySendError::Closed(ev) => (ev, "channel_closed"),
+                };
+                emit_nlqa_fallback(&ev, reason);
             }
         }
         None => {
-            tracing::error!(
-                target: "nlqa1",
-                "Ask audit worker not running — request not blocked, event dropped"
-            );
+            emit_nlqa_fallback(&ev, "worker_not_running");
         }
     }
+}
+
+fn emit_nlqa_fallback(ev: &NlqaEvent, reason: &str) {
+    let payload = crate::elite_hardening::nlqa_chain::fallback_audit_json(
+        ev.tenant_id,
+        ev.user_id,
+        &ev.question,
+        &ev.plan_json,
+        &ev.compiled_sql,
+        ev.rows_returned,
+        ev.elapsed_ms,
+        &ev.error,
+        reason,
+    );
+    crate::elite_hardening::nlqa_chain::emit_ask_audit_fallback(&payload, reason);
 }
 
 async fn nlqa_worker_loop(pool: Arc<PgPool>, mut rx: mpsc::Receiver<NlqaEvent>) {
     while let Some(ev) = rx.recv().await {
-        if let Err(e) = persist_nlqa_chained(&pool, ev).await {
+        if let Err(e) = persist_nlqa_chained(&pool, &ev).await {
             tracing::error!(target: "nlqa1", error = %e, "Ask audit chain append failed");
+            emit_nlqa_fallback(&ev, "persist_failed");
         }
     }
 }
 
-async fn persist_nlqa_chained(pool: &PgPool, ev: NlqaEvent) -> Result<(), String> {
+async fn persist_nlqa_chained(pool: &PgPool, ev: &NlqaEvent) -> Result<(), String> {
     let mut tx = crate::db::begin_tenant_tx(pool, ev.tenant_id)
         .await
         .map_err(|e| format!("nlqa1 tenant tx: {e}"))?;
