@@ -33,10 +33,11 @@ type HmacSha256 = Hmac<Sha256>;
 /// v2 binds unix timestamp + nonce into the MAC so a captured v1 signature cannot replay.
 const QUERYPLAN_HMAC_DOMAIN: &[u8] = b"weissman-queryplan-v2\0";
 /// Maximum |server_now − plan_ts| accepted for S2S QueryPlan HMAC (seconds).
-pub const QUERYPLAN_HMAC_MAX_SKEW_SECS: i64 = 5;
+/// 15s absorbs NTP/cluster clock skew without opening a useful replay window.
+pub const QUERYPLAN_HMAC_MAX_SKEW_SECS: i64 = 15;
 /// Redis / local nonce TTL. 2× the skew window so a packet at the edge cannot
 /// be replayed after the store forgets it.
-pub const QUERYPLAN_NONCE_TTL_SECS: u64 = 10;
+pub const QUERYPLAN_NONCE_TTL_SECS: u64 = 30;
 const QUERYPLAN_NONCE_MIN_HEX: usize = 16;
 const QUERYPLAN_NONCE_MAX_HEX: usize = 64;
 
@@ -576,7 +577,9 @@ pub fn verify_query_plan_hmac_with_key_at(
 ) -> Result<(), String> {
     validate_queryplan_nonce(nonce)?;
     if now.abs_diff(ts) > QUERYPLAN_HMAC_MAX_SKEW_SECS as u64 {
-        return Err("query plan timestamp is outside the 5 second replay window".into());
+        return Err(format!(
+            "query plan timestamp is outside the {QUERYPLAN_HMAC_MAX_SKEW_SECS} second replay window"
+        ));
     }
     let expected_hex = sign_query_plan_with_key(plan, key, ts, nonce)?;
     let expected = hex::decode(&expected_hex).unwrap_or_default();
@@ -1163,6 +1166,18 @@ mod tests {
         let mac_ok = sign_query_plan_with_key(&plan, &key, edge, &nonce).expect("sign");
         verify_query_plan_hmac_with_key_at(&plan, &mac_ok, edge, &nonce, &key, now)
             .expect("edge of window must pass");
+        // Architect gate: 3s NTP/cluster skew must not starve S2S Ask.
+        let skew3 = now - 3;
+        let mac3 = sign_query_plan_with_key(&plan, &key, skew3, &nonce).expect("sign");
+        verify_query_plan_hmac_with_key_at(&plan, &mac3, skew3, &nonce, &key, now)
+            .expect("3s clock skew must be inside the 15s window");
+    }
+
+    #[test]
+    fn queryplan_hmac_skew_window_is_twice_nonce_ttl() {
+        assert_eq!(QUERYPLAN_HMAC_MAX_SKEW_SECS, 15);
+        assert_eq!(QUERYPLAN_NONCE_TTL_SECS, 30);
+        assert!(QUERYPLAN_NONCE_TTL_SECS as i64 >= QUERYPLAN_HMAC_MAX_SKEW_SECS * 2);
     }
 
     #[test]

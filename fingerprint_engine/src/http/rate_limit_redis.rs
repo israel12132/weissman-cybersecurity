@@ -436,7 +436,7 @@ fn local_queryplan_nonce_claim(key: &str, ttl: Duration) -> bool {
 }
 
 pub async fn claim_queryplan_nonce_strict(nonce: &str) -> StrictOp<bool> {
-    let ttl = Duration::from_secs(10); // keep in lockstep with nl_query::QUERYPLAN_NONCE_TTL_SECS
+    let ttl = Duration::from_secs(crate::nl_query::QUERYPLAN_NONCE_TTL_SECS);
     let key = queryplan_nonce_key(nonce);
     let Some(rl) = shared() else {
         return if distributed_state_required() {
