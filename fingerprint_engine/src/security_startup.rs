@@ -13,6 +13,8 @@ const WEAK_DB_PASSWORD_FRAGMENTS: &[&str] = &[
     "weissman_dev_secret",
     "weissman_auth_dev",
     "weissman_ro_dev",
+    "weissman_worker_dev",
+    "weissman_analytics_dev",
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -106,6 +108,8 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
         "DATABASE_URL",
         "WEISSMAN_AUTH_DATABASE_URL",
         "WEISSMAN_READ_ONLY_DATABASE_URL",
+        "WEISSMAN_WORKER_DATABASE_URL",
+        "WEISSMAN_ANALYTICS_DATABASE_URL",
     ] {
         if let Ok(url) = std::env::var(var) {
             let u = url.to_ascii_lowercase();
@@ -118,6 +122,9 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
     }
 
     weissman_db::role_guard::enforce_production_dsn_roles()?;
+    if matches!(scope, StartupScope::Worker) {
+        weissman_db::role_guard::enforce_production_analytics_dsn()?;
+    }
 
     if matches!(scope, StartupScope::Server) {
         if std::env::var("WEISSMAN_MIGRATE_URL")

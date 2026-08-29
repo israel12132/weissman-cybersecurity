@@ -856,6 +856,33 @@ mod tests {
     }
 
     #[test]
+    fn analytics_worker_roles_migration_matches_role_guard_lists() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/migrations/20260829120000_hermetic_analytics_worker_roles.sql"
+        );
+        let sql = std::fs::read_to_string(path).expect("analytics/worker roles migration");
+        assert!(sql.contains("BYPASSRLS"));
+        assert!(sql.contains("weissman_analytics"));
+        assert!(sql.contains("weissman_worker"));
+        for table in crate::role_guard::ANALYTICS_SELECT_TABLES {
+            assert!(sql.contains(table), "analytics grants must include {table}");
+        }
+        for table in crate::role_guard::WORKER_JOB_BUS_TABLES {
+            assert!(sql.contains(table), "worker grants must include {table}");
+        }
+        assert!(!sql.contains("vulnerabilities"));
+        assert!(!sql.contains("agent_anomalies"));
+        let fail_closed = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/migrations/20260829120100_job_bus_tenant_fail_closed.sql"
+        );
+        let pol = std::fs::read_to_string(fail_closed).expect("job-bus fail-closed");
+        assert!(pol.contains("app_current_tenant_id()"));
+        assert!(!pol.contains("NULLIF(current_setting('app.current_tenant_id'"));
+    }
+
+    #[test]
     fn client_scope_isolation_migration_is_frozen_at_original_sha384() {
         // 2a960be edited this file after live volumes had applied it. sqlx then
         // refused to boot. The file is restored to 389751f; new SQL belongs in

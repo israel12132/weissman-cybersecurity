@@ -1,10 +1,12 @@
 //! Hermetic Postgres role split for runtime SQLx pools.
 //!
-//! | Role            | DSN                                      | Privileges                                      |
-//! |-----------------|------------------------------------------|-------------------------------------------------|
-//! | `weissman_app`  | `DATABASE_URL`                           | DML subject to FORCE RLS (`NOBYPASSRLS`)        |
-//! | `weissman_auth` | `WEISSMAN_AUTH_DATABASE_URL`             | Login plane only (`BYPASSRLS`)                  |
-//! | `weissman_ro`   | `WEISSMAN_READ_ONLY_DATABASE_URL`        | SELECT on [`RO_SELECT_TABLES`], 15s timeout     |
+//! | Role                 | DSN                                      | Privileges                                      |
+//! |----------------------|------------------------------------------|-------------------------------------------------|
+//! | `weissman_app`       | `DATABASE_URL`                           | DML subject to FORCE RLS (`NOBYPASSRLS`)        |
+//! | `weissman_auth`      | `WEISSMAN_AUTH_DATABASE_URL`             | Login plane only (`BYPASSRLS`)                  |
+//! | `weissman_ro`        | `WEISSMAN_READ_ONLY_DATABASE_URL`        | SELECT on [`RO_SELECT_TABLES`], 15s timeout     |
+//! | `weissman_worker`    | `WEISSMAN_WORKER_DATABASE_URL`           | Job-bus DML (`BYPASSRLS`), no tenant tables     |
+//! | `weissman_analytics` | `WEISSMAN_ANALYTICS_DATABASE_URL`        | SELECT on [`ANALYTICS_SELECT_TABLES`] (`BYPASSRLS`) |
 //!
 //! Superuser / table-owner DSNs belong in `WEISSMAN_MIGRATE_URL` only. A runtime
 //! pool that connects as `postgres` silently bypasses every RLS policy.
@@ -19,6 +21,10 @@ pub const APP_ROLE: &str = "weissman_app";
 pub const AUTH_ROLE: &str = "weissman_auth";
 /// Ask Weissman NL→SQL pool role — SELECT-only.
 pub const RO_ROLE: &str = "weissman_ro";
+/// Job-bus control-plane role — claim/heartbeat across tenants.
+pub const WORKER_ROLE: &str = "weissman_worker";
+/// Global billing / quota aggregation role — metrics SELECT only.
+pub const ANALYTICS_ROLE: &str = "weissman_analytics";
 
 /// Tables `weissman_ro` may `SELECT`. Keep in lock-step with
 /// `20260827120100_hermetic_db_roles.sql`.
@@ -40,12 +46,34 @@ pub const RO_SELECT_TABLES: &[&str] = &[
 
 /// Ask Weissman hard statement timeout (milliseconds).
 pub const RO_STATEMENT_TIMEOUT_MS: u64 = 15_000;
+/// Analytics aggregation statement timeout (milliseconds).
+pub const ANALYTICS_STATEMENT_TIMEOUT_MS: u64 = 60_000;
+
+/// Tables `weissman_analytics` may `SELECT`. Keep in lock-step with
+/// `20260829120000_hermetic_analytics_worker_roles.sql`.
+/// Never include `vulnerabilities`, `agent_anomalies`, or job-bus tables.
+pub const ANALYTICS_SELECT_TABLES: &[&str] = &[
+    "billing_plans",
+    "tenant_usage_counters",
+    "weissman_tenant_quota_usage",
+    "tenant_llm_usage",
+];
+
+/// Job-bus tables `weissman_worker` may DML. Keep in lock-step with
+/// `20260829120000_hermetic_analytics_worker_roles.sql`.
+pub const WORKER_JOB_BUS_TABLES: &[&str] = &[
+    "weissman_async_jobs",
+    "weissman_job_events",
+    "weissman_job_forensic_dlq",
+];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PoolKind {
     App,
     Auth,
     ReadOnly,
+    Worker,
+    Analytics,
 }
 
 impl PoolKind {
@@ -55,12 +83,14 @@ impl PoolKind {
             Self::App => APP_ROLE,
             Self::Auth => AUTH_ROLE,
             Self::ReadOnly => RO_ROLE,
+            Self::Worker => WORKER_ROLE,
+            Self::Analytics => ANALYTICS_ROLE,
         }
     }
 
     #[must_use]
     pub fn expects_bypassrls(self) -> bool {
-        matches!(self, Self::Auth)
+        matches!(self, Self::Auth | Self::Worker | Self::Analytics)
     }
 }
 
@@ -117,7 +147,52 @@ pub fn enforce_production_dsn_roles() -> Result<(), String> {
             require_dsn_role("WEISSMAN_INTEL_DATABASE_URL", t, APP_ROLE)?;
         }
     }
+
+    let worker = std::env::var("WEISSMAN_WORKER_DATABASE_URL")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let Some(worker) = worker else {
+        return Err(
+            "WEISSMAN_WORKER_DATABASE_URL must be set in production to the weissman_worker role \
+             (BYPASSRLS job-bus claim plane). Sharing DATABASE_URL would let weissman_app claim \
+             across tenants or see zero rows under fail-closed job-bus RLS"
+                .into(),
+        );
+    };
+    require_dsn_role("WEISSMAN_WORKER_DATABASE_URL", &worker, WORKER_ROLE)?;
+
+    if let Ok(analytics) = std::env::var("WEISSMAN_ANALYTICS_DATABASE_URL") {
+        let t = analytics.trim();
+        if !t.is_empty() {
+            require_dsn_role("WEISSMAN_ANALYTICS_DATABASE_URL", t, ANALYTICS_ROLE)?;
+        }
+    }
     Ok(())
+}
+
+/// Worker process: global billing aggregation requires the analytics DSN.
+pub fn enforce_production_analytics_dsn() -> Result<(), String> {
+    if !is_production_env() || e2e_or_allow_superuser_dsn() {
+        return Ok(());
+    }
+    let analytics = std::env::var("WEISSMAN_ANALYTICS_DATABASE_URL")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let Some(analytics) = analytics else {
+        return Err(
+            "WEISSMAN_ANALYTICS_DATABASE_URL must be set on the worker in production to the \
+             weissman_analytics role (BYPASSRLS SELECT on metrics tables only). Global quota \
+             aggregation must not run as weissman_app (FORCE RLS sees one tenant) or weissman_auth"
+                .into(),
+        );
+    };
+    require_dsn_role(
+        "WEISSMAN_ANALYTICS_DATABASE_URL",
+        &analytics,
+        ANALYTICS_ROLE,
+    )
 }
 
 /// Validate a DSN's userinfo against the expected role. Always errors on a
@@ -162,6 +237,8 @@ pub async fn assert_pool_role(pool: &PgPool, kind: PoolKind) -> Result<(), sqlx:
                 PoolKind::App => "app",
                 PoolKind::Auth => "auth",
                 PoolKind::ReadOnly => "read-only",
+                PoolKind::Worker => "worker",
+                PoolKind::Analytics => "analytics",
             }
         );
         if strict {
@@ -245,6 +322,26 @@ mod tests {
     }
 
     #[test]
+    fn analytics_select_list_excludes_customer_detail_and_job_bus() {
+        assert_eq!(ANALYTICS_SELECT_TABLES.len(), 4);
+        for forbidden in [
+            "vulnerabilities",
+            "agent_anomalies",
+            "clients",
+            "users",
+            "weissman_async_jobs",
+            "weissman_job_events",
+        ] {
+            assert!(
+                !ANALYTICS_SELECT_TABLES.contains(&forbidden),
+                "analytics must not SELECT {forbidden}"
+            );
+        }
+        assert_eq!(WORKER_JOB_BUS_TABLES.len(), 3);
+        assert!(!WORKER_JOB_BUS_TABLES.contains(&"vulnerabilities"));
+    }
+
+    #[test]
     fn require_dsn_role_accepts_matching_user() {
         assert!(require_dsn_role(
             "DATABASE_URL",
@@ -292,6 +389,11 @@ mod tests {
         assert!(!PoolKind::App.expects_bypassrls());
         assert!(PoolKind::Auth.expects_bypassrls());
         assert!(!PoolKind::ReadOnly.expects_bypassrls());
+        assert_eq!(PoolKind::Worker.expected_role(), WORKER_ROLE);
+        assert!(PoolKind::Worker.expects_bypassrls());
+        assert_eq!(PoolKind::Analytics.expected_role(), ANALYTICS_ROLE);
+        assert!(PoolKind::Analytics.expects_bypassrls());
         assert_eq!(RO_STATEMENT_TIMEOUT_MS, 15_000);
+        assert_eq!(ANALYTICS_STATEMENT_TIMEOUT_MS, 60_000);
     }
 }

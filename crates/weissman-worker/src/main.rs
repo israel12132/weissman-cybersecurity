@@ -82,6 +82,33 @@ fn touch_liveness_beat() {
     }
 }
 
+fn spawn_analytics_billing_loop(pool: Arc<PgPool>) {
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(3600));
+        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tick.tick().await;
+            match weissman_db::analytics::quota_usage_snapshot(pool.as_ref()).await {
+                Ok(rows) => {
+                    let tenants: std::collections::HashSet<i64> =
+                        rows.iter().map(|r| r.tenant_id).collect();
+                    info!(
+                        target: "weissman_worker",
+                        rows = rows.len(),
+                        tenants = tenants.len(),
+                        "analytics billing snapshot (all tenants)"
+                    );
+                }
+                Err(e) => warn!(
+                    target: "weissman_worker",
+                    error = %e,
+                    "analytics billing snapshot failed"
+                ),
+            }
+        }
+    });
+}
+
 fn worker_id() -> String {
     let host = hostname::get()
         .ok()
@@ -634,7 +661,7 @@ async fn async_main() {
     // a connection-hungry scan checks out every app slot and the worker's own "mark this job
     // completed" write times out ("database: pool timed out"), so finished jobs never reach a
     // terminal state and pollers see them hang. A tiny separate pool keeps the control plane alive.
-    let ctrl_pool = match weissman_db::connect_control(database_url.trim()).await {
+    let ctrl_pool = match weissman_db::connect_control_from_env().await {
         Ok(p) => Arc::new(p),
         Err(e) => {
             eprintln!(
@@ -649,6 +676,23 @@ async fn async_main() {
     // against a server max_connections of 100 — see warn_if_pool_budget_exceeds_server.
     weissman_db::warn_if_pool_budget_exceeds_server(ctrl_pool.as_ref(), "worker", 48 + 12 + 12 + 8)
         .await;
+
+    match weissman_db::connect_analytics_from_env().await {
+        Ok(Some(p)) => {
+            info!(target: "weissman_worker", "analytics pool connected (cross-tenant billing)");
+            spawn_analytics_billing_loop(Arc::new(p));
+        }
+        Ok(None) => {
+            warn!(
+                target: "weissman_worker",
+                "WEISSMAN_ANALYTICS_DATABASE_URL unset — skipping global billing aggregation"
+            );
+        }
+        Err(e) => {
+            eprintln!("weissman-worker: analytics database connect failed: {e}");
+            std::process::exit(1);
+        }
+    }
 
     let light_n = worker_concurrency_cap("WEISSMAN_WORKER_LIGHT_CONCURRENCY", 8);
     let heavy_n = worker_concurrency_cap("WEISSMAN_WORKER_HEAVY_CONCURRENCY", 2);

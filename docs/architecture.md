@@ -63,7 +63,7 @@
                 ┌──────────────────────────────────────────────────────┐
                 │  PostgreSQL 16 + pgvector (`pgvector/pgvector:pg16`) │
                 │  ─────────────────────────────────────────────────── │
-                │  • 112 migrations (sqlx + no-tx pre-runner)          │
+                │  • 114 migrations (sqlx + no-tx pre-runner)          │
                 │  • RLS forced on every multi-tenant table            │
                 │  • 3 roles:                                          │
                 │      weissman_app   — app, subject to RLS            │

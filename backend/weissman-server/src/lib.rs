@@ -131,7 +131,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         intel_pool,
         read_only_pool,
     );
-    fingerprint_engine::http::spawn_http_background_tasks(&state);
+    fingerprint_engine::http::spawn_http_background_tasks(&state, pools.job_control.clone());
     let static_dir = resolve_static_dir();
     let router = api::routes::build_full_router(state, static_dir).await;
     let router = middleware::cors::apply(router);

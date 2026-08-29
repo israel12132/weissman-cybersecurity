@@ -17,17 +17,13 @@ pub struct AsyncJob {
     pub trace_id: Option<String>,
 }
 
-/// Open a transaction with the **worker/queue** RLS posture: `app.current_tenant_id = ''`
-/// selects the unrestricted branch of the `weissman_async_jobs` policy
-/// (`NULLIF('','') IS NULL`).
+/// Open a transaction with the **worker/queue** RLS posture: `app.current_tenant_id = ''`.
 ///
-/// `weissman_app` is `NOBYPASSRLS` and migration `20260602180000` set a database-level
-/// default `app.current_tenant_id = '0'`, so an unscoped connection's policy collapses to
-/// `tenant_id = 0` and hides/rejects every real tenant's row. Setting the GUC transaction-locally
-/// (`SET LOCAL` semantics via `set_config(..., true)`) restores the intended "trusted queue
-/// plumbing is unrestricted" branch without leaking scope to the next borrower of the pooled
-/// connection. Tenant-scoped operations (`enqueue`, `get_job_for_tenant`) use
-/// [`crate::begin_tenant_tx`] with a concrete id instead.
+/// Claim/heartbeat/complete run on `weissman_worker` (BYPASSRLS). The empty GUC is
+/// belt-and-suspenders: if this helper is ever pointed at `weissman_app`, fail-closed
+/// job-bus policies (`tenant_id = app_current_tenant_id()`) return zero rows instead of
+/// leaking every tenant's payloads. Do **not** restore an "unset GUC = unrestricted"
+/// policy on `weissman_app`.
 async fn begin_worker_tx(
     pool: &PgPool,
 ) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, sqlx::Error> {
@@ -108,8 +104,13 @@ pub async fn enqueue_held(
 /// atomic UPDATE, so a worker never observes a claimable job without its
 /// envelope. Guarded on the row still being held (`run_after IS NOT NULL`) so a
 /// late finalize cannot resurrect a job that was already failed.
-pub async fn release_hold(pool: &PgPool, job_id: Uuid, payload: Value) -> Result<u64, sqlx::Error> {
-    let mut tx = begin_worker_tx(pool).await?;
+pub async fn release_hold(
+    pool: &PgPool,
+    tenant_id: i64,
+    job_id: Uuid,
+    payload: Value,
+) -> Result<u64, sqlx::Error> {
+    let mut tx = crate::begin_tenant_tx(pool, tenant_id).await?;
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs
               SET payload = $2, run_after = NULL, updated_at = now()

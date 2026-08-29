@@ -71,20 +71,22 @@ async fn admin_pool(url: &str) -> sqlx::PgPool {
         .expect("connect TEST_DATABASE_URL")
 }
 
-/// Pool that is subject to RLS, like the real worker.
+/// Pool as `weissman_worker` (BYPASSRLS job-bus role), like the real control plane.
 async fn worker_pool(url: &str) -> sqlx::PgPool {
     PgPoolOptions::new()
         .max_connections(2)
         .acquire_timeout(std::time::Duration::from_secs(5))
         .after_connect(|conn, _| {
             Box::pin(async move {
-                sqlx::query("SET ROLE weissman_app").execute(conn).await?;
+                sqlx::query("SET ROLE weissman_worker")
+                    .execute(conn)
+                    .await?;
                 Ok(())
             })
         })
         .connect(url)
         .await
-        .expect("connect worker pool as weissman_app")
+        .expect("connect worker pool as weissman_worker")
 }
 
 async fn reset(pool: &sqlx::PgPool, tenant: i64) {

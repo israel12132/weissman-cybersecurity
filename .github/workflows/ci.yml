@@ -617,7 +617,9 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d weissman -v ON_ERROR_STOP=1 <<'SQL'
           ALTER ROLE weissman_app LOGIN PASSWORD 'ci-app-password-24-chars-minimum';
           ALTER ROLE weissman_auth LOGIN PASSWORD 'ci-auth-password-24-chars-minimum';
-          GRANT CONNECT ON DATABASE weissman TO weissman_app, weissman_auth;
+          ALTER ROLE weissman_worker LOGIN PASSWORD 'ci-worker-password-24-chars-minimum';
+          ALTER ROLE weissman_analytics LOGIN PASSWORD 'ci-analytics-password-24-chars-minimum';
+          GRANT CONNECT ON DATABASE weissman TO weissman_app, weissman_auth, weissman_worker, weissman_analytics;
           SQL
 
       - name: Bound Postgres lock waits (CI database backstop)
@@ -789,6 +791,8 @@ jobs:
         env:
           DATABASE_URL: postgresql://weissman_app:ci-app-password-24-chars-minimum@127.0.0.1:5432/weissman
           WEISSMAN_AUTH_DATABASE_URL: postgresql://weissman_auth:ci-auth-password-24-chars-minimum@127.0.0.1:5432/weissman
+          WEISSMAN_WORKER_DATABASE_URL: postgresql://weissman_worker:ci-worker-password-24-chars-minimum@127.0.0.1:5432/weissman
+          WEISSMAN_ANALYTICS_DATABASE_URL: postgresql://weissman_analytics:ci-analytics-password-24-chars-minimum@127.0.0.1:5432/weissman
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           REDIS_URL: redis://127.0.0.1:6379/0
           WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
@@ -847,6 +851,8 @@ jobs:
         env:
           DATABASE_URL: postgresql://weissman_app:ci-app-password-24-chars-minimum@127.0.0.1:5432/weissman
           WEISSMAN_AUTH_DATABASE_URL: postgresql://weissman_auth:ci-auth-password-24-chars-minimum@127.0.0.1:5432/weissman
+          WEISSMAN_WORKER_DATABASE_URL: postgresql://weissman_worker:ci-worker-password-24-chars-minimum@127.0.0.1:5432/weissman
+          WEISSMAN_ANALYTICS_DATABASE_URL: postgresql://weissman_analytics:ci-analytics-password-24-chars-minimum@127.0.0.1:5432/weissman
           REDIS_URL: redis://127.0.0.1:6379/0
           WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
           WEISSMAN_JOB_ORCHESTRATOR_SECRET: ci-job-orchestrator-secret-32-bytes-minimum-v1
