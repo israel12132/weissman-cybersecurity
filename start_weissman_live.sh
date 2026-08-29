@@ -288,6 +288,18 @@ ensure_env() {
     fi
   done
 
+  # Dual-control headers are accepted only from these TCP peers (security_startup.rs).
+  # Compose live: docker user-defined networks live in 172.16.0.0/12. Pin to the
+  # reverse-proxy /32 when the overlay is hostile (k8s). Empty => compose :? fail
+  # and production boot refuse.
+  if [[ -z "$(env_get WEISSMAN_TRUST_PROXY_CIDRS)" ]]; then
+    env_set WEISSMAN_TRUST_PROXY_CIDRS "172.16.0.0/12"
+    log "Set WEISSMAN_TRUST_PROXY_CIDRS=172.16.0.0/12 (pin to your reverse-proxy CIDR on k8s)"
+  fi
+  if [[ -z "$(env_get WEISSMAN_TRUST_PROXY_HEADERS)" ]]; then
+    env_set WEISSMAN_TRUST_PROXY_HEADERS "1"
+  fi
+
   # CEO genesis vault. Must be exactly 64 hex chars (32 bytes) — ceo::vault::hex32 rejects
   # anything else, so it cannot use gen_secret's base64. Same rationale as
   # WEISSMAN_INTEGRATIONS_VAULT_KEY above: without it the vault key is derived from the
@@ -364,6 +376,9 @@ validate_env() {
   # weissman-worker; catching it here beats waiting out the health-check timeout.
   require_len WEISSMAN_JOB_ORCHESTRATOR_SECRET 32 "regenerate with: openssl rand -base64 48"
   require_len WEISSMAN_ADMIN_PASSWORD 12
+  if [[ -z "${WEISSMAN_TRUST_PROXY_CIDRS:-}" ]]; then
+    die "WEISSMAN_TRUST_PROXY_CIDRS must be a non-empty CIDR list in production (dual-control SSRF guard)"
+  fi
 
   local weak_frags=(weissman_dev_secret weissman_auth_dev)
   for key in DB_APP_PASSWORD DB_AUTH_PASSWORD POSTGRES_PASSWORD; do
