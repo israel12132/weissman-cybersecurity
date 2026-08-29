@@ -316,7 +316,12 @@ jobs:
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${ver}/gitleaks_${ver}_linux_x64.tar.gz" \
             | tar -xz gitleaks
           ./gitleaks detect --no-git --redact --no-banner --exit-code 1 --source .
-          ./gitleaks detect --redact --no-banner --exit-code 1 --source .
+          ./gitleaks detect --redact --no-banner --exit-code 1 --source . \
+            --report-format json --report-path gitleaks-git.json || {
+            echo '--- gitleaks git-history findings ---'
+            cat gitleaks-git.json || true
+            exit 1
+          }
 
       - name: Dependency & IaC vuln scan (Trivy filesystem, CRITICAL+HIGH)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -596,6 +601,19 @@ jobs:
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
         run: cargo run -q -p weissman-db --example run_migrate
 
+      - name: Rotate hermetic role passwords for production-mode smoke
+        # Runtime pools must be weissman_app / weissman_auth (FORCE RLS / BYPASSRLS).
+        # Migration-created passwords are the blocked dev fragments; replace them
+        # with CI-only values before WEISSMAN_ENV=production boot.
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d weissman -v ON_ERROR_STOP=1 <<'SQL'
+          ALTER ROLE weissman_app LOGIN PASSWORD 'ci-app-password-24-chars-minimum';
+          ALTER ROLE weissman_auth LOGIN PASSWORD 'ci-auth-password-24-chars-minimum';
+          GRANT CONNECT ON DATABASE weissman TO weissman_app, weissman_auth;
+          SQL
+
       - name: Bound Postgres lock waits (CI database backstop)
         # Defence in depth behind weissman_db::advisory_lock. That module bounds every advisory
         # lock we take TODAY; this bounds every blocking wait any connection to this database can
@@ -763,8 +781,8 @@ jobs:
 
       - name: Start weissman-server
         env:
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
-          WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          DATABASE_URL: postgresql://weissman_app:ci-app-password-24-chars-minimum@127.0.0.1:5432/weissman
+          WEISSMAN_AUTH_DATABASE_URL: postgresql://weissman_auth:ci-auth-password-24-chars-minimum@127.0.0.1:5432/weissman
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           REDIS_URL: redis://127.0.0.1:6379/0
           WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
@@ -813,8 +831,8 @@ jobs:
 
       - name: Start weissman-worker
         env:
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
-          WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          DATABASE_URL: postgresql://weissman_app:ci-app-password-24-chars-minimum@127.0.0.1:5432/weissman
+          WEISSMAN_AUTH_DATABASE_URL: postgresql://weissman_auth:ci-auth-password-24-chars-minimum@127.0.0.1:5432/weissman
           REDIS_URL: redis://127.0.0.1:6379/0
           WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
           WEISSMAN_JOB_ORCHESTRATOR_SECRET: ci-job-orchestrator-secret-32-bytes-minimum-v1

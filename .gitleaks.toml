@@ -48,6 +48,9 @@ paths = [
     # from `${{ secrets.* }}`, never inline. gitleaks stays active on every other
     # workflow and on deploy/, backend/, crates/, scripts/, .env*, etc.
     '''\.github/workflows/nightly-e2e\.yml$''',
+    # crates.io package checksums are 64-hex and trip git-history generic-api-key
+    # even though the working-tree scan ignores `checksum = "..."` context.
+    '''Cargo\.lock$''',
 ]
 regexes = [
     # `key = 'enable_rfc3161_signing'` is a config FLAG NAME, not a credential —
@@ -58,4 +61,7 @@ regexes = [
     # Throwaway 64-hex WEISSMAN_VAULT_KEY fixture in the nightly-e2e workflow —
     # scoped to the ephemeral runner DB only, never a real vault key.
     '''0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef''',
+    # SHA-pinned actions/setup-node@v7.0.0 (40-hex commit). Git-history mode
+    # scores the added pin as a generic key; the working-tree scan does not.
+    '''820762786026740c76f36085b0efc47a31fe5020''',
 ]
