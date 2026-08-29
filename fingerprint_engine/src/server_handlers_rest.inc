@@ -129,13 +129,11 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
     let mut engines: Vec<String> = vec![];
     let mut safe_mode = false;
     if postgres_ok {
-        if let Some(tid) = sqlx::query_scalar::<_, i64>(
-            "SELECT id FROM tenants WHERE slug = 'default' AND active = true LIMIT 1",
-        )
-        .fetch_optional(state.auth_pool.as_ref())
-        .await
-        .ok()
-        .flatten()
+        if let Some(tid) = sqlx::query_scalar::<_, i64>("SELECT id FROM tenants WHERE slug = 'default' AND active = true LIMIT 1")
+            .fetch_optional(state.auth_pool.as_ref())
+            .await
+            .ok()
+            .flatten()
         {
             if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, tid).await {
                 if let Ok(Some(s)) = sqlx::query_scalar::<_, String>("SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'active_engines'")
@@ -194,20 +192,18 @@ fn resident_set_kb() -> Option<u64> {
     // sync read on every request adds avoidable jitter to the async runtime's poll loop
     // and shows up as latency on the rest of the request handlers sharing that worker.
     use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{Instant, Duration};
     use std::sync::OnceLock;
-    use std::time::{Duration, Instant};
 
     static CACHE_VAL: AtomicU64 = AtomicU64::new(0);
-    static CACHE_AT: OnceLock<std::sync::Mutex<Option<Instant>>> = OnceLock::new();
+    static CACHE_AT:  OnceLock<std::sync::Mutex<Option<Instant>>> = OnceLock::new();
     let lock = CACHE_AT.get_or_init(|| std::sync::Mutex::new(None));
 
     if let Ok(guard) = lock.lock() {
         if let Some(when) = *guard {
             if when.elapsed() < Duration::from_secs(5) {
                 let v = CACHE_VAL.load(Ordering::Relaxed);
-                if v > 0 {
-                    return Some(v);
-                }
+                if v > 0 { return Some(v); }
             }
         }
     }
@@ -415,21 +411,14 @@ async fn api_audit_export(
         .into_response()
 }
 
-async fn api_enterprise_settings_get(
-    State(state): State<Arc<AppState>>,
-    Extension(auth): Extension<AuthContext>,
-) -> Response {
+async fn api_enterprise_settings_get(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
     // alert_webhook_url is a bearer credential for the customer's alert channel; the PATCH is
     // admin-gated, so the GET must be too (a plain GET otherwise skips mutation_rbac_middleware).
     if let Err(r) = crate::rbac::require_admin(&auth) {
         return r;
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"global_safe_mode": false, "alert_webhook_url": ""})),
-        )
-            .into_response();
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"global_safe_mode": false, "alert_webhook_url": ""}))).into_response();
     };
     let safe = sqlx::query_scalar::<_, String>("SELECT COALESCE(value,'false') FROM system_configs WHERE tenant_id = $1 AND key = 'global_safe_mode'")
         .bind(auth.tenant_id)
@@ -447,11 +436,7 @@ async fn api_enterprise_settings_get(
         .unwrap_or_default();
     let _ = tx.commit().await;
     let safe_b = safe == "true" || safe == "1";
-    (
-        StatusCode::OK,
-        Json(json!({"global_safe_mode": safe_b, "alert_webhook_url": webhook})),
-    )
-        .into_response()
+    (StatusCode::OK, Json(json!({"global_safe_mode": safe_b, "alert_webhook_url": webhook}))).into_response()
 }
 
 async fn api_enterprise_settings_patch(
@@ -482,16 +467,7 @@ async fn api_enterprise_settings_patch(
             tracing::error!(target: "enterprise_settings", tenant_id = auth.tenant_id, error = %e, "safe_mode upsert failed");
             return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": "settings not persisted"}))).into_response();
         }
-        let _ = audit_log::insert_audit(
-            &mut tx,
-            auth.tenant_id,
-            Some(auth.user_id),
-            &actor,
-            "safe_mode_toggled",
-            &format!("global_safe_mode={}", s),
-            &ip,
-        )
-        .await;
+        let _ = audit_log::insert_audit(&mut tx, auth.tenant_id, Some(auth.user_id), &actor, "safe_mode_toggled", &format!("global_safe_mode={}", s), &ip).await;
     }
     if let Some(url) = body.alert_webhook_url {
         let trimmed = url.trim();
@@ -506,32 +482,15 @@ async fn api_enterprise_settings_patch(
             tracing::error!(target: "enterprise_settings", tenant_id = auth.tenant_id, error = %e, "alert_webhook upsert failed");
             return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": "settings not persisted"}))).into_response();
         }
-        let _ = audit_log::insert_audit(
-            &mut tx,
-            auth.tenant_id,
-            Some(auth.user_id),
-            &actor,
-            "alerts_settings_updated",
-            "alert_webhook_url updated",
-            &ip,
-        )
-        .await;
+        let _ = audit_log::insert_audit(&mut tx, auth.tenant_id, Some(auth.user_id), &actor, "alerts_settings_updated", "alert_webhook_url updated", &ip).await;
     }
     // A discarded commit (or an audit-append that aborted the tx) previously reported success
     // while nothing was persisted — the safe-mode kill switch would silently no-op.
     match tx.commit().await {
-        Ok(()) => (
-            StatusCode::OK,
-            Json(json!({"ok": true, "message": "enterprise settings updated"})),
-        )
-            .into_response(),
+        Ok(()) => (StatusCode::OK, Json(json!({"ok": true, "message": "enterprise settings updated"}))).into_response(),
         Err(e) => {
             tracing::error!(target: "enterprise_settings", tenant_id = auth.tenant_id, error = %e, "settings commit failed");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": "settings not persisted"})),
-            )
-                .into_response()
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": "settings not persisted"}))).into_response()
         }
     }
 }
@@ -555,29 +514,12 @@ async fn api_system_backup(
         Ok(p) => {
             if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
                 let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-                let _ = audit_log::insert_audit(
-                    &mut tx,
-                    auth.tenant_id,
-                    Some(auth.user_id),
-                    &u,
-                    "backup_triggered",
-                    &format!("path={}", p.display()),
-                    &ip,
-                )
-                .await;
+                let _ = audit_log::insert_audit(&mut tx, auth.tenant_id, Some(auth.user_id), &u, "backup_triggered", &format!("path={}", p.display()), &ip).await;
                 let _ = tx.commit().await;
             }
-            (
-                StatusCode::OK,
-                Json(json!({"ok": true, "path": p.to_string_lossy()})),
-            )
-                .into_response()
+            (StatusCode::OK, Json(json!({"ok": true, "path": p.to_string_lossy()}))).into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": e})),
-        )
-            .into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": e}))).into_response(),
     }
 }
 
@@ -625,12 +567,12 @@ async fn api_clients_list(
            WHERE ($3::bigint IS NULL OR id = $3)
            ORDER BY id LIMIT $1 OFFSET $2"#,
     )
-    .bind(limit)
-    .bind(offset)
-    .bind(scoped)
-    .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
+        .bind(limit)
+        .bind(offset)
+        .bind(scoped)
+        .fetch_all(&mut *tx)
+        .await
+        .unwrap_or_default();
     let _ = tx.commit().await;
     let out: Vec<Value> = rows
         .into_iter()
@@ -656,11 +598,7 @@ async fn api_clients_list(
 /// Read-only platform metadata (gated by auth_guard): which adversary techniques the
 /// engine fleet detects, grouped by tactic, with the contributing engines + rollups.
 async fn api_attack_coverage(Extension(_auth): Extension<AuthContext>) -> Response {
-    (
-        StatusCode::OK,
-        Json(crate::attack_coverage::coverage_json()),
-    )
-        .into_response()
+    (StatusCode::OK, Json(crate::attack_coverage::coverage_json())).into_response()
 }
 
 /// POST /api/clients/:id/scan/run-all — queue the curated baseline engine bundle against the
@@ -690,12 +628,14 @@ async fn api_clients_scan_run_all(
         )
             .into_response();
     };
-    let row = sqlx::query("SELECT domains FROM clients WHERE id = $1")
-        .bind(id)
-        .fetch_optional(&mut *tx)
-        .await
-        .ok()
-        .flatten();
+    let row = sqlx::query(
+        "SELECT domains FROM clients WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
     let _ = tx.commit().await;
 
     let domains_raw: String = match row {
@@ -742,9 +682,12 @@ async fn api_clients_scan_run_all(
     ];
 
     let job_count = (domains.len() * baseline_engines.len()) as u64;
-    if let Err(detail) =
-        crate::billing::gate_scan_enqueue_n(state.auth_pool.as_ref(), auth.tenant_id, job_count)
-            .await
+    if let Err(detail) = crate::billing::gate_scan_enqueue_n(
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        job_count,
+    )
+    .await
     {
         return (
             StatusCode::PAYMENT_REQUIRED,
@@ -762,11 +705,7 @@ async fn api_clients_scan_run_all(
             Some(auth.user_id),
             &u,
             "scan_run_all_initiated",
-            &format!(
-                "client_id={id} engines={baseline:?}",
-                id = id,
-                baseline = baseline_engines
-            ),
+            &format!("client_id={id} engines={baseline:?}", id = id, baseline = baseline_engines),
             &ip,
         )
         .await;
@@ -907,11 +846,7 @@ async fn api_clients_create(
     }
     let name = body.name.as_deref().unwrap_or("").trim();
     if name.is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"ok": false, "detail": "name required"})),
-        )
-            .into_response();
+        return (StatusCode::BAD_REQUEST, Json(json!({"ok": false, "detail": "name required"}))).into_response();
     }
     if let Err(detail) = crate::billing::enforce_client_create(
         state.auth_pool.as_ref(),
@@ -960,8 +895,7 @@ async fn api_clients_create(
             config.insert("industrial_ot_enabled".to_string(), json!(true));
         }
     }
-    let client_configs = serde_json::to_string(&Value::Object(config))
-        .unwrap_or_else(|_| DEFAULT_CLIENT_CONFIGS_JSON.to_string());
+    let client_configs = serde_json::to_string(&Value::Object(config)).unwrap_or_else(|_| DEFAULT_CLIENT_CONFIGS_JSON.to_string());
 
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
@@ -1010,11 +944,7 @@ async fn api_clients_create(
         Some(auth.user_id),
         &actor,
         "client_created",
-        &format!(
-            "client_id={} name={}",
-            id,
-            name.chars().take(200).collect::<String>()
-        ),
+        &format!("client_id={} name={}", id, name.chars().take(200).collect::<String>()),
         &ip,
     )
     .await;
@@ -1056,11 +986,11 @@ async fn api_clients_update(
             COALESCE(gcp_project_id,'') AS gcp_project_id
            FROM clients WHERE id = $1"#,
     )
-    .bind(id)
-    .fetch_optional(&mut *tx)
-    .await
-    .ok()
-    .flatten();
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten();
     let (
         cur_name,
         cur_domains,
@@ -1074,36 +1004,21 @@ async fn api_clients_update(
     ) = match row {
         Some(r) => (
             r.try_get::<String, _>("name").unwrap_or_default(),
-            r.try_get::<String, _>("domains")
-                .unwrap_or_else(|_| "[]".to_string()),
-            r.try_get::<String, _>("tech_stack")
-                .unwrap_or_else(|_| "[]".to_string()),
-            r.try_get::<String, _>("ip_ranges")
-                .unwrap_or_else(|_| "[]".to_string()),
+            r.try_get::<String, _>("domains").unwrap_or_else(|_| "[]".to_string()),
+            r.try_get::<String, _>("tech_stack").unwrap_or_else(|_| "[]".to_string()),
+            r.try_get::<String, _>("ip_ranges").unwrap_or_else(|_| "[]".to_string()),
             r.try_get::<String, _>("contact_email").unwrap_or_default(),
-            r.try_get::<bool, _>("auto_detect_tech_stack")
-                .unwrap_or(true),
-            r.try_get::<String, _>("aws_cross_account_role_arn")
-                .unwrap_or_default(),
-            r.try_get::<String, _>("aws_external_id")
-                .unwrap_or_default(),
+            r.try_get::<bool, _>("auto_detect_tech_stack").unwrap_or(true),
+            r.try_get::<String, _>("aws_cross_account_role_arn").unwrap_or_default(),
+            r.try_get::<String, _>("aws_external_id").unwrap_or_default(),
             r.try_get::<String, _>("gcp_project_id").unwrap_or_default(),
         ),
         None => {
             let _ = tx.rollback().await;
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({"ok": false, "detail": "client not found"})),
-            )
-                .into_response();
+            return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "client not found"}))).into_response();
         }
     };
-    let name = body
-        .name
-        .as_deref()
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .unwrap_or(&cur_name);
+    let name = body.name.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty()).unwrap_or(&cur_name);
     let domains = body.domains.as_deref().unwrap_or(&cur_domains);
     let tech_stack = body.tech_stack.as_deref().unwrap_or(&cur_tech);
     let ip_ranges = body.ip_ranges.as_deref().unwrap_or(&cur_ip);
@@ -1134,26 +1049,22 @@ async fn api_clients_update(
             aws_cross_account_role_arn = $7, aws_external_id = $8, gcp_project_id = $9,
             updated_at = now() WHERE id = $10"#,
     )
-    .bind(name)
-    .bind(domains)
-    .bind(tech_stack)
-    .bind(ip_ranges)
-    .bind(contact_email)
-    .bind(auto_detect)
-    .bind(aws_arn)
-    .bind(aws_ext)
-    .bind(gcp)
-    .bind(id)
-    .execute(&mut *tx)
-    .await
-    .is_err()
+        .bind(name)
+        .bind(domains)
+        .bind(tech_stack)
+        .bind(ip_ranges)
+        .bind(contact_email)
+        .bind(auto_detect)
+        .bind(aws_arn)
+        .bind(aws_ext)
+        .bind(gcp)
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .is_err()
     {
         let _ = tx.rollback().await;
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false})),
-        )
-            .into_response();
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false}))).into_response();
     }
     let ip = extract_client_ip(&headers, addr);
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
@@ -1196,11 +1107,7 @@ async fn api_clients_delete(
         .flatten();
     let Some(nr) = row else {
         let _ = tx.rollback().await;
-        return (
-            StatusCode::NOT_FOUND,
-            Json(json!({"ok": false, "detail": "client not found"})),
-        )
-            .into_response();
+        return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "client not found"}))).into_response();
     };
     let cname: String = nr.try_get::<String, _>("name").unwrap_or_default();
     let ip = extract_client_ip(&headers, addr);
@@ -1211,11 +1118,7 @@ async fn api_clients_delete(
         Some(auth.user_id),
         &actor,
         "client_deleted",
-        &format!(
-            "client_id={} name={}",
-            id,
-            cname.chars().take(200).collect::<String>()
-        ),
+        &format!("client_id={} name={}", id, cname.chars().take(200).collect::<String>()),
         &ip,
     )
     .await;
@@ -1232,19 +1135,10 @@ async fn api_clients_delete(
     .bind(id)
     .execute(&mut *tx)
     .await;
-    let n = sqlx::query("DELETE FROM clients WHERE id = $1")
-        .bind(id)
-        .execute(&mut *tx)
-        .await
-        .map(|r| r.rows_affected())
-        .unwrap_or(0);
+    let n = sqlx::query("DELETE FROM clients WHERE id = $1").bind(id).execute(&mut *tx).await.map(|r| r.rows_affected()).unwrap_or(0);
     if n == 0 {
         let _ = tx.rollback().await;
-        return (
-            StatusCode::NOT_FOUND,
-            Json(json!({"ok": false, "detail": "client not found"})),
-        )
-            .into_response();
+        return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "client not found"}))).into_response();
     }
     let _ = sqlx::query("DELETE FROM vulnerabilities WHERE client_id = $1")
         .bind(id)
@@ -1306,11 +1200,7 @@ async fn api_client_config_patch(
         Some(x) => x,
         None => {
             let _ = tx.rollback().await;
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({"ok": false, "detail": "client not found"})),
-            )
-                .into_response();
+            return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "client not found"}))).into_response();
         }
     };
     let mut config: serde_json::Map<String, Value> = match serde_json::from_str(&current) {
@@ -1331,10 +1221,7 @@ async fn api_client_config_patch(
     if let Some(ref roe_raw) = body.roe_mode {
         let roe = roe_raw.trim();
         if roe == "safe_proofs" {
-            config.insert(
-                "roe_mode".to_string(),
-                Value::String("safe_proofs".to_string()),
-            );
+            config.insert("roe_mode".to_string(), Value::String("safe_proofs".to_string()));
         } else if roe == "weaponized_god_mode" {
             // Governance: weaponized ROE requires explicit approval trail, unless the server
             // is configured with a confirm secret and caller provides a matching header.
@@ -1368,9 +1255,8 @@ async fn api_client_config_patch(
 
                 if let Some(r) = row {
                     let req_id: i64 = r.try_get("id").unwrap_or(0);
-                    let status: String = r
-                        .try_get("status")
-                        .unwrap_or_else(|_| "pending".to_string());
+                    let status: String =
+                        r.try_get("status").unwrap_or_else(|_| "pending".to_string());
                     let first: Option<i64> = r.try_get("first_approved_by_user_id").ok().flatten();
                     let second: Option<i64> =
                         r.try_get("second_approved_by_user_id").ok().flatten();
@@ -1445,10 +1331,7 @@ async fn api_client_config_patch(
         }
     }
     if let Some(level) = body.stealth_level {
-        config.insert(
-            "stealth_level".to_string(),
-            Value::Number(serde_json::Number::from(level.min(100))),
-        );
+        config.insert("stealth_level".to_string(), Value::Number(serde_json::Number::from(level.min(100))));
     }
     if let Some(b) = body.auto_harvest {
         config.insert("auto_harvest".to_string(), Value::Bool(b));
@@ -1473,11 +1356,7 @@ async fn api_client_config_patch(
         Ok(s) => s,
         Err(_) => {
             let _ = tx.rollback().await;
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false})),
-            )
-                .into_response();
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false}))).into_response();
         }
     };
     if sqlx::query("UPDATE clients SET client_configs = $1, updated_at = now() WHERE id = $2")
@@ -1488,11 +1367,7 @@ async fn api_client_config_patch(
         .is_err()
     {
         let _ = tx.rollback().await;
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false})),
-        )
-            .into_response();
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false}))).into_response();
     }
     let new_roe = new_json
         .get("roe_mode")
@@ -1545,11 +1420,7 @@ async fn api_client_config_patch(
         .await;
     }
     let _ = tx.commit().await;
-    (
-        StatusCode::OK,
-        Json(json!({"ok": true, "config": new_json})),
-    )
-        .into_response()
+    (StatusCode::OK, Json(json!({"ok": true, "config": new_json}))).into_response()
 }
 
 #[allow(dead_code)]
@@ -1565,24 +1436,11 @@ async fn api_scan_start(
     let ip = extract_client_ip(&headers, addr);
     if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-        let _ = audit_log::insert_audit(
-            &mut tx,
-            auth.tenant_id,
-            Some(auth.user_id),
-            &u,
-            "scan_initiated",
-            "continuous scanning started",
-            &ip,
-        )
-        .await;
+        let _ = audit_log::insert_audit(&mut tx, auth.tenant_id, Some(auth.user_id), &u, "scan_initiated", "continuous scanning started", &ip).await;
         let _ = tx.commit().await;
     }
     crate::orchestrator::set_scanning_active(true);
-    (
-        StatusCode::OK,
-        Json(json!({"ok": true, "message": "Continuous scanning started"})),
-    )
-        .into_response()
+    (StatusCode::OK, Json(json!({"ok": true, "message": "Continuous scanning started"}))).into_response()
 }
 
 #[allow(dead_code)]
@@ -1598,24 +1456,11 @@ async fn api_scan_stop(
     let ip = extract_client_ip(&headers, addr);
     if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-        let _ = audit_log::insert_audit(
-            &mut tx,
-            auth.tenant_id,
-            Some(auth.user_id),
-            &u,
-            "scan_stopped",
-            "continuous scanning stopped",
-            &ip,
-        )
-        .await;
+        let _ = audit_log::insert_audit(&mut tx, auth.tenant_id, Some(auth.user_id), &u, "scan_stopped", "continuous scanning stopped", &ip).await;
         let _ = tx.commit().await;
     }
     crate::orchestrator::set_scanning_active(false);
-    (
-        StatusCode::OK,
-        Json(json!({"ok": true, "message": "Scanning stopped"})),
-    )
-        .into_response()
+    (StatusCode::OK, Json(json!({"ok": true, "message": "Scanning stopped"}))).into_response()
 }
 
 #[allow(dead_code)]
@@ -1647,16 +1492,7 @@ async fn api_scan_run_all(
     let ip = extract_client_ip(&headers, addr);
     if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-        let _ = audit_log::insert_audit(
-            &mut tx,
-            auth.tenant_id,
-            Some(auth.user_id),
-            &u,
-            "scan_initiated",
-            "full scan cycle run-all (single-tenant)",
-            &ip,
-        )
-        .await;
+        let _ = audit_log::insert_audit(&mut tx, auth.tenant_id, Some(auth.user_id), &u, "scan_initiated", "full scan cycle run-all (single-tenant)", &ip).await;
         let _ = tx.commit().await;
     }
     match crate::async_jobs::enqueue(
@@ -1689,6 +1525,7 @@ async fn api_scan_run_all(
     }
 }
 
+
 async fn api_scan(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -1713,63 +1550,39 @@ async fn api_scan(
     if let Err(r) = crate::client_isolation::force_json_client_id(&auth, &mut scan_body) {
         return r;
     }
-    let engine = scan_body
-        .get("engine")
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
-    let target = scan_body
-        .get("target")
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
+    let engine = scan_body.get("engine").and_then(Value::as_str).unwrap_or("").to_string();
+    let target = scan_body.get("target").and_then(Value::as_str).unwrap_or("").to_string();
     let ip = extract_client_ip(&headers, addr);
     if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-        let _ = audit_log::insert_audit(
-            &mut tx,
-            auth.tenant_id,
-            Some(auth.user_id),
-            &u,
-            "scan_initiated",
-            &format!(
-                "command_center engine={} target={}",
-                engine,
-                target.chars().take(200).collect::<String>()
-            ),
-            &ip,
-        )
-        .await;
+        let _ = audit_log::insert_audit(&mut tx, auth.tenant_id, Some(auth.user_id), &u, "scan_initiated", &format!("command_center engine={} target={}", engine, target.chars().take(200).collect::<String>()), &ip).await;
         let _ = tx.commit().await;
     }
-    let (job_kind, mut payload) = match crate::scan_routing::route_scan_job(
-        &scan_body,
-        auth.tenant_id,
-        state.app_pool.as_ref(),
-    )
-    .await
-    {
-        Ok(x) => x,
-        Err(e) => {
-            let mut body_json = json!({"detail": e.detail(), "code": e.error_code()});
-            let mut response_headers = axum::http::HeaderMap::new();
-            if let Some((reset_at, limit, used)) = e.quota_metadata() {
-                let retry_after = (reset_at - chrono::Utc::now().timestamp()).max(1);
-                if let Some(obj) = body_json.as_object_mut() {
-                    obj.insert("reset_at_unix".into(), json!(reset_at));
-                    obj.insert("limit".into(), json!(limit));
-                    obj.insert("used".into(), json!(used));
-                    obj.insert("retry_after_seconds".into(), json!(retry_after));
+    let (job_kind, mut payload) =
+        match crate::scan_routing::route_scan_job(&scan_body, auth.tenant_id, state.app_pool.as_ref())
+            .await
+        {
+            Ok(x) => x,
+            Err(e) => {
+                let mut body_json = json!({"detail": e.detail(), "code": e.error_code()});
+                let mut response_headers = axum::http::HeaderMap::new();
+                if let Some((reset_at, limit, used)) = e.quota_metadata() {
+                    let retry_after = (reset_at - chrono::Utc::now().timestamp()).max(1);
+                    if let Some(obj) = body_json.as_object_mut() {
+                        obj.insert("reset_at_unix".into(), json!(reset_at));
+                        obj.insert("limit".into(), json!(limit));
+                        obj.insert("used".into(), json!(used));
+                        obj.insert("retry_after_seconds".into(), json!(retry_after));
+                    }
+                    if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after.to_string()) {
+                        response_headers.insert("Retry-After", v);
+                    }
                 }
-                if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after.to_string()) {
-                    response_headers.insert("Retry-After", v);
-                }
+                let mut resp = (e.status_code(), Json(body_json)).into_response();
+                resp.headers_mut().extend(response_headers);
+                return resp;
             }
-            let mut resp = (e.status_code(), Json(body_json)).into_response();
-            resp.headers_mut().extend(response_headers);
-            return resp;
-        }
-    };
+        };
     if let Some(t) = scan_body
         .get("target")
         .and_then(Value::as_str)
@@ -1826,12 +1639,8 @@ async fn ws_timing(
     let mut rx = state.timing_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
-            if let Some(scoped) =
-                crate::http::tenant_stream::visible_to_scoped(&msg, tenant_id, viewer_cid)
-            {
-                if socket.send(Message::Text(scoped)).await.is_err() {
-                    break;
-                }
+            if let Some(scoped) = crate::http::tenant_stream::visible_to_scoped(&msg, tenant_id, viewer_cid) {
+                if socket.send(Message::Text(scoped)).await.is_err() { break; }
             }
         }
     })
@@ -1847,12 +1656,8 @@ async fn ws_ai_redteam(
     let mut rx = state.redteam_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
-            if let Some(scoped) =
-                crate::http::tenant_stream::visible_to_scoped(&msg, tenant_id, viewer_cid)
-            {
-                if socket.send(Message::Text(scoped)).await.is_err() {
-                    break;
-                }
+            if let Some(scoped) = crate::http::tenant_stream::visible_to_scoped(&msg, tenant_id, viewer_cid) {
+                if socket.send(Message::Text(scoped)).await.is_err() { break; }
             }
         }
     })
@@ -1868,12 +1673,8 @@ async fn ws_threat_intel(
     let mut rx = state.radar_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
-            if let Some(scoped) =
-                crate::http::tenant_stream::visible_to_scoped(&msg, tenant_id, viewer_cid)
-            {
-                if socket.send(Message::Text(scoped)).await.is_err() {
-                    break;
-                }
+            if let Some(scoped) = crate::http::tenant_stream::visible_to_scoped(&msg, tenant_id, viewer_cid) {
+                if socket.send(Message::Text(scoped)).await.is_err() { break; }
             }
         }
     })
@@ -1894,8 +1695,7 @@ async fn api_telemetry_stream(
     let rx = state.telemetry_broadcast_tx.subscribe();
     let stream = crate::http::sse_bridge::bridge_broadcast(rx, move |payload: &str| {
         // Tenant + customer isolation: drop events not stamped for this viewer.
-        if crate::http::tenant_stream::visible_to_scoped(payload, viewer_tid, viewer_cid).is_none()
-        {
+        if crate::http::tenant_stream::visible_to_scoped(payload, viewer_tid, viewer_cid).is_none() {
             return false;
         }
         if let Some(ref want) = filter_job {
@@ -1923,22 +1723,21 @@ async fn latency_tcp_connect_ms(host: &str, port: u16) -> Option<u64> {
     }
     let addr = format!("{}:{}", host, port);
     let start = std::time::Instant::now();
-    match tokio::time::timeout(Duration::from_secs(6), tokio::net::TcpStream::connect(addr)).await {
+    match tokio::time::timeout(
+        Duration::from_secs(6),
+        tokio::net::TcpStream::connect(addr),
+    )
+    .await
+    {
         Ok(Ok(_)) => Some(start.elapsed().as_millis() as u64),
         _ => None,
     }
 }
 
-async fn api_latency_probe(
-    axum::extract::Json(body): axum::extract::Json<LatencyProbeBody>,
-) -> Response {
+async fn api_latency_probe(axum::extract::Json(body): axum::extract::Json<LatencyProbeBody>) -> Response {
     let url_raw = body.url.trim();
     if url_raw.is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "latency_ms": null, "error": "url required" })),
-        )
-            .into_response();
+        return (StatusCode::BAD_REQUEST, Json(json!({ "latency_ms": null, "error": "url required" }))).into_response();
     }
     let parsed = match url::Url::parse(url_raw) {
         Ok(u) => u,
@@ -2015,26 +1814,15 @@ async fn api_latency_probe(
 async fn api_dag_get() -> Response {
     let g = dag_engine::build_engine_dag();
     let (nodes, edges) = dag_engine::dag_for_ui(&g);
-    let nodes_json: Vec<Value> = nodes
-        .iter()
-        .map(|(id, label)| json!({ "id": id, "label": label }))
-        .collect();
-    let edges_json: Vec<Value> = edges
-        .iter()
-        .map(|(s, t)| json!({ "source": s, "target": t }))
-        .collect();
-    let mut stage_to_nodes: std::collections::HashMap<u8, Vec<String>> =
-        std::collections::HashMap::new();
+    let nodes_json: Vec<Value> = nodes.iter().map(|(id, label)| json!({ "id": id, "label": label })).collect();
+    let edges_json: Vec<Value> = edges.iter().map(|(s, t)| json!({ "source": s, "target": t })).collect();
+    let mut stage_to_nodes: std::collections::HashMap<u8, Vec<String>> = std::collections::HashMap::new();
     for stage in 0..=4u8 {
         let engines = dag_pipeline::engines_for_stage(stage);
         stage_to_nodes.insert(stage, engines.iter().map(|s| s.to_string()).collect());
     }
     stage_to_nodes.insert(4, vec!["compliance".to_string()]);
-    (
-        StatusCode::OK,
-        Json(json!({ "nodes": nodes_json, "edges": edges_json, "stage_to_nodes": stage_to_nodes })),
-    )
-        .into_response()
+    (StatusCode::OK, Json(json!({ "nodes": nodes_json, "edges": edges_json, "stage_to_nodes": stage_to_nodes }))).into_response()
 }
 
 // ── Auto Domain Discovery ─────────────────────────────────────────────────────
@@ -2064,10 +1852,7 @@ async fn api_discovery_domains(
             Some(auth.user_id),
             &u,
             "discovery_initiated",
-            &format!(
-                "auto_domain_discovery target={}",
-                body.target.chars().take(200).collect::<String>()
-            ),
+            &format!("auto_domain_discovery target={}", body.target.chars().take(200).collect::<String>()),
             &ip,
         )
         .await;
@@ -2152,9 +1937,7 @@ async fn api_scan_all_engines(
         // enabled_engines lives inside the TEXT `client_configs` JSON blob — there is no `config`
         // column, and `clients` is FORCE RLS so this must run inside a tenant tx (bare-pool reads
         // match zero rows and silently widen the engine set to the full KNOWN_ENGINE_IDS list).
-        let cfg_text: Option<String> = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id)
-            .await
-        {
+        let cfg_text: Option<String> = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
             Ok(mut tx) => {
                 let r = sqlx::query_scalar::<_, String>(
                     "SELECT COALESCE(NULLIF(trim(client_configs), ''), '') FROM clients WHERE id = $1 AND tenant_id = $2",
@@ -2175,17 +1958,8 @@ async fn api_scan_all_engines(
             .and_then(|s| serde_json::from_str::<Value>(&s).ok())
             .and_then(|c| c.get("enabled_engines").cloned())
             .and_then(|e| e.as_array().cloned())
-            .map(|arr| {
-                arr.into_iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect()
-            })
-            .unwrap_or_else(|| {
-                weissman_core::models::engine::KNOWN_ENGINE_IDS
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect()
-            })
+            .map(|arr| arr.into_iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .unwrap_or_else(|| weissman_core::models::engine::KNOWN_ENGINE_IDS.iter().map(|s| s.to_string()).collect())
     };
 
     if engines.is_empty() {
@@ -2197,9 +1971,12 @@ async fn api_scan_all_engines(
     }
 
     let job_count = engines.len() as u64;
-    if let Err(detail) =
-        crate::billing::gate_scan_enqueue_n(state.auth_pool.as_ref(), auth.tenant_id, job_count)
-            .await
+    if let Err(detail) = crate::billing::gate_scan_enqueue_n(
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        job_count,
+    )
+    .await
     {
         return (
             StatusCode::PAYMENT_REQUIRED,
@@ -2212,23 +1989,22 @@ async fn api_scan_all_engines(
     let target = if let Some(ref t) = body.target {
         t.clone()
     } else {
-        let domains_result: Option<String> =
-            match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-                Ok(mut tx) => {
-                    let r = sqlx::query_scalar::<_, String>(
-                        "SELECT domains FROM clients WHERE id = $1 AND tenant_id = $2",
-                    )
-                    .bind(body.client_id)
-                    .bind(auth.tenant_id)
-                    .fetch_optional(&mut *tx)
-                    .await
-                    .ok()
-                    .flatten();
-                    let _ = tx.commit().await;
-                    r
-                }
-                Err(_) => None,
-            };
+        let domains_result: Option<String> = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+            Ok(mut tx) => {
+                let r = sqlx::query_scalar::<_, String>(
+                    "SELECT domains FROM clients WHERE id = $1 AND tenant_id = $2",
+                )
+                .bind(body.client_id)
+                .bind(auth.tenant_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .ok()
+                .flatten();
+                let _ = tx.commit().await;
+                r
+            }
+            Err(_) => None,
+        };
 
         domains_result
             .and_then(|d| {
@@ -2256,10 +2032,7 @@ async fn api_scan_all_engines(
     )
     .await
     {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"ok": false, "detail": detail})),
-        )
+        return (StatusCode::FORBIDDEN, Json(json!({"ok": false, "detail": detail})))
             .into_response();
     }
 
@@ -2345,10 +2118,7 @@ async fn api_scan_discovered_domains(
         )
         .await
         {
-            return (
-                StatusCode::FORBIDDEN,
-                Json(json!({"ok": false, "detail": detail})),
-            )
+            return (StatusCode::FORBIDDEN, Json(json!({"ok": false, "detail": detail})))
                 .into_response();
         }
     }
@@ -2365,9 +2135,12 @@ async fn api_scan_discovered_domains(
     });
 
     let job_count = (body.domains.len() * engines.len()) as u64;
-    if let Err(detail) =
-        crate::billing::gate_scan_enqueue_n(state.auth_pool.as_ref(), auth.tenant_id, job_count)
-            .await
+    if let Err(detail) = crate::billing::gate_scan_enqueue_n(
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        job_count,
+    )
+    .await
     {
         return (
             StatusCode::PAYMENT_REQUIRED,
@@ -2385,11 +2158,7 @@ async fn api_scan_discovered_domains(
             Some(auth.user_id),
             &u,
             "scan_domains_initiated",
-            &format!(
-                "client_id={} domains_count={}",
-                body.client_id,
-                body.domains.len()
-            ),
+            &format!("client_id={} domains_count={}", body.client_id, body.domains.len()),
             &ip,
         )
         .await;
