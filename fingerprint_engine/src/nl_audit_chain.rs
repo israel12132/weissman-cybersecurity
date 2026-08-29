@@ -289,4 +289,149 @@ mod tests {
         assert!(verify_sealed_id_order("genesis", &rows).is_ok());
         assert!(verify_sealed_asked_at_order("genesis", &rows).is_ok());
     }
+
+    #[tokio::test]
+    #[ignore = "live Postgres; cargo test -- --ignored --nocapture with DATABASE_URL"]
+    async fn live_postgres_out_of_order_asked_at_chains_by_id() {
+        let url = std::env::var("TEST_DATABASE_URL")
+            .or_else(|_| std::env::var("DATABASE_URL"))
+            .unwrap_or_default();
+        if url.trim().is_empty() {
+            eprintln!("skip live NL chain demo: DATABASE_URL unset");
+            return;
+        }
+        let pool = match sqlx::postgres::PgPoolOptions::new()
+            .max_connections(2)
+            .connect(&url)
+            .await
+        {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("skip live NL chain demo: connect failed: {e}");
+                return;
+            }
+        };
+        let has_col: bool = sqlx::query_scalar(
+            "SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'nl_query_audit'
+                  AND column_name = 'event_hash'
+            )",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap_or(false);
+        if !has_col {
+            eprintln!("skip live NL chain demo: event_hash column missing");
+            return;
+        }
+
+        let tenant_id: i64 = 1;
+        let marker = format!(
+            "architect-4433-nl-chain-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        );
+        let late = ts(1_777_000_000); // later wall clock
+        let early = ts(1_700_000_000); // earlier wall clock
+
+        let mut tx = crate::db::begin_tenant_tx(&pool, tenant_id)
+            .await
+            .expect("tenant tx");
+        sqlx::query(
+            "INSERT INTO nl_query_audit
+                (tenant_id, user_id, asked_at, question, compiled_sql, rows_returned, elapsed_ms, error)
+             VALUES ($1, 9, $2, $3, 'SELECT 1', 1, 4, '')",
+        )
+        .bind(tenant_id)
+        .bind(late)
+        .bind(format!("{marker}-id-first-later-clock"))
+        .execute(&mut *tx)
+        .await
+        .expect("insert later-clock first (lower id)");
+        sqlx::query(
+            "INSERT INTO nl_query_audit
+                (tenant_id, user_id, asked_at, question, compiled_sql, rows_returned, elapsed_ms, error)
+             VALUES ($1, 9, $2, $3, 'SELECT 1', 1, 4, '')",
+        )
+        .bind(tenant_id)
+        .bind(early)
+        .bind(format!("{marker}-id-second-earlier-clock"))
+        .execute(&mut *tx)
+        .await
+        .expect("insert earlier-clock second (higher id)");
+        tx.commit().await.expect("commit inserts");
+
+        let sealed = chain_pending_for_tenant(&pool, tenant_id, 256)
+            .await
+            .expect("seal by id");
+        assert!(
+            sealed >= 2,
+            "sealer must persist both demo rows, got {sealed}"
+        );
+
+        let mut tx = crate::db::begin_tenant_tx(&pool, tenant_id)
+            .await
+            .expect("read tx");
+        let rows = sqlx::query(
+            r#"SELECT id, tenant_id, user_id, asked_at, question, compiled_sql,
+                      rows_returned, elapsed_ms, error, prev_hash, event_hash
+               FROM nl_query_audit
+               WHERE tenant_id = $1 AND question LIKE $2
+               ORDER BY id ASC"#,
+        )
+        .bind(tenant_id)
+        .bind(format!("{marker}%"))
+        .fetch_all(&mut *tx)
+        .await
+        .expect("fetch sealed");
+        let _ = tx.commit().await;
+
+        assert_eq!(rows.len(), 2);
+        let parsed: Vec<NlAuditRow> = rows
+            .iter()
+            .map(|r| NlAuditRow {
+                id: r.get("id"),
+                tenant_id: r.get("tenant_id"),
+                user_id: r.get("user_id"),
+                asked_at: r.get("asked_at"),
+                question: r.get("question"),
+                compiled_sql: r.get("compiled_sql"),
+                rows_returned: r.get("rows_returned"),
+                elapsed_ms: r.get("elapsed_ms"),
+                error: r.get("error"),
+                prev_hash: r.get("prev_hash"),
+                event_hash: r.get("event_hash"),
+            })
+            .collect();
+        assert!(
+            parsed[0].asked_at > parsed[1].asked_at,
+            "demo rows must have inverted timestamps vs id order"
+        );
+        assert!(
+            parsed[0].event_hash.is_some() && parsed[1].event_hash.is_some(),
+            "both rows must be sealed"
+        );
+        assert!(
+            verify_sealed_id_order("", &parsed).is_ok(),
+            "live chain must verify in BIGSERIAL id order"
+        );
+        assert!(
+            verify_sealed_asked_at_order("", &parsed).is_err(),
+            "live chain must NOT verify in asked_at order"
+        );
+
+        let mut tx = crate::db::begin_tenant_tx(&pool, tenant_id)
+            .await
+            .expect("cleanup tx");
+        let _ = sqlx::query("DELETE FROM nl_query_audit WHERE tenant_id = $1 AND question LIKE $2")
+            .bind(tenant_id)
+            .bind(format!("{marker}%"))
+            .execute(&mut *tx)
+            .await;
+        let _ = tx.commit().await;
+    }
 }
