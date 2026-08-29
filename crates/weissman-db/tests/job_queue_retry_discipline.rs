@@ -390,13 +390,15 @@ async fn excluding_kinds_lets_light_work_through_a_saturated_heavy_pool() {
         .bind(vec![HEAVY, LIGHT])
         .execute(&admin)
         .await;
-    let _ = sqlx::query(
-        "INSERT INTO tenants (id, slug, name) VALUES ($1, 'excl-probe', 'Excl probe') \
+    sqlx::query(
+        "INSERT INTO tenants (id, slug, name) VALUES ($1, $2, 'Excl probe') \
          ON CONFLICT (id) DO NOTHING",
     )
     .bind(TENANT_EXCL)
+    .bind(format!("excl-probe-{TENANT_EXCL}"))
     .execute(&admin)
-    .await;
+    .await
+    .expect("seed tenant");
 
     // Heavy first, so it is the head of the queue by created_at — the exact shape that stalled it.
     for kind in [HEAVY, LIGHT] {

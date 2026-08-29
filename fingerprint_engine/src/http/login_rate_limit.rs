@@ -235,10 +235,11 @@ mod tests {
     #[test]
     fn local_governor_is_checked_before_redis_in_source() {
         let src = include_str!("login_rate_limit.rs");
-        let local = src
+        let prod = src.split("#[cfg(test)]").next().expect("production source");
+        let local = prod
             .find("limiter.check_key")
             .expect("in-process governor check");
-        let redis = src
+        let redis = prod
             .find("rate_limit_redis::is_enabled")
             .expect("redis branch");
         assert!(
@@ -246,11 +247,11 @@ mod tests {
             "in-process governor must run before any Redis I/O"
         );
         assert!(
-            !src.contains("incr_login_ip_strict(&ip).await"),
+            !prod.contains("incr_login_ip_strict"),
             "request path must not await Redis INCR; spawn async token-bucket instead"
         );
         assert!(
-            src.contains("spawn_incr_login_ip"),
+            prod.contains("spawn_incr_login_ip"),
             "local allow must fire-and-forget a Redis token-bucket update"
         );
     }

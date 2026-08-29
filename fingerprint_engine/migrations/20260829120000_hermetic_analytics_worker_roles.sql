@@ -3,7 +3,7 @@
 --   weissman_analytics  — SELECT-only on billing/quota/LLM meter tables. Midnight
 --                         billing and worker aggregation MUST use this pool
 --                         (WEISSMAN_ANALYTICS_DATABASE_URL). It cannot read
---                         vulnerabilities, agent_anomalies, or job payloads.
+--                         customer findings, endpoint anomalies, or job payloads.
 --   weissman_worker     — DML only on the job-bus tables so claim/heartbeat can
 --                         cross tenants without weakening weissman_app RLS
 --                         (WEISSMAN_WORKER_DATABASE_URL).

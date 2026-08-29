@@ -259,12 +259,13 @@ mod tests {
     #[test]
     fn module_never_calls_env_var_string() {
         let src = include_str!("secret_zeroize.rs");
+        let prod = src.split("#[cfg(test)]").next().expect("production source");
         assert!(
-            !src.contains("std::env::var("),
+            !prod.contains("std::env::var("),
             "vault load path must not allocate a heap String via std::env::var"
         );
-        assert!(src.contains("var_os"));
-        assert!(src.contains("into_encoded_bytes"));
-        assert!(src.contains("mlock") || src.contains("VirtualLock"));
+        assert!(prod.contains("var_os"));
+        assert!(prod.contains("into_encoded_bytes"));
+        assert!(prod.contains("mlock") || prod.contains("VirtualLock"));
     }
 }

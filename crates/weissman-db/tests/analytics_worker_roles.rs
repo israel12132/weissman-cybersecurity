@@ -31,6 +31,20 @@ async fn connect(url: &str) -> sqlx::PgPool {
         .expect("connect TEST_DATABASE_URL")
 }
 
+/// Dedicated connection under `SET ROLE`. Permission errors must not share a
+/// transaction with later assertions (25P02 aborted-tx).
+async fn conn_as_role(
+    pool: &sqlx::PgPool,
+    role: &str,
+) -> sqlx::pool::PoolConnection<sqlx::Postgres> {
+    let mut conn = pool.acquire().await.expect("acquire");
+    sqlx::query(&format!("SET ROLE {role}"))
+        .execute(&mut *conn)
+        .await
+        .unwrap_or_else(|e| panic!("SET ROLE {role}: {e}"));
+    conn
+}
+
 #[tokio::test]
 async fn analytics_role_cannot_read_customer_or_job_tables() {
     let url = test_database_url();
@@ -38,15 +52,10 @@ async fn analytics_role_cannot_read_customer_or_job_tables() {
         return;
     }
     let pool = connect(&url).await;
-
-    let mut tx = pool.begin().await.expect("begin");
-    sqlx::query("SET LOCAL ROLE weissman_analytics")
-        .execute(&mut *tx)
-        .await
-        .expect("SET ROLE weissman_analytics");
+    let mut conn = conn_as_role(&pool, "weissman_analytics").await;
 
     let quota_ok = sqlx::query("SELECT used FROM weissman_tenant_quota_usage LIMIT 1")
-        .fetch_optional(&mut *tx)
+        .fetch_optional(&mut *conn)
         .await;
     assert!(
         quota_ok.is_ok(),
@@ -54,31 +63,24 @@ async fn analytics_role_cannot_read_customer_or_job_tables() {
         quota_ok.err()
     );
 
-    let vuln = sqlx::query("SELECT 1 FROM vulnerabilities LIMIT 1")
-        .fetch_optional(&mut *tx)
-        .await;
-    assert!(vuln.is_err(), "analytics must not read vulnerabilities");
-
-    let jobs = sqlx::query("SELECT 1 FROM weissman_async_jobs LIMIT 1")
-        .fetch_optional(&mut *tx)
-        .await;
-    assert!(jobs.is_err(), "analytics must not read the job-bus");
-
-    let anom = sqlx::query("SELECT 1 FROM agent_anomalies LIMIT 1")
-        .fetch_optional(&mut *tx)
-        .await;
-    assert!(anom.is_err(), "analytics must not read agent_anomalies");
-
     let bypass: bool =
         sqlx::query_scalar("SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user")
-            .fetch_one(&mut *tx)
+            .fetch_one(&mut *conn)
             .await
             .expect("rolbypassrls");
     assert!(
         bypass,
         "weissman_analytics must BYPASSRLS for global aggregates"
     );
-    let _ = tx.rollback().await;
+
+    for (sql, label) in [
+        ("SELECT 1 FROM vulnerabilities LIMIT 1", "vulnerabilities"),
+        ("SELECT 1 FROM weissman_async_jobs LIMIT 1", "the job-bus"),
+        ("SELECT 1 FROM agent_anomalies LIMIT 1", "agent_anomalies"),
+    ] {
+        let err = sqlx::query(sql).fetch_optional(&mut *conn).await;
+        assert!(err.is_err(), "analytics must not read {label}");
+    }
 }
 
 #[tokio::test]
@@ -88,15 +90,10 @@ async fn worker_role_cannot_read_vulnerabilities() {
         return;
     }
     let pool = connect(&url).await;
-
-    let mut tx = pool.begin().await.expect("begin");
-    sqlx::query("SET LOCAL ROLE weissman_worker")
-        .execute(&mut *tx)
-        .await
-        .expect("SET ROLE weissman_worker");
+    let mut conn = conn_as_role(&pool, "weissman_worker").await;
 
     let jobs_ok = sqlx::query("SELECT 1 FROM weissman_async_jobs LIMIT 1")
-        .fetch_optional(&mut *tx)
+        .fetch_optional(&mut *conn)
         .await;
     assert!(
         jobs_ok.is_ok(),
@@ -105,13 +102,12 @@ async fn worker_role_cannot_read_vulnerabilities() {
     );
 
     let vuln = sqlx::query("SELECT 1 FROM vulnerabilities LIMIT 1")
-        .fetch_optional(&mut *tx)
+        .fetch_optional(&mut *conn)
         .await;
     assert!(
         vuln.is_err(),
         "weissman_worker must not read tenant findings"
     );
-    let _ = tx.rollback().await;
 }
 
 #[tokio::test]
