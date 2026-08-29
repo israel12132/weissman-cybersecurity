@@ -144,6 +144,18 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
             );
         }
 
+        let proxy_cidrs = std::env::var("WEISSMAN_TRUST_PROXY_CIDRS").unwrap_or_default();
+        let parsed_cidrs = proxy_cidrs
+            .split(',')
+            .filter_map(|s| s.trim().parse::<ipnetwork::IpNetwork>().ok())
+            .count();
+        if parsed_cidrs == 0 {
+            return Err(
+                "WEISSMAN_TRUST_PROXY_CIDRS must be set in production to at least one valid CIDR so dual-control headers cannot be injected by hitting Axum :8000 directly (SSRF / pod bypass of Nginx)"
+                    .into(),
+            );
+        }
+
         // Without Redis, login lockout + per-tenant/IP rate limits fall back to
         // per-replica in-memory state. In a multi-replica deployment that lets a
         // brute-force attacker spread attempts across replicas to dodge the limits,

@@ -1671,6 +1671,7 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         );
         // UEBA — purge old samples once an hour so the table stays bounded.
         crate::ueba_detector::spawn_retention_loop(app_pool.clone());
+        crate::nl_audit_chain::spawn_nl_audit_chain_loop(app_pool.clone());
         crate::sovereign_self_scan::spawn_sovereign_self_scan_loop(
             app_pool.clone(),
             state.telemetry_broadcast_tx.clone(),
@@ -1836,7 +1837,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             crate::http::ceo_rbac::ceo_rbac_middleware,
         ))
         .layer(middleware::from_fn(crate::rbac::mutation_rbac_middleware))
-        .layer(middleware::from_fn(crate::http::client_scope::client_scope_middleware))
+        .layer(middleware::from_fn(
+            crate::http::client_scope::client_scope_middleware,
+        ))
         .layer(middleware::from_fn(
             crate::http::sse_context::sse_context_middleware,
         ))
@@ -1847,6 +1850,12 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         ))
         .layer(middleware::from_fn(
             crate::request_trace::trace_http_middleware,
+        ))
+        // OUTERMOST: reject dual-control headers unless TCP peer ∈ TRUST_PROXY_CIDRS.
+        // Must sit outside auth so a direct :8000 / SSRF client cannot inject
+        // X-Weissman-Destructive-Confirm after Nginx has already stripped it.
+        .layer(middleware::from_fn(
+            crate::http::dual_control_proxy::dual_control_proxy_guard,
         ))
         .with_state(state);
     // Frontend is built with base: '/command-center/' so assets at /command-center/assets/...

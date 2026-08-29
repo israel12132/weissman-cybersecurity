@@ -11,12 +11,15 @@
 //!      up in the learned set) — those are fired at severity `medium` too, once
 //!      the metric has accumulated ≥ 24 observations.
 //!
-//! The detector NEVER fires while a metric is still learning (`n < 24`). Baselines
-//! are keyed per (agent, metric) — NOT per hour-of-week: with a 7-day sample
-//! window, any given hour-of-week bucket only ever holds ~1 sample, so per-bucket
-//! baselines could never reach the sample threshold and the detector never fired.
-//! Training over the whole rolling window makes both paths reachable while still
-//! honouring the "don't fire until trained" contract.
+//! The detector NEVER fires numeric z-score anomalies while a metric is still
+//! learning (`n < 24`). Categorical process/port items seen during the 20-minute
+//! agent onboarding window are **not** copied into `learned_set` unless they pass
+//! active validation (OS allow-list, fleet whitelist, threat signatures).
+//! Baselines are keyed per (agent, metric) — NOT per hour-of-week: with a 7-day
+//! sample window, any given hour-of-week bucket only ever holds ~1 sample, so
+//! per-bucket baselines could never reach the sample threshold and the detector
+//! never fired. Training over the whole rolling window makes both paths reachable
+//! while still honouring the "don't fire until trained" contract.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -312,21 +315,55 @@ async fn check_new_categorical(
         None => (HashSet::new(), 0),
     };
 
-    // Find items that are NEW (not in learned_set) — but only fire once we're
-    // out of the learning window.
     let new_items: Vec<String> = observed
         .iter()
         .filter(|x| !learned.contains(*x))
         .cloned()
         .collect();
 
-    // Add observed → learned_set and bump the per-metric observation count on
-    // EVERY sample (not just when the set changes) so `n` reflects how much history
-    // we've accumulated — that is what the learning gate below reads. Stored in a
-    // single per-(agent,metric) row under GLOBAL_BUCKET so it can actually train.
-    for x in observed {
-        learned.insert(x.clone());
+    let onboarding = agent_in_onboarding_window(tx, tenant_id, &p.agent_id).await?;
+    let fleet = if onboarding {
+        fleet_learned_items(tx, tenant_id, &p.agent_id, metric).await?
+    } else {
+        HashSet::new()
+    };
+
+    let mut admit: Vec<String> = Vec::new();
+    let mut threat_items: Vec<String> = Vec::new();
+    let mut unvalidated: Vec<String> = Vec::new();
+    if onboarding {
+        let is_ports = metric == "open_ports";
+        for item in &new_items {
+            let verdict = if is_ports {
+                item.parse::<i64>()
+                    .map(|p| crate::ueba_onboarding::classify_port(p, &fleet))
+                    .unwrap_or(crate::ueba_onboarding::OnboardingVerdict::Unvalidated)
+            } else {
+                crate::ueba_onboarding::classify_process(item, &fleet)
+            };
+            match verdict {
+                crate::ueba_onboarding::OnboardingVerdict::AllowBaseline => {
+                    admit.push(item.clone())
+                }
+                crate::ueba_onboarding::OnboardingVerdict::Threat => {
+                    threat_items.push(item.clone())
+                }
+                crate::ueba_onboarding::OnboardingVerdict::Unvalidated => {
+                    unvalidated.push(item.clone())
+                }
+            }
+        }
+        for x in observed {
+            if learned.contains(x) || admit.iter().any(|a| a == x) {
+                learned.insert(x.clone());
+            }
+        }
+    } else {
+        for x in observed {
+            learned.insert(x.clone());
+        }
     }
+
     let learned_vec: Vec<String> = learned.into_iter().collect();
     let _ = sqlx::query(
         r#"INSERT INTO agent_metric_baselines
@@ -346,17 +383,63 @@ async fn check_new_categorical(
     .execute(&mut **tx)
     .await;
 
-    if n_obs < MIN_BASELINE_SAMPLES || new_items.is_empty() {
-        return Ok(None); // still learning OR nothing new
+    if onboarding {
+        if !threat_items.is_empty() {
+            return insert_categorical_anomaly(
+                tx,
+                tenant_id,
+                p,
+                sample_id,
+                metric,
+                &threat_items,
+                "high",
+                "Onboarding threat signature — item excluded from UEBA baseline",
+            )
+            .await;
+        }
+        if !unvalidated.is_empty() {
+            return insert_categorical_anomaly(
+                tx,
+                tenant_id,
+                p,
+                sample_id,
+                metric,
+                &unvalidated,
+                "high",
+                "Onboarding unvalidated process/port — excluded from baseline until fleet/OS allow-list or threat-intel admits it",
+            )
+            .await;
+        }
+        return Ok(None);
     }
-    let detail = format!("{}: {}", title, new_items.join(", "));
+
+    if n_obs < MIN_BASELINE_SAMPLES || new_items.is_empty() {
+        return Ok(None);
+    }
+    insert_categorical_anomaly(
+        tx, tenant_id, p, sample_id, metric, &new_items, "medium", title,
+    )
+    .await
+}
+
+async fn insert_categorical_anomaly(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    p: &UebaIngestPayload,
+    sample_id: i64,
+    metric: &str,
+    items: &[String],
+    severity: &str,
+    title: &str,
+) -> Result<Option<AnomalyRecord>, String> {
+    let detail = format!("{}: {}", title, items.join(", "));
     let rec = AnomalyRecord {
         metric: metric.to_string(),
-        observed: new_items.len() as f64,
+        observed: items.len() as f64,
         baseline_mean: 0.0,
         baseline_stddev: 0.0,
-        z_score: new_items.len() as f64,
-        severity: "medium".to_string(),
+        z_score: items.len() as f64,
+        severity: severity.to_string(),
         detail: detail.clone(),
     };
     sqlx::query(
@@ -364,7 +447,7 @@ async fn check_new_categorical(
                  (tenant_id, agent_id, client_id, sample_id, metric_name,
                   observed, baseline_mean, baseline_stddev, z_score,
                   severity, detail, detected_at)
-           VALUES ($1, $2, $3, $4, $5, $6, 0, 0, $6, 'medium', $7, now())"#,
+           VALUES ($1, $2, $3, $4, $5, $6, 0, 0, $6, $7, $8, now())"#,
     )
     .bind(tenant_id)
     .bind(&p.agent_id)
@@ -372,11 +455,67 @@ async fn check_new_categorical(
     .bind(sample_id)
     .bind(metric)
     .bind(rec.z_score)
+    .bind(severity)
     .bind(&detail)
     .execute(&mut **tx)
     .await
     .map_err(|e| format!("insert categorical anomaly: {e}"))?;
     Ok(Some(rec))
+}
+
+async fn agent_in_onboarding_window(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    agent_id: &str,
+) -> Result<bool, String> {
+    let enrolled: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+        r#"SELECT enrolled_at FROM endpoint_agents
+           WHERE tenant_id = $1 AND agent_uuid::text = $2"#,
+    )
+    .bind(tenant_id)
+    .bind(agent_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(|e| format!("enrolled_at: {e}"))?;
+    let Some(at) = enrolled else {
+        return Ok(true);
+    };
+    let age = chrono::Utc::now().signed_duration_since(at);
+    Ok(age.num_seconds() < crate::ueba_onboarding::ONBOARDING_WINDOW_SECS)
+}
+
+async fn fleet_learned_items(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    agent_id: &str,
+    metric: &str,
+) -> Result<HashSet<String>, String> {
+    let rows: Vec<serde_json::Value> = sqlx::query_scalar(
+        r#"SELECT learned_set FROM agent_metric_baselines
+           WHERE tenant_id = $1 AND metric_name = $2 AND hour_of_week = $3
+             AND agent_id <> $4 AND n >= $5"#,
+    )
+    .bind(tenant_id)
+    .bind(metric)
+    .bind(GLOBAL_BUCKET)
+    .bind(agent_id)
+    .bind(MIN_BASELINE_SAMPLES)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(|e| format!("fleet learned_set: {e}"))?;
+    let mut out = HashSet::new();
+    for v in rows {
+        if let Ok(items) = serde_json::from_value::<Vec<String>>(v) {
+            for item in items {
+                if metric == "top_processes" {
+                    out.insert(crate::ueba_onboarding::normalize_process_name(&item));
+                } else {
+                    out.insert(item);
+                }
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// Long-running worker that purges samples older than 14 days and emits the

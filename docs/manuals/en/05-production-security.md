@@ -40,6 +40,7 @@ This activates guards in `fingerprint_engine/src/security_startup.rs` (`enforce_
 | `WEISSMAN_METRICS_TOKEN` unset or < 32 chars (server) | Refuses boot |
 | `REDIS_URL` unset without `WEISSMAN_ALLOW_SINGLE_NODE=1` (server) | Refuses boot |
 | `WEISSMAN_JOB_ORCHESTRATOR_SECRET` unset or < 32 chars (server + worker) | Refuses boot |
+| `WEISSMAN_TRUST_PROXY_CIDRS` unset (server) | Refuses boot — dual-control headers would otherwise be injectable via direct `:8000` |
 | JWT via `?access_token=` query param | Rejected at runtime |
 
 ---
@@ -86,6 +87,14 @@ X-Weissman-Destructive-Confirm: <exact secret value>
 
 Implemented in `fingerprint_engine/src/security_hardening.rs`. In production, missing secret blocks server start; missing header returns 403 at runtime.
 
+Nginx (or any reverse proxy) **must not** be the only control. Overlay/pod/SSRF clients can speak to Axum on `:8000` and inject the same headers. Middleware `dual_control_proxy_guard` (outermost layer) accepts those headers only when `ConnectInfo` peer IP is in `WEISSMAN_TRUST_PROXY_CIDRS`; every other peer is **403 Forbidden** immediately.
+
+```bash
+WEISSMAN_TRUST_PROXY_CIDRS=10.0.0.0/8,172.16.0.0/12
+```
+
+**Required in production** — empty CIDR list refuses server boot.
+
 ### 4. Protect metrics and admin surfaces
 
 ```bash
@@ -109,7 +118,7 @@ Scan paths call `gate_scan_enqueue` in `fingerprint_engine/src/billing/mod.rs`.
 - Expose only 443 (and 80 → redirect) publicly
 - Postgres and Redis not reachable from the internet
 - Set `WEISSMAN_TRUST_PROXY_HEADERS=1` only behind a trusted reverse proxy
-- Optional: `WEISSMAN_TRUST_PROXY_CIDRS` for forwarded client IP validation
+- **Required in production:** `WEISSMAN_TRUST_PROXY_CIDRS` — dual-control headers are accepted only from those TCP peers (403 otherwise)
 
 Never set `WEISSMAN_ALLOW_INSECURE_TLS=1` in production.
 

@@ -471,6 +471,7 @@ async fn audit_query(
     res: &AskResult,
 ) {
     if let Ok(mut tx) = crate::db::begin_tenant_tx(app_pool, tenant_id).await {
+        // Hash columns stay NULL — async sealer walks BIGSERIAL `id`, not asked_at.
         let _ = sqlx::query(
             "INSERT INTO nl_query_audit
                 (tenant_id, user_id, asked_at, question, plan_json, compiled_sql,
