@@ -3,9 +3,10 @@
 use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use serde_json::{json, Map, Value};
-use sha2::{Digest, Sha256};
 use std::sync::OnceLock;
-use zeroize::Zeroize;
+use zeroize::Zeroizing;
+
+use crate::secret_zeroize;
 
 const INT_PREFIX: &str = "wzi1:";
 
@@ -22,23 +23,11 @@ const SECRET_KEYS: &[&str] = &[
 ];
 
 fn derive_key(domain: &[u8], material: &str) -> [u8; 32] {
-    let mut h = Sha256::new();
-    h.update(domain);
-    h.update(material.as_bytes());
-    let mut k = [0u8; 32];
-    k.copy_from_slice(&h.finalize());
-    k
+    secret_zeroize::derive_aes256_key(domain, material)
 }
 
 fn hex32(raw: &str) -> Option<[u8; 32]> {
-    let b = hex::decode(raw.trim()).ok()?;
-    if b.len() == 32 {
-        let mut k = [0u8; 32];
-        k.copy_from_slice(&b);
-        Some(k)
-    } else {
-        None
-    }
+    secret_zeroize::hex32(raw)
 }
 
 /// True when a dedicated (non-JWT-derived) vault key is configured. When false
@@ -47,17 +36,16 @@ fn hex32(raw: &str) -> Option<[u8; 32]> {
 /// dedicated key.
 #[must_use]
 pub fn dedicated_key_configured() -> bool {
-    if std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY")
-        .map(|v| v.trim().len() >= 32)
-        .unwrap_or(false)
-        || std::env::var("WEISSMAN_VAULT_KEY")
-            .ok()
-            .and_then(|v| hex32(&v))
-            .is_some()
-    {
-        return true;
+    if let Some(&flag) = DEDICATED_AFTER_SCRUB.get() {
+        return flag;
     }
-    DEDICATED_AFTER_SCRUB.get().copied().unwrap_or(false)
+    env_has_dedicated_integrations_key()
+}
+
+fn env_has_dedicated_integrations_key() -> bool {
+    secret_zeroize::env_zeroizing("WEISSMAN_INTEGRATIONS_VAULT_KEY")
+        .is_some_and(|v| v.trim().len() >= 32)
+        || secret_zeroize::env_is_hex32_key("WEISSMAN_VAULT_KEY")
 }
 
 static DEDICATED_AFTER_SCRUB: OnceLock<bool> = OnceLock::new();
@@ -65,15 +53,7 @@ static DEDICATED_AFTER_SCRUB: OnceLock<bool> = OnceLock::new();
 /// Load the integrations keyring from the environment. Call once at boot before
 /// [`scrub_key_env_vars`].
 pub fn prime_keys_from_env() {
-    let _ = DEDICATED_AFTER_SCRUB.get_or_init(|| {
-        std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY")
-            .map(|v| v.trim().len() >= 32)
-            .unwrap_or(false)
-            || std::env::var("WEISSMAN_VAULT_KEY")
-                .ok()
-                .and_then(|v| hex32(&v))
-                .is_some()
-    });
+    let _ = DEDICATED_AFTER_SCRUB.get_or_init(env_has_dedicated_integrations_key);
     let _ = vault_key();
     let _ = decrypt_keyring();
 }
@@ -86,46 +66,40 @@ pub fn scrub_key_env_vars() {
         "WEISSMAN_VAULT_KEY",
         "WEISSMAN_VAULT_KEY_PREVIOUS",
     ] {
-        if let Ok(mut v) = std::env::var(name) {
-            v.zeroize();
-        }
-        std::env::remove_var(name);
+        secret_zeroize::scrub_env_var(name);
     }
 }
 
 /// Current (encryption) key. `None` only when no key material exists at all
 /// (dev without a JWT secret) — in production the startup guard requires one.
 fn vault_key() -> Option<[u8; 32]> {
-    static KEY: OnceLock<Option<[u8; 32]>> = OnceLock::new();
-    *KEY.get_or_init(|| {
-        if let Ok(mut raw) = std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY") {
-            let ok = raw.trim().len() >= 32;
-            let derived = if ok {
-                Some(derive_key(b"weissman-integrations-vault-v1|", raw.trim()))
-            } else {
-                None
-            };
-            raw.zeroize();
-            if derived.is_some() {
-                return derived;
+    static KEY: OnceLock<Option<Zeroizing<[u8; 32]>>> = OnceLock::new();
+    KEY.get_or_init(|| {
+        if let Some(raw) = secret_zeroize::env_zeroizing("WEISSMAN_INTEGRATIONS_VAULT_KEY") {
+            if raw.trim().len() >= 32 {
+                return Some(Zeroizing::new(derive_key(
+                    b"weissman-integrations-vault-v1|",
+                    raw.trim(),
+                )));
             }
         }
-        if let Ok(mut raw) = std::env::var("WEISSMAN_VAULT_KEY") {
-            let parsed = hex32(&raw);
-            raw.zeroize();
-            if let Some(k) = parsed {
-                return Some(k);
+        if let Some(raw) = secret_zeroize::env_zeroizing("WEISSMAN_VAULT_KEY") {
+            if let Some(k) = hex32(raw.trim()) {
+                return Some(Zeroizing::new(k));
             }
         }
-        let js = std::env::var("WEISSMAN_JWT_SECRET").unwrap_or_default();
-        if js.trim().len() < 16 {
-            return None;
+        if let Some(js) = secret_zeroize::env_zeroizing("WEISSMAN_JWT_SECRET") {
+            if js.trim().len() >= 16 {
+                return Some(Zeroizing::new(derive_key(
+                    b"weissman-integrations-vault-fallback|",
+                    js.trim(),
+                )));
+            }
         }
-        Some(derive_key(
-            b"weissman-integrations-vault-fallback|",
-            js.trim(),
-        ))
+        None
     })
+    .as_ref()
+    .map(|z| **z)
 }
 
 /// True when a key is available to encrypt secrets at rest. The production
@@ -184,21 +158,23 @@ fn build_decrypt_keyring(
 /// Decrypt keyring: current key first, then rotated-out previous keys so a key rotation never
 /// orphans already-encrypted secrets.
 fn decrypt_keyring() -> &'static [[u8; 32]] {
-    static KEYS: OnceLock<Vec<[u8; 32]>> = OnceLock::new();
+    static KEYS: OnceLock<Zeroizing<Vec<[u8; 32]>>> = OnceLock::new();
     KEYS.get_or_init(|| {
-        let mut prev_vault = std::env::var("WEISSMAN_VAULT_KEY_PREVIOUS").unwrap_or_default();
-        let mut prev_int =
-            std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY_PREVIOUS").unwrap_or_default();
-        let ring = build_decrypt_keyring(
+        let prev_vault = secret_zeroize::env_zeroizing("WEISSMAN_VAULT_KEY_PREVIOUS")
+            .unwrap_or_else(|| Zeroizing::new(String::new()));
+        let prev_int = secret_zeroize::env_zeroizing("WEISSMAN_INTEGRATIONS_VAULT_KEY_PREVIOUS")
+            .unwrap_or_else(|| Zeroizing::new(String::new()));
+        let jwt = secret_zeroize::env_zeroizing("WEISSMAN_JWT_SECRET")
+            .unwrap_or_else(|| Zeroizing::new(String::new()));
+        let prev_jwt = secret_zeroize::env_zeroizing("WEISSMAN_JWT_SECRET_PREVIOUS")
+            .unwrap_or_else(|| Zeroizing::new(String::new()));
+        Zeroizing::new(build_decrypt_keyring(
             vault_key(),
-            &std::env::var("WEISSMAN_JWT_SECRET").unwrap_or_default(),
-            &prev_vault,
-            &prev_int,
-            &std::env::var("WEISSMAN_JWT_SECRET_PREVIOUS").unwrap_or_default(),
-        );
-        prev_vault.zeroize();
-        prev_int.zeroize();
-        ring
+            jwt.as_str(),
+            prev_vault.as_str(),
+            prev_int.as_str(),
+            prev_jwt.as_str(),
+        ))
     })
     .as_slice()
 }

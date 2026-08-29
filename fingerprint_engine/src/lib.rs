@@ -295,6 +295,7 @@ pub mod scada_ics_engine;
 pub mod scan_payload_redaction;
 pub mod scan_routing;
 pub mod scan_schedule_worker;
+pub mod secret_zeroize;
 pub mod security_hardening;
 pub mod security_posture;
 pub mod security_startup;
