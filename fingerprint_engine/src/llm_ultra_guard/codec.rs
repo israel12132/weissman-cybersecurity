@@ -9,12 +9,17 @@ pub struct Normalized {
 }
 
 /// Strip C0 controls (keep \n \t), zero-width / bidi overrides, and fold lookalikes.
+/// JSON `\uXXXX` is unfolded and the stream is NFC-normalised first so a prompt
+/// of `\u0073ystem prompt` cannot skip the Aho-Corasick needles.
 #[must_use]
 pub fn normalize(raw: &str) -> Normalized {
-    let mut out = String::with_capacity(raw.len());
+    use unicode_normalization::UnicodeNormalization;
+    let unescaped = unescape_json_escapes(raw);
+    let nfc: String = unescaped.nfc().collect();
+    let mut out = String::with_capacity(nfc.len());
     let mut homoglyphs = false;
     let mut invisible = false;
-    for ch in raw.chars() {
+    for ch in nfc.chars() {
         if is_invisible(ch) {
             invisible = true;
             continue;
@@ -325,13 +330,11 @@ pub fn unescape_json_escapes(s: &str) -> String {
 
 /// NFC + homoglyph fold + JSON-escape unfold. Used by inspect_output so a
 /// truncated/invalid JSON completion cannot skip leak detection, and `\u0073ystem`
-/// cannot hide `system` from the automaton.
+/// cannot hide `system` from the automaton. Shares [`normalize`] so Ask input
+/// and planner output use the same stream.
 #[must_use]
 pub fn unfold_output_stream(raw: &str) -> String {
-    use unicode_normalization::UnicodeNormalization;
-    let unescaped = unescape_json_escapes(raw);
-    let nfc: String = unescaped.nfc().collect();
-    normalize(&nfc).folded
+    normalize(raw).folded
 }
 
 #[cfg(test)]
