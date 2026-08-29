@@ -1143,9 +1143,44 @@ async fn api_apply_asset_tag_rules(
 struct AskBody {
     #[serde(default)]
     question: String,
-    /// Service-to-service only. Requires `plan_hmac` or `X-Weissman-QueryPlan-Hmac`.
+    /// Service-to-service only. Requires HMAC + timestamp + nonce.
     plan: Option<crate::nl_query::QueryPlan>,
     plan_hmac: Option<String>,
+    plan_ts: Option<i64>,
+    plan_nonce: Option<String>,
+}
+
+fn header_str(headers: &axum::http::HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get(name)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn queryplan_admit_response(err: &str) -> Response {
+    let (status, code) = if err.contains("already been used") {
+        (StatusCode::FORBIDDEN, "queryplan_replay")
+    } else if err.contains("timestamp") {
+        (StatusCode::FORBIDDEN, "queryplan_timestamp_invalid")
+    } else if err.contains("nonce must be") {
+        (StatusCode::FORBIDDEN, "queryplan_nonce_invalid")
+    } else if err.contains("unavailable") || err.contains("fail-closed") {
+        (StatusCode::SERVICE_UNAVAILABLE, "distributed_store_unavailable")
+    } else if err.contains("HMAC key unavailable") {
+        (StatusCode::FORBIDDEN, "queryplan_hmac_unavailable")
+    } else {
+        (StatusCode::FORBIDDEN, "queryplan_hmac_invalid")
+    };
+    (
+        status,
+        Json(json!({
+            "ok": false,
+            "code": code,
+            "detail": err
+        })),
+    )
+        .into_response()
 }
 
 async fn api_ask(
@@ -1166,11 +1201,11 @@ async fn api_ask(
             }))).into_response();
         }
     };
-    let header_hmac = headers
-        .get("X-Weissman-QueryPlan-Hmac")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
-    let signed_plan = if let Some(plan) = body.plan {
+    let header_hmac = header_str(&headers, "X-Weissman-QueryPlan-Hmac");
+    let header_ts = header_str(&headers, "X-Weissman-QueryPlan-Ts")
+        .and_then(|s| s.trim().parse::<i64>().ok());
+    let header_nonce = header_str(&headers, "X-Weissman-QueryPlan-Nonce");
+    let admitted_plan = if let Some(plan) = body.plan {
         let hmac = body
             .plan_hmac
             .as_deref()
@@ -1187,29 +1222,48 @@ async fn api_ask(
             )
                 .into_response();
         }
-        if let Err(e) = crate::nl_query::verify_query_plan_hmac(&plan, hmac) {
+        let Some(ts) = body.plan_ts.or(header_ts) else {
             return (
                 StatusCode::FORBIDDEN,
                 Json(json!({
                     "ok": false,
-                    "code": "queryplan_hmac_invalid",
-                    "detail": e
+                    "code": "queryplan_timestamp_required",
+                    "detail": "direct QueryPlan requires plan_ts or X-Weissman-QueryPlan-Ts"
+                })),
+            )
+                .into_response();
+        };
+        let nonce = body
+            .plan_nonce
+            .as_deref()
+            .or(header_nonce.as_deref())
+            .unwrap_or("");
+        if nonce.is_empty() {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({
+                    "ok": false,
+                    "code": "queryplan_nonce_required",
+                    "detail": "direct QueryPlan requires plan_nonce or X-Weissman-QueryPlan-Nonce"
                 })),
             )
                 .into_response();
         }
-        Some((plan, hmac.to_string()))
+        match crate::nl_query::ingest_signed_query_plan(plan, hmac, ts, nonce).await {
+            Ok(p) => Some(p),
+            Err(e) => return queryplan_admit_response(&e),
+        }
     } else {
         None
     };
-    let result = if let Some((plan, hmac)) = signed_plan {
+    let result = if let Some(plan) = admitted_plan {
         crate::nl_query::ask(
             &state.app_pool,
             ro_pool.as_ref(),
             auth.tenant_id,
             Some(auth.user_id),
             "",
-            Some((plan, hmac.as_str())),
+            Some(plan),
         )
         .await
     } else {

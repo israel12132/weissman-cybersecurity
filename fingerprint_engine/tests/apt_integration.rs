@@ -144,10 +144,14 @@ fn nl_query_json_plan_is_the_only_compile_path() {
     );
     let plan: QueryPlan = serde_json::from_str(json).expect("plan");
     let key = [0x42u8; 32];
-    let mac = fingerprint_engine::nl_query::sign_query_plan_with_key(&plan, &key).expect("sign");
-    let admitted =
-        fingerprint_engine::nl_query::ingest_signed_query_plan_with_key(plan, &mac, &key)
-            .expect("hmac");
+    let ts = fingerprint_engine::nl_query::queryplan_unix_now();
+    let nonce = fingerprint_engine::nl_query::new_queryplan_nonce();
+    let mac = fingerprint_engine::nl_query::sign_query_plan_with_key(&plan, &key, ts, &nonce)
+        .expect("sign");
+    let admitted = fingerprint_engine::nl_query::ingest_signed_query_plan_with_key(
+        plan, &mac, ts, &nonce, &key,
+    )
+    .expect("hmac");
     let compiled = compile_plan(&admitted, 42).expect("compile");
     assert!(compiled
         .sql
@@ -188,5 +192,54 @@ fn ingest_and_compile_latency_is_sub_millisecond() {
     assert!(
         per < Duration::from_millis(1),
         "compile_plan per-call {per:?} (batch {elapsed:?}) must be sub-millisecond"
+    );
+}
+
+#[test]
+fn nl_query_signed_plan_replay_and_skew_are_rejected() {
+    let json = r#"{"table":"vulnerabilities","select":["id"],"filters":[],"limit":10}"#;
+    let plan: QueryPlan = serde_json::from_str(json).expect("plan");
+    let key = [0x7Au8; 32];
+    let ts = fingerprint_engine::nl_query::queryplan_unix_now();
+    let nonce = fingerprint_engine::nl_query::new_queryplan_nonce();
+    let mac = fingerprint_engine::nl_query::sign_query_plan_with_key(&plan, &key, ts, &nonce)
+        .expect("sign");
+    fingerprint_engine::nl_query::ingest_signed_query_plan_with_key(
+        plan.clone(),
+        &mac,
+        ts,
+        &nonce,
+        &key,
+    )
+    .expect("first admit");
+    let replay = fingerprint_engine::nl_query::ingest_signed_query_plan_with_key(
+        plan.clone(),
+        &mac,
+        ts,
+        &nonce,
+        &key,
+    )
+    .expect_err("replay");
+    assert!(
+        replay.contains("already been used"),
+        "replay must fail, got {replay}"
+    );
+
+    let stale_ts = ts - fingerprint_engine::nl_query::QUERYPLAN_HMAC_MAX_SKEW_SECS - 1;
+    let stale_nonce = fingerprint_engine::nl_query::new_queryplan_nonce();
+    let stale_mac =
+        fingerprint_engine::nl_query::sign_query_plan_with_key(&plan, &key, stale_ts, &stale_nonce)
+            .expect("sign stale");
+    let stale_err = fingerprint_engine::nl_query::verify_query_plan_hmac_with_key(
+        &plan,
+        &stale_mac,
+        stale_ts,
+        &stale_nonce,
+        &key,
+    )
+    .expect_err("stale");
+    assert!(
+        stale_err.contains("timestamp"),
+        "stale timestamp must fail, got {stale_err}"
     );
 }

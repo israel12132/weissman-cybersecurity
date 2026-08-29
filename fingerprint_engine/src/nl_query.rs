@@ -26,11 +26,19 @@ use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use sqlx::{Column, PgPool, Row};
 use std::collections::HashMap;
-use std::sync::LazyLock;
-use std::time::Instant;
+use std::sync::{LazyLock, Mutex};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 type HmacSha256 = Hmac<Sha256>;
-const QUERYPLAN_HMAC_DOMAIN: &[u8] = b"weissman-queryplan-v1\0";
+/// v2 binds unix timestamp + nonce into the MAC so a captured v1 signature cannot replay.
+const QUERYPLAN_HMAC_DOMAIN: &[u8] = b"weissman-queryplan-v2\0";
+/// Maximum |server_now − plan_ts| accepted for S2S QueryPlan HMAC (seconds).
+pub const QUERYPLAN_HMAC_MAX_SKEW_SECS: i64 = 5;
+/// Redis / local nonce TTL. 2× the skew window so a packet at the edge cannot
+/// be replayed after the store forgets it.
+pub const QUERYPLAN_NONCE_TTL_SECS: u64 = 10;
+const QUERYPLAN_NONCE_MIN_HEX: usize = 16;
+const QUERYPLAN_NONCE_MAX_HEX: usize = 64;
 
 // ─── Allow-list schema ───────────────────────────────────────────────────────
 #[derive(Debug, Clone)]
@@ -500,24 +508,77 @@ pub fn canonical_query_plan_bytes(plan: &QueryPlan) -> Result<Vec<u8>, String> {
     serde_json::to_vec(plan).map_err(|e| format!("canonicalize plan: {e}"))
 }
 
+/// Unix seconds used to bind QueryPlan HMACs.
+#[must_use]
+pub fn queryplan_unix_now() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+/// 16-byte (32 hex char) nonce for one S2S QueryPlan admission.
+#[must_use]
+pub fn new_queryplan_nonce() -> String {
+    hex::encode(uuid::Uuid::new_v4().as_bytes())
+}
+
+pub fn validate_queryplan_nonce(nonce: &str) -> Result<(), String> {
+    let n = nonce.trim();
+    if n.len() < QUERYPLAN_NONCE_MIN_HEX || n.len() > QUERYPLAN_NONCE_MAX_HEX {
+        return Err("query plan nonce must be 16-64 hex characters".into());
+    }
+    if !n.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("query plan nonce must be hexadecimal".into());
+    }
+    Ok(())
+}
+
 /// Sign a QueryPlan with an explicit 32-byte key (tests + S2S helpers).
-pub fn sign_query_plan_with_key(plan: &QueryPlan, key: &[u8; 32]) -> Result<String, String> {
+///
+/// The MAC covers `domain || canonical_plan || ts_be_i64 || nonce_utf8`.
+pub fn sign_query_plan_with_key(
+    plan: &QueryPlan,
+    key: &[u8; 32],
+    ts: i64,
+    nonce: &str,
+) -> Result<String, String> {
+    validate_queryplan_nonce(nonce)?;
     let mut mac = HmacSha256::new_from_slice(key).map_err(|e| e.to_string())?;
     mac.update(QUERYPLAN_HMAC_DOMAIN);
     mac.update(&canonical_query_plan_bytes(plan)?);
+    mac.update(&ts.to_be_bytes());
+    mac.update(nonce.trim().as_bytes());
     Ok(hex::encode(mac.finalize().into_bytes()))
 }
 
-pub fn sign_query_plan(plan: &QueryPlan) -> Result<String, String> {
-    sign_query_plan_with_key(plan, &queryplan_hmac_key()?)
+pub fn sign_query_plan(plan: &QueryPlan, ts: i64, nonce: &str) -> Result<String, String> {
+    sign_query_plan_with_key(plan, &queryplan_hmac_key()?, ts, nonce)
 }
 
 pub fn verify_query_plan_hmac_with_key(
     plan: &QueryPlan,
     hmac_hex: &str,
+    ts: i64,
+    nonce: &str,
     key: &[u8; 32],
 ) -> Result<(), String> {
-    let expected_hex = sign_query_plan_with_key(plan, key)?;
+    verify_query_plan_hmac_with_key_at(plan, hmac_hex, ts, nonce, key, queryplan_unix_now())
+}
+
+pub fn verify_query_plan_hmac_with_key_at(
+    plan: &QueryPlan,
+    hmac_hex: &str,
+    ts: i64,
+    nonce: &str,
+    key: &[u8; 32],
+    now: i64,
+) -> Result<(), String> {
+    validate_queryplan_nonce(nonce)?;
+    if now.abs_diff(ts) > QUERYPLAN_HMAC_MAX_SKEW_SECS as u64 {
+        return Err("query plan timestamp is outside the 5 second replay window".into());
+    }
+    let expected_hex = sign_query_plan_with_key(plan, key, ts, nonce)?;
     let expected = hex::decode(&expected_hex).unwrap_or_default();
     if !crate::security_hardening::constant_time_hmac_hex_eq(&expected, hmac_hex) {
         return Err("query plan HMAC is invalid".into());
@@ -525,22 +586,58 @@ pub fn verify_query_plan_hmac_with_key(
     Ok(())
 }
 
-pub fn verify_query_plan_hmac(plan: &QueryPlan, hmac_hex: &str) -> Result<(), String> {
-    verify_query_plan_hmac_with_key(plan, hmac_hex, &queryplan_hmac_key()?)
+pub fn verify_query_plan_hmac(
+    plan: &QueryPlan,
+    hmac_hex: &str,
+    ts: i64,
+    nonce: &str,
+) -> Result<(), String> {
+    verify_query_plan_hmac_with_key(plan, hmac_hex, ts, nonce, &queryplan_hmac_key()?)
 }
 
-/// Admit a service-to-service QueryPlan after vault HMAC verification.
-pub fn ingest_signed_query_plan(plan: QueryPlan, hmac_hex: &str) -> Result<QueryPlan, String> {
-    verify_query_plan_hmac(&plan, hmac_hex)?;
+static LOCAL_QUERYPLAN_NONCES: LazyLock<Mutex<HashMap<String, Instant>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Process-local nonce consume (unit tests + single-node when Redis is unset).
+pub fn consume_queryplan_nonce_local(nonce: &str) -> Result<(), String> {
+    validate_queryplan_nonce(nonce)?;
+    let ttl = Duration::from_secs(QUERYPLAN_NONCE_TTL_SECS);
+    let mut g = LOCAL_QUERYPLAN_NONCES
+        .lock()
+        .map_err(|_| "query plan nonce store poisoned".to_string())?;
+    g.retain(|_, seen| seen.elapsed() < ttl);
+    let key = nonce.trim().to_ascii_lowercase();
+    if g.contains_key(&key) {
+        return Err("query plan HMAC nonce has already been used".into());
+    }
+    g.insert(key, Instant::now());
+    Ok(())
+}
+
+/// Admit a service-to-service QueryPlan after vault HMAC + replay checks.
+///
+/// Consumes the nonce via Redis `SET NX` when `REDIS_URL` is set; otherwise
+/// a process-local map (fail-closed when production distributed Redis is required).
+pub async fn ingest_signed_query_plan(
+    plan: QueryPlan,
+    hmac_hex: &str,
+    ts: i64,
+    nonce: &str,
+) -> Result<QueryPlan, String> {
+    verify_query_plan_hmac(&plan, hmac_hex, ts, nonce)?;
+    crate::http::rate_limit_redis::claim_queryplan_nonce(nonce).await?;
     Ok(plan)
 }
 
 pub fn ingest_signed_query_plan_with_key(
     plan: QueryPlan,
     hmac_hex: &str,
+    ts: i64,
+    nonce: &str,
     key: &[u8; 32],
 ) -> Result<QueryPlan, String> {
-    verify_query_plan_hmac_with_key(&plan, hmac_hex, key)?;
+    verify_query_plan_hmac_with_key(&plan, hmac_hex, ts, nonce, key)?;
+    consume_queryplan_nonce_local(nonce)?;
     Ok(plan)
 }
 
@@ -659,14 +756,14 @@ pub async fn execute_plan(
 }
 
 /// Run a free-form question end-to-end: LLM → plan → validate → execute.
-/// Direct QueryPlan execution requires [`signed_plan`] (vault HMAC).
+/// Direct QueryPlan execution requires [`admitted_plan`] (HMAC + ts + nonce already verified).
 pub async fn ask(
     app_pool: &PgPool,
     ro_pool: &PgPool,
     tenant_id: i64,
     user_id: Option<i64>,
     question: &str,
-    signed_plan: Option<(QueryPlan, &str)>,
+    admitted_plan: Option<QueryPlan>,
 ) -> AskResult {
     let start = Instant::now();
     let bad = |err: &str| AskResult {
@@ -689,20 +786,13 @@ pub async fn ask(
         return bad("question too long (max 2000 chars)");
     }
 
-    let plan: QueryPlan = if let Some((plan, hmac)) = signed_plan {
+    let plan: QueryPlan = if let Some(plan) = admitted_plan {
         if !q.is_empty() {
             let r = bad("signed QueryPlan must not be mixed with a natural-language question");
             audit_query(app_pool, tenant_id, user_id, question, &r).await;
             return r;
         }
-        match ingest_signed_query_plan(plan, hmac) {
-            Ok(p) => p,
-            Err(e) => {
-                let r = bad(&e);
-                audit_query(app_pool, tenant_id, user_id, question, &r).await;
-                return r;
-            }
-        }
+        plan
     } else {
         if q.is_empty() {
             return bad("question is empty");
@@ -902,6 +992,7 @@ async fn llm_to_plan(question: &str, tenant_id: i64) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hmac::Mac;
 
     #[test]
     fn compile_simple_severity_in() {
@@ -1031,13 +1122,95 @@ mod tests {
             limit: Some(10),
         };
         let key = [0x11u8; 32];
-        let mac = sign_query_plan_with_key(&plan, &key).expect("sign");
-        let admitted =
-            ingest_signed_query_plan_with_key(plan.clone(), &mac, &key).expect("valid hmac");
+        let ts = queryplan_unix_now();
+        let nonce = new_queryplan_nonce();
+        let mac = sign_query_plan_with_key(&plan, &key, ts, &nonce).expect("sign");
+        let admitted = ingest_signed_query_plan_with_key(plan.clone(), &mac, ts, &nonce, &key)
+            .expect("valid hmac");
         assert_eq!(admitted.table, "vulnerabilities");
-        assert!(verify_query_plan_hmac_with_key(&plan, "deadbeef", &key).is_err());
+        assert!(verify_query_plan_hmac_with_key(&plan, "deadbeef", ts, &nonce, &key).is_err());
         let compiled = compile_plan(&admitted, 1).expect("compile");
         assert!(compiled.sql.contains("tenant_id = $1"));
+    }
+
+    #[test]
+    fn signed_query_plan_rejects_stale_timestamp() {
+        let plan = QueryPlan {
+            table: "vulnerabilities".into(),
+            select: vec!["id".into()],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: Some(1),
+        };
+        let key = [0x22u8; 32];
+        let nonce = new_queryplan_nonce();
+        let now = 1_700_000_000i64;
+        let ts = now - QUERYPLAN_HMAC_MAX_SKEW_SECS - 1;
+        let mac = sign_query_plan_with_key(&plan, &key, ts, &nonce).expect("sign");
+        let err = verify_query_plan_hmac_with_key_at(&plan, &mac, ts, &nonce, &key, now)
+            .expect_err("stale");
+        assert!(
+            err.contains("timestamp"),
+            "stale timestamp must be rejected, got {err}"
+        );
+        let future = now + QUERYPLAN_HMAC_MAX_SKEW_SECS + 1;
+        let mac_f = sign_query_plan_with_key(&plan, &key, future, &nonce).expect("sign");
+        let err_f = verify_query_plan_hmac_with_key_at(&plan, &mac_f, future, &nonce, &key, now)
+            .expect_err("future");
+        assert!(err_f.contains("timestamp"), "got {err_f}");
+        let edge = now - QUERYPLAN_HMAC_MAX_SKEW_SECS;
+        let mac_ok = sign_query_plan_with_key(&plan, &key, edge, &nonce).expect("sign");
+        verify_query_plan_hmac_with_key_at(&plan, &mac_ok, edge, &nonce, &key, now)
+            .expect("edge of window must pass");
+    }
+
+    #[test]
+    fn signed_query_plan_rejects_replayed_nonce() {
+        let plan = QueryPlan {
+            table: "vulnerabilities".into(),
+            select: vec!["id".into()],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: Some(1),
+        };
+        let key = [0x33u8; 32];
+        let ts = queryplan_unix_now();
+        let nonce = new_queryplan_nonce();
+        let mac = sign_query_plan_with_key(&plan, &key, ts, &nonce).expect("sign");
+        ingest_signed_query_plan_with_key(plan.clone(), &mac, ts, &nonce, &key).expect("first");
+        let err =
+            ingest_signed_query_plan_with_key(plan, &mac, ts, &nonce, &key).expect_err("replay");
+        assert!(
+            err.contains("already been used"),
+            "replay must fail-closed, got {err}"
+        );
+    }
+
+    #[test]
+    fn signed_query_plan_v1_mac_without_ts_binding_is_rejected() {
+        let plan = QueryPlan {
+            table: "vulnerabilities".into(),
+            select: vec!["id".into()],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: Some(1),
+        };
+        let key = [0x44u8; 32];
+        let ts = queryplan_unix_now();
+        let nonce = new_queryplan_nonce();
+        // v1 MAC: domain v1 || plan only — must not verify under v2.
+        let mut mac = HmacSha256::new_from_slice(&key).expect("key");
+        mac.update(b"weissman-queryplan-v1\0");
+        mac.update(&canonical_query_plan_bytes(&plan).expect("canon"));
+        let v1 = hex::encode(mac.finalize().into_bytes());
+        let err = verify_query_plan_hmac_with_key(&plan, &v1, ts, &nonce, &key).expect_err("v1");
+        assert!(
+            err.contains("HMAC") || err.contains("invalid"),
+            "v1 signature must die, got {err}"
+        );
     }
 
     #[test]

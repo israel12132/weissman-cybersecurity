@@ -394,3 +394,71 @@ pub async fn incr_api_ip_strict(client_ip: &str) -> StrictOp<u64> {
     )
     .await
 }
+
+/// Claim a QueryPlan HMAC nonce exactly once (`SET key NX EX`).
+///
+/// `true` = first use. `false` = replay. `Unavailable` when Redis is required
+/// but unreachable (fail-closed). When Redis is unset and distributed state is
+/// not required, a process-local map is used so unit tests and single-node
+/// dev still reject replays.
+pub async fn claim_queryplan_nonce(nonce: &str) -> Result<(), String> {
+    match claim_queryplan_nonce_strict(nonce).await {
+        StrictOp::Ok(true) => Ok(()),
+        StrictOp::Ok(false) => Err("query plan HMAC nonce has already been used".into()),
+        StrictOp::Unavailable => Err(
+            "distributed security store (Redis) is unavailable; QueryPlan replay protection fail-closed"
+                .into(),
+        ),
+    }
+}
+
+fn queryplan_nonce_key(nonce: &str) -> String {
+    format!(
+        "weissman:queryplan:nonce:{}",
+        nonce.trim().to_ascii_lowercase()
+    )
+}
+
+static LOCAL_QUERYPLAN_NONCES: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
+fn local_queryplan_nonce_claim(key: &str, ttl: Duration) -> bool {
+    let Ok(mut g) = LOCAL_QUERYPLAN_NONCES.lock() else {
+        return false;
+    };
+    g.retain(|_, seen| seen.elapsed() < ttl);
+    if g.contains_key(key) {
+        return false;
+    }
+    g.insert(key.to_string(), std::time::Instant::now());
+    true
+}
+
+pub async fn claim_queryplan_nonce_strict(nonce: &str) -> StrictOp<bool> {
+    let ttl = Duration::from_secs(10); // keep in lockstep with nl_query::QUERYPLAN_NONCE_TTL_SECS
+    let key = queryplan_nonce_key(nonce);
+    let Some(rl) = shared() else {
+        return if distributed_state_required() {
+            StrictOp::Unavailable
+        } else {
+            StrictOp::Ok(local_queryplan_nonce_claim(&key, ttl))
+        };
+    };
+    let Ok(mut conn) = rl.conn().await else {
+        return StrictOp::Unavailable;
+    };
+    let acquired: Result<Option<String>, _> = redis::cmd("SET")
+        .arg(&key)
+        .arg("1")
+        .arg("NX")
+        .arg("EX")
+        .arg(ttl.as_secs())
+        .query_async(&mut conn)
+        .await;
+    match acquired {
+        Ok(Some(_)) => StrictOp::Ok(true),
+        Ok(None) => StrictOp::Ok(false),
+        Err(_) => StrictOp::Unavailable,
+    }
+}
