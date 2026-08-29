@@ -801,6 +801,10 @@ jobs:
           # integrations_vault::key_present() and ceo::vault::key_present(). CI-throwaway value.
           WEISSMAN_VAULT_KEY: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
           WEISSMAN_ENV: production
+          # CI has no Paddle. Production defaults billing_strict on; docker-compose
+          # and self-hosted use 0. Without this, enforce_client_create 402s the
+          # engine-group smoke before INSERT.
+          WEISSMAN_BILLING_STRICT: "0"
           WEISSMAN_COOKIE_SECURE: "1"
           WEISSMAN_ADMIN_EMAIL: admin@localhost
           WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum

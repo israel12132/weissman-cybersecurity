@@ -61,7 +61,18 @@ fn period_ym_now() -> String {
     format!("{:04}-{:02}", n.year(), n.month())
 }
 
-pub async fn enforce_client_create(pool: &PgPool, tenant_id: i64) -> Result<(), String> {
+/// Enforce plan client quota before `INSERT INTO clients`.
+///
+/// Subscription catalog rows are read on `auth_pool` (`weissman_auth` holds
+/// GRANT + BYPASSRLS on `tenant_subscriptions` / `billing_plans`). The live
+/// client count must **not** use that pool: `weissman_auth` has no privilege
+/// on `clients` (sovereign auth plane). Count inside a tenant-scoped app
+/// transaction so FORCE RLS sees the caller's tenant.
+pub async fn enforce_client_create(
+    auth_pool: &PgPool,
+    app_pool: &PgPool,
+    tenant_id: i64,
+) -> Result<(), String> {
     if !billing_strict_enabled() {
         return Ok(());
     }
@@ -72,7 +83,7 @@ pub async fn enforce_client_create(pool: &PgPool, tenant_id: i64) -> Result<(), 
            WHERE ts.tenant_id = $1"#,
     )
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(auth_pool)
     .await
     .map_err(|e| e.to_string())?;
     let Some(r) = row else {
@@ -86,12 +97,16 @@ pub async fn enforce_client_create(pool: &PgPool, tenant_id: i64) -> Result<(), 
         ));
     }
     let max_c: i32 = r.try_get("max_clients").map_err(|e| e.to_string())?;
+    let mut tx = weissman_db::begin_tenant_tx(app_pool, tenant_id)
+        .await
+        .map_err(|e| e.to_string())?;
     let count: i64 =
         sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients WHERE tenant_id = $1")
             .bind(tenant_id)
-            .fetch_one(pool)
+            .fetch_one(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
+    let _ = tx.commit().await;
     if count >= max_c as i64 {
         return Err(format!(
             "Client limit reached ({}/{}). Upgrade your plan.",
@@ -830,4 +845,22 @@ pub async fn register_tenant_and_admin(
     .map_err(|e| e.to_string())?;
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok((tid, uid))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn client_quota_counts_inside_app_tenant_tx() {
+        // weissman_auth must not SELECT public.clients (sovereign auth plane).
+        // Quota enforcement opens a tenant tx on the app pool instead.
+        let src = include_str!("mod.rs");
+        assert!(
+            src.contains("begin_tenant_tx(app_pool, tenant_id)"),
+            "client COUNT must run inside begin_tenant_tx on the app pool"
+        );
+        assert!(
+            src.contains("fetch_one(&mut *tx)"),
+            "client COUNT must use the tenant transaction, not the auth pool"
+        );
+    }
 }
