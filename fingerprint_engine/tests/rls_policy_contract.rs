@@ -170,3 +170,22 @@ fn ndr_itdr_ingest_migration_in_sync_both_dirs() {
         "migration must be identical in both dirs (sync check)"
     );
 }
+
+#[test]
+fn auth_bootstrap_promotes_master_bootstrap_to_owner() {
+    // POST /api/clients is owner-only. CI smoke logs in as
+    // WEISSMAN_MASTER_BOOTSTRAP_EMAIL; boot must promote that row, not only
+    // WEISSMAN_ADMIN_EMAIL, or engine-group smoke dies with 403 owner_required.
+    let src = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/auth_bootstrap.rs"),
+    )
+    .unwrap_or_default();
+    assert!(
+        src.contains("WEISSMAN_MASTER_BOOTSTRAP_EMAIL"),
+        "master bootstrap must be in the owner promotion set"
+    );
+    assert!(
+        src.contains("fn owner_bootstrap_emails"),
+        "owner email set must stay a named helper so both env operators are promoted"
+    );
+}
