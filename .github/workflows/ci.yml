@@ -772,7 +772,9 @@ jobs:
           # token-signing key to MFA/SOAR/CEO-vault decryption). One 64-hex key satisfies both
           # integrations_vault::key_present() and ceo::vault::key_present(). CI-throwaway value.
           WEISSMAN_VAULT_KEY: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
-          WEISSMAN_RAG_PROVENANCE_SECRET: a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00
+          # CI-throwaway RAG HMAC (64 hex). Repeating cafebabe — not a vault secret.
+          # Distinct from WEISSMAN_VAULT_KEY and from the JWT (security_startup forbids equality).
+          WEISSMAN_RAG_PROVENANCE_SECRET: cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe
           WEISSMAN_ENV: production
           WEISSMAN_COOKIE_SECURE: "1"
           WEISSMAN_ADMIN_EMAIL: admin@localhost
@@ -829,7 +831,9 @@ jobs:
           # Secrets-at-rest vault key (64 hex): the worker runs the same production startup guard
           # and refuses to boot without integrations_vault + ceo_vault keys. CI-throwaway value.
           WEISSMAN_VAULT_KEY: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
-          WEISSMAN_RAG_PROVENANCE_SECRET: a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00
+          # CI-throwaway RAG HMAC (64 hex). Repeating cafebabe — not a vault secret.
+          # Distinct from WEISSMAN_VAULT_KEY and from the JWT (security_startup forbids equality).
+          WEISSMAN_RAG_PROVENANCE_SECRET: cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe
           # Heavy scans must run at real parallelism. This env block is worker-only: the server
           # step above stays capped at app/auth/intel = 24/6/4, while the worker runs at
           # app/auth/intel = 48/4/4, so the combined pool budget is 86 plus the worker control

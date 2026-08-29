@@ -26,7 +26,7 @@ jobs:
       WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: nightly-e2e-destructive-confirm-min-32-chars-0123456789
       WEISSMAN_VAULT_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       # Dedicated RAG HMAC (64 hex). Production refuses JWT/council fallback.
-      WEISSMAN_RAG_PROVENANCE_SECRET: a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00
+      WEISSMAN_RAG_PROVENANCE_SECRET: cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe
       # Cap DB pools so weissman-server + weissman-worker together stay well under
       # postgres max_connections (default 100). At defaults each process opens
       # ~68 connections (app 48 + auth 12 + intel 8); two processes exceeded 100,

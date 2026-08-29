@@ -58,4 +58,10 @@ regexes = [
     # Throwaway 64-hex WEISSMAN_VAULT_KEY fixture in the nightly-e2e workflow —
     # scoped to the ephemeral runner DB only, never a real vault key.
     '''0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef''',
+    # CI-throwaway WEISSMAN_RAG_PROVENANCE_SECRET (64 hex). Repeating cafebabe is the
+    # live fixture; the high-entropy predecessor is allowlisted so `gitleaks detect`
+    # (git history, fetch-depth: 0) does not fail closed on the commit that first
+    # added production RAG HMAC pinning.
+    '''cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe''',
+    '''a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00''',
 ]
