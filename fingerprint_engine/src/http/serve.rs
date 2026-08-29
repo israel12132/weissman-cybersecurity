@@ -1842,6 +1842,14 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             .route("/dashboard", get(dashboard_page))
     };
     let api = serve_route_groups::mount_api_routes(root_routes)
+        // Unmatched paths must still enter middleware. Without a fallback, Axum
+        // 404s decoy/lure URLs before auth_guard can honey-route them.
+        .fallback(|| async {
+            (
+                StatusCode::NOT_FOUND,
+                Json(json!({"detail": "Not found", "ok": false})),
+            )
+        })
         .layer(middleware::from_fn(
             crate::http::login_rate_limit_middleware,
         ))

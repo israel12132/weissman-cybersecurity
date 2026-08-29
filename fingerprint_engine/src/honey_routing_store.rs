@@ -173,7 +173,7 @@ pub async fn ingest_hit(
             let escalated = escalate_confidence(confidence as u8, distinct);
             if escalated as i32 != confidence {
                 let _ = sqlx::query(
-                    "UPDATE honey_route_sessions SET confidence = $2, high_confidence = $3, updated_at = now() WHERE id = $1",
+                    "UPDATE honey_route_sessions SET confidence = GREATEST(confidence, $2), high_confidence = high_confidence OR $3, updated_at = now() WHERE id = $1",
                 )
                 .bind(session_id)
                 .bind(escalated as i32)
