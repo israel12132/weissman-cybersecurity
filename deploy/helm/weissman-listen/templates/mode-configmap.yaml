@@ -1,0 +1,54 @@
+{{- if eq .Values.mode "privilegedInit" }}
+# Privileged init runs in THIS chart's helper pod netns only if we owned the
+# backend Deployment. Instead we emit a merge-able init container as a ConfigMap
+# that the backend chart / kustomize overlay must include. PSS Restricted will
+# reject it — then use mode=podSysctl after kubelet allowlist.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-privileged-init
+  labels:
+    app.kubernetes.io/name: weissman-listen
+data:
+  init-container.yaml: |
+    - name: raise-listen-backlog
+      image: {{ .Values.privilegedInit.image }}
+      securityContext:
+        privileged: true
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          set -eu
+          sysctl -w net.core.somaxconn=4096
+          sysctl -w net.ipv4.tcp_max_syn_backlog=4096 || true
+{{- end }}
+{{- if eq .Values.mode "podSysctl" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-pod-sysctl
+  labels:
+    app.kubernetes.io/name: weissman-listen
+data:
+  kubelet.md: |
+    Add to kubelet config:
+      allowedUnsafeSysctls:
+        - net.core.somaxconn
+        - net.ipv4.tcp_max_syn_backlog
+    Then on weissman-backend pod spec.securityContext:
+      sysctls:
+        - name: net.core.somaxconn
+          value: "4096"
+        - name: net.ipv4.tcp_max_syn_backlog
+          value: "4096"
+  patch.yaml: |
+    spec:
+      template:
+        spec:
+          securityContext:
+            sysctls:
+              - name: net.core.somaxconn
+                value: "4096"
+              - name: net.ipv4.tcp_max_syn_backlog
+                value: "4096"
+{{- end }}

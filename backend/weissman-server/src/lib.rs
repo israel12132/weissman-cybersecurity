@@ -122,6 +122,8 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let router = middleware::cors::apply(router);
     let router = middleware::security_headers::apply(router);
     let router = middleware::rate_limiter::apply_global_rate_limit(router);
+    // After the edge limiter: inflate gzip/br with a 4 MiB output cap (zip bomb).
+    let router = middleware::inbound_decode::apply(router);
     // Outermost: Brotli-4/gzip for SPA static types only. API JSON is uncompressed
     // here — nginx (`deploy/nginx-brotli.inc` / gateway gzip) owns JSON compression
     // so a request flood cannot starve Tokio workers. SSE and WebSocket 101 skipped.

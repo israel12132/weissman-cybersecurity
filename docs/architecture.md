@@ -90,10 +90,10 @@ Sub-millisecond request path for Command Center and agent ingest:
 
 | Control | Where | Notes |
 |---------|--------|--------|
-| SIMD JSON | `fingerprint_engine::http::simd_json` (sonic-rs) | **Ingest + telemetry only.** `#[serde(borrow)]` is an in-handler parse; `parse_ingest_bytes` **`into_owned()`s every field** before the HTTP body is dropped. Engines/reports stay on `serde_json`. |
-| Tokio workers | `hpc_runtime::build_scan_runtime` | Default = `min(physical cores, **cgroup/affinity quota**)`. Never sizes from raw `/proc/cpuinfo` on a 2-CPU pod sitting on a 128-core node. Override: `WEISSMAN_TOKIO_WORKER_THREADS=logical\|smt\|N` (integers still clamped to quota). LIFO slot on. |
-| TCP | `http::tcp_socket` + `Serve::tcp_nodelay(true)` | Nagle off + keepalive. `listen(4096)` is reduced to `net.core.somaxconn` when the kernel would silently truncate; host/compose/systemd apply `deploy/sysctl.d/99-weissman-listen.conf`. |
-| Brotli-4 | nginx gateway / `deploy/nginx-brotli.inc` | **JSON compression is not in Axum** (CPU DoS). Axum Brotli-4 is SPA/static (`text/html`, CSS, JS, WASM) only. SSE excluded. Docker gateway gzip's JSON. VPS: include `nginx-brotli.inc`. |
+| SIMD JSON | `fingerprint_engine::http::simd_json` (sonic-rs) | **Ingest + telemetry only.** `parse_ingest_bytes` decodes **directly into owned** `'static` fields (`from_slice_owned`). No borrow/`Cow` then `into_owned()` (double heap). Engines/reports stay on `serde_json`. |
+| Tokio workers | `hpc_runtime::build_scan_runtime` | Default = `min(physical cores, **cgroup/affinity quota**)`. Quota uses **ceil**, hard floor **1** (`quota_cores_to_workers`: 250m/0.5 → 1, 2.5 → 3, never 0). Override: `WEISSMAN_TOKIO_WORKER_THREADS=logical\|smt\|N` (still clamped). LIFO slot on. |
+| TCP | `http::tcp_socket` + `Serve::tcp_nodelay(true)` | Nagle off + keepalive. `listen(4096)` is reduced to `net.core.somaxconn` when the kernel would silently truncate; host/compose/systemd apply `deploy/sysctl.d/99-weissman-listen.conf`. K8s: read-only init preflight + Helm `deploy/helm/weissman-listen`. |
+| Brotli-4 | nginx gateway / `deploy/nginx-brotli.inc` | **JSON compression is not in Axum** (CPU DoS). Axum Brotli-4 is SPA/static only. SSE excluded. **Inbound** gzip/br inflate is capped at **4 MiB** (`inbound_decode`); over → 413 + Connection: close. |
 | `spawn_blocking` | `/api/health` RSS, CEO telemetry, report writes | Filesystem I/O never sits on the event-loop worker |
 | Stream caps | `http::bounded_codec` | 1 MiB length-delimited frame / 4 MiB WS message / 1 MiB WS frame — room for agent reconnect batches, hard OOM ceiling. |
 | DashMap | login lockout, agent registry, LLM circuit, AI daily tokens, engine telemetry | Sharded maps. **Eviction sweep** every 15 min (`http::dashmap_gc`; `WEISSMAN_DASHMAP_EVICT_SECS`). Agent remote presence already pruned every 30s. |

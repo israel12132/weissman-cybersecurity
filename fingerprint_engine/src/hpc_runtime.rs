@@ -191,8 +191,23 @@ pub fn cgroup_cpu_quota_cores() -> Option<f64> {
     }
 }
 
+/// Convert a cgroup CPU quota in cores (may be fractional) into a Tokio worker count.
+///
+/// Tokio panics on `worker_threads = 0`. Kubernetes `resources.limits.cpu: "250m"` /
+/// `"0.5"` must become **1**, never truncated to 0. Non-integers such as 2.5 **ceil**
+/// to 3 so the fractional remainder is usable instead of leaving two workers to fight
+/// over a leftover slice.
+#[must_use]
+pub fn quota_cores_to_workers(quota: f64) -> usize {
+    if !quota.is_finite() || quota <= 0.0 {
+        return 1;
+    }
+    (quota.ceil() as usize).max(1)
+}
+
 /// Runnable CPUs for this process: `available_parallelism` (affinity) capped by
 /// the cgroup quota. Never returns the bare-metal `/proc/cpuinfo` count.
+/// Never returns 0.
 #[must_use]
 pub fn container_parallelism() -> usize {
     let affinity = std::thread::available_parallelism()
@@ -200,14 +215,7 @@ pub fn container_parallelism() -> usize {
         .unwrap_or(1)
         .max(1);
     match cgroup_cpu_quota_cores() {
-        Some(q) => {
-            let capped = q.ceil() as usize;
-            if capped == 0 {
-                affinity
-            } else {
-                affinity.min(capped)
-            }
-        }
+        Some(q) => affinity.min(quota_cores_to_workers(q)),
         None => affinity,
     }
     .max(1)
@@ -599,5 +607,24 @@ core id\t: 1
     fn container_parallelism_is_at_least_one() {
         assert!(container_parallelism() >= 1);
         assert!(tokio_worker_threads() <= container_parallelism());
+    }
+
+    #[test]
+    fn fractional_cgroup_quota_never_yields_zero_workers() {
+        assert_eq!(quota_cores_to_workers(0.25), 1); // 250m
+        assert_eq!(quota_cores_to_workers(0.5), 1);
+        assert_eq!(quota_cores_to_workers(0.99), 1);
+        assert_eq!(quota_cores_to_workers(1.0), 1);
+        assert_eq!(quota_cores_to_workers(2.5), 3); // ceil, not trunc
+        assert_eq!(quota_cores_to_workers(2.0), 2);
+        assert_eq!(quota_cores_to_workers(0.0), 1);
+        assert_eq!(quota_cores_to_workers(-4.0), 1);
+        assert_eq!(quota_cores_to_workers(f64::NAN), 1);
+        assert_eq!(quota_cores_to_workers(f64::INFINITY), 1);
+        assert_eq!(parse_cgroup_v2_cpu_max("25000 100000"), Some(0.25));
+        assert_eq!(
+            quota_cores_to_workers(parse_cgroup_v2_cpu_max("25000 100000").unwrap()),
+            1
+        );
     }
 }

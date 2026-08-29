@@ -71,7 +71,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile monito
 
 Plain `docker compose up -d --build` (base file only) is for local development, not production.
 
-The `backend` service sets `sysctls.net.core.somaxconn=4096` so the kernel does not silently truncate Axum's listen backlog. Host-level: `sudo bash deploy/apply-listen-sysctl.sh`. JSON gzip is at the gateway; Axum does not Brotli-compress API JSON.
+The `backend` service sets `sysctls.net.core.somaxconn=4096` so the kernel does not silently truncate Axum's listen backlog. Host-level: `sudo bash deploy/apply-listen-sysctl.sh`. Kubernetes: `helm upgrade --install weissman-listen deploy/helm/weissman-listen` (fail-closed preflight) or `kubectl apply -f deploy/k8s/listen-sysctl-daemonset.yaml`. JSON gzip is at the gateway; Axum does not Brotli-compress API JSON. Inbound gzip/br inflate is capped at 4 MiB.
 
 Services started:
 - `postgres` — pgvector/pgvector:pg16

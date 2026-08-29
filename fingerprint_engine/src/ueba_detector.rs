@@ -21,7 +21,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::PgPool;
-use std::borrow::Cow;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -43,42 +42,20 @@ pub struct UebaIngestPayload {
     pub metrics: Value,
 }
 
-/// Zero-copy view of an ingest body. `agent_id` may borrow the HTTP buffer
-/// (`#[serde(borrow)]` / `Cow`). This type is **never** returned from the
-/// handler: [`parse_ingest_bytes`] detaches every field with `into_owned`
-/// before the request `Bytes` can be dropped (Axum 200 OK / MPSC / spawn).
-#[derive(Debug, Deserialize)]
-struct UebaIngestBorrowed<'a> {
-    #[serde(borrow)]
-    agent_id: Cow<'a, str>,
-    client_id: i64,
-    hour_of_week: i16,
-    metrics: Value,
-}
-
-/// SIMD parse of `POST /api/ueba/ingest`. Returns an **owned** `'static` payload.
-///
-/// Borrowed `Cow::Borrowed` slices into `buf` are copied here. Callers may
-/// drop the HTTP body, spawn a task, or send the payload on a channel.
+/// SIMD parse of `POST /api/ueba/ingest`. Direct decode into owned `'static` fields
+/// (`from_slice_owned`). No `#[serde(borrow)]` / `Cow` — that path parsed into
+/// slices then copied again (`into_owned`), doubling heap work without keeping
+/// zero-copy past the handler boundary.
 pub fn parse_ingest_bytes(buf: &[u8]) -> Result<UebaIngestPayload, String> {
-    let borrowed: UebaIngestBorrowed<'_> = crate::http::simd_json::from_slice(buf)?;
-    // Detach from the request buffer *before* this function returns. A Cow
-    // that still points at hyper's body becomes use-after-free the moment the
-    // handler replies 200 and Axum reclaims the Bytes.
-    let agent_id = borrowed.agent_id.into_owned();
-    let agent_id = agent_id.trim().to_string();
-    if agent_id.is_empty() {
+    let mut p: UebaIngestPayload = crate::http::simd_json::from_slice_owned(buf)?;
+    p.agent_id = p.agent_id.trim().to_string();
+    if p.agent_id.is_empty() {
         return Err("agent_id is required".into());
     }
-    if borrowed.metrics.is_null() {
+    if p.metrics.is_null() {
         return Err("metrics is required".into());
     }
-    Ok(UebaIngestPayload {
-        agent_id,
-        client_id: borrowed.client_id,
-        hour_of_week: borrowed.hour_of_week,
-        metrics: borrowed.metrics,
-    })
+    Ok(p)
 }
 
 /// Public entry point — called by the server when an agent posts a `ueba_baseline`
@@ -462,7 +439,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_ingest_bytes_borrows_then_owns_agent_id() {
+    fn parse_ingest_bytes_returns_owned_static_payload() {
         let raw =
             br#"{"agent_id":"host-aabb","client_id":7,"hour_of_week":13,"metrics":{"load":1.5}}"#;
         let p = parse_ingest_bytes(raw).expect("parse");

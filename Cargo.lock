@@ -7172,7 +7172,10 @@ name = "weissman-server"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "brotli",
+ "bytes",
  "fingerprint_engine",
+ "flate2",
  "governor",
  "nonzero_ext",
  "serde_json",

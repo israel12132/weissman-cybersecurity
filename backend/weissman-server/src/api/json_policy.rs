@@ -6,6 +6,10 @@
 
 const DEFAULT_MAX_BYTES: usize = 5 * 1024 * 1024;
 
+/// Hard cap on **decompressed** request size. A 10 KiB gzip/br body that inflates
+/// past this is a bomb: 413 and drop, never gigabytes of RAM.
+pub const MAX_DECOMPRESSED_BODY_BYTES: usize = 4 * 1024 * 1024;
+
 /// Maximum request body size applied at the router (`DefaultBodyLimit`).
 ///
 /// Override with `WEISSMAN_MAX_REQUEST_BODY_BYTES` (clamped between 1 KiB and 128 MiB).

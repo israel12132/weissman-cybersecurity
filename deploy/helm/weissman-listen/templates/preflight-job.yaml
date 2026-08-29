@@ -1,0 +1,43 @@
+# Helm pre-install/pre-upgrade: refuse to complete if somaxconn would truncate listen(4096).
+# The Job's netns uses the cluster default — same default the backend pod would get.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-listen-preflight
+  labels:
+    app.kubernetes.io/name: weissman-listen
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: preflight
+          image: {{ .Values.preflight.image | quote }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              v=$(cat /proc/sys/net/core/somaxconn 2>/dev/null || echo 0)
+              echo "weissman-listen preflight: somaxconn=$v (need >= 4096)"
+              if [ "$v" -lt 4096 ]; then
+                echo "FATAL: Axum listen(4096) will be silently truncated to $v."
+                echo "Set helm --set mode=privilegedInit (PSS exception) or mode=podSysctl"
+                echo "after kubelet allowedUnsafeSysctls=net.core.somaxconn,net.ipv4.tcp_max_syn_backlog"
+                echo "or enable daemonSet.enabled=true (hostNetwork only)."
+                exit 1
+              fi

@@ -32,7 +32,9 @@ for f in \
   deploy/k8s/gateway-deployment.yaml \
   deploy/k8s/gateway-service.yaml \
   deploy/k8s/redis-deployment.yaml \
-  deploy/k8s/ingress.yaml
+  deploy/k8s/ingress.yaml \
+  deploy/k8s/listen-sysctl-daemonset.yaml \
+  deploy/helm/weissman-listen/Chart.yaml
 do
   [[ -f "$f" ]] && ok "exists $f" || bad "missing $f"
 done
@@ -50,7 +52,8 @@ if command -v kubectl >/dev/null 2>&1; then
     -f deploy/k8s/gateway-deployment.yaml \
     -f deploy/k8s/gateway-service.yaml \
     -f deploy/k8s/redis-deployment.yaml \
-    -f deploy/k8s/ingress.yaml >/dev/null 2>&1; then
+    -f deploy/k8s/ingress.yaml \
+    -f deploy/k8s/listen-sysctl-daemonset.yaml >/dev/null 2>&1; then
     ok "kubectl dry-run client"
   else
     bad "kubectl dry-run client"
