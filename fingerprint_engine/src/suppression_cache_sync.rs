@@ -3,10 +3,15 @@
 //!
 //! Without this, a 30s DashMap TTL on node B keeps serving a stale empty/old
 //! rule set and will still dispatch SOAR after node A already busted locally.
+//!
+//! Pub/Sub is at-most-once. A reconnect gap is handled with stale-while-revalidate
+//! plus 0..=5000 ms jitter — never a fleet-wide DashMap `.clear()`.
 
 use futures::StreamExt;
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
+use std::sync::Arc;
 use std::time::Duration;
 
 pub const CHANNEL: &str = "weissman:suppression_cache:bust";
@@ -92,18 +97,23 @@ fn apply_remote(event: &CacheBustEvent) {
     }
 }
 
-async fn run_subscriber() -> Result<(), String> {
+fn on_pubsub_gap(pool: &Arc<PgPool>) {
+    crate::fp_feedback::mark_suppression_cache_stale_for_swr();
+    crate::fp_feedback::schedule_suppression_cache_swr_refresh(pool.clone());
+}
+
+async fn run_subscriber(pool: Arc<PgPool>) -> Result<(), String> {
     let client = redis_client().ok_or("REDIS_URL unset")?;
     let mut pubsub = client.get_async_pubsub().await.map_err(|e| e.to_string())?;
     pubsub.subscribe(CHANNEL).await.map_err(|e| e.to_string())?;
-    // Pub/Sub is at-most-once. Events published while this replica was
-    // disconnected are gone; drop the local DashMap so persist reloads rules
-    // from Postgres instead of serving a stale 30s snapshot.
-    crate::fp_feedback::invalidate_suppression_cache_all_local();
+    // At-most-once: busts published while we were down are gone. Keep serving
+    // stale rules and refresh from Postgres after a random jitter so every
+    // replica does not stampede the suppression table at once.
+    on_pubsub_gap(&pool);
     tracing::info!(
         target: "suppression_cache_sync",
         channel = CHANNEL,
-        "CACHE_BUST_SUPPRESSION subscriber active (local suppression cache evicted)"
+        "CACHE_BUST_SUPPRESSION subscriber active (SWR refresh scheduled)"
     );
     let mut stream = pubsub.on_message();
     while let Some(msg) = stream.next().await {
@@ -116,7 +126,7 @@ async fn run_subscriber() -> Result<(), String> {
 }
 
 /// Subscribe for the life of this process (server + worker). No-op without Redis.
-pub fn spawn_suppression_cache_redis_sync() {
+pub fn spawn_suppression_cache_redis_sync(pool: Arc<PgPool>) {
     if redis_client().is_none() {
         tracing::info!(
             target: "suppression_cache_sync",
@@ -126,14 +136,14 @@ pub fn spawn_suppression_cache_redis_sync() {
     }
     tokio::spawn(async move {
         loop {
-            if let Err(e) = run_subscriber().await {
+            if let Err(e) = run_subscriber(pool.clone()).await {
                 tracing::warn!(
                     target: "suppression_cache_sync",
                     error = %e,
-                    "subscriber disconnected; retrying"
+                    "subscriber disconnected; retrying with SWR"
                 );
             }
-            crate::fp_feedback::invalidate_suppression_cache_all_local();
+            on_pubsub_gap(&pool);
             tokio::time::sleep(Duration::from_secs(SUBSCRIBER_RETRY_SECS)).await;
         }
     });
@@ -157,13 +167,19 @@ mod tests {
     }
 
     #[test]
-    fn subscriber_evicts_local_cache_on_subscribe_and_retry() {
+    fn subscriber_uses_swr_not_violent_clear_on_reconnect() {
         let src = include_str!("suppression_cache_sync.rs");
         assert!(
-            src.matches("invalidate_suppression_cache_all_local()")
-                .count()
-                >= 2,
-            "subscribe success and the reconnect loop must both drop the DashMap"
+            !src.contains(concat!("invalidate_suppression_cache_all", "_local()")),
+            "reconnect must not empty the DashMap (thundering herd)"
+        );
+        assert!(
+            src.contains("mark_suppression_cache_stale_for_swr"),
+            "reconnect must mark the cache stale"
+        );
+        assert!(
+            src.contains("schedule_suppression_cache_swr_refresh"),
+            "reconnect must schedule a jittered Postgres refresh"
         );
     }
 }

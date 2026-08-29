@@ -409,6 +409,16 @@ async fn persist_dedup_auto_suppress_and_cross_plane_critical() {
             || joined.contains("autovacuum_vacuum_scale_factor"),
         "ingest autovacuum not set: {joined}"
     );
+    let persistence: String = sqlx::query_scalar(
+        "SELECT relpersistence::text FROM pg_class WHERE relname = 'weissman_cluster_ingest'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("relpersistence");
+    assert_eq!(
+        persistence, "u",
+        "weissman_cluster_ingest must be UNLOGGED, got {persistence}"
+    );
 
     eprintln!("alert-fatigue live contract OK finding_id={finding_id}");
 }

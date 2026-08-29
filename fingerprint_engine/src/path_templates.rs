@@ -8,18 +8,28 @@
 //!
 //! Prefix context is preserved, so `/api/v1/public/image/{id}` never collapses
 //! onto `/api/v1/admin/billing/{id}`.
+//!
+//! The trie is an RCU snapshot (`ArcSwap<TrieNode>`): persist reads a frozen
+//! `Arc` and never waits on writers. Observes clone-modify-swap in the
+//! background so an HTTP flood during boot cannot pin Axum workers on a
+//! write lock.
 
+use arc_swap::ArcSwap;
 use dashmap::DashMap;
 use sqlx::PgPool;
 use std::collections::HashMap;
-use std::sync::{Arc, LazyLock, RwLock};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
 const LEARN_TTL: Duration = Duration::from_secs(60);
-const MAX_PATHS_PER_TENANT: usize = 4000;
+const MAX_PATHS_PER_TENANT: usize = 25_000;
 const MAX_CHILDREN: usize = 64;
 /// Two distinct non-reserved siblings at the same prefix ⇒ that position is `{id}`.
 const FANOUT_TO_VARIABLE: usize = 2;
+/// Unique-path pages for cold-start pre-warm (never a full-table jsonb dump).
+const PREWARM_BATCH: i64 = 25_000;
+const PREWARM_WINDOW_SQL: &str = "90 days";
 
 static TENANT_INDEX: LazyLock<DashMap<i64, CachedIndex>> = LazyLock::new(DashMap::new);
 
@@ -28,7 +38,7 @@ struct CachedIndex {
     index: Arc<PathTemplateIndex>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct TrieNode {
     children: HashMap<String, TrieNode>,
     /// Non-reserved children at this node are interchangeable identifiers.
@@ -36,10 +46,18 @@ struct TrieNode {
 }
 
 /// Learned route templates for one tenant.
-#[derive(Debug, Default)]
 pub struct PathTemplateIndex {
-    root: RwLock<TrieNode>,
-    observes: std::sync::atomic::AtomicUsize,
+    root: ArcSwap<TrieNode>,
+    observes: AtomicUsize,
+}
+
+impl Default for PathTemplateIndex {
+    fn default() -> Self {
+        Self {
+            root: ArcSwap::from_pointee(TrieNode::default()),
+            observes: AtomicUsize::new(0),
+        }
+    }
 }
 
 impl PathTemplateIndex {
@@ -52,35 +70,61 @@ impl PathTemplateIndex {
     #[must_use]
     pub fn from_urls(urls: &[&str]) -> Self {
         let idx = Self::new();
-        for u in urls {
-            idx.observe_url(u);
-        }
+        idx.observe_urls(urls.iter().copied());
         idx
     }
 
     pub fn observe_url(&self, raw: &str) {
-        let n = self.observes.load(std::sync::atomic::Ordering::Relaxed);
-        if n >= MAX_PATHS_PER_TENANT {
+        self.observe_urls(std::iter::once(raw));
+    }
+
+    /// Clone the trie once, apply every URL, then swap the snapshot. Readers
+    /// keep walking the previous `Arc` with no write lock.
+    pub fn observe_urls(&self, urls: impl IntoIterator<Item = impl AsRef<str>>) {
+        if self.is_full() {
             return;
         }
-        let segs = path_segments(raw);
-        if segs.is_empty() {
+        let batch: Vec<Vec<String>> = urls
+            .into_iter()
+            .filter_map(|u| {
+                let segs = path_segments(u.as_ref());
+                if segs.is_empty() {
+                    None
+                } else {
+                    Some(segs)
+                }
+            })
+            .collect();
+        if batch.is_empty() {
             return;
         }
-        if let Ok(mut root) = self.root.write() {
-            insert_path(&mut root, &segs);
-            self.observes
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let remaining = MAX_PATHS_PER_TENANT.saturating_sub(self.observes.load(Ordering::Relaxed));
+        if remaining == 0 {
+            return;
         }
+        let take = batch.len().min(remaining);
+        self.root.rcu(|current| {
+            let mut n = (**current).clone();
+            for segs in batch.iter().take(take) {
+                insert_path(&mut n, segs);
+            }
+            Arc::new(n)
+        });
+        self.observes.fetch_add(take, Ordering::Relaxed);
+    }
+
+    fn is_full(&self) -> bool {
+        self.observes.load(Ordering::Relaxed) >= MAX_PATHS_PER_TENANT
     }
 
     /// Rewrite variable positions. Local structural rules apply first; tenant
-    /// fan-out fills the gaps those rules miss.
+    /// fan-out fills the gaps those rules miss. Walks a frozen snapshot — never
+    /// acquires a write lock.
     #[must_use]
     pub fn apply_segments(&self, segs: &[&str]) -> String {
         let last = segs.len().saturating_sub(1);
-        let snap = self.root.read().ok();
-        let mut node = snap.as_deref();
+        let snap = self.root.load();
+        let mut node: Option<&TrieNode> = Some(snap.as_ref());
         let mut out = String::new();
         for (i, seg) in segs.iter().enumerate() {
             if i > 0 {
@@ -176,86 +220,96 @@ pub fn path_segments(raw: &str) -> Vec<String> {
         .collect()
 }
 
-const PERSISTED_TARGET_SQL: &str = r#"SELECT DISTINCT COALESCE(
-                    NULLIF(raw_data->>'target', ''),
-                    NULLIF(raw_data->>'target_url', ''),
-                    NULLIF(raw_data->'raw'->>'url', ''),
-                    NULLIF(raw_data->'raw'->>'target_url', ''),
-                    NULLIF(raw_data->>'url', '')
-                )
-             FROM vulnerabilities
+const CLUSTER_TARGET_PAGE_SQL: &str = r#"SELECT DISTINCT target
+             FROM weissman_finding_clusters
             WHERE tenant_id = $1
-              AND COALESCE(
+              AND target <> ''
+              AND last_seen_at > NOW() - INTERVAL '90 days'
+              AND target > $2
+            ORDER BY target
+            LIMIT $3"#;
+
+const VULN_TARGET_PAGE_SQL: &str = r#"SELECT DISTINCT t
+             FROM (
+                SELECT COALESCE(
                     NULLIF(raw_data->>'target', ''),
                     NULLIF(raw_data->>'target_url', ''),
                     NULLIF(raw_data->'raw'->>'url', ''),
                     NULLIF(raw_data->'raw'->>'target_url', ''),
                     NULLIF(raw_data->>'url', '')
-                  ) IS NOT NULL
-            LIMIT 2000"#;
+                ) AS t
+                  FROM vulnerabilities
+                 WHERE tenant_id = $1
+                   AND COALESCE(last_seen_at, discovered_at) > NOW() - INTERVAL '90 days'
+             ) s
+            WHERE t IS NOT NULL AND t > $2
+            ORDER BY t
+            LIMIT $3"#;
+
+async fn paginate_unique_targets(
+    pool: &PgPool,
+    tenant_id: i64,
+    index: &PathTemplateIndex,
+    sql: &str,
+) -> bool {
+    let mut cursor = String::new();
+    let mut any_ok = false;
+    loop {
+        if index.is_full() {
+            break;
+        }
+        let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
+            return any_ok;
+        };
+        let rows = sqlx::query_scalar::<_, String>(sql)
+            .bind(tenant_id)
+            .bind(&cursor)
+            .bind(PREWARM_BATCH)
+            .fetch_all(&mut *tx)
+            .await;
+        let committed = tx.commit().await.is_ok();
+        match rows {
+            Ok(rows) => {
+                any_ok = true;
+                if rows.is_empty() {
+                    break;
+                }
+                if let Some(last) = rows.last() {
+                    cursor = last.clone();
+                }
+                let n = rows.len();
+                index.observe_urls(rows);
+                if n < PREWARM_BATCH as usize {
+                    break;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    target: "path_templates",
+                    tenant_id,
+                    error = %e,
+                    "unique-path page unavailable for trie pre-warm"
+                );
+                return any_ok && committed;
+            }
+        }
+    }
+    any_ok
+}
 
 async fn observe_persisted_targets(
     pool: &PgPool,
     tenant_id: i64,
     index: &PathTemplateIndex,
 ) -> bool {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return false;
-    };
-    let mut loaded_query = false;
-    // Cluster targets are already route-normalized (`…/users/{id}`). Reloading
-    // them after a reboot is what closes the cold-start hole: the next sibling
-    // (`carol`) must not mint a new finding_id.
-    match sqlx::query_scalar::<_, String>(
-        r#"SELECT target FROM weissman_finding_clusters
-            WHERE tenant_id = $1 AND target <> ''
-            ORDER BY last_seen_at DESC NULLS LAST
-            LIMIT 2000"#,
-    )
-    .bind(tenant_id)
-    .fetch_all(&mut *tx)
-    .await
-    {
-        Ok(rows) => {
-            loaded_query = true;
-            for t in rows {
-                index.observe_url(&t);
-            }
-        }
-        Err(e) => {
-            tracing::warn!(
-                target: "path_templates",
-                tenant_id,
-                error = %e,
-                "cluster targets unavailable for trie pre-warm"
-            );
-        }
+    // One short tenant TX per 25k unique-path page. Never dump the full
+    // jsonb history into the Axum heap; 90-day window + DISTINCT + keyset.
+    let clusters = paginate_unique_targets(pool, tenant_id, index, CLUSTER_TARGET_PAGE_SQL).await;
+    if index.is_full() {
+        return clusters;
     }
-    match sqlx::query_scalar::<_, String>(PERSISTED_TARGET_SQL)
-        .bind(tenant_id)
-        .fetch_all(&mut *tx)
-        .await
-    {
-        Ok(rows) => {
-            loaded_query = true;
-            for t in rows {
-                index.observe_url(&t);
-            }
-        }
-        Err(e) => {
-            tracing::warn!(
-                target: "path_templates",
-                tenant_id,
-                error = %e,
-                "vulnerability targets unavailable for trie pre-warm"
-            );
-        }
-    }
-    if !loaded_query {
-        let _ = tx.rollback().await;
-        return false;
-    }
-    tx.commit().await.is_ok()
+    let vulns = paginate_unique_targets(pool, tenant_id, index, VULN_TARGET_PAGE_SQL).await;
+    clusters || vulns
 }
 
 /// Warm (or reuse) the in-memory index from cluster + finding targets.
@@ -282,7 +336,8 @@ pub async fn index_for_tenant(pool: &PgPool, tenant_id: i64) -> Arc<PathTemplate
 }
 
 /// Load every active tenant's trie from persisted targets. Uses
-/// [`weissman_db::active_tenant_ids`] (never a raw `tenants` scan).
+/// [`weissman_db::active_tenant_ids`] (never a raw `tenants` scan). Sequential
+/// per tenant so boot cannot fan out N heavy DISTINCT scans at once.
 pub async fn prewarm_all_tenants(pool: &PgPool) {
     let ids = match weissman_db::active_tenant_ids(pool).await {
         Ok(v) => v,
@@ -302,7 +357,9 @@ pub async fn prewarm_all_tenants(pool: &PgPool) {
     tracing::info!(
         target: "path_templates",
         tenants = n,
-        "path-template trie pre-warmed from persisted cluster/finding targets"
+        window = PREWARM_WINDOW_SQL,
+        batch = PREWARM_BATCH,
+        "path-template trie pre-warmed from unique 90-day cluster/finding targets"
     );
 }
 
@@ -396,5 +453,48 @@ mod tests {
             worker.contains("path_templates::spawn_prewarm"),
             "worker boot must pre-warm the per-tenant trie"
         );
+    }
+
+    #[test]
+    fn prewarm_sql_is_bounded_unique_90_day_pages() {
+        for sql in [CLUSTER_TARGET_PAGE_SQL, VULN_TARGET_PAGE_SQL] {
+            assert!(
+                sql.contains("INTERVAL '90 days'"),
+                "pre-warm must not scan unbounded history:\n{sql}"
+            );
+            assert!(
+                sql.contains("LIMIT $3"),
+                "pre-warm must page with LIMIT:\n{sql}"
+            );
+            assert!(
+                sql.contains("DISTINCT"),
+                "pre-warm must ingest unique paths only:\n{sql}"
+            );
+        }
+        assert_eq!(PREWARM_BATCH, 25_000);
+    }
+
+    #[test]
+    fn rcu_reads_never_wait_on_observe() {
+        let idx = Arc::new(PathTemplateIndex::from_urls(&[
+            "https://api.corp/api/v1/users/alice",
+            "https://api.corp/api/v1/users/bob",
+        ]));
+        let readers = idx.clone();
+        let t = std::thread::spawn(move || {
+            for _ in 0..2_000 {
+                let _ = readers.apply_segments(&["api", "v1", "users", "carol"]);
+            }
+        });
+        for i in 0..2_000 {
+            idx.observe_url(&format!("https://api.corp/api/v1/users/u{i}"));
+        }
+        t.join().expect("reader thread");
+        let carol = normalize_target_ctx(
+            "https://api.corp/api/v1/users/carol",
+            &IdentityHint::default(),
+            Some(idx.as_ref()),
+        );
+        assert_eq!(carol, "https://api.corp/api/v1/users/{id}");
     }
 }

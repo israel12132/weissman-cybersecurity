@@ -2568,6 +2568,7 @@ name = "fingerprint_engine"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
+ "arc-swap",
  "async-stream",
  "async-trait",
  "aws-config",

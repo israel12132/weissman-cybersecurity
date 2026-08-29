@@ -329,9 +329,11 @@ pub async fn persist_engine_findings(
     // Learn route templates from this tenant (and this batch) before hashing
     // identities so emails / filenames / sibling slugs share one key.
     let path_templates = crate::path_templates::index_for_tenant(pool, tenant_id).await;
-    for raw in findings {
-        path_templates.observe_url(&extract_target(raw, target));
-    }
+    let observe_batch: Vec<String> = findings
+        .iter()
+        .map(|raw| extract_target(raw, target))
+        .collect();
+    path_templates.observe_urls(&observe_batch);
 
     let mut tx = db::begin_tenant_tx(pool, tenant_id)
         .await

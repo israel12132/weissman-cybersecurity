@@ -1534,7 +1534,7 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         );
     }
     crate::agent_registry_sync::spawn_agent_registry_redis_sync(state.endpoint_agents.clone());
-    crate::suppression_cache_sync::spawn_suppression_cache_redis_sync();
+    crate::suppression_cache_sync::spawn_suppression_cache_redis_sync(app_pool.clone());
     crate::path_templates::spawn_prewarm(app_pool.clone());
     // Cross-replica real-time: bridge the live telemetry broadcast over Redis pub/sub so
     // SSE/WS clients on every replica see events produced on any replica (no-op without REDIS_URL).

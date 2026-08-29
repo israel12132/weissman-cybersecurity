@@ -18,13 +18,17 @@
 
 use dashmap::DashMap;
 use globset::Glob;
+use rand::RngExt;
 use sqlx::{PgPool, Postgres, Transaction};
 use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
 const AUTO_SUPPRESS_FP_THRESHOLD: i32 = 3;
 const SUPPRESSION_CACHE_TTL: Duration = Duration::from_secs(30);
+/// Upper bound for stale-while-revalidate jitter after a Redis pub/sub gap.
+pub const SWR_JITTER_MAX_MS: u64 = 5_000;
 
 struct CachedRules {
     loaded_at: Instant,
@@ -35,6 +39,7 @@ static SUPPRESSION_CACHE: LazyLock<DashMap<(i64, String), CachedRules>> =
     LazyLock::new(DashMap::new);
 static GLOB_MATCHERS: LazyLock<DashMap<String, Option<globset::GlobMatcher>>> =
     LazyLock::new(DashMap::new);
+static SWR_REFRESH_RUNNING: AtomicBool = AtomicBool::new(false);
 
 /// Drop the in-memory glob cache for `(tenant, engine)` after a new rule is written.
 pub fn invalidate_suppression_cache(tenant_id: i64, engine: &str) {
@@ -58,12 +63,61 @@ pub fn invalidate_suppression_cache_tenant_local(tenant_id: i64) {
     SUPPRESSION_CACHE.retain(|k, _| k.0 != tenant_id);
 }
 
-/// Drop every cached rule set on this replica. Redis Pub/Sub is at-most-once:
-/// a reconnect gap can drop `CACHE_BUST_SUPPRESSION` events, so the subscriber
-/// must force the next persist to reload from Postgres rather than serve a
-/// stale empty/old globset. Does not re-publish.
+/// Drop every cached rule set on this replica. Tests / tenant wipe only.
+/// Production Redis reconnect must **not** call this — see
+/// [`mark_suppression_cache_stale_for_swr`].
 pub fn invalidate_suppression_cache_all_local() {
     SUPPRESSION_CACHE.clear();
+}
+
+/// Mark every cached rule set expired without dropping it. Persist keeps
+/// serving the stale globset (stale-while-revalidate) so a fleet-wide Redis
+/// blip cannot stampede Postgres.
+pub fn mark_suppression_cache_stale_for_swr() {
+    let expired_at = Instant::now()
+        .checked_sub(SUPPRESSION_CACHE_TTL)
+        .unwrap_or_else(Instant::now);
+    for mut entry in SUPPRESSION_CACHE.iter_mut() {
+        entry.loaded_at = expired_at;
+    }
+}
+
+/// After a pub/sub gap, one replica waits a random 0..=5000 ms then reloads
+/// every cached `(tenant, engine)` sequentially. Other persist calls keep serving
+/// stale rules until this finishes.
+pub fn schedule_suppression_cache_swr_refresh(pool: Arc<PgPool>) {
+    if tokio::runtime::Handle::try_current().is_err() {
+        return;
+    }
+    if SUPPRESSION_CACHE.is_empty() {
+        return;
+    }
+    if SWR_REFRESH_RUNNING
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return;
+    }
+    tokio::spawn(async move {
+        struct ClearFlag;
+        impl Drop for ClearFlag {
+            fn drop(&mut self) {
+                SWR_REFRESH_RUNNING.store(false, Ordering::SeqCst);
+            }
+        }
+        let _clear = ClearFlag;
+        let jitter_ms = rand::rng().random_range(0..=SWR_JITTER_MAX_MS);
+        tokio::time::sleep(Duration::from_millis(jitter_ms)).await;
+        let keys: Vec<(i64, String)> = SUPPRESSION_CACHE.iter().map(|e| e.key().clone()).collect();
+        for (tenant_id, engine) in keys {
+            let _ = load_suppression_rules_from_db(pool.as_ref(), tenant_id, &engine).await;
+        }
+        tracing::info!(
+            target: "fp_feedback",
+            jitter_ms,
+            "suppression cache SWR refresh complete"
+        );
+    });
 }
 
 #[inline]
@@ -290,9 +344,27 @@ pub async fn active_suppressions_for_engine(
         if hit.loaded_at.elapsed() < SUPPRESSION_CACHE_TTL {
             return hit.rules.clone();
         }
+        // Expired but present: serve stale and let the jittered SWR worker
+        // (or a single in-process refresh) reload from Postgres.
+        let stale = hit.rules.clone();
+        drop(hit);
+        schedule_suppression_cache_swr_refresh(Arc::new(pool.clone()));
+        return stale;
     }
+    load_suppression_rules_from_db(pool, tenant_id, engine).await
+}
+
+async fn load_suppression_rules_from_db(
+    pool: &PgPool,
+    tenant_id: i64,
+    engine: &str,
+) -> Vec<SuppressionRule> {
+    let cache_key = (tenant_id, engine.to_ascii_lowercase());
     let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Vec::new();
+        return SUPPRESSION_CACHE
+            .get(&cache_key)
+            .map(|h| h.rules.clone())
+            .unwrap_or_default();
     };
     let rows: Vec<(String, Option<String>)> = sqlx::query_as(
         r#"SELECT signature_hash, target_glob FROM finding_suppressions
@@ -438,7 +510,8 @@ pub async fn bump_suppression_hits(
 mod tests {
     use super::{
         invalidate_suppression_cache_all_local, invalidate_suppression_cache_tenant_local,
-        is_suppressed_by, multiplier_from_counts, CachedRules, SuppressionRule, SUPPRESSION_CACHE,
+        is_suppressed_by, mark_suppression_cache_stale_for_swr, multiplier_from_counts,
+        CachedRules, SuppressionRule, SUPPRESSION_CACHE, SUPPRESSION_CACHE_TTL, SWR_JITTER_MAX_MS,
     };
     use std::time::Instant;
 
@@ -560,17 +633,36 @@ mod tests {
     }
 
     /// Redis Pub/Sub is at-most-once. After a dropped subscription, reconnect
-    /// must empty the DashMap so every tenant reloads from Postgres.
+    /// must keep serving stale rules (SWR) rather than emptying the DashMap.
     #[test]
-    fn redis_reconnect_evicts_every_local_tenant_cache() {
+    fn redis_reconnect_swr_keeps_stale_entries() {
         let a = 9_011_i64;
         let b = 9_012_i64;
         cache_empty(a, "asm");
         cache_empty(b, "nmap");
-        invalidate_suppression_cache_all_local();
+        mark_suppression_cache_stale_for_swr();
         assert!(
-            SUPPRESSION_CACHE.is_empty(),
-            "reconnect eviction must not leave a stale tenant"
+            SUPPRESSION_CACHE.contains_key(&(a, "asm".into())),
+            "SWR must not drop tenant A"
         );
+        assert!(
+            SUPPRESSION_CACHE.contains_key(&(b, "nmap".into())),
+            "SWR must not drop tenant B"
+        );
+        let a_age = SUPPRESSION_CACHE
+            .get(&(a, "asm".into()))
+            .expect("a")
+            .loaded_at
+            .elapsed();
+        assert!(
+            a_age >= SUPPRESSION_CACHE_TTL,
+            "SWR marks entries expired so the jittered worker reloads them"
+        );
+        invalidate_suppression_cache_all_local();
+    }
+
+    #[test]
+    fn swr_jitter_is_bounded_to_five_seconds() {
+        assert_eq!(SWR_JITTER_MAX_MS, 5_000);
     }
 }

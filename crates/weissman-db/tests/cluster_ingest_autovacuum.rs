@@ -33,3 +33,25 @@ fn cluster_ingest_autovacuum_is_enforced_in_both_sqlx_trees() {
         "cluster-ingest autovacuum migration drifted between sqlx trees"
     );
 }
+
+const UNLOGGED_DB: &str = include_str!("../migrations/20260829120000_cluster_ingest_unlogged.sql");
+const UNLOGGED_ENGINE: &str = include_str!(
+    "../../../fingerprint_engine/migrations/20260829120000_cluster_ingest_unlogged.sql"
+);
+
+#[test]
+fn cluster_ingest_is_unlogged_in_both_sqlx_trees() {
+    for (label, sql) in [
+        ("crates/weissman-db/migrations", UNLOGGED_DB),
+        ("fingerprint_engine/migrations", UNLOGGED_ENGINE),
+    ] {
+        assert!(
+            sql.contains("ALTER TABLE weissman_cluster_ingest SET UNLOGGED"),
+            "{label}: missing SET UNLOGGED\n{sql}"
+        );
+    }
+    assert_eq!(
+        UNLOGGED_DB, UNLOGGED_ENGINE,
+        "cluster-ingest UNLOGGED migration drifted between sqlx trees"
+    );
+}

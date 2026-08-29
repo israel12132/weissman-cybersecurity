@@ -100,6 +100,25 @@ pub async fn drain_all_tenants(pool: &PgPool, per_tenant: i64) -> Result<u64, St
         .map_err(|e| format!("cluster ingest tenants: {e}"))?;
     let mut processed: u64 = 0;
     for tid in tenants {
+        match requeue_unclustered(pool, tid, per_tenant).await {
+            Ok(n) if n > 0 => {
+                tracing::info!(
+                    target: "cluster_ingest",
+                    tenant_id = tid,
+                    requeued = n,
+                    "re-enqueued unclustered findings after unlogged outbox loss"
+                );
+            }
+            Ok(_) => {}
+            Err(e) => {
+                tracing::warn!(
+                    target: "cluster_ingest",
+                    tenant_id = tid,
+                    error = %e,
+                    "unclustered requeue failed"
+                );
+            }
+        }
         processed += drain_for_tenant(pool, tid, per_tenant).await?;
     }
     Ok(processed)
@@ -136,6 +155,56 @@ pub async fn vuln_cluster_ids(
         out.insert(id, cid);
     }
     out
+}
+
+/// After an unclean Postgres restart an UNLOGGED outbox is truncated.
+/// Re-enqueue recent findings that never received a `cluster_id` so the
+/// logged `vulnerabilities` row is not stranded. Bounded per call.
+async fn requeue_unclustered(pool: &PgPool, tenant_id: i64, limit: i64) -> Result<u64, String> {
+    let cap = limit.clamp(1, 500);
+    let mut tx = db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("cluster ingest requeue tx: {e}"))?;
+    let n = sqlx::query(
+        r#"INSERT INTO weissman_cluster_ingest (
+                tenant_id, client_id, vuln_id, cluster_key, target, engine, source,
+                title, severity, cwe, vuln_signature, cve, cvss, epss, kev_listed, is_new_member
+           )
+           SELECT v.tenant_id,
+                  v.client_id,
+                  v.id,
+                  COALESCE(v.signature_hash, ''),
+                  COALESCE(NULLIF(v.raw_data->>'target', ''), ''),
+                  COALESCE(v.source, ''),
+                  COALESCE(v.source, ''),
+                  COALESCE(v.title, ''),
+                  COALESCE(v.severity, 'info'),
+                  COALESCE(v.raw_data->>'cwe', ''),
+                  COALESCE(v.signature_hash, ''),
+                  NULLIF(v.raw_data->>'cve', ''),
+                  NULL,
+                  v.epss_score,
+                  COALESCE(v.kev_listed, false),
+                  true
+             FROM vulnerabilities v
+            WHERE v.tenant_id = $1
+              AND v.cluster_id IS NULL
+              AND v.discovered_at > NOW() - INTERVAL '90 days'
+              AND NOT EXISTS (
+                    SELECT 1 FROM weissman_cluster_ingest i
+                     WHERE i.tenant_id = v.tenant_id AND i.vuln_id = v.id
+              )
+            LIMIT $2"#,
+    )
+    .bind(tenant_id)
+    .bind(cap)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| format!("cluster ingest requeue: {e}"))?;
+    tx.commit()
+        .await
+        .map_err(|e| format!("cluster ingest requeue commit: {e}"))?;
+    Ok(n.rows_affected())
 }
 
 async fn drain_once(pool: &PgPool, tenant_id: i64, limit: i64) -> Result<u64, String> {

@@ -726,7 +726,9 @@ async fn async_main() {
         }
     });
 
-    fingerprint_engine::suppression_cache_sync::spawn_suppression_cache_redis_sync();
+    fingerprint_engine::suppression_cache_sync::spawn_suppression_cache_redis_sync(
+        app_pool.clone(),
+    );
     fingerprint_engine::path_templates::spawn_prewarm(app_pool.clone());
 
     // Serial cluster-ingest drain — crash recovery for persist TXes that committed
