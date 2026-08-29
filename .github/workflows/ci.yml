@@ -1202,7 +1202,7 @@ jobs:
         # quarantine for the legacy crates. Coverage may only go up, never down. Collect once,
         # then emit both lcov (artifact) and json (ratchet input) from the cached profdata.
         run: |
-          cargo llvm-cov --workspace --all-targets --no-report
+          cargo llvm-cov --workspace --all-targets --no-report -- --test-threads=2
           cargo llvm-cov report --lcov --output-path lcov.info
           cargo llvm-cov report --json --output-path cov.json
           node scripts/coverage_ratchet.mjs cov.json
