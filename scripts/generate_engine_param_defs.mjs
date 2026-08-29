@@ -31,7 +31,8 @@ const AI_HEAVY = new Set([
   'semantic_ai_fuzz', 'ai_adversarial_redteam', 'llm_path_fuzz', 'ollama_fuzz',
   'http_feedback_fuzz', 'poe_synthesis', 'nexus_sovereign_swarm', 'llm_redteam',
   'llm_fuzzer', 'council_debate', 'feedback_fuzz', 'deep_fuzz', 'llm_jailbreak',
-  'prompt_injection_chain', 'rag_poisoning_engine', 'autonomous_pentest',
+  'prompt_injection_chain', 'rag_poisoning_engine', 'prompt_injection_brake',
+  'jailbreak_cognitive_engine', 'rag_poisoning_guard', 'autonomous_pentest',
 ])
 
 const P = (key, label, type, extra = {}) => ({ key, label, type, defaultVal: '', ...extra })

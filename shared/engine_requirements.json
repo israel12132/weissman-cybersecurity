@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-08-18T03:34:38.169Z",
-  "production_engine_count": 563,
+  "generated_at": "2026-08-27T16:18:26.724Z",
+  "production_engine_count": 566,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -286,7 +286,7 @@
         "tenant_ai_entitlement",
         "llm_secops_endpoints"
       ],
-      "engine_count": 48
+      "engine_count": 51
     },
     "oast_blind": {
       "id": "oast_blind",
@@ -1344,6 +1344,45 @@
       "group": "ai",
       "kind": "real_probe",
       "label": "ML Model Stealing Engine",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "prompt_injection_brake": {
+      "id": "prompt_injection_brake",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Prompt Injection Brake",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "jailbreak_cognitive_engine": {
+      "id": "jailbreak_cognitive_engine",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Jailbreak Cognitive Engine",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "rag_poisoning_guard": {
+      "id": "rag_poisoning_guard",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "RAG Poisoning Guard",
       "requirements": [
         "contact_email",
         "llm_secops_endpoints",

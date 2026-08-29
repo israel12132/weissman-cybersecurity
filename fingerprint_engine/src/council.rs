@@ -785,6 +785,9 @@ async fn fetch_supreme_memory_context(
         let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
             return String::new();
         };
+        let _ = sqlx::query("SET LOCAL hnsw.ef_search = 64")
+            .execute(&mut *tx)
+            .await;
         let rows = sqlx::query(
             r#"SELECT id, brief_excerpt, strategy_summary, orchestrator_instruction,
                       (embedding_vec <=> $1::vector) AS distance
@@ -794,7 +797,7 @@ async fn fetch_supreme_memory_context(
                 LIMIT $2"#,
         )
         .bind(&qtext)
-        .bind(k)
+        .bind(k.min(10))
         .fetch_all(&mut *tx)
         .await;
         if let Ok(rows) = rows {
@@ -828,6 +831,9 @@ async fn fetch_supreme_memory_context(
                 let orch: Value = r.try_get("orchestrator_instruction").unwrap_or(json!({}));
                 let dist: f64 = r.try_get("distance").unwrap_or(1.0);
                 let sim = (1.0 - dist).clamp(0.0, 1.0);
+                if sim < 0.45 {
+                    continue;
+                }
                 lines.push(format!(
                     "- prior_win (sim={:.3}): brief={} summary={} orchestrator={}",
                     sim, excerpt, summary, orch
@@ -966,6 +972,50 @@ pub async fn persist_supreme_council_win(
         Err(_) => emb_pg.clone().unwrap_or_default(),
     };
     let emb_json = serde_json::to_value(&emb_legacy).map_err(|e| e.to_string())?;
+    let mut vec_for_store = emb_pg.clone().unwrap_or_else(|| emb_legacy.clone());
+    if vec_for_store.len() == crate::embeddings::EMBEDDING_DIM {
+        let _ = crate::llm_ultra_guard::l2_normalize(&mut vec_for_store);
+        let verdict = crate::llm_ultra_guard::verify_embedding(&vec_for_store, None);
+        if !verdict.ok {
+            return Err(format!(
+                "RAG poisoning guard rejected council embedding: {}",
+                verdict.reason
+            ));
+        }
+        let emb_pg_text = crate::embeddings::vec_to_pg_text(&vec_for_store);
+        let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        sqlx::query(
+            r#"INSERT INTO supreme_council_memory (
+                tenant_id, target_fingerprint, brief_excerpt,
+                orchestrator_instruction, strategy_summary,
+                embedding, embedding_vec, oast_token, source,
+                embedding_sha256, embedding_norm, verified_at
+            ) VALUES (
+                $1, $2, $3, $4, $5,
+                $6, NULLIF($7, '')::vector, $8, $9,
+                $10, $11, now()
+            )"#,
+        )
+        .bind(tenant_id)
+        .bind(&fp)
+        .bind(&excerpt)
+        .bind(&sovereign.orchestrator)
+        .bind(summary.chars().take(8000).collect::<String>())
+        .bind(emb_json)
+        .bind(&emb_pg_text)
+        .bind(sovereign.oast_token.trim())
+        .bind("oast_success")
+        .bind(&verdict.sha256)
+        .bind(verdict.l2_norm)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+        tx.commit().await.map_err(|e| e.to_string())?;
+        info!(target: "council", tenant_id, "supreme council winning strategy persisted to semantic memory");
+        return Ok(());
+    }
     let emb_pg_text: Option<String> = emb_pg
         .as_ref()
         .map(|v| crate::embeddings::vec_to_pg_text(v));

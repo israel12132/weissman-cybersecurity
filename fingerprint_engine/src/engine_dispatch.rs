@@ -584,6 +584,15 @@ async fn dispatch_engine_match(
         "ai_supply_chain_attack" => crate::advanced_ai_engines::run_ai_supply_chain_attack_result(target).await,
         "llm_agent_hijack" => crate::advanced_ai_engines::run_llm_agent_hijack_result(target).await,
         "rag_poisoning_engine" => crate::advanced_ai_engines::run_rag_poisoning_engine_result(target).await,
+        "prompt_injection_brake" => {
+            crate::llm_ultra_guard::run_prompt_injection_brake_result(target, ctx).await
+        }
+        "jailbreak_cognitive_engine" => {
+            crate::llm_ultra_guard::run_jailbreak_cognitive_engine_result(target, ctx).await
+        }
+        "rag_poisoning_guard" => {
+            crate::llm_ultra_guard::run_rag_poisoning_guard_result(target, ctx).await
+        }
         "adversarial_examples" => crate::advanced_ai_engines::run_adversarial_examples_result(target).await,
         "data_poisoning_engine" => crate::advanced_ai_engines::run_data_poisoning_engine_result(target).await,
         "deepfake_synthesis" => crate::advanced_ai_engines::run_deepfake_synthesis_result(target).await,

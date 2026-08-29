@@ -642,6 +642,7 @@ export const ROUTE_TITLES = {
   remediation: 'Remediation Hub',
   'kill-chain': 'Kill Chain Orchestrator',
   'ai-analysis': 'AI Analysis Engine',
+  'llm-ultra-guard': 'LLM Ultra-Guard',
   'exploit-lab': 'Exploit Research Lab',
   'nexus-swarm': 'Nexus Sovereign Swarm',
   'roe-approvals': 'RoE Approvals',

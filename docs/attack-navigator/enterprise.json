@@ -196,8 +196,8 @@
     },
     {
       "techniqueID": "T1566",
-      "score": 7,
-      "comment": "cognitive_starvation, deepfake_genai, email_dns_posture, external_exposure_supreme, fair_exposure_fusion, malvertising_seo_poison, sovereign_active_defense_fusion",
+      "score": 8,
+      "comment": "cognitive_starvation, deepfake_genai, email_dns_posture, external_exposure_supreme, fair_exposure_fusion, malvertising_seo_poison, prompt_injection_brake, sovereign_active_defense_fusion",
       "enabled": true
     },
     {
@@ -580,8 +580,8 @@
     },
     {
       "techniqueID": "T1059.008",
-      "score": 5,
-      "comment": "gpt_plugin_attack, llm_guardrail_bypass, llm_jailbreak, llm_system_prompt_leak, prompt_injection_chain",
+      "score": 6,
+      "comment": "gpt_plugin_attack, jailbreak_cognitive_engine, llm_guardrail_bypass, llm_jailbreak, llm_system_prompt_leak, prompt_injection_chain",
       "enabled": true
     },
     {
@@ -604,8 +604,8 @@
     },
     {
       "techniqueID": "T1565",
-      "score": 5,
-      "comment": "ai_bias_exploit, ai_poisoning, rag_poisoning, rag_poisoning_engine, risk_superposition_collapse",
+      "score": 6,
+      "comment": "ai_bias_exploit, ai_poisoning, rag_poisoning, rag_poisoning_engine, rag_poisoning_guard, risk_superposition_collapse",
       "enabled": true
     },
     {

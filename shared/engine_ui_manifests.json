@@ -325,6 +325,121 @@
       }
     },
     {
+      "engine_id": "liquid_matrix",
+      "route_paths": [
+        "/sovereign-defense-matrix"
+      ],
+      "evidence_i18n_key": "pages.sovereignDefense.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_kill_switch": false,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#14b8a6"
+      }
+    },
+    {
+      "engine_id": "cognitive_starvation",
+      "route_paths": [
+        "/sovereign-defense-matrix"
+      ],
+      "evidence_i18n_key": "pages.sovereignDefense.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_kill_switch": false,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#14b8a6"
+      }
+    },
+    {
+      "engine_id": "fair_exposure_fusion",
+      "route_paths": [
+        "/risk-graph"
+      ],
+      "evidence_i18n_key": "pages.riskGraphVisualization.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_kill_switch": false,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#10b981"
+      }
+    },
+    {
+      "engine_id": "sovereign_active_defense_fusion",
+      "route_paths": [
+        "/sovereign-defense-matrix"
+      ],
+      "evidence_i18n_key": "pages.sovereignDefense.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_kill_switch": false,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#2dd4bf"
+      }
+    },
+    {
+      "engine_id": "jailbreak_cognitive_engine",
+      "route_paths": [
+        "/llm-ultra-guard"
+      ],
+      "evidence_i18n_key": "pages.llmUltraGuard.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": false,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    },
+    {
+      "engine_id": "rag_poisoning_guard",
+      "route_paths": [
+        "/llm-ultra-guard"
+      ],
+      "evidence_i18n_key": "pages.llmUltraGuard.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": false,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#34d399"
+      }
+    },
+    {
+      "engine_id": "prompt_injection_brake",
+      "route_paths": [
+        "/llm-ultra-guard"
+      ],
+      "evidence_i18n_key": "pages.llmUltraGuard.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": false,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
       "engine_id": "scada_ics",
       "route_paths": [
         "/ot-ics"

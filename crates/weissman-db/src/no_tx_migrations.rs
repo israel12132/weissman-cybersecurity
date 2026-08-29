@@ -627,6 +627,44 @@ mod tests {
     }
 
     #[test]
+    fn supreme_council_hnsw_rebuild_is_concurrent_and_outside_the_txn_file() {
+        let concurrent = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/migrations/20260828120000_supreme_council_hnsw_concurrent.sql"
+        ));
+        assert!(
+            concurrent.starts_with("-- weissman:no-transaction"),
+            "HNSW rebuild must opt out of SQLx BEGIN/COMMIT"
+        );
+        assert!(
+            concurrent.contains("CREATE INDEX CONCURRENTLY"),
+            "new HNSW must be built online"
+        );
+        assert!(
+            concurrent.contains("DROP INDEX CONCURRENTLY IF EXISTS ix_supreme_council_mem_embedding_hnsw;"),
+            "legacy name dropped only after the m=32 index exists"
+        );
+        assert!(
+            !concurrent.to_ascii_uppercase().contains("\nBEGIN"),
+            "CONCURRENTLY cannot run inside BEGIN"
+        );
+
+        let txn = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/migrations/20260827160000_llm_ultra_guard.sql"
+        ));
+        assert!(
+            !txn.to_ascii_lowercase().contains("create index")
+                || !txn.contains("ix_supreme_council_mem_embedding_hnsw"),
+            "transactional Ultra-Guard file must not rebuild HNSW (AccessExclusiveLock)"
+        );
+        assert!(
+            !txn.to_ascii_lowercase().contains("drop index if exists ix_supreme_council_mem_embedding_hnsw"),
+            "transactional Ultra-Guard file must not DROP the live HNSW index"
+        );
+    }
+
+    #[test]
     fn client_scope_insert_only_followup_migration_exists() {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),

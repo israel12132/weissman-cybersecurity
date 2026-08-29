@@ -14,8 +14,8 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 ## Headline
 
 - **226 distinct ATT&CK techniques** covered by
-  **563 mapped engines** (101 of them sub-techniques).
-- That is **192 primary** engine mappings plus **34
+  **566 mapped engines** (101 of them sub-techniques).
+- That is **193 primary** engine mappings plus **33
   code-grounded secondary** techniques — the extra ATT&CK T-codes each engine's own implementation
   tags on the findings it emits (`mitre: "Txxxx"` / kill-chain `mitre_path`). Secondary techniques
   are extracted from source, not asserted: if the code doesn't perform it, it isn't counted.
@@ -34,8 +34,8 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 |--------|-------------------:|------------:|--------:|
 | Reconnaissance | 21 / 46 | 46% | 69 |
 | Resource Development | 15 / 50 | 30% | 33 |
-| Initial Access | 19 / 22 | 86% | 163 |
-| Execution | 15 / 64 | 23% | 59 |
+| Initial Access | 19 / 22 | 86% | 164 |
+| Execution | 15 / 64 | 23% | 60 |
 | Persistence | 15 / 113 | 13% | 53 |
 | Privilege Escalation | 14 / 96 | 15% | 52 |
 | Stealth | 26 / 148 | 18% | 68 |
@@ -46,7 +46,7 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 | Collection | 15 / 41 | 37% | 58 |
 | Command and Control | 12 / 45 | 27% | 30 |
 | Exfiltration | 7 / 19 | 37% | 21 |
-| Impact | 12 / 33 | 36% | 38 |
+| Impact | 12 / 33 | 36% | 39 |
 
 ### Mobile ATT&CK — 9 techniques, 7/12 tactics
 

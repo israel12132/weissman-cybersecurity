@@ -66,6 +66,10 @@ hickory-resolver = { version = "0.26" }
 serde_yaml = "0.9"
 # Production: granular locking for SSE registry (no global RwLock contention)
 dashmap = "6"
+# LLM ultra-guard: parallel signature scan + multi-pattern matching at the edge.
+aho-corasick = "1"
+rayon = "1.10"
+unicode-normalization = "0.1"
 # Binary PDF generation (Executive Report) is done natively in `pdf_report.rs`
 # (self-contained %PDF-1.4 writer, base-14 Helvetica) — no third-party PDF crate, so the
 # tree stays free of the printpdf/lopdf/time-0.2 supply-chain advisories.

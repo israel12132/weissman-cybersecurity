@@ -118,6 +118,8 @@ pub const COVERAGE: &[Technique] = &[
         engines: &[
             "llm_jailbreak",
             "prompt_injection_chain",
+            "prompt_injection_brake",
+            "jailbreak_cognitive_engine",
             "autonomous_ai_escape",
         ],
     },
@@ -238,6 +240,12 @@ pub const COVERAGE: &[Technique] = &[
         name: "Data from Information Repositories",
         tactic: "Collection",
         engines: &["swagger_abuse", "odata_injection", "soap_injection"],
+    },
+    Technique {
+        id: "T1565",
+        name: "Data Manipulation",
+        tactic: "Impact",
+        engines: &["rag_poisoning_engine", "rag_poisoning_guard", "data_poisoning_engine"],
     },
     // ── Command and Control ─────────────────────────────────────────────────
     Technique {

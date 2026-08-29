@@ -706,6 +706,22 @@ export const EXPLICIT_PARAM_DEFS = {
     { key:'poison_variants', label:'Poison Variants (comma-sep)', type:'text', placeholder:'adversarial_prompt,zip_bomb_meta', defaultVal:'adversarial_prompt,zip_bomb_meta,xml_entity,shadow_api' },
     { key:'probe_rate', label:'Probe Rate (req/s)', type:'number', placeholder:'8', defaultVal:'8', min:1, max:100 },
   ],
+  prompt_injection_brake: [
+    { key:'probe_remote_llm', label:'Probe remote LLM (LLM01 canary)', type:'select', options:['true','false'], defaultVal:'true' },
+    { key:'persist_events', label:'Persist guard events', type:'select', options:['true','false'], defaultVal:'true' },
+    { key:'llm_base_url', label:'LLM Base URL', type:'text', placeholder:'http://127.0.0.1:11434/v1', defaultVal:'' },
+    { key:'intensity', label:'Scan Intensity', type:'select', options:['light','normal','aggressive'], defaultVal:'normal' },
+  ],
+  jailbreak_cognitive_engine: [
+    { key:'probe_remote_llm', label:'Probe remote LLM (jailbreak canary)', type:'select', options:['true','false'], defaultVal:'true' },
+    { key:'llm_base_url', label:'LLM Base URL', type:'text', placeholder:'http://127.0.0.1:11434/v1', defaultVal:'' },
+    { key:'intensity', label:'Scan Intensity', type:'select', options:['light','normal','aggressive'], defaultVal:'normal' },
+  ],
+  rag_poisoning_guard: [
+    { key:'inspect_council_memory', label:'Inspect Supreme Council vectors', type:'select', options:['true','false'], defaultVal:'true' },
+    { key:'probe_remote_llm', label:'Probe remote RAG/feedback surface', type:'select', options:['true','false'], defaultVal:'true' },
+    { key:'intensity', label:'Scan Intensity', type:'select', options:['light','normal','aggressive'], defaultVal:'normal' },
+  ],
   oast_oob: [
     { key:'oast_domain', label:'OAST Callback Domain', type:'text', placeholder:'token.oast.example.com', defaultVal:'' },
     { key:'oast_api_key', label:'OAST API Key', type:'password', placeholder:'from tenant or client integrations', defaultVal:'' },
