@@ -805,6 +805,10 @@ jobs:
           # and self-hosted use 0. Without this, enforce_client_create 402s the
           # engine-group smoke before INSERT.
           WEISSMAN_BILLING_STRICT: "0"
+          # Parallel Playwright crawl (~100 routes) bursts well past the production
+          # 30/s per-IP API cap. Raise the throwaway-stack ceiling; production defaults stay 30/60.
+          WEISSMAN_RATE_LIMIT_PER_SEC: "500"
+          WEISSMAN_RATE_LIMIT_BURST: "2000"
           WEISSMAN_COOKIE_SECURE: "1"
           WEISSMAN_ADMIN_EMAIL: admin@localhost
           WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum

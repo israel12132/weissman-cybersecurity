@@ -37,13 +37,21 @@ fn is_api_path(path: &str) -> bool {
     path.starts_with("/api/") && path != "/api/health"
 }
 
+/// Login / refresh already sit in the dedicated unauth login bucket (8/min).
+/// Counting them in the 30/s API Redis bucket makes a parallel UI crawl's
+/// session recovery compete with authenticated traffic.
+#[must_use]
+fn counts_toward_api_bucket(method: &axum::http::Method, path: &str) -> bool {
+    is_api_path(path) && !super::login_rate_limit::is_login_post(method, path)
+}
+
 pub async fn api_rate_limit_middleware(
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     request: Request<Body>,
     next: Next,
 ) -> Response {
     let path = request.uri().path();
-    if !is_api_path(path) {
+    if !counts_toward_api_bucket(request.method(), path) {
         return next.run(request).await;
     }
 
@@ -143,4 +151,22 @@ pub async fn api_rate_limit_middleware(
 
     rate_limit_metrics::record_api_allowed(&ip);
     next.run(request).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::Method;
+
+    #[test]
+    fn login_and_refresh_skip_the_api_bucket() {
+        assert!(!counts_toward_api_bucket(&Method::POST, "/api/login"));
+        assert!(!counts_toward_api_bucket(
+            &Method::POST,
+            "/api/auth/refresh"
+        ));
+        assert!(counts_toward_api_bucket(&Method::GET, "/api/clients"));
+        assert!(counts_toward_api_bucket(&Method::GET, "/api/billing/usage"));
+        assert!(!counts_toward_api_bucket(&Method::GET, "/api/health"));
+    }
 }

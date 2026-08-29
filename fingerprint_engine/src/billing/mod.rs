@@ -97,6 +97,18 @@ pub async fn enforce_client_create(
         ));
     }
     let max_c: i32 = r.try_get("max_clients").map_err(|e| e.to_string())?;
+    let count = count_tenant_clients(app_pool, tenant_id).await?;
+    if count >= max_c as i64 {
+        return Err(format!(
+            "Client limit reached ({}/{}). Upgrade your plan.",
+            count, max_c
+        ));
+    }
+    Ok(())
+}
+
+/// `clients` is FORCE RLS and not granted to `weissman_auth`. Count on the app pool.
+async fn count_tenant_clients(app_pool: &PgPool, tenant_id: i64) -> Result<i64, String> {
     let mut tx = weissman_db::begin_tenant_tx(app_pool, tenant_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -107,13 +119,7 @@ pub async fn enforce_client_create(
             .await
             .map_err(|e| e.to_string())?;
     let _ = tx.commit().await;
-    if count >= max_c as i64 {
-        return Err(format!(
-            "Client limit reached ({}/{}). Upgrade your plan.",
-            count, max_c
-        ));
-    }
-    Ok(())
+    Ok(count)
 }
 
 pub async fn enforce_scan_start(pool: &PgPool, tenant_id: i64) -> Result<(), String> {
@@ -228,7 +234,11 @@ fn subscription_allows_usage(status: &str) -> bool {
     matches!(status.to_lowercase().as_str(), "active" | "trialing")
 }
 
-pub async fn usage_dashboard_json(pool: &PgPool, tenant_id: i64) -> Result<Value, String> {
+pub async fn usage_dashboard_json(
+    auth_pool: &PgPool,
+    app_pool: &PgPool,
+    tenant_id: i64,
+) -> Result<Value, String> {
     let row = sqlx::query(
         r#"SELECT ts.status, ts.plan_slug, ts.paddle_subscription_id, ts.current_period_end,
                   bp.display_name, bp.max_clients, bp.max_scans_month
@@ -237,7 +247,7 @@ pub async fn usage_dashboard_json(pool: &PgPool, tenant_id: i64) -> Result<Value
            WHERE ts.tenant_id = $1"#,
     )
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(auth_pool)
     .await
     .map_err(|e| e.to_string())?;
     let Some(r) = row else {
@@ -255,19 +265,14 @@ pub async fn usage_dashboard_json(pool: &PgPool, tenant_id: i64) -> Result<Value
     let paddle_sub: Option<String> = r.try_get("paddle_subscription_id").ok();
     let period_end: Option<chrono::DateTime<Utc>> = r.try_get("current_period_end").ok();
 
-    let client_count: i64 =
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients WHERE tenant_id = $1")
-            .bind(tenant_id)
-            .fetch_one(pool)
-            .await
-            .map_err(|e| e.to_string())?;
+    let client_count = count_tenant_clients(app_pool, tenant_id).await?;
     let period = period_ym_now();
     let scans_used: i64 = sqlx::query_scalar::<_, i64>(
         "SELECT COALESCE(scans_started,0)::bigint FROM tenant_usage_counters WHERE tenant_id = $1 AND period_ym = $2",
     )
     .bind(tenant_id)
     .bind(&period)
-    .fetch_optional(pool)
+    .fetch_optional(auth_pool)
     .await
     .map_err(|e| e.to_string())?
     .unwrap_or(0);
@@ -859,8 +864,8 @@ mod tests {
             "client COUNT must run inside begin_tenant_tx on the app pool"
         );
         assert!(
-            src.contains("fetch_one(&mut *tx)"),
-            "client COUNT must use the tenant transaction, not the auth pool"
+            src.contains("async fn count_tenant_clients"),
+            "usage dashboard and quota share one app-pool COUNT helper"
         );
     }
 }
