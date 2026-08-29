@@ -26,7 +26,9 @@ Inspection-day script: **`docs/operations/INSPECTION-DAY-RUNBOOK.md`**.
 - **Multi-tenant by construction.** Every multi-tenant table carries
   `tenant_id BIGINT NOT NULL REFERENCES tenants(id)` and has **forced
   PostgreSQL Row-Level Security** (`USING (tenant_id = current_setting(...)::bigint)`).
-  80+ tables, no exceptions.
+  `FORCE ROW LEVEL SECURITY` is applied to every RLS-enabled table (catch-all
+  migration `20260828180000_force_rls_all_tenant_tables.sql`) so table owners
+  and the planner cannot skip `USING` quals. 80+ tables, no exceptions.
 - **Audit trail.** Every authenticated write goes through
   `audit_log::insert_audit`; rows land in `public.audit_logs` with
   `(tenant_id, user_id, user_label, action_type, details, ip_address,
@@ -98,6 +100,10 @@ Summary of key controls:
   tables, `statement_timeout=15s`, `idle_in_transaction_session_timeout=30s`.
   Production DSNs must use `weissman_app` / `weissman_auth` / `weissman_ro`
   (never the superuser) for runtime SQLx.
+  Pre-auth Axum rate limiting (`login_rate_limit_middleware`) sits **outside**
+  `auth_guard` and checks the in-process governor before any Redis or Postgres
+  I/O, so a password-spray cannot exhaust the dedicated `weissman_auth` pool
+  (`/api/login`, `/api/auth/mfa/verify`, `/api/auth/refresh`).
 
 ## 5. Cryptography
 
@@ -121,9 +127,11 @@ Summary of key controls:
   silently stores plaintext), and a previous-key ring (`WEISSMAN_VAULT_KEY_PREVIOUS`
   plus the existing `WEISSMAN_JWT_SECRET_PREVIOUS` rotation keyring) keeps
   already-encrypted secrets readable across key rotation.
-  After boot the process wipes `WEISSMAN_VAULT_KEY` and
-  `WEISSMAN_INTEGRATIONS_VAULT_KEY` from the environment (zeroize) so a
-  memory/environ leak cannot recover the raw key material.
+  After boot the process loads vault keys into `zeroize::Zeroizing` heap
+  containers (env `String` copies and hex-decode buffers are overwritten on
+  `Drop`), then wipes `WEISSMAN_VAULT_KEY` and
+  `WEISSMAN_INTEGRATIONS_VAULT_KEY` from the environment so a
+  `/proc/self/environ` or leftover-heap leak cannot recover the raw key material.
 
 ## 6. Threat intelligence integrity
 

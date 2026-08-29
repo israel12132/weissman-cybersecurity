@@ -119,7 +119,7 @@ Never set `WEISSMAN_ALLOW_INSECURE_TLS=1` in production.
 REDIS_URL=redis://redis-host:6379/0
 ```
 
-Required for multi-replica rate limits, login lockout (`/api/login`, `/api/auth/mfa/verify`), and agent fleet registry. When Redis is configured in production, middleware **fail-closed** (503) if Redis is unreachable — no silent in-memory fallback.
+Required for multi-replica rate limits, login lockout (`/api/login`, `/api/auth/mfa/verify`, `/api/auth/refresh`), and agent fleet registry. When Redis is configured in production, middleware **fail-closed** (503) if Redis is unreachable — no silent in-memory fallback. The login governor runs **in-process first** (before Redis and before any `weissman_auth` pool checkout) so a password-spray cannot exhaust the dedicated auth connections.
 
 Zero-trust job bus (requires `REDIS_URL` + dedicated orchestrator secret):
 

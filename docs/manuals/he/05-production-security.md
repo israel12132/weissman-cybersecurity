@@ -106,7 +106,7 @@ Self-hosted unlimited: `WEISSMAN_BILLING_STRICT=0` **רק עם חוזה כתוב
 REDIS_URL=redis://host:6379/0
 ```
 
-נדרש ל-rate limits, lockout (`/api/login`, `/api/auth/mfa/verify`), registry של agents.
+נדרש ל-rate limits, lockout (`/api/login`, `/api/auth/mfa/verify`, `/api/auth/refresh`), registry של agents. מגבלת הלוגין רצה **קודם בתהליך** (לפני Redis ולפני חיבור ל-`weissman_auth`) כדי שמכת סיסמאות לא תייש את מאגר החיבורים.
 
 ### 8. SAML / OIDC
 

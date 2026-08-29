@@ -44,6 +44,7 @@
 //!     the CONCURRENTLY index migration that ships with the bootstrap.
 
 use sha2::{Digest, Sha384};
+use sqlx::postgres::PgConnection;
 use sqlx::{Executor, PgPool};
 use std::fs;
 use std::path::Path;
@@ -346,9 +347,48 @@ async fn ensure_sqlx_migrations_table(pool: &PgPool) -> Result<(), NoTxMigrateEr
 /// Returns the wall-clock execution time (ms). The raw SQLx error is preserved
 /// (not wrapped) so the caller can inspect its SQLSTATE — see
 /// [`is_missing_dependency`].
+///
+/// HNSW / `CREATE INDEX CONCURRENTLY` files pin a **single** connection so
+/// `SET maintenance_work_mem` survives for the whole build (`SET LOCAL` is a
+/// no-op outside a transaction, and CONCURRENTLY cannot run inside one).
+/// Invalid leftover indexes are dropped before the build and again if a
+/// statement fails, so a crashed CONCURRENTLY run cannot leak disk.
 async fn run_no_tx_statements(pool: &PgPool, m: &NoTxMigration) -> Result<i64, sqlx::Error> {
     let started = Instant::now();
     let statements = split_sql_statements(&m.sql);
+    if needs_pinned_index_connection(&m.sql) {
+        let mut conn = pool.acquire().await?;
+        let hnsw = sql_has_hnsw_concurrent_create(&m.sql);
+        if hnsw {
+            apply_hnsw_maintenance_work_mem(&mut conn).await?;
+        }
+        let exec = match drop_invalid_indexes(&mut conn).await {
+            Ok(_) => exec_no_tx_statements(&mut conn, m, &statements).await,
+            Err(e) => Err(e),
+        };
+        if exec.is_err() {
+            if let Err(e) = drop_invalid_indexes(&mut conn).await {
+                tracing::warn!(
+                    target: "weissman_db::no_tx",
+                    version = m.version,
+                    error = %e,
+                    "could not drop INVALID leftover indexes after failed no-tx build"
+                );
+            }
+        }
+        if hnsw {
+            if let Err(e) = reset_maintenance_work_mem(&mut conn).await {
+                tracing::warn!(
+                    target: "weissman_db::no_tx",
+                    version = m.version,
+                    error = %e,
+                    "could not RESET maintenance_work_mem after HNSW build"
+                );
+            }
+        }
+        exec?;
+        return Ok(started.elapsed().as_millis() as i64);
+    }
     for (i, stmt) in statements.iter().enumerate() {
         let trimmed = stmt.trim();
         if trimmed.is_empty() {
@@ -364,6 +404,123 @@ async fn run_no_tx_statements(pool: &PgPool, m: &NoTxMigration) -> Result<i64, s
         pool.execute(trimmed).await?;
     }
     Ok(started.elapsed().as_millis() as i64)
+}
+
+async fn exec_no_tx_statements(
+    conn: &mut PgConnection,
+    m: &NoTxMigration,
+    statements: &[String],
+) -> Result<(), sqlx::Error> {
+    for (i, stmt) in statements.iter().enumerate() {
+        let trimmed = stmt.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        tracing::info!(
+            target: "weissman_db::no_tx",
+            version = m.version,
+            description = %m.description,
+            statement_index = i,
+            "executing no-tx statement"
+        );
+        conn.execute(trimmed).await?;
+    }
+    Ok(())
+}
+
+fn needs_pinned_index_connection(sql: &str) -> bool {
+    let u = sql.to_ascii_uppercase();
+    u.contains("CREATE INDEX CONCURRENTLY") || u.contains("DROP INDEX CONCURRENTLY")
+}
+
+fn sql_has_hnsw_concurrent_create(sql: &str) -> bool {
+    let u = sql.to_ascii_uppercase();
+    u.contains("CREATE INDEX CONCURRENTLY") && u.contains("USING HNSW")
+}
+
+/// Allowlisted `maintenance_work_mem` for HNSW CONCURRENTLY builds.
+///
+/// `SET` cannot take a bind parameter, so the value MUST come from this
+/// allowlist — never interpolate operator input verbatim.
+fn hnsw_maintenance_work_mem() -> &'static str {
+    parse_hnsw_maintenance_work_mem(
+        std::env::var("WEISSMAN_HNSW_MAINTENANCE_WORK_MEM")
+            .ok()
+            .as_deref(),
+    )
+}
+
+fn parse_hnsw_maintenance_work_mem(raw: Option<&str>) -> &'static str {
+    const DEFAULT: &str = "256MB";
+    match raw.map(str::trim) {
+        None | Some("") => DEFAULT,
+        Some("64MB") => "64MB",
+        Some("128MB") => "128MB",
+        Some("256MB") => "256MB",
+        Some("512MB") => "512MB",
+        Some("1GB") => "1GB",
+        Some(other) => {
+            tracing::warn!(
+                target: "weissman_db::no_tx",
+                value = other,
+                "invalid WEISSMAN_HNSW_MAINTENANCE_WORK_MEM (allow 64MB|128MB|256MB|512MB|1GB); using 256MB"
+            );
+            DEFAULT
+        }
+    }
+}
+
+async fn apply_hnsw_maintenance_work_mem(conn: &mut PgConnection) -> Result<(), sqlx::Error> {
+    let mem = hnsw_maintenance_work_mem();
+    tracing::info!(
+        target: "weissman_db::no_tx",
+        maintenance_work_mem = mem,
+        "HNSW CONCURRENTLY build: session maintenance_work_mem (SET LOCAL is invalid outside a transaction)"
+    );
+    sqlx::query(&format!("SET maintenance_work_mem = '{mem}'"))
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}
+
+async fn reset_maintenance_work_mem(conn: &mut PgConnection) -> Result<(), sqlx::Error> {
+    sqlx::query("RESET maintenance_work_mem")
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}
+
+fn pg_quote_ident(ident: &str) -> String {
+    format!("\"{}\"", ident.replace('"', "\"\""))
+}
+
+/// Drop leftover INVALID indexes (crashed `CREATE INDEX CONCURRENTLY`) so they
+/// cannot consume production disk until the next successful rebuild.
+async fn drop_invalid_indexes(conn: &mut PgConnection) -> Result<usize, sqlx::Error> {
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        r#"SELECT n.nspname, c.relname
+           FROM pg_class c
+           JOIN pg_index i ON i.indexrelid = c.oid
+           JOIN pg_namespace n ON n.oid = c.relnamespace
+           WHERE c.relkind = 'i'
+             AND NOT i.indisvalid
+             AND n.nspname NOT IN ('pg_catalog', 'information_schema')"#,
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+    let n = rows.len();
+    for (schema, name) in &rows {
+        let ident = format!("{}.{}", pg_quote_ident(schema), pg_quote_ident(name));
+        tracing::warn!(
+            target: "weissman_db::no_tx",
+            index = %ident,
+            "dropping INVALID leftover index before/after CONCURRENTLY build"
+        );
+        sqlx::query(&format!("DROP INDEX CONCURRENTLY IF EXISTS {ident}"))
+            .execute(&mut *conn)
+            .await?;
+    }
+    Ok(n)
 }
 
 /// Record a no-tx migration as applied in `_sqlx_migrations` with its
@@ -637,6 +794,45 @@ mod tests {
         assert!(sql.contains("ix_supreme_council_mem_embedding_hnsw"));
         assert!(sql.contains("ix_pwp_embedding_hnsw"));
         assert!(sql.contains("CREATE INDEX CONCURRENTLY"));
+    }
+
+    #[test]
+    fn hnsw_sql_is_detected_as_pinned_concurrent_build() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/migrations/20260827120000_pgvector_hnsw_m16_ef64.sql"
+        );
+        let sql = std::fs::read_to_string(path).expect("hnsw migration");
+        assert!(sql_has_hnsw_concurrent_create(&sql));
+        assert!(needs_pinned_index_connection(&sql));
+        assert!(!sql_has_hnsw_concurrent_create(
+            "CREATE INDEX CONCURRENTLY ix ON t(x)"
+        ));
+        assert!(needs_pinned_index_connection(
+            "DROP INDEX CONCURRENTLY IF EXISTS ix_async_jobs_pending"
+        ));
+    }
+
+    #[test]
+    fn hnsw_maintenance_work_mem_is_allowlisted() {
+        assert_eq!(parse_hnsw_maintenance_work_mem(None), "256MB");
+        assert_eq!(parse_hnsw_maintenance_work_mem(Some("")), "256MB");
+        assert_eq!(parse_hnsw_maintenance_work_mem(Some("512MB")), "512MB");
+        assert_eq!(parse_hnsw_maintenance_work_mem(Some("1GB")), "1GB");
+        assert_eq!(parse_hnsw_maintenance_work_mem(Some("64MB")), "64MB");
+        assert_eq!(
+            parse_hnsw_maintenance_work_mem(Some("'; DROP TABLE students; --")),
+            "256MB"
+        );
+    }
+
+    #[test]
+    fn pg_quote_ident_escapes_double_quotes() {
+        assert_eq!(
+            pg_quote_ident("ix_pwp_embedding_hnsw"),
+            "\"ix_pwp_embedding_hnsw\""
+        );
+        assert_eq!(pg_quote_ident("odd\"name"), "\"odd\"\"name\"");
     }
 
     #[test]

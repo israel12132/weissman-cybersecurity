@@ -52,7 +52,7 @@ fn enroll_limiter() -> Arc<RateLimiter<String, DefaultKeyedStateStore<String>, D
     .clone()
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum UnauthPostKind {
     Login,
     Enroll,
@@ -69,6 +69,12 @@ fn unauth_post_kind(method: &axum::http::Method, path: &str) -> Option<UnauthPos
         return None;
     }
     if is_account_lockout_post(method, path) {
+        return Some(UnauthPostKind::Login);
+    }
+    // Refresh hits the dedicated weissman_auth pool (bcrypt / token lookup) the
+    // same way login does. Rate-limit it in the Login bucket before any Postgres
+    // checkout so a spray cannot exhaust the auth pool.
+    if path == "/api/auth/refresh" {
         return Some(UnauthPostKind::Login);
     }
     // Both agent credential endpoints share the Enroll bucket: /session takes a bearer secret
@@ -101,6 +107,14 @@ pub async fn login_rate_limit_middleware(
         ),
     };
 
+    // In-process governor first — no Redis, no auth-pool checkout. Under a
+    // password-spray the weissman_auth pool must not be the first choke point.
+    if let Err(neg) = limiter.check_key(&ip) {
+        let clock = DefaultClock::default();
+        let retry_after_secs = neg.wait_time_from(clock.now()).as_secs().max(1);
+        return deny_unauth_post(&ip, &path, label, limit, burst, "local", retry_after_secs);
+    }
+
     if super::rate_limit_redis::is_enabled() {
         let redis_count = match kind {
             UnauthPostKind::Login => super::rate_limit_redis::incr_login_ip_strict(&ip).await,
@@ -110,40 +124,8 @@ pub async fn login_rate_limit_middleware(
             super::rate_limit_redis::StrictOp::Ok(count) => {
                 let max = limit.get() as u64;
                 if count > max {
-                    rate_limit_metrics::record_login_denied(&ip, &path);
-                    let retry_after_secs = 60u64;
-                    tracing::warn!(
-                        target: "rate_limit",
-                        client_ip = %ip,
-                        path = %path,
-                        count,
-                        limit = max,
-                        kind = label,
-                        "unauthenticated POST rate limit exceeded (redis)"
-                    );
-                    let mut resp = (
-                        StatusCode::TOO_MANY_REQUESTS,
-                        axum::Json(serde_json::json!({
-                            "ok": false,
-                            "code": "rate_limited",
-                            "detail": format!(
-                                "{label} rate limit hit ({burst} burst / {limit} per minute per IP). Retry in {retry_after_secs}s."
-                            ),
-                            "retry_after_seconds": retry_after_secs,
-                            "limit_per_minute": limit.get(),
-                            "burst": burst.get(),
-                            "source": "redis",
-                        })),
-                    )
-                        .into_response();
-                    if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after_secs.to_string())
-                    {
-                        resp.headers_mut().insert("Retry-After", v);
-                    }
-                    return resp;
+                    return deny_unauth_post(&ip, &path, label, limit, burst, "redis", 60);
                 }
-                rate_limit_metrics::record_login_allowed(&ip);
-                return next.run(request).await;
             }
             super::rate_limit_redis::StrictOp::Unavailable
                 if super::rate_limit_redis::distributed_state_required() =>
@@ -170,42 +152,92 @@ pub async fn login_rate_limit_middleware(
         return super::rate_limit_redis::distributed_store_unavailable_response();
     }
 
-    if let Err(neg) = limiter.check_key(&ip) {
-        rate_limit_metrics::record_login_denied(&ip, &path);
-        let clock = DefaultClock::default();
-        let retry_after_secs = neg.wait_time_from(clock.now()).as_secs().max(1);
-        let limit = limit.get();
-        let burst = burst.get();
-        tracing::warn!(
-            target: "rate_limit",
-            client_ip = %ip,
-            path = %path,
-            retry_after_secs,
-            limit,
-            burst,
-            kind = label,
-            "unauthenticated POST rate limit exceeded"
-        );
-        let mut resp = (
-            StatusCode::TOO_MANY_REQUESTS,
-            axum::Json(serde_json::json!({
-                "ok": false,
-                "code": "rate_limited",
-                "detail": format!(
-                    "{label} rate limit hit ({burst} burst / {limit} per minute per IP). Retry in {retry_after_secs}s."
-                ),
-                "retry_after_seconds": retry_after_secs,
-                "limit_per_minute": limit,
-                "burst": burst,
-            })),
-        )
-            .into_response();
-        if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after_secs.to_string()) {
-            resp.headers_mut().insert("Retry-After", v);
-        }
-        return resp;
-    }
-
     rate_limit_metrics::record_login_allowed(&ip);
     next.run(request).await
+}
+
+fn deny_unauth_post(
+    ip: &str,
+    path: &str,
+    label: &str,
+    limit: NonZeroU32,
+    burst: NonZeroU32,
+    source: &str,
+    retry_after_secs: u64,
+) -> Response {
+    rate_limit_metrics::record_login_denied(ip, path);
+    let limit_n = limit.get();
+    let burst_n = burst.get();
+    tracing::warn!(
+        target: "rate_limit",
+        client_ip = %ip,
+        path = %path,
+        retry_after_secs,
+        limit = limit_n,
+        burst = burst_n,
+        kind = label,
+        source,
+        "unauthenticated POST rate limit exceeded"
+    );
+    let mut body = serde_json::json!({
+        "ok": false,
+        "code": "rate_limited",
+        "detail": format!(
+            "{label} rate limit hit ({burst_n} burst / {limit_n} per minute per IP). Retry in {retry_after_secs}s."
+        ),
+        "retry_after_seconds": retry_after_secs,
+        "limit_per_minute": limit_n,
+        "burst": burst_n,
+    });
+    if source == "redis" {
+        body["source"] = serde_json::json!("redis");
+    }
+    let mut resp = (StatusCode::TOO_MANY_REQUESTS, axum::Json(body)).into_response();
+    if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after_secs.to_string()) {
+        resp.headers_mut().insert("Retry-After", v);
+    }
+    resp
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::Method;
+
+    #[test]
+    fn login_bucket_covers_auth_pool_posts() {
+        assert!(is_login_post(&Method::POST, "/api/login"));
+        assert!(is_login_post(&Method::POST, "/api/auth/mfa/verify"));
+        assert!(is_login_post(&Method::POST, "/api/auth/refresh"));
+        assert!(!is_login_post(&Method::GET, "/api/login"));
+        assert!(!is_login_post(&Method::POST, "/api/agents/enroll"));
+    }
+
+    #[test]
+    fn enroll_bucket_covers_agent_credential_posts() {
+        assert_eq!(
+            unauth_post_kind(&Method::POST, "/api/agents/enroll"),
+            Some(UnauthPostKind::Enroll)
+        );
+        assert_eq!(
+            unauth_post_kind(&Method::POST, "/api/agents/session"),
+            Some(UnauthPostKind::Enroll)
+        );
+        assert_eq!(unauth_post_kind(&Method::POST, "/api/findings"), None);
+    }
+
+    #[test]
+    fn local_governor_is_checked_before_redis_in_source() {
+        let src = include_str!("login_rate_limit.rs");
+        let local = src
+            .find("limiter.check_key")
+            .expect("in-process governor check");
+        let redis = src
+            .find("rate_limit_redis::is_enabled")
+            .expect("redis branch");
+        assert!(
+            local < redis,
+            "in-process governor must run before any Redis I/O"
+        );
+    }
 }
