@@ -341,8 +341,8 @@ mod tests {
         let view = crate::direct_syscalls::pe::PeView::new(&img).expect("pe");
         let eat = view.export_directory().expect("eat");
         let span = infer_text_span_from_eat(view, &eat).expect("span");
-        assert_eq!(span.rva_start, 0x400);
-        assert_eq!(span.rva_end, 0x400 + STUB_LEN * 3);
-        assert!(!span.contains_bytes(0x400 + STUB_LEN * 3, 8));
+        assert_eq!(span.rva_start, 0x600);
+        assert_eq!(span.rva_end, 0x600 + STUB_LEN * 4);
+        assert!(!span.contains_bytes(0x600 + STUB_LEN * 4, 8));
     }
 }

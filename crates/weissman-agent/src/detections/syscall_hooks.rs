@@ -41,14 +41,39 @@ fn scan(engine: &str) -> anyhow::Result<Vec<Value>> {
     extras.insert("target_exports_resolved".into(), json!(resolver.len()));
     extras.insert("hooked_stubs".into(), json!(hooked_n));
     extras.insert(
-        "hooked_hashes".into(),
+        "hooked_targets".into(),
         Value::Array(
             resolver
                 .entries()
                 .iter()
                 .filter(|e| e.hooked)
                 .take(32)
-                .map(|e| json!({ "hash": format!("{:016x}", e.hash), "ssn": e.ssn, "rva": e.rva }))
+                .map(|e| {
+                    json!({
+                        "alg": "sha256-64",
+                        "hash": format!("{:016x}", e.hash),
+                        "ssn": e.ssn,
+                        "rva": e.rva
+                    })
+                })
+                .collect(),
+        ),
+    );
+    extras.insert(
+        "hooked_eat".into(),
+        Value::Array(
+            resolver
+                .hook_map()
+                .iter()
+                .filter(|e| e.hooked)
+                .map(|e| {
+                    json!({
+                        "alg": "fnv1a-64",
+                        "fnv": format!("{:016x}", e.fnv),
+                        "ssn": e.ssn,
+                        "rva": e.rva
+                    })
+                })
                 .collect(),
         ),
     );
@@ -57,9 +82,9 @@ fn scan(engine: &str) -> anyhow::Result<Vec<Value>> {
         Ok(vec![finding(
             engine,
             &format!(
-                "ntdll Nt/Zw stubs unhooked ({} of {} Nt/Zw exports scanned via Hell's Gate)",
-                resolver.len(),
-                resolver.exports_scanned()
+                "ntdll Nt/Zw stubs unhooked ({} Nt/Zw exports scanned; {} SHA-256 dispatch targets)",
+                resolver.exports_scanned(),
+                resolver.len()
             ),
             "info",
             "T1562.001",

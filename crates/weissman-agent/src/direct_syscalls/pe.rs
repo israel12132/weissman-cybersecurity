@@ -381,6 +381,106 @@ fn export_dir_plausible(buf: &[u8], dir: &IMAGE_EXPORT_DIRECTORY) -> bool {
     names_end <= buf.len() && funcs_end <= buf.len() && ords_end <= buf.len()
 }
 
+/// Recover ntdll's export directory without PE headers.
+///
+/// Complete header erasure (first 1024 bytes zeroed) deletes the data directory
+/// RVA. This scanner locates `IMAGE_EXPORT_DIRECTORY` from the names table:
+/// find a critical Nt* string, then the directory whose `AddressOfNames` slot
+/// points at it. `"ntdll.dll"` is a secondary signal if the API strings moved.
+pub fn recover_ntdll_export_directory(buf: &[u8]) -> Option<IMAGE_EXPORT_DIRECTORY> {
+    const API_NEEDLES: [&[u8]; 3] = [
+        b"NtAllocateVirtualMemory",
+        b"NtProtectVirtualMemory",
+        b"NtClose",
+    ];
+    for needle in API_NEEDLES {
+        if let Some(dir) = find_export_directory_by_api_name(buf, needle) {
+            return Some(dir);
+        }
+    }
+    find_ntdll_export_directory(buf)
+}
+
+/// Locate an export directory whose names table contains `api` (NUL-terminated).
+pub fn find_export_directory_by_api_name(buf: &[u8], api: &[u8]) -> Option<IMAGE_EXPORT_DIRECTORY> {
+    if api.is_empty() {
+        return None;
+    }
+    let mut search_from = 0usize;
+    while search_from + api.len() < buf.len() {
+        let rest = &buf[search_from..];
+        let Some(rel) = rest.windows(api.len()).position(|w| w == api) else {
+            break;
+        };
+        let name_off = search_from + rel;
+        let terminated = buf.get(name_off + api.len()) == Some(&0);
+        let token_start = name_off == 0 || buf.get(name_off - 1) == Some(&0);
+        if !terminated || !token_start {
+            search_from = name_off + 1;
+            continue;
+        }
+        let name_rva = name_off as u32;
+        let name_le = name_rva.to_le_bytes();
+        let mut slot = 0usize;
+        while slot + 4 <= buf.len() {
+            if buf.get(slot..slot + 4) == Some(&name_le[..]) {
+                if let Some(dir) = dir_from_names_slot(buf, slot) {
+                    return Some(dir);
+                }
+            }
+            slot = match slot.checked_add(4) {
+                Some(v) => v,
+                None => break,
+            };
+        }
+        search_from = name_off + 1;
+    }
+    None
+}
+
+/// Given one AddressOfNames slot, find the `IMAGE_EXPORT_DIRECTORY` whose
+/// `address_of_names` field points at that table. The table is a separate RVA
+/// (not packed at directory+32), so we match the pointer field, then validate.
+fn dir_from_names_slot(buf: &[u8], slot_off: usize) -> Option<IMAGE_EXPORT_DIRECTORY> {
+    const ADDR_OF_NAMES_OFF: usize = 32;
+    let max = buf
+        .len()
+        .saturating_sub(mem::size_of::<IMAGE_EXPORT_DIRECTORY>());
+    let mut field = ADDR_OF_NAMES_OFF;
+    while field <= max + ADDR_OF_NAMES_OFF && field + 4 <= buf.len() {
+        let Some(names_base) = read_u32(buf, field).map(|v| v as usize) else {
+            field = match field.checked_add(4) {
+                Some(v) => v,
+                None => break,
+            };
+            continue;
+        };
+        if names_base <= slot_off && (slot_off - names_base).is_multiple_of(4) {
+            let idx = (slot_off - names_base) / 4;
+            let Some(dir_off) = field.checked_sub(ADDR_OF_NAMES_OFF) else {
+                field = match field.checked_add(4) {
+                    Some(v) => v,
+                    None => break,
+                };
+                continue;
+            };
+            if let Some(dir) = read_export_directory(buf, dir_off) {
+                if dir.address_of_names as usize == names_base
+                    && idx < dir.number_of_names as usize
+                    && export_dir_plausible(buf, &dir)
+                {
+                    return Some(dir);
+                }
+            }
+        }
+        field = match field.checked_add(4) {
+            Some(v) => v,
+            None => break,
+        };
+    }
+    None
+}
+
 /// Locate ntdll's export directory by finding the `"ntdll.dll"` name string,
 /// then the `IMAGE_EXPORT_DIRECTORY` whose `name` RVA points at it.
 /// Survives PE header stomping: DOS/NT headers may be zeroed while `.rdata`
@@ -469,7 +569,32 @@ mod tests {
         let img = crate::direct_syscalls::fixtures::synthetic_ntdll_header_stomped(false);
         assert!(PeView::new(&img).is_none(), "DOS/NT headers must be gone");
         let eat = find_ntdll_export_directory(&img).expect("EAT via ntdll.dll name");
-        assert_eq!(eat.number_of_names, 3);
+        assert_eq!(eat.number_of_names, 4);
         assert_eq!(cstr_at_bytes(&img, eat.name), Some("ntdll.dll"));
+    }
+
+    #[test]
+    fn complete_header_erase_recovers_eat_via_api_name_chain() {
+        let img = crate::direct_syscalls::fixtures::synthetic_ntdll_complete_header_erase(false);
+        assert!(PeView::new(&img).is_none());
+        assert!(
+            img[..0x400].iter().all(|&b| b == 0),
+            "first 1024 bytes must be gone"
+        );
+        let eat = find_export_directory_by_api_name(&img, b"NtAllocateVirtualMemory")
+            .expect("EAT via NtAllocateVirtualMemory names chain (not ntdll.dll fallback)");
+        assert_eq!(eat.number_of_names, 4);
+        let name0 = cstr_at_bytes(&img, read_u32(&img, eat.address_of_names as usize).unwrap());
+        assert_eq!(name0, Some("NtAllocateVirtualMemory"));
+    }
+
+    #[test]
+    fn dll_name_stomp_still_recovers_eat_via_nt_allocate() {
+        let img =
+            crate::direct_syscalls::fixtures::synthetic_ntdll_headers_and_dllname_stomped(false);
+        assert!(find_ntdll_export_directory(&img).is_none());
+        let eat = find_export_directory_by_api_name(&img, b"NtAllocateVirtualMemory")
+            .expect("API-name signature scan");
+        assert_eq!(eat.number_of_names, 4);
     }
 }

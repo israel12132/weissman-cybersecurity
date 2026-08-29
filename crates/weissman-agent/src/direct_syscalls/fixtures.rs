@@ -10,35 +10,46 @@ use super::ssn::{encode_clean_stub, encode_jmp_hook_stub, STUB_LEN};
 
 const E_LFANEW: usize = 0x80;
 const SECTION_TABLE_RVA: usize = E_LFANEW + 264; // after IMAGE_NT_HEADERS64
-const EXPORT_RVA: u32 = 0x200;
-const FUNCS_RVA: u32 = 0x2C0;
-const NAMES_RVA: u32 = 0x2E0;
-const ORDS_RVA: u32 = 0x2F0;
-const STRINGS_RVA: u32 = 0x300;
-const STUBS_RVA: u32 = 0x400;
+                                                 // .rdata lives at 0x400 so a complete 1024-byte header erase cannot wipe the EAT.
+const EXPORT_RVA: u32 = 0x400;
+const FUNCS_RVA: u32 = 0x440;
+const NAMES_RVA: u32 = 0x460;
+const ORDS_RVA: u32 = 0x480;
+const STRINGS_RVA: u32 = 0x4A0;
+const STUBS_RVA: u32 = 0x600;
 /// RVA of the first syscall stub in [`synthetic_ntdll`].
 pub const FIXTURE_STUBS_RVA: u32 = STUBS_RVA;
-const TEXT_SIZE: u32 = (STUB_LEN * 3) as u32; // three syscall stubs, nothing past them
+const TEXT_SIZE: u32 = (STUB_LEN * 4) as u32; // four syscall stubs, nothing past them
 const IMAGE_SIZE: usize = 0x800;
 const IMAGE_SCN_MEM_READ: u32 = 0x4000_0000;
 const IMAGE_SCN_CNT_INITIALIZED_DATA: u32 = 0x0000_0040;
+/// First 1024 bytes — DOS/NT headers + section table on a typical ntdll mapping.
+pub const COMPLETE_HEADER_ERASE_LEN: usize = 0x400;
 
 const EXPORTS: &[&str] = &[
     "NtAllocateVirtualMemory",
     "NtProtectVirtualMemory",
     "NtClose",
+    "NtCreateSection",
 ];
 
 /// Base SSNs laid out in stub order (adjacent stubs differ by 1 — Halo's Gate invariant).
 pub const FIXTURE_SSN_ALLOCATE: u16 = 0x18;
 pub const FIXTURE_SSN_PROTECT: u16 = 0x19;
 pub const FIXTURE_SSN_CLOSE: u16 = 0x1A;
+pub const FIXTURE_SSN_CREATE_SECTION: u16 = 0x1B;
 
-/// Build a compact PE32+ image with three Nt* exports.
+/// Build a compact PE32+ image with Nt* exports.
 ///
 /// When `hook_allocate` is true, `NtAllocateVirtualMemory`'s stub is overwritten with
 /// `jmp rel32` so Halo's Gate must recover SSN `0x18` from the neighbor.
+/// When `hook_create_section` is true, the non-target `NtCreateSection` stub is hooked
+/// so `syscall_evasion` must report it via the FNV-1a eat map (not SHA-256).
 pub fn synthetic_ntdll(hook_allocate: bool) -> Vec<u8> {
+    synthetic_ntdll_hooks(hook_allocate, false)
+}
+
+pub fn synthetic_ntdll_hooks(hook_allocate: bool, hook_create_section: bool) -> Vec<u8> {
     let mut buf = vec![0u8; IMAGE_SIZE];
 
     let dos = IMAGE_DOS_HEADER {
@@ -104,7 +115,7 @@ pub fn synthetic_ntdll(hook_allocate: bool) -> Vec<u8> {
             minor_subsystem_version: 0,
             win32_version_value: 0,
             size_of_image: IMAGE_SIZE as u32,
-            size_of_headers: 0x200,
+            size_of_headers: COMPLETE_HEADER_ERASE_LEN as u32,
             check_sum: 0,
             subsystem: 3,
             dll_characteristics: 0,
@@ -129,9 +140,9 @@ pub fn synthetic_ntdll(hook_allocate: bool) -> Vec<u8> {
         IMAGE_SECTION_HEADER {
             name: rdata_name,
             virtual_size: 0x200,
-            virtual_address: 0x200,
+            virtual_address: 0x400,
             size_of_raw_data: 0x200,
-            pointer_to_raw_data: 0x200,
+            pointer_to_raw_data: 0x400,
             pointer_to_relocations: 0,
             pointer_to_linenumbers: 0,
             number_of_relocations: 0,
@@ -186,7 +197,7 @@ pub fn synthetic_ntdll(hook_allocate: bool) -> Vec<u8> {
         str_cur += name.len() + 1;
 
         let ssn = FIXTURE_SSN_ALLOCATE + i as u16;
-        let stub = if hook_allocate && i == 0 {
+        let stub = if (hook_allocate && i == 0) || (hook_create_section && i == 3) {
             encode_jmp_hook_stub()
         } else {
             encode_clean_stub(ssn)
@@ -203,11 +214,26 @@ pub fn synthetic_ntdll(hook_allocate: bool) -> Vec<u8> {
     buf
 }
 
-/// Same as [`synthetic_ntdll`] but DOS/NT headers and the section table are
-/// zeroed — the EDR header-stomp case. EAT + stubs remain.
+/// Same as [`synthetic_ntdll`] but the first 1024 bytes (DOS/NT headers and
+/// the section table) are zeroed — complete PE header erasure. EAT at 0x400
+/// and stubs at 0x600 remain.
 pub fn synthetic_ntdll_header_stomped(hook_allocate: bool) -> Vec<u8> {
+    synthetic_ntdll_complete_header_erase(hook_allocate)
+}
+
+pub fn synthetic_ntdll_complete_header_erase(hook_allocate: bool) -> Vec<u8> {
     let mut buf = synthetic_ntdll(hook_allocate);
-    buf[..0x200].fill(0);
+    buf[..COMPLETE_HEADER_ERASE_LEN].fill(0);
+    buf
+}
+
+/// Complete header erase plus the mapped `"ntdll.dll"` export name is wiped.
+/// Recovery must use the Nt* API-name chain, not the DLL name RVA.
+pub fn synthetic_ntdll_headers_and_dllname_stomped(hook_allocate: bool) -> Vec<u8> {
+    let mut buf = synthetic_ntdll_complete_header_erase(hook_allocate);
+    if let Some(off) = buf.windows(9).position(|w| w == b"ntdll.dll") {
+        buf[off..off + 10].fill(0);
+    }
     buf
 }
 
@@ -241,7 +267,7 @@ mod tests {
         let img = synthetic_ntdll(false);
         let pe = PeView::new(&img).expect("PE view");
         let exp = pe.export_directory().expect("export dir");
-        assert_eq!(exp.number_of_names, 3);
+        assert_eq!(exp.number_of_names, 4);
         assert_eq!(pe.cstr_at(exp.name), Some("ntdll.dll"));
         assert_eq!(
             pe.cstr_at(pe.u32_at(exp.address_of_names, 0).unwrap()),
