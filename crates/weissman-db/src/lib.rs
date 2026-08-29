@@ -699,6 +699,8 @@ pub async fn ensure_admin_user(auth_pool: &PgPool) -> Result<(), sqlx::Error> {
 
 /// One-time bootstrap admin in `default` tenant when **`WEISSMAN_MASTER_BOOTSTRAP_EMAIL`** is set together with
 /// `WEISSMAN_MASTER_BOOTSTRAP_PASSWORD` or `WEISSMAN_MASTER_BOOTSTRAP_BCRYPT`. No hardcoded identity in source.
+/// Inserts `role=admin`; boot-time auth bootstrap then promotes the row to `is_superadmin`
+/// so owner-only client create/delete works.
 pub async fn ensure_master_bootstrap_user(auth_pool: &PgPool) -> Result<(), sqlx::Error> {
     let email = std::env::var("WEISSMAN_MASTER_BOOTSTRAP_EMAIL")
         .ok()

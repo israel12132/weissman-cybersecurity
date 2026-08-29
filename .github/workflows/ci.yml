@@ -316,7 +316,13 @@ jobs:
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${ver}/gitleaks_${ver}_linux_x64.tar.gz" \
             | tar -xz gitleaks
           ./gitleaks detect --no-git --redact --no-banner --exit-code 1 --source .
+          # fetch-depth: 0 materializes every origin head. gitleaks' default git
+          # log includes --all, so a throwaway 64-hex vault pin on an unrelated
+          # agent's branch fails THIS job. Bound history to the checked-out ref
+          # (PR merge = main ∪ this branch; still catches secrets later deleted
+          # from the tree).
           ./gitleaks detect --redact --no-banner --exit-code 1 --source . \
+            --log-opts='HEAD' \
             --report-format json --report-path gitleaks-git.json || {
             echo '--- gitleaks git-history findings ---'
             cat gitleaks-git.json || true
