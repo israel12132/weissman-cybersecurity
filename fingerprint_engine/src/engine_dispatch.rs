@@ -762,6 +762,9 @@ async fn dispatch_engine_match(
         "chronos" => crate::chronos_engine::run_chronos_result(target, ctx).await,
         "poe_synthesis" => run_poe_synthesis_dispatch(target, ctx).await,
         "liquid_matrix" => crate::liquid_matrix_engine::run_liquid_matrix_result(target, ctx).await,
+        "honey_routing_gateway" => {
+            crate::honey_routing_gateway_engine::run_honey_routing_gateway_result(target, ctx).await
+        }
         "cognitive_starvation" => {
             crate::cognitive_starvation_engine::run_cognitive_starvation_result(target, ctx).await
         }

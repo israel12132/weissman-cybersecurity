@@ -14,6 +14,7 @@
 //! | `risk_superposition_collapse` | Multi-engine Bayesian belief + STRIPS + FAIR |
 //! | `sovereign_active_defense_fusion` | MTD + cognitive starvation + deception + CHRONOS |
 //! | `fair_exposure_fusion` | External exposure grade + FAIR ALE/SLE roll-up |
+//! | `honey_routing_gateway` | Honey-route sessions + Dijkstra weights + FAIR ARO |
 
 /// Production fusion engine IDs — must remain a subset of `PRODUCTION_ENGINE_IDS`.
 pub const FUSION_ENGINE_IDS: &[&str] = &[
@@ -23,6 +24,7 @@ pub const FUSION_ENGINE_IDS: &[&str] = &[
     "risk_superposition_collapse",
     "sovereign_active_defense_fusion",
     "fair_exposure_fusion",
+    "honey_routing_gateway",
 ];
 
 pub use crate::external_exposure_supreme::{
@@ -30,6 +32,9 @@ pub use crate::external_exposure_supreme::{
 };
 pub use crate::fair_exposure_fusion_engine::{
     run_fair_exposure_fusion, run_fair_exposure_fusion_result,
+};
+pub use crate::honey_routing_gateway_engine::{
+    run_honey_routing_gateway, run_honey_routing_gateway_result,
 };
 pub use crate::identity_attack_chain_engine::{
     run_identity_attack_chain, run_identity_attack_chain_result,

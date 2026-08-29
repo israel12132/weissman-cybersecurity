@@ -126,7 +126,7 @@ pub async fn compute_and_store(
     .map_err(|e| format!("load nodes: {e}"))?;
 
     let edge_rows = sqlx::query(
-        r#"SELECT from_node_id, to_node_id, edge_type
+        r#"SELECT from_node_id, to_node_id, edge_type, metadata
              FROM risk_graph_edges
             WHERE tenant_id = $1 AND client_id = $2"#,
     )
@@ -157,16 +157,25 @@ pub async fn compute_and_store(
         })
         .collect();
 
-    let mut adjacency: HashMap<i64, Vec<(i64, String)>> = HashMap::new();
+    let mut adjacency: HashMap<i64, Vec<(i64, String, f64)>> = HashMap::new();
     let mut edges = Vec::with_capacity(edge_rows.len());
     for r in edge_rows {
         let from: i64 = r.try_get("from_node_id").unwrap_or(0);
         let to: i64 = r.try_get("to_node_id").unwrap_or(0);
         let etype: String = r.try_get("edge_type").unwrap_or_default();
+        let meta_raw: String = r.try_get("metadata").unwrap_or_else(|_| "{}".into());
+        let honey_weight = serde_json::from_str::<Value>(&meta_raw)
+            .ok()
+            .and_then(|v| v.get("honey_weight").and_then(Value::as_f64))
+            .unwrap_or(1.0)
+            .clamp(0.05, 1.0);
         if from == 0 || to == 0 {
             continue;
         }
-        adjacency.entry(from).or_default().push((to, etype.clone()));
+        adjacency
+            .entry(from)
+            .or_default()
+            .push((to, etype.clone(), honey_weight));
         edges.push(GraphEdge {
             from,
             to,
@@ -348,7 +357,7 @@ fn dijkstra_path(
     entry: i64,
     target: i64,
     nodes: &HashMap<i64, GraphNode>,
-    adjacency: &HashMap<i64, Vec<(i64, String)>>,
+    adjacency: &HashMap<i64, Vec<(i64, String, f64)>>,
 ) -> Option<AttackPath> {
     let entry_node = nodes.get(&entry)?;
     let mut heap: BinaryHeap<HeapEntry> = BinaryHeap::new();
@@ -403,7 +412,7 @@ fn dijkstra_path(
         let Some(neighbours) = adjacency.get(&node) else {
             continue;
         };
-        for (next, etype) in neighbours {
+        for (next, etype, honey_weight) in neighbours {
             // Don't revisit a node already in this path (avoid cycles).
             if path.iter().any(|s| s.node_id == *next) {
                 continue;
@@ -411,7 +420,7 @@ fn dijkstra_path(
             let Some(next_node) = nodes.get(next) else {
                 continue;
             };
-            let edge_cost = node_pivot_weight(next_node);
+            let edge_cost = node_pivot_weight(next_node) * honey_weight.clamp(0.05, 1.0);
             let mut new_path = path.clone();
             new_path.push(PathStep {
                 node_id: next_node.id,
@@ -462,9 +471,9 @@ mod tests {
         nodes.insert(1, n(1, true, false, 0.0));
         nodes.insert(2, n(2, false, false, 5.0));
         nodes.insert(3, n(3, false, true, 0.0));
-        let mut adj: HashMap<i64, Vec<(i64, String)>> = HashMap::new();
-        adj.insert(1, vec![(2, "connects".into())]);
-        adj.insert(2, vec![(3, "leads_to".into())]);
+        let mut adj: HashMap<i64, Vec<(i64, String, f64)>> = HashMap::new();
+        adj.insert(1, vec![(2, "connects".into(), 1.0)]);
+        adj.insert(2, vec![(3, "leads_to".into(), 1.0)]);
         let p = dijkstra_path(1, 3, &nodes, &adj).unwrap();
         assert_eq!(p.hops, 2);
         assert_eq!(p.steps.len(), 3);
@@ -475,7 +484,23 @@ mod tests {
         let mut nodes = HashMap::new();
         nodes.insert(1, n(1, true, false, 0.0));
         nodes.insert(2, n(2, false, true, 0.0));
-        let adj: HashMap<i64, Vec<(i64, String)>> = HashMap::new();
+        let adj: HashMap<i64, Vec<(i64, String, f64)>> = HashMap::new();
         assert!(dijkstra_path(1, 2, &nodes, &adj).is_none());
+    }
+
+    #[test]
+    fn honey_weight_lowers_path_cost() {
+        let mut nodes = HashMap::new();
+        nodes.insert(1, n(1, true, false, 0.0));
+        nodes.insert(2, n(2, false, true, 0.0));
+        let mut adj_full: HashMap<i64, Vec<(i64, String, f64)>> = HashMap::new();
+        adj_full.insert(1, vec![(2, "leads_to".into(), 1.0)]);
+        let mut adj_honey: HashMap<i64, Vec<(i64, String, f64)>> = HashMap::new();
+        adj_honey.insert(1, vec![(2, "leads_to".into(), 0.72)]);
+        let full = dijkstra_path(1, 2, &nodes, &adj_full).unwrap();
+        let honey = dijkstra_path(1, 2, &nodes, &adj_honey).unwrap();
+        assert!(honey.cost < full.cost);
+        // CVSS 7.2-shaped: cheaper than a clean edge, never a 0.15 golden path.
+        assert!(honey.cost > full.cost * 0.50);
     }
 }

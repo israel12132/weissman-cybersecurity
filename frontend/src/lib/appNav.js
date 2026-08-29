@@ -102,6 +102,7 @@ export const NAV_GROUPS = [
       { to: '/nexus-swarm', labelKey: 'nav.nexus_swarm', icon: '⚡' },
       { to: '/superposition-collapse', labelKey: 'nav.superposition_collapse', icon: '◈' },
       { to: '/sovereign-defense-matrix', labelKey: 'nav.sovereign_defense', icon: '⬡' },
+      { to: '/honey-routing', labelKey: 'nav.honey_routing', icon: '🕸' },
     ],
   },
   {
@@ -196,6 +197,7 @@ const PATH_OVERRIDES = [
   { prefix: '/billing', groupId: 'primary', labelKey: 'nav.billing' },
   { prefix: '/superposition-collapse', groupId: 'command', labelKey: 'nav.superposition_collapse' },
   { prefix: '/sovereign-defense-matrix', groupId: 'command', labelKey: 'nav.sovereign_defense' },
+  { prefix: '/honey-routing', groupId: 'command', labelKey: 'nav.honey_routing' },
   { prefix: '/engines/top-tier/', groupId: 'engines', labelKey: 'nav.engine_profile' },
   { prefix: '/engines/top-tier', groupId: 'engines', labelKey: 'nav.top_tier_engines' },
   { prefix: '/engines/strategic', groupId: 'engines', labelKey: 'nav.strategic_engines' },

@@ -66,6 +66,7 @@ struct DefenseTelemetry {
     chronos_freezes_24h: i64,
     cognitive_sessions_24h: i64,
     deception_triggers_24h: i64,
+    honey_route_sessions_24h: i64,
     agents_online: i64,
     mtd_epoch_active: bool,
 }
@@ -115,6 +116,15 @@ async fn load_defense_telemetry(ctx: &EngineRunContext) -> DefenseTelemetry {
     .await
     .unwrap_or(0);
 
+    let honey_route_sessions_24h: i64 = sqlx::query_scalar(
+        r#"SELECT COUNT(*)::bigint FROM honey_route_sessions
+            WHERE client_id = $1 AND last_payload_at > now() - interval '24 hours'"#,
+    )
+    .bind(client_id)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
+
     let agents_online: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM endpoint_agents
             WHERE client_id = $1 AND last_seen_at > now() - interval '5 minutes'"#,
@@ -131,6 +141,7 @@ async fn load_defense_telemetry(ctx: &EngineRunContext) -> DefenseTelemetry {
         chronos_freezes_24h,
         cognitive_sessions_24h,
         deception_triggers_24h,
+        honey_route_sessions_24h,
         agents_online,
         mtd_epoch_active: false,
     }
@@ -229,6 +240,20 @@ pub async fn run_sovereign_active_defense_fusion_result(
                 &format!(
                     "{} deception trigger(s) in 24h — attackers interacted with canary/shadow assets.",
                     telemetry.deception_triggers_24h
+                ),
+                &host,
+            ));
+        }
+        if telemetry.honey_route_sessions_24h > 0 {
+            maturity += 10;
+            merged.push(finding(
+                ENGINE_ID,
+                "Honey-routing gateway engaged — live attacker sessions",
+                "high",
+                "T1599",
+                &format!(
+                    "{} honey-route session(s) in 24h — scanners were transparently diverted into the honeynet.",
+                    telemetry.honey_route_sessions_24h
                 ),
                 &host,
             ));

@@ -310,6 +310,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "chronos",
     "cognitive_starvation",
     "liquid_matrix",
+    "honey_routing_gateway",
     "sovereign_active_defense_fusion",
     "adversarial_threat_emulation",
     "dark_web_monitor",
@@ -979,6 +980,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "risk_superposition_collapse",
     "chronos",
     "liquid_matrix",
+    "honey_routing_gateway",
     "sovereign_active_defense_fusion",
     "cognitive_starvation",
     "adversarial_threat_emulation",
@@ -1457,6 +1459,9 @@ pub fn resolve_engine_id(id: &str) -> &str {
         }
         "chronos_engine" | "temporal_rollback" | "zero_day_chronos" => "chronos",
         "liquid-matrix" | "mtd_routing" | "moving_target_defense" => "liquid_matrix",
+        "honey-routing" | "honey_routing" | "active_deception_gateway" | "honeynet_gateway" => {
+            "honey_routing_gateway"
+        }
         "offensive_ai_poisoning" | "ai_starvation" | "cognitive_starvation_engine" => {
             "cognitive_starvation"
         }

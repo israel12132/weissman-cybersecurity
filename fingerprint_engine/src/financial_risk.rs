@@ -110,6 +110,17 @@ pub async fn compute_and_store(
 
     // For every node, compute SLE = value × impact + KEV/EPSS-multiplied ALE.
     // We join vulnerabilities to find the worst current finding per node.
+    let honey_aro: f64 = sqlx::query_scalar(
+        r#"SELECT COALESCE(MAX(aro_floor), 0)::float8
+             FROM honey_route_fair_overrides
+            WHERE tenant_id = $1 AND client_id = $2
+              AND (expires_at IS NULL OR expires_at > now())"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0.0);
     let rows = sqlx::query(
         r#"SELECT n.id, n.label, n.graph_key, n.node_type, n.crown_jewel,
                   COALESCE(n.business_value_usd, $3)               AS value,
@@ -153,7 +164,7 @@ pub async fn compute_and_store(
         }
 
         let sle = single_loss_expectancy(value, cvss);
-        let ale = annual_loss_expectancy(sle, epss, kev, discount);
+        let ale = annual_loss_expectancy(sle, epss, kev, discount, honey_aro);
 
         if sle > sle_worst {
             sle_worst = sle;
@@ -273,13 +284,22 @@ fn single_loss_expectancy(asset_value_usd: i64, cvss: f32) -> i64 {
 /// Annual Loss Expectancy = SLE × annualised exploit probability × discount factor.
 /// EPSS reports 30-day probability — multiply by 12 to get annualised. KEV-listed
 /// floors annualised probability at 1.0 (assumed at least one attempt/year).
-fn annual_loss_expectancy(sle_usd: i64, epss: f32, kev: bool, discount: f32) -> i64 {
+fn annual_loss_expectancy(
+    sle_usd: i64,
+    epss: f32,
+    kev: bool,
+    discount: f32,
+    aro_floor: f64,
+) -> i64 {
     if sle_usd <= 0 {
         return 0;
     }
     let mut aro = (epss as f64) * 12.0; // annualised rate of occurrence
     if kev {
         aro = aro.max(1.0);
+    }
+    if aro_floor > 0.0 {
+        aro = aro.max(aro_floor);
     }
     aro = aro.clamp(0.0, 12.0); // can't fire more than once per month on average
     let disc = (discount as f64).clamp(0.0, 1.0);
@@ -305,21 +325,30 @@ mod tests {
     #[test]
     fn ale_kev_floors_aro_at_one() {
         let sle = 100_000;
-        let ale_no_kev = annual_loss_expectancy(sle, 0.0, false, 0.30);
-        let ale_kev = annual_loss_expectancy(sle, 0.0, true, 0.30);
+        let ale_no_kev = annual_loss_expectancy(sle, 0.0, false, 0.30, 0.0);
+        let ale_kev = annual_loss_expectancy(sle, 0.0, true, 0.30, 0.0);
         assert_eq!(ale_no_kev, 0);
         assert_eq!(ale_kev, 30_000); // sle * 1.0 ARO * 0.30 discount
     }
     #[test]
     fn ale_uses_epss_when_no_kev() {
         // EPSS 0.50 ≈ 6 events/yr × 0.3 discount × $100k = $180k
-        let ale = annual_loss_expectancy(100_000, 0.50, false, 0.30);
+        let ale = annual_loss_expectancy(100_000, 0.50, false, 0.30, 0.0);
         assert!(ale > 170_000 && ale < 190_000);
     }
     #[test]
     fn ale_clamps_at_twelve_events_yr() {
         // EPSS 1.0 × 12 = 12 events; can't go higher.
-        let ale = annual_loss_expectancy(100_000, 1.0, true, 1.0);
+        let ale = annual_loss_expectancy(100_000, 1.0, true, 1.0, 0.0);
         assert_eq!(ale, 1_200_000); // 100k × 12 × 1.0
+    }
+
+    #[test]
+    fn honey_route_aro_floor_raises_ale() {
+        let sle = 100_000;
+        let without = annual_loss_expectancy(sle, 0.0, false, 1.0, 0.0);
+        let with_floor = annual_loss_expectancy(sle, 0.0, false, 1.0, 3.0);
+        assert_eq!(without, 0);
+        assert_eq!(with_floor, 300_000); // 100k × 3.0 ARO × 1.0
     }
 }

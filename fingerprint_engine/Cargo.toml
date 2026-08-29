@@ -131,6 +131,9 @@ tokio-util = { version = "0.7", features = ["codec"] }
 lettre = { version = "0.11.22", default-features = false, features = ["tokio1-rustls-tls", "builder", "smtp-transport"] }
 aes-gcm = "0.10"
 hex = "0.4"
+nom = "7"
+hyper = { version = "1", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["tokio", "server-auto"] }
 syn = { version = "2.0", features = ["full", "visit"] }
 subtle = "2.6"
 metrics = "0.24"
