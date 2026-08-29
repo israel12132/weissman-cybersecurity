@@ -56,14 +56,23 @@ if (!readFileSync(hfv, 'utf8').includes('host_liveness_required_to_close')) {
 if (!readFileSync(liveness, 'utf8').includes('agent_host_binds_target')) {
   fail('host_liveness missing per-host agent bind (client_id heartbeat is a false close)')
 }
+if (!readFileSync(liveness, 'utf8').includes('shorthand_binds_with_suffix')) {
+  fail('host_liveness missing tenant DNS suffix gate for short-name FQDN (dev vs prod hijack)')
+}
 if (!readFileSync(cascade, 'utf8').includes('udp_internal')) fail('dns_cascade missing internal UDP stage')
 if (!readFileSync(cascade, 'utf8').includes('dns_dot_udp_downgrade')) {
   fail('dns_cascade missing DoT→UDP critical SOC event')
+}
+if (!readFileSync(cascade, 'utf8').includes('UDP_DOWNGRADE_COOLDOWN')) {
+  fail('dns_cascade missing DoT→UDP SIEM cooldown/dedup')
 }
 const nlqa = join(ROOT, 'fingerprint_engine/src/elite_hardening/nlqa_chain.rs')
 if (!existsSync(nlqa)) fail(`missing ${nlqa}`)
 if (!readFileSync(nlqa, 'utf8').includes('nlqa1_audit_fallback')) {
   fail('nlqa1 missing JSON fallback when mPSC is full')
+}
+if (!readFileSync(nlqa, 'utf8').includes('NLQA_GLOBAL_PERSIST_PERMITS')) {
+  fail('nlqa1 missing bounded persist pool (advisory lock must not starve Tokio workers)')
 }
 
 const routeSrc = readFileSync(routes, 'utf8')
@@ -83,5 +92,13 @@ const sqlAcl = readFileSync(migAcl, 'utf8')
 if (!sqlAcl.includes('insert_supreme_council_memory')) fail('ACL migration missing definer insert')
 if (!sqlAcl.includes('nl_query_audit')) fail('ACL migration missing nlqa hash columns')
 if (!sqlAcl.includes('supreme_council_memory_acl')) fail('ACL migration missing council trigger')
+if (!sqlAcl.includes('SET search_path = public, pg_temp')) {
+  fail('council SECURITY DEFINER missing search_path pin (pg_temp last)')
+}
+const migSearch = join(
+  ROOT,
+  'crates/weissman-db/migrations/20260829234800_elite_hardening_search_path.sql',
+)
+if (!existsSync(migSearch)) fail(`missing ${migSearch}`)
 
 console.log('elite_hardening_gate: 100 controls, live API, page, migration — ok')

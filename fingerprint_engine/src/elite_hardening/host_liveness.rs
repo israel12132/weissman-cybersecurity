@@ -224,14 +224,17 @@ async fn tcp_banner_live(host: &str, port: u16) -> bool {
 }
 
 /// Bind an agent row to the scan target. Sibling hosts on the same client
-/// must not count. FQDN vs short-name is allowed only when one side is a
-/// single label equal to the other's left-most label.
+/// must not count. Short-name ↔ FQDN is allowed **only** when the FQDN is
+/// exactly `{short}.{suffix}` for a suffix in the tenant/client allow-list
+/// (`clients.domains` and/or `WEISSMAN_LIVENESS_DNS_SUFFIXES`).
+/// `web01.dev.local` must never prove `web01.prod.local` live.
 #[must_use]
 pub fn agent_host_binds_target(
     hostname: &str,
     device_name: &str,
     agent_uuid: &str,
     target_host: &str,
+    allowed_dns_suffixes: &[String],
 ) -> bool {
     let target = normalize_host_label(target_host);
     if target.is_empty() {
@@ -249,7 +252,58 @@ pub fn agent_host_binds_target(
     if !uuid.is_empty() && uuid == target {
         return true;
     }
-    short_or_fqdn_same_machine(&host, &target)
+    shorthand_binds_with_suffix(&host, &target, allowed_dns_suffixes)
+        || shorthand_binds_with_suffix(&device, &target, allowed_dns_suffixes)
+}
+
+/// Parse `clients.domains` JSON or a comma-separated env list into suffix labels.
+pub fn parse_liveness_dns_suffixes(raw: &str) -> Vec<String> {
+    let t = raw.trim();
+    if t.is_empty() {
+        return Vec::new();
+    }
+    let items: Vec<String> = match serde_json::from_str::<Vec<serde_json::Value>>(t) {
+        Ok(arr) => arr
+            .into_iter()
+            .filter_map(|v| match v {
+                serde_json::Value::String(s) => Some(s),
+                other => Some(other.to_string()),
+            })
+            .collect(),
+        Err(_) => t
+            .split([',', ';', '\n', '\t', ' '])
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect(),
+    };
+    let mut out = Vec::new();
+    for s in items {
+        if let Some(n) = normalize_dns_suffix(&s) {
+            if !out.iter().any(|e| e == &n) {
+                out.push(n);
+            }
+        }
+    }
+    out
+}
+
+pub fn env_liveness_dns_suffixes() -> Vec<String> {
+    match std::env::var("WEISSMAN_LIVENESS_DNS_SUFFIXES") {
+        Ok(s) => parse_liveness_dns_suffixes(&s),
+        Err(_) => Vec::new(),
+    }
+}
+
+fn normalize_dns_suffix(s: &str) -> Option<String> {
+    let mut t = s.trim().to_ascii_lowercase();
+    if let Some(rest) = t.strip_prefix("*.") {
+        t = rest.to_string();
+    }
+    t = t.trim_matches('.').to_string();
+    if t.is_empty() || t.contains('/') || t.contains(':') {
+        return None;
+    }
+    Some(t)
 }
 
 fn normalize_host_label(s: &str) -> String {
@@ -267,8 +321,8 @@ fn is_single_label(s: &str) -> bool {
     !s.is_empty() && !s.contains('.')
 }
 
-fn short_or_fqdn_same_machine(hostname: &str, target: &str) -> bool {
-    if hostname.is_empty() || target.is_empty() {
+fn shorthand_binds_with_suffix(hostname: &str, target: &str, suffixes: &[String]) -> bool {
+    if hostname.is_empty() || target.is_empty() || suffixes.is_empty() {
         return false;
     }
     let h = left_label(hostname);
@@ -276,8 +330,14 @@ fn short_or_fqdn_same_machine(hostname: &str, target: &str) -> bool {
     if h.is_empty() || h != t {
         return false;
     }
-    // `web01` ↔ `web01.corp.local`. Never `web01.a.com` ↔ `web01.b.com`.
-    is_single_label(hostname) || is_single_label(target)
+    let (short, fqdn) = if is_single_label(hostname) && !is_single_label(target) {
+        (hostname, target)
+    } else if is_single_label(target) && !is_single_label(hostname) {
+        (target, hostname)
+    } else {
+        return false;
+    };
+    suffixes.iter().any(|sfx| fqdn == &format!("{short}.{sfx}"))
 }
 
 async fn agent_heartbeat_live(
@@ -310,9 +370,26 @@ async fn agent_heartbeat_live(
     .fetch_all(&mut *tx)
     .await
     .unwrap_or_default();
+    let domains_raw: String = sqlx::query_scalar(
+        r#"SELECT COALESCE(domains, '[]') FROM clients
+            WHERE tenant_id = $1 AND id = $2"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or_else(|| "[]".to_string());
     let _ = tx.commit().await;
+    let mut suffixes = env_liveness_dns_suffixes();
+    for s in parse_liveness_dns_suffixes(&domains_raw) {
+        if !suffixes.iter().any(|e| e == &s) {
+            suffixes.push(s);
+        }
+    }
     rows.iter()
-        .any(|(hn, device, uuid)| agent_host_binds_target(hn, device, uuid, &target))
+        .any(|(hn, device, uuid)| agent_host_binds_target(hn, device, uuid, &target, &suffixes))
 }
 
 /// Resolve a host:port to a socket for tests and TLS connect.
@@ -403,6 +480,7 @@ mod tests {
             "healthy",
             "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             "web-offline.corp.local",
+            &[],
         ));
     }
 
@@ -413,20 +491,69 @@ mod tests {
             "",
             "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
             "web-offline.corp.local",
+            &[],
         ));
         assert!(agent_host_binds_target(
             "ignored",
             "",
             "cccccccc-cccc-cccc-cccc-cccccccccccc",
             "cccccccc-cccc-cccc-cccc-cccccccccccc",
+            &[],
         ));
-        assert!(agent_host_binds_target("", "grid-01", "", "grid-01",));
+        assert!(agent_host_binds_target("", "grid-01", "", "grid-01", &[]));
     }
 
     #[test]
-    fn short_name_and_fqdn_are_the_same_machine() {
-        assert!(agent_host_binds_target("web01", "", "", "web01.corp.local"));
-        assert!(agent_host_binds_target("web01.corp.local", "", "", "web01"));
+    fn short_name_requires_tenant_suffix_allowlist() {
+        let none: [String; 0] = [];
+        assert!(!agent_host_binds_target(
+            "web01",
+            "",
+            "",
+            "web01.corp.local",
+            &none,
+        ));
+        let corp = vec!["corp.local".to_string()];
+        assert!(agent_host_binds_target(
+            "web01",
+            "",
+            "",
+            "web01.corp.local",
+            &corp,
+        ));
+        assert!(agent_host_binds_target(
+            "web01.corp.local",
+            "",
+            "",
+            "web01",
+            &corp,
+        ));
+    }
+
+    #[test]
+    fn same_short_name_dev_vs_prod_does_not_bind() {
+        let prod = vec!["prod.local".to_string()];
+        assert!(!agent_host_binds_target(
+            "web01",
+            "",
+            "",
+            "web01.dev.local",
+            &prod,
+        ));
+        assert!(!agent_host_binds_target(
+            "web01.dev.local",
+            "",
+            "",
+            "web01.prod.local",
+            &prod,
+        ));
+        assert!(agent_host_binds_target(
+            "web01",
+            "",
+            "",
+            "web01.prod.local",
+            &prod,
+        ));
     }
 
     #[test]
@@ -436,12 +563,19 @@ mod tests {
             "",
             "",
             "web01.b.example",
+            &["example".to_string()],
         ));
     }
 
     #[test]
     fn empty_target_never_binds() {
-        assert!(!agent_host_binds_target("web01", "web01", "uuid", ""));
-        assert!(!agent_host_binds_target("web01", "", "", "   "));
+        assert!(!agent_host_binds_target("web01", "web01", "uuid", "", &[]));
+        assert!(!agent_host_binds_target("web01", "", "", "   ", &[]));
+    }
+
+    #[test]
+    fn parses_client_domains_json_as_suffixes() {
+        let s = parse_liveness_dns_suffixes(r#"["prod.local","*.dev.local"]"#);
+        assert_eq!(s, vec!["prod.local", "dev.local"]);
     }
 }

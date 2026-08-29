@@ -11,10 +11,10 @@ should link here rather than copying figures.
 | — real live probes | 303 | same (295 distinct impls) |
 | — aliases | 212 | same |
 | — agent-required | 48 | same |
-| Rust test fns (`#[test]`/`#[tokio::test]`, incl. parameterized) | 2580 | grep over workspace |
+| Rust test fns (`#[test]`/`#[tokio::test]`, incl. parameterized) | 2585 | grep over workspace |
 | HTTP route registrations (`.route(`) | 339 | grep over `fingerprint_engine/src` + `backend` |
-| Migrations — `crates/weissman-db/migrations` | 111 | `ls crates/weissman-db/migrations` |
-| Migrations — `fingerprint_engine/migrations` | 111 | `ls fingerprint_engine/migrations` |
+| Migrations — `crates/weissman-db/migrations` | 112 | `ls crates/weissman-db/migrations` |
+| Migrations — `fingerprint_engine/migrations` | 112 | `ls fingerprint_engine/migrations` |
 
 **Reading the engine count honestly:** the 563 catalog IDs resolve to
 **295 distinct probe implementations** — 212 are

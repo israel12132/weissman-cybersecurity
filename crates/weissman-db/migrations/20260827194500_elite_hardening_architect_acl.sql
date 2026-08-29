@@ -29,6 +29,7 @@ ALTER TABLE supreme_council_memory
 CREATE OR REPLACE FUNCTION public.supreme_council_memory_acl()
 RETURNS trigger
 LANGUAGE plpgsql
+SET search_path = public, pg_temp
 AS $$
 BEGIN
     IF NEW.source IS NULL OR NEW.source NOT IN (
@@ -66,7 +67,7 @@ CREATE OR REPLACE FUNCTION public.insert_supreme_council_memory(
 ) RETURNS bigint
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = ''
+SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_id bigint;
@@ -108,6 +109,7 @@ COMMENT ON FUNCTION public.insert_supreme_council_memory(
     bigint, text, text, jsonb, text, jsonb, text, text, text
 ) IS
     'Sole INSERT path for supreme_council_memory. Enforces tenant GUC + trusted source. '
+    'SECURITY DEFINER SET search_path = public, pg_temp (pg_temp last). '
     'weissman_app has EXECUTE only; table INSERT is revoked.';
 
 REVOKE ALL ON FUNCTION public.insert_supreme_council_memory(

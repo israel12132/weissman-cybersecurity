@@ -11,6 +11,15 @@ use std::path::{Path, PathBuf};
 
 pub const CHAIN_VERSION: &str = "nlqa1";
 
+/// Max concurrent nlqa1 DB persists across all tenants. Async tasks wait on
+/// this semaphore — they do **not** occupy Tokio worker threads while queued.
+/// One noisy tenant therefore cannot starve UEBA / SOAR / scan work.
+pub const NLQA_GLOBAL_PERSIST_PERMITS: usize = 4;
+
+/// At most one persist in flight per tenant (hash-chain + advisory lock).
+/// Additional events for that tenant stay in the mPSC, then JSON-fallback.
+pub const NLQA_TENANT_PERSIST_PERMITS: usize = 1;
+
 /// Canonical payload hashed into `event_hash`. Keep stable for verification.
 pub fn canonical_nlqa_payload(
     prev_hash: &str,
@@ -162,5 +171,12 @@ mod tests {
         assert_eq!(j["tenant_id"], 7);
         assert_eq!(j["question"], "show kev");
         assert_eq!(j["compliance"], "bank_of_israel_361_audit_trail");
+    }
+
+    #[test]
+    fn persist_pool_cannot_saturate_the_runtime() {
+        assert_eq!(NLQA_GLOBAL_PERSIST_PERMITS, 4);
+        assert_eq!(NLQA_TENANT_PERSIST_PERMITS, 1);
+        assert!(NLQA_GLOBAL_PERSIST_PERMITS >= NLQA_TENANT_PERSIST_PERMITS);
     }
 }

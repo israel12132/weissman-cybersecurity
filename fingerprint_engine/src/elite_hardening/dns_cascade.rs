@@ -14,7 +14,8 @@ use hickory_resolver::net::runtime::TokioRuntimeProvider;
 use hickory_resolver::proto::rr::RecordType;
 use hickory_resolver::TokioResolver;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::time::Duration;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use super::stealth_ops::{doh_lookup_detailed, strip_doh_txt, DohLookup};
 use serde_json::{json, Value};
@@ -70,6 +71,7 @@ pub async fn lookup_detailed(name: &str, record_type: &str) -> CascadeResult {
             answers,
             definitive,
         }) if definitive || !answers.is_empty() => {
+            mark_encrypted_dns_recovered();
             return CascadeResult {
                 answers,
                 method: "doh",
@@ -80,6 +82,7 @@ pub async fn lookup_detailed(name: &str, record_type: &str) -> CascadeResult {
 
     if let Some(dot) = dot_lookup(host, rr).await {
         if dot.definitive || !dot.answers.is_empty() {
+            mark_encrypted_dns_recovered();
             return CascadeResult {
                 answers: dot.answers,
                 method: "dot",
@@ -133,9 +136,98 @@ pub fn internal_udp_resolvers() -> Vec<IpAddr> {
 
 pub const DNS_UDP_DOWNGRADE_EVENT: &str = "dns_dot_udp_downgrade";
 
+/// Default SIEM cooldown: one critical event per outage window, not per query.
+pub const UDP_DOWNGRADE_COOLDOWN: Duration = Duration::from_secs(15 * 60);
+
+/// Decision for DoT→UDP SOC emission (pure; used by the process gate and tests).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DowngradeSoc {
+    Emit { suppressed_since_last: u64 },
+    Suppress { suppressed: u64 },
+}
+
+/// Process-wide dedup so a jammed TCP/853 cannot storm the SIEM.
+#[derive(Debug, Clone, Copy)]
+pub struct UdpDowngradeDedup {
+    pub last_emit: Option<Instant>,
+    pub suppressed: u64,
+}
+
+impl UdpDowngradeDedup {
+    pub const fn new() -> Self {
+        Self {
+            last_emit: None,
+            suppressed: 0,
+        }
+    }
+
+    pub fn on_encrypted_ok(&mut self) {
+        self.last_emit = None;
+        self.suppressed = 0;
+    }
+
+    pub fn on_udp_fallback(&mut self, now: Instant, cooldown: Duration) -> DowngradeSoc {
+        match self.last_emit {
+            None => {
+                self.last_emit = Some(now);
+                self.suppressed = 0;
+                DowngradeSoc::Emit {
+                    suppressed_since_last: 0,
+                }
+            }
+            Some(prev) if now.saturating_duration_since(prev) >= cooldown => {
+                let n = self.suppressed;
+                self.last_emit = Some(now);
+                self.suppressed = 0;
+                DowngradeSoc::Emit {
+                    suppressed_since_last: n,
+                }
+            }
+            Some(_) => {
+                self.suppressed = self.suppressed.saturating_add(1);
+                DowngradeSoc::Suppress {
+                    suppressed: self.suppressed,
+                }
+            }
+        }
+    }
+}
+
+impl Default for UdpDowngradeDedup {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+static UDP_DOWNGRADE_GATE: Mutex<UdpDowngradeDedup> = Mutex::new(UdpDowngradeDedup {
+    last_emit: None,
+    suppressed: 0,
+});
+
+fn downgrade_gate() -> std::sync::MutexGuard<'static, UdpDowngradeDedup> {
+    UDP_DOWNGRADE_GATE.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+pub fn mark_encrypted_dns_recovered() {
+    downgrade_gate().on_encrypted_ok();
+}
+
+fn cooldown_from_env() -> Duration {
+    match std::env::var("WEISSMAN_DNS_DOWNGRADE_COOLDOWN_SECS") {
+        Ok(s) => s
+            .trim()
+            .parse::<u64>()
+            .ok()
+            .filter(|n| *n > 0)
+            .map(Duration::from_secs)
+            .unwrap_or(UDP_DOWNGRADE_COOLDOWN),
+        Err(_) => UDP_DOWNGRADE_COOLDOWN,
+    }
+}
+
 /// SOC payload for a DoT (TCP/853) failure that caused internal-UDP fallback.
 #[must_use]
-pub fn udp_downgrade_soc_payload(name: &str, rr: &str) -> Value {
+pub fn udp_downgrade_soc_payload(name: &str, rr: &str, suppressed_since_last: u64) -> Value {
     json!({
         "event": DNS_UDP_DOWNGRADE_EVENT,
         "severity": "critical",
@@ -143,22 +235,43 @@ pub fn udp_downgrade_soc_payload(name: &str, rr: &str) -> Value {
         "name": name,
         "rr": rr,
         "mitre": "T1040",
+        "dedup_cooldown_secs": cooldown_from_env().as_secs(),
+        "suppressed_queries": suppressed_since_last,
     })
 }
 
-/// Immediate High/Critical security event for SIEM when DNS is downgraded
-/// from DoT to organisation-internal UDP after port 853 failed.
+/// High/Critical security event for SIEM when DNS is downgraded from DoT to
+/// organisation-internal UDP. Deduped to one event per cooldown window (default
+/// 15 minutes) or until encrypted DNS (DoH/DoT) recovers.
 pub fn emit_udp_downgrade_soc(name: &str, rr: &str) {
-    let payload = udp_downgrade_soc_payload(name, rr);
-    tracing::error!(
-        target: "security_event",
-        event = DNS_UDP_DOWNGRADE_EVENT,
-        severity = "critical",
-        name = %name,
-        rr = %rr,
-        audit_json = %payload,
-        "DNS DoT (TCP/853) failed; falling back to organisation-internal UDP — possible active network tampering or eavesdrop"
-    );
+    let decision = downgrade_gate().on_udp_fallback(Instant::now(), cooldown_from_env());
+    match decision {
+        DowngradeSoc::Emit {
+            suppressed_since_last,
+        } => {
+            let payload = udp_downgrade_soc_payload(name, rr, suppressed_since_last);
+            tracing::error!(
+                target: "security_event",
+                event = DNS_UDP_DOWNGRADE_EVENT,
+                severity = "critical",
+                name = %name,
+                rr = %rr,
+                suppressed_queries = suppressed_since_last,
+                audit_json = %payload,
+                "DNS DoT (TCP/853) failed; falling back to organisation-internal UDP — possible active network tampering or eavesdrop"
+            );
+        }
+        DowngradeSoc::Suppress { suppressed } => {
+            tracing::debug!(
+                target: "security_event",
+                event = DNS_UDP_DOWNGRADE_EVENT,
+                name = %name,
+                rr = %rr,
+                suppressed,
+                "DNS DoT→UDP downgrade suppressed (SIEM cooldown)"
+            );
+        }
+    }
 }
 
 struct DotLookup {
@@ -616,11 +729,57 @@ mod tests {
 
     #[test]
     fn udp_downgrade_soc_event_is_critical() {
-        let p = udp_downgrade_soc_payload("mx.internal.test", "MX");
+        let p = udp_downgrade_soc_payload("mx.internal.test", "MX", 0);
         assert_eq!(p["event"], DNS_UDP_DOWNGRADE_EVENT);
         assert_eq!(p["severity"], "critical");
         assert_eq!(p["reason"], "dot_port_853_failed_fell_back_to_internal_udp");
         assert_eq!(p["name"], "mx.internal.test");
         assert_eq!(p["rr"], "MX");
+        assert_eq!(p["suppressed_queries"], 0);
+    }
+
+    #[test]
+    fn udp_downgrade_emits_once_per_cooldown_then_again_after() {
+        let mut g = UdpDowngradeDedup::new();
+        let t0 = Instant::now();
+        let cool = Duration::from_secs(15 * 60);
+        assert_eq!(
+            g.on_udp_fallback(t0, cool),
+            DowngradeSoc::Emit {
+                suppressed_since_last: 0
+            }
+        );
+        assert_eq!(
+            g.on_udp_fallback(t0 + Duration::from_secs(1), cool),
+            DowngradeSoc::Suppress { suppressed: 1 }
+        );
+        assert_eq!(
+            g.on_udp_fallback(t0 + Duration::from_secs(30), cool),
+            DowngradeSoc::Suppress { suppressed: 2 }
+        );
+        assert_eq!(
+            g.on_udp_fallback(t0 + cool, cool),
+            DowngradeSoc::Emit {
+                suppressed_since_last: 2
+            }
+        );
+    }
+
+    #[test]
+    fn encrypted_dns_recovery_rearms_the_soc_event() {
+        let mut g = UdpDowngradeDedup::new();
+        let t0 = Instant::now();
+        let cool = Duration::from_secs(15 * 60);
+        assert!(matches!(
+            g.on_udp_fallback(t0, cool),
+            DowngradeSoc::Emit { .. }
+        ));
+        g.on_encrypted_ok();
+        assert_eq!(
+            g.on_udp_fallback(t0 + Duration::from_secs(1), cool),
+            DowngradeSoc::Emit {
+                suppressed_since_last: 0
+            }
+        );
     }
 }

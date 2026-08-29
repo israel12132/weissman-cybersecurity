@@ -20,13 +20,14 @@
 //! Tenant scoping: every plan is rewritten to include `tenant_id = $tenant`
 //! before compilation. Users never see another tenant's data.
 
+use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sqlx::{Column, PgPool, Row};
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, OnceLock};
 use std::time::Instant;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Semaphore};
 
 // ─── Allow-list schema ───────────────────────────────────────────────────────
 #[derive(Debug, Clone)]
@@ -598,6 +599,30 @@ struct NlqaEvent {
 
 const NLQA_CHANNEL_CAP: usize = 1024;
 static NLQA_TX: OnceLock<mpsc::Sender<NlqaEvent>> = OnceLock::new();
+static NLQA_GLOBAL_PERSIST: OnceLock<Arc<Semaphore>> = OnceLock::new();
+static NLQA_TENANT_PERSIST: OnceLock<DashMap<i64, Arc<Semaphore>>> = OnceLock::new();
+
+fn nlqa_global_persist() -> Arc<Semaphore> {
+    NLQA_GLOBAL_PERSIST
+        .get_or_init(|| {
+            Arc::new(Semaphore::new(
+                crate::elite_hardening::nlqa_chain::NLQA_GLOBAL_PERSIST_PERMITS,
+            ))
+        })
+        .clone()
+}
+
+fn nlqa_tenant_persist(tenant_id: i64) -> Arc<Semaphore> {
+    NLQA_TENANT_PERSIST
+        .get_or_init(DashMap::new)
+        .entry(tenant_id)
+        .or_insert_with(|| {
+            Arc::new(Semaphore::new(
+                crate::elite_hardening::nlqa_chain::NLQA_TENANT_PERSIST_PERMITS,
+            ))
+        })
+        .clone()
+}
 
 /// Start the per-process nlqa1 hash-chain worker. Ask never waits on this lock.
 pub fn spawn_audit_worker(pool: Arc<PgPool>) {
@@ -661,10 +686,30 @@ fn emit_nlqa_fallback(ev: &NlqaEvent, reason: &str) {
 
 async fn nlqa_worker_loop(pool: Arc<PgPool>, mut rx: mpsc::Receiver<NlqaEvent>) {
     while let Some(ev) = rx.recv().await {
-        if let Err(e) = persist_nlqa_chained(&pool, &ev).await {
-            tracing::error!(target: "nlqa1", error = %e, "Ask audit chain append failed");
-            emit_nlqa_fallback(&ev, "persist_failed");
-        }
+        let pool = pool.clone();
+        tokio::spawn(async move {
+            persist_nlqa_isolated(pool, ev).await;
+        });
+    }
+}
+
+/// Isolate advisory-lock waits: at most 4 persists process-wide and 1 per
+/// tenant. Waiters are async tasks (not OS threads), so a flooded tenant cannot
+/// starve the Tokio pool used by UEBA / SOAR / scans. Ask still never blocks.
+async fn persist_nlqa_isolated(pool: Arc<PgPool>, ev: NlqaEvent) {
+    let global = nlqa_global_persist();
+    let Ok(_global_permit) = global.acquire_owned().await else {
+        emit_nlqa_fallback(&ev, "persist_pool_closed");
+        return;
+    };
+    let tenant = nlqa_tenant_persist(ev.tenant_id);
+    let Ok(_tenant_permit) = tenant.acquire_owned().await else {
+        emit_nlqa_fallback(&ev, "tenant_lock_closed");
+        return;
+    };
+    if let Err(e) = persist_nlqa_chained(&pool, &ev).await {
+        tracing::error!(target: "nlqa1", error = %e, "Ask audit chain append failed");
+        emit_nlqa_fallback(&ev, "persist_failed");
     }
 }
 
