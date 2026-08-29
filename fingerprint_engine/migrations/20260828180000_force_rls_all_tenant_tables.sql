@@ -4,7 +4,7 @@
 -- worker paths. FORCE is required so table owners and the query planner
 -- cannot skip USING quals (join uniqueness / timing side-channels).
 
-ALTER TABLE public.tenants FORCE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.tenants FORCE ROW LEVEL SECURITY;
 
 DO $$
 DECLARE

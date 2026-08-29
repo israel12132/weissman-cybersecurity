@@ -145,7 +145,7 @@ fn force_rls_catch_all_migration_forces_without_enabling() {
     let b = std::fs::read_to_string(&db).unwrap_or_default();
     assert!(!a.is_empty(), "FORCE RLS catch-all migration present");
     assert_eq!(a, b, "migration must be identical in both dirs");
-    assert!(a.contains("ALTER TABLE public.tenants FORCE ROW LEVEL SECURITY"));
+    assert!(a.contains("ALTER TABLE IF EXISTS public.tenants FORCE ROW LEVEL SECURITY"));
     assert!(a.contains("FORCE ROW LEVEL SECURITY"));
     assert!(a.contains("relrowsecurity"));
     assert!(a.contains("NOT c.relforcerowsecurity"));
