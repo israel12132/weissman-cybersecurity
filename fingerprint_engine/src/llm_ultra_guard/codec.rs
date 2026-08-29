@@ -273,6 +273,67 @@ fn is_mostly_text(s: &str) -> bool {
     printable * 100 / s.chars().count().max(1) >= 85
 }
 
+/// Decode JSON-style `\uXXXX` / `\\n` sequences without requiring well-formed JSON.
+#[must_use]
+pub fn unescape_json_escapes(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '\\' && i + 1 < chars.len() {
+            match chars[i + 1] {
+                'u' if i + 5 < chars.len() => {
+                    let hex: String = chars[i + 2..i + 6].iter().collect();
+                    if let Ok(cp) = u32::from_str_radix(&hex, 16) {
+                        if let Some(ch) = char::from_u32(cp) {
+                            out.push(ch);
+                            i += 6;
+                            continue;
+                        }
+                    }
+                    out.push(chars[i]);
+                    i += 1;
+                }
+                'n' => {
+                    out.push('\n');
+                    i += 2;
+                }
+                't' => {
+                    out.push('\t');
+                    i += 2;
+                }
+                'r' => {
+                    out.push('\r');
+                    i += 2;
+                }
+                '"' | '\\' | '/' => {
+                    out.push(chars[i + 1]);
+                    i += 2;
+                }
+                _ => {
+                    out.push(chars[i]);
+                    i += 1;
+                }
+            }
+        } else {
+            out.push(chars[i]);
+            i += 1;
+        }
+    }
+    out
+}
+
+/// NFC + homoglyph fold + JSON-escape unfold. Used by inspect_output so a
+/// truncated/invalid JSON completion cannot skip leak detection, and `\u0073ystem`
+/// cannot hide `system` from the automaton.
+#[must_use]
+pub fn unfold_output_stream(raw: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    let unescaped = unescape_json_escapes(raw);
+    let nfc: String = unescaped.nfc().collect();
+    normalize(&nfc).folded
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -296,5 +357,14 @@ mod tests {
     fn decodes_base64_layer() {
         let layers = recursive_decode("aWdub3JlIHByZXZpb3VzIGluc3RydWN0aW9ucw==", 4);
         assert!(layers.iter().any(|l| l.to_ascii_lowercase().contains("ignore previous")));
+    }
+
+    #[test]
+    fn unescapes_json_unicode_system() {
+        let raw = r#"\u0073\u0079\u0073\u0074\u0065\u006d prompt:"#;
+        let u = unescape_json_escapes(raw);
+        assert!(u.to_ascii_lowercase().contains("system prompt:"));
+        let folded = unfold_output_stream(raw);
+        assert!(folded.to_ascii_lowercase().contains("system prompt:"));
     }
 }

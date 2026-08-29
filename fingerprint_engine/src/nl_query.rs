@@ -443,7 +443,7 @@ pub async fn ask(
         source: "ask_weissman",
         ..crate::llm_ultra_guard::GuardContext::default()
     };
-    let guard_report = crate::llm_ultra_guard::inspect_prompt(q, &gctx);
+    let guard_report = crate::llm_ultra_guard::inspect_prompt_async(q.to_string(), gctx.clone()).await;
     let _ = crate::llm_ultra_guard::persist_event(
         app_pool,
         &gctx,
@@ -476,7 +476,7 @@ pub async fn ask(
             return r;
         }
     };
-    let (out_leak, _) = crate::llm_ultra_guard::inspect_output(&plan_json.to_string());
+    let (out_leak, _) = crate::llm_ultra_guard::inspect_output_async(plan_json.to_string()).await;
     if out_leak >= 0.4 {
         let mut r = bad(
             "blocked by Weissman output guardrail (possible secret/system-prompt leak in planner completion).",

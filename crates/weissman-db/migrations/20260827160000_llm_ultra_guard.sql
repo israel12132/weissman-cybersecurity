@@ -88,18 +88,18 @@ CREATE POLICY rag_vector_integrity_tenant ON rag_vector_integrity FOR ALL
 GRANT SELECT, INSERT ON rag_vector_integrity TO weissman_app;
 GRANT USAGE, SELECT ON SEQUENCE rag_vector_integrity_id_seq TO weissman_app;
 
--- ── Council memory integrity columns + HNSW rebuild (m=32, ef_construction=128)
+-- ── Council memory integrity columns ─────────────────────────────────────────
+-- HNSW rebuild (m=32, ef_construction=128) is NOT here. DROP INDEX / CREATE INDEX
+-- on a populated supreme_council_memory takes AccessExclusiveLock for the whole
+-- build (minutes to hours at millions of vectors) and stalls Ask Weissman +
+-- worker RAG. Online rebuild lives in
+-- 20260828120000_supreme_council_hnsw_concurrent.sql (weissman:no-transaction,
+-- CREATE INDEX CONCURRENTLY then DROP INDEX CONCURRENTLY of the legacy name).
 ALTER TABLE supreme_council_memory
     ADD COLUMN IF NOT EXISTS embedding_sha256 TEXT,
     ADD COLUMN IF NOT EXISTS embedding_norm   REAL,
     ADD COLUMN IF NOT EXISTS source_link      TEXT,
     ADD COLUMN IF NOT EXISTS verified_at      TIMESTAMPTZ;
-
-DROP INDEX IF EXISTS ix_supreme_council_mem_embedding_hnsw;
-CREATE INDEX IF NOT EXISTS ix_supreme_council_mem_embedding_hnsw
-    ON supreme_council_memory
- USING hnsw (embedding_vec vector_cosine_ops)
-  WITH (m = 32, ef_construction = 128);
 
 -- ── Role hardening: auth plane never reads RAG / guard intel ────────────────
 REVOKE ALL ON TABLE supreme_council_memory FROM weissman_auth;

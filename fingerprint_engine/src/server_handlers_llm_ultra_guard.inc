@@ -33,7 +33,7 @@ async fn api_llm_ultra_guard_inspect(
         financial_risk_high: body.financial_risk_high,
         ..crate::llm_ultra_guard::GuardContext::default()
     };
-    let report = crate::llm_ultra_guard::inspect_prompt(prompt, &ctx);
+    let report = crate::llm_ultra_guard::inspect_prompt_async(prompt.to_string(), ctx.clone()).await;
     let event_id = crate::llm_ultra_guard::persist_event(
         &state.app_pool,
         &ctx,

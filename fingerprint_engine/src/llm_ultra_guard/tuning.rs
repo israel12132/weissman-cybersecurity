@@ -110,9 +110,33 @@ pub const HNSW_EF_SEARCH: i32 = 64;
 pub const VECTOR_DIM: usize = 1536;
 pub const ANN_LIMIT: i64 = 10;
 pub const COSINE_DUP_THRESHOLD: f32 = 0.992;
+/// OpenAI/vLLM unit-norm embeddings jitter across FP16/FP32 and CUDA vs CPU.
+/// Never compare `norm == 1.0`. Architect gate: `|1 - n| < 1e-5`.
+pub const NORM_UNIT_EPSILON: f32 = 1e-5;
+/// Wide band for *pre-normalise* poison detection (near-zero / exploding vectors).
 pub const NORM_LO: f32 = 0.82;
 pub const NORM_HI: f32 = 1.18;
 pub const OUTLIER_COSINE: f32 = 0.12;
+
+#[must_use]
+pub fn unit_norm_ok(n: f32) -> bool {
+    n.is_finite() && (1.0 - n).abs() < NORM_UNIT_EPSILON
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unit_norm_accepts_fp_jitter_inside_epsilon() {
+        assert!(unit_norm_ok(1.0));
+        assert!(unit_norm_ok(1.0 - 4e-6));
+        assert!(unit_norm_ok(1.0 + 4e-6));
+        assert!(!unit_norm_ok(0.99));
+        assert!(!unit_norm_ok(1.0001));
+        assert!(!unit_norm_ok(f32::NAN));
+    }
+}
 
 #[must_use]
 pub fn vllm_cli_args(p: &VllmProfile) -> Vec<String> {
@@ -172,6 +196,7 @@ pub fn as_json() -> serde_json::Value {
             "ef_search": HNSW_EF_SEARCH,
             "dim": VECTOR_DIM,
             "ann_limit": ANN_LIMIT,
+            "norm_unit_epsilon": NORM_UNIT_EPSILON,
             "norm_lo": NORM_LO,
             "norm_hi": NORM_HI,
         },

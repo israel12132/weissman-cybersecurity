@@ -1,7 +1,7 @@
 //! RAG poisoning verification: L2-norm, cosine, SHA-256 integrity, outlier vs centroid.
 
 use crate::llm_ultra_guard::tuning::{
-    COSINE_DUP_THRESHOLD, NORM_HI, NORM_LO, OUTLIER_COSINE, VECTOR_DIM,
+    unit_norm_ok, COSINE_DUP_THRESHOLD, NORM_UNIT_EPSILON, OUTLIER_COSINE, VECTOR_DIM,
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -42,9 +42,14 @@ pub fn verify_embedding(vec: &[f32], centroid: Option<&[f32]>) -> EmbeddingVerdi
     let n = l2_norm(vec);
     let mut flags = 0u32;
     let mut reasons = Vec::new();
-    if n < NORM_LO || n > NORM_HI {
+    // Architect gate: never `n == 1.0`. FP16/FP32 and CUDA vs CPU jitter is
+    // bounded by NORM_UNIT_EPSILON (1e-5). Anything outside is poison or a
+    // caller that skipped l2_normalize().
+    if !unit_norm_ok(n) {
         flags |= crate::llm_ultra_guard::flags::RAG_OUTLIER;
-        reasons.push(format!("l2_norm {n:.4} outside [{NORM_LO}, {NORM_HI}]"));
+        reasons.push(format!(
+            "l2_norm {n:.8} is not 1±{NORM_UNIT_EPSILON} (FP jitter bound)"
+        ));
     }
     let mut outlier = false;
     if let Some(c) = centroid {
@@ -116,8 +121,19 @@ pub fn too_similar_to_known_false_positive(candidate: &[f32], known_fp: &[Vec<f3
         .any(|k| cosine(candidate, k) >= COSINE_DUP_THRESHOLD)
 }
 
-/// L2-normalise in place. Returns false if the vector is zero.
+/// L2-normalise in place (up to two passes so residual error stays inside ε).
+/// Returns false if the vector is zero.
 pub fn l2_normalize(v: &mut [f32]) -> bool {
+    if !scale_to_unit(v) {
+        return false;
+    }
+    if !unit_norm_ok(l2_norm(v)) {
+        let _ = scale_to_unit(v);
+    }
+    true
+}
+
+fn scale_to_unit(v: &mut [f32]) -> bool {
     let n = l2_norm(v);
     if n < 1e-12 {
         return false;
@@ -155,6 +171,36 @@ mod tests {
         v[3] = 0.6;
         v[7] = 0.8;
         assert!((cosine(&v, &v) - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn accepts_fp_jitter_around_unit() {
+        let mut hi = vec![0.0f32; VECTOR_DIM];
+        hi[0] = 1.0 + NORM_UNIT_EPSILON * 0.5;
+        let r = verify_embedding(&hi, None);
+        assert!(r.ok, "1+ε/2 must pass: {}", r.reason);
+
+        let mut lo = vec![0.0f32; VECTOR_DIM];
+        lo[0] = 1.0 - NORM_UNIT_EPSILON * 0.5;
+        let r = verify_embedding(&lo, None);
+        assert!(r.ok, "1-ε/2 must pass: {}", r.reason);
+    }
+
+    #[test]
+    fn rejects_unnormalized_and_exact_one_is_not_required() {
+        let mut collapsed = vec![0.0f32; VECTOR_DIM];
+        collapsed[0] = 0.99;
+        assert!(!verify_embedding(&collapsed, None).ok);
+
+        let mut unit = vec![0.0f32; VECTOR_DIM];
+        unit[0] = 1.0;
+        assert!(verify_embedding(&unit, None).ok);
+
+        let mut raw = vec![0.25f32; VECTOR_DIM];
+        assert!(l2_normalize(&mut raw));
+        let r = verify_embedding(&raw, None);
+        assert!(r.ok, "post-normalize must sit inside ε: n={} {}", r.l2_norm, r.reason);
+        assert!(unit_norm_ok(r.l2_norm));
     }
 
     #[test]
