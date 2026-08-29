@@ -92,7 +92,7 @@ pub struct AppState {
     poe_job_registry: PoeJobRegistry,
     poe_job_updates_tx: flume::Sender<(String, String)>,
     /// Global error telemetry: broadcast to all connected Cockpit clients for Toast. Payload: JSON { engine, message, severity }.
-    telemetry_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
+    pub(crate) telemetry_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
     /// Sequenced Command Center telemetry: raw telemetry tagged with a monotonic `_seq` by the
     /// replay recorder; consumed by `/ws/command-center` so a live client can track its position.
     cc_sequenced_tx: Arc<tokio::sync::broadcast::Sender<String>>,
@@ -279,20 +279,24 @@ async fn auth_guard(
     mut request: Request<Body>,
     next: Next,
 ) -> Response {
-    let path = request.uri().path();
-    let method = request.method();
+    let path = request.uri().path().to_string();
+    let method = request.method().clone();
+    // Dedicated honeynet decoys: never 401 — transparent deception (architecture §2–3).
+    if crate::honey_routing::is_decoy_path(&path) {
+        return crate::http::honey_routing_mw::serve_honey(state, request).await;
+    }
     // Unauthenticated login + MFA verify (per-IP rate limit + per-email lockout in handlers).
-    if crate::http::is_account_lockout_post(method, path) {
+    if crate::http::is_account_lockout_post(&method, &path) {
         return next.run(request).await;
     }
     // Everything else reachable without a JWT is declared once in PUBLIC_ROUTES.
-    if is_public_route(method, path) {
+    if is_public_route(&method, &path) {
         return next.run(request).await;
     }
     if path.starts_with("/api/") || path.starts_with("/ws/") {
-        let extracted = extract_token_from_request(&request, path);
+        let extracted = extract_token_from_request(&request, &path);
         if let Some((t, source)) = extracted {
-            if let Some(mut ctx) = verify_token_for_request(&t, path, source) {
+            if let Some(mut ctx) = verify_token_for_request(&t, &path, source) {
                 if auth_jwt::is_user_access_context(&ctx) {
                     let Some(ref jti) = ctx.jti else {
                         tracing::debug!(
@@ -392,11 +396,23 @@ async fn auth_guard(
                 "No auth token found in request (cookie or Authorization header; agent WS may use ?token=)"
             );
         }
+        // Architecture §2: scanner/lure probes are honey-routed instead of a standard 401.
+        if crate::honey_routing::is_lure_path(&path)
+            && !crate::honey_routing::is_honey_bypass_path(method.as_str(), &path)
+        {
+            return crate::http::honey_routing_mw::serve_honey(state, request).await;
+        }
         return (
             StatusCode::UNAUTHORIZED,
             Json(json!({"detail": "Unauthorized", "ok": false})),
         )
             .into_response();
+    }
+    // Non-API lure paths (/admin, /.git, /phpmyadmin, …) — honey-route instead of SPA 404.
+    if crate::honey_routing::is_lure_path(&path)
+        && !crate::honey_routing::is_honey_bypass_path(method.as_str(), &path)
+    {
+        return crate::http::honey_routing_mw::serve_honey(state, request).await;
     }
     next.run(request).await
 }
@@ -1837,7 +1853,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             crate::http::ceo_rbac::ceo_rbac_middleware,
         ))
         .layer(middleware::from_fn(crate::rbac::mutation_rbac_middleware))
-        .layer(middleware::from_fn(crate::http::client_scope::client_scope_middleware))
+        .layer(middleware::from_fn(
+            crate::http::client_scope::client_scope_middleware,
+        ))
         .layer(middleware::from_fn(
             crate::http::sse_context::sse_context_middleware,
         ))
@@ -1879,7 +1897,10 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         eprintln!("[Weissman] Command Center not found (no frontend/dist). Using legacy dashboard at /. Set WEISSMAN_STATIC or run from project root with frontend/dist built.");
         mount_legal_static(api)
     };
-    app
+    // Outermost hop: every 401/403 (auth_guard, RBAC, handlers) shares honeynet TTFB + headers.
+    app.layer(middleware::from_fn(
+        crate::honey_mimicry::fabric_401_403_middleware,
+    ))
 }
 
 pub async fn run_http_tcp_listener(app: Router, port: u16) {
@@ -1902,6 +1923,13 @@ pub async fn run_http_tcp_listener(app: Router, port: u16) {
         "[Weissman] Listening on http://0.0.0.0:{} (set PORT in .env to change; Nginx must proxy the same port)",
         port
     );
+    if crate::proxy_protocol::enabled() {
+        eprintln!(
+            "[Weissman] PROXY protocol v2 reader enabled (WEISSMAN_PROXY_PROTOCOL=1) — expecting nginx stream preface + optional ClientHello TLV 0xE0"
+        );
+        run_proxy_protocol_accept(app, listener).await;
+        return;
+    }
     if let Err(e) = axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
@@ -1913,6 +1941,63 @@ pub async fn run_http_tcp_listener(app: Router, port: u16) {
         std::process::exit(1);
     }
     eprintln!("[Weissman] Graceful shutdown complete — in-flight requests drained.");
+}
+
+/// Accept loop that consumes PROXY v2 (and optional TLS ClientHello TLV 0xE0)
+/// before HTTP/1. Used when nginx `stream { proxy_protocol on; }` fronts Axum.
+async fn run_proxy_protocol_accept(app: Router, listener: tokio::net::TcpListener) {
+    use axum::extract::connect_info::ConnectInfo;
+    use hyper::body::Incoming;
+    use hyper_util::rt::{TokioExecutor, TokioIo};
+    use hyper_util::server::conn::auto::Builder;
+
+    loop {
+        tokio::select! {
+            _ = shutdown_signal() => {
+                eprintln!("[Weissman] Graceful shutdown complete — in-flight requests drained.");
+                break;
+            }
+            accepted = listener.accept() => {
+                let (stream, peer) = match accepted {
+                    Ok(s) => s,
+                    Err(e) => {
+                        tracing::warn!(error = %e, "accept failed");
+                        continue;
+                    }
+                };
+                let app = app.clone();
+                tokio::spawn(async move {
+                    let (stream, addr, hello) =
+                        match crate::proxy_protocol::maybe_read(stream, peer).await {
+                            Ok(t) => t,
+                            Err(e) => {
+                                tracing::debug!(error = %e, "proxy protocol read failed");
+                                return;
+                            }
+                        };
+                    if let Some(h) = hello {
+                        crate::tls_client_hello::stash_proxy_hello(addr, h);
+                    }
+                    let io = TokioIo::new(stream);
+                    let svc = hyper::service::service_fn(move |request: axum::http::Request<Incoming>| {
+                        let app = app.clone();
+                        async move {
+                            let mut request = request.map(Body::new);
+                            request.extensions_mut().insert(ConnectInfo(addr));
+                            app.oneshot(request).await
+                        }
+                    });
+                    if let Err(err) = Builder::new(TokioExecutor::new())
+                        .serve_connection_with_upgrades(io, svc)
+                        .await
+                    {
+                        tracing::debug!(error = %err, "proxy-protocol connection closed");
+                    }
+                    crate::tls_client_hello::drop_stashed_hello(addr);
+                });
+            }
+        }
+    }
 }
 
 /// Resolves on SIGINT (Ctrl-C) or SIGTERM (container/systemd stop) so Axum drains

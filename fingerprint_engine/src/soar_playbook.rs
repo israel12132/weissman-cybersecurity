@@ -85,6 +85,10 @@ pub struct PlaybookTrigger {
     pub cve_prefixes: Vec<String>,
     #[serde(default)]
     pub cooldown_seconds: Option<i64>,
+    /// When non-empty, `PlaybookEvent.kind` must match one of these (case-insensitive).
+    /// Honey-routing uses this so `page_oncall` never shares a trigger with HITL `isolate_host`.
+    #[serde(default)]
+    pub kinds: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -167,6 +171,9 @@ impl PlaybookTrigger {
             {
                 return false;
             }
+        }
+        if !self.kinds.is_empty() && !self.kinds.iter().any(|k| k.eq_ignore_ascii_case(&e.kind)) {
+            return false;
         }
         true
     }
@@ -636,5 +643,18 @@ mod tests {
             actions: vec![],
         };
         assert_eq!(dedup_key(&pb, &ev), dedup_key(&pb, &ev));
+    }
+
+    #[test]
+    fn trigger_kinds_gate_event_kind() {
+        let t = PlaybookTrigger {
+            kinds: vec!["honey_route_high_confidence".into()],
+            ..Default::default()
+        };
+        let mut ev = ev_kev_critical();
+        ev.kind = "honey_route_high_confidence".into();
+        assert!(t.matches(&ev));
+        ev.kind = "honey_route_isolate_hitl".into();
+        assert!(!t.matches(&ev));
     }
 }

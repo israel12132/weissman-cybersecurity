@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 563 production engines in registry order */
+/** All 564 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -3995,6 +3995,15 @@ export const ENGINES_REGISTRY = [
     mitre: 'T1599',
     description:
       'TOTP-synchronized routing tokens with DB-persisted MTD epochs; live gateway probe compares Server header vs current rotation fingerprint — evidence-only, no simulation flags',
+    requiresTarget: true,
+  },
+  {
+    id: 'honey_routing_gateway',
+    label: 'Honey-Routing Gateway',
+    group: 'defense',
+    mitre: 'T1599',
+    description:
+      'Transparent honey-routing of scanners into a high-fidelity honeynet: admin decoy + debug-shell AST (nom), 14ms TTFB mimicry on 401/403, JA3/JA4 from nginx ClientHello, CVSS-7.2 Dijkstra weights (~0.72), SOAR page_oncall only at 100% confidence — isolate_host is HITL dual-control',
     requiresTarget: true,
   },
   {

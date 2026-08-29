@@ -688,6 +688,11 @@ export const EXPLICIT_PARAM_DEFS = {
     { key:'port_pool_max', label:'Port Pool Max', type:'number', placeholder:'39999', defaultVal:'39999', min:1024, max:65535 },
     { key:'probe_gateway', label:'Probe Gateway Reachability', type:'select', options:['true','false'], defaultVal:'true' },
   ],
+  honey_routing_gateway: [
+    { key:'probe_decoys', label:'Probe Decoy Surfaces', type:'select', options:['true','false'], defaultVal:'true' },
+    { key:'include_risk_graph', label:'Include Dijkstra Honey Weights', type:'select', options:['true','false'], defaultVal:'true' },
+    { key:'include_fair_aro', label:'Include FAIR ARO Floor', type:'select', options:['true','false'], defaultVal:'true' },
+  ],
   sovereign_active_defense_fusion: [
     { key:'include_liquid_matrix', label:'Include LIQUID-MATRIX MTD', type:'select', options:['true','false'], defaultVal:'true' },
     { key:'include_cognitive_starvation', label:'Include Cognitive Starvation', type:'select', options:['true','false'], defaultVal:'true' },

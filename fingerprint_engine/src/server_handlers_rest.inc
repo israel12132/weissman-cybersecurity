@@ -112,9 +112,7 @@ async fn public_status(State(state): State<Arc<AppState>>) -> Response {
                 "redis": if redis_ok { "ok" } else { "down" },
                 "scan_pipeline": if fresh { "ok" } else { "stale" },
             },
-            "last_completed_scan_age_seconds": last_run_age_secs.map(|a| a.round()),
-            "scan_freshness_threshold_seconds": 86_400,
-            "notice": "Maintenance windows and incident updates are published here (SLA_AND_STATUS.md §4).",
+            "notice": "Maintenance windows and incident updates are published here (SLA_AND_STATUS.md §4). OPSEC: no customer counts or active-scan volume.",
         })),
     )
         .into_response()

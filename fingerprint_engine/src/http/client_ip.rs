@@ -28,6 +28,12 @@ fn trusted_proxy_cidrs() -> Vec<IpNetwork> {
         .unwrap_or_default()
 }
 
+/// True when the immediate TCP peer is allowed to set forwarding / TLS-hello headers.
+#[must_use]
+pub fn peer_is_trusted_proxy(peer: SocketAddr) -> bool {
+    trusted_proxy_peer(peer.ip())
+}
+
 fn trusted_proxy_peer(peer: IpAddr) -> bool {
     if !trust_proxy_headers() {
         return false;

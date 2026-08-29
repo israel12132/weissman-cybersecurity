@@ -79,6 +79,7 @@ export const ROUTE_EVIDENCE = {
   '/nexus-swarm': 'pages.nexusSovereignSwarm.evidence_notice',
   '/superposition-collapse': 'pages.superpositionCollapse.evidence_notice',
   '/sovereign-defense-matrix': 'pages.sovereignDefense.evidence_notice',
+  '/honey-routing': 'pages.honeyRouting.evidence_notice',
   '/digital-twin': 'pages.digitalTwinSimulator.evidence_notice',
   '/ast-fuzzing': 'pages.astFuzzingStudio.evidence_notice',
   '/feedback-loop': 'pages.feedbackLoopVerification.evidence_notice',

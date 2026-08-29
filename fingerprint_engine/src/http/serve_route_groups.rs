@@ -533,6 +533,22 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/sovereign-defense/poison-library",
             get(api_sovereign_defense_poison_library),
         )
+        .route(
+            "/api/honey-routing/:client_id/dashboard",
+            get(api_honey_routing_dashboard),
+        )
+        .route(
+            "/api/honey-routing/:client_id/sessions/:session_id",
+            get(api_honey_routing_session),
+        )
+        .route(
+            "/api/honey-routing/:client_id/sessions/:session_id/isolate-request",
+            post(api_honey_routing_isolate_request),
+        )
+        .route(
+            "/api/honey-routing/:client_id/sessions/:session_id/isolate-approve",
+            post(api_honey_routing_isolate_approve),
+        )
         .route("/api/clients/:id/auto-heal", post(api_auto_heal))
         .route(
             "/api/clients/:id/findings/:finding_id/brief",
