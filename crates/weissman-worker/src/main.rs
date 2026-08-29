@@ -577,6 +577,10 @@ async fn async_main() {
         eprintln!("[startup] worker security policy refusal: {msg}");
         std::process::exit(2);
     }
+    if let Err(msg) = fingerprint_engine::security_startup::enforce_rag_provenance_policy() {
+        eprintln!("[startup] worker RAG provenance HMAC refusal: {msg}");
+        std::process::exit(2);
+    }
     if let Err(msg) = fingerprint_engine::http::rate_limit_redis::verify_redis_at_startup().await {
         eprintln!("[startup] worker Redis distributed state refusal: {msg}");
         std::process::exit(2);

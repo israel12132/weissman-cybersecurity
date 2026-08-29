@@ -35,24 +35,42 @@ fn severity_hfv_rank(s: &str) -> u8 {
     }
 }
 
-/// High-water finding value while the row is open. A `VERIFIED_FIXED` row always
-/// yields `None` so a later regression starts a clean lifecycle at live severity.
+/// High-water finding value while the row is open.
+///
+/// A verified close freezes `existing_watermark` (native severity at close) for SLA
+/// history. A later `REOPENED` cycle ignores that freeze and starts at `incoming_severity`.
 #[must_use]
 pub fn hfv_watermark_after_scan(
     existing_watermark: Option<&str>,
     incoming_severity: &str,
     existing_status: &str,
+    cycle_closed: bool,
 ) -> Option<String> {
-    if existing_status.eq_ignore_ascii_case("VERIFIED_FIXED") {
-        // Verified close wipes the peak so a later regression starts a clean lifecycle.
-        return None;
+    let incoming = incoming_severity.trim();
+    if cycle_closed || existing_status.eq_ignore_ascii_case("VERIFIED_FIXED") {
+        return existing_watermark
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(ToOwned::to_owned)
+            .or_else(|| {
+                if incoming.is_empty() {
+                    None
+                } else {
+                    Some(incoming.to_string())
+                }
+            });
+    }
+    if existing_status.eq_ignore_ascii_case("REOPENED") {
+        if incoming.is_empty() {
+            return None;
+        }
+        return Some(incoming.to_string());
     }
     let a = existing_watermark.unwrap_or("").trim();
-    let b = incoming_severity.trim();
-    if severity_hfv_rank(a) >= severity_hfv_rank(b) && !a.is_empty() {
+    if severity_hfv_rank(a) >= severity_hfv_rank(incoming) && !a.is_empty() {
         Some(a.to_string())
-    } else if !b.is_empty() {
-        Some(b.to_string())
+    } else if !incoming.is_empty() {
+        Some(incoming.to_string())
     } else if !a.is_empty() {
         Some(a.to_string())
     } else {
@@ -60,10 +78,16 @@ pub fn hfv_watermark_after_scan(
     }
 }
 
-/// Full HFV reset after a live-verified close. Next lifecycle starts with no peak.
+/// Native severity frozen onto the closed cycle so SLA/FAIR history aggregations
+/// still see the row (never NULL).
 #[must_use]
-pub fn hfv_watermark_on_verified_fixed() -> Option<&'static str> {
-    None
+pub fn hfv_watermark_on_verified_fixed(native_severity: &str) -> Option<String> {
+    let s = native_severity.trim();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s.to_string())
+    }
 }
 use tokio::sync::{Semaphore, SemaphorePermit};
 
@@ -627,11 +651,11 @@ pub async fn persist_engine_findings(
                   description, status, proof, poc_commitment_sha256, raw_data, discovered_at,
                   signature_hash, epss_score, kev_listed, kev_known_ransomware, kev_due_date,
                   intel_enriched_at, confidence_multiplier, effective_risk, poc_sealed,
-                  watermark_severity)
+                  watermark_severity, is_cycle_closed)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now(),
                        $13, $14, $15, $16, $17,
                        CASE WHEN $14 IS NOT NULL OR $15 THEN now() ELSE NULL END,
-                       $18, $19, $20, $6)
+                       $18, $19, $20, $6, FALSE)
                ON CONFLICT (tenant_id, client_id, finding_id) DO UPDATE SET
                    run_id               = EXCLUDED.run_id,
                    title                = EXCLUDED.title,
@@ -650,7 +674,8 @@ pub async fn persist_engine_findings(
                    poc_sealed           = vulnerabilities.poc_sealed OR EXCLUDED.poc_sealed,
                    watermark_severity   = CASE
                        WHEN vulnerabilities.status IN ('VERIFIED_FIXED')
-                           THEN NULL
+                            OR vulnerabilities.is_cycle_closed
+                           THEN COALESCE(NULLIF(vulnerabilities.watermark_severity, ''), vulnerabilities.severity)
                        WHEN CASE lower(COALESCE(NULLIF(vulnerabilities.watermark_severity, ''), vulnerabilities.severity))
                               WHEN 'critical' THEN 4 WHEN 'high' THEN 3
                               WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END
@@ -660,6 +685,7 @@ pub async fn persist_engine_findings(
                            THEN COALESCE(NULLIF(vulnerabilities.watermark_severity, ''), vulnerabilities.severity)
                        ELSE EXCLUDED.severity
                    END,
+                   is_cycle_closed      = (vulnerabilities.status IN ('VERIFIED_FIXED')),
                    updated_at           = now(),
                    last_seen_at         = now(),
                    seen_count           = vulnerabilities.seen_count + 1
@@ -1036,31 +1062,34 @@ mod tests {
     #[test]
     fn hfv_watermark_rises_and_does_not_fall() {
         assert_eq!(
-            hfv_watermark_after_scan(Some("medium"), "critical", "OPEN").as_deref(),
+            hfv_watermark_after_scan(Some("medium"), "critical", "OPEN", false).as_deref(),
             Some("critical")
         );
         assert_eq!(
-            hfv_watermark_after_scan(Some("critical"), "low", "OPEN").as_deref(),
+            hfv_watermark_after_scan(Some("critical"), "low", "OPEN", false).as_deref(),
             Some("critical")
         );
         assert_eq!(
-            hfv_watermark_after_scan(None, "high", "OPEN").as_deref(),
+            hfv_watermark_after_scan(None, "high", "OPEN", false).as_deref(),
             Some("high")
         );
     }
 
     #[test]
-    fn hfv_watermark_resets_on_verified_fixed() {
-        assert!(hfv_watermark_on_verified_fixed().is_none());
+    fn hfv_watermark_freezes_native_on_verified_fixed_and_reopens_clean() {
         assert_eq!(
-            hfv_watermark_after_scan(None, "critical", "VERIFIED_FIXED"),
-            None,
-            "clean watermark after verified close; incoming scan must not restore the old peak"
+            hfv_watermark_on_verified_fixed("critical").as_deref(),
+            Some("critical")
         );
         assert_eq!(
-            hfv_watermark_after_scan(Some("critical"), "low", "VERIFIED_FIXED"),
-            None,
-            "stale peak on a verified row is discarded, not carried into the next lifecycle"
+            hfv_watermark_after_scan(Some("critical"), "low", "VERIFIED_FIXED", true).as_deref(),
+            Some("critical"),
+            "closed cycle keeps native severity for SLA history aggregations"
+        );
+        assert_eq!(
+            hfv_watermark_after_scan(Some("critical"), "medium", "REOPENED", false).as_deref(),
+            Some("medium"),
+            "regression starts a new cycle at live severity, not the old peak"
         );
     }
 }

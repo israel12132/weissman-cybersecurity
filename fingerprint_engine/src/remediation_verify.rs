@@ -96,9 +96,13 @@ pub async fn run_verification(
         r#"UPDATE vulnerabilities
               SET status = $1,
                   watermark_severity = CASE
-                      WHEN $1 = 'VERIFIED_FIXED' THEN NULL
+                      WHEN $1 = 'VERIFIED_FIXED'
+                          THEN COALESCE(NULLIF(severity, ''), watermark_severity)
+                      WHEN $1 = 'REOPENED'
+                          THEN COALESCE(NULLIF(severity, ''), watermark_severity)
                       ELSE watermark_severity
                   END,
+                  is_cycle_closed = ($1 = 'VERIFIED_FIXED'),
                   raw_data = jsonb_set(
                       COALESCE(raw_data, '{}'::jsonb),
                       '{remediation_verification}',

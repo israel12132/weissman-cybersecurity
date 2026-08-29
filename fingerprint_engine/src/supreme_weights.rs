@@ -340,20 +340,29 @@ pub fn is_rag_provenance_hex64(s: &str) -> bool {
 
 /// HMAC key for RAG / pentest-memory provenance.
 ///
-/// Production (`WEISSMAN_ENV=production`): **only** `WEISSMAN_RAG_PROVENANCE_SECRET`
-/// (64 hex, loaded from the vault). No fallback to JWT or council signing keys.
-/// Empty key means fail-closed: nothing is signed or accepted.
+/// Strict (`WEISSMAN_ENV=production` or `WEISSMAN_E2E_STACK=1`): **only**
+/// `WEISSMAN_RAG_PROVENANCE_SECRET` (64 hex, loaded from the vault). No fallback
+/// to JWT or council signing keys. Empty key means fail-closed: nothing is signed
+/// or accepted.
 ///
-/// Non-production: dedicated secret, then council signing secret, then JWT —
-/// so local labs still retrieve signed vectors without a vault.
+/// Local / unit tests: dedicated secret, then council signing secret, then JWT,
+/// with a one-shot WARNING so a laptop boot never requires minting 64 hex.
 pub fn rag_provenance_secret() -> Vec<u8> {
     let dedicated = std::env::var("WEISSMAN_RAG_PROVENANCE_SECRET")
         .ok()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
-    if weissman_core::tls_policy::is_production_environment() {
+    if crate::security_startup::rag_hmac_must_be_strict() {
         return dedicated.unwrap_or_default().into_bytes();
     }
+    if dedicated
+        .as_deref()
+        .map(is_rag_provenance_hex64)
+        .unwrap_or(false)
+    {
+        return dedicated.unwrap_or_default().into_bytes();
+    }
+    let _ = crate::security_startup::enforce_rag_provenance_policy();
     dedicated
         .or_else(|| {
             std::env::var("WEISSMAN_COUNCIL_DEBATE_SIGNING_SECRET")

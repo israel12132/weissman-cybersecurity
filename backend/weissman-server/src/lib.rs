@@ -63,6 +63,9 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if let Err(msg) = fingerprint_engine::security_startup::enforce_production_security_policy() {
         return Err(format!("[startup] security policy refusal: {msg}").into());
     }
+    if let Err(msg) = fingerprint_engine::security_startup::enforce_rag_provenance_policy() {
+        return Err(format!("[startup] RAG provenance HMAC refusal: {msg}").into());
+    }
     if let Err(msg) = fingerprint_engine::http::rate_limit_redis::verify_redis_at_startup().await {
         return Err(format!("[startup] Redis distributed state refusal: {msg}").into());
     }

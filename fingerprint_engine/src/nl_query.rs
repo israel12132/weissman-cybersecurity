@@ -26,13 +26,16 @@ use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use sqlx::{Column, PgPool, Row};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, OnceLock};
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
 
 /// Bounded Ask Weissman audit lane. try_send so a slow DB never blocks the analyst.
 const NL_AUDIT_MPSC_CAPACITY: usize = 1024;
+/// Under audit-flood DoS, page SIEM at most this often. Extra drops are counted, not formatted.
+const NLQA1_SIEM_PAGE_MIN_INTERVAL_MS: u64 = 250;
 
 struct NlAuditEvent {
     tenant_id: i64,
@@ -46,6 +49,8 @@ struct NlAuditEvent {
 }
 
 static NL_AUDIT_TX: OnceLock<mpsc::Sender<NlAuditEvent>> = OnceLock::new();
+static NLQA1_LAST_PAGE_MS: AtomicU64 = AtomicU64::new(0);
+static NLQA1_SUPPRESSED: AtomicU64 = AtomicU64::new(0);
 
 /// Start the background writer that appends SHA-256-chained `nl_query_audit` rows.
 /// Safe to call more than once; later calls are no-ops.
@@ -68,11 +73,37 @@ fn question_fingerprint(question: &str) -> String {
     hex::encode(Sha256::digest(question.as_bytes()))
 }
 
+fn unix_now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
+        .unwrap_or(0)
+}
+
 /// SIEM-visible emergency log when the audit MPSC is full or closed.
 /// Dropping the DB write must never be silent — that is an audit-tamper signal.
+///
+/// The HTTP worker only formats this event after a 250ms rate-limit gate. The
+/// subscriber itself is `tracing_appender::non_blocking` (lossy), so a disk-stuck
+/// log driver cannot stall Tokio threads even if the rate limit is bypassed.
 fn report_audit_channel_saturated(ev: &NlAuditEvent, kind: &str) {
+    metrics::counter!("weissman_nlqa_audit_dropped_total", "kind" => kind.to_string()).increment(1);
+    let now = unix_now_ms();
+    let last = NLQA1_LAST_PAGE_MS.load(Ordering::Relaxed);
+    if now.saturating_sub(last) < NLQA1_SIEM_PAGE_MIN_INTERVAL_MS {
+        NLQA1_SUPPRESSED.fetch_add(1, Ordering::Relaxed);
+        return;
+    }
+    if NLQA1_LAST_PAGE_MS
+        .compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
+        NLQA1_SUPPRESSED.fetch_add(1, Ordering::Relaxed);
+        return;
+    }
+    let suppressed = NLQA1_SUPPRESSED.swap(0, Ordering::Relaxed);
     tracing::error!(
-        target: "nl_query_audit",
+        target: "nlqa1_fallback",
         tenant_id = ev.tenant_id,
         user_id = ev.user_id,
         question_sha256 = %question_fingerprint(&ev.question),
@@ -80,6 +111,7 @@ fn report_audit_channel_saturated(ev: &NlAuditEvent, kind: &str) {
         rows_returned = ev.rows_returned,
         has_error = !ev.error.is_empty(),
         drop_kind = kind,
+        suppressed_since_last_page = suppressed,
         "Ask Weissman audit MPSC saturated — event dropped to keep /api/ask hot. Possible audit flood / trace-wiping. SIEM must page."
     );
 }
@@ -118,7 +150,7 @@ fn enqueue_audit(tenant_id: i64, user_id: Option<i64>, question: &str, res: &Ask
         }
         None => {
             tracing::error!(
-                target: "nl_query_audit",
+                target: "nlqa1_fallback",
                 tenant_id,
                 question_sha256 = %question_fingerprint(question),
                 "Ask Weissman audit worker not started; event not queued"
@@ -270,6 +302,7 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
                 "seen_count",
                 "signature_hash",
                 "watermark_severity",
+                "is_cycle_closed",
             ],
             order_by: &["discovered_at", "epss_score", "seen_count", "id"],
             joins: &[],

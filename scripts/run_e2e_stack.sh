@@ -119,6 +119,12 @@ start_apps() {
   export WEISSMAN_COOKIE_SECURE="${WEISSMAN_E2E_COOKIE_SECURE:-0}"
   # Force stable dev secret so server/worker HMAC always matches (ignore production .env).
   export WEISSMAN_JOB_ORCHESTRATOR_SECRET="dev-job-orchestrator-secret-32-bytes-minimum-v1"
+  # E2E stack is fail-closed for RAG HMAC (WEISSMAN_E2E_STACK=1). Mint a throwaway 64-hex
+  # if the inherited .env is empty or not hex — never copy the JWT.
+  if [[ -z "${WEISSMAN_RAG_PROVENANCE_SECRET:-}" || ! "${WEISSMAN_RAG_PROVENANCE_SECRET}" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    WEISSMAN_RAG_PROVENANCE_SECRET="$(openssl rand -hex 32)"
+    export WEISSMAN_RAG_PROVENANCE_SECRET
+  fi
   export WEISSMAN_ENGINE_STACK_BYTES="${WEISSMAN_ENGINE_STACK_BYTES:-33554432}"
   unset WEISSMAN_ALLOW_DEFAULT_ADMIN_PASSWORD
   if [[ -z "${WEISSMAN_JWT_SECRET:-}" || -z "${WEISSMAN_ADMIN_PASSWORD:-}" ]]; then
@@ -154,6 +160,7 @@ start_apps() {
     WEISSMAN_AUTH_POOL_MAX="${WEISSMAN_AUTH_POOL_MAX:-6}" \
     WEISSMAN_INTEL_POOL_MAX="${WEISSMAN_INTEL_POOL_MAX:-4}" \
     WEISSMAN_JOB_ORCHESTRATOR_SECRET="$WEISSMAN_JOB_ORCHESTRATOR_SECRET" \
+    WEISSMAN_RAG_PROVENANCE_SECRET="$WEISSMAN_RAG_PROVENANCE_SECRET" \
     "$ROOT/target/debug/weissman-server" >"$LOG_DIR/server.log" 2>&1 &
   echo $! >"$SERVER_PID"
   echo "Starting weissman-worker..."
@@ -162,6 +169,7 @@ start_apps() {
     WEISSMAN_AUTH_POOL_MAX="${WEISSMAN_AUTH_POOL_MAX:-4}" \
     WEISSMAN_INTEL_POOL_MAX="${WEISSMAN_INTEL_POOL_MAX:-4}" \
     WEISSMAN_JOB_ORCHESTRATOR_SECRET="$WEISSMAN_JOB_ORCHESTRATOR_SECRET" \
+    WEISSMAN_RAG_PROVENANCE_SECRET="$WEISSMAN_RAG_PROVENANCE_SECRET" \
     WEISSMAN_ENGINE_STACK_BYTES="$WEISSMAN_ENGINE_STACK_BYTES" \
     "$ROOT/target/debug/weissman-worker" >"$LOG_DIR/worker.log" 2>&1 &
   echo $! >"$WORKER_PID"

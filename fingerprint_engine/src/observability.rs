@@ -13,6 +13,9 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 static PROMETHEUS: OnceLock<Option<PrometheusHandle>> = OnceLock::new();
+/// Must outlive the process: dropping it flushes then joins the non-blocking log thread.
+static NON_BLOCKING_LOG_GUARD: OnceLock<tracing_appender::non_blocking::WorkerGuard> =
+    OnceLock::new();
 
 /// Logs panics through `tracing` (target `sovereign`) then chains the default hook.
 /// Call after [`init_tracing_from_env`] so subscribers are installed.
@@ -128,6 +131,11 @@ fn build_otel_layer(
 
 /// Production JSON logs when `WEISSMAN_LOG_FORMAT=json` (plain text otherwise).
 /// When `WEISSMAN_OTLP_ENDPOINT` is set, also exports OpenTelemetry spans via OTLP/HTTP.
+///
+/// Fmt output is always `tracing_appender::non_blocking` (lossy ring buffer + dedicated
+/// thread). A Tokio worker that emits `tracing::error!` — including Ask Weissman
+/// `nlqa1_fallback` under an audit-flood DoS — never waits on stdout, a container log
+/// driver, or NFS.
 pub fn init_tracing_from_env() {
     use tracing_subscriber::prelude::*;
     use tracing_subscriber::Layer;
@@ -138,6 +146,8 @@ pub fn init_tracing_from_env() {
         .map(|s| s.eq_ignore_ascii_case("json"))
         .unwrap_or(false);
 
+    let (nb_writer, guard) = tracing_appender::non_blocking(std::io::stdout());
+
     let mut layers: Vec<
         Box<dyn tracing_subscriber::Layer<tracing_subscriber::Registry> + Send + Sync>,
     > = Vec::new();
@@ -146,16 +156,28 @@ pub fn init_tracing_from_env() {
             tracing_subscriber::fmt::layer()
                 .json()
                 .flatten_event(true)
+                .with_writer(nb_writer)
                 .with_filter(filter)
                 .boxed(),
         );
     } else {
-        layers.push(tracing_subscriber::fmt::layer().with_filter(filter).boxed());
+        layers.push(
+            tracing_subscriber::fmt::layer()
+                .with_writer(nb_writer)
+                .with_filter(filter)
+                .boxed(),
+        );
     }
     if let Some(otel) = build_otel_layer() {
         layers.push(otel);
     }
-    let _ = tracing_subscriber::registry().with(layers).try_init();
+    if tracing_subscriber::registry()
+        .with(layers)
+        .try_init()
+        .is_ok()
+    {
+        let _ = NON_BLOCKING_LOG_GUARD.set(guard);
+    }
 }
 
 /// Spawns background inserts into `tenant_llm_usage` for each LLM completion (see `weissman_engines::openai_chat`).
