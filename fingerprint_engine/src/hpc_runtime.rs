@@ -39,7 +39,9 @@ fn tokio_cpu_affinity_cpus() -> Vec<usize> {
 }
 
 /// Count physical cores from `/proc/cpuinfo` (`physical id` + `core id` pairs).
-/// Falls back to `available_parallelism` (logical CPUs) when the file is missing.
+/// Host topology only — **never** use this as the Tokio worker count in a
+/// container. [`tokio_worker_threads`] clamps it to [`container_parallelism`].
+/// Falls back to `available_parallelism` when the file is missing.
 #[must_use]
 pub fn physical_cpu_count() -> usize {
     #[cfg(target_os = "linux")]
@@ -96,25 +98,152 @@ pub fn parse_physical_cpus_from_cpuinfo(text: &str) -> Option<usize> {
     }
 }
 
-/// Worker-thread count: `WEISSMAN_TOKIO_WORKER_THREADS` or physical cores.
-///
-/// Override tokens (for I/O-bound production benches where SMT helps):
-/// - unset / `physical` → unique `(physical id, core id)` pairs
-/// - `logical` / `smt` / `available` → `available_parallelism` (Hyperthread siblings)
-/// - a positive integer → exact worker count
+/// Cgroups v2 `cpu.max` → cores. `"max 100000"` is unlimited (`None`).
 #[must_use]
-pub fn tokio_worker_threads() -> usize {
-    let logical = std::thread::available_parallelism()
+pub fn parse_cgroup_v2_cpu_max(text: &str) -> Option<f64> {
+    let mut parts = text.split_whitespace();
+    let quota = parts.next()?.trim();
+    if quota.eq_ignore_ascii_case("max") {
+        return None;
+    }
+    let quota: i64 = quota.parse().ok()?;
+    let period: i64 = parts.next().unwrap_or("100000").parse().ok()?;
+    if quota <= 0 || period <= 0 {
+        return None;
+    }
+    Some(quota as f64 / period as f64)
+}
+
+/// Cgroups v1 `cpu.cfs_quota_us` / `cpu.cfs_period_us`. Quota `-1` is unlimited.
+#[must_use]
+pub fn parse_cgroup_v1_cfs(quota_us: &str, period_us: &str) -> Option<f64> {
+    let quota: i64 = quota_us.trim().parse().ok()?;
+    let period: i64 = period_us.trim().parse().ok()?;
+    if quota < 0 {
+        return None;
+    }
+    if quota == 0 || period <= 0 {
+        return None;
+    }
+    Some(quota as f64 / period as f64)
+}
+
+fn read_cgroup_v2_quota_from_proc() -> Option<f64> {
+    let proc = std::fs::read_to_string("/proc/self/cgroup").ok()?;
+    let rel = proc
+        .lines()
+        .find_map(|l| l.strip_prefix("0::"))?
+        .trim()
+        .trim_start_matches('/');
+    let root = std::path::Path::new("/sys/fs/cgroup");
+    let mut path = if rel.is_empty() {
+        root.to_path_buf()
+    } else {
+        root.join(rel)
+    };
+    let mut tightest: Option<f64> = None;
+    loop {
+        if let Ok(text) = std::fs::read_to_string(path.join("cpu.max")) {
+            if let Some(n) = parse_cgroup_v2_cpu_max(&text) {
+                tightest = Some(match tightest {
+                    Some(t) => t.min(n),
+                    None => n,
+                });
+            }
+        }
+        if path == root {
+            break;
+        }
+        if !path.pop() {
+            break;
+        }
+    }
+    tightest
+}
+
+/// CPU quota in cores from cgroups v2 then v1. `None` = unlimited / unreadable.
+#[must_use]
+pub fn cgroup_cpu_quota_cores() -> Option<f64> {
+    #[cfg(not(target_os = "linux"))]
+    {
+        return None;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(text) = std::fs::read_to_string("/sys/fs/cgroup/cpu.max") {
+            if let Some(n) = parse_cgroup_v2_cpu_max(&text) {
+                return Some(n);
+            }
+            if text
+                .split_whitespace()
+                .next()
+                .is_some_and(|w| w.eq_ignore_ascii_case("max"))
+            {
+                return None;
+            }
+        }
+        if let Some(n) = read_cgroup_v2_quota_from_proc() {
+            return Some(n);
+        }
+        let quota = std::fs::read_to_string("/sys/fs/cgroup/cpu/cpu.cfs_quota_us").ok()?;
+        let period = std::fs::read_to_string("/sys/fs/cgroup/cpu/cpu.cfs_period_us").ok()?;
+        parse_cgroup_v1_cfs(&quota, &period)
+    }
+}
+
+/// Runnable CPUs for this process: `available_parallelism` (affinity) capped by
+/// the cgroup quota. Never returns the bare-metal `/proc/cpuinfo` count.
+#[must_use]
+pub fn container_parallelism() -> usize {
+    let affinity = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(1)
         .max(1);
-    parse_tokio_worker_threads(
+    match cgroup_cpu_quota_cores() {
+        Some(q) => {
+            let capped = q.ceil() as usize;
+            if capped == 0 {
+                affinity
+            } else {
+                affinity.min(capped)
+            }
+        }
+        None => affinity,
+    }
+    .max(1)
+}
+
+/// Worker-thread count: cgroup/affinity first, then optional SMT bypass.
+///
+/// Override tokens:
+/// - unset / `physical` → `min(host physical cores, container quota)` (SMT bypass
+///   **inside** the quota — never 128 workers in a 2-CPU pod)
+/// - `logical` / `smt` / `available` → container quota (Hyperthread siblings
+///   that this process may actually run)
+/// - a positive integer → exact count, **still clamped** to the container quota
+#[must_use]
+pub fn tokio_worker_threads() -> usize {
+    let container = container_parallelism();
+    let host_physical = physical_cpu_count();
+    let physical_capped = host_physical.min(container).max(1);
+    let requested = parse_tokio_worker_threads(
         std::env::var("WEISSMAN_TOKIO_WORKER_THREADS")
             .ok()
             .as_deref(),
-        physical_cpu_count(),
-        logical,
-    )
+        physical_capped,
+        container,
+    );
+    let n = requested.min(container).max(1);
+    if requested > container {
+        tracing::warn!(
+            target: "hpc_runtime",
+            requested,
+            container,
+            cgroup_quota = ?cgroup_cpu_quota_cores(),
+            "Tokio worker count clamped to cgroup/affinity quota (context-switch storm defense)"
+        );
+    }
+    n
 }
 
 /// Resolve worker count from a raw env value (unit-tested without touching process env).
@@ -174,7 +303,10 @@ pub fn build_scan_runtime() -> io::Result<tokio::runtime::Runtime> {
         worker_threads = threads,
         max_blocking_threads = blocking,
         lifo_slot = tokio_lifo_slot_enabled(),
-        "tokio runtime workers (physical default; override WEISSMAN_TOKIO_WORKER_THREADS=logical|N)"
+        container_parallelism = container_parallelism(),
+        host_physical = physical_cpu_count(),
+        cgroup_quota = ?cgroup_cpu_quota_cores(),
+        "tokio runtime workers (cgroup-capped; override WEISSMAN_TOKIO_WORKER_THREADS=logical|N)"
     );
 
     #[cfg(target_os = "linux")]
@@ -425,5 +557,47 @@ core id\t: 1
         assert_eq!(parse_tokio_worker_threads(Some("32"), 8, 16), 32);
         assert_eq!(parse_tokio_worker_threads(Some("0"), 8, 16), 8);
         assert_eq!(parse_tokio_worker_threads(Some("nope"), 8, 16), 8);
+    }
+
+    #[test]
+    fn cgroup_v2_cpu_max_unlimited() {
+        assert_eq!(parse_cgroup_v2_cpu_max("max 100000"), None);
+        assert_eq!(parse_cgroup_v2_cpu_max("max"), None);
+    }
+
+    #[test]
+    fn cgroup_v2_cpu_max_quota() {
+        assert_eq!(parse_cgroup_v2_cpu_max("200000 100000"), Some(2.0));
+        assert_eq!(parse_cgroup_v2_cpu_max("150000 100000"), Some(1.5));
+        assert_eq!(parse_cgroup_v2_cpu_max("0 100000"), None);
+    }
+
+    #[test]
+    fn cgroup_v1_cfs_quota() {
+        assert_eq!(parse_cgroup_v1_cfs("-1", "100000"), None);
+        assert_eq!(parse_cgroup_v1_cfs("200000", "100000"), Some(2.0));
+        assert_eq!(parse_cgroup_v1_cfs("400000", "100000"), Some(4.0));
+    }
+
+    #[test]
+    fn k8s_two_cpu_limit_never_uses_host_128() {
+        // 128-thread host, 2-CPU pod: physical capped at quota, integer env clamped.
+        let host_physical = 64;
+        let container = 2;
+        let physical_capped = host_physical.min(container);
+        assert_eq!(
+            parse_tokio_worker_threads(None, physical_capped, container),
+            2
+        );
+        assert_eq!(
+            parse_tokio_worker_threads(Some("128"), physical_capped, container).min(container),
+            2
+        );
+    }
+
+    #[test]
+    fn container_parallelism_is_at_least_one() {
+        assert!(container_parallelism() >= 1);
+        assert!(tokio_worker_threads() <= container_parallelism());
     }
 }

@@ -71,6 +71,8 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile monito
 
 Plain `docker compose up -d --build` (base file only) is for local development, not production.
 
+The `backend` service sets `sysctls.net.core.somaxconn=4096` so the kernel does not silently truncate Axum's listen backlog. Host-level: `sudo bash deploy/apply-listen-sysctl.sh`. JSON gzip is at the gateway; Axum does not Brotli-compress API JSON.
+
 Services started:
 - `postgres` — pgvector/pgvector:pg16
 - `redis` — rate limits + telemetry

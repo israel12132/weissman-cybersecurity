@@ -193,6 +193,10 @@ check_prereqs() {
   docker compose version >/dev/null 2>&1 || die "docker compose v2 required"
   docker info >/dev/null 2>&1 || die "Docker daemon not running — start dockerd first"
 
+  if [[ -x "$ROOT/deploy/apply-listen-sysctl.sh" ]]; then
+    "$ROOT/deploy/apply-listen-sysctl.sh" || true
+  fi
+
   if [[ -x "$ROOT/scripts/verify_docker_build_integrity.sh" ]]; then
     "$ROOT/scripts/verify_docker_build_integrity.sh" || die "Docker build context incomplete — fix before deploy"
   fi

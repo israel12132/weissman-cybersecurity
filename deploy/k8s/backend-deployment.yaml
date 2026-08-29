@@ -60,6 +60,11 @@ spec:
           ports:
             - containerPort: 8000
           resources:
+            # cpu: "2" is the cgroup quota Tokio honors (not host /proc/cpuinfo).
+            # somaxconn is a kubelet unsafe sysctl — set on the node:
+            #   net.core.somaxconn=4096 net.ipv4.tcp_max_syn_backlog=4096
+            # or allowedUnsafeSysctls + pod securityContext.sysctls. Compose already
+            # sets these on the Docker backend service.
             requests:
               cpu: 250m
               memory: 512Mi

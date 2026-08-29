@@ -1,9 +1,11 @@
 # Brotli at quality 4 — include from the TLS site after installing the module:
 #   Debian/Ubuntu: apt install libnginx-mod-http-brotli   (package name varies)
-#   Then: include /path/to/repo/deploy/nginx-brotli.inc;
+#   Then: sudo cp deploy/nginx-brotli.inc /etc/nginx/snippets/weissman-brotli.conf
+#         include /etc/nginx/snippets/weissman-brotli.conf;   # in the TLS server{}
 #
-# Do NOT include this file on nginxinc/nginx-unprivileged (no ngx_brotli) —
-# weissman-server applies Brotli-4 via tower-http for API JSON.
+# Production JSON compression lives HERE, not in Axum. In-process Brotli on
+# /api JSON is a CPU-exhaustion DoS (Tokio worker starvation). The Docker
+# gateway image has no ngx_brotli — it uses gzip instead (deploy/nginx-gateway.conf).
 # Never list text/event-stream: Brotli buffering delays SOC alerts.
 
 brotli on;

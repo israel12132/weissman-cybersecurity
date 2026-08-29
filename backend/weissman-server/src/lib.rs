@@ -122,7 +122,9 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let router = middleware::cors::apply(router);
     let router = middleware::security_headers::apply(router);
     let router = middleware::rate_limiter::apply_global_rate_limit(router);
-    // Outermost: Brotli quality 4 (+ gzip) for API JSON. SSE and WebSocket 101 are skipped.
+    // Outermost: Brotli-4/gzip for SPA static types only. API JSON is uncompressed
+    // here — nginx (`deploy/nginx-brotli.inc` / gateway gzip) owns JSON compression
+    // so a request flood cannot starve Tokio workers. SSE and WebSocket 101 skipped.
     let router = middleware::compression::apply(router);
     // Fail fast on a malformed PORT rather than silently binding 8000 (which the container/k8s
     // healthchecks hardcode) — matches how DATABASE_URL is validated above. A blank/unset PORT

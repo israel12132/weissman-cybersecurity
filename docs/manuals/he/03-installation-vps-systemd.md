@@ -27,6 +27,7 @@
 ```bash
 sudo apt update && sudo apt install -y postgresql-16 redis-server nginx
 sudo bash deploy/install-build-deps-debian.sh
+sudo bash deploy/apply-listen-sysctl.sh   # somaxconn=4096 — אחרת listen(4096) נחתך בשקט
 ```
 
 יצירת roles וDB:
@@ -99,6 +100,12 @@ PORT=8000
 העתיקו `deploy/nginx-weissman.conf` או-`deploy/Caddyfile`. הפנו TLS ל-`127.0.0.1:8000`.
 
 WebSocket: `deploy/nginx-snippet-websocket-map.conf`.
+
+דחיסת JSON ב-Brotli היא ב-nginx (לא ב-Axum). אחרי `apt install libnginx-mod-http-brotli`:
+
+```bash
+sudo cp deploy/nginx-brotli.inc /etc/nginx/snippets/weissman-brotli.conf
+```
 
 ### 6. הפעלה
 

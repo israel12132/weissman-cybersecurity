@@ -11,6 +11,10 @@ use serde_json::Value;
 
 /// Parse `T` from JSON bytes with sonic-rs (SIMD). Falls back to serde_json so
 /// unusual serde attributes still decode if the SIMD parser rejects them.
+///
+/// **Lifetime rule:** if `T` borrows `buf` (`#[serde(borrow)]` / `Cow<'a, str>`),
+/// copy with `.into_owned()` before the HTTP handler returns, spawns a task, or
+/// sends on a channel. The request body is freed when Axum finishes the response.
 pub fn from_slice<'a, T>(buf: &'a [u8]) -> Result<T, String>
 where
     T: Deserialize<'a>,

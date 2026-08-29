@@ -43,9 +43,10 @@ pub struct UebaIngestPayload {
     pub metrics: Value,
 }
 
-/// Zero-copy view of an ingest body. `agent_id` borrows the request buffer
-/// (`#[serde(borrow)]` / `Cow`) so unescaped strings never hit the heap until
-/// we persist to Postgres.
+/// Zero-copy view of an ingest body. `agent_id` may borrow the HTTP buffer
+/// (`#[serde(borrow)]` / `Cow`). This type is **never** returned from the
+/// handler: [`parse_ingest_bytes`] detaches every field with `into_owned`
+/// before the request `Bytes` can be dropped (Axum 200 OK / MPSC / spawn).
 #[derive(Debug, Deserialize)]
 struct UebaIngestBorrowed<'a> {
     #[serde(borrow)]
@@ -55,10 +56,17 @@ struct UebaIngestBorrowed<'a> {
     metrics: Value,
 }
 
-/// SIMD + borrowed parse of `POST /api/ueba/ingest` (and agent finding bodies).
+/// SIMD parse of `POST /api/ueba/ingest`. Returns an **owned** `'static` payload.
+///
+/// Borrowed `Cow::Borrowed` slices into `buf` are copied here. Callers may
+/// drop the HTTP body, spawn a task, or send the payload on a channel.
 pub fn parse_ingest_bytes(buf: &[u8]) -> Result<UebaIngestPayload, String> {
     let borrowed: UebaIngestBorrowed<'_> = crate::http::simd_json::from_slice(buf)?;
-    let agent_id = borrowed.agent_id.trim();
+    // Detach from the request buffer *before* this function returns. A Cow
+    // that still points at hyper's body becomes use-after-free the moment the
+    // handler replies 200 and Axum reclaims the Bytes.
+    let agent_id = borrowed.agent_id.into_owned();
+    let agent_id = agent_id.trim().to_string();
     if agent_id.is_empty() {
         return Err("agent_id is required".into());
     }
@@ -66,7 +74,7 @@ pub fn parse_ingest_bytes(buf: &[u8]) -> Result<UebaIngestPayload, String> {
         return Err("metrics is required".into());
     }
     Ok(UebaIngestPayload {
-        agent_id: agent_id.to_string(),
+        agent_id,
         client_id: borrowed.client_id,
         hour_of_week: borrowed.hour_of_week,
         metrics: borrowed.metrics,
@@ -461,6 +469,19 @@ mod tests {
         assert_eq!(p.agent_id, "host-aabb");
         assert_eq!(p.client_id, 7);
         assert_eq!(p.hour_of_week, 13);
+        assert_eq!(p.metrics["load"], 1.5);
+        fn assert_static<T: 'static>(_: &T) {}
+        assert_static(&p);
+    }
+
+    #[test]
+    fn ingest_payload_survives_dropped_request_buffer() {
+        let raw =
+            br#"{"agent_id":"host-aabb","client_id":7,"hour_of_week":13,"metrics":{"load":1.5}}"#
+                .to_vec();
+        let p = parse_ingest_bytes(&raw).expect("parse");
+        drop(raw);
+        assert_eq!(p.agent_id, "host-aabb");
         assert_eq!(p.metrics["load"], 1.5);
     }
 
