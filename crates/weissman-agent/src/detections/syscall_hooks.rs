@@ -34,28 +34,32 @@ fn scan(engine: &str) -> anyhow::Result<Vec<Value>> {
         )]);
     };
 
-    let hooked: Vec<_> = resolver.entries().iter().filter(|e| e.hooked).collect();
+    let hooked_n = resolver.hooked_count();
     let mut extras = serde_json::Map::new();
     extras.insert("ntdll_mapped".into(), json!(true));
-    extras.insert("exports_resolved".into(), json!(resolver.len()));
-    extras.insert("hooked_stubs".into(), json!(hooked.len()));
+    extras.insert("exports_scanned".into(), json!(resolver.exports_scanned()));
+    extras.insert("target_exports_resolved".into(), json!(resolver.len()));
+    extras.insert("hooked_stubs".into(), json!(hooked_n));
     extras.insert(
         "hooked_hashes".into(),
         Value::Array(
-            hooked
+            resolver
+                .entries()
                 .iter()
+                .filter(|e| e.hooked)
                 .take(32)
                 .map(|e| json!({ "hash": format!("{:016x}", e.hash), "ssn": e.ssn, "rva": e.rva }))
                 .collect(),
         ),
     );
 
-    if hooked.is_empty() {
+    if hooked_n == 0 {
         Ok(vec![finding(
             engine,
             &format!(
-                "ntdll Nt/Zw stubs unhooked ({} exports resolved via Hell's Gate)",
-                resolver.len()
+                "ntdll Nt/Zw stubs unhooked ({} of {} Nt/Zw exports scanned via Hell's Gate)",
+                resolver.len(),
+                resolver.exports_scanned()
             ),
             "info",
             "T1562.001",
@@ -65,10 +69,7 @@ fn scan(engine: &str) -> anyhow::Result<Vec<Value>> {
     } else {
         Ok(vec![finding(
             engine,
-            &format!(
-                "User-mode syscall hooks on {} ntdll export(s)",
-                hooked.len()
-            ),
+            &format!("User-mode syscall hooks on {hooked_n} ntdll export(s)"),
             "high",
             "T1562.001",
             "One or more Nt/Zw stubs begin with a JMP (0xE9/FF25) rather than the canonical syscall prologue. Halo's Gate recovered the real SSN from neighboring stubs. This is the user-mode EDR/AV detour surface — or an unhook attempt.",

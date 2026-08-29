@@ -18,7 +18,7 @@
 //! headers. EAT names are alphabetical, not address-sorted; a stub at a page or
 //! section edge must never cause a `±32` walk to touch unmapped memory.
 
-use crate::direct_syscalls::pe::TextSpan;
+use crate::direct_syscalls::pe::{PeView, TextSpan, IMAGE_EXPORT_DIRECTORY};
 
 pub const STUB_LEN: usize = 32;
 pub const MAX_HALOS_DEPTH: usize = 100;
@@ -116,6 +116,103 @@ pub fn resolve_stub_ssn(image: &[u8], func_offset: usize, text: TextSpan) -> Opt
         return Some(ResolvedSsn { ssn, hooked: true });
     }
     None
+}
+
+/// Infer `.text` from Nt/Zw export stubs when PE section headers were stomped.
+///
+/// Only RVAs that appear in the EAT and match a Hell's Gate prologue or a
+/// user-mode JMP hook are included — a poison stub planted after the real
+/// syscall cluster cannot expand the window (and cannot feed Halo's Gate).
+#[must_use]
+pub fn infer_text_span_from_eat(
+    view: PeView<'_>,
+    export: &IMAGE_EXPORT_DIRECTORY,
+) -> Option<TextSpan> {
+    let image = view.bytes();
+    let mut min_rva = usize::MAX;
+    let mut max_end = 0usize;
+    let mut hits = 0usize;
+    for i in 0..export.number_of_names as usize {
+        let Some(name_rva) = view.u32_at(export.address_of_names, i) else {
+            continue;
+        };
+        let Some(name) = view.cstr_at(name_rva) else {
+            continue;
+        };
+        if !(name.starts_with("Nt") || name.starts_with("Zw")) {
+            continue;
+        }
+        let Some(ordinal) = view.u16_at(export.address_of_name_ordinals, i) else {
+            continue;
+        };
+        let Some(func_rva) = view.u32_at(export.address_of_functions, ordinal as usize) else {
+            continue;
+        };
+        let func_rva = func_rva as usize;
+        let Some(stub) = image.get(func_rva..) else {
+            continue;
+        };
+        if !(is_hells_gate_prologue(stub) || is_user_mode_hook(stub)) {
+            continue;
+        }
+        hits += 1;
+        min_rva = min_rva.min(func_rva);
+        max_end = max_end.max(func_rva.saturating_add(STUB_LEN).min(image.len()));
+    }
+    if hits == 0 || min_rva >= max_end {
+        return None;
+    }
+    Some(TextSpan {
+        rva_start: min_rva,
+        rva_end: max_end,
+    })
+}
+
+/// Infer the `.text` window from Hell's Gate / hooked-stub opcodes when PE
+/// section headers were stomped. Never reads outside `image`.
+#[must_use]
+pub fn infer_text_span_from_stubs(image: &[u8]) -> Option<TextSpan> {
+    if image.len() < PROLOGUE_LEN {
+        return None;
+    }
+    let mut hits: Vec<usize> = Vec::new();
+    let mut off = 0usize;
+    while off + PROLOGUE_LEN <= image.len() {
+        let stub = &image[off..off + PROLOGUE_LEN];
+        if is_hells_gate_prologue(stub) {
+            hits.push(off);
+            off = off.saturating_add(STUB_LEN);
+            continue;
+        }
+        off = off.saturating_add(16);
+    }
+    if hits.len() < 2 {
+        return None;
+    }
+    let mut start = hits[0];
+    let mut end = hits[hits.len() - 1].saturating_add(STUB_LEN);
+    while start >= STUB_LEN {
+        let prev = start - STUB_LEN;
+        if is_user_mode_hook(image.get(prev..).unwrap_or(&[])) {
+            start = prev;
+        } else {
+            break;
+        }
+    }
+    while end < image.len() {
+        if is_user_mode_hook(image.get(end..).unwrap_or(&[])) {
+            end = end.saturating_add(STUB_LEN).min(image.len());
+        } else {
+            break;
+        }
+    }
+    if start >= end {
+        return None;
+    }
+    Some(TextSpan {
+        rva_start: start,
+        rva_end: end.min(image.len()),
+    })
 }
 
 /// Encode a canonical 32-byte Nt/Zw syscall stub for tests and fixtures.
@@ -225,5 +322,27 @@ mod tests {
             rva_end: STUB_LEN + 4,
         };
         assert!(resolve_stub_ssn(&image, STUB_LEN, edge).is_none());
+    }
+
+    #[test]
+    fn infer_text_span_from_prologues_includes_hooked_slot() {
+        let mut image = vec![0u8; STUB_LEN * 3];
+        image[..STUB_LEN].copy_from_slice(&encode_clean_stub(0x18));
+        image[STUB_LEN..STUB_LEN * 2].copy_from_slice(&encode_jmp_hook_stub());
+        image[STUB_LEN * 2..STUB_LEN * 3].copy_from_slice(&encode_clean_stub(0x1A));
+        let span = infer_text_span_from_stubs(&image).expect("span");
+        assert_eq!(span.rva_start, 0);
+        assert_eq!(span.rva_end, STUB_LEN * 3);
+    }
+
+    #[test]
+    fn infer_text_span_from_eat_excludes_poison_after_stubs() {
+        let img = crate::direct_syscalls::fixtures::synthetic_ntdll(false);
+        let view = crate::direct_syscalls::pe::PeView::new(&img).expect("pe");
+        let eat = view.export_directory().expect("eat");
+        let span = infer_text_span_from_eat(view, &eat).expect("span");
+        assert_eq!(span.rva_start, 0x400);
+        assert_eq!(span.rva_end, 0x400 + STUB_LEN * 3);
+        assert!(!span.contains_bytes(0x400 + STUB_LEN * 3, 8));
     }
 }

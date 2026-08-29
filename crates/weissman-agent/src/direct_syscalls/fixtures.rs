@@ -16,6 +16,8 @@ const NAMES_RVA: u32 = 0x2E0;
 const ORDS_RVA: u32 = 0x2F0;
 const STRINGS_RVA: u32 = 0x300;
 const STUBS_RVA: u32 = 0x400;
+/// RVA of the first syscall stub in [`synthetic_ntdll`].
+pub const FIXTURE_STUBS_RVA: u32 = STUBS_RVA;
 const TEXT_SIZE: u32 = (STUB_LEN * 3) as u32; // three syscall stubs, nothing past them
 const IMAGE_SIZE: usize = 0x800;
 const IMAGE_SCN_MEM_READ: u32 = 0x4000_0000;
@@ -198,6 +200,14 @@ pub fn synthetic_ntdll(hook_allocate: bool) -> Vec<u8> {
     let poison_off = (STUBS_RVA + TEXT_SIZE) as usize;
     buf[poison_off..poison_off + STUB_LEN].copy_from_slice(&encode_clean_stub(0x99));
 
+    buf
+}
+
+/// Same as [`synthetic_ntdll`] but DOS/NT headers and the section table are
+/// zeroed — the EDR header-stomp case. EAT + stubs remain.
+pub fn synthetic_ntdll_header_stomped(hook_allocate: bool) -> Vec<u8> {
+    let mut buf = synthetic_ntdll(hook_allocate);
+    buf[..0x200].fill(0);
     buf
 }
 

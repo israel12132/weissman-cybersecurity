@@ -8,13 +8,23 @@
 /// Maximum modules walked before aborting (circular-list guard).
 const MAX_MODULES: usize = 256;
 
-/// Return the in-memory base of `ntdll.dll`, or `None` if the walk fails.
+/// In-memory ntdll mapping from the PEB loader list (not PE headers).
+#[derive(Clone, Copy)]
+pub struct NtdllMapping {
+    pub base: *const u8,
+    pub size_of_image: usize,
+}
+
+/// Return ntdll's mapped base and `SizeOfImage` from `LDR_DATA_TABLE_ENTRY`.
+///
+/// Size comes from the loader, not the PE optional header — so PE header
+/// stomping cannot shrink or erase the mapping we walk.
 ///
 /// # Safety
 /// Caller must run on Windows x64. The PEB and loader lists are process-lifetime
 /// kernel structures; we only read them.
 #[cfg(all(windows, target_arch = "x86_64"))]
-pub unsafe fn ntdll_base() -> Option<*const u8> {
+pub unsafe fn ntdll_mapping() -> Option<NtdllMapping> {
     use std::arch::asm;
 
     let peb: *const u8;
@@ -52,13 +62,28 @@ pub unsafe fn ntdll_base() -> Option<*const u8> {
             let name = std::slice::from_raw_parts(name_buf, n_chars);
             if utf16_eq_ignore_ascii_case(name, "ntdll.dll") {
                 let dll_base = *(current.add(0x30) as *const *const u8);
-                if !dll_base.is_null() {
-                    return Some(dll_base);
+                // SizeOfImage is ULONG at +0x40.
+                let size = *(current.add(0x40) as *const u32) as usize;
+                if !dll_base.is_null() && size >= 0x400 && size <= 16 * 1024 * 1024 {
+                    return Some(NtdllMapping {
+                        base: dll_base,
+                        size_of_image: size,
+                    });
                 }
             }
         }
         current = *(current as *const *const u8); // InLoadOrderLinks.Flink
     }
+    None
+}
+
+#[cfg(all(windows, target_arch = "x86_64"))]
+pub unsafe fn ntdll_base() -> Option<*const u8> {
+    ntdll_mapping().map(|m| m.base)
+}
+
+#[cfg(not(all(windows, target_arch = "x86_64")))]
+pub unsafe fn ntdll_mapping() -> Option<NtdllMapping> {
     None
 }
 

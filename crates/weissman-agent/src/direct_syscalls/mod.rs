@@ -7,10 +7,14 @@
 //!
 //! Pipeline:
 //! 1. PEB walk (`GS:[0x60]`) locates `ntdll.dll` without `GetModuleHandle`.
-//! 2. Export Address Table is parsed; Nt/Zw names are identified by truncated
-//!    SHA-256 (no plaintext API list in the resolver entries).
+//!    Mapping size comes from `LDR_DATA_TABLE_ENTRY.SizeOfImage`, not PE headers.
+//! 2. Export Address Table is parsed. SHA-256 runs only for the pre-computed
+//!    agent target set (not every Nt/Zw export). If DOS/NT headers were stomped,
+//!    the EAT is recovered by locating `"ntdll.dll"` and `.text` is inferred from
+//!    syscall prologue / JMP-hook opcodes at those export RVAs.
 //! 3. Clean stubs yield the SSN via Hell's Gate (`mov eax, SSN`).
-//! 4. Hooked stubs (`jmp` / `0xE9`) recover the SSN via Halo's Gate neighbor scan.
+//! 4. Hooked stubs (`jmp` / `0xE9`) recover the SSN via Halo's Gate neighbor scan
+//!    confined to the `.text` window.
 //! 5. Windows x64 `syscall` is issued with the Microsoft calling convention.
 
 pub mod dispatch;
@@ -21,8 +25,8 @@ pub mod ssn;
 
 #[cfg(all(windows, target_arch = "x86_64"))]
 use crate::direct_syscalls::pe::MAX_IMAGE_SIZE;
-use crate::direct_syscalls::pe::{PeView, MAX_EXPORT_NAMES};
-use crate::direct_syscalls::ssn::resolve_stub_ssn;
+use crate::direct_syscalls::pe::{find_ntdll_export_directory, PeView, MAX_EXPORT_NAMES};
+use crate::direct_syscalls::ssn::{infer_text_span_from_eat, resolve_stub_ssn};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::ffi::c_void;
@@ -42,6 +46,16 @@ pub fn hash_api_name(name: &str) -> u64 {
     u64::from_le_bytes(buf)
 }
 
+/// Nt* routines this process actually issues. SHA-256 runs once per name at
+/// process start (LazyLock), not once per EAT export on every parse.
+pub const TARGET_SYSCALL_NAMES: &[&str] = &[
+    "NtAllocateVirtualMemory",
+    "NtProtectVirtualMemory",
+    "NtQuerySystemInformation",
+    "NtQueryInformationProcess",
+    "NtClose",
+];
+
 pub static NT_ALLOCATE_VIRTUAL_MEMORY: LazyLock<u64> =
     LazyLock::new(|| hash_api_name("NtAllocateVirtualMemory"));
 pub static NT_PROTECT_VIRTUAL_MEMORY: LazyLock<u64> =
@@ -51,6 +65,21 @@ pub static NT_QUERY_SYSTEM_INFORMATION: LazyLock<u64> =
 pub static NT_QUERY_INFORMATION_PROCESS: LazyLock<u64> =
     LazyLock::new(|| hash_api_name("NtQueryInformationProcess"));
 pub static NT_CLOSE: LazyLock<u64> = LazyLock::new(|| hash_api_name("NtClose"));
+
+/// Pre-computed target hashes. EAT walk compares names against
+/// [`TARGET_SYSCALL_NAMES`] and uses these constants — it does not SHA-256
+/// every Nt/Zw export on cold start.
+#[must_use]
+pub fn precomputed_target_hash(name: &str) -> Option<u64> {
+    Some(match name {
+        "NtAllocateVirtualMemory" => *NT_ALLOCATE_VIRTUAL_MEMORY,
+        "NtProtectVirtualMemory" => *NT_PROTECT_VIRTUAL_MEMORY,
+        "NtQuerySystemInformation" => *NT_QUERY_SYSTEM_INFORMATION,
+        "NtQueryInformationProcess" => *NT_QUERY_INFORMATION_PROCESS,
+        "NtClose" => *NT_CLOSE,
+        _ => return None,
+    })
+}
 
 /// One resolved Nt/Zw export.
 #[derive(Debug, Clone, Copy)]
@@ -65,58 +94,84 @@ pub struct SyscallEntry {
 #[derive(Debug, Clone)]
 pub struct SyscallResolver {
     entries: Vec<SyscallEntry>,
+    scanned: usize,
+    hooked_total: usize,
 }
 
 impl SyscallResolver {
     /// Parse Nt/Zw exports from a PE32+ image already in memory.
+    ///
+    /// Prefers PE headers. If DOS/NT headers or the section table were stomped,
+    /// recovers the EAT by locating `"ntdll.dll"` in an export directory and
+    /// infers `.text` from Hell's Gate prologues.
     #[must_use]
     pub fn from_pe_bytes(image: &[u8]) -> Option<Self> {
-        let pe = PeView::new(image)?;
-        let export = pe.export_directory()?;
+        let pe_opt = PeView::new(image);
+        let view = pe_opt.unwrap_or_else(|| PeView::raw(image));
+        let export = view
+            .export_directory()
+            .or_else(|| find_ntdll_export_directory(image))?;
         if export.number_of_names == 0 || export.number_of_names > MAX_EXPORT_NAMES {
             return None;
         }
-        let text = pe.text_section_span()?;
+        // Prefer PE `.text`. If the section table was stomped, infer the window
+        // from Nt/Zw EAT stubs (prologue / JMP-hook opcodes) so Halo's Gate
+        // never walks a poison gadget planted outside the export cluster.
+        let text = pe_opt
+            .and_then(|p| p.text_section_span())
+            .or_else(|| infer_text_span_from_eat(view, &export))?;
         let mut entries = Vec::new();
+        let mut scanned = 0usize;
+        let mut hooked_total = 0usize;
         for i in 0..export.number_of_names as usize {
-            let name_rva = match pe.u32_at(export.address_of_names, i) {
+            let name_rva = match view.u32_at(export.address_of_names, i) {
                 Some(v) => v,
                 None => continue,
             };
-            let name = match pe.cstr_at(name_rva) {
+            let name = match view.cstr_at(name_rva) {
                 Some(n) => n,
                 None => continue,
             };
             if !(name.starts_with("Nt") || name.starts_with("Zw")) {
                 continue;
             }
-            let ordinal = match pe.u16_at(export.address_of_name_ordinals, i) {
+            let ordinal = match view.u16_at(export.address_of_name_ordinals, i) {
                 Some(v) => v as usize,
                 None => continue,
             };
-            let func_rva = match pe.u32_at(export.address_of_functions, ordinal) {
+            let func_rva = match view.u32_at(export.address_of_functions, ordinal) {
                 Some(v) => v,
                 None => continue,
             };
-            let Some(resolved) = resolve_stub_ssn(pe.bytes(), func_rva as usize, text) else {
+            let Some(resolved) = resolve_stub_ssn(view.bytes(), func_rva as usize, text) else {
+                continue;
+            };
+            scanned += 1;
+            if resolved.hooked {
+                hooked_total += 1;
+            }
+            // SHA-256 only for the pre-computed target set — not every Nt/Zw name.
+            let Some(hash) = precomputed_target_hash(name) else {
                 continue;
             };
             entries.push(SyscallEntry {
-                hash: hash_api_name(name),
+                hash,
                 ssn: resolved.ssn,
                 hooked: resolved.hooked,
                 rva: func_rva,
             });
         }
-        Self::from_entries(entries)
+        Self::from_entries(entries, scanned, hooked_total)
     }
 
-    fn from_entries(entries: Vec<SyscallEntry>) -> Option<Self> {
-        if entries.is_empty() {
+    fn from_entries(
+        entries: Vec<SyscallEntry>,
+        scanned: usize,
+        hooked_total: usize,
+    ) -> Option<Self> {
+        if entries.is_empty() && scanned == 0 {
             return None;
         }
-        // Fail closed on hash collisions: two distinct exports with the same
-        // truncated SHA-256 must never resolve — that is the injection bypass.
         let mut seen: HashSet<u64> = HashSet::new();
         let mut poisoned: HashSet<u64> = HashSet::new();
         for e in &entries {
@@ -131,7 +186,11 @@ impl SyscallResolver {
         if entries.is_empty() {
             return None;
         }
-        Some(Self { entries })
+        Some(Self {
+            entries,
+            scanned: scanned.max(1),
+            hooked_total,
+        })
     }
 
     /// Walk the live process PEB, map ntdll, parse the EAT.
@@ -140,38 +199,13 @@ impl SyscallResolver {
     /// Windows x64 only. Reads the PEB and ntdll's mapped image.
     #[cfg(all(windows, target_arch = "x86_64"))]
     pub unsafe fn from_live_ntdll() -> Option<Self> {
-        let base = peb::ntdll_base()?;
-        // Read enough of the headers to parse SizeOfImage + the section table.
-        let header_span = 0x400usize;
-        let header = std::slice::from_raw_parts(base, header_span);
-        let pe_hdr = PeView::new(header)?;
-        let size = pe_hdr.size_of_image()? as usize;
-        if size < header_span || size > MAX_IMAGE_SIZE {
+        let map = peb::ntdll_mapping()?;
+        let size = map.size_of_image;
+        if size < 0x400 || size > MAX_IMAGE_SIZE {
             return None;
         }
-        let hdr_size = (pe_hdr.size_of_headers()? as usize).max(0x200).min(size);
-        // Copy headers + each listed section. Gaps between sections are left
-        // zeroed and are never read from the process — those pages may be
-        // unmapped and would AV a SizeOfImage-wide from_raw_parts walk.
         let mut image = vec![0u8; size];
-        let hdr_copy = hdr_size.min(size);
-        image[..hdr_copy].copy_from_slice(std::slice::from_raw_parts(base, hdr_copy));
-        let pe = PeView::new(&image)?;
-        if let Some(sections) = pe.sections() {
-            for sec in sections {
-                let va = sec.virtual_address as usize;
-                let sz = sec.virtual_size as usize;
-                if sz == 0 || va >= size {
-                    continue;
-                }
-                let copy_len = sz.min(size - va);
-                if copy_len == 0 {
-                    continue;
-                }
-                let src = std::slice::from_raw_parts(base.add(va), copy_len);
-                image[va..va + copy_len].copy_from_slice(src);
-            }
-        }
+        copy_ntdll_image(map.base, size, &mut image);
         Self::from_pe_bytes(&image)
     }
 
@@ -192,7 +226,12 @@ impl SyscallResolver {
 
     #[must_use]
     pub fn hooked_count(&self) -> usize {
-        self.entries.iter().filter(|e| e.hooked).count()
+        self.hooked_total
+    }
+
+    #[must_use]
+    pub fn exports_scanned(&self) -> usize {
+        self.scanned
     }
 
     #[must_use]
@@ -203,6 +242,36 @@ impl SyscallResolver {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+}
+
+/// Copy committed pages of live ntdll. Uses `VirtualQuery` so stomped headers
+/// (no section table) do not cause a SizeOfImage-wide read of a guard page.
+#[cfg(all(windows, target_arch = "x86_64"))]
+unsafe fn copy_ntdll_image(base: *const u8, size: usize, out: &mut [u8]) {
+    use windows_sys::Win32::System::Memory::{VirtualQuery, MEMORY_BASIC_INFORMATION, MEM_COMMIT};
+
+    let copy_len = size.min(out.len());
+    let mut off = 0usize;
+    while off < copy_len {
+        let mut mbi = std::mem::zeroed::<MEMORY_BASIC_INFORMATION>();
+        let queried = VirtualQuery(
+            base.add(off).cast(),
+            &mut mbi,
+            std::mem::size_of::<MEMORY_BASIC_INFORMATION>(),
+        );
+        if queried == 0 {
+            break;
+        }
+        let region = mbi.RegionSize.max(0x1000).min(copy_len - off);
+        if mbi.State == MEM_COMMIT {
+            let src = std::slice::from_raw_parts(base.add(off), region);
+            out[off..off + region].copy_from_slice(src);
+        }
+        off = off.saturating_add(region);
+        if region == 0 {
+            break;
+        }
     }
 }
 
@@ -303,7 +372,8 @@ pub use dispatch::{
 mod tests {
     use super::*;
     use crate::direct_syscalls::fixtures::{
-        synthetic_ntdll, FIXTURE_SSN_ALLOCATE, FIXTURE_SSN_CLOSE, FIXTURE_SSN_PROTECT,
+        synthetic_ntdll, synthetic_ntdll_header_stomped, FIXTURE_SSN_ALLOCATE, FIXTURE_SSN_CLOSE,
+        FIXTURE_SSN_PROTECT, FIXTURE_STUBS_RVA,
     };
     use std::time::{Duration, Instant};
 
@@ -344,9 +414,20 @@ mod tests {
             hooked: false,
             rva: 0x600,
         };
-        let resolver = SyscallResolver::from_entries(vec![a, b, c]).expect("keep unique");
+        let resolver = SyscallResolver::from_entries(vec![a, b, c], 3, 0).expect("keep unique");
         assert!(resolver.resolve_by_hash(0x1111).is_none());
         assert_eq!(resolver.resolve_ssn(0x2222), Some(0x1A));
+    }
+
+    #[test]
+    fn precomputed_map_covers_agent_targets_only() {
+        assert_eq!(TARGET_SYSCALL_NAMES.len(), 5);
+        for name in TARGET_SYSCALL_NAMES {
+            assert_eq!(precomputed_target_hash(name), Some(hash_api_name(name)));
+        }
+        assert!(precomputed_target_hash("NtQueryVirtualMemory").is_none());
+        assert!(precomputed_target_hash("ZwClose").is_none());
+        assert!(precomputed_target_hash("RtlGetVersion").is_none());
     }
 
     #[test]
@@ -355,6 +436,7 @@ mod tests {
         let resolver = SyscallResolver::from_pe_bytes(&img).expect("resolver");
         assert_eq!(resolver.len(), 3);
         assert_eq!(resolver.hooked_count(), 0);
+        assert_eq!(resolver.exports_scanned(), 3);
         assert_eq!(
             resolver.resolve_ssn(*NT_ALLOCATE_VIRTUAL_MEMORY),
             Some(FIXTURE_SSN_ALLOCATE)
@@ -375,6 +457,8 @@ mod tests {
             .expect("allocate");
         assert!(entry.hooked, "JMP hook must be flagged");
         assert_eq!(entry.ssn, FIXTURE_SSN_ALLOCATE);
+        assert_eq!(resolver.hooked_count(), 1);
+        assert_eq!(resolver.exports_scanned(), 3);
         // Neighbors stay clean.
         let protect = resolver
             .resolve_by_hash(hash_api_name("NtProtectVirtualMemory"))
@@ -435,6 +519,43 @@ mod tests {
                 .resolve_ssn(*NT_ALLOCATE_VIRTUAL_MEMORY),
             Some(FIXTURE_SSN_ALLOCATE)
         );
+    }
+
+    #[test]
+    fn header_stomped_image_still_resolves_via_signature_fallback() {
+        let img = synthetic_ntdll_header_stomped(true);
+        assert!(
+            crate::direct_syscalls::pe::PeView::new(&img).is_none(),
+            "stomped DOS/NT headers must fail the PE parser"
+        );
+        let resolver = SyscallResolver::from_pe_bytes(&img).expect("header-stomp fallback");
+        let entry = resolver
+            .resolve_by_hash(*NT_ALLOCATE_VIRTUAL_MEMORY)
+            .expect("allocate");
+        assert!(entry.hooked);
+        assert_eq!(entry.ssn, FIXTURE_SSN_ALLOCATE);
+        assert_eq!(
+            resolver.resolve_ssn(*NT_PROTECT_VIRTUAL_MEMORY),
+            Some(FIXTURE_SSN_PROTECT)
+        );
+        assert_eq!(resolver.resolve_ssn(*NT_CLOSE), Some(FIXTURE_SSN_CLOSE));
+        assert_eq!(resolver.hooked_count(), 1);
+        assert_eq!(resolver.exports_scanned(), 3);
+    }
+
+    #[test]
+    fn header_stomp_halos_gate_ignores_poison_after_eat_stubs() {
+        let mut img = synthetic_ntdll_header_stomped(false);
+        let close_off = FIXTURE_STUBS_RVA as usize + 2 * crate::direct_syscalls::ssn::STUB_LEN;
+        img[close_off..close_off + crate::direct_syscalls::ssn::STUB_LEN]
+            .copy_from_slice(&crate::direct_syscalls::ssn::encode_jmp_hook_stub());
+        let resolver = SyscallResolver::from_pe_bytes(&img).expect("fallback");
+        // Poison stub after .text is SSN 0x99. If Halo's Gate walked it, Close
+        // would resolve to 0x98 instead of 0x1A.
+        assert_eq!(resolver.resolve_ssn(*NT_CLOSE), Some(FIXTURE_SSN_CLOSE));
+        let close = resolver.resolve_by_hash(*NT_CLOSE).expect("close");
+        assert!(close.hooked);
+        assert_ne!(close.ssn, 0x98);
     }
 
     #[test]

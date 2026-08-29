@@ -1,7 +1,8 @@
 //! Minimal PE32+ view used to walk ntdll's Export Address Table without Win32 APIs.
 //!
-//! All reads are bounds-checked against the supplied image slice. Live ntdll is mapped
-//! into this view after reading `SizeOfImage` from the optional header.
+//! All reads are bounds-checked against the supplied image slice. Live ntdll is
+//! sized from the PEB loader (`SizeOfImage` at LDR +0x40), not the optional header,
+//! so PE header stomping cannot shrink the mapping.
 
 #![allow(non_camel_case_types, non_snake_case, dead_code)]
 
@@ -288,29 +289,18 @@ impl<'a> PeView<'a> {
         if va == 0 || size < mem::size_of::<IMAGE_EXPORT_DIRECTORY>() {
             return None;
         }
-        Some(IMAGE_EXPORT_DIRECTORY {
-            characteristics: read_u32(self.bytes, va)?,
-            time_date_stamp: read_u32(self.bytes, va + 4)?,
-            major_version: read_u16(self.bytes, va + 8)?,
-            minor_version: read_u16(self.bytes, va + 10)?,
-            name: read_u32(self.bytes, va + 12)?,
-            base: read_u32(self.bytes, va + 16)?,
-            number_of_functions: read_u32(self.bytes, va + 20)?,
-            number_of_names: read_u32(self.bytes, va + 24)?,
-            address_of_functions: read_u32(self.bytes, va + 28)?,
-            address_of_names: read_u32(self.bytes, va + 32)?,
-            address_of_name_ordinals: read_u32(self.bytes, va + 36)?,
-        })
+        Some(read_export_directory(self.bytes, va)?)
+    }
+
+    /// Header-agnostic view. Used when DOS/NT headers were stomped but `.rdata`
+    /// (EAT) and `.text` (stubs) are still mapped.
+    #[must_use]
+    pub fn raw(bytes: &'a [u8]) -> Self {
+        Self { bytes }
     }
 
     pub fn cstr_at(&self, rva: u32) -> Option<&str> {
-        let start = rva as usize;
-        if start >= self.bytes.len() {
-            return None;
-        }
-        let window = &self.bytes[start..self.bytes.len().min(start + MAX_NAME_LEN)];
-        let end = window.iter().position(|&b| b == 0)?;
-        std::str::from_utf8(&window[..end]).ok()
+        cstr_at_bytes(self.bytes, rva)
     }
 
     pub fn u32_at(&self, rva: u32, index: usize) -> Option<u32> {
@@ -340,6 +330,99 @@ pub fn read_u32(buf: &[u8], off: usize) -> Option<u32> {
 
 pub fn read_i32(buf: &[u8], off: usize) -> Option<i32> {
     Some(read_u32(buf, off)? as i32)
+}
+
+pub fn cstr_at_bytes(buf: &[u8], rva: u32) -> Option<&str> {
+    let start = rva as usize;
+    if start >= buf.len() {
+        return None;
+    }
+    let window = &buf[start..buf.len().min(start + MAX_NAME_LEN)];
+    let end = window.iter().position(|&b| b == 0)?;
+    std::str::from_utf8(&window[..end]).ok()
+}
+
+pub fn read_export_directory(buf: &[u8], va: usize) -> Option<IMAGE_EXPORT_DIRECTORY> {
+    if va
+        .checked_add(mem::size_of::<IMAGE_EXPORT_DIRECTORY>())
+        .filter(|end| *end <= buf.len())
+        .is_none()
+    {
+        return None;
+    }
+    Some(IMAGE_EXPORT_DIRECTORY {
+        characteristics: read_u32(buf, va)?,
+        time_date_stamp: read_u32(buf, va + 4)?,
+        major_version: read_u16(buf, va + 8)?,
+        minor_version: read_u16(buf, va + 10)?,
+        name: read_u32(buf, va + 12)?,
+        base: read_u32(buf, va + 16)?,
+        number_of_functions: read_u32(buf, va + 20)?,
+        number_of_names: read_u32(buf, va + 24)?,
+        address_of_functions: read_u32(buf, va + 28)?,
+        address_of_names: read_u32(buf, va + 32)?,
+        address_of_name_ordinals: read_u32(buf, va + 36)?,
+    })
+}
+
+fn export_dir_plausible(buf: &[u8], dir: &IMAGE_EXPORT_DIRECTORY) -> bool {
+    if dir.number_of_names == 0 || dir.number_of_names > MAX_EXPORT_NAMES {
+        return false;
+    }
+    if dir.number_of_functions < dir.number_of_names {
+        return false;
+    }
+    let names = dir.address_of_names as usize;
+    let funcs = dir.address_of_functions as usize;
+    let ords = dir.address_of_name_ordinals as usize;
+    let names_end = names.saturating_add((dir.number_of_names as usize).saturating_mul(4));
+    let funcs_end = funcs.saturating_add((dir.number_of_functions as usize).saturating_mul(4));
+    let ords_end = ords.saturating_add((dir.number_of_names as usize).saturating_mul(2));
+    names_end <= buf.len() && funcs_end <= buf.len() && ords_end <= buf.len()
+}
+
+/// Locate ntdll's export directory by finding the `"ntdll.dll"` name string,
+/// then the `IMAGE_EXPORT_DIRECTORY` whose `name` RVA points at it.
+/// Survives PE header stomping: DOS/NT headers may be zeroed while `.rdata`
+/// still holds the EAT.
+pub fn find_ntdll_export_directory(buf: &[u8]) -> Option<IMAGE_EXPORT_DIRECTORY> {
+    const NEEDLE: &[u8] = b"ntdll.dll";
+    let mut search_from = 0usize;
+    while search_from + NEEDLE.len() < buf.len() {
+        let rest = &buf[search_from..];
+        let Some(rel) = rest
+            .windows(NEEDLE.len())
+            .position(|w| w.eq_ignore_ascii_case(NEEDLE))
+        else {
+            break;
+        };
+        let name_off = search_from + rel;
+        if buf.get(name_off + NEEDLE.len()) != Some(&0) {
+            search_from = name_off + 1;
+            continue;
+        }
+        let name_rva = name_off as u32;
+        let name_le = name_rva.to_le_bytes();
+        let max = buf
+            .len()
+            .saturating_sub(mem::size_of::<IMAGE_EXPORT_DIRECTORY>());
+        let mut off = 0usize;
+        while off <= max {
+            if buf.get(off + 12..off + 16) == Some(&name_le[..]) {
+                if let Some(dir) = read_export_directory(buf, off) {
+                    if dir.name == name_rva && export_dir_plausible(buf, &dir) {
+                        return Some(dir);
+                    }
+                }
+            }
+            off = match off.checked_add(4) {
+                Some(v) => v,
+                None => break,
+            };
+        }
+        search_from = name_off + 1;
+    }
+    None
 }
 
 fn section_name_is(name: [u8; 8], want: &[u8]) -> bool {
@@ -379,5 +462,14 @@ mod tests {
         assert!(!span.contains_bytes(0x3E0, 8)); // before .text
         assert!(!span.contains_bytes(0x460, 8));
         assert!(!span.contains_bytes(usize::MAX, 1));
+    }
+
+    #[test]
+    fn stomped_headers_recover_eat_via_ntdll_name() {
+        let img = crate::direct_syscalls::fixtures::synthetic_ntdll_header_stomped(false);
+        assert!(PeView::new(&img).is_none(), "DOS/NT headers must be gone");
+        let eat = find_ntdll_export_directory(&img).expect("EAT via ntdll.dll name");
+        assert_eq!(eat.number_of_names, 3);
+        assert_eq!(cstr_at_bytes(&img, eat.name), Some("ntdll.dll"));
     }
 }
