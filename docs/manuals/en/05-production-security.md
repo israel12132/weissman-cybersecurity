@@ -90,7 +90,9 @@ Implemented in `fingerprint_engine/src/security_hardening.rs`. In production, mi
 Nginx (or any reverse proxy) **must not** be the only control. Overlay/pod/SSRF clients can speak to Axum on `:8000` and inject the same headers. Middleware `dual_control_proxy_guard` (outermost layer) accepts those headers only when `ConnectInfo` peer IP is in `WEISSMAN_TRUST_PROXY_CIDRS`; every other peer is **403 Forbidden** immediately.
 
 ```bash
-WEISSMAN_TRUST_PROXY_CIDRS=10.0.0.0/8,172.16.0.0/12
+# Compose/VPS docker networks. On Kubernetes pin to the ingress controller only
+# (never the cluster pod CIDR — that re-opens in-cluster SSRF to :8000).
+WEISSMAN_TRUST_PROXY_CIDRS=172.16.0.0/12
 ```
 
 **Required in production** — empty CIDR list refuses server boot.

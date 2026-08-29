@@ -81,7 +81,8 @@ X-Weissman-Destructive-Confirm: <ערך מדויק>
 Nginx שמסיר את הכותרות **אינו מספיק**. לקוח ב-overlay/pod/SSRF יכול לדבר ישירות עם Axum ב-`:8000` ולהזריק את אותן כותרות. Middleware `dual_control_proxy_guard` מקבל אותן רק כש-`ConnectInfo` peer נמצא ב-`WEISSMAN_TRUST_PROXY_CIDRS`; כל peer אחר → **403 Forbidden**.
 
 ```bash
-WEISSMAN_TRUST_PROXY_CIDRS=10.0.0.0/8,172.16.0.0/12
+# Compose/VPS: רשתות Docker. ב-k8s: רק CIDR של ingress, לא טווח ה-pods של הקלאסטר.
+WEISSMAN_TRUST_PROXY_CIDRS=172.16.0.0/12
 ```
 
 **חובה ב-production** — רשימת CIDR ריקה מסרבת boot.
