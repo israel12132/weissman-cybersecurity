@@ -1,10 +1,11 @@
 //! Encrypted disk spool for findings / task completions when the WebSocket is down.
 //!
-//! Offline telemetry is written under an innocuous temp-cache name and sealed with
-//! AES-256-GCM. The wrapping key is HKDF-SHA256 over real OS entropy (getrandom),
-//! stored in systemd credentials, the Linux user keyring, or a 0600 file — never
-//! `/etc/machine-id`, DMI UUID, MAC, or hostname. On Windows the ciphertext is
-//! additionally wrapped with DPAPI (`CryptProtectData`).
+//! Offline telemetry is written under an innocuous cache name and sealed with
+//! AES-256-GCM. The wrapping key is HKDF-SHA256 over real OS entropy (getrandom).
+//! IKM lives in a **reboot-stable** directory (never `/tmp`): systemd credentials,
+//! TPM 2.0 seal (`tpm2-tools` on `/dev/tpmrm0`), Linux user keyring cache, or a
+//! 0600 file. Never `/etc/machine-id`, DMI UUID, MAC, or hostname. On Windows the
+//! ciphertext is additionally wrapped with DPAPI (`CryptProtectData`).
 
 use crate::protocol::AgentToServer;
 use aes_gcm::aead::rand_core::RngCore;
@@ -28,27 +29,50 @@ pub fn spool_path() -> PathBuf {
     obfuscated_default_path()
 }
 
+/// Durable agent state (IKM + spool ciphertext). Never `/tmp` — tmpfs is wiped
+/// on reboot and would make AES-256-GCM keys and offline telemetry unrecoverable.
+#[must_use]
+pub fn persistent_state_dir() -> PathBuf {
+    if let Some(p) = std::env::var_os("WEISSMAN_AGENT_STATE_DIR") {
+        return PathBuf::from(p);
+    }
+    #[cfg(windows)]
+    {
+        return std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\ProgramData\Microsoft\Windows\INetCache"))
+            .join("Microsoft")
+            .join("Windows")
+            .join("INetCache")
+            .join("IE");
+    }
+    #[cfg(not(windows))]
+    {
+        if let Some(p) = std::env::var_os("XDG_STATE_HOME") {
+            return PathBuf::from(p).join(".cache").join("fontconfig");
+        }
+        if let Some(home) = std::env::var_os("HOME") {
+            return PathBuf::from(home)
+                .join(".local")
+                .join("state")
+                .join(".cache")
+                .join("fontconfig");
+        }
+        PathBuf::from("/var/lib/weissman-agent/.cache")
+    }
+}
+
 fn obfuscated_default_path() -> PathBuf {
     let token = hex::encode(&derive_key()[..16]);
     #[cfg(windows)]
     {
-        let base = std::env::var_os("LOCALAPPDATA")
-            .map(PathBuf::from)
-            .unwrap_or_else(std::env::temp_dir);
-        return base
-            .join("Microsoft")
-            .join("Windows")
-            .join("INetCache")
-            .join("IE")
+        return persistent_state_dir()
             .join(&token[..8.min(token.len())])
             .join(format!("{token}.dat"));
     }
     #[cfg(not(windows))]
     {
-        std::env::temp_dir()
-            .join(".cache")
-            .join("fontconfig")
-            .join(format!("{token}.cache-7"))
+        persistent_state_dir().join(format!("{token}.cache-7"))
     }
 }
 
@@ -58,22 +82,11 @@ fn default_ikm_path() -> PathBuf {
     }
     #[cfg(windows)]
     {
-        let base = std::env::var_os("LOCALAPPDATA")
-            .map(PathBuf::from)
-            .unwrap_or_else(std::env::temp_dir);
-        return base
-            .join("Microsoft")
-            .join("Windows")
-            .join("INetCache")
-            .join("IE")
-            .join(".ieuser.dat");
+        return persistent_state_dir().join(".ieuser.dat");
     }
     #[cfg(not(windows))]
     {
-        std::env::temp_dir()
-            .join(".cache")
-            .join("fontconfig")
-            .join(".user-7.cache")
+        persistent_state_dir().join(".user-7.cache")
     }
 }
 
@@ -172,7 +185,11 @@ fn load_ikm() -> Vec<u8> {
     }
     #[cfg(target_os = "linux")]
     {
+        if let Some(k) = super::tpm_seal::unseal_ikm(&persistent_state_dir()) {
+            return k.to_vec();
+        }
         if let Some(k) = linux_keyring::load() {
+            let _ = super::tpm_seal::seal_ikm(&persistent_state_dir(), &k);
             return k.to_vec();
         }
     }
@@ -180,6 +197,11 @@ fn load_ikm() -> Vec<u8> {
     if let Some(k) = load_or_create_ikm_file(&path) {
         #[cfg(target_os = "linux")]
         {
+            if super::tpm_seal::seal_ikm(&persistent_state_dir(), &k)
+                && super::tpm_seal::unseal_ikm(&persistent_state_dir()).as_ref() == Some(&k)
+            {
+                let _ = std::fs::remove_file(&path);
+            }
             let _ = linux_keyring::store(&k);
         }
         return k.to_vec();
@@ -187,7 +209,14 @@ fn load_ikm() -> Vec<u8> {
     let k = fresh_entropy();
     #[cfg(target_os = "linux")]
     {
+        if super::tpm_seal::seal_ikm(&persistent_state_dir(), &k) {
+            let _ = linux_keyring::store(&k);
+            return k.to_vec();
+        }
         let _ = linux_keyring::store(&k);
+    }
+    if write_ikm_file(&path, &k).is_ok() {
+        return k.to_vec();
     }
     k.to_vec()
 }
@@ -482,6 +511,10 @@ mod tests {
     fn append_and_drain_roundtrip() {
         let _guard = ENV_LOCK.lock().expect("env lock");
         let (dir, path) = temp_spool();
+        std::env::set_var("WEISSMAN_AGENT_STATE_DIR", &dir);
+        std::env::set_var("WEISSMAN_AGENT_SPOOL_KEY_FILE", dir.join("ikm"));
+        std::env::remove_var("WEISSMAN_AGENT_SPOOL_SECRET");
+        std::env::remove_var("CREDENTIALS_DIRECTORY");
         let msg = AgentToServer::Finding {
             agent_id: "a1".into(),
             task_id: "t1".into(),
@@ -505,20 +538,88 @@ mod tests {
     #[test]
     fn default_path_is_not_an_obvious_agent_artifact() {
         let _guard = ENV_LOCK.lock().expect("env lock");
+        let dir = std::env::temp_dir().join(format!(
+            "ws-spool-path-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::env::set_var("WEISSMAN_AGENT_STATE_DIR", &dir);
+        std::env::set_var("WEISSMAN_AGENT_SPOOL_KEY_FILE", dir.join("ikm"));
         let p = obfuscated_default_path();
         let s = p.to_string_lossy().to_ascii_lowercase();
         assert!(!s.contains("weissman"), "{s}");
         assert!(!s.contains("agent.spool"), "{s}");
         assert!(!s.contains("spool.jsonl"), "{s}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn kdf_does_not_use_weak_host_attributes() {
         let src = include_str!("spool.rs");
+        let prod = src.split("#[cfg(test)]").next().unwrap();
         assert!(src.contains("Hkdf"));
         assert!(src.contains("linux_keyring"));
         assert!(src.contains("CREDENTIALS_DIRECTORY"));
+        assert!(src.contains("tpm_seal"));
+        assert!(src.contains("persistent_state_dir"));
+        assert!(
+            !prod.contains("temp_dir()"),
+            "production IKM/spool paths must not live under tmpfs"
+        );
         assert_eq!(VERSION, 2);
+    }
+
+    #[test]
+    fn persistent_state_dir_is_not_tmp() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let prev_state = std::env::var_os("WEISSMAN_AGENT_STATE_DIR");
+        std::env::remove_var("WEISSMAN_AGENT_STATE_DIR");
+        let p = persistent_state_dir();
+        let tmp = std::env::temp_dir();
+        assert!(
+            !p.starts_with(&tmp),
+            "state dir {} must survive reboot; tmp is {}",
+            p.display(),
+            tmp.display()
+        );
+        match prev_state {
+            Some(v) => std::env::set_var("WEISSMAN_AGENT_STATE_DIR", v),
+            None => std::env::remove_var("WEISSMAN_AGENT_STATE_DIR"),
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn tpm_helpers_do_not_fake_success_without_device() {
+        let dir = std::env::temp_dir().join(format!(
+            "ws-tpm-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let _ = std::fs::create_dir_all(&dir);
+        let k = [0x42u8; 32];
+        if crate::transport::tpm_seal::tpm_device_present() {
+            if crate::transport::tpm_seal::seal_ikm(&dir, &k) {
+                assert_eq!(
+                    crate::transport::tpm_seal::unseal_ikm(&dir),
+                    Some(k),
+                    "TPM seal must round-trip when the device is live"
+                );
+            }
+        } else {
+            assert!(
+                !crate::transport::tpm_seal::seal_ikm(&dir, &k),
+                "must not claim TPM seal without /dev/tpm*"
+            );
+            assert!(crate::transport::tpm_seal::unseal_ikm(&dir).is_none());
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[cfg(unix)]

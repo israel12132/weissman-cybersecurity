@@ -15,14 +15,15 @@
 //! ports and processes fire after the learning window **and** after a short onboarding
 //! grace (15–30 minutes from `endpoint_agents.enrolled_at`, default 20). During grace,
 //! items are **not** blindly written into `learned_set`: they must pass signature
-//! deny-lists, live threat-intel, and the Global Fleet Whitelist / fleet consensus
-//! (`ueba_onboarding`). Failures page the SOC as an onboarding hijack.
+//! deny-lists, live threat-intel, and the OS/name whitelist or a sovereign
+//! SHA-256 allow-list (`ueba_onboarding`). Fleet majority never grants Learn.
+//! Failures page the SOC as an onboarding hijack.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::PgPool;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -199,6 +200,7 @@ pub async fn ingest_sample(
                 &observed.iter().map(|n| n.to_string()).collect::<Vec<_>>(),
                 "Unfamiliar TCP port listening on host",
                 onboarding_grace,
+                None,
             )
             .await?
             {
@@ -210,6 +212,20 @@ pub async fn ingest_sample(
                 .iter()
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
                 .collect();
+            let proc_hashes: HashMap<String, String> = obj
+                .get("top_process_hashes")
+                .and_then(Value::as_object)
+                .map(|o| {
+                    o.iter()
+                        .filter_map(|(k, v)| {
+                            v.as_str()
+                                .map(|h| h.trim().to_ascii_lowercase())
+                                .filter(|h| h.len() == 64)
+                                .map(|h| (k.clone(), h))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
             if let Some(a) = check_new_categorical(
                 &mut tx,
                 tenant_id,
@@ -219,6 +235,7 @@ pub async fn ingest_sample(
                 &observed,
                 "Unfamiliar process observed running on host",
                 onboarding_grace,
+                Some(&proc_hashes),
             )
             .await?
             {
@@ -389,6 +406,7 @@ async fn check_new_categorical(
     observed: &[String],
     title: &str,
     onboarding_grace: bool,
+    binary_hashes: Option<&HashMap<String, String>>,
 ) -> Result<Option<AnomalyRecord>, String> {
     // Read the current learned_set.
     let row: Option<(serde_json::Value, i32)> = sqlx::query_as(
@@ -426,21 +444,14 @@ async fn check_new_categorical(
 
     let mut hijack: Vec<String> = Vec::new();
     if onboarding_grace && (metric == "open_ports" || metric == "top_processes") {
-        let grace = onboarding_grace_secs();
         for item in &new_items {
+            let hash = crate::ueba_onboarding::item_binary_hash(item, binary_hashes);
             let sig = crate::ueba_onboarding::signature_denies(metric, item);
-            let ti = crate::ueba_onboarding::threat_intel_hit(tx, tenant_id, metric, item).await;
-            let fleet = crate::ueba_onboarding::fleet_consensus_hit(
-                tx,
-                tenant_id,
-                &p.agent_id,
-                metric,
-                item,
-                grace,
-            )
-            .await;
+            let ti =
+                crate::ueba_onboarding::threat_intel_hit(tx, tenant_id, metric, item, hash).await;
             let wl = crate::ueba_onboarding::on_global_whitelist(metric, item);
-            match crate::ueba_onboarding::decide_onboarding_item(metric, item, sig, ti, wl, fleet) {
+            let sov = crate::ueba_onboarding::on_sovereign_binary_allowlist(hash);
+            match crate::ueba_onboarding::decide_onboarding_item(metric, item, sig, ti, wl, sov) {
                 crate::ueba_onboarding::OnboardingDecision::Learn => {
                     learned.insert(item.clone());
                 }
@@ -483,7 +494,7 @@ async fn check_new_categorical(
             return Ok(None);
         }
         let detail = format!(
-            "Onboarding hijack: process/port failed signature, threat-intel, or fleet whitelist: {}",
+            "Onboarding hijack: process/port failed signature, threat-intel, OS whitelist, or sovereign SHA-256 allow-list: {}",
             hijack.join(", ")
         );
         let rec = AnomalyRecord {

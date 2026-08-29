@@ -3,11 +3,16 @@
 //! During the 15–30 minute grace window, ports and processes are **not** blindly
 //! unioned into `learned_set`. Each new item must:
 //!   1. Fail closed against compiled offensive signatures.
-//!   2. Fail closed against live `threat_ingest_events` (process names).
-//!   3. Appear on the hard Global Fleet Whitelist **or** on the learned set of
-//!      another agent in this tenant that is already past grace.
+//!   2. Fail closed against live `threat_ingest_events` (process names and
+//!      SHA-256 of `/proc/<pid>/exe` when the agent sent `top_process_hashes`).
+//!   3. Appear on the hard OS/name Global Fleet Whitelist **or** have its
+//!      SHA-256 on the sovereign allow-list (`WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST`).
 //!
+//! Fleet majority is **never** a Learn grant: a poisoned golden image would
+//! otherwise bless the backdoor into every new agent's `learned_set`.
 //! A miss on (3) or a hit on (1)/(2) stays out of the baseline and pages the SOC.
+
+use std::collections::HashMap;
 
 const FLEET_PROCESS_ALLOW: &[&str] = &[
     "systemd",
@@ -191,6 +196,42 @@ pub fn on_global_whitelist(metric: &str, item: &str) -> bool {
         .any(|s| n == *s || base == *s || base == format!("{s}.exe"))
 }
 
+/// SHA-256 (64 hex) of an on-disk binary, compared to the sovereign
+/// `WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST`. Empty / malformed hashes never match.
+#[must_use]
+pub fn on_sovereign_binary_allowlist(hash: Option<&str>) -> bool {
+    let Some(h) = hash.map(str::trim).filter(|s| s.len() == 64) else {
+        return false;
+    };
+    if !h.chars().all(|c| c.is_ascii_hexdigit()) {
+        return false;
+    }
+    let n = h.to_ascii_lowercase();
+    env_allowlist("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST")
+        .iter()
+        .any(|x| x == &n)
+}
+
+/// Look up the agent-reported SHA-256 for a process name (`top_process_hashes`).
+#[must_use]
+pub fn item_binary_hash<'a>(
+    item: &str,
+    hashes: Option<&'a HashMap<String, String>>,
+) -> Option<&'a str> {
+    let map = hashes?;
+    if let Some(h) = map.get(item) {
+        return Some(h.as_str());
+    }
+    let base = item.rsplit(['/', '\\']).next().unwrap_or(item);
+    if let Some(h) = map.get(base) {
+        return Some(h.as_str());
+    }
+    map.iter().find_map(|(k, v)| {
+        let kbase = k.rsplit(['/', '\\']).next().unwrap_or(k);
+        (kbase.eq_ignore_ascii_case(base) || k.eq_ignore_ascii_case(item)).then_some(v.as_str())
+    })
+}
+
 #[must_use]
 pub fn decide_onboarding_item(
     metric: &str,
@@ -198,12 +239,12 @@ pub fn decide_onboarding_item(
     sig_hit: bool,
     ti_hit: bool,
     on_whitelist: bool,
-    on_fleet_consensus: bool,
+    on_sovereign_hash: bool,
 ) -> OnboardingDecision {
     if sig_hit || ti_hit {
         return OnboardingDecision::RejectAndAlert;
     }
-    if on_whitelist || on_fleet_consensus {
+    if on_whitelist || on_sovereign_hash {
         return OnboardingDecision::Learn;
     }
     let _ = metric;
@@ -211,23 +252,23 @@ pub fn decide_onboarding_item(
     OnboardingDecision::RejectAndAlert
 }
 
-/// Live TI: process names (len ≥ 4) against `threat_ingest_events`. Ports use
-/// signatures only — substring `"22"` would false-hit CVE years.
+/// Live TI: process names (len ≥ 4) against `threat_ingest_events`. When the
+/// agent sent a SHA-256, also match that hex in `exploit_signature_json`.
+/// Ports use signatures only — substring `"22"` would false-hit CVE years.
 pub async fn threat_intel_hit(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: i64,
     metric: &str,
     item: &str,
+    binary_hash: Option<&str>,
 ) -> bool {
     if metric == "open_ports" {
         return false;
     }
     let n = norm_item(item);
-    if n.len() < 4 {
-        return false;
-    }
-    sqlx::query_scalar::<_, bool>(
-        r#"SELECT EXISTS(
+    if n.len() >= 4 {
+        let hit = sqlx::query_scalar::<_, bool>(
+            r#"SELECT EXISTS(
                 SELECT 1 FROM threat_ingest_events
                  WHERE tenant_id = $1
                    AND (
@@ -235,15 +276,41 @@ pub async fn threat_intel_hit(
                      OR position($2 in lower(coalesce(exploit_signature_json, ''))) > 0
                    )
             )"#,
+        )
+        .bind(tenant_id)
+        .bind(&n)
+        .fetch_one(&mut **tx)
+        .await
+        .unwrap_or(false);
+        if hit {
+            return true;
+        }
+    }
+    let Some(h) = binary_hash.map(str::trim).filter(|s| s.len() == 64) else {
+        return false;
+    };
+    if !h.chars().all(|c| c.is_ascii_hexdigit()) {
+        return false;
+    }
+    let h = h.to_ascii_lowercase();
+    sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+                SELECT 1 FROM threat_ingest_events
+                 WHERE tenant_id = $1
+                   AND position($2 in lower(coalesce(exploit_signature_json, ''))) > 0
+            )"#,
     )
     .bind(tenant_id)
-    .bind(&n)
+    .bind(&h)
     .fetch_one(&mut **tx)
     .await
     .unwrap_or(false)
 }
 
 /// Another agent in this tenant, past onboarding grace, already learned the item.
+///
+/// **Do not use this to grant Learn.** Golden-image fleets would launder a
+/// backdoor into `learned_set`. Kept for SOC telemetry / forensics only.
 pub async fn fleet_consensus_hit(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: i64,
@@ -326,7 +393,39 @@ mod tests {
         );
         assert_eq!(
             decide_onboarding_item("top_processes", "acme-app", false, false, false, true),
-            OnboardingDecision::Learn
+            OnboardingDecision::Learn,
+            "sovereign SHA-256 allow-list may Learn; fleet majority must not"
         );
+        assert!(!on_sovereign_binary_allowlist(None));
+    }
+
+    #[test]
+    fn golden_image_fleet_majority_is_not_a_learn_path() {
+        let detector = include_str!("ueba_detector.rs");
+        assert!(
+            !detector.contains("fleet_consensus_hit"),
+            "detector must not Learn from fleet consensus (golden-image poisoning)"
+        );
+        assert_eq!(
+            decide_onboarding_item("top_processes", "backdoor", false, false, false, false),
+            OnboardingDecision::RejectAndAlert
+        );
+    }
+
+    #[test]
+    fn sovereign_hash_allowlist_is_64_hex() {
+        let prev = std::env::var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST").ok();
+        std::env::set_var(
+            "WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST",
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        );
+        assert!(on_sovereign_binary_allowlist(Some(
+            "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD"
+        )));
+        assert!(!on_sovereign_binary_allowlist(Some("deadbeef")));
+        match prev {
+            Some(v) => std::env::set_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST", v),
+            None => std::env::remove_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST"),
+        }
     }
 }

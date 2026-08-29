@@ -854,6 +854,7 @@ mod tests {
         let inc = include_str!("../../deploy/nginx-strip-internal-headers.inc");
         assert!(inc.contains("proxy_set_header X-Weissman-Destructive-Confirm \"\""));
         assert!(inc.contains("proxy_set_header X-Weissman-Dual-Approve \"\""));
+        assert!(inc.contains("proxy_set_header X-Weissman-Proxy-Hmac \"\""));
         assert!(
             !inc.contains("proxy_set_header X-Weissman-Signature"),
             "must not blank HMAC webhook signatures"

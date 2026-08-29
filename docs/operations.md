@@ -90,7 +90,9 @@ rest (AES-256-GCM). **Production fails closed at startup if no key material is s
 |-----|--------|
 | `WEISSMAN_TRUST_PROXY_HEADERS` | Enables use of `X-Forwarded-For` / `X-Real-IP` for audit + rate limit client identity |
 | `WEISSMAN_TRUST_PROXY_CIDRS` | Optional comma-separated trusted proxy CIDRs; when set, only peers in this list are allowed to supply forwarded client IP |
-| `WEISSMAN_PRIVILEGE_HEADER_TRUSTED_CIDRS` | TCP peers allowed to send `X-Weissman-Destructive-Confirm` / `Dual-Approve` / `Llm-Handshake`. Empty in production rejects those headers (JSON body still works). RFC1918 is not implicit. |
+| `WEISSMAN_PROXY_SIGNING_SECRET` | ≥32 chars. Short-lived `X-Weissman-Proxy-Hmac` (`v1={unix}.{hex}`) required before Axum will consume dual-control headers. CIDR is never enough in production. |
+| `WEISSMAN_AGENT_STATE_DIR` | Reboot-stable directory for agent spool IKM (TPM-sealed when `/dev/tpmrm0` exists). Never `/tmp`. |
+| `WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST` | Comma-separated SHA-256 hex of binaries allowed to enter `learned_set` during onboarding. Fleet majority never grants Learn. |
 
 ---
 

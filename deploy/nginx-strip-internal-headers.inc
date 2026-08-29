@@ -7,9 +7,11 @@
 #   - X-Weissman-Signature     (inbound HMAC on /hooks/)
 #   - X-Weissman-Digest        (outbound attestation; harmless inbound)
 #
-# Command Center sends the same dual-control tokens in the JSON body
-# (`destructive_confirm` / `dual_approve`). The app accepts header OR body and
-# requires a constant-time match when both are present.
+# Also blank X-Weissman-Proxy-Hmac so a client cannot mint a dual-control
+# signature through the public edge. Axum accepts privilege headers only when
+# that HMAC verifies (WEISSMAN_PROXY_SIGNING_SECRET). Command Center sends
+# JSON `destructive_confirm` / `dual_approve` instead.
 proxy_set_header X-Weissman-Destructive-Confirm "";
 proxy_set_header X-Weissman-Dual-Approve "";
 proxy_set_header X-Weissman-Llm-Handshake "";
+proxy_set_header X-Weissman-Proxy-Hmac "";

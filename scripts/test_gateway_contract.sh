@@ -38,10 +38,11 @@ trap cleanup EXIT
 inc="$ROOT/deploy/nginx-strip-internal-headers.inc"
 gw="$ROOT/deploy/nginx-gateway.conf"
 if grep -q 'proxy_set_header X-Weissman-Destructive-Confirm ""' "$inc" \
-   && grep -q 'proxy_set_header X-Weissman-Dual-Approve ""' "$inc"; then
+   && grep -q 'proxy_set_header X-Weissman-Dual-Approve ""' "$inc" \
+   && grep -q 'proxy_set_header X-Weissman-Proxy-Hmac ""' "$inc"; then
   ok "gateway blanks dual-control headers (header smuggling)"
 else
-  bad "gateway does not blank X-Weissman-Destructive-Confirm / Dual-Approve"
+  bad "gateway does not blank X-Weissman-Destructive-Confirm / Dual-Approve / Proxy-Hmac"
 fi
 if grep -q 'proxy_set_header X-Weissman-Signature' "$inc"; then
   bad "strip include must not blank HMAC webhook signatures"

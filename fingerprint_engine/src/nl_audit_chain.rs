@@ -34,13 +34,24 @@ const PENDING_SQL: &str = "SELECT id, user_id, question, compiled_sql, rows_retu
           ORDER BY id ASC
           FOR UPDATE";
 
+const SEGMENT_SQL: &str = "SELECT id, user_id, question, compiled_sql, rows_returned, elapsed_ms,
+                COALESCE(error, '')
+           FROM nl_query_audit
+          WHERE tenant_id = $1 AND id >= $2
+          ORDER BY id ASC
+          FOR UPDATE";
+
 const TIP_SQL: &str = "SELECT id, COALESCE(event_hash, '') FROM nl_query_audit
           WHERE tenant_id = $1 AND event_hash <> $2
           ORDER BY id DESC LIMIT 1";
 
-const UPDATE_SQL: &str = "UPDATE nl_query_audit
+const PREV_BEFORE_SQL: &str = "SELECT COALESCE(event_hash, '') FROM nl_query_audit
+          WHERE tenant_id = $1 AND id < $2 AND event_hash <> $3
+          ORDER BY id DESC LIMIT 1";
+
+const STAMP_SQL: &str = "UPDATE nl_query_audit
                 SET prev_hash = $3, event_hash = $4
-              WHERE id = $1 AND tenant_id = $2 AND event_hash = $5";
+              WHERE id = $1 AND tenant_id = $2";
 
 static CHAIN_TX: OnceLock<mpsc::Sender<i64>> = OnceLock::new();
 
@@ -125,20 +136,14 @@ async fn sweep_all(pool: &PgPool) -> Result<(), sqlx::Error> {
     Ok(())
 }
 
-/// Rows the worker may append to the existing chain: strictly after the tip's
-/// `BIGSERIAL` `id`. A late-committed lower id cannot be spliced behind a hash
-/// that is already on disk — that would fail any integrity walk `ORDER BY id`.
-/// Timestamps (`asked_at`) are never consulted (clock skew / out-of-order
-/// insert). `pending_asc` must already be sorted by `id` ascending.
+/// Late-committed `BIGSERIAL` id at or behind the chained tip: the worker must
+/// re-hash every row from that hole through the tip (atomic re-chain), not
+/// leave the hole unchained for an attacker to hide DML in.
 #[must_use]
-pub(crate) fn pending_after_tip(pending_ids_asc: &[i64], tip_id: Option<i64>) -> Vec<i64> {
-    match tip_id {
-        None => pending_ids_asc.to_vec(),
-        Some(tip) => pending_ids_asc
-            .iter()
-            .copied()
-            .filter(|id| *id > tip)
-            .collect(),
+pub(crate) fn hole_behind_tip(pending_ids_asc: &[i64], tip_id: Option<i64>) -> bool {
+    match (pending_ids_asc.first(), tip_id) {
+        (Some(&id), Some(tip)) => id <= tip,
+        _ => false,
     }
 }
 
@@ -153,59 +158,53 @@ async fn chain_tenant(pool: &PgPool, tenant_id: i64) -> Result<(), sqlx::Error> 
     )
     .await?;
 
-    let pending: bool = sqlx::query_scalar(
-        "SELECT EXISTS(
-             SELECT 1 FROM nl_query_audit
-              WHERE tenant_id = $1 AND event_hash = $2
-         )",
-    )
-    .bind(tenant_id)
-    .bind(UNCHAINED)
-    .fetch_one(&mut *tx)
-    .await?;
-    if !pending {
-        tx.commit().await?;
-        return Ok(());
-    }
-
-    // Architect requirement: row-level FOR UPDATE lives on the worker, not
-    // the HTTP path. Bound by begin_tenant_tx lock_timeout.
-    // Total order is BIGSERIAL `id ASC` — never `asked_at` (clock skew).
-    let rows: Vec<(i64, Option<i64>, String, String, i32, i32, String)> =
+    let pending_rows: Vec<(i64, Option<i64>, String, String, i32, i32, String)> =
         sqlx::query_as(PENDING_SQL)
             .bind(tenant_id)
             .bind(UNCHAINED)
             .fetch_all(&mut *tx)
             .await?;
+    if pending_rows.is_empty() {
+        tx.commit().await?;
+        return Ok(());
+    }
 
     let tip: Option<(i64, String)> = sqlx::query_as(TIP_SQL)
         .bind(tenant_id)
         .bind(UNCHAINED)
         .fetch_optional(&mut *tx)
         .await?;
+    let pending_ids: Vec<i64> = pending_rows.iter().map(|(id, ..)| *id).collect();
+    let start_id = pending_ids[0];
+    let rechain = hole_behind_tip(&pending_ids, tip.as_ref().map(|(id, _)| *id));
 
-    let (tip_id, mut prev_hash) = match tip {
-        Some((id, h)) => (Some(id), h),
-        None => (None, String::new()),
-    };
-    let allowed = pending_after_tip(&rows.iter().map(|(id, ..)| *id).collect::<Vec<_>>(), tip_id);
-    if allowed.len() < rows.len() {
-        tracing::error!(
+    let (rows, mut prev_hash) = if rechain {
+        tracing::warn!(
             target: "nl_audit_chain",
             tenant_id,
-            tip_id,
-            pending = rows.len(),
-            chainable = allowed.len(),
-            "late-committed nl_query_audit id is behind the chained tip; \
-             left unchained so integrity walks ORDER BY id stay valid"
+            hole_id = start_id,
+            tip_id = tip.as_ref().map(|(id, _)| *id),
+            "re-chaining audit segment from late-committed id through the tip"
         );
-    }
-    let allowed: HashSet<i64> = allowed.into_iter().collect();
+        let segment: Vec<(i64, Option<i64>, String, String, i32, i32, String)> =
+            sqlx::query_as(SEGMENT_SQL)
+                .bind(tenant_id)
+                .bind(start_id)
+                .fetch_all(&mut *tx)
+                .await?;
+        let prev: String = sqlx::query_scalar(PREV_BEFORE_SQL)
+            .bind(tenant_id)
+            .bind(start_id)
+            .bind(UNCHAINED)
+            .fetch_optional(&mut *tx)
+            .await?
+            .unwrap_or_default();
+        (segment, prev)
+    } else {
+        (pending_rows, tip.map(|(_, h)| h).unwrap_or_default())
+    };
 
     for (id, user_id, sealed_q, sealed_sql, rows_returned, elapsed_ms, error) in rows {
-        if !allowed.contains(&id) {
-            continue;
-        }
         let canonical = nl_audit_crypto::canonical_nl_audit_payload(
             &prev_hash,
             tenant_id,
@@ -217,12 +216,11 @@ async fn chain_tenant(pool: &PgPool, tenant_id: i64) -> Result<(), sqlx::Error> 
             &error,
         );
         let event_hash = nl_audit_crypto::event_hash(&canonical);
-        sqlx::query(UPDATE_SQL)
+        sqlx::query(STAMP_SQL)
             .bind(id)
             .bind(tenant_id)
             .bind(&prev_hash)
             .bind(&event_hash)
-            .bind(UNCHAINED)
             .execute(&mut *tx)
             .await?;
         prev_hash = event_hash;
@@ -235,6 +233,41 @@ async fn chain_tenant(pool: &PgPool, tenant_id: i64) -> Result<(), sqlx::Error> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    static LIVE_DB_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    async fn assert_segment_chained(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        tenant_id: i64,
+        from_id: i64,
+        to_id: i64,
+    ) {
+        let rows: Vec<(i64, String, String)> = sqlx::query_as(
+            "SELECT id, prev_hash, event_hash FROM nl_query_audit
+              WHERE tenant_id = $1 AND id >= $2 AND id <= $3
+              ORDER BY id ASC",
+        )
+        .bind(tenant_id)
+        .bind(from_id)
+        .bind(to_id)
+        .fetch_all(&mut **tx)
+        .await
+        .expect("read segment");
+        assert!(!rows.is_empty(), "segment {from_id}..={to_id} empty");
+        assert_eq!(rows[0].0, from_id);
+        assert_eq!(rows.last().map(|r| r.0), Some(to_id));
+        for (id, _prev, ev) in &rows {
+            assert_ne!(ev.as_str(), UNCHAINED, "id {id} left unchained");
+            assert_eq!(ev.len(), 64, "id {id} hash must be SHA-256 hex");
+        }
+        for w in rows.windows(2) {
+            assert_eq!(
+                w[1].1, w[0].2,
+                "id {} must hash-link to id {}",
+                w[1].0, w[0].0
+            );
+        }
+    }
 
     #[test]
     fn unchained_marker_is_empty_string() {
@@ -278,11 +311,17 @@ mod tests {
     }
 
     #[test]
-    fn pending_after_tip_skips_late_ids_behind_the_chain() {
-        assert_eq!(pending_after_tip(&[5, 6, 7], None), vec![5, 6, 7]);
-        assert_eq!(pending_after_tip(&[5, 6, 7], Some(6)), vec![7]);
-        assert_eq!(pending_after_tip(&[5], Some(6)), Vec::<i64>::new());
-        assert_eq!(pending_after_tip(&[10, 11], Some(9)), vec![10, 11]);
+    fn hole_behind_tip_triggers_rechain_not_a_blind_skip() {
+        assert!(!hole_behind_tip(&[5, 6, 7], None));
+        assert!(hole_behind_tip(&[5, 6, 7], Some(6)));
+        assert!(hole_behind_tip(&[5], Some(6)));
+        assert!(!hole_behind_tip(&[10, 11], Some(9)));
+        assert!(SEGMENT_SQL.contains("id >= $2"));
+        assert!(STAMP_SQL.contains("SET prev_hash"));
+        assert!(
+            !STAMP_SQL.contains("AND event_hash"),
+            "re-chain must overwrite already-signed tip hashes"
+        );
     }
 
     #[test]
@@ -333,6 +372,7 @@ mod tests {
                 return;
             }
         };
+        let _live = LIVE_DB_LOCK.lock().await;
         let pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(2)
             .acquire_timeout(std::time::Duration::from_secs(5))
@@ -386,31 +426,99 @@ mod tests {
         let mut tx = crate::db::begin_tenant_tx(&pool, tenant_id)
             .await
             .expect("read tx");
-        let rows: Vec<(i64, String, String)> = sqlx::query_as(
-            "SELECT id, prev_hash, event_hash FROM nl_query_audit
-              WHERE tenant_id = $1 AND question LIKE $2
-              ORDER BY id ASC",
-        )
-        .bind(tenant_id)
-        .bind(format!("{marker}%"))
-        .fetch_all(&mut *tx)
-        .await
-        .expect("read chain");
+        assert_segment_chained(&mut tx, tenant_id, id_early, id_late).await;
         let _ = sqlx::query("DELETE FROM nl_query_audit WHERE tenant_id = $1 AND question LIKE $2")
             .bind(tenant_id)
             .bind(format!("{marker}%"))
             .execute(&mut *tx)
             .await;
         tx.commit().await.expect("cleanup");
-        assert_eq!(rows.len(), 2);
-        assert_eq!(rows[0].0, id_early);
-        assert_eq!(rows[1].0, id_late);
-        assert_eq!(
-            rows[1].1, rows[0].2,
-            "later id must hash-link to earlier id"
+    }
+
+    #[tokio::test]
+    async fn rechains_hole_behind_tip_instead_of_leaving_unchained() {
+        let url = match std::env::var("TEST_DATABASE_URL") {
+            Ok(u) if !u.trim().is_empty() => u,
+            _ => {
+                eprintln!(
+                    "SKIP rechains_hole_behind_tip_instead_of_leaving_unchained: no TEST_DATABASE_URL"
+                );
+                return;
+            }
+        };
+        let _live = LIVE_DB_LOCK.lock().await;
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(2)
+            .acquire_timeout(std::time::Duration::from_secs(5))
+            .connect(&url)
+            .await
+            .expect("connect TEST_DATABASE_URL");
+        let tenant_id: i64 =
+            sqlx::query_scalar("SELECT id FROM tenants WHERE slug = 'default' LIMIT 1")
+                .fetch_optional(&pool)
+                .await
+                .expect("lookup default tenant")
+                .expect("default tenant must exist");
+        let marker = format!(
+            "nlqa-rechain-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         );
-        assert_eq!(rows[0].2.len(), 64);
-        assert_ne!(rows[0].2, UNCHAINED);
-        assert_ne!(rows[1].2, UNCHAINED);
+        let mut tx = crate::db::begin_tenant_tx(&pool, tenant_id)
+            .await
+            .expect("tenant tx");
+        let id_a: i64 = sqlx::query_scalar(
+            "INSERT INTO nl_query_audit
+                 (tenant_id, question, compiled_sql, event_hash, prev_hash)
+             VALUES ($1, $2, 's-a', '', '')
+             RETURNING id",
+        )
+        .bind(tenant_id)
+        .bind(format!("{marker}-a"))
+        .fetch_one(&mut *tx)
+        .await
+        .expect("insert A");
+        let id_b: i64 = sqlx::query_scalar(
+            "INSERT INTO nl_query_audit
+                 (tenant_id, question, compiled_sql, event_hash, prev_hash)
+             VALUES ($1, $2, 's-b', '', '')
+             RETURNING id",
+        )
+        .bind(tenant_id)
+        .bind(format!("{marker}-b"))
+        .fetch_one(&mut *tx)
+        .await
+        .expect("insert B");
+        tx.commit().await.expect("commit inserts");
+        chain_tenant(&pool, tenant_id).await.expect("initial chain");
+
+        let mut tx = crate::db::begin_tenant_tx(&pool, tenant_id)
+            .await
+            .expect("punch hole");
+        sqlx::query(
+            "UPDATE nl_query_audit SET event_hash = '', prev_hash = ''
+              WHERE tenant_id = $1 AND id = $2",
+        )
+        .bind(tenant_id)
+        .bind(id_a)
+        .execute(&mut *tx)
+        .await
+        .expect("clear A hashes");
+        tx.commit().await.expect("commit hole");
+
+        chain_tenant(&pool, tenant_id).await.expect("re-chain hole");
+
+        let mut tx = crate::db::begin_tenant_tx(&pool, tenant_id)
+            .await
+            .expect("read tx");
+        assert_segment_chained(&mut tx, tenant_id, id_a, id_b).await;
+        let _ = sqlx::query("DELETE FROM nl_query_audit WHERE tenant_id = $1 AND question LIKE $2")
+            .bind(tenant_id)
+            .bind(format!("{marker}%"))
+            .execute(&mut *tx)
+            .await;
+        tx.commit().await.expect("cleanup");
     }
 }
