@@ -115,33 +115,8 @@ pub async fn login_rate_limit_middleware(
         return deny_unauth_post(&ip, &path, label, limit, burst, "local", retry_after_secs);
     }
 
-    if super::rate_limit_redis::is_enabled() {
-        let redis_count = match kind {
-            UnauthPostKind::Login => super::rate_limit_redis::incr_login_ip_strict(&ip).await,
-            UnauthPostKind::Enroll => super::rate_limit_redis::incr_enroll_ip_strict(&ip).await,
-        };
-        match redis_count {
-            super::rate_limit_redis::StrictOp::Ok(count) => {
-                let max = limit.get() as u64;
-                if count > max {
-                    return deny_unauth_post(&ip, &path, label, limit, burst, "redis", 60);
-                }
-            }
-            super::rate_limit_redis::StrictOp::Unavailable
-                if super::rate_limit_redis::distributed_state_required() =>
-            {
-                tracing::error!(
-                    target: "rate_limit",
-                    client_ip = %ip,
-                    path = %path,
-                    kind = label,
-                    "Redis unavailable for required distributed rate limit (fail-closed)"
-                );
-                return super::rate_limit_redis::distributed_store_unavailable_response();
-            }
-            super::rate_limit_redis::StrictOp::Unavailable => {}
-        }
-    } else if super::rate_limit_redis::distributed_state_required() {
+    let redis = super::rate_limit_redis::is_enabled();
+    if !redis && super::rate_limit_redis::distributed_state_required() {
         tracing::error!(
             target: "rate_limit",
             client_ip = %ip,
@@ -150,6 +125,37 @@ pub async fn login_rate_limit_middleware(
             "REDIS_URL required but Redis rate limiter not initialized (fail-closed)"
         );
         return super::rate_limit_redis::distributed_store_unavailable_response();
+    }
+    if redis
+        && super::rate_limit_redis::distributed_state_required()
+        && super::rate_limit_redis::redis_sync_unhealthy()
+    {
+        tracing::error!(
+            target: "rate_limit",
+            client_ip = %ip,
+            path = %path,
+            kind = label,
+            "Redis sync unhealthy for required distributed rate limit (fail-closed)"
+        );
+        return super::rate_limit_redis::distributed_store_unavailable_response();
+    }
+    let bucket = match kind {
+        UnauthPostKind::Login => "login",
+        UnauthPostKind::Enroll => "enroll",
+    };
+    if redis && super::rate_limit_redis::distributed_ip_denied(bucket, &ip) {
+        return deny_unauth_post(&ip, &path, label, limit, burst, "redis", 60);
+    }
+    // Async Redis token-bucket — never await on the request path. Global IP
+    // state converges in milliseconds across replicas; local governor already ran.
+    if redis {
+        let max = limit.get() as u64;
+        match kind {
+            UnauthPostKind::Login => super::rate_limit_redis::spawn_incr_login_ip(ip.clone(), max),
+            UnauthPostKind::Enroll => {
+                super::rate_limit_redis::spawn_incr_enroll_ip(ip.clone(), max)
+            }
+        }
     }
 
     rate_limit_metrics::record_login_allowed(&ip);
@@ -238,6 +244,14 @@ mod tests {
         assert!(
             local < redis,
             "in-process governor must run before any Redis I/O"
+        );
+        assert!(
+            !src.contains("incr_login_ip_strict(&ip).await"),
+            "request path must not await Redis INCR; spawn async token-bucket instead"
+        );
+        assert!(
+            src.contains("spawn_incr_login_ip"),
+            "local allow must fire-and-forget a Redis token-bucket update"
         );
     }
 }

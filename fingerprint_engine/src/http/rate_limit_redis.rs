@@ -6,9 +6,11 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use dashmap::DashMap;
 use redis::AsyncCommands;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Bound every Redis acquire/op. Without this, a Redis black-hole (packets dropped, no RST)
 /// makes each op await forever and wedges the whole API on the per-request rate-limit path —
@@ -393,4 +395,74 @@ pub async fn incr_api_ip_strict(client_ip: &str) -> StrictOp<u64> {
         Duration::from_secs(1),
     )
     .await
+}
+
+static REDIS_SYNC_UNHEALTHY: AtomicBool = AtomicBool::new(false);
+
+fn deny_until() -> &'static DashMap<String, Instant> {
+    static M: OnceLock<DashMap<String, Instant>> = OnceLock::new();
+    M.get_or_init(DashMap::new)
+}
+
+fn deny_map_key(kind: &str, ip: &str) -> String {
+    format!("{kind}:{ip}")
+}
+
+/// True when a prior async Redis INCR observed this IP over the global burst.
+#[must_use]
+pub fn distributed_ip_denied(kind: &str, ip: &str) -> bool {
+    let key = deny_map_key(kind, ip);
+    match deny_until().get(&key) {
+        Some(until) if *until > Instant::now() => true,
+        Some(_) => {
+            deny_until().remove(&key);
+            false
+        }
+        None => false,
+    }
+}
+
+/// True when the last async Redis INCR failed (outage). Request path must not await Redis.
+#[must_use]
+pub fn redis_sync_unhealthy() -> bool {
+    REDIS_SYNC_UNHEALTHY.load(Ordering::Relaxed)
+}
+
+fn record_async_incr(kind: &str, ip: &str, max: u64, window: Duration, op: StrictOp<u64>) {
+    match op {
+        StrictOp::Ok(n) if n > max => {
+            deny_until().insert(deny_map_key(kind, ip), Instant::now() + window);
+            REDIS_SYNC_UNHEALTHY.store(false, Ordering::Relaxed);
+        }
+        StrictOp::Ok(_) => {
+            REDIS_SYNC_UNHEALTHY.store(false, Ordering::Relaxed);
+        }
+        StrictOp::Unavailable => {
+            REDIS_SYNC_UNHEALTHY.store(true, Ordering::Relaxed);
+        }
+    }
+}
+
+/// Fire-and-forget Redis token-bucket INCR for login. Does not run on the request task.
+pub fn spawn_incr_login_ip(ip: String, max: u64) {
+    tokio::spawn(async move {
+        let op = incr_login_ip_strict(&ip).await;
+        record_async_incr("login", &ip, max, Duration::from_secs(60), op);
+    });
+}
+
+/// Fire-and-forget Redis token-bucket INCR for agent enroll.
+pub fn spawn_incr_enroll_ip(ip: String, max: u64) {
+    tokio::spawn(async move {
+        let op = incr_enroll_ip_strict(&ip).await;
+        record_async_incr("enroll", &ip, max, Duration::from_secs(60), op);
+    });
+}
+
+/// Fire-and-forget Redis token-bucket INCR for authenticated API traffic.
+pub fn spawn_incr_api_ip(ip: String, max: u64) {
+    tokio::spawn(async move {
+        let op = incr_api_ip_strict(&ip).await;
+        record_async_incr("api", &ip, max, Duration::from_secs(1), op);
+    });
 }

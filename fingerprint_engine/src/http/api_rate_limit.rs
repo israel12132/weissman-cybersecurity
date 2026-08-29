@@ -57,58 +57,16 @@ pub async fn api_rate_limit_middleware(
 
     let ip = extract_client_ip(request.headers(), peer);
     let limit = per_sec().get() as u64;
+    let path = path.to_string();
 
-    if super::rate_limit_redis::is_enabled() {
-        match super::rate_limit_redis::incr_api_ip_strict(&ip).await {
-            super::rate_limit_redis::StrictOp::Ok(count) => {
-                if count > limit {
-                    rate_limit_metrics::record_api_denied(&ip);
-                    let retry_after_secs = 1u64;
-                    tracing::warn!(
-                        target: "rate_limit",
-                        client_ip = %ip,
-                        path = %path,
-                        count,
-                        limit,
-                        "API rate limit exceeded (redis)"
-                    );
-                    let mut resp = (
-                        StatusCode::TOO_MANY_REQUESTS,
-                        axum::Json(serde_json::json!({
-                            "ok": false,
-                            "code": "rate_limited",
-                            "detail": format!(
-                                "API rate limit hit ({limit} per second per IP). Retry in {retry_after_secs}s."
-                            ),
-                            "retry_after_seconds": retry_after_secs,
-                            "limit_per_second": limit,
-                            "source": "redis",
-                        })),
-                    )
-                        .into_response();
-                    if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after_secs.to_string())
-                    {
-                        resp.headers_mut().insert("Retry-After", v);
-                    }
-                    return resp;
-                }
-                rate_limit_metrics::record_api_allowed(&ip);
-                return next.run(request).await;
-            }
-            super::rate_limit_redis::StrictOp::Unavailable
-                if super::rate_limit_redis::distributed_state_required() =>
-            {
-                tracing::error!(
-                    target: "rate_limit",
-                    client_ip = %ip,
-                    path = %path,
-                    "Redis unavailable for required API rate limit (fail-closed)"
-                );
-                return super::rate_limit_redis::distributed_store_unavailable_response();
-            }
-            super::rate_limit_redis::StrictOp::Unavailable => {}
-        }
-    } else if super::rate_limit_redis::distributed_state_required() {
+    if let Err(neg) = limiter().check_key(&ip) {
+        let clock = DefaultClock::default();
+        let retry_after_secs = neg.wait_time_from(clock.now()).as_secs().max(1);
+        return deny_api(&ip, &path, limit, retry_after_secs, "local");
+    }
+
+    let redis = super::rate_limit_redis::is_enabled();
+    if !redis && super::rate_limit_redis::distributed_state_required() {
         tracing::error!(
             target: "rate_limit",
             client_ip = %ip,
@@ -117,40 +75,58 @@ pub async fn api_rate_limit_middleware(
         );
         return super::rate_limit_redis::distributed_store_unavailable_response();
     }
-
-    if let Err(neg) = limiter().check_key(&ip) {
-        rate_limit_metrics::record_api_denied(&ip);
-        let clock = DefaultClock::default();
-        let retry_after_secs = neg.wait_time_from(clock.now()).as_secs().max(1);
-        tracing::warn!(
+    if redis
+        && super::rate_limit_redis::distributed_state_required()
+        && super::rate_limit_redis::redis_sync_unhealthy()
+    {
+        tracing::error!(
             target: "rate_limit",
             client_ip = %ip,
             path = %path,
-            retry_after_secs,
-            limit,
-            "API rate limit exceeded"
+            "Redis sync unhealthy for required API rate limit (fail-closed)"
         );
-        let mut resp = (
-            StatusCode::TOO_MANY_REQUESTS,
-            axum::Json(serde_json::json!({
-                "ok": false,
-                "code": "rate_limited",
-                "detail": format!(
-                    "API rate limit hit ({limit} per second per IP). Retry in {retry_after_secs}s."
-                ),
-                "retry_after_seconds": retry_after_secs,
-                "limit_per_second": limit,
-            })),
-        )
-            .into_response();
-        if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after_secs.to_string()) {
-            resp.headers_mut().insert("Retry-After", v);
-        }
-        return resp;
+        return super::rate_limit_redis::distributed_store_unavailable_response();
+    }
+    if redis && super::rate_limit_redis::distributed_ip_denied("api", &ip) {
+        return deny_api(&ip, &path, limit, 1, "redis");
+    }
+    if redis {
+        super::rate_limit_redis::spawn_incr_api_ip(ip.clone(), limit);
     }
 
     rate_limit_metrics::record_api_allowed(&ip);
     next.run(request).await
+}
+
+fn deny_api(ip: &str, path: &str, limit: u64, retry_after_secs: u64, source: &str) -> Response {
+    rate_limit_metrics::record_api_denied(ip);
+    tracing::warn!(
+        target: "rate_limit",
+        client_ip = %ip,
+        path = %path,
+        retry_after_secs,
+        limit,
+        source,
+        "API rate limit exceeded"
+    );
+    let mut resp = (
+        StatusCode::TOO_MANY_REQUESTS,
+        axum::Json(serde_json::json!({
+            "ok": false,
+            "code": "rate_limited",
+            "detail": format!(
+                "API rate limit hit ({limit} per second per IP). Retry in {retry_after_secs}s."
+            ),
+            "retry_after_seconds": retry_after_secs,
+            "limit_per_second": limit,
+            "source": source,
+        })),
+    )
+        .into_response();
+    if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after_secs.to_string()) {
+        resp.headers_mut().insert("Retry-After", v);
+    }
+    resp
 }
 
 #[cfg(test)]
@@ -168,5 +144,28 @@ mod tests {
         assert!(counts_toward_api_bucket(&Method::GET, "/api/clients"));
         assert!(counts_toward_api_bucket(&Method::GET, "/api/billing/usage"));
         assert!(!counts_toward_api_bucket(&Method::GET, "/api/health"));
+    }
+
+    #[test]
+    fn local_governor_precedes_async_redis_on_request_path() {
+        let src = include_str!("api_rate_limit.rs");
+        let local = src
+            .find("limiter().check_key")
+            .expect("in-process governor check");
+        let redis = src
+            .find("rate_limit_redis::is_enabled")
+            .expect("redis branch");
+        assert!(
+            local < redis,
+            "in-process governor must run before any Redis I/O"
+        );
+        assert!(
+            !src.contains("incr_api_ip_strict(&ip).await"),
+            "request path must not await Redis INCR; spawn async token-bucket instead"
+        );
+        assert!(
+            src.contains("spawn_incr_api_ip"),
+            "local allow must fire-and-forget a Redis token-bucket update"
+        );
     }
 }
