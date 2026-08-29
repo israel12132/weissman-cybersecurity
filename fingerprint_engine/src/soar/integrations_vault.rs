@@ -22,11 +22,11 @@ const SECRET_KEYS: &[&str] = &[
     "bot_token",
 ];
 
-fn derive_key(domain: &[u8], material: &str) -> [u8; 32] {
+fn derive_key(domain: &[u8], material: &[u8]) -> [u8; 32] {
     secret_zeroize::derive_aes256_key(domain, material)
 }
 
-fn hex32(raw: &str) -> Option<[u8; 32]> {
+fn hex32(raw: &[u8]) -> Option<[u8; 32]> {
     secret_zeroize::hex32(raw)
 }
 
@@ -43,8 +43,8 @@ pub fn dedicated_key_configured() -> bool {
 }
 
 fn env_has_dedicated_integrations_key() -> bool {
-    secret_zeroize::env_zeroizing("WEISSMAN_INTEGRATIONS_VAULT_KEY")
-        .is_some_and(|v| v.trim().len() >= 32)
+    secret_zeroize::take_env_bytes_locked("WEISSMAN_INTEGRATIONS_VAULT_KEY")
+        .is_some_and(|v| v.trim_ascii().len() >= 32)
         || secret_zeroize::env_is_hex32_key("WEISSMAN_VAULT_KEY")
 }
 
@@ -75,24 +75,25 @@ pub fn scrub_key_env_vars() {
 fn vault_key() -> Option<[u8; 32]> {
     static KEY: OnceLock<Option<Zeroizing<[u8; 32]>>> = OnceLock::new();
     KEY.get_or_init(|| {
-        if let Some(raw) = secret_zeroize::env_zeroizing("WEISSMAN_INTEGRATIONS_VAULT_KEY") {
-            if raw.trim().len() >= 32 {
+        if let Some(raw) = secret_zeroize::take_env_bytes_locked("WEISSMAN_INTEGRATIONS_VAULT_KEY")
+        {
+            if raw.trim_ascii().len() >= 32 {
                 return Some(Zeroizing::new(derive_key(
                     b"weissman-integrations-vault-v1|",
-                    raw.trim(),
+                    raw.trim_ascii(),
                 )));
             }
         }
-        if let Some(raw) = secret_zeroize::env_zeroizing("WEISSMAN_VAULT_KEY") {
-            if let Some(k) = hex32(raw.trim()) {
+        if let Some(raw) = secret_zeroize::take_env_bytes_locked("WEISSMAN_VAULT_KEY") {
+            if let Some(k) = hex32(raw.trim_ascii()) {
                 return Some(Zeroizing::new(k));
             }
         }
-        if let Some(js) = secret_zeroize::env_zeroizing("WEISSMAN_JWT_SECRET") {
-            if js.trim().len() >= 16 {
+        if let Some(js) = secret_zeroize::take_env_bytes_locked("WEISSMAN_JWT_SECRET") {
+            if js.trim_ascii().len() >= 16 {
                 return Some(Zeroizing::new(derive_key(
                     b"weissman-integrations-vault-fallback|",
-                    js.trim(),
+                    js.trim_ascii(),
                 )));
             }
         }
@@ -115,19 +116,19 @@ pub fn key_present() -> bool {
 /// caches in a `OnceLock`, so a test that flips environment variables cannot observe the effect.
 fn build_decrypt_keyring(
     current: Option<[u8; 32]>,
-    jwt_secret: &str,
-    prev_vault_hex_csv: &str,
-    prev_integrations_csv: &str,
-    prev_jwt_csv: &str,
+    jwt_secret: &[u8],
+    prev_vault_hex_csv: &[u8],
+    prev_integrations_csv: &[u8],
+    prev_jwt_csv: &[u8],
 ) -> Vec<[u8; 32]> {
     let mut v: Vec<[u8; 32]> = Vec::new();
     if let Some(k) = current {
         v.push(k);
     }
-    v.extend(prev_vault_hex_csv.split(',').filter_map(hex32));
-    for e in prev_integrations_csv.split(',') {
-        if e.trim().len() >= 32 {
-            v.push(derive_key(b"weissman-integrations-vault-v1|", e.trim()));
+    v.extend(secret_zeroize::split_csv(prev_vault_hex_csv).filter_map(hex32));
+    for e in secret_zeroize::split_csv(prev_integrations_csv) {
+        if e.len() >= 32 {
+            v.push(derive_key(b"weissman-integrations-vault-v1|", e));
         }
     }
     // Legacy rows: everything written before a dedicated key existed was encrypted with the key
@@ -138,18 +139,16 @@ fn build_decrypt_keyring(
     // dedicated key a safe migration: new writes use the dedicated key, old rows still open. It
     // grants no access the fallback did not already have — this is the key those rows are
     // encrypted with today.
-    if jwt_secret.trim().len() >= 16 {
-        let legacy = derive_key(b"weissman-integrations-vault-fallback|", jwt_secret.trim());
+    let jwt_trim = secret_zeroize::trim_ascii(jwt_secret);
+    if jwt_trim.len() >= 16 {
+        let legacy = derive_key(b"weissman-integrations-vault-fallback|", jwt_trim);
         if !v.contains(&legacy) {
             v.push(legacy);
         }
     }
-    for e in prev_jwt_csv.split(',') {
-        if e.trim().len() >= 16 {
-            v.push(derive_key(
-                b"weissman-integrations-vault-fallback|",
-                e.trim(),
-            ));
+    for e in secret_zeroize::split_csv(prev_jwt_csv) {
+        if e.len() >= 16 {
+            v.push(derive_key(b"weissman-integrations-vault-fallback|", e));
         }
     }
     v
@@ -160,20 +159,17 @@ fn build_decrypt_keyring(
 fn decrypt_keyring() -> &'static [[u8; 32]] {
     static KEYS: OnceLock<Zeroizing<Vec<[u8; 32]>>> = OnceLock::new();
     KEYS.get_or_init(|| {
-        let prev_vault = secret_zeroize::env_zeroizing("WEISSMAN_VAULT_KEY_PREVIOUS")
-            .unwrap_or_else(|| Zeroizing::new(String::new()));
-        let prev_int = secret_zeroize::env_zeroizing("WEISSMAN_INTEGRATIONS_VAULT_KEY_PREVIOUS")
-            .unwrap_or_else(|| Zeroizing::new(String::new()));
-        let jwt = secret_zeroize::env_zeroizing("WEISSMAN_JWT_SECRET")
-            .unwrap_or_else(|| Zeroizing::new(String::new()));
-        let prev_jwt = secret_zeroize::env_zeroizing("WEISSMAN_JWT_SECRET_PREVIOUS")
-            .unwrap_or_else(|| Zeroizing::new(String::new()));
+        let prev_vault = secret_zeroize::take_env_bytes_locked("WEISSMAN_VAULT_KEY_PREVIOUS");
+        let prev_int =
+            secret_zeroize::take_env_bytes_locked("WEISSMAN_INTEGRATIONS_VAULT_KEY_PREVIOUS");
+        let jwt = secret_zeroize::take_env_bytes_locked("WEISSMAN_JWT_SECRET");
+        let prev_jwt = secret_zeroize::take_env_bytes_locked("WEISSMAN_JWT_SECRET_PREVIOUS");
         Zeroizing::new(build_decrypt_keyring(
             vault_key(),
-            jwt.as_str(),
-            prev_vault.as_str(),
-            prev_int.as_str(),
-            prev_jwt.as_str(),
+            jwt.as_ref().map(|z| z.as_bytes()).unwrap_or(b""),
+            prev_vault.as_ref().map(|z| z.as_bytes()).unwrap_or(b""),
+            prev_int.as_ref().map(|z| z.as_bytes()).unwrap_or(b""),
+            prev_jwt.as_ref().map(|z| z.as_bytes()).unwrap_or(b""),
         ))
     })
     .as_slice()
@@ -418,14 +414,14 @@ mod tests {
         const DEDICATED: &str = "a-dedicated-integrations-vault-key-32+";
 
         // A secret written yesterday, under the fallback.
-        let legacy_key = derive_key(b"weissman-integrations-vault-fallback|", JWT);
+        let legacy_key = derive_key(b"weissman-integrations-vault-fallback|", JWT.as_bytes());
         let legacy_blob = encrypt_with_key(&legacy_key, "slack-bot-token-xoxb").expect("encrypt");
 
         // Today: a dedicated key is configured, so it becomes the encryption key.
-        let dedicated_key = derive_key(b"weissman-integrations-vault-v1|", DEDICATED);
+        let dedicated_key = derive_key(b"weissman-integrations-vault-v1|", DEDICATED.as_bytes());
         assert_ne!(dedicated_key, legacy_key, "test premise: the keys differ");
 
-        let keyring = build_decrypt_keyring(Some(dedicated_key), JWT, "", "", "");
+        let keyring = build_decrypt_keyring(Some(dedicated_key), JWT.as_bytes(), b"", b"", b"");
 
         let recovered = keyring
             .iter()

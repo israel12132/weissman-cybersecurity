@@ -169,8 +169,9 @@ hwlocality = { version = "1.0.0-alpha.12", optional = true }
 libc = "0.2"
 
 [lints.rust]
-# hpc_runtime::linux_affinity uses libc sched_setaffinity (documented SAFETY in module).
-# All other modules must remain free of unsafe code.
+# Documented unsafe exceptions: hpc_runtime::linux_affinity (sched_setaffinity)
+# and secret_zeroize::memlock (mlock / madvise / VirtualLock). All other modules
+# must remain free of unsafe code.
 unsafe_code = "deny"
 
 [lints.clippy]

@@ -6,9 +6,11 @@
 #![recursion_limit = "512"]
 //!
 //! # Safety policy
-//! Unsafe code is denied crate-wide. The sole exception is `hpc_runtime::linux_affinity`, which
-//! calls `libc::sched_setaffinity` for NUMA-aware thread pinning on Linux. That module carries an
-//! explicit `#[allow(unsafe_code)]` with documented SAFETY invariants.
+//! Unsafe code is denied crate-wide. Documented exceptions (each with
+//! `#[allow(unsafe_code)]` and SAFETY invariants):
+//! - `hpc_runtime::linux_affinity` — `libc::sched_setaffinity` for NUMA pin.
+//! - `secret_zeroize::memlock` — `mlock` / `munlock` / `madvise(MADV_DONTDUMP)`
+//!   (Linux) and `VirtualLock` / `VirtualUnlock` (Windows) for vault key pages.
 #![deny(unsafe_code)]
 #![allow(
     clippy::collapsible_if,

@@ -20,19 +20,19 @@ const VAULT_PREFIX: &str = "wzv1:";
 fn vault_key() -> Option<[u8; 32]> {
     static KEY: OnceLock<Option<Zeroizing<[u8; 32]>>> = OnceLock::new();
     KEY.get_or_init(|| {
-        if let Some(raw) = crate::secret_zeroize::env_zeroizing("WEISSMAN_VAULT_KEY") {
-            if let Some(k) = crate::secret_zeroize::hex32(raw.trim()) {
+        if let Some(raw) = crate::secret_zeroize::take_env_bytes_locked("WEISSMAN_VAULT_KEY") {
+            if let Some(k) = crate::secret_zeroize::hex32(raw.trim_ascii()) {
                 return Some(Zeroizing::new(k));
             }
             eprintln!(
                 "[Weissman][vault] WEISSMAN_VAULT_KEY must be 64 hex chars (32 bytes); ignoring"
             );
         }
-        if let Some(js) = crate::secret_zeroize::env_zeroizing("WEISSMAN_JWT_SECRET") {
-            if js.trim().len() >= 16 {
+        if let Some(js) = crate::secret_zeroize::take_env_bytes_locked("WEISSMAN_JWT_SECRET") {
+            if js.trim_ascii().len() >= 16 {
                 return Some(Zeroizing::new(crate::secret_zeroize::derive_aes256_key(
                     b"weissman-vault-key-v1|",
-                    js.trim(),
+                    js.trim_ascii(),
                 )));
             }
         }
@@ -95,28 +95,37 @@ fn decrypt_keyring() -> &'static [[u8; 32]] {
         if let Some(k) = vault_key() {
             v.push(k);
         }
-        if let Some(csv) = crate::secret_zeroize::env_zeroizing("WEISSMAN_VAULT_KEY_PREVIOUS") {
-            v.extend(csv.split(',').filter_map(crate::secret_zeroize::hex32));
+        if let Some(csv) =
+            crate::secret_zeroize::take_env_bytes_locked("WEISSMAN_VAULT_KEY_PREVIOUS")
+        {
+            v.extend(
+                crate::secret_zeroize::split_csv(csv.as_bytes())
+                    .filter_map(crate::secret_zeroize::hex32),
+            );
         }
         // Legacy rows encrypted with the CURRENT JWT secret, before a dedicated WEISSMAN_VAULT_KEY
         // existed. Without this, setting that key — what the hardened startup guard now demands —
         // orphans every existing CEO-vault secret, because the JWT-derived key only reached this
         // keyring via *_PREVIOUS. See the matching note in soar/integrations_vault.rs.
-        if let Some(js) = crate::secret_zeroize::env_zeroizing("WEISSMAN_JWT_SECRET") {
-            if js.trim().len() >= 16 {
-                let legacy =
-                    crate::secret_zeroize::derive_aes256_key(b"weissman-vault-key-v1|", js.trim());
+        if let Some(js) = crate::secret_zeroize::take_env_bytes_locked("WEISSMAN_JWT_SECRET") {
+            if js.trim_ascii().len() >= 16 {
+                let legacy = crate::secret_zeroize::derive_aes256_key(
+                    b"weissman-vault-key-v1|",
+                    js.trim_ascii(),
+                );
                 if !v.contains(&legacy) {
                     v.push(legacy);
                 }
             }
         }
-        if let Some(csv) = crate::secret_zeroize::env_zeroizing("WEISSMAN_JWT_SECRET_PREVIOUS") {
-            for e in csv.split(',') {
-                if e.trim().len() >= 16 {
+        if let Some(csv) =
+            crate::secret_zeroize::take_env_bytes_locked("WEISSMAN_JWT_SECRET_PREVIOUS")
+        {
+            for e in crate::secret_zeroize::split_csv(csv.as_bytes()) {
+                if e.len() >= 16 {
                     v.push(crate::secret_zeroize::derive_aes256_key(
                         b"weissman-vault-key-v1|",
-                        e.trim(),
+                        e,
                     ));
                 }
             }
