@@ -11,6 +11,7 @@
 pub mod catalog;
 pub mod control_plane;
 pub mod host;
+pub mod kernel;
 
 use crate::engine_dispatch::{run_agent_required_engine, EngineRunContext};
 use crate::engine_probes::{extract_host, finding, http_client, http_get, normalize_url};
@@ -162,7 +163,7 @@ async fn remote_edge_signal(target: &str) -> Option<Value> {
         &format!("Live edge fetch {} → HTTP {}", extract_host(target), probe.status),
         if probe.status == 0 { "medium" } else { "info" },
         "T1071.001",
-        "Remote HTTP probe of the authorised target for WAF/EDR-adjacent edge signals. Host EDR/AMSI/syscall integrity is scored from live /proc (and the endpoint agent when enrolled).",
+        "Remote HTTP probe of the authorised target for WAF/EDR-adjacent edge signals. Host EDR/AMSI/syscall integrity is scored from live /proc + memfd/tracepoints (and the endpoint agent when enrolled).",
         target,
     );
     if let Some(obj) = f.as_object_mut() {
@@ -225,6 +226,7 @@ fn score_peb(host: &HostSnapshot, facet: usize, c: &Check) -> (&'static str, &'s
     ev["deleted_exe"] = json!(host.deleted_exe);
     ev["ld_preload"] = json!(host.ld_preload);
     ev["sensitive_environ"] = json!(host.sensitive_environ);
+    ev["kernel"] = json!(&host.kernel);
     ev["check"] = json!(c.title);
     match facet {
         0 if host.tracer_pid != 0 => ("gap", "high", ev),
@@ -233,8 +235,15 @@ fn score_peb(host: &HostSnapshot, facet: usize, c: &Check) -> (&'static str, &'s
         3 if host.rwx_maps > 0 => ("gap", "medium", ev),
         4 if !host.sensitive_environ.is_empty() => ("gap", "high", ev),
         5 if host.thread_count == 0 => ("limited", "info", ev),
+        6 if host.kernel.memfd_maps + host.kernel.memfd_fds > 0 => ("gap", "high", ev),
+        7 if host.kernel.prot_flap => ("gap", "high", ev),
+        8 if host.kernel.anon_exec_maps > 2 => ("gap", "medium", ev),
+        9 if !host.kernel.execve_tracepoint && !host.kernel.memfd_tracepoint => {
+            ev["note"] = json!("no execve/memfd_create tracepoints — /proc-only blindspot");
+            ("limited", "medium", ev)
+        }
         _ => {
-            ev["observed"] = json!("live /proc integrity");
+            ev["observed"] = json!("live /proc + memfd + tracepoint integrity");
             ("pass", "info", ev)
         }
     }
@@ -250,11 +259,22 @@ fn score_syscall(
     ev["libc_disk_sha256"] = json!(host.libc_disk_sha256);
     ev["seccomp_mode"] = json!(host.seccomp_mode);
     ev["ld_preload"] = json!(host.ld_preload);
+    ev["kernel"] = json!(&host.kernel);
+    ev["halosgate_executed"] = json!(false);
     ev["check"] = json!(c.title);
     match facet {
         0 if !host.ld_preload.is_empty() => ("gap", "high", ev),
         1 if !host.libc_mapped => ("gap", "medium", ev),
         2 if host.libc_disk_sha256.is_none() => ("limited", "info", ev),
+        3 if host.kernel.halosgate_executed => ("gap", "critical", ev),
+        4 if !host.kernel.shuffled || (!host.kernel.jitter_applied && !cfg!(test)) => {
+            ev["note"] = json!("sequential recon pattern — EDR T1592 risk");
+            ("gap", "high", ev)
+        }
+        5 if host.kernel.scan_capped => ("limited", "info", ev),
+        6 if host.kernel.bytes_scanned as usize > kernel::MAX_EVASION_SCAN_SIZE_LIMIT => {
+            ("gap", "high", ev)
+        }
         _ => ("pass", "info", ev),
     }
 }
@@ -383,6 +403,7 @@ fn score_copy(
     let ev = json!({
         "skip_locked_claim": cp.skip_locked_claim,
         "copy_ingest_ok": cp.copy_ingest_ok,
+        "copy_upsert_ok": cp.copy_upsert_ok,
         "copy_rows": cp.copy_rows,
         "async_jobs_pending": cp.async_jobs_pending,
         "check": c.title,
@@ -390,6 +411,7 @@ fn score_copy(
     match facet {
         0 if !cp.skip_locked_claim => ("gap", "high", ev),
         1 if !cp.copy_ingest_ok => ("limited", "info", ev),
+        2 if !cp.copy_upsert_ok && cp.copy_ingest_ok => ("gap", "high", ev),
         _ => ("pass", "info", ev),
     }
 }
@@ -473,7 +495,7 @@ fn summary_finding(
             "info"
         },
         "T1562.001",
-        "Composite of 10 live domains: PEB/TEB-equivalent process integrity, syscall/loader integrity, hollow/ghost artifacts, persistence enumeration, in-memory masking posture, telemetry posture (no blinding), WSS/JWT ring-buffer, RLS, COPY/SKIP LOCKED, and CI/CD gates. Assessment-only — no evasion payload executed.",
+        "Composite of 10 live domains: PEB/TEB-equivalent process integrity, syscall/loader integrity, hollow/ghost artifacts, persistence enumeration, in-memory masking posture, telemetry posture (no blinding), WSS/JWT ring-buffer, RLS, COPY/SKIP LOCKED, and CI/CD gates. Assessment-only — no evasion payload executed. Kernel sensors: memfd, protection flap, tracepoints, jittered 16MiB scan.",
         target,
     );
     if let Some(obj) = f.as_object_mut() {
@@ -572,7 +594,30 @@ pub fn fail_safe_wipe() -> Value {
     json!({
         "ok": true,
         "canaries": wiped,
-        "note": "Removed Weissman-tagged assessment canaries only. OS persistence, EDR, ETW, and AMSI were not modified.",
+        "heap_policy": "zeroize+shrink_to_fit+capacity_0",
+        "note": "Removed Weissman-tagged assessment and deception canaries only. OS persistence, EDR, ETW, and AMSI were not modified.",
+    })
+}
+
+pub fn auto_remediate() -> Value {
+    let host = host::collect_live();
+    let artifact = kernel::generate_hardening_artifact(&host.kernel, &host.writable_persist_paths);
+    let staged = kernel::stage_hardening(&artifact).ok();
+    json!({
+        "ok": true,
+        "artifact": artifact,
+        "staged": staged,
+        "mode": "staging_unless_WEISSMAN_APPLY_HOST_HARDENING",
+    })
+}
+
+pub fn plant_deception() -> Value {
+    let planted = kernel::plant_deception_canaries();
+    json!({
+        "ok": !planted.is_empty(),
+        "planted": planted,
+        "inventory": kernel::deception_inventory(),
+        "note": "Weissman-tagged deception canaries only. Not APT malware, not process injection.",
     })
 }
 
@@ -592,6 +637,8 @@ mod tests {
         let domains = domain_scores(&results);
         assert_eq!(domains.len(), 10);
         assert!(domains.iter().all(|d| d.pass + d.gaps + d.limited == 50));
+        assert!(!host.kernel.halosgate_executed);
+        assert!(host.kernel.bytes_scanned as usize <= kernel::MAX_EVASION_SCAN_SIZE_LIMIT);
     }
 
     #[test]

@@ -98,6 +98,12 @@ pub enum ServerToAgent {
     FailSafeWipe {
         reason: String,
     },
+    AutoRemediate {
+        reason: String,
+    },
+    PlantDeception {
+        reason: String,
+    },
     Shutdown {
         reason: String,
     },

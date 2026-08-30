@@ -298,6 +298,14 @@ async fn handle_text(
             crate::transport::encrypted_ring::fail_safe_wipe();
             let _ = crate::detections::fail_safe_wipe_canaries();
         }
+        ServerToAgent::AutoRemediate { reason } => {
+            warn!(target: "agent", reason = %reason, "auto-remediate staging");
+            let _ = crate::detections::auto_remediate();
+        }
+        ServerToAgent::PlantDeception { reason } => {
+            warn!(target: "agent", reason = %reason, "plant deception canaries");
+            let _ = crate::detections::plant_deception();
+        }
         ServerToAgent::Shutdown { reason } => {
             warn!(target: "agent", reason = %reason, "server requested shutdown");
             std::process::exit(0);

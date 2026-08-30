@@ -19,6 +19,7 @@ pub struct ControlPlaneSnapshot {
     pub rls_force: bool,
     pub skip_locked_claim: bool,
     pub copy_ingest_ok: bool,
+    pub copy_upsert_ok: bool,
     pub copy_rows: u64,
     pub async_jobs_pending: i64,
     pub ci_scripts_present: usize,
@@ -154,12 +155,14 @@ pub async fn probe_db(
 
     if let Some(cid) = client_id {
         match weissman_db::bulk_copy::copy_stealth_check_results(pool, tenant_id, cid, &[]).await {
-            Ok(n) => {
+            Ok((n, upsert)) => {
                 snap.copy_ingest_ok = true;
+                snap.copy_upsert_ok = upsert;
                 snap.copy_rows = n;
             }
             Err(_) => {
                 snap.copy_ingest_ok = false;
+                snap.copy_upsert_ok = false;
             }
         }
     }

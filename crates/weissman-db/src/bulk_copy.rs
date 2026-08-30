@@ -40,42 +40,31 @@ impl StealthCheckRow {
     }
 }
 
-/// COPY (preferred) or batched INSERT of check results for one tenant/client.
+/// COPY into a session-scoped TEMP table, then one atomic UPSERT
+/// (`INSERT … ON CONFLICT DO UPDATE`). Avoids UniqueViolation when the
+/// control-plane and an agent persist the same (tenant, client, check_id).
 pub async fn copy_stealth_check_results(
     pool: &Pool<Postgres>,
     tenant_id: i64,
     client_id: i64,
     rows: &[StealthCheckRow],
-) -> Result<u64, sqlx::Error> {
-    if rows.is_empty() {
-        // Still exercise COPY with a zero-row payload so the control-plane
-        // probe observes a live COPY round-trip against the RLS table.
-        return copy_or_insert(pool, tenant_id, client_id, &[]).await;
-    }
-    copy_or_insert(pool, tenant_id, client_id, rows).await
-}
-
-async fn copy_or_insert(
-    pool: &Pool<Postgres>,
-    tenant_id: i64,
-    client_id: i64,
-    rows: &[StealthCheckRow],
-) -> Result<u64, sqlx::Error> {
-    match try_copy(pool, tenant_id, client_id, rows).await {
-        Ok(n) => Ok(n),
+) -> Result<(u64, bool), sqlx::Error> {
+    match try_copy_upsert(pool, tenant_id, client_id, rows).await {
+        Ok(n) => Ok((n, true)),
         Err(e) => {
             tracing::warn!(
                 target: "bulk_copy",
                 error = %e,
                 rows = rows.len(),
-                "COPY ingest failed; falling back to INSERT"
+                "COPY+UPSERT failed; falling back to INSERT"
             );
-            insert_rows(pool, tenant_id, client_id, rows).await
+            let n = insert_rows(pool, tenant_id, client_id, rows).await?;
+            Ok((n, false))
         }
     }
 }
 
-async fn try_copy(
+async fn try_copy_upsert(
     pool: &Pool<Postgres>,
     tenant_id: i64,
     client_id: i64,
@@ -91,9 +80,28 @@ async fn try_copy(
         .execute(&mut *conn)
         .await?;
 
+    sqlx::query("DROP TABLE IF EXISTS stealth_evasion_ingest")
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query(
+        r#"CREATE TEMP TABLE stealth_evasion_ingest (
+            tenant_id BIGINT NOT NULL,
+            client_id BIGINT NOT NULL,
+            check_id SMALLINT NOT NULL,
+            domain SMALLINT NOT NULL,
+            status TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            mitre TEXT NOT NULL,
+            title TEXT NOT NULL,
+            evidence_json JSONB NOT NULL
+        )"#,
+    )
+    .execute(&mut *conn)
+    .await?;
+
     let csv = encode_csv(tenant_id, client_id, rows);
     let stmt = concat!(
-        "COPY stealth_evasion_check_results ",
+        "COPY stealth_evasion_ingest ",
         "(tenant_id, client_id, check_id, domain, status, severity, mitre, title, evidence_json) ",
         "FROM STDIN WITH (FORMAT csv, HEADER false)"
     );
@@ -101,8 +109,34 @@ async fn try_copy(
     if !csv.is_empty() {
         copy.send(csv.into_bytes()).await?;
     }
-    let n = copy.finish().await?;
-    Ok(n)
+    let _copied = copy.finish().await?;
+
+    let n = sqlx::query_scalar::<_, i64>(
+        r#"WITH up AS (
+            INSERT INTO stealth_evasion_check_results
+                (tenant_id, client_id, check_id, domain, status, severity, mitre, title, evidence_json)
+            SELECT tenant_id, client_id, check_id, domain, status, severity, mitre, title, evidence_json
+              FROM stealth_evasion_ingest
+            ON CONFLICT (tenant_id, client_id, check_id) DO UPDATE SET
+                domain = EXCLUDED.domain,
+                status = EXCLUDED.status,
+                severity = EXCLUDED.severity,
+                mitre = EXCLUDED.mitre,
+                title = EXCLUDED.title,
+                evidence_json = EXCLUDED.evidence_json,
+                created_at = now()
+            RETURNING 1
+        )
+        SELECT COUNT(*) FROM up"#,
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+
+    let _ = sqlx::query("DROP TABLE IF EXISTS stealth_evasion_ingest")
+        .execute(&mut *conn)
+        .await;
+
+    Ok(n as u64)
 }
 
 fn encode_csv(tenant_id: i64, client_id: i64, rows: &[StealthCheckRow]) -> String {
@@ -145,7 +179,15 @@ async fn insert_rows(
         sqlx::query(
             r#"INSERT INTO stealth_evasion_check_results
                 (tenant_id, client_id, check_id, domain, status, severity, mitre, title, evidence_json)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)"#,
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+               ON CONFLICT (tenant_id, client_id, check_id) DO UPDATE SET
+                 domain = EXCLUDED.domain,
+                 status = EXCLUDED.status,
+                 severity = EXCLUDED.severity,
+                 mitre = EXCLUDED.mitre,
+                 title = EXCLUDED.title,
+                 evidence_json = EXCLUDED.evidence_json,
+                 created_at = now()"#,
         )
         .bind(tenant_id)
         .bind(client_id)

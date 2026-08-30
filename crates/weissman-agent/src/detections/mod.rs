@@ -169,6 +169,14 @@ pub fn fail_safe_wipe_canaries() -> Vec<String> {
     stealth_integrity::wipe_canaries()
 }
 
+pub fn auto_remediate() -> serde_json::Value {
+    stealth_integrity::auto_remediate()
+}
+
+pub fn plant_deception() -> serde_json::Value {
+    stealth_integrity::plant_deception()
+}
+
 /// Helper used by every detection to emit a finding with the standard envelope.
 pub(crate) fn finding(
     engine: &str,

@@ -3255,6 +3255,12 @@
       "fail_safe": "Fail-safe wipe",
       "wiping": "Wiping…",
       "wipe_ok": "Fail-safe complete · {{n}} agent(s) signaled",
+      "auto_remediate": "Auto-remediate gap",
+      "remediating": "Staging…",
+      "remediate_ok": "Hardening staged · {{n}} agent(s) signaled",
+      "plant_deception": "Plant deception canary",
+      "planting": "Planting…",
+      "deception_ok": "Deception canary planted · {{n}} agent(s) signaled",
       "intensity_light": "Light",
       "intensity_normal": "Normal",
       "intensity_aggressive": "Aggressive",
@@ -3263,7 +3269,7 @@
       "catalog": "500-check catalog",
       "search_checks": "Search checks (title, MITRE, id)",
       "empty_ready": "Select a client and run a live assessment. Host integrity is scored from /proc; WSS/RLS/COPY/CI from this control plane.",
-      "evidence_notice": "Live evidence from GET /api/stealthy-persistence-evasion/status + POST /api/command-center/scan (stealthy_persistence_evasion). Assessment-only: no AMSI/ETW patches, no process injection, no persistence implants."
+      "evidence_notice": "Live evidence from GET /api/stealthy-persistence-evasion/status + POST /api/command-center/scan (stealthy_persistence_evasion). Assessment-only: no AMSI/ETW patches, no process injection, no persistence implants, no HalosGate stubs. Kernel sensors: memfd + tracepoints + jittered 16MiB scan."
     },
     "wafBypass": {
       "title": "WAF Bypass Characterization Lab",

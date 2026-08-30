@@ -66,6 +66,7 @@ export default function StealthyPersistenceEvasion() {
   const [catalogQuery, setCatalogQuery] = useState('')
   const [wiping, setWiping] = useState(false)
   const [wipeMsg, setWipeMsg] = useState(null)
+  const [busyAction, setBusyAction] = useState('')
 
   useEffect(() => {
     apiFetch('/api/clients').then((d) => {
@@ -182,7 +183,7 @@ export default function StealthyPersistenceEvasion() {
           reason: 'command-center fail-safe',
         }),
       })
-      setWipeMsg(d)
+      setWipeMsg({ kind: 'wipe', ...d })
       await loadStatus()
     } catch (e) {
       setWipeMsg({ ok: false, error: (e && e.message) || 'wipe failed' })
@@ -191,8 +192,30 @@ export default function StealthyPersistenceEvasion() {
     }
   }, [selectedClientId, loadStatus])
 
+  const postStealthAction = useCallback(async (path, reason, kind) => {
+    setBusyAction(kind)
+    setWipeMsg(null)
+    try {
+      const d = await apiFetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: selectedClientId ? Number(selectedClientId) : undefined,
+          reason,
+        }),
+      })
+      setWipeMsg({ kind, ...d })
+      await loadStatus()
+    } catch (e) {
+      setWipeMsg({ ok: false, kind, error: (e && e.message) || `${kind} failed` })
+    } finally {
+      setBusyAction('')
+    }
+  }, [selectedClientId, loadStatus])
+
   const jobStatus = uiJobStatus(pendingJobId, scanning)
   const cp = status?.control_plane || {}
+  const host = status?.host || {}
 
   return (
     <PageShell
@@ -260,6 +283,24 @@ export default function StealthyPersistenceEvasion() {
         >
           {wiping ? t('pages.stealthyEvasion.wiping') : t('pages.stealthyEvasion.fail_safe')}
         </Button>
+        <Button
+          variant="unstyled"
+          type="button"
+          onClick={() => postStealthAction('/api/stealthy-persistence-evasion/auto-remediate', 'command-center auto-remediate', 'remediate')}
+          disabled={!!busyAction}
+          className="px-4 py-2 rounded-xl font-mono text-sm border border-emerald-500/40 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-40"
+        >
+          {busyAction === 'remediate' ? t('pages.stealthyEvasion.remediating') : t('pages.stealthyEvasion.auto_remediate')}
+        </Button>
+        <Button
+          variant="unstyled"
+          type="button"
+          onClick={() => postStealthAction('/api/stealthy-persistence-evasion/plant-deception', 'command-center deception canary', 'deception')}
+          disabled={!!busyAction}
+          className="px-4 py-2 rounded-xl font-mono text-sm border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 disabled:opacity-40"
+        >
+          {busyAction === 'deception' ? t('pages.stealthyEvasion.planting') : t('pages.stealthyEvasion.plant_deception')}
+        </Button>
         {jobStatus && <span className="text-[10px] font-mono text-[var(--text-muted)]">{jobStatus}</span>}
         {lastUpdated && <span className="text-[10px] font-mono text-[var(--text-muted)]">{lastUpdated}</span>}
       </div>
@@ -269,17 +310,31 @@ export default function StealthyPersistenceEvasion() {
       )}
       {wipeMsg && (
         <div className={`rounded-lg border px-4 py-3 text-sm font-mono mb-4 ${wipeMsg.ok ? 'border-emerald-500/40 text-emerald-300' : 'border-rose-500/40 text-rose-300'}`}>
-          {wipeMsg.ok ? t('pages.stealthyEvasion.wipe_ok', { n: wipeMsg.agents_signaled ?? 0 }) : (wipeMsg.error || 'fail-safe error')}
+          {wipeMsg.ok
+            ? (wipeMsg.kind === 'remediate'
+              ? t('pages.stealthyEvasion.remediate_ok', { n: wipeMsg.agents_signaled ?? 0 })
+              : wipeMsg.kind === 'deception'
+                ? t('pages.stealthyEvasion.deception_ok', { n: wipeMsg.agents_signaled ?? 0 })
+                : t('pages.stealthyEvasion.wipe_ok', { n: wipeMsg.agents_signaled ?? 0 }))
+            : (wipeMsg.error || 'action error')}
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3 mb-3">
         <Stat label={t('pages.stealthyEvasion.score')} value={score == null ? '—' : `${score}`} color={score == null ? undefined : scoreColor(score)} />
         <Stat label={t('pages.stealthyEvasion.checks')} value={catalog.catalog_len ?? 500} />
         <Stat label="RLS" value={cp.rls_policy_count ?? '—'} />
-        <Stat label="COPY" value={cp.copy_ingest_ok ? 'live' : '—'} />
+        <Stat label="COPY" value={cp.copy_upsert_ok ? 'upsert' : (cp.copy_ingest_ok ? 'live' : '—')} />
         <Stat label="SKIP LOCKED" value={cp.skip_locked_claim ? 'ok' : '—'} />
         <Stat label="CI" value={`${cp.ci_scripts_present ?? 0}/${cp.ci_scripts_expected ?? 6}`} />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3 mb-6">
+        <Stat label="MEMFD" value={(host.kernel?.memfd_maps || 0) + (host.kernel?.memfd_fds || 0)} />
+        <Stat label="BPF/TP" value={host.kernel?.memfd_tracepoint || host.kernel?.execve_tracepoint ? 'ok' : '—'} />
+        <Stat label="FLAP" value={host.kernel?.prot_flap ? 'yes' : 'no'} />
+        <Stat label="JITTER" value={host.kernel?.jitter_applied ? `${host.kernel?.jitter_ms ?? 0}ms` : 'off'} />
+        <Stat label="SCAN CAP" value={host.kernel?.scan_capped ? 'hit' : '16MiB'} />
+        <Stat label="HALOSGATE" value="never" />
       </div>
 
       {domains.length > 0 && (

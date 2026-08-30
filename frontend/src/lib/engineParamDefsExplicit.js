@@ -147,6 +147,7 @@ export const EXPLICIT_PARAM_DEFS = {
                    { key:'intensity',       label:'Scan Intensity',                  type:'select',   options:['light','normal','aggressive'], defaultVal:'normal' },
                    { key:'safe_mode',       label:'Safe Mode (assessment only)',     type:'select',   options:['true','false'], defaultVal:'true' },
                    { key:'include_agent',   label:'Dispatch enrolled endpoint agent', type:'select',   options:['true','false'], defaultVal:'true' },
+                   { key:'auto_remediate',  label:'Stage hardening artifact after scan', type:'select', options:['true','false'], defaultVal:'false' },
                    { key:'max_findings',    label:'Max Findings',                    type:'number',   defaultVal:'200', min:1, max:5000 },
                  ],
   file_upload:     [{ key:'intensity',       label:'Probe Intensity',              type:'select',   options:['light','normal','aggressive'], defaultVal:'normal' },

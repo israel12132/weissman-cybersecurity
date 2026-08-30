@@ -36,6 +36,7 @@ pub async fn run(engine: &str) -> anyhow::Result<Vec<Value>> {
             "sensitive_environ": snap.sensitive_environ,
             "thread_count": snap.thread_count,
             "libc_sha256_prefix": snap.libc_sha256.as_deref().map(|s| &s[..s.len().min(16)]),
+            "memfd_hint": linux_memfd_hint(),
         }),
     ));
 
@@ -351,6 +352,30 @@ fn entropy_hits(dir: &str) -> usize {
         .count()
 }
 
+fn linux_memfd_hint() -> serde_json::Value {
+    #[cfg(target_os = "linux")]
+    {
+        let maps = std::fs::read_to_string("/proc/self/maps").unwrap_or_default();
+        let memfd_maps = maps.lines().filter(|l| l.contains("/memfd:")).count();
+        let mut memfd_fds = 0usize;
+        if let Ok(rd) = std::fs::read_dir("/proc/self/fd") {
+            memfd_fds = rd
+                .flatten()
+                .filter(|e| {
+                    std::fs::read_link(e.path())
+                        .map(|t| t.to_string_lossy().contains("memfd:"))
+                        .unwrap_or(false)
+                })
+                .count();
+        }
+        json!({ "memfd_maps": memfd_maps, "memfd_fds": memfd_fds })
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        json!({ "memfd_maps": 0, "memfd_fds": 0 })
+    }
+}
+
 fn find_canaries() -> Vec<String> {
     let mut out = Vec::new();
     for dir in ["/tmp", "/var/tmp", "/dev/shm"] {
@@ -375,7 +400,47 @@ pub fn wipe_canaries() -> Vec<String> {
             removed.push(p);
         }
     }
+    for dir in ["/tmp", "/var/tmp", "/dev/shm"] {
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            continue;
+        };
+        for ent in rd.flatten() {
+            let n = ent.file_name();
+            let s = n.to_string_lossy();
+            if s.contains("weissman-deception-canary") {
+                let p = ent.path();
+                if std::fs::remove_file(&p).is_ok() {
+                    removed.push(p.display().to_string());
+                }
+            }
+        }
+    }
     removed
+}
+
+pub fn plant_deception() -> serde_json::Value {
+    let uuid = format!("{:x}", std::process::id() as u64);
+    let path = format!("/tmp/weissman-deception-canary-{uuid}");
+    let mut body = b"WEISSMAN-DECEPTION\n".to_vec();
+    body.extend(std::iter::repeat(0xA5).take(4096));
+    let ok = std::fs::write(&path, &body).is_ok();
+    serde_json::json!({ "ok": ok, "path": path, "note": "Weissman-tagged canary only" })
+}
+
+pub fn auto_remediate() -> serde_json::Value {
+    let dir = "/tmp/weissman-remediation";
+    let _ = std::fs::create_dir_all(dir);
+    let path = format!("{dir}/99-weissman-stealth.conf");
+    let body = "# weissman stealth auto-remediate (staging)\n\
+kernel.yama.ptrace_scope=1\n\
+kernel.kptr_restrict=2\n\
+fs.suid_dumpable=0\n";
+    let ok = std::fs::write(&path, body).is_ok();
+    serde_json::json!({
+        "ok": ok,
+        "staged": path,
+        "apply": std::env::var("WEISSMAN_APPLY_HOST_HARDENING").ok().as_deref() == Some("1"),
+    })
 }
 
 #[cfg(test)]

@@ -5,6 +5,7 @@
 //! patch ntdll, never issue raw syscalls, never inject, never disable ETW/AMSI,
 //! and never install persistence.
 
+use super::kernel::{self, KernelSnapshot};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -36,6 +37,7 @@ pub struct HostSnapshot {
     pub self_exe_exists: bool,
     pub weissman_canaries: Vec<String>,
     pub agent_binary_bytes: Option<u64>,
+    pub kernel: KernelSnapshot,
 }
 
 const SENSITIVE_ENV: &[&str] = &[
@@ -93,6 +95,7 @@ pub fn collect_live() -> HostSnapshot {
         }
     }
     snap.weissman_canaries = find_canaries();
+    snap.kernel = kernel::collect();
     snap
 }
 
@@ -384,6 +387,7 @@ pub fn wipe_canaries() -> HashMap<String, String> {
             }
         }
     }
+    report.extend(kernel::wipe_deception_canaries());
     report
 }
 

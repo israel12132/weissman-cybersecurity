@@ -79,6 +79,10 @@ pub enum ServerToAgent {
     Ack { task_id: String },
     /// Asks the agent to wipe assessment canaries + encrypted ring buffer.
     FailSafeWipe { reason: String },
+    /// Stage a host-hardening artifact (systemd/sysctl). Never installs persistence.
+    AutoRemediate { reason: String },
+    /// Plant Weissman-tagged deception canaries (not APT malware).
+    PlantDeception { reason: String },
     /// Asks the agent to shut down (revoked, deprovisioned, …).
     Shutdown { reason: String },
 }

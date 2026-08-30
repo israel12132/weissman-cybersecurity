@@ -28,7 +28,8 @@ const host = fs.readFileSync(
   'utf8',
 )
 
-const titles = [...catalog.matchAll(/^\s+\("[^"]+", "[^"]+"\),$/gm)]
+const titlesChunk = catalog.slice(catalog.indexOf('const TITLES'))
+const titles = [...titlesChunk.matchAll(/"T\d+(?:\.\d+)?"/g)]
 if (titles.length !== 500) {
   console.error(`catalog titles: expected 500, got ${titles.length}`)
   process.exit(1)
@@ -54,6 +55,20 @@ for (const k of forbidden) {
 }
 if (!host.includes('assessment')) {
   console.error('engine must declare assessment-only mode')
+  process.exit(1)
+}
+if (!fs.existsSync(path.join(root, 'fingerprint_engine/src/stealthy_persistence_evasion/kernel.rs'))) {
+  console.error('missing kernel.rs sensors')
+  process.exit(1)
+}
+const bulk = fs.readFileSync(path.join(root, 'crates/weissman-db/src/bulk_copy.rs'), 'utf8')
+if (!bulk.includes('ON CONFLICT')) {
+  console.error('bulk_copy.rs must UPSERT with ON CONFLICT')
+  process.exit(1)
+}
+const ring = fs.readFileSync(path.join(root, 'crates/weissman-agent/src/transport/encrypted_ring.rs'), 'utf8')
+if (!ring.includes('shrink_to_fit') || !ring.includes('zeroize')) {
+  console.error('encrypted_ring fail-safe must zeroize and shrink_to_fit')
   process.exit(1)
 }
 

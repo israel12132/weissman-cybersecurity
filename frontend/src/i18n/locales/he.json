@@ -3324,6 +3324,12 @@
       "fail_safe": "השמדה בטוחה",
       "wiping": "מוחק…",
       "wipe_ok": "השמדה הושלמה · {{n}} סוכנים",
+      "auto_remediate": "תיקון אוטונומי",
+      "remediating": "מכין…",
+      "remediate_ok": "הקשחה הוכנה · {{n}} סוכנים",
+      "plant_deception": "שתילת סמן הטעיה",
+      "planting": "שותל…",
+      "deception_ok": "סמן הטעיה נשתל · {{n}} סוכנים",
       "intensity_light": "קל",
       "intensity_normal": "רגיל",
       "intensity_aggressive": "אגרסיבי",
@@ -3332,7 +3338,7 @@
       "catalog": "קטלוג 500 בדיקות",
       "search_checks": "חיפוש בדיקות (כותרת, MITRE, מזהה)",
       "empty_ready": "בחר לקוח והפעל הערכה חיה. שלמות המארח נמדדת מ-/proc; WSS/RLS/COPY/CI ממישור הבקרה.",
-      "evidence_notice": "ראיות חיות מ-GET /api/stealthy-persistence-evasion/status + POST /api/command-center/scan (stealthy_persistence_evasion). הערכה בלבד: בלי תיקוני AMSI/ETW, בלי הזרקה, בלי התקנת שרידות."
+      "evidence_notice": "ראיות חיות מ-GET /api/stealthy-persistence-evasion/status + POST /api/command-center/scan. הערכה בלבד: בלי AMSI/ETW, בלי הזרקה, בלי שרידות, בלי HalosGate. חיישני קרנל: memfd + tracepoints + סריקה 16MiB."
     },
     "wafBypass": {
       "title": "מעבדת אפיון WAF Bypass",

@@ -177,6 +177,14 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             post(api_stealthy_persistence_fail_safe),
         )
         .route(
+            "/api/stealthy-persistence-evasion/auto-remediate",
+            post(api_stealthy_persistence_auto_remediate),
+        )
+        .route(
+            "/api/stealthy-persistence-evasion/plant-deception",
+            post(api_stealthy_persistence_plant_deception),
+        )
+        .route(
             "/api/onboarding/tenant-status",
             get(api_onboarding_tenant_status),
         )
