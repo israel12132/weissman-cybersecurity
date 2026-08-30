@@ -118,6 +118,43 @@ def _poll_job(client: httpx.Client, headers: dict[str, str], job_id: str) -> str
     return "timeout"
 
 
+def _domains_of(row: dict) -> list[str]:
+    raw = row.get("domains") or []
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            return []
+    if not isinstance(raw, list):
+        return []
+    return [str(x) for x in raw]
+
+
+def _example_com_client_id(client: httpx.Client, auth_headers: dict[str, str]) -> int:
+    """Pick (or create) a client whose approved domains include example.com.
+
+    After engine-group smoke / UI-button audit, GET /api/clients[0] may be a
+    client whose scope is github.com or an IP-only lab — out of scope for
+    https://example.com and therefore 403 on microsecond_timing.
+    """
+    clients = client.get("/api/clients", headers=auth_headers).json()
+    assert isinstance(clients, list)
+    for row in clients:
+        if any("example.com" in d for d in _domains_of(row)):
+            return int(row["id"])
+    created = client.post(
+        "/api/clients",
+        headers=auth_headers,
+        json={
+            "name": "Py E2E Example Client",
+            "domains": '["https://example.com"]',
+            "ip_ranges": '["127.0.0.0/8"]',
+        },
+    )
+    created.raise_for_status()
+    return int(created.json()["id"])
+
+
 def test_health_and_login(client: httpx.Client, auth_headers: dict[str, str]) -> None:
     assert client.get("/api/health").status_code == 200
     assert client.get("/api/clients", headers=auth_headers).status_code == 200
@@ -170,8 +207,7 @@ def test_scope_rejection(client: httpx.Client, auth_headers: dict[str, str]) -> 
 
 
 def test_job_payload_secrets_redacted(client: httpx.Client, auth_headers: dict[str, str]) -> None:
-    clients = client.get("/api/clients", headers=auth_headers).json()
-    client_id = clients[0]["id"]
+    client_id = _example_com_client_id(client, auth_headers)
     # Distinctive plaintext sentinel: if the server echoes the secret back
     # anywhere in the job payload it will appear verbatim. A pre-redacted mask
     # (e.g. "••••") would make this test pass even with no redaction at all.
@@ -186,7 +222,7 @@ def test_job_payload_secrets_redacted(client: httpx.Client, auth_headers: dict[s
             "github_token": sentinel,
         },
     )
-    assert scan.status_code == 202
+    assert scan.status_code == 202, f"{scan.status_code} {scan.text}"
     job_id = scan.json()["job_id"]
     payload = client.get(f"/api/jobs/{job_id}", headers=auth_headers).json().get("payload", {})
     assert sentinel not in json.dumps(payload), "github_token must not be echoed raw to client"
