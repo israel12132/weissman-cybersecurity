@@ -1,14 +1,16 @@
 //! Distributed rate-limit counters via Redis (`REDIS_URL`). Falls back to in-process governor when unset.
 //!
 //! In production multi-replica mode (`REDIS_URL` set, `WEISSMAN_ALLOW_SINGLE_NODE` unset), Redis
-//! failures are **fail-closed** — callers must not silently degrade to per-replica memory.
+//! outages **degrade** the request-path governor to a stricter in-memory cap (50%) and emit a
+//! SOC signal — they do **not** 503 legitimate logins (self-inflicted DoS). MFA lockout and
+//! other stores that still require Redis keep [`distributed_store_unavailable_response`].
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use dashmap::DashMap;
 use redis::AsyncCommands;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -335,7 +337,40 @@ pub async fn verify_redis_at_startup() -> Result<(), String> {
     Ok(())
 }
 
+/// True when Redis is required for cluster coherence but the client is missing
+/// or the last async INCR failed. Request-path governors must degrade locally
+/// (50% cap) instead of returning 503.
+#[must_use]
+pub fn redis_degraded() -> bool {
+    distributed_state_required() && (!is_enabled() || redis_sync_unhealthy())
+}
+
+/// SOC-visible Redis outage. Rate-limited to once per 60s so a spray cannot flood logs.
+pub fn notify_redis_degraded(component: &'static str) {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    static LAST: AtomicU64 = AtomicU64::new(0);
+    let prev = LAST.load(Ordering::Relaxed);
+    if now.saturating_sub(prev) < 60 {
+        return;
+    }
+    if LAST
+        .compare_exchange(prev, now, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
+        return;
+    }
+    tracing::error!(
+        target: "weissman_soc",
+        component,
+        "Redis unavailable or sync unhealthy — governor degraded to 50% in-memory cap (not fail-closed 503)"
+    );
+}
+
 /// Standard 503 when Redis is required but unreachable (fail-closed).
+/// Used by MFA/sqlx paths that cannot degrade; login/API governors must not call this.
 #[must_use]
 pub fn distributed_store_unavailable_response() -> Response {
     (
@@ -465,4 +500,33 @@ pub fn spawn_incr_api_ip(ip: String, max: u64) {
         let op = incr_api_ip_strict(&ip).await;
         record_async_incr("api", &ip, max, Duration::from_secs(1), op);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn request_path_governors_must_degrade_not_503() {
+        let src = include_str!("rate_limit_redis.rs");
+        let prod = src.split("#[cfg(test)]").next().expect("production source");
+        assert!(prod.contains("redis_degraded"));
+        assert!(prod.contains("weissman_soc"));
+        assert!(prod.contains("50%"));
+        let login = include_str!("login_rate_limit.rs");
+        let login_prod = login.split("#[cfg(test)]").next().expect("login prod");
+        assert!(
+            !login_prod.contains("distributed_store_unavailable_response"),
+            "login governor must not 503 when Redis is unhealthy"
+        );
+        assert!(login_prod.contains("redis_degraded"));
+        assert!(
+            login_prod.contains("weissman_soc") || login_prod.contains("notify_redis_degraded")
+        );
+        let api = include_str!("api_rate_limit.rs");
+        let api_prod = api.split("#[cfg(test)]").next().expect("api prod");
+        assert!(
+            !api_prod.contains("distributed_store_unavailable_response"),
+            "API governor must not 503 when Redis is unhealthy"
+        );
+        assert!(api_prod.contains("redis_degraded"));
+    }
 }

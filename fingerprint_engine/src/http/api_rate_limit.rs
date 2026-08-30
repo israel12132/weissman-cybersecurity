@@ -22,11 +22,25 @@ fn burst() -> NonZeroU32 {
     NonZeroU32::new(rate_limit_metrics::api_burst()).unwrap_or(NonZeroU32::MIN)
 }
 
+fn half_quota(n: NonZeroU32) -> NonZeroU32 {
+    NonZeroU32::new(n.get() / 2).unwrap_or(NonZeroU32::MIN)
+}
+
 fn limiter() -> Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>> {
     static LIM: OnceLock<Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>>> =
         OnceLock::new();
     LIM.get_or_init(|| {
         let q = Quota::per_second(per_sec()).allow_burst(burst());
+        Arc::new(RateLimiter::keyed(q))
+    })
+    .clone()
+}
+
+fn degraded_limiter() -> Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>> {
+    static LIM: OnceLock<Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>>> =
+        OnceLock::new();
+    LIM.get_or_init(|| {
+        let q = Quota::per_second(half_quota(per_sec())).allow_burst(half_quota(burst()));
         Arc::new(RateLimiter::keyed(q))
     })
     .clone()
@@ -56,38 +70,31 @@ pub async fn api_rate_limit_middleware(
     }
 
     let ip = extract_client_ip(request.headers(), peer);
-    let limit = per_sec().get() as u64;
+    let degraded = super::rate_limit_redis::redis_degraded();
+    if degraded {
+        super::rate_limit_redis::notify_redis_degraded("api_governor");
+    }
+    let limiter = if degraded {
+        degraded_limiter()
+    } else {
+        limiter()
+    };
+    let limit_n = if degraded {
+        half_quota(per_sec())
+    } else {
+        per_sec()
+    };
+    let limit = limit_n.get() as u64;
     let path = path.to_string();
 
-    if let Err(neg) = limiter().check_key(&ip) {
+    if let Err(neg) = limiter.check_key(&ip) {
         let clock = DefaultClock::default();
         let retry_after_secs = neg.wait_time_from(clock.now()).as_secs().max(1);
         return deny_api(&ip, &path, limit, retry_after_secs, "local");
     }
 
     let redis = super::rate_limit_redis::is_enabled();
-    if !redis && super::rate_limit_redis::distributed_state_required() {
-        tracing::error!(
-            target: "rate_limit",
-            client_ip = %ip,
-            path = %path,
-            "REDIS_URL required but Redis API rate limiter not initialized (fail-closed)"
-        );
-        return super::rate_limit_redis::distributed_store_unavailable_response();
-    }
-    if redis
-        && super::rate_limit_redis::distributed_state_required()
-        && super::rate_limit_redis::redis_sync_unhealthy()
-    {
-        tracing::error!(
-            target: "rate_limit",
-            client_ip = %ip,
-            path = %path,
-            "Redis sync unhealthy for required API rate limit (fail-closed)"
-        );
-        return super::rate_limit_redis::distributed_store_unavailable_response();
-    }
-    if redis && super::rate_limit_redis::distributed_ip_denied("api", &ip) {
+    if redis && !degraded && super::rate_limit_redis::distributed_ip_denied("api", &ip) {
         return deny_api(&ip, &path, limit, 1, "redis");
     }
     if redis {
@@ -151,13 +158,11 @@ mod tests {
         let src = include_str!("api_rate_limit.rs");
         let prod = src.split("#[cfg(test)]").next().expect("production source");
         let local = prod
-            .find("limiter().check_key")
+            .find("limiter.check_key")
             .expect("in-process governor check");
-        let redis = prod
-            .find("rate_limit_redis::is_enabled")
-            .expect("redis branch");
+        let spawn = prod.find("spawn_incr_api_ip").expect("async redis spawn");
         assert!(
-            local < redis,
+            local < spawn,
             "in-process governor must run before any Redis I/O"
         );
         assert!(
@@ -168,5 +173,12 @@ mod tests {
             prod.contains("spawn_incr_api_ip"),
             "local allow must fire-and-forget a Redis token-bucket update"
         );
+        assert!(
+            !prod.contains("distributed_store_unavailable_response"),
+            "Redis outage must degrade to 50% local cap, not 503"
+        );
+        assert!(prod.contains("redis_degraded"));
+        assert!(prod.contains("half_quota"));
+        assert!(prod.contains("notify_redis_degraded"));
     }
 }

@@ -24,11 +24,39 @@ fn login_burst() -> NonZeroU32 {
     NonZeroU32::new(rate_limit_metrics::login_burst()).unwrap_or(NonZeroU32::MIN)
 }
 
+fn half_quota(n: NonZeroU32) -> NonZeroU32 {
+    NonZeroU32::new(n.get() / 2).unwrap_or(NonZeroU32::MIN)
+}
+
 fn login_limiter() -> Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>> {
     static LIM: OnceLock<Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>>> =
         OnceLock::new();
     LIM.get_or_init(|| {
         let q = Quota::per_minute(login_per_minute()).allow_burst(login_burst());
+        Arc::new(RateLimiter::keyed(q))
+    })
+    .clone()
+}
+
+fn degraded_login_limiter() -> Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>>
+{
+    static LIM: OnceLock<Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>>> =
+        OnceLock::new();
+    LIM.get_or_init(|| {
+        let q = Quota::per_minute(half_quota(login_per_minute()))
+            .allow_burst(half_quota(login_burst()));
+        Arc::new(RateLimiter::keyed(q))
+    })
+    .clone()
+}
+
+fn degraded_enroll_limiter(
+) -> Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>> {
+    static LIM: OnceLock<Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>>> =
+        OnceLock::new();
+    LIM.get_or_init(|| {
+        let q = Quota::per_minute(half_quota(enroll_per_minute()))
+            .allow_burst(half_quota(enroll_burst()));
         Arc::new(RateLimiter::keyed(q))
     })
     .clone()
@@ -97,18 +125,37 @@ pub async fn login_rate_limit_middleware(
     };
 
     let ip = extract_client_ip(request.headers(), peer);
-    let (limiter, limit, burst, label) = match kind {
-        UnauthPostKind::Login => (login_limiter(), login_per_minute(), login_burst(), "Login"),
-        UnauthPostKind::Enroll => (
+    let degraded = super::rate_limit_redis::redis_degraded();
+    if degraded {
+        super::rate_limit_redis::notify_redis_degraded("login_governor");
+    }
+    let (limiter, limit, burst, label) = match (kind, degraded) {
+        (UnauthPostKind::Login, false) => {
+            (login_limiter(), login_per_minute(), login_burst(), "Login")
+        }
+        (UnauthPostKind::Login, true) => (
+            degraded_login_limiter(),
+            half_quota(login_per_minute()),
+            half_quota(login_burst()),
+            "Login",
+        ),
+        (UnauthPostKind::Enroll, false) => (
             enroll_limiter(),
             enroll_per_minute(),
             enroll_burst(),
+            "Agent enroll",
+        ),
+        (UnauthPostKind::Enroll, true) => (
+            degraded_enroll_limiter(),
+            half_quota(enroll_per_minute()),
+            half_quota(enroll_burst()),
             "Agent enroll",
         ),
     };
 
     // In-process governor first — no Redis, no auth-pool checkout. Under a
     // password-spray the weissman_auth pool must not be the first choke point.
+    // When Redis is unhealthy the limiter is the 50% cap, not a 503.
     if let Err(neg) = limiter.check_key(&ip) {
         let clock = DefaultClock::default();
         let retry_after_secs = neg.wait_time_from(clock.now()).as_secs().max(1);
@@ -116,38 +163,15 @@ pub async fn login_rate_limit_middleware(
     }
 
     let redis = super::rate_limit_redis::is_enabled();
-    if !redis && super::rate_limit_redis::distributed_state_required() {
-        tracing::error!(
-            target: "rate_limit",
-            client_ip = %ip,
-            path = %path,
-            kind = label,
-            "REDIS_URL required but Redis rate limiter not initialized (fail-closed)"
-        );
-        return super::rate_limit_redis::distributed_store_unavailable_response();
-    }
-    if redis
-        && super::rate_limit_redis::distributed_state_required()
-        && super::rate_limit_redis::redis_sync_unhealthy()
-    {
-        tracing::error!(
-            target: "rate_limit",
-            client_ip = %ip,
-            path = %path,
-            kind = label,
-            "Redis sync unhealthy for required distributed rate limit (fail-closed)"
-        );
-        return super::rate_limit_redis::distributed_store_unavailable_response();
-    }
     let bucket = match kind {
         UnauthPostKind::Login => "login",
         UnauthPostKind::Enroll => "enroll",
     };
-    if redis && super::rate_limit_redis::distributed_ip_denied(bucket, &ip) {
+    if redis && !degraded && super::rate_limit_redis::distributed_ip_denied(bucket, &ip) {
         return deny_unauth_post(&ip, &path, label, limit, burst, "redis", 60);
     }
-    // Async Redis token-bucket — never await on the request path. Global IP
-    // state converges in milliseconds across replicas; local governor already ran.
+    // Async Redis token-bucket — never await on the request path. Still spawned
+    // while degraded (client present) so a recovered Redis can clear the flag.
     if redis {
         let max = limit.get() as u64;
         match kind {
@@ -239,11 +263,9 @@ mod tests {
         let local = prod
             .find("limiter.check_key")
             .expect("in-process governor check");
-        let redis = prod
-            .find("rate_limit_redis::is_enabled")
-            .expect("redis branch");
+        let spawn = prod.find("spawn_incr_login_ip").expect("async redis spawn");
         assert!(
-            local < redis,
+            local < spawn,
             "in-process governor must run before any Redis I/O"
         );
         assert!(
@@ -254,5 +276,12 @@ mod tests {
             prod.contains("spawn_incr_login_ip"),
             "local allow must fire-and-forget a Redis token-bucket update"
         );
+        assert!(
+            !prod.contains("distributed_store_unavailable_response"),
+            "Redis outage must degrade to 50% local cap, not 503"
+        );
+        assert!(prod.contains("redis_degraded"));
+        assert!(prod.contains("half_quota"));
+        assert!(prod.contains("notify_redis_degraded"));
     }
 }
