@@ -106,9 +106,9 @@ Self-hosted unlimited: `WEISSMAN_BILLING_STRICT=0` **רק עם חוזה כתוב
 REDIS_URL=redis://host:6379/0
 ```
 
-נדרש ל-rate limits, lockout (`/api/login`, `/api/auth/mfa/verify`, `/api/auth/refresh`), registry של agents. מגבלת הלוגין רצה **קודם בתהליך** (לפני Redis ולפני חיבור ל-`weissman_auth`) כדי שמכת סיסמאות לא תייש את מאגר החיבורים.
+נדרש ל-rate limits, lockout (`/api/login`, `/api/auth/mfa/verify`, `/api/auth/refresh`), registry של agents. כש-Redis נופל אחרי boot, governors של login/API יורדים לתקרה מקומית של `50% / WEISSMAN_REPLICA_COUNT` (ברירת מחדל 8 מופעים) — לא 503. מגבלת הלוגין רצה **קודם בתהליך** (לפני Redis ולפני חיבור ל-`weissman_auth`) כדי שמכת סיסמאות לא תייש את מאגר החיבורים.
 
-שורות `weissman_async_jobs.payload` נחתמות ב-AES-256-GCM לפי tenant ממפתח ה-vault. dump של הטבלה הוא ciphertext. ה-worker מפענח ב-claim; `GET /api/jobs/:id` מפענח את שורת ה-tenant של הקורא ואז מסתיר סודות. אין helper לפענוח המוני. `client_id` ו-`engine` נשארים plaintext siblings לסינון SQL; `target`, `validated_scope` וטוקנים נשארים במעטפה.
+שורות `weissman_async_jobs.payload` נחתמות ב-AES-256-GCM לפי tenant ממפתח ה-vault. dump של הטבלה הוא ciphertext. AAD קושר `tenant_id` יחד עם `client_id` / `engine` שב-plaintext, כך שהחלפת השדות ליד ה-ciphertext נכשלת בפענוח. ה-worker מפענח ב-claim; `GET /api/jobs/:id` מפענח את שורת ה-tenant של הקורא ואז מסתיר סודות. אין helper לפענוח המוני. `target`, `validated_scope` וטוקנים נשארים במעטפה.
 
 ### 8. SAML / OIDC
 
