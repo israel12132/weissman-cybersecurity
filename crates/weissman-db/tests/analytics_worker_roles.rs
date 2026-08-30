@@ -54,13 +54,22 @@ async fn analytics_role_cannot_read_customer_or_job_tables() {
     let pool = connect(&url).await;
     let mut conn = conn_as_role(&pool, "weissman_analytics").await;
 
-    let quota_ok = sqlx::query("SELECT used FROM weissman_tenant_quota_usage LIMIT 1")
+    let snap_ok = sqlx::query("SELECT scans_started FROM weissman_billing_usage_snapshot LIMIT 1")
         .fetch_optional(&mut *conn)
         .await;
     assert!(
-        quota_ok.is_ok(),
-        "analytics must SELECT quota metrics: {:?}",
-        quota_ok.err()
+        snap_ok.is_ok(),
+        "analytics must SELECT the billing snapshot: {:?}",
+        snap_ok.err()
+    );
+
+    let plans_ok = sqlx::query("SELECT slug FROM billing_plans LIMIT 1")
+        .fetch_optional(&mut *conn)
+        .await;
+    assert!(
+        plans_ok.is_ok(),
+        "analytics must SELECT billing_plans: {:?}",
+        plans_ok.err()
     );
 
     let bypass: bool =
@@ -70,13 +79,25 @@ async fn analytics_role_cannot_read_customer_or_job_tables() {
             .expect("rolbypassrls");
     assert!(
         bypass,
-        "weissman_analytics must BYPASSRLS for global aggregates"
+        "weissman_analytics must BYPASSRLS for global snapshot reads"
     );
 
     for (sql, label) in [
         ("SELECT 1 FROM vulnerabilities LIMIT 1", "vulnerabilities"),
         ("SELECT 1 FROM weissman_async_jobs LIMIT 1", "the job-bus"),
         ("SELECT 1 FROM agent_anomalies LIMIT 1", "agent_anomalies"),
+        (
+            "SELECT used FROM weissman_tenant_quota_usage LIMIT 1",
+            "raw quota meters",
+        ),
+        (
+            "SELECT scans_started FROM tenant_usage_counters LIMIT 1",
+            "raw scan counters",
+        ),
+        (
+            "SELECT total_tokens FROM tenant_llm_usage LIMIT 1",
+            "raw LLM meters",
+        ),
     ] {
         let err = sqlx::query(sql).fetch_optional(&mut *conn).await;
         assert!(err.is_err(), "analytics must not read {label}");
@@ -131,4 +152,15 @@ async fn roles_exist_with_expected_bypass_flags() {
     assert_eq!(map.get("weissman_app"), Some(&(false, false)));
     assert_eq!(map.get("weissman_analytics"), Some(&(true, false)));
     assert_eq!(map.get("weissman_worker"), Some(&(true, false)));
+
+    let cfg: Vec<String> = sqlx::query_scalar(
+        "SELECT unnest(rolconfig) FROM pg_roles WHERE rolname = 'weissman_analytics'",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("analytics rolconfig");
+    assert!(
+        cfg.iter().any(|c| c == "statement_timeout=15s"),
+        "weissman_analytics rolconfig must pin 15s timeout, got {cfg:?}"
+    );
 }
