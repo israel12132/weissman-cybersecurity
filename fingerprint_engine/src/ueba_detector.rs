@@ -263,6 +263,8 @@ pub async fn ingest_sample(
                 "logged_in_users",
                 &observed,
                 "New unique user on core asset",
+                false,
+                None,
             )
             .await?
             {
