@@ -206,11 +206,11 @@ export default function SovereignTheater() {
       }),
     [messages, q],
   )
-  const openWindows = useMemo(
+  const theaterWindows = useMemo(
     () =>
       windows.filter((w) => {
-        if (q && !`${w.engine_id || ''} ${w.target || ''} ${w.phase || ''}`.toLowerCase().includes(q)) return false
-        return w.open
+        if (!q) return true
+        return `${w.engine_id || ''} ${w.target || ''} ${w.phase || ''}`.toLowerCase().includes(q)
       }),
     [windows, q],
   )
@@ -363,13 +363,13 @@ export default function SovereignTheater() {
               {t(`${NS}.windows`)}
             </h2>
             <div className="p-3 space-y-2 overflow-auto max-h-[36rem]">
-              {openWindows.length === 0 ? (
+              {theaterWindows.length === 0 ? (
                 <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.no_windows`)}</p>
               ) : (
-                openWindows.map((w) => (
+                theaterWindows.map((w) => (
                   <div
                     key={`${w.engine_id}-${w.job_id || w.id}`}
-                    className={`rounded-lg border px-3 py-2 font-mono text-[11px] ${phaseTone(w.phase)}`}
+                    className={`rounded-lg border px-3 py-2 font-mono text-[11px] ${phaseTone(w.phase)} ${w.open ? '' : 'opacity-70'}`}
                   >
                     <div className="flex justify-between gap-2">
                       <span className="font-semibold">{w.engine_id}</span>

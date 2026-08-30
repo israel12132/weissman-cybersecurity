@@ -88,46 +88,42 @@ pub fn finish_run(ctx: &EngineRunContext, engine_id: &str, target: &str, result:
         return;
     };
     let finding_count = i32::try_from(result.findings.len()).unwrap_or(i32::MAX);
+    let mut events = Vec::new();
     if finding_count > 0 {
-        dispatch_event(
-            ctx.app_pool.clone(),
-            EngineLogEvent {
-                tenant_id,
-                client_id: ctx.client_id,
-                job_id: ctx.job_id.clone(),
-                engine_id: engine_id.trim().to_string(),
-                phase: "finding".into(),
-                target: target.to_string(),
-                detail: format!("{finding_count} live finding(s)"),
-                failure_class: None,
-                finding_count: Some(finding_count),
-                payload: json!({ "message": result.message }),
-            },
-        );
+        events.push(EngineLogEvent {
+            tenant_id,
+            client_id: ctx.client_id,
+            job_id: ctx.job_id.clone(),
+            engine_id: engine_id.trim().to_string(),
+            phase: "finding".into(),
+            target: target.to_string(),
+            detail: format!("{finding_count} live finding(s)"),
+            failure_class: None,
+            finding_count: Some(finding_count),
+            payload: json!({ "message": result.message }),
+        });
     }
     let failed = result.status.eq_ignore_ascii_case("error")
         || result.status.eq_ignore_ascii_case("failed")
         || result.status.eq_ignore_ascii_case("panic")
         || result.status.eq_ignore_ascii_case("timeout");
-    dispatch_event(
-        ctx.app_pool.clone(),
-        EngineLogEvent {
-            tenant_id,
-            client_id: ctx.client_id,
-            job_id: ctx.job_id.clone(),
-            engine_id: engine_id.trim().to_string(),
-            phase: if failed {
-                "failed".into()
-            } else {
-                "exited".into()
-            },
-            target: target.to_string(),
-            detail: result.message.clone(),
-            failure_class: None,
-            finding_count: Some(finding_count),
-            payload: json!({ "status": result.status }),
+    events.push(EngineLogEvent {
+        tenant_id,
+        client_id: ctx.client_id,
+        job_id: ctx.job_id.clone(),
+        engine_id: engine_id.trim().to_string(),
+        phase: if failed {
+            "failed".into()
+        } else {
+            "exited".into()
         },
-    );
+        target: target.to_string(),
+        detail: result.message.clone(),
+        failure_class: None,
+        finding_count: Some(finding_count),
+        payload: json!({ "status": result.status }),
+    });
+    dispatch_events(ctx.app_pool.clone(), events);
 }
 
 pub fn emit_resilience(
@@ -163,15 +159,21 @@ pub fn emit_resilience(
 }
 
 fn dispatch_event(pool: Option<Arc<PgPool>>, event: EngineLogEvent) {
+    dispatch_events(pool, vec![event]);
+}
+
+fn dispatch_events(pool: Option<Arc<PgPool>>, events: Vec<EngineLogEvent>) {
     spawn_io(async move {
-        if let Some(pool) = pool.as_ref() {
-            if let Err(e) = persist(pool.as_ref(), &event).await {
-                tracing::warn!(target: "sovereign_operator", error = %e, "engine log persist failed");
+        for event in events {
+            if let Some(pool) = pool.as_ref() {
+                if let Err(e) = persist(pool.as_ref(), &event).await {
+                    tracing::warn!(target: "sovereign_operator", error = %e, "engine log persist failed");
+                }
             }
+            let wire = crate::http::tenant_stream::stamp_value(event.tenant_id, event.to_json());
+            crate::telemetry_bus::publish_bus("telemetry", &wire).await;
+            crate::telemetry_bus::publish_bus(BUS_CHANNEL, &wire).await;
         }
-        let wire = crate::http::tenant_stream::stamp_value(event.tenant_id, event.to_json());
-        crate::telemetry_bus::publish_bus("telemetry", &wire).await;
-        crate::telemetry_bus::publish_bus(BUS_CHANNEL, &wire).await;
     });
 }
 
@@ -274,7 +276,7 @@ pub async fn live_windows(pool: &PgPool, tenant_id: i64) -> Result<Vec<Value>, s
                   to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS ts
            FROM weissman_sovereign_engine_logs
            WHERE created_at > now() - interval '2 hours'
-           ORDER BY engine_id, COALESCE(job_id, ''), created_at DESC
+           ORDER BY engine_id, COALESCE(job_id, ''), id DESC
            LIMIT 64"#,
     )
     .fetch_all(&mut *tx)
