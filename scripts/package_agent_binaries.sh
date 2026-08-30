@@ -11,6 +11,9 @@ TARGETS=(
   "aarch64-unknown-linux-musl:linux-aarch64-musl"
 )
 
+# linux-gnu links tss-esapi-sys (pkg-config: tss2-sys / tss2-esys / tss2-mu /
+# tss2-tctildr). Install libtss2-dev on the build host first. linux-musl is
+# cfg-gated off tss-esapi and stays free of libtss2.
 echo "[weissman] building weissman-agent (release, host native)..."
 cargo build -p weissman-agent --release
 HOST_BIN="target/release/weissman-agent"

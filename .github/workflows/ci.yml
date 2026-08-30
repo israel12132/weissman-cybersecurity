@@ -733,6 +733,12 @@ jobs:
             /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
           df -h /
 
+      - name: Verify Docker build context (TSS headers + COPY coverage)
+        # Fast fail: weissman-agent linux-gnu links tss-esapi-sys. If libtss2-dev is
+        # missing from deploy/backend.Dockerfile the image cargo build dies after
+        # minutes with "Package tss2-sys was not found".
+        run: ./scripts/verify_docker_build_integrity.sh
+
       - name: Build Docker production images
         # `docker compose build` interpolates the ENTIRE compose file at load time, so the
         # two runtime-only required secrets — ${WEISSMAN_JWT_SECRET:?} and

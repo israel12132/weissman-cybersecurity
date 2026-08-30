@@ -89,6 +89,31 @@ fi
 mv "${BIN_PATH}.tmp" "${BIN_PATH}"
 chmod 0755 "${BIN_PATH}"
 
+# linux-gnu is dynamically linked against libtss2 (native ESAPI). Missing
+# libraries make the dynamic linker refuse to start the process at all —
+# TPM sealing never gets a chance to fall back to a 0600 file.
+if [ "${OS}" = "linux" ] && command -v ldd >/dev/null 2>&1; then
+    if ldd "${BIN_PATH}" 2>/dev/null | grep -q 'libtss2-.*not found'; then
+        if command -v apt-get >/dev/null 2>&1 && [ "$(id -u)" -eq 0 ]; then
+            echo "[weissman-agent] installing tpm2-tss runtime (libtss2) for native ESAPI"
+            apt-get update -qq
+            if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                libtss2-esys-3.0.2-0 libtss2-sys1 libtss2-mu0 libtss2-tctildr0 libtss2-tcti-device0; then
+                # Ubuntu 24.04 time64 transition (t64 suffix / mu soname bump).
+                DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                    libtss2-esys-3.0.2-0t64 libtss2-sys1t64 libtss2-mu-4.0.1-0t64 \
+                    libtss2-tctildr0t64 libtss2-tcti-device0t64 \
+                    || true
+            fi
+        fi
+        if ldd "${BIN_PATH}" 2>/dev/null | grep -q 'libtss2-.*not found'; then
+            echo "[weissman-agent] libtss2 is missing; the gnu agent cannot start." >&2
+            echo "  Install your distro's tpm2-tss runtime (Debian/Ubuntu: libtss2-esys + libtss2-tctildr)." >&2
+            exit 7
+        fi
+    fi
+fi
+
 # Enroll ONCE, here, and persist the identity for the service to reuse.
 #
 # This step used to be a throwaway "verify it can enroll" check: it consumed the strictly

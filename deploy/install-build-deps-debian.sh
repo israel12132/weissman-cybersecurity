@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Debian/Ubuntu: packages required to compile weissman-server / weissman-worker (OpenSSL + native-tls).
+# Debian/Ubuntu: packages required to compile weissman-server / weissman-worker / weissman-agent
+# (OpenSSL + native-tls + TPM 2.0 TSS headers for tss-esapi-sys on linux-gnu).
 # Run on a machine with free disk in / and /var (apt needs cache space).
 # Usage: sudo bash deploy/install-build-deps-debian.sh
 set -euo pipefail
@@ -14,8 +15,9 @@ apt-get install -y --no-install-recommends \
   libssl-dev \
   libudev-dev \
   libhwloc-dev \
+  libtss2-dev \
   curl \
   ca-certificates
 echo "OK. Install Node separately if you build the frontend (e.g. apt install nodejs npm, or use nvm)."
-echo "Then: . \"\$HOME/.cargo/env\" && cargo build --release -p weissman-server -p weissman-worker"
+echo "Then: . \"\$HOME/.cargo/env\" && cargo build --release -p weissman-server -p weissman-worker -p weissman-agent"
 echo "And:  cd frontend && npm ci && npm run build"
