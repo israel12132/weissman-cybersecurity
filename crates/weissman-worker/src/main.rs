@@ -580,6 +580,12 @@ async fn async_main() {
         eprintln!("[startup] worker Redis distributed state refusal: {msg}");
         std::process::exit(2);
     }
+    info!(
+        target: "weissman_worker",
+        cem_dago = fingerprint_engine::cem_dago::is_enabled(),
+        max_parallel = fingerprint_engine::cem_dago::max_parallel(),
+        "CEM-DAGO cognitive mesh (shared blackboard + DAG router)"
+    );
 
     let database_url = match std::env::var("DATABASE_URL") {
         Ok(u) if !u.trim().is_empty() => u,

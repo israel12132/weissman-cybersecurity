@@ -955,13 +955,26 @@ async fn execute_job_unscoped(
 
             let intelligence_bus = crate::ws_intelligence_bus::IntelligenceBus::new_shared();
             let mut cross_job_params = serde_json::json!({});
+            let runtime_cfg = load_tenant_runtime_config(app.clone(), tid).await?;
 
-            for engine_id in &ordered_engines {
+            if crate::cem_dago::is_enabled() {
                 let _ = telemetry.send(format!(
-                    r#"{{"job_id":"{}","message":"Running engine: {}","status":"running"}}"#,
-                    job.id, engine_id
+                    r#"{{"job_id":"{}","message":"CEM-DAGO mesh: {} engines (blackboard + DAG waves)","status":"running"}}"#,
+                    job.id, ordered_engines.len()
                 ));
-
+                let blackboard = std::sync::Arc::new(crate::cem_dago::ScanBlackboard::from_env(
+                    tid,
+                    client_id,
+                    job.id.to_string(),
+                ));
+                crate::cem_dago::seed_scan_context(
+                    blackboard.as_ref(),
+                    &target,
+                    &[target.clone()],
+                    &[],
+                    false,
+                )
+                .await;
                 crate::ws_intelligence_bus::merge_params_artifacts(
                     &mut cross_job_params,
                     &intelligence_bus,
@@ -969,68 +982,155 @@ async fn execute_job_unscoped(
                 let ctx = crate::engine_dispatch::EngineRunContext {
                     tenant_id: Some(tid),
                     target_list: vec![target.clone()],
+                    github_token: runtime_cfg.github_token.clone(),
+                    llm_base_url: runtime_cfg.llm_base_url.clone().unwrap_or_default(),
+                    llm_model: runtime_cfg.llm_model.clone().unwrap_or_default(),
                     app_pool: Some(app.clone()),
                     agents: Some(crate::endpoint_agents::AgentRegistry::global()),
                     client_id: Some(client_id),
                     job_params: cross_job_params.clone(),
                     intelligence_bus: Some(intelligence_bus.clone()),
+                    blackboard: Some(blackboard.clone()),
+                    scan_id: Some(job.id.to_string()),
+                    job_id: Some(job.id.to_string()),
+                    oast_listener_url: runtime_cfg.oast_listener_url.clone(),
+                    oast_domain: runtime_cfg.oast_domain.clone(),
+                    oast_api_key: runtime_cfg.oast_api_key.clone(),
                     ..Default::default()
                 };
-                // Batch isolation: each engine runs with panic/timeout isolation + adaptive retry.
-                // A failing, hung, or panicking engine never aborts the batch — every other engine
-                // still runs its own scan. Per-engine telemetry is recorded for the reliability view.
-                let ctx_ref = &ctx;
-                let eid = engine_id.as_str();
-                let (result, telem) = crate::engine_resilience::run_with_resilience(
-                    eid,
-                    &target,
-                    crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
-                    move |variant, hint| {
-                        let mut c = ctx_ref.clone();
-                        if hint.force_ghost_network {
-                            crate::engine_dispatch::apply_ghost_escalation(&mut c.stealth);
-                        }
-                        async move { crate::engine_dispatch::run_engine(eid, &variant, &c).await }
-                    },
-                )
+                let report = crate::cem_dago::execute_mesh(crate::cem_dago::MeshRequest {
+                    pool: app.clone(),
+                    target: target.clone(),
+                    engines: ordered_engines.clone(),
+                    ctx,
+                    blackboard,
+                    read_only_pool: crate::cem_dago::weissman_ro_pool(),
+                })
                 .await;
-                crate::engine_telemetry::record(eid, &telem);
-                crate::ws_intelligence_bus::merge_params_artifacts(
-                    &mut cross_job_params,
-                    &intelligence_bus,
-                );
-
-                if result.success {
-                    succeeded += 1;
-                    let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Engine {} completed: {} findings","status":"running"}}"#, job.id, engine_id, result.findings.len()));
-                } else {
-                    failed += 1;
+                for outcome in &report.outcomes {
+                    if outcome.success {
+                        succeeded += 1;
+                    } else {
+                        failed += 1;
+                    }
+                    results.push(json!({
+                        "engine": outcome.engine_id,
+                        "success": outcome.success,
+                        "findings_count": outcome.findings.len(),
+                        "summary": outcome.message,
+                        "pivot_of": outcome.pivot_of,
+                        "cem_dago": true,
+                    }));
+                    let _ = persist_findings_best_effort(
+                        app.as_ref(),
+                        tid,
+                        Some(client_id),
+                        &outcome.engine_id,
+                        &target,
+                        &outcome.findings,
+                    )
+                    .await;
+                }
+                results.push(json!({
+                    "cem_dago_report": {
+                        "waves": report.waves,
+                        "pivots": report.pivots,
+                        "council_invoked": report.council_invoked,
+                        "council_degraded": report.council_degraded,
+                        "council_error": report.council_error,
+                    }
+                }));
+                let _ = telemetry.send(format!(
+                    r#"{{"job_id":"{}","message":"CEM-DAGO complete: {}/{} succeeded, {} pivots, council={}","status":"completed"}}"#,
+                    job.id, succeeded, ordered_engines.len(), report.pivots.len(), report.council_invoked
+                ));
+            } else {
+                for engine_id in &ordered_engines {
                     let _ = telemetry.send(format!(
+                        r#"{{"job_id":"{}","message":"Running engine: {}","status":"running"}}"#,
+                        job.id, engine_id
+                    ));
+
+                    crate::ws_intelligence_bus::merge_params_artifacts(
+                        &mut cross_job_params,
+                        &intelligence_bus,
+                    );
+                    let ctx = crate::engine_dispatch::EngineRunContext {
+                        tenant_id: Some(tid),
+                        target_list: vec![target.clone()],
+                        github_token: runtime_cfg.github_token.clone(),
+                        llm_base_url: runtime_cfg.llm_base_url.clone().unwrap_or_default(),
+                        llm_model: runtime_cfg.llm_model.clone().unwrap_or_default(),
+                        app_pool: Some(app.clone()),
+                        agents: Some(crate::endpoint_agents::AgentRegistry::global()),
+                        client_id: Some(client_id),
+                        job_params: cross_job_params.clone(),
+                        intelligence_bus: Some(intelligence_bus.clone()),
+                        oast_listener_url: runtime_cfg.oast_listener_url.clone(),
+                        oast_domain: runtime_cfg.oast_domain.clone(),
+                        oast_api_key: runtime_cfg.oast_api_key.clone(),
+                        job_id: Some(job.id.to_string()),
+                        ..Default::default()
+                    };
+                    // Batch isolation: each engine runs with panic/timeout isolation + adaptive retry.
+                    // A failing, hung, or panicking engine never aborts the batch — every other engine
+                    // still runs its own scan. Per-engine telemetry is recorded for the reliability view.
+                    let ctx_ref = &ctx;
+                    let eid = engine_id.as_str();
+                    let (result, telem) =
+                        crate::engine_resilience::run_with_resilience(
+                            eid,
+                            &target,
+                            crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
+                            move |variant, hint| {
+                                let mut c = ctx_ref.clone();
+                                if hint.force_ghost_network {
+                                    crate::engine_dispatch::apply_ghost_escalation(&mut c.stealth);
+                                }
+                                async move {
+                                    crate::engine_dispatch::run_engine(eid, &variant, &c).await
+                                }
+                            },
+                        )
+                        .await;
+                    crate::engine_telemetry::record(eid, &telem);
+                    crate::ws_intelligence_bus::merge_params_artifacts(
+                        &mut cross_job_params,
+                        &intelligence_bus,
+                    );
+
+                    if result.success {
+                        succeeded += 1;
+                        let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Engine {} completed: {} findings","status":"running"}}"#, job.id, engine_id, result.findings.len()));
+                    } else {
+                        failed += 1;
+                        let _ = telemetry.send(format!(
                         r#"{{"job_id":"{}","message":"Engine {} failed: {}","status":"running"}}"#,
                         job.id, engine_id, result.summary
                     ));
+                    }
+
+                    results.push(json!({
+                        "engine": engine_id,
+                        "success": result.success,
+                        "findings_count": result.findings.len(),
+                        "summary": result.summary,
+                        "resilience": telem.to_json(),
+                    }));
+
+                    let _ = persist_findings_best_effort(
+                        app.as_ref(),
+                        tid,
+                        Some(client_id),
+                        engine_id,
+                        &target,
+                        &result.findings,
+                    )
+                    .await;
                 }
 
-                results.push(json!({
-                    "engine": engine_id,
-                    "success": result.success,
-                    "findings_count": result.findings.len(),
-                    "summary": result.summary,
-                    "resilience": telem.to_json(),
-                }));
-
-                let _ = persist_findings_best_effort(
-                    app.as_ref(),
-                    tid,
-                    Some(client_id),
-                    engine_id,
-                    &target,
-                    &result.findings,
-                )
-                .await;
+                let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Scan-all-engines completed: {}/{} succeeded","status":"completed"}}"#, job.id, succeeded, ordered_engines.len()));
             }
-
-            let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Scan-all-engines completed: {}/{} succeeded","status":"completed"}}"#, job.id, succeeded, ordered_engines.len()));
 
             if !target.trim().is_empty() {
                 let _ = crate::superposition_followup::enqueue_after_batch(

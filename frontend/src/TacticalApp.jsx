@@ -84,6 +84,7 @@ import {
   VulnIntelDashboard,
   FinancialRisk,
   AttackPaths,
+  CemDagoMesh,
   AttackCoverage,
   SecurityPosture,
   IocFeed,
@@ -267,6 +268,7 @@ export default function TacticalApp() {
           <Route path="vuln-intel" element={<VulnIntelDashboard />} />
           <Route path="financial-risk" element={<FinancialRisk />} />
           <Route path="attack-paths" element={<AttackPaths />} />
+          <Route path="cem-dago" element={<CemDagoMesh />} />
           <Route path="attack-coverage" element={<AttackCoverage />} />
           <Route path="security-posture" element={<SecurityPosture />} />
           <Route path="iocs" element={<IocFeed />} />

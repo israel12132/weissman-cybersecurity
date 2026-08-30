@@ -47,6 +47,10 @@ pub struct EngineRunContext {
     pub oast_domain: Option<String>,
     /// Tenant OAST API key from `system_configs`.
     pub oast_api_key: Option<String>,
+    /// Optional CEM-DAGO scan blackboard (worker/orchestrator attach this; engines never peer-chat).
+    pub blackboard: Option<std::sync::Arc<crate::cem_dago::ScanBlackboard>>,
+    /// Scan correlation id (async job uuid or `run-{id}-c{client}`).
+    pub scan_id: Option<String>,
 }
 
 /// Escalate a run context into the Ghost Network after a WAF/rate-limit block: enable identity
