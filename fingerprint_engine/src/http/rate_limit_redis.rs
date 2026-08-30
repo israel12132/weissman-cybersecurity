@@ -333,6 +333,26 @@ pub async fn verify_redis_at_startup() -> Result<(), String> {
     Ok(())
 }
 
+/// Timeout-bounded GET. `None` when Redis is unset or the key is missing.
+pub async fn kv_get(key: &str) -> Option<String> {
+    let rl = shared()?;
+    let mut conn = rl.conn().await.ok()?;
+    conn.get::<_, Option<String>>(key).await.ok().flatten()
+}
+
+/// Timeout-bounded SETEX. `false` when Redis is unset or the write failed.
+pub async fn kv_set_ex(key: &str, value: &str, ttl: Duration) -> bool {
+    let Some(rl) = shared() else {
+        return false;
+    };
+    let Ok(mut conn) = rl.conn().await else {
+        return false;
+    };
+    conn.set_ex::<_, _, ()>(key, value, ttl.as_secs())
+        .await
+        .is_ok()
+}
+
 /// Standard 503 when Redis is required but unreachable (fail-closed).
 #[must_use]
 pub fn distributed_store_unavailable_response() -> Response {

@@ -116,10 +116,19 @@ pub async fn serve_honey(state: Arc<AppState>, request: Request<Body>) -> Respon
         }
     });
 
-    honey_mimicry::finish_fabric_response(started, decoy_response(&method, &path, &body_str)).await
+    honey_mimicry::finish_fabric_response(
+        started,
+        decoy_response(&method, &path, &body_str, &hit).await,
+    )
+    .await
 }
 
-fn decoy_response(method: &axum::http::Method, path: &str, body: &str) -> Response {
+async fn decoy_response(
+    method: &axum::http::Method,
+    path: &str,
+    body: &str,
+    hit: &crate::honey_routing::HoneyHit,
+) -> Response {
     let p = crate::honey_routing::normalize_path(path);
     if p.starts_with(DECOY_FINGERPRINT) {
         return (StatusCode::NO_CONTENT, ()).into_response();
@@ -140,13 +149,10 @@ fn decoy_response(method: &axum::http::Method, path: &str, body: &str) -> Respon
             tls: json!({}),
         })
         .unwrap_or_default();
-        let cwd = serde_json::from_str::<Value>(body)
-            .ok()
-            .and_then(|v| v.get("cwd").and_then(Value::as_str).map(str::to_string))
-            .unwrap_or_else(|| "/home/ops-admin".into());
+        let fp = crate::honey_routing::session_fingerprint(&hit.source_ip, &hit.user_agent);
         return (
             StatusCode::OK,
-            Json(honey_deception_node::shell_exec_json(&cmd, &cwd)),
+            Json(crate::honey_shell_session::exec_for_session(&fp, &cmd).await),
         )
             .into_response();
     }

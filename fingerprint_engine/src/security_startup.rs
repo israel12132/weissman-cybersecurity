@@ -178,6 +178,16 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
         );
     }
 
+    if env_truthy("WEISSMAN_TRUST_PROXY_HEADERS") {
+        let hmac = std::env::var("WEISSMAN_PROXY_HMAC_SECRET").unwrap_or_default();
+        if hmac.trim().len() < 32 {
+            return Err(
+                "WEISSMAN_PROXY_HMAC_SECRET must be set to a strong (>=32 chars) dedicated value in production when WEISSMAN_TRUST_PROXY_HEADERS is enabled — unsigned X-SSL-Client-Hello headers are refused"
+                    .into(),
+            );
+        }
+    }
+
     // Secrets-at-rest vaults: fail closed rather than silently storing MFA seeds, SOAR provider
     // credentials and CEO-vault secrets under the token-signing key.
     //

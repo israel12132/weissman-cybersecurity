@@ -20,6 +20,7 @@
 #   WEISSMAN_JWT_SECRET (>=48 chars)   WEISSMAN_ADMIN_PASSWORD
 #   WEISSMAN_METRICS_TOKEN (>=32)      WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET (>=32)
 #   WEISSMAN_JOB_ORCHESTRATOR_SECRET (>=32)
+#   WEISSMAN_PROXY_HMAC_SECRET (>=32, required when TRUST_PROXY_HEADERS=1)
 #   WEISSMAN_PUBLIC_BASE_URL (https)   POSTGRES_PASSWORD  DB_APP_PASSWORD
 #   DB_AUTH_PASSWORD  REDIS_PASSWORD   (monitoring uses WEISSMAN_ADMIN_* — optional GRAFANA_ADMIN_PASSWORD override)
 # Bounded container logs. Docker's json-file driver defaults to *unbounded* growth and
@@ -108,6 +109,7 @@ services:
       # so the app's default (trust loopback/private peers) is safe; pin
       # WEISSMAN_TRUST_PROXY_CIDRS in .env to narrow it further.
       WEISSMAN_TRUST_PROXY_HEADERS: ${WEISSMAN_TRUST_PROXY_HEADERS:-1}
+      WEISSMAN_PROXY_HMAC_SECRET: ${WEISSMAN_PROXY_HMAC_SECRET:?set a 32+ char WEISSMAN_PROXY_HMAC_SECRET}
       # OAST out-of-band correlation (blind SSRF/XXE/Log4Shell). Optional: when
       # WEISSMAN_OAST_DOMAIN is set the launcher also starts the `oast` service and the
       # engines correlate callbacks via WEISSMAN_OAST_LISTENER_URL. Empty => the OAST engine

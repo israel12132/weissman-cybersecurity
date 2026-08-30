@@ -231,6 +231,20 @@ pub async fn inject_risk_graph(
     hit: &HoneyHit,
     decision: &HoneyDecision,
 ) -> Result<(), String> {
+    let stats = crate::honey_routing::load_live_kev_epss_stats(
+        app_pool,
+        tenant_id,
+        client_id,
+        &hit.source_ip,
+    )
+    .await;
+    let sampled = crate::honey_routing::sample_honey_weight(
+        decision.confidence,
+        &stats,
+        &decision.session_fp,
+        &decision.decoy_kind,
+    );
+
     let mut tx = crate::db::begin_tenant_tx(app_pool, tenant_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -274,8 +288,11 @@ pub async fn inject_risk_graph(
     .bind(EDGE_LEADS_TO)
     .bind(
         json!({
-            "honey_weight": honey_edge_weight(decision.confidence),
-            "cvss_equivalent": crate::honey_routing::HONEY_CVSS_EQUIV,
+            "honey_weight": sampled.honey_weight,
+            "honey_edge_cost": sampled.honey_edge_cost,
+            "cvss_equivalent": sampled.cvss_equivalent,
+            "weight_source": sampled.source,
+            "live_n": sampled.live_n,
             "source": ENGINE_ID,
             "mitre": decision.mitre_techniques,
             "confidence": decision.confidence,
@@ -543,10 +560,16 @@ pub async fn dashboard_snapshot(
             "soar_min": CONF_ACTIVE
         },
         "honey_weight_policy": {
-            "cvss_equivalent": crate::honey_routing::HONEY_CVSS_EQUIV,
-            "typical": crate::honey_routing::honey_edge_weight(crate::honey_routing::CONF_PASSIVE)
+            "source": "live_kev_epss_gaussian",
+            "cvss_spectrum": "1.0-10.0",
+            "typical": crate::honey_routing::honey_edge_weight(crate::honey_routing::CONF_PASSIVE),
+            "note": "leads_to costs sampled from live CISA KEV + EPSS of client findings; never a 0.64–0.80 clamp"
         },
-        "mimicry": { "ttfb_floor_ms": 14 }
+        "mimicry": {
+            "ttfb": "gaussian_live_401",
+            "bootstrap_mean_ms": 8.5,
+            "bootstrap_std_ms": 2.1
+        }
     }))
 }
 

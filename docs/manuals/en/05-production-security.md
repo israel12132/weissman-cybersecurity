@@ -109,6 +109,7 @@ Scan paths call `gate_scan_enqueue` in `fingerprint_engine/src/billing/mod.rs`.
 - Expose only 443 (and 80 → redirect) publicly
 - Postgres and Redis not reachable from the internet
 - Set `WEISSMAN_TRUST_PROXY_HEADERS=1` only behind a trusted reverse proxy
+- Set `WEISSMAN_PROXY_HMAC_SECRET` (≥32 chars) so nginx can sign `X-Weissman-Proxy-Hmac`; Axum ignores unsigned `X-SSL-Client-Hello`
 - Optional: `WEISSMAN_TRUST_PROXY_CIDRS` for forwarded client IP validation
 
 Never set `WEISSMAN_ALLOW_INSECURE_TLS=1` in production.

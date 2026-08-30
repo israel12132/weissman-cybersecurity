@@ -10,7 +10,7 @@ use crate::honey_routing::{DECOY_ADMIN, DECOY_FINGERPRINT};
 
 const HOSTNAME: &str = "gw-core-01.internal.weissman-vip";
 const USER: &str = "ops-admin";
-const HOME: &str = "/home/ops-admin";
+pub const HOME: &str = "/home/ops-admin";
 
 #[derive(Debug, Clone)]
 pub struct ShellState {

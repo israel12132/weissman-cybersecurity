@@ -4003,7 +4003,7 @@ export const ENGINES_REGISTRY = [
     group: 'defense',
     mitre: 'T1599',
     description:
-      'Transparent honey-routing of scanners into a high-fidelity honeynet: admin decoy + debug-shell AST (nom), 14ms TTFB mimicry on 401/403, JA3/JA4 from nginx ClientHello, CVSS-7.2 Dijkstra weights (~0.72), SOAR page_oncall only at 100% confidence — isolate_host is HITL dual-control',
+      'Transparent honey-routing of scanners into a high-fidelity honeynet: admin decoy + debug-shell AST (nom, Redis/LRU session cap 1000), Gaussian TTFB mimicry matching live 401/403, HMAC-signed nginx ClientHello (JA3/JA4), Dijkstra weights from live CISA KEV+EPSS — SOAR page_oncall only at 100% confidence, isolate_host is HITL dual-control',
     requiresTarget: true,
   },
   {

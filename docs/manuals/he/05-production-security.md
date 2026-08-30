@@ -98,6 +98,7 @@ Self-hosted unlimited: `WEISSMAN_BILLING_STRICT=0` **רק עם חוזה כתוב
 - חשיפה ציבורית: 443 בלבד
 - Postgres/Redis לא מהאינטרנט
 - `WEISSMAN_TRUST_PROXY_HEADERS=1` רק מאחורי proxy מהימן
+- `WEISSMAN_PROXY_HMAC_SECRET` (≥32) לחתימת `X-Weissman-Proxy-Hmac` על כותרות TLS; Axum מתעלם מ-ClientHello לא חתום
 - לעולם לא `WEISSMAN_ALLOW_INSECURE_TLS=1` ב-production
 
 ### 7. Redis

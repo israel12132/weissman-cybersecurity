@@ -153,7 +153,7 @@ pub async fn run_honey_routing_gateway_result(
             &format!("Dijkstra honey-weight edges: {weighted_edges}"),
             if weighted_edges > 0 { "medium" } else { "info" },
             "T1583",
-            "Attack-path Dijkstra multiplies edge cost by a CVSS-7.2-shaped honey_weight (~0.72, clamp 0.64–0.80) for observed attacker→decoy leads_to edges so the chain looks earned, not a golden-path honeypot.",
+            "Attack-path Dijkstra samples honey_weight / honey_edge_cost from a Gaussian fitted to live CISA KEV + EPSS of the client's real findings (wide 1.0–10.0 severity spectrum) so decoy leads_to edges do not fingerprint as a 0.64–0.80 band.",
             &host,
             gev,
         ));

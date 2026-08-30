@@ -90,6 +90,7 @@ rest (AES-256-GCM). **Production fails closed at startup if no key material is s
 |-----|--------|
 | `WEISSMAN_TRUST_PROXY_HEADERS` | Enables use of `X-Forwarded-For` / `X-Real-IP` for audit + rate limit client identity |
 | `WEISSMAN_TRUST_PROXY_CIDRS` | Optional comma-separated trusted proxy CIDRs; when set, only peers in this list are allowed to supply forwarded client IP |
+| `WEISSMAN_PROXY_HMAC_SECRET` | HMAC-SHA256 key (≥32 chars) for nginx `X-Weissman-Proxy-Hmac` over TLS ClientHello headers. Required in production when `WEISSMAN_TRUST_PROXY_HEADERS=1`. Unsigned `X-SSL-Client-Hello` is ignored. |
 
 ---
 

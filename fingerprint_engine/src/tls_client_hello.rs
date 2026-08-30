@@ -11,6 +11,7 @@ use std::net::SocketAddr;
 use std::sync::OnceLock;
 
 use crate::http::client_ip::peer_is_trusted_proxy;
+use crate::proxy_hmac::{self, ProxyTlsHeaders};
 
 static PROXY_HELLO: OnceLock<DashMap<SocketAddr, Vec<u8>>> = OnceLock::new();
 
@@ -75,12 +76,22 @@ impl TlsFingerprint {
     }
 }
 
-/// Extract TLS fingerprints. Spoofed `X-SSL-*` / `X-TLS-*` headers from the
-/// public internet are ignored unless the immediate peer is a trusted proxy.
-/// PROXY v2 TLV ClientHello (stashed by the accept loop) is trusted because it
-/// was parsed off the TCP preface, not from attacker-controlled HTTP headers.
+/// Extract TLS fingerprints. HTTP `X-SSL-*` / `X-TLS-*` headers are parsed only
+/// when the peer is a trusted proxy **and** `X-Weissman-Proxy-Hmac` verifies
+/// against the vault/sovereign secret. PROXY v2 TLV ClientHello (TCP preface)
+/// is trusted without HTTP HMAC because it is not attacker-controlled headers.
 #[must_use]
 pub fn from_request_headers(headers: &HeaderMap, peer: SocketAddr) -> TlsFingerprint {
+    from_request_headers_inner(headers, peer, peer_is_trusted_proxy(peer), None)
+}
+
+#[must_use]
+pub fn from_request_headers_inner(
+    headers: &HeaderMap,
+    peer: SocketAddr,
+    trusted_proxy: bool,
+    secret_override: Option<&[u8]>,
+) -> TlsFingerprint {
     if let Some(raw) = peek_stashed_hello(peer) {
         if let Some(parsed) = parse_client_hello(&raw) {
             return parsed.with_source("proxy_protocol_tlv");
@@ -92,35 +103,66 @@ pub fn from_request_headers(headers: &HeaderMap, peer: SocketAddr) -> TlsFingerp
         ..TlsFingerprint::default()
     };
 
-    if !peer_is_trusted_proxy(peer) {
+    if !trusted_proxy {
         return fp;
     }
 
-    fp.negotiated_protocol = hdr(headers, "x-ssl-protocol");
-    fp.negotiated_cipher = hdr(headers, "x-ssl-cipher");
-    fp.offered_ciphers = hdr(headers, "x-ssl-ciphers");
-    fp.offered_curves = hdr(headers, "x-ssl-curves");
+    let tls_hdrs = ProxyTlsHeaders {
+        client_hello_b64: hdr(headers, "x-ssl-client-hello").unwrap_or_default(),
+        protocol: hdr(headers, "x-ssl-protocol").unwrap_or_default(),
+        cipher: hdr(headers, "x-ssl-cipher").unwrap_or_default(),
+        ciphers: hdr(headers, "x-ssl-ciphers").unwrap_or_default(),
+        curves: hdr(headers, "x-ssl-curves").unwrap_or_default(),
+        ja3: hdr(headers, "x-tls-ja3")
+            .or_else(|| hdr(headers, "x-ssl-ja3"))
+            .or_else(|| hdr(headers, "x-ja3-fingerprint"))
+            .or_else(|| hdr(headers, "cf-ja3"))
+            .unwrap_or_default(),
+        ja4: hdr(headers, "x-tls-ja4")
+            .or_else(|| hdr(headers, "x-ssl-ja4"))
+            .or_else(|| hdr(headers, "x-ja4-fingerprint"))
+            .unwrap_or_default(),
+    };
 
-    if let Some(raw_b64) = hdr(headers, "x-ssl-client-hello") {
-        if let Some(parsed) = parse_client_hello_b64(&raw_b64) {
+    let hmac_raw = hdr(headers, proxy_hmac::HEADER_HMAC).unwrap_or_default();
+    let ts_raw = hdr(headers, proxy_hmac::HEADER_TS).unwrap_or_default();
+    let Some(secret) = secret_override
+        .map(|s| s.to_vec())
+        .or_else(proxy_hmac::signing_secret)
+    else {
+        fp.source = "proxy_hmac_secret_missing".into();
+        return fp;
+    };
+    if hmac_raw.is_empty()
+        || ts_raw.is_empty()
+        || !proxy_hmac::verify(&secret, &tls_hdrs, &ts_raw, &hmac_raw)
+    {
+        fp.source = "proxy_hmac_rejected".into();
+        return fp;
+    }
+
+    fp.negotiated_protocol = Some(tls_hdrs.protocol.clone()).filter(|s| !s.is_empty());
+    fp.negotiated_cipher = Some(tls_hdrs.cipher.clone()).filter(|s| !s.is_empty());
+    fp.offered_ciphers = Some(tls_hdrs.ciphers.clone()).filter(|s| !s.is_empty());
+    fp.offered_curves = Some(tls_hdrs.curves.clone()).filter(|s| !s.is_empty());
+
+    if !tls_hdrs.client_hello_b64.is_empty() {
+        if let Some(parsed) = parse_client_hello_b64(&tls_hdrs.client_hello_b64) {
+            let mut parsed = parsed;
+            parsed.negotiated_protocol = fp.negotiated_protocol.clone();
+            parsed.negotiated_cipher = fp.negotiated_cipher.clone();
+            parsed.source = "raw_client_hello".into();
             return parsed;
         }
         fp.source = "client_hello_header_unparseable".into();
     }
 
-    if let Some(ja3) = hdr(headers, "x-tls-ja3")
-        .or_else(|| hdr(headers, "x-ssl-ja3"))
-        .or_else(|| hdr(headers, "x-ja3-fingerprint"))
-        .or_else(|| hdr(headers, "cf-ja3"))
-    {
-        fp.ja3 = Some(ja3.to_ascii_lowercase());
+    if !tls_hdrs.ja3.is_empty() {
+        fp.ja3 = Some(tls_hdrs.ja3.to_ascii_lowercase());
         fp.source = "proxy_ja3_header".into();
     }
-    if let Some(ja4) = hdr(headers, "x-tls-ja4")
-        .or_else(|| hdr(headers, "x-ssl-ja4"))
-        .or_else(|| hdr(headers, "x-ja4-fingerprint"))
-    {
-        fp.ja4 = Some(ja4.to_ascii_lowercase());
+    if !tls_hdrs.ja4.is_empty() {
+        fp.ja4 = Some(tls_hdrs.ja4.to_ascii_lowercase());
         if fp.source == "not_terminated_in_app_layer" {
             fp.source = "proxy_ja4_header".into();
         }
@@ -500,6 +542,47 @@ mod tests {
     fn garbage_hello_does_not_panic() {
         assert!(parse_client_hello(&[0, 1, 2, 3]).is_none());
         assert!(parse_client_hello_b64("@@@").is_none());
+    }
+
+    #[test]
+    fn trusted_peer_unsigned_hello_is_rejected() {
+        let hello = hello_tls12_one_cipher();
+        let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &hello);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-ssl-client-hello", b64.parse().unwrap());
+        let peer: SocketAddr = "127.0.0.1:443".parse().unwrap();
+        let secret = b"sovereign-proxy-hmac-secret-32bytes!!";
+        let fp = from_request_headers_inner(&headers, peer, true, Some(secret));
+        assert!(fp.ja3.is_none());
+        assert_eq!(fp.source, "proxy_hmac_rejected");
+    }
+
+    #[test]
+    fn trusted_peer_signed_hello_parses_ja3() {
+        let hello = hello_tls12_one_cipher();
+        let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &hello);
+        let secret = b"sovereign-proxy-hmac-secret-32bytes!!";
+        let ts = crate::proxy_hmac::now_unix();
+        let tls = crate::proxy_hmac::ProxyTlsHeaders {
+            client_hello_b64: b64.clone(),
+            protocol: "TLSv1.2".into(),
+            cipher: String::new(),
+            ciphers: String::new(),
+            curves: String::new(),
+            ja3: String::new(),
+            ja4: String::new(),
+        };
+        let mac = crate::proxy_hmac::sign_hex(secret, &tls.canonical_v1(ts)).unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert("x-ssl-client-hello", b64.parse().unwrap());
+        headers.insert("x-ssl-protocol", "TLSv1.2".parse().unwrap());
+        headers.insert("x-weissman-proxy-ts", ts.to_string().parse().unwrap());
+        headers.insert("x-weissman-proxy-hmac", mac.parse().unwrap());
+        let peer: SocketAddr = "127.0.0.1:443".parse().unwrap();
+        let fp = from_request_headers_inner(&headers, peer, true, Some(secret));
+        assert_eq!(fp.source, "raw_client_hello");
+        assert_eq!(fp.ja3_raw.as_deref(), Some("771,47,,,"));
+        assert!(fp.ja3.is_some());
     }
 
     #[test]

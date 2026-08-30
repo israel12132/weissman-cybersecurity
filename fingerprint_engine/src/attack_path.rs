@@ -164,18 +164,28 @@ pub async fn compute_and_store(
         let to: i64 = r.try_get("to_node_id").unwrap_or(0);
         let etype: String = r.try_get("edge_type").unwrap_or_default();
         let meta_raw: String = r.try_get("metadata").unwrap_or_else(|_| "{}".into());
-        let honey_weight = serde_json::from_str::<Value>(&meta_raw)
-            .ok()
+        let meta = serde_json::from_str::<Value>(&meta_raw).ok();
+        let honey_edge_cost = meta
+            .as_ref()
+            .and_then(|v| v.get("honey_edge_cost").and_then(Value::as_f64));
+        let honey_weight = meta
+            .as_ref()
             .and_then(|v| v.get("honey_weight").and_then(Value::as_f64))
-            .unwrap_or(1.0)
-            .clamp(0.05, 1.0);
+            .unwrap_or(1.0);
+        // Negative encodes an absolute Dijkstra cost sampled from live KEV/EPSS
+        // (avoids the 0.64–0.80 multiplier fingerprint). Positive = multiplier.
+        let stored_w = if let Some(c) = honey_edge_cost {
+            -c.abs().clamp(0.05, 10.0)
+        } else {
+            honey_weight.clamp(0.05, 10.0)
+        };
         if from == 0 || to == 0 {
             continue;
         }
         adjacency
             .entry(from)
             .or_default()
-            .push((to, etype.clone(), honey_weight));
+            .push((to, etype.clone(), stored_w));
         edges.push(GraphEdge {
             from,
             to,
@@ -420,7 +430,11 @@ fn dijkstra_path(
             let Some(next_node) = nodes.get(next) else {
                 continue;
             };
-            let edge_cost = node_pivot_weight(next_node) * honey_weight.clamp(0.05, 1.0);
+            let edge_cost = if *honey_weight < 0.0 {
+                honey_weight.abs().clamp(0.05, 10.0)
+            } else {
+                node_pivot_weight(next_node) * honey_weight.clamp(0.05, 10.0)
+            };
             let mut new_path = path.clone();
             new_path.push(PathStep {
                 node_id: next_node.id,
@@ -500,7 +514,7 @@ mod tests {
         let full = dijkstra_path(1, 2, &nodes, &adj_full).unwrap();
         let honey = dijkstra_path(1, 2, &nodes, &adj_honey).unwrap();
         assert!(honey.cost < full.cost);
-        // CVSS 7.2-shaped: cheaper than a clean edge, never a 0.15 golden path.
+        // A discounted honey edge is cheaper than a clean edge, but not a 0.15 golden path.
         assert!(honey.cost > full.cost * 0.50);
     }
 }

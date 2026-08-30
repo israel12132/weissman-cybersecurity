@@ -6,11 +6,12 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sqlx::Row;
 
 pub const ENGINE_ID: &str = "honey_routing_gateway";
 pub const FAIR_ARO_FLOOR: f64 = 3.0;
 pub const SOAR_COOLDOWN_SECS: i64 = 3600;
-/// CVSS 7.2 / 10 — typical “worked for it” chain, not a golden 0.15 path.
+/// Prior mean CVSS when the client has no live KEV/EPSS yet (not a clamp band).
 pub const HONEY_CVSS_EQUIV: f64 = 7.2;
 pub const CONF_PASSIVE: u8 = 40;
 pub const CONF_ENUMERATION: u8 = 75;
@@ -405,12 +406,264 @@ pub fn truncate_body(body: &str, max: usize) -> String {
     }
 }
 
+/// Live CISA KEV + EPSS moments from the client's real findings (same tenant subnet).
+#[derive(Debug, Clone)]
+pub struct LiveKevEpssStats {
+    pub n: usize,
+    pub severity_mean: f64,
+    pub severity_std: f64,
+    pub cost_mean: f64,
+    pub cost_std: f64,
+    pub source: &'static str,
+}
+
+impl Default for LiveKevEpssStats {
+    fn default() -> Self {
+        // Wide enterprise prior (CVSS ~N(5.8, 2.4) → costs spanning ~0.15–2.0), never a 0.72 band.
+        Self {
+            n: 0,
+            severity_mean: 5.8,
+            severity_std: 2.4,
+            cost_mean: 0.85,
+            cost_std: 0.45,
+            source: "wide_prior",
+        }
+    }
+}
+
+/// Map a live finding to the same pivot **cost** Dijkstra uses (`1 / score`).
+#[must_use]
+pub fn pivot_cost_from_intel(cvss: f64, epss: f64, kev: bool) -> f64 {
+    let mut score: f64 = 0.5 + (cvss.clamp(0.0, 10.0) / 10.0);
+    score *= 1.0 + epss.clamp(0.0, 1.0) * 1.5;
+    if kev {
+        score *= 2.0;
+    }
+    1.0 / score.max(0.05)
+}
+
+#[must_use]
+pub fn severity_from_intel(cvss: f64, epss: f64, kev: bool) -> f64 {
+    let mut s = cvss.clamp(0.0, 10.0);
+    s *= 1.0 + epss.clamp(0.0, 1.0) * 0.5;
+    if kev {
+        s = (s * 1.15).max(8.5).min(10.0);
+    }
+    s.clamp(1.0, 10.0)
+}
+
+fn moments(xs: &[f64]) -> (f64, f64) {
+    if xs.is_empty() {
+        return (0.0, 0.0);
+    }
+    let n = xs.len() as f64;
+    let mean = xs.iter().sum::<f64>() / n;
+    if xs.len() < 2 {
+        return (mean, 0.0);
+    }
+    let var = xs.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (n - 1.0);
+    (mean, var.sqrt())
+}
+
+fn stats_from_rows(rows: &[(f64, f64, bool)], source: &'static str) -> LiveKevEpssStats {
+    let costs: Vec<f64> = rows
+        .iter()
+        .map(|(c, e, k)| pivot_cost_from_intel(*c, *e, *k))
+        .collect();
+    let sevs: Vec<f64> = rows
+        .iter()
+        .map(|(c, e, k)| severity_from_intel(*c, *e, *k))
+        .collect();
+    let (cost_mean, cost_std) = moments(&costs);
+    let (severity_mean, severity_std) = moments(&sevs);
+    LiveKevEpssStats {
+        n: rows.len(),
+        severity_mean,
+        severity_std: severity_std.max(0.4),
+        cost_mean,
+        cost_std: cost_std.max(0.05),
+        source,
+    }
+}
+
+/// Load live KEV/EPSS of the client's findings. Catalog intel is the fallback when
+/// the subnet has no scored vulns yet — never a hardcoded 0.64–0.80 band.
+pub async fn load_live_kev_epss_stats(
+    pool: &sqlx::PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    source_ip: &str,
+) -> LiveKevEpssStats {
+    let prefix = v4_slash24_prefix(source_ip);
+    if let Ok(rows) = fetch_client_intel(pool, tenant_id, client_id, prefix.as_deref()).await {
+        if rows.len() >= 8 {
+            return stats_from_rows(&rows, "client_subnet_kev_epss");
+        }
+        if !rows.is_empty() {
+            if let Ok(all) = fetch_client_intel(pool, tenant_id, client_id, None).await {
+                if all.len() >= rows.len() {
+                    return stats_from_rows(&all, "client_kev_epss");
+                }
+            }
+            return stats_from_rows(&rows, "client_kev_epss");
+        }
+    }
+    if let Ok(cat) = fetch_catalog_intel(pool).await {
+        if cat.len() >= 8 {
+            return stats_from_rows(&cat, "catalog_kev_epss");
+        }
+    }
+    LiveKevEpssStats::default()
+}
+
+fn v4_slash24_prefix(ip: &str) -> Option<String> {
+    let ip = ip.split('%').next().unwrap_or(ip).trim();
+    let ip = ip.split(':').next().unwrap_or(ip);
+    let parts: Vec<&str> = ip.split('.').collect();
+    if parts.len() != 4 {
+        return None;
+    }
+    if parts.iter().all(|p| p.parse::<u8>().is_ok()) {
+        Some(format!("{}.{}.{}.", parts[0], parts[1], parts[2]))
+    } else {
+        None
+    }
+}
+
+async fn fetch_client_intel(
+    pool: &sqlx::PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    subnet_prefix: Option<&str>,
+) -> Result<Vec<(f64, f64, bool)>, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let prefix = subnet_prefix.unwrap_or("");
+    let rows = sqlx::query(
+        r#"SELECT
+                COALESCE(
+                    NULLIF((raw_data->>'cvss_score')::float, 0),
+                    CASE lower(severity)
+                        WHEN 'critical' THEN 9.5
+                        WHEN 'high' THEN 7.5
+                        WHEN 'medium' THEN 5.5
+                        WHEN 'low' THEN 3.0
+                        ELSE 5.0
+                    END
+                ) AS cvss,
+                COALESCE(epss_score, 0)::float8 AS epss,
+                COALESCE(kev_listed, false) AS kev
+           FROM vulnerabilities
+          WHERE tenant_id = $1 AND client_id = $2
+            AND COALESCE(status, 'OPEN') NOT IN ('FIXED', 'FALSE_POSITIVE')
+            AND (
+                $3 = ''
+                OR COALESCE(raw_data->>'ip', raw_data->>'host', raw_data->>'target', '')
+                   LIKE $3 || '%'
+            )
+          ORDER BY discovered_at DESC NULLS LAST
+          LIMIT 800"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(prefix)
+    .fetch_all(&mut *tx)
+    .await?;
+    let _ = tx.commit().await;
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            (
+                f64_col(&r, "cvss").unwrap_or(5.0),
+                f64_col(&r, "epss").unwrap_or(0.0),
+                r.try_get::<bool, _>("kev").unwrap_or(false),
+            )
+        })
+        .collect())
+}
+
+fn f64_col(r: &sqlx::postgres::PgRow, name: &str) -> Option<f64> {
+    r.try_get::<f64, _>(name)
+        .ok()
+        .or_else(|| r.try_get::<f32, _>(name).ok().map(|v| f64::from(v)))
+}
+
+async fn fetch_catalog_intel(pool: &sqlx::PgPool) -> Result<Vec<(f64, f64, bool)>, sqlx::Error> {
+    // Live CISA KEV + FIRST EPSS mirrors — not invented scores.
+    let rows = sqlx::query(
+        r#"SELECT e.score::float8 AS epss,
+                  (k.cve IS NOT NULL) AS kev
+             FROM epss_intel e
+             LEFT JOIN kev_intel k ON k.cve = e.cve
+            ORDER BY e.refreshed_at DESC NULLS LAST
+            LIMIT 2000"#,
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let epss = f64_col(&r, "epss").unwrap_or(0.0);
+            let kev = r.try_get::<bool, _>("kev").unwrap_or(false);
+            let cvss = if kev { 9.0 } else { 4.0 + epss * 6.0 };
+            (cvss, epss, kev)
+        })
+        .collect())
+}
+
+#[derive(Debug, Clone)]
+pub struct HoneyWeightSample {
+    pub honey_weight: f64,
+    pub honey_edge_cost: f64,
+    pub cvss_equivalent: f64,
+    pub source: &'static str,
+    pub live_n: usize,
+}
+
+/// Sample Dijkstra cost from the live KEV/EPSS Gaussian (wide spectrum, no 0.64–0.80 clamp).
+#[must_use]
+pub fn sample_honey_weight(
+    confidence: u8,
+    stats: &LiveKevEpssStats,
+    session_fp: &str,
+    decoy_kind: &str,
+) -> HoneyWeightSample {
+    let seed = {
+        use sha2::{Digest, Sha256};
+        let mut h = Sha256::new();
+        h.update(session_fp.as_bytes());
+        h.update(b"|");
+        h.update(decoy_kind.as_bytes());
+        h.update(b"|");
+        h.update([confidence]);
+        u64::from_le_bytes(h.finalize()[..8].try_into().unwrap_or([0; 8]))
+    };
+    let sev = crate::gaussian::sample_normal_seeded(
+        stats.severity_mean,
+        stats.severity_std.max(0.4),
+        seed,
+    )
+    .clamp(1.0, 10.0);
+    let cost = crate::gaussian::sample_normal_seeded(
+        stats.cost_mean,
+        stats.cost_std.max(0.05),
+        seed ^ 0xA5A5_A5A5_A5A5_A5A5,
+    )
+    .clamp(0.05, 10.0);
+    // Multiplier vs a clean edge (~cost 1.0): spread across real enterprise graphs.
+    let honey_weight = (cost / stats.cost_mean.max(0.2)).clamp(0.05, 10.0);
+    HoneyWeightSample {
+        honey_weight,
+        honey_edge_cost: cost,
+        cvss_equivalent: sev,
+        source: stats.source,
+        live_n: stats.n,
+    }
+}
+
+/// Unseeded sample for dashboards / tests (wide prior, not a 0.72 fingerprint).
 #[must_use]
 pub fn honey_edge_weight(confidence: u8) -> f64 {
-    // CVSS 7.2-shaped cost: slightly easier than a clean edge, never a 0.15 golden path.
-    let base = HONEY_CVSS_EQUIV / 10.0;
-    let spread = (f64::from(confidence) - 50.0) * 0.0008;
-    (base + spread).clamp(0.64, 0.80)
+    sample_honey_weight(confidence, &LiveKevEpssStats::default(), "dash", "decoy").honey_weight
 }
 
 #[must_use]
@@ -548,12 +801,39 @@ mod tests {
     }
 
     #[test]
-    fn honey_weight_is_cvss72_not_golden() {
-        let w = honey_edge_weight(40);
-        assert!(w > 0.60 && w < 0.85);
-        assert!(w > 0.15);
-        assert!((w - 0.72).abs() < 0.03);
-        let hot = honey_edge_weight(100);
-        assert!((0.64..=0.80).contains(&hot));
+    fn honey_weight_is_not_a_homogeneous_band() {
+        let stats = LiveKevEpssStats {
+            n: 40,
+            severity_mean: 6.1,
+            severity_std: 2.2,
+            cost_mean: 0.9,
+            cost_std: 0.5,
+            source: "test",
+        };
+        let mut weights = Vec::new();
+        for i in 0..40 {
+            let s = sample_honey_weight(40, &stats, &format!("fp-{i}"), "admin_portal");
+            weights.push(s.honey_edge_cost);
+            assert!(s.honey_edge_cost >= 0.05 && s.honey_edge_cost <= 10.0);
+            assert!(s.cvss_equivalent >= 1.0 && s.cvss_equivalent <= 10.0);
+        }
+        let min = weights.iter().copied().fold(f64::INFINITY, f64::min);
+        let max = weights.iter().copied().fold(0.0_f64, f64::max);
+        assert!(
+            (max - min) > 0.15,
+            "costs still clustered: min={min} max={max}"
+        );
+        let in_old_band = weights
+            .iter()
+            .filter(|w| **w >= 0.64 && **w <= 0.80)
+            .count();
+        assert!(
+            in_old_band < weights.len(),
+            "all samples fell in the old 0.64–0.80 fingerprint band"
+        );
+        // Same attacker+decoy is stable (no per-hit jitter fingerprint).
+        let a = sample_honey_weight(100, &stats, "same", "shell");
+        let b = sample_honey_weight(100, &stats, "same", "shell");
+        assert!((a.honey_edge_cost - b.honey_edge_cost).abs() < 1e-12);
     }
 }
