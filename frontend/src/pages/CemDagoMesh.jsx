@@ -226,7 +226,11 @@ export default function CemDagoMesh() {
             />
             <ExecutiveWidget
               label={t(`${NS}.kpi_redis`)}
-              value={status.redis_configured ? t(`${NS}.on`) : t(`${NS}.off`)}
+              value={
+                status.redis_configured
+                  ? `${status.blackboard_codec || 'msgpack'} · ${status.redis_pool || 'pool'}`
+                  : t(`${NS}.off`)
+              }
               hint={t(`${NS}.kpi_redis_hint`)}
               accent={status.redis_configured ? '#22d3ee' : '#f97316'}
             />

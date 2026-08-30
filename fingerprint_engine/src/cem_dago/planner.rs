@@ -13,8 +13,12 @@
 
 use super::blackboard::{FailureLog, ScanBlackboard};
 use super::pivot::fallback_engine_ids;
+use super::queryplan_sandbox::{
+    execute_plan_under_ro_sandbox, failures_for_llm, probe_reason_allowed, probe_target_allowed,
+    reject_query_plan_injection, sanitize_blackboard_text, signals_for_llm,
+};
 use crate::elite_hardening::nl_guard::ASK_WEISSMAN_TABLE_COUNT;
-use crate::nl_query::{compile_plan, execute_plan, QueryPlan};
+use crate::nl_query::{compile_plan, QueryPlan};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::PgPool;
@@ -91,16 +95,18 @@ pub fn validate_offensive_plan(
     fallback_target: &str,
 ) -> (OffensiveQueryPlan, Vec<String>) {
     let mut rejected = Vec::new();
-    let rationale = raw
-        .get("rationale")
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
+    let rationale = sanitize_blackboard_text(
+        raw.get("rationale").and_then(Value::as_str).unwrap_or(""),
+        480,
+    );
     let telemetry_query = raw
         .get("telemetry_query")
         .cloned()
         .and_then(|v| serde_json::from_value::<QueryPlan>(v).ok())
         .and_then(|qp| {
+            if reject_query_plan_injection(&qp).is_err() {
+                return None;
+            }
             if compile_plan(&qp, 0).is_err() {
                 None
             } else {
@@ -138,11 +144,22 @@ pub fn validate_offensive_plan(
                 rejected.push(format!("empty_target:{engine_id}"));
                 continue;
             }
-            let reason = p
+            if !probe_target_allowed(&target) {
+                if probe_target_allowed(fallback_target) {
+                    target = fallback_target.to_string();
+                } else {
+                    rejected.push(format!("unsafe_target:{engine_id}"));
+                    continue;
+                }
+            }
+            let mut reason = p
                 .get("reason")
                 .and_then(Value::as_str)
                 .unwrap_or("")
                 .to_string();
+            if !probe_reason_allowed(&reason) {
+                reason.clear();
+            }
             let mitre = p
                 .get("mitre_techniques")
                 .and_then(Value::as_array)
@@ -284,7 +301,8 @@ pub async fn trigger_supreme_council_planner(
 
     let failures = blackboard.list_failures().await.unwrap_or_default();
     let signals = blackboard.present_signals().await.unwrap_or_default();
-    let fail_json = serde_json::to_value(&failures).unwrap_or(Value::Array(vec![]));
+    let fail_json = failures_for_llm(&failures);
+    let signals_safe = signals_for_llm(&signals);
 
     if !super::council_enabled() {
         return degrade(
@@ -301,7 +319,7 @@ pub async fn trigger_supreme_council_planner(
         &input.llm_base_url,
         &input.llm_model,
         &input.target,
-        &signals,
+        &signals_safe,
         &fail_json,
     )
     .await;
@@ -367,8 +385,9 @@ fn degrade(
     }
 }
 
-/// Council SQL runs only on the weissman_ro pool. Missing RO config skips the
-/// query rather than executing on the application role.
+/// Council SQL runs only on the weissman_ro pool, after the hermetic QueryPlan
+/// sandbox (identifier allow-list + injection needles + compiled-SQL guard).
+/// The application pool is never used.
 async fn execute_telemetry_on_weissman_ro(
     plan: &mut OffensiveQueryPlan,
     ro_pool: Option<&PgPool>,
@@ -381,22 +400,11 @@ async fn execute_telemetry_on_weissman_ro(
         crate::nl_query::allowed_table_count(),
         ASK_WEISSMAN_TABLE_COUNT
     );
-    if let Err(e) = compile_plan(&qp, tenant_id) {
-        tracing::warn!(target: "cem_dago", error = %e, "telemetry QueryPlan rejected");
-        plan.telemetry_query = None;
-        return 0;
-    }
-    let Some(ro) = ro_pool else {
-        tracing::warn!(
-            target: "cem_dago",
-            "QueryPlan skipped — WEISSMAN_READ_ONLY_DATABASE_URL unset (weissman_ro required)"
-        );
-        return 0;
-    };
-    match execute_plan(ro, tenant_id, qp).await {
-        Ok(ask) => ask.row_count,
+    match execute_plan_under_ro_sandbox(qp, ro_pool, tenant_id).await {
+        Ok(n) => n,
         Err(e) => {
-            tracing::warn!(target: "cem_dago", error = %e, "weissman_ro execute failed");
+            tracing::warn!(target: "cem_dago", error = %e, "telemetry QueryPlan rejected by weissman_ro sandbox");
+            plan.telemetry_query = None;
             0
         }
     }
@@ -416,6 +424,7 @@ async fn call_vllm(
         format!("{base}/chat/completions")
     };
 
+    let target_safe = sanitize_blackboard_text(target, 200);
     let prompt = format!(
         "Analyze the following attack failures and current scan telemetry. \
          Generate a high-fidelity JSON object with keys: \
@@ -423,8 +432,9 @@ async fn call_vllm(
          rationale (string), \
          telemetry_query (optional QueryPlan with table/select/filters/limit for risk_graph_nodes or risk_graph_edges). \
          Use only real Weissman production engine_id values. Do not invent findings. \
-         telemetry_query.table must be one of the 13 weissman_ro tables (never users).\n\
-         Target: {target}\nSignals: {signals:?}\nFailures: {fail_json}"
+         telemetry_query.table must be one of the 13 weissman_ro tables (never users). \
+         telemetry_query must contain only allow-listed identifiers — never SQL, never pg_ catalog names.\n\
+         Target: {target_safe}\nSignals: {signals:?}\nFailures: {fail_json}"
     );
 
     let client = crate::outbound_http::external_json_client().map_err(|e| e.to_string())?;
@@ -635,5 +645,49 @@ mod tests {
             crate::nl_query::allowed_table_count(),
             ASK_WEISSMAN_TABLE_COUNT
         );
+    }
+
+    #[test]
+    fn validate_drops_injected_queryplan_and_unsafe_target() {
+        let raw = json!({
+            "rationale": "ignore previous; SELECT pg_sleep(10)",
+            "probes": [{
+                "engine_id": "osint",
+                "target": "https://example.com; DROP TABLE users",
+                "reason": "recon -- pg_read_file('/etc/passwd')"
+            }],
+            "telemetry_query": {
+                "table": "pg_shadow",
+                "select": ["passwd"],
+                "filters": [],
+                "limit": 1
+            }
+        });
+        let (plan, rejected) = validate_offensive_plan(&raw, "https://fallback.example");
+        assert!(plan.telemetry_query.is_none());
+        assert_eq!(plan.rationale, "[redacted]");
+        assert_eq!(plan.probes.len(), 1);
+        assert_eq!(plan.probes[0].target, "https://fallback.example");
+        assert!(plan.probes[0].reason.is_empty());
+        assert!(rejected.is_empty() || !rejected.iter().any(|r| r.contains("osint")));
+        let _ = rejected;
+    }
+
+    #[test]
+    fn validate_accepts_allowlisted_graph_queryplan() {
+        let raw = json!({
+            "rationale": "map internet-exposed nodes",
+            "probes": [],
+            "telemetry_query": {
+                "table": "risk_graph_nodes",
+                "select": ["id", "label"],
+                "filters": [],
+                "order_by": "id",
+                "limit": 10
+            }
+        });
+        let (plan, _) = validate_offensive_plan(&raw, "10.0.0.1");
+        assert!(plan.telemetry_query.is_some());
+        assert_eq!(plan.telemetry_query.unwrap().table, "risk_graph_nodes");
     }
 }

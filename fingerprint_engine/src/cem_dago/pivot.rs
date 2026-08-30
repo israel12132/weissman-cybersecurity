@@ -1,4 +1,9 @@
-//! Pivot: Dijkstra over live `risk_graph_nodes` / `risk_graph_edges` plus manifest overlap.
+//! Pivot: Dijkstra over a **scan-resident** copy of `risk_graph_nodes` / `risk_graph_edges`.
+//!
+//! The tenant graph is loaded **once** at mesh start ([`load_risk_graph`]) and held as
+//! `Arc<CachedRiskGraph>` on the scan context. Per-engine failures recompute Dijkstra
+//! in RAM only — they must not re-query Postgres (that starves the application pool
+//! when a wave of engines times out together).
 //!
 //! Schema is `from_node_id` / `to_node_id` / `edge_type` (not the draft `source_node`/`cost`
 //! columns). Edge cost follows the same inverse-CVSS/EPSS/KEV model as [`crate::attack_path`].
@@ -10,6 +15,48 @@ use petgraph::graph::{DiGraph, NodeIndex};
 use serde::Serialize;
 use sqlx::{PgPool, Row};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+/// Scan-resident risk graph. Wrapped in `Arc<RwLock<_>>` on [`crate::cem_dago::mesh`]
+/// so the type matches the production contract; the mesh never writes after load.
+#[derive(Clone)]
+pub struct CachedRiskGraph {
+    labels: HashMap<i64, (String, String, bool, f64)>,
+    graph: DiGraph<i64, (f64, String)>,
+    idx: HashMap<i64, NodeIndex>,
+    hops_meta: Vec<(i64, i64, String, f64)>,
+}
+
+impl CachedRiskGraph {
+    #[must_use]
+    pub fn empty() -> Self {
+        Self {
+            labels: HashMap::new(),
+            graph: DiGraph::new(),
+            idx: HashMap::new(),
+            hops_meta: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn node_count(&self) -> usize {
+        self.labels.len()
+    }
+
+    #[must_use]
+    pub fn edge_count(&self) -> usize {
+        self.hops_meta.len()
+    }
+}
+
+/// Shared handle stored on the mesh executor for the lifetime of one scan.
+pub type ResidentRiskGraph = Arc<RwLock<CachedRiskGraph>>;
+
+#[must_use]
+pub fn resident_graph(graph: CachedRiskGraph) -> ResidentRiskGraph {
+    Arc::new(RwLock::new(graph))
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct GraphHop {
@@ -26,12 +73,12 @@ pub struct AlternativeRoute {
     pub start: String,
 }
 
-/// Load the client risk graph and return cheapest-path signals from internet-exposed nodes.
-pub async fn alternative_signals_via_dijkstra(
+/// Pull the tenant risk graph from Postgres **once**. Callers cache the result.
+pub async fn load_risk_graph(
     pool: &PgPool,
     tenant_id: i64,
     client_id: i64,
-) -> Result<AlternativeRoute, String> {
+) -> Result<CachedRiskGraph, String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| format!("tenant tx: {e}"))?;
@@ -102,7 +149,19 @@ pub async fn alternative_signals_via_dijkstra(
         hops_meta.push((from, to, etype, node_cost));
     }
 
-    let starts: Vec<i64> = labels
+    Ok(CachedRiskGraph {
+        labels,
+        graph,
+        idx,
+        hops_meta,
+    })
+}
+
+/// Cheapest-path signals from internet-exposed nodes. **No I/O.**
+#[must_use]
+pub fn alternative_signals_from_cached(cached: &CachedRiskGraph) -> AlternativeRoute {
+    let starts: Vec<i64> = cached
+        .labels
         .iter()
         .filter(|(_, t)| t.2)
         .map(|(id, _)| *id)
@@ -113,14 +172,18 @@ pub async fn alternative_signals_via_dijkstra(
     let mut start_label = String::from("internet_exposed");
 
     if let Some(&sid) = starts.first() {
-        start_label = labels.get(&sid).map(|t| t.0.clone()).unwrap_or(start_label);
-        if let Some(&start_idx) = idx.get(&sid) {
-            let costs = dijkstra(&graph, start_idx, None, |e| e.weight().0);
+        start_label = cached
+            .labels
+            .get(&sid)
+            .map(|t| t.0.clone())
+            .unwrap_or(start_label);
+        if let Some(&start_idx) = cached.idx.get(&sid) {
+            let costs = dijkstra(&cached.graph, start_idx, None, |e| e.weight().0);
             let mut ranked: Vec<_> = costs.into_iter().collect();
             ranked.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
             for (nix, _) in ranked.into_iter().take(32) {
-                let node_id = graph[nix];
-                if let Some((label, ntype, _, _)) = labels.get(&node_id) {
+                let node_id = cached.graph[nix];
+                if let Some((label, ntype, _, _)) = cached.labels.get(&node_id) {
                     push_signals(&mut signals, ntype);
                     push_signals(&mut signals, label);
                 }
@@ -128,16 +191,24 @@ pub async fn alternative_signals_via_dijkstra(
         }
     }
 
-    for (from, to, etype, cost) in hops_meta.into_iter().take(64) {
-        push_signals(&mut signals, &etype);
-        if let Some(k) = EdgeKind::from_graph_label(&etype) {
+    for (from, to, etype, cost) in cached.hops_meta.iter().take(64) {
+        push_signals(&mut signals, etype);
+        if let Some(k) = EdgeKind::from_graph_label(etype) {
             signals.insert(k.signal().to_string());
         }
         hops.push(GraphHop {
-            from_label: labels.get(&from).map(|t| t.0.clone()).unwrap_or_default(),
-            to_label: labels.get(&to).map(|t| t.0.clone()).unwrap_or_default(),
-            edge_type: etype,
-            cost,
+            from_label: cached
+                .labels
+                .get(from)
+                .map(|t| t.0.clone())
+                .unwrap_or_default(),
+            to_label: cached
+                .labels
+                .get(to)
+                .map(|t| t.0.clone())
+                .unwrap_or_default(),
+            edge_type: etype.clone(),
+            cost: *cost,
         });
     }
 
@@ -148,11 +219,23 @@ pub async fn alternative_signals_via_dijkstra(
 
     let mut sigs: Vec<String> = signals.into_iter().collect();
     sigs.sort();
-    Ok(AlternativeRoute {
+    AlternativeRoute {
         signals: sigs,
         hops,
         start: start_label,
-    })
+    }
+}
+
+/// Load-then-compute helper for callers that do not hold a scan-resident graph
+/// (status probes, one-shot tools). The mesh path must use [`load_risk_graph`]
+/// once and [`alternative_signals_from_cached`] thereafter.
+pub async fn alternative_signals_via_dijkstra(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+) -> Result<AlternativeRoute, String> {
+    let cached = load_risk_graph(pool, tenant_id, client_id).await?;
+    Ok(alternative_signals_from_cached(&cached))
 }
 
 fn push_signals(set: &mut HashSet<String>, label: &str) {
@@ -247,6 +330,36 @@ mod tests {
         assert!(sigs
             .iter()
             .any(|s| s == "web_port_active" || s == "ot_protocol"));
+    }
+
+    #[test]
+    fn cached_graph_dijkstra_is_ram_only() {
+        let mut cached = CachedRiskGraph::empty();
+        let a = cached.graph.add_node(1);
+        let b = cached.graph.add_node(2);
+        cached.idx.insert(1, a);
+        cached.idx.insert(2, b);
+        cached
+            .labels
+            .insert(1, ("internet_exposed".into(), "entry".into(), true, 1.0));
+        cached
+            .labels
+            .insert(2, ("web_app".into(), "web".into(), false, 0.5));
+        cached.graph.add_edge(a, b, (0.5, "exposes".into()));
+        cached.hops_meta.push((1, 2, "exposes".into(), 0.5));
+        let route = alternative_signals_from_cached(&cached);
+        assert!(!route.signals.is_empty());
+        assert!(route
+            .signals
+            .iter()
+            .any(|s| s == "web_port_active" || s == "internet_exposed" || s == "web_app"));
+    }
+
+    #[test]
+    fn empty_cached_graph_has_seed_signals() {
+        let route = alternative_signals_from_cached(&CachedRiskGraph::empty());
+        assert!(route.signals.contains(&"internet_exposed".to_string()));
+        assert!(route.signals.contains(&"web_port_active".to_string()));
     }
 
     #[test]

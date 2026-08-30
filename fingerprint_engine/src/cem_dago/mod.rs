@@ -22,6 +22,7 @@ pub mod mesh;
 pub mod payload_trie;
 pub mod pivot;
 pub mod planner;
+pub mod queryplan_sandbox;
 pub mod registry;
 pub mod router;
 

@@ -6,7 +6,10 @@
 
 use super::blackboard::ScanBlackboard;
 use super::lanes::partition_lanes;
-use super::pivot::{alternative_signals_via_dijkstra, fallback_engine_ids};
+use super::pivot::{
+    alternative_signals_from_cached, fallback_engine_ids, load_risk_graph, resident_graph,
+    CachedRiskGraph, ResidentRiskGraph,
+};
 use super::planner::{trigger_supreme_council_planner, PlannerInput};
 use super::record_engine_result;
 use super::router::next_ready_wave;
@@ -54,6 +57,8 @@ struct MeshExec {
     blackboard: Arc<ScanBlackboard>,
     read_only_pool: Option<Arc<PgPool>>,
     enabled: Vec<String>,
+    /// Tenant DiGraph loaded once per scan. Pivots read this lock; they never hit Postgres.
+    risk_graph: ResidentRiskGraph,
 }
 
 impl MeshExec {
@@ -65,6 +70,7 @@ impl MeshExec {
             blackboard: req.blackboard.clone(),
             read_only_pool: req.read_only_pool.clone(),
             enabled: req.engines.clone(),
+            risk_graph: resident_graph(CachedRiskGraph::empty()),
         }
     }
 }
@@ -137,6 +143,30 @@ pub struct MeshRunReport {
 pub async fn execute_mesh(req: MeshRequest) -> MeshRunReport {
     let mut exec = MeshExec::from_request(&req);
     attach_payload_trie(&mut exec).await;
+    match load_risk_graph(
+        exec.pool.as_ref(),
+        exec.blackboard.tenant_id(),
+        exec.blackboard.client_id(),
+    )
+    .await
+    {
+        Ok(g) => {
+            tracing::info!(
+                target: "cem_dago",
+                nodes = g.node_count(),
+                edges = g.edge_count(),
+                "loaded scan-resident risk graph (Dijkstra is RAM-only from here)"
+            );
+            exec.risk_graph = resident_graph(g);
+        }
+        Err(e) => {
+            tracing::warn!(
+                target: "cem_dago",
+                error = %e,
+                "risk graph load failed — pivots use empty resident graph (no per-failure SQL)"
+            );
+        }
+    }
     let mut remaining: HashSet<String> = req.engines.iter().cloned().collect();
     let mut already: HashSet<String> = HashSet::new();
     let mut waves: Vec<Vec<String>> = Vec::new();
@@ -264,20 +294,10 @@ async fn execute_orchestration_step(
     );
     metrics::counter!("weissman_cem_dago_pivots_total").increment(1);
 
-    let route = alternative_signals_via_dijkstra(
-        exec.pool.as_ref(),
-        exec.blackboard.tenant_id(),
-        exec.blackboard.client_id(),
-    )
-    .await
-    .unwrap_or_else(|e| {
-        tracing::warn!(target: "cem_dago", error = %e, "dijkstra fallback path empty");
-        super::pivot::AlternativeRoute {
-            signals: vec!["internet_exposed".into(), "web_port_active".into()],
-            hops: vec![],
-            start: "internet_exposed".into(),
-        }
-    });
+    let route = {
+        let g = exec.risk_graph.read().await;
+        alternative_signals_from_cached(&g)
+    };
 
     let fallbacks = fallback_engine_ids(
         failed_engine,
@@ -487,7 +507,12 @@ pub fn status_json() -> Value {
         "redis_configured": crate::http::rate_limit_redis::is_enabled(),
         "weissman_ro_configured": super::weissman_ro_pool().is_some(),
         "blackboard_ttl_secs": super::BLACKBOARD_TTL_SECS,
-        "blackboard_codec": "msgpack",
+        "blackboard_codec": "msgpack_v1",
+        "codec_magic": "0xC1",
+        "codec_version": super::blackboard::CODEC_VERSION,
+        "redis_pool": "connection_manager",
+        "graph_cache": "scan_resident",
+        "queryplan_sandbox": "hermetic_whitelist",
         "wave_join": "join_all",
         "dispatch": "id_lookup_not_dyn_trait",
         "pipeline_special_engines": super::PIPELINE_SPECIAL_ENGINES,
@@ -538,7 +563,11 @@ mod tests {
         assert_eq!(v["ok"], true);
         assert_eq!(v["pattern"], "shared_blackboard_plus_active_dag_router");
         assert_eq!(v["wave_join"], "join_all");
-        assert_eq!(v["blackboard_codec"], "msgpack");
+        assert_eq!(v["blackboard_codec"], "msgpack_v1");
+        assert_eq!(v["codec_magic"], "0xC1");
+        assert_eq!(v["redis_pool"], "connection_manager");
+        assert_eq!(v["graph_cache"], "scan_resident");
+        assert_eq!(v["queryplan_sandbox"], "hermetic_whitelist");
         assert_eq!(v["dispatch"], "id_lookup_not_dyn_trait");
         assert_eq!(v["trie_prewarm"]["batch_size"], 25_000);
         assert_eq!(v["trie_prewarm"]["window_days"], 90);
