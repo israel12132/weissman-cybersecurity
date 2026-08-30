@@ -213,6 +213,7 @@ pub mod bgp_dns_hijacking_engine;
 pub mod bitbucket_heal;
 pub mod ble_rf_engine;
 pub mod bola_idor_engine;
+pub mod c2_runtime_guards;
 pub mod cache_poisoning_engine;
 pub mod cicd_ast_scan;
 pub mod cicd_interceptor;

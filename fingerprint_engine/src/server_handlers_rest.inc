@@ -1548,6 +1548,28 @@ async fn api_scan(
     }
     let engine = scan_body.get("engine").and_then(Value::as_str).unwrap_or("").to_string();
     let target = scan_body.get("target").and_then(Value::as_str).unwrap_or("").to_string();
+    let mut c2_scan_lock_held = false;
+    if engine == "advanced_c2_covert_exfil" {
+        match crate::c2_runtime_guards::try_acquire_c2_scan_lock(auth.tenant_id).await {
+            crate::c2_runtime_guards::ScanLockOutcome::Acquired => {
+                c2_scan_lock_held = true;
+            }
+            crate::c2_runtime_guards::ScanLockOutcome::Held { ttl_secs } => {
+                let mut resp = (
+                    StatusCode::CONFLICT,
+                    Json(crate::c2_runtime_guards::c2_scan_conflict_body(ttl_secs)),
+                )
+                    .into_response();
+                if let Ok(v) = axum::http::HeaderValue::from_str(&ttl_secs.to_string()) {
+                    resp.headers_mut().insert("Retry-After", v);
+                }
+                return resp;
+            }
+            crate::c2_runtime_guards::ScanLockOutcome::Unavailable => {
+                return crate::http::rate_limit_redis::distributed_store_unavailable_response();
+            }
+        }
+    }
     let ip = extract_client_ip(&headers, addr);
     if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
@@ -1560,6 +1582,9 @@ async fn api_scan(
         {
             Ok(x) => x,
             Err(e) => {
+                if c2_scan_lock_held {
+                    crate::c2_runtime_guards::release_c2_scan_lock(auth.tenant_id).await;
+                }
                 let mut body_json = json!({"detail": e.detail(), "code": e.error_code()});
                 let mut response_headers = axum::http::HeaderMap::new();
                 if let Some((reset_at, limit, used)) = e.quota_metadata() {
@@ -1615,6 +1640,9 @@ async fn api_scan(
         )
             .into_response(),
         Err(e) => {
+            if c2_scan_lock_held {
+                crate::c2_runtime_guards::release_c2_scan_lock(auth.tenant_id).await;
+            }
             tracing::error!(target: "async_jobs", error = %e, job_kind = %job_kind, "enqueue scan job failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,

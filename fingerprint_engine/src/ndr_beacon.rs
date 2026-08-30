@@ -131,6 +131,223 @@ pub fn jitter_should_adapt(z: f64, threshold: f64) -> bool {
     z.is_finite() && z.abs() > threshold
 }
 
+/// Significant spectral peak in an unevenly sampled series (Lomb–Scargle).
+#[derive(Debug, Clone, Copy)]
+pub struct SpectralPeak {
+    pub period: f64,
+    pub power: f64,
+    pub false_alarm_prob: f64,
+    pub significant: bool,
+}
+
+/// Lomb–Scargle periodogram peak (Scargle 1982 / Numerical Recipes).
+///
+/// Z-score / CV assume a unimodal Gaussian around a fixed mean. APT beacons that
+/// jitter with a deterministic chaotic map (logistic / Lorenz-class) or a
+/// high-amplitude sinusoid inflate time-domain variance and evade `|z|>3` and
+/// `CV < 0.15`. The periodogram still sees the hidden frequency.
+///
+/// `t` and `y` must be the same length. Returns `None` when the series is too
+/// short, constant, or has no finite span.
+#[must_use]
+pub fn lomb_scargle_peak(t: &[f64], y: &[f64]) -> Option<SpectralPeak> {
+    if t.len() != y.len() || y.len() < 8 {
+        return None;
+    }
+    if y.iter().any(|v| !v.is_finite()) || t.iter().any(|v| !v.is_finite()) {
+        return None;
+    }
+    let n = y.len() as f64;
+    let ybar = mean(y);
+    let sigma = stddev(y);
+    if !sigma.is_finite() || sigma < 1e-12 {
+        return None;
+    }
+    let var = sigma * sigma;
+    let tmin = t.iter().copied().fold(f64::INFINITY, f64::min);
+    let tmax = t.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let span = tmax - tmin;
+    if span <= 1e-9 {
+        return None;
+    }
+    let nfreq = (4 * y.len()).clamp(32, 256);
+    let fmin = 1.0 / span;
+    let fmax = (n / 2.0) / span;
+    if fmax <= fmin {
+        return None;
+    }
+    let mut best_p = 0.0;
+    let mut best_f = fmin;
+    for i in 0..nfreq {
+        let f = fmin + (fmax - fmin) * (i as f64) / nfreq as f64;
+        let w = 2.0 * std::f64::consts::PI * f;
+        let mut s2 = 0.0;
+        let mut c2 = 0.0;
+        for &ti in t {
+            s2 += (2.0 * w * ti).sin();
+            c2 += (2.0 * w * ti).cos();
+        }
+        let tau = (s2.atan2(c2)) / (2.0 * w);
+        let mut sc = 0.0;
+        let mut ss = 0.0;
+        let mut cc = 0.0;
+        let mut cs = 0.0;
+        for (&ti, &yi) in t.iter().zip(y.iter()) {
+            let a = w * (ti - tau);
+            let yc = yi - ybar;
+            let c = a.cos();
+            let s = a.sin();
+            sc += yc * c;
+            ss += yc * s;
+            cc += c * c;
+            cs += s * s;
+        }
+        let p = 0.5 * (sc * sc / cc.max(1e-18) + ss * ss / cs.max(1e-18)) / var;
+        if p > best_p {
+            best_p = p;
+            best_f = f;
+        }
+    }
+    let m = nfreq as f64;
+    let ez = (-best_p).exp();
+    let fap = (1.0 - (1.0 - ez).powf(m)).clamp(0.0, 1.0);
+    Some(SpectralPeak {
+        period: 1.0 / best_f,
+        power: best_p,
+        false_alarm_prob: fap,
+        significant: fap < 0.01 && best_p > 4.0,
+    })
+}
+
+/// Naive real DFT power spectrum (DC skipped). Fine for N ≤ 256; no extra crate.
+#[must_use]
+pub fn dft_power(y: &[f64]) -> Vec<f64> {
+    let n = y.len();
+    if n < 2 {
+        return Vec::new();
+    }
+    let m = mean(y);
+    let half = n / 2;
+    let mut out = vec![0.0; half];
+    for k in 0..half {
+        let mut re = 0.0;
+        let mut im = 0.0;
+        for (n_i, &v) in y.iter().enumerate() {
+            let ang = -2.0 * std::f64::consts::PI * (k as f64) * (n_i as f64) / n as f64;
+            let yc = v - m;
+            re += yc * ang.cos();
+            im += yc * ang.sin();
+        }
+        out[k] = re * re + im * im;
+    }
+    out
+}
+
+/// Dominant non-DC DFT bin. `Some((k, peak/mean))` when the peak is ≥ `ratio` times the rest.
+#[must_use]
+pub fn fft_peak_significant(y: &[f64], ratio: f64) -> Option<(usize, f64)> {
+    if y.len() < 8 {
+        return None;
+    }
+    let p = dft_power(y);
+    if p.len() < 3 {
+        return None;
+    }
+    let (k, peak) = p
+        .iter()
+        .enumerate()
+        .skip(2) // skip DC and the window-length trend (k=1)
+        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))?;
+    if *peak <= 0.0 {
+        return None;
+    }
+    let rest: Vec<f64> = p
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i != k)
+        .map(|(_, v)| *v)
+        .collect();
+    let mean_rest = mean(&rest);
+    if mean_rest <= 1e-18 {
+        return None;
+    }
+    let snr = peak / mean_rest;
+    if snr >= ratio {
+        Some((k, snr))
+    } else {
+        None
+    }
+}
+
+/// Hidden-periodicity detector for high-CV / chaotic jitter that evades Z-score.
+///
+/// Runs Lomb–Scargle on (arrival time, interval) plus a DFT of the interval
+/// sequence. Does **not** require low coefficient of variation.
+pub fn detect_spectral_beacons(samples: &[FlowSample], cfg: &NdrConfig) -> Vec<NdrFinding> {
+    let mut out = Vec::new();
+    let min_iv = cfg.min_intervals.max(7);
+    for (dst, mut flows) in group_by_dst(samples) {
+        flows.sort_by_key(|f| f.ts);
+        if flows.len() < min_iv + 1 {
+            continue;
+        }
+        let intervals: Vec<f64> = flows
+            .windows(2)
+            .map(|w| (w[1].ts - w[0].ts) as f64)
+            .collect();
+        let m = mean(&intervals);
+        if m < cfg.min_interval_secs || m > cfg.max_interval_secs {
+            continue;
+        }
+        let times: Vec<f64> = flows.iter().skip(1).map(|f| f.ts as f64).collect();
+        let ls = lomb_scargle_peak(&times, &intervals);
+        let fft = fft_peak_significant(&intervals, 10.0);
+        let ls_hit = ls.map(|p| p.significant).unwrap_or(false);
+        // FFT-only hits must also show a Lomb–Scargle peak (power>3) so a slow
+        // browsing trend (DFT bin 1) cannot impersonate a C2 periodogram.
+        let fft_hit = fft.is_some() && ls.map(|p| p.power > 3.0).unwrap_or(false);
+        if !ls_hit && !fft_hit {
+            continue;
+        }
+        let cv = coefficient_of_variation(&intervals);
+        let mut evidence = serde_json::json!({
+            "connections": flows.len(),
+            "mean_interval_secs": (m * 1000.0).round() / 1000.0,
+            "coefficient_of_variation": (cv * 10000.0).round() / 10000.0,
+            "detector": "lomb_scargle_fft",
+            "zscore_evasion": cv > cfg.max_cv,
+        });
+        if let Some(p) = ls {
+            evidence["lomb_scargle_period"] =
+                serde_json::json!((p.period * 1000.0).round() / 1000.0);
+            evidence["lomb_scargle_power"] = serde_json::json!((p.power * 1000.0).round() / 1000.0);
+            evidence["lomb_scargle_fap"] =
+                serde_json::json!((p.false_alarm_prob * 1e6).round() / 1e6);
+            evidence["lomb_scargle_significant"] = serde_json::json!(p.significant);
+        }
+        if let Some((k, snr)) = fft {
+            evidence["fft_bin"] = serde_json::json!(k);
+            evidence["fft_snr"] = serde_json::json!((snr * 100.0).round() / 100.0);
+        }
+        let confidence = ls
+            .map(|p| (1.0 - p.false_alarm_prob).clamp(0.55, 0.97))
+            .unwrap_or(0.7);
+        out.push(NdrFinding {
+            kind: "c2_beacon_spectral".to_string(),
+            dst: dst.clone(),
+            severity: if cv > cfg.max_cv {
+                "high".to_string()
+            } else {
+                "medium".to_string()
+            },
+            confidence: (confidence * 10000.0).round() / 10000.0,
+            mitre: "T1071".to_string(),
+            evidence,
+        });
+    }
+    out
+}
+
 fn group_by_dst(samples: &[FlowSample]) -> std::collections::BTreeMap<String, Vec<&FlowSample>> {
     let mut map: std::collections::BTreeMap<String, Vec<&FlowSample>> =
         std::collections::BTreeMap::new();
@@ -214,9 +431,10 @@ pub fn detect_exfiltration(samples: &[FlowSample], cfg: &NdrConfig) -> Vec<NdrFi
     out
 }
 
-/// Run both detectors.
+/// Run cadence, spectral (Z-score-evasion), and volume detectors.
 pub fn analyze(samples: &[FlowSample], cfg: &NdrConfig) -> Vec<NdrFinding> {
     let mut v = detect_beacons(samples, cfg);
+    v.extend(detect_spectral_beacons(samples, cfg));
     v.extend(detect_exfiltration(samples, cfg));
     v
 }
@@ -307,5 +525,79 @@ mod tests {
         let hits = analyze(&samples, &NdrConfig::default());
         assert!(hits.iter().any(|h| h.kind == "c2_beacon"));
         assert!(hits.iter().any(|h| h.kind == "bulk_exfiltration"));
+    }
+
+    fn sine_jittered_beacon(n: usize, base: f64, amp: f64, period: usize) -> Vec<FlowSample> {
+        let mut t = 0.0_f64;
+        let mut out = Vec::with_capacity(n);
+        for i in 0..n {
+            out.push(FlowSample::new(t.round() as i64, "apt.example", 64));
+            let phase = 2.0 * std::f64::consts::PI * (i as f64) / period as f64;
+            t += base + amp * phase.sin();
+        }
+        out
+    }
+
+    #[test]
+    fn high_cv_sine_jitter_evades_zscore_cv_but_fft_catches() {
+        // Amplitude 25 on a 30s base ⇒ CV ≫ 0.15 (classic detector miss) but a
+        // period-8 sinusoid is a textbook spectral signature (Lorenz/Fibonacci-
+        // class deterministic jitter that looks random in the time domain).
+        let samples = sine_jittered_beacon(32, 30.0, 25.0, 8);
+        let cfg = NdrConfig::default();
+        assert!(
+            detect_beacons(&samples, &cfg).is_empty(),
+            "high-CV sine jitter must not trip the Gaussian CV detector"
+        );
+        let iv: Vec<f64> = samples
+            .windows(2)
+            .map(|w| (w[1].ts - w[0].ts) as f64)
+            .collect();
+        assert!(
+            coefficient_of_variation(&iv) > cfg.max_cv,
+            "test fixture must actually evade CV"
+        );
+        let fft = fft_peak_significant(&iv, 6.0);
+        assert!(
+            fft.is_some(),
+            "FFT must see the period-8 component, got {fft:?}"
+        );
+        let times: Vec<f64> = samples.iter().skip(1).map(|f| f.ts as f64).collect();
+        let ls = lomb_scargle_peak(&times, &iv);
+        assert!(
+            ls.is_some_and(|p| p.power > 3.0),
+            "Lomb-Scargle must report a strong peak, got {ls:?}"
+        );
+        let spectral = detect_spectral_beacons(&samples, &cfg);
+        assert!(
+            spectral.iter().any(|h| h.kind == "c2_beacon_spectral"),
+            "fused spectral detector must fire, got {spectral:?}"
+        );
+    }
+
+    #[test]
+    fn whiteish_irregular_intervals_are_not_spectral_beacons() {
+        // Same human-like series as jittery_traffic, extended so N ≥ 8.
+        let times = [
+            0i64, 5, 90, 95, 400, 410, 1200, 1205, 5000, 9000, 9020, 14000, 18111, 25000, 31000,
+            40000,
+        ];
+        let samples: Vec<FlowSample> = times
+            .iter()
+            .map(|&t| FlowSample::new(1000 + t, "cdn.example", 800))
+            .collect();
+        let hits = detect_spectral_beacons(&samples, &NdrConfig::default());
+        assert!(
+            hits.is_empty(),
+            "irregular browsing must not flag as spectral beacon: {hits:?}"
+        );
+    }
+
+    #[test]
+    fn constant_intervals_have_no_fft_peak() {
+        let y = vec![60.0; 16];
+        assert!(fft_peak_significant(&y, 8.0).is_none());
+        let t: Vec<f64> = (0..16).map(|i| i as f64 * 60.0).collect();
+        assert!(lomb_scargle_peak(&t, &y).is_none());
     }
 }

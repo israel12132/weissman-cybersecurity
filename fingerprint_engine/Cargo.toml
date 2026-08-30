@@ -22,7 +22,7 @@ weissman-job-bus = { path = "../crates/weissman-job-bus" }
 weissman-fleet-shaping = { path = "../crates/weissman-fleet-shaping" }
 weissman-engines = { path = "../backend/weissman-engines" }
 ml-kem = "0.2.3"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking", "http2"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking", "http2", "stream"] }
 tokio = { version = "1", features = ["full", "sync"] }
 regex = "1.10"
 futures = "0.3"

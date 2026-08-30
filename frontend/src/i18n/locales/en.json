@@ -5271,6 +5271,7 @@
       "last_run": "Last: {{time}}",
       "queued": "C2 covert-exfil scan queued ({{id}})",
       "scan_failed": "Scan failed",
+      "scan_locked": "A C2 assessment is already running for this tenant (409). Wait for it to finish, then retry.",
       "empty_ready_title": "Run a scan to assess beacon, DNS tunnel, HTTP/3/WSS, NTP/ICMP, stego and ingress C2 surface.",
       "empty_ready_body": "No covert-channel exposure observed on the last live run."
     },

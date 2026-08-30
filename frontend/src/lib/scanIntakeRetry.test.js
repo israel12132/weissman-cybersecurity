@@ -58,6 +58,14 @@ describe('apiFetchScanIntake', () => {
     expect(apiFetch).toHaveBeenCalledTimes(4) // initial + 3 retries
   })
 
+  it('does not retry a terminal 409 C2 scan lock', async () => {
+    apiFetch.mockResolvedValueOnce(res(409))
+    const p = apiFetchScanIntake('/api/command-center/scan', { method: 'POST', body: '{}' })
+    await vi.runAllTimersAsync()
+    expect((await p).status).toBe(409)
+    expect(apiFetch).toHaveBeenCalledTimes(1)
+  })
+
   it('does not retry a terminal 400', async () => {
     apiFetch.mockResolvedValueOnce(res(400))
     const p = apiFetchScanIntake('/api/command-center/scan', { method: 'POST', body: '{}' })

@@ -16,7 +16,7 @@ const ENGINE = 'advanced_c2_covert_exfil'
 const ACCENT = '#22d3ee'
 
 const PROBE_TOGGLES = [
-  { key: 'check_beaconing', label: 'Beacon jitter / health masquerade', hint: 'Multi-sample RTT, Z-score, padding', defaultVal: true },
+      { key: 'check_beaconing', label: 'Beacon jitter / health masquerade', hint: 'Z-score + Lomb–Scargle/FFT', defaultVal: true },
   { key: 'check_dns_tunnel', label: 'DNS TXT entropy / TTL / DoH', hint: 'Live TXT + DoH path probes', defaultVal: true },
   { key: 'check_http3_ws', label: 'HTTP/3 Alt-Svc + WebSocket', hint: 'QUIC advertisement and WSS upgrade', defaultVal: true },
   { key: 'check_icmp_ntp', label: 'ICMP echo + NTP UDP/123', hint: 'Covert-channel feasibility, not an implant', defaultVal: true },
@@ -35,6 +35,7 @@ const CATEGORY_META = {
   beacon_jitter: { label: 'Beacon jitter', icon: '⏱', color: '#f472b6', order: 1 },
   beacon_padding: { label: 'Beacon padding', icon: '▣', color: '#fb7185', order: 2 },
   beacon_zscore: { label: 'Z-score adapt', icon: 'σ', color: '#a78bfa', order: 3 },
+  beacon_spectral: { label: 'Spectral beacon', icon: '∿', color: '#c084fc', order: 3.5 },
   c2_masquerade: { label: 'C2 masquerade', icon: '🎭', color: '#818cf8', order: 4 },
   c2_hmac: { label: 'HMAC headers', icon: '🔏', color: '#ef4444', order: 5 },
   c2_ua_split: { label: 'UA split', icon: 'U', color: '#fb7185', order: 5.5 },
@@ -279,10 +280,11 @@ export default function C2CovertExfilCommandCenter() {
     setStatus('running')
     setFindings([])
     try {
-      const { ok, data: d } = await postScan(buildBody())
+      const { ok, data: d, status } = await postScan(buildBody())
       if (!ok) {
         setStatus('error')
-        showToast('error', d.detail || t('pages.c2CovertExfil.scan_failed'))
+        const locked = status === 409 || d.code === 'c2_scan_lock'
+        showToast('error', locked ? t('pages.c2CovertExfil.scan_locked') : (d.detail || t('pages.c2CovertExfil.scan_failed')))
         return
       }
       const jobId = d.job_id ?? ''

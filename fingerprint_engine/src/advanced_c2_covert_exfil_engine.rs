@@ -14,6 +14,11 @@
 //! T1095 / T1572 / T1041 / T1048 / T1027.003 / T1001.002 / T1573 / T1571.
 
 use crate::arsenal_config::{finding_rich, ArsenalConfig, Evidence, Intensity};
+use crate::c2_runtime_guards::{
+    aggregate_dns_anomaly_summaries, hour_utc_bucket, media_chunk_would_exceed,
+    media_content_length_rejected, redis_claim_dns_summary_flush, window_filter_dns_observations,
+    DnsObservation, MAX_MEDIA_FILE_SIZE_BYTES, MEDIA_ANALYSIS_TIMEOUT,
+};
 use crate::cloud_hunter::{GraphEdge, GraphNode};
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
@@ -22,7 +27,8 @@ use crate::engine_probes::{
 };
 use crate::engine_result::{print_result, EngineResult};
 use crate::ndr_beacon::{
-    coefficient_of_variation, jitter_should_adapt, mean, stddev, zscore, FlowSample, NdrConfig,
+    coefficient_of_variation, fft_peak_significant, jitter_should_adapt, lomb_scargle_peak, mean,
+    stddev, zscore, FlowSample, NdrConfig,
 };
 use futures::stream::{self, StreamExt};
 use serde_json::{json, Value};
@@ -266,6 +272,7 @@ async fn get_with_backoff(
 async fn fetch_bytes(client: &reqwest::Client, url: &str, max: usize) -> Option<Vec<u8>> {
     crate::fleet_shaping::acquire_for_url(url).await;
     let _stealth = crate::stealth_queue::acquire(url).await;
+    let cap = max.min(MAX_MEDIA_FILE_SIZE_BYTES);
     let resp = timeout(Duration::from_secs(8), client.get(url).send())
         .await
         .ok()?
@@ -273,12 +280,36 @@ async fn fetch_bytes(client: &reqwest::Client, url: &str, max: usize) -> Option<
     if !resp.status().is_success() {
         return None;
     }
-    let bytes = timeout(Duration::from_secs(8), resp.bytes())
-        .await
-        .ok()?
-        .ok()?;
-    let take = bytes.len().min(max);
-    Some(bytes[..take].to_vec())
+    if let Some(cl) = resp.content_length() {
+        if media_content_length_rejected(cl) || cl as usize > cap {
+            tracing::warn!(
+                target: "advanced_c2_covert_exfil",
+                url,
+                content_length = cl,
+                cap,
+                "refusing public-media download: Content-Length exceeds 2 MiB ceiling"
+            );
+            return None;
+        }
+    }
+    let mut out = Vec::new();
+    let mut stream = resp.bytes_stream();
+    while let Some(chunk) = timeout(Duration::from_secs(8), stream.next()).await.ok()? {
+        let chunk = chunk.ok()?;
+        if media_chunk_would_exceed(out.len(), chunk.len()) || out.len() + chunk.len() > cap {
+            tracing::warn!(
+                target: "advanced_c2_covert_exfil",
+                url,
+                buffered = out.len(),
+                chunk = chunk.len(),
+                cap,
+                "aborting public-media download: streamed size exceeded 2 MiB ceiling"
+            );
+            return None;
+        }
+        out.extend_from_slice(&chunk);
+    }
+    Some(out)
 }
 
 // ── Layer 1: Encrypted C2 beaconing / masquerade ─────────────────────────────
@@ -306,15 +337,19 @@ async fn probe_beaconing(
     let mut bodies: Vec<Vec<u8>> = Vec::new();
     let mut statuses = Vec::new();
     let mut last_headers: Vec<(String, String)> = Vec::new();
+    let t0 = Instant::now();
+    let mut wall_stamps = Vec::new();
 
-    for i in 0..sample_n {
+    for _ in 0..sample_n {
         if let Some((p, rtt)) = get_with_backoff(client, &health, &[], 2).await {
             rtts.push(rtt as f64);
             bodies.push(p.body.as_bytes().to_vec());
             statuses.push(p.status);
             last_headers = p.headers.clone();
+            let elapsed = t0.elapsed().as_secs_f64();
+            wall_stamps.push(elapsed);
             samples_out.push(FlowSample::new(
-                i as i64 * 1_000 + (rtt as i64 / 1000),
+                (elapsed * 1_000.0) as i64,
                 &p.final_url,
                 p.body.len() as u64,
             ));
@@ -409,6 +444,53 @@ async fn probe_beaconing(
                     .with("threshold", 3.0)
                     .with("adapted", true),
             );
+        }
+
+        // Lomb–Scargle + DFT alongside Z-score: chaotic/Fibonacci-class jitter
+        // inflates σ so |z| never trips, but a spectral peak remains.
+        if wall_stamps.len() >= 8 {
+            let intervals: Vec<f64> = wall_stamps.windows(2).map(|w| w[1] - w[0]).collect();
+            let times = wall_stamps[1..].to_vec();
+            let ls = lomb_scargle_peak(&times, &intervals);
+            let fft = fft_peak_significant(&intervals, 8.0);
+            let ls_hit = ls.map(|p| p.significant).unwrap_or(false);
+            if ls_hit || fft.is_some() {
+                let period = ls.map(|p| p.period).unwrap_or(0.0);
+                emit(
+                    findings,
+                    "Hidden beacon periodicity in chaotic jitter (Lomb–Scargle / FFT)",
+                    "high",
+                    T_WEB,
+                    &format!(
+                        "Time-domain CV={:.3} looks like network noise (Z-score evasion) but Lomb–Scargle/FFT recovered a spectral peak (period {:.3}s). Deterministic chaotic maps (Fibonacci/Lorenz-class) do not beat a periodogram.",
+                        cv,
+                        period
+                    ),
+                    target,
+                    "beacon_spectral",
+                    0.78,
+                    Evidence::new()
+                        .with("cv", cv)
+                        .with("zscore_last", z)
+                        .with(
+                            "lomb_scargle",
+                            ls.map(|p| {
+                                json!({
+                                    "period": p.period,
+                                    "power": p.power,
+                                    "fap": p.false_alarm_prob,
+                                    "significant": p.significant,
+                                })
+                            })
+                            .unwrap_or(json!(null)),
+                        )
+                        .with(
+                            "fft",
+                            fft.map(|(k, snr)| json!({"bin": k, "snr": snr}))
+                                .unwrap_or(json!(null)),
+                        ),
+                );
+            }
         }
     }
 
@@ -546,7 +628,7 @@ async fn probe_dns_tunnel(
     base: &str,
     target: &str,
     findings: &mut Vec<Value>,
-    dns_rows: &mut Vec<Value>,
+    dns_obs: &mut Vec<DnsObservation>,
 ) {
     if !tri(cfg, "check_dns_tunnel", true) {
         return;
@@ -554,12 +636,14 @@ async fn probe_dns_tunnel(
     let txts = dns_txt(host).await;
     for rec in &txts {
         let ent = shannon_entropy(rec.as_bytes());
-        dns_rows.push(json!({
-            "qtype": "TXT",
-            "host": host,
-            "len": rec.len(),
-            "entropy": ent,
-        }));
+        dns_obs.push(DnsObservation {
+            qtype: "TXT".into(),
+            host: host.to_string(),
+            entropy: Some(ent),
+            txt_len: Some(rec.len()),
+            min_ttl: None,
+            extra: json!({}),
+        });
         if rec.len() > 200 {
             emit(
                 findings,
@@ -604,7 +688,14 @@ async fn probe_dns_tunnel(
     }
 
     if let Some(ttl) = dns_a_min_ttl(host).await {
-        dns_rows.push(json!({"qtype": "A", "host": host, "min_ttl": ttl}));
+        dns_obs.push(DnsObservation {
+            qtype: "A".into(),
+            host: host.to_string(),
+            entropy: None,
+            txt_len: None,
+            min_ttl: Some(ttl as i32),
+            extra: json!({}),
+        });
         if ttl <= 1 {
             emit(
                 findings,
@@ -624,7 +715,14 @@ async fn probe_dns_tunnel(
     }
 
     if let Some(cname) = crate::cloud_hunter::resolve_cname(host).await {
-        dns_rows.push(json!({"qtype": "CNAME", "host": host, "target": cname}));
+        dns_obs.push(DnsObservation {
+            qtype: "CNAME".into(),
+            host: host.to_string(),
+            entropy: None,
+            txt_len: None,
+            min_ttl: None,
+            extra: json!({"target": cname}),
+        });
         let low = cname.to_ascii_lowercase();
         if low.contains("cloudfront")
             || low.contains("akamai")
@@ -921,6 +1019,68 @@ fn looks_jpeg(b: &[u8]) -> bool {
     b.len() >= 3 && b[0] == 0xff && b[1] == 0xd8 && b[2] == 0xff
 }
 
+/// Poisoned PNG IHDR: insane dimensions or a forged chunk length. Decoding this
+/// would expand a few kilobytes into gigabytes of RAM (decompression bomb).
+#[must_use]
+pub fn png_ihdr_is_poisoned(b: &[u8]) -> bool {
+    if !looks_png(b) {
+        return false;
+    }
+    if b.len() < 24 {
+        return true;
+    }
+    let clen = u32::from_be_bytes([b[8], b[9], b[10], b[11]]);
+    if clen != 13 || &b[12..16] != b"IHDR" {
+        return true;
+    }
+    let w = u32::from_be_bytes([b[16], b[17], b[18], b[19]]);
+    let h = u32::from_be_bytes([b[20], b[21], b[22], b[23]]);
+    w == 0 || h == 0 || w > 8_192 || h > 8_192 || (w as u64).saturating_mul(h as u64) > 16_777_216
+}
+
+/// Poisoned JPEG markers: APP1/segment length that overruns the buffer.
+#[must_use]
+pub fn jpeg_markers_poisoned(b: &[u8]) -> bool {
+    if !looks_jpeg(b) {
+        return false;
+    }
+    let mut i = 2usize;
+    while i + 4 <= b.len() {
+        if b[i] != 0xff {
+            break;
+        }
+        let marker = b[i + 1];
+        if marker == 0xd9 || marker == 0xda {
+            break;
+        }
+        if marker == 0xd8 || (0xd0..=0xd7).contains(&marker) || marker == 0x01 {
+            i += 2;
+            continue;
+        }
+        let seglen = u16::from_be_bytes([b[i + 2], b[i + 3]]) as usize;
+        if seglen < 2 || i + 2 + seglen > b.len() {
+            return true;
+        }
+        i += 2 + seglen;
+    }
+    false
+}
+
+fn inspect_media_bytes(bytes: &[u8]) -> Option<(f64, f64, bool, bool, bool)> {
+    if bytes.len() > MAX_MEDIA_FILE_SIZE_BYTES {
+        return None;
+    }
+    if png_ihdr_is_poisoned(bytes) || jpeg_markers_poisoned(bytes) {
+        return None;
+    }
+    let png = looks_png(bytes);
+    let jpg = looks_jpeg(bytes);
+    let ent = shannon_entropy(bytes);
+    let chi = lsb_chi_square(bytes);
+    let exif = jpg && bytes.windows(4).any(|w| w == b"Exif");
+    Some((ent, chi, png, jpg, exif))
+}
+
 async fn probe_stego(
     cfg: &ArsenalConfig,
     client: &reqwest::Client,
@@ -971,8 +1131,8 @@ async fn probe_stego(
     });
 
     let max_bytes = cfg
-        .usize_or("stego_max_bytes", 262_144)
-        .clamp(8_192, 1_048_576);
+        .usize_or("stego_max_bytes", MAX_MEDIA_FILE_SIZE_BYTES)
+        .clamp(8_192, MAX_MEDIA_FILE_SIZE_BYTES);
     let fetched = stream::iter(urls)
         .map(|url| {
             let c = client.clone();
@@ -987,11 +1147,25 @@ async fn probe_stego(
         if bytes.len() < 64 {
             continue;
         }
-        let ent = shannon_entropy(&bytes);
-        let chi = lsb_chi_square(&bytes);
-        let png = looks_png(&bytes);
-        let jpg = looks_jpeg(&bytes);
-        let exif = jpg && bytes.windows(4).any(|w| w == b"Exif");
+        let owned = bytes.clone();
+        let inspected = timeout(
+            MEDIA_ANALYSIS_TIMEOUT,
+            tokio::task::spawn_blocking(move || inspect_media_bytes(&owned)),
+        )
+        .await;
+        let Some((ent, chi, png, jpg, exif)) = (match inspected {
+            Ok(Ok(inner)) => inner,
+            _ => {
+                tracing::warn!(
+                    target: "advanced_c2_covert_exfil",
+                    url = %url,
+                    "dropping public-media analysis: poisoned headers or 100ms bound exceeded"
+                );
+                continue;
+            }
+        }) else {
+            continue;
+        };
         if png && ent > 7.85 && bytes.len() > 20_000 {
             emit(
                 findings,
@@ -1304,7 +1478,7 @@ async fn persist_audits(
     ctx: &EngineRunContext,
     target: &str,
     findings: &[Value],
-    dns_rows: &[Value],
+    dns_obs: Vec<DnsObservation>,
 ) {
     let Some(pool) = ctx.app_pool.as_ref() else {
         return;
@@ -1350,19 +1524,29 @@ async fn persist_audits(
         .execute(&mut *tx)
         .await;
     }
-    for row in dns_rows {
+    // Postgres receives hourly anomaly summaries only — never raw DNS queries.
+    let hour = hour_utc_bucket(chrono::Utc::now());
+    let filtered = window_filter_dns_observations(tenant_id, dns_obs).await;
+    let summaries = aggregate_dns_anomaly_summaries(&filtered, hour);
+    for sum in summaries {
+        if !redis_claim_dns_summary_flush(tenant_id, &sum.host, hour).await {
+            continue;
+        }
         let _ = sqlx::query(
             r#"INSERT INTO dns_covert_query_audits
-               (tenant_id, client_id, job_id, target, qtype, query_host, evidence)
-               VALUES ($1,$2,$3,$4,$5,$6,$7)"#,
+               (tenant_id, client_id, job_id, target, qtype, query_host, hour_utc, evidence)
+               VALUES ($1,$2,$3,$4,'SUMMARY',$5,$6,$7)
+               ON CONFLICT (tenant_id, query_host, hour_utc)
+               WHERE qtype = 'SUMMARY' AND hour_utc IS NOT NULL
+               DO NOTHING"#,
         )
         .bind(tenant_id)
         .bind(ctx.client_id)
         .bind(job_id.as_deref())
         .bind(target)
-        .bind(row.get("qtype").and_then(Value::as_str).unwrap_or("TXT"))
-        .bind(row.get("host").and_then(Value::as_str).unwrap_or(""))
-        .bind(sqlx::types::Json(row.clone()))
+        .bind(&sum.host)
+        .bind(sum.hour_utc)
+        .bind(sqlx::types::Json(sum.evidence()))
         .execute(&mut *tx)
         .await;
     }
@@ -1605,7 +1789,7 @@ pub async fn run_advanced_c2_covert_exfil_result_ctx(
         );
     }
 
-    persist_audits(ctx, target, &findings, &dns_rows).await;
+    persist_audits(ctx, target, &findings, dns_rows).await;
 
     let msg = format!(
         "advanced_c2_covert_exfil: {} live finding(s) on {}",
@@ -1703,6 +1887,72 @@ mod tests {
         assert!(looks_png(&png));
         assert!(!looks_jpeg(&png));
         assert!(looks_jpeg(&[0xff, 0xd8, 0xff, 0xe0]));
+    }
+
+    #[test]
+    fn png_ihdr_bomb_is_rejected() {
+        let mut png = vec![137, 80, 78, 71, 13, 10, 26, 10];
+        png.extend_from_slice(&13u32.to_be_bytes()); // IHDR length
+        png.extend_from_slice(b"IHDR");
+        png.extend_from_slice(&60_000u32.to_be_bytes()); // width bomb
+        png.extend_from_slice(&60_000u32.to_be_bytes()); // height bomb
+        assert!(png_ihdr_is_poisoned(&png));
+        assert!(inspect_media_bytes(&png).is_none());
+    }
+
+    #[test]
+    fn jpeg_overrun_app1_is_rejected() {
+        let mut jpg = vec![0xff, 0xd8, 0xff, 0xe1];
+        jpg.extend_from_slice(&20_000u16.to_be_bytes()); // APP1 claims 20k but body is tiny
+        jpg.extend_from_slice(&[0u8; 8]);
+        assert!(jpeg_markers_poisoned(&jpg));
+        assert!(inspect_media_bytes(&jpg).is_none());
+    }
+
+    #[test]
+    fn media_ceiling_constant_is_2_mib() {
+        assert_eq!(MAX_MEDIA_FILE_SIZE_BYTES, 2 * 1024 * 1024);
+    }
+
+    #[test]
+    fn dns_observations_never_become_raw_pg_rows() {
+        let hour = crate::c2_runtime_guards::hour_utc_bucket(chrono::Utc::now());
+        let obs = vec![
+            DnsObservation {
+                qtype: "TXT".into(),
+                host: "t.example".into(),
+                entropy: Some(5.1),
+                txt_len: Some(40),
+                min_ttl: None,
+                extra: serde_json::json!({}),
+            },
+            DnsObservation {
+                qtype: "TXT".into(),
+                host: "t.example".into(),
+                entropy: Some(5.2),
+                txt_len: Some(41),
+                min_ttl: None,
+                extra: serde_json::json!({}),
+            },
+            DnsObservation {
+                qtype: "A".into(),
+                host: "t.example".into(),
+                entropy: None,
+                txt_len: None,
+                min_ttl: Some(300),
+                extra: serde_json::json!({}),
+            },
+        ];
+        let sums = crate::c2_runtime_guards::aggregate_dns_anomaly_summaries(&obs, hour);
+        assert_eq!(sums.len(), 1);
+        assert_eq!(sums[0].query_count, 3);
+        assert_eq!(
+            sums[0]
+                .evidence()
+                .get("raw_queries_persisted")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
     }
 
     #[tokio::test]
