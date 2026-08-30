@@ -12,8 +12,9 @@
 //! The zero-trust bus envelope (`_weissman_job_bus`) stays a **plaintext
 //! sibling** so `payload ? '_weissman_job_bus'` still gates claim. Indexable
 //! routing keys `client_id` and `engine` are also plaintext siblings so SQL
-//! filters keep working. Secrets, `target`, and `validated_scope` stay inside
-//! `_weissman_job_enc`.
+//! filters keep working — and they are bound as GCM AAD so swapping those
+//! siblings without the ciphertext fails open. Secrets, `target`, and
+//! `validated_scope` stay inside `_weissman_job_enc`.
 //!
 //! No bulk-decrypt helper exists on purpose.
 
@@ -52,6 +53,44 @@ fn tenant_wrap_key(kek: &[u8; 32], tenant_id: i64) -> [u8; 32] {
 
 fn tenant_aad(tenant_id: i64) -> [u8; 8] {
     tenant_id.to_le_bytes()
+}
+
+/// AEAD associated data for envelope v2: tenant (from the row, not JSON) plus
+/// the plaintext routing siblings. Changing `client_id` / `engine` next to the
+/// ciphertext makes GCM open fail.
+fn routing_aad(tenant_id: i64, payload: &Value) -> Vec<u8> {
+    let mut aad = Vec::with_capacity(64);
+    aad.extend_from_slice(b"weissman-job-aad-v2|");
+    aad.extend_from_slice(&tenant_id.to_le_bytes());
+    aad.push(0);
+    push_canonical_atom(&mut aad, payload.get("client_id"));
+    aad.push(0);
+    push_canonical_atom(&mut aad, payload.get("engine"));
+    aad
+}
+
+fn push_canonical_atom(out: &mut Vec<u8>, v: Option<&Value>) {
+    match v {
+        Some(Value::String(s)) => {
+            out.push(b's');
+            out.extend_from_slice(s.as_bytes());
+        }
+        Some(Value::Number(n)) => {
+            out.push(b'n');
+            out.extend_from_slice(n.to_string().as_bytes());
+        }
+        Some(Value::Bool(b)) => {
+            out.push(b'b');
+            out.extend_from_slice(if *b { b"1" } else { b"0" });
+        }
+        Some(Value::Null) | None => out.push(b'-'),
+        Some(other) => {
+            out.push(b'j');
+            if let Ok(bytes) = serde_json::to_vec(other) {
+                out.extend_from_slice(&bytes);
+            }
+        }
+    }
 }
 
 /// Seal `payload` for storage. Passthrough when no KEK (dev without a vault key).
@@ -140,7 +179,7 @@ pub(crate) fn seal_with_kek(
     let wrap = tenant_wrap_key(kek, tenant_id);
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&wrap));
     let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-    let aad = tenant_aad(tenant_id);
+    let aad = routing_aad(tenant_id, &inner);
     let ct = cipher
         .encrypt(
             &nonce,
@@ -152,7 +191,7 @@ pub(crate) fn seal_with_kek(
         .map_err(|_| "job envelope encrypt failed".to_string())?;
     let mut out = json!({
         ENC_KEY: {
-            "v": 1,
+            "v": 2,
             "nonce": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, nonce.as_slice()),
             "ct": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &ct),
         }
@@ -173,9 +212,16 @@ pub(crate) fn open_with_kek(
         .get(ENC_KEY)
         .ok_or_else(|| "missing job envelope".to_string())?;
     let v = enc.get("v").and_then(|x| x.as_i64()).unwrap_or(0);
-    if v != 1 {
-        return Err(format!("unsupported job envelope version {v}"));
-    }
+    let aad_owned: Vec<u8> = match v {
+        1 => {
+            // Pre-routing AAD: tenant_id only. Still accepted so in-flight v1
+            // rows from this branch's first envelope commit can be claimed.
+            tenant_aad(tenant_id).to_vec()
+        }
+        2 => routing_aad(tenant_id, payload),
+        other => return Err(format!("unsupported job envelope version {other}")),
+    };
+    let aad = aad_owned.as_slice();
     let nonce_b64 = enc
         .get("nonce")
         .and_then(|x| x.as_str())
@@ -194,15 +240,8 @@ pub(crate) fn open_with_kek(
     let wrap = tenant_wrap_key(kek, tenant_id);
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&wrap));
     let nonce = Nonce::from_slice(&nonce_bytes);
-    let aad = tenant_aad(tenant_id);
     let pt = cipher
-        .decrypt(
-            nonce,
-            Payload {
-                msg: &ct,
-                aad: &aad,
-            },
-        )
+        .decrypt(nonce, Payload { msg: &ct, aad })
         .map_err(|_| "job envelope decrypt failed".to_string())?;
     let mut inner: Value = serde_json::from_slice(&pt)
         .map_err(|_| "job envelope plaintext is not JSON".to_string())?;
@@ -433,9 +472,45 @@ mod tests {
     }
 
     #[test]
+    fn tampered_routing_sibling_fails_open() {
+        let kek = [0x77u8; 32];
+        let plain = json!({
+            "engine": "osint",
+            "client_id": 5,
+            "target": "https://example.com"
+        });
+        let mut sealed = seal_with_kek(&plain, 3, &kek).expect("seal");
+        assert_eq!(
+            sealed
+                .get(ENC_KEY)
+                .and_then(|e| e.get("v"))
+                .and_then(|v| v.as_i64()),
+            Some(2)
+        );
+        sealed["engine"] = json!("timing");
+        assert!(
+            open_with_kek(&sealed, 3, &kek).is_err(),
+            "changing plaintext engine must fail GCM AAD"
+        );
+        sealed["engine"] = json!("osint");
+        sealed["client_id"] = json!(99);
+        assert!(
+            open_with_kek(&sealed, 3, &kek).is_err(),
+            "changing plaintext client_id must fail GCM AAD"
+        );
+        sealed["client_id"] = json!(5);
+        let opened = open_with_kek(&sealed, 3, &kek).expect("untampered");
+        assert_eq!(
+            opened.get("target").and_then(|v| v.as_str()),
+            Some("https://example.com")
+        );
+    }
+
+    #[test]
     fn seal_with_kek_is_the_only_encrypt_entry() {
         let src = include_str!("job_envelope.rs");
         let prod = src.split("#[cfg(test)]").next().expect("production source");
+        assert!(prod.contains("weissman-job-aad-v2|"));
         assert_eq!(
             prod.matches(".encrypt(").count(),
             1,
