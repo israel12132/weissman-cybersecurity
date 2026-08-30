@@ -25,6 +25,13 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
   builds are fully statically linked (`crt-static`); the installer prefers
   `linux-<arch>-musl`.
 
+### Fixed
+
+- **CI gitleaks history scan** uses `--log-opts="HEAD"` so `actions/checkout`
+  `fetch-depth: 0` cannot fail this PR on throwaway fixture strings that exist
+  only on unrelated origin branches. The repeating-`deadbeef`
+  `WEISSMAN_VAULT_KEY` CI fixture is allowlisted (same class as the nightly-e2e
+  hex).
 
 ### Added
 

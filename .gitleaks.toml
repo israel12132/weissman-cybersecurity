@@ -58,4 +58,7 @@ regexes = [
     # Throwaway 64-hex WEISSMAN_VAULT_KEY fixture in the nightly-e2e workflow —
     # scoped to the ephemeral runner DB only, never a real vault key.
     '''0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef''',
+    # Throwaway 64-hex WEISSMAN_VAULT_KEY fixture in ci.yml rust-audit-lint-test
+    # env (repeating deadbeef). Same class as the nightly-e2e hex above.
+    '''deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef''',
 ]
