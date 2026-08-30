@@ -316,7 +316,10 @@ jobs:
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${ver}/gitleaks_${ver}_linux_x64.tar.gz" \
             | tar -xz gitleaks
           ./gitleaks detect --no-git --redact --no-banner --exit-code 1 --source .
-          ./gitleaks detect --redact --no-banner --exit-code 1 --source .
+          # History scan is this checkout's ancestry only. actions/checkout fetch-depth:0
+          # also fetches every origin branch; gitleaks' default walk then fails this PR on
+          # fixture strings that exist only on unrelated agent branches.
+          ./gitleaks detect --redact --no-banner --exit-code 1 --source . --log-opts="HEAD"
 
       - name: Dependency & IaC vuln scan (Trivy filesystem, CRITICAL+HIGH)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
