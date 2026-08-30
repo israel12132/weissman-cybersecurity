@@ -87,6 +87,11 @@ export default function CemDagoMesh() {
     [blackboard],
   )
 
+  const quarantineRows = useMemo(
+    () => (Array.isArray(blackboard?.quarantine) ? blackboard.quarantine : []),
+    [blackboard],
+  )
+
   const filteredManifests = useMemo(() => {
     const q = searchTerm.trim().toLowerCase()
     if (!q) return manifests
@@ -205,7 +210,7 @@ export default function CemDagoMesh() {
         {loading && !status && <SkeletonWidgetGrid count={4} />}
 
         {status && (
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-8 gap-3">
             <ExecutiveWidget
               label={t(`${NS}.kpi_enabled`)}
               value={status.enabled ? t(`${NS}.on`) : t(`${NS}.off`)}
@@ -245,6 +250,16 @@ export default function CemDagoMesh() {
               value={blackboard?.evidence_count ?? 0}
               hint={t(`${NS}.kpi_evidence_hint`)}
               accent="#f97316"
+            />
+            <ExecutiveWidget
+              label={t(`${NS}.quarantine`)}
+              value={blackboard?.telemetry_integrity_violations ?? quarantineRows.length}
+              hint={status.graph_cache || 'arcswap_live'}
+              accent={
+                (blackboard?.telemetry_integrity_violations ?? quarantineRows.length) > 0
+                  ? '#f43f5e'
+                  : '#34d399'
+              }
             />
             <ExecutiveWidget
               label={t(`${NS}.kpi_trie`)}
@@ -314,6 +329,21 @@ export default function CemDagoMesh() {
                 {failureRows.map((f, i) => (
                   <li key={`${f.engine_id}-${i}`} className="text-[11px] font-mono text-rose-200/90">
                     {f.engine_id} @ {f.target}: {f.error_message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {quarantineRows.length > 0 && (
+            <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-950/20 p-3" role="alert">
+              <h3 className="text-[10px] font-mono uppercase tracking-widest text-amber-200 mb-2">
+                {t(`${NS}.quarantine`)}
+              </h3>
+              <ul className="space-y-1">
+                {quarantineRows.map((q, i) => (
+                  <li key={`${q.field_key}-${i}`} className="text-[11px] font-mono text-amber-100/90 break-all">
+                    {q.kind}/{q.field_key} codec=0x
+                    {q.codec_byte != null ? Number(q.codec_byte).toString(16) : '?'} hex={q.raw_hex} — {q.decode_error}
                   </li>
                 ))}
               </ul>

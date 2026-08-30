@@ -1,25 +1,27 @@
-//! Pivot: Dijkstra over a **scan-resident** copy of `risk_graph_nodes` / `risk_graph_edges`.
+//! Pivot: Dijkstra over a **live** copy of `risk_graph_nodes` / `risk_graph_edges`.
 //!
-//! The tenant graph is loaded **once** at mesh start ([`load_risk_graph`]) and held as
-//! `Arc<CachedRiskGraph>` on the scan context. Per-engine failures recompute Dijkstra
-//! in RAM only — they must not re-query Postgres (that starves the application pool
-//! when a wave of engines times out together).
+//! The tenant graph is loaded at mesh start ([`load_risk_graph`]) into
+//! [`ResidentRiskGraph`] (`Arc<ArcSwap<CachedRiskGraph>>`). Per-engine failures
+//! recompute Dijkstra in RAM only — they must not re-query Postgres on every
+//! timeout. After each wave, new blackboard signals are ingested with a CAS
+//! (`rcu`) swap so Dijkstra sees mid-scan topology (asset discovery / lateral
+//! movement) without an `RwLock` write that would stall the event loop.
 //!
 //! Schema is `from_node_id` / `to_node_id` / `edge_type` (not the draft `source_node`/`cost`
 //! columns). Edge cost follows the same inverse-CVSS/EPSS/KEV model as [`crate::attack_path`].
 
 use super::manifest::EdgeKind;
 use super::registry::manifest_for;
+use arc_swap::ArcSwap;
 use petgraph::algo::dijkstra;
 use petgraph::graph::{DiGraph, NodeIndex};
 use serde::Serialize;
 use sqlx::{PgPool, Row};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
-/// Scan-resident risk graph. Wrapped in `Arc<RwLock<_>>` on [`crate::cem_dago::mesh`]
-/// so the type matches the production contract; the mesh never writes after load.
+/// Scan-resident risk graph. [`ArcSwap`] so discovery engines can publish a new
+/// snapshot without blocking Dijkstra readers on an `RwLock` write.
 #[derive(Clone)]
 pub struct CachedRiskGraph {
     labels: HashMap<i64, (String, String, bool, f64)>,
@@ -48,14 +50,96 @@ impl CachedRiskGraph {
     pub fn edge_count(&self) -> usize {
         self.hops_meta.len()
     }
+
+    #[must_use]
+    pub fn has_label(&self, label: &str) -> bool {
+        self.labels.values().any(|t| t.0 == label)
+    }
+
+    /// Copy-on-write: attach newly discovered blackboard signals as nodes linked
+    /// from internet-exposed entry points so Dijkstra sees live topology.
+    #[must_use]
+    pub fn with_ingested_signals(&self, signals: &[String]) -> Self {
+        let mut next = self.clone();
+        let existing: HashSet<String> = next.labels.values().map(|t| t.0.clone()).collect();
+        let mut next_id = next
+            .labels
+            .keys()
+            .copied()
+            .min()
+            .unwrap_or(0)
+            .min(0)
+            .saturating_sub(1);
+        if next_id >= 0 {
+            next_id = -1;
+        }
+        if !next.labels.values().any(|t| t.2) {
+            let id = next_id;
+            next_id -= 1;
+            let idx = next.graph.add_node(id);
+            next.idx.insert(id, idx);
+            next.labels
+                .insert(id, ("internet_exposed".into(), "entry".into(), true, 1.0));
+        }
+        let starts: Vec<i64> = next
+            .labels
+            .iter()
+            .filter(|(_, t)| t.2)
+            .map(|(id, _)| *id)
+            .collect();
+        for sig in signals {
+            if !ingestible_signal(sig) || existing.contains(sig) {
+                continue;
+            }
+            let id = next_id;
+            next_id -= 1;
+            let gidx = next.graph.add_node(id);
+            next.idx.insert(id, gidx);
+            let ntype = EdgeKind::from_graph_label(sig)
+                .map(|k| k.signal().to_string())
+                .unwrap_or_else(|| "discovered".into());
+            next.labels.insert(id, (sig.clone(), ntype, false, 0.4));
+            for sid in &starts {
+                let Some(&u) = next.idx.get(sid) else {
+                    continue;
+                };
+                let etype = format!("live:{sig}");
+                next.graph.add_edge(u, gidx, (0.4, etype.clone()));
+                next.hops_meta.push((*sid, id, etype, 0.4));
+            }
+        }
+        next
+    }
+}
+
+fn ingestible_signal(sig: &str) -> bool {
+    if sig.starts_with('_')
+        || sig == "internet_exposed"
+        || sig == "historical_payloads"
+        || sig == "discovery_paths"
+        || sig == "_failures"
+    {
+        return false;
+    }
+    EdgeKind::from_graph_label(sig).is_some()
 }
 
 /// Shared handle stored on the mesh executor for the lifetime of one scan.
-pub type ResidentRiskGraph = Arc<RwLock<CachedRiskGraph>>;
+pub type ResidentRiskGraph = Arc<ArcSwap<CachedRiskGraph>>;
 
 #[must_use]
 pub fn resident_graph(graph: CachedRiskGraph) -> ResidentRiskGraph {
-    Arc::new(RwLock::new(graph))
+    Arc::new(ArcSwap::from_pointee(graph))
+}
+
+/// Atomic snapshot replace (no blocking write lock).
+pub fn store_graph(cache: &ResidentRiskGraph, graph: CachedRiskGraph) {
+    cache.store(Arc::new(graph));
+}
+
+/// CAS / RCU ingest of live blackboard signals.
+pub fn ingest_live_signals(cache: &ResidentRiskGraph, signals: &[String]) {
+    cache.rcu(|cur| Arc::new((**cur).with_ingested_signals(signals)));
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -373,5 +457,31 @@ mod tests {
         let ids = fallback_engine_ids("scada_ics", &enabled, &ran, &["ot_protocol".into()], 4);
         assert!(ids.contains(&"iot_firmware".to_string()));
         assert!(!ids.contains(&"scada_ics".to_string()));
+    }
+
+    #[test]
+    fn ingest_signal_adds_live_hop_for_dijkstra() {
+        let mut cached = CachedRiskGraph::empty();
+        let a = cached.graph.add_node(1);
+        cached.idx.insert(1, a);
+        cached
+            .labels
+            .insert(1, ("internet_exposed".into(), "entry".into(), true, 1.0));
+        let live = cached.with_ingested_signals(&["ot_protocol".into()]);
+        assert!(live.has_label("ot_protocol"));
+        assert!(live.edge_count() > cached.edge_count());
+        let route = alternative_signals_from_cached(&live);
+        assert!(
+            route
+                .hops
+                .iter()
+                .any(|h| h.to_label == "ot_protocol" || h.edge_type.contains("ot_protocol")),
+            "live ingest must be visible to Dijkstra hops: {:?}",
+            route.hops
+        );
+        let swapped = resident_graph(cached);
+        ingest_live_signals(&swapped, &["web_port_active".into()]);
+        let snap = swapped.load();
+        assert!(snap.has_label("web_port_active"));
     }
 }

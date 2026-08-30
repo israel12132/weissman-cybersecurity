@@ -283,6 +283,7 @@ pub async fn execute_plan_under_ro_sandbox(
     if blob_has_injection(&compiled.sql) {
         return Err("sandbox: compiled SQL contains a blocked token".into());
     }
+    super::sql_ast::validate_compiled_sql_ast(&compiled.sql)?;
     let Some(ro) = ro_pool else {
         return Err(
             "QueryPlan skipped — WEISSMAN_READ_ONLY_DATABASE_URL unset (weissman_ro required)"
@@ -402,5 +403,20 @@ mod tests {
             value: Value::from(1),
         }];
         assert!(reject_query_plan_injection(&qp).is_err());
+    }
+
+    #[test]
+    fn json_unicode_semicolon_never_reaches_sql() {
+        let raw =
+            r#"{"table":"risk_graph_nodes\u003bdrop","select":["id"],"filters":[],"limit":1}"#;
+        let qp: QueryPlan = serde_json::from_str(raw).unwrap();
+        assert!(qp.table.contains(';'));
+        assert!(reject_query_plan_injection(&qp).is_err());
+    }
+
+    #[test]
+    fn compiled_sql_passes_ast_gate() {
+        let compiled = compile_plan(&ok_plan(), 1).expect("compile");
+        crate::cem_dago::sql_ast::validate_compiled_sql_ast(&compiled.sql).expect("ast");
     }
 }

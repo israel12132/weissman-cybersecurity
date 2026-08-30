@@ -23,8 +23,11 @@ pub mod payload_trie;
 pub mod pivot;
 pub mod planner;
 pub mod queryplan_sandbox;
+pub mod redis_pool;
 pub mod registry;
 pub mod router;
+pub mod sql_ast;
+pub mod telemetry_quarantine;
 
 pub use blackboard::{BlackboardError, Evidence, FailureLog, ScanBlackboard};
 pub use lanes::{engine_lane, EngineLane};

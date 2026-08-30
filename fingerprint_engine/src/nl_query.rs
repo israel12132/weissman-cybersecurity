@@ -293,6 +293,14 @@ pub fn is_allowlisted_table(name: &str) -> bool {
     SCHEMA.contains_key(name)
 }
 
+/// Sorted allow-list names for AST table extraction (never a parallel hand list).
+#[must_use]
+pub fn allowlisted_table_names() -> Vec<&'static str> {
+    let mut v: Vec<&'static str> = SCHEMA.keys().copied().collect();
+    v.sort_unstable();
+    v
+}
+
 /// Hermetic QueryPlan sandbox: column must be enumerated on that table.
 #[must_use]
 pub fn is_allowlisted_column(table: &str, column: &str) -> bool {

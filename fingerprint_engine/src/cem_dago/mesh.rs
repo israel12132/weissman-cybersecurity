@@ -7,8 +7,8 @@
 use super::blackboard::ScanBlackboard;
 use super::lanes::partition_lanes;
 use super::pivot::{
-    alternative_signals_from_cached, fallback_engine_ids, load_risk_graph, resident_graph,
-    CachedRiskGraph, ResidentRiskGraph,
+    alternative_signals_from_cached, fallback_engine_ids, ingest_live_signals, load_risk_graph,
+    resident_graph, store_graph, CachedRiskGraph, ResidentRiskGraph,
 };
 use super::planner::{trigger_supreme_council_planner, PlannerInput};
 use super::record_engine_result;
@@ -57,7 +57,8 @@ struct MeshExec {
     blackboard: Arc<ScanBlackboard>,
     read_only_pool: Option<Arc<PgPool>>,
     enabled: Vec<String>,
-    /// Tenant DiGraph loaded once per scan. Pivots read this lock; they never hit Postgres.
+    /// Tenant DiGraph in ArcSwap. Pivots load() a snapshot; they never hit Postgres
+    /// per failure. Waves ingest live blackboard signals (and optionally reload SQL).
     risk_graph: ResidentRiskGraph,
 }
 
@@ -155,9 +156,9 @@ pub async fn execute_mesh(req: MeshRequest) -> MeshRunReport {
                 target: "cem_dago",
                 nodes = g.node_count(),
                 edges = g.edge_count(),
-                "loaded scan-resident risk graph (Dijkstra is RAM-only from here)"
+                "loaded scan-resident risk graph (Dijkstra is RAM-only; ArcSwap for live topology)"
             );
-            exec.risk_graph = resident_graph(g);
+            store_graph(&exec.risk_graph, g);
         }
         Err(e) => {
             tracing::warn!(
@@ -205,12 +206,14 @@ pub async fn execute_mesh(req: MeshRequest) -> MeshRunReport {
                 )
                 .await;
                 pivots.push(step.event);
+                let pivot_dirty = step.outcomes.iter().any(|o| o.success);
+                let launched = step.launched;
                 for o in step.outcomes {
                     already.insert(o.engine_id.clone());
                     remaining.remove(&o.engine_id);
                     outcomes.push(o);
                 }
-                if step.launched == 0 {
+                if launched == 0 {
                     let c = invoke_council(&exec, &already).await;
                     council_invoked = c.invoked;
                     council_degraded = c.degraded;
@@ -222,6 +225,8 @@ pub async fn execute_mesh(req: MeshRequest) -> MeshRunReport {
                     }
                     break;
                 }
+                refresh_live_graph(&exec, pivot_dirty).await;
+                flush_quarantine(&exec).await;
                 continue;
             }
             let rest: Vec<String> = remaining.iter().cloned().collect();
@@ -232,6 +237,7 @@ pub async fn execute_mesh(req: MeshRequest) -> MeshRunReport {
         metrics::counter!("weissman_cem_dago_waves_total").increment(1);
 
         let wave_out = run_wave(&exec, &ready, None).await;
+        let wave_dirty = wave_out.iter().any(|o| o.success);
         for o in wave_out {
             remaining.remove(&o.engine_id);
             already.insert(o.engine_id.clone());
@@ -247,6 +253,8 @@ pub async fn execute_mesh(req: MeshRequest) -> MeshRunReport {
             }
             outcomes.push(o);
         }
+        refresh_live_graph(&exec, wave_dirty).await;
+        flush_quarantine(&exec).await;
     }
 
     if !remaining.is_empty() && !council_invoked {
@@ -259,6 +267,8 @@ pub async fn execute_mesh(req: MeshRequest) -> MeshRunReport {
         }
         outcomes.extend(c.outcomes);
     }
+
+    flush_quarantine(&exec).await;
 
     MeshRunReport {
         waves,
@@ -295,7 +305,7 @@ async fn execute_orchestration_step(
     metrics::counter!("weissman_cem_dago_pivots_total").increment(1);
 
     let route = {
-        let g = exec.risk_graph.read().await;
+        let g = exec.risk_graph.load();
         alternative_signals_from_cached(&g)
     };
 
@@ -463,6 +473,51 @@ async fn run_one(exec: &MeshExec, engine_id: &str, target: &str) -> EngineResult
     result
 }
 
+async fn refresh_live_graph(exec: &MeshExec, reload_sql: bool) {
+    if reload_sql {
+        match load_risk_graph(
+            exec.pool.as_ref(),
+            exec.blackboard.tenant_id(),
+            exec.blackboard.client_id(),
+        )
+        .await
+        {
+            Ok(g) => {
+                tracing::debug!(
+                    target: "cem_dago",
+                    nodes = g.node_count(),
+                    edges = g.edge_count(),
+                    "reloaded risk graph after dirty wave (one SQL, then RAM Dijkstra)"
+                );
+                store_graph(&exec.risk_graph, g);
+            }
+            Err(e) => {
+                tracing::debug!(
+                    target: "cem_dago",
+                    error = %e,
+                    "live graph SQL reload skipped — ingesting blackboard signals only"
+                );
+            }
+        }
+    }
+    let signals = exec.blackboard.present_signals().await.unwrap_or_default();
+    ingest_live_signals(&exec.risk_graph, &signals);
+}
+
+async fn flush_quarantine(exec: &MeshExec) {
+    let blobs = exec
+        .blackboard
+        .persist_and_take_quarantine(exec.pool.as_ref())
+        .await;
+    if !blobs.is_empty() {
+        tracing::error!(
+            target: "cem_dago",
+            count = blobs.len(),
+            "telemetry integrity violations flushed to RLS quarantine"
+        );
+    }
+}
+
 /// Seed the blackboard for a client scan (discovery / OT / internet edge).
 pub async fn seed_scan_context(
     blackboard: &ScanBlackboard,
@@ -510,9 +565,11 @@ pub fn status_json() -> Value {
         "blackboard_codec": "msgpack_v1",
         "codec_magic": "0xC1",
         "codec_version": super::blackboard::CODEC_VERSION,
-        "redis_pool": "connection_manager",
-        "graph_cache": "scan_resident",
-        "queryplan_sandbox": "hermetic_whitelist",
+        "redis_pool": "sharded_connection_manager",
+        "redis_shards": super::redis_pool::redis_shard_count(),
+        "graph_cache": "arcswap_live",
+        "queryplan_sandbox": "ast_whitelist",
+        "telemetry_quarantine": true,
         "wave_join": "join_all",
         "dispatch": "id_lookup_not_dyn_trait",
         "pipeline_special_engines": super::PIPELINE_SPECIAL_ENGINES,
@@ -565,9 +622,10 @@ mod tests {
         assert_eq!(v["wave_join"], "join_all");
         assert_eq!(v["blackboard_codec"], "msgpack_v1");
         assert_eq!(v["codec_magic"], "0xC1");
-        assert_eq!(v["redis_pool"], "connection_manager");
-        assert_eq!(v["graph_cache"], "scan_resident");
-        assert_eq!(v["queryplan_sandbox"], "hermetic_whitelist");
+        assert_eq!(v["redis_pool"], "sharded_connection_manager");
+        assert_eq!(v["graph_cache"], "arcswap_live");
+        assert_eq!(v["queryplan_sandbox"], "ast_whitelist");
+        assert_eq!(v["telemetry_quarantine"], true);
         assert_eq!(v["dispatch"], "id_lookup_not_dyn_trait");
         assert_eq!(v["trie_prewarm"]["batch_size"], 25_000);
         assert_eq!(v["trie_prewarm"]["window_days"], 90);

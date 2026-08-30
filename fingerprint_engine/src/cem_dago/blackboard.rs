@@ -3,23 +3,26 @@
 //! Engines never message each other. They read/write this hash only. Local cache
 //! avoids duplicate Redis round-trips within a process. TTL is 24 hours.
 //!
-//! Redis I/O uses a **process-wide** [`redis::aio::ConnectionManager`] (multiplexed
-//! TCP + reconnect). Wave `join_all` tasks clone the manager instead of opening a
-//! new socket per evidence write — that is what prevents FD / Redis-client
-//! exhaustion under DAG fan-out.
+//! Redis I/O uses a **cgroup-sized shard of** [`redis::aio::ConnectionManager`]
+//! sockets ([`super::redis_pool`]). Wave `join_all` tasks pick a shard by field
+//! key so large MessagePack writes do not Head-of-Line block a single TCP
+//! socket, without opening a connection per engine.
 //!
 //! When `REDIS_URL` is unset the store is in-process memory (honest: the API on
 //! another process cannot see it). Production multi-replica deployments already
 //! require Redis (`rate_limit_redis::distributed_state_required`).
 
+use super::redis_pool::{shared_redis_pool, ShardedRedis};
+use super::telemetry_quarantine::{blob_from_raw, persist_quarantine, QuarantineBlob};
 use super::BLACKBOARD_TTL_SECS;
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sqlx::PgPool;
 use std::collections::HashMap;
 use std::time::Duration;
 use thiserror::Error;
-use tokio::sync::{OnceCell, RwLock};
+use tokio::sync::RwLock;
 
 const REDIS_OP_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -28,8 +31,6 @@ const REDIS_OP_TIMEOUT: Duration = Duration::from_secs(2);
 pub const CODEC_MAGIC: u8 = 0xC1;
 /// Current Evidence / FailureLog named-map layout.
 pub const CODEC_VERSION: u8 = 1;
-
-static REDIS_MANAGER: OnceCell<Option<redis::aio::ConnectionManager>> = OnceCell::const_new();
 
 #[derive(Debug, Error)]
 pub enum BlackboardError {
@@ -198,17 +199,18 @@ pub struct FailureLog {
     pub timestamp: i64,
 }
 
-/// Shared scan memory. Cheap to clone the Redis manager (`ConnectionManager` is
+/// Shared scan memory. Cheap to clone a shard manager (`ConnectionManager` is
 /// `Clone`); the local cache stays behind `RwLock`.
 pub struct ScanBlackboard {
     tenant_id: i64,
     client_id: i64,
     scan_id: String,
-    /// When true, I/O goes through [`shared_redis_manager`] (or a test-injected manager).
+    /// When true, I/O goes through [`shared_redis_pool`] (or a test-injected manager).
     redis_enabled: bool,
-    /// Test / open_scan override. `None` means use the process-wide manager.
+    /// Test override. `None` means pick a shard from the process-wide pool.
     redis_dedicated: Option<redis::aio::ConnectionManager>,
     local_cache: RwLock<HashMap<String, Evidence>>,
+    quarantine: RwLock<Vec<QuarantineBlob>>,
 }
 
 impl std::fmt::Debug for ScanBlackboard {
@@ -218,7 +220,7 @@ impl std::fmt::Debug for ScanBlackboard {
             .field("client_id", &self.client_id)
             .field("scan_id", &self.scan_id)
             .field("redis_backed", &self.redis_enabled)
-            .field("redis_pooled", &self.redis_enabled)
+            .field("redis_sharded", &self.redis_enabled)
             .finish()
     }
 }
@@ -233,10 +235,11 @@ impl ScanBlackboard {
             redis_enabled: true,
             redis_dedicated: None,
             local_cache: RwLock::new(HashMap::new()),
+            quarantine: RwLock::new(Vec::new()),
         }
     }
 
-    /// Inject a manager (live tests). Still a single multiplexed connection, not a new TCP per op.
+    /// Inject a manager (live tests). Production paths use the sharded pool.
     pub fn with_manager(
         tenant_id: i64,
         client_id: i64,
@@ -250,6 +253,7 @@ impl ScanBlackboard {
             redis_enabled: true,
             redis_dedicated: Some(redis),
             local_cache: RwLock::new(HashMap::new()),
+            quarantine: RwLock::new(Vec::new()),
         }
     }
 
@@ -263,6 +267,7 @@ impl ScanBlackboard {
             redis_enabled: false,
             redis_dedicated: None,
             local_cache: RwLock::new(HashMap::new()),
+            quarantine: RwLock::new(Vec::new()),
         }
     }
 
@@ -318,16 +323,105 @@ impl ScanBlackboard {
         format!("weissman:blackboard:latest:{tenant_id}:{client_id}")
     }
 
-    async fn conn(&self) -> Result<redis::aio::ConnectionManager, BlackboardError> {
+    #[must_use]
+    pub fn quarantine_key(&self) -> String {
+        format!(
+            "weissman:quarantine:{}:{}:{}",
+            self.tenant_id, self.client_id, self.scan_id
+        )
+    }
+
+    async fn conn_for(
+        &self,
+        shard_key: &str,
+    ) -> Result<redis::aio::ConnectionManager, BlackboardError> {
         if let Some(m) = &self.redis_dedicated {
             return Ok(m.clone());
         }
         if !self.redis_enabled {
             return Err(BlackboardError::Redis("redis not configured".into()));
         }
-        shared_redis_manager()
+        let pool = shared_redis_pool()
             .await
-            .ok_or_else(|| BlackboardError::Redis("redis connection manager unavailable".into()))
+            .ok_or_else(|| BlackboardError::Redis("sharded redis pool unavailable".into()))?;
+        Ok(pool.shard(shard_key))
+    }
+
+    /// Decode failure → hex quarantine blob + critical log. Never a silent skip.
+    /// Corrupt fields are **not** treated as present DAG signals.
+    pub(crate) async fn quarantine_decode_failure(
+        &self,
+        kind: &str,
+        field_key: &str,
+        raw: &[u8],
+        err: &BlackboardError,
+    ) {
+        metrics::counter!("weissman_cem_dago_telemetry_integrity_violations_total").increment(1);
+        tracing::error!(
+            target: "cem_dago",
+            kind,
+            field_key,
+            error = %err,
+            bytes = raw.len(),
+            "TELEMETRY INTEGRITY VIOLATION — MessagePack body quarantined (DAG continues)"
+        );
+        let blob = blob_from_raw(kind, field_key, raw, &err.to_string());
+        {
+            let mut q = self.quarantine.write().await;
+            q.push(blob.clone());
+        }
+        if !self.redis_enabled {
+            return;
+        }
+        let Ok(mut conn) = self.conn_for(&self.quarantine_key()).await else {
+            return;
+        };
+        let payload = serde_json::to_vec(&blob).unwrap_or_default();
+        let key = self.quarantine_key();
+        let _ = tokio::time::timeout(REDIS_OP_TIMEOUT, async {
+            let _: () = conn.rpush(&key, payload.as_slice()).await?;
+            let _: () = conn.expire(&key, BLACKBOARD_TTL_SECS).await?;
+            Ok::<(), redis::RedisError>(())
+        })
+        .await;
+    }
+
+    /// Drain in-memory + Redis quarantine lists.
+    pub async fn take_quarantine(&self) -> Vec<QuarantineBlob> {
+        let mut out = {
+            let mut q = self.quarantine.write().await;
+            std::mem::take(&mut *q)
+        };
+        if self.redis_enabled {
+            if let Ok(mut conn) = self.conn_for(&self.quarantine_key()).await {
+                let key = self.quarantine_key();
+                let raw: Result<Vec<Vec<u8>>, _> =
+                    tokio::time::timeout(REDIS_OP_TIMEOUT, conn.lrange(&key, 0, -1))
+                        .await
+                        .map_err(|_| BlackboardError::Redis("timeout".into()))
+                        .and_then(|r| r.map_err(Into::into));
+                if let Ok(rows) = raw {
+                    let _: Result<(), _> = tokio::time::timeout(REDIS_OP_TIMEOUT, conn.del(&key))
+                        .await
+                        .map_err(|_| ())
+                        .and_then(|r: Result<u64, _>| r.map(|_| ()).map_err(|_| ()));
+                    for row in rows {
+                        if let Ok(b) = serde_json::from_slice::<QuarantineBlob>(&row) {
+                            out.push(b);
+                        }
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// Persist drained quarantine blobs under RLS and emit SOC events.
+    pub async fn persist_and_take_quarantine(&self, pool: &PgPool) -> Vec<QuarantineBlob> {
+        let blobs = self.take_quarantine().await;
+        let _ =
+            persist_quarantine(pool, self.tenant_id, self.client_id, &self.scan_id, &blobs).await;
+        blobs
     }
 
     /// Write a finding or hot evidence field.
@@ -351,7 +445,7 @@ impl ScanBlackboard {
         if !self.redis_enabled {
             return Ok(());
         }
-        let mut conn = self.conn().await?;
+        let mut conn = self.conn_for(key).await?;
         let hash_key = self.redis_key();
         tokio::time::timeout(REDIS_OP_TIMEOUT, async {
             let _: () = conn.hset(&hash_key, key, serialized.as_slice()).await?;
@@ -373,7 +467,7 @@ impl ScanBlackboard {
         if !self.redis_enabled {
             return Ok(None);
         }
-        let mut conn = self.conn().await?;
+        let mut conn = self.conn_for(key).await?;
         let result: Option<Vec<u8>> =
             tokio::time::timeout(REDIS_OP_TIMEOUT, conn.hget(self.redis_key(), key))
                 .await
@@ -386,12 +480,8 @@ impl ScanBlackboard {
                     Ok(Some(evidence))
                 }
                 Err(e) => {
-                    tracing::warn!(
-                        target: "cem_dago",
-                        key,
-                        error = %e,
-                        "skip incompatible blackboard field (schema drift)"
-                    );
+                    self.quarantine_decode_failure("evidence", key, &data, &e)
+                        .await;
                     Ok(None)
                 }
             },
@@ -403,24 +493,32 @@ impl ScanBlackboard {
         self.read_evidence(key).await.ok().flatten().is_some()
     }
 
-    /// Keys currently known (local cache ∪ Redis hash).
+    /// Keys currently known (local cache ∪ Redis hash). Corrupt fields are quarantined
+    /// and **omitted** so the DAG does not treat garbage as a present signal.
     pub async fn present_signals(&self) -> Result<Vec<String>, BlackboardError> {
         let mut keys: std::collections::BTreeSet<String> = {
             let cache = self.local_cache.read().await;
             cache.keys().cloned().collect()
         };
         if self.redis_enabled {
-            let mut conn = self.conn().await?;
+            let hash_key = self.redis_key();
+            let mut conn = self.conn_for(&hash_key).await?;
             let map: HashMap<String, Vec<u8>> =
-                tokio::time::timeout(REDIS_OP_TIMEOUT, conn.hgetall(self.redis_key()))
+                tokio::time::timeout(REDIS_OP_TIMEOUT, conn.hgetall(&hash_key))
                     .await
                     .map_err(|_| BlackboardError::Redis("redis hgetall timeout".into()))??;
             for (k, raw) in map {
-                if let Ok(ev) = decode_evidence(&raw) {
-                    let mut cache = self.local_cache.write().await;
-                    cache.insert(k.clone(), ev);
+                match decode_evidence(&raw) {
+                    Ok(ev) => {
+                        let mut cache = self.local_cache.write().await;
+                        cache.insert(k.clone(), ev);
+                        keys.insert(k);
+                    }
+                    Err(e) => {
+                        self.quarantine_decode_failure("evidence", &k, &raw, &e)
+                            .await;
+                    }
                 }
-                keys.insert(k);
             }
         }
         Ok(keys.into_iter().collect())
@@ -456,8 +554,8 @@ impl ScanBlackboard {
             return self.write_evidence("_failures", "dago", list).await;
         }
         let serialized = encode_failure(&failure)?;
-        let mut conn = self.conn().await?;
         let log_key = self.failures_key();
+        let mut conn = self.conn_for(&log_key).await?;
         tokio::time::timeout(REDIS_OP_TIMEOUT, async {
             let _: () = conn.rpush(&log_key, serialized.as_slice()).await?;
             let _: () = conn.expire(&log_key, BLACKBOARD_TTL_SECS).await?;
@@ -477,17 +575,19 @@ impl ScanBlackboard {
             let parsed: Vec<FailureLog> = serde_json::from_value(v).unwrap_or_default();
             return Ok(parsed);
         }
-        let mut conn = self.conn().await?;
+        let log_key = self.failures_key();
+        let mut conn = self.conn_for(&log_key).await?;
         let raw: Vec<Vec<u8>> =
-            tokio::time::timeout(REDIS_OP_TIMEOUT, conn.lrange(self.failures_key(), 0, -1))
+            tokio::time::timeout(REDIS_OP_TIMEOUT, conn.lrange(&log_key, 0, -1))
                 .await
                 .map_err(|_| BlackboardError::Redis("redis lrange timeout".into()))??;
         let mut out = Vec::with_capacity(raw.len());
-        for row in raw {
+        for (i, row) in raw.into_iter().enumerate() {
             match decode_failure(&row) {
                 Ok(f) => out.push(f),
                 Err(e) => {
-                    tracing::warn!(target: "cem_dago", error = %e, "skip malformed failure log");
+                    self.quarantine_decode_failure("failure", &format!("failures[{i}]"), &row, &e)
+                        .await;
                 }
             }
         }
@@ -499,8 +599,8 @@ impl ScanBlackboard {
         if !self.redis_enabled {
             return Ok(());
         }
-        let mut conn = self.conn().await?;
         let idx = Self::latest_index_key(self.tenant_id, self.client_id);
+        let mut conn = self.conn_for(&idx).await?;
         let scan = self.scan_id.clone();
         tokio::time::timeout(REDIS_OP_TIMEOUT, async {
             let _: () = conn.set(&idx, scan.as_str()).await?;
@@ -513,21 +613,11 @@ impl ScanBlackboard {
     }
 }
 
-/// One multiplexed Redis connection for the process. Clones share the socket.
+/// Default shard from the process-wide pool (compat for callers that want one manager).
 pub async fn shared_redis_manager() -> Option<redis::aio::ConnectionManager> {
-    REDIS_MANAGER
-        .get_or_init(|| async {
-            let url = std::env::var("REDIS_URL")
-                .ok()
-                .filter(|s| !s.trim().is_empty())?;
-            let client = redis::Client::open(url.as_str()).ok()?;
-            tokio::time::timeout(REDIS_OP_TIMEOUT, redis::aio::ConnectionManager::new(client))
-                .await
-                .ok()?
-                .ok()
-        })
+    shared_redis_pool()
         .await
-        .clone()
+        .map(|p: ShardedRedis| p.shard("weissman:blackboard"))
 }
 
 /// Open the latest scan blackboard for a client (Redis index). `None` when no scan recorded.
@@ -535,15 +625,15 @@ pub async fn open_latest(
     tenant_id: i64,
     client_id: i64,
 ) -> Result<Option<ScanBlackboard>, BlackboardError> {
-    let Some(mgr) = shared_redis_manager().await else {
+    let Some(pool) = shared_redis_pool().await else {
         return Ok(None);
     };
     let idx = ScanBlackboard::latest_index_key(tenant_id, client_id);
-    let mut conn = mgr.clone();
+    let mut conn = pool.shard(&idx);
     let scan_id: Option<String> = tokio::time::timeout(REDIS_OP_TIMEOUT, conn.get(&idx))
         .await
         .map_err(|_| BlackboardError::Redis("redis connect timeout".into()))??;
-    Ok(scan_id.map(|id| ScanBlackboard::with_manager(tenant_id, client_id, id, mgr)))
+    Ok(scan_id.map(|id| ScanBlackboard::new(tenant_id, client_id, id)))
 }
 
 pub async fn open_scan(
@@ -551,14 +641,14 @@ pub async fn open_scan(
     client_id: i64,
     scan_id: &str,
 ) -> Result<ScanBlackboard, BlackboardError> {
-    match shared_redis_manager().await {
-        Some(m) => Ok(ScanBlackboard::with_manager(
+    if redis_url_configured() {
+        Ok(ScanBlackboard::new(
             tenant_id,
             client_id,
             scan_id.to_string(),
-            m,
-        )),
-        None => Ok(ScanBlackboard::memory(tenant_id, client_id, scan_id)),
+        ))
+    } else {
+        Ok(ScanBlackboard::memory(tenant_id, client_id, scan_id))
     }
 }
 
@@ -708,5 +798,69 @@ mod tests {
         assert_eq!(bytes.get(1).copied(), Some(CODEC_VERSION));
         let decoded = decode_evidence(&bytes).unwrap();
         assert_eq!(decoded.source_engine, "live_proof");
+    }
+
+    #[tokio::test]
+    async fn decode_failure_quarantines_and_is_not_a_signal() {
+        let bb = ScanBlackboard::memory(1, 2, "q-scan");
+        bb.quarantine_decode_failure(
+            "evidence",
+            "web_port_active",
+            &[0xff, 0x00, 0xc1],
+            &BlackboardError::Deserialize("corrupt msgpack".into()),
+        )
+        .await;
+        let q = bb.take_quarantine().await;
+        assert_eq!(q.len(), 1);
+        assert_eq!(q[0].kind, "evidence");
+        assert_eq!(q[0].field_key, "web_port_active");
+        assert_eq!(q[0].raw_hex, "ff00c1");
+        assert!(bb.read_evidence("web_port_active").await.unwrap().is_none());
+        assert!(!bb.has_signal("web_port_active").await);
+        assert!(bb.present_signals().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn redis_corrupt_field_quarantined_when_available() {
+        let url = std::env::var("REDIS_URL")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| "redis://127.0.0.1:6379/0".into());
+        let Ok(client) = redis::Client::open(url.as_str()) else {
+            return;
+        };
+        let ping = tokio::time::timeout(
+            Duration::from_secs(2),
+            redis::aio::ConnectionManager::new(client),
+        )
+        .await;
+        let Ok(Ok(mgr)) = ping else {
+            return;
+        };
+        let mut conn = mgr.clone();
+        let pong: Result<String, _> = redis::cmd("PING").query_async(&mut conn).await;
+        if pong.as_deref() != Ok("PONG") {
+            return;
+        }
+        let bb = ScanBlackboard::with_manager(77, 66, "cem-dago-quarantine-proof".into(), mgr);
+        let hash = bb.redis_key();
+        let garbage = b"%%%not-a-codec%%%";
+        let _: () = conn
+            .hset(&hash, "web_port_active", &garbage[..])
+            .await
+            .unwrap();
+        assert!(bb.read_evidence("web_port_active").await.unwrap().is_none());
+        let signals = bb.present_signals().await.unwrap();
+        assert!(
+            !signals.iter().any(|s| s == "web_port_active"),
+            "corrupt field must not be a DAG signal"
+        );
+        let q = bb.take_quarantine().await;
+        assert!(!q.is_empty(), "decode failure must quarantine, got {q:?}");
+        let expected_hex = crate::cem_dago::telemetry_quarantine::encode_raw_hex(garbage);
+        assert!(
+            q.iter().any(|b| b.raw_hex.contains(&expected_hex)),
+            "quarantine hex missing {expected_hex}: {q:?}"
+        );
     }
 }

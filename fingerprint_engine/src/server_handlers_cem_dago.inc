@@ -126,6 +126,18 @@ async fn api_cem_dago_blackboard(
 
     let dump = bb.dump_all().await.unwrap_or_default();
     let failures = bb.list_failures().await.unwrap_or_default();
+    let flushed = bb.persist_and_take_quarantine(&state.app_pool).await;
+    let quarantine = if flushed.is_empty() {
+        crate::cem_dago::telemetry_quarantine::load_quarantine_for_scan(
+            &state.app_pool,
+            auth.tenant_id,
+            client_id,
+            bb.scan_id(),
+        )
+        .await
+    } else {
+        flushed
+    };
     let mut evidence = serde_json::Map::new();
     for (k, ev) in dump {
         evidence.insert(
@@ -149,6 +161,8 @@ async fn api_cem_dago_blackboard(
             "evidence": evidence,
             "failures": failures,
             "evidence_count": evidence.len(),
+            "quarantine": quarantine,
+            "telemetry_integrity_violations": quarantine.len(),
         })),
     )
         .into_response()
