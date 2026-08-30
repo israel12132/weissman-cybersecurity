@@ -566,6 +566,12 @@ pub struct JobStatusView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub heartbeat_at: Option<chrono::DateTime<chrono::Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub worker_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub locked_until: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_after: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub trace_id: Option<String>,
     pub source: &'static str,
 }
@@ -580,7 +586,8 @@ pub async fn get_job_for_tenant(
 ) -> Result<Option<JobStatusView>, sqlx::Error> {
     let mut tx = crate::begin_tenant_tx(pool, tenant_id).await?;
     let row = sqlx::query(
-        r#"SELECT id, kind, status, payload, result_json, last_error, attempt_count, created_at, updated_at, heartbeat_at, trace_id
+        r#"SELECT id, kind, status, payload, result_json, last_error, attempt_count,
+                  created_at, updated_at, heartbeat_at, worker_id, locked_until, run_after, trace_id
            FROM weissman_async_jobs WHERE id = $1 AND tenant_id = $2"#,
     )
     .bind(job_id)
@@ -605,6 +612,9 @@ pub async fn get_job_for_tenant(
     let created_at: chrono::DateTime<chrono::Utc> = row.try_get("created_at")?;
     let updated_at: chrono::DateTime<chrono::Utc> = row.try_get("updated_at")?;
     let heartbeat_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("heartbeat_at").ok();
+    let worker_id: Option<String> = row.try_get("worker_id").ok().flatten();
+    let locked_until: Option<chrono::DateTime<chrono::Utc>> = row.try_get("locked_until").ok();
+    let run_after: Option<chrono::DateTime<chrono::Utc>> = row.try_get("run_after").ok();
     let trace_id: Option<String> = row.try_get("trace_id").ok();
     Ok(Some(JobStatusView {
         id,
@@ -617,6 +627,9 @@ pub async fn get_job_for_tenant(
         created_at,
         updated_at,
         heartbeat_at,
+        worker_id,
+        locked_until,
+        run_after,
         trace_id,
         source: "async_job",
     }))

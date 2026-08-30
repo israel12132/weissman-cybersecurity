@@ -16,6 +16,7 @@ use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use sqlx::Row;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -28,6 +29,98 @@ const SWARM_GOSSIP_STREAM: &str = "weissman:swarm:gossip";
 const SWARM_GOSSIP_MAXLEN: i64 = 10_000;
 const LIVENESS_TTL_SECS: u64 = 2;
 const LIVENESS_REFRESH_MS: u64 = 400;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerLivenessView {
+    pub worker_id: String,
+    pub alive: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ttl_secs: Option<i64>,
+}
+
+fn swarm_worker_key(worker_id: &str) -> String {
+    format!("{}{}", SWARM_REGISTRY_PREFIX, worker_id)
+}
+
+/// Cached Redis manager for **read-only** operator inspect. Failures are not cached so a blip
+/// does not permanently disable diagnostics.
+pub async fn shared_redis() -> Option<redis::aio::ConnectionManager> {
+    static CELL: tokio::sync::OnceCell<redis::aio::ConnectionManager> =
+        tokio::sync::OnceCell::const_new();
+    match tokio::time::timeout(
+        Duration::from_secs(2),
+        CELL.get_or_try_init(|| async { redis_manager_from_env().await.ok_or(()) }),
+    )
+    .await
+    {
+        Ok(Ok(c)) => Some(c.clone()),
+        _ => None,
+    }
+}
+
+/// Read-only swarm liveness key (`weissman:swarm:worker:{id}`). Does not declare workers dead
+/// or force-release leases — that remains the coordinator's job.
+pub async fn inspect_worker_liveness<C: redis::aio::ConnectionLike>(
+    conn: &mut C,
+    worker_id: &str,
+) -> Result<WorkerLivenessView, JobBusError> {
+    if worker_id.trim().is_empty() {
+        return Ok(WorkerLivenessView {
+            worker_id: worker_id.to_string(),
+            alive: false,
+            ttl_secs: None,
+        });
+    }
+    let key = swarm_worker_key(worker_id);
+    let ttl: i64 = redis::cmd("TTL")
+        .arg(&key)
+        .query_async(conn)
+        .await
+        .map_err(|e| JobBusError::Redis(e.to_string()))?;
+    Ok(liveness_from_ttl(worker_id, ttl))
+}
+
+/// Batch read-only swarm liveness for the workers named on running jobs.
+pub async fn inspect_workers<C: redis::aio::ConnectionLike>(
+    conn: &mut C,
+    worker_ids: &[String],
+) -> Result<HashMap<String, WorkerLivenessView>, JobBusError> {
+    let mut out = HashMap::with_capacity(worker_ids.len());
+    let unique: Vec<&str> = {
+        let mut seen = std::collections::HashSet::new();
+        worker_ids
+            .iter()
+            .map(|s| s.as_str())
+            .filter(|s| !s.trim().is_empty() && seen.insert(*s))
+            .collect()
+    };
+    if unique.is_empty() {
+        return Ok(out);
+    }
+    let keys: Vec<String> = unique.iter().map(|id| swarm_worker_key(id)).collect();
+    let mut pipe = redis::pipe();
+    for k in &keys {
+        pipe.cmd("TTL").arg(k);
+    }
+    let ttls: Vec<i64> = pipe
+        .query_async(conn)
+        .await
+        .map_err(|e| JobBusError::Redis(e.to_string()))?;
+    for (i, id) in unique.iter().enumerate() {
+        let ttl = ttls.get(i).copied().unwrap_or(-2);
+        out.insert((*id).to_string(), liveness_from_ttl(id, ttl));
+    }
+    Ok(out)
+}
+
+fn liveness_from_ttl(worker_id: &str, ttl: i64) -> WorkerLivenessView {
+    let alive = ttl >= 0 || ttl == -1;
+    WorkerLivenessView {
+        worker_id: worker_id.to_string(),
+        alive,
+        ttl_secs: if ttl >= 0 { Some(ttl) } else { None },
+    }
+}
 
 pub async fn redis_manager_from_env() -> Option<redis::aio::ConnectionManager> {
     let url = std::env::var("REDIS_URL")
