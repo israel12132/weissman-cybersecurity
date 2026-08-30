@@ -11,6 +11,7 @@ import json
 import math
 import os
 import time
+from urllib.parse import urlparse
 
 import httpx
 import pytest
@@ -130,6 +131,20 @@ def _domains_of(row: dict) -> list[str]:
     return [str(x) for x in raw]
 
 
+def _host_is_example_com(raw: str) -> bool:
+    """True only when the URL/host's parsed hostname is exactly example.com.
+
+    Substring checks like ``"example.com" in url`` match attacker hosts
+    (`notexample.com`, `example.com.evil.test`). Parse the hostname instead.
+    """
+    text = raw.strip()
+    if not text:
+        return False
+    parsed = urlparse(text if "://" in text else f"https://{text}")
+    host = (parsed.hostname or "").lower().rstrip(".")
+    return host == "example.com"
+
+
 def _example_com_client_id(client: httpx.Client, auth_headers: dict[str, str]) -> int:
     """Pick (or create) a client whose approved domains include example.com.
 
@@ -140,7 +155,7 @@ def _example_com_client_id(client: httpx.Client, auth_headers: dict[str, str]) -
     clients = client.get("/api/clients", headers=auth_headers).json()
     assert isinstance(clients, list)
     for row in clients:
-        if any("example.com" in d for d in _domains_of(row)):
+        if any(_host_is_example_com(d) for d in _domains_of(row)):
             return int(row["id"])
     created = client.post(
         "/api/clients",
