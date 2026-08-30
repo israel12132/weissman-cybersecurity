@@ -28,7 +28,8 @@ use crate::engine_probes::{
 use crate::engine_result::{print_result, EngineResult};
 use crate::ndr_beacon::{
     coefficient_of_variation, fft_peak_significant, jitter_should_adapt, lomb_scargle_peak, mean,
-    stddev, zscore, FlowSample, NdrConfig,
+    spectral_hit, stddev, zscore, FlowSample, NdrConfig, MAX_BEACON_SAMPLES, MIN_BEACON_SAMPLES,
+    MIN_SPECTRAL_INTERVALS, SPECTRAL_FFT_SNR,
 };
 use futures::stream::{self, StreamExt};
 use serde_json::{json, Value};
@@ -39,6 +40,14 @@ use tokio::net::UdpSocket;
 use tokio::time::timeout;
 
 const ENGINE_ID: &str = "advanced_c2_covert_exfil";
+
+/// Sole Postgres write for DNS covert audits: one SUMMARY row per host/hour.
+const DNS_SUMMARY_INSERT_SQL: &str = r#"INSERT INTO dns_covert_query_audits
+               (tenant_id, client_id, job_id, target, qtype, query_host, hour_utc, evidence)
+               VALUES ($1,$2,$3,$4,'SUMMARY',$5,$6,$7)
+               ON CONFLICT (tenant_id, query_host, hour_utc)
+               WHERE qtype = 'SUMMARY' AND hour_utc IS NOT NULL
+               DO NOTHING"#;
 
 const T_WEB: &str = "T1071.001";
 const T_DNS: &str = "T1071.004";
@@ -312,6 +321,16 @@ async fn fetch_bytes(client: &reqwest::Client, url: &str, max: usize) -> Option<
     Some(out)
 }
 
+/// How many live HTTP samples the beacon layer takes.
+///
+/// Floor is [`MIN_BEACON_SAMPLES`] (12 stamps) so Lomb–Scargle and FFT always
+/// run **alongside** Z-score. `beacon_samples=3` cannot disable the periodogram.
+#[must_use]
+pub(crate) fn beacon_sample_count(cfg: &ArsenalConfig) -> usize {
+    cfg.usize_or("beacon_samples", MIN_BEACON_SAMPLES)
+        .clamp(MIN_BEACON_SAMPLES, MAX_BEACON_SAMPLES)
+}
+
 // ── Layer 1: Encrypted C2 beaconing / masquerade ─────────────────────────────
 
 async fn probe_beaconing(
@@ -325,12 +344,7 @@ async fn probe_beaconing(
     if !tri(cfg, "check_beaconing", true) {
         return;
     }
-    let sample_n = match cfg.intensity() {
-        Intensity::Light => 3usize,
-        Intensity::Normal => 5,
-        Intensity::Aggressive => 8,
-    }
-    .min(cfg.usize_or("beacon_samples", 5).clamp(2, 12));
+    let sample_n = beacon_sample_count(cfg);
 
     let health = format!("{}/api/v1/health", base.trim_end_matches('/'));
     let mut rtts = Vec::new();
@@ -448,13 +462,14 @@ async fn probe_beaconing(
 
         // Lomb–Scargle + DFT alongside Z-score: chaotic/Fibonacci-class jitter
         // inflates σ so |z| never trips, but a spectral peak remains.
-        if wall_stamps.len() >= 8 {
-            let intervals: Vec<f64> = wall_stamps.windows(2).map(|w| w[1] - w[0]).collect();
+        // Gate on *interval* count (stamps - 1), not stamp count — 8 stamps
+        // only yield 7 intervals and used to skip the periodogram silently.
+        let intervals: Vec<f64> = wall_stamps.windows(2).map(|w| w[1] - w[0]).collect();
+        if intervals.len() >= MIN_SPECTRAL_INTERVALS {
             let times = wall_stamps[1..].to_vec();
             let ls = lomb_scargle_peak(&times, &intervals);
-            let fft = fft_peak_significant(&intervals, 8.0);
-            let ls_hit = ls.map(|p| p.significant).unwrap_or(false);
-            if ls_hit || fft.is_some() {
+            let fft = fft_peak_significant(&intervals, SPECTRAL_FFT_SNR);
+            if spectral_hit(ls, fft) {
                 let period = ls.map(|p| p.period).unwrap_or(0.0);
                 emit(
                     findings,
@@ -1532,23 +1547,16 @@ async fn persist_audits(
         if !redis_claim_dns_summary_flush(tenant_id, &sum.host, hour).await {
             continue;
         }
-        let _ = sqlx::query(
-            r#"INSERT INTO dns_covert_query_audits
-               (tenant_id, client_id, job_id, target, qtype, query_host, hour_utc, evidence)
-               VALUES ($1,$2,$3,$4,'SUMMARY',$5,$6,$7)
-               ON CONFLICT (tenant_id, query_host, hour_utc)
-               WHERE qtype = 'SUMMARY' AND hour_utc IS NOT NULL
-               DO NOTHING"#,
-        )
-        .bind(tenant_id)
-        .bind(ctx.client_id)
-        .bind(job_id.as_deref())
-        .bind(target)
-        .bind(&sum.host)
-        .bind(sum.hour_utc)
-        .bind(sqlx::types::Json(sum.evidence()))
-        .execute(&mut *tx)
-        .await;
+        let _ = sqlx::query(DNS_SUMMARY_INSERT_SQL)
+            .bind(tenant_id)
+            .bind(ctx.client_id)
+            .bind(job_id.as_deref())
+            .bind(target)
+            .bind(&sum.host)
+            .bind(sum.hour_utc)
+            .bind(sqlx::types::Json(sum.evidence()))
+            .execute(&mut *tx)
+            .await;
     }
     let _ = tx.commit().await;
 }
@@ -1915,6 +1923,43 @@ mod tests {
     }
 
     #[test]
+    fn beacon_sample_count_floors_operator_override_so_spectral_runs() {
+        let light = ArsenalConfig::from_value(json!({"intensity": "light"}));
+        let normal = ArsenalConfig::from_value(json!({}));
+        let aggressive = ArsenalConfig::from_value(json!({"intensity": "aggressive"}));
+        let too_small = ArsenalConfig::from_value(json!({"beacon_samples": 3}));
+        let huge = ArsenalConfig::from_value(json!({"beacon_samples": 99}));
+        assert_eq!(beacon_sample_count(&light), MIN_BEACON_SAMPLES);
+        assert_eq!(beacon_sample_count(&normal), MIN_BEACON_SAMPLES);
+        assert_eq!(beacon_sample_count(&aggressive), MAX_BEACON_SAMPLES);
+        assert_eq!(
+            beacon_sample_count(&too_small),
+            MIN_BEACON_SAMPLES,
+            "beacon_samples=3 must not disable Lomb–Scargle/FFT"
+        );
+        assert_eq!(beacon_sample_count(&huge), MAX_BEACON_SAMPLES);
+        assert!(
+            beacon_sample_count(&light) > MIN_SPECTRAL_INTERVALS,
+            "stamps-1 must meet the periodogram floor"
+        );
+    }
+
+    #[test]
+    fn dns_pg_insert_is_summary_only() {
+        assert!(
+            DNS_SUMMARY_INSERT_SQL.contains("'SUMMARY'"),
+            "Postgres writes must be SUMMARY rows"
+        );
+        assert!(DNS_SUMMARY_INSERT_SQL.contains("hour_utc"));
+        assert!(DNS_SUMMARY_INSERT_SQL.contains("ON CONFLICT"));
+        let lowered = DNS_SUMMARY_INSERT_SQL.to_ascii_lowercase();
+        assert!(
+            !lowered.contains("values") || lowered.contains("'summary'"),
+            "qtype is a SUMMARY literal, never a bound per-query type"
+        );
+    }
+
+    #[test]
     fn dns_observations_never_become_raw_pg_rows() {
         let hour = crate::c2_runtime_guards::hour_utc_bucket(chrono::Utc::now());
         let obs = vec![
@@ -1984,5 +2029,76 @@ mod tests {
                 .any(|c| *c == "coverage_manifest" || *c == "posture_score"),
             "expected coverage or posture on live example.com, got {cats:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn persist_audits_writes_hourly_summary_not_raw_queries() {
+        let url = std::env::var("DATABASE_URL")
+            .ok()
+            .filter(|s| !s.trim().is_empty());
+        let Some(url) = url else {
+            return;
+        };
+        let pool = match sqlx::PgPool::connect(&url).await {
+            Ok(p) => p,
+            Err(_) => return,
+        };
+        let tenant_id = std::env::var("WEISSMAN_TEST_TENANT_ID")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1);
+        let host = format!("summary-seal-{}.invalid", uuid::Uuid::new_v4());
+        let ctx = EngineRunContext {
+            tenant_id: Some(tenant_id),
+            client_id: Some(1),
+            app_pool: Some(std::sync::Arc::new(pool.clone())),
+            job_id: Some(format!("job-{}", uuid::Uuid::new_v4())),
+            ..Default::default()
+        };
+        let obs = vec![
+            DnsObservation {
+                qtype: "TXT".into(),
+                host: host.clone(),
+                entropy: Some(5.4),
+                txt_len: Some(240),
+                min_ttl: Some(1),
+                extra: json!({"probe": "persist_seal"}),
+            },
+            DnsObservation {
+                qtype: "A".into(),
+                host: host.clone(),
+                entropy: None,
+                txt_len: None,
+                min_ttl: Some(300),
+                extra: json!({}),
+            },
+        ];
+        persist_audits(&ctx, "https://persist-seal.test", &[], obs).await;
+
+        let Ok(mut tx) = crate::db::begin_tenant_tx(&pool, tenant_id).await else {
+            panic!("begin_tenant_tx failed after persist_audits — cannot verify SUMMARY write");
+        };
+        use sqlx::Row;
+        let rows = sqlx::query(
+            r#"SELECT qtype, hour_utc IS NOT NULL AS has_hour, evidence->>'kind' AS kind
+               FROM dns_covert_query_audits WHERE query_host = $1"#,
+        )
+        .bind(&host)
+        .fetch_all(&mut *tx)
+        .await
+        .expect("select dns summaries");
+        let _ = tx.commit().await;
+        assert_eq!(
+            rows.len(),
+            1,
+            "exactly one hourly SUMMARY row for the anomalous host, got {}",
+            rows.len()
+        );
+        let qtype: String = rows[0].get("qtype");
+        let has_hour: bool = rows[0].get("has_hour");
+        let kind: Option<String> = rows[0].get("kind");
+        assert_eq!(qtype, "SUMMARY");
+        assert!(has_hour, "SUMMARY rows must carry hour_utc");
+        assert_eq!(kind.as_deref(), Some("hourly_anomaly_summary"));
     }
 }

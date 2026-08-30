@@ -13,6 +13,31 @@
 
 use serde::Serialize;
 
+/// Minimum inter-arrival series length for Lomb–Scargle / DFT.
+///
+/// Z-score/CV run on as few as 3–4 samples; a periodogram needs a full
+/// interval vector. Live HTTP must collect `MIN_SPECTRAL_INTERVALS + 1`
+/// timestamps (one more stamp than intervals) or the spectral path is dead.
+pub const MIN_SPECTRAL_INTERVALS: usize = 8;
+
+/// Live HTTP `/api/v1/health` stamps so Lomb–Scargle/FFT have enough cycles
+/// *alongside* Z-score. Nine stamps (8 intervals) is the periodogram minimum
+/// but a single cycle of chaotic jitter is invisible; 12 stamps is the
+/// smallest N that recovers a period-4 sinusoid (see unit tests). Operator
+/// `beacon_samples` is clamped to this floor.
+pub const MIN_BEACON_SAMPLES: usize = 12;
+
+/// Upper bound on live HTTP beacon probes (matches the floor: always 12).
+pub const MAX_BEACON_SAMPLES: usize = 12;
+
+/// DFT peak / mean-rest ratio used by the live HTTP path and NDR fusion.
+pub const SPECTRAL_FFT_SNR: f64 = 8.0;
+
+/// Lomb–Scargle power floor used to corroborate an FFT peak. FAP < 0.01 is
+/// the strong LS hit; at N=12 that bar is rarely met, so FFT + power > 3
+/// is the live-N detection path.
+pub const SPECTRAL_LS_POWER_FLOOR: f64 = 3.0;
+
 /// One observed flow to a destination at a point in time.
 #[derive(Debug, Clone)]
 pub struct FlowSample {
@@ -151,7 +176,7 @@ pub struct SpectralPeak {
 /// short, constant, or has no finite span.
 #[must_use]
 pub fn lomb_scargle_peak(t: &[f64], y: &[f64]) -> Option<SpectralPeak> {
-    if t.len() != y.len() || y.len() < 8 {
+    if t.len() != y.len() || y.len() < MIN_SPECTRAL_INTERVALS {
         return None;
     }
     if y.iter().any(|v| !v.is_finite()) || t.iter().any(|v| !v.is_finite()) {
@@ -246,7 +271,7 @@ pub fn dft_power(y: &[f64]) -> Vec<f64> {
 /// Dominant non-DC DFT bin. `Some((k, peak/mean))` when the peak is ≥ `ratio` times the rest.
 #[must_use]
 pub fn fft_peak_significant(y: &[f64], ratio: f64) -> Option<(usize, f64)> {
-    if y.len() < 8 {
+    if y.len() < MIN_SPECTRAL_INTERVALS {
         return None;
     }
     let p = dft_power(y);
@@ -279,13 +304,28 @@ pub fn fft_peak_significant(y: &[f64], ratio: f64) -> Option<(usize, f64)> {
     }
 }
 
+/// Combined Lomb–Scargle + FFT decision used by live HTTP and NDR fusion.
+///
+/// Strong hit: Lomb–Scargle FAP < 0.01 (`significant`). An FFT peak must also
+/// show LS power > [`SPECTRAL_LS_POWER_FLOOR`] so irregular browsing cannot
+/// impersonate a C2 periodogram.
+#[must_use]
+pub fn spectral_hit(ls: Option<SpectralPeak>, fft: Option<(usize, f64)>) -> bool {
+    let ls_hit = ls.map(|p| p.significant).unwrap_or(false);
+    let fft_hit = fft.is_some()
+        && ls
+            .map(|p| p.power > SPECTRAL_LS_POWER_FLOOR)
+            .unwrap_or(false);
+    ls_hit || fft_hit
+}
+
 /// Hidden-periodicity detector for high-CV / chaotic jitter that evades Z-score.
 ///
 /// Runs Lomb–Scargle on (arrival time, interval) plus a DFT of the interval
 /// sequence. Does **not** require low coefficient of variation.
 pub fn detect_spectral_beacons(samples: &[FlowSample], cfg: &NdrConfig) -> Vec<NdrFinding> {
     let mut out = Vec::new();
-    let min_iv = cfg.min_intervals.max(7);
+    let min_iv = cfg.min_intervals.max(MIN_SPECTRAL_INTERVALS);
     for (dst, mut flows) in group_by_dst(samples) {
         flows.sort_by_key(|f| f.ts);
         if flows.len() < min_iv + 1 {
@@ -301,12 +341,8 @@ pub fn detect_spectral_beacons(samples: &[FlowSample], cfg: &NdrConfig) -> Vec<N
         }
         let times: Vec<f64> = flows.iter().skip(1).map(|f| f.ts as f64).collect();
         let ls = lomb_scargle_peak(&times, &intervals);
-        let fft = fft_peak_significant(&intervals, 10.0);
-        let ls_hit = ls.map(|p| p.significant).unwrap_or(false);
-        // FFT-only hits must also show a Lomb–Scargle peak (power>3) so a slow
-        // browsing trend (DFT bin 1) cannot impersonate a C2 periodogram.
-        let fft_hit = fft.is_some() && ls.map(|p| p.power > 3.0).unwrap_or(false);
-        if !ls_hit && !fft_hit {
+        let fft = fft_peak_significant(&intervals, SPECTRAL_FFT_SNR);
+        if !spectral_hit(ls, fft) {
             continue;
         }
         let cv = coefficient_of_variation(&intervals);
@@ -599,5 +635,69 @@ mod tests {
         assert!(fft_peak_significant(&y, 8.0).is_none());
         let t: Vec<f64> = (0..16).map(|i| i as f64 * 60.0).collect();
         assert!(lomb_scargle_peak(&t, &y).is_none());
+    }
+
+    #[test]
+    fn eight_stamps_are_below_spectral_floor() {
+        // 8 stamps → 7 intervals. The live path used to call LS/FFT here
+        // and silently get None. Floor is 8 intervals (9 stamps).
+        let samples = sine_jittered_beacon(8, 30.0, 25.0, 8);
+        let iv: Vec<f64> = samples
+            .windows(2)
+            .map(|w| (w[1].ts - w[0].ts) as f64)
+            .collect();
+        assert_eq!(iv.len(), 7);
+        assert!(lomb_scargle_peak(
+            &samples
+                .iter()
+                .skip(1)
+                .map(|f| f.ts as f64)
+                .collect::<Vec<_>>(),
+            &iv
+        )
+        .is_none());
+        assert!(fft_peak_significant(&iv, 8.0).is_none());
+        assert!(
+            detect_spectral_beacons(&samples, &NdrConfig::default()).is_empty(),
+            "7 intervals must not be treated as a complete periodogram"
+        );
+    }
+
+    #[test]
+    fn live_http_sample_count_feeds_spectral_detector() {
+        // Period-4 chaotic sine at the live HTTP floor (12 stamps). Period-8
+        // needs ~32 samples (several cycles); 12 stamps recover period-4
+        // which is the realistic HTTP-beacon harmonic at this budget.
+        let samples = sine_jittered_beacon(MIN_BEACON_SAMPLES, 30.0, 25.0, 4);
+        let cfg = NdrConfig::default();
+        let iv: Vec<f64> = samples
+            .windows(2)
+            .map(|w| (w[1].ts - w[0].ts) as f64)
+            .collect();
+        assert!(
+            iv.len() >= MIN_SPECTRAL_INTERVALS,
+            "live floor must feed the periodogram, got {} intervals",
+            iv.len()
+        );
+        assert!(
+            coefficient_of_variation(&iv) > cfg.max_cv,
+            "fixture must still evade Gaussian CV at the live N"
+        );
+        assert!(
+            detect_beacons(&samples, &cfg).is_empty(),
+            "high-CV sine at live N must not trip Z-score/CV"
+        );
+        let times: Vec<f64> = samples.iter().skip(1).map(|f| f.ts as f64).collect();
+        let ls = lomb_scargle_peak(&times, &iv);
+        let fft = fft_peak_significant(&iv, SPECTRAL_FFT_SNR);
+        assert!(
+            spectral_hit(ls, fft),
+            "Lomb–Scargle/FFT must catch chaotic jitter at live N, ls={ls:?} fft={fft:?}"
+        );
+        let spectral = detect_spectral_beacons(&samples, &cfg);
+        assert!(
+            spectral.iter().any(|h| h.kind == "c2_beacon_spectral"),
+            "fused spectral detector must fire at live HTTP sample count, got {spectral:?}"
+        );
     }
 }
