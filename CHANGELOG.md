@@ -35,6 +35,10 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 - **Yanked `chacha20 0.10.0`** (pulled by `rand 0.10.1`) bumped to **0.10.2**
   so `cargo deny` advisories pass. README DB-box migration count synced to
   **111**.
+- **RLS GUC cast safety** on `agent_metric_baselines_global` and
+  `agent_telemetry_errors`: policies use `public.app_current_tenant_id()`
+  instead of `current_setting(...)::bigint`, so an empty worker scope cannot
+  raise `invalid input syntax for type bigint: ""`.
 
 ### Added
 

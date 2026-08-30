@@ -480,3 +480,43 @@ async fn no_role_level_tenant_guc_default_survives() {
          20260811000100_reset_role_tenant_guc_defaults."
     );
 }
+
+/// Source-level twin of `no_rls_policy_casts_the_raw_tenant_guc`.
+///
+/// The live `pg_policy` scan only sees what a migrated database actually installed. A new
+/// table whose `CREATE POLICY` copies the pre-20260811 `::bigint` form is invisible until
+/// CI migrates — and that is exactly how `agent_metric_baselines_global` /
+/// `agent_telemetry_errors` escaped review. Anything dated after the rewrite migration
+/// must use `public.app_current_tenant_id()` in the file itself.
+#[test]
+fn migrations_after_cast_safety_do_not_reintroduce_raw_guc_bigint_cast() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+    let cutoff = "20260811000000";
+    // Split so this test file does not match its own documentation of the defect.
+    let needle = concat!("current_setting('app.current_tenant_id', true)", "::bigint");
+    let mut offenders = Vec::new();
+    for entry in std::fs::read_dir(&dir).expect("weissman-db/migrations") {
+        let path = entry.expect("dirent").path();
+        let name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .to_string();
+        if !name.ends_with(".sql") {
+            continue;
+        }
+        let stamp = name.split('_').next().unwrap_or("");
+        if stamp <= cutoff {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap_or_default();
+        if text.contains(needle) {
+            offenders.push(name);
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "migrations after {cutoff} reintroduced current_setting(...)::bigint \
+         (empty worker GUC raises). Use public.app_current_tenant_id(): {offenders:?}"
+    );
+}

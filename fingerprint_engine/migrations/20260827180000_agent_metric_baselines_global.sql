@@ -20,9 +20,11 @@ CREATE INDEX IF NOT EXISTS ix_ambg_agent
 ALTER TABLE agent_metric_baselines_global ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agent_metric_baselines_global FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS agent_metric_baselines_global_tenant ON agent_metric_baselines_global;
+-- Cast-safe: empty worker GUC must not raise. Never current_setting(...)::bigint
+-- (see 20260811000000_rls_tenant_guc_cast_safety).
 CREATE POLICY agent_metric_baselines_global_tenant ON agent_metric_baselines_global FOR ALL
-    USING       (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK  (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING       (tenant_id = public.app_current_tenant_id())
+    WITH CHECK  (tenant_id = public.app_current_tenant_id());
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON agent_metric_baselines_global TO weissman_app;
 
