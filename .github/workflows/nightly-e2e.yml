@@ -147,6 +147,13 @@ jobs:
           # findings-E2E's explicit per-engine scans (they timed out). The E2E
           # drives scans itself via /api/command-center/scan.
           WEISSMAN_SCANNING_ENABLED: "0"
+          # Same CI-only quotas as .github/workflows/ci.yml Start weissman-server.
+          # Production defaults (8 logins/min, 24 scan POSTs/min) plus governor
+          # Retry-After of 1s starve a sequential full-group findings E2E from one IP.
+          WEISSMAN_TENANT_SCAN_POSTS_PER_MINUTE: "120"
+          WEISSMAN_TENANT_SCAN_BURST: "60"
+          WEISSMAN_LOGIN_PER_MINUTE: "60"
+          WEISSMAN_LOGIN_BURST: "60"
         run: ./target/debug/weissman-server > /tmp/weissman-server.log 2>&1 &
 
       - name: Start weissman-worker

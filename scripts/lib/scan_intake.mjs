@@ -29,6 +29,22 @@ const WAIT_CAP_MS = 75000
 // not touch the burst case: six 1.5s fallback waits total 9s, far inside the budget.
 const WAIT_TOTAL_BUDGET_MS = 90000
 const SHED_CODES = new Set([429, 503])
+// Governor `wait_time_from().as_secs().max(1)` often advertises 1s while the quota
+// window is still a full minute. Honoring 1s six times burns the retry budget inside
+// the same window. Floor 429 waits so one retry can actually clear the bucket.
+const RATE_LIMITED_FLOOR_MS = 15000
+
+export function shedWaitMs(status, retryAfterSeconds, attemptIndex = 1) {
+  const hint = Number(retryAfterSeconds)
+  const fromHint = Number.isFinite(hint) && hint > 0
+    ? hint * 1000
+    : Math.min(1500 * attemptIndex, WAIT_CAP_MS)
+  let waitMs = Math.min(fromHint, WAIT_CAP_MS)
+  if (status === 429 && waitMs < RATE_LIMITED_FLOOR_MS) {
+    waitMs = Math.min(RATE_LIMITED_FLOOR_MS, WAIT_CAP_MS)
+  }
+  return waitMs
+}
 
 export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -51,9 +67,7 @@ export async function retryShed(attempt, opts = {}) {
   let spentMs = 0
   for (let i = 1; i <= retries && SHED_CODES.has(statusOf(res)); i += 1) {
     const hint = Number(retryAfterOf(res))
-    const waitMs = Number.isFinite(hint) && hint > 0
-      ? Math.min(hint * 1000, WAIT_CAP_MS)
-      : Math.min(1500 * i, WAIT_CAP_MS)
+    const waitMs = shedWaitMs(statusOf(res), hint, i)
     if (spentMs + waitMs > WAIT_TOTAL_BUDGET_MS) break
     spentMs += waitMs
     console.log(

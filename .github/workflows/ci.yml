@@ -808,6 +808,16 @@ jobs:
           # (The bulk-vs-interactive head-of-line starvation is a real product concern tracked
           # separately from this CI-scoping change.)
           WEISSMAN_SCANNING_ENABLED: "0"
+          # Live E2E in this job chains Playwright + pytest + engine-group scans on one
+          # IP/tenant. Production defaults (8 logins/min, 24 scan POSTs/min) 429 the later
+          # steps; governor Retry-After is often 1s and burns out inside the same window.
+          # These apply only to this CI server process (OnceLock at boot).
+          WEISSMAN_TENANT_SCAN_POSTS_PER_MINUTE: "120"
+          WEISSMAN_TENANT_SCAN_BURST: "60"
+          WEISSMAN_LOGIN_PER_MINUTE: "60"
+          WEISSMAN_LOGIN_BURST: "60"
+          WEISSMAN_RATE_LIMIT_PER_SEC: "200"
+          WEISSMAN_RATE_LIMIT_BURST: "400"
           # Server + worker share ONE Postgres (max_connections=100). Each process opens THREE
           # pools (app + auth + intel), so capping only the app pool leaves auth(12)+intel(12)
           # each uncounted. Cap all three to the sizes the repo's own E2E harness uses
