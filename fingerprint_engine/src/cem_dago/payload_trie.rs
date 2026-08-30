@@ -236,7 +236,7 @@ pub fn ingest_pages(
         }
     }
     stats.inserted = trie.len();
-    stats
+    (trie, stats)
 }
 
 fn row_to_seed(r: &sqlx::postgres::PgRow) -> Option<TrieSeed> {
