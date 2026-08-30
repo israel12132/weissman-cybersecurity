@@ -6,7 +6,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { GROUP_SMOKE_PLAN, FINDINGS_E2E_PLAN, collectApprovedDomains } from './lib/group_smoke_plan.mjs'
-import { retryScanIntake, retryLogin } from './lib/scan_intake.mjs'
+import { retryScanIntake, retryLogin, retryShed } from './lib/scan_intake.mjs'
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 
@@ -74,7 +74,7 @@ async function pollJob(jobId, token) {
   for (let i = 0; i < POLL_MAX; i += 1) {
     const { status, data } = await retryShed(
       () => api('GET', `/api/jobs/${jobId}`, { token }),
-      { label, what: 'job poll' },
+      { label, what: 'job poll', retries: 3 },
     )
     if (status === 200 && terminal(data.status)) return data
     await sleep(POLL_MS)
