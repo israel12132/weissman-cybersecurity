@@ -68,23 +68,35 @@ async fn incr_window(key: &str, window: Duration) -> Option<u64> {
     incr_and_bound_ttl(&mut conn, key, window).await.ok()
 }
 
-/// INCR, then set EXPIRE if the key has no TTL.
+/// Atomic `INCR` + `PEXPIRE` when the key has no TTL.
 ///
-/// `INCR` + `EXPIRE` only when `count == 1` races: if EXPIRE is dropped the key
-/// never dies, a 1-second API window grows without bound, and live E2E job
-/// polls on 127.0.0.1 are 429'd until they look like a job timeout.
+/// Split `INCR` then `EXPIRE` only when `count == 1` races: a dropped EXPIRE
+/// leaves a 1-second API window immortal, counts climb past the limit, and
+/// live E2E job polls on 127.0.0.1 are 429'd until they look like a job timeout.
+/// A follow-up `TTL` + `EXPIRE` still has a lost-EXPIRE window. One Lua eval
+/// cannot drop the expire independently of the increment.
+const INCR_BOUND_TTL_LUA: &str = r#"
+local n = redis.call('INCR', KEYS[1])
+local ttl_ms = tonumber(ARGV[1])
+if redis.call('PTTL', KEYS[1]) < 0 then
+  redis.call('PEXPIRE', KEYS[1], ttl_ms)
+end
+return n
+"#;
+
 async fn incr_and_bound_ttl(
     conn: &mut redis::aio::MultiplexedConnection,
     key: &str,
     window: Duration,
 ) -> redis::RedisResult<u64> {
-    let count: u64 = conn.incr(key, 1u64).await?;
-    let ttl: i64 = conn.ttl(key).await.unwrap_or(-1);
-    if ttl < 0 {
-        let secs = window.as_secs().max(1) as i64;
-        let _: Result<(), _> = conn.expire(key, secs).await;
-    }
-    Ok(count)
+    let ttl_ms = window.as_millis().max(1) as i64;
+    redis::cmd("EVAL")
+        .arg(INCR_BOUND_TTL_LUA)
+        .arg(1i64)
+        .arg(key)
+        .arg(ttl_ms)
+        .query_async(conn)
+        .await
 }
 
 /// Tenant scan POST counter (60s window). `None` when Redis unavailable.
@@ -404,4 +416,30 @@ pub async fn incr_api_ip_strict(client_ip: &str) -> StrictOp<u64> {
         Duration::from_secs(1),
     )
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn incr_bound_ttl_lua_cannot_incr_without_expire_repair() {
+        let lua = INCR_BOUND_TTL_LUA.replace(char::is_whitespace, "");
+        assert!(
+            lua.contains("redis.call('INCR',KEYS[1])"),
+            "window counter must INCR inside Lua"
+        );
+        assert!(
+            lua.contains("redis.call('PEXPIRE',KEYS[1],ttl_ms)"),
+            "missing TTL must be repaired in the same eval as INCR"
+        );
+        assert!(
+            lua.contains("redis.call('PTTL',KEYS[1])<0"),
+            "heal path must look at PTTL, not a client-side count==1"
+        );
+        assert!(
+            !lua.contains("ifn==1"),
+            "must not gate EXPIRE on first INCR only"
+        );
+    }
 }
