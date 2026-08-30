@@ -77,12 +77,14 @@ type PoeJobRegistry = Arc<DashMap<String, Vec<flume::Sender<String>>>>;
 const TELEMETRY_BROADCAST_CAPACITY: usize = 128;
 
 pub struct AppState {
+    /// Process-lifetime app pool. Created once at boot; never rebuild per request.
     pub app_pool: Arc<PgPool>,
     pub intel_pool: Arc<PgPool>,
     pub auth_pool: Arc<PgPool>,
     /// Optional read-only pool (separate role with SELECT-only grants).
     /// When `Some`, `nl_query::ask` will use this for the compiled SQL execution
     /// step. Defense-in-depth: even if validation breaks, Postgres rejects writes.
+    /// Built once in [`new_app_state`] from a dropped [`weissman_db::SecretUrl`].
     pub read_only_pool: Option<Arc<PgPool>>,
     started_at: Instant,
     timing_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
@@ -1408,25 +1410,24 @@ pub fn new_app_state(
     auth_pool: Arc<PgPool>,
     intel_pool: Arc<PgPool>,
 ) -> Arc<AppState> {
-    // Optional read-only pool for /api/ask. Falls back to None if the env var
-    // isn't set — endpoint will then return 503 with a clear "configure this" hint.
-    let read_only_pool: Option<Arc<PgPool>> = match std::env::var("WEISSMAN_READ_ONLY_DATABASE_URL")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-    {
-        Some(url) => match sqlx::postgres::PgPoolOptions::new()
-            .max_connections(5)
-            .acquire_timeout(std::time::Duration::from_secs(5))
-            .connect_lazy(&url)
-        {
-            Ok(p) => Some(Arc::new(p)),
-            Err(e) => {
-                tracing::warn!(target: "nl_query", error = %e, "read-only pool init failed");
-                None
-            }
-        },
-        None => None,
-    };
+    // Optional read-only pool for /api/ask. Built once here from a SecretUrl that
+    // is dropped before this function returns — the PgPool is the long-lived
+    // handle. Falls back to None if the env var isn't set (endpoint returns 503).
+    let read_only_pool: Option<Arc<PgPool>> =
+        match weissman_db::secret_read_only_database_url_from_env() {
+            Some(secret) => match sqlx::postgres::PgPoolOptions::new()
+                .max_connections(5)
+                .acquire_timeout(std::time::Duration::from_secs(5))
+                .connect_lazy(secret.expose())
+            {
+                Ok(p) => Some(Arc::new(p)),
+                Err(e) => {
+                    tracing::warn!(target: "nl_query", error = %e, "read-only pool init failed");
+                    None
+                }
+            },
+            None => None,
+        };
     let (timing_tx, _) = tokio::sync::broadcast::channel::<String>(256);
     let (redteam_tx, _) = tokio::sync::broadcast::channel::<String>(256);
     let (radar_tx, _) = tokio::sync::broadcast::channel::<String>(256);
@@ -1528,6 +1529,9 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         app_pool.clone(),
         state.endpoint_agents.clone(),
     );
+    // Binary COPY ingest runs on every replica: the replica that accepted the agent
+    // payload owns the mPSC buffer. Leader-only would drop samples on followers.
+    crate::postgres_bulk_copy::spawn(app_pool.clone());
     if is_leader {
         crate::endpoint_agents::spawn_ueba_baseline_scheduler(
             app_pool.clone(),

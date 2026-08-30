@@ -101,6 +101,25 @@ pub enum ServerToAgent {
     Shutdown {
         reason: String,
     },
+    /// Ingest channel is full. Agent must retain the last `ueba_baseline` finding
+    /// locally and retry after `retry_after_ms` (or on the next session).
+    Backpressure {
+        retry_after_ms: u64,
+        #[serde(default)]
+        task_id: Option<String>,
+        #[serde(default)]
+        engine: Option<String>,
+        #[serde(default)]
+        reason: Option<String>,
+    },
+}
+
+/// Outcome of persisting an agent finding. Backpressure is not a transport error —
+/// the WebSocket stays up and the agent is told to wait / spill.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StoreFindingResult {
+    Stored,
+    Backpressure { retry_after_ms: u64 },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -970,7 +989,9 @@ pub async fn store_finding(
     engine: &str,
     finding: &Value,
 ) -> Result<(), sqlx::Error> {
-    store_finding_for_task(pool, tenant_id, client_id, engine, finding, None).await
+    store_finding_for_task(pool, tenant_id, client_id, engine, finding, None)
+        .await
+        .map(|_| ())
 }
 
 /// Persist an agent finding, optionally correlating it to the scan job that dispatched the task.
@@ -981,12 +1002,29 @@ pub async fn store_finding_for_task(
     engine: &str,
     finding: &Value,
     task_id: Option<&str>,
-) -> Result<(), sqlx::Error> {
+) -> Result<StoreFindingResult, sqlx::Error> {
     if engine == "ueba_baseline" {
         if let Some(payload) = parse_ueba_ingest(finding, client_id) {
-            let _ = crate::ueba_detector::ingest_sample(pool, tenant_id, payload).await;
+            match crate::postgres_bulk_copy::submit_ueba_sample(pool, tenant_id, payload, None)
+                .await
+            {
+                Ok(_) => {}
+                Err(crate::postgres_bulk_copy::SubmitError::Backpressure(bp)) => {
+                    return Ok(StoreFindingResult::Backpressure {
+                        retry_after_ms: bp.retry_after_ms,
+                    });
+                }
+                Err(crate::postgres_bulk_copy::SubmitError::Failed(e)) => {
+                    tracing::warn!(
+                        target: "endpoint_agents",
+                        tenant_id,
+                        error = %e,
+                        "ueba ingest failed; agent socket stays up"
+                    );
+                }
+            }
         }
-        return Ok(());
+        return Ok(StoreFindingResult::Stored);
     }
     let scan_job_id = if let Some(tid) = task_id {
         task_scan_job_id(pool, tenant_id, tid).await
@@ -1043,7 +1081,7 @@ pub async fn store_finding_for_task(
         let msg = crate::http::tenant_stream::stamp_value(tenant_id, msg);
         crate::telemetry_bus::publish_bus("telemetry", &msg).await;
     }
-    Ok(())
+    Ok(StoreFindingResult::Stored)
 }
 
 /// Resolve the parent scan job id stored on an agent task (if any).
@@ -1400,6 +1438,31 @@ mod tests {
         .unwrap();
         assert_eq!(v["type"], "shutdown");
         assert_eq!(v["reason"], "bye");
+    }
+
+    #[test]
+    fn server_to_agent_backpressure_round_trips() {
+        let msg = ServerToAgent::Backpressure {
+            retry_after_ms: 200,
+            task_id: Some("t-9".into()),
+            engine: Some("ueba_baseline".into()),
+            reason: Some("ueba_ingest_channel_full".into()),
+        };
+        let v = serde_json::to_value(&msg).unwrap();
+        assert_eq!(v["type"], "backpressure");
+        assert_eq!(v["retry_after_ms"], 200);
+        let back: ServerToAgent = serde_json::from_value(v).unwrap();
+        match back {
+            ServerToAgent::Backpressure {
+                retry_after_ms,
+                engine,
+                ..
+            } => {
+                assert_eq!(retry_after_ms, 200);
+                assert_eq!(engine.as_deref(), Some("ueba_baseline"));
+            }
+            _ => panic!("expected Backpressure"),
+        }
     }
 
     #[test]

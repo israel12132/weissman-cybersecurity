@@ -76,6 +76,7 @@ In-process background loops (`weissman-server`):
   • CISA KEV refresh                         every 6 h
   • FIRST.org EPSS back-fill                  every 12 h
   • UEBA sample retention                     hourly  (>14 d purge)
+  • UEBA binary COPY ingest                   every replica (batch size or flush interval)
   • Sovereign self-scan (LLM audit-log review) opt-in via env
   • SOAR playbook dispatch                    fire-and-forget on finding persist
 ```
@@ -144,10 +145,28 @@ In-process background loops (`weissman-server`):
    listening TCP ports, top processes (by `/proc/*/comm`), unique UIDs, uptime,
    load, memory used %, failed logins (`/var/log/auth.log` if readable).
    Bundles into `metrics` JSON with `hour_of_week` (Mon-00 = 0, Sun-23 = 167).
-3. Server `POST /api/ueba/ingest` → `ueba_detector::ingest_sample`:
-   - INSERT into `agent_metric_samples`,
+3. Server `POST /api/ueba/ingest` (admin) and `/ws/agent` `ueba_baseline` findings
+   enqueue onto a **bounded** Tokio mPSC (`postgres_bulk_copy`, default capacity
+   50_000 / `WEISSMAN_UEBA_COPY_CHANNEL`). A per-replica worker flushes via
+   PostgreSQL **binary COPY** (`COPY agent_metric_samples … FROM STDIN WITH
+   (FORMAT binary)`) when the buffer hits `WEISSMAN_UEBA_COPY_BATCH_SIZE`
+   (default 512) or `WEISSMAN_UEBA_COPY_FLUSH_MS` (default 50 ms). The COPY
+   worker warms `pg_attribute` **once at startup**
+   (`warm_agent_metric_samples_schema`) against the v1 column contract
+   (`weissman_db::pg_binary_copy`) and caches the result in memory (reset only
+   when the pool is rebuilt). Each flush calls
+   `require_warmed_agent_metric_samples_schema` only — it never re-queries the
+   catalog, so `POST /api/ueba/ingest` cannot flood Postgres system catalogs.
+   COPY runs inside an explicit tenant transaction (`begin_tenant_tx`); `COMMIT`
+   happens only after `finish()` and a matching row count — a mid-stream failure
+   `abort()`s the writer and rolls the batch back. RLS is applied per tenant.
+   A full channel returns **backpressure** (HTTP 429 + `ServerToAgent::Backpressure`);
+   agents keep a FIFO `ueba-spill.json` queue (hard cap 5 MiB / 10 000 samples,
+   oldest dropped first) and retry. INSERT fallback is only used when the worker
+   is absent, the channel is closed, or the schema contract was not warmed.
+   After COPY commits:
    - re-derive baselines (mean + stddev) for every numeric metric for that
-     `(agent, metric, hour_of_week)` bucket from the last 7 days,
+     `(agent, metric)` over the last 7 days,
    - if baseline has ≥ 24 samples and stddev > 0:
      `|z| > 3` → row in `agent_anomalies` with `severity='medium'`,
      `|z| > 6` → `severity='high'`,
@@ -155,6 +174,9 @@ In-process background loops (`weissman-server`):
      (collected over the same 7-day window) fires a categorical anomaly once
      it's out of the learning window.
 4. `/api/ueba/anomalies` exposes the rolling list for the cockpit UEBA panel.
+   `/api/ueba/ingest-stats` exposes replica-local COPY counters (rows flushed,
+   last flush latency, channel depth, INSERT fallback count, backpressure
+   rejects, schema version, schema-warmed flag).
 
 ---
 

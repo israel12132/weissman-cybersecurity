@@ -1121,7 +1121,7 @@ async fn api_openapi_spec() -> Response {
             "/api/ueba/ingest": {
                 "post": {
                     "summary": "Ingest a UEBA baseline sample from a weissman-agent",
-                    "description": "Server side: writes the sample, recomputes mean/stddev from the last 7 days for `(agent, metric, hour_of_week)`, fires medium-severity anomaly when `|z| > 3` (high when > 6). Also detects new-port / new-process categorical anomalies.",
+                    "description": "The HTTP/agent path enqueues the sample on a bounded Tokio mPSC (default 50_000, WEISSMAN_UEBA_COPY_CHANNEL). A dedicated worker flushes via PostgreSQL binary COPY (`COPY agent_metric_samples … FROM STDIN WITH (FORMAT binary)`) inside an explicit transaction when the buffer hits WEISSMAN_UEBA_COPY_BATCH_SIZE or WEISSMAN_UEBA_COPY_FLUSH_MS. Schema version 1 is asserted against pg_attribute before the stream starts. COMMIT happens only after finish() and a matching row count. After COPY commits, the detector recomputes mean/stddev from the last 7 days for `(agent, metric)`, fires medium-severity anomaly when `|z| > 3` (high when > 6), and detects new-port / new-process categorical anomalies. A full channel returns 429 backpressure (no INSERT). INSERT fallback is only used when the worker is absent.",
                     "tags": ["UEBA"],
                     "requestBody": {
                         "required": true,
@@ -1136,7 +1136,17 @@ async fn api_openapi_spec() -> Response {
                             }
                         } } }
                     },
-                    "responses": { "200": { "description": "Ingest summary + any anomalies fired" } }
+                    "responses": {
+                        "200": { "description": "Ingest summary + any anomalies fired" },
+                        "429": { "description": "Ingest channel full — Retry-After + retry_after_ms; retain samples locally" }
+                    }
+                }
+            },
+            "/api/ueba/ingest-stats": {
+                "get": {
+                    "summary": "Replica-local PostgreSQL binary COPY ingest counters",
+                    "tags": ["UEBA"],
+                    "responses": { "200": { "description": "Queued depth, rows flushed, last flush latency, INSERT fallback count, backpressure rejects, schema version" } }
                 }
             },
 

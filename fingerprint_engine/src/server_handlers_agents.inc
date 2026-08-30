@@ -716,7 +716,7 @@ async fn ws_agent(
                                             .or_insert_with(|| json!(aid));
                                     }
                                     if let Some(cid) = client_id {
-                                        let _ = crate::endpoint_agents::store_finding_for_task(
+                                        match crate::endpoint_agents::store_finding_for_task(
                                             app_pool.as_ref(),
                                             tenant_id,
                                             cid,
@@ -724,7 +724,31 @@ async fn ws_agent(
                                             &finding,
                                             task_id,
                                         )
-                                        .await;
+                                        .await
+                                        {
+                                            Ok(crate::endpoint_agents::StoreFindingResult::Backpressure {
+                                                retry_after_ms,
+                                            }) => {
+                                                let _ = tx_to_agent
+                                                    .send(crate::endpoint_agents::ServerToAgent::Backpressure {
+                                                        retry_after_ms,
+                                                        task_id: task_id.map(str::to_string),
+                                                        engine: Some(engine),
+                                                        reason: Some(
+                                                            "ueba_ingest_channel_full".into(),
+                                                        ),
+                                                    })
+                                                    .await;
+                                            }
+                                            Ok(crate::endpoint_agents::StoreFindingResult::Stored) => {}
+                                            Err(e) => {
+                                                tracing::warn!(
+                                                    target: "endpoint_agents",
+                                                    error = %e,
+                                                    "store_finding_for_task failed"
+                                                );
+                                            }
+                                        }
                                     }
                                 }
                                 "task_done" | "task_error" => {

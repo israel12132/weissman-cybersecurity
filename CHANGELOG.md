@@ -9,6 +9,30 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Added
 
+- **PostgreSQL binary COPY ingest for UEBA.** Agent and `POST /api/ueba/ingest`
+  paths enqueue samples on a **bounded** Tokio mPSC (default 50_000); a
+  per-replica worker flushes with `COPY agent_metric_samples … FROM STDIN WITH
+  (FORMAT binary)` at batch size (`WEISSMAN_UEBA_COPY_BATCH_SIZE`, default 512)
+  or interval (`WEISSMAN_UEBA_COPY_FLUSH_MS`, default 50 ms), grouped by tenant
+  so RLS still holds. The encoder is locked to schema version 1
+  (`AGENT_METRIC_SAMPLES_COPY_COLUMNS`). `pg_attribute` is queried **once** when
+  the COPY worker starts (`warm_agent_metric_samples_schema`); the flush path
+  only reads the in-memory result. COPY runs in an explicit transaction and
+  commits only after `finish()` plus a matching row count; send failure
+  `abort()`s the writer and rolls back. A full channel returns HTTP 429 /
+  `ServerToAgent::Backpressure` (agents spill to a FIFO `ueba-spill.json`
+  capped at 5 MiB / 10 000 samples); INSERT fallback is only used when the
+  worker is absent or the schema contract was not warmed.
+  Cockpit counters live at `GET /api/ueba/ingest-stats`. Encoder:
+  `weissman_db::pg_binary_copy`.
+- **Zero-knowledge vault loader.** `vault_config_crypto` loads
+  `WEISSMAN_VAULT_KEY` (64 hex) / `WEISSMAN_INTEGRATIONS_VAULT_KEY` (64 hex or
+  ≥32-char passphrase) per operation, runs AES-256-GCM, and wipes keys plus
+  decrypted config buffers via `Zeroize` / `ZeroizeOnDrop`. Decrypted fields
+  and DSNs are `SecretString` / `SecretUrl` (not `Clone`, not cached in
+  `OnceLock`). The `PgPool` itself is process-lifetime state created once at
+  boot. The sovereign loader has no JWT fallback. Integration and CEO
+  vaults still decrypt legacy JWT-derived rows through the keyring.
 - **Dynamic compliance framework catalog.** `compliance_frameworks` is now the
   authoritative list of in-scope frameworks (migration
   `20260729120000_compliance_frameworks_dynamic_and_onboarding.sql`, mirrored to
@@ -64,6 +88,12 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Security
 
+- **Vault keys are no longer pinned in a process-lifetime `OnceLock`.**
+  `integrations_vault` and `ceo::vault` load dedicated AES-256-GCM keys per
+  encrypt/decrypt and `zeroize` the working copies (plus plaintext decrypt
+  buffers) before return. The JWT-derived key remains on the *decrypt*
+  keyring only, so enabling `WEISSMAN_INTEGRATIONS_VAULT_KEY` /
+  `WEISSMAN_VAULT_KEY` does not orphan MFA/SOAR/CEO secrets.
 - **Removed the `genpdf` dependency** from `fingerprint_engine`, clearing the
   `RUSTSEC-2026-0187` `lopdf` deeply-nested-parse stack-overflow advisory (reached
   only via `genpdf → printpdf → lopdf`) and dropping the whole unmaintained subtree

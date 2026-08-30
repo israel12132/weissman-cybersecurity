@@ -132,6 +132,7 @@ pub mod pipeline_context;
 pub mod pipeline_engine;
 pub mod pipeline_to_runtime_risk_engine;
 pub mod poc_sandbox;
+pub mod postgres_bulk_copy;
 pub mod portfolio_posture;
 pub mod posture_score;
 pub mod recon;
@@ -176,6 +177,7 @@ pub mod threat_intel_engine;
 pub mod timing_engine;
 pub mod ueba_detector;
 pub mod validator;
+pub mod vault_config_crypto;
 
 pub mod admin_users;
 pub mod advanced_ai_engines;

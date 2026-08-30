@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Row};
-use std::sync::OnceLock;
+use zeroize::Zeroize;
 
 // ── Secret-at-rest encryption (AES-256-GCM) ────────────────────────────────────
 // Tenant secrets stored in the vault are encrypted at rest. The key is a dedicated
@@ -37,28 +37,32 @@ fn hex32(raw: &str) -> Option<[u8; 32]> {
     }
 }
 
-fn vault_key() -> Option<[u8; 32]> {
-    static KEY: OnceLock<Option<[u8; 32]>> = OnceLock::new();
-    *KEY.get_or_init(|| {
-        if let Ok(raw) = std::env::var("WEISSMAN_VAULT_KEY") {
-            let t = raw.trim();
-            if !t.is_empty() {
-                if let Some(k) = hex32(t) {
-                    return Some(k);
+fn vault_key() -> Option<crate::vault_config_crypto::VaultKey> {
+    match crate::vault_config_crypto::VaultKey::load_vault_key() {
+        Ok(k) => Some(k),
+        Err(crate::vault_config_crypto::VaultCryptoError::Missing { .. })
+        | Err(crate::vault_config_crypto::VaultCryptoError::InvalidHex { .. }) => {
+            if let Ok(raw) = std::env::var("WEISSMAN_VAULT_KEY") {
+                if !raw.trim().is_empty()
+                    && crate::vault_config_crypto::parse_hex32(raw.trim()).is_none()
+                {
+                    eprintln!(
+                        "[Weissman][vault] WEISSMAN_VAULT_KEY must be 64 hex chars (32 bytes); ignoring"
+                    );
                 }
-                eprintln!(
-                    "[Weissman][vault] WEISSMAN_VAULT_KEY must be 64 hex chars (32 bytes); ignoring"
-                );
+            }
+            let js = std::env::var("WEISSMAN_JWT_SECRET").unwrap_or_default();
+            if js.trim().len() < 16 {
+                None
+            } else {
+                Some(crate::vault_config_crypto::VaultKey::from_bytes(derive_key(
+                    b"weissman-vault-key-v1|",
+                    js.trim(),
+                )))
             }
         }
-        let js = std::env::var("WEISSMAN_JWT_SECRET").unwrap_or_default();
-        if js.trim().len() < 16 {
-            // No key material. In production the startup guard (key_present) refuses
-            // boot; in dev the CEO vault stores plaintext (no managed secrets there).
-            return None;
-        }
-        Some(derive_key(b"weissman-vault-key-v1|", js.trim()))
-    })
+        Err(_) => None,
+    }
 }
 
 /// True when a key is available to encrypt CEO-vault secrets at rest — including the JWT-derived
@@ -87,38 +91,35 @@ pub fn dedicated_key_configured() -> bool {
 /// Decrypt keyring: current key, then rotated-out previous keys
 /// (`WEISSMAN_VAULT_KEY_PREVIOUS` hex + the `WEISSMAN_JWT_SECRET_PREVIOUS`
 /// rotation keyring) so key rotation never orphans encrypted CEO-vault rows.
-fn decrypt_keyring() -> &'static [[u8; 32]] {
-    static KEYS: OnceLock<Vec<[u8; 32]>> = OnceLock::new();
-    KEYS.get_or_init(|| {
-        let mut v: Vec<[u8; 32]> = Vec::new();
-        if let Some(k) = vault_key() {
-            v.push(k);
-        }
-        if let Ok(csv) = std::env::var("WEISSMAN_VAULT_KEY_PREVIOUS") {
-            v.extend(csv.split(',').filter_map(hex32));
-        }
-        // Legacy rows encrypted with the CURRENT JWT secret, before a dedicated WEISSMAN_VAULT_KEY
-        // existed. Without this, setting that key — what the hardened startup guard now demands —
-        // orphans every existing CEO-vault secret, because the JWT-derived key only reached this
-        // keyring via *_PREVIOUS. See the matching note in soar/integrations_vault.rs.
-        if let Ok(js) = std::env::var("WEISSMAN_JWT_SECRET") {
-            if js.trim().len() >= 16 {
-                let legacy = derive_key(b"weissman-vault-key-v1|", js.trim());
-                if !v.contains(&legacy) {
-                    v.push(legacy);
-                }
+fn decrypt_keyring() -> Vec<[u8; 32]> {
+    let mut v: Vec<[u8; 32]> = Vec::new();
+    if let Some(mut k) = vault_key() {
+        v.push(*k.as_bytes());
+        k.zeroize();
+    }
+    if let Ok(csv) = std::env::var("WEISSMAN_VAULT_KEY_PREVIOUS") {
+        v.extend(csv.split(',').filter_map(hex32));
+    }
+    // Legacy rows encrypted with the CURRENT JWT secret, before a dedicated WEISSMAN_VAULT_KEY
+    // existed. Without this, setting that key — what the hardened startup guard now demands —
+    // orphans every existing CEO-vault secret, because the JWT-derived key only reached this
+    // keyring via *_PREVIOUS. See the matching note in soar/integrations_vault.rs.
+    if let Ok(js) = std::env::var("WEISSMAN_JWT_SECRET") {
+        if js.trim().len() >= 16 {
+            let legacy = derive_key(b"weissman-vault-key-v1|", js.trim());
+            if !v.contains(&legacy) {
+                v.push(legacy);
             }
         }
-        if let Ok(csv) = std::env::var("WEISSMAN_JWT_SECRET_PREVIOUS") {
-            for e in csv.split(',') {
-                if e.trim().len() >= 16 {
-                    v.push(derive_key(b"weissman-vault-key-v1|", e.trim()));
-                }
+    }
+    if let Ok(csv) = std::env::var("WEISSMAN_JWT_SECRET_PREVIOUS") {
+        for e in csv.split(',') {
+            if e.trim().len() >= 16 {
+                v.push(derive_key(b"weissman-vault-key-v1|", e.trim()));
             }
         }
-        v
-    })
-    .as_slice()
+    }
+    v
 }
 
 fn encrypt_with_key(key: &[u8; 32], plaintext: &str) -> Option<String> {
@@ -142,15 +143,22 @@ fn decrypt_with_key(key: &[u8; 32], stored: &str) -> Option<String> {
     }
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
     let nonce = Nonce::from_slice(&blob[..12]);
-    let pt = cipher.decrypt(nonce, &blob[12..]).ok()?;
-    String::from_utf8(pt).ok()
+    let mut pt = cipher.decrypt(nonce, &blob[12..]).ok()?;
+    let out = String::from_utf8(pt.clone()).ok();
+    pt.zeroize();
+    out
 }
 
 /// Encrypt a tenant secret for storage. Falls back to plaintext only when no key
 /// is available (dev without JWT secret); production always has a key.
 pub fn encrypt_secret(plaintext: &str) -> String {
     match vault_key() {
-        Some(k) => encrypt_with_key(&k, plaintext).unwrap_or_else(|| plaintext.to_string()),
+        Some(mut k) => {
+            let out =
+                encrypt_with_key(k.as_bytes(), plaintext).unwrap_or_else(|| plaintext.to_string());
+            k.zeroize();
+            out
+        }
         None => plaintext.to_string(),
     }
 }
@@ -161,12 +169,18 @@ pub fn decrypt_secret(stored: &str) -> String {
     if !stored.starts_with(VAULT_PREFIX) {
         return stored.to_string();
     }
-    for k in decrypt_keyring() {
+    let mut keys = decrypt_keyring();
+    let mut recovered = None;
+    for k in keys.iter() {
         if let Some(pt) = decrypt_with_key(k, stored) {
-            return pt;
+            recovered = Some(pt);
+            break;
         }
     }
-    stored.to_string()
+    for k in keys.iter_mut() {
+        k.zeroize();
+    }
+    recovered.unwrap_or_else(|| stored.to_string())
 }
 
 #[derive(Debug, Serialize)]

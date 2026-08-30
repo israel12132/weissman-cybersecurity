@@ -129,8 +129,9 @@ aws-sdk-ssoadmin = { version = "1.14", default-features = false, features = ["de
 aws-types = "1"
 tokio-util = { version = "0.7", features = ["codec"] }
 lettre = { version = "0.11.22", default-features = false, features = ["tokio1-rustls-tls", "builder", "smtp-transport"] }
-aes-gcm = "0.10"
+aes-gcm = { version = "0.10", features = ["zeroize"] }
 hex = "0.4"
+zeroize = { version = "1", features = ["derive"] }
 syn = { version = "2.0", features = ["full", "visit"] }
 subtle = "2.6"
 metrics = "0.24"

@@ -144,6 +144,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         // UEBA + baseline/drift dashboard
         .route("/api/ueba/ingest", post(api_ueba_ingest))
+        .route("/api/ueba/ingest-stats", get(api_ueba_ingest_stats))
         // NDR / ITDR live data ingest (feeds network beaconing/exfil + identity-threat detectors).
         .route("/api/ndr/flows", post(api_ndr_flows_ingest))
         .route("/api/itdr/auth-events", post(api_itdr_auth_ingest))

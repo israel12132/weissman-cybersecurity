@@ -2,6 +2,12 @@
 //! App role (`weissman_app`) is subject to RLS. Auth role (`weissman_auth`) bypasses RLS for login / IdP resolution only.
 //!
 //! [`database_url_from_env`] and pool helpers read configuration from the process environment at runtime.
+//!
+//! **Pools are process-lifetime state.** Call [`connect_app_from_env`] (and siblings)
+//! once at boot, store the returned [`PgPool`] / `Arc<PgPool>` on `AppState`, and
+//! never rebuild a pool on an API request. [`SecretUrl`] exists only for that
+//! one-time connect (or a deliberate hot DSN rotation) and is wiped on drop.
+//! Do not cache DSN strings in `OnceLock`.
 
 #![forbid(unsafe_code)]
 
@@ -12,11 +18,15 @@ pub mod env_bootstrap;
 pub mod job_queue;
 pub mod llm_usage;
 pub mod no_tx_migrations;
+pub mod pg_binary_copy;
+pub mod secret;
 
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::{Postgres, Transaction};
 use std::sync::Arc;
 use std::time::Duration;
+
+pub use secret::SecretUrl;
 
 /// Primary application database URL (role `weissman_app`, RLS). Read from `DATABASE_URL` when the process starts each call.
 pub fn database_url_from_env() -> Result<String, std::env::VarError> {
@@ -293,6 +303,22 @@ pub async fn connect_worker_app(database_url: &str) -> Result<PgPool, sqlx::Erro
     connect_app_with_pool_tuning(database_url, max, min, acquire_timeout, stmt_ms).await
 }
 
+/// Worker app pool from `DATABASE_URL`. Same lifetime rules as [`connect_app_from_env`]:
+/// call once at process start, keep the [`PgPool`], drop the [`SecretUrl`].
+pub async fn connect_worker_app_from_env() -> Result<PgPool, sqlx::Error> {
+    let secret = secret_database_url_from_env()
+        .map_err(|e| sqlx::Error::Configuration(format!("DATABASE_URL: {}", e).into()))?;
+    let t = secret.expose().trim();
+    if t.is_empty() {
+        return Err(sqlx::Error::Configuration(
+            "DATABASE_URL is set but empty".into(),
+        ));
+    }
+    env_bootstrap::validate_database_url(t)
+        .map_err(|msg| sqlx::Error::Configuration(format!("DATABASE_URL: {}", msg).into()))?;
+    connect_worker_app(t).await
+}
+
 /// Per-connection `statement_timeout` in milliseconds (0 disables). Tunable per pool via env.
 fn statement_timeout_ms(var: &str, default_ms: u64) -> u64 {
     std::env::var(var)
@@ -330,11 +356,57 @@ pub async fn connect_control(database_url: &str) -> Result<PgPool, sqlx::Error> 
         .await
 }
 
-/// Connect app pool using `DATABASE_URL` from the environment.
-pub async fn connect_app_from_env() -> Result<PgPool, sqlx::Error> {
-    let url = database_url_from_env()
+/// Control-plane pool from `DATABASE_URL`. Same lifetime rules as [`connect_app_from_env`].
+pub async fn connect_control_from_env() -> Result<PgPool, sqlx::Error> {
+    let secret = secret_database_url_from_env()
         .map_err(|e| sqlx::Error::Configuration(format!("DATABASE_URL: {}", e).into()))?;
-    let t = url.trim();
+    let t = secret.expose().trim();
+    if t.is_empty() {
+        return Err(sqlx::Error::Configuration(
+            "DATABASE_URL is set but empty".into(),
+        ));
+    }
+    env_bootstrap::validate_database_url(t)
+        .map_err(|msg| sqlx::Error::Configuration(format!("DATABASE_URL: {}", msg).into()))?;
+    connect_control(t).await
+}
+
+/// Load `DATABASE_URL` into a zeroizing wrapper. Prefer this over
+/// [`database_url_from_env`] on connect paths so the DSN is wiped after use.
+pub fn secret_database_url_from_env() -> Result<SecretUrl, std::env::VarError> {
+    Ok(SecretUrl::new(std::env::var("DATABASE_URL")?))
+}
+
+/// Optional read-only DSN (`WEISSMAN_READ_ONLY_DATABASE_URL`) in a zeroizing wrapper.
+#[must_use]
+pub fn secret_read_only_database_url_from_env() -> Option<SecretUrl> {
+    std::env::var("WEISSMAN_READ_ONLY_DATABASE_URL")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(SecretUrl::new)
+}
+
+/// Connect app pool using `DATABASE_URL` from the environment.
+///
+/// # Process-lifetime pool (do not call per request)
+///
+/// Build the SQLx [`PgPool`] **once** at process start and store it on
+/// `AppState` / `Pools` (`Arc<PgPool>`). The pool is the long-lived handle:
+/// it does not expose the original DSN as a usable string. Rebuilding a pool
+/// on every API call would redo TCP/TLS and Postgres auth (tens of
+/// milliseconds) and is forbidden.
+///
+/// [`SecretUrl`] is used **only** for this one-time connect (or a deliberate
+/// hot DSN rotation). It is dropped — and the heap bytes are wiped — when
+/// this function returns. Do **not** cache the URL in `OnceLock`. After a
+/// pool rebuild, call
+/// [`pg_binary_copy::invalidate_agent_metric_samples_schema_cache`] so the
+/// COPY worker re-warms `pg_attribute`.
+pub async fn connect_app_from_env() -> Result<PgPool, sqlx::Error> {
+    let secret = secret_database_url_from_env()
+        .map_err(|e| sqlx::Error::Configuration(format!("DATABASE_URL: {}", e).into()))?;
+    let t = secret.expose().trim();
     if t.is_empty() {
         return Err(sqlx::Error::Configuration(
             "DATABASE_URL is set but empty".into(),
@@ -370,11 +442,22 @@ pub async fn connect_auth(database_url: &str) -> Result<PgPool, sqlx::Error> {
         .await
 }
 
+/// Auth DSN in a zeroizing wrapper (`WEISSMAN_AUTH_DATABASE_URL` or `DATABASE_URL`).
+pub fn secret_auth_database_url_from_env() -> Result<SecretUrl, std::env::VarError> {
+    match std::env::var("WEISSMAN_AUTH_DATABASE_URL") {
+        Ok(s) if !s.trim().is_empty() => Ok(SecretUrl::new(s)),
+        _ => secret_database_url_from_env(),
+    }
+}
+
 /// Connect auth pool using `WEISSMAN_AUTH_DATABASE_URL` or `DATABASE_URL`.
+///
+/// Same lifetime rules as [`connect_app_from_env`]: one call at boot, keep the
+/// [`PgPool`], drop the [`SecretUrl`]. Do not rebuild per request.
 pub async fn connect_auth_from_env() -> Result<PgPool, sqlx::Error> {
-    let url = resolve_auth_database_url()
+    let secret = secret_auth_database_url_from_env()
         .map_err(|e| sqlx::Error::Configuration(format!("auth database URL: {}", e).into()))?;
-    let t = url.trim();
+    let t = secret.expose().trim();
     if t.is_empty() {
         return Err(sqlx::Error::Configuration(
             "resolved auth database URL is empty".into(),
@@ -418,13 +501,22 @@ pub async fn connect_intel(database_url: &str) -> Result<PgPool, sqlx::Error> {
         .await
 }
 
+/// Intel DSN in a zeroizing wrapper (`WEISSMAN_INTEL_DATABASE_URL` or `DATABASE_URL`).
+pub fn secret_intel_database_url_from_env() -> Result<SecretUrl, std::env::VarError> {
+    match std::env::var("WEISSMAN_INTEL_DATABASE_URL") {
+        Ok(s) if !s.trim().is_empty() => Ok(SecretUrl::new(s)),
+        _ => secret_database_url_from_env(),
+    }
+}
+
+/// Connect the intel pool. Same lifetime rules as [`connect_app_from_env`].
 pub async fn connect_intel_from_env() -> Result<PgPool, sqlx::Error> {
-    let url = intel_database_url_from_env().map_err(|e| {
+    let secret = secret_intel_database_url_from_env().map_err(|e| {
         sqlx::Error::Configuration(
             format!("WEISSMAN_INTEL_DATABASE_URL / DATABASE_URL: {}", e).into(),
         )
     })?;
-    let t = url.trim();
+    let t = secret.expose().trim();
     if t.is_empty() {
         return Err(sqlx::Error::Configuration(
             "intel database URL is empty".into(),
