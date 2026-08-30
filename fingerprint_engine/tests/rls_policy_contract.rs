@@ -413,8 +413,12 @@ fn auth_bootstrap_promotes_master_bootstrap_to_owner() {
         "owner email set must stay a named helper so both env operators are promoted"
     );
     assert!(
-        src.contains("fn env_owner_emails"),
-        "env operators must be collected through env_owner_emails"
+        src.contains("fn env_nonempty"),
+        "env operators must be read through env_nonempty so empty strings are skipped"
+    );
+    assert!(
+        src.contains("sync_admin_credentials_from"),
+        "promotion must accept injected emails so tests do not hold an env mutex across await"
     );
 }
 
