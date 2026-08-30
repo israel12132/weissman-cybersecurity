@@ -267,15 +267,26 @@ pub async fn usage_dashboard_json(
 
     let client_count = count_tenant_clients(app_pool, tenant_id).await?;
     let period = period_ym_now();
-    let scans_used: i64 = sqlx::query_scalar::<_, i64>(
-        "SELECT COALESCE(scans_started,0)::bigint FROM tenant_usage_counters WHERE tenant_id = $1 AND period_ym = $2",
+    let scans_used: i64 = match sqlx::query_scalar::<_, i64>(
+        "SELECT scans_started FROM weissman_billing_usage_snapshot WHERE tenant_id = $1 AND period_ym = $2",
     )
     .bind(tenant_id)
     .bind(&period)
-    .fetch_optional(auth_pool)
+    .fetch_optional(app_pool)
     .await
     .map_err(|e| e.to_string())?
-    .unwrap_or(0);
+    {
+        Some(n) => n,
+        None => sqlx::query_scalar::<_, i64>(
+            "SELECT COALESCE(scans_started,0)::bigint FROM tenant_usage_counters WHERE tenant_id = $1 AND period_ym = $2",
+        )
+        .bind(tenant_id)
+        .bind(&period)
+        .fetch_optional(app_pool)
+        .await
+        .map_err(|e| e.to_string())?
+        .unwrap_or(0),
+    };
 
     Ok(json!({
         "billing_strict": billing_strict_enabled(),

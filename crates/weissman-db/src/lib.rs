@@ -366,7 +366,7 @@ pub async fn connect_control_from_env() -> Result<PgPool, sqlx::Error> {
     connect_control(t).await
 }
 
-/// Analytics pool: `weissman_analytics`, SELECT-only metrics, 60s statement timeout, read-only tx.
+/// Analytics pool: `weissman_analytics`, SELECT-only snapshot/catalog, 15s statement timeout, read-only tx.
 pub async fn connect_analytics(database_url: &str) -> Result<PgPool, sqlx::Error> {
     let t = database_url.trim();
     if t.is_empty() {

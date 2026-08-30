@@ -46,18 +46,16 @@ pub const RO_SELECT_TABLES: &[&str] = &[
 
 /// Ask Weissman hard statement timeout (milliseconds).
 pub const RO_STATEMENT_TIMEOUT_MS: u64 = 15_000;
-/// Analytics aggregation statement timeout (milliseconds).
-pub const ANALYTICS_STATEMENT_TIMEOUT_MS: u64 = 60_000;
+/// Analytics statement timeout (milliseconds). Hard cap so a heavy meter scan
+/// cannot pin pool connections; live aggregation belongs on the snapshot table.
+pub const ANALYTICS_STATEMENT_TIMEOUT_MS: u64 = 15_000;
 
 /// Tables `weissman_analytics` may `SELECT`. Keep in lock-step with
-/// `20260829120000_hermetic_analytics_worker_roles.sql`.
-/// Never include `vulnerabilities`, `agent_anomalies`, or job-bus tables.
-pub const ANALYTICS_SELECT_TABLES: &[&str] = &[
-    "billing_plans",
-    "tenant_usage_counters",
-    "weissman_tenant_quota_usage",
-    "tenant_llm_usage",
-];
+/// `20260830120000_billing_usage_snapshot_15s.sql`.
+/// Never include `vulnerabilities`, `agent_anomalies`, job-bus tables, or raw
+/// meter heaps (`tenant_usage_counters`, `weissman_tenant_quota_usage`,
+/// `tenant_llm_usage`) — those are rolled into the snapshot asynchronously.
+pub const ANALYTICS_SELECT_TABLES: &[&str] = &["billing_plans", "weissman_billing_usage_snapshot"];
 
 /// Job-bus tables `weissman_worker` may DML. Keep in lock-step with
 /// `20260829120000_hermetic_analytics_worker_roles.sql`.
@@ -323,7 +321,11 @@ mod tests {
 
     #[test]
     fn analytics_select_list_excludes_customer_detail_and_job_bus() {
-        assert_eq!(ANALYTICS_SELECT_TABLES.len(), 4);
+        assert_eq!(ANALYTICS_SELECT_TABLES.len(), 2);
+        assert!(ANALYTICS_SELECT_TABLES.contains(&"weissman_billing_usage_snapshot"));
+        assert!(!ANALYTICS_SELECT_TABLES.contains(&"tenant_usage_counters"));
+        assert!(!ANALYTICS_SELECT_TABLES.contains(&"weissman_tenant_quota_usage"));
+        assert!(!ANALYTICS_SELECT_TABLES.contains(&"tenant_llm_usage"));
         for forbidden in [
             "vulnerabilities",
             "agent_anomalies",
@@ -394,6 +396,6 @@ mod tests {
         assert_eq!(PoolKind::Analytics.expected_role(), ANALYTICS_ROLE);
         assert!(PoolKind::Analytics.expects_bypassrls());
         assert_eq!(RO_STATEMENT_TIMEOUT_MS, 15_000);
-        assert_eq!(ANALYTICS_STATEMENT_TIMEOUT_MS, 60_000);
+        assert_eq!(ANALYTICS_STATEMENT_TIMEOUT_MS, 15_000);
     }
 }

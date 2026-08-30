@@ -865,8 +865,17 @@ mod tests {
         assert!(sql.contains("BYPASSRLS"));
         assert!(sql.contains("weissman_analytics"));
         assert!(sql.contains("weissman_worker"));
-        for table in crate::role_guard::ANALYTICS_SELECT_TABLES {
-            assert!(sql.contains(table), "analytics grants must include {table}");
+        // Historical file granted raw meter tables; do not point ANALYTICS_SELECT_TABLES at it.
+        for table in [
+            "billing_plans",
+            "tenant_usage_counters",
+            "weissman_tenant_quota_usage",
+            "tenant_llm_usage",
+        ] {
+            assert!(
+                sql.contains(table),
+                "legacy analytics grants must include {table}"
+            );
         }
         for table in crate::role_guard::WORKER_JOB_BUS_TABLES {
             assert!(sql.contains(table), "worker grants must include {table}");
@@ -880,6 +889,28 @@ mod tests {
         let pol = std::fs::read_to_string(fail_closed).expect("job-bus fail-closed");
         assert!(pol.contains("app_current_tenant_id()"));
         assert!(!pol.contains("NULLIF(current_setting('app.current_tenant_id'"));
+    }
+
+    #[test]
+    fn billing_usage_snapshot_migration_matches_current_analytics_grants() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/migrations/20260830120000_billing_usage_snapshot_15s.sql"
+        );
+        let sql = std::fs::read_to_string(path).expect("billing snapshot migration");
+        assert!(sql.contains("statement_timeout = '15s'"));
+        assert!(sql.contains("weissman_billing_usage_snapshot"));
+        assert!(sql.contains("weissman_refresh_billing_usage_snapshot"));
+        assert!(
+            sql.contains("REVOKE SELECT ON public.tenant_usage_counters FROM weissman_analytics")
+        );
+        for table in crate::role_guard::ANALYTICS_SELECT_TABLES {
+            assert!(
+                sql.contains(table),
+                "current analytics grants must include {table}"
+            );
+        }
+        assert!(!sql.contains("GRANT SELECT ON public.tenant_usage_counters TO weissman_analytics"));
     }
 
     #[test]
