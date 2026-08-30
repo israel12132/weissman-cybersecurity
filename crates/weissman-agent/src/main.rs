@@ -137,7 +137,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Encrypted 10 MiB ring is keyed from the renewal secret so a memory dump of
     // a disconnected agent does not yield plaintext findings.
-    ringbuf::init(&enrollment.agent_secret);
+    ringbuf::init(&enrollment.agent_secret)?;
 
     if cli.enroll_only {
         // The installer runs this to validate the token. It used to throw the result away and

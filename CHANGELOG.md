@@ -68,6 +68,18 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Fixed
 
+- **Telemetry Blinding.** Three consecutive `sampling_failed` ticks (blocked
+  NtQuery / empty `/proc`) still skip z-score INSERT, but now increment
+  `agent_telemetry_errors` and persist a **critical** finding titled
+  `Telemetry Blinding Attack Detected` (SOAR `finding_persisted`). A healthy
+  sample resets the streak. Re-alert cooldown is 15 minutes.
+- **RDRAND carry-flag fail-closed.** XChaCha nonces require 16+ bytes from
+  CF-checked `rdrand`+`setc` (10 retries, reject 0 / `u64::MAX`) and/or
+  `getrandom(GRND_NONBLOCK)`. PID/time is not a standalone CSPRNG; the agent
+  refuses to start if both sources are empty.
+- **Gateway certificate pin is exclusive.** A pin mismatch never falls through
+  to the OS trust store (SSL-inspection MITM blocked). Bootstrap uses webpki
+  public roots only, then freezes the leaf SHA-256.
 - **UEBA empty-sample Alert Storm.** A blocked `NtQuerySystemInformation` (or
   empty `/proc` / `KERN_PROC` table) no longer uploads `process_count = 0`.
   The agent sets `sampling_failed` + `sample_error`; `ueba_detector` skips the

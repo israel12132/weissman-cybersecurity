@@ -15,8 +15,9 @@ path = "src/main.rs"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "sync", "io-util", "net", "fs", "process"] }
 # UEBA baseline uses chrono::Utc + Datelike for hour-of-week computation.
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-# Streaming WebSocket + TLS. webpki public roots ∪ the host native store
-# (enterprise SSL inspection) plus optional leaf pin.
+# Streaming WebSocket + TLS. Pin-first to the Weissman gateway
+# (`WEISSMAN_SERVER_CERT_SHA256` or sticky TOFU). Native CAs are parsed
+# fault-tolerantly but never used to accept the sovereign handshake.
 tokio-tungstenite = { version = "0.24", default-features = false, features = ["rustls-tls-webpki-roots", "connect"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 rustls-native-certs = "0.8"

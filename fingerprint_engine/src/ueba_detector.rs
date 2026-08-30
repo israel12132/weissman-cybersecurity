@@ -134,11 +134,36 @@ pub async fn ingest_sample(
             reason,
             "UEBA sample skipped — syscall/empty table is not a z-score event"
         );
+        let eval = match record_sampling_failure(pool, tenant_id, &p, reason).await {
+            Ok(e) => e,
+            Err(e) => {
+                tracing::error!(
+                    target: "ueba",
+                    agent_id = %p.agent_id,
+                    error = %e,
+                    "telemetry-error counter write failed"
+                );
+                SamplingFailureEval::default()
+            }
+        };
+        if eval.alerted {
+            fire_telemetry_blinding_alert(pool, tenant_id, &p, reason, eval.consecutive).await;
+        }
         return Ok(UebaIngestSummary {
             skipped: true,
             skip_reason: Some(reason.to_string()),
+            consecutive_failures: eval.consecutive,
+            blinding_alert: eval.alerted,
             ..Default::default()
         });
+    }
+    if let Err(e) = reset_sampling_failures(pool, tenant_id, &p.agent_id).await {
+        tracing::warn!(
+            target: "ueba",
+            agent_id = %p.agent_id,
+            error = %e,
+            "failed to clear telemetry-error streak after a healthy sample"
+        );
     }
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
@@ -229,6 +254,10 @@ pub struct UebaIngestSummary {
     pub skipped: bool,
     #[serde(default)]
     pub skip_reason: Option<String>,
+    #[serde(default)]
+    pub consecutive_failures: i32,
+    #[serde(default)]
+    pub blinding_alert: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -656,6 +685,170 @@ async fn check_new_categorical(
     Ok(Some(rec))
 }
 
+/// Consecutive skipped samples before a Telemetry Blinding critical alert.
+pub const TELEMETRY_BLINDING_THRESHOLD: i32 = 3;
+/// Re-page SOC if the host stays blind this long after the last alert.
+pub const TELEMETRY_BLINDING_REALERT_SECS: i64 = 900;
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SamplingFailureEval {
+    pub consecutive: i32,
+    pub alerted: bool,
+}
+
+/// Pure streak rule: 3 consecutive failures fire; re-alert after 15 minutes if still blind.
+#[must_use]
+pub fn should_alert_telemetry_blinding(
+    consecutive: i32,
+    seconds_since_last_alert: Option<i64>,
+) -> bool {
+    if consecutive < TELEMETRY_BLINDING_THRESHOLD {
+        return false;
+    }
+    match seconds_since_last_alert {
+        None => true,
+        Some(s) => s >= TELEMETRY_BLINDING_REALERT_SECS,
+    }
+}
+
+async fn record_sampling_failure(
+    pool: &PgPool,
+    tenant_id: i64,
+    p: &UebaIngestPayload,
+    reason: &str,
+) -> Result<SamplingFailureEval, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("tenant tx: {e}"))?;
+    let sample_error = p
+        .metrics
+        .get("sample_error")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(reason);
+    let row: Option<(i32, Option<chrono::DateTime<chrono::Utc>>)> = sqlx::query_as(
+        r#"INSERT INTO agent_telemetry_errors
+                 (tenant_id, agent_id, client_id, consecutive_failures,
+                  last_error, last_failed_at)
+           VALUES ($1, $2, $3, 1, $4, now())
+           ON CONFLICT (tenant_id, agent_id) DO UPDATE SET
+               consecutive_failures = agent_telemetry_errors.consecutive_failures + 1,
+               last_error = EXCLUDED.last_error,
+               last_failed_at = now(),
+               client_id = EXCLUDED.client_id
+           RETURNING consecutive_failures, last_alerted_at"#,
+    )
+    .bind(tenant_id)
+    .bind(&p.agent_id)
+    .bind(p.client_id)
+    .bind(sample_error)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| format!("upsert telemetry errors: {e}"))?;
+    let (consecutive, last_alerted_at) = row.unwrap_or((1, None));
+    let secs_since_alert = last_alerted_at.map(|ts| (chrono::Utc::now() - ts).num_seconds());
+    let alerted = should_alert_telemetry_blinding(consecutive, secs_since_alert);
+    if alerted {
+        sqlx::query(
+            r#"UPDATE agent_telemetry_errors
+                  SET last_alerted_at = now()
+                WHERE tenant_id = $1 AND agent_id = $2"#,
+        )
+        .bind(tenant_id)
+        .bind(&p.agent_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| format!("stamp blinding alert: {e}"))?;
+        sqlx::query(
+            r#"INSERT INTO agent_anomalies
+                     (tenant_id, agent_id, client_id, sample_id, metric_name,
+                      observed, baseline_mean, baseline_stddev, z_score,
+                      severity, detail, detected_at)
+               VALUES ($1, $2, $3, NULL, 'telemetry_blinding',
+                       $4, 0, 0, $4, 'critical', $5, now())"#,
+        )
+        .bind(tenant_id)
+        .bind(&p.agent_id)
+        .bind(p.client_id)
+        .bind(consecutive as f64)
+        .bind(format!(
+            "Telemetry Blinding Attack Detected: {consecutive} consecutive sampling failures ({sample_error})"
+        ))
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| format!("insert blinding anomaly: {e}"))?;
+    }
+    tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+    Ok(SamplingFailureEval {
+        consecutive,
+        alerted,
+    })
+}
+
+async fn reset_sampling_failures(
+    pool: &PgPool,
+    tenant_id: i64,
+    agent_id: &str,
+) -> Result<(), String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("tenant tx: {e}"))?;
+    sqlx::query("DELETE FROM agent_telemetry_errors WHERE tenant_id = $1 AND agent_id = $2")
+        .bind(tenant_id)
+        .bind(agent_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| format!("clear telemetry errors: {e}"))?;
+    tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+    Ok(())
+}
+
+async fn fire_telemetry_blinding_alert(
+    pool: &PgPool,
+    tenant_id: i64,
+    p: &UebaIngestPayload,
+    reason: &str,
+    consecutive: i32,
+) {
+    let finding = serde_json::json!({
+        "title": "Telemetry Blinding Attack Detected",
+        "severity": "critical",
+        "description": format!(
+            "Endpoint agent {} reported {consecutive} consecutive host-observation failures ({reason}). Process/port inventory is being suppressed — treat as possible NtQuerySystemInformation / /proc tampering, not a quiet host.",
+            p.agent_id
+        ),
+        "mitre_attack": "T1562.001",
+        "kind": "telemetry_blinding",
+        "agent_id": p.agent_id,
+        "consecutive_failures": consecutive,
+        "skip_reason": reason,
+        "sample_error": p.metrics.get("sample_error"),
+        "source": "agent",
+    });
+    match crate::findings_persist::persist_engine_findings(
+        pool,
+        tenant_id,
+        Some(p.client_id),
+        "telemetry_blinding",
+        &p.agent_id,
+        std::slice::from_ref(&finding),
+    )
+    .await
+    {
+        Ok(_) => tracing::error!(
+            target: "ueba",
+            agent_id = %p.agent_id,
+            consecutive,
+            "Telemetry Blinding Attack Detected — critical finding persisted for SOAR"
+        ),
+        Err(e) => tracing::error!(
+            target: "ueba",
+            agent_id = %p.agent_id,
+            error = %e,
+            "failed to persist Telemetry Blinding finding"
+        ),
+    }
+}
+
 /// Long-running worker that purges samples older than 14 days and emits the
 /// detected anomalies as `agent_required_ok` findings for the orchestrator to
 /// pick up. Spawned from `serve::spawn_http_background_tasks`.
@@ -835,5 +1028,22 @@ mod tests {
     fn healthy_inventory_is_ingested() {
         let metrics = serde_json::json!({"process_count": 87, "open_port_count": 12});
         assert_eq!(ueba_sample_skip_reason(&metrics), None);
+    }
+
+    #[test]
+    fn blinding_alert_fires_on_third_consecutive_failure() {
+        assert!(!should_alert_telemetry_blinding(1, None));
+        assert!(!should_alert_telemetry_blinding(2, None));
+        assert!(should_alert_telemetry_blinding(3, None));
+        assert!(should_alert_telemetry_blinding(4, None));
+        assert!(
+            !should_alert_telemetry_blinding(4, Some(60)),
+            "must not storm SOC every skipped tick"
+        );
+        assert!(should_alert_telemetry_blinding(
+            4,
+            Some(TELEMETRY_BLINDING_REALERT_SECS)
+        ));
+        assert_eq!(TELEMETRY_BLINDING_THRESHOLD, 3);
     }
 }

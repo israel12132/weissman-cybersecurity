@@ -1,8 +1,9 @@
 //! In-memory encrypted circular buffer for agent→server frames while WSS is down.
 //!
 //! XChaCha20-Poly1305 with a fresh 192-bit nonce per frame. The nonce mixer is
-//! non-blocking (CPU RDRAND/RNDR + Linux `getrandom(GRND_NONBLOCK)` + seq/time
-//! SHA-256) so a cold VM with an empty entropy pool cannot hang agent boot.
+//! non-blocking (CPU RDRAND with explicit CF/`setc` check + Linux
+//! `getrandom(GRND_NONBLOCK)`). PID/time alone is never enough: without 16+
+//! bytes of CSPRNG the agent refuses to start (fail-closed, no two-time pad).
 
 use crate::protocol::AgentToServer;
 use chacha20poly1305::aead::{Aead, KeyInit};
@@ -89,7 +90,10 @@ impl EncryptedRing {
         if plain.is_empty() {
             return;
         }
-        let nonce_raw = fill_xchacha_nonce();
+        let Some(nonce_raw) = fill_xchacha_nonce() else {
+            self.dropped += 1;
+            return;
+        };
         let nonce = XNonce::from_slice(&nonce_raw);
         let Ok(ciphertext) = self.key.encrypt(nonce, plain) else {
             return;
@@ -217,30 +221,62 @@ fn severity_is_hot(finding: &Value) -> bool {
     s == "critical" || s == "high"
 }
 
-/// 192-bit XChaCha20 nonce that never blocks the agent on a starved `/dev/urandom`.
-///
-/// Mix, in order:
-///   1. CPU RNG when present (RDRAND / AArch64 RNDR) — non-blocking.
-///   2. OS entropy with `GRND_NONBLOCK` on Linux (EAGAIN is ignored).
-///   3. SHA-256(seq ‖ unix-nanos ‖ pid ‖ bytes-so-far) XOR'd over the buffer
-///      so uniqueness holds even on a cold VM with an empty entropy pool.
+/// Minimum CSPRNG bytes (CPU RNG and/or OS getrandom) before a nonce is legal.
+const STRONG_ENTROPY_MIN: usize = 16;
+/// Architect: retry RDRAND up to 10 times while CF=0.
+const RDRAND_RETRIES: u32 = 10;
+
+/// 192-bit XChaCha20 nonce. Never blocks on `/dev/urandom`. Never falls back
+/// to PID+time alone (that is a two-time pad on a cold VM / broken RDRAND
+/// pass-through). Returns `None` if hardware CF-checked RNG and non-blocking
+/// OS CSPRNG together cannot supply [`STRONG_ENTROPY_MIN`] bytes.
 #[must_use]
-pub(crate) fn fill_xchacha_nonce() -> [u8; NONCE_LEN] {
+pub(crate) fn fill_xchacha_nonce() -> Option<[u8; NONCE_LEN]> {
     let mut nonce = [0u8; NONCE_LEN];
-    mix_hw_rng(&mut nonce);
-    mix_os_nonblock(&mut nonce);
+    let hw = mix_hw_rng(&mut nonce);
+    let os = mix_os_nonblock(&mut nonce);
+    if hw.saturating_add(os) < STRONG_ENTROPY_MIN {
+        return None;
+    }
     mix_counter_time(&mut nonce);
-    nonce
+    Some(nonce)
+}
+
+/// Probe the CSPRNG before the agent serves traffic. Fail-closed on starvation.
+pub fn ensure_strong_entropy() -> anyhow::Result<()> {
+    let a = fill_xchacha_nonce().ok_or_else(|| {
+        anyhow::anyhow!(
+            "strong entropy unavailable: RDRAND/RNDR CF-failed or returned a constant, \
+             and getrandom(GRND_NONBLOCK) was empty — refusing to start (no PID/time nonce)"
+        )
+    })?;
+    let b = fill_xchacha_nonce()
+        .ok_or_else(|| anyhow::anyhow!("strong entropy unavailable on second nonce probe"))?;
+    if a == b {
+        anyhow::bail!("CSPRNG produced identical XChaCha nonces — treating RNG as broken");
+    }
+    Ok(())
+}
+
+/// Accept a hardware RNG draw only when the carry/success flag is set and the
+/// value is not a silent-zero / all-ones hypervisor stub.
+#[must_use]
+pub(crate) fn accept_hw_u64(flag: u8, val: u64) -> Option<u64> {
+    if flag == 1 && val != 0 && val != u64::MAX {
+        Some(val)
+    } else {
+        None
+    }
 }
 
 #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
-fn mix_hw_rng(out: &mut [u8; NONCE_LEN]) {
+fn mix_hw_rng(out: &mut [u8; NONCE_LEN]) -> usize {
     if !is_x86_feature_detected!("rdrand") {
-        return;
+        return 0;
     }
     let mut off = 0usize;
     while off < NONCE_LEN {
-        let Some(v) = rdrand_u64() else {
+        let Some(v) = secure_rdrand() else {
             break;
         };
         let b = v.to_le_bytes();
@@ -250,41 +286,62 @@ fn mix_hw_rng(out: &mut [u8; NONCE_LEN]) {
         }
         off += n;
     }
+    off
 }
 
+/// RDRAND with an explicit Carry Flag check (`setc`) and 10 retries.
+/// A hypervisor that leaves CF=0 cannot be treated as success.
 #[cfg(target_arch = "x86_64")]
-fn rdrand_u64() -> Option<u64> {
-    let mut val = 0u64;
-    for _ in 0..16 {
-        if unsafe { core::arch::x86_64::_rdrand64_step(&mut val) } == 1 {
-            return Some(val);
+#[inline(always)]
+pub fn secure_rdrand() -> Option<u64> {
+    for _ in 0..RDRAND_RETRIES {
+        let mut val: u64 = 0;
+        let mut ok: u8;
+        unsafe {
+            core::arch::asm!(
+                "rdrand {val}",
+                "setc {ok}",
+                val = inout(reg) val,
+                ok = lateout(reg_byte) ok,
+                options(nomem, nostack),
+            );
+        }
+        if let Some(v) = accept_hw_u64(ok, val) {
+            return Some(v);
         }
     }
     None
 }
 
 #[cfg(target_arch = "x86")]
-fn rdrand_u64() -> Option<u64> {
-    let mut lo = 0u32;
-    let mut hi = 0u32;
-    for _ in 0..16 {
+#[inline(always)]
+pub fn secure_rdrand() -> Option<u64> {
+    for _ in 0..RDRAND_RETRIES {
+        let mut lo = 0u32;
+        let mut hi = 0u32;
         let a = unsafe { core::arch::x86::_rdrand32_step(&mut lo) };
         let b = unsafe { core::arch::x86::_rdrand32_step(&mut hi) };
         if a == 1 && b == 1 {
-            return Some((u64::from(hi) << 32) | u64::from(lo));
+            let val = (u64::from(hi) << 32) | u64::from(lo);
+            if let Some(v) = accept_hw_u64(1, val) {
+                return Some(v);
+            }
         }
     }
     None
 }
 
 #[cfg(target_arch = "aarch64")]
-fn mix_hw_rng(out: &mut [u8; NONCE_LEN]) {
+fn mix_hw_rng(out: &mut [u8; NONCE_LEN]) -> usize {
     if !std::arch::is_aarch64_feature_detected!("rand") {
-        return;
+        return 0;
     }
     let mut off = 0usize;
     while off < NONCE_LEN {
-        let Some(v) = (unsafe { core::arch::aarch64::__rndr() }) else {
+        let Some(raw) = (unsafe { core::arch::aarch64::__rndr() }) else {
+            break;
+        };
+        let Some(v) = accept_hw_u64(1, raw) else {
             break;
         };
         let b = v.to_le_bytes();
@@ -294,13 +351,16 @@ fn mix_hw_rng(out: &mut [u8; NONCE_LEN]) {
         }
         off += n;
     }
+    off
 }
 
 #[cfg(not(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64")))]
-fn mix_hw_rng(_out: &mut [u8; NONCE_LEN]) {}
+fn mix_hw_rng(_out: &mut [u8; NONCE_LEN]) -> usize {
+    0
+}
 
 #[cfg(target_os = "linux")]
-fn mix_os_nonblock(out: &mut [u8; NONCE_LEN]) {
+fn mix_os_nonblock(out: &mut [u8; NONCE_LEN]) -> usize {
     let mut tmp = [0u8; NONCE_LEN];
     let n = unsafe {
         libc::getrandom(
@@ -309,22 +369,32 @@ fn mix_os_nonblock(out: &mut [u8; NONCE_LEN]) {
             libc::GRND_NONBLOCK,
         )
     };
-    if n > 0 {
-        let n = (n as usize).min(NONCE_LEN);
-        for i in 0..n {
-            out[i] ^= tmp[i];
-        }
+    if n <= 0 {
+        return 0;
     }
+    let n = (n as usize).min(NONCE_LEN);
+    if tmp[..n].iter().all(|&b| b == 0) {
+        return 0;
+    }
+    for i in 0..n {
+        out[i] ^= tmp[i];
+    }
+    n
 }
 
 #[cfg(not(target_os = "linux"))]
-fn mix_os_nonblock(out: &mut [u8; NONCE_LEN]) {
+fn mix_os_nonblock(out: &mut [u8; NONCE_LEN]) -> usize {
     let mut tmp = [0u8; NONCE_LEN];
-    if getrandom::getrandom(&mut tmp).is_ok() {
-        for i in 0..NONCE_LEN {
-            out[i] ^= tmp[i];
-        }
+    if getrandom::getrandom(&mut tmp).is_err() {
+        return 0;
     }
+    if tmp.iter().all(|&b| b == 0) {
+        return 0;
+    }
+    for i in 0..NONCE_LEN {
+        out[i] ^= tmp[i];
+    }
+    NONCE_LEN
 }
 
 fn mix_counter_time(out: &mut [u8; NONCE_LEN]) {
@@ -351,9 +421,13 @@ static UEBA_UPLOADED: AtomicU64 = AtomicU64::new(0);
 static LAST_RTT_US: AtomicU64 = AtomicU64::new(0);
 
 /// Initialise the process-wide ring from the agent renewal secret.
-pub fn init(secret: &str) {
+/// Fail-closed: refuse to start if RDRAND/RNDR and the OS CSPRNG cannot
+/// supply strong entropy (no PID/time two-time-pad).
+pub fn init(secret: &str) -> anyhow::Result<()> {
+    ensure_strong_entropy()?;
     let ring = EncryptedRing::new(secret);
     let _ = RING.set(Mutex::new(ring));
+    Ok(())
 }
 
 pub fn push(msg: &AgentToServer) {
@@ -543,7 +617,10 @@ mod tests {
         let started = Instant::now();
         let mut seen = std::collections::HashSet::new();
         for _ in 0..512 {
-            assert!(seen.insert(fill_xchacha_nonce()), "nonce collision");
+            assert!(
+                seen.insert(fill_xchacha_nonce().expect("strong entropy")),
+                "nonce collision"
+            );
         }
         assert!(
             started.elapsed() < Duration::from_secs(2),
@@ -558,8 +635,28 @@ mod tests {
         assert!(src.contains("GRND_NONBLOCK"));
         assert!(src.contains("mix_counter_time"));
         assert!(src.contains("libc::getrandom"));
-        // Crate getrandom is only on the non-Linux OS path.
+        assert!(src.contains("setc"));
+        assert!(src.contains("RDRAND_RETRIES"));
         assert!(src.contains("#[cfg(not(target_os = \"linux\"))]"));
+    }
+
+    #[test]
+    fn rdrand_carry_flag_rejects_zero_and_failure() {
+        assert!(accept_hw_u64(1, 0xA5A5_A5A5_A5A5_A5A5).is_some());
+        assert!(
+            accept_hw_u64(0, 0xA5A5_A5A5_A5A5_A5A5).is_none(),
+            "CF=0 must not be treated as entropy"
+        );
+        assert!(
+            accept_hw_u64(1, 0).is_none(),
+            "silent-zero hypervisor pass-through"
+        );
+        assert!(accept_hw_u64(1, u64::MAX).is_none());
+    }
+
+    #[test]
+    fn boot_fails_closed_only_when_csprng_is_dead() {
+        ensure_strong_entropy().expect("this host must have getrandom or RDRAND");
     }
 
     #[test]

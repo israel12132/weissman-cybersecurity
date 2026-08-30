@@ -1,10 +1,12 @@
 //! TLS for enrollment HTTPS + agent WSS.
 //!
-//! Trust store = webpki public roots ∪ the host native store (so enterprise
-//! SSL inspection CAs work). Optional hard pin via `WEISSMAN_SERVER_CERT_SHA256`.
-//! Otherwise TOFU: first successful verify records the leaf SHA-256; later
-//! handshakes accept a matching pin or a roots-trusted rotation (Let's Encrypt
-//! / inspection-cert rollover).
+//! The Weissman gateway is pin-first. `WEISSMAN_SERVER_CERT_SHA256` (or a
+//! previously persisted leaf pin) is the only acceptable handshake. A matching
+//! pin is accepted; a mismatch is rejected **without** falling through to the
+//! OS trust store — that is how SSL-inspection MITM is blocked.
+//! First-boot bootstrap (no pin yet) verifies against **webpki public roots
+//! only**, then freezes the leaf SHA-256 as a sticky pin. Native CAs are never
+//! used to accept the sovereign gateway.
 
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::client::WebPkiServerVerifier;
@@ -20,7 +22,7 @@ static TOFU_PIN: Mutex<Option<[u8; 32]>> = Mutex::new(None);
 static OBSERVED_PIN: Mutex<Option<[u8; 32]>> = Mutex::new(None);
 static PIN_CHANGED: AtomicBool = AtomicBool::new(false);
 
-/// Load a previously persisted TOFU pin (64 hex chars).
+/// Load a previously persisted TOFU pin (64 hex chars). After this the pin is sticky.
 pub fn set_tofu_pin_hex(hex_pin: &str) {
     if let Some(p) = parse_pin(hex_pin) {
         if let Ok(mut g) = TOFU_PIN.lock() {
@@ -58,19 +60,9 @@ fn leaf_sha256(cert: &CertificateDer<'_>) -> [u8; 32] {
     a
 }
 
-fn combined_roots() -> RootCertStore {
+fn public_roots() -> RootCertStore {
     let mut roots = RootCertStore::empty();
     roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-    let stats = absorb_native_certs(&mut roots);
-    if stats.load_errors > 0 || stats.skipped_parse > 0 {
-        tracing::debug!(
-            target: "agent",
-            added = stats.added,
-            skipped_parse = stats.skipped_parse,
-            load_errors = stats.load_errors,
-            "native TLS roots merged with fault-tolerant parse"
-        );
-    }
     roots
 }
 
@@ -81,9 +73,9 @@ struct NativeCertStats {
     load_errors: usize,
 }
 
-/// Load the host trust store one cert at a time. Expired / SHA-1 / truncated
-/// enterprise CAs are skipped; they must not fail the whole bundle (rustls is
-/// stricter than the OS store, and one junk CA would otherwise block WSS).
+/// Fault-tolerant parse of the host store (junk CAs skipped). Not used to
+/// accept the Weissman gateway — kept so a future non-gateway client can
+/// merge enterprise CAs without aborting on SHA-1/expired internals.
 fn absorb_native_certs(roots: &mut RootCertStore) -> NativeCertStats {
     let native = rustls_native_certs::load_native_certs();
     let load_errors = native.errors.len();
@@ -92,6 +84,31 @@ fn absorb_native_certs(roots: &mut RootCertStore) -> NativeCertStats {
         added,
         skipped_parse,
         load_errors,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GatewayTrust {
+    AcceptPinned,
+    RejectPinMismatch,
+    BootstrapPublicRoots,
+}
+
+/// Pin is exclusive. A known pin never falls through to any CA, native or public.
+#[must_use]
+pub(crate) fn gateway_trust(
+    env_pin: Option<[u8; 32]>,
+    sticky: Option<[u8; 32]>,
+    leaf: [u8; 32],
+) -> GatewayTrust {
+    if let Some(pin) = env_pin.or(sticky) {
+        if pin == leaf {
+            GatewayTrust::AcceptPinned
+        } else {
+            GatewayTrust::RejectPinMismatch
+        }
+    } else {
+        GatewayTrust::BootstrapPublicRoots
     }
 }
 
@@ -111,25 +128,22 @@ impl ServerCertVerifier for WeissmanVerifier {
         now: UnixTime,
     ) -> Result<ServerCertVerified, TlsError> {
         let hash = leaf_sha256(end_entity);
-        if let Some(pin) = self.hard_pin {
-            if hash == pin {
+        let sticky = TOFU_PIN.lock().ok().and_then(|g| *g);
+        match gateway_trust(self.hard_pin, sticky, hash) {
+            GatewayTrust::AcceptPinned => {
                 if let Ok(mut g) = OBSERVED_PIN.lock() {
                     *g = Some(hash);
                 }
                 return Ok(ServerCertVerified::assertion());
             }
-            return Err(TlsError::General(
-                "server certificate does not match WEISSMAN_SERVER_CERT_SHA256 pin".into(),
-            ));
-        }
-        let tofu = TOFU_PIN.lock().ok().and_then(|g| *g);
-        if let Some(pin) = tofu {
-            if hash == pin {
-                if let Ok(mut g) = OBSERVED_PIN.lock() {
-                    *g = Some(hash);
-                }
-                return Ok(ServerCertVerified::assertion());
+            GatewayTrust::RejectPinMismatch => {
+                return Err(TlsError::General(
+                    "server certificate does not match the pinned Weissman gateway SHA-256 \
+                     (OS trust store is not a fallback — SSL interception blocked)"
+                        .into(),
+                ));
             }
+            GatewayTrust::BootstrapPublicRoots => {}
         }
         match self.inner.verify_server_cert(
             end_entity,
@@ -139,13 +153,6 @@ impl ServerCertVerifier for WeissmanVerifier {
             now,
         ) {
             Ok(v) => {
-                if tofu.is_some() && tofu != Some(hash) {
-                    PIN_CHANGED.store(true, Ordering::Relaxed);
-                    tracing::info!(
-                        target: "agent",
-                        "TLS leaf rotated under a trusted CA; updating TOFU pin"
-                    );
-                }
                 if let Ok(mut g) = OBSERVED_PIN.lock() {
                     *g = Some(hash);
                 }
@@ -188,12 +195,25 @@ fn install_crypto_provider() {
     });
 }
 
-/// rustls client config: webpki ∪ native roots, plus pinning.
+/// rustls client config: webpki public roots for bootstrap; pin is exclusive.
 pub fn rustls_client_config() -> anyhow::Result<ClientConfig> {
     install_crypto_provider();
-    let roots = combined_roots();
+    let roots = public_roots();
     if roots.is_empty() {
-        anyhow::bail!("TLS root store is empty (webpki + native)");
+        anyhow::bail!("TLS root store is empty (webpki public roots)");
+    }
+    {
+        let mut discarded = RootCertStore::empty();
+        let stats = absorb_native_certs(&mut discarded);
+        if stats.added + stats.skipped_parse + stats.load_errors > 0 {
+            tracing::debug!(
+                target: "agent",
+                parsed = stats.added,
+                skipped_parse = stats.skipped_parse,
+                load_errors = stats.load_errors,
+                "native CAs parsed with fault-tolerant skip; not trusted for Weissman gateway"
+            );
+        }
     }
     let inner = WebPkiServerVerifier::builder(Arc::new(roots))
         .build()
@@ -210,7 +230,7 @@ pub fn rustls_client_config() -> anyhow::Result<ClientConfig> {
     Ok(cfg)
 }
 
-/// Persist the last accepted leaf SHA-256 onto `agent.state` (TOFU).
+/// Persist the last accepted leaf SHA-256 onto `agent.state` (sticky pin).
 pub fn persist_observed_pin() {
     let Some(hex) = observed_pin_hex() else {
         return;
@@ -266,11 +286,34 @@ mod tests {
         assert_eq!(added, 0);
         assert_eq!(skipped, 3);
         assert_eq!(roots.len(), before, "webpki roots must survive junk CAs");
-        assert!(!combined_roots().is_empty());
+        let _ = absorb_native_certs(&mut roots);
+        assert!(!public_roots().is_empty());
     }
 
     #[test]
-    fn combined_roots_never_empty() {
-        assert!(!combined_roots().is_empty());
+    fn public_roots_never_empty() {
+        assert!(!public_roots().is_empty());
+    }
+
+    #[test]
+    fn pinned_leaf_never_falls_through_to_os_store() {
+        let pin = [0x11u8; 32];
+        let other = [0x22u8; 32];
+        assert_eq!(
+            gateway_trust(Some(pin), None, pin),
+            GatewayTrust::AcceptPinned
+        );
+        assert_eq!(
+            gateway_trust(Some(pin), None, other),
+            GatewayTrust::RejectPinMismatch
+        );
+        assert_eq!(
+            gateway_trust(None, Some(pin), other),
+            GatewayTrust::RejectPinMismatch
+        );
+        assert_eq!(
+            gateway_trust(None, None, other),
+            GatewayTrust::BootstrapPublicRoots
+        );
     }
 }
