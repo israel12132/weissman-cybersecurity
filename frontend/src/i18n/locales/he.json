@@ -220,6 +220,7 @@
     "websocket_security": "אבטחת WebSocket",
     "email_posture": "אמון דואר ודומיין",
     "identity_security": "אבטחת זהות ו-SSO",
+    "privilege_escalation": "הסלמת הרשאות ואישורים",
     "kerberos_security": "AD ו-Kerberos",
     "smb_netbios": "אבטחת SMB / NetBIOS",
     "password_spray": "תנוחת Password Spray",
@@ -5555,6 +5556,9 @@
     "identitySecurityCenter": {
       "evidence_notice": "posture Identity/OAuth/OIDC/SAML מ-POST /api/command-center/scan (מנועי identity / oauth_oidc / saml_attack). misconfig בטoken ובפדרציה מאומתים עם exchanges פרוטוקול חיים."
     },
+    "privilegeEscalationCommandCenter": {
+      "evidence_notice": "ביקורת הסלמת הרשאות וגישה לאישורים ב-POST /api/command-center/scan (privilege_escalation_credential_access). 500 בקרות חיות. Registry ב-Windows נקרא ב-Win32 RegQueryValueExW בתוך התהליך (לא reg.exe). שורות כיסוי כולל na/not_observed נשמרות תחת SET LOCAL app.current_tenant_id ב-UPSERT אחד. המנוע לא מבצע דאמפ LSASS ולא מריץ מעקף UAC."
+    },
     "kerberosSecurityCommandCenter": {
       "evidence_notice": "בדיקות חשיפת Kerberos/AD ב-POST /api/command-center/scan כש-RoE מאפשר. תוצאות משקפות תגובות LDAP/Kerberos חיות — ריק כשאין DC ב-scope."
     },
@@ -7277,7 +7281,7 @@
   "supremeNerveCenter": {
     "title": "מרכז עצבים עליון",
     "ceoOnly": "מנכ\"ל / superadmin בלבד",
-    "evidence_notice": "תמונת מצב חיה מ-GET /api/ceo/supreme/nerve-center — כל 563 המנועים, מודולי מערכת, משימות אסינכרוניות ופרמטרי בקרה. ללא טלמטריה מדומה.",
+      "evidence_notice": "תמונת מצב חיה מ-GET /api/ceo/supreme/nerve-center — כל 564 המנועים, מודולי מערכת, משימות אסינכרוניות ופרמטרי בקרה. ללא טלמטריה מדומה.",
     "refresh": "רענון",
     "pollInterval": "רענון אוטומטי כל {{sec}} שניות",
     "stuckAlert": "{{count}} מנוע(ים) נראים תקועים — בדוק heartbeat של worker ועדכוני phase.",

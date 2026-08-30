@@ -62,6 +62,7 @@ export const ROUTE_EVIDENCE = {
   '/waf-bypass': 'pages.wafBypassLab.evidence_notice',
   '/file-upload-lab': 'pages.fileUploadSecurityLab.evidence_notice',
   '/identity-security': 'pages.identitySecurityCenter.evidence_notice',
+  '/privilege-escalation': 'pages.privilegeEscalationCommandCenter.evidence_notice',
   '/kerberos-security': 'pages.kerberosSecurityCommandCenter.evidence_notice',
   '/smb-netbios': 'pages.smbNetbiosCommandCenter.evidence_notice',
   '/password-spray': 'pages.passwordSprayCommandCenter.evidence_notice',

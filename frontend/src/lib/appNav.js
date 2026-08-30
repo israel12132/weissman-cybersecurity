@@ -127,6 +127,7 @@ export const NAV_GROUPS = [
       { to: '/tls-posture', labelKey: 'nav.tls_posture', icon: '🔒' },
       { to: '/email-posture', labelKey: 'nav.email_posture', icon: '✉' },
       { to: '/identity-security', labelKey: 'nav.identity_security', icon: '🔐' },
+      { to: '/privilege-escalation', labelKey: 'nav.privilege_escalation', icon: '⛨' },
       { to: '/kerberos-security', labelKey: 'nav.kerberos_security', icon: '🏰' },
       { to: '/smb-netbios', labelKey: 'nav.smb_netbios', icon: '🖧' },
       { to: '/password-spray', labelKey: 'nav.password_spray', icon: '🎯' },

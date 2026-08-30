@@ -120,6 +120,7 @@ export const ContainmentRulesBuilder = React$lazy(() => import('../pages/Contain
 export const BaselineAndDrift = React$lazy(() => import('../pages/BaselineAndDrift'))
 export const IdentityContextManager = React$lazy(() => import('../pages/IdentityContextManager'))
 export const IdentitySecurityCenter = React$lazy(() => import('../pages/IdentitySecurityCenter'))
+export const PrivilegeEscalationCommandCenter = React$lazy(() => import('../pages/PrivilegeEscalationCommandCenter'))
 export const KerberosSecurityCommandCenter = React$lazy(() => import('../pages/KerberosSecurityCommandCenter'))
 export const SmbNetbiosCommandCenter = React$lazy(() => import('../pages/SmbNetbiosCommandCenter'))
 export const PasswordSprayCommandCenter = React$lazy(() => import('../pages/PasswordSprayCommandCenter'))
