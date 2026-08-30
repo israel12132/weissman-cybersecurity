@@ -14,6 +14,8 @@ use std::time::Duration;
 /// makes each op await forever and wedges the whole API on the per-request rate-limit path —
 /// and the fail-closed paths (`StrictOp::Unavailable`) never fire because the await never returns.
 const REDIS_OP_TIMEOUT: Duration = Duration::from_secs(2);
+/// Ask Weissman acquire+command cap. A hung Redis must not pin Tokio workers.
+pub const ASK_REDIS_ACQUIRE_TIMEOUT_MS: u64 = 50;
 
 pub struct RedisRateLimiter {
     client: redis::Client,
@@ -35,6 +37,20 @@ impl RedisRateLimiter {
             redis::RedisError::from((redis::ErrorKind::IoError, "redis connect timeout"))
         })??;
         conn.set_response_timeout(REDIS_OP_TIMEOUT);
+        Ok(conn)
+    }
+
+    async fn conn_with_timeout(
+        &self,
+        timeout: Duration,
+    ) -> redis::RedisResult<redis::aio::MultiplexedConnection> {
+        let mut conn =
+            tokio::time::timeout(timeout, self.client.get_multiplexed_async_connection())
+                .await
+                .map_err(|_| {
+                    redis::RedisError::from((redis::ErrorKind::IoError, "redis acquire timeout"))
+                })??;
+        conn.set_response_timeout(timeout);
         Ok(conn)
     }
 }
@@ -405,11 +421,42 @@ pub async fn incr_api_ip_strict(client_ip: &str) -> StrictOp<u64> {
     .await
 }
 
-/// Ask Weissman per-user counter (60s window, fail-closed aware).
+/// Ask Weissman per-user counter (60s window). Acquire and INCR are capped at
+/// [`ASK_REDIS_ACQUIRE_TIMEOUT_MS`] so a stalled Redis cannot lock the Tokio pool.
 pub async fn incr_ask_user_strict(user_id: i64) -> StrictOp<u64> {
-    incr_window_strict(
+    incr_window_strict_timeout(
         &format!("weissman:rl:ask:{user_id}"),
         Duration::from_secs(60),
+        Duration::from_millis(ASK_REDIS_ACQUIRE_TIMEOUT_MS),
     )
     .await
+}
+
+async fn incr_window_strict_timeout(
+    key: &str,
+    window: Duration,
+    timeout: Duration,
+) -> StrictOp<u64> {
+    let Some(rl) = shared() else {
+        return if distributed_state_required() {
+            StrictOp::Unavailable
+        } else {
+            StrictOp::Ok(0)
+        };
+    };
+    let mut conn = match rl.conn_with_timeout(timeout).await {
+        Ok(c) => c,
+        Err(_) => return StrictOp::Unavailable,
+    };
+    let incr = async {
+        let count: u64 = conn.incr(key, 1u64).await?;
+        if count == 1 {
+            let _: Result<(), _> = conn.expire(key, window.as_secs() as i64).await;
+        }
+        Ok::<u64, redis::RedisError>(count)
+    };
+    match tokio::time::timeout(timeout, incr).await {
+        Ok(Ok(count)) => StrictOp::Ok(count),
+        _ => StrictOp::Unavailable,
+    }
 }

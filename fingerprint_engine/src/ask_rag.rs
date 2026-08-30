@@ -92,6 +92,10 @@ mod tests {
         assert!(PLANNER_RAG_SQL.contains("$2::vector"));
         assert!(PLANNER_RAG_SQL.contains("LIMIT $3"));
         assert!(!PLANNER_RAG_SQL.contains('{'));
+        assert!(
+            !PLANNER_RAG_SQL.contains('\''),
+            "no quoted literals — bind $1/$2/$3 only"
+        );
         assert_eq!(clamp_k(99), MAX_K);
     }
 

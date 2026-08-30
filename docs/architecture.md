@@ -136,8 +136,10 @@ In-process background loops (`weissman-server`):
    **always** the first WHERE clause, regardless of plan content. `LIMIT` is
    capped at 200. The plan is HMAC-SHA256 sealed with an **HKDF-SHA256**
    (RFC 5869) tenant key from `WEISSMAN_VAULT_KEY`; a leaked JWT signing secret
-   cannot forge another tenant's seal. Audit AES-GCM nonces come from
-   ChaCha8Rng (vault-seeded) + a counter — no blocking `getrandom` on boot.
+   cannot forge another tenant's seal. Audit AES-GCM nonces are a fresh
+   ChaCha8Rng seeded per call from HKDF(vault) mixed with PID, thread,
+   wall-clock nanos, Instant, ASLR, and HOSTNAME/POD_NAME — no shared
+   stream across Kubernetes pods, and no blocking `getrandom` on boot.
 4. The compiled parameterised SQL is executed on a connection from
    `read_only_pool` — a dedicated `weissman_ro` Postgres role with **SELECT-only
    grants** on 13 whitelisted tables, `statement_timeout=15s`,

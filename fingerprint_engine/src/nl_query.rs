@@ -24,8 +24,8 @@
 //!      are rejected. RAG tables are not on the NL allow-list; contextual memory
 //!      is fetched separately via [`crate::ask_rag`] on the app pool.
 
-use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::aead::generic_array::GenericArray;
+use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Key};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac as HmacMac};
@@ -39,7 +39,7 @@ use sqlx::{Column, PgPool, Row};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{LazyLock, Mutex, OnceLock};
+use std::sync::{LazyLock, OnceLock};
 use std::time::Instant;
 use weissman_core::tls_policy::is_production_environment;
 use weissman_db::{READ_ONLY_MAX_ROWS, READ_ONLY_ROLE, READ_ONLY_STATEMENT_TIMEOUT_MS};
@@ -494,10 +494,20 @@ impl<'de> Visitor<'de> for DepthVisitor {
     fn visit_f64<E>(self, v: f64) -> Result<Value, E> {
         Ok(Value::from(v))
     }
-    fn visit_str<E>(self, v: &str) -> Result<Value, E> {
+    fn visit_str<E: de::Error>(self, v: &str) -> Result<Value, E> {
+        if v.contains('\0') {
+            return Err(de::Error::custom(
+                "blocked: NUL is not allowed in QueryPlan JSON",
+            ));
+        }
         Ok(Value::String(v.to_owned()))
     }
-    fn visit_string<E>(self, v: String) -> Result<Value, E> {
+    fn visit_string<E: de::Error>(self, v: String) -> Result<Value, E> {
+        if v.contains('\0') {
+            return Err(de::Error::custom(
+                "blocked: NUL is not allowed in QueryPlan JSON",
+            ));
+        }
         Ok(Value::String(v))
     }
     fn visit_none<E>(self) -> Result<Value, E> {
@@ -657,13 +667,89 @@ fn ingest_plan_value(v: Value) -> Result<QueryPlan, String> {
     if let Some(l) = obj.get("limit") {
         slim.insert("limit".into(), l.clone());
     }
-    let mut plan: QueryPlan = serde_json::from_value(Value::Object(slim))
-        .map_err(|e| format!("plan is not a valid QueryPlan JSON: {e}"))?;
+    // Build the plan from the already-capped Value tree. Never re-parse raw JSON.
+    let mut plan = query_plan_from_capped_object(slim)?;
     if crate::ask_vector_caps::is_blocked_vector_table(&plan.table) {
         return Err("blocked: vector/RAG tables are not exposed to NL queries".into());
     }
     sanitize_plan(&mut plan)?;
     Ok(plan)
+}
+
+/// Materialize [`QueryPlan`] from the stream-parsed tree — no second JSON decode.
+fn query_plan_from_capped_object(slim: Map<String, Value>) -> Result<QueryPlan, String> {
+    let table = slim
+        .get("table")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "plan is not a valid QueryPlan JSON: missing table".to_string())?
+        .to_string();
+    let select = match slim.get("select") {
+        None | Some(Value::Null) => vec![],
+        Some(Value::Array(a)) => a
+            .iter()
+            .map(|v| {
+                v.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "select columns must be strings".to_string())
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        Some(_) => return Err("select must be an array".into()),
+    };
+    let filters = match slim.get("filters") {
+        None | Some(Value::Null) => vec![],
+        Some(Value::Array(arr)) => {
+            let mut out = Vec::with_capacity(arr.len());
+            for f in arr {
+                let fo = f
+                    .as_object()
+                    .ok_or_else(|| "filter must be a JSON object".to_string())?;
+                let column = fo
+                    .get("column")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        "plan is not a valid QueryPlan JSON: missing field `column`".to_string()
+                    })?
+                    .to_string();
+                let op = fo
+                    .get("op")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        "plan is not a valid QueryPlan JSON: missing field `op`".to_string()
+                    })?
+                    .to_string();
+                let value = fo.get("value").cloned().unwrap_or(Value::Null);
+                out.push(Filter { column, op, value });
+            }
+            out
+        }
+        Some(_) => return Err("filters must be an array".into()),
+    };
+    let order_by = match slim.get("order_by") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(s)) => Some(s.clone()),
+        Some(_) => return Err("order_by must be a string".into()),
+    };
+    let order_desc = match slim.get("order_desc") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(b)) => *b,
+        Some(_) => return Err("order_desc must be a boolean".into()),
+    };
+    let limit = match slim.get("limit") {
+        None | Some(Value::Null) => None,
+        Some(Value::Number(n)) => Some(
+            n.as_i64()
+                .ok_or_else(|| "limit must be an integer".to_string())?,
+        ),
+        Some(_) => return Err("limit must be an integer".into()),
+    };
+    Ok(QueryPlan {
+        table,
+        select,
+        filters,
+        order_by,
+        order_desc,
+        limit,
+    })
 }
 
 fn hex32_key(raw: &str) -> Option<[u8; 32]> {
@@ -748,17 +834,27 @@ pub fn warm_ask_crypto() {
     let _ = audit_nonce();
 }
 
-fn chacha_seed() -> [u8; 32] {
-    if let Ok(master) = seal_master_key() {
-        if let Ok(k) = hkdf_okm(&master, b"ask-audit-nonce-chacha8-v1") {
-            return k;
-        }
-    }
+/// Per-call host mix: PID, thread, wall-clock nanos, Instant, ASLR, HOSTNAME/POD.
+/// Survives parallel Kubernetes pods that all share PID 1 and the same vault.
+fn host_uniqueness_mix() -> [u8; 32] {
+    static BOOT: OnceLock<std::time::Instant> = OnceLock::new();
+    static COUNTER: AtomicU64 = AtomicU64::new(1);
+    let boot = *BOOT.get_or_init(std::time::Instant::now);
     let mut h = Sha256::new();
-    h.update(b"ask-audit-nonce-chacha8-fallback-v1");
+    h.update(b"ask-host-mix-v2|");
     h.update(std::process::id().to_le_bytes());
+    h.update(format!("{:?}", std::thread::current().id()).as_bytes());
+    h.update(&COUNTER.fetch_add(1, Ordering::Relaxed).to_le_bytes());
     if let Ok(d) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
         h.update(d.as_nanos().to_le_bytes());
+    }
+    h.update(boot.elapsed().as_nanos().to_le_bytes());
+    h.update((&COUNTER as *const AtomicU64 as u64).to_le_bytes());
+    if let Ok(hn) = std::env::var("HOSTNAME") {
+        h.update(hn.as_bytes());
+    }
+    if let Ok(pod) = std::env::var("POD_NAME") {
+        h.update(pod.as_bytes());
     }
     let out = h.finalize();
     let mut s = [0u8; 32];
@@ -766,19 +862,21 @@ fn chacha_seed() -> [u8; 32] {
     s
 }
 
-/// 96-bit AES-GCM nonce from ChaCha8Rng (vault-seeded) + a process counter.
-/// Never calls `getrandom` / `OsRng`, so a cold-boot entropy stall cannot hang Ask.
+/// 96-bit AES-GCM nonce. Vault HKDF + per-call host mix seed a fresh ChaCha8Rng.
+/// Never calls `getrandom` / `OsRng`. Distinct pods cannot share a nonce stream.
 fn audit_nonce() -> [u8; 12] {
-    static RNG: OnceLock<Mutex<ChaCha8Rng>> = OnceLock::new();
-    static COUNTER: AtomicU64 = AtomicU64::new(1);
-    let mut rng = RNG
-        .get_or_init(|| Mutex::new(ChaCha8Rng::from_seed(chacha_seed())))
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let mix = host_uniqueness_mix();
+    let seed = match seal_master_key() {
+        Ok(master) => {
+            let mut info = Vec::from(*b"ask-audit-nonce-chacha8-v2");
+            info.extend_from_slice(&mix);
+            hkdf_okm(&master, &info).unwrap_or(mix)
+        }
+        Err(_) => mix,
+    };
+    let mut rng = ChaCha8Rng::from_seed(seed);
     let mut bytes = [0u8; 12];
-    rng.fill_bytes(&mut bytes[..8]);
-    let n = COUNTER.fetch_add(1, Ordering::Relaxed) as u32;
-    bytes[8..12].copy_from_slice(&n.to_le_bytes());
+    rng.fill_bytes(&mut bytes);
     bytes
 }
 
@@ -1217,20 +1315,12 @@ pub async fn ask(
         return r;
     }
 
-    // 1) Optional server-side RAG context (app pool, fixed SQL) then LLM → plan.
+    // 1) Optional server-side RAG context (app pool, fixed SQL) then one capped parse.
     let rag = crate::ask_rag::planner_context(app_pool, tenant_id, q).await;
-    let plan_json = match llm_to_plan(q, tenant_id, rag.as_deref()).await {
-        Ok(v) => v,
-        Err(e) => {
-            let (r, internal) = fail(&format!("plan generation failed: {e}"));
-            audit_query(app_pool, tenant_id, user_id, question, &r, Some(&internal)).await;
-            return r;
-        }
-    };
-    let plan = match ingest_plan_value(plan_json) {
+    let plan = match llm_to_plan(q, tenant_id, rag.as_deref()).await {
         Ok(p) => p,
         Err(e) => {
-            let (r, internal) = fail(&e);
+            let (r, internal) = fail(&format!("plan generation failed: {e}"));
             audit_query(app_pool, tenant_id, user_id, question, &r, Some(&internal)).await;
             return r;
         }
@@ -1413,7 +1503,7 @@ async fn llm_to_plan(
     question: &str,
     tenant_id: i64,
     rag_context: Option<&str>,
-) -> Result<Value, String> {
+) -> Result<QueryPlan, String> {
     // Ask Weissman planner. Routes through the multi-provider failover chain
     // (`weissman_engines::llm_router`, configured by WEISSMAN_LLM_ENDPOINTS) so the planner now
     // inherits per-endpoint retry, circuit breaking, cross-provider failover, and per-tenant LLM
@@ -1451,10 +1541,7 @@ async fn llm_to_plan(
     )
     .await
     .map_err(|e| e.to_string())?;
-    if looks_like_raw_sql(text.trim()) {
-        return Err("blocked: planner returned raw SQL; QueryPlan JSON is required".into());
-    }
-    parse_json_capped(text.trim())
+    ingest_planner_output(text.trim())
 }
 
 #[cfg(test)]
@@ -1622,6 +1709,29 @@ mod tests {
         assert_eq!(c.params[1], Value::String("%100\\%\\_off%".into()));
         assert!(c.sql.contains("ILIKE $2 ESCAPE '\\'"), "{}", c.sql);
         assert!(!c.sql.contains("100%_off"), "{}", c.sql);
+    }
+
+    #[test]
+    fn like_backslash_and_quote_stay_in_bound_params() {
+        let plan = QueryPlan {
+            table: "vulnerabilities".into(),
+            select: vec!["id".into()],
+            filters: vec![Filter {
+                column: "title".into(),
+                op: "like".into(),
+                value: json!(r#"\' OR 1=1 --"#),
+            }],
+            order_by: None,
+            order_desc: false,
+            limit: Some(5),
+        };
+        let c = compile_plan(&plan, 3).unwrap();
+        assert!(c.sql.contains("ILIKE $2 ESCAPE '\\'"), "{}", c.sql);
+        assert!(!c.sql.contains("OR 1=1"), "{}", c.sql);
+        assert!(!c.sql.contains("\\' OR"), "{}", c.sql);
+        let bound = c.params[1].as_str().unwrap();
+        assert!(bound.contains('\\'), "{bound}");
+        assert!(bound.starts_with('%') && bound.ends_with('%'), "{bound}");
     }
 
     #[test]
@@ -1862,5 +1972,18 @@ mod tests {
         let n1 = audit_nonce();
         let n2 = audit_nonce();
         assert_ne!(n1, n2);
+        let a = host_uniqueness_mix();
+        let b = host_uniqueness_mix();
+        assert_ne!(a, b, "host mix must change every call (counter + clock)");
+    }
+
+    #[test]
+    fn stream_parser_rejects_unicode_nul() {
+        let raw = r#"{"table":"vulnerabilities","select":["id"],"filters":[{"column":"title","op":"=","value":"a\u0000b"}]}"#;
+        let err = ingest_planner_output(raw).unwrap_err();
+        assert!(
+            err.contains("NUL") || err.contains("control") || err.contains("nesting"),
+            "{err}"
+        );
     }
 }

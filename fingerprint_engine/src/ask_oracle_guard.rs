@@ -465,6 +465,14 @@ mod tests {
     }
 
     #[test]
+    fn ask_redis_acquire_timeout_is_fifty_ms() {
+        assert_eq!(
+            crate::http::rate_limit_redis::ASK_REDIS_ACQUIRE_TIMEOUT_MS,
+            50
+        );
+    }
+
+    #[test]
     fn redis_outage_is_fail_closed_when_configured() {
         use crate::http::rate_limit_redis::StrictOp;
         assert_eq!(
