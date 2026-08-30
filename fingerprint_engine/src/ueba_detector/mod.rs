@@ -37,9 +37,9 @@ use stats::{
 use std::collections::HashSet;
 use std::sync::{Arc, OnceLock};
 use time::{
-    adjacent_hours, clock_skew_secs, distinct_weekdays, hour_of_week_utc,
-    is_boundary_false_positive, is_offhours, learning_complete, offhours_multiplier,
-    should_update_baseline, CLOCK_SKEW_WARN_SECS,
+    adjacent_hours, clamp_to_server_clock, classify_timestamp, clock_skew_secs, distinct_weekdays,
+    hour_of_week_utc, is_boundary_false_positive, is_offhours, learning_complete,
+    offhours_multiplier, should_update_baseline, TimestampTrust, CLOCK_SKEW_WARN_SECS,
 };
 use validate::{
     sanitize_process_name, validate_agent_id, validate_hour, validate_nonce, MAX_NONCE_LEN,
@@ -264,14 +264,21 @@ pub async fn ingest_sample(
 
     let received = Utc::now();
     let sampled_at = p.sampled_at.unwrap_or(received);
-    // Delayed samples map to their original hour-of-week (UTC), not arrival time.
-    p.hour_of_week = hour_of_week_utc(sampled_at);
-    if clock_skew_secs(sampled_at, received) > CLOCK_SKEW_WARN_SECS {
+    let trust = classify_timestamp(sampled_at, received, policy.learn_window_days);
+    // Delayed samples map to their original UTC hour. Future spoofs must not
+    // shift the hour-of-week bucket — use the server clock.
+    p.hour_of_week = hour_of_week_utc(match trust {
+        TimestampTrust::FutureSpoof => received,
+        _ => sampled_at,
+    });
+    if matches!(trust, TimestampTrust::LateReplay)
+        && clock_skew_secs(sampled_at, received) > CLOCK_SKEW_WARN_SECS
+    {
         tracing::warn!(
             target: "ueba_ingest",
             agent_id = %p.agent_id,
             skew_secs = clock_skew_secs(sampled_at, received),
-            "agent clock skew exceeds 5 minutes"
+            "late UEBA replay exceeds 5 minutes"
         );
     }
 
@@ -308,28 +315,37 @@ pub async fn ingest_sample(
     .await
     .map_err(|_| "ingest failed".to_string())?;
 
+    let clock_safe_ts = clamp_to_server_clock(sampled_at, received);
+    let future_spoof = matches!(trust, TimestampTrust::FutureSpoof);
     let _ = sqlx::query(
         r#"UPDATE endpoint_agents
               SET last_sample_seq = CASE
                       WHEN $1::bigint IS NULL THEN last_sample_seq
                       ELSE GREATEST(COALESCE(last_sample_seq, 0), $1)
                   END,
-                  last_sample_at = GREATEST(COALESCE(last_sample_at, $2), $2)
-            WHERE tenant_id = $3 AND agent_uuid = $4::uuid"#,
+                  last_sample_at = CASE
+                      WHEN $3::boolean THEN last_sample_at
+                      ELSE GREATEST(COALESCE(last_sample_at, $2), $2)
+                  END
+            WHERE tenant_id = $4 AND agent_uuid = $5::uuid"#,
     )
     .bind(p.seq)
-    .bind(sampled_at)
+    .bind(clock_safe_ts)
+    .bind(future_spoof)
     .bind(tenant_id)
     .bind(&p.agent_id)
     .execute(&mut *tx)
     .await;
 
-    let apply_baseline = should_update_baseline(
-        sampled_at,
-        received,
-        last_sample_at,
-        policy.learn_window_days,
-    );
+    // A previously-poisoned last_sample_at in the future would blind every live sample.
+    let last_sample_at = last_sample_at.map(|t| t.min(received));
+    let apply_baseline = !future_spoof
+        && should_update_baseline(
+            sampled_at,
+            received,
+            last_sample_at,
+            policy.learn_window_days,
+        );
 
     let whitelist = load_whitelist(&mut tx, tenant_id, p.client_id)
         .await
@@ -348,6 +364,29 @@ pub async fn ingest_sample(
         &policy.holiday_dates,
         policy.treat_holidays_as_weekend,
     );
+
+    if future_spoof {
+        let skew = sampled_at.signed_duration_since(received).num_seconds();
+        if let Some(a) = insert_anomaly_row(
+            &mut tx,
+            tenant_id,
+            &p,
+            sample_id,
+            "clock_skew",
+            skew as f64,
+            0.0,
+            5.0,
+            skew as f64,
+            "critical",
+            &format!(
+                "Clock-skew attack: agent sampled_at is {skew}s ahead of server clock (limit 5s). Baseline not updated (telemetry blinding)."
+            ),
+        )
+        .await?
+        {
+            summary.anomalies.push(a);
+        }
+    }
 
     if apply_baseline {
         if let Value::Object(obj) = &p.metrics {
@@ -507,7 +546,7 @@ pub async fn ingest_sample(
     }
     summary.learning = is_learning;
     if is_learning {
-        summary.anomalies.clear();
+        summary.anomalies.retain(|a| a.metric == "clock_skew");
     }
 
     // Sample-gap / mute detection: expected cadence is ~15 min; a drop without matching
@@ -848,6 +887,19 @@ async fn check_new_categorical(
     let process_names = metric == "top_processes" || metric == "listen_map";
     let mut novel = learned.observe(observed, now, process_names);
     novel.retain(|x| !in_whitelist(x, whitelist) && !is_os_baseline(x));
+    if process_names {
+        let mut kept = Vec::new();
+        for name in novel {
+            let others = fleet_other_hosts(tx, tenant_id, &p.agent_id, &name)
+                .await
+                .unwrap_or(0);
+            if learned.try_fleet_promote(&name, others, now) {
+                continue;
+            }
+            kept.push(name);
+        }
+        novel = kept;
+    }
     if learned.seen.len() > LEARNED_SET_CAP {
         learned.prune(now);
     }
@@ -959,6 +1011,26 @@ async fn insert_anomaly_row(
         severity: severity.to_string(),
         detail: detail.to_string(),
     }))
+}
+
+async fn fleet_other_hosts(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: i64,
+    agent_id: &str,
+    detail: &str,
+) -> Result<i64, sqlx::Error> {
+    let token = detail.trim();
+    sqlx::query_scalar(
+        r#"SELECT COUNT(DISTINCT agent_id) FROM agent_metric_baselines
+            WHERE tenant_id = $1 AND metric_name = 'top_processes'
+              AND agent_id <> $3
+              AND learned_set::text LIKE '%' || $2 || '%'"#,
+    )
+    .bind(tenant_id)
+    .bind(token.chars().take(48).collect::<String>())
+    .bind(agent_id)
+    .fetch_one(&mut **tx)
+    .await
 }
 
 async fn fleet_uniqueness(

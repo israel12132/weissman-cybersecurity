@@ -1,8 +1,10 @@
 //! MPSC ingest queue, per-agent rate limit, gzip payload, dedicated pool semaphore.
 //!
-//! The channel is the burst buffer (default 50 000). The DB semaphore is acquired
-//! **in the recv loop before spawn** so a slow partition-purge cannot drain the
-//! channel into 50k concurrent tasks and then 429 the hot path a second later.
+//! HTTP/WS enqueue is `try_send` only — Axum never waits on Postgres. The recv
+//! loop `spawn`s immediately; the **DB** semaphore is acquired inside the task
+//! so a slow query cannot stall the worker loop or the HTTP thread pool.
+//! A separate task-slot cap (not the PG pool) keeps spawn fan-out bounded so
+//! the 50k MPSC remains the HTTP-facing burst buffer.
 
 use flate2::read::GzDecoder;
 use governor::{clock::DefaultClock, state::keyed::DefaultKeyedStateStore, Quota, RateLimiter};
@@ -19,6 +21,8 @@ use super::{ingest_sample, UebaIngestPayload};
 const DEFAULT_QUEUE_CAP: usize = 50_000;
 const MIN_QUEUE_CAP: usize = 4_096;
 const MAX_QUEUE_CAP: usize = 200_000;
+const DEFAULT_INFLIGHT: usize = 256;
+const MIN_INFLIGHT: usize = 32;
 const RATE_PER_MIN: u32 = 2;
 
 struct IngestJob {
@@ -66,6 +70,28 @@ pub fn configured_queue_cap() -> usize {
 fn queue_cap() -> usize {
     static CAP: OnceLock<usize> = OnceLock::new();
     *CAP.get_or_init(configured_queue_cap)
+}
+
+pub fn clamp_inflight(n: usize) -> usize {
+    n.clamp(MIN_INFLIGHT, queue_cap_or_default())
+}
+
+fn queue_cap_or_default() -> usize {
+    DEFAULT_QUEUE_CAP
+}
+
+fn configured_inflight() -> usize {
+    let parsed = std::env::var("WEISSMAN_UEBA_INGEST_INFLIGHT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(DEFAULT_INFLIGHT);
+    parsed.clamp(MIN_INFLIGHT, configured_queue_cap())
+}
+
+fn task_slots() -> Arc<Semaphore> {
+    static S: OnceLock<Arc<Semaphore>> = OnceLock::new();
+    S.get_or_init(|| Arc::new(Semaphore::new(configured_inflight())))
+        .clone()
 }
 
 /// UEBA writes share a semaphore so a noisy agent cannot exhaust the UI pool.
@@ -161,9 +187,8 @@ pub fn enqueue(
     }
 }
 
-/// Direct path used by tests and by the worker after a permit is already held.
-/// Do **not** acquire the DB semaphore here — the recv loop holds it for the
-/// lifetime of the spawned task. A second acquire would deadlock the pool.
+/// Direct path used by tests and by the worker after dequeue.
+/// The DB semaphore is acquired inside the spawned ingest task, not here.
 pub async fn process_job(
     pool: &PgPool,
     tenant_id: i64,
@@ -190,15 +215,20 @@ pub fn spawn_ingest_worker(pool: Arc<PgPool>) {
     tokio::spawn(async move {
         while let Some(job) = rx.recv().await {
             health::set_queue_depth(rx.len());
-            // Hold a permit *before* spawning so in-flight work ≤ pool permits
-            // and the MPSC is the real 50k burst buffer (not an unbounded fan-out).
-            let permit: OwnedSemaphorePermit = match ueba_permits().acquire_owned().await {
-                Ok(p) => p,
+            let pool = pool.clone();
+            let db_sem = ueba_permits();
+            // Bound tokio tasks (not PG connections). Recv waits here only after
+            // INFLIGHT tasks exist; HTTP try_send is still non-blocking.
+            let slot: OwnedSemaphorePermit = match task_slots().acquire_owned().await {
+                Ok(s) => s,
                 Err(_) => break,
             };
-            let pool = pool.clone();
             tokio::spawn(async move {
-                let _permit = permit;
+                let _slot = slot;
+                let _db_permit = match db_sem.acquire_owned().await {
+                    Ok(p) => p,
+                    Err(_) => return,
+                };
                 match process_job(
                     pool.as_ref(),
                     job.tenant_id,
@@ -262,5 +292,13 @@ mod tests {
         assert_eq!(clamp_queue_cap(100), MIN_QUEUE_CAP);
         assert_eq!(clamp_queue_cap(1_000_000), MAX_QUEUE_CAP);
         assert!(DEFAULT_QUEUE_CAP >= 50_000);
+    }
+
+    #[test]
+    fn inflight_slots_are_not_the_db_pool() {
+        assert_eq!(clamp_inflight(1), MIN_INFLIGHT);
+        assert_eq!(clamp_inflight(256), 256);
+        assert!(DEFAULT_INFLIGHT >= MIN_INFLIGHT);
+        assert!(DEFAULT_INFLIGHT < DEFAULT_QUEUE_CAP);
     }
 }

@@ -158,13 +158,15 @@ In-process background loops (`weissman-server`):
 2. Wire path is WSS `Finding{engine:ueba_baseline}` (preferred) or
    `POST /api/ueba/ingest` with an agent JWT (requires a live WSS session) or
    an admin JWT. The HTTP handler enqueues onto a Tokio MPSC (default cap
-   **50 000**, `WEISSMAN_UEBA_INGEST_QUEUE`, 2 samples/agent/minute). The
-   DB semaphore is acquired **before** the worker spawns a job so the
-   channel is the real burst buffer (a 4096 cap plus immediate fan-out
-   filled in well under a second during a nightly purge). Typical sample
-   ~2 KiB → ~100 MiB at 50k; worst case is 64 KiB × 50k if every payload
-   hits `MAX_METRICS_BYTES`. `WEISSMAN_TRUST_PROXY_HEADERS` is honoured
-   for source IP. Out-of-scope IPs vs `clients.ip_ranges` return **403**.
+   **50 000**, `WEISSMAN_UEBA_INGEST_QUEUE`, 2 samples/agent/minute). HTTP
+   `try_send` never waits on Postgres. The worker `spawn`s first; the DB
+   semaphore is acquired **inside** the task so a slow query cannot stall
+   Axum. A separate inflight cap (`WEISSMAN_UEBA_INGEST_INFLIGHT`, default
+   256) bounds tokio tasks so the MPSC stays the HTTP-facing buffer.
+   Typical sample ~2 KiB → ~100 MiB at 50k; worst case is 64 KiB × 50k if
+   every payload hits `MAX_METRICS_BYTES`. `WEISSMAN_TRUST_PROXY_HEADERS`
+   is honoured for source IP. Out-of-scope IPs vs `clients.ip_ranges`
+   return **403**.
 3. `ueba_detector::ingest_sample` (serialized per `agent_id`):
    - INSERT into `agent_metric_samples` using **`sampled_at`** (delayed
      catch-up maps to the original UTC hour, not arrival time),
@@ -173,16 +175,28 @@ In-process background loops (`weissman-server`):
      and storms the detector. `n` is a raw counter and is never decayed.
      Samples older than the learn window, or older than `last_sample_at`
      by >2s, are archive-only and do not update the live baseline.
+     `sampled_at` more than **5 seconds ahead** of the server clock is a
+     clock-spoof: the sample is stored for forensics, a critical
+     `clock_skew` anomaly is raised, EWMV is not updated, and
+     `last_sample_at` is never advanced with the client timestamp
+     (`LEAST(sampled_at, now())` on the GREATEST path).
+   - EWMV variance uses a safe denominator: if `W − V₂/W` ≈ 0, fall back
+     to population `S/W` then to the metric σ floor — never NaN/Inf.
    - MAD fallback + winsorization + per-metric σ floor so a collapsed
      variance cannot turn `min_delta` into a 100σ alert,
    - `|z|` gates are per-metric (`failed_logins` at 2σ, load/memory at 3σ);
      `uptime_seconds` is a reboot delta, not a z-score,
-   - **no client-facing anomaly** while `endpoint_agents.is_learning` is
-     true (exit requires n≥24 **and** ≥5 distinct weekdays),
+   - **no client-facing UEBA anomaly** while `endpoint_agents.is_learning` is
+     true (exit requires n≥24 **and** ≥5 distinct weekdays), except
+     **`clock_skew`** (telemetry blinding is a security event, not a
+     baseline);
    - categorical `open_ports[]` (integer[], ephemeral ranges excluded) and
-     normalised `top_processes[]` vs a 1500-item learned set (`{t,n}` hits,
-     30-day aging, 7-day eviction resurrection) plus a built-in OS
-     process baseline (`systemd`, `sshd`, `kubelet`, …) and tenant whitelist,
+     normalised `top_processes[]` vs a 1500-item **probation** set: a name
+     is approved into the baseline only after 24h of consistent observation
+     on this host **or** fleet consensus (≥3 other agents). Least-hits
+     eviction applies only to probation (compile-loop poison cannot eject
+     weekly backup jobs). 7-day eviction resurrection, built-in OS
+     process baseline (`systemd`, `sshd`, `kubelet`, …), and tenant whitelist.
    - after commit: SOAR playbook for `high`/`critical` (3s timeout, 3600s
      cooldown); `isolate_host` when critical **or** (failed_logins high + new
      ports); `page_oncall` only off-hours; FAIR ARO floor 2.0.

@@ -201,7 +201,7 @@ async fn run_retention_locked(pool: &PgPool) -> Result<RetentionReport, sqlx::Er
                       FROM jsonb_each(learned_set) e
                      WHERE jsonb_typeof(learned_set) = 'object'
                        AND (
-                            e.key = '_evicted'
+                            e.key IN ('_evicted', '_probation')
                             OR CASE jsonb_typeof(e.value)
                                  WHEN 'number' THEN COALESCE((e.value #>> '{}')::bigint, 0)
                                  WHEN 'object' THEN COALESCE((e.value->>'t')::bigint, 0)

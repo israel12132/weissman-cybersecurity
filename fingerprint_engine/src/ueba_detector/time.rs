@@ -86,11 +86,61 @@ pub fn clamp_learn_window_days(days: i64) -> i64 {
     }
 }
 
-/// Clock-skew warning when the agent's sampled_at drifts from server receipt by > 5 minutes.
+/// Clock-skew warning when a *late* replay drifts from server receipt by > 5 minutes.
 pub const CLOCK_SKEW_WARN_SECS: i64 = 5 * 60;
+
+/// Maximum *future* client `sampled_at` vs server wall clock. Beyond this the
+/// packet is a clock-spoof / telemetry-blinding attempt (GREATEST attack).
+pub const CLOCK_SPOOF_SECS: i64 = 5;
 
 pub fn clock_skew_secs(sampled_at: DateTime<Utc>, received_at: DateTime<Utc>) -> i64 {
     (received_at - sampled_at).num_seconds().abs()
+}
+
+/// True when `|server_now − sampled_at| ≤ 5s` (live sample, not a replay and not a spoof).
+pub fn is_agent_timestamp_valid(sampled_at_epoch: i64, server_now_epoch: i64) -> bool {
+    server_now_epoch.abs_diff(sampled_at_epoch) as i64 <= CLOCK_SPOOF_SECS
+}
+
+/// Never let a client timestamp advance `last_sample_at` into the future.
+pub fn clamp_to_server_clock(sampled_at: DateTime<Utc>, received: DateTime<Utc>) -> DateTime<Utc> {
+    if sampled_at > received {
+        received
+    } else {
+        sampled_at
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimestampTrust {
+    /// Within ±5s of the server clock.
+    Fresh,
+    /// In the past beyond 5s, still inside the learn window — offline ring catch-up.
+    LateReplay,
+    /// `sampled_at` is more than 5s *ahead* of the server — clock spoof.
+    FutureSpoof,
+    /// Older than the tenant learn window.
+    TooOld,
+}
+
+pub fn classify_timestamp(
+    sampled_at: DateTime<Utc>,
+    received: DateTime<Utc>,
+    window_days: i64,
+) -> TimestampTrust {
+    let ahead = sampled_at.signed_duration_since(received).num_seconds();
+    if ahead > CLOCK_SPOOF_SECS {
+        return TimestampTrust::FutureSpoof;
+    }
+    let behind = received.signed_duration_since(sampled_at).num_seconds();
+    if behind <= CLOCK_SPOOF_SECS {
+        return TimestampTrust::Fresh;
+    }
+    let window = clamp_learn_window_days(window_days);
+    if received.signed_duration_since(sampled_at).num_days() > window {
+        return TimestampTrust::TooOld;
+    }
+    TimestampTrust::LateReplay
 }
 
 /// Distinct weekdays represented in a set of hour-of-week values (0..=6 Monday-based).
@@ -208,5 +258,40 @@ mod tests {
         // 1s behind last is within slack (same-tick batch).
         let jitter = Utc.with_ymd_and_hms(2026, 8, 27, 11, 44, 59).unwrap();
         assert!(should_update_baseline(jitter, received, last, 7));
+    }
+
+    #[test]
+    fn future_sampled_at_is_clock_spoof() {
+        let received = Utc.with_ymd_and_hms(2026, 8, 27, 12, 0, 0).unwrap();
+        let plus_4 = Utc.with_ymd_and_hms(2026, 8, 27, 12, 0, 4).unwrap();
+        let plus_6 = Utc.with_ymd_and_hms(2026, 8, 27, 12, 0, 6).unwrap();
+        let tomorrow = Utc.with_ymd_and_hms(2026, 8, 28, 12, 0, 0).unwrap();
+        let hour_ago = Utc.with_ymd_and_hms(2026, 8, 27, 11, 0, 0).unwrap();
+        assert_eq!(
+            classify_timestamp(plus_4, received, 7),
+            TimestampTrust::Fresh
+        );
+        assert_eq!(
+            classify_timestamp(plus_6, received, 7),
+            TimestampTrust::FutureSpoof
+        );
+        assert_eq!(
+            classify_timestamp(tomorrow, received, 7),
+            TimestampTrust::FutureSpoof
+        );
+        assert_eq!(
+            classify_timestamp(hour_ago, received, 7),
+            TimestampTrust::LateReplay
+        );
+        assert!(!is_agent_timestamp_valid(
+            tomorrow.timestamp(),
+            received.timestamp()
+        ));
+        assert!(is_agent_timestamp_valid(
+            plus_4.timestamp(),
+            received.timestamp()
+        ));
+        assert_eq!(clamp_to_server_clock(tomorrow, received), received);
+        assert_eq!(clamp_to_server_clock(hour_ago, received), hour_ago);
     }
 }

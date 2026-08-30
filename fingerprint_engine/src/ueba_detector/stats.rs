@@ -222,19 +222,42 @@ impl Ewmv {
     }
 
     pub fn variance(&self) -> f64 {
-        if self.w <= 1.0 + SIGMA_EPS {
-            return 0.0;
-        }
-        // Weighted Bessel: W − V₂/W. Equals n−1 when every weight is 1.
-        let denom = self.w - (self.v2 / self.w);
-        if denom < 1e-9 {
-            return 0.0;
-        }
-        sanitize_f64(self.s / denom).max(0.0)
+        calculate_safe_ewmv_variance(self.s, self.w, self.v2, 0.0)
     }
 
     pub fn stddev(&self) -> f64 {
         sanitize_f64(self.variance().sqrt())
+    }
+}
+
+/// Weighted Bessel `S / (W − V₂/W)` with a hard NaN/Inf guard.
+///
+/// Cold-start and high-λ decay can drive the denominator to ~0 (or `V₂/W` to Inf
+/// when W underflows). Returning 0 here is unsafe for the caller that then does
+/// `z = (x−μ)/σ` against a later non-zero floor; we fall back to population
+/// `S/W`, then to `floor_sigma²`. Every path is sanitised.
+pub fn calculate_safe_ewmv_variance(s: f64, w: f64, v2: f64, floor_sigma: f64) -> f64 {
+    let s = sanitize_f64(s).max(0.0);
+    let w = sanitize_f64(w).max(0.0);
+    let v2 = sanitize_f64(v2).max(0.0);
+    let floor_var = {
+        let f = sanitize_f64(floor_sigma).max(0.0);
+        sanitize_f64(f * f).max(0.0)
+    };
+    if w < SIGMA_EPS {
+        return floor_var;
+    }
+    let denom = w - (v2 / w);
+    let raw = if !denom.is_finite() || denom.abs() < 1e-9 {
+        s / w
+    } else {
+        s / denom
+    };
+    let v = sanitize_f64(raw);
+    if !v.is_finite() || v <= 0.0 {
+        floor_var
+    } else {
+        v
     }
 }
 
@@ -498,5 +521,28 @@ mod tests {
         // With the floor, |z| stays at the metric gate (3.0).
         let z = z_score(11.0, 10.0, floor);
         assert!((z - z_threshold_for("unique_users")).abs() < 1e-9);
+    }
+
+    #[test]
+    fn ewmv_zero_denominator_never_nan() {
+        // W = V₂ = 1 → Bessel denom W − V₂/W = 0. Must not yield NaN/Inf.
+        let v = calculate_safe_ewmv_variance(4.0, 1.0, 1.0, 0.5);
+        assert!(v.is_finite() && v > 0.0, "got {v}");
+        let z = z_score(12.0, 10.0, v.sqrt());
+        assert!(z.is_finite(), "z leaked non-finite: {z}");
+        let underflow = calculate_safe_ewmv_variance(1.0, 1e-18, 1.0, 0.25);
+        assert!(
+            underflow.is_finite() && (underflow - 0.0625).abs() < 1e-9,
+            "W≈0 must use floor_sigma², got {underflow}"
+        );
+        let e = Ewmv {
+            n: 1,
+            mean: 10.0,
+            s: 0.0,
+            w: 1.0,
+            v2: 1.0,
+        };
+        assert!(e.stddev().is_finite());
+        assert_eq!(e.stddev(), 0.0);
     }
 }

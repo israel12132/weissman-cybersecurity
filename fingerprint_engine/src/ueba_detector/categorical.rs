@@ -1,10 +1,9 @@
 //! Categorical UEBA: learned sets, process/port normalisation, whitelist, aging, uniqueness.
 //!
-//! A hard cap of 500 plus oldest-first eviction thrashes on K8s / dev hosts: the same
-//! legitimate short-lived process falls out of the set and re-alerts as "new". We keep a
-//! bounded set (1 500) with hit counts, evict lowest-hit among the oldest, remember evictions
-//! for 7 days so a return is a resurrection not a novel, and never alert on a built-in OS
-//! process baseline. Tenant / fleet whitelist still wins.
+//! Names do **not** enter the approved baseline on first sighting. They sit in
+//! `_probation` until either 24h of consistent observation on this host, or fleet
+//! consensus (≥3 other agents). Least-hits eviction applies only to probation, so
+//! a compile-loop of random binaries cannot eject weekly backup jobs.
 
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -14,7 +13,12 @@ use super::validate::sanitize_process_name;
 pub const LEARNED_SET_CAP: usize = 1500;
 pub const LEARNED_SET_MAX_AGE_DAYS: i64 = 30;
 pub const EVICTED_RESURRECT_DAYS: i64 = 7;
+/// 24h of consistent observation on *this* host before a name is approved.
+pub const PROBATION_SECS: i64 = 24 * 3600;
+/// Distinct *other* agents in the tenant that must already know the name.
+pub const FLEET_CONSENSUS_OTHERS: i64 = 3;
 const EVICTED_KEY: &str = "_evicted";
+const PROBATION_KEY: &str = "_probation";
 
 /// Built-in fleet OS / supervisor names. Sanitized (basename, lower, no `.exe`).
 const OS_BASELINE: &[&str] = &[
@@ -52,13 +56,42 @@ const OS_BASELINE: &[&str] = &[
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LearnedEntry {
     pub last_seen: i64,
+    pub first_seen: i64,
     pub hits: u64,
+}
+
+impl LearnedEntry {
+    fn new(now: i64) -> Self {
+        Self {
+            last_seen: now,
+            first_seen: now,
+            hits: 1,
+        }
+    }
+
+    fn legacy(ts: i64) -> Self {
+        Self {
+            last_seen: ts,
+            first_seen: ts,
+            hits: 1,
+        }
+    }
+
+    fn to_json(self) -> Value {
+        serde_json::json!({ "t": self.last_seen, "n": self.hits, "t0": self.first_seen })
+    }
+}
+
+fn tenure_ok(e: &LearnedEntry, now: i64) -> bool {
+    e.hits >= 2 && now.saturating_sub(e.first_seen) >= PROBATION_SECS
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct LearnedSet {
-    /// item → last-seen + hit count
+    /// Approved baseline (24h tenure or fleet consensus). Least-hits must not evict these.
     pub seen: HashMap<String, LearnedEntry>,
+    /// Candidates. Random compile-loop names die here and never touch `seen`.
+    pub probation: HashMap<String, LearnedEntry>,
     /// recently evicted item → unix epoch of eviction (resurrection window)
     pub evicted: HashMap<String, i64>,
 }
@@ -66,26 +99,15 @@ pub struct LearnedSet {
 impl LearnedSet {
     pub fn from_json(v: &Value) -> Self {
         let mut seen = HashMap::new();
+        let mut probation = HashMap::new();
         let mut evicted = HashMap::new();
         match v {
             Value::Array(arr) => {
                 for x in arr {
                     if let Some(s) = x.as_str() {
-                        seen.insert(
-                            s.to_string(),
-                            LearnedEntry {
-                                last_seen: 0,
-                                hits: 1,
-                            },
-                        );
+                        seen.insert(s.to_string(), LearnedEntry::legacy(0));
                     } else if let Some(n) = x.as_i64() {
-                        seen.insert(
-                            n.to_string(),
-                            LearnedEntry {
-                                last_seen: 0,
-                                hits: 1,
-                            },
-                        );
+                        seen.insert(n.to_string(), LearnedEntry::legacy(0));
                     }
                 }
             }
@@ -99,21 +121,41 @@ impl LearnedSet {
                         }
                         continue;
                     }
+                    if k == PROBATION_KEY {
+                        if let Value::Object(inner) = val {
+                            for (pk, pv) in inner {
+                                probation.insert(pk.clone(), parse_entry(pv));
+                            }
+                        }
+                        continue;
+                    }
+                    if k.starts_with('_') {
+                        continue;
+                    }
                     seen.insert(k.clone(), parse_entry(val));
                 }
             }
             _ => {}
         }
-        Self { seen, evicted }
+        Self {
+            seen,
+            probation,
+            evicted,
+        }
     }
 
     pub fn to_json(&self) -> Value {
         let mut obj = serde_json::Map::new();
         for (k, e) in &self.seen {
-            obj.insert(
-                k.clone(),
-                serde_json::json!({ "t": e.last_seen, "n": e.hits }),
-            );
+            obj.insert(k.clone(), e.to_json());
+        }
+        if !self.probation.is_empty() {
+            let p: serde_json::Map<String, Value> = self
+                .probation
+                .iter()
+                .map(|(k, e)| (k.clone(), e.to_json()))
+                .collect();
+            obj.insert(PROBATION_KEY.to_string(), Value::Object(p));
         }
         if !self.evicted.is_empty() {
             let ev: serde_json::Map<String, Value> = self
@@ -131,8 +173,9 @@ impl LearnedSet {
         self.seen.keys().cloned().collect()
     }
 
-    /// Record `items`. Returns names that are novel (not previously learned, not
-    /// a 7-day resurrection, and — when `process_names` — not an OS baseline).
+    /// Record `items`. Returns names that are not yet approved (first sighting or
+    /// still on probation). OS baseline never appears. A 24h tenure on this host
+    /// promotes probation → seen. Fleet consensus is applied by the caller.
     pub fn observe(&mut self, items: &[String], now_unix: i64, process_names: bool) -> Vec<String> {
         let mut novel = Vec::new();
         for raw in items {
@@ -152,77 +195,103 @@ impl LearnedSet {
                 let age = now_unix.saturating_sub(evicted_at);
                 if age <= EVICTED_RESURRECT_DAYS * 86_400 {
                     self.evicted.remove(&key);
-                    self.seen.insert(
-                        key,
-                        LearnedEntry {
-                            last_seen: now_unix,
-                            hits: 1,
-                        },
-                    );
+                    self.seen.insert(key, LearnedEntry::new(now_unix));
                     continue;
                 }
                 self.evicted.remove(&key);
             }
+            if let Some(entry) = self.probation.get_mut(&key) {
+                entry.last_seen = now_unix;
+                entry.hits = entry.hits.saturating_add(1);
+                continue;
+            }
             novel.push(key.clone());
-            self.seen.insert(
-                key,
-                LearnedEntry {
-                    last_seen: now_unix,
-                    hits: 1,
-                },
-            );
+            self.probation.insert(key, LearnedEntry::new(now_unix));
         }
+        self.promote_by_tenure(now_unix);
         self.prune(now_unix);
         novel
+    }
+
+    pub fn try_fleet_promote(&mut self, key: &str, other_hosts: i64, now_unix: i64) -> bool {
+        if other_hosts < FLEET_CONSENSUS_OTHERS {
+            return false;
+        }
+        if !self.probation.contains_key(key) {
+            return false;
+        }
+        self.promote_key(key, now_unix);
+        true
+    }
+
+    fn promote_by_tenure(&mut self, now_unix: i64) {
+        let due: Vec<String> = self
+            .probation
+            .iter()
+            .filter(|(_, e)| tenure_ok(e, now_unix))
+            .map(|(k, _)| k.clone())
+            .collect();
+        for k in due {
+            self.promote_key(&k, now_unix);
+        }
+    }
+
+    fn promote_key(&mut self, key: &str, now_unix: i64) {
+        if let Some(mut e) = self.probation.remove(key) {
+            e.last_seen = now_unix;
+            self.seen.insert(key.to_string(), e);
+        }
     }
 
     pub fn prune(&mut self, now_unix: i64) {
         let cutoff = now_unix.saturating_sub(LEARNED_SET_MAX_AGE_DAYS * 86_400);
         self.seen
             .retain(|_, e| e.last_seen == 0 || e.last_seen >= cutoff);
+        self.probation
+            .retain(|_, e| e.last_seen == 0 || e.last_seen >= cutoff);
         let evict_cut = now_unix.saturating_sub(EVICTED_RESURRECT_DAYS * 86_400);
         self.evicted.retain(|_, ts| *ts >= evict_cut);
-        if self.seen.len() <= LEARNED_SET_CAP {
-            if self.evicted.len() > LEARNED_SET_CAP {
-                let mut ev: Vec<(String, i64)> =
-                    self.evicted.iter().map(|(k, v)| (k.clone(), *v)).collect();
-                ev.sort_by_key(|(_, ts)| *ts);
-                let drop_n = self.evicted.len() - LEARNED_SET_CAP;
-                for (k, _) in ev.into_iter().take(drop_n) {
-                    self.evicted.remove(&k);
-                }
+        if self.probation.len() > LEARNED_SET_CAP {
+            let mut items: Vec<(String, u64, i64)> = self
+                .probation
+                .iter()
+                .map(|(k, e)| (k.clone(), e.hits, e.last_seen))
+                .collect();
+            items.sort_by(|a, b| a.1.cmp(&b.1).then(a.2.cmp(&b.2)));
+            let drop_n = self.probation.len() - LEARNED_SET_CAP;
+            for (k, _, _) in items.into_iter().take(drop_n) {
+                self.probation.remove(&k);
+                self.evicted.insert(k, now_unix);
             }
-            return;
         }
-        // Lowest hits among the oldest: sort hits asc, then last_seen asc.
-        let mut items: Vec<(String, u64, i64)> = self
-            .seen
-            .iter()
-            .map(|(k, e)| (k.clone(), e.hits, e.last_seen))
-            .collect();
-        items.sort_by(|a, b| a.1.cmp(&b.1).then(a.2.cmp(&b.2)));
-        let drop_n = self.seen.len() - LEARNED_SET_CAP;
-        for (k, _, _) in items.into_iter().take(drop_n) {
-            self.seen.remove(&k);
-            self.evicted.insert(k, now_unix);
+        if self.evicted.len() > LEARNED_SET_CAP {
+            let mut ev: Vec<(String, i64)> =
+                self.evicted.iter().map(|(k, v)| (k.clone(), *v)).collect();
+            ev.sort_by_key(|(_, ts)| *ts);
+            let drop_n = self.evicted.len() - LEARNED_SET_CAP;
+            for (k, _) in ev.into_iter().take(drop_n) {
+                self.evicted.remove(&k);
+            }
         }
     }
 }
 
 fn parse_entry(val: &Value) -> LearnedEntry {
     match val {
-        Value::Number(n) => LearnedEntry {
-            last_seen: n.as_i64().unwrap_or(0),
-            hits: 1,
-        },
-        Value::Object(map) => LearnedEntry {
-            last_seen: map.get("t").and_then(Value::as_i64).unwrap_or(0),
-            hits: map.get("n").and_then(Value::as_u64).unwrap_or(1).max(1),
-        },
-        _ => LearnedEntry {
-            last_seen: val.as_i64().unwrap_or(0),
-            hits: 1,
-        },
+        Value::Number(n) => {
+            let ts = n.as_i64().unwrap_or(0);
+            LearnedEntry::legacy(ts)
+        }
+        Value::Object(map) => {
+            let last = map.get("t").and_then(Value::as_i64).unwrap_or(0);
+            let first = map.get("t0").and_then(Value::as_i64).unwrap_or(last);
+            LearnedEntry {
+                last_seen: last,
+                first_seen: first,
+                hits: map.get("n").and_then(Value::as_u64).unwrap_or(1).max(1),
+            }
+        }
+        _ => LearnedEntry::legacy(val.as_i64().unwrap_or(0)),
     }
 }
 
@@ -273,7 +342,6 @@ pub fn uniqueness_score(hosts_with: i64, fleet_size: i64) -> f64 {
         return 1.0;
     }
     let frac = (hosts_with.max(1) as f64) / (fleet_size as f64);
-    // 1.0 = unique to this host; ~0.15 = present on most of the fleet.
     (1.0 - frac).clamp(0.15, 1.0)
 }
 
@@ -296,16 +364,69 @@ mod tests {
         let now = 1_700_000_000;
         let novel = s.observe(&["nginx".into(), "python3".into()], now, true);
         assert_eq!(novel.len(), 2);
+        assert!(
+            s.seen.is_empty(),
+            "first sighting is probation, not approved"
+        );
         let again = s.observe(&["nginx".into()], now + 10, true);
         assert!(again.is_empty());
-        assert_eq!(s.seen.get("nginx").map(|e| e.hits), Some(2));
+        assert_eq!(s.probation.get("nginx").map(|e| e.hits), Some(2));
         s.observe(&["old".into()], now - 40 * 86_400, true);
         s.prune(now);
-        assert!(!s.seen.contains_key("old"));
+        assert!(!s.probation.contains_key("old"));
         for i in 0..1600 {
             s.observe(&[format!("p{i}")], now, true);
         }
+        assert!(s.probation.len() <= LEARNED_SET_CAP);
         assert!(s.seen.len() <= LEARNED_SET_CAP);
+    }
+
+    #[test]
+    fn tenure_promotes_after_24h() {
+        let mut s = LearnedSet::default();
+        let now = 1_700_000_000;
+        s.observe(&["backup".into()], now, true);
+        s.observe(&["backup".into()], now + 60, true);
+        assert!(s.seen.is_empty());
+        s.observe(&["backup".into()], now + PROBATION_SECS + 1, true);
+        assert!(s.seen.contains_key("backup"));
+        assert!(!s.probation.contains_key("backup"));
+    }
+
+    #[test]
+    fn fleet_consensus_promotes_without_24h() {
+        let mut s = LearnedSet::default();
+        let now = 1_700_000_000;
+        s.observe(&["fleet-daemon".into()], now, true);
+        assert!(s.try_fleet_promote("fleet-daemon", FLEET_CONSENSUS_OTHERS, now));
+        assert!(s.seen.contains_key("fleet-daemon"));
+        assert!(!s.try_fleet_promote("missing", FLEET_CONSENSUS_OTHERS, now));
+        let mut s2 = LearnedSet::default();
+        s2.observe(&["solo".into()], now, true);
+        assert!(!s2.try_fleet_promote("solo", 2, now));
+        assert!(s2.probation.contains_key("solo"));
+    }
+
+    #[test]
+    fn poison_names_do_not_evict_approved() {
+        let mut s = LearnedSet::default();
+        let now = 1_700_000_000;
+        s.seen.insert(
+            "backup".into(),
+            LearnedEntry {
+                last_seen: now,
+                first_seen: now - PROBATION_SECS * 7,
+                hits: 4,
+            },
+        );
+        for i in 0..2000 {
+            s.observe(&[format!("tmp{i}")], now, true);
+        }
+        assert!(
+            s.seen.contains_key("backup"),
+            "weekly backup must survive a compile-loop flood"
+        );
+        assert!(s.probation.len() <= LEARNED_SET_CAP);
     }
 
     #[test]
@@ -319,6 +440,7 @@ mod tests {
         );
         assert!(novel.is_empty());
         assert!(s.seen.is_empty());
+        assert!(s.probation.is_empty());
         assert!(is_os_baseline("22:sshd"));
         assert!(!is_os_baseline("4444:nc"));
     }
@@ -327,15 +449,7 @@ mod tests {
     fn evicted_item_resurrects_without_novel() {
         let mut s = LearnedSet::default();
         let now = 1_700_000_000;
-        s.seen.insert(
-            "node".into(),
-            LearnedEntry {
-                last_seen: now,
-                hits: 1,
-            },
-        );
         s.evicted.insert("node".into(), now);
-        s.seen.remove("node");
         let novel = s.observe(&["node".into()], now + 3600, true);
         assert!(novel.is_empty(), "7-day resurrection must not re-alert");
         assert!(s.seen.contains_key("node"));
@@ -343,33 +457,35 @@ mod tests {
     }
 
     #[test]
-    fn evicts_low_hits_before_high_hits() {
+    fn evicts_low_hits_from_probation_only() {
         let mut s = LearnedSet::default();
         let now = 1_700_000_000;
         for i in 0..LEARNED_SET_CAP {
-            s.seen.insert(
+            s.probation.insert(
                 format!("keep{i}"),
                 LearnedEntry {
                     last_seen: now,
+                    first_seen: now,
                     hits: 50,
                 },
             );
         }
-        s.seen.insert(
+        s.probation.insert(
             "rare".into(),
             LearnedEntry {
                 last_seen: now - 100,
+                first_seen: now - 100,
                 hits: 1,
             },
         );
         s.prune(now);
-        assert!(!s.seen.contains_key("rare"));
+        assert!(!s.probation.contains_key("rare"));
         assert!(s.evicted.contains_key("rare"));
-        assert_eq!(s.seen.len(), LEARNED_SET_CAP);
+        assert_eq!(s.probation.len(), LEARNED_SET_CAP);
     }
 
     #[test]
-    fn legacy_numeric_json_hydrates() {
+    fn legacy_numeric_json_hydrates_as_approved() {
         let v = json!({"nginx": 1700000000, "sshd": 1700000001});
         let s = LearnedSet::from_json(&v);
         assert_eq!(s.seen.get("nginx").map(|e| e.hits), Some(1));
