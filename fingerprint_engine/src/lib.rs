@@ -11,9 +11,10 @@
 //! - `hpc_runtime::linux_affinity` — `libc::sched_setaffinity` for NUMA pin.
 //! - `secret_zeroize::memlock` — `mlock` / `munlock` / `madvise(MADV_DONTDUMP)`
 //!   (Linux) and `VirtualLock` / `VirtualUnlock` (Windows) for vault key pages.
-//! - `secret_zeroize::raw_environ` — `libc::environ` (Linux/Unix) and
-//!   `GetEnvironmentStringsW` (Windows) so vault keys never pass through
-//!   `std::env::var_os` heap `OsString`s.
+//! - `secret_zeroize::raw_environ` — **read-only** walk of `libc::environ`
+//!   (Linux/Unix) and `GetEnvironmentStringsW` (Windows) so vault keys never
+//!   pass through `std::env::var_os` heap `OsString`s. Unset is
+//!   `std::env::remove_var` only — never in-place writes into the OS block.
 #![deny(unsafe_code)]
 #![allow(
     clippy::collapsible_if,

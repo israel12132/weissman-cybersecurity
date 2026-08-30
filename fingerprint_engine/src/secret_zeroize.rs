@@ -10,7 +10,8 @@
 //! 2. `mlock` / `VirtualLock` so the copy cannot be swapped
 //! 3. Linux `MADV_DONTDUMP` so core dumps skip the pages
 //! 4. `Zeroize` on drop, then `munlock`
-//! 5. In-place environ overwrite + `remove_var` for vault key names (JWT stays)
+//! 5. `std::env::remove_var` for vault key names (JWT stays). Never write through
+//!    the shared `environ` C-strings — that desynchronizes libc and is UB.
 
 #[allow(unsafe_code)]
 mod raw_environ;
@@ -125,10 +126,9 @@ pub fn env_is_hex32_key(name: &str) -> bool {
         .is_some()
 }
 
-/// Overwrite the live environ slot with same-length filler in place, then unset
-/// so `/proc/self/environ` cannot be scanned for the original key.
+/// Unset a vault-key name via the libc-safe Rust API. Does **not** poke the
+/// process `environ` block; `remove_var` updates the allocator-owned map.
 pub fn scrub_env_var(name: &str) {
-    raw_environ::overwrite_value_in_place(name);
     std::env::remove_var(name);
 }
 
@@ -267,8 +267,9 @@ mod tests {
         );
         assert!(
             !prod.contains("env::set_var("),
-            "scrub must overwrite environ in place, not set_var a filler String"
+            "scrub must not set_var a filler String"
         );
+        assert!(prod.contains("remove_var"));
         assert!(prod.contains("mlock") || prod.contains("VirtualLock"));
         let environ_src = include_str!("secret_zeroize/raw_environ.rs");
         let environ_prod = environ_src
@@ -280,6 +281,11 @@ mod tests {
                 || environ_prod.contains("libc::environ")
                 || environ_prod.contains("GetEnvironmentStringsW"),
             "must read the OS environment block, not std::env"
+        );
+        assert!(
+            !environ_prod.contains("overwrite_value_in_place")
+                && !environ_prod.contains("unix_overwrite"),
+            "must not write through the shared environ C-strings"
         );
         assert!(!environ_prod.contains("env::var_os("));
         assert!(!environ_prod.contains("into_encoded_bytes("));

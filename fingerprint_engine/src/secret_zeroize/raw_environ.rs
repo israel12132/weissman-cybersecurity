@@ -5,6 +5,10 @@
 //! Walking `libc::environ` (Linux/Unix) or `GetEnvironmentStringsW` (Windows) copies
 //! the value **directly** into [`super::LockedBytes`].
 //!
+//! This module is **read-only**. Mutating the shared `environ` C-strings and then
+//! calling `remove_var` desynchronizes libc's allocator-owned map (UB / SIGSEGV).
+//! Scrub is [`std::env::remove_var`] in [`super::scrub_env_var`].
+//!
 //! Callers run this at boot (single-threaded) or in tests that own the process env.
 
 use super::LockedBytes;
@@ -30,19 +34,6 @@ pub(super) fn take_env_value_locked(name: &str) -> Option<LockedBytes> {
     }
 }
 
-/// Overwrite the live environ **value** with same-length ASCII `'0'`, in place.
-/// Linux/Unix mutates `environ` C-strings. Windows snapshots are copies — no-op
-/// besides documenting the walk; [`std::env::remove_var`] still unsets.
-pub(super) fn overwrite_value_in_place(name: &str) {
-    if name.is_empty() || name.as_bytes().contains(&b'=') {
-        return;
-    }
-    #[cfg(unix)]
-    unix_overwrite(name.as_bytes());
-    #[cfg(windows)]
-    windows_overwrite(name);
-}
-
 #[cfg(unix)]
 fn unix_environ() -> *mut *mut std::os::raw::c_char {
     // POSIX process environment vector (`libc::environ` / glibc `environ`).
@@ -52,8 +43,9 @@ fn unix_environ() -> *mut *mut std::os::raw::c_char {
         static mut environ: *mut *mut std::os::raw::c_char;
     }
     // SAFETY: POSIX `environ` is the process environment vector. We only
-    // read (or overwrite value bytes of matching entries) while the caller
-    // guarantees no concurrent `setenv` from another thread — boot + tests.
+    // **read** matching entries while the caller guarantees no concurrent
+    // `setenv` from another thread — boot + tests. We never write the
+    // C-strings or the vector itself.
     unsafe { environ }
 }
 
@@ -67,24 +59,7 @@ fn unix_take(name: &[u8]) -> Option<LockedBytes> {
 }
 
 #[cfg(unix)]
-fn unix_overwrite(name: &[u8]) {
-    let Some(value) = unix_find_value(name) else {
-        return;
-    };
-    // SAFETY: `value` is the writable value tail of an environ C-string. Filling
-    // with `'0'` keeps the same length so adjacent entries stay valid. This is
-    // the in-place scrub *before* `remove_var` unsets the slot.
-    unsafe {
-        let mut p = value;
-        while *p != 0 {
-            *p = b'0' as std::os::raw::c_char;
-            p = p.add(1);
-        }
-    }
-}
-
-#[cfg(unix)]
-fn unix_find_value(name: &[u8]) -> Option<*mut std::os::raw::c_char> {
+fn unix_find_value(name: &[u8]) -> Option<*const std::os::raw::c_char> {
     let mut vec = unix_environ();
     if vec.is_null() {
         return None;
@@ -98,7 +73,7 @@ fn unix_find_value(name: &[u8]) -> Option<*mut std::os::raw::c_char> {
                 return None;
             }
             if let Some(val) = entry_value_ptr(entry, name) {
-                return Some(val);
+                return Some(val as *const std::os::raw::c_char);
             }
             vec = vec.add(1);
         }
@@ -153,21 +128,16 @@ unsafe fn copy_cstr_bytes(ptr: *const std::os::raw::c_char) -> Vec<u8> {
 
 #[cfg(windows)]
 fn windows_take(name: &str) -> Option<LockedBytes> {
-    windows_walk(name, false)
+    windows_walk(name)
 }
 
 #[cfg(windows)]
-fn windows_overwrite(name: &str) {
-    let _ = windows_walk(name, true);
-}
-
-#[cfg(windows)]
-fn windows_walk(name: &str, overwrite: bool) -> Option<LockedBytes> {
+fn windows_walk(name: &str) -> Option<LockedBytes> {
     let wanted: Vec<u16> = name.encode_utf16().collect();
     // SAFETY: `GetEnvironmentStringsW` returns a caller-owned UTF-16 block
     // freed with `FreeEnvironmentStringsW`. Entries are `NAME=value` separated
-    // by NUL, terminated by a double NUL. Overwrite only mutates the snapshot
-    // (Windows does not expose the PEB block here); `remove_var` still unsets.
+    // by NUL, terminated by a double NUL. Read-only: we copy the value then
+    // free the snapshot. `remove_var` unsets the live PEB entry.
     unsafe {
         let start = GetEnvironmentStringsW();
         if start.is_null() {
@@ -184,16 +154,10 @@ fn windows_walk(name: &str, overwrite: bool) -> Option<LockedBytes> {
                 end = end.add(1);
             }
             let len = end.offset_from(p) as usize;
-            let slice = std::slice::from_raw_parts_mut(p, len);
+            let slice = std::slice::from_raw_parts(p, len);
             if let Some(eq) = slice.iter().position(|&c| c == b'=' as u16) {
                 if slice[..eq] == wanted[..] {
-                    if overwrite {
-                        for unit in &mut slice[eq + 1..] {
-                            *unit = b'0' as u16;
-                        }
-                    } else {
-                        found = Some(LockedBytes::from_vec(utf16_to_utf8(&slice[eq + 1..])));
-                    }
+                    found = Some(LockedBytes::from_vec(utf16_to_utf8(&slice[eq + 1..])));
                     break;
                 }
             }
