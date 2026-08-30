@@ -17,7 +17,7 @@ use zeroize::Zeroizing;
 
 const VAULT_PREFIX: &str = "wzv1:";
 
-fn vault_key() -> Option<[u8; 32]> {
+pub(crate) fn vault_key() -> Option<[u8; 32]> {
     static KEY: OnceLock<Option<Zeroizing<[u8; 32]>>> = OnceLock::new();
     KEY.get_or_init(|| {
         if let Some(raw) = crate::secret_zeroize::take_env_bytes_locked("WEISSMAN_VAULT_KEY") {
@@ -557,6 +557,8 @@ pub async fn post_resume_suspended_job(
     trace: Option<&str>,
 ) -> Result<uuid::Uuid, String> {
     let body = json!({ "resume_suspended_id": suspended_id });
+    let body =
+        crate::job_envelope::seal_job_payload(&body, tenant_id).map_err(|e| e.to_string())?;
     weissman_db::job_queue::enqueue(pool, tenant_id, "genesis_eternal_fuzz", body, trace)
         .await
         .map_err(|e| e.to_string())

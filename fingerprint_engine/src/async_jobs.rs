@@ -29,19 +29,12 @@ pub async fn enqueue(
     // claim the still-envelopeless `pending` row in the insert->UPDATE window
     // and kill it ("missing signed envelope"). Non-bus path keeps the plain
     // immediately-`pending` insert.
+    let stored = crate::job_envelope::seal_job_payload_sqlx(payload.clone(), tenant_id)?;
     let id = if bus_enabled {
-        weissman_db::job_queue::enqueue_held(
-            pool,
-            tenant_id,
-            kind,
-            payload.clone(),
-            trace_id.as_deref(),
-            30,
-        )
-        .await?
-    } else {
-        weissman_db::job_queue::enqueue(pool, tenant_id, kind, payload.clone(), trace_id.as_deref())
+        weissman_db::job_queue::enqueue_held(pool, tenant_id, kind, stored, trace_id.as_deref(), 30)
             .await?
+    } else {
+        weissman_db::job_queue::enqueue(pool, tenant_id, kind, stored, trace_id.as_deref()).await?
     };
 
     if bus_enabled {
@@ -52,6 +45,7 @@ pub async fn enqueue(
             Ok(Some(envelope)) => {
                 let mut enriched = payload;
                 attach_signed_envelope(&mut enriched, envelope);
+                let sealed = crate::job_envelope::seal_job_payload_sqlx(enriched, tenant_id)?;
                 // Atomic: attach envelope AND release the hold (run_after=NULL)
                 // so the worker only ever sees this job claimable WITH its
                 // envelope present.
@@ -64,7 +58,7 @@ pub async fn enqueue(
                 // dead-lettered on claim. A failure here must be as loud and as terminal for
                 // this attempt as the sibling Ok(None) / Err arms below.
                 let released =
-                    weissman_db::job_queue::release_hold(pool, tenant_id, id, enriched).await;
+                    weissman_db::job_queue::release_hold(pool, tenant_id, id, sealed).await;
                 let attach_error = match released {
                     Ok(1) => None,
                     // 0 rows: the row is no longer `pending` with a hold — already failed,

@@ -82,27 +82,24 @@ fn touch_liveness_beat() {
     }
 }
 
-fn spawn_analytics_billing_loop(pool: Arc<PgPool>) {
+fn spawn_billing_snapshot_loop(pool: Arc<PgPool>) {
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(Duration::from_secs(3600));
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tick.tick().await;
-            match weissman_db::analytics::quota_usage_snapshot(pool.as_ref()).await {
-                Ok(rows) => {
-                    let tenants: std::collections::HashSet<i64> =
-                        rows.iter().map(|r| r.tenant_id).collect();
+            match weissman_db::analytics::refresh_billing_usage_snapshot(pool.as_ref()).await {
+                Ok(n) => {
                     info!(
                         target: "weissman_worker",
-                        rows = rows.len(),
-                        tenants = tenants.len(),
-                        "analytics billing snapshot (all tenants)"
+                        rows = n,
+                        "billing usage snapshot refreshed"
                     );
                 }
                 Err(e) => warn!(
                     target: "weissman_worker",
                     error = %e,
-                    "analytics billing snapshot failed"
+                    "billing usage snapshot refresh failed"
                 ),
             }
         }
@@ -234,12 +231,33 @@ async fn process_one(
     bus: Arc<JobBus>,
     swarm: Option<Arc<WorkerSwarm>>,
     wid: String,
-    job: AsyncJob,
+    mut job: AsyncJob,
 ) {
     // Job-state writes (fail/complete/dead-letter/forensic) go through the control-plane pool so a
     // running scan holding every `app_pool` slot can never starve them. Engine execution below
     // still uses `app_pool`.
     let pool = ctrl_pool.as_ref();
+    match fingerprint_engine::job_envelope::open_job_payload(&job.payload, job.tenant_id) {
+        Ok(plain) => job.payload = plain,
+        Err(e) => {
+            error!(
+                target: "weissman_worker",
+                job_id = %job.id,
+                tenant_id = job.tenant_id,
+                error = %e,
+                "job envelope decrypt failed — cannot read another tenant's ciphertext"
+            );
+            let err_s = format!("job envelope decrypt failed: {e}");
+            if job.attempt_count >= job.max_attempts {
+                let _ = job_queue::fail_job(pool, &job, &wid, &err_s, BASE_BACKOFF_SECS).await;
+            } else {
+                let backoff =
+                    (BASE_BACKOFF_SECS * (1_i64 << job.attempt_count.min(6).max(0))).min(120);
+                let _ = job_queue::release_reserved_job(pool, job.id, &wid, &err_s, backoff).await;
+            }
+            return;
+        }
+    }
     let bus_on = bus.is_enabled();
     info!(
         target: "weissman_worker",
@@ -677,10 +695,13 @@ async fn async_main() {
     weissman_db::warn_if_pool_budget_exceeds_server(ctrl_pool.as_ref(), "worker", 48 + 12 + 12 + 8)
         .await;
 
+    spawn_billing_snapshot_loop(ctrl_pool.clone());
     match weissman_db::connect_analytics_from_env().await {
-        Ok(Some(p)) => {
-            info!(target: "weissman_worker", "analytics pool connected (cross-tenant billing)");
-            spawn_analytics_billing_loop(Arc::new(p));
+        Ok(Some(_p)) => {
+            info!(
+                target: "weissman_worker",
+                "analytics pool connected (snapshot SELECT only; refresh runs on worker)"
+            );
         }
         Ok(None) => {
             warn!(

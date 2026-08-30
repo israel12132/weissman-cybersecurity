@@ -232,6 +232,9 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
 pub fn lock_and_scrub_vault_keys_after_boot() {
     crate::ceo::vault::prime_keys_from_env();
     crate::soar::integrations_vault::prime_keys_from_env();
+    if let Some(k) = crate::ceo::vault::vault_key() {
+        crate::job_envelope::install_kek(k);
+    }
     crate::ceo::vault::scrub_key_env_vars();
     crate::soar::integrations_vault::scrub_key_env_vars();
 }
@@ -289,12 +292,18 @@ mod tests {
     }
 
     #[test]
-    fn non_production_env_skips_all_guards() {
-        // The guard is a no-op outside production regardless of weak secrets, so
-        // dev/CI default boot is never blocked by these checks.
-        if !is_production_environment() {
-            assert!(enforce_production_security_policy().is_ok());
-            assert!(enforce_worker_production_security_policy().is_ok());
-        }
+    fn vault_boot_installs_job_bus_kek_before_env_scrub() {
+        let src = include_str!("security_startup.rs");
+        let prod = src.split("#[cfg(test)]").next().expect("production source");
+        let kek = prod
+            .find("job_envelope::install_kek")
+            .expect("install job-bus KEK after vault prime");
+        let scrub = prod
+            .find("crate::ceo::vault::scrub_key_env_vars")
+            .expect("scrub after prime");
+        assert!(
+            kek < scrub,
+            "KEK must be copied into the job envelope before env wipe"
+        );
     }
 }

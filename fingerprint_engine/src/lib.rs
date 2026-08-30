@@ -11,6 +11,9 @@
 //! - `hpc_runtime::linux_affinity` — `libc::sched_setaffinity` for NUMA pin.
 //! - `secret_zeroize::memlock` — `mlock` / `munlock` / `madvise(MADV_DONTDUMP)`
 //!   (Linux) and `VirtualLock` / `VirtualUnlock` (Windows) for vault key pages.
+//! - `secret_zeroize::raw_environ` — `libc::environ` (Linux/Unix) and
+//!   `GetEnvironmentStringsW` (Windows) so vault keys never pass through
+//!   `std::env::var_os` heap `OsString`s.
 #![deny(unsafe_code)]
 #![allow(
     clippy::collapsible_if,
@@ -114,6 +117,7 @@ pub mod intel_epss;
 pub mod intel_findings_backfill;
 pub mod intel_http_cache;
 pub mod intel_kev;
+pub mod job_envelope;
 pub mod job_orchestration;
 pub mod leak_hunter_engine;
 pub mod liminal_boundary_engine;
