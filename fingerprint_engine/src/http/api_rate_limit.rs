@@ -22,6 +22,12 @@ fn burst() -> NonZeroU32 {
     NonZeroU32::new(rate_limit_metrics::api_burst()).unwrap_or(NonZeroU32::MIN)
 }
 
+/// Redis fixed-window cap. Must match governor `allow_burst`, not just refill,
+/// or a live E2E from 127.0.0.1 429s at 30 req/s while in-process still has 60 burst.
+fn window_cap() -> u64 {
+    per_sec().get().max(burst().get()) as u64
+}
+
 fn limiter() -> Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>> {
     static LIM: OnceLock<Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>>> =
         OnceLock::new();
@@ -48,7 +54,8 @@ pub async fn api_rate_limit_middleware(
     }
 
     let ip = extract_client_ip(request.headers(), peer);
-    let limit = per_sec().get() as u64;
+    let refill = per_sec().get() as u64;
+    let limit = window_cap();
 
     if super::rate_limit_redis::is_enabled() {
         match super::rate_limit_redis::incr_api_ip_strict(&ip).await {
@@ -70,10 +77,11 @@ pub async fn api_rate_limit_middleware(
                             "ok": false,
                             "code": "rate_limited",
                             "detail": format!(
-                                "API rate limit hit ({limit} per second per IP). Retry in {retry_after_secs}s."
+                                "API rate limit hit ({limit} burst / {refill} per second per IP). Retry in {retry_after_secs}s."
                             ),
                             "retry_after_seconds": retry_after_secs,
-                            "limit_per_second": limit,
+                            "limit_per_second": refill,
+                            "burst": limit,
                             "source": "redis",
                         })),
                     )
@@ -120,6 +128,7 @@ pub async fn api_rate_limit_middleware(
             path = %path,
             retry_after_secs,
             limit,
+            refill,
             "API rate limit exceeded"
         );
         let mut resp = (
@@ -128,10 +137,11 @@ pub async fn api_rate_limit_middleware(
                 "ok": false,
                 "code": "rate_limited",
                 "detail": format!(
-                    "API rate limit hit ({limit} per second per IP). Retry in {retry_after_secs}s."
+                    "API rate limit hit ({limit} burst / {refill} per second per IP). Retry in {retry_after_secs}s."
                 ),
                 "retry_after_seconds": retry_after_secs,
-                "limit_per_second": limit,
+                "limit_per_second": refill,
+                "burst": limit,
             })),
         )
             .into_response();
@@ -143,4 +153,21 @@ pub async fn api_rate_limit_middleware(
 
     rate_limit_metrics::record_api_allowed(&ip);
     next.run(request).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redis_window_cap_is_max_of_refill_and_burst() {
+        let cap = window_cap();
+        let refill = per_sec().get() as u64;
+        let burst = burst().get() as u64;
+        assert_eq!(cap, refill.max(burst));
+        assert!(
+            cap >= burst,
+            "Redis must not 429 inside the governor burst window (cap={cap} burst={burst})"
+        );
+    }
 }

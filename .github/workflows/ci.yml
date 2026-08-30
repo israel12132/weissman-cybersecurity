@@ -143,7 +143,18 @@ jobs:
         run: pip install pip-audit ruff pytest httpx
 
       - name: Run pip-audit (known CVEs in Python deps)
-        run: pip-audit -r requirements.txt --progress-spinner off
+        run: |
+          # PyPI OSV lookups reset connections under load; retry so a peer-RST is not a red gate.
+          n=0
+          until pip-audit -r requirements.txt --progress-spinner off; do
+            n=$((n + 1))
+            if [ "$n" -ge 4 ]; then
+              echo "pip-audit failed after $n attempts" >&2
+              exit 1
+            fi
+            echo "pip-audit attempt $n failed (network); retrying…" >&2
+            sleep $((n * 8))
+          done
 
       - name: Run ruff linter
         run: ruff check src/ --select E,F,W --ignore E501
