@@ -39,6 +39,9 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
   `agent_telemetry_errors`: policies use `public.app_current_tenant_id()`
   instead of `current_setting(...)::bigint`, so an empty worker scope cannot
   raise `invalid input syntax for type bigint: ""`.
+- **CI smoke owner** — `WEISSMAN_MASTER_BOOTSTRAP_EMAIL` (`ci-smoke`) is
+  promoted to `is_superadmin` alongside `WEISSMAN_ADMIN_EMAIL`, so
+  `POST /api/clients` is not 403 `owner_required`.
 
 ### Added
 
