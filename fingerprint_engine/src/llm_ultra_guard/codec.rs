@@ -9,17 +9,18 @@ pub struct Normalized {
 }
 
 /// Strip C0 controls (keep \n \t), zero-width / bidi overrides, and fold lookalikes.
-/// JSON `\uXXXX` is unfolded and the stream is NFC-normalised first so a prompt
-/// of `\u0073ystem prompt` cannot skip the Aho-Corasick needles.
+/// JSON `\uXXXX` is unfolded and the stream is NFKC-normalised first so a prompt
+/// of `\u0073ystem prompt` or fullwidth/math compatibility letters cannot skip
+/// the Aho-Corasick needles (NFC leaves U+FF53 / U+1D42C intact).
 #[must_use]
 pub fn normalize(raw: &str) -> Normalized {
     use unicode_normalization::UnicodeNormalization;
     let unescaped = unescape_json_escapes(raw);
-    let nfc: String = unescaped.nfc().collect();
-    let mut out = String::with_capacity(nfc.len());
+    let nfkc: String = unescaped.nfkc().collect();
+    let mut out = String::with_capacity(nfkc.len());
     let mut homoglyphs = false;
     let mut invisible = false;
-    for ch in nfc.chars() {
+    for ch in nfkc.chars() {
         if is_invisible(ch) {
             invisible = true;
             continue;
@@ -328,10 +329,9 @@ pub fn unescape_json_escapes(s: &str) -> String {
     out
 }
 
-/// NFC + homoglyph fold + JSON-escape unfold. Used by inspect_output so a
-/// truncated/invalid JSON completion cannot skip leak detection, and `\u0073ystem`
-/// cannot hide `system` from the automaton. Shares [`normalize`] so Ask input
-/// and planner output use the same stream.
+/// NFKC + homoglyph fold + JSON-escape unfold. Used by inspect_output so a
+/// truncated/invalid JSON completion cannot skip leak detection, `\u0073ystem`
+/// cannot hide `system`, and compatibility forms (U+FF53, math bold) map to ASCII.
 #[must_use]
 pub fn unfold_output_stream(raw: &str) -> String {
     normalize(raw).folded
@@ -369,5 +369,23 @@ mod tests {
         assert!(u.to_ascii_lowercase().contains("system prompt:"));
         let folded = unfold_output_stream(raw);
         assert!(folded.to_ascii_lowercase().contains("system prompt:"));
+    }
+
+    #[test]
+    fn nfkc_maps_fullwidth_and_math_bold_to_ascii_s() {
+        // FULLWIDTH LATIN SMALL LETTER S — architect NFKC gate (NFC would leave it).
+        let fullwidth = "\u{FF53}ystem prompt:";
+        assert!(
+            unfold_output_stream(fullwidth)
+                .to_ascii_lowercase()
+                .contains("system prompt:")
+        );
+        // MATHEMATICAL BOLD SMALL S (U+1D42C) — not in the homoglyph table; NFKC -> s.
+        let math_bold = "\u{1D42C}ystem prompt:";
+        assert!(
+            unfold_output_stream(math_bold)
+                .to_ascii_lowercase()
+                .contains("system prompt:")
+        );
     }
 }

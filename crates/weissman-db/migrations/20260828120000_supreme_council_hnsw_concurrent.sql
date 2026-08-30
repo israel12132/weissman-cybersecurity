@@ -15,15 +15,20 @@
 --
 -- Contract: build the new index under a NEW name while the old index keeps
 -- serving queries, then DROP the legacy name. Both statements are CONCURRENTLY
--- (brief ACCESS SHARE only).
+-- (brief ShareUpdateExclusiveLock, not AccessExclusiveLock).
 --
--- Idempotency: DROP IF EXISTS of the new name first clears an INVALID leftover
--- from a killed CREATE CONCURRENTLY. CREATE IF NOT EXISTS then rebuilds.
--- DROP of the legacy name is a no-op when it is already gone.
+-- ─── INVALID leftover trap ────────────────────────────────────────────────
+-- If CREATE INDEX CONCURRENTLY is killed (OOM, timeout, crash) Postgres keeps
+-- the catalog row with pg_index.indisvalid = false. CREATE INDEX CONCURRENTLY
+-- IF NOT EXISTS then *skips* that name, this file would DROP the live legacy
+-- index and record success — RAG boots with no usable HNSW (crash-loop / 503).
+-- DROP INDEX CONCURRENTLY IF EXISTS of the new name FIRST removes both VALID
+-- and INVALID leftovers. CREATE has no IF NOT EXISTS so an INVALID name can
+-- never be skipped. pgvector ops class is vector_cosine_ops (not cosine_ops).
 
 DROP INDEX CONCURRENTLY IF EXISTS ix_supreme_council_mem_embedding_hnsw_m32;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_supreme_council_mem_embedding_hnsw_m32
+CREATE INDEX CONCURRENTLY ix_supreme_council_mem_embedding_hnsw_m32
     ON supreme_council_memory
  USING hnsw (embedding_vec vector_cosine_ops)
   WITH (m = 32, ef_construction = 128);

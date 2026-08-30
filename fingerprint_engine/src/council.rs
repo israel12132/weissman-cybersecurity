@@ -974,8 +974,12 @@ pub async fn persist_supreme_council_win(
     let emb_json = serde_json::to_value(&emb_legacy).map_err(|e| e.to_string())?;
     let mut vec_for_store = emb_pg.clone().unwrap_or_else(|| emb_legacy.clone());
     if vec_for_store.len() == crate::embeddings::EMBEDDING_DIM {
-        let _ = crate::llm_ultra_guard::l2_normalize(&mut vec_for_store);
-        let verdict = crate::llm_ultra_guard::verify_embedding(&vec_for_store, None);
+        if !crate::llm_ultra_guard::l2_normalize(&mut vec_for_store) {
+            return Err(
+                "RAG poisoning guard rejected council embedding: zero vector".into(),
+            );
+        }
+        let verdict = crate::llm_ultra_guard::verify_and_unitize(&mut vec_for_store, None);
         if !verdict.ok {
             return Err(format!(
                 "RAG poisoning guard rejected council embedding: {}",

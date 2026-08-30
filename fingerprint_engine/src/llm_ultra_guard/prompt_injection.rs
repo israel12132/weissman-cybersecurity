@@ -20,12 +20,8 @@ static INJECTION_AC: LazyLock<AhoCorasick> = LazyLock::new(|| {
 /// from starving Tokio I/O workers (WebSocket pings, health checks) when an
 /// attacker floods nested Aho-Corasick haystacks.
 static GUARD_RAYON: LazyLock<rayon::ThreadPool> = LazyLock::new(|| {
-    let n = std::thread::available_parallelism()
-        .map(|p| p.get())
-        .unwrap_or(2);
-    let threads = n.saturating_div(2).max(1);
     rayon::ThreadPoolBuilder::new()
-        .num_threads(threads)
+        .num_threads(crate::llm_ultra_guard::tuning::guard_cpu_slots())
         .thread_name(|i| format!("llm-ug-{i}"))
         .build()
         .expect("llm ultra-guard rayon pool")

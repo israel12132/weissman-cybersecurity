@@ -123,6 +123,17 @@ pub fn unit_norm_ok(n: f32) -> bool {
     n.is_finite() && (1.0 - n).abs() < NORM_UNIT_EPSILON
 }
 
+/// Concurrent inspect slots: half of cgroup-visible cores (min 1).
+/// Shared by the Rayon guard pool and the Tokio spawn_blocking semaphore.
+#[must_use]
+pub fn guard_cpu_slots() -> usize {
+    std::thread::available_parallelism()
+        .map(|p| p.get())
+        .unwrap_or(2)
+        .saturating_div(2)
+        .max(1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,5 +211,6 @@ pub fn as_json() -> serde_json::Value {
             "norm_lo": NORM_LO,
             "norm_hi": NORM_HI,
         },
+        "inspect_permits": guard_cpu_slots(),
     })
 }

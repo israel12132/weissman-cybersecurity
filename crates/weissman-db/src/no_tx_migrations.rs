@@ -636,9 +636,23 @@ mod tests {
             concurrent.starts_with("-- weissman:no-transaction"),
             "HNSW rebuild must opt out of SQLx BEGIN/COMMIT"
         );
+        let drop_new = concurrent
+            .find("DROP INDEX CONCURRENTLY IF EXISTS ix_supreme_council_mem_embedding_hnsw_m32")
+            .expect("DROP of m32 name first (clears INVALID leftovers)");
+        let create_new = concurrent
+            .find("CREATE INDEX CONCURRENTLY ix_supreme_council_mem_embedding_hnsw_m32")
+            .expect("CREATE of m32 name without IF NOT EXISTS");
         assert!(
-            concurrent.contains("CREATE INDEX CONCURRENTLY"),
-            "new HNSW must be built online"
+            drop_new < create_new,
+            "INVALID leftover must be dropped before CREATE; IF NOT EXISTS would skip an indisvalid index"
+        );
+        assert!(
+            !concurrent.contains("CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_supreme_council_mem_embedding_hnsw_m32"),
+            "IF NOT EXISTS skips INVALID leftovers and then DROP of the live legacy index bricks RAG"
+        );
+        assert!(
+            concurrent.contains("vector_cosine_ops"),
+            "pgvector cosine opclass is vector_cosine_ops"
         );
         assert!(
             concurrent.contains("DROP INDEX CONCURRENTLY IF EXISTS ix_supreme_council_mem_embedding_hnsw;"),

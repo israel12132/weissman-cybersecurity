@@ -81,6 +81,35 @@ pub fn verify_embedding(vec: &[f32], centroid: Option<&[f32]>) -> EmbeddingVerdi
     }
 }
 
+/// Epsilon-gate then f64 re-unitize in place. SHA-256 and `l2_norm` are taken
+/// from the unitized bytes that will be written to Postgres, so HNSW cosine
+/// does not drift from near-unit leftovers (0.99999).
+#[must_use]
+pub fn verify_and_unitize(vec: &mut [f32], centroid: Option<&[f32]>) -> EmbeddingVerdict {
+    let gate = verify_embedding(vec, centroid);
+    if !gate.ok {
+        return gate;
+    }
+    if !unitize_f64(vec) {
+        return EmbeddingVerdict {
+            ok: false,
+            l2_norm: 0.0,
+            sha256: String::new(),
+            outlier: true,
+            reason: "f64 re-unitize failed after epsilon gate".into(),
+            flags: crate::llm_ultra_guard::flags::RAG_OUTLIER,
+        };
+    }
+    EmbeddingVerdict {
+        ok: true,
+        l2_norm: l2_norm(vec),
+        sha256: sha256_vec(vec),
+        outlier: false,
+        reason: "ok".into(),
+        flags: 0,
+    }
+}
+
 #[must_use]
 pub fn l2_norm(v: &[f32]) -> f32 {
     v.iter().map(|x| x * x).sum::<f32>().sqrt()
@@ -121,25 +150,36 @@ pub fn too_similar_to_known_false_positive(candidate: &[f32], known_fp: &[Vec<f3
         .any(|k| cosine(candidate, k) >= COSINE_DUP_THRESHOLD)
 }
 
-/// L2-normalise in place (up to two passes so residual error stays inside ε).
+/// L2-normalise in place using f64 accumulators (two passes) so the vector
+/// written to pgvector is unit-length for HNSW cosine, not a 1e-5 residual.
 /// Returns false if the vector is zero.
 pub fn l2_normalize(v: &mut [f32]) -> bool {
-    if !scale_to_unit(v) {
+    unitize_f64(v)
+}
+
+/// Divide by the f64 L2 norm (second pass eats f32 rounding).
+fn unitize_f64(v: &mut [f32]) -> bool {
+    if !scale_to_unit_f64(v) {
         return false;
     }
     if !unit_norm_ok(l2_norm(v)) {
-        let _ = scale_to_unit(v);
+        let _ = scale_to_unit_f64(v);
     }
     true
 }
 
-fn scale_to_unit(v: &mut [f32]) -> bool {
-    let n = l2_norm(v);
-    if n < 1e-12 {
+fn scale_to_unit_f64(v: &mut [f32]) -> bool {
+    let mut acc = 0.0f64;
+    for x in v.iter() {
+        let d = f64::from(*x);
+        acc += d * d;
+    }
+    let n = acc.sqrt();
+    if n < 1e-18 {
         return false;
     }
     for x in v.iter_mut() {
-        *x /= n;
+        *x = (f64::from(*x) / n) as f32;
     }
     true
 }
@@ -201,6 +241,23 @@ mod tests {
         let r = verify_embedding(&raw, None);
         assert!(r.ok, "post-normalize must sit inside ε: n={} {}", r.l2_norm, r.reason);
         assert!(unit_norm_ok(r.l2_norm));
+    }
+
+    #[test]
+    fn verify_and_unitize_snaps_epsilon_jitter_to_unit_in_f64() {
+        let mut v = vec![0.0f32; VECTOR_DIM];
+        v[0] = 1.0 - NORM_UNIT_EPSILON * 0.5;
+        let before = l2_norm(&v);
+        assert!(unit_norm_ok(before), "precondition: inside ε");
+        let r = verify_and_unitize(&mut v, None);
+        assert!(r.ok, "{}", r.reason);
+        let after = l2_norm(&v);
+        assert!(
+            (after - 1.0).abs() <= (before - 1.0).abs(),
+            "f64 snap must not worsen residual: before={before} after={after}"
+        );
+        assert!((after - 1.0).abs() < 1e-6, "stored residual after={after}");
+        assert_eq!(r.sha256, sha256_vec(&v));
     }
 
     #[test]
