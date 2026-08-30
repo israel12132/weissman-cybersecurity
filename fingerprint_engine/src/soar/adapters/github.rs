@@ -92,6 +92,9 @@ impl OpenPullRequestAdapter for GithubPrAdapter {
         let _ = tx.commit().await;
 
         let queue_payload = json!({ "spec_id": spec_id.to_string(), "soar": true });
+        let queue_payload =
+            crate::job_envelope::seal_job_payload_sqlx(queue_payload, ctx.cmd.tenant_id)
+                .map_err(|e| AdapterError::Provider(format!("job envelope: {e}")))?;
         if let Err(e) = crate::db::job_queue::enqueue_with_max_attempts(
             ctx.pool,
             ctx.cmd.tenant_id,

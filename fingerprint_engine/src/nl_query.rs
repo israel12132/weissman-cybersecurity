@@ -183,8 +183,15 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
         "risk_graph_edges",
         TableSpec {
             table: "risk_graph_edges",
-            columns: &["id", "client_id", "from_node_id", "to_node_id", "edge_type"],
-            order_by: &["id", "edge_type"],
+            columns: &[
+                "id",
+                "client_id",
+                "from_node_id",
+                "to_node_id",
+                "edge_type",
+                "created_at",
+            ],
+            order_by: &["created_at", "id", "edge_type"],
             joins: &[],
             has_tenant: true,
         },
@@ -216,9 +223,12 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
                 "id",
                 "client_id",
                 "hostname",
+                "device_name",
                 "os",
+                "arch",
                 "agent_version",
                 "status",
+                "enrolled_at",
                 "last_seen_at",
             ],
             order_by: &["last_seen_at", "id"],
@@ -227,11 +237,11 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
         },
     );
     m.insert(
-        "weissman_async_jobs",
+        "report_runs",
         TableSpec {
-            table: "weissman_async_jobs",
-            columns: &["id", "kind", "status", "created_at", "updated_at"],
-            order_by: &["created_at", "updated_at"],
+            table: "report_runs",
+            columns: &["id", "region", "created_at", "summary"],
+            order_by: &["created_at", "id"],
             joins: &[],
             has_tenant: true,
         },
@@ -605,11 +615,15 @@ pub async fn execute_plan(
     // connection every statement autocommits, which would discard the GUC before the query and
     // collapse RLS to the database default tenant (0) — returning zero rows for every real tenant.
     let mut tx = ro_pool.begin().await.map_err(|e| format!("begin: {e}"))?;
-    sqlx::query("SELECT set_config('app.current_tenant_id', $1::text, true)")
-        .bind(tenant_id.to_string())
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| format!("set tenant guc: {e}"))?;
+    sqlx::query(
+        "SELECT set_config('app.current_tenant_id', $1::text, true), \
+                set_config('statement_timeout', '15s', true), \
+                set_config('idle_in_transaction_session_timeout', '30s', true)",
+    )
+    .bind(tenant_id.to_string())
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| format!("set tenant guc: {e}"))?;
 
     let wrapped = wrap_nl_sql(&compiled.sql);
     let mut q = sqlx::query(&wrapped);
@@ -938,7 +952,7 @@ You MUST output a single JSON object — nothing else (no ```json fences, no pro
 
 Schema:
 {
-  "table":     "<one of vulnerabilities|weissman_finding_clusters|clients|risk_graph_nodes|agent_anomalies|attack_path_snapshots|risk_graph_edges|client_financial_risk_snapshots|endpoint_agents|weissman_async_jobs|epss_intel|kev_intel|audit_logs>",
+  "table":     "<one of vulnerabilities|weissman_finding_clusters|clients|risk_graph_nodes|agent_anomalies|attack_path_snapshots|risk_graph_edges|client_financial_risk_snapshots|endpoint_agents|report_runs|epss_intel|kev_intel|audit_logs>",
   "select":    ["col1","col2", ...]           // optional; default = all columns
   "filters":   [
      {"column":"severity","op":"in","value":["critical","high"]},
@@ -963,10 +977,10 @@ Schema:
 - risk_graph_nodes(id, client_id, node_type, label, graph_key, risk_score, is_choke_point, internet_exposed, crown_jewel, asset_value, business_value_usd)
 - agent_anomalies(id, agent_id, client_id, metric_name, observed, baseline_mean, baseline_stddev, z_score, severity, detail, detected_at)
 - attack_path_snapshots(id, client_id, computed_at, entry_count, jewel_count, path_count, max_risk)
-- risk_graph_edges(id, client_id, from_node_id, to_node_id, edge_type)
+- risk_graph_edges(id, client_id, from_node_id, to_node_id, edge_type, created_at)
 - client_financial_risk_snapshots(id, client_id, computed_at, total_asset_value_usd, sle_worst_usd, ale_annualised_usd, crown_jewel_value_usd, currency_code)
-- endpoint_agents(id, client_id, hostname, os, agent_version, status, last_seen_at)
-- weissman_async_jobs(id, kind, status, created_at, updated_at)
+- endpoint_agents(id, client_id, hostname, device_name, os, arch, agent_version, status, enrolled_at, last_seen_at)
+- report_runs(id, region, created_at, summary)
 - epss_intel(cve, score, percentile, epss_date, refreshed_at)
 - kev_intel(cve, vendor_project, product, date_added, known_ransomware_use, due_date)
 - audit_logs(id, created_at, user_label, action_type, details, ip_address)
@@ -1157,6 +1171,55 @@ mod tests {
         };
         let c = compile_plan(&plan, 1).unwrap();
         assert!(c.sql.ends_with(&format!("LIMIT {}", MAX_LIMIT)));
+    }
+
+    #[test]
+    fn rejects_job_queue_and_users_tables() {
+        for table in ["weissman_async_jobs", "users", "pg_roles"] {
+            let plan = QueryPlan {
+                table: table.into(),
+                select: vec![],
+                filters: vec![],
+                order_by: None,
+                order_desc: false,
+                limit: None,
+                aggregate: None,
+                aggregate_column: None,
+                group_by: None,
+            };
+            assert!(
+                compile_plan(&plan, 1).is_err(),
+                "{table} must not be exposable to Ask Weissman"
+            );
+        }
+    }
+
+    #[test]
+    fn compiler_tables_are_on_the_ro_grant_list() {
+        for table in SCHEMA.keys() {
+            assert!(
+                weissman_db::role_guard::RO_SELECT_TABLES.contains(table),
+                "{table} is in the NL compiler but not granted to weissman_ro"
+            );
+        }
+    }
+
+    #[test]
+    fn compiles_endpoint_agents_with_forced_tenant() {
+        let plan = QueryPlan {
+            table: "endpoint_agents".into(),
+            select: vec!["hostname".into(), "status".into()],
+            filters: vec![],
+            order_by: Some("last_seen_at".into()),
+            order_desc: true,
+            limit: Some(10),
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
+        };
+        let c = compile_plan(&plan, 42).unwrap();
+        assert_eq!(c.params[0], Value::from(42));
+        assert!(c.sql.contains("FROM endpoint_agents WHERE tenant_id = $1"));
     }
 
     #[test]

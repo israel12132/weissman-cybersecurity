@@ -148,9 +148,9 @@ async function main() {
     // window instead of stalling on unreachable third-party infrastructure.
     if (entry.params && typeof entry.params === 'object') Object.assign(body, entry.params)
 
-    // Access token TTL in CI is 120 minutes. Re-login before every engine burns the
-    // Redis login bucket (default 8/min from 127.0.0.1) after Playwright/pytest.
-    // Refresh only when the previous call was unauthorized.
+    // One login for the sweep. Re-login-per-engine burns the per-IP login quota
+    // (8/min) after Playwright already used 127.0.0.1; CI JWT is 120 minutes.
+    // Refresh only when a later call is unauthorized.
     if (entry !== ACTIVE_PLAN[0]) {
       const probe = await api('GET', '/api/clients', { token })
       if (probe.status === 401) {

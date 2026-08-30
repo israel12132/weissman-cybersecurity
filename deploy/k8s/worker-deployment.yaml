@@ -54,6 +54,16 @@ spec:
                 secretKeyRef:
                   name: weissman-secrets
                   key: auth_database_url
+            - name: WEISSMAN_WORKER_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: worker_database_url
+            - name: WEISSMAN_ANALYTICS_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: analytics_database_url
             - name: WEISSMAN_JWT_SECRET
               valueFrom:
                 secretKeyRef:

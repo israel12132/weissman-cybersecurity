@@ -134,6 +134,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 lettre = { version = "0.11.22", default-features = false, features = ["tokio1-rustls-tls", "builder", "smtp-transport"] }
 aes-gcm = "0.10"
 hex = "0.4"
+zeroize = "1"
 syn = { version = "2.0", features = ["full", "visit"] }
 subtle = "2.6"
 metrics = "0.24"
@@ -174,7 +175,9 @@ hwlocality = { version = "1.0.0-alpha.12", optional = true }
 libc = "0.2"
 
 [lints.rust]
-# hpc_runtime::linux_affinity uses libc sched_setaffinity (documented SAFETY in module).
+# Documented unsafe exceptions: hpc_runtime::linux_affinity (sched_setaffinity),
+# secret_zeroize::memlock (mlock / madvise / VirtualLock), and
+# secret_zeroize::raw_environ (libc::environ / GetEnvironmentStringsW).
 # All other modules must remain free of unsafe code.
 unsafe_code = "deny"
 

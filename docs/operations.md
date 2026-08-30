@@ -49,6 +49,8 @@ rest (AES-256-GCM). **Production fails closed at startup if no key material is s
 
 > **Rotation:** set the new key, move the old value into `*_PREVIOUS`, restart. Old
 > ciphertext still decrypts via the previous key; MFA seeds re-encrypt opportunistically.
+> Boot loads keys into `zeroize::Zeroizing` heap containers, then overwrites and
+> unsets the env vars (`/proc/self/environ` plus leftover `String` copies).
 
 ### LLM / embeddings (used by Council RAG, NL-Query, Predictive)
 
@@ -72,11 +74,14 @@ rest (AES-256-GCM). **Production fails closed at startup if no key material is s
 
 ### Pool tuning
 
-| Var | Default |
-|-----|---------|
-| `WEISSMAN_APP_POOL_MAX` | 48 |
-| `WEISSMAN_APP_POOL_MIN` | 2 |
-| `WEISSMAN_SOVEREIGN_MPSC_CAPACITY` | unset → unbounded |
+| Var | Default | Effect |
+|-----|---------|--------|
+| `WEISSMAN_APP_POOL_MAX` | 48 | App SQLx pool size |
+| `WEISSMAN_APP_POOL_MIN` | 2 | App SQLx pool floor |
+| `WEISSMAN_SOVEREIGN_MPSC_CAPACITY` | unset → unbounded | In-process job channel bound |
+| `WEISSMAN_HNSW_MAINTENANCE_WORK_MEM` | `256MB` | Session `maintenance_work_mem` for HNSW `CREATE INDEX CONCURRENTLY` (allowlist: 64MB, 128MB, 256MB, 512MB, 1GB). `SET LOCAL` cannot wrap CONCURRENTLY. |
+| `WEISSMAN_LOGIN_PER_MINUTE` | 8 | Pre-auth login / MFA / refresh POSTs per IP |
+| `WEISSMAN_LOGIN_BURST` | 12 | Burst for the login governor |
 
 ### TLS policy
 
@@ -123,8 +128,10 @@ The pre-runner in `crates/weissman-db/src/no_tx_migrations.rs`:
 1. Detects the header.
 2. Computes the file's SHA-384 (SQLx-compatible).
 3. Looks up `_sqlx_migrations` by version.
-4. If absent: executes every statement on a fresh connection **outside** any
-   transaction, then INSERTs a row in `_sqlx_migrations` with the SHA-384.
+4. If absent: executes every statement on a **pinned** connection **outside** any
+   transaction (HNSW builds also `SET maintenance_work_mem` on that session and
+   `DROP INDEX CONCURRENTLY` any INVALID leftovers), then INSERTs a row in
+   `_sqlx_migrations` with the SHA-384.
 5. If present with matching checksum: skip.
 6. If present with mismatching checksum: **refuse to boot** with
    `NoTxMigrateError::ChecksumMismatch` — operator must restore the file or

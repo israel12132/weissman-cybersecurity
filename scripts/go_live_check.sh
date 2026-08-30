@@ -103,7 +103,8 @@ section "Production secrets contract"
 # the manual `cp PRODUCTION.env.template .env` path has a line to fill. (Empty is correct
 # in the template — the launcher generates the values.)
 for var in WEISSMAN_JWT_SECRET WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET WEISSMAN_JOB_ORCHESTRATOR_SECRET \
-           WEISSMAN_METRICS_TOKEN WEISSMAN_RAG_PROVENANCE_SECRET REDIS_PASSWORD POSTGRES_PASSWORD DB_APP_PASSWORD DB_AUTH_PASSWORD; do
+           WEISSMAN_METRICS_TOKEN WEISSMAN_RAG_PROVENANCE_SECRET REDIS_PASSWORD POSTGRES_PASSWORD DB_APP_PASSWORD DB_AUTH_PASSWORD \
+           DB_WORKER_PASSWORD DB_ANALYTICS_PASSWORD; do
   if grep -q "^${var}=" PRODUCTION.env.template; then
     ok "PRODUCTION.env.template lists $var"
   else

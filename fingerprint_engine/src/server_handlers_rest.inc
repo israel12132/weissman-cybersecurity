@@ -848,8 +848,12 @@ async fn api_clients_create(
     if name.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"ok": false, "detail": "name required"}))).into_response();
     }
-    if let Err(detail) =
-        crate::billing::enforce_client_create(state.auth_pool.as_ref(), auth.tenant_id).await
+    if let Err(detail) = crate::billing::enforce_client_create(
+        state.auth_pool.as_ref(),
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+    )
+    .await
     {
         return (
             StatusCode::PAYMENT_REQUIRED,

@@ -71,6 +71,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
     fingerprint_engine::auth_jwt::init_jwt_secret_from_env()
         .map_err(|msg| std::io::Error::new(std::io::ErrorKind::InvalidInput, msg))?;
+    fingerprint_engine::security_startup::lock_and_scrub_vault_keys_after_boot();
     let database_url = std::env::var("DATABASE_URL").unwrap_or_default();
     if database_url.trim().is_empty() {
         return Err("DATABASE_URL is not set (check EnvironmentFile= and weissman_db::env_bootstrap::load_process_environment)".into());
@@ -116,9 +117,24 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             pools.app.clone()
         }
     };
-    let state =
-        fingerprint_engine::http::new_app_state(pools.app.clone(), pools.auth.clone(), intel_pool);
-    fingerprint_engine::http::spawn_http_background_tasks(&state);
+    let read_only_pool = match weissman_db::connect_readonly_from_env().await {
+        Ok(p) => p.map(std::sync::Arc::new),
+        Err(e) => {
+            tracing::warn!(
+                target: "nl_query",
+                error = %e,
+                "read-only pool init failed"
+            );
+            None
+        }
+    };
+    let state = fingerprint_engine::http::new_app_state(
+        pools.app.clone(),
+        pools.auth.clone(),
+        intel_pool,
+        read_only_pool,
+    );
+    fingerprint_engine::http::spawn_http_background_tasks(&state, pools.job_control.clone());
     let static_dir = resolve_static_dir();
     let router = api::routes::build_full_router(state, static_dir).await;
     let router = middleware::cors::apply(router);

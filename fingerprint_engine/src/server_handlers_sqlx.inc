@@ -1935,11 +1935,12 @@ async fn collect_engine_history_json(
     .map_err(|e| format!("direct jobs query: {}", e))?;
 
     for r in direct_rows {
-        let payload = r
+        let stored = r
             .try_get::<Option<serde_json::Value>, _>("payload")
             .ok()
             .flatten()
             .unwrap_or_else(|| json!({}));
+        let payload = crate::job_envelope::reveal_job_payload_for_tenant(&stored, tenant_id);
         let result_json = r
             .try_get::<Option<serde_json::Value>, _>("result_json")
             .ok()
@@ -2216,13 +2217,19 @@ async fn api_engine_export(
 
     if let Some(job_id_str) = q.job_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         if let Ok(job_uuid) = uuid::Uuid::parse_str(job_id_str) {
-            if let Ok(Some(status)) = db::job_queue::get_job_for_tenant(
+            if let Ok(Some(mut status)) = db::job_queue::get_job_for_tenant(
                 state.app_pool.as_ref(),
                 auth.tenant_id,
                 job_uuid,
             )
             .await
             {
+                status.payload = crate::scan_payload_redaction::redact_for_api(
+                    &crate::job_envelope::reveal_job_payload_for_tenant(
+                        &status.payload,
+                        auth.tenant_id,
+                    ),
+                );
                 if let Some(obj) = out.as_object_mut() {
                     obj.insert("selected_job".into(), json!(status));
                 }
@@ -2288,13 +2295,19 @@ async fn api_top_tier_engine_export(
 
     if let Some(job_id_str) = q.job_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         if let Ok(job_uuid) = uuid::Uuid::parse_str(job_id_str) {
-            if let Ok(Some(status)) = db::job_queue::get_job_for_tenant(
+            if let Ok(Some(mut status)) = db::job_queue::get_job_for_tenant(
                 state.app_pool.as_ref(),
                 auth.tenant_id,
                 job_uuid,
             )
             .await
             {
+                status.payload = crate::scan_payload_redaction::redact_for_api(
+                    &crate::job_envelope::reveal_job_payload_for_tenant(
+                        &status.payload,
+                        auth.tenant_id,
+                    ),
+                );
                 if let Some(obj) = out.as_object_mut() {
                     obj.insert("selected_job".into(), json!(status));
                 }

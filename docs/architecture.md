@@ -63,13 +63,13 @@
                 ┌──────────────────────────────────────────────────────┐
                 │  PostgreSQL 16 + pgvector (`pgvector/pgvector:pg16`) │
                 │  ─────────────────────────────────────────────────── │
-                │  • 100 migrations (sqlx + no-tx pre-runner)          │
+                │  • 115 migrations (sqlx + no-tx pre-runner)          │
                 │  • RLS forced on every multi-tenant table            │
                 │  • 3 roles:                                          │
                 │      weissman_app   — app, subject to RLS            │
                 │      weissman_auth  — login plane (bypass for users) │
-                │      weissman_ro    — /api/ask only, SELECT-only     │
-                │  • Extensions: vector (HNSW cosine)                  │
+                │      weissman_ro    — /api/ask SELECT, 15s, 13 tbls  │
+                │  • Extensions: vector (HNSW cosine m=16/ef=64)       │
                 └──────────────────────────────────────────────────────┘
 
 In-process background loops (`weissman-server`):
@@ -122,8 +122,8 @@ In-process background loops (`weissman-server`):
 1. UI sends `{ question }` to `POST /api/ask`.
 2. Backend calls the LLM (`OPENAI_BASE_URL` + `OPENAI_API_KEY` env vars) with a
    system prompt that *forbids* raw SQL — it must emit a strict JSON `QueryPlan`.
-3. `nl_query::compile_plan` validates the plan against an allow-list of 6
-   tables × ~50 columns × 10 operators. Tenant scope (`tenant_id = $1`) is
+3. `nl_query::compile_plan` validates the plan against an allow-list of 11
+   tenant-scoped tables × ~50 columns × 10 operators. Tenant scope (`tenant_id = $1`) is
    **always** the first WHERE clause, regardless of plan content. `LIMIT` is
    capped at 200.
 4. The compiled parameterised SQL is executed on a connection from
@@ -184,8 +184,8 @@ In-process background loops (`weissman-server`):
 | Jobs | `weissman_async_jobs` (partial idx `ix_async_jobs_pending`) |
 | Agent | `endpoint_agents`, `endpoint_agent_enrollment_tokens`, `endpoint_agent_tasks`, `agent_metric_samples`, `agent_metric_baselines`, `agent_anomalies` |
 | SOAR | `weissman_playbooks`, `weissman_playbook_runs` |
-| Council RAG | `supreme_council_memory` (embedding_vec vector(1536) + HNSW), `supreme_council_rag_hits` |
-| Pentest RL | `pentest_winning_paths` (embedding vector(1536) + HNSW) |
+| Council RAG | `supreme_council_memory` (embedding_vec vector(1536) + HNSW `m=16,ef_construction=64`), `supreme_council_rag_hits` |
+| Pentest RL | `pentest_winning_paths` (embedding vector(1536) + HNSW `m=16,ef_construction=64`) |
 | NL→SQL | `nl_query_audit`, role `weissman_ro` |
 | Signup | `pending_signups` |
 | Heal | `heal_requests`, `auto_heal_job_specs` |

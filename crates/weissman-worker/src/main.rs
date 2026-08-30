@@ -90,6 +90,30 @@ fn touch_liveness_beat_at(path: &std::path::Path) {
     }
 }
 
+fn spawn_billing_snapshot_loop(pool: Arc<PgPool>) {
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(3600));
+        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tick.tick().await;
+            match weissman_db::analytics::refresh_billing_usage_snapshot(pool.as_ref()).await {
+                Ok(n) => {
+                    info!(
+                        target: "weissman_worker",
+                        rows = n,
+                        "billing usage snapshot refreshed"
+                    );
+                }
+                Err(e) => warn!(
+                    target: "weissman_worker",
+                    error = %e,
+                    "billing usage snapshot refresh failed"
+                ),
+            }
+        }
+    });
+}
+
 fn worker_id() -> String {
     let host = hostname::get()
         .ok()
@@ -218,12 +242,33 @@ async fn process_one(
     bus: Arc<JobBus>,
     swarm: Option<Arc<WorkerSwarm>>,
     wid: String,
-    job: AsyncJob,
+    mut job: AsyncJob,
 ) {
     // Job-state writes (fail/complete/dead-letter/forensic) go through the control-plane pool so a
     // running scan holding every `app_pool` slot can never starve them. Engine execution below
     // still uses `app_pool`.
     let pool = ctrl_pool.as_ref();
+    match fingerprint_engine::job_envelope::open_job_payload(&job.payload, job.tenant_id) {
+        Ok(plain) => job.payload = plain,
+        Err(e) => {
+            error!(
+                target: "weissman_worker",
+                job_id = %job.id,
+                tenant_id = job.tenant_id,
+                error = %e,
+                "job envelope decrypt failed — cannot read another tenant's ciphertext"
+            );
+            let err_s = format!("job envelope decrypt failed: {e}");
+            if job.attempt_count >= job.max_attempts {
+                let _ = job_queue::fail_job(pool, &job, &wid, &err_s, BASE_BACKOFF_SECS).await;
+            } else {
+                let backoff =
+                    (BASE_BACKOFF_SECS * (1_i64 << job.attempt_count.min(6).max(0))).min(120);
+                let _ = job_queue::release_reserved_job(pool, job.id, &wid, &err_s, backoff).await;
+            }
+            return;
+        }
+    }
     let bus_on = bus.is_enabled();
     info!(
         target: "weissman_worker",
@@ -591,6 +636,7 @@ async fn async_main() {
         eprintln!("[startup] worker RAG provenance HMAC refusal: {msg}");
         std::process::exit(2);
     }
+    fingerprint_engine::security_startup::lock_and_scrub_vault_keys_after_boot();
     if let Err(msg) = fingerprint_engine::http::rate_limit_redis::verify_redis_at_startup().await {
         eprintln!("[startup] worker Redis distributed state refusal: {msg}");
         std::process::exit(2);
@@ -654,7 +700,7 @@ async fn async_main() {
     // a connection-hungry scan checks out every app slot and the worker's own "mark this job
     // completed" write times out ("database: pool timed out"), so finished jobs never reach a
     // terminal state and pollers see them hang. A tiny separate pool keeps the control plane alive.
-    let ctrl_pool = match weissman_db::connect_control(database_url.trim()).await {
+    let ctrl_pool = match weissman_db::connect_control_from_env().await {
         Ok(p) => Arc::new(p),
         Err(e) => {
             eprintln!(
@@ -669,6 +715,26 @@ async fn async_main() {
     // against a server max_connections of 100 — see warn_if_pool_budget_exceeds_server.
     weissman_db::warn_if_pool_budget_exceeds_server(ctrl_pool.as_ref(), "worker", 48 + 12 + 12 + 8)
         .await;
+
+    spawn_billing_snapshot_loop(ctrl_pool.clone());
+    match weissman_db::connect_analytics_from_env().await {
+        Ok(Some(_p)) => {
+            info!(
+                target: "weissman_worker",
+                "analytics pool connected (snapshot SELECT only; refresh runs on worker)"
+            );
+        }
+        Ok(None) => {
+            warn!(
+                target: "weissman_worker",
+                "WEISSMAN_ANALYTICS_DATABASE_URL unset — skipping global billing aggregation"
+            );
+        }
+        Err(e) => {
+            eprintln!("weissman-worker: analytics database connect failed: {e}");
+            std::process::exit(1);
+        }
+    }
 
     let light_n = worker_concurrency_cap("WEISSMAN_WORKER_LIGHT_CONCURRENCY", 8);
     let heavy_n = worker_concurrency_cap("WEISSMAN_WORKER_HEAVY_CONCURRENCY", 2);

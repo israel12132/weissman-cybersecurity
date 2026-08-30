@@ -14,6 +14,8 @@ const WEAK_DB_PASSWORD_FRAGMENTS: &[&str] = &[
     "weissman_dev_secret",
     "weissman_auth_dev",
     "weissman_ro_dev",
+    "weissman_worker_dev",
+    "weissman_analytics_dev",
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -107,6 +109,8 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
         "DATABASE_URL",
         "WEISSMAN_AUTH_DATABASE_URL",
         "WEISSMAN_READ_ONLY_DATABASE_URL",
+        "WEISSMAN_WORKER_DATABASE_URL",
+        "WEISSMAN_ANALYTICS_DATABASE_URL",
     ] {
         if let Ok(url) = std::env::var(var) {
             let u = url.to_ascii_lowercase();
@@ -116,6 +120,11 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
                 ));
             }
         }
+    }
+
+    weissman_db::role_guard::enforce_production_dsn_roles()?;
+    if matches!(scope, StartupScope::Worker) {
+        weissman_db::role_guard::enforce_production_analytics_dsn()?;
     }
 
     if matches!(scope, StartupScope::Server) {
@@ -291,6 +300,19 @@ pub fn enforce_rag_provenance_policy() -> Result<(), String> {
     }
 }
 
+/// Load AES-256-GCM vault keys into process memory, then wipe the env copies so a
+/// later memory dump / `/proc/self/environ` leak cannot recover
+/// `WEISSMAN_VAULT_KEY` / `WEISSMAN_INTEGRATIONS_VAULT_KEY`.
+pub fn lock_and_scrub_vault_keys_after_boot() {
+    crate::ceo::vault::prime_keys_from_env();
+    crate::soar::integrations_vault::prime_keys_from_env();
+    if let Some(k) = crate::ceo::vault::vault_key() {
+        crate::job_envelope::install_kek(k);
+    }
+    crate::ceo::vault::scrub_key_env_vars();
+    crate::soar::integrations_vault::scrub_key_env_vars();
+}
+
 /// True when production expects Redis-backed distributed lockout, rate limits, and agent registry.
 #[must_use]
 pub fn production_distributed_state_required() -> bool {
@@ -371,5 +393,21 @@ mod tests {
             assert!(!rag_hmac_must_be_strict());
             assert!(enforce_rag_provenance_policy().is_ok());
         }
+    }
+
+    #[test]
+    fn vault_boot_installs_job_bus_kek_before_env_scrub() {
+        let src = include_str!("security_startup.rs");
+        let prod = src.split("#[cfg(test)]").next().expect("production source");
+        let kek = prod
+            .find("job_envelope::install_kek")
+            .expect("install job-bus KEK after vault prime");
+        let scrub = prod
+            .find("crate::ceo::vault::scrub_key_env_vars")
+            .expect("scrub after prime");
+        assert!(
+            kek < scrub,
+            "KEK must be copied into the job envelope before env wipe"
+        );
     }
 }

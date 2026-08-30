@@ -2716,6 +2716,7 @@ dependencies = [
  "weissman-fleet-shaping",
  "weissman-job-bus",
  "weissman-ui-provenance",
+ "zeroize",
 ]
 
 [[package]]
