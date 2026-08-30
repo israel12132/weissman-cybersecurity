@@ -568,6 +568,8 @@ struct ContainmentExecuteBody {
     mode: String,
     aws_instance_id: Option<String>,
     confirm: bool,
+    #[serde(default)]
+    destructive_confirm: String,
 }
 
 async fn api_containment_execute(
@@ -590,7 +592,10 @@ async fn api_containment_execute(
     }
     let ip = extract_client_ip(&headers, addr);
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-    if !crate::security_hardening::destructive_action_authorized(&headers) {
+    if !crate::security_hardening::destructive_action_authorized_with(
+        &headers,
+        crate::security_hardening::nonempty_token(&body.destructive_confirm),
+    ) {
         if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
             let _ = audit_log::insert_audit(
                 &mut tx,

@@ -321,6 +321,7 @@ mod tests {
             order_by: Some("id".into()),
             order_desc: false,
             limit: Some(10),
+            ..QueryPlan::default()
         }
     }
 

@@ -1375,7 +1375,12 @@ async fn api_auto_heal(
     }
     let ip = extract_client_ip(&headers, addr);
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
+    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized_with(
+        &headers,
+        &auth,
+        crate::security_hardening::nonempty_token(&body.destructive_confirm),
+        crate::security_hardening::nonempty_token(&body.dual_approve),
+    ) {
         if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
             let _ = audit_log::insert_audit(
                 &mut tx,
@@ -1842,7 +1847,12 @@ async fn api_heal_revert(
     if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
-    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
+    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized_with(
+        &headers,
+        &auth,
+        crate::security_hardening::nonempty_token(&body.destructive_confirm),
+        crate::security_hardening::nonempty_token(&body.dual_approve),
+    ) {
         return r;
     }
     if let Err(detail) = crate::security_hardening::validate_finding_id_token(&body.finding_id) {
@@ -1976,7 +1986,12 @@ async fn api_heal_batch(
     if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
-    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
+    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized_with(
+        &headers,
+        &auth,
+        crate::security_hardening::nonempty_token(&body.destructive_confirm),
+        crate::security_hardening::nonempty_token(&body.dual_approve),
+    ) {
         return r;
     }
     // Token precedence: an explicit per-request git_token wins; otherwise fall back to the

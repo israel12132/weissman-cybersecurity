@@ -577,6 +577,7 @@ mod tests {
             order_by: None,
             order_desc: false,
             limit: Some(1),
+            ..QueryPlan::default()
         };
         assert!(compile_plan(&qp, 1).is_err());
     }
@@ -590,6 +591,7 @@ mod tests {
             order_by: None,
             order_desc: false,
             limit: Some(1),
+            ..QueryPlan::default()
         };
         assert!(compile_plan(&qp, 1).is_err());
     }

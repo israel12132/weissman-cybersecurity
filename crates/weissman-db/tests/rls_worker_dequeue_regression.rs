@@ -113,9 +113,12 @@ async fn seed_tenant_jobs(pool: &sqlx::PgPool, tenant_id: i64, count: i32) {
     .expect("seed tenant");
 
     for _ in 0..count {
+        // Stamp epoch so these rows sort ahead of leftover pending work from earlier
+        // CI steps (API smoke enqueues command_center_engine jobs). claim_next is
+        // global FIFO by created_at; a 64-claim drain lost that race in CI.
         sqlx::query(
-            "INSERT INTO weissman_async_jobs (tenant_id, kind, payload, status) \
-             VALUES ($1, $2, '{}'::jsonb, 'pending')",
+            "INSERT INTO weissman_async_jobs (tenant_id, kind, payload, status, created_at) \
+             VALUES ($1, $2, '{}'::jsonb, 'pending', TIMESTAMPTZ '1970-01-01+00')",
         )
         .bind(tenant_id)
         .bind(PROBE_KIND)
@@ -237,9 +240,9 @@ async fn worker_dequeues_across_tenants_with_empty_scope() {
     // like a real worker, account only our probe jobs, and let unrelated claims fall through.
     let mut seen_tenants = std::collections::HashSet::new();
     let mut claimed_probe = false;
-    // 4 probe jobs + generous slack for unrelated pending jobs sitting ahead of them in the queue.
-    // Each claim flips a distinct row to `running`, so the loop monotonically drains toward ours.
-    for _ in 0..64 {
+    // 4 probe jobs are stamped at epoch so they sort first. Keep a drain bound anyway in
+    // case another test also backdated rows; each claim flips a distinct row to `running`.
+    for _ in 0..16 {
         match job_queue::claim_next_with_role(
             &worker_pool,
             "rls-worker-dequeue-regression",
@@ -282,7 +285,8 @@ async fn worker_dequeues_across_tenants_with_empty_scope() {
     assert!(
         claimed_probe,
         "the worker claimed no probe job under the empty scope — either the seeded jobs were not \
-         claimable, or the drain bound was exhausted by unrelated work before reaching them"
+         claimable (RLS hiding them / empty-GUC cast raising swallowed as Ok(None)), or claim_next \
+         never reached the epoch-stamped probes"
     );
     assert!(
         seen_tenants.contains(&TENANT_A) && seen_tenants.contains(&TENANT_B),

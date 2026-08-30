@@ -189,7 +189,7 @@ async fn api_portfolio_posture(
         .unwrap_or(2000)
         .clamp(1, 5000);
     match crate::portfolio_posture::load_portfolio(
-        &state.app_pool,
+        state.read_pool(),
         auth.tenant_id,
         max_clients,
         per_client_limit,
@@ -917,7 +917,13 @@ async fn api_playbooks_create(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
     let trigger = if body.trigger.is_null() { json!({}) } else { body.trigger };
-    let actions = if body.actions.is_null() { json!([]) } else { body.actions };
+    let actions_raw = if body.actions.is_null() { json!([]) } else { body.actions };
+    let actions = match crate::playbook_dsl::sanitize_actions_dsl(&actions_raw) {
+        Ok(a) => a,
+        Err(e) => {
+            return (StatusCode::BAD_REQUEST, Json(json!({"ok": false, "detail": e}))).into_response();
+        }
+    };
     let id_res: Result<i64, _> = sqlx::query_scalar(
         r#"INSERT INTO weissman_playbooks
                (tenant_id, name, description, enabled, trigger_dsl, actions_dsl, created_by_user_id)
@@ -950,7 +956,13 @@ async fn api_playbooks_update(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
     let trigger = if body.trigger.is_null() { json!({}) } else { body.trigger };
-    let actions = if body.actions.is_null() { json!([]) } else { body.actions };
+    let actions_raw = if body.actions.is_null() { json!([]) } else { body.actions };
+    let actions = match crate::playbook_dsl::sanitize_actions_dsl(&actions_raw) {
+        Ok(a) => a,
+        Err(e) => {
+            return (StatusCode::BAD_REQUEST, Json(json!({"ok": false, "detail": e}))).into_response();
+        }
+    };
     let res = sqlx::query(
         r#"UPDATE weissman_playbooks
               SET name = $1, description = $2, enabled = $3,
@@ -998,6 +1010,10 @@ struct PlaybookFireBody {
     event: crate::soar_playbook::PlaybookEvent,
     #[serde(default)]
     dry_run: bool,
+    #[serde(default)]
+    destructive_confirm: String,
+    #[serde(default)]
+    dual_approve: String,
 }
 
 async fn api_playbooks_fire(
@@ -1007,7 +1023,12 @@ async fn api_playbooks_fire(
     Json(body): Json<PlaybookFireBody>,
 ) -> Response {
     if !body.dry_run {
-        if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
+        if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized_with(
+            &headers,
+            &auth,
+            crate::security_hardening::nonempty_token(&body.destructive_confirm),
+            crate::security_hardening::nonempty_token(&body.dual_approve),
+        ) {
             return r;
         }
     } else if let Err(r) = crate::rbac::require_operator(&auth) {
@@ -1027,6 +1048,120 @@ async fn api_playbooks_fire(
         "dry_run": body.dry_run,
         "results": results,
     }))).into_response()
+}
+
+async fn api_soar_executions_list(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    let raw_status = q.get("status").map(String::as_str).unwrap_or("");
+    let status_filter = match crate::soar::ExecutionStatus::parse_list_filter(raw_status) {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"ok": false, "detail": e})),
+            )
+                .into_response();
+        }
+    };
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(100)
+        .clamp(1, 200);
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+    };
+    let pending_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM soar_action_executions
+         WHERE tenant_id = $1 AND status = 'pending_hitl'",
+    )
+    .bind(auth.tenant_id)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
+    let rows = if let Some(st) = status_filter {
+        sqlx::query(
+            r#"SELECT e.id, e.action_kind, e.status, e.target_id, e.provider, e.result_detail,
+                      e.blast_radius, e.created_at, e.hitl_required, e.hitl_approved_by,
+                      e.hitl_approved_at, e.client_id, e.playbook_id
+               FROM soar_action_executions e
+               WHERE e.tenant_id = $1 AND e.status = $2
+               ORDER BY e.created_at DESC
+               LIMIT $3"#,
+        )
+        .bind(auth.tenant_id)
+        .bind(st.as_str())
+        .bind(limit)
+        .fetch_all(&mut *tx)
+        .await
+    } else {
+        sqlx::query(
+            r#"SELECT e.id, e.action_kind, e.status, e.target_id, e.provider, e.result_detail,
+                      e.blast_radius, e.created_at, e.hitl_required, e.hitl_approved_by,
+                      e.hitl_approved_at, e.client_id, e.playbook_id
+               FROM soar_action_executions e
+               WHERE e.tenant_id = $1
+               ORDER BY e.created_at DESC
+               LIMIT $2"#,
+        )
+        .bind(auth.tenant_id)
+        .bind(limit)
+        .fetch_all(&mut *tx)
+        .await
+    };
+    let _ = tx.commit().await;
+    match rows {
+        Ok(rows) => {
+            let items: Vec<Value> = rows
+                .into_iter()
+                .map(|r| {
+                    let blast = r
+                        .try_get::<serde_json::Value, _>("blast_radius")
+                        .unwrap_or(json!({}));
+                    let crown = blast
+                        .get("crown_jewel_touched")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false);
+                    json!({
+                        "id": r.try_get::<uuid::Uuid,_>("id").ok(),
+                        "action_kind": r.try_get::<String,_>("action_kind").ok(),
+                        "status": r.try_get::<String,_>("status").ok(),
+                        "target_id": r.try_get::<String,_>("target_id").ok(),
+                        "provider": r.try_get::<String,_>("provider").ok(),
+                        "result_detail": r.try_get::<String,_>("result_detail").ok(),
+                        "blast_radius": blast,
+                        "crown_jewel_touched": crown,
+                        "created_at": r.try_get::<chrono::DateTime<chrono::Utc>,_>("created_at").ok(),
+                        "hitl_required": r.try_get::<bool,_>("hitl_required").unwrap_or(false),
+                        "hitl_approved_by": r.try_get::<Option<i64>,_>("hitl_approved_by").ok().flatten(),
+                        "hitl_approved_at": r.try_get::<Option<chrono::DateTime<chrono::Utc>>,_>("hitl_approved_at").ok().flatten(),
+                        "client_id": r.try_get::<Option<i64>,_>("client_id").ok().flatten(),
+                        "playbook_id": r.try_get::<Option<i64>,_>("playbook_id").ok().flatten(),
+                    })
+                })
+                .collect();
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "ok": true,
+                    "items": items,
+                    "pending_count": pending_count,
+                })),
+            )
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
+        )
+            .into_response(),
+    }
 }
 
 async fn api_soar_execution_get(
@@ -1087,12 +1222,83 @@ async fn api_soar_execution_revert(
     Extension(auth): Extension<AuthContext>,
     headers: axum::http::HeaderMap,
     Path(id): Path<uuid::Uuid>,
+    Json(body): Json<SoarHitlBody>,
 ) -> Response {
-    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
+    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized_with(
+        &headers,
+        &auth,
+        crate::security_hardening::nonempty_token(&body.destructive_confirm),
+        crate::security_hardening::nonempty_token(&body.dual_approve),
+    ) {
         return r;
     }
     match crate::soar::revert_execution(&state.app_pool, auth.tenant_id, id).await {
         Ok(detail) => (StatusCode::OK, Json(json!({"ok": true, "detail": detail}))).into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"ok": false, "detail": e}))).into_response(),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct SoarHitlBody {
+    #[serde(default)]
+    reason: String,
+    #[serde(default)]
+    destructive_confirm: String,
+    #[serde(default)]
+    dual_approve: String,
+}
+
+async fn api_soar_hitl_approve(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    headers: axum::http::HeaderMap,
+    Path(id): Path<uuid::Uuid>,
+    Json(body): Json<SoarHitlBody>,
+) -> Response {
+    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized_with(
+        &headers,
+        &auth,
+        crate::security_hardening::nonempty_token(&body.destructive_confirm),
+        crate::security_hardening::nonempty_token(&body.dual_approve),
+    ) {
+        return r;
+    }
+    match crate::soar::approve_hitl(&state.app_pool, auth.tenant_id, id, auth.user_id).await {
+        Ok(out) => (StatusCode::OK, Json(json!({
+            "ok": true,
+            "status": out.status,
+            "detail": out.detail,
+            "execution_id": out.execution_id,
+        }))).into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"ok": false, "detail": e}))).into_response(),
+    }
+}
+
+async fn api_soar_hitl_deny(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    headers: axum::http::HeaderMap,
+    Path(id): Path<uuid::Uuid>,
+    Json(body): Json<SoarHitlBody>,
+) -> Response {
+    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized_with(
+        &headers,
+        &auth,
+        crate::security_hardening::nonempty_token(&body.destructive_confirm),
+        crate::security_hardening::nonempty_token(&body.dual_approve),
+    ) {
+        return r;
+    }
+    match crate::soar::deny_hitl(
+        &state.app_pool,
+        auth.tenant_id,
+        id,
+        auth.user_id,
+        &body.reason,
+    )
+    .await
+    {
+        Ok(()) => (StatusCode::OK, Json(json!({"ok": true}))).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"ok": false, "detail": e}))).into_response(),
     }
 }
@@ -1150,6 +1356,59 @@ async fn api_ask(
     if let Err(r) = crate::rbac::require_analyst(&auth) {
         return r;
     }
+    match crate::nl_audit_chain::ask_path_is_locked(state.app_pool.as_ref(), auth.tenant_id).await
+    {
+        Ok(true) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "code": "nl_audit_epoch_fragmentation",
+                    "detail": "Ask Weissman is fail-closed: audit-chain epoch cap. SOC has been paged.",
+                })),
+            )
+                .into_response();
+        }
+        Ok(false) => {}
+        Err(e) => {
+            tracing::error!(target: "api_ask", error = %e, "ask fail-closed lock check failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false, "detail": "ask chain lock unavailable"})),
+            )
+                .into_response();
+        }
+    }
+    let quota = match crate::tenant_quota::enforce(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        "ask",
+        crate::tenant_quota::QuotaWindow::Daily,
+        50,
+    )
+    .await
+    {
+        Ok(d) => d,
+        Err(e) => {
+            tracing::error!(target: "api_ask", error = %e, "ask daily quota check failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false, "detail": "ask quota unavailable"})),
+            )
+                .into_response();
+        }
+    };
+    if !quota.allowed {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({
+                "ok": false,
+                "detail": "daily Ask Weissman quota exceeded (50/day)",
+                "quota": quota,
+            })),
+        )
+            .into_response();
+    }
     let ro_pool = match state.read_only_pool.as_ref() {
         Some(p) => p,
         None => {
@@ -1166,7 +1425,15 @@ async fn api_ask(
         Some(auth.user_id),
         &body.question,
     ).await;
-    (StatusCode::OK, Json(json!({"ok": result.error.is_none(), "result": result}))).into_response()
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": result.error.is_none(),
+            "result": result,
+            "quota": quota,
+        })),
+    )
+        .into_response()
 }
 
 // ─── UEBA ingest (called by /ws/agent when ueba_baseline finding arrives) ──
