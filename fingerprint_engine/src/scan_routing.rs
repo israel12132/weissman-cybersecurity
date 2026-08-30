@@ -1154,6 +1154,31 @@ mod tests {
     }
 
     #[test]
+    fn http_feedback_fuzz_routes_to_feedback_fuzz_job() {
+        let def = find_route_def("http_feedback_fuzz").expect("http_feedback_fuzz must be routed");
+        assert_eq!(def.job_kind, "feedback_fuzz");
+        assert!(def.requires.contains(&Requires::ClientId));
+        assert!(def.requires.contains(&Requires::NonEmptyTarget));
+        assert!(def.inject_oast);
+        assert_eq!(def.entitlement, EntitlementTier::AiHeavy);
+    }
+
+    #[test]
+    fn alias_fuzz_engines_are_not_dedicated_feedback_job() {
+        for id in [
+            "xss_advanced",
+            "csrf_exploit",
+            "race_condition_web",
+            "open_redirect",
+        ] {
+            assert!(
+                find_route_def(id).is_none(),
+                "{id} must stay on command_center_engine (15min) with a campaign wall, not remap to feedback_fuzz"
+            );
+        }
+    }
+
+    #[test]
     fn seal_payload_strips_secrets_before_queue() {
         let raw = json!({
             "engine": "osint",

@@ -3043,61 +3043,36 @@ async fn run_http_fuzz_alias(
     target: &str,
     ctx: &EngineRunContext,
 ) -> EngineResult {
-    let anomalies = if let Some(tid) = ctx.tenant_id {
-        crate::fuzzer::run_fuzzer_collect_tenant(
-            target,
-            base_payload,
-            Some(tid),
-            None,
-            Some(cognitive_hint),
-            ctx.app_pool.as_deref(),
-        )
-        .await
-    } else {
-        crate::fuzzer::run_fuzzer_collect(target, base_payload).await
-    };
-
-    let verified_oob = anomalies.iter().filter(|a| a.oob_token.is_some()).count();
-    let findings: Vec<serde_json::Value> = anomalies
-        .iter()
-        .map(|a| {
-            let oob = a.oob_token.clone().filter(|s| !s.trim().is_empty());
-            let verified = oob.is_some();
-            json!({
-                "type": engine_id,
-                "source_engine": engine_id,
-                "engine_id": engine_id,
-                "canonical_engine": "http_feedback_fuzz",
-                "alias_engine_id": engine_id,
-                "canonical_engine_id": "http_feedback_fuzz",
-                "probe_fidelity": "http_fuzz_tuned",
-                "surface_summary": cognitive_hint,
-                "alias_category": category,
-                "category": category,
-                "title": a.anomaly_type.clone(),
-                "severity": "high",
-                "mitre_attack": mitre,
-                "description": format!("{} — {}", engine_id, a.baseline_vs_anomaly),
-                "url": a.target_url.clone(),
-                "payload": a.payload.clone(),
-                "verified": verified,
-                "verification_method": if verified { "oob_oast_callback" } else { "behavioral_feedback_validation" },
-                "oob_token": oob,
-                "llm_user_prompt": a.llm_user_prompt,
-                "target": target,
-            })
-        })
-        .collect();
-
-    EngineResult::ok(
-        findings,
-        format!(
-            "{}: {} validated anomalies ({} OOB-verified)",
-            engine_id,
-            anomalies.len(),
-            verified_oob
-        ),
+    let ctl = crate::fuzz_campaign::FuzzCampaignCtl::for_job(
+        engine_id,
+        Some("command_center_engine"),
+        ctx.job_params
+            .get("fuzz_budget_secs")
+            .and_then(|v| v.as_u64()),
+        ctx.job_id.clone(),
+        ctx.tenant_id,
+        ctx.app_pool.clone(),
+        ctx.swarm_broadcast.clone(),
+    );
+    let oast = ctx
+        .job_params
+        .get("oast_interaction_token")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    crate::fuzzer::run_engine_campaign(
+        engine_id,
+        base_payload,
+        cognitive_hint,
+        category,
+        mitre,
+        target,
+        ctl,
+        ctx.tenant_id,
+        oast,
+        ctx.app_pool.as_deref(),
     )
+    .await
 }
 
 #[cfg(test)]
