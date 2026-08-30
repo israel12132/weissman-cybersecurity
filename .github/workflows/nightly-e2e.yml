@@ -47,6 +47,9 @@ jobs:
       # ephemeral-DB fsync tuning: CI infra config, not a change to the gate).
       WEISSMAN_RATE_LIMIT_PER_SEC: "500"
       WEISSMAN_RATE_LIMIT_BURST: "2000"
+      WEISSMAN_ALLOW_SUPERUSER_DSN: "1"
+      WEISSMAN_WORKER_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+      WEISSMAN_ANALYTICS_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
     services:
       postgres:
         image: pgvector/pgvector:pg16

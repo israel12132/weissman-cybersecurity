@@ -15,6 +15,8 @@ require() {
 
 require DATABASE_URL
 require WEISSMAN_AUTH_DATABASE_URL
+require WEISSMAN_WORKER_DATABASE_URL
+require WEISSMAN_ANALYTICS_DATABASE_URL
 require WEISSMAN_MIGRATE_URL
 require WEISSMAN_JWT_SECRET
 require REDIS_URL
@@ -44,6 +46,8 @@ type: Opaque
 stringData:
   database_url: "${DATABASE_URL}"
   auth_database_url: "${WEISSMAN_AUTH_DATABASE_URL}"
+  worker_database_url: "${WEISSMAN_WORKER_DATABASE_URL}"
+  analytics_database_url: "${WEISSMAN_ANALYTICS_DATABASE_URL}"
   migrate_url: "${WEISSMAN_MIGRATE_URL}"
   jwt_secret: "${WEISSMAN_JWT_SECRET}"
   redis_url: "${REDIS_URL}"

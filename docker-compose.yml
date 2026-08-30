@@ -145,6 +145,8 @@ services:
       # Read-only role for "Ask Weissman" (NL->SQL, /api/ask). SELECT-only, 15s statement
       # timeout, RLS-scoped (migration 20260608140300). Without it the endpoint returns 503.
       WEISSMAN_READ_ONLY_DATABASE_URL: postgresql://${DB_RO_USER:-weissman_ro}:${DB_RO_PASSWORD:-weissman_ro_dev}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_WORKER_DATABASE_URL: postgresql://${DB_WORKER_USER:-weissman_worker}:${DB_WORKER_PASSWORD:-weissman_worker_dev}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_ANALYTICS_DATABASE_URL: postgresql://${DB_ANALYTICS_USER:-weissman_analytics}:${DB_ANALYTICS_PASSWORD:-weissman_analytics_dev}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_MIGRATE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_MIGRATIONS_DIR: /srv/migrations
       REDIS_URL: redis://redis:6379/0
@@ -217,6 +219,8 @@ services:
     environment:
       DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_WORKER_DATABASE_URL: postgresql://${DB_WORKER_USER:-weissman_worker}:${DB_WORKER_PASSWORD:-weissman_worker_dev}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_ANALYTICS_DATABASE_URL: postgresql://${DB_ANALYTICS_USER:-weissman_analytics}:${DB_ANALYTICS_PASSWORD:-weissman_analytics_dev}@postgres:5432/${POSTGRES_DB:-weissman}
       REDIS_URL: redis://redis:6379/0
       WEISSMAN_JWT_SECRET: "${WEISSMAN_JWT_SECRET:?Set WEISSMAN_JWT_SECRET in .env}"
       # Must be byte-identical to the backend's value — the worker verifies job envelopes the server signed.

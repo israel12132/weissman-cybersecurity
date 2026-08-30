@@ -212,20 +212,22 @@ async fn worker_dequeues_across_tenants_with_empty_scope() {
     seed_tenant_jobs(&pool, TENANT_A, 2).await;
     seed_tenant_jobs(&pool, TENANT_B, 2).await;
 
-    // Everything below runs as weissman_app (NOBYPASSRLS), the role the worker actually uses.
-    // A superuser pool would bypass every policy and mask the bug entirely.
+    // Everything below runs as weissman_worker (BYPASSRLS, job-bus GRANT only).
+    // weissman_app is fail-closed on this table; a superuser pool would mask both contracts.
     let worker_pool = PgPoolOptions::new()
         .max_connections(2)
         .acquire_timeout(std::time::Duration::from_secs(5))
         .after_connect(|conn, _| {
             Box::pin(async move {
-                sqlx::query("SET ROLE weissman_app").execute(conn).await?;
+                sqlx::query("SET ROLE weissman_worker")
+                    .execute(conn)
+                    .await?;
                 Ok(())
             })
         })
         .connect(&url)
         .await
-        .expect("connect worker pool as weissman_app");
+        .expect("connect worker pool as weissman_worker");
 
     // This is the exact call the worker makes every poll. Before the fix it returned
     // Err(invalid input syntax for type bigint: "").
@@ -395,13 +397,15 @@ async fn reserve_next_refuses_a_job_with_no_signed_envelope() {
         .acquire_timeout(std::time::Duration::from_secs(5))
         .after_connect(|conn, _| {
             Box::pin(async move {
-                sqlx::query("SET ROLE weissman_app").execute(conn).await?;
+                sqlx::query("SET ROLE weissman_worker")
+                    .execute(conn)
+                    .await?;
                 Ok(())
             })
         })
         .connect(&url)
         .await
-        .expect("connect worker pool as weissman_app");
+        .expect("connect worker pool as weissman_worker");
 
     let mut claimed = Vec::new();
     for _ in 0..4 {
@@ -439,6 +443,54 @@ async fn reserve_next_refuses_a_job_with_no_signed_envelope() {
     assert!(
         claimed[0].payload.get("_weissman_job_bus").is_some(),
         "the claimed job must be the one carrying the signed envelope"
+    );
+}
+
+/// **Fail-closed job-bus.** `weissman_app` with an empty/unset GUC must see zero rows,
+/// even when jobs exist. Cross-tenant visibility is `weissman_worker` only.
+#[tokio::test]
+async fn weissman_app_empty_guc_cannot_read_job_bus() {
+    let url = test_database_url();
+    if url.is_empty() {
+        return;
+    }
+    let pool = connect(&url).await;
+    const TENANT_F: i64 = 918_274_006;
+    cleanup(&pool, &[TENANT_F]).await;
+    seed_tenant_jobs(&pool, TENANT_F, 3).await;
+
+    let app_pool = PgPoolOptions::new()
+        .max_connections(2)
+        .acquire_timeout(std::time::Duration::from_secs(5))
+        .after_connect(|conn, _| {
+            Box::pin(async move {
+                sqlx::query("SET ROLE weissman_app").execute(conn).await?;
+                Ok(())
+            })
+        })
+        .connect(&url)
+        .await
+        .expect("connect as weissman_app");
+
+    let mut tx = app_pool.begin().await.expect("begin");
+    sqlx::query("SELECT set_config('app.current_tenant_id', '', true)")
+        .execute(&mut *tx)
+        .await
+        .expect("empty GUC");
+    let n: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM weissman_async_jobs WHERE tenant_id = $1 AND kind = $2",
+    )
+    .bind(TENANT_F)
+    .bind(PROBE_KIND)
+    .fetch_one(&mut *tx)
+    .await
+    .expect("count under empty GUC");
+    let _ = tx.rollback().await;
+
+    cleanup(&pool, &[TENANT_F]).await;
+    assert_eq!(
+        n, 0,
+        "weissman_app with empty GUC must not read job-bus rows (queue hijack)"
     );
 }
 

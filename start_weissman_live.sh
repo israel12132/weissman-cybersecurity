@@ -264,6 +264,11 @@ ensure_env() {
     # WEISSMAN_READ_ONLY_DATABASE_URL; without it /api/ask is 503 and the boot role-sync
     # strips LOGIN from weissman_ro.
     DB_RO_PASSWORD
+    # Job-bus claim plane + analytics (BYPASSRLS dedicated roles). Required by the
+    # prod overlay DSNs; without them weissman_app cannot claim jobs under fail-closed
+    # job-bus RLS and midnight billing cannot aggregate across tenants.
+    DB_WORKER_PASSWORD
+    DB_ANALYTICS_PASSWORD
     WEISSMAN_JWT_SECRET
     WEISSMAN_METRICS_TOKEN
     WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET

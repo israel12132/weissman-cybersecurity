@@ -6,9 +6,15 @@
 #![recursion_limit = "512"]
 //!
 //! # Safety policy
-//! Unsafe code is denied crate-wide. The sole exception is `hpc_runtime::linux_affinity`, which
-//! calls `libc::sched_setaffinity` for NUMA-aware thread pinning on Linux. That module carries an
-//! explicit `#[allow(unsafe_code)]` with documented SAFETY invariants.
+//! Unsafe code is denied crate-wide. Documented exceptions (each with
+//! `#[allow(unsafe_code)]` and SAFETY invariants):
+//! - `hpc_runtime::linux_affinity` — `libc::sched_setaffinity` for NUMA pin.
+//! - `secret_zeroize::memlock` — `mlock` / `munlock` / `madvise(MADV_DONTDUMP)`
+//!   (Linux) and `VirtualLock` / `VirtualUnlock` (Windows) for vault key pages.
+//! - `secret_zeroize::raw_environ` — **read-only** walk of `libc::environ`
+//!   (Linux/Unix) and `GetEnvironmentStringsW` (Windows) so vault keys never
+//!   pass through `std::env::var_os` heap `OsString`s. Unset is
+//!   `std::env::remove_var` only — never in-place writes into the OS block.
 #![deny(unsafe_code)]
 #![allow(
     clippy::collapsible_if,
@@ -114,6 +120,7 @@ pub mod intel_epss;
 pub mod intel_findings_backfill;
 pub mod intel_http_cache;
 pub mod intel_kev;
+pub mod job_envelope;
 pub mod job_orchestration;
 pub mod leak_hunter_engine;
 pub mod liminal_boundary_engine;
@@ -305,6 +312,7 @@ pub mod scada_ics_engine;
 pub mod scan_payload_redaction;
 pub mod scan_routing;
 pub mod scan_schedule_worker;
+pub mod secret_zeroize;
 pub mod security_hardening;
 pub mod security_posture;
 pub mod security_startup;

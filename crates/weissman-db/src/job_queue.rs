@@ -17,24 +17,27 @@ pub struct AsyncJob {
     pub trace_id: Option<String>,
 }
 
-/// Open a transaction with the **worker/queue** RLS posture: `app.current_tenant_id = ''`
-/// selects the unrestricted branch of the `weissman_async_jobs` policy
-/// (`NULLIF('','') IS NULL`).
+/// Open a transaction with the **worker/queue** RLS posture: `app.current_tenant_id = ''`.
 ///
-/// `weissman_app` is `NOBYPASSRLS` and migration `20260602180000` set a database-level
-/// default `app.current_tenant_id = '0'`, so an unscoped connection's policy collapses to
-/// `tenant_id = 0` and hides/rejects every real tenant's row. Setting the GUC transaction-locally
-/// (`SET LOCAL` semantics via `set_config(..., true)`) restores the intended "trusted queue
-/// plumbing is unrestricted" branch without leaking scope to the next borrower of the pooled
-/// connection. Tenant-scoped operations (`enqueue`, `get_job_for_tenant`) use
-/// [`crate::begin_tenant_tx`] with a concrete id instead.
+/// Claim/heartbeat/complete run on `weissman_worker` (BYPASSRLS). The empty GUC is
+/// belt-and-suspenders: if this helper is ever pointed at `weissman_app`, fail-closed
+/// job-bus policies (`tenant_id = app_current_tenant_id()`) return zero rows instead of
+/// leaking every tenant's payloads. Do **not** restore an "unset GUC = unrestricted"
+/// policy on `weissman_app`.
 async fn begin_worker_tx(
     pool: &PgPool,
 ) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    sqlx::query("SELECT set_config('app.current_tenant_id', '', true)")
-        .execute(&mut *tx)
-        .await?;
+    // Claim/heartbeat/complete are short catalog updates. SET LOCAL lock_timeout
+    // so a stray wait cannot pin this transaction; SKIP LOCKED itself never waits.
+    // Callers MUST commit before any webhook, scan, or other network I/O.
+    sqlx::query(
+        "SELECT set_config('app.current_tenant_id', '', true), \
+                set_config('lock_timeout', $1, true)",
+    )
+    .bind(crate::advisory_lock::lock_timeout_setting())
+    .execute(&mut *tx)
+    .await?;
     Ok(tx)
 }
 
@@ -147,8 +150,13 @@ pub async fn enqueue_held_in_tx(
 /// atomic UPDATE, so a worker never observes a claimable job without its
 /// envelope. Guarded on the row still being held (`run_after IS NOT NULL`) so a
 /// late finalize cannot resurrect a job that was already failed.
-pub async fn release_hold(pool: &PgPool, job_id: Uuid, payload: Value) -> Result<u64, sqlx::Error> {
-    let mut tx = begin_worker_tx(pool).await?;
+pub async fn release_hold(
+    pool: &PgPool,
+    tenant_id: i64,
+    job_id: Uuid,
+    payload: Value,
+) -> Result<u64, sqlx::Error> {
+    let mut tx = crate::begin_tenant_tx(pool, tenant_id).await?;
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs
               SET payload = $2, run_after = NULL, updated_at = now()
@@ -383,6 +391,8 @@ pub async fn reserve_next_excluding_with_role(
     .bind(exclude)
     .fetch_optional(&mut *tx)
     .await?;
+    // Commit BEFORE returning: execute_job / outbound HTTP / network scans must not
+    // hold this FOR UPDATE SKIP LOCKED row lock.
     tx.commit().await?;
 
     let Some(row) = row else {
@@ -508,6 +518,8 @@ pub async fn claim_next_excluding_with_role(
     .bind(exclude)
     .fetch_optional(&mut *tx)
     .await?;
+    // Commit BEFORE returning: execute_job / outbound HTTP / network scans must not
+    // hold this FOR UPDATE SKIP LOCKED row lock.
     tx.commit().await?;
 
     let Some(row) = row else {
@@ -971,5 +983,27 @@ mod worker_pool_role_tests {
                 | WorkerPoolRole::Soar
         ));
         assert!((0..=3).contains(&role.sql_mode()));
+    }
+
+    #[test]
+    fn claim_path_commits_before_any_network_io() {
+        // Worker scans and SOAR outbound HTTP run AFTER claim_next/reserve_next return.
+        // This module must stay a pure SQL control plane so FOR UPDATE SKIP LOCKED
+        // row locks cannot be held across I/O.
+        let src = include_str!("job_queue.rs");
+        let production = src.split("#[cfg(test)]").next().unwrap_or(src);
+        assert!(production.contains("FOR UPDATE SKIP LOCKED"));
+        assert!(
+            production.contains("Commit BEFORE returning"),
+            "claim functions must document that the transaction is closed before job execution"
+        );
+        assert!(
+            !production.contains("reqwest"),
+            "job_queue must not perform HTTP inside the claim transaction"
+        );
+        assert!(
+            production.contains("use sqlx::") && production.contains("use uuid::"),
+            "claim path is SQLx + UUID only"
+        );
     }
 }

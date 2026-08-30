@@ -119,6 +119,44 @@ fn ndr_itdr_ingest_migration_has_forced_rls() {
 }
 
 #[test]
+fn pgvector_hnsw_params_and_hermetic_roles_migrations_exist() {
+    let dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/weissman-db/migrations");
+    let hnsw = std::fs::read_to_string(dir.join("20260827115700_pgvector_hnsw_m16_ef64.sql"))
+        .unwrap_or_default();
+    assert!(hnsw.contains("m = 16"));
+    assert!(hnsw.contains("ef_construction = 64"));
+    assert!(hnsw.starts_with("-- weissman:no-transaction"));
+    let roles = std::fs::read_to_string(dir.join("20260827115800_hermetic_db_roles.sql"))
+        .unwrap_or_default();
+    assert!(roles.contains("NOBYPASSRLS"));
+    assert!(roles.contains("statement_timeout = '15s'"));
+    assert_eq!(weissman_db::role_guard::RO_SELECT_TABLES.len(), 13);
+}
+
+#[test]
+fn force_rls_catch_all_migration_forces_without_enabling() {
+    let dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/weissman-db/migrations");
+    let fe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("migrations/20260828180000_force_rls_all_tenant_tables.sql");
+    let db = dir.join("20260828180000_force_rls_all_tenant_tables.sql");
+    let a = std::fs::read_to_string(&fe).unwrap_or_default();
+    let b = std::fs::read_to_string(&db).unwrap_or_default();
+    assert!(!a.is_empty(), "FORCE RLS catch-all migration present");
+    assert_eq!(a, b, "migration must be identical in both dirs");
+    assert!(a.contains("ALTER TABLE IF EXISTS public.tenants FORCE ROW LEVEL SECURITY"));
+    assert!(a.contains("FORCE ROW LEVEL SECURITY"));
+    assert!(a.contains("relrowsecurity"));
+    assert!(a.contains("NOT c.relforcerowsecurity"));
+    assert!(a.contains("SET row_security = on"));
+    assert!(
+        !a.to_ascii_uppercase().contains("ENABLE ROW LEVEL SECURITY"),
+        "catch-all must not ENABLE RLS on tables that currently have none"
+    );
+}
+
+#[test]
 fn ndr_itdr_ingest_migration_in_sync_both_dirs() {
     let fe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("migrations/20260614130000_ndr_itdr_ingest.sql");
@@ -355,6 +393,33 @@ fn strip_sql_comments(sql: &str) -> String {
         i += 1;
     }
     out
+}
+
+#[test]
+fn auth_bootstrap_promotes_master_bootstrap_to_owner() {
+    // POST /api/clients is owner-only. CI smoke logs in as
+    // WEISSMAN_MASTER_BOOTSTRAP_EMAIL; boot must promote that row, not only
+    // WEISSMAN_ADMIN_EMAIL, or engine-group smoke dies with 403 owner_required.
+    let src = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/auth_bootstrap.rs"),
+    )
+    .unwrap_or_default();
+    assert!(
+        src.contains("WEISSMAN_MASTER_BOOTSTRAP_EMAIL"),
+        "master bootstrap must be in the owner promotion set"
+    );
+    assert!(
+        src.contains("fn merge_owner_emails"),
+        "owner email set must stay a named helper so both env operators are promoted"
+    );
+    assert!(
+        src.contains("fn env_nonempty"),
+        "env operators must be read through env_nonempty so empty strings are skipped"
+    );
+    assert!(
+        src.contains("sync_admin_credentials_from"),
+        "promotion must accept injected emails so tests do not hold an env mutex across await"
+    );
 }
 
 #[test]

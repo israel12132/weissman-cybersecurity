@@ -1431,26 +1431,8 @@ pub fn new_app_state(
     app_pool: Arc<PgPool>,
     auth_pool: Arc<PgPool>,
     intel_pool: Arc<PgPool>,
+    read_only_pool: Option<Arc<PgPool>>,
 ) -> Arc<AppState> {
-    // Optional read-only pool for /api/ask and Command Center dashboard reads. Falls back to None if the env var
-    // isn't set — endpoint will then return 503 with a clear "configure this" hint.
-    let read_only_pool: Option<Arc<PgPool>> = match std::env::var("WEISSMAN_READ_ONLY_DATABASE_URL")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-    {
-        Some(url) => match sqlx::postgres::PgPoolOptions::new()
-            .max_connections(16)
-            .acquire_timeout(std::time::Duration::from_secs(5))
-            .connect_lazy(&url)
-        {
-            Ok(p) => Some(Arc::new(p)),
-            Err(e) => {
-                tracing::warn!(target: "nl_query", error = %e, "read-only pool init failed");
-                None
-            }
-        },
-        None => None,
-    };
     let (timing_tx, _) = tokio::sync::broadcast::channel::<String>(256);
     let (redteam_tx, _) = tokio::sync::broadcast::channel::<String>(256);
     let (radar_tx, _) = tokio::sync::broadcast::channel::<String>(256);
@@ -1530,7 +1512,7 @@ pub fn new_app_state(
     })
 }
 
-pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
+pub fn spawn_http_background_tasks(state: &Arc<AppState>, job_control_pool: Arc<PgPool>) {
     let app_pool = state.app_pool.clone();
     let intel_pool = state.intel_pool.clone();
     let auth_pool = state.auth_pool.clone();
@@ -1687,7 +1669,7 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
             state.telemetry_broadcast_tx.clone(),
         );
         crate::data_retention::spawn_data_retention_loop(app_pool.clone(), intel_pool.clone());
-        crate::async_jobs::spawn_stale_lock_reclaim_loop(app_pool.clone());
+        crate::async_jobs::spawn_stale_lock_reclaim_loop(job_control_pool);
         // Threat-intel mirrors (CISA KEV + FIRST EPSS). Both are best-effort, idempotent,
         // and gated by env vars so dev/offline runs can skip outbound HTTP.
         crate::intel_kev::bootstrap_kev_catalog(app_pool.clone());
@@ -1854,9 +1836,6 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             .route("/dashboard", get(dashboard_page))
     };
     let api = serve_route_groups::mount_api_routes(root_routes)
-        .layer(middleware::from_fn(
-            crate::http::login_rate_limit_middleware,
-        ))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             crate::http::tenant_scan_limit::tenant_scan_rate_limit_middleware,
@@ -1873,6 +1852,12 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         ))
         .layer(middleware::from_fn_with_state(state.clone(), auth_guard))
         .layer(middleware::from_fn(crate::http::api_rate_limit_middleware))
+        // Pre-auth: later `.layer()` is outer (runs first). Login rate-limit must
+        // sit outside `auth_guard` so a password-spray is rejected before any
+        // weissman_auth pool checkout / bcrypt.
+        .layer(middleware::from_fn(
+            crate::http::login_rate_limit_middleware,
+        ))
         .layer(middleware::from_fn(
             crate::observability::http_metrics_middleware,
         ))
@@ -2017,6 +2002,30 @@ mod public_route_guard_tests {
         // Correct public path but wrong method is not public.
         assert!(!is_public_route(&Method::GET, "/api/logout"));
         assert!(!is_public_route(&Method::POST, "/api/health"));
+    }
+
+    /// Axum runs the *last* `.layer()` first. Login rate-limit must be layered
+    /// after `auth_guard` so brute-force POSTs never check out a weissman_auth
+    /// connection before the in-process governor.
+    #[test]
+    fn login_rate_limit_layer_is_outside_auth_guard() {
+        let src = include_str!("serve.rs");
+        let start = src
+            .find("pub async fn build_http_router")
+            .expect("build_http_router");
+        let chunk = &src[start..];
+        let end = chunk.find(".with_state(state)").unwrap_or(chunk.len());
+        let layers = &chunk[..end];
+        let auth = layers
+            .find("from_fn_with_state(state.clone(), auth_guard)")
+            .expect("auth_guard layer");
+        let login = layers
+            .find("login_rate_limit_middleware")
+            .expect("login_rate_limit layer");
+        assert!(
+            login > auth,
+            "login_rate_limit_middleware must be layered after auth_guard (outer / pre-auth)"
+        );
     }
 }
 
