@@ -52,6 +52,7 @@ pub mod auth_refresh;
 pub mod battlespace_topology;
 pub mod benchmark;
 pub mod billing;
+pub mod cem_dago;
 pub mod ceo;
 pub mod chronos_engine;
 pub mod client_isolation;

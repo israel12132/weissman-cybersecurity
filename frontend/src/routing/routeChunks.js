@@ -79,6 +79,7 @@ export const IncidentResponseCenter = React$lazy(() => import('../pages/Incident
 export const VulnIntelDashboard = React$lazy(() => import('../pages/VulnIntelDashboard.jsx'))
 export const FinancialRisk = React$lazy(() => import('../pages/FinancialRisk.jsx'))
 export const AttackPaths = React$lazy(() => import('../pages/AttackPaths.jsx'))
+export const CemDagoMesh = React$lazy(() => import('../pages/CemDagoMesh.jsx'))
 export const AttackCoverage = React$lazy(() => import('../pages/AttackCoverage.jsx'))
 export const SecurityPosture = React$lazy(() => import('../pages/SecurityPosture.jsx'))
 export const IocFeed = React$lazy(() => import('../pages/IocFeed.jsx'))

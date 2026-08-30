@@ -287,6 +287,34 @@ pub fn allowed_table_count() -> usize {
     SCHEMA.len()
 }
 
+/// Hermetic QueryPlan sandbox: table must be one of the 13 weissman_ro names.
+#[must_use]
+pub fn is_allowlisted_table(name: &str) -> bool {
+    SCHEMA.contains_key(name)
+}
+
+/// Sorted allow-list names for AST table extraction (never a parallel hand list).
+#[must_use]
+pub fn allowlisted_table_names() -> Vec<&'static str> {
+    let mut v: Vec<&'static str> = SCHEMA.keys().copied().collect();
+    v.sort_unstable();
+    v
+}
+
+/// Hermetic QueryPlan sandbox: column must be enumerated on that table.
+#[must_use]
+pub fn is_allowlisted_column(table: &str, column: &str) -> bool {
+    SCHEMA
+        .get(table)
+        .is_some_and(|s| s.columns.contains(&column))
+}
+
+/// Hermetic QueryPlan sandbox: filter operator must be in the static op list.
+#[must_use]
+pub fn is_allowlisted_op(op: &str) -> bool {
+    ALLOWED_OPS.contains(&op)
+}
+
 const ALLOWED_OPS: &[&str] = &[
     "=",
     "!=",

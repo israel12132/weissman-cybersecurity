@@ -152,6 +152,8 @@ const RLS_FORCE_ALLOWLIST: &[&str] = &[
     "stripe_webhook_events",
     "weissman_self_heal_gate",
     "ueba_sovereign_binary_allowlist",
+    // Corrupt MessagePack with no tenant identity cannot insert under FORCE RLS.
+    "cem_dago_telemetry_quarantine_global",
 ];
 
 fn sql_idents_after(hay: &str, needle_lc: &str) -> Vec<String> {
@@ -245,7 +247,9 @@ fn hardening_migrations_20260827_identical_in_both_dirs() {
         "20260827120600_cicd_scan_events_rls_cast_safe.sql",
         "20260830140000_nl_audit_chain_epoch_and_sovereign_allowlist.sql",
         "20260830160000_privilege_escalation_controls.sql",
+        "20260830180000_cem_dago_telemetry_quarantine.sql",
         "20260830184500_nl_epoch_cap_and_sovereign_signature.sql",
+        "20260830190000_cem_dago_telemetry_quarantine_global.sql",
     ];
     for name in names {
         let fe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
