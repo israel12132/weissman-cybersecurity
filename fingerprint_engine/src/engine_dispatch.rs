@@ -768,6 +768,9 @@ async fn dispatch_engine_match(
         "identity_attack_chain" => {
             crate::identity_attack_chain_engine::run_identity_attack_chain_result(target, ctx).await
         }
+        "privilege_escalation_credential_access" => {
+            crate::priv_esc_cred_access::run_priv_esc_cred_access_result(target, ctx).await
+        }
         "pipeline_to_runtime_risk" => {
             crate::pipeline_to_runtime_risk_engine::run_pipeline_to_runtime_risk_result(target, ctx)
                 .await
