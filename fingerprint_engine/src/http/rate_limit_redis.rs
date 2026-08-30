@@ -1,15 +1,17 @@
 //! Distributed rate-limit counters via Redis (`REDIS_URL`). Falls back to in-process governor when unset.
 //!
 //! In production multi-replica mode (`REDIS_URL` set, `WEISSMAN_ALLOW_SINGLE_NODE` unset), Redis
-//! outages **degrade** the request-path governor to a stricter in-memory cap (50%) and emit a
-//! SOC signal — they do **not** 503 legitimate logins (self-inflicted DoS). MFA lockout and
-//! other stores that still require Redis keep [`distributed_store_unavailable_response`].
+//! outages **degrade** the request-path governor to a stricter in-memory cap
+//! (`50% / WEISSMAN_REPLICA_COUNT`) and emit a SOC signal — they do **not** 503
+//! legitimate logins (self-inflicted DoS). MFA lockout and other stores that still
+//! require Redis keep [`distributed_store_unavailable_response`].
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use dashmap::DashMap;
 use redis::AsyncCommands;
+use std::num::NonZeroU32;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
@@ -339,10 +341,44 @@ pub async fn verify_redis_at_startup() -> Result<(), String> {
 
 /// True when Redis is required for cluster coherence but the client is missing
 /// or the last async INCR failed. Request-path governors must degrade locally
-/// (50% cap) instead of returning 503.
+/// (`50% / replica_count`) instead of returning 503.
 #[must_use]
 pub fn redis_degraded() -> bool {
     distributed_state_required() && (!is_enabled() || redis_sync_unhealthy())
+}
+
+/// Replica count for sharded local caps. Production must set
+/// `WEISSMAN_REPLICA_COUNT` to the Deployment size. Unset defaults to 8 so an
+/// omitted var cannot widen the per-pod flood window. Single-node / E2E stacks
+/// default to 1.
+#[must_use]
+pub fn replica_count() -> NonZeroU32 {
+    if let Ok(s) = std::env::var("WEISSMAN_REPLICA_COUNT") {
+        if let Ok(n) = s.trim().parse::<u32>() {
+            if let Some(nz) = NonZeroU32::new(n) {
+                return nz;
+            }
+        }
+    }
+    if crate::security_startup::env_truthy_pub("WEISSMAN_E2E_STACK")
+        || crate::security_startup::env_truthy_pub("WEISSMAN_ALLOW_SINGLE_NODE")
+    {
+        return NonZeroU32::MIN;
+    }
+    NonZeroU32::new(8).expect("8 is non-zero")
+}
+
+/// Local cap when Redis is down: half the global quota, split across replicas.
+/// Floor of 1 so a huge replica count cannot disable the governor entirely.
+#[must_use]
+pub fn degraded_local_quota(global: NonZeroU32) -> NonZeroU32 {
+    degraded_local_quota_with_replicas(global, replica_count())
+}
+
+#[must_use]
+pub fn degraded_local_quota_with_replicas(global: NonZeroU32, replicas: NonZeroU32) -> NonZeroU32 {
+    let half = (global.get() / 2).max(1);
+    NonZeroU32::new((half / replicas.get()).max(1)).unwrap_or(NonZeroU32::MIN)
 }
 
 /// SOC-visible Redis outage. Rate-limited to once per 60s so a spray cannot flood logs.
@@ -365,7 +401,7 @@ pub fn notify_redis_degraded(component: &'static str) {
     tracing::error!(
         target: "weissman_soc",
         component,
-        "Redis unavailable or sync unhealthy — governor degraded to 50% in-memory cap (not fail-closed 503)"
+        "Redis unavailable or sync unhealthy — governor degraded to 50%/replica in-memory cap (not fail-closed 503)"
     );
 }
 
@@ -509,6 +545,8 @@ mod tests {
         let src = include_str!("rate_limit_redis.rs");
         let prod = src.split("#[cfg(test)]").next().expect("production source");
         assert!(prod.contains("redis_degraded"));
+        assert!(prod.contains("degraded_local_quota"));
+        assert!(prod.contains("WEISSMAN_REPLICA_COUNT"));
         assert!(prod.contains("weissman_soc"));
         assert!(prod.contains("50%"));
         let login = include_str!("login_rate_limit.rs");
@@ -528,5 +566,18 @@ mod tests {
             "API governor must not 503 when Redis is unhealthy"
         );
         assert!(api_prod.contains("redis_degraded"));
+    }
+
+    #[test]
+    fn degraded_quota_splits_half_across_replicas() {
+        use super::degraded_local_quota_with_replicas;
+        use std::num::NonZeroU32;
+        let g = NonZeroU32::new(100).unwrap();
+        let ten = NonZeroU32::new(10).unwrap();
+        let hundred = NonZeroU32::new(100).unwrap();
+        assert_eq!(degraded_local_quota_with_replicas(g, ten).get(), 5); // 50/10
+        assert_eq!(degraded_local_quota_with_replicas(g, hundred).get(), 1); // floor
+        let one = NonZeroU32::MIN;
+        assert_eq!(degraded_local_quota_with_replicas(g, one).get(), 50); // single replica
     }
 }

@@ -24,8 +24,8 @@ fn login_burst() -> NonZeroU32 {
     NonZeroU32::new(rate_limit_metrics::login_burst()).unwrap_or(NonZeroU32::MIN)
 }
 
-fn half_quota(n: NonZeroU32) -> NonZeroU32 {
-    NonZeroU32::new(n.get() / 2).unwrap_or(NonZeroU32::MIN)
+fn degraded_quota(n: NonZeroU32) -> NonZeroU32 {
+    super::rate_limit_redis::degraded_local_quota(n)
 }
 
 fn login_limiter() -> Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>> {
@@ -43,8 +43,8 @@ fn degraded_login_limiter() -> Arc<RateLimiter<String, DefaultKeyedStateStore<St
     static LIM: OnceLock<Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>>> =
         OnceLock::new();
     LIM.get_or_init(|| {
-        let q = Quota::per_minute(half_quota(login_per_minute()))
-            .allow_burst(half_quota(login_burst()));
+        let q = Quota::per_minute(degraded_quota(login_per_minute()))
+            .allow_burst(degraded_quota(login_burst()));
         Arc::new(RateLimiter::keyed(q))
     })
     .clone()
@@ -55,8 +55,8 @@ fn degraded_enroll_limiter(
     static LIM: OnceLock<Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>>> =
         OnceLock::new();
     LIM.get_or_init(|| {
-        let q = Quota::per_minute(half_quota(enroll_per_minute()))
-            .allow_burst(half_quota(enroll_burst()));
+        let q = Quota::per_minute(degraded_quota(enroll_per_minute()))
+            .allow_burst(degraded_quota(enroll_burst()));
         Arc::new(RateLimiter::keyed(q))
     })
     .clone()
@@ -135,8 +135,8 @@ pub async fn login_rate_limit_middleware(
         }
         (UnauthPostKind::Login, true) => (
             degraded_login_limiter(),
-            half_quota(login_per_minute()),
-            half_quota(login_burst()),
+            degraded_quota(login_per_minute()),
+            degraded_quota(login_burst()),
             "Login",
         ),
         (UnauthPostKind::Enroll, false) => (
@@ -147,15 +147,15 @@ pub async fn login_rate_limit_middleware(
         ),
         (UnauthPostKind::Enroll, true) => (
             degraded_enroll_limiter(),
-            half_quota(enroll_per_minute()),
-            half_quota(enroll_burst()),
+            degraded_quota(enroll_per_minute()),
+            degraded_quota(enroll_burst()),
             "Agent enroll",
         ),
     };
 
     // In-process governor first — no Redis, no auth-pool checkout. Under a
     // password-spray the weissman_auth pool must not be the first choke point.
-    // When Redis is unhealthy the limiter is the 50% cap, not a 503.
+    // When Redis is unhealthy the limiter is the 50%/replica cap, not a 503.
     if let Err(neg) = limiter.check_key(&ip) {
         let clock = DefaultClock::default();
         let retry_after_secs = neg.wait_time_from(clock.now()).as_secs().max(1);
@@ -278,10 +278,10 @@ mod tests {
         );
         assert!(
             !prod.contains("distributed_store_unavailable_response"),
-            "Redis outage must degrade to 50% local cap, not 503"
+            "Redis outage must degrade to 50%/replica local cap, not 503"
         );
         assert!(prod.contains("redis_degraded"));
-        assert!(prod.contains("half_quota"));
+        assert!(prod.contains("degraded_local_quota"));
         assert!(prod.contains("notify_redis_degraded"));
     }
 }

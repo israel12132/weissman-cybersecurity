@@ -22,8 +22,8 @@ fn burst() -> NonZeroU32 {
     NonZeroU32::new(rate_limit_metrics::api_burst()).unwrap_or(NonZeroU32::MIN)
 }
 
-fn half_quota(n: NonZeroU32) -> NonZeroU32 {
-    NonZeroU32::new(n.get() / 2).unwrap_or(NonZeroU32::MIN)
+fn degraded_quota(n: NonZeroU32) -> NonZeroU32 {
+    super::rate_limit_redis::degraded_local_quota(n)
 }
 
 fn limiter() -> Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>> {
@@ -40,7 +40,7 @@ fn degraded_limiter() -> Arc<RateLimiter<String, DefaultKeyedStateStore<String>,
     static LIM: OnceLock<Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>>> =
         OnceLock::new();
     LIM.get_or_init(|| {
-        let q = Quota::per_second(half_quota(per_sec())).allow_burst(half_quota(burst()));
+        let q = Quota::per_second(degraded_quota(per_sec())).allow_burst(degraded_quota(burst()));
         Arc::new(RateLimiter::keyed(q))
     })
     .clone()
@@ -80,7 +80,7 @@ pub async fn api_rate_limit_middleware(
         limiter()
     };
     let limit_n = if degraded {
-        half_quota(per_sec())
+        degraded_quota(per_sec())
     } else {
         per_sec()
     };
@@ -175,10 +175,10 @@ mod tests {
         );
         assert!(
             !prod.contains("distributed_store_unavailable_response"),
-            "Redis outage must degrade to 50% local cap, not 503"
+            "Redis outage must degrade to 50%/replica local cap, not 503"
         );
         assert!(prod.contains("redis_degraded"));
-        assert!(prod.contains("half_quota"));
+        assert!(prod.contains("degraded_local_quota"));
         assert!(prod.contains("notify_redis_degraded"));
     }
 }
