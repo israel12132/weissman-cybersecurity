@@ -508,7 +508,7 @@ fn normalize_href_to_path(href: &str) -> Option<String> {
     }
     let no_q = h.split('?').next().unwrap_or(h);
     if no_q.starts_with('/') {
-        return normalize_probe_path(no_q);
+        return crate::discovery_corpus::sanitize_discovered_path(no_q);
     }
     if let Some(rest) = no_q
         .strip_prefix("http://")
@@ -516,10 +516,10 @@ fn normalize_href_to_path(href: &str) -> Option<String> {
     {
         let path_start = rest.find('/')?;
         let path = rest.get(path_start..)?;
-        return normalize_probe_path(path);
+        return crate::discovery_corpus::sanitize_discovered_path(path);
     }
     if !no_q.contains("://") {
-        return normalize_probe_path(no_q);
+        return crate::discovery_corpus::sanitize_discovered_path(no_q);
     }
     None
 }

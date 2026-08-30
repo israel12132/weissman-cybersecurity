@@ -73,6 +73,7 @@ pub mod demo_request;
 pub mod discovery_ai;
 pub mod discovery_engine;
 pub mod discovery_knowledge;
+pub mod discovery_pace;
 pub mod elite_hardening;
 pub mod embeddings;
 pub mod engine_accounting;

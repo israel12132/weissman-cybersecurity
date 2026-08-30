@@ -2,6 +2,7 @@
 //! Used by recon_engine.py for attack surface discovery.
 
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Semaphore;
 
 const DEFAULT_CONCURRENCY: usize = 200;
@@ -187,7 +188,36 @@ pub const DEFAULT_SUBDOMAINS: &[&str] = &[
     "meet",
 ];
 
-/// Resolve one hostname; returns Some(hostname) if it resolves.
+/// True when at least two of `resolved` probes returned an address (wildcard / catch-all DNS).
+#[must_use]
+pub fn wildcard_vote(resolved: &[bool]) -> bool {
+    resolved.iter().filter(|r| **r).count() >= 2
+}
+
+async fn random_label_resolves(domain: &str) -> bool {
+    let label = format!("wx{}z", uuid::Uuid::new_v4().simple());
+    let host = format!("{label}.{domain}");
+    let addr = format!("{host}:80");
+    match tokio::time::timeout(Duration::from_secs(3), tokio::net::lookup_host(addr)).await {
+        Ok(Ok(mut iter)) => iter.next().is_some(),
+        _ => false,
+    }
+}
+
+/// Pre-flight: 3 fully-random labels. If ≥2 resolve, the zone is a DNS wildcard/catch-all.
+/// Unlimited brute-force must not run — every prefix would look live.
+pub async fn detect_dns_wildcard(domain: &str) -> bool {
+    let domain = domain.trim().trim_end_matches('.').to_lowercase();
+    if domain.is_empty() || domain.parse::<std::net::IpAddr>().is_ok() {
+        return false;
+    }
+    let mut hits = [false; 3];
+    for slot in &mut hits {
+        *slot = random_label_resolves(&domain).await;
+    }
+    wildcard_vote(&hits)
+}
+
 async fn resolve_one(host: &str) -> Option<String> {
     let host = host.trim().to_lowercase();
     if host.is_empty() {
@@ -258,5 +288,19 @@ mod tests {
     async fn test_enum_empty_domain() {
         let r = enum_subdomains_default("").await;
         assert!(r.is_empty());
+    }
+
+    #[test]
+    fn wildcard_vote_requires_two_hits() {
+        assert!(!wildcard_vote(&[false, false, false]));
+        assert!(!wildcard_vote(&[true, false, false]));
+        assert!(wildcard_vote(&[true, true, false]));
+        assert!(wildcard_vote(&[true, true, true]));
+    }
+
+    #[tokio::test]
+    async fn detect_wildcard_skips_empty_and_ip() {
+        assert!(!detect_dns_wildcard("").await);
+        assert!(!detect_dns_wildcard("10.0.0.1").await);
     }
 }
