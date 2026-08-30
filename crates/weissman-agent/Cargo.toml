@@ -41,10 +41,14 @@ sha2 = "0.10"
 hex = "0.4"
 
 # Encrypted in-memory ring (XChaCha20-Poly1305, 192-bit random nonce, 10 MiB cap).
+# Per-frame keys via HKDF-SHA256; master IKM is mlocked / Linux keyring when possible.
 chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
+hkdf = "0.12"
+zeroize = "1"
 getrandom = "0.2"
 hmac = "0.12"
 subtle = "2"
+base64 = "0.22"
 
 # Random nonce + uuid.
 uuid = { version = "1", features = ["v4"] }

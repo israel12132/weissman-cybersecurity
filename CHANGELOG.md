@@ -39,6 +39,16 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
   `agent_telemetry_errors`: policies use `public.app_current_tenant_id()`
   instead of `current_setting(...)::bigint`, so an empty worker scope cannot
   raise `invalid input syntax for type bigint: ""`.
+- **Telemetry Blinding lock** stays on until a healthy sample. Every skip after
+  3 consecutive failures writes `agent_anomalies` and persists the SOAR
+  finding; the 15-minute window only gates on-call paging (`last_alerted_at`).
+- **Ring HKDF + zeroize.** Per-frame XChaCha keys are HKDF-SHA256 from a
+  keyring/mlocked master IKM; frame keys and plaintext are zeroized after use.
+- **Dual-pin TLS.** Active leaf pin(s) plus a sovereign Root CA pin/PEM for
+  certificate rotation. OS store is still never a fallback.
+- **Low-Entropy Emergency Mode.** Boot waits on blocking `getrandom`, then a
+  Vault `WEISSMAN_AGENT_ENTROPY_SEED` if CSPRNG is dead; SOC gets a critical
+  finding. No seed and no CSPRNG still fails closed.
 - **CI smoke owner** — `WEISSMAN_MASTER_BOOTSTRAP_EMAIL` (`ci-smoke`) is
   promoted to `is_superadmin` alongside `WEISSMAN_ADMIN_EMAIL`, so
   `POST /api/clients` is not 403 `owner_required`.

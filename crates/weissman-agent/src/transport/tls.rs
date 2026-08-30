@@ -1,12 +1,11 @@
 //! TLS for enrollment HTTPS + agent WSS.
 //!
-//! The Weissman gateway is pin-first. `WEISSMAN_SERVER_CERT_SHA256` (or a
-//! previously persisted leaf pin) is the only acceptable handshake. A matching
-//! pin is accepted; a mismatch is rejected **without** falling through to the
-//! OS trust store — that is how SSL-inspection MITM is blocked.
-//! First-boot bootstrap (no pin yet) verifies against **webpki public roots
-//! only**, then freezes the leaf SHA-256 as a sticky pin. Native CAs are never
-//! used to accept the sovereign gateway.
+//! The Weissman gateway is pin-first. Active leaf pin(s)
+//! (`WEISSMAN_SERVER_CERT_SHA256`, optional `_BACKUP` leaf, sticky TOFU) never
+//! fall through to the OS store. A sovereign Root CA pin
+//! (`WEISSMAN_SERVER_ROOT_CA_SHA256` and/or `WEISSMAN_SERVER_ROOT_CA_PEM`) is
+//! the only rotation path: the presented chain must verify against that root,
+//! then the new leaf is frozen. Leaf-hash == root-hash is NOT a valid check.
 
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::client::WebPkiServerVerifier;
@@ -17,6 +16,7 @@ use rustls::{
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use subtle::ConstantTimeEq;
 
 static TOFU_PIN: Mutex<Option<[u8; 32]>> = Mutex::new(None);
 static OBSERVED_PIN: Mutex<Option<[u8; 32]>> = Mutex::new(None);
@@ -51,6 +51,68 @@ fn parse_pin(s: &str) -> Option<[u8; 32]> {
     let mut a = [0u8; 32];
     a.copy_from_slice(&bytes);
     Some(a)
+}
+
+fn parse_pin_list(s: &str) -> Vec<[u8; 32]> {
+    s.split([',', ' ', '\n', '\t'])
+        .filter_map(parse_pin)
+        .collect()
+}
+
+fn pin_eq(a: &[u8; 32], b: &[u8; 32]) -> bool {
+    bool::from(a.ct_eq(b))
+}
+
+fn env_leaf_pins() -> Vec<[u8; 32]> {
+    let mut pins = Vec::new();
+    for key in [
+        "WEISSMAN_SERVER_CERT_SHA256",
+        "WEISSMAN_SERVER_CERT_SHA256_BACKUP",
+    ] {
+        if let Ok(v) = std::env::var(key) {
+            pins.extend(parse_pin_list(&v));
+        }
+    }
+    pins
+}
+
+fn env_root_ca_hash() -> Option<[u8; 32]> {
+    std::env::var("WEISSMAN_SERVER_ROOT_CA_SHA256")
+        .ok()
+        .as_deref()
+        .and_then(parse_pin)
+}
+
+fn env_root_ca_certs() -> Vec<CertificateDer<'static>> {
+    let mut out = Vec::new();
+    if let Ok(pem) = std::env::var("WEISSMAN_SERVER_ROOT_CA_PEM") {
+        out.extend(pem_certs(&pem));
+    }
+    if let Ok(path) = std::env::var("WEISSMAN_SERVER_ROOT_CA_FILE") {
+        if let Ok(pem) = std::fs::read_to_string(path) {
+            out.extend(pem_certs(&pem));
+        }
+    }
+    out
+}
+
+fn pem_certs(pem: &str) -> Vec<CertificateDer<'static>> {
+    let mut out = Vec::new();
+    let mut rest = pem;
+    while let Some(start) = rest.find("-----BEGIN CERTIFICATE-----") {
+        let body = &rest[start + 27..];
+        let Some(end) = body.find("-----END CERTIFICATE-----") else {
+            break;
+        };
+        let b64: String = body[..end].chars().filter(|c| !c.is_whitespace()).collect();
+        if let Ok(der) = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &b64) {
+            if !der.is_empty() {
+                out.push(CertificateDer::from(der));
+            }
+        }
+        rest = &body[end + 25..];
+    }
+    out
 }
 
 fn leaf_sha256(cert: &CertificateDer<'_>) -> [u8; 32] {
@@ -90,32 +152,91 @@ fn absorb_native_certs(roots: &mut RootCertStore) -> NativeCertStats {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum GatewayTrust {
     AcceptPinned,
+    TrySovereignRoot,
     RejectPinMismatch,
     BootstrapPublicRoots,
 }
 
-/// Pin is exclusive. A known pin never falls through to any CA, native or public.
+/// Pin is exclusive. OS store is never a fallback.
+/// `backup_root` is a sovereign Root CA pin / PEM — used only to verify the
+/// presented chain (rotation), never compared to the leaf hash.
 #[must_use]
 pub(crate) fn gateway_trust(
-    env_pin: Option<[u8; 32]>,
+    leaf_pins: &[[u8; 32]],
     sticky: Option<[u8; 32]>,
     leaf: [u8; 32],
+    backup_root: bool,
 ) -> GatewayTrust {
-    if let Some(pin) = env_pin.or(sticky) {
-        if pin == leaf {
-            GatewayTrust::AcceptPinned
-        } else {
-            GatewayTrust::RejectPinMismatch
+    let mut pins: Vec<[u8; 32]> = leaf_pins.to_vec();
+    if let Some(s) = sticky {
+        if !pins.iter().any(|p| pin_eq(p, &s)) {
+            pins.push(s);
         }
+    }
+    if pins.is_empty() {
+        return GatewayTrust::BootstrapPublicRoots;
+    }
+    if pins.iter().any(|p| pin_eq(p, &leaf)) {
+        return GatewayTrust::AcceptPinned;
+    }
+    if backup_root {
+        GatewayTrust::TrySovereignRoot
     } else {
-        GatewayTrust::BootstrapPublicRoots
+        GatewayTrust::RejectPinMismatch
     }
 }
 
 #[derive(Debug)]
 struct WeissmanVerifier {
     inner: Arc<WebPkiServerVerifier>,
-    hard_pin: Option<[u8; 32]>,
+    leaf_pins: Vec<[u8; 32]>,
+    root_ca_hash: Option<[u8; 32]>,
+    root_ca_certs: Vec<CertificateDer<'static>>,
+}
+
+impl WeissmanVerifier {
+    fn backup_configured(&self) -> bool {
+        self.root_ca_hash.is_some() || !self.root_ca_certs.is_empty()
+    }
+
+    fn verify_sovereign_root(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        intermediates: &[CertificateDer<'_>],
+        server_name: &ServerName<'_>,
+        ocsp_response: &[u8],
+        now: UnixTime,
+    ) -> Result<ServerCertVerified, TlsError> {
+        let mut roots = RootCertStore::empty();
+        for c in &self.root_ca_certs {
+            let _ = roots.add(c.clone());
+        }
+        let mut presented: Vec<CertificateDer<'static>> = Vec::new();
+        presented.push(CertificateDer::from(end_entity.as_ref().to_vec()));
+        presented.extend(
+            intermediates
+                .iter()
+                .map(|c| CertificateDer::from(c.as_ref().to_vec())),
+        );
+        if let Some(want) = self.root_ca_hash {
+            for c in &presented {
+                if pin_eq(&leaf_sha256(c), &want) {
+                    let _ = roots.add(c.clone());
+                }
+            }
+        }
+        if roots.is_empty() {
+            return Err(TlsError::General(
+                "sovereign Root CA pin did not match any presented certificate \
+                 and no WEISSMAN_SERVER_ROOT_CA_PEM was loaded"
+                    .into(),
+            ));
+        }
+        let verifier = WebPkiServerVerifier::builder(Arc::new(roots))
+            .build()
+            .map_err(|e| TlsError::General(format!("sovereign root verifier: {e}")))?;
+        verifier.verify_server_cert(end_entity, intermediates, server_name, ocsp_response, now)
+    }
 }
 
 impl ServerCertVerifier for WeissmanVerifier {
@@ -129,12 +250,41 @@ impl ServerCertVerifier for WeissmanVerifier {
     ) -> Result<ServerCertVerified, TlsError> {
         let hash = leaf_sha256(end_entity);
         let sticky = TOFU_PIN.lock().ok().and_then(|g| *g);
-        match gateway_trust(self.hard_pin, sticky, hash) {
+        match gateway_trust(&self.leaf_pins, sticky, hash, self.backup_configured()) {
             GatewayTrust::AcceptPinned => {
                 if let Ok(mut g) = OBSERVED_PIN.lock() {
                     *g = Some(hash);
                 }
                 return Ok(ServerCertVerified::assertion());
+            }
+            GatewayTrust::TrySovereignRoot => {
+                match self.verify_sovereign_root(
+                    end_entity,
+                    intermediates,
+                    server_name,
+                    ocsp_response,
+                    now,
+                ) {
+                    Ok(v) => {
+                        tracing::warn!(
+                            target: "agent",
+                            "active TLS leaf pin missed; accepted via sovereign Root CA pin — freezing new leaf"
+                        );
+                        if let Ok(mut g) = OBSERVED_PIN.lock() {
+                            *g = Some(hash);
+                        }
+                        if let Ok(mut g) = TOFU_PIN.lock() {
+                            *g = Some(hash);
+                        }
+                        PIN_CHANGED.store(true, Ordering::Relaxed);
+                        return Ok(v);
+                    }
+                    Err(e) => {
+                        return Err(TlsError::General(format!(
+                            "leaf pin missed and sovereign Root CA verification failed: {e}"
+                        )));
+                    }
+                }
             }
             GatewayTrust::RejectPinMismatch => {
                 return Err(TlsError::General(
@@ -218,11 +368,13 @@ pub fn rustls_client_config() -> anyhow::Result<ClientConfig> {
     let inner = WebPkiServerVerifier::builder(Arc::new(roots))
         .build()
         .map_err(|e| anyhow::anyhow!("web pki verifier: {e}"))?;
-    let hard_pin = std::env::var("WEISSMAN_SERVER_CERT_SHA256")
-        .ok()
-        .as_deref()
-        .and_then(parse_pin);
-    let verifier = Arc::new(WeissmanVerifier { inner, hard_pin });
+    let leaf_pins = env_leaf_pins();
+    let verifier = Arc::new(WeissmanVerifier {
+        inner,
+        leaf_pins,
+        root_ca_hash: env_root_ca_hash(),
+        root_ca_certs: env_root_ca_certs(),
+    });
     let cfg = ClientConfig::builder()
         .dangerous()
         .with_custom_certificate_verifier(verifier)
@@ -300,20 +452,49 @@ mod tests {
         let pin = [0x11u8; 32];
         let other = [0x22u8; 32];
         assert_eq!(
-            gateway_trust(Some(pin), None, pin),
+            gateway_trust(&[pin], None, pin, false),
             GatewayTrust::AcceptPinned
         );
         assert_eq!(
-            gateway_trust(Some(pin), None, other),
+            gateway_trust(&[pin], None, other, false),
             GatewayTrust::RejectPinMismatch
         );
         assert_eq!(
-            gateway_trust(None, Some(pin), other),
+            gateway_trust(&[], Some(pin), other, false),
             GatewayTrust::RejectPinMismatch
         );
         assert_eq!(
-            gateway_trust(None, None, other),
+            gateway_trust(&[], None, other, false),
             GatewayTrust::BootstrapPublicRoots
         );
+        assert_eq!(
+            gateway_trust(&[pin], None, other, true),
+            GatewayTrust::TrySovereignRoot,
+            "leaf miss with sovereign root configured must try chain verify, not OS store"
+        );
+        assert_eq!(
+            gateway_trust(&[pin, other], None, other, false),
+            GatewayTrust::AcceptPinned,
+            "backup leaf pin is a second allowed leaf, not a root-hash compare"
+        );
+    }
+
+    #[test]
+    fn pem_certs_parses_one_block() {
+        // Tiny invalid DER is fine — parser only splits PEM.
+        let der = b"\x30\x00";
+        let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, der);
+        let pem = format!("-----BEGIN CERTIFICATE-----\n{b64}\n-----END CERTIFICATE-----\n");
+        let certs = pem_certs(&pem);
+        assert_eq!(certs.len(), 1);
+        assert_eq!(certs[0].as_ref(), der);
+    }
+
+    #[test]
+    fn parse_pin_list_comma_separated() {
+        let a = "ab".repeat(32);
+        let b = "cd".repeat(32);
+        let pins = parse_pin_list(&format!("{a},{b}"));
+        assert_eq!(pins.len(), 2);
     }
 }

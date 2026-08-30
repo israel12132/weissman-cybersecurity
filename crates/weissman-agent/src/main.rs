@@ -135,9 +135,28 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    // Encrypted 10 MiB ring is keyed from the renewal secret so a memory dump of
-    // a disconnected agent does not yield plaintext findings.
+    // Encrypted 10 MiB ring is keyed from the renewal secret (HKDF per-frame,
+    // master in keyring/mlock). A dump of ciphertext without the IKM is useless.
     ringbuf::init(&enrollment.agent_secret)?;
+    if ringbuf::in_entropy_emergency() {
+        error!(
+            target: "agent",
+            "Low-Entropy Emergency Mode: host CSPRNG is dead; using WEISSMAN_AGENT_ENTROPY_SEED"
+        );
+        ringbuf::push(&protocol::AgentToServer::Finding {
+            agent_id: enrollment.agent_id.clone(),
+            task_id: "boot".into(),
+            engine: "entropy_emergency".into(),
+            finding: serde_json::json!({
+                "title": "Host CSPRNG unavailable — Low-Entropy Emergency Mode",
+                "severity": "critical",
+                "description": "RDRAND/RNDR CF-check and getrandom failed at boot. The agent used a Vault-injected WEISSMAN_AGENT_ENTROPY_SEED so it could start instead of crash-looping. Treat this host as degraded until hardware/OS entropy is restored.",
+                "mitre_attack": "T1562.001",
+                "kind": "entropy_emergency",
+                "source": "agent",
+            }),
+        });
+    }
 
     if cli.enroll_only {
         // The installer runs this to validate the token. It used to throw the result away and

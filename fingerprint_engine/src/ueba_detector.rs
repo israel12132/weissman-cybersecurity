@@ -146,14 +146,19 @@ pub async fn ingest_sample(
                 SamplingFailureEval::default()
             }
         };
-        if eval.alerted {
+        // SOAR + Postgres stay live for every skip after the threshold. The
+        // 15-minute window only gates on-call paging (last_alerted_at), never
+        // the blinded lock or the event log — cooldown abuse must not hide a
+        // pulse of NtQuerySystemInformation / /proc blocks.
+        if eval.persist_event {
             fire_telemetry_blinding_alert(pool, tenant_id, &p, reason, eval.consecutive).await;
         }
         return Ok(UebaIngestSummary {
             skipped: true,
             skip_reason: Some(reason.to_string()),
             consecutive_failures: eval.consecutive,
-            blinding_alert: eval.alerted,
+            blinding_alert: eval.persist_event,
+            oncall_paged: eval.page_oncall,
             ..Default::default()
         });
     }
@@ -258,6 +263,10 @@ pub struct UebaIngestSummary {
     pub consecutive_failures: i32,
     #[serde(default)]
     pub blinding_alert: bool,
+    /// True when the 15-minute on-call page window elapsed. Never used to
+    /// suppress SOAR or `agent_anomalies` rows.
+    #[serde(default)]
+    pub oncall_paged: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -687,28 +696,48 @@ async fn check_new_categorical(
 
 /// Consecutive skipped samples before a Telemetry Blinding critical alert.
 pub const TELEMETRY_BLINDING_THRESHOLD: i32 = 3;
-/// Re-page SOC if the host stays blind this long after the last alert.
-pub const TELEMETRY_BLINDING_REALERT_SECS: i64 = 900;
+/// On-call page (email/SMS) cooldown. Does **not** silence Postgres or SOAR.
+pub const TELEMETRY_BLINDING_ONCALL_SECS: i64 = 900;
+#[deprecated(note = "on-call window only; use TELEMETRY_BLINDING_ONCALL_SECS")]
+pub const TELEMETRY_BLINDING_REALERT_SECS: i64 = TELEMETRY_BLINDING_ONCALL_SECS;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SamplingFailureEval {
     pub consecutive: i32,
-    pub alerted: bool,
+    /// Host is blinded (streak ≥ 3). Persist anomaly + SOAR every skip. No cooldown.
+    pub persist_event: bool,
+    /// Page on-call. 15-minute window. Must not gate persist_event.
+    pub page_oncall: bool,
 }
 
-/// Pure streak rule: 3 consecutive failures fire; re-alert after 15 minutes if still blind.
+/// State-machine / SOAR rule: once blinded, every subsequent skip is an event.
+#[must_use]
+pub fn should_persist_telemetry_blinding(consecutive: i32) -> bool {
+    consecutive >= TELEMETRY_BLINDING_THRESHOLD
+}
+
+/// Email/SMS only. APT pulsing inside this window still lands in Postgres + SOAR.
+#[must_use]
+pub fn should_page_oncall_telemetry_blinding(
+    consecutive: i32,
+    seconds_since_last_page: Option<i64>,
+) -> bool {
+    if !should_persist_telemetry_blinding(consecutive) {
+        return false;
+    }
+    match seconds_since_last_page {
+        None => true,
+        Some(s) => s >= TELEMETRY_BLINDING_ONCALL_SECS,
+    }
+}
+
+/// Backward-compatible name: this is the **persist/SOAR** rule (no cooldown).
 #[must_use]
 pub fn should_alert_telemetry_blinding(
     consecutive: i32,
-    seconds_since_last_alert: Option<i64>,
+    _seconds_since_last_alert: Option<i64>,
 ) -> bool {
-    if consecutive < TELEMETRY_BLINDING_THRESHOLD {
-        return false;
-    }
-    match seconds_since_last_alert {
-        None => true,
-        Some(s) => s >= TELEMETRY_BLINDING_REALERT_SECS,
-    }
+    should_persist_telemetry_blinding(consecutive)
 }
 
 async fn record_sampling_failure(
@@ -745,19 +774,10 @@ async fn record_sampling_failure(
     .await
     .map_err(|e| format!("upsert telemetry errors: {e}"))?;
     let (consecutive, last_alerted_at) = row.unwrap_or((1, None));
-    let secs_since_alert = last_alerted_at.map(|ts| (chrono::Utc::now() - ts).num_seconds());
-    let alerted = should_alert_telemetry_blinding(consecutive, secs_since_alert);
-    if alerted {
-        sqlx::query(
-            r#"UPDATE agent_telemetry_errors
-                  SET last_alerted_at = now()
-                WHERE tenant_id = $1 AND agent_id = $2"#,
-        )
-        .bind(tenant_id)
-        .bind(&p.agent_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| format!("stamp blinding alert: {e}"))?;
+    let secs_since_page = last_alerted_at.map(|ts| (chrono::Utc::now() - ts).num_seconds());
+    let persist_event = should_persist_telemetry_blinding(consecutive);
+    let page_oncall = should_page_oncall_telemetry_blinding(consecutive, secs_since_page);
+    if persist_event {
         sqlx::query(
             r#"INSERT INTO agent_anomalies
                      (tenant_id, agent_id, client_id, sample_id, metric_name,
@@ -777,10 +797,23 @@ async fn record_sampling_failure(
         .await
         .map_err(|e| format!("insert blinding anomaly: {e}"))?;
     }
+    if page_oncall {
+        sqlx::query(
+            r#"UPDATE agent_telemetry_errors
+                  SET last_alerted_at = now()
+                WHERE tenant_id = $1 AND agent_id = $2"#,
+        )
+        .bind(tenant_id)
+        .bind(&p.agent_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| format!("stamp on-call page: {e}"))?;
+    }
     tx.commit().await.map_err(|e| format!("commit: {e}"))?;
     Ok(SamplingFailureEval {
         consecutive,
-        alerted,
+        persist_event,
+        page_oncall,
     })
 }
 
@@ -1032,17 +1065,23 @@ mod tests {
 
     #[test]
     fn blinding_alert_fires_on_third_consecutive_failure() {
-        assert!(!should_alert_telemetry_blinding(1, None));
-        assert!(!should_alert_telemetry_blinding(2, None));
-        assert!(should_alert_telemetry_blinding(3, None));
-        assert!(should_alert_telemetry_blinding(4, None));
+        assert!(!should_persist_telemetry_blinding(1));
+        assert!(!should_persist_telemetry_blinding(2));
+        assert!(should_persist_telemetry_blinding(3));
+        assert!(should_persist_telemetry_blinding(4));
+        // Cooldown must NOT silence SOAR / Postgres. A 30s block + 5s clear +
+        // 10min block inside the old 15-minute window still persists.
         assert!(
-            !should_alert_telemetry_blinding(4, Some(60)),
-            "must not storm SOC every skipped tick"
+            should_alert_telemetry_blinding(4, Some(60)),
+            "SOAR/event log is not cooldown-gated"
         );
-        assert!(should_alert_telemetry_blinding(
+        assert!(
+            !should_page_oncall_telemetry_blinding(4, Some(60)),
+            "on-call page (email/SMS) keeps the 15-minute window"
+        );
+        assert!(should_page_oncall_telemetry_blinding(
             4,
-            Some(TELEMETRY_BLINDING_REALERT_SECS)
+            Some(TELEMETRY_BLINDING_ONCALL_SECS)
         ));
         assert_eq!(TELEMETRY_BLINDING_THRESHOLD, 3);
     }
