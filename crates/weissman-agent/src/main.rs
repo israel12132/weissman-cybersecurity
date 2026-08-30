@@ -2,12 +2,11 @@
 //!
 //! Boot sequence:
 //!   1. parse CLI / env (`--server-url`, `--enrollment-token`, `--client-id`).
-//!   2. enroll over HTTPS, obtain a per-agent session JWT + agent_id.
+//!   2. enroll over HTTPS (or resume AEAD-encrypted identity spool), obtain a
+//!      per-agent session JWT + agent_id.
 //!   3. open a WebSocket to `/ws/agent`, send `hello`, await `task` messages.
 //!   4. for each task: spawn local detection, stream `finding` messages, then `task_done`.
 //!   5. reconnect with exponential backoff on disconnect.
-//!
-//! No persistent storage; all state in memory.
 
 mod detections;
 mod protocol;
@@ -123,6 +122,10 @@ async fn main() -> anyhow::Result<()> {
         println!("{}", serde_json::to_string_pretty(&enrollment)?);
         return Ok(());
     }
+
+    detections::spawn_onboarding_exec_gate(Duration::from_secs(
+        detections::ONBOARDING_EXEC_GATE_SECS,
+    ));
 
     // Reconnect loop with exponential back-off.
     let mut backoff = cli.backoff_ms_initial.max(250);

@@ -13,6 +13,11 @@ mod log_integrity;
 mod malware_local;
 mod mobile_local;
 mod network_local;
+mod onboarding_exec_gate;
+pub use onboarding_exec_gate::{
+    spawn_for_window as spawn_onboarding_exec_gate,
+    ONBOARDING_WINDOW_SECS as ONBOARDING_EXEC_GATE_SECS,
+};
 mod process_hollowing;
 mod process_modules;
 mod scheduled_tasks;

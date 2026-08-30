@@ -20,6 +20,8 @@
 #   WEISSMAN_JWT_SECRET (>=48 chars)   WEISSMAN_ADMIN_PASSWORD
 #   WEISSMAN_METRICS_TOKEN (>=32)      WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET (>=32)
 #   WEISSMAN_JOB_ORCHESTRATOR_SECRET (>=32)
+#   WEISSMAN_PROXY_SIGNING_SECRET (>=32; dual-control HMAC)
+#   WEISSMAN_TRUST_PROXY_CIDRS (comma-separated; X-Forwarded-For allow-list)
 #   WEISSMAN_PUBLIC_BASE_URL (https)   POSTGRES_PASSWORD  DB_APP_PASSWORD
 #   DB_AUTH_PASSWORD  REDIS_PASSWORD   (monitoring uses WEISSMAN_ADMIN_* — optional GRAFANA_ADMIN_PASSWORD override)
 # Bounded container logs. Docker's json-file driver defaults to *unbounded* growth and
@@ -98,16 +100,17 @@ services:
       WEISSMAN_ADMIN_PASSWORD: ${WEISSMAN_ADMIN_PASSWORD:?set a strong WEISSMAN_ADMIN_PASSWORD}
       WEISSMAN_METRICS_TOKEN: ${WEISSMAN_METRICS_TOKEN:?set a 32+ char WEISSMAN_METRICS_TOKEN}
       WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ${WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET:?set a 32+ char WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET}
+      # Dual-control headers are accepted only with this HMAC (X-Weissman-Proxy-Signature).
+      # IP/CIDR is NOT a dual-control trust signal (k8s pod IP reuse).
+      WEISSMAN_PROXY_SIGNING_SECRET: ${WEISSMAN_PROXY_SIGNING_SECRET:?set a 32+ char WEISSMAN_PROXY_SIGNING_SECRET}
       WEISSMAN_JOB_ORCHESTRATOR_SECRET: ${WEISSMAN_JOB_ORCHESTRATOR_SECRET:?set a 32+ char WEISSMAN_JOB_ORCHESTRATOR_SECRET}
       WEISSMAN_BILLING_STRICT: ${WEISSMAN_BILLING_STRICT:-0}
       WEISSMAN_AGENT_BIN_DIR: /srv/bin/agents
-      # The gateway forwards X-Forwarded-For / X-Real-IP; without this the backend keys
-      # every request off the gateway's container IP, collapsing per-IP rate limits and
-      # login lockout into a single global bucket and making SSE session-IP binding a
-      # no-op. Backend is only reachable from the gateway on the private compose network,
-      # so the app's default (trust loopback/private peers) is safe; pin
-      # WEISSMAN_TRUST_PROXY_CIDRS in .env to narrow it further.
+      # Dual-control headers (X-Weissman-Destructive-Confirm / X-Weissman-Dual-Approve)
+      # require X-Weissman-Proxy-Signature (HMAC with WEISSMAN_PROXY_SIGNING_SECRET).
+      # CIDRs below are for X-Forwarded-For client identity only — never dual-control trust.
       WEISSMAN_TRUST_PROXY_HEADERS: ${WEISSMAN_TRUST_PROXY_HEADERS:-1}
+      WEISSMAN_TRUST_PROXY_CIDRS: ${WEISSMAN_TRUST_PROXY_CIDRS:?set WEISSMAN_TRUST_PROXY_CIDRS to the reverse-proxy CIDRs allowed to supply X-Forwarded-For}
       # OAST out-of-band correlation (blind SSRF/XXE/Log4Shell). Optional: when
       # WEISSMAN_OAST_DOMAIN is set the launcher also starts the `oast` service and the
       # engines correlate callbacks via WEISSMAN_OAST_LISTENER_URL. Empty => the OAST engine

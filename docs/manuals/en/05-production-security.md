@@ -40,6 +40,8 @@ This activates guards in `fingerprint_engine/src/security_startup.rs` (`enforce_
 | `WEISSMAN_METRICS_TOKEN` unset or < 32 chars (server) | Refuses boot |
 | `REDIS_URL` unset without `WEISSMAN_ALLOW_SINGLE_NODE=1` (server) | Refuses boot |
 | `WEISSMAN_JOB_ORCHESTRATOR_SECRET` unset or < 32 chars (server + worker) | Refuses boot |
+| `WEISSMAN_PROXY_SIGNING_SECRET` unset or < 32 chars (server) | Refuses boot — dual-control headers require HMAC, not IP |
+| `WEISSMAN_TRUST_PROXY_CIDRS` unset (server) | Refuses boot — X-Forwarded-For client identity |
 | JWT via `?access_token=` query param | Rejected at runtime |
 
 ---
@@ -86,6 +88,16 @@ X-Weissman-Destructive-Confirm: <exact secret value>
 
 Implemented in `fingerprint_engine/src/security_hardening.rs`. In production, missing secret blocks server start; missing header returns 403 at runtime.
 
+Nginx (or any reverse proxy) **must not** be the only control, and **IP/CIDR must not authorize dual-control**. Kubernetes recycles pod IPs: a crashed gateway address can land on a neighbor pod that then hits Axum `:8000`. Middleware `dual_control_proxy_guard` (outermost layer) accepts `X-Weissman-Destructive-Confirm` / `X-Weissman-Dual-Approve` only when `X-Weissman-Proxy-Signature: t=<unix>,v1=<hmac-sha256-hex>` verifies with `WEISSMAN_PROXY_SIGNING_SECRET`. Canonical string: `v1:{t}\\n{METHOD}\\n{path}\\n{confirm}\\n{approve}`. Max skew 90 seconds. Missing/invalid signature is **403 Forbidden**.
+
+```bash
+WEISSMAN_PROXY_SIGNING_SECRET=$(openssl rand -base64 48)
+# Optional njs helper: deploy/nginx-proxy-sign.njs
+# CLI: scripts/sign_weissman_proxy_header.sh POST /api/containment/execute "$CONFIRM" "$APPROVE"
+```
+
+`WEISSMAN_TRUST_PROXY_CIDRS` remains **required in production** for `X-Forwarded-For` client identity only — never as a dual-control allow-list.
+
 ### 4. Protect metrics and admin surfaces
 
 ```bash
@@ -109,7 +121,8 @@ Scan paths call `gate_scan_enqueue` in `fingerprint_engine/src/billing/mod.rs`.
 - Expose only 443 (and 80 → redirect) publicly
 - Postgres and Redis not reachable from the internet
 - Set `WEISSMAN_TRUST_PROXY_HEADERS=1` only behind a trusted reverse proxy
-- Optional: `WEISSMAN_TRUST_PROXY_CIDRS` for forwarded client IP validation
+- **Required in production:** `WEISSMAN_PROXY_SIGNING_SECRET` — dual-control HMAC (`X-Weissman-Proxy-Signature`)
+- **Required in production:** `WEISSMAN_TRUST_PROXY_CIDRS` — forwarded client IP only (not dual-control)
 
 Never set `WEISSMAN_ALLOW_INSECURE_TLS=1` in production.
 

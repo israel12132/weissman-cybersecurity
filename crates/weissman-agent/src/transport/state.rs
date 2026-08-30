@@ -73,8 +73,9 @@ pub fn state_path() -> PathBuf {
 /// enrollment token if it still has one, which is strictly better than refusing to start.
 #[must_use]
 pub fn load(path: &Path) -> Option<AgentState> {
-    let raw = std::fs::read_to_string(path).ok()?;
-    match serde_json::from_str::<AgentState>(&raw) {
+    let raw = super::spool_crypto::load_maybe_encrypted(path)?;
+    let text = String::from_utf8(raw).ok()?;
+    match serde_json::from_str::<AgentState>(&text) {
         Ok(s) if !s.agent_id.trim().is_empty() && !s.agent_secret.trim().is_empty() => Some(s),
         Ok(_) => None,
         Err(e) => {
@@ -87,31 +88,11 @@ pub fn load(path: &Path) -> Option<AgentState> {
     }
 }
 
-/// Persist identity with owner-only permissions. It holds a bearer credential.
+/// Persist identity encrypted (Linux: kernel keyring IKM) with owner-only permissions.
 pub fn save(path: &Path, state: &AgentState) -> std::io::Result<()> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
     let body = serde_json::to_vec_pretty(state)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    // Write-then-rename so a crash mid-write cannot leave a truncated file that would send the
-    // agent back to re-enrolling with a token it has already consumed.
-    let tmp = path.with_extension("state.tmp");
-    std::fs::write(&tmp, &body)?;
-    set_owner_only(&tmp)?;
-    std::fs::rename(&tmp, path)?;
-    set_owner_only(path)
-}
-
-#[cfg(unix)]
-fn set_owner_only(path: &Path) -> std::io::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
-}
-
-#[cfg(not(unix))]
-fn set_owner_only(_path: &Path) -> std::io::Result<()> {
-    Ok(())
+    super::spool_crypto::persist_encrypted(path, &body)
 }
 
 #[cfg(test)]
@@ -148,6 +129,57 @@ mod tests {
             );
         }
 
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn persisted_file_must_not_contain_plaintext_agent_secret() {
+        let dir = std::env::temp_dir().join(format!(
+            "weissman-agent-spool-secret-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let path = dir.join("agent.state");
+        save(&path, &sample()).expect("save");
+        let raw = std::fs::read(&path).expect("read spool");
+        assert!(
+            super::super::spool_crypto::looks_encrypted(&raw),
+            "spool must be WSPL AEAD, not JSON"
+        );
+        let secret = b"s3cr3t-renewal-credential";
+        assert!(
+            !raw.windows(secret.len()).any(|w| w == secret),
+            "agent_secret must not appear in raw spool bytes"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn legacy_plaintext_json_loads_for_migration() {
+        let dir = std::env::temp_dir().join(format!(
+            "weissman-agent-legacy-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(1)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("agent.state");
+        let body = serde_json::to_vec_pretty(&sample()).unwrap();
+        assert_eq!(body.first().copied(), Some(b'{'));
+        std::fs::write(&path, &body).unwrap();
+        let loaded = load(&path).expect("legacy plaintext must load once");
+        assert_eq!(loaded.agent_secret, sample().agent_secret);
+        save(&path, &loaded).expect("rewrite encrypted");
+        let raw = std::fs::read(&path).unwrap();
+        assert!(super::super::spool_crypto::looks_encrypted(&raw));
+        assert!(!raw
+            .windows(b"s3cr3t-renewal-credential".len())
+            .any(|w| w == b"s3cr3t-renewal-credential"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -46,6 +46,11 @@ jsonwebtoken = { version = "9", default-features = false }
 # HTTP fetch for enrollment (request a session token).
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "json"] }
 
+# AEAD identity spool. IKM is kernel keyring (Linux) or getrandom — never machine-id/MAC/env.
+hmac = "0.12"
+getrandom = "0.2"
+chacha20poly1305 = "0.10"
+
 # CLI parsing.
 clap = { version = "4", features = ["derive", "env"] }
 
@@ -62,5 +67,8 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_Threading",
     "Win32_System_LibraryLoader",
 ] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
 
 # Release profile is defined at workspace root Cargo.toml.

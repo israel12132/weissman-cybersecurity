@@ -37,6 +37,8 @@ WEISSMAN_ENV=production
 | `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET` חסר או < 32 תווים | Refuse boot |
 | `WEISSMAN_METRICS_TOKEN` חסר או < 32 תווים | Refuse boot |
 | `WEISSMAN_JOB_ORCHESTRATOR_SECRET` חסר או < 32 תווים (server + worker) | Refuse boot |
+| `WEISSMAN_PROXY_SIGNING_SECRET` חסר או < 32 תווים (server) | Refuse boot — dual-control דורש HMAC, לא IP |
+| `WEISSMAN_TRUST_PROXY_CIDRS` חסר (server) | Refuse boot — זהות לקוח X-Forwarded-For |
 | JWT ב-`?access_token=` | נדחה ב-runtime |
 
 ---
@@ -77,6 +79,14 @@ X-Weissman-Destructive-Confirm: <ערך מדויק>
 
 מימוש: `security_hardening.rs`. ב-production — חסר secret חוסם boot; חסר header → 403.
 
+Nginx שמסיר את הכותרות **אינו מספיק**, ו-**IP/CIDR אינו אות אמון ל-dual-control**. Kubernetes ממחזר כתובות פודים. Middleware `dual_control_proxy_guard` מקבל `X-Weissman-Destructive-Confirm` / Dual-Approve רק כש-`X-Weissman-Proxy-Signature` מאומת עם `WEISSMAN_PROXY_SIGNING_SECRET`. אחרת **403**.
+
+```bash
+WEISSMAN_PROXY_SIGNING_SECRET=$(openssl rand -base64 48)
+```
+
+`WEISSMAN_TRUST_PROXY_CIDRS` נשאר חובה ב-production לזהות לקוח (`X-Forwarded-For`) בלבד — לא כ-allow-list ל-dual-control.
+
 ### 4. הגנה על metrics
 
 ```bash
@@ -98,6 +108,8 @@ Self-hosted unlimited: `WEISSMAN_BILLING_STRICT=0` **רק עם חוזה כתוב
 - חשיפה ציבורית: 443 בלבד
 - Postgres/Redis לא מהאינטרנט
 - `WEISSMAN_TRUST_PROXY_HEADERS=1` רק מאחורי proxy מהימן
+- **חובה ב-production:** `WEISSMAN_PROXY_SIGNING_SECRET` — HMAC ל-dual-control
+- **חובה ב-production:** `WEISSMAN_TRUST_PROXY_CIDRS` — זהות לקוח מועברת בלבד (לא dual-control)
 - לעולם לא `WEISSMAN_ALLOW_INSECURE_TLS=1` ב-production
 
 ### 7. Redis

@@ -690,6 +690,8 @@ async fn async_main() {
         "started"
     );
 
+    fingerprint_engine::nl_audit_chain::spawn_nl_audit_chain_loop(app_pool.clone());
+
     let stop = Arc::new(AtomicBool::new(false));
     let stop_clone = stop.clone();
     let swarm_shutdown = swarm.clone();
