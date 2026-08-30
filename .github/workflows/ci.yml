@@ -238,6 +238,11 @@ jobs:
           sudo docker image prune -af || true
           df -h /
 
+      - name: Install TPM 2.0 TSS headers (native ESAPI)
+        # weissman-agent links tss-esapi on linux-gnu. ubuntu-latest does not
+        # ship libtss2-dev; without it the workspace test link fails.
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libtss2-dev pkg-config
+
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
 
@@ -591,6 +596,9 @@ jobs:
         run: npm run build
         working-directory: frontend
 
+      - name: Install TPM 2.0 TSS headers (native ESAPI)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libtss2-dev pkg-config
+
       - name: Build weissman-server + worker (warm compile for health check)
         run: cargo build -p weissman-server -p weissman-worker
 
@@ -643,6 +651,7 @@ jobs:
         timeout-minutes: 25
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          REDIS_URL: redis://127.0.0.1:6379
           # Fail (don't skip) the DB-backed integration tests here, so a dropped
           # TEST_DATABASE_URL can never masquerade as a green run.
           WEISSMAN_REQUIRE_DB_TESTS: "1"
@@ -1192,6 +1201,8 @@ jobs:
         with:
           toolchain: 1.91.1
           components: llvm-tools-preview
+      - name: Install TPM 2.0 TSS headers (native ESAPI)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libtss2-dev pkg-config
       - name: Install cargo-llvm-cov
         run: cargo install cargo-llvm-cov --locked
       - name: Coverage (workspace lib tests) — per-crate ratchet

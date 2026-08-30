@@ -61,6 +61,10 @@ anyhow = "1"
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"
 
+# Native TPM 2.0 ESAPI. glibc only — musl agent builds stay free of libtss2.
+[target.'cfg(all(target_os = "linux", target_env = "gnu"))'.dependencies]
+tss-esapi = { version = "7.6.0", default-features = false }
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",

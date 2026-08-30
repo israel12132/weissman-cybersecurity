@@ -1,12 +1,12 @@
-//! Seal spool IKM with live TPM 2.0 tools (`tpm2-tss` / tpm2-tools).
+//! Seal spool IKM with the native TPM 2.0 ESAPI (`tss-esapi`).
 //!
-//! Success is only reported after a real `tpm2_unseal` of 32 bytes. Missing
-//! `/dev/tpmrm0` / `/dev/tpm0` or missing `tpm2_*` binaries returns `None` /
-//! `false` — this module never fakes a TPM.
+//! Success is only reported after a real ESAPI `unseal` of 32 bytes. Missing
+//! `/dev/tpmrm0` / `/dev/tpm0`, a musl build (no `libtss2`), or ESAPI failure
+//! returns `None` / `false` — this module never fakes a TPM and never shells
+//! out to `tpm2-tools`.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 
 const PUB_NAME: &str = ".user-7.pub";
 const PRIV_NAME: &str = ".user-7.priv";
@@ -24,41 +24,6 @@ fn tpm_device_path() -> Option<&'static str> {
     } else {
         None
     }
-}
-
-fn tpm2_tools_available() -> bool {
-    Command::new("tpm2_createprimary")
-        .arg("-h")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
-
-fn tpm2(dev: &str, bin: &str, args: &[&str], work: &Path) -> bool {
-    Command::new(bin)
-        .env("TPM2TOOLS_TCTI", format!("device:{dev}"))
-        .current_dir(work)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
-
-fn work_dir(state_dir: &Path) -> Option<PathBuf> {
-    let work = state_dir.join(".tpm-ctx");
-    std::fs::create_dir_all(&work).ok()?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&work, std::fs::Permissions::from_mode(0o700));
-    }
-    Some(work)
 }
 
 fn pub_path(state_dir: &Path) -> PathBuf {
@@ -80,124 +45,223 @@ fn wipe(path: &Path) {
 /// Unseal the 32-byte IKM previously sealed into `state_dir`.
 #[must_use]
 pub fn unseal_ikm(state_dir: &Path) -> Option<[u8; 32]> {
-    let dev = tpm_device_path()?;
-    if !tpm2_tools_available() {
-        return None;
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    {
+        esapi::unseal_ikm(state_dir, tpm_device_path()?)
     }
-    let pub_p = pub_path(state_dir);
-    let priv_p = priv_path(state_dir);
-    if !pub_p.is_file() || !priv_p.is_file() {
-        return None;
+    #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+    {
+        let _ = state_dir;
+        None
     }
-    let work = work_dir(state_dir)?;
-    let primary = work.join("primary.ctx");
-    let key_ctx = work.join("key.ctx");
-    let out = work.join("unsealed");
-    let _ = std::fs::remove_file(&out);
-    if !tpm2(
-        dev,
-        "tpm2_createprimary",
-        &["-C", "o", "-c", "primary.ctx", "-Q"],
-        &work,
-    ) {
-        return None;
-    }
-    if !tpm2(
-        dev,
-        "tpm2_load",
-        &[
-            "-C",
-            "primary.ctx",
-            "-u",
-            pub_p.to_str()?,
-            "-r",
-            priv_p.to_str()?,
-            "-c",
-            "key.ctx",
-            "-Q",
-        ],
-        &work,
-    ) {
-        let _ = std::fs::remove_file(&primary);
-        return None;
-    }
-    if !tpm2(
-        dev,
-        "tpm2_unseal",
-        &["-c", "key.ctx", "-o", "unsealed", "-Q"],
-        &work,
-    ) {
-        let _ = std::fs::remove_file(&primary);
-        let _ = std::fs::remove_file(&key_ctx);
-        return None;
-    }
-    let raw = std::fs::read(&out).ok();
-    wipe(&out);
-    let _ = std::fs::remove_file(&primary);
-    let _ = std::fs::remove_file(&key_ctx);
-    let raw = raw?;
-    if raw.len() != 32 {
-        return None;
-    }
-    let mut k = [0u8; 32];
-    k.copy_from_slice(&raw);
-    Some(k)
 }
 
 /// Seal `ikm` to the TPM. Returns true only when a subsequent unseal would be
 /// possible (objects written). Caller should still `unseal_ikm` to confirm.
 #[must_use]
 pub fn seal_ikm(state_dir: &Path, ikm: &[u8; 32]) -> bool {
-    let Some(dev) = tpm_device_path() else {
-        return false;
-    };
-    if !tpm2_tools_available() {
-        return false;
-    }
-    let Some(work) = work_dir(state_dir) else {
-        return false;
-    };
-    if std::fs::create_dir_all(state_dir).is_err() {
-        return false;
-    }
-    let secret = work.join("secret.bin");
-    if std::fs::write(&secret, ikm).is_err() {
-        return false;
-    }
-    #[cfg(unix)]
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&secret, std::fs::Permissions::from_mode(0o600));
+        let Some(dev) = tpm_device_path() else {
+            return false;
+        };
+        esapi::seal_ikm(state_dir, ikm, dev)
     }
-    let pub_p = pub_path(state_dir);
-    let priv_p = priv_path(state_dir);
-    let ok = tpm2(
-        dev,
-        "tpm2_createprimary",
-        &["-C", "o", "-c", "primary.ctx", "-Q"],
-        &work,
-    ) && tpm2(
-        dev,
-        "tpm2_create",
-        &[
-            "-C",
-            "primary.ctx",
-            "-i",
-            "secret.bin",
-            "-u",
-            pub_p.to_str().unwrap_or(""),
-            "-r",
-            priv_p.to_str().unwrap_or(""),
-            "-Q",
-        ],
-        &work,
-    );
-    wipe(&secret);
-    let _ = std::fs::remove_file(work.join("primary.ctx"));
-    if !ok {
-        let _ = std::fs::remove_file(&pub_p);
-        let _ = std::fs::remove_file(&priv_p);
-        return false;
+    #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+    {
+        let _ = (state_dir, ikm);
+        false
     }
-    pub_p.is_file() && priv_p.is_file()
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+mod esapi {
+    use super::{priv_path, pub_path, wipe};
+    use std::convert::TryFrom;
+    use std::path::Path;
+    use std::str::FromStr;
+    use tss_esapi::attributes::ObjectAttributesBuilder;
+    use tss_esapi::handles::ObjectHandle;
+    use tss_esapi::interface_types::algorithm::{HashingAlgorithm, PublicAlgorithm};
+    use tss_esapi::interface_types::resource_handles::Hierarchy;
+    use tss_esapi::structures::{
+        Digest, KeyedHashScheme, Private, Public, PublicBuilder, PublicKeyedHashParameters,
+        SensitiveData, SymmetricCipherParameters, SymmetricDefinitionObject,
+    };
+    use tss_esapi::traits::{Marshall, UnMarshall};
+    use tss_esapi::{Context, TctiNameConf};
+
+    fn open_context(dev: &str) -> Option<Context> {
+        // Device path is only `/dev/tpmrm0` or `/dev/tpm0` from our own check.
+        // Never honor a host TCTI env var — that would be injection surface.
+        let tcti = TctiNameConf::from_str(&format!("device:{dev}")).ok()?;
+        Context::new(tcti).ok()
+    }
+
+    fn primary_public() -> Option<Public> {
+        let object_attributes = ObjectAttributesBuilder::new()
+            .with_fixed_tpm(true)
+            .with_fixed_parent(true)
+            .with_st_clear(false)
+            .with_sensitive_data_origin(true)
+            .with_user_with_auth(true)
+            .with_decrypt(true)
+            .with_restricted(true)
+            .build()
+            .ok()?;
+        PublicBuilder::new()
+            .with_public_algorithm(PublicAlgorithm::SymCipher)
+            .with_name_hashing_algorithm(HashingAlgorithm::Sha256)
+            .with_object_attributes(object_attributes)
+            .with_symmetric_cipher_parameters(SymmetricCipherParameters::new(
+                SymmetricDefinitionObject::AES_128_CFB,
+            ))
+            .with_symmetric_cipher_unique_identifier(Digest::default())
+            .build()
+            .ok()
+    }
+
+    fn sealed_public() -> Option<Public> {
+        let object_attributes = ObjectAttributesBuilder::new()
+            .with_fixed_tpm(true)
+            .with_fixed_parent(true)
+            .with_st_clear(false)
+            .with_user_with_auth(true)
+            .build()
+            .ok()?;
+        PublicBuilder::new()
+            .with_public_algorithm(PublicAlgorithm::KeyedHash)
+            .with_name_hashing_algorithm(HashingAlgorithm::Sha256)
+            .with_object_attributes(object_attributes)
+            .with_keyed_hash_parameters(PublicKeyedHashParameters::new(KeyedHashScheme::Null))
+            .with_keyed_hash_unique_identifier(Digest::default())
+            .build()
+            .ok()
+    }
+
+    fn write_0600(path: &Path, bytes: &[u8]) -> bool {
+        if let Some(dir) = path.parent() {
+            if std::fs::create_dir_all(dir).is_err() {
+                return false;
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+            }
+        }
+        if std::fs::write(path, bytes).is_err() {
+            return false;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+        }
+        true
+    }
+
+    pub(super) fn seal_ikm(state_dir: &Path, ikm: &[u8; 32], dev: &str) -> bool {
+        let Some(mut context) = open_context(dev) else {
+            return false;
+        };
+        let Some(primary_pub) = primary_public() else {
+            return false;
+        };
+        let Some(sealed_pub) = sealed_public() else {
+            return false;
+        };
+        let Ok(sensitive) = SensitiveData::try_from(ikm.to_vec()) else {
+            return false;
+        };
+        let created = context.execute_with_nullauth_session(|ctx| {
+            let primary = ctx.create_primary(
+                Hierarchy::Owner,
+                primary_pub.clone(),
+                None,
+                None,
+                None,
+                None,
+            )?;
+            let child = ctx.create(
+                primary.key_handle,
+                sealed_pub.clone(),
+                None,
+                Some(sensitive),
+                None,
+                None,
+            )?;
+            let _ = ctx.flush_context(ObjectHandle::from(primary.key_handle));
+            Ok::<_, tss_esapi::Error>((child.out_private, child.out_public))
+        });
+        let Ok((private, public)) = created else {
+            return false;
+        };
+        let Ok(pub_bytes) = public.marshall() else {
+            return false;
+        };
+        let priv_bytes = private.to_vec();
+        let pub_p = pub_path(state_dir);
+        let priv_p = priv_path(state_dir);
+        if !write_0600(&pub_p, &pub_bytes) || !write_0600(&priv_p, &priv_bytes) {
+            wipe(&pub_p);
+            wipe(&priv_p);
+            return false;
+        }
+        pub_p.is_file() && priv_p.is_file()
+    }
+
+    pub(super) fn unseal_ikm(state_dir: &Path, dev: &str) -> Option<[u8; 32]> {
+        let pub_p = pub_path(state_dir);
+        let priv_p = priv_path(state_dir);
+        let pub_bytes = std::fs::read(&pub_p).ok()?;
+        let priv_bytes = std::fs::read(&priv_p).ok()?;
+        let public = Public::unmarshall(&pub_bytes).ok()?;
+        let private = Private::try_from(priv_bytes).ok()?;
+        let mut context = open_context(dev)?;
+        let Some(primary_pub) = primary_public() else {
+            return None;
+        };
+        let opened = context.execute_with_nullauth_session(|ctx| {
+            let primary = ctx.create_primary(
+                Hierarchy::Owner,
+                primary_pub.clone(),
+                None,
+                None,
+                None,
+                None,
+            )?;
+            let loaded = ctx.load(primary.key_handle, private.clone(), public.clone())?;
+            let data = ctx.unseal(ObjectHandle::from(loaded))?;
+            let _ = ctx.flush_context(ObjectHandle::from(loaded));
+            let _ = ctx.flush_context(ObjectHandle::from(primary.key_handle));
+            Ok::<_, tss_esapi::Error>(data)
+        });
+        let data = opened.ok()?;
+        let raw = data.as_slice();
+        if raw.len() != 32 {
+            return None;
+        }
+        let mut k = [0u8; 32];
+        k.copy_from_slice(raw);
+        Some(k)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn never_invokes_host_tpm2_cli() {
+        let src = include_str!("tpm_seal.rs");
+        let prod = src.split("#[cfg(test)]").next().unwrap();
+        assert!(
+            !prod.contains("std::process"),
+            "native ESAPI must not spawn a host process"
+        );
+        assert!(!prod.contains("TPM2TOOLS"));
+        assert!(prod.contains("tss_esapi"));
+        let _ = tpm_device_present();
+    }
 }

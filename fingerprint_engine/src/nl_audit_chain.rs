@@ -11,6 +11,11 @@
 //!   3. Per-tenant `FOR UPDATE` on unchained rows inside `begin_tenant_tx`
 //!      (lock_timeout is set by `set_tenant_tx`) plus a dedicated advisory
 //!      key so two replicas cannot interleave the same tenant's chain.
+//!
+//! Late-committed `BIGSERIAL` ids behind the tip are re-hashed when the hole
+//! is shallow (`WEISSMAN_NL_AUDIT_MAX_HOLE_DISTANCE`, default 100). A deeper
+//! hole freezes the current `chain_epoch` and stamps only the unchained rows
+//! onto a parallel epoch so a 50k-row rewrite cannot DoS the tenant.
 
 use sqlx::PgPool;
 use std::collections::HashSet;
@@ -41,17 +46,25 @@ const SEGMENT_SQL: &str = "SELECT id, user_id, question, compiled_sql, rows_retu
           ORDER BY id ASC
           FOR UPDATE";
 
-const TIP_SQL: &str = "SELECT id, COALESCE(event_hash, '') FROM nl_query_audit
+const TIP_SQL: &str = "SELECT id, COALESCE(event_hash, ''), COALESCE(chain_epoch, 1)
+           FROM nl_query_audit
           WHERE tenant_id = $1 AND event_hash <> $2
           ORDER BY id DESC LIMIT 1";
 
-const PREV_BEFORE_SQL: &str = "SELECT COALESCE(event_hash, '') FROM nl_query_audit
+const PREV_BEFORE_SQL: &str = "SELECT COALESCE(event_hash, ''), COALESCE(chain_epoch, 1)
+           FROM nl_query_audit
           WHERE tenant_id = $1 AND id < $2 AND event_hash <> $3
           ORDER BY id DESC LIMIT 1";
 
 const STAMP_SQL: &str = "UPDATE nl_query_audit
-                SET prev_hash = $3, event_hash = $4
+                SET prev_hash = $3, event_hash = $4, chain_epoch = $5
               WHERE id = $1 AND tenant_id = $2";
+
+/// Default cap on how far behind the tip a late id may sit before we freeze
+/// the current epoch instead of rewriting every already-chained row.
+pub const DEFAULT_MAX_HOLE_DISTANCE: i64 = 100;
+
+type AuditRow = (i64, Option<i64>, String, String, i32, i32, String);
 
 static CHAIN_TX: OnceLock<mpsc::Sender<i64>> = OnceLock::new();
 
@@ -137,14 +150,30 @@ async fn sweep_all(pool: &PgPool) -> Result<(), sqlx::Error> {
 }
 
 /// Late-committed `BIGSERIAL` id at or behind the chained tip: the worker must
-/// re-hash every row from that hole through the tip (atomic re-chain), not
-/// leave the hole unchained for an attacker to hide DML in.
+/// not leave the hole unchained for an attacker to hide DML in.
 #[must_use]
 pub(crate) fn hole_behind_tip(pending_ids_asc: &[i64], tip_id: Option<i64>) -> bool {
     match (pending_ids_asc.first(), tip_id) {
         (Some(&id), Some(tip)) => id <= tip,
         _ => false,
     }
+}
+
+/// `tip_id - hole_id` is the BIGSERIAL distance, not a COUNT(*). A stuck
+/// writer that finally commits 50_000 ids behind the tip would otherwise force
+/// a single tenant transaction to re-hash the entire history.
+#[must_use]
+pub(crate) fn hole_too_deep(hole_id: i64, tip_id: i64, max_distance: i64) -> bool {
+    tip_id.saturating_sub(hole_id) > max_distance
+}
+
+#[must_use]
+pub(crate) fn max_hole_distance() -> i64 {
+    std::env::var("WEISSMAN_NL_AUDIT_MAX_HOLE_DISTANCE")
+        .ok()
+        .and_then(|s| s.parse::<i64>().ok())
+        .filter(|&n| n >= 0)
+        .unwrap_or(DEFAULT_MAX_HOLE_DISTANCE)
 }
 
 /// Serialize chaining for one tenant. HTTP inserts are never blocked: they
@@ -158,52 +187,93 @@ async fn chain_tenant(pool: &PgPool, tenant_id: i64) -> Result<(), sqlx::Error> 
     )
     .await?;
 
-    let pending_rows: Vec<(i64, Option<i64>, String, String, i32, i32, String)> =
-        sqlx::query_as(PENDING_SQL)
-            .bind(tenant_id)
-            .bind(UNCHAINED)
-            .fetch_all(&mut *tx)
-            .await?;
+    let pending_rows: Vec<AuditRow> = sqlx::query_as(PENDING_SQL)
+        .bind(tenant_id)
+        .bind(UNCHAINED)
+        .fetch_all(&mut *tx)
+        .await?;
     if pending_rows.is_empty() {
         tx.commit().await?;
         return Ok(());
     }
 
-    let tip: Option<(i64, String)> = sqlx::query_as(TIP_SQL)
+    let tip: Option<(i64, String, i32)> = sqlx::query_as(TIP_SQL)
         .bind(tenant_id)
         .bind(UNCHAINED)
         .fetch_optional(&mut *tx)
         .await?;
-    let pending_ids: Vec<i64> = pending_rows.iter().map(|(id, ..)| *id).collect();
-    let start_id = pending_ids[0];
-    let rechain = hole_behind_tip(&pending_ids, tip.as_ref().map(|(id, _)| *id));
+    let start_id = pending_rows[0].0;
+    let max_dist = max_hole_distance();
 
-    let (rows, mut prev_hash) = if rechain {
-        tracing::warn!(
-            target: "nl_audit_chain",
-            tenant_id,
-            hole_id = start_id,
-            tip_id = tip.as_ref().map(|(id, _)| *id),
-            "re-chaining audit segment from late-committed id through the tip"
-        );
-        let segment: Vec<(i64, Option<i64>, String, String, i32, i32, String)> =
-            sqlx::query_as(SEGMENT_SQL)
+    match tip {
+        None => {
+            stamp_rows(&mut tx, tenant_id, pending_rows, String::new(), 1).await?;
+        }
+        Some((tip_id, tip_hash, tip_epoch)) if start_id > tip_id => {
+            stamp_rows(&mut tx, tenant_id, pending_rows, tip_hash, tip_epoch).await?;
+        }
+        Some((tip_id, tip_hash, tip_epoch))
+            if hole_behind_tip(&[start_id], Some(tip_id))
+                && hole_too_deep(start_id, tip_id, max_dist) =>
+        {
+            let new_epoch = tip_epoch.saturating_add(1);
+            tracing::warn!(
+                target: "nl_audit_chain",
+                tenant_id,
+                hole_id = start_id,
+                tip_id,
+                max_hole_distance = max_dist,
+                frozen_epoch = tip_epoch,
+                new_epoch,
+                "late audit id exceeds max hole distance — freezing current epoch and starting a parallel chain"
+            );
+            let mut late = Vec::new();
+            let mut after = Vec::new();
+            for row in pending_rows {
+                if row.0 <= tip_id {
+                    late.push(row);
+                } else {
+                    after.push(row);
+                }
+            }
+            stamp_rows(&mut tx, tenant_id, late, String::new(), new_epoch).await?;
+            stamp_rows(&mut tx, tenant_id, after, tip_hash, tip_epoch).await?;
+        }
+        Some((tip_id, _, _)) => {
+            tracing::warn!(
+                target: "nl_audit_chain",
+                tenant_id,
+                hole_id = start_id,
+                tip_id,
+                "re-chaining audit segment from late-committed id through the tip"
+            );
+            let segment: Vec<AuditRow> = sqlx::query_as(SEGMENT_SQL)
                 .bind(tenant_id)
                 .bind(start_id)
                 .fetch_all(&mut *tx)
                 .await?;
-        let prev: String = sqlx::query_scalar(PREV_BEFORE_SQL)
-            .bind(tenant_id)
-            .bind(start_id)
-            .bind(UNCHAINED)
-            .fetch_optional(&mut *tx)
-            .await?
-            .unwrap_or_default();
-        (segment, prev)
-    } else {
-        (pending_rows, tip.map(|(_, h)| h).unwrap_or_default())
-    };
+            let pred: Option<(String, i32)> = sqlx::query_as(PREV_BEFORE_SQL)
+                .bind(tenant_id)
+                .bind(start_id)
+                .bind(UNCHAINED)
+                .fetch_optional(&mut *tx)
+                .await?;
+            let (prev, epoch) = pred.unwrap_or_else(|| (String::new(), 1));
+            stamp_rows(&mut tx, tenant_id, segment, prev, epoch).await?;
+        }
+    }
 
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn stamp_rows(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    rows: Vec<AuditRow>,
+    mut prev_hash: String,
+    epoch: i32,
+) -> Result<(), sqlx::Error> {
     for (id, user_id, sealed_q, sealed_sql, rows_returned, elapsed_ms, error) in rows {
         let canonical = nl_audit_crypto::canonical_nl_audit_payload(
             &prev_hash,
@@ -221,12 +291,11 @@ async fn chain_tenant(pool: &PgPool, tenant_id: i64) -> Result<(), sqlx::Error> 
             .bind(tenant_id)
             .bind(&prev_hash)
             .bind(&event_hash)
-            .execute(&mut *tx)
+            .bind(epoch)
+            .execute(&mut **tx)
             .await?;
         prev_hash = event_hash;
     }
-
-    tx.commit().await?;
     Ok(())
 }
 
@@ -319,9 +388,30 @@ mod tests {
         assert!(SEGMENT_SQL.contains("id >= $2"));
         assert!(STAMP_SQL.contains("SET prev_hash"));
         assert!(
+            STAMP_SQL.contains("chain_epoch"),
+            "stamp must persist chain_epoch so a deep hole can fork without rewriting the tip"
+        );
+        assert!(
             !STAMP_SQL.contains("AND event_hash"),
             "re-chain must overwrite already-signed tip hashes"
         );
+        assert!(TIP_SQL.contains("chain_epoch"));
+    }
+
+    #[test]
+    fn hole_too_deep_uses_id_distance_not_a_full_history_rewrite() {
+        assert!(
+            !hole_too_deep(10, 110, 100),
+            "exactly 100 ids behind is allowed"
+        );
+        assert!(hole_too_deep(10, 111, 100), "101 ids behind must fork");
+        assert!(hole_too_deep(1, 50_001, 100));
+        assert!(!hole_too_deep(5, 5, 100));
+        assert!(
+            hole_too_deep(5, 6, 0),
+            "max 0 means any hole behind the tip forks"
+        );
+        assert_eq!(DEFAULT_MAX_HOLE_DISTANCE, 100);
     }
 
     #[test]
@@ -359,6 +449,11 @@ mod tests {
         assert_ne!(b, b_genesis);
         assert_eq!(a.len(), 64);
         assert_eq!(b.len(), 64);
+        assert!(
+            !nl_audit_crypto::canonical_nl_audit_payload("", 1, None, "q", "s", 0, 0, "")
+                .contains("chain_epoch"),
+            "chain_epoch must not enter the hash payload or existing hashes break"
+        );
     }
 
     #[tokio::test]
@@ -514,6 +609,135 @@ mod tests {
             .await
             .expect("read tx");
         assert_segment_chained(&mut tx, tenant_id, id_a, id_b).await;
+        let _ = sqlx::query("DELETE FROM nl_query_audit WHERE tenant_id = $1 AND question LIKE $2")
+            .bind(tenant_id)
+            .bind(format!("{marker}%"))
+            .execute(&mut *tx)
+            .await;
+        tx.commit().await.expect("cleanup");
+    }
+
+    #[tokio::test]
+    async fn deep_hole_forks_parallel_epoch_without_rewriting_the_tip() {
+        let url = match std::env::var("TEST_DATABASE_URL") {
+            Ok(u) if !u.trim().is_empty() => u,
+            _ => {
+                eprintln!(
+                    "SKIP deep_hole_forks_parallel_epoch_without_rewriting_the_tip: no TEST_DATABASE_URL"
+                );
+                return;
+            }
+        };
+        let _live = LIVE_DB_LOCK.lock().await;
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(2)
+            .acquire_timeout(std::time::Duration::from_secs(5))
+            .connect(&url)
+            .await
+            .expect("connect TEST_DATABASE_URL");
+        let tenant_id: i64 =
+            sqlx::query_scalar("SELECT id FROM tenants WHERE slug = 'default' LIMIT 1")
+                .fetch_optional(&pool)
+                .await
+                .expect("lookup default tenant")
+                .expect("default tenant must exist");
+        let marker = format!(
+            "nlqa-epoch-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        );
+        let mut tx = crate::db::begin_tenant_tx(&pool, tenant_id)
+            .await
+            .expect("tenant tx");
+        let id_a: i64 = sqlx::query_scalar(
+            "INSERT INTO nl_query_audit
+                 (tenant_id, question, compiled_sql, event_hash, prev_hash)
+             VALUES ($1, $2, 's-a', '', '')
+             RETURNING id",
+        )
+        .bind(tenant_id)
+        .bind(format!("{marker}-a"))
+        .fetch_one(&mut *tx)
+        .await
+        .expect("insert A");
+        let id_b: i64 = sqlx::query_scalar(
+            "INSERT INTO nl_query_audit
+                 (tenant_id, question, compiled_sql, event_hash, prev_hash)
+             VALUES ($1, $2, 's-b', '', '')
+             RETURNING id",
+        )
+        .bind(tenant_id)
+        .bind(format!("{marker}-b"))
+        .fetch_one(&mut *tx)
+        .await
+        .expect("insert B");
+        tx.commit().await.expect("commit inserts");
+        chain_tenant(&pool, tenant_id).await.expect("initial chain");
+
+        let mut tx = crate::db::begin_tenant_tx(&pool, tenant_id)
+            .await
+            .expect("snapshot B");
+        let before: (String, String, i32) = sqlx::query_as(
+            "SELECT prev_hash, event_hash, COALESCE(chain_epoch, 1)
+               FROM nl_query_audit WHERE tenant_id = $1 AND id = $2",
+        )
+        .bind(tenant_id)
+        .bind(id_b)
+        .fetch_one(&mut *tx)
+        .await
+        .expect("read B hashes");
+        sqlx::query(
+            "UPDATE nl_query_audit SET event_hash = '', prev_hash = ''
+              WHERE tenant_id = $1 AND id = $2",
+        )
+        .bind(tenant_id)
+        .bind(id_a)
+        .execute(&mut *tx)
+        .await
+        .expect("clear A hashes");
+        tx.commit().await.expect("commit hole");
+
+        let prev_max = std::env::var("WEISSMAN_NL_AUDIT_MAX_HOLE_DISTANCE").ok();
+        std::env::set_var("WEISSMAN_NL_AUDIT_MAX_HOLE_DISTANCE", "0");
+        let chain_res = chain_tenant(&pool, tenant_id).await;
+        match prev_max {
+            Some(v) => std::env::set_var("WEISSMAN_NL_AUDIT_MAX_HOLE_DISTANCE", v),
+            None => std::env::remove_var("WEISSMAN_NL_AUDIT_MAX_HOLE_DISTANCE"),
+        }
+        chain_res.expect("fork epoch for deep hole");
+
+        let mut tx = crate::db::begin_tenant_tx(&pool, tenant_id)
+            .await
+            .expect("read tx");
+        let after_b: (String, String, i32) = sqlx::query_as(
+            "SELECT prev_hash, event_hash, COALESCE(chain_epoch, 1)
+               FROM nl_query_audit WHERE tenant_id = $1 AND id = $2",
+        )
+        .bind(tenant_id)
+        .bind(id_b)
+        .fetch_one(&mut *tx)
+        .await
+        .expect("read B after fork");
+        assert_eq!(after_b, before, "frozen epoch must not rewrite the tip row");
+        let after_a: (String, String, i32) = sqlx::query_as(
+            "SELECT prev_hash, event_hash, COALESCE(chain_epoch, 1)
+               FROM nl_query_audit WHERE tenant_id = $1 AND id = $2",
+        )
+        .bind(tenant_id)
+        .bind(id_a)
+        .fetch_one(&mut *tx)
+        .await
+        .expect("read A after fork");
+        assert_eq!(after_a.0, "", "new epoch is genesis");
+        assert_ne!(after_a.1, UNCHAINED, "late row must still be signed");
+        assert_eq!(after_a.1.len(), 64);
+        assert_eq!(after_a.2, before.2 + 1, "A must land on the next epoch");
+        assert_ne!(
+            after_a.2, after_b.2,
+            "A and B must not share an epoch after a deep fork"
+        );
         let _ = sqlx::query("DELETE FROM nl_query_audit WHERE tenant_id = $1 AND question LIKE $2")
             .bind(tenant_id)
             .bind(format!("{marker}%"))

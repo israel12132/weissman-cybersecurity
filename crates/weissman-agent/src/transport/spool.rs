@@ -3,7 +3,7 @@
 //! Offline telemetry is written under an innocuous cache name and sealed with
 //! AES-256-GCM. The wrapping key is HKDF-SHA256 over real OS entropy (getrandom).
 //! IKM lives in a **reboot-stable** directory (never `/tmp`): systemd credentials,
-//! TPM 2.0 seal (`tpm2-tools` on `/dev/tpmrm0`), Linux user keyring cache, or a
+//! TPM 2.0 seal (native `tss-esapi` on `/dev/tpmrm0`), Linux user keyring cache, or a
 //! 0600 file. Never `/etc/machine-id`, DMI UUID, MAC, or hostname. On Windows the
 //! ciphertext is additionally wrapped with DPAPI (`CryptProtectData`).
 

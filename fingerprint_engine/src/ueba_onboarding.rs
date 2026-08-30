@@ -6,7 +6,9 @@
 //!   2. Fail closed against live `threat_ingest_events` (process names and
 //!      SHA-256 of `/proc/<pid>/exe` when the agent sent `top_process_hashes`).
 //!   3. Appear on the hard OS/name Global Fleet Whitelist **or** have its
-//!      SHA-256 on the sovereign allow-list (`WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST`).
+//!      SHA-256 on the sovereign allow-list: packaged update file, local DB
+//!      (`ueba_sovereign_binary_allowlist`), `WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST`,
+//!      or `WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST_FILE`. Never an outbound HTTP call.
 //!
 //! Fleet majority is **never** a Learn grant: a poisoned golden image would
 //! otherwise bless the backdoor into every new agent's `learned_set`.
@@ -136,6 +138,11 @@ pub enum OnboardingDecision {
     RejectAndAlert,
 }
 
+const PACKAGED_ALLOWLIST: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../crates/weissman-db/data/ueba_sovereign_binary_allowlist.txt"
+));
+
 fn env_allowlist(var: &str) -> Vec<String> {
     std::env::var(var)
         .ok()
@@ -146,6 +153,55 @@ fn env_allowlist(var: &str) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn parse_hash_lines(raw: &str) -> Vec<String> {
+    raw.lines()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty() && !s.starts_with('#'))
+        .map(|s| s.to_ascii_lowercase())
+        .filter(|s| s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit()))
+        .collect()
+}
+
+fn offline_file_allowlist() -> Vec<String> {
+    let path = match std::env::var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST_FILE") {
+        Ok(p) if !p.trim().is_empty() => p,
+        _ => return Vec::new(),
+    };
+    std::fs::read_to_string(path)
+        .map(|t| parse_hash_lines(&t))
+        .unwrap_or_default()
+}
+
+fn packaged_allowlist() -> Vec<String> {
+    parse_hash_lines(PACKAGED_ALLOWLIST)
+}
+
+fn normalize_sha256(hash: Option<&str>) -> Option<String> {
+    let h = hash.map(str::trim).filter(|s| s.len() == 64)?;
+    if !h.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(h.to_ascii_lowercase())
+}
+
+fn local_source_hits() -> Vec<(String, &'static str)> {
+    let mut out = Vec::new();
+    for h in parse_hash_lines(
+        &std::env::var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST")
+            .unwrap_or_default()
+            .replace(',', "\n"),
+    ) {
+        out.push((h, "env"));
+    }
+    for h in offline_file_allowlist() {
+        out.push((h, "offline_file"));
+    }
+    for h in packaged_allowlist() {
+        out.push((h, "packaged"));
+    }
+    out
 }
 
 fn norm_item(item: &str) -> String {
@@ -196,20 +252,55 @@ pub fn on_global_whitelist(metric: &str, item: &str) -> bool {
         .any(|s| n == *s || base == *s || base == format!("{s}.exe"))
 }
 
-/// SHA-256 (64 hex) of an on-disk binary, compared to the sovereign
-/// `WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST`. Empty / malformed hashes never match.
+/// SHA-256 (64 hex) of an on-disk binary, compared to local sovereign sources
+/// (env, offline file, packaged update). Empty / malformed hashes never match.
+/// The live detector also consults `ueba_sovereign_binary_allowlist` in the
+/// local database — never an outbound HTTP call.
 #[must_use]
 pub fn on_sovereign_binary_allowlist(hash: Option<&str>) -> bool {
-    let Some(h) = hash.map(str::trim).filter(|s| s.len() == 64) else {
+    let Some(n) = normalize_sha256(hash) else {
         return false;
     };
-    if !h.chars().all(|c| c.is_ascii_hexdigit()) {
-        return false;
+    local_source_hits().iter().any(|(x, _)| x == &n)
+}
+
+/// Upsert packaged / env / USB hashes into the local catalog. Failures are
+/// ignored (the table may not exist yet); Learn still uses local sources.
+pub async fn seed_sovereign_allowlist(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>) {
+    for (sha, source) in local_source_hits() {
+        let _ = sqlx::query(
+            r#"INSERT INTO ueba_sovereign_binary_allowlist (sha256, source)
+               VALUES ($1, $2)
+               ON CONFLICT (sha256) DO NOTHING"#,
+        )
+        .bind(&sha)
+        .bind(source)
+        .execute(&mut **tx)
+        .await;
     }
-    let n = h.to_ascii_lowercase();
-    env_allowlist("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST")
-        .iter()
-        .any(|x| x == &n)
+}
+
+/// Offline-first Learn grant: env, packaged file, USB drop, or local DB.
+pub async fn on_sovereign_binary_allowlist_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    hash: Option<&str>,
+) -> bool {
+    if on_sovereign_binary_allowlist(hash) {
+        return true;
+    }
+    let Some(n) = normalize_sha256(hash) else {
+        return false;
+    };
+    seed_sovereign_allowlist(tx).await;
+    sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+                SELECT 1 FROM ueba_sovereign_binary_allowlist WHERE sha256 = $1
+           )"#,
+    )
+    .bind(&n)
+    .fetch_one(&mut **tx)
+    .await
+    .unwrap_or(false)
 }
 
 /// Look up the agent-reported SHA-256 for a process name (`top_process_hashes`).
@@ -427,5 +518,70 @@ mod tests {
             Some(v) => std::env::set_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST", v),
             None => std::env::remove_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST"),
         }
+    }
+
+    #[test]
+    fn sovereign_allowlist_is_offline_first() {
+        let src = include_str!("ueba_onboarding.rs");
+        let prod = src.split("#[cfg(test)]").next().unwrap();
+        assert!(prod.contains("ueba_sovereign_binary_allowlist"));
+        assert!(prod.contains("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST_FILE"));
+        assert!(
+            !prod.contains("reqwest"),
+            "sovereign allow-list must not call outbound HTTP"
+        );
+    }
+
+    #[test]
+    fn packaged_allowlist_file_has_no_placeholder_hashes() {
+        assert!(
+            packaged_allowlist().is_empty(),
+            "packaged catalog must not ship placeholder SHA-256 values"
+        );
+    }
+
+    #[tokio::test]
+    async fn local_db_allowlist_grants_learn_without_env() {
+        let url = match std::env::var("TEST_DATABASE_URL") {
+            Ok(u) if !u.trim().is_empty() => u,
+            _ => {
+                eprintln!("SKIP local_db_allowlist_grants_learn_without_env: no TEST_DATABASE_URL");
+                return;
+            }
+        };
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(2)
+            .acquire_timeout(std::time::Duration::from_secs(5))
+            .connect(&url)
+            .await
+            .expect("connect");
+        let hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let mut tx = pool.begin().await.expect("tx");
+        sqlx::query(
+            r#"INSERT INTO ueba_sovereign_binary_allowlist (sha256, source)
+               VALUES ($1, 'packaged')
+               ON CONFLICT (sha256) DO NOTHING"#,
+        )
+        .bind(hash)
+        .execute(&mut *tx)
+        .await
+        .expect("insert catalog hash");
+        let prev = std::env::var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST").ok();
+        std::env::remove_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST");
+        let hit = on_sovereign_binary_allowlist_tx(&mut tx, Some(hash)).await;
+        match prev {
+            Some(v) => std::env::set_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST", v),
+            None => std::env::remove_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST"),
+        }
+        assert!(hit, "local DB catalog must grant Learn without env or HTTP");
+        assert!(
+            !on_sovereign_binary_allowlist(Some(hash)),
+            "sync helper is env/file/packaged only; DB is the async path"
+        );
+        let _ = sqlx::query("DELETE FROM ueba_sovereign_binary_allowlist WHERE sha256 = $1")
+            .bind(hash)
+            .execute(&mut *tx)
+            .await;
+        tx.commit().await.expect("cleanup");
     }
 }
