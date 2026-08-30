@@ -77,6 +77,36 @@ impl Drop for SoarLockGuard {
     }
 }
 
+/// Isolate **must not** proceed without Redis. Two API replicas without a
+/// distributed lock can quarantine the same host twice.
+pub async fn try_acquire_isolate_lock(idempotency_key: &str) -> Result<SoarLockGuard, String> {
+    let Some(rl) = shared() else {
+        return Err(
+            "isolate_host requires REDIS_URL — refusing to isolate without a distributed lock"
+                .into(),
+        );
+    };
+    let lock_key = format!("{LOCK_PREFIX}{idempotency_key}");
+    let done_key = format!("{DONE_PREFIX}{idempotency_key}");
+    let Ok(mut conn) = rl.client.get_multiplexed_async_connection().await else {
+        return Err("isolate_host Redis unavailable — fail closed".into());
+    };
+    if conn.exists(&done_key).await.ok().unwrap_or(false) {
+        return Err("isolate_host already completed (done marker)".into());
+    }
+    let token = uuid::Uuid::new_v4().to_string();
+    let acquired: bool = conn.set_nx(&lock_key, &token).await.ok().unwrap_or(false);
+    if !acquired {
+        return Err("isolate_host already in-flight on another replica".into());
+    }
+    let _: Result<(), _> = conn.expire(&lock_key, DEFAULT_LOCK_SECS as i64).await;
+    Ok(SoarLockGuard::Redis {
+        key: lock_key,
+        token,
+        client: rl.client.clone(),
+    })
+}
+
 /// Acquire exclusive lock for this idempotency key. `None` = already in-flight or done marker.
 pub async fn try_acquire_lock(idempotency_key: &str) -> Option<SoarLockGuard> {
     let Some(rl) = shared() else {

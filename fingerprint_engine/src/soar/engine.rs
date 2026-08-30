@@ -58,6 +58,19 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
     let idem = idempotency_key(&cmd.action_kind, &cmd.target_id, &vuln_sig);
 
     if let Some(existing) = find_existing_execution(pool, cmd.tenant_id, &idem).await {
+        if existing.status == ExecutionStatus::PendingHitl.as_str()
+            && !cmd
+                .params
+                .get("_hitl_approved")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+        {
+            return ActionOutcome {
+                status: "pending_hitl".into(),
+                detail: format!("awaiting HITL on execution {}", existing.id),
+                execution_id: Some(existing.id),
+            };
+        }
         if existing.status == ExecutionStatus::Resolved.as_str()
             || existing.status == ExecutionStatus::DuplicateSkipped.as_str()
         {
@@ -72,25 +85,45 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
         }
     }
 
-    let _lock = match idempotency::try_acquire_lock(&idem).await {
-        Some(g) => g,
-        None => {
-            audit::log_execution(
-                pool,
-                &cmd,
-                "duplicate_skipped",
-                "redis lock held or done marker",
-                None,
-            )
-            .await;
-            return ActionOutcome {
-                status: "ok".into(),
-                detail: "duplicate_skipped: action already in-flight or completed".into(),
-                execution_id: None,
-            };
+    let isolate = cmd.action_kind.eq_ignore_ascii_case("isolate_host");
+    let _lock = if isolate {
+        match idempotency::try_acquire_isolate_lock(&idem).await {
+            Ok(g) => g,
+            Err(e) => {
+                audit::log_execution(pool, &cmd, "failed", &e, None).await;
+                return ActionOutcome {
+                    status: "failed".into(),
+                    detail: e,
+                    execution_id: None,
+                };
+            }
+        }
+    } else {
+        match idempotency::try_acquire_lock(&idem).await {
+            Some(g) => g,
+            None => {
+                audit::log_execution(
+                    pool,
+                    &cmd,
+                    "duplicate_skipped",
+                    "redis lock held or done marker",
+                    None,
+                )
+                .await;
+                return ActionOutcome {
+                    status: "ok".into(),
+                    detail: "duplicate_skipped: action already in-flight or completed".into(),
+                    execution_id: None,
+                };
+            }
         }
     };
 
+    let hitl_approved = cmd
+        .params
+        .get("_hitl_approved")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     let force = cmd
         .params
         .get("pre_approved")
@@ -114,6 +147,7 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
             client_id: cmd.client_id,
             target_id: cmd.target_id.clone(),
             force_approved: force,
+            hitl_approved,
             expected_vpc_tag: expected_vpc,
         },
     )
@@ -130,6 +164,22 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
         }
     };
 
+    if blast.requires_hitl {
+        let _ = mark_pending_hitl(pool, cmd.tenant_id, execution_id, &blast.block_reason).await;
+        audit::log_execution(
+            pool,
+            &cmd,
+            "pending_hitl",
+            &blast.block_reason,
+            Some(execution_id),
+        )
+        .await;
+        return ActionOutcome {
+            status: "pending_hitl".into(),
+            detail: blast.block_reason,
+            execution_id: Some(execution_id),
+        };
+    }
     if blast.blocked {
         let _ = update_status(
             pool,
@@ -409,6 +459,144 @@ async fn update_execution_result(
     .await
     .map_err(|e| e.to_string())?;
     let _ = tx.commit().await;
+    Ok(())
+}
+
+async fn mark_pending_hitl(
+    pool: &PgPool,
+    tenant_id: i64,
+    id: Uuid,
+    detail: &str,
+) -> Result<(), String> {
+    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
+        return Err("tenant tx".into());
+    };
+    sqlx::query(
+        r#"UPDATE soar_action_executions
+           SET status = $3, result_detail = $4, hitl_required = true, updated_at = now()
+           WHERE id = $1 AND tenant_id = $2"#,
+    )
+    .bind(id)
+    .bind(tenant_id)
+    .bind(ExecutionStatus::PendingHitl.as_str())
+    .bind(detail)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Human approval of a crown-jewel isolate (or other HITL-gated action).
+pub async fn approve_hitl(
+    pool: &PgPool,
+    tenant_id: i64,
+    execution_id: Uuid,
+    approver_user_id: i64,
+) -> Result<ActionOutcome, String> {
+    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
+        return Err("tenant tx".into());
+    };
+    let row = sqlx::query(
+        r#"SELECT action_kind, client_id, playbook_id, target_id, evidence, execution_payload, status
+           FROM soar_action_executions
+           WHERE id = $1 AND tenant_id = $2
+           FOR UPDATE"#,
+    )
+    .bind(execution_id)
+    .bind(tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    let Some(row) = row else {
+        let _ = tx.rollback().await;
+        return Err("execution not found".into());
+    };
+    let status: String = row.try_get("status").unwrap_or_default();
+    if status != ExecutionStatus::PendingHitl.as_str() {
+        let _ = tx.rollback().await;
+        return Err(format!("execution is '{status}', not pending_hitl"));
+    }
+    sqlx::query(
+        r#"UPDATE soar_action_executions
+           SET hitl_approved_by = $3, hitl_approved_at = now(), updated_at = now()
+           WHERE id = $1 AND tenant_id = $2"#,
+    )
+    .bind(execution_id)
+    .bind(tenant_id)
+    .bind(approver_user_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    let action_kind: String = row.try_get("action_kind").unwrap_or_default();
+    let client_id: Option<i64> = row.try_get("client_id").ok();
+    let playbook_id: Option<i64> = row.try_get("playbook_id").ok();
+    let target_id: String = row.try_get("target_id").unwrap_or_default();
+    let evidence: Value = row.try_get("evidence").unwrap_or(json!({}));
+    let mut params: Value = row.try_get("execution_payload").unwrap_or(json!({}));
+    if let Some(obj) = params.as_object_mut() {
+        obj.insert("_hitl_approved".into(), json!(true));
+    }
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    let ev: ThreatEvidence = serde_json::from_value(evidence).unwrap_or(ThreatEvidence {
+        finding_id: None,
+        title: String::new(),
+        severity: String::new(),
+        source: String::new(),
+        target: target_id.clone(),
+        cve: None,
+        signature_hash: None,
+        cvss: None,
+        epss: None,
+        kev: false,
+        internet_exposed: false,
+        trigger_kind: "hitl_approve".into(),
+    });
+    let cmd = ExecuteActionCommand {
+        action_kind,
+        tenant_id,
+        client_id,
+        playbook_id,
+        target_id,
+        params,
+        evidence: ev,
+        dry_run: false,
+    };
+    Ok(execute_armored_action(pool, cmd).await)
+}
+
+/// Human denial of a HITL-gated action.
+pub async fn deny_hitl(
+    pool: &PgPool,
+    tenant_id: i64,
+    execution_id: Uuid,
+    approver_user_id: i64,
+    reason: &str,
+) -> Result<(), String> {
+    let detail = format!("hitl_denied by user {approver_user_id}: {reason}");
+    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
+        return Err("tenant tx".into());
+    };
+    let n = sqlx::query(
+        r#"UPDATE soar_action_executions
+           SET status = $3, result_detail = $4, hitl_approved_by = $5, updated_at = now()
+           WHERE id = $1 AND tenant_id = $2 AND status = $6"#,
+    )
+    .bind(execution_id)
+    .bind(tenant_id)
+    .bind(ExecutionStatus::Failed.as_str())
+    .bind(&detail)
+    .bind(approver_user_id)
+    .bind(ExecutionStatus::PendingHitl.as_str())
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?
+    .rows_affected();
+    tx.commit().await.map_err(|e| e.to_string())?;
+    if n == 0 {
+        return Err("execution not pending HITL".into());
+    }
     Ok(())
 }
 

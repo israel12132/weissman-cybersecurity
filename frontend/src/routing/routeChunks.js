@@ -60,6 +60,7 @@ export const TemplateEngineWorkbench = React$lazy(() => import('../pages/Templat
 export const AstFuzzingStudio = React$lazy(() => import('../pages/AstFuzzingStudio'))
 export const FeedbackLoopVerification = React$lazy(() => import('../pages/FeedbackLoopVerification'))
 export const CouncilHitlQueue = React$lazy(() => import('../pages/CouncilHitlQueue'))
+export const SoarHitlQueue = React$lazy(() => import('../pages/SoarHitlQueue'))
 export const SelfImprovementConsole = React$lazy(() => import('../pages/SelfImprovementConsole'))
 export const RoeApprovals = React$lazy(() => import('../pages/RoeApprovals'))
 export const SsoDashboard = React$lazy(() => import('../pages/SsoDashboard'))

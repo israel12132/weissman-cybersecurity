@@ -435,8 +435,9 @@ async fn execute_action(pool: &PgPool, ev: &PlaybookEvent, a: &PlaybookAction) -
                     "epss":    ev.epss,
                 }
             });
-            match crate::elite_hardening::soar_hmac::post_signed_json(&url, &body).await {
-                Ok((_, detail)) => ("ok".into(), detail),
+            let hmac_secret = params.get("secret").and_then(Value::as_str);
+            match post_signed_playbook_webhook(&url, &body, hmac_secret).await {
+                Ok(detail) => ("ok".into(), detail),
                 Err(e) => ("failed".into(), e),
             }
         }
@@ -489,13 +490,63 @@ async fn execute_action(pool: &PgPool, ev: &PlaybookEvent, a: &PlaybookAction) -
                 return ("skipped".into(), "url required".into());
             }
             let body = params.get("body").cloned().unwrap_or(json!(ev));
-            match crate::elite_hardening::soar_hmac::post_signed_json(url, &body).await {
-                Ok((_, detail)) => ("ok".into(), detail),
+            let hmac_secret = params.get("secret").and_then(Value::as_str);
+            match post_signed_playbook_webhook(url, &body, hmac_secret).await {
+                Ok(detail) => ("ok".into(), detail),
                 Err(e) => ("failed".into(), e),
             }
         }
 
         other => ("skipped".into(), format!("unknown action kind: {}", other)),
+    }
+}
+
+/// SSRF-safe, HMAC-signed playbook webhook (same headers as alert_delivery).
+async fn post_signed_playbook_webhook(
+    url: &str,
+    payload: &Value,
+    playbook_secret: Option<&str>,
+) -> Result<String, String> {
+    crate::security_hardening::validate_outbound_url(url).await?;
+    let body = payload.to_string();
+    let digest = crate::crypto_engine::sha256_hex(body.as_bytes());
+    let platform_sig = crate::finding_attestation::attest(&digest);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| format!("client: {e}"))?;
+    let mut req = client
+        .post(url)
+        .header(reqwest::header::CONTENT_TYPE, "application/json")
+        .header("X-Weissman-Digest", digest.as_str())
+        .body(body.clone());
+    if let Some((hmac_digest, sig)) = crate::elite_hardening::soar_hmac::sign_body(&body) {
+        req = req
+            .header("X-Weissman-Digest", hmac_digest.as_str())
+            .header("X-Weissman-Signature", format!("v1={sig}"));
+    } else if weissman_core::tls_policy::is_production_environment() {
+        return Err(
+            "fail-closed: WEISSMAN_WEBHOOK_HMAC_SECRET (or JWT secret) required in production"
+                .into(),
+        );
+    } else if let Some(s) = platform_sig {
+        req = req.header("X-Weissman-Signature", format!("v1={s}"));
+    }
+    if let Some(secret) = playbook_secret.filter(|s| !s.trim().is_empty()) {
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+        type HmacSha256 = Hmac<Sha256>;
+        if let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) {
+            mac.update(body.as_bytes());
+            let hex = hex::encode(mac.finalize().into_bytes());
+            req = req.header("X-Weissman-Playbook-Signature", format!("v1={hex}"));
+        }
+    }
+    match req.send().await {
+        Ok(r) if r.status().is_success() => Ok(format!("HTTP {}", r.status())),
+        Ok(r) => Err(format!("HTTP {}", r.status())),
+        Err(e) => Err(e.to_string()),
     }
 }
 

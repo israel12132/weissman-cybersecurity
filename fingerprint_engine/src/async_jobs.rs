@@ -154,6 +154,55 @@ async fn mark_job_failed(
     Ok(())
 }
 
+/// Attach a JobBus envelope to a row inserted with [`weissman_db::job_queue::enqueue_held_in_tx`]
+/// and release the hold. No-op when the bus is disabled (caller should have inserted
+/// a claimable row instead).
+pub async fn finalize_held_job(
+    pool: &PgPool,
+    id: Uuid,
+    tenant_id: i64,
+    kind: &str,
+    payload: Value,
+    trace_id: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    let bus = JobBus::from_env(pool.clone()).await;
+    if !bus.is_enabled() {
+        // Caller inserted a held row even without a bus — clear the hold so it is claimable.
+        let sealed = crate::job_envelope::seal_job_payload_sqlx(payload, tenant_id)?;
+        let _ = weissman_db::job_queue::release_hold(pool, id, sealed).await;
+        return Ok(());
+    }
+    match bus
+        .on_job_dispatched(id, tenant_id, kind, &payload, trace_id)
+        .await
+    {
+        Ok(Some(envelope)) => {
+            let mut enriched = payload;
+            attach_signed_envelope(&mut enriched, envelope);
+            let sealed = crate::job_envelope::seal_job_payload_sqlx(enriched, tenant_id)?;
+            match weissman_db::job_queue::release_hold(pool, id, sealed).await {
+                Ok(1) => Ok(()),
+                Ok(n) => {
+                    let reason = format!(
+                        "envelope attach matched {n} rows (expected 1); job no longer held"
+                    );
+                    tracing::error!(target: "async_jobs", job_id = %id, reason = %reason);
+                    Err(sqlx::Error::Protocol(reason))
+                }
+                Err(e) => Err(e),
+            }
+        }
+        Ok(None) | Err(_) => {
+            tracing::error!(
+                target: "async_jobs",
+                job_id = %id,
+                "JobBus produced no envelope for held SOAR job — leaving held so it is not claimed envelope-less"
+            );
+            Ok(())
+        }
+    }
+}
+
 /// Every 5 minutes, orphan recovery via swarm coordinator (sub-second) + legacy reclaim fallback.
 pub fn spawn_stale_lock_reclaim_loop(pool: Arc<PgPool>) {
     weissman_job_bus::spawn_coordinator_if_enabled((*pool).clone());

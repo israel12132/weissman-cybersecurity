@@ -249,6 +249,11 @@ jobs:
           sudo docker image prune -af || true
           df -h /
 
+      - name: Install TPM 2.0 TSS headers (native ESAPI)
+        # weissman-agent links tss-esapi on linux-gnu. ubuntu-latest does not
+        # ship libtss2-dev; without it the workspace test link fails.
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libtss2-dev pkg-config
+
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
 
@@ -610,6 +615,9 @@ jobs:
         run: npm run build
         working-directory: frontend
 
+      - name: Install TPM 2.0 TSS headers (native ESAPI)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libtss2-dev pkg-config
+
       - name: Build weissman-server + worker (warm compile for health check)
         run: cargo build -p weissman-server -p weissman-worker
 
@@ -677,6 +685,7 @@ jobs:
         timeout-minutes: 25
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          REDIS_URL: redis://127.0.0.1:6379
           # Fail (don't skip) the DB-backed integration tests here, so a dropped
           # TEST_DATABASE_URL can never masquerade as a green run.
           WEISSMAN_REQUIRE_DB_TESTS: "1"
@@ -758,6 +767,12 @@ jobs:
             /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
           df -h /
 
+      - name: Verify Docker build context (TSS headers + COPY coverage)
+        # Fast fail: weissman-agent linux-gnu links tss-esapi-sys. If libtss2-dev is
+        # missing from deploy/backend.Dockerfile the image cargo build dies after
+        # minutes with "Package tss2-sys was not found".
+        run: ./scripts/verify_docker_build_integrity.sh
+
       - name: Build Docker production images
         # `docker compose build` interpolates the ENTIRE compose file at load time, so the
         # two runtime-only required secrets — ${WEISSMAN_JWT_SECRET:?} and
@@ -820,19 +835,11 @@ jobs:
           # and self-hosted use 0. Without this, enforce_client_create 402s the
           # engine-group smoke before INSERT.
           WEISSMAN_BILLING_STRICT: "0"
-          # Parallel Playwright crawl (~100 routes) bursts well past the production
-          # 30/s per-IP API cap. Raise the throwaway-stack ceiling; production defaults stay 30/60.
-          WEISSMAN_RATE_LIMIT_PER_SEC: "500"
-          WEISSMAN_RATE_LIMIT_BURST: "2000"
-          # Same throwaway-stack ceiling for login: engine-group smoke used to POST
-          # /api/login once per engine from 127.0.0.1 and trip the production 8/min
-          # Redis token-bucket. Smoke now logins once; keep headroom for later E2E
-          # steps that still authenticate from this IP. Production defaults stay 8/12.
-          WEISSMAN_LOGIN_PER_MINUTE: "60"
-          WEISSMAN_LOGIN_BURST: "120"
           WEISSMAN_COOKIE_SECURE: "1"
           WEISSMAN_ADMIN_EMAIL: admin@localhost
           WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
+          # Smoke/E2E log in as this user. Boot promotes it to is_superadmin (owner);
+          # otherwise POST /api/clients returns owner_required and group smoke dies.
           WEISSMAN_MASTER_BOOTSTRAP_EMAIL: ci-smoke@localhost
           WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ci-smoke-password
           # The live-scan smoke step logs in ONCE then runs ~18 min (one engine per group,
@@ -840,6 +847,17 @@ jobs:
           # expires mid-run and later scan submits/polls 401. Give the CI token room to
           # outlive the whole smoke sweep.
           WEISSMAN_ACCESS_TOKEN_MINUTES: "120"
+          # This job chains smoke + Playwright crawl + pytest + findings E2E from ONE IP
+          # (127.0.0.1) against Redis-backed login/scan/API limiters. Defaults (8 logins/min,
+          # 24 scan POSTs/min, 30 API/s) are correct anti-abuse for production; they shed the
+          # later E2E steps after the earlier ones have already consumed the window. Clamp to
+          # the same ceilings nightly-e2e.yml uses so the gate measures engines, not the limiter.
+          WEISSMAN_LOGIN_PER_MINUTE: "60"
+          WEISSMAN_LOGIN_BURST: "120"
+          WEISSMAN_TENANT_SCAN_POSTS_PER_MINUTE: "240"
+          WEISSMAN_TENANT_SCAN_BURST: "120"
+          WEISSMAN_RATE_LIMIT_PER_SEC: "500"
+          WEISSMAN_RATE_LIMIT_BURST: "2000"
           # Disable the periodic bulk-scan orchestrator for CI. It dispatches a HEAVY
           # `tenant_full_scan` per active tenant every 60s (60-min job timeout). Those jobs
           # share the worker's 2-slot heavy semaphore with the smoke's on-demand
@@ -853,8 +871,6 @@ jobs:
           # (The bulk-vs-interactive head-of-line starvation is a real product concern tracked
           # separately from this CI-scoping change.)
           WEISSMAN_SCANNING_ENABLED: "0"
-          WEISSMAN_TENANT_SCAN_POSTS_PER_MINUTE: "120"
-          WEISSMAN_TENANT_SCAN_BURST: "40"
           # Server + worker share ONE Postgres (max_connections=100). Each process opens THREE
           # pools (app + auth + intel), so capping only the app pool leaves auth(12)+intel(12)
           # each uncounted. Cap all three to the sizes the repo's own E2E harness uses
@@ -1244,6 +1260,8 @@ jobs:
         with:
           toolchain: 1.91.1
           components: llvm-tools-preview
+      - name: Install TPM 2.0 TSS headers (native ESAPI)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libtss2-dev pkg-config
       - name: Install cargo-llvm-cov
         run: cargo install cargo-llvm-cov --locked
       - name: Coverage (workspace lib tests) — per-crate ratchet

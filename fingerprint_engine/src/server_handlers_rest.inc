@@ -545,7 +545,7 @@ async fn api_clients_list(
         Ok(v) => v,
         Err(r) => return r,
     };
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({
@@ -785,7 +785,7 @@ async fn api_clients_get(
     if let Err(r) = crate::client_isolation::bind_requested_client(&auth, Some(id)) {
         return r;
     }
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({"ok": false, "detail": "Database unavailable. Retry shortly.", "code": "db_unavailable"})),
@@ -1228,7 +1228,10 @@ async fn api_client_config_patch(
             let confirm_secret =
                 std::env::var("WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET").unwrap_or_default();
             let header_bypass = !confirm_secret.trim().is_empty()
-                && crate::security_hardening::destructive_action_authorized(&headers);
+                && crate::security_hardening::destructive_action_authorized_with(
+                    &headers,
+                    crate::security_hardening::nonempty_token(&body.destructive_confirm),
+                );
 
             if old_roe == "weaponized_god_mode" || header_bypass {
                 config.insert(
