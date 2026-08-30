@@ -108,7 +108,7 @@ pub async fn login_rate_limit_middleware(
         };
         match redis_count {
             super::rate_limit_redis::StrictOp::Ok(count) => {
-                let max = limit.get() as u64;
+                let max = (limit.get().max(burst.get())) as u64;
                 if count > max {
                     rate_limit_metrics::record_login_denied(&ip, &path);
                     let retry_after_secs = 60u64;
@@ -208,4 +208,23 @@ pub async fn login_rate_limit_middleware(
 
     rate_limit_metrics::record_login_allowed(&ip);
     next.run(request).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redis_login_cap_is_max_of_quota_and_burst() {
+        let cap = login_per_minute().get().max(login_burst().get());
+        assert_eq!(cap, login_burst().get().max(login_per_minute().get()));
+        assert!(cap >= login_burst().get());
+    }
+
+    #[test]
+    fn redis_enroll_cap_is_max_of_quota_and_burst() {
+        let cap = enroll_per_minute().get().max(enroll_burst().get());
+        assert!(cap >= enroll_burst().get());
+        assert!(cap >= enroll_per_minute().get());
+    }
 }
