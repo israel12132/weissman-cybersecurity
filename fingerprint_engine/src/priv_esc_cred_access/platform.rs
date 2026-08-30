@@ -229,7 +229,7 @@ pub fn apply_platform(cov: &mut Coverage, s: &PlatformSnapshot) {
         cov,
         &[409, 439],
         CheckStatus::Pass,
-        "worker job claim uses SKIP LOCKED / FOR UPDATE in weissman-db",
+        "worker job claim uses FOR UPDATE SKIP LOCKED in weissman-db",
     );
 }
 
