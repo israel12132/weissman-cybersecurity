@@ -71,7 +71,7 @@ async fn persist_and_notify_findings(
     if findings.is_empty() {
         return 0;
     }
-    let count = match crate::findings_persist::persist_engine_findings(
+    let (count, persist_ok) = match crate::findings_persist::persist_engine_findings(
         app_pool.as_ref(),
         tenant_id,
         Some(client_id),
@@ -81,12 +81,30 @@ async fn persist_and_notify_findings(
     )
     .await
     {
-        Ok(n) => n as usize,
+        Ok(n) => (n as usize, true),
         Err(e) => {
             eprintln!("[Weissman][Orchestrator] findings_persist failed ({engine}): {e}");
-            0
+            (0, false)
         }
     };
+    if persist_ok {
+        let present: Vec<String> = findings
+            .iter()
+            .map(|f| crate::findings_persist::build_finding_id(engine, target, f))
+            .collect();
+        if let Err(e) = crate::findings_persist::apply_hack_fix_verify_after_ok_scan(
+            app_pool.as_ref(),
+            tenant_id,
+            Some(client_id),
+            engine,
+            target,
+            &present,
+        )
+        .await
+        {
+            eprintln!("[Weissman][Orchestrator] hack_fix_verify failed ({engine}): {e}");
+        }
+    }
     for f in findings {
         let Some(obj) = f.as_object() else {
             continue;

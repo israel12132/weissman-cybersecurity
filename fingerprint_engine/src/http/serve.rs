@@ -1524,6 +1524,7 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
     // only ever surfaces as an opaque redirect-mismatch at the IdP.
     crate::oidc_auth::warn_if_sso_base_url_unusable();
     crate::http::dashmap_gc::spawn_eviction_loop();
+    crate::nl_query::spawn_audit_worker(app_pool.clone());
     crate::endpoint_agents::spawn_pending_task_pusher(
         app_pool.clone(),
         state.endpoint_agents.clone(),

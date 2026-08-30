@@ -217,23 +217,56 @@ async fn persist_findings_best_effort(
     target: &str,
     findings: &[Value],
 ) -> u64 {
-    if findings.is_empty() || client_id.is_none() {
+    if client_id.is_none() {
         return 0;
     }
-    crate::findings_persist::persist_engine_findings(
-        app_pool, tenant_id, client_id, engine, target, findings,
+    let persisted = if findings.is_empty() {
+        0
+    } else {
+        crate::findings_persist::persist_engine_findings(
+            app_pool, tenant_id, client_id, engine, target, findings,
+        )
+        .await
+        .unwrap_or_else(|e| {
+            tracing::error!(
+                target: "findings_persist",
+                tenant_id,
+                engine = %engine,
+                error = %e,
+                "failed to persist findings"
+            );
+            0
+        })
+    };
+    persisted
+}
+
+/// Successful live scan only: close FIXED claims that this run did not reproduce.
+async fn apply_hfv_after_ok_scan(
+    app_pool: &PgPool,
+    tenant_id: i64,
+    client_id: Option<i64>,
+    engine: &str,
+    target: &str,
+    findings: &[Value],
+) {
+    let present: Vec<String> = findings
+        .iter()
+        .map(|f| crate::findings_persist::build_finding_id(engine, target, f))
+        .collect();
+    if let Err(e) = crate::findings_persist::apply_hack_fix_verify_after_ok_scan(
+        app_pool, tenant_id, client_id, engine, target, &present,
     )
     .await
-    .unwrap_or_else(|e| {
-        tracing::error!(
-            target: "findings_persist",
+    {
+        tracing::warn!(
+            target: "hack_fix_verify",
             tenant_id,
             engine = %engine,
             error = %e,
-            "failed to persist findings"
+            "HFV absence close failed"
         );
-        0
-    })
+    }
 }
 
 async fn persist_findings_grouped_by_client_field(
@@ -579,6 +612,21 @@ async fn execute_job_unscoped(
                 &result.findings,
             )
             .await;
+
+            if crate::elite_hardening::hack_fix_verify::engine_scan_ok(
+                &result.status,
+                result.success,
+            ) {
+                apply_hfv_after_ok_scan(
+                    app_pool.as_ref(),
+                    tid,
+                    client_id_opt,
+                    engine,
+                    target,
+                    &result.findings,
+                )
+                .await;
+            }
 
             if crate::engine_resilience::should_retry_status(&result.status) {
                 let failure_ctx = json!({

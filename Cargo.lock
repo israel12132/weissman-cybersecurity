@@ -7034,6 +7034,7 @@ dependencies = [
 name = "weissman-agent"
 version = "0.1.0"
 dependencies = [
+ "aes-gcm",
  "anyhow",
  "chrono",
  "clap",
@@ -7041,6 +7042,7 @@ dependencies = [
  "hex",
  "hostname",
  "jsonwebtoken",
+ "libc",
  "reqwest 0.12.28",
  "serde",
  "serde_json",

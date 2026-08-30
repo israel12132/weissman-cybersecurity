@@ -382,6 +382,25 @@ async fn dispatch_engine_match(
                 .into()
         }
         "semantic_ai_fuzz" => {
+            let tech = crate::elite_hardening::semantic_gate::fingerprint_target(target);
+            if !crate::elite_hardening::semantic_gate::allow_llm_mutation(
+                &tech,
+                !ctx.discovered_paths.is_empty(),
+            ) {
+                return crate::engine_result::EngineResult::ok(
+                    vec![serde_json::json!({
+                        "type": "semantic_ai_fuzz",
+                        "title": "Semantic fuzzer waiting for technology fingerprint",
+                        "severity": "info",
+                        "description": format!(
+                            "LLM mutation deferred until OpenAPI/fingerprint is available (tech={})",
+                            tech.label
+                        ),
+                        "target": target,
+                    })],
+                    "semantic_ai_fuzz: awaiting fingerprint",
+                );
+            }
             let config = weissman_core::models::semantic::SemanticConfig {
                 llm_base_url: if ctx.llm_base_url.trim().is_empty() {
                     "http://127.0.0.1:8000/v1".to_string()

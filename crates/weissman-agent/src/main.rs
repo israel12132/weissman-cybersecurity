@@ -10,6 +10,8 @@
 //! No persistent storage; all state in memory.
 
 mod detections;
+mod hardening;
+mod inner_crypto;
 mod protocol;
 mod transport;
 
@@ -53,6 +55,8 @@ struct Cli {
 async fn main() -> anyhow::Result<()> {
     init_logging();
     let cli = Cli::parse();
+    crate::hardening::lock_process();
+    crate::hardening::spawn_cpu_governor();
     info!(target: "agent", "Weissman endpoint agent starting (version={})", env!("CARGO_PKG_VERSION"));
 
     let hostname = cli

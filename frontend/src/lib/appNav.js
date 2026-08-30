@@ -99,6 +99,7 @@ export const NAV_GROUPS = [
       { to: '/remediation-analytics', labelKey: 'nav.remediation_analytics', icon: '📊' },
       { to: '/agents', labelKey: 'nav.agents', icon: '📡' },
       { to: '/stealth-ops', labelKey: 'nav.stealth_ops', icon: '🕶' },
+      { to: '/elite-hardening', labelKey: 'nav.elite_hardening', icon: '🛡' },
       { to: '/nexus-swarm', labelKey: 'nav.nexus_swarm', icon: '⚡' },
       { to: '/superposition-collapse', labelKey: 'nav.superposition_collapse', icon: '◈' },
       { to: '/sovereign-defense-matrix', labelKey: 'nav.sovereign_defense', icon: '⬡' },

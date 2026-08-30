@@ -34,6 +34,7 @@ export const ROUTE_EVIDENCE_SKIP = new Set([
   '/engines/top-tier',
   '/engines/osint',
   '/ceo',
+  '/elite-hardening',
 ])
 
 /** Prefixes where child pages render their own evidence banner. */
