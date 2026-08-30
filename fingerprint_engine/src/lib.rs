@@ -125,6 +125,7 @@ pub mod observability;
 pub mod oidc_auth;
 pub mod orchestrator;
 pub mod outbound_http;
+pub mod overflow_log;
 pub mod panic_shield;
 pub mod path_templates;
 pub mod payload_sync_worker;

@@ -10,7 +10,12 @@
 //! failed enqueue aborts the finding write. After commit, [`drain_for_tenant`]
 //! claims pending rows (`FOR UPDATE SKIP LOCKED`), takes a per-`cluster_key`
 //! advisory lock, upserts the cluster, and stamps `vulnerabilities.cluster_id`.
-//! Same-cluster work is serial; different keys proceed in parallel.
+//! After an unclean Postgres restart an UNLOGGED outbox is truncated. Logged
+//! `vulnerabilities` + `weissman_finding_clusters` are the WAL: [`requeue_lost_outbox`]
+//! rebuilds ingest rows for findings that never clustered **and** for clustered
+//! findings whose `last_seen_at` is newer than the cluster (a persist that
+//! committed after the last drain). Redis/host dual-write cannot join the persist
+//! transaction, so it is not the source of truth.
 
 use std::collections::HashMap;
 
@@ -100,28 +105,33 @@ pub async fn drain_all_tenants(pool: &PgPool, per_tenant: i64) -> Result<u64, St
         .map_err(|e| format!("cluster ingest tenants: {e}"))?;
     let mut processed: u64 = 0;
     for tid in tenants {
-        match requeue_unclustered(pool, tid, per_tenant).await {
-            Ok(n) if n > 0 => {
-                tracing::info!(
-                    target: "cluster_ingest",
-                    tenant_id = tid,
-                    requeued = n,
-                    "re-enqueued unclustered findings after unlogged outbox loss"
-                );
-            }
-            Ok(_) => {}
-            Err(e) => {
-                tracing::warn!(
-                    target: "cluster_ingest",
-                    tenant_id = tid,
-                    error = %e,
-                    "unclustered requeue failed"
-                );
-            }
-        }
-        processed += drain_for_tenant(pool, tid, per_tenant).await?;
+        processed += recover_tenant(pool, tid, per_tenant).await?;
     }
     Ok(processed)
+}
+
+/// Requeue rows lost with the UNLOGGED outbox, then drain one tenant.
+pub async fn recover_tenant(pool: &PgPool, tenant_id: i64, limit: i64) -> Result<u64, String> {
+    match requeue_lost_outbox(pool, tenant_id, limit).await {
+        Ok(n) if n > 0 => {
+            tracing::info!(
+                target: "cluster_ingest",
+                tenant_id,
+                requeued = n,
+                "re-enqueued findings after unlogged outbox loss"
+            );
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::warn!(
+                target: "cluster_ingest",
+                tenant_id,
+                error = %e,
+                "lost-outbox requeue failed"
+            );
+        }
+    }
+    drain_for_tenant(pool, tenant_id, limit).await
 }
 
 /// `vulnerabilities.id` → `cluster_id` after drain (for SOAR events built pre-cluster).
@@ -157,16 +167,11 @@ pub async fn vuln_cluster_ids(
     out
 }
 
-/// After an unclean Postgres restart an UNLOGGED outbox is truncated.
-/// Re-enqueue recent findings that never received a `cluster_id` so the
-/// logged `vulnerabilities` row is not stranded. Bounded per call.
-async fn requeue_unclustered(pool: &PgPool, tenant_id: i64, limit: i64) -> Result<u64, String> {
-    let cap = limit.clamp(1, 500);
-    let mut tx = db::begin_tenant_tx(pool, tenant_id)
-        .await
-        .map_err(|e| format!("cluster ingest requeue tx: {e}"))?;
-    let n = sqlx::query(
-        r#"INSERT INTO weissman_cluster_ingest (
+/// Logged `vulnerabilities` / clusters are the WAL for the UNLOGGED outbox.
+/// Replay (1) never-clustered rows and (2) clustered rows whose persist is
+/// newer than `weissman_finding_clusters.last_seen_at` (watermark / seen_count
+/// updates that committed, then vanished with the truncated ingest table).
+const REQUEUE_SQL: &str = r#"INSERT INTO weissman_cluster_ingest (
                 tenant_id, client_id, vuln_id, cluster_key, target, engine, source,
                 title, severity, cwe, vuln_signature, cve, cvss, epss, kev_listed, is_new_member
            )
@@ -185,22 +190,37 @@ async fn requeue_unclustered(pool: &PgPool, tenant_id: i64, limit: i64) -> Resul
                   NULL,
                   v.epss_score,
                   COALESCE(v.kev_listed, false),
-                  true
+                  (v.cluster_id IS NULL OR c.id IS NULL)
              FROM vulnerabilities v
+             LEFT JOIN weissman_finding_clusters c
+                    ON c.tenant_id = v.tenant_id AND c.id = v.cluster_id
             WHERE v.tenant_id = $1
-              AND v.cluster_id IS NULL
-              AND v.discovered_at > NOW() - INTERVAL '90 days'
+              AND COALESCE(v.last_seen_at, v.discovered_at) > NOW() - INTERVAL '90 days'
+              AND (
+                    v.cluster_id IS NULL
+                    OR c.id IS NULL
+                    OR COALESCE(v.last_seen_at, v.discovered_at) > c.last_seen_at
+              )
               AND NOT EXISTS (
                     SELECT 1 FROM weissman_cluster_ingest i
-                     WHERE i.tenant_id = v.tenant_id AND i.vuln_id = v.id
+                     WHERE i.tenant_id = v.tenant_id
+                       AND i.vuln_id = v.id
+                       AND i.processed_at IS NULL
               )
-            LIMIT $2"#,
-    )
-    .bind(tenant_id)
-    .bind(cap)
-    .execute(&mut *tx)
-    .await
-    .map_err(|e| format!("cluster ingest requeue: {e}"))?;
+            ORDER BY v.id
+            LIMIT $2"#;
+
+async fn requeue_lost_outbox(pool: &PgPool, tenant_id: i64, limit: i64) -> Result<u64, String> {
+    let cap = limit.clamp(1, 500);
+    let mut tx = db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("cluster ingest requeue tx: {e}"))?;
+    let n = sqlx::query(REQUEUE_SQL)
+        .bind(tenant_id)
+        .bind(cap)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| format!("cluster ingest requeue: {e}"))?;
     tx.commit()
         .await
         .map_err(|e| format!("cluster ingest requeue commit: {e}"))?;
@@ -340,4 +360,40 @@ async fn drain_once(pool: &PgPool, tenant_id: i64, limit: i64) -> Result<u64, St
         .await
         .map_err(|e| format!("cluster ingest commit: {e}"))?;
     Ok(n)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::REQUEUE_SQL;
+
+    #[test]
+    fn requeue_sql_replays_stale_clustered_findings() {
+        assert!(
+            REQUEUE_SQL.contains("COALESCE(v.last_seen_at, v.discovered_at) > c.last_seen_at"),
+            "UNLOGGED truncate must replay clustered vulns whose persist is newer than the cluster:\n{REQUEUE_SQL}"
+        );
+        assert!(
+            REQUEUE_SQL.contains("v.cluster_id IS NULL"),
+            "still replay never-clustered rows"
+        );
+        assert!(
+            REQUEUE_SQL.contains("LEFT JOIN weissman_finding_clusters"),
+            "stale watermark detection joins logged clusters"
+        );
+        assert!(
+            REQUEUE_SQL.contains("i.processed_at IS NULL"),
+            "do not duplicate an in-flight ingest row"
+        );
+        assert!(
+            !REQUEUE_SQL.contains("AND v.cluster_id IS NULL\n              AND v.discovered_at"),
+            "must not restrict replay to cluster_id IS NULL only"
+        );
+    }
+
+    #[test]
+    fn crash_sweep_uses_recover_tenant() {
+        let src = include_str!("cluster_ingest.rs");
+        assert!(src.contains("recover_tenant(pool, tid, per_tenant)"));
+        assert!(src.contains("fn requeue_lost_outbox"));
+    }
 }

@@ -54,7 +54,7 @@ async fn persist_dedup_auto_suppress_and_cross_plane_critical() {
         .expect("connect");
 
     ensure_cluster_ingest_schema(&pool).await;
-    let (tenant_id, client_id, seeded) = seed_scope(&pool).await;
+    let (tenant_id, client_id, seeded) = seed_scope(&pool, "dedup").await;
     reset_scope(&pool, tenant_id, client_id).await;
     eprintln!("alert-fatigue live: tenant={tenant_id} client={client_id} seeded={seeded}");
 
@@ -441,7 +441,7 @@ async fn cold_start_prewarm_collapses_next_sibling() {
         .expect("connect");
 
     ensure_cluster_ingest_schema(&pool).await;
-    let (tenant_id, client_id, _) = seed_scope(&pool).await;
+    let (tenant_id, client_id, _) = seed_scope(&pool, "prewarm").await;
     reset_scope(&pool, tenant_id, client_id).await;
     fingerprint_engine::path_templates::invalidate_tenant(tenant_id);
 
@@ -517,6 +517,113 @@ async fn cold_start_prewarm_collapses_next_sibling() {
     eprintln!("cold-start prewarm OK finding_id={}", rows[0].0);
 }
 
+/// UNLOGGED ingest truncate after a clustered persist must still raise the
+/// watermark: logged `vulnerabilities.last_seen_at` is the WAL, not Redis.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires live Postgres (TEST_DATABASE_URL)"]
+async fn unlogged_truncate_replays_stale_cluster_watermark() {
+    let url = db_url().expect("TEST_DATABASE_URL / DATABASE_URL");
+    fingerprint_engine::db::run_migrations(url.trim())
+        .await
+        .expect("migrations");
+    let pool = PgPoolOptions::new()
+        .max_connections(8)
+        .acquire_timeout(Duration::from_secs(10))
+        .connect(url.trim())
+        .await
+        .expect("connect");
+
+    ensure_cluster_ingest_schema(&pool).await;
+    let (tenant_id, client_id, _) = seed_scope(&pool, "replay").await;
+    reset_scope(&pool, tenant_id, client_id).await;
+
+    persist_engine_findings(
+        &pool,
+        tenant_id,
+        Some(client_id),
+        "asm",
+        "https://app.example.com/replay-login",
+        &[finding(
+            "SQL Injection replay-outbox",
+            "sqli-unlogged-replay",
+            "https://app.example.com/replay-login",
+            "medium",
+        )],
+    )
+    .await
+    .expect("persist medium");
+
+    let row = sqlx::query(
+        r#"SELECT v.id, v.cluster_id, c.watermark_severity
+             FROM vulnerabilities v
+             JOIN weissman_finding_clusters c
+               ON c.id = v.cluster_id AND c.tenant_id = v.tenant_id
+            WHERE v.tenant_id = $1 AND v.client_id = $2
+              AND v.title = 'SQL Injection replay-outbox'"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .fetch_one(&pool)
+    .await
+    .expect("clustered finding");
+    let vuln_id: i64 = row.get("id");
+    let cluster_id: i64 = row
+        .get::<Option<i64>, _>("cluster_id")
+        .expect("cluster_id assigned");
+    let wm0: String = row.get("watermark_severity");
+    assert_ne!(wm0.to_ascii_lowercase(), "critical");
+
+    sqlx::query(
+        r#"UPDATE weissman_finding_clusters
+              SET last_seen_at = NOW() - INTERVAL '2 days'
+            WHERE id = $1 AND tenant_id = $2"#,
+    )
+    .bind(cluster_id)
+    .bind(tenant_id)
+    .execute(&pool)
+    .await
+    .expect("age cluster");
+    sqlx::query(
+        r#"UPDATE vulnerabilities
+              SET last_seen_at = NOW(), severity = 'critical'
+            WHERE id = $1 AND tenant_id = $2"#,
+    )
+    .bind(vuln_id)
+    .bind(tenant_id)
+    .execute(&pool)
+    .await
+    .expect("persist-after-crash on logged vuln");
+    sqlx::query("DELETE FROM weissman_cluster_ingest WHERE tenant_id = $1")
+        .bind(tenant_id)
+        .execute(&pool)
+        .await
+        .expect("simulate UNLOGGED truncate");
+
+    let n = fingerprint_engine::cluster_ingest::recover_tenant(&pool, tenant_id, 200)
+        .await
+        .expect("recover after truncate");
+    assert!(
+        n >= 1,
+        "stale clustered finding must requeue+drain, processed={n}"
+    );
+
+    let wm: String = sqlx::query_scalar(
+        r#"SELECT watermark_severity FROM weissman_finding_clusters
+            WHERE id = $1 AND tenant_id = $2"#,
+    )
+    .bind(cluster_id)
+    .bind(tenant_id)
+    .fetch_one(&pool)
+    .await
+    .expect("watermark after replay");
+    assert_eq!(
+        wm.to_ascii_lowercase(),
+        "critical",
+        "lost ingest update must still raise the cluster watermark, got {wm}"
+    );
+    eprintln!("unlogged-truncate replay OK cluster_id={cluster_id} watermark={wm}");
+}
+
 async fn ensure_cluster_ingest_schema(pool: &sqlx::PgPool) {
     let sql = include_str!(
         "../../crates/weissman-db/migrations/20260827173000_cluster_ingest_watermark.sql"
@@ -534,22 +641,26 @@ async fn ensure_cluster_ingest_schema(pool: &sqlx::PgPool) {
         .expect("apply cluster ingest autovacuum");
 }
 
-async fn seed_scope(pool: &sqlx::PgPool) -> (i64, i64, bool) {
-    if let (Ok(t), Ok(c)) = (
-        std::env::var("WEISSMAN_LIVE_TENANT_ID"),
-        std::env::var("WEISSMAN_LIVE_CLIENT_ID"),
-    ) {
-        if let (Ok(tid), Ok(cid)) = (t.parse::<i64>(), c.parse::<i64>()) {
-            return (tid, cid, false);
+async fn seed_scope(pool: &sqlx::PgPool, key: &str) -> (i64, i64, bool) {
+    if key == "dedup" {
+        if let (Ok(t), Ok(c)) = (
+            std::env::var("WEISSMAN_LIVE_TENANT_ID"),
+            std::env::var("WEISSMAN_LIVE_CLIENT_ID"),
+        ) {
+            if let (Ok(tid), Ok(cid)) = (t.parse::<i64>(), c.parse::<i64>()) {
+                return (tid, cid, false);
+            }
         }
     }
 
-    let slug = "__alert_fatigue_live__";
+    let slug = format!("__alert_fatigue_live_{key}__");
+    let client_name = format!("alert-fatigue-client-{key}");
     let tenant_id: i64 = sqlx::query_scalar(
-        r#"INSERT INTO tenants (slug, name) VALUES ($1, 'alert fatigue live')
+        r#"INSERT INTO tenants (slug, name) VALUES ($1, $2)
            ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id"#,
     )
-    .bind(slug)
+    .bind(&slug)
+    .bind(format!("alert fatigue live {key}"))
     .fetch_one(pool)
     .await
     .expect("seed tenant");
@@ -569,9 +680,14 @@ async fn seed_scope(pool: &sqlx::PgPool) -> (i64, i64, bool) {
         .execute(pool)
         .await
         .ok();
+    sqlx::query("DELETE FROM weissman_cluster_ingest WHERE tenant_id = $1")
+        .bind(tenant_id)
+        .execute(pool)
+        .await
+        .ok();
     sqlx::query("DELETE FROM clients WHERE tenant_id = $1 AND name = $2")
         .bind(tenant_id)
-        .bind("alert-fatigue-client")
+        .bind(&client_name)
         .execute(pool)
         .await
         .ok();
@@ -579,7 +695,7 @@ async fn seed_scope(pool: &sqlx::PgPool) -> (i64, i64, bool) {
     let client_id: i64 =
         sqlx::query_scalar(r#"INSERT INTO clients (tenant_id, name) VALUES ($1, $2) RETURNING id"#)
             .bind(tenant_id)
-            .bind("alert-fatigue-client")
+            .bind(&client_name)
             .fetch_one(pool)
             .await
             .expect("seed client");

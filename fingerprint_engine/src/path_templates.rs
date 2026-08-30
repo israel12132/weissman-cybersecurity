@@ -16,6 +16,7 @@
 
 use arc_swap::ArcSwap;
 use dashmap::DashMap;
+use futures::stream::{self, StreamExt};
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -30,6 +31,9 @@ const FANOUT_TO_VARIABLE: usize = 2;
 /// Unique-path pages for cold-start pre-warm (never a full-table jsonb dump).
 const PREWARM_BATCH: i64 = 25_000;
 const PREWARM_WINDOW_SQL: &str = "90 days";
+/// Boot fan-out: enough to cut sequential startup, small enough that 10
+/// tenant DISTINCT pages cannot starve the pool or trip a liveness probe.
+const PREWARM_CONCURRENCY: usize = 10;
 
 static TENANT_INDEX: LazyLock<DashMap<i64, CachedIndex>> = LazyLock::new(DashMap::new);
 
@@ -78,8 +82,10 @@ impl PathTemplateIndex {
         self.observe_urls(std::iter::once(raw));
     }
 
-    /// Clone the trie once, apply every URL, then swap the snapshot. Readers
-    /// keep walking the previous `Arc` with no write lock.
+    /// Clone-modify-swap through [`ArcSwap::rcu`]: that helper is a CAS loop
+    /// (load → clone → modify → compare-exchange → retry with the winner).
+    /// Two persist workers observing the same tenant cannot lost-update.
+    /// Readers keep walking the previous `Arc` with no write lock.
     pub fn observe_urls(&self, urls: impl IntoIterator<Item = impl AsRef<str>>) {
         if self.is_full() {
             return;
@@ -103,6 +109,8 @@ impl PathTemplateIndex {
             return;
         }
         let take = batch.len().min(remaining);
+        // `rcu` retries the closure against the latest snapshot when another
+        // writer won the swap — this batch is applied on top, never instead.
         self.root.rcu(|current| {
             let mut n = (**current).clone();
             for segs in batch.iter().take(take) {
@@ -336,8 +344,9 @@ pub async fn index_for_tenant(pool: &PgPool, tenant_id: i64) -> Arc<PathTemplate
 }
 
 /// Load every active tenant's trie from persisted targets. Uses
-/// [`weissman_db::active_tenant_ids`] (never a raw `tenants` scan). Sequential
-/// per tenant so boot cannot fan out N heavy DISTINCT scans at once.
+/// [`weissman_db::active_tenant_ids`] (never a raw `tenants` scan). Bounded
+/// concurrency (`PREWARM_CONCURRENCY`) so thousands of tenants cannot stretch
+/// boot past a Kubernetes liveness probe, and cannot open N pool clients at once.
 pub async fn prewarm_all_tenants(pool: &PgPool) {
     let ids = match weissman_db::active_tenant_ids(pool).await {
         Ok(v) => v,
@@ -351,12 +360,15 @@ pub async fn prewarm_all_tenants(pool: &PgPool) {
         }
     };
     let n = ids.len();
-    for tid in ids {
-        let _ = index_for_tenant(pool, tid).await;
-    }
+    stream::iter(ids)
+        .for_each_concurrent(PREWARM_CONCURRENCY, |tid| async move {
+            let _ = index_for_tenant(pool, tid).await;
+        })
+        .await;
     tracing::info!(
         target: "path_templates",
         tenants = n,
+        concurrency = PREWARM_CONCURRENCY,
         window = PREWARM_WINDOW_SQL,
         batch = PREWARM_BATCH,
         "path-template trie pre-warmed from unique 90-day cluster/finding targets"
@@ -472,6 +484,50 @@ mod tests {
             );
         }
         assert_eq!(PREWARM_BATCH, 25_000);
+        assert_eq!(PREWARM_CONCURRENCY, 10);
+        let src = include_str!("path_templates.rs");
+        assert!(
+            src.contains("for_each_concurrent(PREWARM_CONCURRENCY"),
+            "pre-warm must fan out tenants with bounded concurrency, not a serial for-loop"
+        );
+    }
+
+    #[test]
+    fn concurrent_observe_does_not_lost_update() {
+        // Same tenant, two writers, disjoint prefixes. A load-clone-store (no
+        // CAS retry) would drop one side; `ArcSwap::rcu` must keep both.
+        for _ in 0..32 {
+            let idx = Arc::new(PathTemplateIndex::new());
+            let a = idx.clone();
+            let b = idx.clone();
+            let t1 = std::thread::spawn(move || {
+                a.observe_urls([
+                    "https://api.corp/api/v1/users/alice",
+                    "https://api.corp/api/v1/users/bob",
+                ]);
+            });
+            let t2 = std::thread::spawn(move || {
+                b.observe_urls([
+                    "https://api.corp/api/v1/orgs/acme",
+                    "https://api.corp/api/v1/orgs/globex",
+                ]);
+            });
+            t1.join().expect("users writer");
+            t2.join().expect("orgs writer");
+            let hint = IdentityHint::default();
+            let users = normalize_target_ctx(
+                "https://api.corp/api/v1/users/carol",
+                &hint,
+                Some(idx.as_ref()),
+            );
+            let orgs = normalize_target_ctx(
+                "https://api.corp/api/v1/orgs/other",
+                &hint,
+                Some(idx.as_ref()),
+            );
+            assert_eq!(users, "https://api.corp/api/v1/users/{id}");
+            assert_eq!(orgs, "https://api.corp/api/v1/orgs/{id}");
+        }
     }
 
     #[test]
