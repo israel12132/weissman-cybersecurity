@@ -223,6 +223,7 @@
     "tls_posture": "TLS Posture",
     "email_posture": "Email & Domain Trust",
     "identity_security": "Identity & SSO Security",
+    "privilege_escalation": "Privilege Escalation & Credentials",
     "kerberos_security": "AD & Kerberos Security",
     "smb_netbios": "SMB / NetBIOS Security",
     "password_spray": "Password Spray Posture",
@@ -5506,6 +5507,9 @@
     "identitySecurityCenter": {
       "evidence_notice": "Identity/OAuth/OIDC/SAML posture from POST /api/command-center/scan (identity / oauth_oidc / saml_attack engines). Token and federation misconfigs are validated with live protocol exchanges."
     },
+    "privilegeEscalationCommandCenter": {
+      "evidence_notice": "Privilege-escalation and credential-access audit via POST /api/command-center/scan (privilege_escalation_credential_access). 500 live controls. Windows registry is Win32 RegQueryValueExW in-process (never reg.exe). Coverage rows including na/not_observed persist under SET LOCAL app.current_tenant_id via one bulk UPSERT. The engine never dumps LSASS or executes a UAC bypass."
+    },
     "kerberosSecurityCommandCenter": {
       "evidence_notice": "Kerberos/AD exposure checks via POST /api/command-center/scan where RoE permits. Results reflect live LDAP/Kerberos responses — empty when no domain controllers are in scope."
     },
@@ -7228,7 +7232,7 @@
   "supremeNerveCenter": {
     "title": "Supreme Nerve Center",
     "ceoOnly": "CEO / superadmin only",
-    "evidence_notice": "Live snapshot from GET /api/ceo/supreme/nerve-center — all 563 engines, subsystem modules, async jobs, and control parameters. No simulated telemetry.",
+      "evidence_notice": "Live snapshot from GET /api/ceo/supreme/nerve-center — all 564 engines, subsystem modules, async jobs, and control parameters. No simulated telemetry.",
     "refresh": "Refresh",
     "pollInterval": "Auto-refresh every {{sec}}s",
     "stuckAlert": "{{count}} engine(s) appear stuck — investigate worker heartbeat and phase updates.",
