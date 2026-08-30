@@ -18,7 +18,7 @@ use crate::openai_chat::{
 use crate::result::EngineResult;
 use crate::stealth;
 
-use super::wordlist::{expand_recursive_directory_paths, expanded_path_wordlist};
+use super::wordlist::expand_recursive_directory_paths;
 
 const SPEC_PATHS: [&str; 4] = [
     "/openapi.json",
@@ -547,10 +547,11 @@ async fn get_html_link_discovery_paths(
     probed: &std::collections::HashSet<String>,
     max_new: usize,
 ) -> Vec<String> {
+    let cap = if max_new == 0 { usize::MAX } else { max_new };
     let mut discovered = std::collections::HashSet::<String>::new();
     let base = base.trim_end_matches('/');
-    for path in seed_paths.iter().take(36) {
-        if discovered.len() >= max_new {
+    for path in seed_paths.iter() {
+        if discovered.len() >= cap {
             break;
         }
         let Some(path_norm) = normalize_probe_path(path) else {
@@ -584,7 +585,7 @@ async fn get_html_link_discovery_paths(
             if probed.contains(&p) {
                 continue;
             }
-            if discovered.insert(p.clone()) && discovered.len() >= max_new {
+            if discovered.insert(p.clone()) && discovered.len() >= cap {
                 break;
             }
         }
@@ -691,7 +692,7 @@ async fn run_semantic_fallback_paths(
         }
     }
 
-    let initial: Vec<String> = paths.iter().take(40).cloned().collect();
+    let initial: Vec<String> = paths.clone();
     post_probe_batch(
         base,
         client,
@@ -708,11 +709,10 @@ async fn run_semantic_fallback_paths(
     .await;
 
     let seeds: Vec<String> = recursion_seeds.into_iter().collect();
-    let expanded = expand_recursive_directory_paths(&seeds, 72);
+    let expanded = expand_recursive_directory_paths(&seeds, 0);
     let second_wave: Vec<String> = expanded
         .into_iter()
         .filter(|p| !probed.contains(p))
-        .take(48)
         .collect();
 
     post_probe_batch(
@@ -734,11 +734,10 @@ async fn run_semantic_fallback_paths(
     crawl_seeds.sort();
     crawl_seeds.dedup();
     let html_paths =
-        get_html_link_discovery_paths(base, &crawl_seeds, client, st, &probed, 72).await;
+        get_html_link_discovery_paths(base, &crawl_seeds, client, st, &probed, 0).await;
     let third_wave: Vec<String> = html_paths
         .into_iter()
         .filter(|p| !probed.contains(p))
-        .take(44)
         .collect();
 
     post_probe_batch(
@@ -865,7 +864,11 @@ pub async fn run_semantic_fuzz_result(
     let spec = match fetch_openapi(&base, &client, st_ref).await {
         Some(s) => s,
         None => {
-            let paths: Vec<String> = paths_opt.clone().unwrap_or_else(expanded_path_wordlist);
+            // POST business-logic probes use live/discovered paths, not the full public seed
+            // (tens of thousands of combinators). Existence brute lives in ASM / spider.
+            let paths: Vec<String> = paths_opt
+                .clone()
+                .unwrap_or_else(|| crate::discovery_corpus::sensitive_exposure_paths());
             let fallback_findings = run_semantic_fallback_paths(
                 &base,
                 &client,

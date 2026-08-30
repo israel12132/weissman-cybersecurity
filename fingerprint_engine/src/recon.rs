@@ -6,7 +6,7 @@ use tokio::sync::Semaphore;
 
 const DEFAULT_CONCURRENCY: usize = 200;
 
-/// Default subdomain prefixes for brute-forcing (kept in sync with Python COMMON_SUBDOMAINS).
+/// Default subdomain prefixes for brute-forcing (legacy short list; live enum uses the full corpus).
 pub const DEFAULT_SUBDOMAINS: &[&str] = &[
     // Core web
     "www",
@@ -240,13 +240,15 @@ pub async fn enum_subdomains(domain: &str, wordlist: &[String], concurrency: usi
     out
 }
 
-/// Run subdomain enumeration with default wordlist; returns JSON array of strings.
+/// Full public subdomain-prefix corpus (unbounded seed).
+#[must_use]
+pub fn default_subdomain_wordlist() -> Vec<String> {
+    weissman_engines::discovery_corpus::all_subdomain_prefixes().to_vec()
+}
+
+/// Run subdomain enumeration with the public-knowledge corpus (no prefix cap).
 pub async fn enum_subdomains_default(domain: &str) -> Vec<String> {
-    let wordlist: Vec<String> = DEFAULT_SUBDOMAINS
-        .iter()
-        .map(|s| (*s).to_string())
-        .collect();
-    enum_subdomains(domain, &wordlist, DEFAULT_CONCURRENCY).await
+    enum_subdomains(domain, &default_subdomain_wordlist(), DEFAULT_CONCURRENCY).await
 }
 
 #[cfg(test)]

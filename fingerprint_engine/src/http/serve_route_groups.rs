@@ -722,6 +722,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/payload-sync/status", get(api_payload_sync_status))
         .route("/api/payload-sync/payloads", get(api_payload_sync_payloads))
         .route("/api/payload-sync/run", post(api_payload_sync_run))
+        .route(
+            "/api/discovery-knowledge/stats",
+            get(api_discovery_knowledge_stats),
+        )
         .route("/api/edge-swarm/nodes", get(api_edge_swarm_nodes))
         .route("/api/edge-swarm/heartbeat", post(api_edge_swarm_heartbeat))
         .route("/api/edge-fuzz/manifest", get(api_edge_fuzz_manifest))

@@ -45,8 +45,9 @@ use crate::cloud_hunter;
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_result::{print_result, EngineResult};
 use crate::fingerprint::scan_targets_concurrent_with_stealth;
-use crate::recon::{enum_subdomains, enum_subdomains_default, DEFAULT_SUBDOMAINS};
+use crate::recon::{default_subdomain_wordlist, enum_subdomains, enum_subdomains_default};
 use futures::future::join_all;
+use futures::stream::{self, StreamExt};
 use hickory_resolver::config::ResolverConfig;
 use hickory_resolver::net::runtime::TokioRuntimeProvider;
 use hickory_resolver::proto::rr::RecordType;
@@ -151,7 +152,7 @@ pub async fn run_asm_result_with_ports_and_subdomains(
             enum_subdomains_default(&host).await
         };
         let mut urls = vec![format!("https://{}", host), format!("http://{}", host)];
-        for s in subs.iter().take(20) {
+        for s in subs.iter() {
             urls.push(format!("https://{}", s));
             urls.push(format!("http://{}", s));
         }
@@ -1274,7 +1275,12 @@ const SENSITIVE_PATHS: &[(&str, &str, &str)] = &[
     ("/phpinfo.php", "medium", "PHP info disclosure"),
 ];
 
-async fn probe_sensitive_paths(client: &reqwest::Client, host: &str) -> Vec<Value> {
+async fn probe_sensitive_paths(
+    client: &reqwest::Client,
+    host: &str,
+    pool: Option<&sqlx::PgPool>,
+    extra_paths: &[String],
+) -> Vec<Value> {
     let mut out = Vec::new();
     for (path, sev, label) in SENSITIVE_PATHS {
         let url = format!("https://{host}{path}");
@@ -1324,6 +1330,50 @@ async fn probe_sensitive_paths(client: &reqwest::Client, host: &str) -> Vec<Valu
             "Remove public access; authenticate admin surfaces; delete backup artifacts from web roots.",
         ));
     }
+    let mut extra: Vec<String> = weissman_engines::discovery_corpus::sensitive_exposure_paths()
+        .into_iter()
+        .chain(extra_paths.iter().cloned())
+        .filter(|p| !SENSITIVE_PATHS.iter().any(|(listed, _, _)| listed == p))
+        .collect();
+    extra.sort();
+    extra.dedup();
+    let budget = weissman_engines::discovery_corpus::discovery_probe_budget();
+    if extra.len() > budget {
+        extra.truncate(budget);
+    }
+    let extra_hits: Vec<Option<(String, String, u16)>> =
+        stream::iter(extra.into_iter().map(|path| {
+            let client = client.clone();
+            let host = host.to_string();
+            async move {
+                let url = format!("https://{host}{path}");
+                let resp = client.get(&url).send().await.ok()?;
+                let status = resp.status().as_u16();
+                if !(200..400).contains(&status) || status == 404 {
+                    return None;
+                }
+                Some((path, url, status))
+            }
+        }))
+        .buffer_unordered(32)
+        .collect()
+        .await;
+    let mut confirmed = Vec::new();
+    for hit in extra_hits.into_iter().flatten() {
+        confirmed.push(hit.0.clone());
+        out.push(asm_finding(
+            "sensitive_path",
+            "medium",
+            hit.1.clone(),
+            format!("Sensitive path reachable: {}", hit.0),
+            "T1190",
+            format!("GET {} returned HTTP {}", hit.1, hit.2),
+            "Remove public access; authenticate admin surfaces; delete backup artifacts from web roots.",
+        ));
+    }
+    if let Some(pool) = pool {
+        crate::discovery_knowledge::remember(pool, "path", &confirmed, "probe_hit", true, "").await;
+    }
     out
 }
 
@@ -1343,7 +1393,11 @@ const ROBOTS_SENSITIVE: &[&str] = &[
     "database",
 ];
 
-async fn harvest_robots_txt(client: &reqwest::Client, host: &str) -> Vec<Value> {
+async fn harvest_robots_txt(
+    client: &reqwest::Client,
+    host: &str,
+    pool: Option<&sqlx::PgPool>,
+) -> Vec<Value> {
     let url = format!("https://{host}/robots.txt");
     let Ok(resp) = client.get(&url).send().await else {
         return Vec::new();
@@ -1356,6 +1410,7 @@ async fn harvest_robots_txt(client: &reqwest::Client, host: &str) -> Vec<Value> 
         return Vec::new();
     }
     let mut flagged = Vec::new();
+    let mut harvested = Vec::new();
     for line in body.lines() {
         let l = line.trim().to_lowercase();
         if !l.starts_with("disallow:") {
@@ -1365,12 +1420,18 @@ async fn harvest_robots_txt(client: &reqwest::Client, host: &str) -> Vec<Value> 
         if path.is_empty() || path == "/" {
             continue;
         }
+        if let Some(norm) = weissman_engines::discovery_corpus::normalize_http_path(path) {
+            harvested.push(norm);
+        }
         if ROBOTS_SENSITIVE.iter().any(|k| path.contains(k)) {
             flagged.push(path.to_string());
         }
     }
     flagged.sort();
     flagged.dedup();
+    if let Some(pool) = pool {
+        crate::discovery_knowledge::remember(pool, "path", &harvested, "robots", true, "").await;
+    }
     if flagged.is_empty() {
         return vec![asm_finding(
             "robots",
@@ -1770,7 +1831,9 @@ pub async fn run_asm_result_ctx(
     let do_robots = p.bool_or("robots_harvest", true);
     let do_dkim = p.bool_or("dkim_probe", true) && is_domain;
     let subdomain_sources = p.str_or("subdomain_sources", "both").to_ascii_lowercase();
-    let max_subdomains = p.usize_or("max_subdomains", 50).clamp(0, 500);
+    let live_ai = p.bool_or("live_ai_discovery", true);
+    let max_raw = p.usize_or("max_subdomains", 0);
+    let max_subdomains = if max_raw == 0 { usize::MAX } else { max_raw };
     let port_timeout = p
         .u64_or("port_timeout_ms", PORT_TIMEOUT_MS)
         .clamp(100, 5000);
@@ -1802,7 +1865,12 @@ pub async fn run_asm_result_ctx(
     }
     if do_subdomains {
         if subdomain_sources == "passive" || subdomain_sources == "both" {
-            let ct = crtsh_subdomains(&client, &host, max_subdomains.max(1) * 2).await;
+            let ct_cap = if max_subdomains == usize::MAX {
+                50_000
+            } else {
+                max_subdomains.max(1).saturating_mul(2)
+            };
+            let ct = crtsh_subdomains(&client, &host, ct_cap).await;
             if !ct.is_empty() {
                 notes.push(format!(
                     "Certificate Transparency surfaced {} name(s).",
@@ -1812,15 +1880,54 @@ pub async fn run_asm_result_ctx(
             subdomains.extend(ct);
         }
         if subdomain_sources == "bruteforce" || subdomain_sources == "both" {
-            let wordlist: Vec<String> = if custom_wordlist.is_empty() {
-                DEFAULT_SUBDOMAINS
-                    .iter()
-                    .map(|s| (*s).to_string())
-                    .collect()
+            let custom_extra: Vec<String> = custom_wordlist.clone();
+            let wordlist = if live_ai {
+                crate::discovery_ai::hydrate_subdomain_prefixes(
+                    ctx.discovery_knowledge_pool(),
+                    &host,
+                    "",
+                    &custom_extra,
+                    &ctx.llm_base_url,
+                    &ctx.llm_model,
+                    ctx.tenant_id,
+                )
+                .await
+            } else if custom_extra.is_empty() {
+                let mut wl = default_subdomain_wordlist();
+                if let Some(pool) = ctx.discovery_knowledge_pool() {
+                    crate::discovery_knowledge::seed_public_knowledge(pool).await;
+                    let learned = crate::discovery_knowledge::load_subdomain_prefixes(pool).await;
+                    wl = crate::discovery_knowledge::merge_unique(&[&wl, &learned]);
+                }
+                wl
             } else {
-                custom_wordlist.clone()
+                custom_extra
+            };
+            let budget = weissman_engines::discovery_corpus::discovery_probe_budget();
+            let wordlist = if wordlist.len() > budget {
+                wordlist.into_iter().take(budget).collect()
+            } else {
+                wordlist
             };
             let brute = enum_subdomains(&host, &wordlist, 200).await;
+            if let Some(pool) = ctx.discovery_knowledge_pool() {
+                let confirmed: Vec<String> = brute
+                    .iter()
+                    .filter_map(|fqdn| {
+                        fqdn.strip_suffix(&format!(".{host}"))
+                            .map(std::string::ToString::to_string)
+                    })
+                    .collect();
+                crate::discovery_knowledge::remember(
+                    pool,
+                    "subdomain_prefix",
+                    &confirmed,
+                    "probe_hit",
+                    true,
+                    "",
+                )
+                .await;
+            }
             subdomains.extend(brute);
         }
     }
@@ -1960,9 +2067,30 @@ pub async fn run_asm_result_ctx(
         }
     }
 
-    // ── 4. HTTP & TLS posture (apex + top subdomains) ────────────────────────
+    // ── 4. HTTP & TLS posture (apex + discovered subdomains) ──────────────────
+    let discovery_pool = ctx.discovery_knowledge_pool();
+    let extra_sensitive: Vec<String> = if do_sensitive {
+        if live_ai {
+            crate::discovery_ai::hydrate_paths(
+                discovery_pool,
+                &host,
+                "",
+                &[],
+                &ctx.llm_base_url,
+                &ctx.llm_model,
+                ctx.tenant_id,
+            )
+            .await
+        } else if let Some(pool) = discovery_pool {
+            crate::discovery_knowledge::load_learned_paths(pool).await
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
     let mut posture_hosts: Vec<String> = vec![host.clone()];
-    posture_hosts.extend(subdomains.iter().take(6).cloned());
+    posture_hosts.extend(subdomains.iter().cloned());
     for ph in &posture_hosts {
         if do_http {
             let url = format!("https://{ph}");
@@ -2052,10 +2180,12 @@ pub async fn run_asm_result_ctx(
                 }
             }
             if do_sensitive {
-                findings.extend(probe_sensitive_paths(&client, ph).await);
+                findings.extend(
+                    probe_sensitive_paths(&client, ph, discovery_pool, &extra_sensitive).await,
+                );
             }
             if do_robots {
-                findings.extend(harvest_robots_txt(&client, ph).await);
+                findings.extend(harvest_robots_txt(&client, ph, discovery_pool).await);
             }
         }
         if do_tls {
@@ -2154,7 +2284,7 @@ pub async fn run_asm_result_ctx(
     // ── 6. Tech fingerprint ──────────────────────────────────────────────────
     if do_fingerprint {
         let mut urls = vec![format!("https://{}", host), format!("http://{}", host)];
-        for s in subdomains.iter().take(10) {
+        for s in subdomains.iter() {
             urls.push(format!("https://{}", s));
         }
         let fp = scan_targets_concurrent_with_stealth(&urls, stealth).await;

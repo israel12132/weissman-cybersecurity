@@ -468,6 +468,7 @@ async fn execute_job_unscoped(
                 llm_base_url: runtime_cfg.llm_base_url.unwrap_or_default(),
                 llm_model: runtime_cfg.llm_model.unwrap_or_default(),
                 app_pool: Some(app_pool.clone()),
+                intel_pool: Some(intel_pool.clone()),
                 agents: Some(crate::endpoint_agents::AgentRegistry::global()),
                 client_id: client_id_opt,
                 job_params,
@@ -905,6 +906,7 @@ async fn execute_job_unscoped(
 
             let telemetry = TenantEmitter::new(channels.telemetry.clone(), tid);
             let app = app_pool.clone();
+            let intel = intel_pool.clone();
             let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Starting scan-all-engines: {} engines for client {}","status":"running"}}"#, job.id, engines.len(), client_id));
 
             let mut results = Vec::new();
@@ -970,6 +972,7 @@ async fn execute_job_unscoped(
                     tenant_id: Some(tid),
                     target_list: vec![target.clone()],
                     app_pool: Some(app.clone()),
+                    intel_pool: Some(intel.clone()),
                     agents: Some(crate::endpoint_agents::AgentRegistry::global()),
                     client_id: Some(client_id),
                     job_params: cross_job_params.clone(),

@@ -27,6 +27,9 @@ pub struct EngineRunContext {
     /// Pool + agent registry, populated by `api_scan` when known. When set, agent-required
     /// engines try to dispatch live to an enrolled agent and queue an `endpoint_agent_tasks` row.
     pub app_pool: Option<std::sync::Arc<sqlx::PgPool>>,
+    /// Intel pool (`search_path=intel`) for unbounded discovery_knowledge upserts.
+    /// Falls back to `app_pool` when unset (single-DB / CLI / tests).
+    pub intel_pool: Option<std::sync::Arc<sqlx::PgPool>>,
     pub agents: Option<std::sync::Arc<crate::endpoint_agents::AgentRegistry>>,
     pub client_id: Option<i64>,
     /// Extra scan parameters forwarded from POST /api/command-center/scan body.
@@ -47,6 +50,14 @@ pub struct EngineRunContext {
     pub oast_domain: Option<String>,
     /// Tenant OAST API key from `system_configs`.
     pub oast_api_key: Option<String>,
+}
+
+impl EngineRunContext {
+    /// Prefer the intel pool for `intel.discovery_knowledge`; fall back to app.
+    #[must_use]
+    pub fn discovery_knowledge_pool(&self) -> Option<&sqlx::PgPool> {
+        self.intel_pool.as_deref().or(self.app_pool.as_deref())
+    }
 }
 
 /// Escalate a run context into the Ghost Network after a WAF/rate-limit block: enable identity

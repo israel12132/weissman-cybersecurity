@@ -13,7 +13,7 @@ use std::time::Duration;
 use weissman_engines::openai_chat::{self, DEFAULT_LLM_BASE_URL};
 
 const LLM_TIMEOUT_SECS: u64 = 26;
-const PREDICTED_PATHS_LIMIT: usize = 100;
+const PREDICTED_PATHS_LIMIT: usize = 10_000;
 
 const CRAWL_TIMEOUT_SECS: u64 = 9;
 const MAX_PAGES_PER_BASE: usize = 40;
@@ -388,7 +388,7 @@ pub async fn predict_paths_llm(
 ) -> Vec<String> {
     let sample: String = discovered_paths
         .iter()
-        .take(50)
+        .take(80)
         .cloned()
         .collect::<Vec<_>>()
         .join("\n");
@@ -405,8 +405,8 @@ pub async fn predict_paths_llm(
 
 {}
  
-Predict exactly 100 additional high-value paths that likely exist on the same target, based on naming conventions and common patterns (e.g. if /api/v1/auth exists, predict /api/v1/admin, /api/v1/config, /api/v1/users, /api/v2/auth, etc.). Include admin, config, debug, backup, internal, graphql, swagger, actuator, health, metrics, login, register, and framework-specific paths.
-Output ONLY one path per line, each line starting with /. No explanations. Exactly 100 lines."#,
+Predict as many additional high-value HTTP paths as you can that likely exist on the same target, based on naming conventions and common patterns (e.g. if /api/v1/auth exists, predict /api/v1/admin, /api/v1/config, /api/v1/users, /api/v2/auth, etc.). Include admin, config, debug, backup, internal, graphql, swagger, actuator, health, metrics, login, register, well-known, identity, CI/CD, observability, and framework-specific paths.
+Output ONLY one path per line, each line starting with /. No explanations."#,
         sample
     );
     let client = openai_chat::llm_http_client(LLM_TIMEOUT_SECS);
