@@ -23,6 +23,7 @@
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
 use sqlx::{Column, PgPool, Row};
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, OnceLock};
