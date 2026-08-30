@@ -173,7 +173,7 @@ pub async fn login_rate_limit_middleware(
     // Async Redis token-bucket — never await on the request path. Still spawned
     // while degraded (client present) so a recovered Redis can clear the flag.
     if redis {
-        let max = limit.get() as u64;
+        let max = limit.get().max(burst.get()) as u64;
         match kind {
             UnauthPostKind::Login => super::rate_limit_redis::spawn_incr_login_ip(ip.clone(), max),
             UnauthPostKind::Enroll => {
@@ -283,5 +283,19 @@ mod tests {
         assert!(prod.contains("redis_degraded"));
         assert!(prod.contains("degraded_local_quota"));
         assert!(prod.contains("notify_redis_degraded"));
+    }
+
+    #[test]
+    fn redis_login_cap_is_max_of_quota_and_burst() {
+        let cap = login_per_minute().get().max(login_burst().get());
+        assert!(cap >= login_burst().get());
+        assert!(cap >= login_per_minute().get());
+    }
+
+    #[test]
+    fn redis_enroll_cap_is_max_of_quota_and_burst() {
+        let cap = enroll_per_minute().get().max(enroll_burst().get());
+        assert!(cap >= enroll_burst().get());
+        assert!(cap >= enroll_per_minute().get());
     }
 }

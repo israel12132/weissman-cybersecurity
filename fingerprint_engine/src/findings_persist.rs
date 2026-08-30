@@ -568,11 +568,83 @@ pub async fn persist_engine_findings(
         }
         let effective_status = if suppressed { "FALSE_POSITIVE" } else { "OPEN" };
 
+        // Evidence-doubt: stage uncorroborated actionable findings; admit inventory, proof,
+        // KEV, OAST, dual-probe, or confidence ≥ 0.95.
+        {
+            let mut finding_for_doubt = f.clone();
+            if let Value::Object(obj) = &mut finding_for_doubt {
+                obj.insert("kev_listed".into(), json!(kev_listed));
+                obj.insert("poc_sealed".into(), json!(poc_sealed));
+                if !poc.is_empty() {
+                    obj.insert("poc".into(), json!(poc.clone()));
+                }
+            }
+            let ckey = crate::elite_hardening::evidence_doubt::corroboration_key(
+                &target_url,
+                &vuln_signature,
+                &poc,
+            );
+            let distinct =
+                distinct_engines_for_key(&mut tx, tenant_id, client_id, &ckey, engine).await;
+            let decision = crate::elite_hardening::evidence_doubt::decide(
+                engine,
+                &severity,
+                &finding_for_doubt,
+                distinct,
+            );
+            let _ = upsert_finding_candidate(
+                &mut tx,
+                tenant_id,
+                client_id,
+                engine,
+                &ckey,
+                &severity,
+                &title,
+                &finding_for_doubt,
+                &decision,
+            )
+            .await;
+            match decision {
+                crate::elite_hardening::evidence_doubt::AdmitDecision::Stage { reason, .. } => {
+                    tracing::info!(
+                        target: "findings_persist",
+                        engine = %engine,
+                        tenant_id,
+                        %reason,
+                        "staging finding pending corroboration"
+                    );
+                    continue;
+                }
+                crate::elite_hardening::evidence_doubt::AdmitDecision::Admit {
+                    reason,
+                    confidence,
+                } => {
+                    if let Value::Object(obj) = &mut raw_data_enriched {
+                        let pack = crate::elite_hardening::evidence_doubt::proof_pack_hash(
+                            engine,
+                            &ckey,
+                            &finding_for_doubt,
+                            distinct,
+                        );
+                        obj.insert(
+                            "evidence_doubt".into(),
+                            json!({
+                                "reason": reason,
+                                "confidence": confidence,
+                                "proof_pack": pack,
+                            }),
+                        );
+                    }
+                }
+            }
+        }
+
         // True dedup: target a UNIQUE (tenant_id, client_id, finding_id) constraint.
         // On a repeat detection we refresh evidence (description/proof/raw_data + run_id)
-        // and *do not* reset status — analyst-set workflow states (ACKNOWLEDGED, FIXED,
-        // FALSE_POSITIVE) must survive the next scan. last_seen_at tracks recurrence.
-        let (upserted_id, vuln_is_new): (i64, bool) = sqlx::query_as(
+        // and *do not* reset ACKNOWLEDGED / FALSE_POSITIVE. Hack-Fix-Verify *does*
+        // reopen FIXED / VERIFIED_FIXED when the corroboration key is reproduced —
+        // a claim of "fixed" is not allowed to hide a live finding (control 56).
+        let (upserted_id, vuln_is_new, prior_status): (i64, bool, String) = sqlx::query_as(
             r#"INSERT INTO vulnerabilities
                  (run_id, tenant_id, client_id, finding_id, title, severity, source,
                   description, status, proof, poc_commitment_sha256, raw_data, discovered_at,
@@ -601,7 +673,7 @@ pub async fn persist_engine_findings(
                    updated_at           = now(),
                    last_seen_at         = now(),
                    seen_count           = vulnerabilities.seen_count + 1
-               RETURNING id, (xmax = 0) AS is_new"#,
+               RETURNING id, (xmax = 0) AS is_new, COALESCE(status, 'OPEN') AS prior_status"#,
         )
         .bind(run_id)
         .bind(tenant_id)
@@ -626,6 +698,36 @@ pub async fn persist_engine_findings(
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| format!("insert vulnerabilities: {e}"))?;
+
+        if let crate::elite_hardening::hack_fix_verify::Transition::Apply(next) =
+            crate::elite_hardening::hack_fix_verify::on_reappearance(&prior_status)
+        {
+            let proof = serde_json::json!({
+                "phase": "reopened",
+                "reason": "corroboration_key_reproduced",
+                "prior_status": prior_status,
+                "scan_ok": true,
+            });
+            let _ = sqlx::query(
+                r#"UPDATE vulnerabilities
+                      SET status = $1,
+                          raw_data = jsonb_set(
+                              COALESCE(raw_data, '{}'::jsonb),
+                              '{hack_fix_verify}',
+                              $2::jsonb,
+                              true
+                          ),
+                          updated_at = now(),
+                          status_changed_at = now()
+                    WHERE id = $3 AND tenant_id = $4"#,
+            )
+            .bind(next)
+            .bind(proof.to_string())
+            .bind(upserted_id)
+            .bind(tenant_id)
+            .execute(&mut *tx)
+            .await;
+        }
 
         // PoE exploit sealing (critical/high) — sole authorized post-insert mutation.
         if crate::exploit_crypto::should_seal_poc(poc.as_str(), severity.as_str()) {
@@ -846,6 +948,94 @@ pub async fn persist_engine_findings(
     Ok(inserted)
 }
 
+/// After a *successful* live scan of `engine` against `target`, promote
+/// analyst-claimed FIXED rows whose finding_id was **not** reproduced to
+/// `VERIFIED_FIXED` **only if** the host was proven live in this scan window.
+/// Failed scans must not call this. Offline / firewalled hosts must not close
+/// anything. OPEN rows are left alone so a flaky engine cannot empty the inbox
+/// (חוק 2).
+pub async fn apply_hack_fix_verify_after_ok_scan(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: Option<i64>,
+    engine: &str,
+    target: &str,
+    present_finding_ids: &[String],
+) -> Result<u64, String> {
+    let Some(client_id) = client_id else {
+        return Ok(0);
+    };
+    if engine.trim().is_empty() || target.trim().is_empty() {
+        return Ok(0);
+    }
+    let scan_had_findings = present_finding_ids.iter().any(|id| !id.trim().is_empty());
+    let liveness = crate::elite_hardening::host_liveness::prove_host_live(
+        pool,
+        tenant_id,
+        Some(client_id),
+        target,
+        scan_had_findings,
+    )
+    .await;
+    if !liveness.live {
+        tracing::warn!(
+            target: "hack_fix_verify",
+            tenant_id,
+            engine = %engine,
+            target = %target,
+            method = liveness.method,
+            "refusing VERIFIED_FIXED: host liveness unproven (offline/firewalled host cannot close findings)"
+        );
+        return Ok(0);
+    }
+    let proof = json!({
+        "phase": "verified_closed",
+        "reason": "successful_scan_did_not_reproduce_key",
+        "engine": engine,
+        "target": target,
+        "scan_ok": true,
+        "method": "live_rescan_absence",
+        "host_liveness": liveness.to_json(),
+    });
+    let mut tx = db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("hfv tenant tx: {e}"))?;
+    let ids: Vec<String> = present_finding_ids.to_vec();
+    let target_lc = target.trim().to_ascii_lowercase();
+    let res = sqlx::query(
+        r#"UPDATE vulnerabilities
+              SET status = $1,
+                  raw_data = jsonb_set(
+                      COALESCE(raw_data, '{}'::jsonb),
+                      '{hack_fix_verify}',
+                      $2::jsonb,
+                      true
+                  ),
+                  updated_at = now(),
+                  status_changed_at = now()
+            WHERE tenant_id = $3
+              AND client_id = $4
+              AND source = $5
+              AND lower(trim(COALESCE(raw_data->>'target', ''))) = $6
+              AND status IN ('FIXED', 'RESCAN_PENDING', 'REMEDIATION_MARKED')
+              AND NOT (finding_id = ANY($7::text[]))"#,
+    )
+    .bind(crate::elite_hardening::hack_fix_verify::STATUS_VERIFIED_FIXED)
+    .bind(proof.to_string())
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(engine)
+    .bind(&target_lc)
+    .bind(&ids)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| format!("hfv verify-close: {e}"))?;
+    tx.commit()
+        .await
+        .map_err(|e| format!("hfv verify-close commit: {e}"))?;
+    Ok(res.rows_affected())
+}
+
 /// Same priority order as `findings_correlator::derive_vuln_signature`, kept here so
 /// the persist path doesn't need to expose the helper publicly. Centralising the
 /// extraction keeps `signature_hash` identical on both sides.
@@ -960,4 +1150,73 @@ mod tests {
             "different vulnerability signature must yield a different finding_id"
         );
     }
+}
+
+async fn distinct_engines_for_key(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    client_id: i64,
+    key: &str,
+    current: &str,
+) -> usize {
+    let rows: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT engine_id FROM finding_candidates
+          WHERE tenant_id = $1 AND client_id = $2 AND corroboration_key = $3",
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(key)
+    .fetch_all(&mut **tx)
+    .await
+    .unwrap_or_default();
+    let mut set = std::collections::HashSet::new();
+    set.insert(current.to_string());
+    for e in rows {
+        set.insert(e);
+    }
+    set.len()
+}
+
+async fn upsert_finding_candidate(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    client_id: i64,
+    engine: &str,
+    key: &str,
+    severity: &str,
+    title: &str,
+    finding: &Value,
+    decision: &crate::elite_hardening::evidence_doubt::AdmitDecision,
+) -> Result<(), String> {
+    let (reason, confidence) = match decision {
+        crate::elite_hardening::evidence_doubt::AdmitDecision::Admit { reason, confidence } => {
+            (*reason, *confidence)
+        }
+        crate::elite_hardening::evidence_doubt::AdmitDecision::Stage { reason, confidence } => {
+            (*reason, *confidence)
+        }
+    };
+    sqlx::query(
+        r#"INSERT INTO finding_candidates
+             (tenant_id, client_id, engine_id, corroboration_key, severity, title,
+              finding_json, confidence, reason)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           ON CONFLICT (tenant_id, client_id, corroboration_key, engine_id) DO UPDATE SET
+               finding_json = EXCLUDED.finding_json,
+               confidence = EXCLUDED.confidence,
+               reason = EXCLUDED.reason"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(engine)
+    .bind(key)
+    .bind(severity)
+    .bind(title)
+    .bind(finding)
+    .bind(confidence)
+    .bind(reason)
+    .execute(&mut **tx)
+    .await
+    .map(|_| ())
+    .or(Ok(()))
 }

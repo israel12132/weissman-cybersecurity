@@ -185,7 +185,50 @@ fn auth_bootstrap_promotes_master_bootstrap_to_owner() {
         "master bootstrap must be in the owner promotion set"
     );
     assert!(
-        src.contains("fn owner_bootstrap_emails"),
+        src.contains("fn merge_owner_emails"),
         "owner email set must stay a named helper so both env operators are promoted"
+    );
+    assert!(
+        src.contains("fn env_owner_emails"),
+        "env operators must be collected through env_owner_emails"
+    );
+}
+
+#[test]
+fn privilege_escalation_controls_migration_has_forced_rls() {
+    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("migrations/20260830160000_privilege_escalation_controls.sql");
+    assert!(
+        p.is_file(),
+        "privilege escalation controls migration missing: {}",
+        p.display()
+    );
+    let text = std::fs::read_to_string(&p).unwrap();
+    assert!(text.contains("CREATE TABLE IF NOT EXISTS privilege_escalation_control_results"));
+    assert!(text.contains("tenant_id     BIGINT NOT NULL REFERENCES tenants(id)"));
+    assert!(text.contains("FORCE ROW LEVEL SECURITY"));
+    assert!(text.contains("public.app_current_tenant_id()"));
+    assert!(text.contains("CHECK (status IN ('pass', 'fail', 'na', 'not_observed'))"));
+    assert!(text.contains("ux_pac_controls_tenant_host_id"));
+    assert!(text.contains("ON privilege_escalation_control_results TO weissman_app"));
+    assert_eq!(
+        text.matches("app_current_tenant_id()").count(),
+        2,
+        "USING + WITH CHECK must both scope by tenant GUC"
+    );
+}
+
+#[test]
+fn privilege_escalation_controls_migration_in_sync_both_dirs() {
+    let fe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("migrations/20260830160000_privilege_escalation_controls.sql");
+    let db = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../crates/weissman-db/migrations/20260830160000_privilege_escalation_controls.sql");
+    let a = std::fs::read_to_string(&fe).unwrap_or_default();
+    let b = std::fs::read_to_string(&db).unwrap_or_default();
+    assert!(!a.is_empty(), "migration present");
+    assert_eq!(
+        a, b,
+        "privilege_escalation_controls migration must be identical in both dirs"
     );
 }

@@ -26,6 +26,12 @@ fn degraded_quota(n: NonZeroU32) -> NonZeroU32 {
     super::rate_limit_redis::degraded_local_quota(n)
 }
 
+/// Redis window cap. Must match governor `allow_burst`, not just refill,
+/// or live E2E from 127.0.0.1 429s at refill while in-process still has burst.
+fn window_cap() -> u64 {
+    per_sec().get().max(burst().get()) as u64
+}
+
 fn limiter() -> Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>> {
     static LIM: OnceLock<Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>>> =
         OnceLock::new();
@@ -98,7 +104,14 @@ pub async fn api_rate_limit_middleware(
         return deny_api(&ip, &path, limit, 1, "redis");
     }
     if redis {
-        super::rate_limit_redis::spawn_incr_api_ip(ip.clone(), limit);
+        let redis_max = if degraded {
+            degraded_quota(per_sec())
+                .get()
+                .max(degraded_quota(burst()).get()) as u64
+        } else {
+            window_cap()
+        };
+        super::rate_limit_redis::spawn_incr_api_ip(ip.clone(), redis_max);
     }
 
     rate_limit_metrics::record_api_allowed(&ip);
@@ -180,5 +193,17 @@ mod tests {
         assert!(prod.contains("redis_degraded"));
         assert!(prod.contains("degraded_local_quota"));
         assert!(prod.contains("notify_redis_degraded"));
+    }
+
+    #[test]
+    fn redis_window_cap_is_max_of_refill_and_burst() {
+        let cap = window_cap();
+        let refill = per_sec().get() as u64;
+        let burst_n = burst().get() as u64;
+        assert_eq!(cap, refill.max(burst_n));
+        assert!(
+            cap >= burst_n,
+            "Redis must not 429 inside the governor burst window (cap={cap} burst={burst_n})"
+        );
     }
 }

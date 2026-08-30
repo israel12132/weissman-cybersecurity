@@ -12,13 +12,13 @@ Regenerate: `node scripts/engine_coverage_accuracy_report.mjs` · Gate: `--check
 
 | Class | Count | Share |
 |-------|------:|------:|
-| **Live probes** (real network / host / TLS / DNS I/O) | 303 | 53.8% |
-| Aliases (retag → a live probe, same detection logic) | 212 | 37.7% |
+| **Live probes** (real network / host / TLS / DNS I/O) | 304 | 53.9% |
+| Aliases (retag → a live probe, same detection logic) | 212 | 37.6% |
 | Agent-required (host-level; endpoint agent performs the detection) | 48 | 8.5% |
 | **No execution path** (catalog entries that do nothing) | 0 | 0.0% |
-| **Catalog total** | **563** | 100% |
+| **Catalog total** | **564** | 100% |
 
-- **295 distinct probe implementations** back the 303 live
+- **296 distinct probe implementations** back the 304 live
   probes (delegates that share one implementation are counted once).
 - **0 engines with no execution path** — the catalog headline is fully backed.
 - A companion gate, `engine_reality_audit.mjs`, independently proves the same *depth* invariant.
@@ -39,7 +39,7 @@ is pure-alias "coverage theater".
 | Cloud / Infra | 48 | 25 | 23 | 0 | 24 |
 | AI / LLM | 46 | 28 | 18 | 0 | 22 |
 | Recon & OSINT | 44 | 23 | 21 | 0 | 27 |
-| Crypto / Identity | 43 | 21 | 19 | 3 | 24 |
+| Crypto / Identity | 44 | 22 | 19 | 3 | 25 |
 | OT / ICS / IoT | 42 | 30 | 10 | 2 | 19 |
 | Supply Chain | 33 | 21 | 12 | 0 | 11 |
 | Social Engineering | 16 | 12 | 0 | 4 | 8 |
@@ -64,7 +64,7 @@ False positives are handled by a per-`(tenant, engine, signature_hash)` feedback
 
 ## 4. Why this matters against XSOAR / Splunk SOAR / Torq / Tines / Swimlane
 
-Those platforms orchestrate *other people's* detections. Weissman ships **303 in-house
+Those platforms orchestrate *other people's* detections. Weissman ships **304 in-house
 offensive probes across 15 domains and 192 ATT&CK
 techniques**, each wired to real I/O and each discounted by a live accuracy loop — offensive
 coverage plus in-house threat intelligence in one backend, not a workflow engine bolted onto

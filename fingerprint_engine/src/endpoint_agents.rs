@@ -85,6 +85,9 @@ pub enum ServerToAgent {
     Welcome {
         scan_concurrency: Option<u32>,
         heartbeat_secs: Option<u64>,
+        /// Hex-encoded AES-256-GCM key for inner WSS wrapping. Omitted for old agents.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        inner_key_hex: Option<String>,
     },
     Task {
         task_id: String,
@@ -1358,6 +1361,7 @@ mod tests {
         let v = serde_json::to_value(ServerToAgent::Welcome {
             scan_concurrency: Some(4),
             heartbeat_secs: None,
+            inner_key_hex: None,
         })
         .unwrap();
         assert_eq!(v["type"], "welcome");

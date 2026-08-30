@@ -181,6 +181,20 @@ for (const script of ['run_e2e_stack.sh', 'verify_scan_pipeline_e2e.mjs', 'verif
   }
 }
 
+// retryShed is a runtime binding. node --check does not catch a missing import;
+// CI then dies at pollJob after the live stack (login + enqueue already succeeded).
+{
+  const findingsE2ePath = path.join(root, 'scripts', 'verify_engine_groups_findings_e2e.mjs')
+  if (fs.existsSync(findingsE2ePath)) {
+    const findingsE2e = fs.readFileSync(findingsE2ePath, 'utf8')
+    if (!/import\s*\{[^}]*\bretryShed\b[^}]*\}\s*from\s*['\"]\.\/lib\/scan_intake\.mjs['\"]/.test(findingsE2e)) {
+      violations.push(
+        'verify_engine_groups_findings_e2e.mjs: pollJob uses retryShed but does not import it from scan_intake.mjs',
+      )
+    }
+  }
+}
+
 if (warnings.length) {
   console.warn('verify_command_center_coverage: warnings')
   for (const w of warnings) console.warn(`  - ${w}`)

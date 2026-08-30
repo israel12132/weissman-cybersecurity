@@ -89,6 +89,7 @@ export const NAV_GROUPS = [
     items: [
       { to: '/threat-emulation', labelKey: 'nav.threat_emulation', icon: '◈' },
       { to: '/kill-chain', labelKey: 'nav.kill_chain', icon: '⛓' },
+      { to: '/cem-dago', labelKey: 'nav.cem_dago', icon: '🧠' },
       { to: '/attack-paths', labelKey: 'nav.attack_paths', icon: '🕸' },
       { to: '/ai-analysis', labelKey: 'nav.ai_analysis', icon: '🧠' },
       { to: '/exploit-lab', labelKey: 'nav.exploit_lab', icon: '🧪' },
@@ -99,6 +100,7 @@ export const NAV_GROUPS = [
       { to: '/remediation-analytics', labelKey: 'nav.remediation_analytics', icon: '📊' },
       { to: '/agents', labelKey: 'nav.agents', icon: '📡' },
       { to: '/stealth-ops', labelKey: 'nav.stealth_ops', icon: '🕶' },
+      { to: '/elite-hardening', labelKey: 'nav.elite_hardening', icon: '🛡' },
       { to: '/nexus-swarm', labelKey: 'nav.nexus_swarm', icon: '⚡' },
       { to: '/superposition-collapse', labelKey: 'nav.superposition_collapse', icon: '◈' },
       { to: '/sovereign-defense-matrix', labelKey: 'nav.sovereign_defense', icon: '⬡' },
@@ -125,6 +127,7 @@ export const NAV_GROUPS = [
       { to: '/tls-posture', labelKey: 'nav.tls_posture', icon: '🔒' },
       { to: '/email-posture', labelKey: 'nav.email_posture', icon: '✉' },
       { to: '/identity-security', labelKey: 'nav.identity_security', icon: '🔐' },
+      { to: '/privilege-escalation', labelKey: 'nav.privilege_escalation', icon: '⛨' },
       { to: '/kerberos-security', labelKey: 'nav.kerberos_security', icon: '🏰' },
       { to: '/smb-netbios', labelKey: 'nav.smb_netbios', icon: '🖧' },
       { to: '/password-spray', labelKey: 'nav.password_spray', icon: '🎯' },

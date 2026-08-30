@@ -34,6 +34,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/attack-paths/:client_id",
             get(api_attack_paths_for_client),
         )
+        .route("/api/cem-dago/status", get(api_cem_dago_status))
+        .route("/api/cem-dago/manifests", get(api_cem_dago_manifests))
+        .route("/api/cem-dago/waves", get(api_cem_dago_waves))
+        .route("/api/cem-dago/blackboard", get(api_cem_dago_blackboard))
         .route(
             "/api/battlespace/topology/:client_id",
             get(api_battlespace_topology),
@@ -138,6 +142,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         // Ask Weissman (NL → safe SQL)
         .route("/api/ask", post(api_ask))
+        .route(
+            "/api/elite-hardening/status",
+            get(api_elite_hardening_status),
+        )
         // UEBA + baseline/drift dashboard
         .route("/api/ueba/ingest", post(api_ueba_ingest))
         // NDR / ITDR live data ingest (feeds network beaconing/exfil + identity-threat detectors).

@@ -67,6 +67,8 @@ pub enum ServerToAgent {
     Welcome {
         scan_concurrency: Option<u32>,
         heartbeat_secs: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        inner_key_hex: Option<String>,
     },
     /// Dispatch a detection task.
     Task {

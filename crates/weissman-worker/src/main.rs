@@ -22,7 +22,12 @@ const BASE_BACKOFF_SECS: i64 = 5;
 /// Overridable so the same binary works outside a container, where `/tmp` may be shared or
 /// read-only.
 fn liveness_beat_path() -> std::path::PathBuf {
-    std::env::var_os("WEISSMAN_WORKER_LIVENESS_FILE")
+    liveness_beat_path_from(std::env::var_os("WEISSMAN_WORKER_LIVENESS_FILE"))
+}
+
+fn liveness_beat_path_from(override_path: Option<std::ffi::OsString>) -> std::path::PathBuf {
+    override_path
+        .filter(|s| !s.is_empty())
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::path::PathBuf::from("/tmp/weissman-worker-alive"))
 }
@@ -72,8 +77,11 @@ async fn terminalize_exhausted(
 /// Best-effort: a failure to write must never take down the worker, so this only logs. A
 /// persistently unwritable path shows up as a failing healthcheck, which is the correct signal.
 fn touch_liveness_beat() {
-    let path = liveness_beat_path();
-    if let Err(e) = std::fs::write(&path, b"ok") {
+    touch_liveness_beat_at(&liveness_beat_path());
+}
+
+fn touch_liveness_beat_at(path: &std::path::Path) {
+    if let Err(e) = std::fs::write(path, b"ok") {
         warn!(
             target: "weissman_worker",
             path = %path.display(), error = %e,
@@ -212,9 +220,11 @@ const HEAVY_KINDS: &[&str] = &[
 ];
 
 fn worker_concurrency_cap(key: &str, default: usize) -> usize {
-    std::env::var(key)
-        .ok()
-        .and_then(|s| s.parse().ok())
+    worker_concurrency_cap_from(std::env::var(key).ok(), default)
+}
+
+fn worker_concurrency_cap_from(raw: Option<String>, default: usize) -> usize {
+    raw.and_then(|s| s.parse().ok())
         .filter(|&n| n > 0)
         .unwrap_or(default)
 }
@@ -626,6 +636,12 @@ async fn async_main() {
         eprintln!("[startup] worker Redis distributed state refusal: {msg}");
         std::process::exit(2);
     }
+    info!(
+        target: "weissman_worker",
+        cem_dago = fingerprint_engine::cem_dago::is_enabled(),
+        max_parallel = fingerprint_engine::cem_dago::max_parallel(),
+        "CEM-DAGO cognitive mesh (shared blackboard + DAG router)"
+    );
 
     let database_url = match std::env::var("DATABASE_URL") {
         Ok(u) if !u.trim().is_empty() => u,
@@ -1015,16 +1031,24 @@ mod tests {
     /// restore exactly the blind spot the beat was added to close.
     #[test]
     fn liveness_beat_is_written_to_the_configured_path() {
-        let dir = std::env::temp_dir().join(format!("weissman-beat-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "weissman-beat-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
         std::fs::create_dir_all(&dir).expect("create temp dir");
         let path = dir.join("alive");
-        // SAFETY: single-threaded test; no other thread reads the environment concurrently.
-        unsafe { std::env::set_var("WEISSMAN_WORKER_LIVENESS_FILE", &path) };
-
-        assert_eq!(liveness_beat_path(), path, "env override must win");
+        assert_eq!(
+            liveness_beat_path_from(Some(path.clone().into_os_string())),
+            path,
+            "configured path must be used as-is"
+        );
         assert!(!path.exists(), "precondition: beat file does not exist yet");
 
-        touch_liveness_beat();
+        touch_liveness_beat_at(&path);
         assert!(
             path.exists(),
             "touch_liveness_beat must create the file the healthcheck stats"
@@ -1032,10 +1056,9 @@ mod tests {
 
         // Writing again must refresh it rather than fail on an existing file — the worker calls
         // this on every poll for the lifetime of the process.
-        touch_liveness_beat();
+        touch_liveness_beat_at(&path);
         assert!(path.exists(), "repeated beats must keep the file present");
 
-        unsafe { std::env::remove_var("WEISSMAN_WORKER_LIVENESS_FILE") };
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1043,15 +1066,15 @@ mod tests {
     /// never take the worker process down.
     #[test]
     fn liveness_beat_failure_does_not_panic() {
-        // SAFETY: single-threaded test.
-        unsafe {
-            std::env::set_var(
-                "WEISSMAN_WORKER_LIVENESS_FILE",
-                "/nonexistent-dir-weissman/alive",
-            )
-        };
-        touch_liveness_beat(); // must not panic
-        unsafe { std::env::remove_var("WEISSMAN_WORKER_LIVENESS_FILE") };
+        touch_liveness_beat_at(std::path::Path::new("/nonexistent-dir-weissman/alive"));
+    }
+
+    #[test]
+    fn default_liveness_path_is_tmp() {
+        assert_eq!(
+            liveness_beat_path_from(None),
+            std::path::PathBuf::from("/tmp/weissman-worker-alive")
+        );
     }
 
     // Every job kind whose executor arm dispatches the deep monolithic engine future
@@ -1132,25 +1155,14 @@ mod tests {
 
     #[test]
     fn concurrency_cap_parses_positive_env_value() {
-        let key = "WEISSMAN_TEST_WORKER_CAP_POSITIVE";
-        std::env::set_var(key, "12");
-        assert_eq!(worker_concurrency_cap(key, 4), 12);
-        std::env::remove_var(key);
+        assert_eq!(worker_concurrency_cap_from(Some("12".into()), 4), 12);
     }
 
     #[test]
     fn concurrency_cap_falls_back_on_invalid_or_zero() {
-        let key = "WEISSMAN_TEST_WORKER_CAP_INVALID";
-        std::env::remove_var(key);
-        // Unset -> default.
-        assert_eq!(worker_concurrency_cap(key, 7), 7);
-        // Zero rejected -> default.
-        std::env::set_var(key, "0");
-        assert_eq!(worker_concurrency_cap(key, 7), 7);
-        // Non-numeric rejected -> default.
-        std::env::set_var(key, "abc");
-        assert_eq!(worker_concurrency_cap(key, 7), 7);
-        std::env::remove_var(key);
+        assert_eq!(worker_concurrency_cap_from(None, 7), 7);
+        assert_eq!(worker_concurrency_cap_from(Some("0".into()), 7), 7);
+        assert_eq!(worker_concurrency_cap_from(Some("abc".into()), 7), 7);
     }
 
     #[test]

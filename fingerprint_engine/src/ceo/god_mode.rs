@@ -27,6 +27,7 @@ const CORE_ENGINES: &[&str] = &[
     "semantic_ai_fuzz",
     "microsecond_timing",
     "ai_adversarial_redteam",
+    "mobile_mitm",
 ];
 
 async fn get_config_tx_str(
