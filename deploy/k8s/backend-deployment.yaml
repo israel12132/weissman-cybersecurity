@@ -64,7 +64,6 @@ spec:
               if [ "$v" -lt 4096 ]; then
                 echo "FATAL: kernel will silently truncate Axum listen(4096) to $v."
                 echo "Fix: helm upgrade --install weissman-listen deploy/helm/weissman-listen"
-                echo "  or kubectl apply -f deploy/k8s/listen-sysctl-daemonset.yaml"
                 echo "  or kubelet allowedUnsafeSysctls=net.core.somaxconn plus pod sysctls."
                 exit 1
               fi
@@ -92,7 +91,6 @@ spec:
             # somaxconn is a kubelet unsafe sysctl. The listen-backlog-preflight
             # initContainer fail-closes if the pod netns is still 128. Raise it via:
             #   helm install weissman-listen deploy/helm/weissman-listen
-            #   kubectl apply -f deploy/k8s/listen-sysctl-daemonset.yaml
             #   or kubelet allowedUnsafeSysctls + spec.securityContext.sysctls
             requests:
               cpu: 250m

@@ -38,6 +38,6 @@ spec:
                 echo "FATAL: Axum listen(4096) will be silently truncated to $v."
                 echo "Set helm --set mode=privilegedInit (PSS exception) or mode=podSysctl"
                 echo "after kubelet allowedUnsafeSysctls=net.core.somaxconn,net.ipv4.tcp_max_syn_backlog"
-                echo "or enable daemonSet.enabled=true (hostNetwork only)."
+                echo "or set mode=podSysctl after kubelet allowedUnsafeSysctls."
                 exit 1
               fi

@@ -302,10 +302,10 @@ if [[ -f deploy/sysctl.d/99-weissman-listen.conf ]] && [[ -x deploy/apply-listen
 else
   bad "missing deploy/sysctl.d/99-weissman-listen.conf or deploy/apply-listen-sysctl.sh"
 fi
-if [[ -f deploy/helm/weissman-listen/Chart.yaml ]] && [[ -f deploy/k8s/listen-sysctl-daemonset.yaml ]]; then
-  ok "k8s listen chart + DaemonSet present (somaxconn fail-closed)"
+if [[ -f deploy/helm/weissman-listen/Chart.yaml ]] && [[ -f deploy/helm/weissman-listen/templates/preflight-job.yaml ]]; then
+  ok "k8s listen Helm chart present (somaxconn fail-closed preflight)"
 else
-  bad "missing deploy/helm/weissman-listen or deploy/k8s/listen-sysctl-daemonset.yaml"
+  bad "missing deploy/helm/weissman-listen"
 fi
 
 section "Live staging (optional)"
