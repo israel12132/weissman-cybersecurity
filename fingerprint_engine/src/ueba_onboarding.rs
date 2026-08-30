@@ -7,7 +7,8 @@
 //!      SHA-256 of `/proc/<pid>/exe` when the agent sent `top_process_hashes`).
 //!   3. Appear on the hard OS/name Global Fleet Whitelist **or** have its
 //!      SHA-256 on the sovereign allow-list: packaged update file, local DB
-//!      (`ueba_sovereign_binary_allowlist`), `WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST`,
+//!      (`ueba_sovereign_binary_allowlist` **only when `sovereign_signature` verifies**
+//!      against the compiled Ed25519 public key), `WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST`,
 //!      or `WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST_FILE`. Never an outbound HTTP call.
 //!
 //! Fleet majority is **never** a Learn grant: a poisoned golden image would
@@ -255,7 +256,8 @@ pub fn on_global_whitelist(metric: &str, item: &str) -> bool {
 /// SHA-256 (64 hex) of an on-disk binary, compared to local sovereign sources
 /// (env, offline file, packaged update). Empty / malformed hashes never match.
 /// The live detector also consults `ueba_sovereign_binary_allowlist` in the
-/// local database — never an outbound HTTP call.
+/// local database — never an outbound HTTP call. DB rows grant Learn only when
+/// `sovereign_signature` verifies against the compiled public key.
 #[must_use]
 pub fn on_sovereign_binary_allowlist(hash: Option<&str>) -> bool {
     let Some(n) = normalize_sha256(hash) else {
@@ -264,23 +266,42 @@ pub fn on_sovereign_binary_allowlist(hash: Option<&str>) -> bool {
     local_source_hits().iter().any(|(x, _)| x == &n)
 }
 
-/// Upsert packaged / env / USB hashes into the local catalog. Failures are
-/// ignored (the table may not exist yet); Learn still uses local sources.
+/// Upsert packaged / env / USB hashes into the local catalog **only when** we can
+/// attach a platform Ed25519 signature. Unsigned inserts are refused (a DB
+/// writer must not bless a hash by itself). Learn still uses env/file/packaged.
 pub async fn seed_sovereign_allowlist(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>) {
+    let Some(seed) = crate::ueba_sovereign_sign::signing_seed_from_env() else {
+        return;
+    };
     for (sha, source) in local_source_hits() {
+        let Some(sig) = crate::ueba_sovereign_sign::sign_sha256_hex(&seed, &sha) else {
+            tracing::error!(
+                target: "ueba_onboarding",
+                sha256 = %sha,
+                "UEBA allow-list seed skipped: WEISSMAN_UEBA_SOVEREIGN_SIGNING_KEY does not match the compiled public key"
+            );
+            continue;
+        };
         let _ = sqlx::query(
-            r#"INSERT INTO ueba_sovereign_binary_allowlist (sha256, source)
-               VALUES ($1, $2)
-               ON CONFLICT (sha256) DO NOTHING"#,
+            r#"INSERT INTO ueba_sovereign_binary_allowlist (sha256, source, sovereign_signature)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (sha256) DO UPDATE
+                 SET sovereign_signature = EXCLUDED.sovereign_signature
+               WHERE ueba_sovereign_binary_allowlist.sovereign_signature = ''"#,
         )
         .bind(&sha)
         .bind(source)
+        .bind(&sig)
         .execute(&mut **tx)
         .await;
     }
 }
 
-/// Offline-first Learn grant: env, packaged file, USB drop, or local DB.
+fn db_signature_grants_learn(sha256_hex: &str, signature_hex: &str) -> bool {
+    crate::ueba_sovereign_sign::verify_sha256_hex(sha256_hex, signature_hex)
+}
+
+/// Offline-first Learn grant: env, packaged file, USB drop, or a **signed** local DB row.
 pub async fn on_sovereign_binary_allowlist_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     hash: Option<&str>,
@@ -292,15 +313,16 @@ pub async fn on_sovereign_binary_allowlist_tx(
         return false;
     };
     seed_sovereign_allowlist(tx).await;
-    sqlx::query_scalar::<_, bool>(
-        r#"SELECT EXISTS(
-                SELECT 1 FROM ueba_sovereign_binary_allowlist WHERE sha256 = $1
-           )"#,
+    let sig: Option<String> = sqlx::query_scalar(
+        r#"SELECT sovereign_signature FROM ueba_sovereign_binary_allowlist WHERE sha256 = $1"#,
     )
     .bind(&n)
-    .fetch_one(&mut **tx)
+    .fetch_optional(&mut **tx)
     .await
-    .unwrap_or(false)
+    .ok()
+    .flatten();
+    sig.as_deref()
+        .is_some_and(|s| db_signature_grants_learn(&n, s))
 }
 
 /// Look up the agent-reported SHA-256 for a process name (`top_process_hashes`).
@@ -443,6 +465,8 @@ pub async fn fleet_consensus_hit(
 mod tests {
     use super::*;
 
+    static ENV_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
     #[test]
     fn ssh_and_443_are_fleet_baseline() {
         assert!(on_global_whitelist("top_processes", "sshd"));
@@ -505,6 +529,7 @@ mod tests {
 
     #[test]
     fn sovereign_hash_allowlist_is_64_hex() {
+        let _env = ENV_LOCK.blocking_lock();
         let prev = std::env::var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST").ok();
         std::env::set_var(
             "WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST",
@@ -540,12 +565,25 @@ mod tests {
         );
     }
 
+    #[test]
+    fn db_learn_requires_sovereign_signature_in_source() {
+        let src = include_str!("ueba_onboarding.rs");
+        let prod = src.split("#[cfg(test)]").next().unwrap();
+        assert!(prod.contains("sovereign_signature"));
+        assert!(prod.contains("verify_sha256_hex"));
+        assert!(
+            !prod.contains("SELECT EXISTS(\n                SELECT 1 FROM ueba_sovereign_binary_allowlist WHERE sha256"),
+            "DB Learn must not EXISTS on sha256 alone"
+        );
+    }
+
     #[tokio::test]
-    async fn local_db_allowlist_grants_learn_without_env() {
+    async fn unsigned_db_row_does_not_grant_learn() {
+        let _env = ENV_LOCK.lock().await;
         let url = match std::env::var("TEST_DATABASE_URL") {
             Ok(u) if !u.trim().is_empty() => u,
             _ => {
-                eprintln!("SKIP local_db_allowlist_grants_learn_without_env: no TEST_DATABASE_URL");
+                eprintln!("SKIP unsigned_db_row_does_not_grant_learn: no TEST_DATABASE_URL");
                 return;
             }
         };
@@ -558,14 +596,92 @@ mod tests {
         let hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         let mut tx = pool.begin().await.expect("tx");
         sqlx::query(
-            r#"INSERT INTO ueba_sovereign_binary_allowlist (sha256, source)
-               VALUES ($1, 'packaged')
-               ON CONFLICT (sha256) DO NOTHING"#,
+            r#"INSERT INTO ueba_sovereign_binary_allowlist (sha256, source, sovereign_signature)
+               VALUES ($1, 'packaged', '')
+               ON CONFLICT (sha256) DO UPDATE SET sovereign_signature = ''"#,
         )
         .bind(hash)
         .execute(&mut *tx)
         .await
-        .expect("insert catalog hash");
+        .expect("insert unsigned catalog hash");
+        let prev_hash = std::env::var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST").ok();
+        let prev_key = std::env::var("WEISSMAN_UEBA_SOVEREIGN_SIGNING_KEY").ok();
+        std::env::remove_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST");
+        std::env::remove_var("WEISSMAN_UEBA_SOVEREIGN_SIGNING_KEY");
+        let hit = on_sovereign_binary_allowlist_tx(&mut tx, Some(hash)).await;
+        match prev_hash {
+            Some(v) => std::env::set_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST", v),
+            None => std::env::remove_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST"),
+        }
+        match prev_key {
+            Some(v) => std::env::set_var("WEISSMAN_UEBA_SOVEREIGN_SIGNING_KEY", v),
+            None => std::env::remove_var("WEISSMAN_UEBA_SOVEREIGN_SIGNING_KEY"),
+        }
+        assert!(
+            !hit,
+            "an unsigned DB row must not grant Learn (TOCTOU / catalog injection)"
+        );
+        let forged = "11".repeat(64);
+        sqlx::query(
+            r#"UPDATE ueba_sovereign_binary_allowlist
+                  SET sovereign_signature = $2
+                WHERE sha256 = $1"#,
+        )
+        .bind(hash)
+        .bind(&forged)
+        .execute(&mut *tx)
+        .await
+        .expect("inject forged signature");
+        let forged_hit = on_sovereign_binary_allowlist_tx(&mut tx, Some(hash)).await;
+        assert!(!forged_hit, "a forged Ed25519 blob must not grant Learn");
+        let _ = sqlx::query("DELETE FROM ueba_sovereign_binary_allowlist WHERE sha256 = $1")
+            .bind(hash)
+            .execute(&mut *tx)
+            .await;
+        tx.commit().await.expect("cleanup");
+    }
+
+    #[tokio::test]
+    async fn signed_db_row_grants_learn_when_platform_key_is_set() {
+        let _env = ENV_LOCK.lock().await;
+        let url = match std::env::var("TEST_DATABASE_URL") {
+            Ok(u) if !u.trim().is_empty() => u,
+            _ => {
+                eprintln!(
+                    "SKIP signed_db_row_grants_learn_when_platform_key_is_set: no TEST_DATABASE_URL"
+                );
+                return;
+            }
+        };
+        let Some(seed) = crate::ueba_sovereign_sign::signing_seed_from_env() else {
+            eprintln!(
+                "SKIP signed_db_row_grants_learn_when_platform_key_is_set: no WEISSMAN_UEBA_SOVEREIGN_SIGNING_KEY"
+            );
+            return;
+        };
+        let hash = "ccccccccccccccccaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let Some(sig) = crate::ueba_sovereign_sign::sign_sha256_hex(&seed, hash) else {
+            panic!(
+                "WEISSMAN_UEBA_SOVEREIGN_SIGNING_KEY is set but does not match EMBEDDED_SOVEREIGN_PUBKEY"
+            );
+        };
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(2)
+            .acquire_timeout(std::time::Duration::from_secs(5))
+            .connect(&url)
+            .await
+            .expect("connect");
+        let mut tx = pool.begin().await.expect("tx");
+        sqlx::query(
+            r#"INSERT INTO ueba_sovereign_binary_allowlist (sha256, source, sovereign_signature)
+               VALUES ($1, 'packaged', $2)
+               ON CONFLICT (sha256) DO UPDATE SET sovereign_signature = EXCLUDED.sovereign_signature"#,
+        )
+        .bind(hash)
+        .bind(&sig)
+        .execute(&mut *tx)
+        .await
+        .expect("insert signed catalog hash");
         let prev = std::env::var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST").ok();
         std::env::remove_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST");
         let hit = on_sovereign_binary_allowlist_tx(&mut tx, Some(hash)).await;
@@ -573,11 +689,7 @@ mod tests {
             Some(v) => std::env::set_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST", v),
             None => std::env::remove_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST"),
         }
-        assert!(hit, "local DB catalog must grant Learn without env or HTTP");
-        assert!(
-            !on_sovereign_binary_allowlist(Some(hash)),
-            "sync helper is env/file/packaged only; DB is the async path"
-        );
+        assert!(hit, "a platform-signed DB row must grant Learn");
         let _ = sqlx::query("DELETE FROM ueba_sovereign_binary_allowlist WHERE sha256 = $1")
             .bind(hash)
             .execute(&mut *tx)

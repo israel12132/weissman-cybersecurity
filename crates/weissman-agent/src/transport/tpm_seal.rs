@@ -77,9 +77,13 @@ pub fn seal_ikm(state_dir: &Path, ikm: &[u8; 32]) -> bool {
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 mod esapi {
     use super::{priv_path, pub_path, wipe};
+    use std::cell::RefCell;
     use std::convert::TryFrom;
     use std::path::Path;
     use std::str::FromStr;
+    use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+    use std::sync::OnceLock;
+    use std::time::{Duration, Instant};
     use tss_esapi::attributes::ObjectAttributesBuilder;
     use tss_esapi::handles::ObjectHandle;
     use tss_esapi::interface_types::algorithm::{HashingAlgorithm, PublicAlgorithm};
@@ -91,11 +95,99 @@ mod esapi {
     use tss_esapi::traits::{Marshall, UnMarshall};
     use tss_esapi::{Context, TctiNameConf};
 
+    const TPM_DA_FAIL_THRESHOLD: u32 = 3;
+    const TPM_DA_COOLDOWN: Duration = Duration::from_secs(300);
+
+    struct CachedTcti {
+        ctx: Option<Context>,
+        dev: String,
+    }
+
+    thread_local! {
+        static CACHED_TCTI: RefCell<CachedTcti> = const {
+            RefCell::new(CachedTcti {
+                ctx: None,
+                dev: String::new(),
+            })
+        };
+    }
+
+    static FAIL_STREAK: AtomicU32 = AtomicU32::new(0);
+    static BREAKER_UNTIL_MS: AtomicU64 = AtomicU64::new(0);
+
+    fn mono_ms() -> u64 {
+        static ORIGIN: OnceLock<Instant> = OnceLock::new();
+        ORIGIN.get_or_init(Instant::now).elapsed().as_millis() as u64
+    }
+
+    fn circuit_open() -> bool {
+        let until = BREAKER_UNTIL_MS.load(Ordering::SeqCst);
+        if until == 0 {
+            return false;
+        }
+        if mono_ms() < until {
+            return true;
+        }
+        BREAKER_UNTIL_MS.store(0, Ordering::SeqCst);
+        FAIL_STREAK.store(0, Ordering::SeqCst);
+        false
+    }
+
+    fn note_esapi_success() {
+        FAIL_STREAK.store(0, Ordering::SeqCst);
+        BREAKER_UNTIL_MS.store(0, Ordering::SeqCst);
+    }
+
+    fn note_esapi_failure() {
+        let n = FAIL_STREAK.fetch_add(1, Ordering::SeqCst) + 1;
+        if n >= TPM_DA_FAIL_THRESHOLD {
+            let until = mono_ms().saturating_add(TPM_DA_COOLDOWN.as_millis() as u64);
+            BREAKER_UNTIL_MS.store(until, Ordering::SeqCst);
+        }
+    }
+
     fn open_context(dev: &str) -> Option<Context> {
         // Device path is only `/dev/tpmrm0` or `/dev/tpm0` from our own check.
         // Never honor a host TCTI env var — that would be injection surface.
         let tcti = TctiNameConf::from_str(&format!("device:{dev}")).ok()?;
         Context::new(tcti).ok()
+    }
+
+    fn with_context<F, T>(dev: &str, f: F) -> Option<T>
+    where
+        F: FnOnce(&mut Context) -> Result<T, tss_esapi::Error>,
+    {
+        if circuit_open() {
+            return None;
+        }
+        CACHED_TCTI.with(|cell| {
+            let mut cache = cell.borrow_mut();
+            if cache.dev != dev {
+                cache.ctx = None;
+                cache.dev = dev.to_string();
+            }
+            if cache.ctx.is_none() {
+                cache.ctx = open_context(dev);
+            }
+            let ctx = match cache.ctx.as_mut() {
+                Some(c) => c,
+                None => {
+                    note_esapi_failure();
+                    return None;
+                }
+            };
+            match f(ctx) {
+                Ok(v) => {
+                    note_esapi_success();
+                    Some(v)
+                }
+                Err(_) => {
+                    cache.ctx = None;
+                    note_esapi_failure();
+                    None
+                }
+            }
+        })
     }
 
     fn primary_public() -> Option<Public> {
@@ -162,9 +254,6 @@ mod esapi {
     }
 
     pub(super) fn seal_ikm(state_dir: &Path, ikm: &[u8; 32], dev: &str) -> bool {
-        let Some(mut context) = open_context(dev) else {
-            return false;
-        };
         let Some(primary_pub) = primary_public() else {
             return false;
         };
@@ -174,27 +263,29 @@ mod esapi {
         let Ok(sensitive) = SensitiveData::try_from(ikm.to_vec()) else {
             return false;
         };
-        let created = context.execute_with_nullauth_session(|ctx| {
-            let primary = ctx.create_primary(
-                Hierarchy::Owner,
-                primary_pub.clone(),
-                None,
-                None,
-                None,
-                None,
-            )?;
-            let child = ctx.create(
-                primary.key_handle,
-                sealed_pub.clone(),
-                None,
-                Some(sensitive),
-                None,
-                None,
-            )?;
-            let _ = ctx.flush_context(ObjectHandle::from(primary.key_handle));
-            Ok::<_, tss_esapi::Error>((child.out_private, child.out_public))
+        let created = with_context(dev, |context| {
+            context.execute_with_nullauth_session(|ctx| {
+                let primary = ctx.create_primary(
+                    Hierarchy::Owner,
+                    primary_pub.clone(),
+                    None,
+                    None,
+                    None,
+                    None,
+                )?;
+                let child = ctx.create(
+                    primary.key_handle,
+                    sealed_pub.clone(),
+                    None,
+                    Some(sensitive.clone()),
+                    None,
+                    None,
+                )?;
+                let _ = ctx.flush_context(ObjectHandle::from(primary.key_handle));
+                Ok::<_, tss_esapi::Error>((child.out_private, child.out_public))
+            })
         });
-        let Ok((private, public)) = created else {
+        let Some((private, public)) = created else {
             return false;
         };
         let Ok(pub_bytes) = public.marshall() else {
@@ -218,26 +309,26 @@ mod esapi {
         let priv_bytes = std::fs::read(&priv_p).ok()?;
         let public = Public::unmarshall(&pub_bytes).ok()?;
         let private = Private::try_from(priv_bytes).ok()?;
-        let mut context = open_context(dev)?;
         let Some(primary_pub) = primary_public() else {
             return None;
         };
-        let opened = context.execute_with_nullauth_session(|ctx| {
-            let primary = ctx.create_primary(
-                Hierarchy::Owner,
-                primary_pub.clone(),
-                None,
-                None,
-                None,
-                None,
-            )?;
-            let loaded = ctx.load(primary.key_handle, private.clone(), public.clone())?;
-            let data = ctx.unseal(ObjectHandle::from(loaded))?;
-            let _ = ctx.flush_context(ObjectHandle::from(loaded));
-            let _ = ctx.flush_context(ObjectHandle::from(primary.key_handle));
-            Ok::<_, tss_esapi::Error>(data)
-        });
-        let data = opened.ok()?;
+        let data = with_context(dev, |context| {
+            context.execute_with_nullauth_session(|ctx| {
+                let primary = ctx.create_primary(
+                    Hierarchy::Owner,
+                    primary_pub.clone(),
+                    None,
+                    None,
+                    None,
+                    None,
+                )?;
+                let loaded = ctx.load(primary.key_handle, private.clone(), public.clone())?;
+                let data = ctx.unseal(ObjectHandle::from(loaded))?;
+                let _ = ctx.flush_context(ObjectHandle::from(loaded));
+                let _ = ctx.flush_context(ObjectHandle::from(primary.key_handle));
+                Ok::<_, tss_esapi::Error>(data)
+            })
+        })?;
         let raw = data.as_slice();
         if raw.len() != 32 {
             return None;
@@ -262,6 +353,14 @@ mod tests {
         );
         assert!(!prod.contains("TPM2TOOLS"));
         assert!(prod.contains("tss_esapi"));
+        assert!(
+            prod.contains("CACHED_TCTI"),
+            "production ESAPI must cache a long-lived TCTI context"
+        );
+        assert!(
+            prod.contains("TPM_DA_FAIL_THRESHOLD") && prod.contains("circuit_open"),
+            "repeated ESAPI failures must trip a DA-lockout circuit breaker"
+        );
         let _ = tpm_device_present();
     }
 }

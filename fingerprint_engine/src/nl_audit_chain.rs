@@ -15,7 +15,9 @@
 //! Late-committed `BIGSERIAL` ids behind the tip are re-hashed when the hole
 //! is shallow (`WEISSMAN_NL_AUDIT_MAX_HOLE_DISTANCE`, default 100). A deeper
 //! hole freezes the current `chain_epoch` and stamps only the unchained rows
-//! onto a parallel epoch so a 50k-row rewrite cannot DoS the tenant.
+//! onto a parallel epoch so a 50k-row rewrite cannot DoS the tenant. At most
+//! [`MAX_CONCURRENT_AUDIT_EPOCHS`] epochs may exist; a further forced fork
+//! fail-closes Ask, locks the tenant, and pages the SOC.
 
 use sqlx::PgPool;
 use std::collections::HashSet;
@@ -59,6 +61,24 @@ const PREV_BEFORE_SQL: &str = "SELECT COALESCE(event_hash, ''), COALESCE(chain_e
 const STAMP_SQL: &str = "UPDATE nl_query_audit
                 SET prev_hash = $3, event_hash = $4, chain_epoch = $5
               WHERE id = $1 AND tenant_id = $2";
+
+const EPOCH_SET_SQL: &str = "SELECT DISTINCT COALESCE(chain_epoch, 1)
+           FROM nl_query_audit
+          WHERE tenant_id = $1 AND event_hash <> $2";
+
+const ASK_LOCKED_SQL: &str = "SELECT EXISTS(SELECT 1 FROM nl_ask_fail_closed WHERE tenant_id = $1)";
+
+const LOCK_ASK_SQL: &str = "INSERT INTO nl_ask_fail_closed
+            (tenant_id, reason, hole_id, tip_id, epoch_count, details)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (tenant_id) DO NOTHING";
+
+const SOC_EPOCH_SQL: &str = "INSERT INTO security_events (event_type, tenant_id, details)
+     VALUES ('nl_audit_epoch_fragmentation', $1, $2)";
+
+/// Hard cap on parallel Ask-Weissman audit epochs. A fourth forced fork is
+/// treated as chain fragmentation: fail-closed, lock Ask, page the SOC.
+pub const MAX_CONCURRENT_AUDIT_EPOCHS: i32 = 3;
 
 /// Default cap on how far behind the tip a late id may sit before we freeze
 /// the current epoch instead of rewriting every already-chained row.
@@ -176,6 +196,83 @@ pub(crate) fn max_hole_distance() -> i64 {
         .unwrap_or(DEFAULT_MAX_HOLE_DISTANCE)
 }
 
+/// True when opening `new_epoch` would create more than
+/// [`MAX_CONCURRENT_AUDIT_EPOCHS`] distinct chained epochs.
+#[must_use]
+pub(crate) fn epoch_fork_exceeds_cap(existing_epochs: &[i32], new_epoch: i32) -> bool {
+    let distinct: std::collections::BTreeSet<i32> = existing_epochs.iter().copied().collect();
+    !distinct.contains(&new_epoch) && (distinct.len() as i32) >= MAX_CONCURRENT_AUDIT_EPOCHS
+}
+
+/// Ask path is fail-closed for this tenant (epoch-fragmentation lock).
+pub async fn ask_path_is_locked(pool: &PgPool, tenant_id: i64) -> Result<bool, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let locked = sqlx::query_scalar::<_, bool>(ASK_LOCKED_SQL)
+        .bind(tenant_id)
+        .fetch_one(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(locked)
+}
+
+async fn persist_epoch_cap_fail_closed(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    hole_id: i64,
+    tip_id: i64,
+    epoch_count: i32,
+    refused_epoch: i32,
+) -> Result<(), sqlx::Error> {
+    tracing::error!(
+        target: "nl_audit_chain",
+        tenant_id,
+        hole_id,
+        tip_id,
+        epoch_count,
+        refused_epoch,
+        max_concurrent_epochs = MAX_CONCURRENT_AUDIT_EPOCHS,
+        "Ask Weissman fail-closed: audit-chain epoch cap — SOC page nl_audit_epoch_fragmentation"
+    );
+    sqlx::query(LOCK_ASK_SQL)
+        .bind(tenant_id)
+        .bind("nl_audit_epoch_fragmentation")
+        .bind(hole_id)
+        .bind(tip_id)
+        .bind(epoch_count)
+        .bind(serde_json::json!({
+            "refused_epoch": refused_epoch,
+            "max_concurrent_epochs": MAX_CONCURRENT_AUDIT_EPOCHS,
+        }))
+        .execute(&mut **tx)
+        .await?;
+    let _ = sqlx::query(SOC_EPOCH_SQL)
+        .bind(tenant_id)
+        .bind(serde_json::json!({
+            "reason": "nl_audit_epoch_fragmentation",
+            "hole_id": hole_id,
+            "tip_id": tip_id,
+            "epoch_count": epoch_count,
+            "refused_epoch": refused_epoch,
+            "max_concurrent_epochs": MAX_CONCURRENT_AUDIT_EPOCHS,
+        }))
+        .execute(&mut **tx)
+        .await;
+    let details = format!(
+        "hole_id={hole_id} tip_id={tip_id} epoch_count={epoch_count} refused_epoch={refused_epoch}"
+    );
+    let _ = crate::audit_log::insert_audit(
+        tx,
+        tenant_id,
+        None,
+        "system",
+        "nl_audit_epoch_fragmentation",
+        &details,
+        "",
+    )
+    .await;
+    Ok(())
+}
+
 /// Serialize chaining for one tenant. HTTP inserts are never blocked: they
 /// write a new row without locking, and this pass picks empty hashes in
 /// `BIGSERIAL` `id` order after taking `FOR UPDATE` on those unchained rows.
@@ -186,6 +283,15 @@ async fn chain_tenant(pool: &PgPool, tenant_id: i64) -> Result<(), sqlx::Error> 
         &format!("nl-audit-chain:{tenant_id}"),
     )
     .await?;
+
+    let already_locked: bool = sqlx::query_scalar(ASK_LOCKED_SQL)
+        .bind(tenant_id)
+        .fetch_one(&mut *tx)
+        .await?;
+    if already_locked {
+        tx.commit().await?;
+        return Ok(());
+    }
 
     let pending_rows: Vec<AuditRow> = sqlx::query_as(PENDING_SQL)
         .bind(tenant_id)
@@ -217,6 +323,24 @@ async fn chain_tenant(pool: &PgPool, tenant_id: i64) -> Result<(), sqlx::Error> 
                 && hole_too_deep(start_id, tip_id, max_dist) =>
         {
             let new_epoch = tip_epoch.saturating_add(1);
+            let epochs: Vec<i32> = sqlx::query_scalar(EPOCH_SET_SQL)
+                .bind(tenant_id)
+                .bind(UNCHAINED)
+                .fetch_all(&mut *tx)
+                .await?;
+            if epoch_fork_exceeds_cap(&epochs, new_epoch) {
+                persist_epoch_cap_fail_closed(
+                    &mut tx,
+                    tenant_id,
+                    start_id,
+                    tip_id,
+                    epochs.len() as i32,
+                    new_epoch,
+                )
+                .await?;
+                tx.commit().await?;
+                return Ok(());
+            }
             tracing::warn!(
                 target: "nl_audit_chain",
                 tenant_id,
@@ -412,6 +536,27 @@ mod tests {
             "max 0 means any hole behind the tip forks"
         );
         assert_eq!(DEFAULT_MAX_HOLE_DISTANCE, 100);
+    }
+
+    #[test]
+    fn epoch_fork_cap_is_three_and_reuse_is_allowed() {
+        assert_eq!(MAX_CONCURRENT_AUDIT_EPOCHS, 3);
+        assert!(!epoch_fork_exceeds_cap(&[1], 2));
+        assert!(!epoch_fork_exceeds_cap(&[1, 2], 3));
+        assert!(
+            epoch_fork_exceeds_cap(&[1, 2, 3], 4),
+            "a fourth distinct epoch must fail closed"
+        );
+        assert!(
+            !epoch_fork_exceeds_cap(&[1, 2, 3], 2),
+            "stamping onto an existing epoch is not a new fork"
+        );
+        let src = include_str!("nl_audit_chain.rs");
+        let prod = src.split("#[cfg(test)]").next().unwrap();
+        assert!(prod.contains("MAX_CONCURRENT_AUDIT_EPOCHS"));
+        assert!(prod.contains("nl_ask_fail_closed"));
+        assert!(prod.contains("nl_audit_epoch_fragmentation"));
+        assert!(prod.contains("ask_path_is_locked"));
     }
 
     #[test]
@@ -741,6 +886,147 @@ mod tests {
         let _ = sqlx::query("DELETE FROM nl_query_audit WHERE tenant_id = $1 AND question LIKE $2")
             .bind(tenant_id)
             .bind(format!("{marker}%"))
+            .execute(&mut *tx)
+            .await;
+        tx.commit().await.expect("cleanup");
+    }
+
+    #[tokio::test]
+    async fn fourth_epoch_fail_closes_ask_and_pages_soc() {
+        let url = match std::env::var("TEST_DATABASE_URL") {
+            Ok(u) if !u.trim().is_empty() => u,
+            _ => {
+                eprintln!("SKIP fourth_epoch_fail_closes_ask_and_pages_soc: no TEST_DATABASE_URL");
+                return;
+            }
+        };
+        let _live = LIVE_DB_LOCK.lock().await;
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(2)
+            .acquire_timeout(std::time::Duration::from_secs(5))
+            .connect(&url)
+            .await
+            .expect("connect TEST_DATABASE_URL");
+        let tenant_id: i64 =
+            sqlx::query_scalar("SELECT id FROM tenants WHERE slug = 'default' LIMIT 1")
+                .fetch_optional(&pool)
+                .await
+                .expect("lookup default tenant")
+                .expect("default tenant must exist");
+        let marker = format!(
+            "nlqa-cap-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        );
+        let mut tx = crate::db::begin_tenant_tx(&pool, tenant_id)
+            .await
+            .expect("tenant tx");
+        sqlx::query("DELETE FROM nl_ask_fail_closed WHERE tenant_id = $1")
+            .bind(tenant_id)
+            .execute(&mut *tx)
+            .await
+            .expect("clear fail-closed lock (migration 20260830184500 must be applied)");
+        let mut ids = Vec::new();
+        for label in ["a", "b", "c", "d"] {
+            let id: i64 = sqlx::query_scalar(
+                "INSERT INTO nl_query_audit
+                     (tenant_id, question, compiled_sql, event_hash, prev_hash)
+                 VALUES ($1, $2, $3, '', '')
+                 RETURNING id",
+            )
+            .bind(tenant_id)
+            .bind(format!("{marker}-{label}"))
+            .bind(format!("s-{label}"))
+            .fetch_one(&mut *tx)
+            .await
+            .expect("insert");
+            ids.push(id);
+        }
+        tx.commit().await.expect("commit inserts");
+        chain_tenant(&pool, tenant_id).await.expect("initial chain");
+
+        let mut tx = crate::db::begin_tenant_tx(&pool, tenant_id)
+            .await
+            .expect("stamp epochs");
+        sqlx::query("UPDATE nl_query_audit SET chain_epoch = 1 WHERE tenant_id = $1 AND id = $2")
+            .bind(tenant_id)
+            .bind(ids[1])
+            .execute(&mut *tx)
+            .await
+            .expect("B epoch 1");
+        sqlx::query("UPDATE nl_query_audit SET chain_epoch = 2 WHERE tenant_id = $1 AND id = $2")
+            .bind(tenant_id)
+            .bind(ids[2])
+            .execute(&mut *tx)
+            .await
+            .expect("C epoch 2");
+        sqlx::query("UPDATE nl_query_audit SET chain_epoch = 3 WHERE tenant_id = $1 AND id = $2")
+            .bind(tenant_id)
+            .bind(ids[3])
+            .execute(&mut *tx)
+            .await
+            .expect("D tip epoch 3");
+        sqlx::query(
+            "UPDATE nl_query_audit SET event_hash = '', prev_hash = ''
+              WHERE tenant_id = $1 AND id = $2",
+        )
+        .bind(tenant_id)
+        .bind(ids[0])
+        .execute(&mut *tx)
+        .await
+        .expect("unchain A");
+        tx.commit().await.expect("commit hole");
+
+        let prev_max = std::env::var("WEISSMAN_NL_AUDIT_MAX_HOLE_DISTANCE").ok();
+        std::env::set_var("WEISSMAN_NL_AUDIT_MAX_HOLE_DISTANCE", "0");
+        let chain_res = chain_tenant(&pool, tenant_id).await;
+        match prev_max {
+            Some(v) => std::env::set_var("WEISSMAN_NL_AUDIT_MAX_HOLE_DISTANCE", v),
+            None => std::env::remove_var("WEISSMAN_NL_AUDIT_MAX_HOLE_DISTANCE"),
+        }
+        chain_res.expect("fail-closed pass must not error");
+
+        assert!(
+            ask_path_is_locked(&pool, tenant_id)
+                .await
+                .expect("lock read"),
+            "Ask must lock when a fourth epoch is refused"
+        );
+
+        let mut tx = crate::db::begin_tenant_tx(&pool, tenant_id)
+            .await
+            .expect("read tx");
+        let a_hash: String = sqlx::query_scalar(
+            "SELECT event_hash FROM nl_query_audit WHERE tenant_id = $1 AND id = $2",
+        )
+        .bind(tenant_id)
+        .bind(ids[0])
+        .fetch_one(&mut *tx)
+        .await
+        .expect("read A");
+        assert_eq!(
+            a_hash, UNCHAINED,
+            "fail-closed must not stamp a fourth epoch onto the hole"
+        );
+        let soc: Option<i64> = sqlx::query_scalar(
+            "SELECT id FROM security_events
+              WHERE tenant_id = $1 AND event_type = 'nl_audit_epoch_fragmentation'
+              ORDER BY id DESC LIMIT 1",
+        )
+        .bind(tenant_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .expect("soc lookup");
+        assert!(soc.is_some(), "SOC security_events row must be written");
+        let _ = sqlx::query("DELETE FROM nl_query_audit WHERE tenant_id = $1 AND question LIKE $2")
+            .bind(tenant_id)
+            .bind(format!("{marker}%"))
+            .execute(&mut *tx)
+            .await;
+        let _ = sqlx::query("DELETE FROM nl_ask_fail_closed WHERE tenant_id = $1")
+            .bind(tenant_id)
             .execute(&mut *tx)
             .await;
         tx.commit().await.expect("cleanup");

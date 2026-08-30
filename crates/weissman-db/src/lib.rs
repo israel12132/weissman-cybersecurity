@@ -41,6 +41,7 @@ pub fn resolve_auth_database_url() -> Result<String, std::env::VarError> {
 }
 
 /// Compile-time crate migrations path (valid in dev / CI where the crate tree exists).
+/// Touched when adding 20260830184500 (epoch cap + UEBA sovereign_signature).
 const COMPILE_TIME_MIGRATIONS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/migrations");
 
 /// Resolve the on-disk migrations directory for the no-tx pre-runner.

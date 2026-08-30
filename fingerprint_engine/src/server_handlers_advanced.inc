@@ -1356,6 +1356,29 @@ async fn api_ask(
     if let Err(r) = crate::rbac::require_analyst(&auth) {
         return r;
     }
+    match crate::nl_audit_chain::ask_path_is_locked(state.app_pool.as_ref(), auth.tenant_id).await
+    {
+        Ok(true) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "code": "nl_audit_epoch_fragmentation",
+                    "detail": "Ask Weissman is fail-closed: audit-chain epoch cap. SOC has been paged.",
+                })),
+            )
+                .into_response();
+        }
+        Ok(false) => {}
+        Err(e) => {
+            tracing::error!(target: "api_ask", error = %e, "ask fail-closed lock check failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false, "detail": "ask chain lock unavailable"})),
+            )
+                .into_response();
+        }
+    }
     let quota = match crate::tenant_quota::enforce(
         state.app_pool.as_ref(),
         auth.tenant_id,

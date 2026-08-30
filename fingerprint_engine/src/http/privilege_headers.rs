@@ -12,6 +12,11 @@
 //! on public locations (clients cannot mint the signature). Command Center
 //! sends JSON `destructive_confirm` / `dual_approve`. Internal callers of `:8000`
 //! attach a short-lived HMAC (`v1={unix}.{nonce}.{hex}`).
+//!
+//! MAC compare is constant-time (`subtle::ConstantTimeEq` on 32-byte tags).
+//! Server wall-clock skew (`HMAC_SKEW_SECS`, ±60s) is enforced in
+//! [`proxy_hmac_valid`] **before** the middleware claims the nonce in Redis, so a
+//! future-dated timestamp never lands in `proxy:nonce:*`.
 
 use axum::body::Body;
 use axum::extract::ConnectInfo;
@@ -35,6 +40,8 @@ const PRIVILEGE_HEADERS: &[&str] = &[
     DUAL_APPROVE_HEADER,
     LLM_HANDSHAKE_HEADER,
 ];
+/// ±60 seconds. A 15s window breaks real reverse-proxy clock skew (TLS +
+/// nginx buffering). Future timestamps still fail this check before Redis.
 const HMAC_SKEW_SECS: i64 = 60;
 const NONCE_TTL_SECS: i64 = 60;
 const REDIS_OP_TIMEOUT: Duration = Duration::from_secs(2);
@@ -157,7 +164,22 @@ pub fn proxy_hmac_valid(headers: &HeaderMap, method: &str, path: &str) -> bool {
     mac.update(b"\n");
     mac.update(path.as_bytes());
     let expected = mac.finalize().into_bytes();
-    expected.len() == parts.mac.len() && expected.as_slice().ct_eq(parts.mac.as_slice()).into()
+    mac_eq_ct(expected.as_slice(), &parts.mac)
+}
+
+/// Constant-time 32-byte MAC compare. Length is normalized so a short/long
+/// provided tag does not skip the `ct_eq` (timing leak on tag length).
+#[must_use]
+fn mac_eq_ct(expected: &[u8], provided: &[u8]) -> bool {
+    let mut exp = [0u8; 32];
+    let mut got = [0u8; 32];
+    if expected.len() == 32 {
+        exp.copy_from_slice(expected);
+    }
+    if provided.len() == 32 {
+        got.copy_from_slice(provided);
+    }
+    bool::from(exp.ct_eq(&got)) && expected.len() == 32 && provided.len() == 32
 }
 
 #[must_use]
@@ -550,6 +572,72 @@ mod tests {
         assert!(prod.contains("claim_proxy_nonce"));
         assert!(prod.contains("mac.update(nonce.as_bytes())"));
         assert!(prod.contains("v1={unix}.{nonce}.{hex"));
+        assert!(prod.contains("ct_eq"));
+        assert!(prod.contains("mac_eq_ct"));
+        let hmac_fn = prod
+            .find("pub fn proxy_hmac_valid")
+            .expect("proxy_hmac_valid");
+        let middleware = prod
+            .find("pub async fn privilege_header_proxy_middleware")
+            .expect("privilege middleware");
+        assert!(
+            hmac_fn < middleware,
+            "MAC+skew run in proxy_hmac_valid before the Redis-claiming middleware"
+        );
+        assert!(
+            prod[hmac_fn..middleware].contains("(now - parts.ts).abs() > HMAC_SKEW_SECS"),
+            "server wall-clock must reject drifted timestamps in proxy_hmac_valid"
+        );
+        assert!(
+            prod[middleware..].contains("claim_proxy_nonce"),
+            "Redis SET NX is the middleware step after MAC+skew"
+        );
+        assert_eq!(HMAC_SKEW_SECS, 60, "proxy skew is ±60s, not 15s");
+    }
+
+    #[test]
+    fn future_timestamp_is_rejected_before_nonce_claim() {
+        with_env(
+            &[
+                ("WEISSMAN_PROXY_SIGNING_SECRET", Some(SECRET)),
+                ("WEISSMAN_ENV", Some("production")),
+                ("RUST_ENV", Some("production")),
+                ("NODE_ENV", Some("production")),
+                ("APP_ENV", Some("production")),
+                ("RAILS_ENV", Some("production")),
+            ],
+            || {
+                let future = now_ts() + 5 * 3600;
+                let mac = sign_proxy_hmac(
+                    SECRET.as_bytes(),
+                    future,
+                    NONCE,
+                    "POST",
+                    "/api/containment/execute",
+                );
+                let mut h = privilege_headers();
+                h.insert(PROXY_HMAC_HEADER, mac.parse().unwrap());
+                assert!(
+                    !proxy_hmac_valid(&h, "POST", "/api/containment/execute"),
+                    "a timestamp 5 hours in the future must fail wall-clock skew"
+                );
+                assert!(!privilege_headers_accepted(
+                    IpAddr::V4(Ipv4Addr::new(10, 1, 2, 3)),
+                    &h,
+                    "POST",
+                    "/api/containment/execute"
+                ));
+            },
+        );
+    }
+
+    #[test]
+    fn mac_eq_ct_does_not_fast_path_on_length() {
+        let a = [0x11u8; 32];
+        let b = [0x11u8; 32];
+        assert!(mac_eq_ct(&a, &b));
+        assert!(!mac_eq_ct(&a, &[0x11u8; 16]));
+        assert!(!mac_eq_ct(&a, &[0x22u8; 32]));
     }
 
     #[tokio::test]

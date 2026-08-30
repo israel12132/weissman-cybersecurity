@@ -178,6 +178,7 @@ pub mod threat_intel_engine;
 pub mod timing_engine;
 pub mod ueba_detector;
 pub mod ueba_onboarding;
+pub mod ueba_sovereign_sign;
 pub mod validator;
 
 pub mod admin_users;

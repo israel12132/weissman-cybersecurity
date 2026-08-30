@@ -244,6 +244,7 @@ fn hardening_migrations_20260827_identical_in_both_dirs() {
         "20260827120500_nl_query_audit_chain_update.sql",
         "20260827120600_cicd_scan_events_rls_cast_safe.sql",
         "20260830140000_nl_audit_chain_epoch_and_sovereign_allowlist.sql",
+        "20260830184500_nl_epoch_cap_and_sovereign_signature.sql",
     ];
     for name in names {
         let fe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

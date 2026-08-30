@@ -93,8 +93,9 @@ rest (AES-256-GCM). **Production fails closed at startup if no key material is s
 | `WEISSMAN_PROXY_SIGNING_SECRET` | ≥32 chars. Short-lived `X-Weissman-Proxy-Hmac` (`v1={unix}.{nonce}.{hex}`) required before Axum will consume dual-control headers. Production also claims the nonce in Redis (`SET NX EX 60`). CIDR is never enough. |
 | `WEISSMAN_AGENT_STATE_DIR` | Reboot-stable directory for agent spool IKM (native TPM ESAPI when `/dev/tpmrm0` exists). Never `/tmp`. linux-gnu agent needs distro `libtss2` at process start (`libtss2-dev` to *build*). musl builds have no TSS link. |
 | `WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST` | Comma-separated SHA-256 hex of binaries allowed to enter `learned_set` during onboarding. Fleet majority never grants Learn. |
-| `WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST_FILE` | Offline/USB drop of the same hashes (one 64-hex digest per line). Merged into the local `ueba_sovereign_binary_allowlist` table. Air-gapped; no outbound HTTP. |
-| `WEISSMAN_NL_AUDIT_MAX_HOLE_DISTANCE` | Max BIGSERIAL distance a late Ask-Weissman audit id may sit behind the tip before the worker freezes the current `chain_epoch` and starts a parallel chain (default 100). |
+| `WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST_FILE` | Offline/USB drop of the same hashes (one 64-hex digest per line). Merged into the local `ueba_sovereign_binary_allowlist` table only when signed with `WEISSMAN_UEBA_SOVEREIGN_SIGNING_KEY`. Air-gapped; no outbound HTTP. |
+| `WEISSMAN_UEBA_SOVEREIGN_SIGNING_KEY` | 64-hex Ed25519 seed matching the public key compiled into `fingerprint_engine`. Required to insert signed catalog rows. Unsigned DB hashes never grant Learn. |
+| `WEISSMAN_NL_AUDIT_MAX_HOLE_DISTANCE` | Max BIGSERIAL distance a late Ask-Weissman audit id may sit behind the tip before the worker freezes the current `chain_epoch` and starts a parallel chain (default 100). At most 3 parallel epochs; a fourth forced fork fail-closes Ask and pages the SOC. |
 
 ---
 

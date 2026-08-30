@@ -512,6 +512,19 @@ pub async fn ask(
         return bad("question too long (max 2000 chars)");
     }
 
+    match crate::nl_audit_chain::ask_path_is_locked(app_pool, tenant_id).await {
+        Ok(true) => {
+            return bad(
+                "Ask Weissman is fail-closed: audit-chain epoch cap (SOC alert nl_audit_epoch_fragmentation)",
+            );
+        }
+        Ok(false) => {}
+        Err(e) => {
+            tracing::error!(target: "nl_query", error = %e, "ask fail-closed lock check failed");
+            return bad("Ask Weissman is fail-closed: audit chain lock unavailable");
+        }
+    }
+
     // 1) LLM → plan JSON.
     let plan_json = match llm_to_plan(q, tenant_id).await {
         Ok(v) => v,
