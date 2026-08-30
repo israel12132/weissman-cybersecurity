@@ -457,8 +457,77 @@ pub async fn claim_queryplan_nonce_strict(nonce: &str) -> StrictOp<bool> {
         .query_async(&mut conn)
         .await;
     match acquired {
-        Ok(Some(_)) => StrictOp::Ok(true),
+        Ok(Some(_)) => confirm_nonce_replicated(&mut conn).await,
         Ok(None) => StrictOp::Ok(false),
         Err(_) => StrictOp::Unavailable,
+    }
+}
+
+const QUERYPLAN_NONCE_WAIT_REPLICAS: i64 = 1;
+const QUERYPLAN_NONCE_WAIT_MS: i64 = 100;
+
+/// After `SET NX`, wait for one replica (`WAIT 1 100`) so a replay against a
+/// lagging replica cannot re-admit the same nonce. Standalone Redis
+/// (`connected_slaves:0`) is admitted without a replica ack.
+pub fn nonce_replica_ack_ok(waited_replicas: i64, connected_slaves: u32) -> bool {
+    waited_replicas >= 1 || connected_slaves == 0
+}
+
+async fn confirm_nonce_replicated(conn: &mut redis::aio::MultiplexedConnection) -> StrictOp<bool> {
+    let wait_n: Result<i64, _> = redis::cmd("WAIT")
+        .arg(QUERYPLAN_NONCE_WAIT_REPLICAS)
+        .arg(QUERYPLAN_NONCE_WAIT_MS)
+        .query_async(conn)
+        .await;
+    let slaves = connected_slaves(conn).await.unwrap_or(1);
+    match wait_n {
+        Ok(n) if nonce_replica_ack_ok(n, slaves) => StrictOp::Ok(true),
+        Ok(_) => StrictOp::Unavailable,
+        Err(_) if slaves == 0 => StrictOp::Ok(true),
+        Err(_) => StrictOp::Unavailable,
+    }
+}
+
+async fn connected_slaves(conn: &mut redis::aio::MultiplexedConnection) -> Option<u32> {
+    let info: String = redis::cmd("INFO")
+        .arg("replication")
+        .query_async(conn)
+        .await
+        .ok()?;
+    parse_connected_slaves(&info)
+}
+
+pub fn parse_connected_slaves(info: &str) -> Option<u32> {
+    for line in info.lines() {
+        if let Some(rest) = line.strip_prefix("connected_slaves:") {
+            return rest.trim().parse().ok();
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replica_ack_standalone_ok() {
+        assert!(nonce_replica_ack_ok(0, 0));
+        assert!(nonce_replica_ack_ok(1, 0));
+    }
+
+    #[test]
+    fn replica_ack_requires_wait_when_slaves_exist() {
+        assert!(!nonce_replica_ack_ok(0, 1));
+        assert!(!nonce_replica_ack_ok(0, 3));
+        assert!(nonce_replica_ack_ok(1, 1));
+        assert!(nonce_replica_ack_ok(2, 3));
+    }
+
+    #[test]
+    fn parses_replication_info() {
+        let info = "role:master\r\nconnected_slaves:2\r\nmaster_repl_offset:1\r\n";
+        assert_eq!(parse_connected_slaves(info), Some(2));
+        assert_eq!(parse_connected_slaves("role:master\n"), None);
     }
 }

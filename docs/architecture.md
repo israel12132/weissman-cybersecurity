@@ -138,8 +138,9 @@ In-process background loops (`weissman-server`):
    solely as service-to-service HMAC v2 (`weissman-queryplan-v2`) over the
    canonical plan, a unix timestamp, and a hex nonce. The server accepts
    `|now − ts| ≤ 15` seconds (NTP/cluster skew) and consumes the nonce with
-   Redis `SET NX EX 30`. Unsigned plans are rejected; there is no end-user
-   JWT fallback.
+   Redis `SET NX EX 30` then `WAIT 1 100` (fail-closed on replica lag; standalone
+   Redis with zero slaves is admitted). Unsigned plans are rejected; there is no
+   end-user JWT fallback.
 
 ---
 
