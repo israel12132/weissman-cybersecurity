@@ -56,6 +56,9 @@ pub struct OtSafetyPolicy {
     /// Physical TCP cap on a Modbus/DNP3 gateway IP (Unit/Station IDs share this).
     pub max_gateway_connections: u32,
     pub modbus_unit_id: u8,
+    /// Extra Unit IDs read on the same TCP pipe (serial-gateway multiplexing).
+    #[serde(skip)]
+    pub extra_modbus_units: Vec<u8>,
     pub dnp3_link_dest: u16,
     pub io_timeout_ms: u64,
     pub connect_timeout_ms: u64,
@@ -78,8 +81,9 @@ impl Default for OtSafetyPolicy {
             probe_mode: ProbeMode::SafeRead,
             protocol_strict: true,
             max_connections_per_host: 2,
-            max_gateway_connections: 8,
+            max_gateway_connections: 2,
             modbus_unit_id: 1,
+            extra_modbus_units: Vec::new(),
             dnp3_link_dest: 1,
             io_timeout_ms: 900,
             connect_timeout_ms: 1200,
@@ -133,13 +137,22 @@ impl OtSafetyPolicy {
             .get("max_gateway_connections")
             .and_then(serde_json::Value::as_u64)
         {
-            p.max_gateway_connections = u32::try_from(n).unwrap_or(8).clamp(1, 8);
+            p.max_gateway_connections = u32::try_from(n).unwrap_or(2).clamp(1, 2);
         }
         if let Some(n) = params
             .get("modbus_unit_id")
             .and_then(serde_json::Value::as_u64)
         {
             p.modbus_unit_id = u8::try_from(n).unwrap_or(1);
+        }
+        if let Some(arr) = params.get("modbus_unit_ids").and_then(|v| v.as_array()) {
+            p.extra_modbus_units = arr
+                .iter()
+                .filter_map(|v| v.as_u64())
+                .map(|n| n as u8)
+                .filter(|&u| u != p.modbus_unit_id)
+                .take(16)
+                .collect();
         }
         if let Some(n) = params
             .get("dnp3_link_dest")
@@ -507,7 +520,7 @@ pub const CONTROL_CATALOG: &[OtControl] = &[
     OtControl {
         id: "MB-22",
         protocol: "modbus",
-        title: "Max 2 TCP per dedicated PLC; gateway Unit-ID slots (cap 8)",
+        title: "Max 2 TCP per PLC and per serial gateway; Unit IDs mux on one pipe",
         implemented: true,
     },
     OtControl {
@@ -616,7 +629,7 @@ pub const CONTROL_CATALOG: &[OtControl] = &[
     OtControl {
         id: "S7-15",
         protocol: "s7",
-        title: "Malformed ISO-on-TCP filtered + bounded COTP reassembly (8 KiB)",
+        title: "Malformed ISO-on-TCP filtered + COTP reassembly (8 KiB, 50ms fragment cap)",
         implemented: true,
     },
     OtControl {
@@ -834,7 +847,7 @@ pub const CONTROL_CATALOG: &[OtControl] = &[
     OtControl {
         id: "IEC-01",
         protocol: "iec61850",
-        title: "Iterative heap-stack ASN.1 BER/DER walker (no recursive parse)",
+        title: "Inline-stack ASN.1 BER walker (16-slot, heap only on spill)",
         implemented: true,
     },
     OtControl {
@@ -948,7 +961,7 @@ pub const CONTROL_CATALOG: &[OtControl] = &[
     OtControl {
         id: "IEC-20",
         protocol: "iec61850",
-        title: "Safe TCP disconnect (FIN then linger-0 RST)",
+        title: "Graceful deceleration: FIN + 10ms, RST only if PLC stays silent",
         implemented: true,
     },
     OtControl {
@@ -999,14 +1012,18 @@ pub fn catalog_json() -> serde_json::Value {
         "total": CONTROL_CATALOG.len(),
         "destructive_forever": DESTRUCTIVE_FOREVER,
         "max_connections_per_host": 2,
-        "max_gateway_connections": 8,
+        "max_gateway_connections": 2,
         "default_mode": "safe_read",
         "zscore_isolate_threshold": 6.0,
-        "stddev_floor": super::anomaly::STDDEV_FLOOR,
+        "mad_switch": super::anomaly::MAD_SWITCH,
+        "cv_floor": super::anomaly::CV_FLOOR,
         "z_abs_cap": super::anomaly::Z_ABS_CAP,
         "cotp_assembly_cap": super::parsers::COTP_ASSEMBLY_CAP,
+        "cotp_fragment_timeout_ms": 50,
         "ber_iterative": true,
-        "rst_on_release": true,
+        "ber_inline_nodes": super::parsers::BER_INLINE_NODES,
+        "graceful_close_ms": 10,
+        "rst_on_release": false,
     })
 }
 
@@ -1020,7 +1037,7 @@ mod tests {
         assert_eq!(p.probe_mode, ProbeMode::SafeRead);
         assert!(!p.probe_mode.allows_writes());
         assert_eq!(p.max_connections_per_host, 2);
-        assert_eq!(p.max_gateway_connections, 8);
+        assert_eq!(p.max_gateway_connections, 2);
         assert_eq!(p.modbus_unit_id, 1);
     }
 

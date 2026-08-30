@@ -4,7 +4,7 @@
 //! * never panics on truncated / hostile input
 //! * maps headers onto `&[u8]` (zero-copy) except COTP DT reassembly, which uses
 //!   a pre-allocated 8 KiB buffer so ISO 8073 fragments can be joined
-//! * walks BER/MMS iteratively on a heap `Vec` (no recursive TLV calls)
+//! * walks BER/MMS iteratively on a 16-slot inline node array (heap only on spill)
 //! * rejects length fields that disagree with the physical buffer (OOB)
 //!
 //! `unsafe_code` is denied crate-wide — zero-copy is `&[u8]` slicing, not `ptr::copy`.
@@ -13,6 +13,7 @@ use nom::error::{ContextError, ErrorKind, ParseError};
 use nom::number::{be_u16, be_u8, le_u16};
 use nom::{Err as NomErr, IResult, Parser};
 use serde::Serialize;
+use std::time::{Duration, Instant};
 
 /// Context-carrying nom error so weissman-server logs a binary-accurate decode failure.
 #[derive(Debug, Clone)]
@@ -371,13 +372,22 @@ pub fn parse_s7_iso_on_tcp(input: &[u8]) -> Result<S7Frame<'_>, ParseFail> {
 /// Pre-allocated COTP DT reassembly. ISO 8073 may split one S7 PDU across TPDUs;
 /// zero-copy slices cannot join them. Cap is 8 KiB (S7-1500 negotiated max).
 pub const COTP_ASSEMBLY_CAP: usize = 8192;
+/// Inter-fragment timeout — incomplete TPDUs are dropped (industrial Slowloris).
+pub const MAX_COTP_FRAGMENT_TIMEOUT: Duration = Duration::from_millis(50);
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct CotpAssembler {
     buf: Vec<u8>,
     last_cotp: Option<CotpHeader>,
     last_tpkt: Option<TpktHeader>,
     fragments: u32,
+    last_frag: Option<Instant>,
+}
+
+impl Default for CotpAssembler {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -396,7 +406,23 @@ impl CotpAssembler {
             last_cotp: None,
             last_tpkt: None,
             fragments: 0,
+            last_frag: None,
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.buf.clear();
+        self.fragments = 0;
+        self.last_frag = None;
+        self.last_cotp = None;
+        self.last_tpkt = None;
+    }
+
+    #[must_use]
+    pub fn timed_out(&self) -> bool {
+        self.last_frag
+            .map(|t| t.elapsed() > MAX_COTP_FRAGMENT_TIMEOUT)
+            .unwrap_or(false)
     }
 
     /// Feed one TPKT. `Ok(Some)` when the TPDU is complete (CR/CC, or DT with EOT).
@@ -408,6 +434,19 @@ impl CotpAssembler {
                 remaining_len: packet.len(),
             });
         }
+        let now = Instant::now();
+        if let Some(last) = self.last_frag {
+            if now.duration_since(last) > MAX_COTP_FRAGMENT_TIMEOUT {
+                self.reset();
+                return Err(ParseFail {
+                    context: "cotp_asm".into(),
+                    kind: "fragment_timeout".into(),
+                    remaining_len: packet.len(),
+                });
+            }
+        }
+        self.last_frag = Some(now);
+
         let (after_tpkt, tpkt) = parse_tpkt(packet).map_err(ParseFail::from_nom)?;
         let (after_cotp, cotp) = parse_cotp(after_tpkt).map_err(ParseFail::from_nom)?;
         self.last_tpkt = Some(tpkt);
@@ -417,7 +456,7 @@ impl CotpAssembler {
         if cotp.pdu_type == 0xf0 {
             let (eot, payload) = cotp_dt_payload(after_cotp)?;
             if self.buf.len().saturating_add(payload.len()) > COTP_ASSEMBLY_CAP {
-                self.buf.clear();
+                self.reset();
                 return Err(ParseFail {
                     context: "cotp_asm".into(),
                     kind: "assembly_overflow".into(),
@@ -438,7 +477,7 @@ impl CotpAssembler {
     }
 
     fn take(&mut self) -> AssembledCotp {
-        AssembledCotp {
+        let out = AssembledCotp {
             tpkt: self.last_tpkt.unwrap_or(TpktHeader {
                 version: 3,
                 reserved: 0,
@@ -452,7 +491,9 @@ impl CotpAssembler {
             }),
             userdata: std::mem::take(&mut self.buf),
             fragments: self.fragments,
-        }
+        };
+        self.reset();
+        out
     }
 }
 
@@ -777,7 +818,7 @@ pub struct BerTlv<'a> {
 }
 
 /// Heap-stack node from the iterative BER walker.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BerNode {
     pub tag: u8,
     pub depth: u32,
@@ -787,6 +828,70 @@ pub struct BerNode {
 
 pub const BER_MAX_NODES: usize = 256;
 pub const BER_MAX_STACK: usize = 16;
+pub const BER_INLINE_NODES: usize = 16;
+
+/// SmallVec-style walk result: 16 nodes live on the stack. Spill to heap only
+/// when a PDU actually has more than 16 TLVs (hostile or huge MMS).
+#[derive(Debug, Clone)]
+pub struct BerWalk {
+    inline: [BerNode; BER_INLINE_NODES],
+    len: usize,
+    spill: Vec<BerNode>,
+}
+
+impl BerWalk {
+    fn empty() -> Self {
+        Self {
+            inline: [BerNode {
+                tag: 0,
+                depth: 0,
+                offset: 0,
+                len: 0,
+            }; BER_INLINE_NODES],
+            len: 0,
+            spill: Vec::new(),
+        }
+    }
+
+    fn push(&mut self, n: BerNode) -> Result<(), ParseFail> {
+        let used = if self.spill.is_empty() {
+            self.len
+        } else {
+            self.spill.len()
+        };
+        if used >= BER_MAX_NODES {
+            return Err(ParseFail {
+                context: "ber".into(),
+                kind: "too_many_nodes".into(),
+                remaining_len: 0,
+            });
+        }
+        if self.spill.is_empty() && self.len < BER_INLINE_NODES {
+            self.inline[self.len] = n;
+            self.len += 1;
+            return Ok(());
+        }
+        if self.spill.is_empty() {
+            self.spill.extend_from_slice(&self.inline[..self.len]);
+        }
+        self.spill.push(n);
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn as_slice(&self) -> &[BerNode] {
+        if self.spill.is_empty() {
+            &self.inline[..self.len]
+        } else {
+            &self.spill
+        }
+    }
+
+    #[must_use]
+    pub fn spilled(&self) -> bool {
+        !self.spill.is_empty()
+    }
+}
 
 struct BerHdr {
     tag: u8,
@@ -839,26 +944,33 @@ pub fn parse_ber_tlv(input: &[u8], max_depth: u32, depth: u32) -> Result<BerTlv<
     })
 }
 
-/// Flat iterative BER/MMS walker. Nesting lives on a bounded heap `Vec`, never
-/// the Tokio worker stack — a malformed 2 MiB TLV nest cannot overflow the thread.
-pub fn walk_ber_iterative(input: &[u8], max_depth: u32) -> Result<Vec<BerNode>, ParseFail> {
+/// Flat iterative BER/MMS walker. Nesting lives on a fixed `[Frame; 17]` (no heap).
+/// Nodes use an inline 16-slot array; heap spill only past 16 TLVs.
+pub fn walk_ber_iterative(input: &[u8], max_depth: u32) -> Result<BerWalk, ParseFail> {
+    #[derive(Clone, Copy)]
     struct Frame {
         off: usize,
         end: usize,
         depth: u32,
     }
-    let cap = (max_depth as usize)
-        .saturating_add(1)
-        .min(BER_MAX_STACK + 1);
-    let mut stack: Vec<Frame> = Vec::with_capacity(cap);
-    stack.push(Frame {
+    let empty = Frame {
+        off: 0,
+        end: 0,
+        depth: 0,
+    };
+    let mut stack = [empty; BER_MAX_STACK + 1];
+    let mut sp = 0usize;
+    stack[0] = Frame {
         off: 0,
         end: input.len(),
         depth: 0,
-    });
-    let mut nodes = Vec::new();
-    while let Some(mut frame) = stack.pop() {
-        if frame.depth > max_depth || stack.len() > BER_MAX_STACK {
+    };
+    sp = 1;
+    let mut nodes = BerWalk::empty();
+    while sp > 0 {
+        sp -= 1;
+        let mut frame = stack[sp];
+        if frame.depth > max_depth {
             return Err(ParseFail {
                 context: "ber".into(),
                 kind: "max_depth".into(),
@@ -866,13 +978,6 @@ pub fn walk_ber_iterative(input: &[u8], max_depth: u32) -> Result<Vec<BerNode>, 
             });
         }
         while frame.off < frame.end {
-            if nodes.len() >= BER_MAX_NODES {
-                return Err(ParseFail {
-                    context: "ber".into(),
-                    kind: "too_many_nodes".into(),
-                    remaining_len: frame.end.saturating_sub(frame.off),
-                });
-            }
             let slice = &input[frame.off..frame.end];
             let hdr = parse_ber_hdr(slice)?;
             let value_off = frame.off + hdr.header_len;
@@ -889,7 +994,7 @@ pub fn walk_ber_iterative(input: &[u8], max_depth: u32) -> Result<Vec<BerNode>, 
                 depth: frame.depth,
                 offset: value_off,
                 len: hdr.value_len,
-            });
+            })?;
             frame.off = value_end;
             let constructed = hdr.tag & 0x20 != 0;
             if constructed && hdr.value_len > 0 {
@@ -902,17 +1007,33 @@ pub fn walk_ber_iterative(input: &[u8], max_depth: u32) -> Result<Vec<BerNode>, 
                     });
                 }
                 if frame.off < frame.end {
-                    stack.push(Frame {
+                    if sp >= stack.len() {
+                        return Err(ParseFail {
+                            context: "ber".into(),
+                            kind: "max_depth".into(),
+                            remaining_len: frame.end.saturating_sub(frame.off),
+                        });
+                    }
+                    stack[sp] = Frame {
                         off: frame.off,
                         end: frame.end,
                         depth: frame.depth,
+                    };
+                    sp += 1;
+                }
+                if sp >= stack.len() {
+                    return Err(ParseFail {
+                        context: "ber".into(),
+                        kind: "max_depth".into(),
+                        remaining_len: hdr.value_len,
                     });
                 }
-                stack.push(Frame {
+                stack[sp] = Frame {
                     off: value_off,
                     end: value_end,
                     depth: child_depth,
-                });
+                };
+                sp += 1;
                 break;
             }
         }
@@ -982,7 +1103,7 @@ pub fn parse_goose_frame(input: &[u8]) -> Result<GooseFrame<'_>, ParseFail> {
     let mut simulation = false;
     let mut ttl = None;
     if let Ok(nodes) = walk_ber_iterative(apdu, 8) {
-        for n in nodes {
+        for n in nodes.as_slice() {
             let value = apdu.get(n.offset..n.offset + n.len).unwrap_or(&[]);
             match n.tag {
                 0x85 => st_num = ber_u32(value),
@@ -1212,8 +1333,12 @@ mod tests {
     fn ber_iterative_walk_uses_heap_stack_not_recursion() {
         let buf = nest_ber(8);
         let nodes = walk_ber_iterative(&buf, 8).expect("iterative");
-        assert!(nodes.iter().any(|n| n.tag == 0x04 && n.len == 1));
-        assert!(nodes.iter().any(|n| n.depth == 8));
+        assert!(nodes.as_slice().iter().any(|n| n.tag == 0x04 && n.len == 1));
+        assert!(nodes.as_slice().iter().any(|n| n.depth == 8));
+        assert!(
+            !nodes.spilled(),
+            "8-deep nest fits in the 16-slot inline array"
+        );
         let err = walk_ber_iterative(&buf, 3).unwrap_err();
         assert_eq!(err.kind, "max_depth");
     }
@@ -1246,6 +1371,26 @@ mod tests {
         let mut asm = CotpAssembler::new();
         let err = asm.push(&pkt).unwrap_err();
         assert_eq!(err.kind, "assembly_overflow");
+    }
+
+    #[test]
+    fn cotp_assembler_drops_slowloris_fragments() {
+        let a = build_cotp_dt(b"AAAA", false);
+        let b = build_cotp_dt(b"BBBB", true);
+        let mut asm = CotpAssembler::new();
+        assert!(asm.push(&a).expect("frag1").is_none());
+        std::thread::sleep(MAX_COTP_FRAGMENT_TIMEOUT + Duration::from_millis(5));
+        assert!(
+            asm.timed_out(),
+            "incomplete TPDU must expire without a follow-up"
+        );
+        let err = asm.push(&b).unwrap_err();
+        assert_eq!(err.kind, "fragment_timeout");
+        let done = asm
+            .push(&b)
+            .expect("reset after timeout")
+            .expect("complete dt");
+        assert_eq!(done.userdata, b"BBBB");
     }
 
     #[test]

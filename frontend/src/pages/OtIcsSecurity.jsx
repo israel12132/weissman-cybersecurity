@@ -513,19 +513,27 @@ export default function OtIcsSecurity() {
                 {t('pages.otIcsSecurity.safety_max_conn', { n: safety.policy.max_connections_per_host ?? 2 })}
               </span>
               <span className="text-[9px] font-mono uppercase tracking-widest px-2 py-1 rounded border border-cyan-500/30 text-cyan-300 bg-cyan-500/10">
-                {t('pages.otIcsSecurity.safety_gateway_conn', { n: safety.policy.max_gateway_connections ?? 8 })}
+                {t('pages.otIcsSecurity.safety_gateway_conn', { n: safety.policy.max_gateway_connections ?? 2 })}
               </span>
               <span className="text-[9px] font-mono uppercase tracking-widest px-2 py-1 rounded border border-amber-500/30 text-amber-300 bg-amber-500/10">
                 {t('pages.otIcsSecurity.safety_zscore', { z: safety.policy.zscore_isolate_threshold ?? 6 })}
               </span>
-              {safety.policy.rst_on_release ? (
-                <span className="text-[9px] font-mono uppercase tracking-widest px-2 py-1 rounded border border-emerald-500/40 text-emerald-300 bg-emerald-500/10">
-                  {t('pages.otIcsSecurity.safety_rst')}
-                </span>
-              ) : null}
+              <span className="text-[9px] font-mono uppercase tracking-widest px-2 py-1 rounded border border-emerald-500/40 text-emerald-300 bg-emerald-500/10">
+                {t('pages.otIcsSecurity.safety_graceful', { ms: safety.policy.graceful_close_ms ?? 10 })}
+              </span>
               {safety.policy.ber_iterative ? (
                 <span className="text-[9px] font-mono uppercase tracking-widest px-2 py-1 rounded border border-emerald-500/40 text-emerald-300 bg-emerald-500/10">
                   {t('pages.otIcsSecurity.safety_ber_iterative')}
+                </span>
+              ) : null}
+              {safety.policy.s7plus_structural ? (
+                <span className="text-[9px] font-mono uppercase tracking-widest px-2 py-1 rounded border border-cyan-500/30 text-cyan-300 bg-cyan-500/10">
+                  {t('pages.otIcsSecurity.safety_s7plus')}
+                </span>
+              ) : null}
+              {safety.policy.plc_decoy ? (
+                <span className="text-[9px] font-mono uppercase tracking-widest px-2 py-1 rounded border border-amber-500/30 text-amber-300 bg-amber-500/10">
+                  {t('pages.otIcsSecurity.safety_decoy')}
                 </span>
               ) : null}
             </div>

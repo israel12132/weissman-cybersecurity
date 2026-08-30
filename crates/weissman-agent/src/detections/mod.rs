@@ -13,6 +13,7 @@ mod log_integrity;
 mod malware_local;
 mod mobile_local;
 mod network_local;
+pub(crate) mod ot_plc_decoy;
 mod process_hollowing;
 mod process_modules;
 mod scheduled_tasks;
@@ -155,6 +156,7 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
             "infostealer_emulation" => infostealer::run(&engine, target.as_deref(), &params).await,
             "ueba_baseline" => baseline::run(&engine).await,
             "chronos" => chronos::run(&engine, &params).await,
+            "deception_honeypot" => ot_plc_decoy::run(&engine).await,
             other => Err(anyhow::anyhow!(
                 "agent has no implementation for engine '{other}'"
             )),

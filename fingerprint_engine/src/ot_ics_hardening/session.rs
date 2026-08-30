@@ -18,8 +18,11 @@ static UNIT_SEMAS: OnceLock<DashMap<String, Arc<Semaphore>>> = OnceLock::new();
 static TX_STATE: OnceLock<DashMap<String, AtomicU16>> = OnceLock::new();
 
 pub const PLC_PHYSICAL_CAP: u32 = 2;
-pub const GATEWAY_PHYSICAL_CAP: u32 = 8;
+/// Moxa NPort / serial gateways collapse above 1–2 TCP pipes. Unit IDs multiplex.
+pub const GATEWAY_PHYSICAL_CAP: u32 = 2;
 pub const STATION_LOGICAL_CAP: usize = 1;
+/// Wait after FIN before a last-resort RST. Old S7-300 stacks panic on linger=0 sprays.
+pub const GRACEFUL_CLOSE_WAIT: Duration = Duration::from_millis(10);
 
 fn host_key(host: &str, port: u16) -> String {
     format!("{host}:{port}")
@@ -69,8 +72,9 @@ pub async fn try_host_slot(
     .await
 }
 
-/// Gateway-aware: physical cap on the IP (up to 8) plus one logical slot per Unit/Station ID
-/// so 40 RTUs behind one Modbus TCP-to-RTU gateway do not serialize on two sockets.
+/// Gateway-aware: physical cap on the IP (max 2 — serial RTU behind the gateway is one
+/// RS-485 pipe) plus one logical slot per Unit/Station ID. Extra units wait and reuse
+/// a pipe (MBAP multiplexing) instead of opening a third socket.
 pub async fn try_station_slot(
     host: &str,
     port: u16,
@@ -184,19 +188,41 @@ pub fn observe_transaction_id(host: &str, port: u16, seen: u16) -> bool {
     true
 }
 
-/// Linger=0 so Drop sends RST and the PLC frees the slot immediately (not hours of TIME_WAIT).
+/// Last-resort RST only. Never call this on the happy path — S7-300 / MicroLogix
+/// TCP stacks wedge or reboot under linger=0 sprays.
 #[allow(deprecated)]
-pub fn arm_rst_on_drop(stream: &TcpStream) {
-    // Tokio deprecates set_linger because linger>0 can block the runtime on drop.
-    // Linger=0 is an immediate RST (no wait) — required so PLC TCP pools of 1–4
-    // slots are not left half-open after tokio::select! aborts I/O.
+fn arm_rst_last_resort(stream: &TcpStream) {
     let _ = stream.set_linger(Some(Duration::ZERO));
 }
 
-/// Graceful-then-RST release: FIN via shutdown, RST on fd close. Never leave a half-open PLC.
-pub async fn release_plc_socket(stream: &mut TcpStream) {
-    arm_rst_on_drop(stream);
+/// Graceful deceleration: FIN first, 10 ms for the PLC to ACK, RST only if silent.
+pub async fn graceful_plc_socket_close(stream: &mut TcpStream) {
     let _ = stream.shutdown().await;
+    tokio::select! {
+        _ = sleep(GRACEFUL_CLOSE_WAIT) => {
+            arm_rst_last_resort(stream);
+        }
+        r = stream.readable() => {
+            if r.is_ok() {
+                let mut b = [0u8; 8];
+                let _ = stream.try_read(&mut b);
+            }
+        }
+    }
+}
+
+/// Same as [`graceful_plc_socket_close`] — kept for call sites that used the old name.
+pub async fn release_plc_socket(stream: &mut TcpStream) {
+    graceful_plc_socket_close(stream).await;
+}
+
+/// Fire-and-forget close when Drop cannot await (never linger=0 in Drop).
+pub fn spawn_graceful_close(mut stream: TcpStream) {
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.spawn(async move {
+            graceful_plc_socket_close(&mut stream).await;
+        });
+    }
 }
 
 /// Race the I/O future against emergency-stop and a hard timeout.
@@ -309,15 +335,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn distinct_units_share_gateway_ip_without_serializing() {
+    async fn distinct_units_share_gateway_ip_within_two_pipes() {
         let wait = Duration::from_millis(40);
-        let a = try_station_slot("10.8.8.1", 502, StationId::ModbusUnit(1), 8, wait)
+        let a = try_station_slot("10.8.8.1", 502, StationId::ModbusUnit(1), 2, wait)
             .await
             .unwrap();
-        let b = try_station_slot("10.8.8.1", 502, StationId::ModbusUnit(2), 8, wait)
+        let b = try_station_slot("10.8.8.1", 502, StationId::ModbusUnit(2), 2, wait)
             .await
             .unwrap();
         assert_ne!(a.station, b.station);
+        let c = try_station_slot("10.8.8.1", 502, StationId::ModbusUnit(3), 2, wait).await;
+        assert!(
+            c.is_err(),
+            "third concurrent TCP on a serial gateway must wait"
+        );
         drop(a);
         drop(b);
     }
@@ -325,10 +356,10 @@ mod tests {
     #[tokio::test]
     async fn same_unit_is_single_flight() {
         let wait = Duration::from_millis(20);
-        let a = try_station_slot("10.8.8.2", 502, StationId::ModbusUnit(7), 8, wait)
+        let a = try_station_slot("10.8.8.2", 502, StationId::ModbusUnit(7), 2, wait)
             .await
             .unwrap();
-        let b = try_station_slot("10.8.8.2", 502, StationId::ModbusUnit(7), 8, wait).await;
+        let b = try_station_slot("10.8.8.2", 502, StationId::ModbusUnit(7), 2, wait).await;
         assert!(b.is_err());
         drop(a);
     }
@@ -354,5 +385,24 @@ mod tests {
         assert!(!w.stalled());
         w.pet();
         assert!(!w.stalled());
+    }
+
+    #[tokio::test]
+    async fn graceful_close_sends_fin_on_loopback() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let peer = tokio::spawn(async move {
+            let (mut s, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 8];
+            // Peer sees FIN (read returns 0) rather than a linger=0 RST abort.
+            let n = tokio::io::AsyncReadExt::read(&mut s, &mut buf)
+                .await
+                .unwrap();
+            n
+        });
+        let mut stream = TcpStream::connect(addr).await.unwrap();
+        graceful_plc_socket_close(&mut stream).await;
+        let n = peer.await.unwrap();
+        assert_eq!(n, 0, "graceful close must deliver FIN, not a reset abort");
     }
 }

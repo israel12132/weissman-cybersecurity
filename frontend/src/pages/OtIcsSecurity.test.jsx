@@ -9,10 +9,13 @@ vi.mock('react-i18next', () => ({
         return `${d?.implemented ?? 0} / ${d?.total ?? 100} hardening controls armed`
       }
       if (k === 'pages.otIcsSecurity.safety_max_conn') return `Max ${d?.n ?? 2} conn / PLC`
-      if (k === 'pages.otIcsSecurity.safety_gateway_conn') return `Gateway ${d?.n ?? 8} TCP / Unit-ID`
+      if (k === 'pages.otIcsSecurity.safety_gateway_conn') return `Gateway ${d?.n ?? 2} TCP / Unit-ID mux`
       if (k === 'pages.otIcsSecurity.safety_zscore') return `Isolate at Z > ${d?.z ?? 6}`
+      if (k === 'pages.otIcsSecurity.safety_graceful') return `FIN + ${d?.ms ?? 10}ms`
       if (k === 'pages.otIcsSecurity.safety_rst') return 'RST on abort'
       if (k === 'pages.otIcsSecurity.safety_ber_iterative') return 'Iterative BER'
+      if (k === 'pages.otIcsSecurity.safety_s7plus') return 'S7-Plus structural'
+      if (k === 'pages.otIcsSecurity.safety_decoy') return 'PLC decoy'
       if (typeof d === 'string') return d
       return k
     },
@@ -81,10 +84,13 @@ const SAFETY = {
     file_transfer_blocked: true,
     goose_inject_blocked: true,
     max_connections_per_host: 2,
-    max_gateway_connections: 8,
+    max_gateway_connections: 2,
     zscore_isolate_threshold: 6,
-    rst_on_release: true,
+    rst_on_release: false,
+    graceful_close_ms: 10,
     ber_iterative: true,
+    s7plus_structural: true,
+    plc_decoy: true,
   },
   control_count: 100,
   protocols: [
@@ -123,9 +129,11 @@ describe('OtIcsSecurity', () => {
     expect(panel.textContent).toMatch(/100 \/ 100/)
     expect(panel.textContent).toMatch(/modbus/i)
     expect(panel.textContent).toMatch(/dnp3/i)
-    expect(panel.textContent).toMatch(/Gateway 8/)
-    expect(panel.textContent).toMatch(/RST on abort/)
+    expect(panel.textContent).toMatch(/Gateway 2/)
+    expect(panel.textContent).toMatch(/FIN \+ 10ms/)
     expect(panel.textContent).toMatch(/Iterative BER/)
+    expect(panel.textContent).toMatch(/S7-Plus structural/)
+    expect(panel.textContent).toMatch(/PLC decoy/)
     await waitFor(() => {
       expect(apiFetch.mock.calls.some((c) => String(c[0]).includes('/api/ot-ics/safety'))).toBe(true)
     })

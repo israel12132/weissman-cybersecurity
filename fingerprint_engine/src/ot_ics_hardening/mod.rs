@@ -7,8 +7,10 @@
 
 pub mod anomaly;
 pub mod parsers;
+pub mod plc_decoy;
 pub mod policy;
 pub mod probes;
+pub mod s7plus;
 pub mod session;
 
 use crate::engine_dispatch::EngineRunContext;
@@ -17,8 +19,8 @@ use crate::engine_result::{print_result, EngineResult};
 use crate::ot_ics_engine::OtFingerprint;
 use serde_json::{json, Value};
 
-use anomaly::{STDDEV_FLOOR, Z_ABS_CAP, Z_ISOLATE};
-use parsers::COTP_ASSEMBLY_CAP;
+use anomaly::{CV_FLOOR, MAD_SWITCH, Z_ABS_CAP, Z_ISOLATE};
+use parsers::{BER_INLINE_NODES, COTP_ASSEMBLY_CAP, MAX_COTP_FRAGMENT_TIMEOUT};
 use policy::{catalog_json, OtSafetyPolicy, ProbeMode, CONTROL_CATALOG, DESTRUCTIVE_FOREVER};
 use probes::{
     probe_dnp3_safe, probe_iec61850_mms_safe, probe_modbus_safe, probe_s7_safe,
@@ -393,7 +395,8 @@ async fn persist_safety_events(
         "max_connections_per_host": policy.max_connections_per_host,
         "writes": false,
         "max_gateway_connections": policy.max_gateway_connections,
-        "rst_on_release": true,
+        "rst_on_release": false,
+        "graceful_close_ms": 10,
     }))
     .execute(&mut *tx)
     .await;
@@ -446,7 +449,7 @@ pub fn safety_api_document(events: Vec<Value>, fair: Option<Value>) -> Value {
         "policy": {
             "probe_mode": "safe_read",
             "max_connections_per_host": 2,
-            "max_gateway_connections": 8,
+            "max_gateway_connections": 2,
             "write_blocked": true,
             "direct_operate_blocked": true,
             "cpu_control_blocked": true,
@@ -455,11 +458,18 @@ pub fn safety_api_document(events: Vec<Value>, fair: Option<Value>) -> Value {
             "goose_inject_blocked": true,
             "watchdog_ms": 2000,
             "zscore_isolate_threshold": Z_ISOLATE,
-            "stddev_floor": STDDEV_FLOOR,
+            "z_scale": "cv_or_mad",
+            "mad_switch": MAD_SWITCH,
+            "cv_floor": CV_FLOOR,
             "z_abs_cap": Z_ABS_CAP,
             "cotp_assembly_cap": COTP_ASSEMBLY_CAP,
+            "cotp_fragment_timeout_ms": MAX_COTP_FRAGMENT_TIMEOUT.as_millis() as u64,
             "ber_iterative": true,
-            "rst_on_release": true,
+            "ber_inline_nodes": BER_INLINE_NODES,
+            "graceful_close_ms": 10,
+            "rst_on_release": false,
+            "s7plus_structural": true,
+            "plc_decoy": true,
             "soar_auto_isolate": std::env::var("WEISSMAN_OT_SOAR_AUTO_ISOLATE").ok().as_deref() == Some("1"),
             "hmac_required_for_active": true,
             "rls": true,
@@ -503,9 +513,13 @@ mod tests {
         assert_eq!(doc["policy"]["write_blocked"], json!(true));
         assert_eq!(doc["policy"]["direct_operate_blocked"], json!(true));
         assert_eq!(doc["policy"]["ber_iterative"], json!(true));
-        assert_eq!(doc["policy"]["rst_on_release"], json!(true));
-        assert_eq!(doc["policy"]["max_gateway_connections"], json!(8));
-        assert_eq!(doc["policy"]["stddev_floor"], json!(STDDEV_FLOOR));
+        assert_eq!(doc["policy"]["rst_on_release"], json!(false));
+        assert_eq!(doc["policy"]["max_gateway_connections"], json!(2));
+        assert_eq!(doc["policy"]["z_scale"], json!("cv_or_mad"));
+        assert_eq!(doc["policy"]["graceful_close_ms"], json!(10));
+        assert_eq!(doc["policy"]["cotp_fragment_timeout_ms"], json!(50));
+        assert_eq!(doc["policy"]["plc_decoy"], json!(true));
+        assert_eq!(doc["policy"]["s7plus_structural"], json!(true));
         assert_eq!(doc["control_count"], json!(100));
         assert_eq!(doc["live"], json!(true));
     }
