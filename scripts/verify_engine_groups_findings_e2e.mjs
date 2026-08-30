@@ -70,8 +70,12 @@ function validateRiskFields(row) {
 }
 
 async function pollJob(jobId, token) {
+  const label = `job ${String(jobId).slice(0, 8)}`
   for (let i = 0; i < POLL_MAX; i += 1) {
-    const { status, data } = await api('GET', `/api/jobs/${jobId}`, { token })
+    const { status, data } = await retryShed(
+      () => api('GET', `/api/jobs/${jobId}`, { token }),
+      { label, what: 'job poll', retries: 3 },
+    )
     if (status === 200 && terminal(data.status)) return data
     await sleep(POLL_MS)
   }

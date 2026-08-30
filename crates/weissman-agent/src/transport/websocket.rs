@@ -55,6 +55,8 @@ pub async fn run_session(
 
     // Outbound channel: detections + heartbeat → WebSocket sink.
     let (out_tx, mut out_rx) = mpsc::channel::<AgentToServer>(CHANNEL_BUFFER);
+    let inner_key: Arc<tokio::sync::Mutex<Option<[u8; 32]>>> =
+        Arc::new(tokio::sync::Mutex::new(None));
 
     // Send Hello immediately.
     let hello = AgentToServer::Hello {
@@ -108,7 +110,9 @@ pub async fn run_session(
     let hb_tx = out_tx.clone();
     let agent_id_hb = enrollment.agent_id.clone();
     let hb_handle = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(heartbeat_secs.max(5)));
+        let mut interval = tokio::time::interval(Duration::from_secs(
+            crate::hardening::jittered_heartbeat_secs(heartbeat_secs),
+        ));
         // Skip the initial immediate tick — Hello already proved liveness.
         interval.tick().await;
         loop {
@@ -134,15 +138,9 @@ pub async fn run_session(
     // Writer: out_rx → sink. Failed sends go to the disk spool so a crash or
     // disconnect does not drop findings that already left the detection task.
     let spool_for_writer = crate::transport::spool::spool_path();
+    let writer_key = Arc::clone(&inner_key);
     let writer_handle = tokio::spawn(async move {
         while let Some(msg) = out_rx.recv().await {
-            // A `Ping` request from the heartbeat loop, not an application message. Sent so the
-            // server's WebSocket layer answers with a Pong, which is inbound traffic and therefore
-            // resets the read-idle deadline below. Without it the connection was torn down every
-            // READ_IDLE_TIMEOUT_SECS on a perfectly healthy link: this protocol is
-            // agent-talks-first, the server has nothing to say between tasks, and it sends no
-            // keepalive of its own — so read-idle was measuring "the server had no work", not
-            // "the connection is dead", and the agent reconnected every 90 seconds forever.
             if matches!(msg, AgentToServer::KeepAlivePing) {
                 if let Err(e) = sink.send(Message::Ping(Vec::new().into())).await {
                     warn!(target: "agent", error = %e, "ping send failed");
@@ -150,13 +148,18 @@ pub async fn run_session(
                 }
                 continue;
             }
-            let line = match serde_json::to_string(&msg) {
+            let mut line = match serde_json::to_string(&msg) {
                 Ok(l) => l,
                 Err(e) => {
                     error!(target: "agent", error = %e, "serialize outbound");
                     continue;
                 }
             };
+            if let Some(key) = *writer_key.lock().await {
+                if let Ok(wrapped) = crate::inner_crypto::wrap(&key, &line) {
+                    line = wrapped;
+                }
+            }
             if let Err(e) = sink.send(Message::text(line)).await {
                 error!(target: "agent", error = %e, "ws send failed — spooling remainder");
                 let _ = crate::transport::spool::append(&spool_for_writer, &msg);
@@ -190,8 +193,17 @@ pub async fn run_session(
             };
             match frame {
                 Message::Text(s) => {
+                    let session_key = *inner_key.lock().await;
+                    let plain = match crate::inner_crypto::unwrap_or_plain(session_key.as_ref(), &s)
+                    {
+                        Ok(p) => p,
+                        Err(e) => {
+                            warn!(target: "agent", error = %e, "drop undecryptable frame");
+                            continue;
+                        }
+                    };
                     handle_text(
-                        &s,
+                        &plain,
                         &out_tx,
                         &running_tasks,
                         &completed_tasks,
@@ -199,6 +211,7 @@ pub async fn run_session(
                         &seen_tasks,
                         enrollment.agent_id.clone(),
                         enrollment.kill_hmac_key.clone(),
+                        Arc::clone(&inner_key),
                     )
                     .await;
                 }
@@ -269,6 +282,7 @@ async fn handle_text(
     seen: &Arc<tokio::sync::Mutex<SeenTasks>>,
     agent_id: String,
     kill_hmac_key: String,
+    inner_key: Arc<tokio::sync::Mutex<Option<[u8; 32]>>>,
 ) {
     let parsed: Result<ServerToAgent, _> = serde_json::from_str(text);
     let msg = match parsed {
@@ -280,10 +294,18 @@ async fn handle_text(
     };
     match msg {
         ServerToAgent::Welcome {
-            scan_concurrency, ..
+            scan_concurrency,
+            inner_key_hex,
+            ..
         } => {
             if let Some(n) = scan_concurrency {
                 max_parallel.store(n.max(1), Ordering::Relaxed);
+            }
+            if let Some(hex_key) = inner_key_hex {
+                if let Some(k) = crate::inner_crypto::key_from_hex(&hex_key) {
+                    *inner_key.lock().await = Some(k);
+                    info!(target: "agent", "inner WSS crypto armed");
+                }
             }
             info!(target: "agent", "server welcomed agent");
         }

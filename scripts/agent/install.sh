@@ -183,13 +183,17 @@ Restart=always
 RestartSec=5s
 NoNewPrivileges=true
 ProtectSystem=strict
-# ProtectSystem=strict mounts the entire filesystem read-only, so without this the agent cannot
-# write agent.state. The installer pre-writes it, but if it is ever lost the agent must be able to
-# re-enroll and persist — otherwise it would consume a fresh token on every single start and
-# crash-loop again, which is the failure this whole change removes.
 ReadWritePaths=${INSTALL_DIR}
 ProtectHome=true
 PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryMax=256M
+CPUQuota=5%
+TasksMax=64
+# ReadWritePaths keeps agent.state + logs writable under ProtectSystem=strict.
 
 [Install]
 WantedBy=multi-user.target

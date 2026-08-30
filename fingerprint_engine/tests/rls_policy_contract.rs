@@ -244,6 +244,7 @@ fn hardening_migrations_20260827_identical_in_both_dirs() {
         "20260827120500_nl_query_audit_chain_update.sql",
         "20260827120600_cicd_scan_events_rls_cast_safe.sql",
         "20260830140000_nl_audit_chain_epoch_and_sovereign_allowlist.sql",
+        "20260830160000_privilege_escalation_controls.sql",
         "20260830184500_nl_epoch_cap_and_sovereign_signature.sql",
     ];
     for name in names {
@@ -350,4 +351,43 @@ fn strip_sql_comments(sql: &str) -> String {
         i += 1;
     }
     out
+}
+
+#[test]
+fn privilege_escalation_controls_migration_has_forced_rls() {
+    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("migrations/20260830160000_privilege_escalation_controls.sql");
+    assert!(
+        p.is_file(),
+        "privilege escalation controls migration missing: {}",
+        p.display()
+    );
+    let text = std::fs::read_to_string(&p).unwrap();
+    assert!(text.contains("CREATE TABLE IF NOT EXISTS privilege_escalation_control_results"));
+    assert!(text.contains("tenant_id     BIGINT NOT NULL REFERENCES tenants(id)"));
+    assert!(text.contains("FORCE ROW LEVEL SECURITY"));
+    assert!(text.contains("public.app_current_tenant_id()"));
+    assert!(text.contains("CHECK (status IN ('pass', 'fail', 'na', 'not_observed'))"));
+    assert!(text.contains("ux_pac_controls_tenant_host_id"));
+    assert!(text.contains("ON privilege_escalation_control_results TO weissman_app"));
+    assert_eq!(
+        text.matches("app_current_tenant_id()").count(),
+        2,
+        "USING + WITH CHECK must both scope by tenant GUC"
+    );
+}
+
+#[test]
+fn privilege_escalation_controls_migration_in_sync_both_dirs() {
+    let fe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("migrations/20260830160000_privilege_escalation_controls.sql");
+    let db = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../crates/weissman-db/migrations/20260830160000_privilege_escalation_controls.sql");
+    let a = std::fs::read_to_string(&fe).unwrap_or_default();
+    let b = std::fs::read_to_string(&db).unwrap_or_default();
+    assert!(!a.is_empty(), "migration present");
+    assert_eq!(
+        a, b,
+        "privilege_escalation_controls migration must be identical in both dirs"
+    );
 }

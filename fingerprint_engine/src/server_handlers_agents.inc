@@ -661,12 +661,18 @@ async fn ws_agent(
         let mut agent_uuid: Option<String> = None;
         let mut client_id: Option<i64> = None;
         let mut local_session: u64 = 0;
+        let mut inner_key: Option<[u8; 32]> = None;
 
         loop {
             tokio::select! {
                 outbound = rx_to_agent.recv() => {
                     let Some(msg) = outbound else { break; };
-                    let line = serde_json::to_string(&msg).unwrap_or_default();
+                    let mut line = serde_json::to_string(&msg).unwrap_or_default();
+                    if let Some(ref key) = inner_key {
+                        if let Ok(wrapped) = crate::elite_hardening::wss_inner::wrap(key, &line) {
+                            line = wrapped;
+                        }
+                    }
                     if socket.send(axum::extract::ws::Message::Text(line)).await.is_err() {
                         break;
                     }
@@ -677,6 +683,13 @@ async fn ws_agent(
                     use axum::extract::ws::Message;
                     match frame {
                         Message::Text(s) => {
+                            let s = match crate::elite_hardening::wss_inner::unwrap_or_plain(
+                                inner_key.as_ref(),
+                                &s,
+                            ) {
+                                Ok(plain) => plain,
+                                Err(_) => continue,
+                            };
                             let v: serde_json::Value = match serde_json::from_str(&s) {
                                 Ok(v) => v,
                                 Err(_) => continue,
@@ -734,9 +747,12 @@ async fn ws_agent(
                                         let _ = crate::endpoint_agents::mark_seen(app_pool.as_ref(), tenant_id, &u, "online").await;
                                         registry.notify_status(&aid, tenant_id, "online").await;
                                     }
+                                    let key = crate::elite_hardening::wss_inner::generate_key();
+                                    inner_key = Some(key);
                                     let welcome = crate::endpoint_agents::ServerToAgent::Welcome {
                                         scan_concurrency: Some(8),
                                         heartbeat_secs: Some(20),
+                                        inner_key_hex: Some(hex::encode(key)),
                                     };
                                     let line = serde_json::to_string(&welcome).unwrap_or_default();
                                     let _ = socket.send(Message::Text(line)).await;

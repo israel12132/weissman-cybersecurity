@@ -157,6 +157,7 @@
     "threat_intel": "מודיעין איומים",
     "target_intel": "מודיעין מטרה",
     "stealth_ops": "תפעול חמקני",
+    "elite_hardening": "הקשחה עילית",
     "attack_paths": "נתיבי תקיפה",
     "scan_scheduler": "מתזמן סריקות",
     "alert_rules": "כללי התראה",
@@ -219,6 +220,7 @@
     "websocket_security": "אבטחת WebSocket",
     "email_posture": "אמון דואר ודומיין",
     "identity_security": "אבטחת זהות ו-SSO",
+    "privilege_escalation": "הסלמת הרשאות ואישורים",
     "kerberos_security": "AD ו-Kerberos",
     "smb_netbios": "אבטחת SMB / NetBIOS",
     "password_spray": "תנוחת Password Spray",
@@ -1485,6 +1487,41 @@
       "empty_body": "IOCs מופיעים כאשר אינדיקטורים רשתיים מחולצים מממצאים.",
       "no_match_title": "אין התאמות",
       "no_match_body": "אף אינדיקטור לא תואם לסינון."
+    },
+    "eliteHardening": {
+      "title": "הקשחה עילית",
+      "subtitle": "100 בקרות חיות — אריג מנועים, חשאיות, UEBA, SOAR, FAIR, Ask Weissman RLS",
+      "badge": "ליבה ריבונית",
+      "evidence_notice": "GET חי /api/elite-hardening/status. בקרות נכשלות סגור; אין אכיפה מדומה.",
+      "load_failed": "טעינת סטטוס הקשחה נכשלה",
+      "kpi_enforced": "חי / 100",
+      "kpi_gaps": "פערים פתוחים",
+      "kpi_probes": "יעד פרובים חיים",
+      "kpi_mitre": "עדכניות ATT&CK",
+      "kpi_engines": "מנועי ייצור חיים",
+      "kpi_lanes": "נתיבי תחרות מכוסים",
+      "kpi_hfv": "Hack-Fix-Verify",
+      "hfv_live": "לולאה חיה",
+      "hfv_title": "Hack-Fix-Verify — סריקת היעדר חיה",
+      "hfv_notice": "FIXED הוא טענה. ALE של FAIR נשאר מתומחר עד שסריקה חיה מוצלחת של מארח שהוכח כחי (לחיצת יד TLS, מענה HTTP, באנר TCP או פעימת weissman-agent) לא משחזרת את מפתח האימות. סריקה שנכשלה, שגיאת מנוע, ומארח כבוי או מאחורי חומת אש אינם יכולים לסגור.",
+      "moat_title": "יתרון ריבוני — נתיבי מנועים חיים",
+      "moat_notice": "ספירת הנתיבים מחושבת מ-PRODUCTION_ENGINE_IDS בבינארי הזה. שמות מתחרים בכרטיסים הם מחקר שוק ציבורי, לא סריקה חיה של המוצרים שלהם.",
+      "moat_unmatched": "ערימה ללא מקבילה",
+      "moat_partial": "פערי נתיב",
+      "search_placeholder": "חיפוש בקרה, פרק או פירוט…",
+      "all_sections": "כל הפרקים",
+      "export_pdf": "ייצוא PDF",
+      "empty_title": "אין צילום בקרות",
+      "empty_body": "התחברו וטענו /api/elite-hardening/status כדי לראות את ליבת 100 הנקודות.",
+      "no_match_title": "אין בקרות תואמות",
+      "no_match_body": "נקו את החיפוש או בחרו פרק אחר.",
+      "col_id": "מזהה",
+      "col_section": "פרק",
+      "col_control": "בקרה",
+      "col_status": "סטטוס",
+      "col_detail": "פירוט חי",
+      "live": "חי",
+      "gap": "פער"
     },
     "uebaAnomalies": {
       "title": "אנומליות UEBA",
@@ -5534,6 +5571,9 @@
     "identitySecurityCenter": {
       "evidence_notice": "posture Identity/OAuth/OIDC/SAML מ-POST /api/command-center/scan (מנועי identity / oauth_oidc / saml_attack). misconfig בטoken ובפדרציה מאומתים עם exchanges פרוטוקול חיים."
     },
+    "privilegeEscalationCommandCenter": {
+      "evidence_notice": "ביקורת הסלמת הרשאות וגישה לאישורים ב-POST /api/command-center/scan (privilege_escalation_credential_access). 500 בקרות חיות. Registry ב-Windows נקרא ב-Win32 RegQueryValueExW בתוך התהליך (לא reg.exe). שורות כיסוי כולל na/not_observed נשמרות תחת SET LOCAL app.current_tenant_id ב-UPSERT אחד. המנוע לא מבצע דאמפ LSASS ולא מריץ מעקף UAC."
+    },
     "kerberosSecurityCommandCenter": {
       "evidence_notice": "בדיקות חשיפת Kerberos/AD ב-POST /api/command-center/scan כש-RoE מאפשר. תוצאות משקפות תגובות LDAP/Kerberos חיות — ריק כשאין DC ב-scope."
     },
@@ -7257,7 +7297,7 @@
   "supremeNerveCenter": {
     "title": "מרכז עצבים עליון",
     "ceoOnly": "מנכ\"ל / superadmin בלבד",
-    "evidence_notice": "תמונת מצב חיה מ-GET /api/ceo/supreme/nerve-center — כל 563 המנועים, מודולי מערכת, משימות אסינכרוניות ופרמטרי בקרה. ללא טלמטריה מדומה.",
+      "evidence_notice": "תמונת מצב חיה מ-GET /api/ceo/supreme/nerve-center — כל 564 המנועים, מודולי מערכת, משימות אסינכרוניות ופרמטרי בקרה. ללא טלמטריה מדומה.",
     "refresh": "רענון",
     "pollInterval": "רענון אוטומטי כל {{sec}} שניות",
     "stuckAlert": "{{count}} מנוע(ים) נראים תקועים — בדוק heartbeat של worker ועדכוני phase.",

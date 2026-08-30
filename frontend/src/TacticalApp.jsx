@@ -98,6 +98,7 @@ import {
   DarkWebMonitor,
   TargetIntelligence,
   StealthOperations,
+  EliteHardeningCommandCenter,
   ThreatHuntingWorkbench,
   ThreatAnalysisCenter,
   EngineClientCatalog,
@@ -125,6 +126,7 @@ import {
   BaselineAndDrift,
   IdentityContextManager,
   IdentitySecurityCenter,
+  PrivilegeEscalationCommandCenter,
   KerberosSecurityCommandCenter,
   SmbNetbiosCommandCenter,
   PasswordSprayCommandCenter,
@@ -239,6 +241,7 @@ export default function TacticalApp() {
           <Route path="jwt-lab" element={<JwtAttackLab />} />
           <Route path="file-upload-lab" element={<FileUploadSecurityLab />} />
           <Route path="identity-security" element={<IdentitySecurityCenter />} />
+          <Route path="privilege-escalation" element={<PrivilegeEscalationCommandCenter />} />
           <Route path="kerberos-security" element={<KerberosSecurityCommandCenter />} />
           <Route path="smb-netbios" element={<SmbNetbiosCommandCenter />} />
           <Route path="password-spray" element={<PasswordSprayCommandCenter />} />
@@ -280,6 +283,7 @@ export default function TacticalApp() {
           <Route path="dark-web" element={<DarkWebMonitor />} />
           <Route path="target-intel" element={<TargetIntelligence />} />
           <Route path="stealth-ops" element={<StealthOperations />} />
+          <Route path="elite-hardening" element={<EliteHardeningCommandCenter />} />
           <Route path="threat-hunting" element={<ThreatHuntingWorkbench />} />
           <Route path="threat-analysis" element={<ThreatAnalysisCenter />} />
           <Route path="engine-catalog" element={<EngineClientCatalog />} />

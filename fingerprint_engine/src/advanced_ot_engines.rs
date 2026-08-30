@@ -449,6 +449,14 @@ pub async fn run_dnp3_attack_result(t: &str) -> EngineResult {
             0x05, 0x64, 0x05, 0xC9, 0x02, 0x00, 0x01, 0x00, 0xCB, 0x16, 0x00, 0x00,
         ];
         let resp = tcp_probe_response(&host, 20000, &probe).await;
+        if let Some(bytes) = resp.as_deref() {
+            if matches!(
+                crate::elite_hardening::ot_fsm::validate_dnp3(bytes),
+                crate::elite_hardening::ot_fsm::FsmVerdict::Abort { .. }
+            ) {
+                return empty_ok("dnp3_attack", t);
+            }
+        }
         let confirmed = resp
             .as_deref()
             .map(|b| b.len() >= 2 && b[0] == 0x05 && b[1] == 0x64)
@@ -719,6 +727,14 @@ pub async fn run_iec61850_attack_result(t: &str) -> EngineResult {
             0xC1, 0x02, 0x01, 0x00, 0xC2, 0x02, 0x01, 0x02,
         ];
         let resp = tcp_probe_response(&host, 102, &probe).await;
+        if let Some(bytes) = resp.as_deref() {
+            if matches!(
+                crate::elite_hardening::ot_fsm::validate_tpkt(bytes),
+                crate::elite_hardening::ot_fsm::FsmVerdict::Abort { .. }
+            ) {
+                return empty_ok("iec61850_attack", t);
+            }
+        }
         let confirmed = resp
             .as_deref()
             .map(|b| b.len() >= 4 && b[0] == 0x03 && b[1] == 0x00)

@@ -18,7 +18,31 @@
 
 use sqlx::{PgPool, Row};
 
-/// Sync admin credentials and promote configured env operators to platform owner.
+/// Env-configured operators that must be able to create clients (owner plane).
+/// Dedupes case-insensitively; empty strings are ignored.
+#[must_use]
+pub fn merge_owner_emails(admin: Option<&str>, bootstrap: Option<&str>) -> Vec<String> {
+    let mut out = Vec::new();
+    for raw in [admin, bootstrap].into_iter().flatten() {
+        let t = raw.trim().to_ascii_lowercase();
+        if t.is_empty() {
+            continue;
+        }
+        if !out.iter().any(|e| e == &t) {
+            out.push(t);
+        }
+    }
+    out
+}
+
+fn env_nonempty(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// Sync admin credentials and promote env operators to platform owner.
 ///
 /// `auth_pool` is BYPASSRLS (`weissman_auth`). `app_pool` is RLS-subject
 /// (`weissman_app`) and is only written through a tenant-scoped transaction.
@@ -45,56 +69,38 @@ async fn sync_admin_credentials_from(
     admin_password: Option<String>,
     master_email: Option<String>,
 ) {
-    if let Some(email) = admin_email.as_deref() {
-        sync_one_operator(auth_pool, app_pool, email, admin_password.as_deref()).await;
+    for email in merge_owner_emails(admin_email.as_deref(), master_email.as_deref()) {
+        promote_env_operator(auth_pool, app_pool, &email).await;
     }
 
-    if let Some(email) = master_email.as_deref() {
-        if !emails_equal(admin_email.as_deref(), Some(email)) {
-            // Password for this row was set at insert (`ensure_master_bootstrap_user`).
-            // Promote only — never overwrite a hash from WEISSMAN_ADMIN_PASSWORD.
-            sync_one_operator(auth_pool, app_pool, email, None).await;
-        }
-    }
+    let Some(email) = admin_email.filter(|s| !s.trim().is_empty()) else {
+        return;
+    };
+    let Some(password) = admin_password.filter(|s| !s.trim().is_empty()) else {
+        return;
+    };
+
+    let Some(row) = lookup_default_user(auth_pool, &email).await else {
+        tracing::debug!(
+            target: "auth_bootstrap",
+            email = %email,
+            "no default-tenant admin row to sync"
+        );
+        return;
+    };
+
+    seed_admin_password_if_empty(app_pool, &row, &email, &password).await;
 }
 
-fn env_nonempty(key: &str) -> Option<String> {
-    std::env::var(key)
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
+struct OwnerRow {
+    user_id: i64,
+    tenant_id: i64,
+    hash: String,
+    is_active: bool,
+    already_owner: bool,
 }
 
-fn emails_equal(a: Option<&str>, b: Option<&str>) -> bool {
-    match (a, b) {
-        (Some(x), Some(y)) => x.eq_ignore_ascii_case(y),
-        _ => false,
-    }
-}
-
-/// Unique env-operator emails that must be platform owners after boot.
-#[cfg(test)]
-fn operator_emails_from(admin: Option<&str>, master: Option<&str>) -> Vec<String> {
-    let mut out = Vec::new();
-    for raw in [admin, master].into_iter().flatten() {
-        let e = raw.trim();
-        if e.is_empty() {
-            continue;
-        }
-        if out.iter().any(|x: &String| x.eq_ignore_ascii_case(e)) {
-            continue;
-        }
-        out.push(e.to_string());
-    }
-    out
-}
-
-async fn sync_one_operator(
-    auth_pool: &PgPool,
-    app_pool: &PgPool,
-    email: &str,
-    password: Option<&str>,
-) {
+async fn lookup_default_user(auth_pool: &PgPool, email: &str) -> Option<OwnerRow> {
     let row = match sqlx::query(
         r#"SELECT u.id,
                   u.tenant_id,
@@ -118,23 +124,11 @@ async fn sync_one_operator(
                 error = %e,
                 "admin credential sync lookup failed"
             );
-            return;
+            return None;
         }
     };
-
-    let Some(row) = row else {
-        tracing::debug!(
-            target: "auth_bootstrap",
-            email = %email,
-            "no default-tenant admin row to sync"
-        );
-        return;
-    };
-
-    let user_id: i64 = match row.try_get("id") {
-        Ok(v) => v,
-        Err(_) => return,
-    };
+    let row = row?;
+    let user_id: i64 = row.try_get("id").ok()?;
     let tenant_id: i64 = match row.try_get("tenant_id") {
         Ok(v) if v > 0 => v,
         _ => {
@@ -143,59 +137,97 @@ async fn sync_one_operator(
                 user_id,
                 "admin row has no tenant_id; refusing unscoped write"
             );
-            return;
+            return None;
         }
     };
-    let hash: String = row.try_get("password_hash").unwrap_or_default();
-    let is_active: bool = row.try_get("is_active").unwrap_or(false);
-    let already_owner: bool = row.try_get("is_superadmin").unwrap_or(false);
+    Some(OwnerRow {
+        user_id,
+        tenant_id,
+        hash: row.try_get("password_hash").unwrap_or_default(),
+        is_active: row.try_get("is_active").unwrap_or(false),
+        already_owner: row.try_get("is_superadmin").unwrap_or(false),
+    })
+}
 
-    let mut tx = match weissman_db::begin_tenant_tx(app_pool, tenant_id).await {
+/// Promote a default-tenant env operator to `is_superadmin` so owner-only
+/// client lifecycle works. Refuses portal (`client`) and assigned-client rows.
+async fn promote_env_operator(auth_pool: &PgPool, app_pool: &PgPool, email: &str) {
+    let Some(row) = lookup_default_user(auth_pool, email).await else {
+        return;
+    };
+    if row.already_owner {
+        return;
+    }
+    let mut tx = match weissman_db::begin_tenant_tx(app_pool, row.tenant_id).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::warn!(
                 target: "auth_bootstrap",
-                user_id,
-                tenant_id,
+                user_id = row.user_id,
+                tenant_id = row.tenant_id,
+                error = %e,
+                "owner promotion could not open tenant transaction"
+            );
+            return;
+        }
+    };
+    if let Err(e) = sqlx::query(
+        r#"UPDATE users
+           SET is_superadmin = true
+           WHERE id = $1
+             AND COALESCE(is_superadmin, false) = false
+             AND assigned_client_id IS NULL
+             AND lower(trim(COALESCE(role, ''))) <> 'client'"#,
+    )
+    .bind(row.user_id)
+    .execute(&mut *tx)
+    .await
+    {
+        tracing::warn!(
+            target: "auth_bootstrap",
+            user_id = row.user_id,
+            error = %e,
+            "owner superadmin promotion failed"
+        );
+        let _ = tx.rollback().await;
+        return;
+    }
+    if let Err(e) = tx.commit().await {
+        tracing::warn!(
+            target: "auth_bootstrap",
+            user_id = row.user_id,
+            error = %e,
+            "owner superadmin promotion commit failed"
+        );
+        return;
+    }
+    tracing::info!(
+        target: "auth_bootstrap",
+        user_id = row.user_id,
+        email = %email,
+        "Promoted configured operator to platform owner (is_superadmin)"
+    );
+}
+
+async fn seed_admin_password_if_empty(
+    app_pool: &PgPool,
+    row: &OwnerRow,
+    email: &str,
+    password: &str,
+) {
+    let mut tx = match weissman_db::begin_tenant_tx(app_pool, row.tenant_id).await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::warn!(
+                target: "auth_bootstrap",
+                user_id = row.user_id,
+                tenant_id = row.tenant_id,
                 error = %e,
                 "admin credential sync could not open tenant transaction"
             );
             return;
         }
     };
-
-    // Client create/delete is owner-only (CEO / superadmin). Env operators are
-    // the platform owner; promote without touching a password they chose later.
-    if !already_owner {
-        if let Err(e) = sqlx::query(
-            r#"UPDATE users
-               SET is_superadmin = true
-               WHERE id = $1
-                 AND COALESCE(is_superadmin, false) = false
-                 AND assigned_client_id IS NULL
-                 AND lower(trim(COALESCE(role, ''))) <> 'client'"#,
-        )
-        .bind(user_id)
-        .execute(&mut *tx)
-        .await
-        {
-            tracing::warn!(
-                target: "auth_bootstrap",
-                user_id,
-                error = %e,
-                "owner superadmin promotion failed"
-            );
-            let _ = tx.rollback().await;
-            return;
-        } else {
-            tracing::info!(
-                target: "auth_bootstrap",
-                user_id,
-                email = %email,
-                "Promoted configured operator to platform owner (is_superadmin)"
-            );
-        }
-    }
 
     // Only WRITE the password hash during first-boot bootstrap (when there is no usable
     // hash yet). Re-hashing from WEISSMAN_ADMIN_PASSWORD on every boot would silently
@@ -204,16 +236,16 @@ async fn sync_one_operator(
     // and reviving the original password (which is echoed in the boot banner and stored in
     // .env) forever. A disabled account is still re-activated for recovery, but its
     // existing credential is preserved.
-    if !hash.is_empty() {
-        if !is_active {
+    if !row.hash.is_empty() {
+        if !row.is_active {
             if let Err(e) = sqlx::query("UPDATE users SET is_active = true WHERE id = $1")
-                .bind(user_id)
+                .bind(row.user_id)
                 .execute(&mut *tx)
                 .await
             {
                 tracing::warn!(
                     target: "auth_bootstrap",
-                    user_id,
+                    user_id = row.user_id,
                     error = %e,
                     "admin reactivation failed"
                 );
@@ -222,7 +254,7 @@ async fn sync_one_operator(
             }
             tracing::info!(
                 target: "auth_bootstrap",
-                user_id,
+                user_id = row.user_id,
                 email = %email,
                 "Re-activated disabled admin (existing password preserved)"
             );
@@ -230,25 +262,13 @@ async fn sync_one_operator(
         if let Err(e) = tx.commit().await {
             tracing::warn!(
                 target: "auth_bootstrap",
-                user_id,
+                user_id = row.user_id,
                 error = %e,
                 "admin credential sync commit failed"
             );
         }
         return;
     }
-
-    let Some(password) = password.filter(|p| !p.is_empty()) else {
-        if let Err(e) = tx.commit().await {
-            tracing::warn!(
-                target: "auth_bootstrap",
-                user_id,
-                error = %e,
-                "admin owner promotion commit failed"
-            );
-        }
-        return;
-    };
 
     // First boot: no credential yet — seed it from WEISSMAN_ADMIN_PASSWORD.
     let new_hash = match bcrypt::hash(password, 12) {
@@ -270,13 +290,13 @@ async fn sync_one_operator(
              AND lower(trim(COALESCE(role, ''))) <> 'client'"#,
     )
     .bind(&new_hash)
-    .bind(user_id)
+    .bind(row.user_id)
     .execute(&mut *tx)
     .await
     {
         tracing::warn!(
             target: "auth_bootstrap",
-            user_id,
+            user_id = row.user_id,
             error = %e,
             "admin credential bootstrap failed"
         );
@@ -287,7 +307,7 @@ async fn sync_one_operator(
     if let Err(e) = tx.commit().await {
         tracing::warn!(
             target: "auth_bootstrap",
-            user_id,
+            user_id = row.user_id,
             error = %e,
             "admin credential bootstrap commit failed"
         );
@@ -296,7 +316,7 @@ async fn sync_one_operator(
 
     tracing::info!(
         target: "auth_bootstrap",
-        user_id,
+        user_id = row.user_id,
         email = %email,
         "Admin credential bootstrapped from WEISSMAN_ADMIN_* env (first boot)"
     );
@@ -307,9 +327,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn operator_emails_include_admin_and_distinct_master_bootstrap() {
+    fn ci_smoke_bootstrap_is_an_owner_alongside_admin() {
         assert_eq!(
-            operator_emails_from(Some("admin@localhost"), Some("ci-smoke@localhost")),
+            merge_owner_emails(Some("admin@localhost"), Some("ci-smoke@localhost")),
             vec![
                 "admin@localhost".to_string(),
                 "ci-smoke@localhost".to_string()
@@ -318,27 +338,19 @@ mod tests {
     }
 
     #[test]
-    fn operator_emails_dedupe_case_insensitive() {
+    fn duplicate_admin_and_bootstrap_collapse() {
         assert_eq!(
-            operator_emails_from(Some("Admin@Localhost"), Some("admin@localhost")),
-            vec!["Admin@Localhost".to_string()]
+            merge_owner_emails(Some("Admin@Localhost"), Some("admin@localhost")),
+            vec!["admin@localhost".to_string()]
         );
     }
 
     #[test]
-    fn operator_emails_skip_blank() {
+    fn empty_and_missing_are_skipped() {
+        assert!(merge_owner_emails(None, Some("  ")).is_empty());
         assert_eq!(
-            operator_emails_from(Some("  "), Some("ci-smoke@localhost")),
-            vec!["ci-smoke@localhost".to_string()]
-        );
-        assert!(operator_emails_from(None, None).is_empty());
-    }
-
-    #[test]
-    fn master_bootstrap_is_an_env_operator_even_without_admin_email() {
-        assert_eq!(
-            operator_emails_from(None, Some("ci-smoke@localhost")),
-            vec!["ci-smoke@localhost".to_string()]
+            merge_owner_emails(None, Some("owner@example")),
+            vec!["owner@example".to_string()]
         );
     }
 

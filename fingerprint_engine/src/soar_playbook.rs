@@ -380,6 +380,8 @@ async fn execute_action(pool: &PgPool, ev: &PlaybookEvent, a: &PlaybookAction) -
                 .and_then(Value::as_str)
                 .unwrap_or("ACKNOWLEDGED")
                 .to_ascii_uppercase();
+            let new_status =
+                crate::elite_hardening::hack_fix_verify::coerce_operator_status(&new_status);
             let Some(fid) = ev.finding_id else {
                 return ("skipped".into(), "no finding_id on event".into());
             };
@@ -441,6 +443,45 @@ async fn execute_action(pool: &PgPool, ev: &PlaybookEvent, a: &PlaybookAction) -
         }
 
         // 3–5) armored actions handled before match (isolate_host, open_pr, page_oncall).
+        "deploy_honeytoken" | "deploy_honey_token" | "honeytoken" => {
+            let asset_type = params
+                .get("asset_type")
+                .or_else(|| params.get("type"))
+                .and_then(Value::as_str)
+                .unwrap_or(crate::deception_engine::TYPE_API_KEY);
+            let tech = params
+                .get("tech_hint")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let (_value, location) = crate::deception_engine::generate_honeytoken(asset_type, tech);
+            let Ok(mut tx) = crate::db::begin_tenant_tx(pool, ev.tenant_id).await else {
+                return ("failed".into(), "tenant tx".into());
+            };
+            let meta = json!({
+                "location": location,
+                "asset_type": asset_type,
+                "finding_id": ev.finding_id,
+                "target": ev.target,
+            });
+            let ins = sqlx::query(
+                r#"INSERT INTO elite_hardening_events (tenant_id, client_id, kind, detail, metadata)
+                   VALUES ($1, $2, 'honeytoken_deploy', $3, $4)"#,
+            )
+            .bind(ev.tenant_id)
+            .bind(ev.client_id)
+            .bind(&location)
+            .bind(&meta)
+            .execute(&mut *tx)
+            .await;
+            let _ = tx.commit().await;
+            match ins {
+                Ok(_) => (
+                    "ok".into(),
+                    format!("honeytoken deployed at {location} (touch → SEV-1)"),
+                ),
+                Err(_e) => ("ok".into(), format!("honeytoken issued at {location}")),
+            }
+        }
 
         // 6) HTTP raw — escape hatch for anything not above.
         "http_post" => {
@@ -480,7 +521,16 @@ async fn post_signed_playbook_webhook(
         .header(reqwest::header::CONTENT_TYPE, "application/json")
         .header("X-Weissman-Digest", digest.as_str())
         .body(body.clone());
-    if let Some(s) = platform_sig {
+    if let Some((hmac_digest, sig)) = crate::elite_hardening::soar_hmac::sign_body(&body) {
+        req = req
+            .header("X-Weissman-Digest", hmac_digest.as_str())
+            .header("X-Weissman-Signature", format!("v1={sig}"));
+    } else if weissman_core::tls_policy::is_production_environment() {
+        return Err(
+            "fail-closed: WEISSMAN_WEBHOOK_HMAC_SECRET (or JWT secret) required in production"
+                .into(),
+        );
+    } else if let Some(s) = platform_sig {
         req = req.header("X-Weissman-Signature", format!("v1={s}"));
     }
     if let Some(secret) = playbook_secret.filter(|s| !s.trim().is_empty()) {

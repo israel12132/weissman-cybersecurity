@@ -766,5 +766,19 @@ export const EXPLICIT_PARAM_DEFS = {
   ],
   spear_phishing_engine:[{key:'campaign_name',label:'Campaign Name',               type:'text',     placeholder:'Red Team Q2', defaultVal:'' },
                    { key:'template',    label:'Template',                           type:'select',   options:['generic','finance','hr','it_support','executive'], defaultVal:'generic' }],
+  privilege_escalation_credential_access: [
+    { key: 'check_syscall', label: 'Syscall / W^X integrity (1–50)', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'check_lsass', label: 'LSASS / identity daemon (51–100)', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'check_token', label: 'Token & impersonation (101–150)', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'check_uac', label: 'UAC bypass prevention (151–200)', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'check_service', label: 'Services & scheduled tasks (201–250)', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'check_kernel', label: 'Kernel / BYOVD (251–300)', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'check_vault', label: 'Credential vaults (301–350)', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'check_telemetry', label: 'Agent telemetry guard (351–400)', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'check_rls', label: 'RLS / multi-tenant DB (401–450)', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'check_cicd', label: 'Zero-fabrication CI (451–500)', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'check_remote', label: 'Remote Windows privilege ports', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'max_findings', label: 'Max Findings', type: 'number', placeholder: '200', defaultVal: '200', min: 20, max: 500 },
+  ],
 }
 
