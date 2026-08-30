@@ -856,6 +856,19 @@ async fn api_findings(
         Ok(v) => v,
         Err(r) => return r,
     };
+    let source_filter: Option<String> = q.get("source").and_then(|s| {
+        let t = s.trim();
+        if t.is_empty() || t.len() > 128 {
+            return None;
+        }
+        if t.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            Some(t.to_string())
+        } else {
+            None
+        }
+    });
 
     let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
@@ -866,8 +879,7 @@ async fn api_findings(
     };
 
     // Build SQL with deterministic bind ordering: $1 = limit, $2 = offset, $3 = severity (or
-    // NULL placeholder), $4 = client_id (or NULL placeholder). Postgres ignores params we don't
-    // reference, but using identical positions for the count query keeps things simple.
+    // NULL placeholder), $4 = client_id (or NULL placeholder), $5 = source (or NULL).
     let rows = sqlx::query(
         "SELECT id, finding_id, title, severity, source, status, client_id::text AS client_id, \
          COALESCE(description,'') AS description, discovered_at, \
@@ -881,6 +893,7 @@ async fn api_findings(
          FROM vulnerabilities \
          WHERE ($3::text[] IS NULL OR lower(severity) = ANY($3)) \
            AND ($4::bigint IS NULL OR client_id = $4) \
+           AND ($5::text IS NULL OR lower(source) = lower($5)) \
          ORDER BY \
             CASE WHEN kev_listed THEN 0 ELSE 1 END, \
             COALESCE(epss_score, 0) DESC, \
@@ -891,6 +904,7 @@ async fn api_findings(
     .bind(offset)
     .bind(severity_filter.as_ref().map(|v| v.as_slice()))
     .bind(client_filter)
+    .bind(source_filter.as_deref())
     .fetch_all(&mut *tx)
     .await;
     // A read failure (statement timeout, RLS/GUC problem, missing column after a partial
@@ -910,10 +924,12 @@ async fn api_findings(
     let total: i64 = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*)::bigint FROM vulnerabilities \
          WHERE ($1::text[] IS NULL OR lower(severity) = ANY($1)) \
-           AND ($2::bigint IS NULL OR client_id = $2)",
+           AND ($2::bigint IS NULL OR client_id = $2) \
+           AND ($3::text IS NULL OR lower(source) = lower($3))",
     )
     .bind(severity_filter.as_ref().map(|v| v.as_slice()))
     .bind(client_filter)
+    .bind(source_filter.as_deref())
     .fetch_one(&mut *tx)
     .await
     .unwrap_or(0);

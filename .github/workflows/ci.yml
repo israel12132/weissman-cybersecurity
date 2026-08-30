@@ -807,6 +807,17 @@ jobs:
           # expires mid-run and later scan submits/polls 401. Give the CI token room to
           # outlive the whole smoke sweep.
           WEISSMAN_ACCESS_TOKEN_MINUTES: "120"
+          # This job chains smoke + Playwright crawl + pytest + findings E2E from ONE IP
+          # (127.0.0.1) against Redis-backed login/scan/API limiters. Defaults (8 logins/min,
+          # 24 scan POSTs/min, 30 API/s) are correct anti-abuse for production; they shed the
+          # later E2E steps after the earlier ones have already consumed the window. Clamp to
+          # the same ceilings nightly-e2e.yml uses so the gate measures engines, not the limiter.
+          WEISSMAN_LOGIN_PER_MINUTE: "60"
+          WEISSMAN_LOGIN_BURST: "120"
+          WEISSMAN_TENANT_SCAN_POSTS_PER_MINUTE: "240"
+          WEISSMAN_TENANT_SCAN_BURST: "120"
+          WEISSMAN_RATE_LIMIT_PER_SEC: "500"
+          WEISSMAN_RATE_LIMIT_BURST: "2000"
           # Disable the periodic bulk-scan orchestrator for CI. It dispatches a HEAVY
           # `tenant_full_scan` per active tenant every 60s (60-min job timeout). Those jobs
           # share the worker's 2-slot heavy semaphore with the smoke's on-demand
