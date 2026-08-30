@@ -692,7 +692,7 @@ async fn run_semantic_fallback_paths(
         }
     }
 
-    let initial: Vec<String> = paths.clone();
+    let initial: Vec<String> = paths.to_vec();
     post_probe_batch(
         base,
         client,
