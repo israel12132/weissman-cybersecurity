@@ -70,8 +70,12 @@ function validateRiskFields(row) {
 }
 
 async function pollJob(jobId, token) {
+  const label = `job ${String(jobId).slice(0, 8)}`
   for (let i = 0; i < POLL_MAX; i += 1) {
-    const { status, data } = await api('GET', `/api/jobs/${jobId}`, { token })
+    const { status, data } = await retryShed(
+      () => api('GET', `/api/jobs/${jobId}`, { token }),
+      { label, what: 'job poll' },
+    )
     if (status === 200 && terminal(data.status)) return data
     await sleep(POLL_MS)
   }
@@ -137,12 +141,8 @@ async function main() {
     // window instead of stalling on unreachable third-party infrastructure.
     if (entry.params && typeof entry.params === 'object') Object.assign(body, entry.params)
 
-    // Refresh the access token before each engine so a long run (many engines,
-    // each polled for minutes) never outlives the token TTL — previously the
-    // later engines failed to enqueue with HTTP 401 once the token expired.
-    const fresh = await login()
-    if (fresh) token = fresh
-
+    // Reuse the token. Re-login-per-engine burns the per-IP login quota (8/min)
+    // after Playwright already used 127.0.0.1; CI sets a 120-minute JWT.
     const scan = await retryScanIntake(
       () => api('POST', '/api/command-center/scan', { token, body }),
       { label },

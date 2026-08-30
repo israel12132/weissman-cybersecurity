@@ -65,11 +65,26 @@ async fn incr_window(key: &str, window: Duration) -> Option<u64> {
     }
     let rl = shared()?;
     let mut conn = rl.conn().await.ok()?;
-    let count: u64 = conn.incr(key, 1u64).await.ok()?;
-    if count == 1 {
-        let _: Result<(), _> = conn.expire(key, window.as_secs() as i64).await;
+    incr_and_bound_ttl(&mut conn, key, window).await.ok()
+}
+
+/// INCR, then set EXPIRE if the key has no TTL.
+///
+/// `INCR` + `EXPIRE` only when `count == 1` races: if EXPIRE is dropped the key
+/// never dies, a 1-second API window grows without bound, and live E2E job
+/// polls on 127.0.0.1 are 429'd until they look like a job timeout.
+async fn incr_and_bound_ttl(
+    conn: &mut redis::aio::MultiplexedConnection,
+    key: &str,
+    window: Duration,
+) -> redis::RedisResult<u64> {
+    let count: u64 = conn.incr(key, 1u64).await?;
+    let ttl: i64 = conn.ttl(key).await.unwrap_or(-1);
+    if ttl < 0 {
+        let secs = window.as_secs().max(1) as i64;
+        let _: Result<(), _> = conn.expire(key, secs).await;
     }
-    Some(count)
+    Ok(count)
 }
 
 /// Tenant scan POST counter (60s window). `None` when Redis unavailable.
@@ -358,14 +373,10 @@ async fn incr_window_strict(key: &str, window: Duration) -> StrictOp<u64> {
     let Ok(mut conn) = rl.conn().await else {
         return StrictOp::Unavailable;
     };
-    let count: u64 = match conn.incr(key, 1u64).await {
-        Ok(c) => c,
-        Err(_) => return StrictOp::Unavailable,
-    };
-    if count == 1 {
-        let _: Result<(), _> = conn.expire(key, window.as_secs() as i64).await;
+    match incr_and_bound_ttl(&mut conn, key, window).await {
+        Ok(count) => StrictOp::Ok(count),
+        Err(_) => StrictOp::Unavailable,
     }
-    StrictOp::Ok(count)
 }
 
 /// Like [`incr_login_ip`] but fail-closed aware for middleware.
