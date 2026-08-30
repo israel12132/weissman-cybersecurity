@@ -813,6 +813,12 @@ jobs:
           # 30/s per-IP API cap. Raise the throwaway-stack ceiling; production defaults stay 30/60.
           WEISSMAN_RATE_LIMIT_PER_SEC: "500"
           WEISSMAN_RATE_LIMIT_BURST: "2000"
+          # Same throwaway-stack ceiling for login: engine-group smoke used to POST
+          # /api/login once per engine from 127.0.0.1 and trip the production 8/min
+          # Redis token-bucket. Smoke now logins once; keep headroom for later E2E
+          # steps that still authenticate from this IP. Production defaults stay 8/12.
+          WEISSMAN_LOGIN_PER_MINUTE: "60"
+          WEISSMAN_LOGIN_BURST: "120"
           WEISSMAN_COOKIE_SECURE: "1"
           WEISSMAN_ADMIN_EMAIL: admin@localhost
           WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum

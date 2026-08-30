@@ -137,11 +137,8 @@ async function main() {
     // window instead of stalling on unreachable third-party infrastructure.
     if (entry.params && typeof entry.params === 'object') Object.assign(body, entry.params)
 
-    // Refresh the access token before each engine so a long run (many engines,
-    // each polled for minutes) never outlives the token TTL — previously the
-    // later engines failed to enqueue with HTTP 401 once the token expired.
-    const fresh = await login()
-    if (fresh) token = fresh
+    // One login for the sweep (CI WEISSMAN_ACCESS_TOKEN_MINUTES=120). Login-per-engine
+    // trips the production per-IP limiter and 429s the rest of the run.
 
     const scan = await retryScanIntake(
       () => api('POST', '/api/command-center/scan', { token, body }),
