@@ -382,6 +382,9 @@ fn redis_client_from_env() -> Option<Arc<redis::Client>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use redis::AsyncCommands;
+    use std::sync::Arc;
+    use std::time::Duration;
 
     #[tokio::test]
     async fn memory_round_trip() {
@@ -422,5 +425,50 @@ mod tests {
         let json = serde_json::to_vec(&ev).unwrap();
         let from_json = decode_evidence(&json).unwrap();
         assert_eq!(from_json.source_engine, "asm");
+    }
+
+    #[tokio::test]
+    async fn redis_msgpack_when_available() {
+        let url = std::env::var("REDIS_URL")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| "redis://127.0.0.1:6379/0".into());
+        let Ok(client) = redis::Client::open(url.as_str()) else {
+            return;
+        };
+        let client = Arc::new(client);
+        let ping = tokio::time::timeout(
+            Duration::from_secs(2),
+            client.get_multiplexed_async_connection(),
+        )
+        .await;
+        let Ok(Ok(mut conn)) = ping else {
+            return;
+        };
+        conn.set_response_timeout(Duration::from_secs(2));
+        let pong: Result<String, _> = redis::cmd("PING").query_async(&mut conn).await;
+        if pong.as_deref() != Ok("PONG") {
+            return;
+        }
+        let bb = ScanBlackboard::new(99, 88, "cem-dago-live-proof".into(), client);
+        bb.write_evidence(
+            "web_port_active",
+            "live_proof",
+            serde_json::json!({"live": true}),
+        )
+        .await
+        .expect("redis write");
+        let ev = bb
+            .read_evidence("web_port_active")
+            .await
+            .expect("redis read")
+            .expect("evidence present");
+        assert_eq!(ev.source_engine, "live_proof");
+        assert_eq!(ev.value["live"], true);
+        let raw: Option<Vec<u8>> = conn.hget(bb.redis_key(), "web_port_active").await.unwrap();
+        let bytes = raw.expect("hash field");
+        assert_ne!(bytes.first().copied(), Some(b'{'));
+        let decoded = decode_evidence(&bytes).unwrap();
+        assert_eq!(decoded.source_engine, "live_proof");
     }
 }
