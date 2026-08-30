@@ -6,8 +6,8 @@
 //! (`weissman-job-bus-v1|` ‖ tenant_id LE bytes).
 //!
 //! Decrypt only with a known tenant: the worker claim path, and the
-//! tenant-scoped job API ([`reveal_job_payload_for_tenant`]). Never via a bulk
-//! `SELECT payload FROM weissman_async_jobs` helper.
+//! tenant-scoped job API ([`reveal_job_payload_for_tenant`]). Never via a
+//! bulk decrypt over the whole job table.
 //!
 //! The zero-trust bus envelope (`_weissman_job_bus`) stays a **plaintext
 //! sibling** so `payload ? '_weissman_job_bus'` still gates claim. Indexable
