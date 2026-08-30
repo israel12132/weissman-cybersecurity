@@ -236,11 +236,11 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
         },
     );
     m.insert(
-        "weissman_async_jobs",
+        "report_runs",
         TableSpec {
-            table: "weissman_async_jobs",
-            columns: &["id", "kind", "status", "created_at", "updated_at"],
-            order_by: &["created_at", "updated_at"],
+            table: "report_runs",
+            columns: &["id", "region", "created_at", "summary"],
+            order_by: &["created_at", "id"],
             joins: &[],
             has_tenant: true,
         },
@@ -874,7 +874,7 @@ You MUST output a single JSON object — nothing else (no ```json fences, no pro
 
 Schema:
 {
-  "table":     "<one of vulnerabilities|weissman_finding_clusters|clients|risk_graph_nodes|agent_anomalies|attack_path_snapshots|risk_graph_edges|client_financial_risk_snapshots|endpoint_agents|weissman_async_jobs|epss_intel|kev_intel|audit_logs>",
+  "table":     "<one of vulnerabilities|weissman_finding_clusters|clients|risk_graph_nodes|agent_anomalies|attack_path_snapshots|risk_graph_edges|client_financial_risk_snapshots|endpoint_agents|report_runs|epss_intel|kev_intel|audit_logs>",
   "select":    ["col1","col2", ...]           // optional; default = all columns
   "filters":   [
      {"column":"severity","op":"in","value":["critical","high"]},
@@ -899,7 +899,7 @@ Schema:
 - risk_graph_edges(id, client_id, from_node_id, to_node_id, edge_type, created_at)
 - client_financial_risk_snapshots(id, client_id, computed_at, total_asset_value_usd, sle_worst_usd, ale_annualised_usd, crown_jewel_value_usd, currency_code)
 - endpoint_agents(id, client_id, hostname, device_name, os, arch, agent_version, status, enrolled_at, last_seen_at)
-- weissman_async_jobs(id, kind, status, created_at, updated_at)
+- report_runs(id, region, created_at, summary)
 - epss_intel(cve, score, percentile, epss_date, refreshed_at)
 - kev_intel(cve, vendor_project, product, date_added, known_ransomware_use, due_date)
 - audit_logs(id, created_at, user_label, action_type, details, ip_address)
