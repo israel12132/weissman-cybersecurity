@@ -296,6 +296,10 @@ mod tests {
             Some(roles::CEO)
         );
         assert_eq!(
+            required_min_role(&Method::POST, "/api/sovereign/operator/stream-ticket"),
+            Some(roles::CEO)
+        );
+        assert_eq!(
             required_min_role(&Method::POST, "/api/admin/users"),
             Some(roles::ADMIN)
         );

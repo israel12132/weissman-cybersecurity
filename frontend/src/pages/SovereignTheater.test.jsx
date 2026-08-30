@@ -8,7 +8,12 @@ vi.mock('react-i18next', () => {
 const { apiFetch } = vi.hoisted(() => ({ apiFetch: vi.fn() }))
 vi.mock('../utils/apiFetch', () => ({ apiFetch }))
 vi.mock('../lib/sseStream', () => ({
-  openSseStream: () => ({ addEventListener: vi.fn(), close: vi.fn() }),
+  openSseStream: (_url, opts) => {
+    if (typeof opts?.getReconnectUrl === 'function') {
+      Promise.resolve(opts.getReconnectUrl()).catch(() => {})
+    }
+    return { addEventListener: vi.fn(), close: vi.fn() }
+  },
 }))
 
 import SovereignTheater from './SovereignTheater'
@@ -53,6 +58,13 @@ beforeEach(() => {
         scripts: [{ id: 2, target: 'https://example.com', method: 'GET', verified: false }],
       })
     }
+    if (String(url).includes('/stream-ticket')) {
+      return Promise.resolve({
+        ok: true,
+        ticket: '11111111-1111-1111-1111-111111111111',
+        expires_in_sec: 5,
+      })
+    }
     return Promise.resolve({ ok: true })
   })
 })
@@ -69,6 +81,12 @@ describe('SovereignTheater', () => {
     expect(apiFetch).toHaveBeenCalledWith('/api/sovereign/operator/memory?limit=60')
     expect(apiFetch).toHaveBeenCalledWith('/api/sovereign/operator/forge?limit=30')
     expect(apiFetch).toHaveBeenCalledWith('/api/sovereign/operator/scripts?limit=30')
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/sovereign/operator/stream-ticket',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    )
     expect(screen.getByText('pages.sovereignTheater.memory')).toBeInTheDocument()
     expect(screen.getByText('pages.sovereignTheater.forge')).toBeInTheDocument()
     expect(screen.getByText('local_ok')).toBeInTheDocument()

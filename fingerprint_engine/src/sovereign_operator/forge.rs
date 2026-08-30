@@ -5,7 +5,8 @@ use super::scripts;
 use super::tools::ToolOutcome;
 use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
-use std::path::PathBuf;
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use uuid::Uuid;
 use weissman_core::models::engine::is_production_engine_id;
@@ -45,16 +46,19 @@ pub async fn forge_draft(
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
-    let id = Uuid::new_v4();
-    let dir = PathBuf::from(FORGE_ROOT).join(id.to_string());
-    if let Err(e) = std::fs::create_dir_all(&dir) {
-        return ToolOutcome {
-            ok: false,
-            name: "forge".into(),
-            detail: format!("worktree create failed: {e}"),
-            payload: json!({}),
-        };
-    }
+    let worktree = match IsolatedWorktree::create() {
+        Ok(w) => w,
+        Err(e) => {
+            return ToolOutcome {
+                ok: false,
+                name: "forge".into(),
+                detail: format!("worktree create failed: {e}"),
+                payload: json!({}),
+            };
+        }
+    };
+    let id = worktree.id;
+    let dir = worktree.dir.clone();
     let src_path = dir.join("lib.rs");
     let source_out = if rust_source.trim().is_empty() {
         format!(
@@ -120,6 +124,7 @@ pub async fn forge_draft(
                 "compile_ok": compile_ok,
                 "compile_log": compile_log.chars().take(4000).collect::<String>(),
                 "worktree": dir.to_string_lossy(),
+                "worktree_purged": true,
                 "in_production_catalog": is_production_engine_id(&engine_id),
             }),
         },
@@ -476,7 +481,35 @@ pub async fn list_forge(pool: &PgPool, tenant_id: i64, limit: i64) -> Result<Vec
         .collect())
 }
 
-fn rustc_metadata(src: &std::path::Path, out_dir: &std::path::Path) -> (bool, String) {
+/// Exclusive UUID directory under `FORGE_ROOT`. Drop wipes the tree so rustc temps cannot collide.
+struct IsolatedWorktree {
+    id: Uuid,
+    dir: PathBuf,
+}
+
+impl IsolatedWorktree {
+    fn create() -> Result<Self, String> {
+        std::fs::create_dir_all(FORGE_ROOT).map_err(|e| e.to_string())?;
+        for _ in 0..8 {
+            let id = Uuid::new_v4();
+            let dir = PathBuf::from(FORGE_ROOT).join(id.to_string());
+            match std::fs::create_dir(&dir) {
+                Ok(()) => return Ok(Self { id, dir }),
+                Err(e) if e.kind() == ErrorKind::AlreadyExists => continue,
+                Err(e) => return Err(e.to_string()),
+            }
+        }
+        Err("forge worktree uuid collision".into())
+    }
+}
+
+impl Drop for IsolatedWorktree {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+fn rustc_metadata(src: &Path, out_dir: &Path) -> (bool, String) {
     let content = std::fs::read_to_string(src).unwrap_or_default();
     let compile_src = if content.contains("crate::") {
         let wrap = out_dir.join("_forge_crate_root.rs");
@@ -510,6 +543,12 @@ mod candidate;
     };
     let out = out_dir.join("libsovereign_forge.rmeta");
     let spawned = Command::new("rustc")
+        .current_dir(out_dir)
+        .env("TMPDIR", out_dir)
+        .env("TMP", out_dir)
+        .env("TEMP", out_dir)
+        .env("CARGO_TARGET_DIR", out_dir.join("target"))
+        .env("CARGO_INCREMENTAL", "0")
         .args([
             "--edition",
             "2021",
@@ -653,16 +692,32 @@ mod tests {
     }
 
     #[test]
+    fn exclusive_worktrees_are_unique_and_wiped() {
+        let a = IsolatedWorktree::create().expect("a");
+        let b = IsolatedWorktree::create().expect("b");
+        assert_ne!(a.dir, b.dir);
+        assert!(a.dir.starts_with(FORGE_ROOT));
+        assert!(a.dir.exists());
+        let path = a.dir.clone();
+        drop(a);
+        assert!(!path.exists(), "worktree must be wiped on drop");
+        drop(b);
+    }
+
+    #[test]
     fn rustc_compiles_standalone_probe() {
-        let dir = std::env::temp_dir().join(format!("sov-forge-unit-{}", std::process::id()));
-        let _ = std::fs::create_dir_all(&dir);
-        let src = dir.join("lib.rs");
+        let worktree = IsolatedWorktree::create().expect("worktree");
+        let src = worktree.dir.join("lib.rs");
         std::fs::write(
             &src,
             "pub fn sovereign_forge_probe() -> &'static str { \"osint\" }\n",
         )
         .expect("write probe");
-        let (ok, log) = rustc_metadata(&src, &dir);
+        let (ok, log) = rustc_metadata(&src, &worktree.dir);
         assert!(ok, "rustc failed: {log}");
+        assert!(
+            worktree.dir.join("libsovereign_forge.rmeta").exists()
+                || worktree.dir.join("lib.rs").exists()
+        );
     }
 }

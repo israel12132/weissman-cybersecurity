@@ -1,6 +1,6 @@
 use crate::sovereign_operator::{
     chat as sov_chat, forge as sov_forge, knowledge as sov_knowledge, log_stream as sov_logs,
-    memory as sov_memory, scripts as sov_scripts, tools as sov_tools,
+    memory as sov_memory, scripts as sov_scripts, stream_ticket as sov_ticket, tools as sov_tools,
 };
 use uuid::Uuid;
 
@@ -44,6 +44,8 @@ struct SovereignToolBody {
 struct SovereignSseQuery {
     #[serde(default)]
     since: Option<i64>,
+    #[serde(default)]
+    ticket: Option<String>,
 }
 
 #[derive(Deserialize, Default)]
@@ -419,11 +421,33 @@ async fn api_sovereign_operator_race_post(
         .into_response()
 }
 
+async fn api_sovereign_operator_stream_ticket(Extension(auth): Extension<AuthContext>) -> Response {
+    let ticket = sov_ticket::issue(auth.tenant_id, auth.user_id);
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "ticket": ticket,
+            "expires_in_sec": sov_ticket::TTL.as_secs(),
+        })),
+    )
+        .into_response()
+}
+
 async fn api_sovereign_operator_stream(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<SovereignSseQuery>,
 ) -> Response {
+    let Some(raw) = q.ticket.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
+        return crate::sovereign_operator::hidden();
+    };
+    let Ok(ticket_id) = Uuid::parse_str(raw) else {
+        return crate::sovereign_operator::hidden();
+    };
+    if !sov_ticket::consume(ticket_id, auth.tenant_id, auth.user_id) {
+        return crate::sovereign_operator::hidden();
+    }
     let pool = state.app_pool.clone();
     let tenant_id = auth.tenant_id;
     let mut since_id = q.since.unwrap_or(0);

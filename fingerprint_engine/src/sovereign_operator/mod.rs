@@ -4,9 +4,11 @@ pub mod chat;
 pub mod forge;
 pub mod hourly;
 pub mod knowledge;
+pub mod llm_fence;
 pub mod log_stream;
 pub mod memory;
 pub mod scripts;
+pub mod stream_ticket;
 pub mod tools;
 
 use crate::auth_jwt::AuthContext;
@@ -77,6 +79,9 @@ mod tests {
     fn prefix_matches_nested() {
         assert!(path_is_sovereign_operator("/api/sovereign/operator"));
         assert!(path_is_sovereign_operator("/api/sovereign/operator/chat"));
+        assert!(path_is_sovereign_operator(
+            "/api/sovereign/operator/stream-ticket"
+        ));
         assert!(!path_is_sovereign_operator("/api/sovereign/phantom-trap"));
         assert!(!path_is_sovereign_operator("/api/ceo/sovereign/trigger"));
     }

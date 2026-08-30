@@ -851,6 +851,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             get(api_sovereign_operator_stream),
         )
         .route(
+            "/api/sovereign/operator/stream-ticket",
+            post(api_sovereign_operator_stream_ticket),
+        )
+        .route(
             "/api/sovereign/operator/memory",
             get(api_sovereign_operator_memory_get),
         )

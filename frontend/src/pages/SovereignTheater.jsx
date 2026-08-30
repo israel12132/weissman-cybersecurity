@@ -118,8 +118,19 @@ export default function SovereignTheater() {
   }, [refresh])
 
   useEffect(() => {
-    const es = openSseStream('/api/sovereign/operator/stream?since=0', {
-      getReconnectUrl: () => `/api/sovereign/operator/stream?since=${sinceRef.current}`,
+    const mintStreamUrl = async () => {
+      const d = await apiFetch('/api/sovereign/operator/stream-ticket', {
+        method: 'POST',
+        body: {},
+      })
+      const ticket = String(d?.ticket || '').trim()
+      if (!ticket) {
+        throw new Error('stream ticket missing')
+      }
+      return `/api/sovereign/operator/stream?since=${sinceRef.current}&ticket=${encodeURIComponent(ticket)}`
+    }
+    const es = openSseStream('/api/sovereign/operator/stream', {
+      getReconnectUrl: mintStreamUrl,
     })
     const onLog = (ev) => {
       try {
