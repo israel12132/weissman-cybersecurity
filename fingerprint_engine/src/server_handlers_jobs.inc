@@ -32,7 +32,7 @@ async fn api_async_jobs_list(
             .into_response();
     };
 
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, kind, status,
                   COALESCE(payload, '{}'::jsonb) AS payload,
                   result_json,
@@ -40,6 +40,7 @@ async fn api_async_jobs_list(
                   attempt_count,
                   worker_id,
                   heartbeat_at,
+                  locked_until,
                   created_at,
                   updated_at
              FROM weissman_async_jobs
@@ -60,9 +61,24 @@ async fn api_async_jobs_list(
     .bind(scoped_client)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "async_jobs", error = %e, "jobs list query failed");
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "detail": "Database query failed",
+                    "jobs": [],
+                })),
+            )
+                .into_response();
+        }
+    };
 
-    let total: i64 = sqlx::query_scalar::<_, i64>(
+    let total: i64 = match sqlx::query_scalar::<_, i64>(
         r#"SELECT COUNT(*)::bigint FROM weissman_async_jobs
             WHERE tenant_id = $2 AND ($1::text IS NULL OR status = $1)
               AND (
@@ -76,10 +92,32 @@ async fn api_async_jobs_list(
     .bind(scoped_client)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
-    let _ = tx.commit().await;
+    {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::error!(target: "async_jobs", error = %e, "jobs count query failed");
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "detail": "Database query failed",
+                    "jobs": [],
+                })),
+            )
+                .into_response();
+        }
+    };
+    if let Err(e) = tx.commit().await {
+        tracing::error!(target: "async_jobs", error = %e, "jobs list commit failed");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable", "jobs": []})),
+        )
+            .into_response();
+    }
 
-    let out: Vec<Value> = rows
+    let mut out: Vec<Value> = rows
         .into_iter()
         .map(|r| {
             let id_uuid: uuid::Uuid = r.try_get("id").unwrap_or_else(|_| uuid::Uuid::nil());
@@ -108,12 +146,25 @@ async fn api_async_jobs_list(
                 "last_error": r.try_get::<Option<String>, _>("last_error").ok().flatten(),
                 "worker_id": r.try_get::<Option<String>, _>("worker_id").ok().flatten(),
                 "heartbeat_at": r.try_get::<chrono::DateTime<Utc>, _>("heartbeat_at").ok().map(|d| d.to_rfc3339()),
+                "locked_until": r.try_get::<chrono::DateTime<Utc>, _>("locked_until").ok().map(|d| d.to_rfc3339()),
                 "created_at": r.try_get::<chrono::DateTime<Utc>, _>("created_at").ok().map(|d| d.to_rfc3339()),
                 "updated_at": updated_at,
                 "completed_at": completed_at,
             })
         })
         .collect();
+
+    let ids: Vec<uuid::Uuid> = out
+        .iter()
+        .filter_map(crate::job_lease_view::parse_job_uuid)
+        .collect();
+    let (lease_backend, leases) = crate::job_lease_view::inspect_leases(&ids).await;
+    let now = Utc::now();
+    for job in &mut out {
+        let id = crate::job_lease_view::parse_job_uuid(job);
+        let lease = id.and_then(|i| leases.get(&i));
+        crate::job_lease_view::attach_diagnostics(job, now, &lease_backend, lease);
+    }
 
     (
         StatusCode::OK,
@@ -123,6 +174,7 @@ async fn api_async_jobs_list(
             "total": total,
             "limit": limit,
             "offset": offset,
+            "lease_backend": lease_backend.to_json(),
         })),
     )
         .into_response()
@@ -144,7 +196,19 @@ async fn api_async_job_status(
                 )
                     .into_response();
             }
-            return (StatusCode::OK, Json(json!(status))).into_response();
+            let mut body = serde_json::to_value(&status).unwrap_or_else(|_| json!(status));
+            let (lease_backend, leases) = crate::job_lease_view::inspect_leases(&[job_id]).await;
+            crate::job_lease_view::attach_diagnostics(
+                &mut body,
+                Utc::now(),
+                &lease_backend,
+                leases.get(&job_id),
+            );
+            if let Some(obj) = body.as_object_mut() {
+                obj.insert("ok".into(), json!(true));
+                obj.insert("lease_backend".into(), lease_backend.to_json());
+            }
+            return (StatusCode::OK, Json(body)).into_response();
         }
         Err(e) => {
             tracing::error!(target: "async_jobs", error = %e, "get_job_for_tenant failed");

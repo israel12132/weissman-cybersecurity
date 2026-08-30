@@ -20,7 +20,9 @@ pub use cqrs::project_event;
 pub use error::JobBusError;
 pub use events::{append_event, fetch_event_chain_hash, JobEventKind, JobEventRecord};
 pub use forensic::{enqueue_forensic_dlq, ForensicBundle, MemorySnapshot};
-pub use lease::{DistributedLease, LeaseHandle};
+pub use lease::{
+    lease_key, new_claim_token, DistributedLease, LeaseHandle, LeaseInspectBatch, LeaseInspection,
+};
 pub use signing::{
     forensic_seal_key_from_env, sign_job_envelope, verify_job_envelope, SignedJobEnvelope,
 };
@@ -143,7 +145,7 @@ impl JobBus {
             None
         };
 
-        let record = append_event(
+        let record = match append_event(
             &self.pool,
             job_id,
             tenant_id,
@@ -154,21 +156,55 @@ impl JobBus {
                 "lease_acquired": lease.is_some(),
             }),
         )
-        .await?;
-        project_event(&self.pool, &record).await?;
+        .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                if let Some(l) = lease {
+                    let _ = l.release().await;
+                }
+                return Err(e);
+            }
+        };
+        if let Err(e) = project_event(&self.pool, &record).await {
+            if let Some(l) = lease {
+                let _ = l.release().await;
+            }
+            return Err(e);
+        }
         self.publish_stream(&record).await;
 
         if lease.is_some() {
-            let lease_rec = append_event(
+            match append_event(
                 &self.pool,
                 job_id,
                 tenant_id,
                 JobEventKind::LeaseAcquired,
                 json!({ "worker_id": worker_id, "lock_secs": lock_secs }),
             )
-            .await?;
-            project_event(&self.pool, &lease_rec).await?;
-            self.publish_stream(&lease_rec).await;
+            .await
+            {
+                Ok(lease_rec) => {
+                    if let Err(e) = project_event(&self.pool, &lease_rec).await {
+                        tracing::error!(
+                            target: "job_bus",
+                            job_id = %job_id,
+                            error = %e,
+                            "LeaseAcquired projection failed — Redis lease is held; DB heartbeat \
+                             must keep locked_until alive or reclaim will race this worker"
+                        );
+                    }
+                    self.publish_stream(&lease_rec).await;
+                }
+                Err(e) => {
+                    tracing::error!(
+                        target: "job_bus",
+                        job_id = %job_id,
+                        error = %e,
+                        "LeaseAcquired event append failed after Redis acquire"
+                    );
+                }
+            }
         }
 
         Ok(lease)
@@ -204,20 +240,36 @@ impl JobBus {
         lock_secs: i64,
     ) -> Result<(), JobBusError> {
         lease.extend(lock_secs).await?;
-        let record = append_event(
+        match append_event(
             &self.pool,
             job_id,
             tenant_id,
             JobEventKind::LeaseExtended,
             json!({ "worker_id": lease.worker_id(), "lock_secs": lock_secs }),
         )
-        .await?;
-        // Project the LeaseExtended event so `weissman_async_jobs.locked_until` is actually
-        // pushed forward. Without this the read-model lock is frozen at claim+lock_secs and the
-        // reclaim sweep re-queues every job that runs longer than one lease window, causing
-        // duplicate execution. Every other `on_*` handler projects its event.
-        project_event(&self.pool, &record).await?;
-        self.publish_stream(&record).await;
+        .await
+        {
+            Ok(record) => {
+                if let Err(e) = project_event(&self.pool, &record).await {
+                    tracing::error!(
+                        target: "job_bus",
+                        job_id = %job_id,
+                        error = %e,
+                        "LeaseExtended projection failed — Redis TTL was refreshed; DB heartbeat \
+                         must keep locked_until alive"
+                    );
+                }
+                self.publish_stream(&record).await;
+            }
+            Err(e) => {
+                tracing::error!(
+                    target: "job_bus",
+                    job_id = %job_id,
+                    error = %e,
+                    "LeaseExtended event append failed after Redis TTL refresh"
+                );
+            }
+        }
         Ok(())
     }
 
@@ -363,5 +415,60 @@ impl JobBus {
 
     pub fn redis(&self) -> Option<&redis::aio::ConnectionManager> {
         self.redis.as_ref()
+    }
+
+    /// Drop Redis leases that still name workers whose Postgres lock was just reclaimed, and
+    /// delete any immortal (no-TTL) keys. Redis errors surface — callers must not swallow them
+    /// into a fake "reclaim succeeded".
+    pub async fn release_reclaimed_leases(
+        &self,
+        jobs: &[(Uuid, Option<String>)],
+    ) -> Result<u64, JobBusError> {
+        let Some(redis) = self.redis.as_ref() else {
+            return Ok(0);
+        };
+        let mut n = 0u64;
+        for (job_id, worker_id) in jobs {
+            if DistributedLease::release_for_reclaim(redis, *job_id, worker_id.as_deref()).await? {
+                n += 1;
+            }
+        }
+        n += DistributedLease::heal_immortal_leases(redis).await?;
+        Ok(n)
+    }
+
+    pub async fn heal_immortal_leases(&self) -> Result<u64, JobBusError> {
+        let Some(redis) = self.redis.as_ref() else {
+            return Ok(0);
+        };
+        DistributedLease::heal_immortal_leases(redis).await
+    }
+}
+
+/// Inspect leases for the jobs API. Redis down with `REDIS_URL` set is an error, not an empty map.
+pub async fn inspect_job_leases(job_ids: &[Uuid]) -> LeaseInspectBatch {
+    match swarm::redis_manager_cached().await {
+        Ok(Some(redis)) => match DistributedLease::inspect_many(&redis, job_ids).await {
+            Ok(leases) => LeaseInspectBatch {
+                redis_configured: true,
+                error: None,
+                leases,
+            },
+            Err(e) => LeaseInspectBatch {
+                redis_configured: true,
+                error: Some(e.to_string()),
+                leases: Default::default(),
+            },
+        },
+        Ok(None) => LeaseInspectBatch {
+            redis_configured: false,
+            error: None,
+            leases: Default::default(),
+        },
+        Err(e) => LeaseInspectBatch {
+            redis_configured: true,
+            error: Some(e),
+            leases: Default::default(),
+        },
     }
 }

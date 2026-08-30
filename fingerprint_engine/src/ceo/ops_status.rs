@@ -26,7 +26,7 @@ pub async fn list_live_async_jobs(
 ) -> Result<Vec<Value>, sqlx::Error> {
     let rows = sqlx::query(
         r#"SELECT id::text AS id, kind, status, worker_id,
-                  heartbeat_at, created_at, updated_at, attempt_count, last_error
+                  heartbeat_at, locked_until, created_at, updated_at, attempt_count, last_error
            FROM weissman_async_jobs
            WHERE tenant_id = $1 AND status IN ('pending', 'running')
              AND ($2::bigint IS NULL OR (
@@ -48,6 +48,11 @@ pub async fn list_live_async_jobs(
             .ok()
             .flatten()
             .map(|t| t.to_rfc3339());
+        let locked = r
+            .try_get::<Option<chrono::DateTime<chrono::Utc>>, _>("locked_until")
+            .ok()
+            .flatten()
+            .map(|t| t.to_rfc3339());
         let ca = r
             .try_get::<chrono::DateTime<chrono::Utc>, _>("created_at")
             .ok()
@@ -62,11 +67,23 @@ pub async fn list_live_async_jobs(
             "status": r.try_get::<String, _>("status").unwrap_or_default(),
             "worker_id": r.try_get::<Option<String>, _>("worker_id").ok().flatten(),
             "heartbeat_at": hb,
+            "locked_until": locked,
             "created_at": ca,
             "updated_at": ua,
             "attempt_count": r.try_get::<i32, _>("attempt_count").unwrap_or(0),
             "last_error": r.try_get::<Option<String>, _>("last_error").ok().flatten(),
         }));
+    }
+    let ids: Vec<uuid::Uuid> = out
+        .iter()
+        .filter_map(crate::job_lease_view::parse_job_uuid)
+        .collect();
+    let (lease_backend, leases) = crate::job_lease_view::inspect_leases(&ids).await;
+    let now = chrono::Utc::now();
+    for job in &mut out {
+        let id = crate::job_lease_view::parse_job_uuid(job);
+        let lease = id.and_then(|i| leases.get(&i));
+        crate::job_lease_view::attach_diagnostics(job, now, &lease_backend, lease);
     }
     Ok(out)
 }

@@ -10,7 +10,10 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tracing::{error, info, warn};
 use weissman_db::job_queue::{self, AsyncJob};
-use weissman_job_bus::{ForensicBundle, JobBus, LeaseHandle, WorkerSwarm};
+use weissman_job_bus::{
+    new_claim_token, DistributedLease, ForensicBundle, JobBus, JobBusError, LeaseHandle,
+    WorkerSwarm,
+};
 
 const POLL_IDLE_MS: u64 = 750;
 const LOCK_SECS: i64 = 300;
@@ -323,8 +326,17 @@ async fn process_one(
     let lease_tid = job.tenant_id;
     let lease_arc = lease.clone();
     let hb_pool = ctrl_pool.clone();
+    let lease_wid = wid.clone();
+    let lease_lost = Arc::new(AtomicBool::new(false));
+    let lease_lost_bg = lease_lost.clone();
+    let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel::<()>();
+    let cancel_tx = Arc::new(Mutex::new(Some(cancel_tx)));
+    let cancel_for_lease = cancel_tx.clone();
     let lease_task = tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(LEASE_EXTEND_INTERVAL_SECS));
+        let mut redis_fails: u32 = 0;
+        let mut db_fails: u32 = 0;
+        const MAX_KEEPALIVE_FAILS: u32 = 3;
         while !lease_stop_bg.load(Ordering::SeqCst) {
             tokio::select! {
                 _ = interval.tick() => {}
@@ -333,20 +345,123 @@ async fn process_one(
             if lease_stop_bg.load(Ordering::SeqCst) {
                 break;
             }
+
             if bus_on {
-                let guard = lease_arc.lock().await;
-                if let Some(ref handle) = *guard {
-                    if let Err(e) = lease_bus
-                        .on_lease_extended(lease_job_id, lease_tid, handle, LOCK_SECS)
-                        .await
-                    {
-                        warn!(target: "weissman_worker", error = %e, "lease extend failed");
+                let mut lost_here = false;
+                {
+                    let mut guard = lease_arc.lock().await;
+                    if let Some(ref handle) = *guard {
+                        match lease_bus
+                            .on_lease_extended(lease_job_id, lease_tid, handle, LOCK_SECS)
+                            .await
+                        {
+                            Ok(()) => redis_fails = 0,
+                            Err(JobBusError::LeaseDenied(_)) => {
+                                error!(
+                                    target: "weissman_worker",
+                                    job_id = %lease_job_id,
+                                    "Redis lease extend denied — attempting re-acquire"
+                                );
+                                if let Some(redis) = lease_bus.redis().cloned() {
+                                    let token = new_claim_token();
+                                    match DistributedLease::acquire(
+                                        redis,
+                                        lease_job_id,
+                                        &lease_wid,
+                                        &token,
+                                        LOCK_SECS,
+                                    )
+                                    .await
+                                    {
+                                        Ok(h) => {
+                                            *guard = Some(h);
+                                            redis_fails = 0;
+                                        }
+                                        Err(JobBusError::LeaseDenied(msg)) => {
+                                            error!(
+                                                target: "weissman_worker",
+                                                job_id = %lease_job_id,
+                                                error = %msg,
+                                                "Redis lease stolen — this worker no longer owns the job"
+                                            );
+                                            lost_here = true;
+                                        }
+                                        Err(e) => {
+                                            redis_fails = redis_fails.saturating_add(1);
+                                            error!(
+                                                target: "weissman_worker",
+                                                job_id = %lease_job_id,
+                                                error = %e,
+                                                fails = redis_fails,
+                                                "Redis lease re-acquire failed"
+                                            );
+                                            if redis_fails >= MAX_KEEPALIVE_FAILS {
+                                                lost_here = true;
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    lost_here = true;
+                                }
+                            }
+                            Err(e) => {
+                                redis_fails = redis_fails.saturating_add(1);
+                                error!(
+                                    target: "weissman_worker",
+                                    job_id = %lease_job_id,
+                                    error = %e,
+                                    fails = redis_fails,
+                                    "Redis lease extend failed"
+                                );
+                                if redis_fails >= MAX_KEEPALIVE_FAILS {
+                                    lost_here = true;
+                                }
+                            }
+                        }
                     }
                 }
-            } else if let Err(e) =
-                job_queue::heartbeat(hb_pool.as_ref(), lease_job_id, LOCK_SECS).await
+                if lost_here {
+                    lease_lost_bg.store(true, Ordering::SeqCst);
+                    if let Some(tx) = cancel_for_lease.lock().await.take() {
+                        let _ = tx.send(());
+                    }
+                    break;
+                }
+            }
+
+            match job_queue::heartbeat_owned(hb_pool.as_ref(), lease_job_id, &lease_wid, LOCK_SECS)
+                .await
             {
-                warn!(target: "weissman_worker", job_id = %lease_job_id, error = %e, "heartbeat failed");
+                Ok(true) => db_fails = 0,
+                Ok(false) => {
+                    error!(
+                        target: "weissman_worker",
+                        job_id = %lease_job_id,
+                        "DB heartbeat matched 0 rows — lock reclaimed or stolen"
+                    );
+                    lease_lost_bg.store(true, Ordering::SeqCst);
+                    if let Some(tx) = cancel_for_lease.lock().await.take() {
+                        let _ = tx.send(());
+                    }
+                    break;
+                }
+                Err(e) => {
+                    db_fails = db_fails.saturating_add(1);
+                    error!(
+                        target: "weissman_worker",
+                        job_id = %lease_job_id,
+                        error = %e,
+                        fails = db_fails,
+                        "DB heartbeat failed"
+                    );
+                    if db_fails >= MAX_KEEPALIVE_FAILS {
+                        lease_lost_bg.store(true, Ordering::SeqCst);
+                        if let Some(tx) = cancel_for_lease.lock().await.take() {
+                            let _ = tx.send(());
+                        }
+                        break;
+                    }
+                }
             }
         }
     });
@@ -365,7 +480,6 @@ async fn process_one(
     // worker started the same scan against a copy that was still executing and could not be
     // stopped. Signalling the thread lets the future be dropped at its next await, which also
     // runs its destructors and releases those connections.
-    let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel::<()>();
     let exec_handle = tokio::spawn(async move {
         let fut = async move {
             match exec_job.kind.as_str() {
@@ -403,7 +517,9 @@ async fn process_one(
             Err(_) => {
                 // Signal first: for a heavy job this is the only thing that actually stops the
                 // engine. `abort()` alone leaves it running on its own OS thread.
-                let _ = cancel_tx.send(());
+                if let Some(tx) = cancel_tx.lock().await.take() {
+                    let _ = tx.send(());
+                }
                 exec_abort.abort();
                 Err(format!(
                     "job timed out after {}s ({})",
@@ -418,6 +534,18 @@ async fn process_one(
     let _ = lease_task.await;
 
     let mut lease_out = lease.lock().await.take();
+
+    if lease_lost.load(Ordering::SeqCst) {
+        warn!(
+            target: "weissman_worker",
+            job_id = %job.id,
+            "discarding in-flight result — lease lost; another worker will resume"
+        );
+        if let Some(l) = lease_out.take() {
+            let _ = l.release().await;
+        }
+        return;
+    }
 
     match outcome {
         Ok(v) => {
@@ -726,23 +854,44 @@ async fn async_main() {
         }
     });
 
-    // Reclaim jobs left `running` after worker crash / network partition (self-healing queue).
+    // Reclaim jobs left `running` (or reserved-pending) after worker crash / network partition.
     let reclaim_pool = ctrl_pool.clone();
+    let reclaim_bus = bus.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(120));
         loop {
             interval.tick().await;
-            match job_queue::reclaim_stale_running_locks(reclaim_pool.as_ref()).await {
-                Ok(n) if n > 0 => {
-                    info!(
-                        target: "weissman_worker",
-                        reclaimed = n,
-                        "stale running locks reclaimed to pending"
-                    );
+            match job_queue::reclaim_stale_locks(reclaim_pool.as_ref()).await {
+                Ok(locks) => {
+                    if !locks.is_empty() {
+                        info!(
+                            target: "weissman_worker",
+                            reclaimed = locks.len(),
+                            "stale locks reclaimed to pending/dead"
+                        );
+                    }
+                    let pairs: Vec<_> = locks.iter().map(|l| (l.id, l.worker_id.clone())).collect();
+                    match reclaim_bus.release_reclaimed_leases(&pairs).await {
+                        Ok(n) if n > 0 => info!(
+                            target: "weissman_worker",
+                            released = n,
+                            "Redis job leases released after stale-lock reclaim"
+                        ),
+                        Ok(_) => {}
+                        Err(e) => error!(
+                            target: "weissman_worker",
+                            error = %e,
+                            "Redis lease release after reclaim failed — jobs may stay unclaimable \
+                             until TTL/heal; this is not silent success"
+                        ),
+                    }
                 }
-                Ok(_) => {}
                 Err(e) => {
-                    warn!(target: "weissman_worker", error = %e, "stale lock reclaim failed");
+                    error!(
+                        target: "weissman_worker",
+                        error = %e,
+                        "stale lock reclaim failed"
+                    );
                 }
             }
         }
@@ -865,16 +1014,14 @@ async fn async_main() {
                         tokio::select! {
                             p = &mut acquire => break p,
                             _ = hb.tick() => {
-                                if !bus.is_enabled() {
-                                    if let Err(e) = job_queue::heartbeat(
-                                        ctrl_pool.as_ref(), job.id, LOCK_SECS,
-                                    ).await {
-                                        warn!(
-                                            target: "weissman_worker",
-                                            job_id = %job.id, error = %e,
-                                            "pre-exec heartbeat failed while awaiting permit"
-                                        );
-                                    }
+                                if let Err(e) = job_queue::heartbeat_owned(
+                                    ctrl_pool.as_ref(), job.id, &wid, LOCK_SECS,
+                                ).await {
+                                    warn!(
+                                        target: "weissman_worker",
+                                        job_id = %job.id, error = %e,
+                                        "pre-exec heartbeat failed while awaiting permit"
+                                    );
                                 }
                             }
                         }
@@ -884,6 +1031,26 @@ async fn async_main() {
                     Ok(p) => p,
                     Err(_) => continue,
                 };
+                match job_queue::heartbeat_owned(ctrl_pool.as_ref(), job.id, &wid, LOCK_SECS).await
+                {
+                    Ok(false) => {
+                        warn!(
+                            target: "weissman_worker",
+                            job_id = %job.id,
+                            "lost reservation while awaiting a concurrency permit — not executing"
+                        );
+                        continue;
+                    }
+                    Err(e) => {
+                        error!(
+                            target: "weissman_worker",
+                            job_id = %job.id, error = %e,
+                            "pre-exec ownership heartbeat failed"
+                        );
+                        continue;
+                    }
+                    Ok(true) => {}
+                }
                 let app_pool = app_pool.clone();
                 let ctrl_pool = ctrl_pool.clone();
                 let intel_pool = intel_pool.clone();

@@ -113,6 +113,7 @@ pub mod intel_epss;
 pub mod intel_findings_backfill;
 pub mod intel_http_cache;
 pub mod intel_kev;
+pub mod job_lease_view;
 pub mod job_orchestration;
 pub mod leak_hunter_engine;
 pub mod liminal_boundary_engine;

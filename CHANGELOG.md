@@ -24,6 +24,15 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
   were listed in the UI but carried no live mappings, so they passed the enforcement
   gate un-evaluated.
 
+### Fixed
+
+- **Job leases no longer stick forever after a worker crash.** Redis acquire
+  always sets a TTL and will steal immortal (no-TTL) keys; stale-lock reclaim
+  now returns reserved-pending rows and deletes the matching Redis lease so
+  `tenant_full_scan` can heartbeat, expire, and resume. `GET /api/jobs` exposes
+  live `stuck_reason` / lease TTL (and fails visibly if Postgres or Redis is
+  down) so the Jobs dashboard shows the real diagnostic, not a silent hang.
+
 ### Changed
 
 - **One compliance integrity gate, not two.** The parallel mapping-integrity work is

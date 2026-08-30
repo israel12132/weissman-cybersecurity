@@ -18,18 +18,40 @@ import Button from '../components/ui/Button'
 
 const columnHelper = createColumnHelper()
 
+/** True when the live API (or Redis overlay) marked this job stuck. */
+export function isJobStuck(job) {
+  return Boolean(job?.stuck_reason)
+}
+
+export function formatLeaseTtl(job) {
+  const ttl = job?.lease?.ttl_secs
+  if (job?.lease?.immortal) return 'immortal'
+  if (ttl == null || Number.isNaN(Number(ttl))) return '—'
+  const n = Number(ttl)
+  if (n < 0) return '—'
+  if (n < 60) return `${n}s`
+  const m = Math.floor(n / 60)
+  return `${m}m ${n % 60}s`
+}
+
+export function stuckReasonI18nKey(code) {
+  if (!code) return null
+  return `pages.jobsDashboard.stuck_${code}`
+}
+
 const STATUS_COLORS = {
   queued: 'text-yellow-400 bg-yellow-900/20 border-yellow-500/30',
   running: 'text-blue-400 bg-blue-900/20 border-blue-500/30',
   completed: 'text-green-400 bg-green-900/20 border-green-500/30',
   failed: 'text-red-400 bg-red-900/20 border-red-500/30',
   cancelled: 'text-[var(--text-tertiary)] bg-[var(--bg-1)]/20 border-[var(--border-strong)]/30',
+  stuck: 'text-orange-300 bg-orange-950/30 border-orange-500/40',
 }
 
-const STATUS_KEYS = ['all', 'queued', 'running', 'completed', 'failed', 'cancelled']
+const STATUS_KEYS = ['all', 'queued', 'running', 'stuck', 'completed', 'failed', 'cancelled']
 
 function exportJobsCsv(jobs, _t) {
-  const header = ['id', 'kind', 'status', 'target', 'engine', 'client_id', 'created_at', 'updated_at', 'attempt_count', 'last_error']
+  const header = ['id', 'kind', 'status', 'stuck_reason', 'target', 'engine', 'client_id', 'created_at', 'updated_at', 'attempt_count', 'locked_until', 'lease_ttl_secs', 'last_error']
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
   const lines = [
     header.join(','),
@@ -38,12 +60,15 @@ function exportJobsCsv(jobs, _t) {
         j.id || j.job_id,
         j.kind || j.type,
         normalizeJobStatus(j.status),
+        j.stuck_reason || '',
         j.target,
         j.engine,
         j.client_id,
         j.created_at,
         j.updated_at || j.completed_at,
         j.attempt_count ?? j.retries,
+        j.locked_until,
+        j.lease?.ttl_secs,
         j.last_error,
       ].map(esc).join(','),
     ),
@@ -71,6 +96,8 @@ export default function JobsDashboard() {
   const [lastUpdated, setLastUpdated] = useState(null)
   const hasLoadedRef = useRef(false)
 
+  const [leaseBackend, setLeaseBackend] = useState(null)
+
   const loadJobs = useCallback(async () => {
     try {
       // Always load every status so the count tiles stay accurate; the active
@@ -88,6 +115,7 @@ export default function JobsDashboard() {
       const jobsList = Array.isArray(data) ? data : (data.jobs || data.items || [])
       setJobs(jobsList)
       setTotal(data.total ?? jobsList.length)
+      setLeaseBackend(data.lease_backend || null)
       setError('')
       setLastUpdated(new Date())
       hasLoadedRef.current = true
@@ -116,22 +144,27 @@ export default function JobsDashboard() {
   const filteredJobs = useMemo(() => {
     const q = search.trim().toLowerCase()
     return jobs.filter((j) => {
-      if (statusFilter !== 'all' && normalizeJobStatus(j.status) !== statusFilter) return false
+      if (statusFilter === 'stuck') {
+        if (!isJobStuck(j)) return false
+      } else if (statusFilter !== 'all' && normalizeJobStatus(j.status) !== statusFilter) {
+        return false
+      }
       if (!q) return true
       const hay = [
         j.id, j.job_id, j.kind, j.type, j.status, j.target, j.engine,
         j.client_id != null ? String(j.client_id) : '',
-        j.last_error,
+        j.last_error, j.stuck_reason, j.worker_id,
       ].filter(Boolean).join(' ').toLowerCase()
       return hay.includes(q)
     })
   }, [jobs, search, statusFilter])
 
   const statusCounts = useMemo(() => {
-    const counts = { queued: 0, running: 0, completed: 0, failed: 0, cancelled: 0 }
+    const counts = { queued: 0, running: 0, completed: 0, failed: 0, cancelled: 0, stuck: 0 }
     for (const j of jobs) {
       const s = normalizeJobStatus(j.status)
       if (counts[s] != null) counts[s] += 1
+      if (isJobStuck(j)) counts.stuck += 1
     }
     return counts
   }, [jobs])
@@ -222,6 +255,25 @@ export default function JobsDashboard() {
           </span>
         ),
       }),
+      columnHelper.accessor((j) => j.stuck_reason || '', {
+        id: 'stuck',
+        header: t('pages.jobsDashboard.col_stuck'),
+        cell: (ctx) => {
+          const code = ctx.getValue()
+          if (!code) {
+            return <span className="text-[11px] font-mono text-[var(--text-muted)]">—</span>
+          }
+          const key = stuckReasonI18nKey(code)
+          return (
+            <span
+              className="px-2 py-1 text-[10px] font-mono border rounded text-orange-200 bg-orange-950/40 border-orange-500/40 animate-pulse"
+              title={code}
+            >
+              {t(key, { defaultValue: code })}
+            </span>
+          )
+        },
+      }),
       columnHelper.accessor((j) => j.created_at || '', {
         id: 'created',
         header: t('pages.jobsDashboard.col_created'),
@@ -294,6 +346,14 @@ export default function JobsDashboard() {
           </div>
         )}
 
+        {leaseBackend && leaseBackend.ok === false && (
+          <div role="alert" className="p-4 bg-orange-950/40 border border-orange-500/40 rounded-lg text-orange-200 text-sm font-mono">
+            {t('pages.jobsDashboard.lease_backend_down', {
+              detail: leaseBackend.detail || t('pages.jobsDashboard.lease_backend_unknown'),
+            })}
+          </div>
+        )}
+
         {loading && !hasLoadedRef.current ? (
           <>
             <SkeletonWidgetGrid count={5} />
@@ -301,8 +361,8 @@ export default function JobsDashboard() {
           </>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              {['queued', 'running', 'completed', 'failed', 'cancelled'].map((status) => (
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              {['queued', 'running', 'stuck', 'completed', 'failed', 'cancelled'].map((status) => (
                 <Button variant="unstyled"
                   key={status}
                   type="button"
@@ -429,6 +489,36 @@ export default function JobsDashboard() {
                       {selectedJob.worker_id && (
                         <CopyableField label={t('pages.jobsDashboard.field_worker')} value={selectedJob.worker_id} />
                       )}
+                      {selectedJob.stuck_reason && (
+                        <div role="alert" className="rounded-lg border border-orange-500/40 bg-orange-950/30 p-3">
+                          <div className="text-[10px] font-mono text-orange-300/80 uppercase mb-1">
+                            {t('pages.jobsDashboard.col_stuck')}
+                          </div>
+                          <div className="text-[12px] font-mono text-orange-100">
+                            {t(stuckReasonI18nKey(selectedJob.stuck_reason), { defaultValue: selectedJob.stuck_reason })}
+                          </div>
+                          {selectedJob.lease?.immortal && (
+                            <div className="mt-1 text-[11px] text-orange-200">
+                              {t('pages.jobsDashboard.lease_immortal_hint')}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-3 text-[12px]">
+                        <div>
+                          <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.field_lock')}</div>
+                          <div className="text-[var(--text-secondary)] mt-0.5 font-mono">
+                            {fmtTime(selectedJob.locked_until)}
+                            {selectedJob.lock_remaining_secs != null && (
+                              <span className="text-[var(--text-muted)]"> ({selectedJob.lock_remaining_secs}s)</span>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.field_lease_ttl')}</div>
+                          <div className="text-[var(--text-secondary)] mt-0.5 font-mono">{formatLeaseTtl(selectedJob)}</div>
+                        </div>
+                      </div>
                       <div className="text-[11px] font-mono text-[var(--text-muted)] space-y-1">
                         <div>{t('pages.jobsDashboard.field_created')}: {fmtTime(selectedJob.created_at)}</div>
                         <div>{t('pages.jobsDashboard.field_updated')}: {fmtTime(selectedJob.updated_at)}</div>
