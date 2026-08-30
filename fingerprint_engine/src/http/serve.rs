@@ -1415,17 +1415,20 @@ pub fn new_app_state(
     // handle. Falls back to None if the env var isn't set (endpoint returns 503).
     let read_only_pool: Option<Arc<PgPool>> =
         match weissman_db::secret_read_only_database_url_from_env() {
-            Some(secret) => match sqlx::postgres::PgPoolOptions::new()
-                .max_connections(5)
-                .acquire_timeout(std::time::Duration::from_secs(5))
-                .connect_lazy(secret.expose())
-            {
-                Ok(p) => Some(Arc::new(p)),
-                Err(e) => {
-                    tracing::warn!(target: "nl_query", error = %e, "read-only pool init failed");
-                    None
+            Some(mut secret) => {
+                let result = sqlx::postgres::PgPoolOptions::new()
+                    .max_connections(5)
+                    .acquire_timeout(std::time::Duration::from_secs(5))
+                    .connect_lazy(secret.expose());
+                secret.wipe();
+                match result {
+                    Ok(p) => Some(Arc::new(p)),
+                    Err(e) => {
+                        tracing::warn!(target: "nl_query", error = %e, "read-only pool init failed");
+                        None
+                    }
                 }
-            },
+            }
             None => None,
         };
     let (timing_tx, _) = tokio::sync::broadcast::channel::<String>(256);

@@ -269,36 +269,75 @@ pub fn encode_agent_metric_sample(
     buf.write_i32(raw_size_bytes);
 }
 
-/// Catalog-check cache. Reset only via [`invalidate_agent_metric_samples_schema_cache`]
-/// (pool rebuild / hot DSN rotation). `OnceLock` cannot reset on reconnect.
+/// Catalog-check cache. Lock-free atomics (no `Mutex` → no `PoisonError`).
+///
+/// `SCHEMA_OK_STALE` is the last successful snapshot after
+/// [`invalidate_agent_metric_samples_schema_cache`]: COPY keeps using the last
+/// known-good contract while a re-warm runs. That is the ArcSwap-equivalent
+/// "readers keep the old snapshot" property without a new crate.
 const SCHEMA_UNCHECKED: u8 = 0;
 const SCHEMA_WARMING: u8 = 1;
 const SCHEMA_OK: u8 = 2;
 const SCHEMA_FAILED: u8 = 3;
+const SCHEMA_OK_STALE: u8 = 4;
 
 static SCHEMA_STATE: AtomicU8 = AtomicU8::new(SCHEMA_UNCHECKED);
+static INVALIDATE_PENDING: AtomicU8 = AtomicU8::new(0);
 
-/// True when the last successful warm matched [`AGENT_METRIC_SAMPLES_COPY_COLUMNS`].
+/// True when a successful warm is still usable (fresh or stale-after-invalidate).
 /// Memory-only — never opens a catalog query.
 #[must_use]
 pub fn agent_metric_samples_schema_is_ok() -> bool {
-    SCHEMA_STATE.load(Ordering::Acquire) == SCHEMA_OK
+    matches!(
+        SCHEMA_STATE.load(Ordering::Acquire),
+        SCHEMA_OK | SCHEMA_OK_STALE
+    )
 }
 
-/// Drop the in-memory contract result. Call when the `PgPool` is rebuilt so the
-/// next [`warm_agent_metric_samples_schema`] re-reads `pg_attribute`.
+/// Mark the last successful warm as stale so the next
+/// [`warm_agent_metric_samples_schema`] re-reads `pg_attribute`.
+///
+/// Does **not** punch a hole in the cache: in-flight COPY workers keep seeing
+/// the last known-good snapshot (`SCHEMA_OK_STALE`). Concurrent invalidation
+/// during `WARMING` sets a pending flag instead of racing the warmer to
+/// `UNCHECKED`.
 pub fn invalidate_agent_metric_samples_schema_cache() {
-    SCHEMA_STATE.store(SCHEMA_UNCHECKED, Ordering::Release);
+    loop {
+        match SCHEMA_STATE.load(Ordering::Acquire) {
+            SCHEMA_OK => {
+                if SCHEMA_STATE
+                    .compare_exchange(
+                        SCHEMA_OK,
+                        SCHEMA_OK_STALE,
+                        Ordering::AcqRel,
+                        Ordering::Acquire,
+                    )
+                    .is_ok()
+                {
+                    return;
+                }
+            }
+            SCHEMA_OK_STALE => return,
+            SCHEMA_WARMING => {
+                INVALIDATE_PENDING.store(1, Ordering::Release);
+                return;
+            }
+            SCHEMA_FAILED | SCHEMA_UNCHECKED => {
+                SCHEMA_STATE.store(SCHEMA_UNCHECKED, Ordering::Release);
+                return;
+            }
+            _ => return,
+        }
+    }
 }
 
 /// COPY / ingest hot path. **Never** queries `pg_attribute`.
 ///
-/// Returns `Ok` only after a successful [`warm_agent_metric_samples_schema`].
-/// If the worker has not warmed yet, or the last warm failed, refuse COPY
-/// (caller INSERT-fallbacks) instead of flooding the Postgres catalog.
+/// Returns `Ok` after a successful warm, including a stale snapshot that is
+/// still valid while a pool reconnect re-warms. Never uses a `Mutex`.
 pub fn require_warmed_agent_metric_samples_schema() -> Result<(), String> {
     match SCHEMA_STATE.load(Ordering::Acquire) {
-        SCHEMA_OK => Ok(()),
+        SCHEMA_OK | SCHEMA_OK_STALE => Ok(()),
         SCHEMA_FAILED => Err(
             "schema contract failed at last warm (pg_attribute); refusing COPY without a catalog query".into(),
         ),
@@ -306,6 +345,82 @@ pub fn require_warmed_agent_metric_samples_schema() -> Result<(), String> {
             "schema contract not warmed; refusing COPY (pg_attribute is startup-only)".into(),
         ),
     }
+}
+
+fn schema_autoheal_enabled() -> bool {
+    match std::env::var("WEISSMAN_UEBA_SCHEMA_AUTOHEAL") {
+        Ok(v) => !matches!(v.trim(), "0" | "false" | "no" | "off"),
+        Err(_) => true,
+    }
+}
+
+fn pg_type_to_sql(pg_type: &str) -> Option<&'static str> {
+    match pg_type {
+        "int8" => Some("BIGINT"),
+        "int4" => Some("INTEGER"),
+        "int2" => Some("SMALLINT"),
+        "text" => Some("TEXT"),
+        "timestamptz" => Some("TIMESTAMPTZ"),
+        "jsonb" => Some("JSONB"),
+        _ => None,
+    }
+}
+
+fn is_safe_ident(name: &str) -> bool {
+    let mut chars = name.chars();
+    matches!(chars.next(), Some('a'..='z') | Some('_'))
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+}
+
+/// Best-effort `ADD COLUMN IF NOT EXISTS` for **missing v1 contract columns only**.
+/// Never changes types, never drops, never touches `id`. Identifiers come from
+/// the static contract, not from catalog strings.
+async fn heal_missing_contract_columns(
+    conn: &mut sqlx::PgConnection,
+    missing: &[String],
+) -> Result<usize, String> {
+    let mut healed = 0usize;
+    for name in missing {
+        if name == "id" {
+            continue;
+        }
+        let Some(col) = AGENT_METRIC_SAMPLES_COPY_COLUMNS
+            .iter()
+            .find(|c| c.name == name.as_str())
+        else {
+            continue;
+        };
+        if !is_safe_ident(col.name) {
+            continue;
+        }
+        let Some(sql_ty) = pg_type_to_sql(col.pg_type) else {
+            continue;
+        };
+        let sql = format!(
+            "ALTER TABLE public.agent_metric_samples ADD COLUMN IF NOT EXISTS {} {sql_ty}",
+            col.name
+        );
+        match sqlx::query(&sql).execute(&mut *conn).await {
+            Ok(_) => {
+                tracing::warn!(
+                    target: "ueba_copy",
+                    column = col.name,
+                    pg_type = col.pg_type,
+                    "schema auto-heal added missing agent_metric_samples column"
+                );
+                healed += 1;
+            }
+            Err(e) => {
+                tracing::warn!(
+                    target: "ueba_copy",
+                    column = col.name,
+                    error = %e,
+                    "schema auto-heal ALTER TABLE failed (role may lack DDL); COPY will INSERT-fallback"
+                );
+            }
+        }
+    }
+    Ok(healed)
 }
 
 /// One catalog query against `pg_attribute` / `pg_type`, serialized so concurrent
@@ -322,6 +437,22 @@ pub async fn warm_agent_metric_samples_schema(pool: &PgPool) -> Result<(), Strin
         ) {
             Ok(_) => break,
             Err(SCHEMA_OK) => return Ok(()),
+            Err(SCHEMA_OK_STALE) => {
+                match SCHEMA_STATE.compare_exchange(
+                    SCHEMA_OK_STALE,
+                    SCHEMA_WARMING,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                ) {
+                    Ok(_) => break,
+                    Err(SCHEMA_OK) => return Ok(()),
+                    Err(SCHEMA_WARMING) => {
+                        tokio::time::sleep(Duration::from_millis(5)).await;
+                        continue;
+                    }
+                    Err(_) => continue,
+                }
+            }
             Err(SCHEMA_WARMING) => {
                 tokio::time::sleep(Duration::from_millis(5)).await;
                 continue;
@@ -334,7 +465,7 @@ pub async fn warm_agent_metric_samples_schema(pool: &PgPool) -> Result<(), Strin
                     Ordering::Acquire,
                 ) {
                     Ok(_) => break,
-                    Err(SCHEMA_OK) => return Ok(()),
+                    Err(SCHEMA_OK) | Err(SCHEMA_OK_STALE) => return Ok(()),
                     Err(SCHEMA_WARMING) => {
                         tokio::time::sleep(Duration::from_millis(5)).await;
                         continue;
@@ -350,9 +481,14 @@ pub async fn warm_agent_metric_samples_schema(pool: &PgPool) -> Result<(), Strin
         .acquire()
         .await
         .map_err(|e| format!("agent_metric_samples catalog: acquire: {e}"))?;
-    match verify_agent_metric_samples_catalog(&mut *conn).await {
+    let result = verify_and_maybe_heal(&mut conn).await;
+    let pending = INVALIDATE_PENDING.swap(0, Ordering::AcqRel) == 1;
+    match result {
         Ok(()) => {
-            SCHEMA_STATE.store(SCHEMA_OK, Ordering::Release);
+            SCHEMA_STATE.store(
+                if pending { SCHEMA_OK_STALE } else { SCHEMA_OK },
+                Ordering::Release,
+            );
             Ok(())
         }
         Err(e) => {
@@ -378,7 +514,69 @@ pub async fn assert_agent_metric_samples_schema(
     Ok(())
 }
 
-async fn verify_agent_metric_samples_catalog(conn: &mut sqlx::PgConnection) -> Result<(), String> {
+async fn verify_and_maybe_heal(conn: &mut sqlx::PgConnection) -> Result<(), String> {
+    match inspect_agent_metric_samples_catalog(conn).await? {
+        CatalogVerdict::Ok => Ok(()),
+        CatalogVerdict::MissingTable => {
+            Err("public.agent_metric_samples is missing from the catalog".into())
+        }
+        CatalogVerdict::TypeMismatch {
+            name,
+            got,
+            expected,
+        } => Err(format!(
+            "schema drift (v{AGENT_METRIC_SAMPLES_SCHEMA_VERSION}): column {name} has type {got}, encoder expects {expected}"
+        )),
+        CatalogVerdict::MissingColumns(missing) => {
+            if !schema_autoheal_enabled() {
+                return Err(format!(
+                    "schema drift (v{AGENT_METRIC_SAMPLES_SCHEMA_VERSION}): column {} missing from agent_metric_samples",
+                    missing.join(", ")
+                ));
+            }
+            let _ = heal_missing_contract_columns(conn, &missing).await?;
+            match inspect_agent_metric_samples_catalog(conn).await? {
+                CatalogVerdict::Ok => Ok(()),
+                other => Err(other.into_error()),
+            }
+        }
+    }
+}
+
+enum CatalogVerdict {
+    Ok,
+    MissingTable,
+    MissingColumns(Vec<String>),
+    TypeMismatch {
+        name: String,
+        got: String,
+        expected: String,
+    },
+}
+
+impl CatalogVerdict {
+    fn into_error(self) -> String {
+        match self {
+            Self::Ok => "schema contract ok".into(),
+            Self::MissingTable => "public.agent_metric_samples is missing from the catalog".into(),
+            Self::MissingColumns(missing) => format!(
+                "schema drift (v{AGENT_METRIC_SAMPLES_SCHEMA_VERSION}): column {} missing from agent_metric_samples",
+                missing.join(", ")
+            ),
+            Self::TypeMismatch {
+                name,
+                got,
+                expected,
+            } => format!(
+                "schema drift (v{AGENT_METRIC_SAMPLES_SCHEMA_VERSION}): column {name} has type {got}, encoder expects {expected}"
+            ),
+        }
+    }
+}
+
+async fn inspect_agent_metric_samples_catalog(
+    conn: &mut sqlx::PgConnection,
+) -> Result<CatalogVerdict, String> {
     let rows: Vec<(String, String)> = sqlx::query_as(
         r#"SELECT a.attname::text, t.typname::text
              FROM pg_attribute a
@@ -396,32 +594,47 @@ async fn verify_agent_metric_samples_catalog(conn: &mut sqlx::PgConnection) -> R
     .map_err(|e| format!("agent_metric_samples catalog: {e}"))?;
 
     if rows.is_empty() {
-        return Err("public.agent_metric_samples is missing from the catalog".into());
+        return Ok(CatalogVerdict::MissingTable);
     }
 
+    let mut missing = Vec::new();
     for col in AGENT_METRIC_SAMPLES_COPY_COLUMNS {
         match rows.iter().find(|(name, _)| name == col.name) {
-            None => {
-                return Err(format!(
-                    "schema drift (v{AGENT_METRIC_SAMPLES_SCHEMA_VERSION}): column {} missing from agent_metric_samples",
-                    col.name
-                ));
-            }
+            None => missing.push(col.name.to_string()),
             Some((_, typ)) if typ != col.pg_type => {
-                return Err(format!(
-                    "schema drift (v{AGENT_METRIC_SAMPLES_SCHEMA_VERSION}): column {} has type {typ}, encoder expects {}",
-                    col.name, col.pg_type
-                ));
+                return Ok(CatalogVerdict::TypeMismatch {
+                    name: col.name.to_string(),
+                    got: typ.clone(),
+                    expected: col.pg_type.to_string(),
+                });
             }
             Some(_) => {}
         }
     }
-    Ok(())
+    if missing.is_empty() {
+        Ok(CatalogVerdict::Ok)
+    } else {
+        Ok(CatalogVerdict::MissingColumns(missing))
+    }
+}
+
+async fn verify_agent_metric_samples_catalog(conn: &mut sqlx::PgConnection) -> Result<(), String> {
+    match inspect_agent_metric_samples_catalog(conn).await? {
+        CatalogVerdict::Ok => Ok(()),
+        other => Err(other.into_error()),
+    }
 }
 
 #[cfg(test)]
 pub fn force_agent_metric_samples_schema_ok_for_tests() {
     SCHEMA_STATE.store(SCHEMA_OK, Ordering::Release);
+    INVALIDATE_PENDING.store(0, Ordering::Release);
+}
+
+#[cfg(test)]
+pub fn reset_agent_metric_samples_schema_cache_for_tests() {
+    SCHEMA_STATE.store(SCHEMA_UNCHECKED, Ordering::Release);
+    INVALIDATE_PENDING.store(0, Ordering::Release);
 }
 
 #[cfg(test)]
@@ -431,7 +644,7 @@ mod tests {
 
     #[test]
     fn require_warmed_is_memory_only_and_refuses_until_ok() {
-        invalidate_agent_metric_samples_schema_cache();
+        reset_agent_metric_samples_schema_cache_for_tests();
         assert!(!agent_metric_samples_schema_is_ok());
         let err = require_warmed_agent_metric_samples_schema().expect_err("unchecked");
         assert!(
@@ -442,8 +655,18 @@ mod tests {
         require_warmed_agent_metric_samples_schema().expect("forced ok");
         assert!(agent_metric_samples_schema_is_ok());
         invalidate_agent_metric_samples_schema_cache();
-        assert!(!agent_metric_samples_schema_is_ok());
-        assert!(require_warmed_agent_metric_samples_schema().is_err());
+        // Stale snapshot stays readable — COPY must not see a cache hole.
+        require_warmed_agent_metric_samples_schema()
+            .expect("invalidate must not punch a hole after a successful warm");
+        assert!(agent_metric_samples_schema_is_ok());
+    }
+
+    #[test]
+    fn pg_type_sql_and_idents_are_contract_safe() {
+        assert_eq!(pg_type_to_sql("jsonb"), Some("JSONB"));
+        assert!(is_safe_ident("hour_of_week"));
+        assert!(!is_safe_ident("hour;drop"));
+        assert!(!is_safe_ident(""));
     }
 
     #[test]

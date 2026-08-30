@@ -25,8 +25,32 @@ use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::{Postgres, Transaction};
 use std::sync::Arc;
 use std::time::Duration;
+use zeroize::Zeroizing;
 
 pub use secret::SecretUrl;
+
+/// Copy a trimmed DSN into a [`Zeroizing`] buffer and wipe `secret` in place.
+///
+/// The env `String` is moved into [`SecretUrl`] first; this copies the trimmed
+/// bytes into a second zeroizing allocation, then overwrites the first. Both
+/// are gone (zeros on the heap) when the connect helper returns.
+fn take_dsn_and_wipe(
+    secret: &mut SecretUrl,
+    label: &str,
+) -> Result<Zeroizing<String>, sqlx::Error> {
+    let trimmed = secret.expose().trim();
+    if trimmed.is_empty() {
+        secret.wipe();
+        return Err(sqlx::Error::Configuration(
+            format!("{label} is set but empty").into(),
+        ));
+    }
+    env_bootstrap::validate_database_url(trimmed)
+        .map_err(|msg| sqlx::Error::Configuration(format!("{label}: {msg}").into()))?;
+    let dsn = Zeroizing::new(trimmed.to_string());
+    secret.wipe();
+    Ok(dsn)
+}
 
 /// Primary application database URL (role `weissman_app`, RLS). Read from `DATABASE_URL` when the process starts each call.
 pub fn database_url_from_env() -> Result<String, std::env::VarError> {
@@ -306,17 +330,10 @@ pub async fn connect_worker_app(database_url: &str) -> Result<PgPool, sqlx::Erro
 /// Worker app pool from `DATABASE_URL`. Same lifetime rules as [`connect_app_from_env`]:
 /// call once at process start, keep the [`PgPool`], drop the [`SecretUrl`].
 pub async fn connect_worker_app_from_env() -> Result<PgPool, sqlx::Error> {
-    let secret = secret_database_url_from_env()
+    let mut secret = secret_database_url_from_env()
         .map_err(|e| sqlx::Error::Configuration(format!("DATABASE_URL: {}", e).into()))?;
-    let t = secret.expose().trim();
-    if t.is_empty() {
-        return Err(sqlx::Error::Configuration(
-            "DATABASE_URL is set but empty".into(),
-        ));
-    }
-    env_bootstrap::validate_database_url(t)
-        .map_err(|msg| sqlx::Error::Configuration(format!("DATABASE_URL: {}", msg).into()))?;
-    connect_worker_app(t).await
+    let dsn = take_dsn_and_wipe(&mut secret, "DATABASE_URL")?;
+    connect_worker_app(dsn.as_str()).await
 }
 
 /// Per-connection `statement_timeout` in milliseconds (0 disables). Tunable per pool via env.
@@ -358,17 +375,10 @@ pub async fn connect_control(database_url: &str) -> Result<PgPool, sqlx::Error> 
 
 /// Control-plane pool from `DATABASE_URL`. Same lifetime rules as [`connect_app_from_env`].
 pub async fn connect_control_from_env() -> Result<PgPool, sqlx::Error> {
-    let secret = secret_database_url_from_env()
+    let mut secret = secret_database_url_from_env()
         .map_err(|e| sqlx::Error::Configuration(format!("DATABASE_URL: {}", e).into()))?;
-    let t = secret.expose().trim();
-    if t.is_empty() {
-        return Err(sqlx::Error::Configuration(
-            "DATABASE_URL is set but empty".into(),
-        ));
-    }
-    env_bootstrap::validate_database_url(t)
-        .map_err(|msg| sqlx::Error::Configuration(format!("DATABASE_URL: {}", msg).into()))?;
-    connect_control(t).await
+    let dsn = take_dsn_and_wipe(&mut secret, "DATABASE_URL")?;
+    connect_control(dsn.as_str()).await
 }
 
 /// Load `DATABASE_URL` into a zeroizing wrapper. Prefer this over
@@ -398,25 +408,16 @@ pub fn secret_read_only_database_url_from_env() -> Option<SecretUrl> {
 /// milliseconds) and is forbidden.
 ///
 /// [`SecretUrl`] is used **only** for this one-time connect (or a deliberate
-/// hot DSN rotation). It is dropped — and the heap bytes are wiped — when
-/// this function returns. Do **not** cache the URL in `OnceLock`. After a
-/// pool rebuild, call
+/// hot DSN rotation). After `connect`, [`SecretUrl::wipe`] overwrites the heap
+/// bytes with zeros (and [`ZeroizeOnDrop`] does it again on drop). Do **not**
+/// cache the URL in `OnceLock`. After a pool rebuild, call
 /// [`pg_binary_copy::invalidate_agent_metric_samples_schema_cache`] so the
 /// COPY worker re-warms `pg_attribute`.
 pub async fn connect_app_from_env() -> Result<PgPool, sqlx::Error> {
-    let secret = secret_database_url_from_env()
+    let mut secret = secret_database_url_from_env()
         .map_err(|e| sqlx::Error::Configuration(format!("DATABASE_URL: {}", e).into()))?;
-    let t = secret.expose().trim();
-    if t.is_empty() {
-        return Err(sqlx::Error::Configuration(
-            "DATABASE_URL is set but empty".into(),
-        ));
-    }
-    // Guard against a DSN with no `user@` (libpq would silently fall back to the OS user, e.g.
-    // `root` under systemd) — the same check `connect_intel_from_env` applies.
-    env_bootstrap::validate_database_url(t)
-        .map_err(|msg| sqlx::Error::Configuration(format!("DATABASE_URL: {}", msg).into()))?;
-    connect_app(t).await
+    let dsn = take_dsn_and_wipe(&mut secret, "DATABASE_URL")?;
+    connect_app(dsn.as_str()).await
 }
 
 /// Auth pool: `WEISSMAN_AUTH_POOL_MAX` (default 12). Smaller than app pool; login/bootstrap only.
@@ -455,19 +456,10 @@ pub fn secret_auth_database_url_from_env() -> Result<SecretUrl, std::env::VarErr
 /// Same lifetime rules as [`connect_app_from_env`]: one call at boot, keep the
 /// [`PgPool`], drop the [`SecretUrl`]. Do not rebuild per request.
 pub async fn connect_auth_from_env() -> Result<PgPool, sqlx::Error> {
-    let secret = secret_auth_database_url_from_env()
+    let mut secret = secret_auth_database_url_from_env()
         .map_err(|e| sqlx::Error::Configuration(format!("auth database URL: {}", e).into()))?;
-    let t = secret.expose().trim();
-    if t.is_empty() {
-        return Err(sqlx::Error::Configuration(
-            "resolved auth database URL is empty".into(),
-        ));
-    }
-    // Same OS-user fallback guard as the app/intel pools (peer-auth DSNs with `user@/db?host=…`
-    // still pass — they carry a non-empty userinfo before `@`).
-    env_bootstrap::validate_database_url(t)
-        .map_err(|msg| sqlx::Error::Configuration(format!("auth database URL: {}", msg).into()))?;
-    connect_auth(t).await
+    let dsn = take_dsn_and_wipe(&mut secret, "auth database URL")?;
+    connect_auth(dsn.as_str()).await
 }
 
 /// URL for the intel / global-payload pool. Defaults to `DATABASE_URL` when unset.
@@ -511,21 +503,13 @@ pub fn secret_intel_database_url_from_env() -> Result<SecretUrl, std::env::VarEr
 
 /// Connect the intel pool. Same lifetime rules as [`connect_app_from_env`].
 pub async fn connect_intel_from_env() -> Result<PgPool, sqlx::Error> {
-    let secret = secret_intel_database_url_from_env().map_err(|e| {
+    let mut secret = secret_intel_database_url_from_env().map_err(|e| {
         sqlx::Error::Configuration(
             format!("WEISSMAN_INTEL_DATABASE_URL / DATABASE_URL: {}", e).into(),
         )
     })?;
-    let t = secret.expose().trim();
-    if t.is_empty() {
-        return Err(sqlx::Error::Configuration(
-            "intel database URL is empty".into(),
-        ));
-    }
-    env_bootstrap::validate_database_url(t).map_err(|msg| {
-        sqlx::Error::Configuration(format!("WEISSMAN_INTEL_DATABASE_URL: {}", msg).into())
-    })?;
-    connect_intel(t).await
+    let dsn = take_dsn_and_wipe(&mut secret, "WEISSMAN_INTEL_DATABASE_URL")?;
+    connect_intel(dsn.as_str()).await
 }
 
 /// Set the RLS GUC **and** the lock-wait bound for this transaction only (`true` =

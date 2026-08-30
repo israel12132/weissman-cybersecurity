@@ -47,6 +47,16 @@ impl SecretUrl {
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
+
+    /// Overwrite every DSN byte with `0` **now**, then clear the `String`.
+    ///
+    /// Dropping this type also zeroizes ([`ZeroizeOnDrop`]), but a compiler
+    /// that merely frees the allocation would leave plaintext residuals in RAM.
+    /// Call this immediately after `PgPool::connect` / `connect_lazy` so the
+    /// heap copy we own does not survive until the next allocator reuse.
+    pub fn wipe(&mut self) {
+        self.inner.zeroize();
+    }
 }
 
 impl std::fmt::Debug for SecretUrl {
@@ -77,5 +87,16 @@ mod tests {
             "postgres://local/db".len()
         );
         assert!(!secret.is_empty());
+    }
+
+    #[test]
+    fn wipe_overwrites_the_heap_copy() {
+        let mut secret = SecretUrl::new("postgres://user:hunter2@127.0.0.1/weissman".into());
+        assert!(secret.expose().contains("hunter2"));
+        secret.wipe();
+        assert!(secret.is_empty() || secret.expose().bytes().all(|b| b == 0));
+        assert!(!secret.expose().contains("hunter2"));
+        let rendered = format!("{secret:?}");
+        assert_eq!(rendered, "SecretUrl([redacted])");
     }
 }

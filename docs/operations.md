@@ -48,11 +48,14 @@ drop. **DSN strings** must not be copied into process-wide globals (`OnceLock`,
 `HashMap` clones). That rule does **not** apply to the SQLx `PgPool`: the pool
 is the long-lived process state (held on `AppState` / worker `Arc<PgPool>`) and
 does not expose the original connection string. `connect_*_from_env` loads the
-DSN into `SecretUrl`, opens the pool **once at boot**, then drops the wrapper.
-Never rebuild a pool on an incoming API request (TCP/TLS + Postgres auth would
-add tens of milliseconds per call). After a deliberate hot DSN rotation /
-pool rebuild, call `invalidate_agent_metric_samples_schema_cache` so the UEBA
-COPY worker re-warms `pg_attribute` once.
+DSN into `SecretUrl`, copies a trimmed DSN into a `Zeroizing<String>`, calls
+`SecretUrl::wipe()` (physical `0` overwrite of the heap bytes) **before** the
+connect future returns, then drops both wrappers. The SQLx `PgPool` is the
+long-lived process state. Never rebuild a pool on an incoming API request.
+After a deliberate hot DSN rotation / pool rebuild, call
+`invalidate_agent_metric_samples_schema_cache` so the UEBA COPY worker re-warms
+`pg_attribute` once (the last good snapshot stays readable as stale-OK while
+that re-warm runs).
 
 | Var | Default | Effect |
 |-----|---------|--------|
@@ -63,8 +66,10 @@ COPY worker re-warms `pg_attribute` once.
 | `WEISSMAN_UEBA_COPY_BATCH_SIZE` | 512 | Binary COPY flush when this many UEBA samples are buffered |
 | `WEISSMAN_UEBA_COPY_FLUSH_MS` | 50 | Binary COPY flush interval (cockpit freshness vs write coalescing) |
 | `WEISSMAN_UEBA_COPY_CHANNEL` | 50000 | Bounded Tokio mPSC capacity. When full, ingest returns backpressure (HTTP 429 / agent `Backpressure`); agents wait or spill locally. INSERT fallback is **not** used on a full channel. |
-| `WEISSMAN_UEBA_SPILL_MAX_BYTES` | 5242880 (5 MiB) | Agent `ueba-spill.json` hard cap. Oldest samples are dropped (FIFO) when the file would exceed this size. |
-| `WEISSMAN_UEBA_SPILL_MAX_SAMPLES` | 10000 | Agent spill sample cap (whichever of bytes/samples is hit first). |
+| `WEISSMAN_UEBA_SPILL_MAX_BYTES` | 5242880 (5 MiB) | Agent hot NDJSON window cap. Overflow is zstd-archived (`ueba-spill.arc`), not discarded, until the archive itself hits 5 MiB compressed. |
+| `WEISSMAN_UEBA_SPILL_MAX_SAMPLES` | 10000 | Agent hot-window sample cap. |
+| `WEISSMAN_UEBA_SPILL_PACE_MS` | 8 (clamped 5–10) | Delay between reconnect burst packets, plus 0–2 ms jitter. |
+| `WEISSMAN_UEBA_SCHEMA_AUTOHEAL` | on | During schema warm, `ADD COLUMN IF NOT EXISTS` for missing v1 contract columns. Set `0` to disable. |
 
 > **Rotation:** set the new key, move the old value into `*_PREVIOUS`, restart. Old
 > ciphertext still decrypts via the previous key; MFA seeds re-encrypt opportunistically.

@@ -53,6 +53,9 @@ clap = { version = "4", features = ["derive", "env"] }
 thiserror = "1"
 anyhow = "1"
 
+# Spill overflow compression (concatenated zstd frames next to NDJSON).
+zstd = "0.13"
+
 # Platform-specific extras pulled in only on Windows so musl builds stay small.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [

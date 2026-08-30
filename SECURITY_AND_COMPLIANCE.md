@@ -120,7 +120,8 @@ Summary of key controls:
   implement `Zeroize` / `ZeroizeOnDrop` so they are overwritten with zeros when
   they leave scope (crash-dump / memory-scan resistance). Decrypted secrets and
   connection DSNs live in `SecretString` / `SecretUrl` (not `Clone`, not stored
-  in `OnceLock` or other process-lifetime **URL** maps). The SQLx `PgPool` is
+  in `OnceLock` or other process-lifetime **URL** maps). After connect,
+  `SecretUrl::wipe()` overwrites the heap DSN. The SQLx `PgPool` is
   the process-lifetime handle and is created once at boot. Production **fails
   closed** at startup when no dedicated key material is present (never silently
   stores plaintext), and a previous-key ring (`WEISSMAN_VAULT_KEY_PREVIOUS`

@@ -153,17 +153,22 @@ In-process background loops (`weissman-server`):
    (default 512) or `WEISSMAN_UEBA_COPY_FLUSH_MS` (default 50 ms). The COPY
    worker warms `pg_attribute` **once at startup**
    (`warm_agent_metric_samples_schema`) against the v1 column contract
-   (`weissman_db::pg_binary_copy`) and caches the result in memory (reset only
-   when the pool is rebuilt). Each flush calls
+   (`weissman_db::pg_binary_copy`) and caches the result in memory. Invalidate
+   after a pool rebuild marks the snapshot **stale** (COPY keeps using the last
+   known-good contract; no Mutex, no cache hole). Each flush calls
    `require_warmed_agent_metric_samples_schema` only — it never re-queries the
    catalog, so `POST /api/ueba/ingest` cannot flood Postgres system catalogs.
+   Missing v1 columns can be added with `ADD COLUMN IF NOT EXISTS` during warm
+   (`WEISSMAN_UEBA_SCHEMA_AUTOHEAL`, default on); type changes still refuse COPY.
    COPY runs inside an explicit tenant transaction (`begin_tenant_tx`); `COMMIT`
    happens only after `finish()` and a matching row count — a mid-stream failure
    `abort()`s the writer and rolls the batch back. RLS is applied per tenant.
    A full channel returns **backpressure** (HTTP 429 + `ServerToAgent::Backpressure`);
-   agents keep a FIFO `ueba-spill.json` queue (hard cap 5 MiB / 10 000 samples,
-   oldest dropped first) and retry. INSERT fallback is only used when the worker
-   is absent, the channel is closed, or the schema contract was not warmed.
+   agents keep an append-only NDJSON `ueba-spill.json` (O(1) write, 0600) with a
+   5 MiB / 10 000 hot window; overflow is zstd-archived rather than discarded.
+   Reconnect resends up to 64 samples with 8 ms pacing between packets. INSERT
+   fallback is only used when the worker is absent, the channel is closed, or
+   the schema contract was not warmed.
    After COPY commits:
    - re-derive baselines (mean + stddev) for every numeric metric for that
      `(agent, metric)` over the last 7 days,

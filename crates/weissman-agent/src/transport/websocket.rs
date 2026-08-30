@@ -72,6 +72,9 @@ pub async fn run_session(
             let Some(spilled) = crate::transport::ueba_spill::load_finding() else {
                 break;
             };
+            if resent > 0 {
+                tokio::time::sleep(crate::transport::ueba_spill::resend_pace()).await;
+            }
             if out_tx.send(spilled).await.is_err() {
                 break;
             }

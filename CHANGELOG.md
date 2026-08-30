@@ -17,12 +17,15 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
   so RLS still holds. The encoder is locked to schema version 1
   (`AGENT_METRIC_SAMPLES_COPY_COLUMNS`). `pg_attribute` is queried **once** when
   the COPY worker starts (`warm_agent_metric_samples_schema`); the flush path
-  only reads the in-memory result. COPY runs in an explicit transaction and
-  commits only after `finish()` plus a matching row count; send failure
-  `abort()`s the writer and rolls back. A full channel returns HTTP 429 /
-  `ServerToAgent::Backpressure` (agents spill to a FIFO `ueba-spill.json`
-  capped at 5 MiB / 10 000 samples); INSERT fallback is only used when the
-  worker is absent or the schema contract was not warmed.
+  only reads the in-memory result. Invalidate after a pool rebuild keeps the last
+  good snapshot readable (stale-OK, lock-free). Missing v1 columns can be added
+  with `ADD COLUMN IF NOT EXISTS` during warm. COPY runs in an explicit
+  transaction and commits only after `finish()` plus a matching row count; send
+  failure `abort()`s the writer and rolls back. A full channel returns HTTP 429 /
+  `ServerToAgent::Backpressure`. Agents spill to append-only NDJSON
+  `ueba-spill.json` (O(1) write, 0600, 5 MiB / 10k hot window, zstd archive of
+  overflow) and resend a paced burst of 64 on reconnect. INSERT fallback is only
+  used when the worker is absent or the schema contract was not warmed.
   Cockpit counters live at `GET /api/ueba/ingest-stats`. Encoder:
   `weissman_db::pg_binary_copy`.
 - **Zero-knowledge vault loader.** `vault_config_crypto` loads
@@ -30,8 +33,10 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
   ≥32-char passphrase) per operation, runs AES-256-GCM, and wipes keys plus
   decrypted config buffers via `Zeroize` / `ZeroizeOnDrop`. Decrypted fields
   and DSNs are `SecretString` / `SecretUrl` (not `Clone`, not cached in
-  `OnceLock`). The `PgPool` itself is process-lifetime state created once at
-  boot. The sovereign loader has no JWT fallback. Integration and CEO
+  `OnceLock`). After connect, `SecretUrl::wipe()` overwrites the heap DSN with
+  zeros (`Zeroizing<String>` holds the trimmed copy only for the connect call).
+  The `PgPool` itself is process-lifetime state created once at boot. The
+  sovereign loader has no JWT fallback. Integration and CEO
   vaults still decrypt legacy JWT-derived rows through the keyring.
 - **Dynamic compliance framework catalog.** `compliance_frameworks` is now the
   authoritative list of in-scope frameworks (migration
