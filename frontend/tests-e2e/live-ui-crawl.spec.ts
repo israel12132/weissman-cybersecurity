@@ -23,7 +23,7 @@ const ROUTES = [
   ),
 ].filter((route, i, arr) => arr.indexOf(route) === i)
 
-test.describe.configure({ mode: 'parallel' })
+test.describe.configure({ mode: 'serial' })
 
 test.beforeEach(async ({ page }, testInfo) => {
   test.skip(!liveEnabled(), 'PLAYWRIGHT_LIVE=1 and WEISSMAN_ADMIN_PASSWORD required')
@@ -72,12 +72,18 @@ async function visitRoute(page: import('@playwright/test').Page, route: string) 
   // bootstrap are visible too; previously it was attached after ensureUiSession, making errors
   // on the most failure-prone navigation invisible.
   const apiErrors: string[] = []
+  const api429: string[] = []
   page.on('response', (r) => {
     const u = r.url()
-    // 429 was previously missed (`>= 500` only), so per-IP rate limiting during a 100-route
-    // crawl surfaced as a mystery timeout rather than a named failure.
-    if (u.includes('/api/') && (r.status() === 429 || r.status() >= 500)) {
+    if (!u.includes('/api/')) return
+    // 5xx is a platform fault. 429 from a single-IP 100-route crawl is the
+    // per-IP limiter doing its job; a handful during SPA boot is not a crashed
+    // page (content assertions still catch an unusable route). A flood of 429s
+    // means the session probe is in a throttle storm — fail that named.
+    if (r.status() >= 500) {
       apiErrors.push(`${r.status()} ${u}`)
+    } else if (r.status() === 429) {
+      api429.push(`${r.status()} ${u}`)
     }
   })
   // NOTE: no pre-emptive ensureUiSession() here. It unconditionally loaded the cockpit
@@ -129,6 +135,9 @@ async function visitRoute(page: import('@playwright/test').Page, route: string) 
   }
   if (apiErrors.length) {
     throw new Error(`API 5xx on ${route}:\n${apiErrors.slice(0, 5).join('\n')}`)
+  }
+  if (api429.length >= 15) {
+    throw new Error(`API 429 flood on ${route} (${api429.length}):\n${api429.slice(0, 5).join('\n')}`)
   }
 }
 

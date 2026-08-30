@@ -816,8 +816,11 @@ jobs:
           WEISSMAN_TENANT_SCAN_BURST: "60"
           WEISSMAN_LOGIN_PER_MINUTE: "60"
           WEISSMAN_LOGIN_BURST: "60"
-          WEISSMAN_RATE_LIMIT_PER_SEC: "200"
-          WEISSMAN_RATE_LIMIT_BURST: "400"
+          # Per-IP API limiter. Redis uses a 1s INCR window; burst is now the cap
+          # (max(per_sec, burst)). Match nightly so one Command Center boot from
+          # 127.0.0.1 is not 429'd. Clamp ceilings: 500/s, burst 2000.
+          WEISSMAN_RATE_LIMIT_PER_SEC: "500"
+          WEISSMAN_RATE_LIMIT_BURST: "2000"
           # Server + worker share ONE Postgres (max_connections=100). Each process opens THREE
           # pools (app + auth + intel), so capping only the app pool leaves auth(12)+intel(12)
           # each uncounted. Cap all three to the sizes the repo's own E2E harness uses

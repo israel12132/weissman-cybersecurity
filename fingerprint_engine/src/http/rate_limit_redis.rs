@@ -52,6 +52,36 @@ fn shared() -> Option<Arc<RedisRateLimiter>> {
     .clone()
 }
 
+/// Atomic INCR + EXPIRE. A split INCR then EXPIRE-if-count==1 leaves a key with
+/// no TTL when EXPIRE fails or races; the counter then grows across seconds and
+/// 429s the rest of the process. Heal any key whose TTL is missing (`TTL < 0`).
+const INCR_EXPIRE_LUA: &str = r#"
+local n = redis.call('INCR', KEYS[1])
+if n == 1 or redis.call('TTL', KEYS[1]) < 0 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return n
+"#;
+
+#[must_use]
+pub fn should_set_expire(count: u64, ttl_secs: i64) -> bool {
+    count == 1 || ttl_secs < 0
+}
+
+async fn incr_with_ttl(
+    conn: &mut redis::aio::MultiplexedConnection,
+    key: &str,
+    window: Duration,
+) -> redis::RedisResult<u64> {
+    redis::cmd("EVAL")
+        .arg(INCR_EXPIRE_LUA)
+        .arg(1)
+        .arg(key)
+        .arg(window.as_secs().max(1))
+        .query_async(conn)
+        .await
+}
+
 async fn incr_window(key: &str, window: Duration) -> Option<u64> {
     // Self-healing fast-fail: if the Redis dependency circuit is open (sustained outage detected by
     // the recovery engine), skip the connect+INCR — which would otherwise each pay REDIS_OP_TIMEOUT
@@ -65,11 +95,7 @@ async fn incr_window(key: &str, window: Duration) -> Option<u64> {
     }
     let rl = shared()?;
     let mut conn = rl.conn().await.ok()?;
-    let count: u64 = conn.incr(key, 1u64).await.ok()?;
-    if count == 1 {
-        let _: Result<(), _> = conn.expire(key, window.as_secs() as i64).await;
-    }
-    Some(count)
+    incr_with_ttl(&mut conn, key, window).await.ok()
 }
 
 /// Tenant scan POST counter (60s window). `None` when Redis unavailable.
@@ -358,14 +384,10 @@ async fn incr_window_strict(key: &str, window: Duration) -> StrictOp<u64> {
     let Ok(mut conn) = rl.conn().await else {
         return StrictOp::Unavailable;
     };
-    let count: u64 = match conn.incr(key, 1u64).await {
-        Ok(c) => c,
-        Err(_) => return StrictOp::Unavailable,
-    };
-    if count == 1 {
-        let _: Result<(), _> = conn.expire(key, window.as_secs() as i64).await;
+    match incr_with_ttl(&mut conn, key, window).await {
+        Ok(count) => StrictOp::Ok(count),
+        Err(_) => StrictOp::Unavailable,
     }
-    StrictOp::Ok(count)
 }
 
 /// Like [`incr_login_ip`] but fail-closed aware for middleware.
@@ -529,5 +551,14 @@ mod tests {
         let info = "role:master\r\nconnected_slaves:2\r\nmaster_repl_offset:1\r\n";
         assert_eq!(parse_connected_slaves(info), Some(2));
         assert_eq!(parse_connected_slaves("role:master\n"), None);
+    }
+
+    #[test]
+    fn expire_on_first_incr_or_missing_ttl() {
+        assert!(should_set_expire(1, -2));
+        assert!(should_set_expire(1, -1));
+        assert!(should_set_expire(40, -1));
+        assert!(!should_set_expire(40, 1));
+        assert!(!should_set_expire(2, 0));
     }
 }

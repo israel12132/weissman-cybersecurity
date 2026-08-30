@@ -53,15 +53,19 @@ pub async fn api_rate_limit_middleware(
     if super::rate_limit_redis::is_enabled() {
         match super::rate_limit_redis::incr_api_ip_strict(&ip).await {
             super::rate_limit_redis::StrictOp::Ok(count) => {
-                if count > limit {
+                let cap = rate_limit_metrics::api_redis_window_cap() as u64;
+                if count > cap {
                     rate_limit_metrics::record_api_denied(&ip);
                     let retry_after_secs = 1u64;
+                    let burst = burst().get();
                     tracing::warn!(
                         target: "rate_limit",
                         client_ip = %ip,
                         path = %path,
                         count,
                         limit,
+                        burst,
+                        cap,
                         "API rate limit exceeded (redis)"
                     );
                     let mut resp = (
@@ -70,10 +74,11 @@ pub async fn api_rate_limit_middleware(
                             "ok": false,
                             "code": "rate_limited",
                             "detail": format!(
-                                "API rate limit hit ({limit} per second per IP). Retry in {retry_after_secs}s."
+                                "API rate limit hit ({cap} burst / {limit} per second per IP). Retry in {retry_after_secs}s."
                             ),
                             "retry_after_seconds": retry_after_secs,
                             "limit_per_second": limit,
+                            "burst": burst,
                             "source": "redis",
                         })),
                     )
