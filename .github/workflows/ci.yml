@@ -853,13 +853,6 @@ jobs:
           # (The bulk-vs-interactive head-of-line starvation is a real product concern tracked
           # separately from this CI-scoping change.)
           WEISSMAN_SCANNING_ENABLED: "0"
-          # One CI IP runs Playwright + job polls + scan intake. Default 30 API
-          # req/s and 8 logins/min are attacker-facing; they 429 the E2E poll
-          # loop (misreported as job timeout) once Redis has a window key.
-          WEISSMAN_RATE_LIMIT_PER_SEC: "200"
-          WEISSMAN_RATE_LIMIT_BURST: "400"
-          WEISSMAN_LOGIN_PER_MINUTE: "60"
-          WEISSMAN_LOGIN_BURST: "80"
           WEISSMAN_TENANT_SCAN_POSTS_PER_MINUTE: "120"
           WEISSMAN_TENANT_SCAN_BURST: "40"
           # Server + worker share ONE Postgres (max_connections=100). Each process opens THREE
