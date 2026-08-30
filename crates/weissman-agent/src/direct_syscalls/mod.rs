@@ -16,18 +16,22 @@
 //!    data directory. `.text` is inferred from syscall prologue / JMP-hook
 //!    opcodes at those export RVAs.
 //! 3. Clean stubs yield the SSN via Hell's Gate (`mov eax, SSN`).
-//! 4. Hooked stubs (`jmp` / `0xE9`) recover the SSN via Halo's Gate neighbor scan
-//!    confined to the `.text` window.
+//! 4. Hooked stubs (`jmp` / `0xE9`) recover the SSN from the remaining
+//!    `syscall; ret` tail (retrograde), then Halo's Gate neighbors confined
+//!    to the `.text` window.
 //! 5. Windows x64 `syscall` is issued with the Microsoft calling convention.
+//!    ntdll copy/scan never exceeds 16 MiB (`MAX_NTDLL_SCAN_LIMIT`).
 
 pub mod dispatch;
 pub mod fixtures;
+pub mod murmur;
 pub mod pe;
 pub mod peb;
 pub mod ssn;
 
+use crate::direct_syscalls::murmur::hook_map_hash;
 #[cfg(all(windows, target_arch = "x86_64"))]
-use crate::direct_syscalls::pe::MAX_IMAGE_SIZE;
+use crate::direct_syscalls::pe::MAX_NTDLL_SCAN_LIMIT;
 use crate::direct_syscalls::pe::{recover_ntdll_export_directory, PeView, MAX_EXPORT_NAMES};
 use crate::direct_syscalls::ssn::{infer_text_span_from_eat, resolve_stub_ssn};
 use sha2::{Digest, Sha256};
@@ -84,21 +88,6 @@ pub fn precomputed_target_hash(name: &str) -> Option<u64> {
     })
 }
 
-/// FNV-1a 64-bit. Used only for the SOC eat-hook inventory — never for SSN
-/// dispatch. SHA-256 remains the fail-closed resolver hash for the five
-/// syscalls this process actually issues.
-#[must_use]
-pub fn fnv1a_64(name: &str) -> u64 {
-    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
-    const PRIME: u64 = 0x0100_0000_01b3;
-    let mut h = OFFSET;
-    for b in name.as_bytes() {
-        h ^= u64::from(*b);
-        h = h.wrapping_mul(PRIME);
-    }
-    h
-}
-
 /// One resolved Nt/Zw export hashed with truncated SHA-256 (dispatch table).
 #[derive(Debug, Clone, Copy)]
 pub struct SyscallEntry {
@@ -108,10 +97,10 @@ pub struct SyscallEntry {
     pub rva: u32,
 }
 
-/// One Nt/Zw export in the eat-hook inventory (FNV-1a, telemetry only).
+/// One Nt/Zw export in the eat-hook inventory (MurmurHash3, telemetry only).
 #[derive(Debug, Clone, Copy)]
 pub struct HookMapEntry {
-    pub fnv: u64,
+    pub mmh: u64,
     pub ssn: u16,
     pub hooked: bool,
     pub rva: u32,
@@ -124,6 +113,9 @@ pub struct SyscallResolver {
     hook_map: Vec<HookMapEntry>,
     scanned: usize,
     hooked_total: usize,
+    scan_capped: bool,
+    declared_image_size: usize,
+    hash_collisions: usize,
 }
 
 impl SyscallResolver {
@@ -134,6 +126,13 @@ impl SyscallResolver {
     /// the names table and infers `.text` from Hell's Gate prologues.
     #[must_use]
     pub fn from_pe_bytes(image: &[u8]) -> Option<Self> {
+        let declared = image.len();
+        let scan_capped = declared > crate::direct_syscalls::pe::MAX_NTDLL_SCAN_LIMIT;
+        let image = if scan_capped {
+            &image[..crate::direct_syscalls::pe::MAX_NTDLL_SCAN_LIMIT]
+        } else {
+            image
+        };
         let pe_opt = PeView::new(image);
         let view = pe_opt.unwrap_or_else(|| PeView::raw(image));
         let export = view
@@ -180,7 +179,7 @@ impl SyscallResolver {
                 hooked_total += 1;
             }
             hook_map.push(HookMapEntry {
-                fnv: fnv1a_64(name),
+                mmh: hook_map_hash(name),
                 ssn: resolved.ssn,
                 hooked: resolved.hooked,
                 rva: func_rva,
@@ -195,7 +194,10 @@ impl SyscallResolver {
                 });
             }
         }
-        Self::from_entries(entries, hook_map, scanned, hooked_total)
+        let mut resolver = Self::from_entries(entries, hook_map, scanned, hooked_total)?;
+        resolver.scan_capped = scan_capped;
+        resolver.declared_image_size = declared;
+        Some(resolver)
     }
 
     fn from_entries(
@@ -218,17 +220,14 @@ impl SyscallResolver {
             .into_iter()
             .filter(|e| !poisoned.contains(&e.hash))
             .collect();
-        let mut fnv_seen: HashSet<u64> = HashSet::new();
-        let mut fnv_poisoned: HashSet<u64> = HashSet::new();
+        let mut mmh_counts: std::collections::HashMap<u64, usize> =
+            std::collections::HashMap::new();
         for e in &hook_map {
-            if !fnv_seen.insert(e.fnv) {
-                fnv_poisoned.insert(e.fnv);
-            }
+            *mmh_counts.entry(e.mmh).or_insert(0) += 1;
         }
-        let hook_map: Vec<HookMapEntry> = hook_map
-            .into_iter()
-            .filter(|e| !fnv_poisoned.contains(&e.fnv))
-            .collect();
+        let hash_collisions = mmh_counts.values().filter(|c| **c > 1).count();
+        // Keep colliding telemetry rows — dropping them is the SOC-blindness
+        // failure mode. SHA-256 dispatch still fail-closes on duplicates.
         if entries.is_empty() {
             return None;
         }
@@ -237,6 +236,9 @@ impl SyscallResolver {
             hook_map,
             scanned: scanned.max(1),
             hooked_total,
+            scan_capped: false,
+            declared_image_size: 0,
+            hash_collisions,
         })
     }
 
@@ -247,13 +249,18 @@ impl SyscallResolver {
     #[cfg(all(windows, target_arch = "x86_64"))]
     pub unsafe fn from_live_ntdll() -> Option<Self> {
         let map = peb::ntdll_mapping()?;
-        let size = map.size_of_image;
-        if size < 0x400 || size > MAX_IMAGE_SIZE {
+        let declared = map.size_of_image;
+        if declared < 0x400 {
             return None;
         }
+        let scan_capped = declared > MAX_NTDLL_SCAN_LIMIT;
+        let size = declared.min(MAX_NTDLL_SCAN_LIMIT);
         let mut image = vec![0u8; size];
         copy_ntdll_image(map.base, size, &mut image);
-        Self::from_pe_bytes(&image)
+        let mut resolver = Self::from_pe_bytes(&image)?;
+        resolver.scan_capped = resolver.scan_capped || scan_capped;
+        resolver.declared_image_size = declared;
+        Some(resolver)
     }
 
     #[must_use]
@@ -295,6 +302,21 @@ impl SyscallResolver {
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
+
+    #[must_use]
+    pub fn scan_capped(&self) -> bool {
+        self.scan_capped
+    }
+
+    #[must_use]
+    pub fn declared_image_size(&self) -> usize {
+        self.declared_image_size
+    }
+
+    #[must_use]
+    pub fn hash_collisions(&self) -> usize {
+        self.hash_collisions
+    }
 }
 
 /// Copy committed pages of live ntdll. Uses `VirtualQuery` so stomped headers
@@ -303,7 +325,7 @@ impl SyscallResolver {
 unsafe fn copy_ntdll_image(base: *const u8, size: usize, out: &mut [u8]) {
     use windows_sys::Win32::System::Memory::{VirtualQuery, MEMORY_BASIC_INFORMATION, MEM_COMMIT};
 
-    let copy_len = size.min(out.len());
+    let copy_len = size.min(out.len()).min(MAX_NTDLL_SCAN_LIMIT);
     let mut off = 0usize;
     while off < copy_len {
         let mut mbi = std::mem::zeroed::<MEMORY_BASIC_INFORMATION>();
@@ -483,10 +505,14 @@ mod tests {
         assert!(precomputed_target_hash("ZwClose").is_none());
         assert!(precomputed_target_hash("RtlGetVersion").is_none());
         assert_ne!(
-            fnv1a_64("NtCreateSection"),
+            hook_map_hash("NtCreateSection"),
             hash_api_name("NtCreateSection")
         );
-        assert_eq!(fnv1a_64("NtClose"), fnv1a_64("NtClose"));
+        assert_eq!(hook_map_hash("NtClose"), hook_map_hash("NtClose"));
+        assert_ne!(
+            crate::direct_syscalls::murmur::murmur3_x64_64(b"NtClose", 1),
+            crate::direct_syscalls::murmur::murmur3_x64_64(b"NtClose", 2)
+        );
     }
 
     #[test]
@@ -500,11 +526,11 @@ mod tests {
         assert!(resolver
             .hook_map()
             .iter()
-            .any(|e| e.fnv == fnv1a_64("NtCreateSection") && !e.hooked));
+            .any(|e| e.mmh == hook_map_hash("NtCreateSection") && !e.hooked));
         assert_eq!(
-            resolver.resolve_ssn(fnv1a_64("NtCreateSection")),
+            resolver.resolve_ssn(hook_map_hash("NtCreateSection")),
             None,
-            "FNV hashes must not be used for SSN dispatch"
+            "MurmurHash3 must not be used for SSN dispatch"
         );
         assert_eq!(
             resolver.resolve_ssn(*NT_ALLOCATE_VIRTUAL_MEMORY),
@@ -632,7 +658,7 @@ mod tests {
     }
 
     #[test]
-    fn fnv_hook_map_reports_non_target_eat_hooks() {
+    fn murmur_hook_map_reports_non_target_eat_hooks() {
         let img = synthetic_ntdll_hooks(false, true);
         let resolver = SyscallResolver::from_pe_bytes(&img).expect("resolver");
         assert_eq!(
@@ -644,7 +670,7 @@ mod tests {
         let create = resolver
             .hook_map()
             .iter()
-            .find(|e| e.fnv == fnv1a_64("NtCreateSection"))
+            .find(|e| e.mmh == hook_map_hash("NtCreateSection"))
             .expect("NtCreateSection in eat map");
         assert!(create.hooked);
         assert_eq!(create.ssn, FIXTURE_SSN_CREATE_SECTION);
@@ -654,7 +680,50 @@ mod tests {
         assert!(resolver
             .entries()
             .iter()
-            .all(|e| e.hash != fnv1a_64("NtCreateSection")));
+            .all(|e| e.hash != hook_map_hash("NtCreateSection")));
+    }
+
+    #[test]
+    fn murmur_collisions_stay_visible_to_soc() {
+        let a = HookMapEntry {
+            mmh: 0xaaaa,
+            ssn: 0x18,
+            hooked: true,
+            rva: 0x400,
+        };
+        let b = HookMapEntry {
+            mmh: 0xaaaa,
+            ssn: 0x99,
+            hooked: true,
+            rva: 0x500,
+        };
+        let dispatch = SyscallEntry {
+            hash: *NT_CLOSE,
+            ssn: 0x1A,
+            hooked: false,
+            rva: 0x600,
+        };
+        let resolver =
+            SyscallResolver::from_entries(vec![dispatch], vec![a, b], 2, 2).expect("keep");
+        assert_eq!(resolver.hook_map().len(), 2, "do not drop colliding hooks");
+        assert_eq!(resolver.hash_collisions(), 1);
+        assert_eq!(resolver.hooked_count(), 2);
+    }
+
+    #[test]
+    fn ntdll_scan_caps_at_16_mib() {
+        let mut img = synthetic_ntdll(false);
+        img.resize(crate::direct_syscalls::pe::MAX_NTDLL_SCAN_LIMIT + 0x1000, 0);
+        let resolver = SyscallResolver::from_pe_bytes(&img).expect("capped scan");
+        assert!(resolver.scan_capped());
+        assert_eq!(
+            resolver.declared_image_size(),
+            crate::direct_syscalls::pe::MAX_NTDLL_SCAN_LIMIT + 0x1000
+        );
+        assert_eq!(
+            resolver.resolve_ssn(*NT_ALLOCATE_VIRTUAL_MEMORY),
+            Some(FIXTURE_SSN_ALLOCATE)
+        );
     }
 
     #[test]

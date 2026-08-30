@@ -96,7 +96,7 @@ running locally on the worker; see `endpoint_agents.rs` for the routing.
 | Anti-debug / rootkit / forensics evasion | `process_modules.rs::run_unusual_runtime` | LD_PRELOAD detection, syscall anomalies |
 | USB enumeration | `usb_devices.rs` | udev / IOKit / SetupAPI |
 | EDR presence | `edr_presence.rs` | Defender, CrowdStrike, SentinelOne |
-| Syscall / EDR hook map | `syscall_hooks.rs` (`syscall_evasion`) | SHA-256 on the 5 agent NT APIs; FNV-1a inventory of the remaining Nt/Zw EAT so SOC sees the full user-mode hook map |
+| Syscall / EDR hook map | `syscall_hooks.rs` (`syscall_evasion`) | SHA-256 on the 5 agent NT APIs; MurmurHash3 (per-process seed) inventory of remaining Nt/Zw EAT; 16 MiB ntdll scan ceiling |
 | Log tampering | `log_integrity.rs` | EventID 1102, journald gaps |
 | **UEBA baseline sample** | `baseline.rs` | Ports + processes + users + load + memory + failed-logins + hour_of_week |
 

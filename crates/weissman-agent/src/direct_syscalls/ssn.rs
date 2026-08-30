@@ -10,9 +10,9 @@
 //! ```
 //!
 //! User-mode EDR hooks typically overwrite the first bytes with `jmp rel32` (`0xE9`)
-//! or `jmp qword ptr [rip]` (`FF 25`). Halo's Gate then walks neighboring 32-byte
-//! stubs (ntdll lays syscall stubs out in SSN order inside `.text`) and reconstructs
-//! the hooked SSN as `neighbor_ssn ∓ index`.
+//! or `jmp qword ptr [rip]` (`FF 25`). The SSN is recovered first from the
+//! remaining `mov eax, SSN; syscall; ret` tail (`B8 .. 0F 05 C3`) — EDR rarely
+//! patches the syscall opcode itself — then from Halo's Gate neighbors.
 //!
 //! Neighbor reads are **strictly confined** to the PE `.text` section parsed from
 //! headers. EAT names are alphabetical, not address-sorted; a stub at a page or
@@ -59,6 +59,33 @@ pub fn is_user_mode_hook(stub: &[u8]) -> bool {
         0x48 if stub.len() > 1 && stub[1] == 0xB8 => true, // mov rax, imm64 (typical push-ret/jmp rax hook)
         _ => false,
     }
+}
+
+/// Recover SSN from the unhooked tail `B8 xx xx 00 00 0F 05 C3` inside one stub.
+///
+/// EDR JMP/CALL hooks rewrite the prologue (`4C 8B D1 B8…`). They almost never
+/// rewrite `syscall; ret`. Scanning the stub from the end — never the whole
+/// ntdll mapping — finds that tail and reads the `mov eax, imm32` immediately
+/// before it.
+#[must_use]
+pub fn retrograde_ssn_from_stub(stub: &[u8]) -> Option<u16> {
+    if stub.len() < 8 {
+        return None;
+    }
+    let mut i = stub.len() - 3;
+    loop {
+        if stub[i] == 0x0F && stub[i + 1] == 0x05 && stub[i + 2] == 0xC3 && i >= 5 {
+            // `mov eax, imm32` immediately before syscall;ret.
+            if stub[i - 5] == 0xB8 && stub[i - 2] == 0x00 && stub[i - 1] == 0x00 {
+                return Some(u16::from_le_bytes([stub[i - 4], stub[i - 3]]));
+            }
+        }
+        if i == 0 {
+            break;
+        }
+        i -= 1;
+    }
+    None
 }
 
 /// Halo's Gate: recover the SSN of a hooked stub from clean neighbors at ±32-byte stride.
@@ -112,6 +139,12 @@ pub fn resolve_stub_ssn(image: &[u8], func_offset: usize, text: TextSpan) -> Opt
         return Some(ResolvedSsn { ssn, hooked: false });
     }
     if is_user_mode_hook(stub) || stub.first() != Some(&0x4C) {
+        // Retrograde is per-stub (32 bytes). Scanning the rest of `.text` would
+        // pick up a later export's syscall;ret and steal its SSN.
+        let slot = stub.get(..STUB_LEN).unwrap_or(stub);
+        if let Some(ssn) = retrograde_ssn_from_stub(slot) {
+            return Some(ResolvedSsn { ssn, hooked: true });
+        }
         let ssn = halos_gate_recover(image, func_offset, text)?;
         return Some(ResolvedSsn { ssn, hooked: true });
     }
@@ -152,7 +185,11 @@ pub fn infer_text_span_from_eat(
         let Some(stub) = image.get(func_rva..) else {
             continue;
         };
-        if !(is_hells_gate_prologue(stub) || is_user_mode_hook(stub)) {
+        let slot = stub.get(..STUB_LEN).unwrap_or(stub);
+        if !(is_hells_gate_prologue(slot)
+            || is_user_mode_hook(slot)
+            || retrograde_ssn_from_stub(slot).is_some())
+        {
             continue;
         }
         hits += 1;
@@ -247,6 +284,25 @@ pub fn encode_jmp_hook_stub() -> [u8; STUB_LEN] {
     stub
 }
 
+/// JMP at the prologue, original `mov eax, SSN; syscall; ret` left at the tail.
+/// Retrograde recovery must find the SSN without Halo's Gate neighbors.
+#[must_use]
+pub fn encode_jmp_hook_with_syscall_tail(ssn: u16) -> [u8; STUB_LEN] {
+    let mut stub = encode_jmp_hook_stub();
+    // Place the unhooked tail at the end of the 32-byte slot (past the 5-byte JMP).
+    let i = STUB_LEN - 3; // syscall;ret
+    stub[i] = 0x0F;
+    stub[i + 1] = 0x05;
+    stub[i + 2] = 0xC3;
+    stub[i - 5] = 0xB8;
+    let s = ssn.to_le_bytes();
+    stub[i - 4] = s[0];
+    stub[i - 3] = s[1];
+    stub[i - 2] = 0x00;
+    stub[i - 1] = 0x00;
+    stub
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -299,6 +355,19 @@ mod tests {
         let mut image = vec![0u8; STUB_LEN];
         image.copy_from_slice(&encode_jmp_hook_stub());
         assert!(halos_gate_recover(&image, 0, text(&image)).is_none());
+    }
+
+    #[test]
+    fn retrograde_recovers_ssn_from_syscall_ret_tail() {
+        let stub = encode_jmp_hook_with_syscall_tail(0x18);
+        assert!(is_user_mode_hook(&stub));
+        assert_eq!(hells_gate_ssn(&stub), None);
+        assert_eq!(retrograde_ssn_from_stub(&stub), Some(0x18));
+        let mut image = vec![0u8; STUB_LEN];
+        image.copy_from_slice(&stub);
+        let resolved = resolve_stub_ssn(&image, 0, text(&image)).expect("tail SSN");
+        assert_eq!(resolved.ssn, 0x18);
+        assert!(resolved.hooked);
     }
 
     #[test]

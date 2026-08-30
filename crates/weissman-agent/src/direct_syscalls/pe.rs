@@ -13,6 +13,9 @@ pub const NT_SIGNATURE: u32 = 0x0000_4550; // PE\0\0
 pub const OPTIONAL_MAGIC_PE32PLUS: u16 = 0x20B;
 pub const DIR_EXPORT: usize = 0;
 pub const MAX_IMAGE_SIZE: usize = 16 * 1024 * 1024;
+/// Hard ceiling for ntdll copy + signature scan. LDR SizeOfImage above this
+/// is treated as EDR memory bloating — we never walk tens of GiB.
+pub const MAX_NTDLL_SCAN_LIMIT: usize = MAX_IMAGE_SIZE;
 pub const MAX_EXPORT_NAMES: u32 = 16_384;
 pub const MAX_NAME_LEN: usize = 256;
 pub const MAX_SECTIONS: u16 = 96;
@@ -387,7 +390,9 @@ fn export_dir_plausible(buf: &[u8], dir: &IMAGE_EXPORT_DIRECTORY) -> bool {
 /// RVA. This scanner locates `IMAGE_EXPORT_DIRECTORY` from the names table:
 /// find a critical Nt* string, then the directory whose `AddressOfNames` slot
 /// points at it. `"ntdll.dll"` is a secondary signal if the API strings moved.
+/// Never scans past [`MAX_NTDLL_SCAN_LIMIT`].
 pub fn recover_ntdll_export_directory(buf: &[u8]) -> Option<IMAGE_EXPORT_DIRECTORY> {
+    let buf = scan_window(buf);
     const API_NEEDLES: [&[u8]; 3] = [
         b"NtAllocateVirtualMemory",
         b"NtProtectVirtualMemory",
@@ -399,6 +404,11 @@ pub fn recover_ntdll_export_directory(buf: &[u8]) -> Option<IMAGE_EXPORT_DIRECTO
         }
     }
     find_ntdll_export_directory(buf)
+}
+
+fn scan_window(buf: &[u8]) -> &[u8] {
+    let n = buf.len().min(MAX_NTDLL_SCAN_LIMIT);
+    &buf[..n]
 }
 
 /// Locate an export directory whose names table contains `api` (NUL-terminated).

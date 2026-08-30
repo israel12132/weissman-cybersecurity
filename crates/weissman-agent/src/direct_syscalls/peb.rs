@@ -64,7 +64,7 @@ pub unsafe fn ntdll_mapping() -> Option<NtdllMapping> {
                 let dll_base = *(current.add(0x30) as *const *const u8);
                 // SizeOfImage is ULONG at +0x40.
                 let size = *(current.add(0x40) as *const u32) as usize;
-                if !dll_base.is_null() && size >= 0x400 && size <= 16 * 1024 * 1024 {
+                if !dll_base.is_null() && size >= 0x400 {
                     return Some(NtdllMapping {
                         base: dll_base,
                         size_of_image: size,

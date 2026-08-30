@@ -44,7 +44,7 @@ pub const FIXTURE_SSN_CREATE_SECTION: u16 = 0x1B;
 /// When `hook_allocate` is true, `NtAllocateVirtualMemory`'s stub is overwritten with
 /// `jmp rel32` so Halo's Gate must recover SSN `0x18` from the neighbor.
 /// When `hook_create_section` is true, the non-target `NtCreateSection` stub is hooked
-/// so `syscall_evasion` must report it via the FNV-1a eat map (not SHA-256).
+/// so `syscall_evasion` must report it via the MurmurHash3 eat map (not SHA-256).
 pub fn synthetic_ntdll(hook_allocate: bool) -> Vec<u8> {
     synthetic_ntdll_hooks(hook_allocate, false)
 }
