@@ -169,7 +169,7 @@ pub async fn finalize_held_job(
     if !bus.is_enabled() {
         // Caller inserted a held row even without a bus — clear the hold so it is claimable.
         let sealed = crate::job_envelope::seal_job_payload_sqlx(payload, tenant_id)?;
-        let _ = weissman_db::job_queue::release_hold(pool, id, sealed).await;
+        let _ = weissman_db::job_queue::release_hold(pool, tenant_id, id, sealed).await;
         return Ok(());
     }
     match bus
@@ -180,7 +180,7 @@ pub async fn finalize_held_job(
             let mut enriched = payload;
             attach_signed_envelope(&mut enriched, envelope);
             let sealed = crate::job_envelope::seal_job_payload_sqlx(enriched, tenant_id)?;
-            match weissman_db::job_queue::release_hold(pool, id, sealed).await {
+            match weissman_db::job_queue::release_hold(pool, tenant_id, id, sealed).await {
                 Ok(1) => Ok(()),
                 Ok(n) => {
                     let reason = format!(
