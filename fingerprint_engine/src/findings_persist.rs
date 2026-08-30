@@ -79,7 +79,8 @@ pub fn hfv_watermark_after_scan(
 }
 
 /// Native severity frozen onto the closed cycle so SLA/FAIR history aggregations
-/// still see the row (never NULL).
+/// still see the row (never NULL). Historical closed-cycle values live in
+/// `vulnerability_lifecycle_events`; this helper only updates the live inbox row.
 #[must_use]
 pub fn hfv_watermark_on_verified_fixed(native_severity: &str) -> Option<String> {
     let s = native_severity.trim();
@@ -87,6 +88,17 @@ pub fn hfv_watermark_on_verified_fixed(native_severity: &str) -> Option<String> 
         None
     } else {
         Some(s.to_string())
+    }
+}
+
+/// A `REOPENED` finding always mints a **new** `cycle_id`. Prior cycle ledger
+/// rows in `vulnerability_lifecycle_events` are never updated.
+#[must_use]
+pub fn hfv_cycle_id_for_status(existing: Option<uuid::Uuid>, new_status: &str) -> uuid::Uuid {
+    if new_status.eq_ignore_ascii_case("REOPENED") {
+        uuid::Uuid::new_v4()
+    } else {
+        existing.unwrap_or_else(uuid::Uuid::new_v4)
     }
 }
 use tokio::sync::{Semaphore, SemaphorePermit};
@@ -651,11 +663,11 @@ pub async fn persist_engine_findings(
                   description, status, proof, poc_commitment_sha256, raw_data, discovered_at,
                   signature_hash, epss_score, kev_listed, kev_known_ransomware, kev_due_date,
                   intel_enriched_at, confidence_multiplier, effective_risk, poc_sealed,
-                  watermark_severity, is_cycle_closed)
+                  watermark_severity, is_cycle_closed, cycle_id)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now(),
                        $13, $14, $15, $16, $17,
                        CASE WHEN $14 IS NOT NULL OR $15 THEN now() ELSE NULL END,
-                       $18, $19, $20, $6, FALSE)
+                       $18, $19, $20, $6, FALSE, gen_random_uuid())
                ON CONFLICT (tenant_id, client_id, finding_id) DO UPDATE SET
                    run_id               = EXCLUDED.run_id,
                    title                = EXCLUDED.title,
@@ -686,6 +698,7 @@ pub async fn persist_engine_findings(
                        ELSE EXCLUDED.severity
                    END,
                    is_cycle_closed      = (vulnerabilities.status IN ('VERIFIED_FIXED')),
+                   cycle_id             = COALESCE(vulnerabilities.cycle_id, gen_random_uuid()),
                    updated_at           = now(),
                    last_seen_at         = now(),
                    seen_count           = vulnerabilities.seen_count + 1
@@ -1091,5 +1104,23 @@ mod tests {
             Some("medium"),
             "regression starts a new cycle at live severity, not the old peak"
         );
+    }
+
+    #[test]
+    fn hfv_reopened_mints_new_cycle_id_and_preserves_prior() {
+        let cycle1 = uuid::Uuid::from_u128(0x1111);
+        assert_eq!(
+            hfv_cycle_id_for_status(Some(cycle1), "VERIFIED_FIXED"),
+            cycle1,
+            "close keeps the cycle so the ledger close event shares cycle_id"
+        );
+        assert_eq!(hfv_cycle_id_for_status(Some(cycle1), "OPEN"), cycle1);
+        let reopened = hfv_cycle_id_for_status(Some(cycle1), "REOPENED");
+        assert_ne!(
+            reopened, cycle1,
+            "regression must be a new ledger cycle; never mutate the closed cycle row"
+        );
+        let again = hfv_cycle_id_for_status(Some(cycle1), "REOPENED");
+        assert_ne!(again, reopened, "each reopen mints a distinct cycle_id");
     }
 }

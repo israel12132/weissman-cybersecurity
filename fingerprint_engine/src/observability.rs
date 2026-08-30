@@ -132,13 +132,16 @@ fn build_otel_layer(
 /// Production JSON logs when `WEISSMAN_LOG_FORMAT=json` (plain text otherwise).
 /// When `WEISSMAN_OTLP_ENDPOINT` is set, also exports OpenTelemetry spans via OTLP/HTTP.
 ///
-/// Fmt output is always `tracing_appender::non_blocking` (lossy ring buffer + dedicated
-/// thread). A Tokio worker that emits `tracing::error!` — including Ask Weissman
-/// `nlqa1_fallback` under an audit-flood DoS — never waits on stdout, a container log
-/// driver, or NFS.
+/// General HTTP `fmt` logs use a **lossy** non-blocking stdout appender so a
+/// stuck container log driver / NFS cannot stall Tokio workers.
+///
+/// Ask Weissman forensic pages (`nlqa1`) do **not** ride this lossy ring.
+/// `nlqa_syslog` uses `NonBlockingBuilder { lossy: false }` + OS syslog.
 pub fn init_tracing_from_env() {
     use tracing_subscriber::prelude::*;
     use tracing_subscriber::Layer;
+
+    crate::nlqa_syslog::init();
 
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
@@ -146,7 +149,12 @@ pub fn init_tracing_from_env() {
         .map(|s| s.eq_ignore_ascii_case("json"))
         .unwrap_or(false);
 
-    let (nb_writer, guard) = tracing_appender::non_blocking(std::io::stdout());
+    // Lossy is correct for HTTP/app logs. Audit overflow uses nlqa_syslog (lossy=false).
+    let (nb_writer, guard) = tracing_appender::non_blocking::NonBlockingBuilder::default()
+        .lossy(true)
+        .buffered_lines_limit(1024)
+        .thread_name("weissman-fmt-logs".into())
+        .finish(std::io::stdout());
 
     let mut layers: Vec<
         Box<dyn tracing_subscriber::Layer<tracing_subscriber::Registry> + Send + Sync>,

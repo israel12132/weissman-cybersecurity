@@ -26,16 +26,13 @@ use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use sqlx::{Column, PgPool, Row};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, OnceLock};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::Instant;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
 
 /// Bounded Ask Weissman audit lane. try_send so a slow DB never blocks the analyst.
 const NL_AUDIT_MPSC_CAPACITY: usize = 1024;
-/// Under audit-flood DoS, page SIEM at most this often. Extra drops are counted, not formatted.
-const NLQA1_SIEM_PAGE_MIN_INTERVAL_MS: u64 = 250;
 
 struct NlAuditEvent {
     tenant_id: i64,
@@ -49,12 +46,11 @@ struct NlAuditEvent {
 }
 
 static NL_AUDIT_TX: OnceLock<mpsc::Sender<NlAuditEvent>> = OnceLock::new();
-static NLQA1_LAST_PAGE_MS: AtomicU64 = AtomicU64::new(0);
-static NLQA1_SUPPRESSED: AtomicU64 = AtomicU64::new(0);
 
 /// Start the background writer that appends SHA-256-chained `nl_query_audit` rows.
 /// Safe to call more than once; later calls are no-ops.
 pub fn spawn_audit_worker(pool: Arc<PgPool>) {
+    crate::nlqa_syslog::init();
     if NL_AUDIT_TX.get().is_some() {
         return;
     }
@@ -73,46 +69,35 @@ fn question_fingerprint(question: &str) -> String {
     hex::encode(Sha256::digest(question.as_bytes()))
 }
 
-fn unix_now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
-        .unwrap_or(0)
-}
-
 /// SIEM-visible emergency log when the audit MPSC is full or closed.
 /// Dropping the DB write must never be silent — that is an audit-tamper signal.
 ///
-/// The HTTP worker only formats this event after a 250ms rate-limit gate. The
-/// subscriber itself is `tracing_appender::non_blocking` (lossy), so a disk-stuck
-/// log driver cannot stall Tokio threads even if the rate limit is bypassed.
+/// Forensic path is **not** the lossy stdout tracing-appender. Every overflow
+/// event is written to OS syslog (`nlqa_syslog`, AUTHPRIV.CRIT, `lossy(false)`).
+/// `tracing::error!` here is best-effort only (HTTP logs may still be lossy).
 fn report_audit_channel_saturated(ev: &NlAuditEvent, kind: &str) {
     metrics::counter!("weissman_nlqa_audit_dropped_total", "kind" => kind.to_string()).increment(1);
-    let now = unix_now_ms();
-    let last = NLQA1_LAST_PAGE_MS.load(Ordering::Relaxed);
-    if now.saturating_sub(last) < NLQA1_SIEM_PAGE_MIN_INTERVAL_MS {
-        NLQA1_SUPPRESSED.fetch_add(1, Ordering::Relaxed);
-        return;
-    }
-    if NLQA1_LAST_PAGE_MS
-        .compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed)
-        .is_err()
-    {
-        NLQA1_SUPPRESSED.fetch_add(1, Ordering::Relaxed);
-        return;
-    }
-    let suppressed = NLQA1_SUPPRESSED.swap(0, Ordering::Relaxed);
+    let qfp = question_fingerprint(&ev.question);
+    let q_preview: String = ev.question.chars().take(180).collect();
+    let page = format!(
+        "nlqa1 Ask Weissman audit MPSC saturated kind={kind} tenant_id={} user_id={} question_sha256={qfp} elapsed_ms={} rows_returned={} has_error={} question_preview={q_preview}",
+        ev.tenant_id,
+        ev.user_id.unwrap_or(0),
+        ev.elapsed_ms,
+        ev.rows_returned,
+        !ev.error.is_empty(),
+    );
+    crate::nlqa_syslog::page_audit_overflow(&page);
     tracing::error!(
         target: "nlqa1_fallback",
         tenant_id = ev.tenant_id,
         user_id = ev.user_id,
-        question_sha256 = %question_fingerprint(&ev.question),
+        question_sha256 = %qfp,
         elapsed_ms = ev.elapsed_ms,
         rows_returned = ev.rows_returned,
         has_error = !ev.error.is_empty(),
         drop_kind = kind,
-        suppressed_since_last_page = suppressed,
-        "Ask Weissman audit MPSC saturated — event dropped to keep /api/ask hot. Possible audit flood / trace-wiping. SIEM must page."
+        "Ask Weissman audit MPSC saturated — DB insert skipped to keep /api/ask hot; forensic page written to OS syslog (non-lossy). Possible audit flood / trace-wiping."
     );
 }
 
@@ -149,6 +134,10 @@ fn enqueue_audit(tenant_id: i64, user_id: Option<i64>, question: &str, res: &Ask
             let _ = try_enqueue_nl_audit(tx, ev);
         }
         None => {
+            crate::nlqa_syslog::page_audit_overflow(&format!(
+                "nlqa1 Ask Weissman audit worker not started tenant_id={tenant_id} question_sha256={}",
+                question_fingerprint(question)
+            ));
             tracing::error!(
                 target: "nlqa1_fallback",
                 tenant_id,
@@ -303,6 +292,7 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
                 "signature_hash",
                 "watermark_severity",
                 "is_cycle_closed",
+                "cycle_id",
             ],
             order_by: &["discovered_at", "epss_score", "seen_count", "id"],
             joins: &[],
@@ -402,6 +392,25 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
                 "max_risk",
             ],
             order_by: &["computed_at", "max_risk"],
+            joins: &[],
+        },
+    );
+    m.insert(
+        "vulnerability_lifecycle_events",
+        TableSpec {
+            table: "vulnerability_lifecycle_events",
+            columns: &[
+                "id",
+                "finding_id",
+                "client_id",
+                "cycle_id",
+                "event_type",
+                "status",
+                "severity",
+                "watermark_severity",
+                "occurred_at",
+            ],
+            order_by: &["occurred_at", "id"],
             joins: &[],
         },
     );
@@ -928,6 +937,10 @@ mod tests {
             try_enqueue_nl_audit(&tx, ev()).is_err(),
             "second try_send on capacity-1 must be Full"
         );
+        assert!(
+            crate::nlqa_syslog::test_sink_contains("kind=full"),
+            "MPSC Full must page OS syslog, never silently drop"
+        );
     }
 
     #[test]
@@ -943,5 +956,28 @@ mod tests {
             a,
             nl_audit_canonical("other", 7, Some(1), "q", "sql", "", ts)
         );
+    }
+
+    #[test]
+    fn lifecycle_ledger_is_ask_allowlisted() {
+        let plan = QueryPlan {
+            table: "vulnerability_lifecycle_events".into(),
+            select: vec![
+                "finding_id".into(),
+                "cycle_id".into(),
+                "event_type".into(),
+                "watermark_severity".into(),
+            ],
+            filters: vec![],
+            order_by: Some("occurred_at".into()),
+            order_desc: true,
+            limit: Some(20),
+        };
+        let c = compile_plan(&plan, 9).unwrap();
+        assert!(c
+            .sql
+            .contains("FROM vulnerability_lifecycle_events WHERE tenant_id = $1"));
+        assert!(c.sql.contains("cycle_id"));
+        assert!(c.sql.contains("event_type"));
     }
 }

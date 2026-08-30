@@ -7,7 +7,11 @@
 //!     For KEV-listed CVEs we floor at 1.0 (assumed at least one event/year).
 //!   * **ALE** (Annualised Loss Expectancy) = `min(SLE × ARO × discount, asset_value)`.
 //!     Unverified `FIXED` still contributes; only `VERIFIED_FIXED` (and
-//!     `FALSE_POSITIVE`) drop a finding from the blast-radius roll-up.
+//!     `FALSE_POSITIVE`) drop a finding from the **current** blast-radius roll-up.
+//!     Historical closed-cycle SLE/ALE (prior native severity, close timestamp)
+//!     is read from append-only `vulnerability_lifecycle_events` keyed by
+//!     `cycle_id`. A `REOPENED` finding mints a new cycle; it must never UPDATE
+//!     the previous cycle's ledger row.
 //!
 //! Roll-up per client:
 //!   * `total_asset_value_usd` — sum of business_value_usd across all nodes

@@ -64,7 +64,7 @@ cd frontend && npm ci && npm run dev
 
 - **Real scans only** — authorized targets in client scope.
 - **Production** refuses weak secrets (`changeme`, empty JWT). See [docs/manuals/he/05-production-security.md](docs/manuals/he/05-production-security.md).
-- **RAG HMAC:** `WEISSMAN_ENV=production` and `WEISSMAN_E2E_STACK=1` require `WEISSMAN_RAG_PROVENANCE_SECRET` as 64 hex from the vault (no JWT fallback). Local `cargo test` / laptop boots may use a short key and log `WARNING: Insecure RAG Secret in non-prod env`.
+- **RAG HMAC:** Release binaries (`cargo build --release` / production Docker) always require `WEISSMAN_RAG_PROVENANCE_SECRET` as 64 hex from the vault (no JWT fallback). This gate is compile-time (`cfg(not(debug_assertions))`) — unsetting `WEISSMAN_ENV` cannot disable it. Local `cargo test` / laptop `cargo run` (debug) may use a short key and log `WARNING: Insecure RAG Secret in debug build`.
 - Never commit `.env`.
 
 ---

@@ -215,22 +215,27 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
         );
     }
 
-    // Server + worker: dedicated RAG provenance HMAC. Strict (64 hex, vault-only, no
-    // JWT/council fallback) when production *or* the live E2E stack is running.
-    // Local unit tests and laptop boots stay on a loud insecure-fallback warning.
+    // Server + worker: dedicated RAG provenance HMAC. Release binaries
+    // (`cfg(not(debug_assertions))`) are fail-closed with no env-var gate —
+    // unsetting WEISSMAN_ENV cannot disable vault HMAC. Debug builds warn +
+    // fall back for local `cargo test` / laptop DX.
     enforce_rag_provenance_policy()?;
 
     Ok(())
 }
 
-/// Fail-closed RAG HMAC when the process is a real production (or production-shaped) boot.
-/// `WEISSMAN_ENV`/`RUST_ENV`/`NODE_ENV=production` **or** `WEISSMAN_E2E_STACK=1`.
-/// Local `cargo test` and laptop `start_weissman.sh` are neither — they get a warning + fallback.
+/// Fail-closed RAG HMAC in **release** binaries.
+///
+/// Gated on `cfg(not(debug_assertions))`, never on `WEISSMAN_ENV` /
+/// `WEISSMAN_E2E_STACK`. An attacker who unsets those variables inside a
+/// production container cannot fall back to JWT/council signing keys.
+/// `cargo test` and laptop `cargo run` (debug) keep the DX fallback.
 #[must_use]
 pub fn rag_hmac_must_be_strict() -> bool {
-    is_production_environment() || env_truthy_pub("WEISSMAN_E2E_STACK")
+    !cfg!(debug_assertions)
 }
 
+#[cfg(debug_assertions)]
 fn warn_insecure_rag_non_prod() {
     static ONCE: OnceLock<()> = OnceLock::new();
     let dedicated = std::env::var("WEISSMAN_RAG_PROVENANCE_SECRET").unwrap_or_default();
@@ -239,14 +244,14 @@ fn warn_insecure_rag_non_prod() {
     }
     let _ = ONCE.get_or_init(|| {
         eprintln!(
-            "[Weissman][rag] WARNING: Insecure RAG Secret in non-prod env. \
+            "[Weissman][rag] WARNING: Insecure RAG Secret in debug build. \
              Set WEISSMAN_RAG_PROVENANCE_SECRET to 64 hex (openssl rand -hex 32) from the vault. \
-             Falling back to council/JWT signing keys. Fail-closed when WEISSMAN_ENV=production \
-             or WEISSMAN_E2E_STACK=1."
+             Falling back to council/JWT signing keys. Release builds (`cfg(not(debug_assertions))`) \
+             always require the vault HMAC — WEISSMAN_ENV cannot disable that gate."
         );
         tracing::warn!(
             target: "rag_provenance",
-            "WARNING: Insecure RAG Secret in non-prod env"
+            "WARNING: Insecure RAG Secret in debug build"
         );
     });
 }
@@ -254,24 +259,36 @@ fn warn_insecure_rag_non_prod() {
 /// Always-on RAG HMAC gate. Call from server and worker even when the rest of the
 /// production policy is skipped (dev / unit tests).
 pub fn enforce_rag_provenance_policy() -> Result<(), String> {
-    if !rag_hmac_must_be_strict() {
-        warn_insecure_rag_non_prod();
+    #[cfg(not(debug_assertions))]
+    {
+        let rag = std::env::var("WEISSMAN_RAG_PROVENANCE_SECRET").unwrap_or_default();
+        let hmac_secret = rag.trim();
+        if hmac_secret.is_empty()
+            || hmac_secret.len() < 64
+            || !crate::supreme_weights::is_rag_provenance_hex64(hmac_secret)
+        {
+            eprintln!("[SECURITY-FATAL] Invalid Vault HMAC configuration in release build!");
+            tracing::error!(
+                target: "rag_provenance",
+                "[SECURITY-FATAL] Invalid Vault HMAC configuration in release build!"
+            );
+            std::process::exit(1);
+        }
+        if let Ok(jwt) = std::env::var("WEISSMAN_JWT_SECRET") {
+            if hmac_secret.eq_ignore_ascii_case(jwt.trim()) {
+                eprintln!(
+                    "[SECURITY-FATAL] WEISSMAN_RAG_PROVENANCE_SECRET must not equal WEISSMAN_JWT_SECRET in release build!"
+                );
+                std::process::exit(1);
+            }
+        }
         return Ok(());
     }
-    let rag = std::env::var("WEISSMAN_RAG_PROVENANCE_SECRET").unwrap_or_default();
-    let rag = rag.trim();
-    if !crate::supreme_weights::is_rag_provenance_hex64(rag) {
-        return Err(
-            "WEISSMAN_RAG_PROVENANCE_SECRET must be a dedicated 64-character hex value when WEISSMAN_ENV=production or WEISSMAN_E2E_STACK=1 (openssl rand -hex 32); load it from the vault with no JWT/council fallback"
-                .into(),
-        );
+    #[cfg(debug_assertions)]
+    {
+        warn_insecure_rag_non_prod();
+        Ok(())
     }
-    if let Ok(jwt) = std::env::var("WEISSMAN_JWT_SECRET") {
-        if rag.eq_ignore_ascii_case(jwt.trim()) {
-            return Err("WEISSMAN_RAG_PROVENANCE_SECRET must not equal WEISSMAN_JWT_SECRET".into());
-        }
-    }
-    Ok(())
 }
 
 /// True when production expects Redis-backed distributed lockout, rate limits, and agent registry.
@@ -340,11 +357,19 @@ mod tests {
     }
 
     #[test]
-    fn rag_hmac_is_not_strict_in_default_unit_tests() {
-        if is_production_environment() || env_truthy_pub("WEISSMAN_E2E_STACK") {
-            return;
+    fn rag_hmac_strictness_is_compile_time_not_env() {
+        assert_eq!(
+            rag_hmac_must_be_strict(),
+            !cfg!(debug_assertions),
+            "HMAC fail-closed must not depend on WEISSMAN_ENV / WEISSMAN_E2E_STACK"
+        );
+        #[cfg(debug_assertions)]
+        {
+            // Spoofing production env must not enable a silent JWT fallback *path
+            // change* in debug — debug is allowed to fall back, and that is a
+            // compile-time property, not an env toggle an attacker can unset.
+            assert!(!rag_hmac_must_be_strict());
+            assert!(enforce_rag_provenance_policy().is_ok());
         }
-        assert!(!rag_hmac_must_be_strict());
-        assert!(enforce_rag_provenance_policy().is_ok());
     }
 }

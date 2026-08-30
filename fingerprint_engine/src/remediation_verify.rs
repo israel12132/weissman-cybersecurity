@@ -103,6 +103,10 @@ pub async fn run_verification(
                       ELSE watermark_severity
                   END,
                   is_cycle_closed = ($1 = 'VERIFIED_FIXED'),
+                  cycle_id = CASE
+                      WHEN $1 = 'REOPENED' THEN gen_random_uuid()
+                      ELSE COALESCE(cycle_id, gen_random_uuid())
+                  END,
                   raw_data = jsonb_set(
                       COALESCE(raw_data, '{}'::jsonb),
                       '{remediation_verification}',

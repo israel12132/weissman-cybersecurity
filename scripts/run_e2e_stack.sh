@@ -119,8 +119,9 @@ start_apps() {
   export WEISSMAN_COOKIE_SECURE="${WEISSMAN_E2E_COOKIE_SECURE:-0}"
   # Force stable dev secret so server/worker HMAC always matches (ignore production .env).
   export WEISSMAN_JOB_ORCHESTRATOR_SECRET="dev-job-orchestrator-secret-32-bytes-minimum-v1"
-  # E2E stack is fail-closed for RAG HMAC (WEISSMAN_E2E_STACK=1). Mint a throwaway 64-hex
-  # if the inherited .env is empty or not hex — never copy the JWT.
+  # Release weissman-server/worker always require vault HMAC (compile-time).
+  # This debug E2E binary may fall back; still mint 64-hex so HMAC paths match prod.
+  # Never copy the JWT.
   if [[ -z "${WEISSMAN_RAG_PROVENANCE_SECRET:-}" || ! "${WEISSMAN_RAG_PROVENANCE_SECRET}" =~ ^[0-9a-fA-F]{64}$ ]]; then
     WEISSMAN_RAG_PROVENANCE_SECRET="$(openssl rand -hex 32)"
     export WEISSMAN_RAG_PROVENANCE_SECRET

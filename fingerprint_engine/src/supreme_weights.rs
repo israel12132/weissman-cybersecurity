@@ -340,13 +340,13 @@ pub fn is_rag_provenance_hex64(s: &str) -> bool {
 
 /// HMAC key for RAG / pentest-memory provenance.
 ///
-/// Strict (`WEISSMAN_ENV=production` or `WEISSMAN_E2E_STACK=1`): **only**
+/// Release (`cfg(not(debug_assertions))`): **only**
 /// `WEISSMAN_RAG_PROVENANCE_SECRET` (64 hex, loaded from the vault). No fallback
 /// to JWT or council signing keys. Empty key means fail-closed: nothing is signed
-/// or accepted.
+/// or accepted. `WEISSMAN_ENV` cannot disable this.
 ///
-/// Local / unit tests: dedicated secret, then council signing secret, then JWT,
-/// with a one-shot WARNING so a laptop boot never requires minting 64 hex.
+/// Debug (`cargo test`, laptop `cargo run`): dedicated secret, then council
+/// signing secret, then JWT, with a one-shot WARNING.
 pub fn rag_provenance_secret() -> Vec<u8> {
     let dedicated = std::env::var("WEISSMAN_RAG_PROVENANCE_SECRET")
         .ok()
