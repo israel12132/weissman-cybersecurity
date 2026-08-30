@@ -89,7 +89,8 @@ rest (AES-256-GCM). **Production fails closed at startup if no key material is s
 | Var | Effect |
 |-----|--------|
 | `WEISSMAN_TRUST_PROXY_HEADERS` | Enables use of `X-Forwarded-For` / `X-Real-IP` for audit + rate limit client identity |
-| `WEISSMAN_TRUST_PROXY_CIDRS` | **Required in production.** Comma-separated CIDRs of reverse proxies allowed to (1) supply forwarded client IP and (2) present dual-control headers (`X-Weissman-Destructive-Confirm` / `X-Weissman-Dual-Approve`). Empty in production → server refuses boot. Any other TCP peer sending those headers is 403 (direct `:8000` / SSRF / pod bypass of Nginx). Lab/non-prod: omit for loopback-only. |
+| `WEISSMAN_TRUST_PROXY_CIDRS` | **Required in production.** Comma-separated CIDRs of reverse proxies allowed to supply forwarded client IP. Empty in production → server refuses boot. This list does **not** authorize dual-control headers. |
+| `WEISSMAN_PROXY_SIGNING_SECRET` | **Required in production (>=32).** HMAC key for `X-Weissman-Proxy-Signature`. Dual-control headers without a valid signature are 403. IP/CIDR is not a dual-control trust signal (Kubernetes pod IP reuse). |
 
 ---
 

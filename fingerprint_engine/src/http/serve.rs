@@ -1851,7 +1851,8 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .layer(middleware::from_fn(
             crate::request_trace::trace_http_middleware,
         ))
-        // OUTERMOST: reject dual-control headers unless TCP peer ∈ TRUST_PROXY_CIDRS.
+        // OUTERMOST: reject dual-control headers unless X-Weissman-Proxy-Signature
+        // verifies (HMAC). IP/CIDR is not a trust signal — k8s pod IP reuse.
         // Must sit outside auth so a direct :8000 / SSRF client cannot inject
         // X-Weissman-Destructive-Confirm after Nginx has already stripped it.
         .layer(middleware::from_fn(

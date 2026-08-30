@@ -144,6 +144,14 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
             );
         }
 
+        let proxy_sig = std::env::var("WEISSMAN_PROXY_SIGNING_SECRET").unwrap_or_default();
+        if proxy_sig.trim().len() < 32 {
+            return Err(
+                "WEISSMAN_PROXY_SIGNING_SECRET must be set to a strong (>=32 chars) HMAC key in production so dual-control headers cannot be injected via recycled Kubernetes pod IPs or direct :8000 / SSRF. IP/CIDR is not a dual-control trust signal."
+                    .into(),
+            );
+        }
+
         let proxy_cidrs = std::env::var("WEISSMAN_TRUST_PROXY_CIDRS").unwrap_or_default();
         let parsed_cidrs = proxy_cidrs
             .split(',')
@@ -151,7 +159,7 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
             .count();
         if parsed_cidrs == 0 {
             return Err(
-                "WEISSMAN_TRUST_PROXY_CIDRS must be set in production to at least one valid CIDR so dual-control headers cannot be injected by hitting Axum :8000 directly (SSRF / pod bypass of Nginx)"
+                "WEISSMAN_TRUST_PROXY_CIDRS must be set in production to at least one valid CIDR for X-Forwarded-For / X-Real-IP client identity (not for dual-control; dual-control uses WEISSMAN_PROXY_SIGNING_SECRET)"
                     .into(),
             );
         }

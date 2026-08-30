@@ -112,6 +112,11 @@ spec:
                 secretKeyRef:
                   name: weissman-secrets
                   key: destructive_confirm_secret
+            - name: WEISSMAN_PROXY_SIGNING_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: proxy_signing_secret
             - name: WEISSMAN_JOB_ORCHESTRATOR_SECRET
               valueFrom:
                 secretKeyRef:

@@ -1,10 +1,10 @@
 //! Encrypted agent identity spool.
 //!
-//! Linux: AEAD key lives in the kernel user keyring (`keyctl`) and in process
-//! memory only. It is **never** derived from `/etc/machine-id`, MAC addresses,
-//! or environment — those are recoverable by an unprivileged local attacker.
-//! Non-Linux: same AEAD; IKM is getrandom() then HKDF. Windows can additionally
-//! wrap via DPAPI later; we still never use host fingerprints as IKM.
+//! Linux: AEAD IKM lives in the **persistent user keyring** (`@u`, not `@s`/`@c`)
+//! plus optional systemd-creds. A session keyring is destroyed on systemd
+//! `Restart=` — that silently dropped UEBA spool decryption and forced re-enroll.
+//! IKM is **never** derived from `/etc/machine-id`, MAC addresses, or environment.
+//! Non-Linux: same AEAD; IKM is getrandom() then HKDF.
 //!
 //! libc 0.2 does not export `add_key`/`keyctl` wrappers on this crate version —
 //! only `SYS_add_key` / `SYS_keyctl` plus `linux/keyctl.h` constants. We issue
@@ -21,6 +21,10 @@ const MAGIC: &[u8; 4] = b"WSPL";
 const VERSION: u8 = 1;
 const NONCE_LEN: usize = 24;
 const KEYRING_DESC: &str = "weissman-agent-spool";
+/// Architect-mandated anchor: UID persistent user keyring, not session (`@s`) or
+/// thread (`@c`). Survives systemd unit crash/restart for the same service UID.
+pub const WEISSMAN_KEYRING_ANCHOR: &str = "@u";
+const SYSTEMD_CRED_NAME: &str = "weissman-agent-spool-ikm";
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -60,26 +64,78 @@ fn aead_key() -> std::io::Result<[u8; 32]> {
 fn load_or_create_ikm() -> std::io::Result<[u8; 32]> {
     #[cfg(target_os = "linux")]
     {
+        linux_keyring::link_persistent_user_keyring();
+        if let Some(ikm) = systemd_creds::read() {
+            let _ = linux_keyring::install(&ikm);
+            return Ok(ikm);
+        }
         if let Some(ikm) = linux_keyring::read() {
             return Ok(ikm);
         }
+        if let Some(ikm) = read_ikm_file() {
+            let _ = linux_keyring::install(&ikm);
+            return Ok(ikm);
+        }
         let ikm = random_ikm()?;
+        persist_ikm_file(&ikm);
         if let Err(e) = linux_keyring::install(&ikm) {
-            // Keyring unavailable (restricted container, seccomp, no user keyring).
-            // Keep IKM in process memory. After reboot the spool cannot decrypt and
-            // the agent re-enrolls — that is the intended fail-closed behaviour.
             tracing::warn!(
                 target: "agent",
                 error = %e,
-                "kernel keyring unavailable; spool IKM is RAM-only (reboot requires re-enroll)"
+                anchor = WEISSMAN_KEYRING_ANCHOR,
+                "kernel user keyring unavailable; IKM persisted via systemd-creds/0600 file"
             );
         }
         Ok(ikm)
     }
     #[cfg(not(target_os = "linux"))]
     {
-        random_ikm()
+        if let Some(ikm) = read_ikm_file() {
+            return Ok(ikm);
+        }
+        let ikm = random_ikm()?;
+        persist_ikm_file(&ikm);
+        Ok(ikm)
     }
+}
+
+fn ikm_file_path() -> std::path::PathBuf {
+    if let Some(p) = std::env::var_os("WEISSMAN_AGENT_IKM_FILE") {
+        return std::path::PathBuf::from(p);
+    }
+    super::state::state_path().with_extension("ikm")
+}
+
+fn persist_ikm_file(ikm: &[u8; 32]) {
+    if std::env::var_os("WEISSMAN_AGENT_STATE_FILE").is_none()
+        && std::env::var_os("WEISSMAN_AGENT_IKM_FILE").is_none()
+    {
+        return;
+    }
+    let path = ikm_file_path();
+    if let Err(e) = write_owner_only(&path, ikm) {
+        tracing::warn!(
+            target: "agent",
+            path = %path.display(),
+            error = %e,
+            "could not persist spool IKM file (0600); systemd restart may require re-enroll"
+        );
+    }
+}
+
+fn read_ikm_file() -> Option<[u8; 32]> {
+    if std::env::var_os("WEISSMAN_AGENT_STATE_FILE").is_none()
+        && std::env::var_os("WEISSMAN_AGENT_IKM_FILE").is_none()
+    {
+        return None;
+    }
+    let raw = std::fs::read(ikm_file_path()).ok()?;
+    if raw.len() == 32 {
+        let mut ikm = [0u8; 32];
+        ikm.copy_from_slice(&raw);
+        return Some(ikm);
+    }
+    None
 }
 
 pub fn encrypt_spool(plaintext: &[u8]) -> std::io::Result<Vec<u8>> {
@@ -184,6 +240,24 @@ pub fn load_maybe_encrypted(path: &Path) -> Option<Vec<u8>> {
 }
 
 #[cfg(target_os = "linux")]
+mod systemd_creds {
+    pub fn read() -> Option<[u8; 32]> {
+        let dir = std::env::var("CREDENTIALS_DIRECTORY").ok()?;
+        if dir.trim().is_empty() {
+            return None;
+        }
+        let path = std::path::Path::new(&dir).join(super::SYSTEMD_CRED_NAME);
+        let raw = std::fs::read(path).ok()?;
+        if raw.len() == 32 {
+            let mut ikm = [0u8; 32];
+            ikm.copy_from_slice(&raw);
+            return Some(ikm);
+        }
+        None
+    }
+}
+
+#[cfg(target_os = "linux")]
 mod linux_keyring {
     use std::ffi::CString;
     use std::io;
@@ -194,6 +268,34 @@ mod linux_keyring {
         CString::new(s).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))
     }
 
+    fn dest_keyring() -> libc::c_long {
+        // @u — never KEY_SPEC_SESSION_KEYRING (-3) or thread keyring.
+        debug_assert_eq!(super::WEISSMAN_KEYRING_ANCHOR, "@u");
+        libc::KEY_SPEC_USER_KEYRING as libc::c_long
+    }
+
+    /// Attach the UID persistent keyring to `@u` so keys survive systemd Restart=
+    /// after the previous session keyring is torn down.
+    pub fn link_persistent_user_keyring() {
+        // uid -1 = calling process. KEYCTL_GET_PERSISTENT creates/links the
+        // persistent keyring into the destination (@u).
+        let rc = unsafe {
+            libc::syscall(
+                libc::SYS_keyctl,
+                libc::KEYCTL_GET_PERSISTENT as libc::c_long,
+                -1_i64,
+                dest_keyring(),
+            )
+        };
+        if rc < 0 {
+            tracing::debug!(
+                target: "agent",
+                error = %io::Error::last_os_error(),
+                "KEYCTL_GET_PERSISTENT unavailable; falling back to @u without persistent link"
+            );
+        }
+    }
+
     pub fn read() -> Option<[u8; KEY_LEN]> {
         let typ = cstr("user").ok()?;
         let desc = cstr(super::KEYRING_DESC).ok()?;
@@ -202,7 +304,7 @@ mod linux_keyring {
             libc::syscall(
                 libc::SYS_keyctl,
                 libc::KEYCTL_SEARCH as libc::c_long,
-                libc::KEY_SPEC_USER_KEYRING as libc::c_long,
+                dest_keyring(),
                 typ.as_ptr(),
                 desc.as_ptr(),
                 0_i64,
@@ -240,7 +342,7 @@ mod linux_keyring {
                 desc.as_ptr(),
                 ikm.as_ptr(),
                 KEY_LEN as libc::size_t,
-                libc::KEY_SPEC_USER_KEYRING as libc::c_long,
+                dest_keyring(),
             )
         };
         if rc < 0 {
@@ -299,5 +401,17 @@ mod tests {
             !ikm.windows(8).any(|w| mid.windows(8).any(|m| m == w)),
             "IKM must not contain /etc/machine-id bytes"
         );
+    }
+
+    #[test]
+    fn keyring_anchor_is_persistent_user_not_session() {
+        assert_eq!(WEISSMAN_KEYRING_ANCHOR, "@u");
+        assert_ne!(WEISSMAN_KEYRING_ANCHOR, "@s");
+        assert_ne!(WEISSMAN_KEYRING_ANCHOR, "@c");
+        #[cfg(target_os = "linux")]
+        {
+            assert_eq!(libc::KEY_SPEC_USER_KEYRING, -4);
+            assert_eq!(libc::KEY_SPEC_SESSION_KEYRING, -3);
+        }
     }
 }

@@ -302,10 +302,20 @@ if sed -n '/^  backend:/,/^  [a-z]/p' docker-compose.prod.yml | grep -q 'WEISSMA
 else
   bad "backend is missing WEISSMAN_TRUST_PROXY_HEADERS — every client collapses into one rate-limit bucket"
 fi
-if sed -n '/^  backend:/,/^  [a-z]/p' docker-compose.prod.yml | grep -q 'WEISSMAN_TRUST_PROXY_CIDRS'; then
-  ok "backend receives WEISSMAN_TRUST_PROXY_CIDRS (dual-control SSRF guard)"
+if sed -n '/^  backend:/,/^  [a-z]/p' docker-compose.prod.yml | grep -q 'WEISSMAN_PROXY_SIGNING_SECRET'; then
+  ok "backend receives WEISSMAN_PROXY_SIGNING_SECRET (dual-control HMAC)"
 else
-  bad "backend is missing WEISSMAN_TRUST_PROXY_CIDRS — dual-control headers injectable via :8000"
+  bad "backend is missing WEISSMAN_PROXY_SIGNING_SECRET — dual-control headers injectable via :8000 / pod IP reuse"
+fi
+if grep -q 'WEISSMAN_PROXY_SIGNING_SECRET' "$LAUNCHER"; then
+  ok "launcher generates/requires WEISSMAN_PROXY_SIGNING_SECRET"
+else
+  bad "launcher does not mention WEISSMAN_PROXY_SIGNING_SECRET"
+fi
+if sed -n '/^  backend:/,/^  [a-z]/p' docker-compose.prod.yml | grep -q 'WEISSMAN_TRUST_PROXY_CIDRS'; then
+  ok "backend receives WEISSMAN_TRUST_PROXY_CIDRS (forwarded-IP allow-list)"
+else
+  bad "backend is missing WEISSMAN_TRUST_PROXY_CIDRS — X-Forwarded-For would be untrusted or over-trusted"
 fi
 if grep -q 'WEISSMAN_TRUST_PROXY_CIDRS' "$LAUNCHER"; then
   ok "launcher generates/requires WEISSMAN_TRUST_PROXY_CIDRS"

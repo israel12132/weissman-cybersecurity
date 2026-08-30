@@ -5,12 +5,70 @@
 //! out of wall-clock order; the sealer **always** sorts by the table's BIGSERIAL
 //! `id` (the monotonic sequence), never by `asked_at`. Ordering by timestamps
 //! would fork the chain and trip integrity audits as false "log tamper" alerts.
+//!
+//! PostgreSQL `nextval` is non-transactional: a rolled-back INSERT leaves a
+//! permanent sequence hole. The sealer never blocks the walk forever waiting for
+//! a missing id. After [`MAX_HOLE_AGE_SECONDS`] it records `SKIPPED_ROLLBACK`
+//! and continues chaining the next committed row.
+//!
+//! PostgreSQL `nextval` is non-transactional: a rolled-back INSERT leaves a
+//! permanent sequence hole. The sealer never blocks the walk forever waiting for
+//! a missing id. After [`MAX_HOLE_AGE_SECONDS`] it records `SKIPPED_ROLLBACK`
+//! and continues chaining the next committed row.
 
 use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 const CHAIN_VERSION: &str = "nl-audit-v1";
+
+/// 5-minute tolerance: in-flight INSERTs may still COMMIT; older holes are rollbacks.
+pub const MAX_HOLE_AGE_SECONDS: i64 = 300;
+pub const SKIPPED_ROLLBACK: &str = "SKIPPED_ROLLBACK";
+
+/// True when a sequence hole is old enough to treat as a rolled-back `nextval`,
+/// not an in-flight transaction. `hole_timestamp` is unix seconds (`first_seen_at`).
+pub fn is_hole_skippable(hole_timestamp: i64) -> bool {
+    is_hole_skippable_at(hole_timestamp, chrono::Utc::now().timestamp())
+}
+
+pub fn is_hole_skippable_at(hole_timestamp: i64, now: i64) -> bool {
+    now.saturating_sub(hole_timestamp) > MAX_HOLE_AGE_SECONDS
+}
+
+/// How many leading pending ids (sorted ASC, all greater than `last_sealed_id`)
+/// may be sealed without walking into a young sequence hole.
+///
+/// `missing_in_range(lo, hi)` returns globally uncommitted ids in that inclusive
+/// span (SECURITY DEFINER in SQL). `first_seen(missing_id)` is when we first
+/// observed that hole.
+pub fn take_sealable_prefix(
+    last_sealed_id: i64,
+    pending_ids: &[i64],
+    missing_in_range: impl Fn(i64, i64) -> Vec<i64>,
+    first_seen: impl Fn(i64) -> i64,
+    now: i64,
+) -> usize {
+    let mut prev = last_sealed_id;
+    let mut n = 0usize;
+    for &id in pending_ids {
+        let lo = prev + 1;
+        let hi = id - 1;
+        if lo <= hi {
+            let missing = missing_in_range(lo, hi);
+            if !missing.is_empty()
+                && missing
+                    .iter()
+                    .any(|&m| !is_hole_skippable_at(first_seen(m), now))
+            {
+                return n;
+            }
+        }
+        n += 1;
+        prev = id;
+    }
+    n
+}
 
 #[derive(Debug, Clone)]
 pub struct NlAuditRow {
@@ -130,6 +188,14 @@ pub async fn chain_pending_for_tenant(
     )
     .await?;
 
+    let last_sealed_id: i64 = sqlx::query_scalar(
+        r#"SELECT COALESCE(MAX(id), 0) FROM nl_query_audit
+           WHERE tenant_id = $1 AND event_hash IS NOT NULL"#,
+    )
+    .bind(tenant_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
     let head: String = sqlx::query_scalar(
         r#"SELECT COALESCE(event_hash, '') FROM nl_query_audit
            WHERE tenant_id = $1 AND event_hash IS NOT NULL
@@ -177,11 +243,135 @@ pub async fn chain_pending_for_tenant(
         return Ok(0);
     }
 
+    observe_and_skip_holes(&mut tx, tenant_id, last_sealed_id, &pending).await?;
+
+    let pending_ids: Vec<i64> = pending.iter().map(|r| r.id).collect();
+    let hole_rows: Vec<(i64, DateTime<Utc>)> = sqlx::query_as(
+        r#"SELECT missing_id, first_seen_at FROM nl_query_audit_chain_holes
+           WHERE tenant_id = $1"#,
+    )
+    .bind(tenant_id)
+    .fetch_all(&mut *tx)
+    .await?;
+    let mut first_seen_map = std::collections::HashMap::new();
+    for (id, ts) in hole_rows {
+        first_seen_map.insert(id, ts.timestamp());
+    }
+    let now = Utc::now().timestamp();
+    let missing_cache = load_missing_gaps(&mut tx, last_sealed_id, &pending_ids).await?;
+    let n_seal = take_sealable_prefix(
+        last_sealed_id,
+        &pending_ids,
+        |lo, hi| {
+            missing_cache
+                .iter()
+                .filter(|&&id| id >= lo && id <= hi)
+                .copied()
+                .collect()
+        },
+        |id| *first_seen_map.get(&id).unwrap_or(&now),
+        now,
+    );
+    if n_seal == 0 {
+        tx.commit().await?;
+        return Ok(0);
+    }
+    pending.truncate(n_seal);
+
     seal_in_id_order(&head, &mut pending);
     let n = pending.len() as u64;
     persist_sealed(&mut tx, &pending).await?;
     tx.commit().await?;
     Ok(n)
+}
+
+async fn load_missing_gaps(
+    tx: &mut Transaction<'_, Postgres>,
+    last_sealed_id: i64,
+    pending_ids: &[i64],
+) -> Result<Vec<i64>, sqlx::Error> {
+    let mut missing = Vec::new();
+    let mut prev = last_sealed_id;
+    for &id in pending_ids {
+        let lo = prev + 1;
+        let hi = id - 1;
+        if lo <= hi {
+            let ids: Vec<i64> =
+                sqlx::query_scalar("SELECT missing_id FROM nl_audit_missing_ids($1, $2)")
+                    .bind(lo)
+                    .bind(hi)
+                    .fetch_all(&mut **tx)
+                    .await?;
+            missing.extend(ids);
+        }
+        prev = id;
+    }
+    Ok(missing)
+}
+
+async fn observe_and_skip_holes(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: i64,
+    last_sealed_id: i64,
+    pending: &[NlAuditRow],
+) -> Result<(), sqlx::Error> {
+    let mut prev = last_sealed_id;
+    let now = Utc::now();
+    for row in pending {
+        let lo = prev + 1;
+        let hi = row.id - 1;
+        if lo <= hi {
+            let missing: Vec<i64> =
+                sqlx::query_scalar("SELECT missing_id FROM nl_audit_missing_ids($1, $2)")
+                    .bind(lo)
+                    .bind(hi)
+                    .fetch_all(&mut **tx)
+                    .await?;
+            for missing_id in missing {
+                sqlx::query(
+                    r#"INSERT INTO nl_query_audit_chain_holes
+                           (tenant_id, missing_id, first_seen_at)
+                       VALUES ($1, $2, $3)
+                       ON CONFLICT (tenant_id, missing_id) DO NOTHING"#,
+                )
+                .bind(tenant_id)
+                .bind(missing_id)
+                .bind(now)
+                .execute(&mut **tx)
+                .await?;
+                let first_seen: DateTime<Utc> = sqlx::query_scalar(
+                    r#"SELECT first_seen_at FROM nl_query_audit_chain_holes
+                       WHERE tenant_id = $1 AND missing_id = $2"#,
+                )
+                .bind(tenant_id)
+                .bind(missing_id)
+                .fetch_one(&mut **tx)
+                .await?;
+                if is_hole_skippable_at(first_seen.timestamp(), now.timestamp()) {
+                    sqlx::query(
+                        r#"UPDATE nl_query_audit_chain_holes
+                           SET skipped_at = $3, reason = $4
+                           WHERE tenant_id = $1 AND missing_id = $2 AND skipped_at IS NULL"#,
+                    )
+                    .bind(tenant_id)
+                    .bind(missing_id)
+                    .bind(now)
+                    .bind(SKIPPED_ROLLBACK)
+                    .execute(&mut **tx)
+                    .await?;
+                    tracing::info!(
+                        target: "nl_audit_chain",
+                        tenant_id,
+                        missing_id,
+                        reason = SKIPPED_ROLLBACK,
+                        "sequence hole older than 5 minutes; continuing audit walk"
+                    );
+                }
+            }
+        }
+        prev = row.id;
+    }
+    Ok(())
 }
 
 async fn persist_sealed(
@@ -288,6 +478,65 @@ mod tests {
         seal_in_id_order("genesis", &mut rows);
         assert!(verify_sealed_id_order("genesis", &rows).is_ok());
         assert!(verify_sealed_asked_at_order("genesis", &rows).is_ok());
+    }
+
+    #[test]
+    fn hole_younger_than_five_minutes_is_not_skippable() {
+        let now = 1_700_000_300;
+        assert!(!is_hole_skippable_at(now - 300, now));
+        assert!(!is_hole_skippable_at(now, now));
+        assert!(is_hole_skippable_at(now - 301, now));
+        assert_eq!(MAX_HOLE_AGE_SECONDS, 300);
+        assert_eq!(SKIPPED_ROLLBACK, "SKIPPED_ROLLBACK");
+    }
+
+    #[test]
+    fn young_sequence_hole_blocks_audit_walk() {
+        let now = 1_000_000;
+        let n = take_sealable_prefix(
+            9,
+            &[11, 12],
+            |lo, hi| {
+                if lo <= 10 && hi >= 10 {
+                    vec![10]
+                } else {
+                    vec![]
+                }
+            },
+            |_| now, // just observed
+            now,
+        );
+        assert_eq!(n, 0, "must wait; id 10 may still be in-flight");
+    }
+
+    #[test]
+    fn aged_sequence_hole_is_skipped_and_walk_continues() {
+        let now = 1_000_000;
+        let first_seen = now - MAX_HOLE_AGE_SECONDS - 1;
+        let n = take_sealable_prefix(
+            9,
+            &[11, 12],
+            |lo, hi| {
+                if lo <= 10 && hi >= 10 {
+                    vec![10]
+                } else {
+                    vec![]
+                }
+            },
+            |_| first_seen,
+            now,
+        );
+        assert_eq!(
+            n, 2,
+            "after 5 minutes the hole is SKIPPED_ROLLBACK; seal 11 then 12"
+        );
+    }
+
+    #[test]
+    fn consecutive_ids_have_no_hole() {
+        let now = 1_000_000;
+        let n = take_sealable_prefix(9, &[10, 11], |_lo, _hi| vec![], |_| now, now);
+        assert_eq!(n, 2);
     }
 
     #[tokio::test]

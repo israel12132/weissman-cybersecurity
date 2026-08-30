@@ -123,6 +123,10 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    detections::spawn_onboarding_exec_gate(Duration::from_secs(
+        detections::ONBOARDING_EXEC_GATE_SECS,
+    ));
+
     // Reconnect loop with exponential back-off.
     let mut backoff = cli.backoff_ms_initial.max(250);
     loop {

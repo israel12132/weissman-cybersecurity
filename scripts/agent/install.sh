@@ -117,6 +117,13 @@ EnvironmentFile=${ENV_FILE}
 ExecStart=${BIN_PATH}
 Restart=always
 RestartSec=5s
+# Persistent UID keyring (@u), not a session keyring that dies on Restart=.
+KeyringMode=shared
+# Optional systemd-creds: agent writes 32-byte IKM next to agent.state (0600).
+LoadCredential=weissman-agent-spool-ikm:-${INSTALL_DIR}/agent.ikm
+# Onboarding exec-gate: FAN_OPEN_EXEC_PERM + SIGSTOP fallback.
+AmbientCapabilities=CAP_SYS_ADMIN CAP_KILL
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_KILL CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE
 NoNewPrivileges=true
 ProtectSystem=strict
 # ProtectSystem=strict mounts the entire filesystem read-only, so without this the agent cannot

@@ -14,11 +14,12 @@ data:
   WEISSMAN_WORKER_HEAVY_CONCURRENCY: "2"
   WEISSMAN_SOAR_VERIFY_WORKER: "1"
   WEISSMAN_AGENT_BIN_DIR: "/srv/bin/agents"
-  # REQUIRED. Ingress/nginx controller CIDRs only — never the whole cluster pod
-  # range (that re-opens dual-control header injection via in-cluster SSRF to :8000).
+  # REQUIRED for X-Forwarded-For client identity. Ingress/nginx controller CIDRs
+  # only — never the whole cluster pod range. Dual-control uses
+  # weissman-secrets/proxy_signing_secret (HMAC), not this CIDR.
   # Empty => weissman-server refuses boot. Replace before apply.
   WEISSMAN_TRUST_PROXY_HEADERS: "1"
   WEISSMAN_TRUST_PROXY_CIDRS: ""
   # Secrets (database_url, jwt_secret, destructive_confirm_secret, job_orchestrator_secret,
-  # metrics_token, redis_url, migrate_url) MUST come from Secret weissman-secrets.
+  # metrics_token, redis_url, migrate_url, proxy_signing_secret) MUST come from Secret weissman-secrets.
   # See deploy/k8s/secret.example.yaml and scripts/k8s-generate-secrets.sh.

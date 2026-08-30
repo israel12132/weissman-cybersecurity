@@ -278,6 +278,7 @@ ensure_env() {
     # every replica — so one leaked value both mints auth tokens and decrypts every stored
     # secret. security_startup.rs now refuses to boot production without this.
     WEISSMAN_INTEGRATIONS_VAULT_KEY
+    WEISSMAN_PROXY_SIGNING_SECRET
   )
   for key in "${keys[@]}"; do
     local cur
@@ -288,10 +289,8 @@ ensure_env() {
     fi
   done
 
-  # Dual-control headers are accepted only from these TCP peers (security_startup.rs).
-  # Compose live: docker user-defined networks live in 172.16.0.0/12. Pin to the
-  # reverse-proxy /32 when the overlay is hostile (k8s). Empty => compose :? fail
-  # and production boot refuse.
+  # Dual-control headers are accepted only with WEISSMAN_PROXY_SIGNING_SECRET
+  # (X-Weissman-Proxy-Signature HMAC). CIDRs below are for X-Forwarded-For only.
   if [[ -z "$(env_get WEISSMAN_TRUST_PROXY_CIDRS)" ]]; then
     env_set WEISSMAN_TRUST_PROXY_CIDRS "172.16.0.0/12"
     log "Set WEISSMAN_TRUST_PROXY_CIDRS=172.16.0.0/12 (pin to your reverse-proxy CIDR on k8s)"
@@ -372,12 +371,13 @@ validate_env() {
   require_len WEISSMAN_JWT_SECRET 48 "regenerate with: openssl rand -base64 48"
   require_len WEISSMAN_METRICS_TOKEN 32
   require_len WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET 32
+  require_len WEISSMAN_PROXY_SIGNING_SECRET 32 "HMAC for X-Weissman-Proxy-Signature (dual-control)"
   # security_startup.rs:146 rejects anything shorter for BOTH weissman-server and
   # weissman-worker; catching it here beats waiting out the health-check timeout.
   require_len WEISSMAN_JOB_ORCHESTRATOR_SECRET 32 "regenerate with: openssl rand -base64 48"
   require_len WEISSMAN_ADMIN_PASSWORD 12
   if [[ -z "${WEISSMAN_TRUST_PROXY_CIDRS:-}" ]]; then
-    die "WEISSMAN_TRUST_PROXY_CIDRS must be a non-empty CIDR list in production (dual-control SSRF guard)"
+    die "WEISSMAN_TRUST_PROXY_CIDRS must be a non-empty CIDR list in production (X-Forwarded-For allow-list)"
   fi
 
   local weak_frags=(weissman_dev_secret weissman_auth_dev)

@@ -7,6 +7,8 @@
 //!   2. Fleet whitelist (same item already trained on other healthy agents)
 //!   3. Threat signatures (known C2 / dual-use attack tools)
 //! Unvalidated and threat-matched items never enter `learned_set` during onboarding.
+//! The agent additionally holds `execve` in the kernel (`FAN_OPEN_EXEC_PERM`) for
+//! the same window so ephemeral implants cannot complete before this check runs.
 
 use std::collections::HashSet;
 
