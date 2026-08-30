@@ -54,6 +54,10 @@ pub(crate) fn findings_from_resolver(engine: &str, resolver: &SyscallResolver) -
         json!(resolver.hash_collisions()),
     );
     extras.insert(
+        "halos_cascade_blocked".into(),
+        json!(resolver.cascade_blocked()),
+    );
+    extras.insert(
         "hooked_targets".into(),
         Value::Array(
             resolver
@@ -84,7 +88,8 @@ pub(crate) fn findings_from_resolver(engine: &str, resolver: &SyscallResolver) -
                         "alg": "murmur3-64",
                         "mmh": format!("{:016x}", e.mmh),
                         "ssn": e.ssn,
-                        "rva": e.rva
+                        "rva": e.rva,
+                        "cascade_blocked": e.cascade_blocked
                     })
                 })
                 .collect(),
@@ -112,6 +117,20 @@ pub(crate) fn findings_from_resolver(engine: &str, resolver: &SyscallResolver) -
             "medium",
             "T1562.001",
             "Two or more Nt/Zw names hashed to the same MurmurHash3 digest under this agent's per-process seed. Both rows are kept so SOC is not blinded. SHA-256 dispatch is unaffected.",
+            extras.clone(),
+        ));
+    }
+    if resolver.cascade_blocked() > 0 {
+        out.push(finding(
+            engine,
+            &format!(
+                "Halo's Gate cascade block on {} ntdll export(s) — EDR hooked the target and all ±{} neighbors",
+                resolver.cascade_blocked(),
+                crate::direct_syscalls::ssn::MAX_HALOS_GATE_NEIGHBOR_DEPTH
+            ),
+            "high",
+            "T1562.001",
+            "The hooked stub had no remaining syscall;ret tail and no clean Hell's Gate neighbor within MAX_HALOS_GATE_NEIGHBOR_DEPTH. Dispatch did not issue a guessed SSN. This is active EDR cascade hooking (or an unhook race), not a resolver bypass.",
             extras.clone(),
         ));
     }
@@ -162,6 +181,7 @@ mod tests {
         assert!(blob.contains("16 MiB"));
         assert!(blob.contains("scan_capped"));
         assert!(blob.contains("murmur3-64"));
+        assert!(blob.contains("halos_cascade_blocked"));
         assert!(!blob.contains("fnv1a"));
     }
 }

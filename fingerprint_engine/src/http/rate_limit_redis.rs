@@ -52,13 +52,14 @@ fn shared() -> Option<Arc<RedisRateLimiter>> {
     .clone()
 }
 
-/// Atomic INCR + EXPIRE. A split INCR then EXPIRE-if-count==1 leaves a key with
-/// no TTL when EXPIRE fails or races; the counter then grows across seconds and
-/// 429s the rest of the process. Heal any key whose TTL is missing (`TTL < 0`).
-const INCR_EXPIRE_LUA: &str = r#"
+/// Atomic INCR + EXPIRE as a single Redis EVAL. Split `INCR` then `EXPIRE` is
+/// not atomic: a crash between them leaves a counter with no TTL and 429s the
+/// tenant until an operator deletes the key. Heal keys whose TTL is missing
+/// (`TTL < 0`) — stricter than expire-on-first-INCR-only.
+pub const REDIS_RATE_LIMITER_LUA: &str = r#"
 local n = redis.call('INCR', KEYS[1])
 if n == 1 or redis.call('TTL', KEYS[1]) < 0 then
-  redis.call('EXPIRE', KEYS[1], ARGV[1])
+  redis.call('EXPIRE', KEYS[1], tonumber(ARGV[1]))
 end
 return n
 "#;
@@ -74,7 +75,7 @@ async fn incr_with_ttl(
     window: Duration,
 ) -> redis::RedisResult<u64> {
     redis::cmd("EVAL")
-        .arg(INCR_EXPIRE_LUA)
+        .arg(REDIS_RATE_LIMITER_LUA)
         .arg(1)
         .arg(key)
         .arg(window.as_secs().max(1))
@@ -486,27 +487,41 @@ pub async fn claim_queryplan_nonce_strict(nonce: &str) -> StrictOp<bool> {
 }
 
 const QUERYPLAN_NONCE_WAIT_REPLICAS: i64 = 1;
-const QUERYPLAN_NONCE_WAIT_MS: i64 = 100;
+/// Redis `WAIT` timeout (milliseconds) and the Tokio ceiling around it.
+/// 100ms held a multiplexed connection under replica lag and could starve
+/// `/api/ask` when many QueryPlans ran together. 10ms fail-closes instead.
+pub const QUERYPLAN_NONCE_WAIT_MS: i64 = 10;
 
-/// After `SET NX`, wait for one replica (`WAIT 1 100`) so a replay against a
-/// lagging replica cannot re-admit the same nonce. Standalone Redis
-/// (`connected_slaves:0`) is admitted without a replica ack.
+/// After `SET NX`, wait for one replica so a replay against a lagging replica
+/// cannot re-admit the same nonce. Standalone Redis (`connected_slaves:0`)
+/// skips `WAIT` entirely. Replica lag or a 10ms timeout fail-closes; the nonce
+/// stays claimed.
 pub fn nonce_replica_ack_ok(waited_replicas: i64, connected_slaves: u32) -> bool {
     waited_replicas >= 1 || connected_slaves == 0
 }
 
 async fn confirm_nonce_replicated(conn: &mut redis::aio::MultiplexedConnection) -> StrictOp<bool> {
-    let wait_n: Result<i64, _> = redis::cmd("WAIT")
-        .arg(QUERYPLAN_NONCE_WAIT_REPLICAS)
-        .arg(QUERYPLAN_NONCE_WAIT_MS)
-        .query_async(conn)
-        .await;
     let slaves = connected_slaves(conn).await.unwrap_or(1);
-    match wait_n {
-        Ok(n) if nonce_replica_ack_ok(n, slaves) => StrictOp::Ok(true),
-        Ok(_) => StrictOp::Unavailable,
-        Err(_) if slaves == 0 => StrictOp::Ok(true),
-        Err(_) => StrictOp::Unavailable,
+    if slaves == 0 {
+        return StrictOp::Ok(true);
+    }
+    let mut wait_cmd = redis::cmd("WAIT");
+    wait_cmd
+        .arg(QUERYPLAN_NONCE_WAIT_REPLICAS)
+        .arg(QUERYPLAN_NONCE_WAIT_MS);
+    let wait_n = match tokio::time::timeout(
+        Duration::from_millis(QUERYPLAN_NONCE_WAIT_MS as u64),
+        wait_cmd.query_async::<i64>(conn),
+    )
+    .await
+    {
+        Ok(Ok(n)) => n,
+        Ok(Err(_)) | Err(_) => return StrictOp::Unavailable,
+    };
+    if nonce_replica_ack_ok(wait_n, slaves) {
+        StrictOp::Ok(true)
+    } else {
+        StrictOp::Unavailable
     }
 }
 
@@ -560,5 +575,18 @@ mod tests {
         assert!(should_set_expire(40, -1));
         assert!(!should_set_expire(40, 1));
         assert!(!should_set_expire(2, 0));
+    }
+
+    #[test]
+    fn rate_limiter_lua_is_single_eval_with_ttl_heal() {
+        assert!(REDIS_RATE_LIMITER_LUA.contains("INCR"));
+        assert!(REDIS_RATE_LIMITER_LUA.contains("EXPIRE"));
+        assert!(REDIS_RATE_LIMITER_LUA.contains("TTL"));
+        assert!(!REDIS_RATE_LIMITER_LUA.contains("MULTI"));
+    }
+
+    #[test]
+    fn queryplan_wait_timeout_is_ten_ms() {
+        assert_eq!(QUERYPLAN_NONCE_WAIT_MS, 10);
     }
 }

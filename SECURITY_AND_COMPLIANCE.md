@@ -40,7 +40,7 @@ Inspection-day script: **`docs/operations/INSPECTION-DAY-RUNBOOK.md`**.
   the question, the LLM-generated plan, the compiled SQL, row count, ms,
   error message (if any). Direct JSON `QueryPlan` bodies are admitted only
   with HMAC v2 (`weissman-queryplan-v2`) bound to unix time + nonce;
-  `|now − ts| ≤ 15s`, Redis `SET NX EX 30` followed by `WAIT 1 100` so a
+  `|now − ts| ≤ 15s`, Redis `SET NX EX 30` followed by `WAIT 1 10` so a
   lagging replica cannot re-admit a captured nonce; fail-closed (no JWT fallback).
 
 ## 3. Data residency

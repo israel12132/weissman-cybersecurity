@@ -4,7 +4,7 @@
 //! random seed stops an off-host attacker from precomputing collisions against
 //! the five agent NT APIs.
 
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 const C1: u64 = 0x87c3_7b91_1142_53d5;
 const C2: u64 = 0x4cf5_ad43_2745_937f;
@@ -115,16 +115,45 @@ pub fn murmur3_x64_64(key: &[u8], seed: u32) -> u64 {
 
 /// Per-process seed. Not exported in SOC extras (leaking it would let an
 /// on-wire observer precompute collisions for this host).
+///
+/// `fork()` / duplicated address spaces inherit the parent's atomics. A child
+/// that kept the same seed would let an attacker who can read one process
+/// predict the sibling's hook-map hashes. Reseed whenever `std::process::id()`
+/// disagrees with the pid that minted the current seed.
+#[must_use]
+pub fn pid_requires_reseed(cached_pid: u32, live_pid: u32) -> bool {
+    cached_pid != live_pid
+}
+
+fn fresh_seed() -> u32 {
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hasher};
+    let mut h = RandomState::new().build_hasher();
+    h.write(b"weissman-hookmap-v1");
+    h.write_u32(std::process::id());
+    (h.finish() as u32) | 1
+}
+
 #[must_use]
 pub fn hook_map_seed() -> u32 {
-    static SEED: OnceLock<u32> = OnceLock::new();
-    *SEED.get_or_init(|| {
-        use std::collections::hash_map::RandomState;
-        use std::hash::{BuildHasher, Hasher};
-        let mut h = RandomState::new().build_hasher();
-        h.write(b"weissman-hookmap-v1");
-        (h.finish() as u32) | 1
-    })
+    static SEED: AtomicU32 = AtomicU32::new(0);
+    static SEED_PID: AtomicU32 = AtomicU32::new(0);
+    let pid = std::process::id();
+    let cached_pid = SEED_PID.load(Ordering::Acquire);
+    if pid_requires_reseed(cached_pid, pid) {
+        let s = fresh_seed();
+        SEED.store(s, Ordering::Release);
+        SEED_PID.store(pid, Ordering::Release);
+        return s;
+    }
+    let s = SEED.load(Ordering::Acquire);
+    if s == 0 {
+        let s = fresh_seed();
+        SEED.store(s, Ordering::Release);
+        s
+    } else {
+        s
+    }
 }
 
 #[must_use]
@@ -148,5 +177,12 @@ mod tests {
     fn process_hash_is_stable_in_process() {
         assert_eq!(hook_map_hash("NtClose"), hook_map_hash("NtClose"));
         assert_ne!(hook_map_hash("NtClose"), hook_map_hash("NtCreateSection"));
+    }
+
+    #[test]
+    fn pid_change_requires_reseed() {
+        assert!(pid_requires_reseed(0, 1));
+        assert!(pid_requires_reseed(10, 11));
+        assert!(!pid_requires_reseed(42, 42));
     }
 }

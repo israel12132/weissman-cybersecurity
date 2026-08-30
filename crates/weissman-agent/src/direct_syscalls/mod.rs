@@ -18,7 +18,9 @@
 //! 3. Clean stubs yield the SSN via Hell's Gate (`mov eax, SSN`).
 //! 4. Hooked stubs (`jmp` / `0xE9`) recover the SSN from the remaining
 //!    `syscall; ret` tail (retrograde), then Halo's Gate neighbors confined
-//!    to the `.text` window.
+//!    to the `.text` window, at most 5 stubs each direction. A cascade of JMP
+//!    hooks across that window fails closed (no guessed SSN) and is reported
+//!    to SOC.
 //! 5. Windows x64 `syscall` is issued with the Microsoft calling convention.
 //!    ntdll copy/scan never exceeds 16 MiB (`MAX_NTDLL_SCAN_LIMIT`).
 
@@ -104,6 +106,7 @@ pub struct HookMapEntry {
     pub ssn: u16,
     pub hooked: bool,
     pub rva: u32,
+    pub cascade_blocked: bool,
 }
 
 /// Hell's Gate / Halo's Gate resolver populated from a PE image (live ntdll or fixture).
@@ -116,6 +119,7 @@ pub struct SyscallResolver {
     scan_capped: bool,
     declared_image_size: usize,
     hash_collisions: usize,
+    cascade_blocked: usize,
 }
 
 impl SyscallResolver {
@@ -151,6 +155,7 @@ impl SyscallResolver {
         let mut hook_map = Vec::new();
         let mut scanned = 0usize;
         let mut hooked_total = 0usize;
+        let mut cascade_blocked = 0usize;
         for i in 0..export.number_of_names as usize {
             let name_rva = match view.u32_at(export.address_of_names, i) {
                 Some(v) => v,
@@ -178,11 +183,24 @@ impl SyscallResolver {
             if resolved.hooked {
                 hooked_total += 1;
             }
+            if resolved.cascade_blocked {
+                cascade_blocked += 1;
+                hook_map.push(HookMapEntry {
+                    mmh: hook_map_hash(name),
+                    ssn: 0,
+                    hooked: true,
+                    rva: func_rva,
+                    cascade_blocked: true,
+                });
+                // Fail closed: never put a guessed SSN on the dispatch table.
+                continue;
+            }
             hook_map.push(HookMapEntry {
                 mmh: hook_map_hash(name),
                 ssn: resolved.ssn,
                 hooked: resolved.hooked,
                 rva: func_rva,
+                cascade_blocked: false,
             });
             // SHA-256 only for the pre-computed target set — not every Nt/Zw name.
             if let Some(hash) = precomputed_target_hash(name) {
@@ -197,6 +215,7 @@ impl SyscallResolver {
         let mut resolver = Self::from_entries(entries, hook_map, scanned, hooked_total)?;
         resolver.scan_capped = scan_capped;
         resolver.declared_image_size = declared;
+        resolver.cascade_blocked = cascade_blocked;
         Some(resolver)
     }
 
@@ -228,7 +247,7 @@ impl SyscallResolver {
         let hash_collisions = mmh_counts.values().filter(|c| **c > 1).count();
         // Keep colliding telemetry rows — dropping them is the SOC-blindness
         // failure mode. SHA-256 dispatch still fail-closes on duplicates.
-        if entries.is_empty() {
+        if entries.is_empty() && hook_map.is_empty() {
             return None;
         }
         Some(Self {
@@ -239,6 +258,7 @@ impl SyscallResolver {
             scan_capped: false,
             declared_image_size: 0,
             hash_collisions,
+            cascade_blocked: 0,
         })
     }
 
@@ -316,6 +336,11 @@ impl SyscallResolver {
     #[must_use]
     pub fn hash_collisions(&self) -> usize {
         self.hash_collisions
+    }
+
+    #[must_use]
+    pub fn cascade_blocked(&self) -> usize {
+        self.cascade_blocked
     }
 }
 
@@ -690,12 +715,14 @@ mod tests {
             ssn: 0x18,
             hooked: true,
             rva: 0x400,
+            cascade_blocked: false,
         };
         let b = HookMapEntry {
             mmh: 0xaaaa,
             ssn: 0x99,
             hooked: true,
             rva: 0x500,
+            cascade_blocked: false,
         };
         let dispatch = SyscallEntry {
             hash: *NT_CLOSE,

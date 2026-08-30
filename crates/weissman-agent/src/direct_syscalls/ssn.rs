@@ -21,14 +21,22 @@
 use crate::direct_syscalls::pe::{PeView, TextSpan, IMAGE_EXPORT_DIRECTORY};
 
 pub const STUB_LEN: usize = 32;
-pub const MAX_HALOS_DEPTH: usize = 100;
+/// Hard cap on Halo's Gate neighbor depth in each direction. EDR cascade
+/// hooks paint whole Nt* clusters; walking tens of stubs would recover an
+/// unrelated export's SSN (`ssn ± depth`) and dispatch would fire it.
+/// Depth 5 is enough for a single isolated JMP; beyond that we fail closed.
+pub const MAX_HALOS_GATE_NEIGHBOR_DEPTH: usize = 5;
 const PROLOGUE_LEN: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResolvedSsn {
     pub ssn: u16,
-    /// True when the target stub itself was hooked and the SSN came from a neighbor.
+    /// True when the target stub itself was hooked and the SSN came from a neighbor
+    /// or from the remaining `syscall;ret` tail.
     pub hooked: bool,
+    /// Hooked stub, no clean neighbor inside [`MAX_HALOS_GATE_NEIGHBOR_DEPTH`].
+    /// `ssn` is unused; dispatch must not issue a syscall for this export.
+    pub cascade_blocked: bool,
 }
 
 /// True when `stub` matches the canonical unhooked syscall prologue.
@@ -91,10 +99,13 @@ pub fn retrograde_ssn_from_stub(stub: &[u8]) -> Option<u16> {
 /// Halo's Gate: recover the SSN of a hooked stub from clean neighbors at ±32-byte stride.
 ///
 /// `text` is the `.text` section of the same PE. Neighbors that would leave that
-/// window (page/section edge) are skipped — they are never read.
+/// window (page/section edge) are skipped — they are never read. Only a clean
+/// Hell's Gate prologue counts — a hooked neighbor is not treated as a source
+/// of SSN bytes (the architect snippet that reads `*(stub+4)` on any non-`0xE9`
+/// byte would steal a CALL-hooked export's register immediate).
 #[must_use]
 pub fn halos_gate_recover(image: &[u8], func_offset: usize, text: TextSpan) -> Option<u16> {
-    for idx in 1..=MAX_HALOS_DEPTH {
+    for idx in 1..=MAX_HALOS_GATE_NEIGHBOR_DEPTH {
         let delta = idx * STUB_LEN;
         if let Some(upper) = func_offset.checked_add(delta) {
             if let Some(ssn) = read_hells_gate_in_text(image, upper, text) {
@@ -136,17 +147,40 @@ pub fn resolve_stub_ssn(image: &[u8], func_offset: usize, text: TextSpan) -> Opt
         return None;
     }
     if let Some(ssn) = hells_gate_ssn(stub) {
-        return Some(ResolvedSsn { ssn, hooked: false });
+        return Some(ResolvedSsn {
+            ssn,
+            hooked: false,
+            cascade_blocked: false,
+        });
+    }
+    // A slice shorter than the prologue cannot be classified as a hook vs
+    // garbage sitting on a section edge — fail closed without a cascade flag.
+    if stub.len() < PROLOGUE_LEN {
+        return None;
     }
     if is_user_mode_hook(stub) || stub.first() != Some(&0x4C) {
         // Retrograde is per-stub (32 bytes). Scanning the rest of `.text` would
         // pick up a later export's syscall;ret and steal its SSN.
         let slot = stub.get(..STUB_LEN).unwrap_or(stub);
         if let Some(ssn) = retrograde_ssn_from_stub(slot) {
-            return Some(ResolvedSsn { ssn, hooked: true });
+            return Some(ResolvedSsn {
+                ssn,
+                hooked: true,
+                cascade_blocked: false,
+            });
         }
-        let ssn = halos_gate_recover(image, func_offset, text)?;
-        return Some(ResolvedSsn { ssn, hooked: true });
+        return match halos_gate_recover(image, func_offset, text) {
+            Some(ssn) => Some(ResolvedSsn {
+                ssn,
+                hooked: true,
+                cascade_blocked: false,
+            }),
+            None => Some(ResolvedSsn {
+                ssn: 0,
+                hooked: true,
+                cascade_blocked: true,
+            }),
+        };
     }
     None
 }
@@ -384,7 +418,12 @@ mod tests {
             rva_end: STUB_LEN * 2,
         };
         assert!(halos_gate_recover(&image, STUB_LEN, text).is_none());
-        assert!(resolve_stub_ssn(&image, STUB_LEN, text).is_none());
+        let blocked = resolve_stub_ssn(&image, STUB_LEN, text).expect("inventory the hook");
+        assert!(blocked.hooked);
+        assert!(
+            blocked.cascade_blocked,
+            "must not steal poison SSN outside .text"
+        );
         // A stub whose prologue would cross .text end is not resolved.
         let edge = TextSpan {
             rva_start: STUB_LEN,
@@ -413,5 +452,43 @@ mod tests {
         assert_eq!(span.rva_start, 0x600);
         assert_eq!(span.rva_end, 0x600 + STUB_LEN * 4);
         assert!(!span.contains_bytes(0x600 + STUB_LEN * 4, 8));
+    }
+
+    #[test]
+    fn halos_gate_stops_at_five_neighbors() {
+        // 6 hooked stubs then a clean one. Depth 6 would recover 0x20-6=0x1A
+        // and dispatch a poisoned SSN. Cap is 5 — fail closed.
+        let n = MAX_HALOS_GATE_NEIGHBOR_DEPTH + 2;
+        let mut image = vec![0u8; STUB_LEN * n];
+        for i in 0..=MAX_HALOS_GATE_NEIGHBOR_DEPTH {
+            let off = i * STUB_LEN;
+            image[off..off + STUB_LEN].copy_from_slice(&encode_jmp_hook_stub());
+        }
+        let clean_off = (MAX_HALOS_GATE_NEIGHBOR_DEPTH + 1) * STUB_LEN;
+        image[clean_off..clean_off + STUB_LEN].copy_from_slice(&encode_clean_stub(0x20));
+        assert!(halos_gate_recover(&image, 0, text(&image)).is_none());
+        let r = resolve_stub_ssn(&image, 0, text(&image)).expect("cascade");
+        assert!(r.cascade_blocked);
+        assert!(r.hooked);
+    }
+
+    #[test]
+    fn halos_gate_still_recovers_at_depth_five() {
+        let n = MAX_HALOS_GATE_NEIGHBOR_DEPTH + 1;
+        let mut image = vec![0u8; STUB_LEN * n];
+        for i in 0..MAX_HALOS_GATE_NEIGHBOR_DEPTH {
+            let off = i * STUB_LEN;
+            image[off..off + STUB_LEN].copy_from_slice(&encode_jmp_hook_stub());
+        }
+        let clean_off = MAX_HALOS_GATE_NEIGHBOR_DEPTH * STUB_LEN;
+        image[clean_off..clean_off + STUB_LEN].copy_from_slice(&encode_clean_stub(
+            0x18 + MAX_HALOS_GATE_NEIGHBOR_DEPTH as u16,
+        ));
+        let recovered = halos_gate_recover(&image, 0, text(&image)).expect("depth-5 neighbor");
+        assert_eq!(recovered, 0x18);
+        let r = resolve_stub_ssn(&image, 0, text(&image)).expect("resolved");
+        assert_eq!(r.ssn, 0x18);
+        assert!(r.hooked);
+        assert!(!r.cascade_blocked);
     }
 }
