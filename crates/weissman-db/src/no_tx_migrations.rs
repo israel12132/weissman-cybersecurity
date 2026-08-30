@@ -902,6 +902,10 @@ mod tests {
         assert!(sql.contains("weissman_billing_usage_snapshot"));
         assert!(sql.contains("weissman_refresh_billing_usage_snapshot"));
         assert!(
+            sql.contains("SET search_path = pg_catalog, public, pg_temp"),
+            "SECURITY DEFINER must pin search_path (pg_temp last) against hijack"
+        );
+        assert!(
             sql.contains("REVOKE SELECT ON public.tenant_usage_counters FROM weissman_analytics")
         );
         for table in crate::role_guard::ANALYTICS_SELECT_TABLES {

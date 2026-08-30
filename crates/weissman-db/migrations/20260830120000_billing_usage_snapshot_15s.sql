@@ -57,7 +57,9 @@ CREATE OR REPLACE FUNCTION public.weissman_refresh_billing_usage_snapshot()
 RETURNS bigint
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, public
+-- Pin search_path so pg_temp / attacker schemas cannot shadow operators or
+-- relations under the definer role (search_path hijack). pg_temp is last.
+SET search_path = pg_catalog, public, pg_temp
 SET default_transaction_read_only = off
 SET row_security = off
 SET statement_timeout = '15s'

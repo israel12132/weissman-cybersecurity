@@ -163,4 +163,20 @@ async fn roles_exist_with_expected_bypass_flags() {
         cfg.iter().any(|c| c == "statement_timeout=15s"),
         "weissman_analytics rolconfig must pin 15s timeout, got {cfg:?}"
     );
+
+    let proconfig: Option<Vec<String>> = sqlx::query_scalar(
+        r#"SELECT proconfig FROM pg_proc
+           WHERE proname = 'weissman_refresh_billing_usage_snapshot'
+             AND pronamespace = 'public'::regnamespace"#,
+    )
+    .fetch_optional(&pool)
+    .await
+    .expect("snapshot fn proconfig");
+    let cfg = proconfig.unwrap_or_default();
+    assert!(
+        cfg.iter().any(|c| c.contains("search_path=")
+            && c.contains("pg_catalog")
+            && c.contains("pg_temp")),
+        "SECURITY DEFINER snapshot fn must pin search_path with pg_temp last, got {cfg:?}"
+    );
 }
