@@ -143,6 +143,8 @@ if (!fs.existsSync(redactMod)) {
   violations.push('scan_payload_redaction.rs: missing')
 } else if (!jobsInc.includes('scan_payload_redaction::redact_for_api')) {
   violations.push('server_handlers_jobs.inc: job GET must redact payload secrets')
+} else if (!jobsInc.includes('reveal_job_payload_for_tenant')) {
+  violations.push('server_handlers_jobs.inc: job GET must decrypt the tenant envelope before redact')
 }
 const asyncExec = fs.readFileSync(path.join(root, 'fingerprint_engine/src/async_job_executor.rs'), 'utf8')
 if (!asyncExec.includes('engine_stack_runtime::run_on_large_stack')) {

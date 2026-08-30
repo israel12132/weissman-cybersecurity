@@ -108,6 +108,8 @@ REDIS_URL=redis://host:6379/0
 
 נדרש ל-rate limits, lockout (`/api/login`, `/api/auth/mfa/verify`, `/api/auth/refresh`), registry של agents. מגבלת הלוגין רצה **קודם בתהליך** (לפני Redis ולפני חיבור ל-`weissman_auth`) כדי שמכת סיסמאות לא תייש את מאגר החיבורים.
 
+שורות `weissman_async_jobs.payload` נחתמות ב-AES-256-GCM לפי tenant ממפתח ה-vault. dump של הטבלה הוא ciphertext. ה-worker מפענח ב-claim; `GET /api/jobs/:id` מפענח את שורת ה-tenant של הקורא ואז מסתיר סודות. אין helper לפענוח המוני. `client_id` ו-`engine` נשארים plaintext siblings לסינון SQL; `target`, `validated_scope` וטוקנים נשארים במעטפה.
+
 ### 8. SAML / OIDC
 
 - `WEISSMAN_XMLSEC1_BINARY` ל-SAML

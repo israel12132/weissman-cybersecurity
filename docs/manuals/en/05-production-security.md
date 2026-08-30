@@ -127,6 +127,8 @@ Zero-trust job bus (requires `REDIS_URL` + dedicated orchestrator secret):
 WEISSMAN_JOB_ORCHESTRATOR_SECRET=<openssl rand -base64 48>
 ```
 
+Durable `weissman_async_jobs.payload` rows are AES-256-GCM sealed per tenant from the vault KEK (`WEISSMAN_INTEGRATIONS_VAULT_KEY` / vault key). A table dump is ciphertext. The worker decrypts on claim; `GET /api/jobs/:id` decrypts the caller's tenant row and then redacts secrets. There is no bulk-decrypt helper. Indexable `client_id` and `engine` stay plaintext siblings so SQL filters keep working; `target`, `validated_scope`, and tokens stay inside the envelope.
+
 See `docs/operations/AUTH-DB-ROTATION.md` for zero-downtime `weissman_auth` password rotation.
 
 ### 8. SAML / OIDC (if enabled)

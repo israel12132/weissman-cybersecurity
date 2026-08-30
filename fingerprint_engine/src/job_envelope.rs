@@ -3,12 +3,17 @@
 //! `weissman_worker` is BYPASSRLS and can `SELECT` every queue row. A bulk dump
 //! of `weissman_async_jobs.payload` must be ciphertext. The AES-256-GCM key is
 //! derived per tenant from the process vault KEK
-//! (`weissman-job-bus-v1|` ‖ tenant_id LE bytes). Decrypt happens only on the
-//! claim path after the worker has the row's `tenant_id`.
+//! (`weissman-job-bus-v1|` ‖ tenant_id LE bytes).
+//!
+//! Decrypt only with a known tenant: the worker claim path, and the
+//! tenant-scoped job API ([`reveal_job_payload_for_tenant`]). Never via a bulk
+//! `SELECT payload FROM weissman_async_jobs` helper.
 //!
 //! The zero-trust bus envelope (`_weissman_job_bus`) stays a **plaintext
-//! sibling** so `payload ? '_weissman_job_bus'` still gates claim. Everything
-//! else is sealed under `_weissman_job_enc`.
+//! sibling** so `payload ? '_weissman_job_bus'` still gates claim. Indexable
+//! routing keys `client_id` and `engine` are also plaintext siblings so SQL
+//! filters keep working. Secrets, `target`, and `validated_scope` stay inside
+//! `_weissman_job_enc`.
 //!
 //! No bulk-decrypt helper exists on purpose.
 
@@ -22,6 +27,8 @@ use crate::secret_zeroize::derive_aes256_key;
 
 const ENC_KEY: &str = "_weissman_job_enc";
 const DOMAIN_PREFIX: &[u8] = b"weissman-job-bus-v1|";
+/// Indexable, non-secret JSON keys copied next to the ciphertext.
+const ROUTING_KEYS: &[&str] = &["client_id", "engine"];
 
 static KEK: RwLock<Option<[u8; 32]>> = RwLock::new(None);
 
@@ -70,6 +77,50 @@ pub fn open_job_payload(payload: &Value, tenant_id: i64) -> Result<Value, String
     open_with_kek(payload, tenant_id, &kek)
 }
 
+/// Tenant-scoped API/UI read: plaintext for the owning tenant, never ciphertext.
+/// On decrypt failure, only routing siblings are returned.
+#[must_use]
+pub fn reveal_job_payload_for_tenant(payload: &Value, tenant_id: i64) -> Value {
+    match open_job_payload(payload, tenant_id) {
+        Ok(mut v) => {
+            if let Some(obj) = v.as_object_mut() {
+                obj.remove(ENC_KEY);
+            }
+            v
+        }
+        Err(e) => {
+            tracing::error!(
+                target: "job_envelope",
+                tenant_id,
+                error = %e,
+                "tenant job payload reveal failed"
+            );
+            routing_only_view(payload)
+        }
+    }
+}
+
+fn routing_only_view(payload: &Value) -> Value {
+    let mut out = serde_json::Map::new();
+    if let Some(bus) = payload.get(PAYLOAD_BUS_KEY) {
+        out.insert(PAYLOAD_BUS_KEY.to_string(), bus.clone());
+    }
+    for k in ROUTING_KEYS {
+        if let Some(v) = payload.get(*k) {
+            out.insert((*k).to_string(), v.clone());
+        }
+    }
+    Value::Object(out)
+}
+
+fn copy_routing_siblings(plain: &Value, out: &mut Value) {
+    for k in ROUTING_KEYS {
+        if let Some(v) = plain.get(*k) {
+            out[*k] = v.clone();
+        }
+    }
+}
+
 pub(crate) fn seal_with_kek(
     payload: &Value,
     tenant_id: i64,
@@ -109,6 +160,7 @@ pub(crate) fn seal_with_kek(
     if let Some(bus) = bus {
         out[PAYLOAD_BUS_KEY] = bus;
     }
+    copy_routing_siblings(&inner, &mut out);
     Ok(out)
 }
 
@@ -231,6 +283,153 @@ mod tests {
         assert!(!prod.contains("SELECT payload FROM weissman_async_jobs"));
         assert!(prod.contains(ENC_KEY));
         assert!(prod.contains("weissman-job-bus-v1|"));
+        assert!(prod.contains("reveal_job_payload_for_tenant"));
+        assert!(prod.contains("const ROUTING_KEYS: &[&str] = &[\"client_id\", \"engine\"]"));
+        assert!(
+            !prod.contains("ROUTING_KEYS: &[&str] = &[\"client_id\", \"engine\", \"target\"]")
+                && !prod.contains("\"validated_scope\"]"),
+            "target and validated_scope must stay inside ciphertext"
+        );
+    }
+
+    #[test]
+    fn sealed_row_exposes_routing_siblings_not_secrets() {
+        let kek = [0x33u8; 32];
+        let plain = json!({
+            "client_id": "c-1",
+            "engine": "osint_payload_engine",
+            "target": "secret.example",
+            "validated_scope": {"cidr": "10.0.0.0/8"},
+            "api_token": "tok_live",
+            PAYLOAD_BUS_KEY: {"v": 1, "tenant_id": 9, "sig": "x"}
+        });
+        let sealed = seal_with_kek(&plain, 9, &kek).expect("seal");
+        assert_eq!(
+            sealed.get("client_id").and_then(|v| v.as_str()),
+            Some("c-1")
+        );
+        assert_eq!(
+            sealed.get("engine").and_then(|v| v.as_str()),
+            Some("osint_payload_engine")
+        );
+        assert!(sealed.get("target").is_none());
+        assert!(sealed.get("validated_scope").is_none());
+        assert!(sealed.get("api_token").is_none());
+        assert!(sealed.get(ENC_KEY).is_some());
+        assert!(sealed.get(PAYLOAD_BUS_KEY).is_some());
+        let dump = serde_json::to_string(&sealed).unwrap();
+        assert!(!dump.contains("secret.example"));
+        assert!(!dump.contains("10.0.0.0/8"));
+        assert!(!dump.contains("tok_live"));
+    }
+
+    #[test]
+    fn reveal_with_kek_returns_plaintext_without_ciphertext() {
+        let kek = [0x44u8; 32];
+        let plain = json!({
+            "engine": "osint",
+            "target": "t",
+            "validated_scope": {"host": "example.com"},
+            PAYLOAD_BUS_KEY: {"v": 1, "tenant_id": 2, "sig": "s"}
+        });
+        let sealed = seal_with_kek(&plain, 2, &kek).expect("seal");
+        let mut view = open_with_kek(&sealed, 2, &kek).expect("open");
+        if let Some(obj) = view.as_object_mut() {
+            obj.remove(ENC_KEY);
+        }
+        assert_eq!(view.get("engine").and_then(|v| v.as_str()), Some("osint"));
+        assert_eq!(view.get("target").and_then(|v| v.as_str()), Some("t"));
+        assert_eq!(
+            view.get("validated_scope")
+                .and_then(|v| v.get("host"))
+                .and_then(|v| v.as_str()),
+            Some("example.com")
+        );
+        assert!(view.get(ENC_KEY).is_none());
+        assert!(view.get(PAYLOAD_BUS_KEY).is_some());
+    }
+
+    #[test]
+    fn reveal_without_kek_returns_only_routing_siblings() {
+        let kek = [0x55u8; 32];
+        let plain = json!({
+            "engine": "osint",
+            "client_id": 7,
+            "target": "must-not-leak",
+            "validated_scope": {"host": "example.com"}
+        });
+        let sealed = seal_with_kek(&plain, 4, &kek).expect("seal");
+        let view = reveal_job_payload_for_tenant(&sealed, 4);
+        assert_eq!(view.get("engine").and_then(|v| v.as_str()), Some("osint"));
+        assert_eq!(view.get("client_id").and_then(|v| v.as_i64()), Some(7));
+        assert!(view.get("target").is_none());
+        assert!(view.get("validated_scope").is_none());
+        assert!(view.get(ENC_KEY).is_none());
+    }
+
+    #[test]
+    fn handlers_source_pin_reveal_before_redact() {
+        let jobs = include_str!("server_handlers_jobs.inc");
+        let status_fn = jobs
+            .split("async fn api_async_job_status")
+            .nth(1)
+            .expect("GET /api/jobs/:id handler");
+        let compact: String = status_fn.chars().filter(|c| !c.is_whitespace()).collect();
+        assert!(
+            compact.contains(
+                "scan_payload_redaction::redact_for_api(&crate::job_envelope::reveal_job_payload_for_tenant"
+            ),
+            "GET /api/jobs/:id must redact(reveal(payload)) so validated_scope/engine reach the client"
+        );
+        let list_fn = jobs
+            .split("async fn api_async_jobs_list")
+            .nth(1)
+            .expect("GET /api/jobs list handler");
+        assert!(
+            list_fn.contains("reveal_job_payload_for_tenant"),
+            "jobs list must decrypt per row so target/engine remain visible"
+        );
+        let sqlx = include_str!("server_handlers_sqlx.inc");
+        assert!(
+            sqlx.matches("reveal_job_payload_for_tenant").count() >= 3,
+            "engine history + both selected_job export paths"
+        );
+    }
+
+    #[test]
+    fn api_shape_matches_scan_pipeline_e2e() {
+        let kek = [0x66u8; 32];
+        let plain = json!({
+            "engine": "osint",
+            "validated_scope": {"host": "example.com"},
+            "github_token": "ghp_e2e_hydration_test_token_not_real",
+            "aws_external_id": "ext-secret"
+        });
+        let sealed = seal_with_kek(&plain, 1, &kek).expect("seal");
+        let dumped = serde_json::to_string(&sealed).unwrap();
+        assert!(
+            !dumped.contains("example.com"),
+            "validated_scope must not appear in the stored JSON dump"
+        );
+        assert_eq!(sealed.get("engine").and_then(|v| v.as_str()), Some("osint"));
+        let opened = open_with_kek(&sealed, 1, &kek).expect("open");
+        let api = crate::scan_payload_redaction::redact_for_api(&opened);
+        assert_eq!(api.get("engine").and_then(|v| v.as_str()), Some("osint"));
+        assert_eq!(
+            api.get("validated_scope")
+                .and_then(|v| v.get("host"))
+                .and_then(|v| v.as_str()),
+            Some("example.com")
+        );
+        assert_eq!(
+            api.get("github_token").and_then(|v| v.as_str()),
+            Some(crate::scan_payload_redaction::MASKED_SECRET)
+        );
+        assert_eq!(
+            api.get("aws_external_id").and_then(|v| v.as_str()),
+            Some(crate::scan_payload_redaction::MASKED_SECRET)
+        );
+        assert!(api.get(ENC_KEY).is_none());
     }
 
     #[test]
