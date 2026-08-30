@@ -27,7 +27,7 @@ pub const WORKER_ROLE: &str = "weissman_worker";
 pub const ANALYTICS_ROLE: &str = "weissman_analytics";
 
 /// Tables `weissman_ro` may `SELECT`. Keep in lock-step with
-/// `20260827120100_hermetic_db_roles.sql`.
+/// `20260827115800_hermetic_db_roles.sql`.
 pub const RO_SELECT_TABLES: &[&str] = &[
     "vulnerabilities",
     "weissman_finding_clusters",

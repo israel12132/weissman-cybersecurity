@@ -782,7 +782,7 @@ mod tests {
     fn pgvector_hnsw_no_tx_migration_pins_m16_ef64() {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/migrations/20260827120000_pgvector_hnsw_m16_ef64.sql"
+            "/migrations/20260827115700_pgvector_hnsw_m16_ef64.sql"
         );
         let sql = std::fs::read_to_string(path).expect("hnsw migration");
         assert!(
@@ -800,7 +800,7 @@ mod tests {
     fn hnsw_sql_is_detected_as_pinned_concurrent_build() {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/migrations/20260827120000_pgvector_hnsw_m16_ef64.sql"
+            "/migrations/20260827115700_pgvector_hnsw_m16_ef64.sql"
         );
         let sql = std::fs::read_to_string(path).expect("hnsw migration");
         assert!(sql_has_hnsw_concurrent_create(&sql));
@@ -839,7 +839,7 @@ mod tests {
     fn hermetic_roles_migration_grants_thirteen_ro_tables() {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/migrations/20260827120100_hermetic_db_roles.sql"
+            "/migrations/20260827115800_hermetic_db_roles.sql"
         );
         let sql = std::fs::read_to_string(path).expect("roles migration");
         assert!(sql.contains("NOBYPASSRLS"));

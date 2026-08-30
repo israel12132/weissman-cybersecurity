@@ -122,12 +122,12 @@ fn ndr_itdr_ingest_migration_has_forced_rls() {
 fn pgvector_hnsw_params_and_hermetic_roles_migrations_exist() {
     let dir =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/weissman-db/migrations");
-    let hnsw = std::fs::read_to_string(dir.join("20260827120000_pgvector_hnsw_m16_ef64.sql"))
+    let hnsw = std::fs::read_to_string(dir.join("20260827115700_pgvector_hnsw_m16_ef64.sql"))
         .unwrap_or_default();
     assert!(hnsw.contains("m = 16"));
     assert!(hnsw.contains("ef_construction = 64"));
     assert!(hnsw.starts_with("-- weissman:no-transaction"));
-    let roles = std::fs::read_to_string(dir.join("20260827120100_hermetic_db_roles.sql"))
+    let roles = std::fs::read_to_string(dir.join("20260827115800_hermetic_db_roles.sql"))
         .unwrap_or_default();
     assert!(roles.contains("NOBYPASSRLS"));
     assert!(roles.contains("statement_timeout = '15s'"));
