@@ -11,6 +11,10 @@ use std::time::Duration;
 use tokio::sync::OnceCell;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
+/// Hot-path acquire: ConnectionManager clone / pool wait. Must not park Tokio
+/// tasks on Redis reconnect. Startup `ConnectionManager::new` still uses
+/// [`CONNECT_TIMEOUT`].
+pub const REDIS_ACQUIRE_TIMEOUT: Duration = Duration::from_millis(50);
 const SHARD_LO: usize = 2;
 const SHARD_HI: usize = 8;
 
@@ -79,6 +83,27 @@ pub async fn shared_redis_pool() -> Option<ShardedRedis> {
         .clone()
 }
 
+/// Shard clone bounded at 50ms. Not bb8 — the pool is sharded `ConnectionManager`.
+/// When the OnceCell is already filled this is a clone (instant). When Redis is
+/// down, the wait fails closed instead of hanging the runtime.
+pub async fn acquire_redis_connection_with_timeout(key: &str) -> Result<ConnectionManager, String> {
+    if let Some(existing) = POOL.get() {
+        return existing
+            .clone()
+            .map(|p| p.shard(key))
+            .ok_or_else(|| "sharded redis pool unavailable".to_string());
+    }
+    let key = key.to_string();
+    tokio::time::timeout(REDIS_ACQUIRE_TIMEOUT, async move {
+        let pool = shared_redis_pool()
+            .await
+            .ok_or_else(|| "sharded redis pool unavailable".to_string())?;
+        Ok(pool.shard(&key))
+    })
+    .await
+    .map_err(|_| "Redis connection acquisition timed out!".to_string())?
+}
+
 async fn build_pool() -> Option<ShardedRedis> {
     let url = std::env::var("REDIS_URL")
         .ok()
@@ -120,5 +145,10 @@ mod tests {
     fn shard_count_clamped() {
         let n = redis_shard_count();
         assert!((2..=8).contains(&n));
+    }
+
+    #[test]
+    fn acquire_timeout_is_fifty_ms() {
+        assert_eq!(REDIS_ACQUIRE_TIMEOUT, Duration::from_millis(50));
     }
 }

@@ -1,14 +1,46 @@
-//! Persist MessagePack decode failures as RLS-scoped quarantine blobs + SOC events.
+//! Persist MessagePack decode failures as quarantine blobs + SOC events.
 //!
 //! Decode errors must never vanish into a warn log. The raw body is hex-encoded
-//! and stored in `cem_dago_telemetry_quarantine`; a matching
-//! `elite_hardening_events` row (`telemetry_integrity_violation`) is the
-//! operator-visible critical alert.
+//! and stored in `cem_dago_telemetry_quarantine` when a usable tenant GUC can
+//! be set. If `tenant_id` is missing/invalid, or the RLS insert fails (OR-01 /
+//! WITH CHECK), the blob is spilled to the system-global buffer
+//! (`cem_dago_telemetry_quarantine_global` + Redis `weissman:quarantine:global`
+//! + structured admin logs). The mesh never aborts on persist failure.
 
+use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Row};
+use std::time::Duration;
+
+use super::redis_pool::acquire_redis_connection_with_timeout;
 
 const RAW_HEX_CAP: usize = 16_384;
+const GLOBAL_REDIS_KEY: &str = "weissman:quarantine:global";
+const GLOBAL_REDIS_OP: Duration = Duration::from_millis(50);
+
+/// Tenant ids that can drive `app.current_tenant_id` + RLS WITH CHECK.
+#[must_use]
+pub fn tenant_scope_usable(tenant_id: i64) -> bool {
+    tenant_id > 0
+}
+
+pub const FALLBACK_INVALID_TENANT: &str = "invalid_tenant";
+pub const FALLBACK_RLS_PERSIST_FAILED: &str = "rls_persist_failed";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuarantinePersistTarget {
+    Tenant,
+    GlobalInvalidTenant,
+}
+
+#[must_use]
+pub fn quarantine_persist_target(tenant_id: i64) -> QuarantinePersistTarget {
+    if tenant_scope_usable(tenant_id) {
+        QuarantinePersistTarget::Tenant
+    } else {
+        QuarantinePersistTarget::GlobalInvalidTenant
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuarantineBlob {
@@ -49,8 +81,24 @@ pub fn blob_from_raw(kind: &str, field_key: &str, raw: &[u8], error: &str) -> Qu
     }
 }
 
-/// Insert quarantine rows + integrity-violation events. Fail-open on DB errors
-/// (scan continues); callers still keep the in-memory / Redis copy.
+fn log_admin_hex(tenant_id: i64, client_id: i64, scan_id: &str, b: &QuarantineBlob, reason: &str) {
+    tracing::error!(
+        target: "cem_dago",
+        tenant_id,
+        client_id,
+        scan_id,
+        kind = %b.kind,
+        field_key = %b.field_key,
+        codec_byte = ?b.codec_byte,
+        raw_hex = %b.raw_hex,
+        decode_error = %b.decode_error,
+        fallback_reason = reason,
+        "TELEMETRY INTEGRITY VIOLATION — admin quarantine buffer retained raw hex"
+    );
+}
+
+/// Insert quarantine rows. Tenant-scoped when `tenant_id > 0`; otherwise, or on
+/// RLS/tx failure, spill to the system-global buffer. Never panics the caller.
 pub async fn persist_quarantine(
     pool: &PgPool,
     tenant_id: i64,
@@ -61,14 +109,53 @@ pub async fn persist_quarantine(
     if blobs.is_empty() {
         return 0;
     }
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        tracing::error!(
-            target: "cem_dago",
+    for b in blobs {
+        log_admin_hex(tenant_id, client_id, scan_id, b, "received");
+    }
+    if quarantine_persist_target(tenant_id) == QuarantinePersistTarget::Tenant {
+        if let Ok(wrote) = persist_tenant_scoped(pool, tenant_id, client_id, scan_id, blobs).await {
+            if wrote == blobs.len() {
+                return wrote;
+            }
+        }
+        return persist_global_buffer(
+            pool,
             tenant_id,
-            "telemetry quarantine persist: tenant tx failed"
-        );
-        return 0;
-    };
+            client_id,
+            scan_id,
+            blobs,
+            FALLBACK_RLS_PERSIST_FAILED,
+        )
+        .await;
+    }
+    persist_global_buffer(
+        pool,
+        tenant_id,
+        client_id,
+        scan_id,
+        blobs,
+        FALLBACK_INVALID_TENANT,
+    )
+    .await
+}
+
+async fn persist_tenant_scoped(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    scan_id: &str,
+    blobs: &[QuarantineBlob],
+) -> Result<usize, ()> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                target: "cem_dago",
+                tenant_id,
+                error = %e,
+                "telemetry quarantine persist: tenant tx failed — spilling to global buffer"
+            );
+        })?;
     let mut wrote = 0usize;
     for b in blobs {
         let ins = sqlx::query(
@@ -87,7 +174,8 @@ pub async fn persist_quarantine(
         .execute(&mut *tx)
         .await;
         if ins.is_err() {
-            continue;
+            let _ = tx.rollback().await;
+            return Err(());
         }
         wrote += 1;
         let meta = serde_json::json!({
@@ -112,7 +200,7 @@ pub async fn persist_quarantine(
         .await;
     }
     if tx.commit().await.is_err() {
-        return 0;
+        return Err(());
     }
     if wrote > 0 {
         tracing::error!(
@@ -121,12 +209,96 @@ pub async fn persist_quarantine(
             client_id,
             scan_id,
             count = wrote,
-            "TELEMETRY INTEGRITY VIOLATION — quarantine blobs persisted for SOC"
+            "TELEMETRY INTEGRITY VIOLATION — RLS quarantine blobs persisted for SOC"
         );
         metrics::counter!("weissman_cem_dago_telemetry_integrity_persisted_total")
             .increment(wrote as u64);
     }
+    Ok(wrote)
+}
+
+async fn persist_global_buffer(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    scan_id: &str,
+    blobs: &[QuarantineBlob],
+    reason: &str,
+) -> usize {
+    let claimed = if tenant_scope_usable(tenant_id) {
+        Some(tenant_id)
+    } else {
+        None
+    };
+    let mut wrote = 0usize;
+    match pool.begin().await {
+        Ok(mut tx) => {
+            for b in blobs {
+                let ins = sqlx::query(
+                    r#"INSERT INTO cem_dago_telemetry_quarantine_global
+                          (claimed_tenant_id, client_id, scan_id, kind, field_key,
+                           codec_byte, raw_hex, decode_error, fallback_reason)
+                       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#,
+                )
+                .bind(claimed)
+                .bind(client_id)
+                .bind(scan_id)
+                .bind(&b.kind)
+                .bind(&b.field_key)
+                .bind(b.codec_byte)
+                .bind(&b.raw_hex)
+                .bind(&b.decode_error)
+                .bind(reason)
+                .execute(&mut *tx)
+                .await;
+                if ins.is_ok() {
+                    wrote += 1;
+                }
+            }
+            if tx.commit().await.is_err() {
+                wrote = 0;
+            }
+        }
+        Err(e) => {
+            tracing::error!(
+                target: "cem_dago",
+                error = %e,
+                "global quarantine postgres begin failed — Redis + admin logs still retain blobs"
+            );
+        }
+    }
+    spill_global_redis(blobs).await;
+    if wrote > 0 {
+        tracing::error!(
+            target: "cem_dago",
+            claimed_tenant_id = ?claimed,
+            client_id,
+            scan_id,
+            count = wrote,
+            fallback_reason = reason,
+            "TELEMETRY INTEGRITY VIOLATION — system-global quarantine buffer persisted"
+        );
+        metrics::counter!("weissman_cem_dago_telemetry_integrity_global_total")
+            .increment(wrote as u64);
+    }
     wrote
+}
+
+async fn spill_global_redis(blobs: &[QuarantineBlob]) {
+    let Ok(mut conn) = acquire_redis_connection_with_timeout(GLOBAL_REDIS_KEY).await else {
+        return;
+    };
+    let _ = tokio::time::timeout(GLOBAL_REDIS_OP, async {
+        for b in blobs {
+            let payload = serde_json::to_vec(b).unwrap_or_default();
+            let _: () = conn.rpush(GLOBAL_REDIS_KEY, payload.as_slice()).await?;
+        }
+        let _: () = conn
+            .expire(GLOBAL_REDIS_KEY, super::BLACKBOARD_TTL_SECS)
+            .await?;
+        Ok::<(), redis::RedisError>(())
+    })
+    .await;
 }
 
 /// RLS-scoped read of quarantine blobs for a scan (Command Center).
@@ -136,6 +308,9 @@ pub async fn load_quarantine_for_scan(
     client_id: i64,
     scan_id: &str,
 ) -> Vec<QuarantineBlob> {
+    if !tenant_scope_usable(tenant_id) {
+        return Vec::new();
+    }
     let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
         return Vec::new();
     };
@@ -178,5 +353,23 @@ mod tests {
         assert_eq!(blob.codec_byte, Some(255));
         assert_eq!(blob.raw_hex, "ff00");
         assert_eq!(blob.kind, "evidence");
+    }
+
+    #[test]
+    fn corrupt_payload_without_tenant_routes_to_global_buffer() {
+        assert_eq!(
+            quarantine_persist_target(0),
+            QuarantinePersistTarget::GlobalInvalidTenant
+        );
+        assert_eq!(
+            quarantine_persist_target(-1),
+            QuarantinePersistTarget::GlobalInvalidTenant
+        );
+        assert!(!tenant_scope_usable(0));
+        assert_eq!(
+            quarantine_persist_target(7),
+            QuarantinePersistTarget::Tenant
+        );
+        assert!(tenant_scope_usable(7));
     }
 }

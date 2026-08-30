@@ -21,8 +21,8 @@ use serde::Serialize;
 use serde_json::Value;
 use sqlx::PgPool;
 use std::collections::HashSet;
-use std::sync::Arc;
-use tokio::sync::Semaphore;
+use std::sync::{Arc, OnceLock};
+use tokio::sync::{Mutex, Semaphore};
 
 const PIVOT_CAP: usize = 4;
 const MAX_WAVES: u32 = 48;
@@ -60,6 +60,14 @@ struct MeshExec {
     /// Tenant DiGraph in ArcSwap. Pivots load() a snapshot; they never hit Postgres
     /// per failure. Waves ingest live blackboard signals (and optionally reload SQL).
     risk_graph: ResidentRiskGraph,
+    /// Worker-wide write lock: SQL reload + ArcSwap store + ingest are a single
+    /// critical section so two finishing waves cannot Lost-Update the live graph.
+    graph_write: Arc<Mutex<()>>,
+}
+
+fn worker_graph_write() -> Arc<Mutex<()>> {
+    static LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
+    LOCK.get_or_init(|| Arc::new(Mutex::new(()))).clone()
 }
 
 impl MeshExec {
@@ -72,6 +80,7 @@ impl MeshExec {
             read_only_pool: req.read_only_pool.clone(),
             enabled: req.engines.clone(),
             risk_graph: resident_graph(CachedRiskGraph::empty()),
+            graph_write: worker_graph_write(),
         }
     }
 }
@@ -144,28 +153,31 @@ pub struct MeshRunReport {
 pub async fn execute_mesh(req: MeshRequest) -> MeshRunReport {
     let mut exec = MeshExec::from_request(&req);
     attach_payload_trie(&mut exec).await;
-    match load_risk_graph(
-        exec.pool.as_ref(),
-        exec.blackboard.tenant_id(),
-        exec.blackboard.client_id(),
-    )
-    .await
     {
-        Ok(g) => {
-            tracing::info!(
-                target: "cem_dago",
-                nodes = g.node_count(),
-                edges = g.edge_count(),
-                "loaded scan-resident risk graph (Dijkstra is RAM-only; ArcSwap for live topology)"
-            );
-            store_graph(&exec.risk_graph, g);
-        }
-        Err(e) => {
-            tracing::warn!(
-                target: "cem_dago",
-                error = %e,
-                "risk graph load failed — pivots use empty resident graph (no per-failure SQL)"
-            );
+        let _write = exec.graph_write.lock().await;
+        match load_risk_graph(
+            exec.pool.as_ref(),
+            exec.blackboard.tenant_id(),
+            exec.blackboard.client_id(),
+        )
+        .await
+        {
+            Ok(g) => {
+                tracing::info!(
+                    target: "cem_dago",
+                    nodes = g.node_count(),
+                    edges = g.edge_count(),
+                    "loaded scan-resident risk graph (Dijkstra is RAM-only; ArcSwap for live topology)"
+                );
+                store_graph(&exec.risk_graph, g);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    target: "cem_dago",
+                    error = %e,
+                    "risk graph load failed — pivots use empty resident graph (no per-failure SQL)"
+                );
+            }
         }
     }
     let mut remaining: HashSet<String> = req.engines.iter().cloned().collect();
@@ -474,6 +486,7 @@ async fn run_one(exec: &MeshExec, engine_id: &str, target: &str) -> EngineResult
 }
 
 async fn refresh_live_graph(exec: &MeshExec, reload_sql: bool) {
+    let _write = exec.graph_write.lock().await;
     if reload_sql {
         match load_risk_graph(
             exec.pool.as_ref(),
@@ -568,8 +581,13 @@ pub fn status_json() -> Value {
         "redis_pool": "sharded_connection_manager",
         "redis_shards": super::redis_pool::redis_shard_count(),
         "graph_cache": "arcswap_live",
-        "queryplan_sandbox": "ast_whitelist",
+        "graph_write": "tokio_mutex_worker",
+        "queryplan_sandbox": "ast_whitelist_limit_200",
+        "queryplan_limit": super::sql_ast::AST_STRICT_LIMIT,
         "telemetry_quarantine": true,
+        "telemetry_quarantine_global": true,
+        "redis_acquire_timeout_ms": super::redis_pool::REDIS_ACQUIRE_TIMEOUT.as_millis() as u64,
+        "redis_op_timeout_ms": 50,
         "wave_join": "join_all",
         "dispatch": "id_lookup_not_dyn_trait",
         "pipeline_special_engines": super::PIPELINE_SPECIAL_ENGINES,
@@ -624,8 +642,13 @@ mod tests {
         assert_eq!(v["codec_magic"], "0xC1");
         assert_eq!(v["redis_pool"], "sharded_connection_manager");
         assert_eq!(v["graph_cache"], "arcswap_live");
-        assert_eq!(v["queryplan_sandbox"], "ast_whitelist");
+        assert_eq!(v["graph_write"], "tokio_mutex_worker");
+        assert_eq!(v["queryplan_sandbox"], "ast_whitelist_limit_200");
+        assert_eq!(v["queryplan_limit"], 200);
         assert_eq!(v["telemetry_quarantine"], true);
+        assert_eq!(v["telemetry_quarantine_global"], true);
+        assert_eq!(v["redis_acquire_timeout_ms"], 50);
+        assert_eq!(v["redis_op_timeout_ms"], 50);
         assert_eq!(v["dispatch"], "id_lookup_not_dyn_trait");
         assert_eq!(v["trie_prewarm"]["batch_size"], 25_000);
         assert_eq!(v["trie_prewarm"]["window_days"], 90);
@@ -660,5 +683,34 @@ mod tests {
         assert!(out
             .iter()
             .any(|o| o.engine_id == "graphql_attack" && o.success));
+    }
+
+    #[tokio::test]
+    async fn graph_write_mutex_serializes_store_then_ingest() {
+        let cache = resident_graph(CachedRiskGraph::empty());
+        let lock = worker_graph_write();
+        let order = Arc::new(Mutex::new(Vec::<&'static str>::new()));
+        let run = |tag_store: &'static str, tag_ingest: &'static str| {
+            let cache = cache.clone();
+            let lock = lock.clone();
+            let order = order.clone();
+            async move {
+                let _g = lock.lock().await;
+                order.lock().await.push(tag_store);
+                store_graph(&cache, CachedRiskGraph::empty());
+                tokio::time::sleep(std::time::Duration::from_millis(15)).await;
+                ingest_live_signals(&cache, &["ot_protocol".into(), "web_port_active".into()]);
+                order.lock().await.push(tag_ingest);
+            }
+        };
+        tokio::join!(run("s1", "i1"), run("s2", "i2"));
+        let o = order.lock().await.clone();
+        assert!(
+            o == ["s1", "i1", "s2", "i2"] || o == ["s2", "i2", "s1", "i1"],
+            "store+ingest must be a single critical section, got {o:?}"
+        );
+        let snap = cache.load();
+        assert!(snap.has_label("ot_protocol"));
+        assert!(snap.has_label("web_port_active"));
     }
 }

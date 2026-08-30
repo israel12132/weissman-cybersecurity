@@ -271,19 +271,22 @@ pub fn reject_query_plan_injection(qp: &QueryPlan) -> Result<(), String> {
 }
 
 /// Compile + `reject_unsafe_sql` + execute **only** on the weissman_ro pool.
-/// The application pool is never accepted.
+/// The application pool is never accepted. `QueryPlan.limit` is forced to
+/// `[1, AST_STRICT_LIMIT]` before compile so a missing/oversized LLM LIMIT
+/// cannot OOM the API (AST injection is a second bound on the compiled text).
 pub async fn execute_plan_under_ro_sandbox(
     qp: QueryPlan,
     ro_pool: Option<&PgPool>,
     tenant_id: i64,
 ) -> Result<usize, String> {
     reject_query_plan_injection(&qp)?;
+    let qp = bound_query_plan_limit(qp);
     let compiled = compile_plan(&qp, tenant_id)?;
     reject_unsafe_sql(&compiled.sql)?;
     if blob_has_injection(&compiled.sql) {
         return Err("sandbox: compiled SQL contains a blocked token".into());
     }
-    super::sql_ast::validate_compiled_sql_ast(&compiled.sql)?;
+    let _bounded_sql = super::sql_ast::validate_and_bound_sql(&compiled.sql)?;
     let Some(ro) = ro_pool else {
         return Err(
             "QueryPlan skipped — WEISSMAN_READ_ONLY_DATABASE_URL unset (weissman_ro required)"
@@ -292,6 +295,17 @@ pub async fn execute_plan_under_ro_sandbox(
     };
     let ask = execute_plan(ro, tenant_id, qp).await?;
     Ok(ask.row_count)
+}
+
+/// Cap / inject QueryPlan.limit before compile_plan. `None` and `> 200` become 200.
+#[must_use]
+pub fn bound_query_plan_limit(mut qp: QueryPlan) -> QueryPlan {
+    let max = super::sql_ast::AST_STRICT_LIMIT as i64;
+    qp.limit = Some(match qp.limit {
+        Some(n) if n > 0 => n.min(max),
+        _ => max,
+    });
+    qp
 }
 
 #[cfg(test)]
@@ -418,5 +432,26 @@ mod tests {
     fn compiled_sql_passes_ast_gate() {
         let compiled = compile_plan(&ok_plan(), 1).expect("compile");
         crate::cem_dago::sql_ast::validate_compiled_sql_ast(&compiled.sql).expect("ast");
+    }
+
+    #[test]
+    fn missing_or_huge_limit_is_capped_before_compile() {
+        let mut qp = ok_plan();
+        qp.limit = None;
+        let qp = bound_query_plan_limit(qp);
+        assert_eq!(qp.limit, Some(200));
+        let compiled = compile_plan(&qp, 1).expect("compile after inject");
+        assert!(
+            compiled.sql.to_ascii_uppercase().contains("LIMIT 200"),
+            "{}",
+            compiled.sql
+        );
+
+        let mut huge = ok_plan();
+        huge.limit = Some(99_999);
+        let huge = bound_query_plan_limit(huge);
+        assert_eq!(huge.limit, Some(200));
+        let compiled = compile_plan(&huge, 1).expect("compile after clamp");
+        assert!(compiled.sql.ends_with("LIMIT 200"), "{}", compiled.sql);
     }
 }

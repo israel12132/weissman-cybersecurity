@@ -12,7 +12,7 @@
 //! another process cannot see it). Production multi-replica deployments already
 //! require Redis (`rate_limit_redis::distributed_state_required`).
 
-use super::redis_pool::{shared_redis_pool, ShardedRedis};
+use super::redis_pool::{acquire_redis_connection_with_timeout, REDIS_ACQUIRE_TIMEOUT};
 use super::telemetry_quarantine::{blob_from_raw, persist_quarantine, QuarantineBlob};
 use super::BLACKBOARD_TTL_SECS;
 use redis::AsyncCommands;
@@ -24,7 +24,9 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
-const REDIS_OP_TIMEOUT: Duration = Duration::from_secs(2);
+/// Every blackboard Redis command is bounded so a hung ConnectionManager
+/// reconnect cannot starve the Tokio runtime under scan load.
+pub(crate) const REDIS_OP_TIMEOUT: Duration = Duration::from_millis(50);
 
 /// MessagePack "never used" opcode. A valid map/array/str never starts with this,
 /// so mixed-version readers can distinguish a version envelope from legacy bodies.
@@ -205,7 +207,7 @@ pub struct ScanBlackboard {
     tenant_id: i64,
     client_id: i64,
     scan_id: String,
-    /// When true, I/O goes through [`shared_redis_pool`] (or a test-injected manager).
+    /// When true, I/O goes through the sharded ConnectionManager pool (or a test-injected manager).
     redis_enabled: bool,
     /// Test override. `None` means pick a shard from the process-wide pool.
     redis_dedicated: Option<redis::aio::ConnectionManager>,
@@ -336,15 +338,18 @@ impl ScanBlackboard {
         shard_key: &str,
     ) -> Result<redis::aio::ConnectionManager, BlackboardError> {
         if let Some(m) = &self.redis_dedicated {
-            return Ok(m.clone());
+            return tokio::time::timeout(REDIS_ACQUIRE_TIMEOUT, async { m.clone() })
+                .await
+                .map_err(|_| {
+                    BlackboardError::Redis("Redis connection acquisition timed out!".into())
+                });
         }
         if !self.redis_enabled {
             return Err(BlackboardError::Redis("redis not configured".into()));
         }
-        let pool = shared_redis_pool()
+        acquire_redis_connection_with_timeout(shard_key)
             .await
-            .ok_or_else(|| BlackboardError::Redis("sharded redis pool unavailable".into()))?;
-        Ok(pool.shard(shard_key))
+            .map_err(BlackboardError::Redis)
     }
 
     /// Decode failure → hex quarantine blob + critical log. Never a silent skip.
@@ -615,9 +620,9 @@ impl ScanBlackboard {
 
 /// Default shard from the process-wide pool (compat for callers that want one manager).
 pub async fn shared_redis_manager() -> Option<redis::aio::ConnectionManager> {
-    shared_redis_pool()
+    acquire_redis_connection_with_timeout("weissman:blackboard")
         .await
-        .map(|p: ShardedRedis| p.shard("weissman:blackboard"))
+        .ok()
 }
 
 /// Open the latest scan blackboard for a client (Redis index). `None` when no scan recorded.
@@ -625,11 +630,11 @@ pub async fn open_latest(
     tenant_id: i64,
     client_id: i64,
 ) -> Result<Option<ScanBlackboard>, BlackboardError> {
-    let Some(pool) = shared_redis_pool().await else {
-        return Ok(None);
-    };
     let idx = ScanBlackboard::latest_index_key(tenant_id, client_id);
-    let mut conn = pool.shard(&idx);
+    let mut conn = match acquire_redis_connection_with_timeout(&idx).await {
+        Ok(c) => c,
+        Err(_) => return Ok(None),
+    };
     let scan_id: Option<String> = tokio::time::timeout(REDIS_OP_TIMEOUT, conn.get(&idx))
         .await
         .map_err(|_| BlackboardError::Redis("redis connect timeout".into()))??;
@@ -664,6 +669,12 @@ mod tests {
     use super::*;
     use redis::AsyncCommands;
     use std::time::Duration;
+
+    #[test]
+    fn redis_timeouts_are_fifty_ms() {
+        assert_eq!(REDIS_OP_TIMEOUT, Duration::from_millis(50));
+        assert_eq!(REDIS_ACQUIRE_TIMEOUT, Duration::from_millis(50));
+    }
 
     #[tokio::test]
     async fn memory_round_trip() {

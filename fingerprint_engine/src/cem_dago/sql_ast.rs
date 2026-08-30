@@ -10,24 +10,63 @@
 use crate::nl_query::{is_allowlisted_column, is_allowlisted_table};
 use sqlparser::ast::{
     BinaryOperator, Expr, Function, GroupByExpr, Query, Select, SelectItem, SetExpr, Statement,
-    TableFactor, TableWithJoins,
+    TableFactor, TableWithJoins, Value,
 };
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
 
+/// Hard cap injected into the AST before weissman_ro execution. Never trust the LLM LIMIT.
+pub const AST_STRICT_LIMIT: u64 = 200;
+
 pub fn validate_compiled_sql_ast(sql: &str) -> Result<(), String> {
+    validate_and_bound_sql(sql).map(|_| ())
+}
+
+/// Parse, inject/clamp `LIMIT 200`, walk the tree, return the rewritten SQL.
+pub fn validate_and_bound_sql(sql: &str) -> Result<String, String> {
     let dialect = PostgreSqlDialect {};
     let ast = Parser::parse_sql(&dialect, sql).map_err(|e| format!("sql ast parse failed: {e}"))?;
     if ast.len() != 1 {
         return Err("sql ast: exactly one statement is required".into());
     }
-    match ast.into_iter().next() {
-        Some(Statement::Query(q)) => validate_query(&q, true),
-        Some(other) => Err(format!(
-            "sql ast: only SELECT is permitted, got {}",
-            statement_kind(&other)
-        )),
-        None => Err("sql ast: empty parse".into()),
+    let mut stmt = ast
+        .into_iter()
+        .next()
+        .ok_or_else(|| "sql ast: empty parse".to_string())?;
+    inject_strict_limit_to_ast(&mut stmt);
+    match &stmt {
+        Statement::Query(q) => validate_query(q, true)?,
+        other => {
+            return Err(format!(
+                "sql ast: only SELECT is permitted, got {}",
+                statement_kind(other)
+            ))
+        }
+    }
+    Ok(stmt.to_string())
+}
+
+/// Physically inject `LIMIT 200` when missing or greater than [`AST_STRICT_LIMIT`].
+pub fn inject_strict_limit_to_ast(statement: &mut Statement) {
+    if let Statement::Query(query) = statement {
+        inject_limit_on_query(query);
+    }
+}
+
+fn inject_limit_on_query(query: &mut Query) {
+    let needs_limit_override = match &query.limit {
+        Some(Expr::Value(Value::Number(n, _))) => n
+            .parse::<u64>()
+            .map(|v| v > AST_STRICT_LIMIT)
+            .unwrap_or(true),
+        None => true,
+        _ => true,
+    };
+    if needs_limit_override {
+        query.limit = Some(Expr::Value(Value::Number(
+            AST_STRICT_LIMIT.to_string(),
+            false,
+        )));
     }
 }
 
@@ -371,5 +410,43 @@ mod tests {
             "SELECT id FROM risk_graph_nodes WHERE label = (SELECT passwd FROM pg_shadow) LIMIT 1"
         )
         .is_err());
+    }
+
+    fn sql_upper(s: &str) -> String {
+        s.split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_ascii_uppercase()
+    }
+
+    #[test]
+    fn injects_limit_200_when_missing() {
+        let out = validate_and_bound_sql("SELECT id FROM risk_graph_nodes").expect("bound");
+        assert!(
+            sql_upper(&out).contains("LIMIT 200"),
+            "expected LIMIT 200 in {out}"
+        );
+        validate_compiled_sql_ast(&out).expect("rewritten still valid");
+    }
+
+    #[test]
+    fn clamps_limit_above_200() {
+        let out =
+            validate_and_bound_sql("SELECT id FROM risk_graph_nodes LIMIT 9999").expect("bound");
+        let u = sql_upper(&out);
+        assert!(u.contains("LIMIT 200"), "expected clamp in {out}");
+        assert!(!u.contains("9999"), "stale limit survived in {out}");
+    }
+
+    #[test]
+    fn preserves_limit_at_or_below_200() {
+        let out =
+            validate_and_bound_sql("SELECT id FROM risk_graph_nodes LIMIT 10").expect("bound");
+        let u = sql_upper(&out);
+        assert!(u.contains("LIMIT 10"), "expected LIMIT 10 in {out}");
+        assert!(
+            !u.contains("LIMIT 200"),
+            "must not raise a small limit: {out}"
+        );
     }
 }
