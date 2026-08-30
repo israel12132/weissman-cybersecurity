@@ -1392,6 +1392,8 @@
       "kpi_ro_hint": "בריכת SELECT בלבד ל-QueryPlan של המועצה",
       "kpi_evidence": "מפתחות עדות",
       "kpi_evidence_hint": "סיגנלים חמים בסריקה הנוכחית",
+      "kpi_trie": "Trie מוקדם",
+      "kpi_trie_hint": "90 הימים האחרונים, אצוות 25,000 — בלי raw_data לא מוגבל",
       "waves_heading": "תצוגת גלי DAG (מנועי האורקסטרטור הליבתיים)",
       "wave": "גל {{n}}",
       "no_waves_title": "אין גלים",

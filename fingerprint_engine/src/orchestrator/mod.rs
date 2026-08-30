@@ -941,15 +941,49 @@ async fn load_poe_config(
             .await
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default();
-    if let Ok(rows) = sqlx::query(
-        "SELECT target_library, payload_data FROM dynamic_payloads WHERE added_at >= now() - interval '60 days'",
-    )
-    .fetch_all(intel_pool.as_ref())
-    .await
+    // Bounded keyset pages (90 days, 25k rows) — never SELECT payload_data unbounded.
     {
-        for r in rows {
-            if let (Ok(lib), Ok(data)) = (r.try_get::<String, _>("target_library"), r.try_get::<String, _>("payload_data")) {
-                gadget_chains.insert(lib, data);
+        use crate::cem_dago::payload_trie::{
+            DYNAMIC_PAYLOADS_PREWARM_SQL, PREWARM_BATCH_SIZE, PREWARM_HARD_CAP,
+        };
+        let mut last_id: i64 = 0;
+        loop {
+            if gadget_chains.len() >= PREWARM_HARD_CAP {
+                break;
+            }
+            let take = ((PREWARM_HARD_CAP - gadget_chains.len()) as i64).min(PREWARM_BATCH_SIZE);
+            match sqlx::query(DYNAMIC_PAYLOADS_PREWARM_SQL)
+                .bind(last_id)
+                .bind(take)
+                .fetch_all(intel_pool.as_ref())
+                .await
+            {
+                Ok(rows) if rows.is_empty() => break,
+                Ok(rows) => {
+                    let n = rows.len();
+                    for r in &rows {
+                        if let Ok(id) = r.try_get::<i64, _>("id") {
+                            last_id = last_id.max(id);
+                        }
+                        if let (Ok(lib), Ok(data)) = (
+                            r.try_get::<String, _>("target_library"),
+                            r.try_get::<String, _>("payload_data"),
+                        ) {
+                            gadget_chains.insert(lib, data);
+                        }
+                    }
+                    if n < take as usize {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        target: "poe_synthesis",
+                        error = %e,
+                        "dynamic_payloads pre-warm page failed (continuing with config gadgets)"
+                    );
+                    break;
+                }
             }
         }
     }

@@ -51,6 +51,8 @@ pub struct EngineRunContext {
     pub blackboard: Option<std::sync::Arc<crate::cem_dago::ScanBlackboard>>,
     /// Scan correlation id (async job uuid or `run-{id}-c{client}`).
     pub scan_id: Option<String>,
+    /// Bounded 90-day payload/target trie pre-warmed by CEM-DAGO (owned Arc, no lifetimes).
+    pub payload_trie: Option<std::sync::Arc<crate::cem_dago::PayloadTrie>>,
 }
 
 /// Escalate a run context into the Ghost Network after a WAF/rate-limit block: enable identity
@@ -234,6 +236,10 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
             ctx.memory_path_ids = winners.iter().map(|w| w.id).collect();
             ctx.memory_payloads = winners.into_iter().map(|w| w.payload).collect();
         }
+    }
+    if let Some(trie) = ctx.payload_trie.as_ref() {
+        let extra = trie.payloads_for_target(target);
+        crate::pentest_memory::prepend_memory_payloads(&mut ctx.memory_payloads, &extra);
     }
     let mut result = dispatch_engine_match(canonical, target, &ctx).await;
     if raw != canonical || !result.findings.is_empty() {

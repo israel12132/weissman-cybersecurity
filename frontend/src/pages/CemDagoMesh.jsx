@@ -205,7 +205,7 @@ export default function CemDagoMesh() {
         {loading && !status && <SkeletonWidgetGrid count={4} />}
 
         {status && (
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-3">
             <ExecutiveWidget
               label={t(`${NS}.kpi_enabled`)}
               value={status.enabled ? t(`${NS}.on`) : t(`${NS}.off`)}
@@ -241,6 +241,16 @@ export default function CemDagoMesh() {
               value={blackboard?.evidence_count ?? 0}
               hint={t(`${NS}.kpi_evidence_hint`)}
               accent="#f97316"
+            />
+            <ExecutiveWidget
+              label={t(`${NS}.kpi_trie`)}
+              value={
+                status.trie_prewarm
+                  ? `${status.trie_prewarm.window_days}d · ${(status.trie_prewarm.batch_size ?? 0).toLocaleString()}`
+                  : '—'
+              }
+              hint={t(`${NS}.kpi_trie_hint`)}
+              accent="#34d399"
             />
           </div>
         )}

@@ -19,6 +19,7 @@ pub mod blackboard;
 pub mod lanes;
 pub mod manifest;
 pub mod mesh;
+pub mod payload_trie;
 pub mod pivot;
 pub mod planner;
 pub mod registry;
@@ -30,6 +31,10 @@ pub use manifest::{CognitiveEngine, EdgeKind, EngineManifest};
 pub use mesh::{
     execute_mesh, manifests_json, seed_scan_context, status_json, MeshEngineOutcome, MeshRequest,
     MeshRunReport, PivotEvent,
+};
+pub use payload_trie::{
+    prewarm_payload_trie, PayloadTrie, PrewarmStats, PREWARM_BATCH_SIZE, PREWARM_HARD_CAP,
+    PREWARM_WINDOW_DAYS,
 };
 pub use registry::{manifest_for, PIPELINE_SPECIAL_ENGINES};
 pub use router::{next_ready_wave, partition_scan_engines, schedule_waves, PartitionedEngines};

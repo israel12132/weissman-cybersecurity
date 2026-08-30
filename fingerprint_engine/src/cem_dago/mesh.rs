@@ -69,6 +69,44 @@ impl MeshExec {
     }
 }
 
+/// Bounded 90-day / 25k-row trie pre-warm. Failures never abort the mesh.
+async fn attach_payload_trie(exec: &mut MeshExec) {
+    let Some(tid) = exec.ctx.tenant_id else {
+        return;
+    };
+    let (trie, stats) =
+        super::payload_trie::prewarm_payload_trie(exec.pool.as_ref(), tid, exec.ctx.client_id)
+            .await;
+    let trie = Arc::new(trie);
+    let hits = trie.lookup_target(&exec.target);
+    if !hits.is_empty() {
+        let payloads: Vec<String> = hits
+            .iter()
+            .map(|h| h.payload.clone())
+            .filter(|p| !p.is_empty())
+            .collect();
+        crate::pentest_memory::prepend_memory_payloads(&mut exec.ctx.memory_payloads, &payloads);
+        let _ = exec
+            .blackboard
+            .write_evidence(
+                "historical_payloads",
+                "payload_trie",
+                serde_json::json!({
+                    "count": hits.len(),
+                    "window_days": super::payload_trie::PREWARM_WINDOW_DAYS,
+                    "batch_size": super::payload_trie::PREWARM_BATCH_SIZE,
+                    "pages_fetched": stats.pages_fetched,
+                    "rows_seen": stats.rows_seen,
+                    "inserted": stats.inserted,
+                    "hit_hard_cap": stats.hit_hard_cap,
+                    "engines": hits.iter().map(|h| h.engine.as_str()).collect::<Vec<_>>(),
+                }),
+            )
+            .await;
+    }
+    exec.ctx.payload_trie = Some(trie);
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct MeshEngineOutcome {
     pub engine_id: String,
@@ -97,7 +135,8 @@ pub struct MeshRunReport {
 
 /// Run enabled mesh engines as blackboard-gated DAG waves with pivot + council.
 pub async fn execute_mesh(req: MeshRequest) -> MeshRunReport {
-    let exec = MeshExec::from_request(&req);
+    let mut exec = MeshExec::from_request(&req);
+    attach_payload_trie(&mut exec).await;
     let mut remaining: HashSet<String> = req.engines.iter().cloned().collect();
     let mut already: HashSet<String> = HashSet::new();
     let mut waves: Vec<Vec<String>> = Vec::new();
@@ -453,6 +492,12 @@ pub fn status_json() -> Value {
         "dispatch": "id_lookup_not_dyn_trait",
         "pipeline_special_engines": super::PIPELINE_SPECIAL_ENGINES,
         "pattern": "shared_blackboard_plus_active_dag_router",
+        "trie_prewarm": {
+            "window_days": super::payload_trie::PREWARM_WINDOW_DAYS,
+            "batch_size": super::payload_trie::PREWARM_BATCH_SIZE,
+            "hard_cap": super::payload_trie::prewarm_hard_cap(),
+            "pagination": "keyset_id",
+        },
     })
 }
 
@@ -495,6 +540,9 @@ mod tests {
         assert_eq!(v["wave_join"], "join_all");
         assert_eq!(v["blackboard_codec"], "msgpack");
         assert_eq!(v["dispatch"], "id_lookup_not_dyn_trait");
+        assert_eq!(v["trie_prewarm"]["batch_size"], 25_000);
+        assert_eq!(v["trie_prewarm"]["window_days"], 90);
+        assert_eq!(v["trie_prewarm"]["pagination"], "keyset_id");
     }
 
     #[tokio::test]
