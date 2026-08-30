@@ -169,9 +169,10 @@ hwlocality = { version = "1.0.0-alpha.12", optional = true }
 libc = "0.2"
 
 [lints.rust]
-# Documented unsafe exceptions: hpc_runtime::linux_affinity (sched_setaffinity)
-# and secret_zeroize::memlock (mlock / madvise / VirtualLock). All other modules
-# must remain free of unsafe code.
+# Documented unsafe exceptions: hpc_runtime::linux_affinity (sched_setaffinity),
+# secret_zeroize::memlock (mlock / madvise / VirtualLock), and
+# secret_zeroize::raw_environ (libc::environ / GetEnvironmentStringsW).
+# All other modules must remain free of unsafe code.
 unsafe_code = "deny"
 
 [lints.clippy]

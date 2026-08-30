@@ -1,15 +1,19 @@
 //! Vault key material: locked, zeroizing byte buffers — never `String`.
 //!
-//! `std::env::var` copies environ bytes onto a heap `String`. The allocator may
-//! duplicate that slice across resizes and then put the old pages on the free
-//! list without wiping them. A memory dump then recovers live vault keys.
+//! `std::env::var` / `var_os` allocate an `OsString`/`String` on the process heap
+//! *before* the caller can pin the bytes. Those allocator pages are not zeroized
+//! when the `OsString` is dropped. A memory dump then recovers live vault keys.
 //!
 //! Load path:
-//! 1. `var_os` → `into_encoded_bytes` (no UTF-8 `String`)
+//! 1. Walk the OS environment block (`libc::environ` / `GetEnvironmentStringsW`)
+//!    and copy **value** bytes straight into [`LockedBytes`] — never `var_os`
 //! 2. `mlock` / `VirtualLock` so the copy cannot be swapped
 //! 3. Linux `MADV_DONTDUMP` so core dumps skip the pages
 //! 4. `Zeroize` on drop, then `munlock`
 //! 5. In-place environ overwrite + `remove_var` for vault key names (JWT stays)
+
+#[allow(unsafe_code)]
+mod raw_environ;
 
 use zeroize::Zeroize;
 
@@ -20,7 +24,7 @@ pub struct LockedBytes {
 }
 
 impl LockedBytes {
-    fn from_vec(mut buf: Vec<u8>) -> Self {
+    pub(crate) fn from_vec(mut buf: Vec<u8>) -> Self {
         let locked_len = buf.len();
         memlock::lock_secret_pages(buf.as_mut_ptr(), locked_len);
         Self { buf, locked_len }
@@ -67,11 +71,10 @@ pub fn split_csv(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
         .filter(|s| !s.is_empty())
 }
 
-/// Copy an env var into a locked byte buffer. Never constructs `String`.
+/// Copy an env var into a locked byte buffer. Never constructs `String` or `OsString`.
 #[must_use]
 pub fn take_env_bytes_locked(name: &str) -> Option<LockedBytes> {
-    let os = std::env::var_os(name)?;
-    Some(LockedBytes::from_vec(os.into_encoded_bytes()))
+    raw_environ::take_env_value_locked(name)
 }
 
 /// Parse 32 bytes from hex on the stack — no `hex::decode` heap buffer.
@@ -122,21 +125,11 @@ pub fn env_is_hex32_key(name: &str) -> bool {
         .is_some()
 }
 
-/// Overwrite the live environ slot with same-length filler, zero the locked copy,
-/// then unset so `/proc/self/environ` cannot be scanned for the original key.
+/// Overwrite the live environ slot with same-length filler in place, then unset
+/// so `/proc/self/environ` cannot be scanned for the original key.
 pub fn scrub_env_var(name: &str) {
-    if let Some(value) = take_env_bytes_locked(name) {
-        let n = value.as_bytes().len();
-        drop(value);
-        if n > 0 {
-            let filler = "0".repeat(n);
-            // SAFETY: filler is ASCII zeros, not secret material.
-            std::env::set_var(name, &filler);
-        }
-        std::env::remove_var(name);
-    } else {
-        std::env::remove_var(name);
-    }
+    raw_environ::overwrite_value_in_place(name);
+    std::env::remove_var(name);
 }
 
 /// Pin secret pages (mlock / VirtualLock + MADV_DONTDUMP).
@@ -264,8 +257,31 @@ mod tests {
             !prod.contains("std::env::var("),
             "vault load path must not allocate a heap String via std::env::var"
         );
-        assert!(prod.contains("var_os"));
-        assert!(prod.contains("into_encoded_bytes"));
+        assert!(
+            !prod.contains("env::var_os("),
+            "std::env::var_os allocates an OsString on the heap before return"
+        );
+        assert!(
+            !prod.contains("into_encoded_bytes("),
+            "into_encoded_bytes still starts from a heap OsString"
+        );
+        assert!(
+            !prod.contains("env::set_var("),
+            "scrub must overwrite environ in place, not set_var a filler String"
+        );
         assert!(prod.contains("mlock") || prod.contains("VirtualLock"));
+        let environ_src = include_str!("secret_zeroize/raw_environ.rs");
+        let environ_prod = environ_src
+            .split("#[cfg(test)]")
+            .next()
+            .expect("raw_environ production source");
+        assert!(
+            environ_prod.contains("static mut environ")
+                || environ_prod.contains("libc::environ")
+                || environ_prod.contains("GetEnvironmentStringsW"),
+            "must read the OS environment block, not std::env"
+        );
+        assert!(!environ_prod.contains("env::var_os("));
+        assert!(!environ_prod.contains("into_encoded_bytes("));
     }
 }
