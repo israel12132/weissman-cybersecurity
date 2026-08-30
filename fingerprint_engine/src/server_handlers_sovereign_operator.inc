@@ -1,4 +1,7 @@
-use crate::sovereign_operator::{chat as sov_chat, knowledge as sov_knowledge, log_stream as sov_logs, tools as sov_tools};
+use crate::sovereign_operator::{
+    chat as sov_chat, forge as sov_forge, knowledge as sov_knowledge, log_stream as sov_logs,
+    memory as sov_memory, scripts as sov_scripts, tools as sov_tools,
+};
 use uuid::Uuid;
 
 #[derive(Deserialize, Default)]
@@ -41,6 +44,20 @@ struct SovereignToolBody {
 struct SovereignSseQuery {
     #[serde(default)]
     since: Option<i64>,
+}
+
+#[derive(Deserialize, Default)]
+struct SovereignMemoryQuery {
+    #[serde(default)]
+    kind: Option<String>,
+    #[serde(default)]
+    limit: Option<i64>,
+}
+
+#[derive(Deserialize, Default)]
+struct SovereignLimitQuery {
+    #[serde(default)]
+    limit: Option<i64>,
 }
 
 fn sov_trace(trace_ext: Option<Extension<crate::request_trace::TraceId>>) -> Option<String> {
@@ -445,4 +462,61 @@ async fn api_sovereign_operator_stream(
     Sse::new(stream)
         .keep_alive(axum::response::sse::KeepAlive::new().interval(Duration::from_secs(20)))
         .into_response()
+}
+
+async fn api_sovereign_operator_memory_get(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<SovereignMemoryQuery>,
+) -> Response {
+    let kind = q.kind.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    match sov_memory::list_recent(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        kind,
+        q.limit.unwrap_or(80),
+    )
+    .await
+    {
+        Ok(rows) => (StatusCode::OK, Json(json!({ "ok": true, "memory": rows }))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
+async fn api_sovereign_operator_forge_get(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<SovereignLimitQuery>,
+) -> Response {
+    match sov_forge::list_forge(state.app_pool.as_ref(), auth.tenant_id, q.limit.unwrap_or(40))
+        .await
+    {
+        Ok(rows) => (StatusCode::OK, Json(json!({ "ok": true, "forge": rows }))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
+async fn api_sovereign_operator_scripts_get(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<SovereignLimitQuery>,
+) -> Response {
+    match sov_scripts::list_scripts(state.app_pool.as_ref(), auth.tenant_id, q.limit.unwrap_or(40))
+        .await
+    {
+        Ok(rows) => (StatusCode::OK, Json(json!({ "ok": true, "scripts": rows }))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
 }

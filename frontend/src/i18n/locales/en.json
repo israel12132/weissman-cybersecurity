@@ -3895,8 +3895,8 @@
     "sovereignTheater": {
       "title": "Sovereign Operator",
       "subtitle": "Owner-only · live engine tape · proof without destruction",
-      "evidence_notice": "Live owner-only APIs: GET/POST /api/sovereign/operator/* (chat, session, knowledge, logs, windows, tools, tune, race) and SSE /api/sovereign/operator/stream. Engine windows open only from worker weissman_sovereign_engine_logs rows. Non-owners receive 404. LLM missing → 503. RoE safe_proofs. No simulated thought or engine entry.",
-      "search_placeholder": "Filter thought, engine window, or log line…",
+      "evidence_notice": "Live owner-only APIs: GET/POST /api/sovereign/operator/* (chat, session, knowledge, logs, windows, memory, forge, scripts, tools, tune, race) and SSE /api/sovereign/operator/stream. Engine windows open only from worker weissman_sovereign_engine_logs rows. Living memory and forge queue are live Postgres. Non-owners receive 404. LLM missing → 503. RoE safe_proofs. No simulated thought or engine entry.",
+      "search_placeholder": "Filter thought, engine window, memory, forge, or log line…",
       "export_json": "Export JSON",
       "load_failed": "Could not load Sovereign Operator state from live APIs.",
       "chat_failed": "Chat failed — LLM must be live (WEISSMAN_LLM_BASE_URL).",
@@ -3922,7 +3922,16 @@
       "sending": "Working…",
       "no_thoughts": "No thought cards yet. Send a command.",
       "no_windows": "No open engine windows. Windows appear only when a worker emits entered/probe.",
-      "no_logs": "No engine log events yet."
+      "no_logs": "No engine log events yet.",
+      "memory": "Living memory",
+      "forge": "Local forge",
+      "scripts": "Sandbox proofs",
+      "no_memory": "No living-memory rows yet. They appear after a live engine finding or remember/script.",
+      "no_forge": "No forge drafts. Local rustc worktrees land here; GitHub stays blocked until live_proof.",
+      "no_scripts": "No sandbox scripts yet. Proof-only GET/POST/HEAD via poc_sandbox.",
+      "verified": "verified",
+      "unverified": "unverified",
+      "sandbox_ran": "executed"
     },
     "clientEngagements": {
       "title": "Engagements",

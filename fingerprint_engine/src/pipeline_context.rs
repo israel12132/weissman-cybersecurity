@@ -333,7 +333,8 @@ pub fn expanded_path_wordlist() -> Vec<String> {
         "/api/Feedbacks",
         "/api/SecurityQuestions",
     ];
-    paths.into_iter().map(String::from).collect()
+    let static_paths: Vec<String> = paths.into_iter().map(String::from).collect();
+    crate::live_knowledge_bus::merge_live_paths(static_paths)
 }
 
 /// Web ports that get their own base URL (http(s)://host:port) for scanning.

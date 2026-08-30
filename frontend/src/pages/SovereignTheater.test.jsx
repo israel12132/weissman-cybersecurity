@@ -38,6 +38,21 @@ beforeEach(() => {
     if (String(url).includes('/knowledge')) {
       return Promise.resolve({ knowledge: { production_engine_count: 563, live: true } })
     }
+    if (String(url).includes('/memory')) {
+      return Promise.resolve({
+        memory: [{ id: 1, kind: 'proof', engine_id: 'osint', target: 'https://ex.test', verified: true }],
+      })
+    }
+    if (String(url).includes('/forge')) {
+      return Promise.resolve({
+        forge: [{ id: 'f1', engine_id: 'osint', title: 'local draft', status: 'local_ok' }],
+      })
+    }
+    if (String(url).includes('/scripts')) {
+      return Promise.resolve({
+        scripts: [{ id: 2, target: 'https://example.com', method: 'GET', verified: false }],
+      })
+    }
     return Promise.resolve({ ok: true })
   })
 })
@@ -46,11 +61,17 @@ afterEach(() => cleanup())
 describe('SovereignTheater', () => {
   it('loads live session, windows, and knowledge then POSTs owner chat', async () => {
     render(<SovereignTheater />)
-    await waitFor(() => expect(screen.getByText('osint')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText('osint').length).toBeGreaterThan(0))
     expect(screen.getByText('pages.sovereignTheater.evidence_notice')).toBeInTheDocument()
     expect(apiFetch).toHaveBeenCalledWith('/api/sovereign/operator/session')
     expect(apiFetch).toHaveBeenCalledWith('/api/sovereign/operator/windows')
     expect(apiFetch).toHaveBeenCalledWith('/api/sovereign/operator/knowledge')
+    expect(apiFetch).toHaveBeenCalledWith('/api/sovereign/operator/memory?limit=60')
+    expect(apiFetch).toHaveBeenCalledWith('/api/sovereign/operator/forge?limit=30')
+    expect(apiFetch).toHaveBeenCalledWith('/api/sovereign/operator/scripts?limit=30')
+    expect(screen.getByText('pages.sovereignTheater.memory')).toBeInTheDocument()
+    expect(screen.getByText('pages.sovereignTheater.forge')).toBeInTheDocument()
+    expect(screen.getByText('local_ok')).toBeInTheDocument()
 
     const input = screen.getByPlaceholderText('pages.sovereignTheater.placeholder')
     fireEvent.change(input, { target: { value: 'status of engines' } })

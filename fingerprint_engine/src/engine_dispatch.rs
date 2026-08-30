@@ -151,9 +151,41 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
     // in the worker log names the culprit engine — the only reliable pinpoint for a fatal abort,
     // which no panic hook can catch.
     tracing::info!(target: "engine_exec", engine = %engine_id, "run_engine begin");
-    crate::sovereign_operator::log_stream::emit_phase(ctx, "entered", engine_id, target, json!({}));
-    let result = run_engine_inner(engine_id, target, ctx).await;
-    crate::sovereign_operator::log_stream::finish_run(ctx, engine_id, target, &result);
+    let mut ctx_live = ctx.clone();
+    let slice = match (ctx.app_pool.as_ref(), ctx.tenant_id) {
+        (Some(pool), Some(tid)) if tid > 0 => {
+            crate::sovereign_operator::memory::hydrate(pool.as_ref(), tid, engine_id, target).await
+        }
+        _ => crate::live_knowledge_bus::LiveSlice::default(),
+    };
+    crate::live_knowledge_bus::prepend_into_ctx(&mut ctx_live, &slice);
+    crate::sovereign_operator::log_stream::emit_phase(
+        &ctx_live,
+        "entered",
+        engine_id,
+        target,
+        json!({
+            "live_knowledge": {
+                "from_memory": slice.from_memory,
+                "paths": slice.paths.len(),
+                "hosts": slice.hosts.len(),
+                "payloads": slice.payloads.len(),
+                "degraded_static": slice.degraded_static,
+            }
+        }),
+    );
+    let result =
+        crate::live_knowledge_bus::scope(slice, run_engine_inner(engine_id, target, &ctx_live))
+            .await;
+    crate::sovereign_operator::memory::ingest_run(
+        ctx.app_pool.clone(),
+        ctx.tenant_id.unwrap_or(0),
+        ctx.client_id,
+        engine_id,
+        target,
+        &result,
+    );
+    crate::sovereign_operator::log_stream::finish_run(&ctx_live, engine_id, target, &result);
     result
 }
 
@@ -274,7 +306,11 @@ async fn run_engine_inner(engine_id: &str, target: &str, ctx: &EngineRunContext)
             )
             .await;
             ctx.memory_path_ids = winners.iter().map(|w| w.id).collect();
-            ctx.memory_payloads = winners.into_iter().map(|w| w.payload).collect();
+            let winner_payloads: Vec<String> = winners.into_iter().map(|w| w.payload).collect();
+            ctx.memory_payloads = crate::live_knowledge_bus::merge_live_first(
+                &std::mem::take(&mut ctx.memory_payloads),
+                winner_payloads,
+            );
         }
     }
     crate::sovereign_operator::log_stream::emit_phase(

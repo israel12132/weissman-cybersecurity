@@ -9,15 +9,20 @@ use uuid::Uuid;
 use weissman_engines::openai_chat::{self, DEFAULT_LLM_MODEL};
 
 const SYSTEM: &str = r#"You are the Weissman Sovereign Operator — the platform owner's right-hand.
-You know this live snapshot of the system (engines, jobs, findings, engine logs). Never invent engines or findings.
+You know this live snapshot of the system (engines, jobs, findings, engine logs, living memory, forge queue, sandbox scripts). Never invent engines or findings.
 You only act through JSON tools. RoE is safe_proofs: prove vulnerabilities with live evidence, never destroy data or take services down.
 If the owner says they authorize a full race against a named client, call tool "race" with confirmation=AUTHORIZED, client_id, and a shift (red|blue|cloud|grc|hunter).
 To retune a failing engine from live logs, call "tune".
 To run one production engine, call "enqueue" with kind=command_center_engine, engine, client_id or target.
-Code changes: call "self_improve" which inserts PENDING_APPROVAL (HITL PR). Never claim you rewrote the binary.
+To fire a proof-only PoC (GET/POST/HEAD, poc_sandbox + optional OAST), call "script" with target, method, payload, marker.
+To store a verified path/host/payload for every later engine, call "remember" with kind in path|host|payload|proof|failure|script|note.
+To draft a new or improved engine locally (worktree + rustc, never the live binary), call "forge" with engine and optional rust_source.
+To require a live finding before GitHub, call "forge_prove" with forge_id and target.
+To queue a HITL GitHub proposal after live_proof only, call "forge_github" with forge_id. Never claim you patched production.
+Code changes: "self_improve" inserts PENDING_APPROVAL (HITL PR). Never claim you rewrote the binary.
 Respond ONLY as a JSON object:
-{"thought":{"kind":"observe|decide|enter_engine|correlate|wait_roe","text":"..."},"reply":"...","tools":[{"name":"enqueue|tune|race|self_improve","args":{}}]}
-thought.kind must be one of those five. tools may be empty.
+{"thought":{"kind":"observe|decide|enter_engine|correlate|wait_roe|script|forge|wait_auth","text":"..."},"reply":"...","tools":[{"name":"enqueue|tune|race|self_improve|script|forge|forge_prove|forge_github|remember","args":{}}]}
+thought.kind must be one of those eight. tools may be empty.
 "#;
 
 fn http_client() -> &'static reqwest::Client {
@@ -248,6 +253,9 @@ fn normalize_thought_kind(raw: &str) -> &'static str {
         "enter_engine" => "enter_engine",
         "correlate" => "correlate",
         "wait_roe" => "wait_roe",
+        "script" => "script",
+        "forge" => "forge",
+        "wait_auth" => "wait_auth",
         _ => "observe",
     }
 }
@@ -395,6 +403,9 @@ mod tests {
         assert_eq!(normalize_thought_kind("ENTER_ENGINE"), "enter_engine");
         assert_eq!(normalize_thought_kind("nope"), "observe");
         assert_eq!(normalize_thought_kind("wait_roe"), "wait_roe");
+        assert_eq!(normalize_thought_kind("script"), "script");
+        assert_eq!(normalize_thought_kind("FORGE"), "forge");
+        assert_eq!(normalize_thought_kind("wait_auth"), "wait_auth");
     }
 
     #[test]

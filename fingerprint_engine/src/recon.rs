@@ -242,10 +242,11 @@ pub async fn enum_subdomains(domain: &str, wordlist: &[String], concurrency: usi
 
 /// Run subdomain enumeration with default wordlist; returns JSON array of strings.
 pub async fn enum_subdomains_default(domain: &str) -> Vec<String> {
-    let wordlist: Vec<String> = DEFAULT_SUBDOMAINS
+    let static_list: Vec<String> = DEFAULT_SUBDOMAINS
         .iter()
         .map(|s| (*s).to_string())
         .collect();
+    let wordlist = crate::live_knowledge_bus::merge_subdomain_wordlist(domain, static_list);
     enum_subdomains(domain, &wordlist, DEFAULT_CONCURRENCY).await
 }
 

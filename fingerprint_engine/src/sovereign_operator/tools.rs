@@ -133,6 +133,11 @@ pub async fn execute_tool(
         "tune" => tool_tune(pool, tenant_id, trace_id, args).await,
         "race" => tool_race(pool, tenant_id, trace_id, args).await,
         "self_improve" => tool_self_improve(pool, tenant_id, actor_user_id, args).await,
+        "script" => super::scripts::run_script(pool, tenant_id, client_id_arg(args), args).await,
+        "forge" => super::forge::forge_draft(pool, tenant_id, actor_user_id, args).await,
+        "forge_prove" => super::forge::forge_prove(pool, tenant_id, trace_id, args).await,
+        "forge_github" => super::forge::forge_github(pool, tenant_id, args).await,
+        "remember" => tool_remember(pool, tenant_id, args).await,
         other => ToolOutcome {
             ok: false,
             name: other.to_string(),
@@ -536,6 +541,61 @@ async fn tool_self_improve(
     }
 }
 
+async fn tool_remember(pool: &PgPool, tenant_id: i64, args: &Value) -> ToolOutcome {
+    let kind = args
+        .get("kind")
+        .and_then(Value::as_str)
+        .unwrap_or("note")
+        .trim();
+    let engine_id = args
+        .get("engine")
+        .or_else(|| args.get("engine_id"))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    let target = args
+        .get("target")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    let evidence = args
+        .get("evidence")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    let body = args.get("body").cloned().unwrap_or(json!({}));
+    let verified = args
+        .get("verified")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    match super::memory::remember(
+        pool,
+        tenant_id,
+        client_id_arg(args),
+        kind,
+        engine_id,
+        target,
+        body,
+        evidence,
+        verified,
+    )
+    .await
+    {
+        Ok(id) => ToolOutcome {
+            ok: true,
+            name: "remember".into(),
+            detail: format!("stored living memory id={id} kind={kind}"),
+            payload: json!({ "id": id, "kind": kind }),
+        },
+        Err(e) => ToolOutcome {
+            ok: false,
+            name: "remember".into(),
+            detail: e,
+            payload: json!({}),
+        },
+    }
+}
+
 fn client_id_arg(args: &Value) -> Option<i64> {
     args.get("client_id").and_then(|v| {
         v.as_i64()
@@ -656,9 +716,21 @@ pub async fn hourly_tune_cycle(pool: &PgPool, tenant_id: i64) -> Result<Value, S
     let logs = log_stream::list_recent(pool, tenant_id, 30)
         .await
         .unwrap_or_default();
+    let memory = super::memory::list_recent(pool, tenant_id, None, 20)
+        .await
+        .unwrap_or_default();
+    let forge = super::forge::list_forge(pool, tenant_id, 10)
+        .await
+        .unwrap_or_default();
+    let scripts = super::scripts::list_scripts(pool, tenant_id, 10)
+        .await
+        .unwrap_or_default();
     Ok(json!({
         "tuned_jobs": jobs,
         "log_sample_count": logs.len(),
+        "living_memory_sample": memory.len(),
+        "forge_queue": forge.len(),
+        "scripts": scripts.len(),
     }))
 }
 
@@ -695,5 +767,13 @@ mod tests {
     #[test]
     fn race_confirm_token_is_explicit() {
         assert_eq!(RACE_CONFIRM, "AUTHORIZED");
+    }
+
+    #[test]
+    fn tool_names_include_living_plane() {
+        assert!(!is_allowed_job_kind("auto_heal"));
+        for name in ["script", "forge", "forge_prove", "forge_github", "remember"] {
+            assert_ne!(name, "auto_heal");
+        }
     }
 }

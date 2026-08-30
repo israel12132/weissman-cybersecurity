@@ -9,7 +9,8 @@ const ARCHITECTURE: &str = r#"Weissman is a Rust-first closed-loop offensive sec
 Execution path: API enqueue → weissman_async_jobs → weissman-worker → engine_dispatch::run_engine → findings_persist → WS/SSE.
 Owner plane: is_superadmin OR role=ceo. Sovereign Operator listens only to that plane.
 Findings are live probes (OAST / sandbox marker). RoE default is safe_proofs — proof without destruction.
-Engine code is compiled Rust; the operator retunes job_params and re-dispatches. Code changes go through self_improve HITL (PENDING_APPROVAL → PR), never in-process mutation of main.
+Engine code is compiled Rust; the operator retunes job_params and re-dispatches. Code changes go through local forge (worktree + rustc + live finding) then self_improve HITL (PENDING_APPROVAL → PR), never in-process mutation of main or PRODUCTION_ENGINE_IDS.
+Living memory (weissman_sovereign_memory) feeds the live knowledge bus so engines try proven paths/hosts/payloads first; static wordlists are degraded fallback only.
 Ask Weissman is NL→SQL read-only. Supreme Council is multi-model debate. Neither is the Sovereign Operator.
 Canonical encyclopedia: docs/sales/WEISSMAN-PLATFORM-ENCYCLOPEDIA.md (product map: weissman-server, weissman-worker, weissman-agent, PostgreSQL, Redis, Command Center SPA, engines, findings, agents, billing, SOC, Council/Ask, admin).
 Canonical registry: PRODUCTION_ENGINE_IDS (compiled) + frontend/src/lib/enginesRegistry.js.
@@ -23,6 +24,15 @@ pub async fn build_snapshot(pool: &PgPool, tenant_id: i64) -> Result<Value, Stri
     let logs = crate::sovereign_operator::log_stream::list_recent(pool, tenant_id, 40)
         .await
         .unwrap_or_default();
+    let living_memory = crate::sovereign_operator::memory::list_recent(pool, tenant_id, None, 24)
+        .await
+        .unwrap_or_default();
+    let forge_queue = crate::sovereign_operator::forge::list_forge(pool, tenant_id, 12)
+        .await
+        .unwrap_or_default();
+    let scripts = crate::sovereign_operator::scripts::list_scripts(pool, tenant_id, 12)
+        .await
+        .unwrap_or_default();
     let fail_classes = failure_classes_from_jobs(&jobs);
     Ok(json!({
         "architecture": ARCHITECTURE,
@@ -32,6 +42,9 @@ pub async fn build_snapshot(pool: &PgPool, tenant_id: i64) -> Result<Value, Stri
         "recent_jobs": jobs,
         "recent_clusters": clusters,
         "recent_engine_logs": logs,
+        "living_memory": living_memory,
+        "forge_queue": forge_queue,
+        "scripts": scripts,
         "failure_classes": fail_classes,
         "encyclopedia_path": "docs/sales/WEISSMAN-PLATFORM-ENCYCLOPEDIA.md",
         "registry": "PRODUCTION_ENGINE_IDS",
@@ -62,6 +75,21 @@ pub fn snapshot_prompt_text(snap: &Value) -> String {
     s.push_str("\n\nEngine logs (live tape):\n");
     s.push_str(
         &serde_json::to_string_pretty(snap.get("recent_engine_logs").unwrap_or(&json!([])))
+            .unwrap_or_default(),
+    );
+    s.push_str("\n\nLiving memory (paths/hosts/payloads/proofs):\n");
+    s.push_str(
+        &serde_json::to_string_pretty(snap.get("living_memory").unwrap_or(&json!([])))
+            .unwrap_or_default(),
+    );
+    s.push_str("\n\nForge queue:\n");
+    s.push_str(
+        &serde_json::to_string_pretty(snap.get("forge_queue").unwrap_or(&json!([])))
+            .unwrap_or_default(),
+    );
+    s.push_str("\n\nSandbox scripts:\n");
+    s.push_str(
+        &serde_json::to_string_pretty(snap.get("scripts").unwrap_or(&json!([])))
             .unwrap_or_default(),
     );
     if s.len() > 14000 {
@@ -153,6 +181,8 @@ mod tests {
         assert!(ARCHITECTURE.contains("engine_dispatch::run_engine"));
         assert!(ARCHITECTURE.contains("WEISSMAN-PLATFORM-ENCYCLOPEDIA.md"));
         assert!(ARCHITECTURE.contains("PRODUCTION_ENGINE_IDS"));
+        assert!(ARCHITECTURE.contains("live knowledge bus"));
+        assert!(ARCHITECTURE.contains("weissman_sovereign_memory"));
     }
 
     #[test]

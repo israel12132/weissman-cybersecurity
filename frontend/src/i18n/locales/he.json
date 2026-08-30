@@ -3895,8 +3895,8 @@
     "sovereignTheater": {
       "title": "הריבון",
       "subtitle": "בעלים בלבד · סרט מנוע חי · הוכחה בלי השמדה",
-      "evidence_notice": "API חי לבעלים בלבד: GET/POST /api/sovereign/operator/* (chat, session, knowledge, logs, windows, tools, tune, race) ו-SSE /api/sovereign/operator/stream. חלונות מנוע נפתחים רק משורות weissman_sovereign_engine_logs של ה-worker. מי שאינו בעלים מקבל 404. בלי LLM → 503. RoE safe_proofs. אין מחשבה או כניסה למנוע מדומה.",
-      "search_placeholder": "סינון מחשבה, חלון מנוע או שורת לוג…",
+      "evidence_notice": "API חי לבעלים בלבד: GET/POST /api/sovereign/operator/* (chat, session, knowledge, logs, windows, memory, forge, scripts, tools, tune, race) ו-SSE /api/sovereign/operator/stream. חלונות מנוע נפתחים רק משורות weissman_sovereign_engine_logs של ה-worker. זיכרון חי ותור forge הם Postgres חי. מי שאינו בעלים מקבל 404. בלי LLM → 503. RoE safe_proofs. אין מחשבה או כניסה למנוע מדומה.",
+      "search_placeholder": "סינון מחשבה, חלון מנוע, זיכרון, forge או שורת לוג…",
       "export_json": "ייצוא JSON",
       "load_failed": "טעינת מצב הריבון מה-API החי נכשלה.",
       "chat_failed": "הצ'אט נכשל — נדרש LLM חי (WEISSMAN_LLM_BASE_URL).",
@@ -3922,7 +3922,16 @@
       "sending": "עובד…",
       "no_thoughts": "אין כרטיסי מחשבה עדיין. שלח פקודה.",
       "no_windows": "אין חלונות מנוע פתוחים. חלון נפתח רק כש-worker פולט entered/probe.",
-      "no_logs": "אין עדיין אירועי לוג מנוע."
+      "no_logs": "אין עדיין אירועי לוג מנוע.",
+      "memory": "זיכרון חי",
+      "forge": "נפחיה מקומית",
+      "scripts": "הוכחות sandbox",
+      "no_memory": "אין עדיין שורות זיכרון חי. הן מופיעות אחרי ממצא מנוע חי או remember/script.",
+      "no_forge": "אין טיוטות forge. worktree + rustc מקומיים נכנסים לכאן; GitHub חסום עד live_proof.",
+      "no_scripts": "אין סקריפטי sandbox עדיין. הוכחה בלבד GET/POST/HEAD דרך poc_sandbox.",
+      "verified": "מאומת",
+      "unverified": "לא מאומת",
+      "sandbox_ran": "בוצע"
     },
     "clientEngagements": {
       "title": "מעורבויות",

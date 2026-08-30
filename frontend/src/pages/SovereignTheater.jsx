@@ -20,10 +20,21 @@ function phaseTone(phase) {
 
 function thoughtTone(kind) {
   if (kind === 'enter_engine') return 'border-cyan-400/50 bg-cyan-500/10'
-  if (kind === 'wait_roe') return 'border-amber-400/50 bg-amber-500/10'
+  if (kind === 'wait_roe' || kind === 'wait_auth') return 'border-amber-400/50 bg-amber-500/10'
   if (kind === 'correlate') return 'border-violet-400/50 bg-violet-500/10'
   if (kind === 'decide') return 'border-emerald-400/50 bg-emerald-500/10'
+  if (kind === 'script') return 'border-orange-400/50 bg-orange-500/10'
+  if (kind === 'forge') return 'border-fuchsia-400/50 bg-fuchsia-500/10'
   return 'border-[var(--border-default)] bg-[var(--row-hover-bg)]'
+}
+
+function forgeTone(status) {
+  if (status === 'rejected') return 'text-rose-300 border-rose-500/40 bg-rose-500/10'
+  if (status === 'live_proof') return 'text-amber-200 border-amber-500/40 bg-amber-500/10'
+  if (status === 'github_queued') return 'text-emerald-200 border-emerald-500/40 bg-emerald-500/10'
+  if (status === 'local_ok') return 'text-cyan-200 border-cyan-500/40 bg-cyan-500/10'
+  if (status === 'proof_pending') return 'text-orange-200 border-orange-500/40 bg-orange-500/10'
+  return 'text-[var(--text-muted)] border-[var(--border-default)] bg-[var(--row-hover-bg)]'
 }
 
 export default function SovereignTheater() {
@@ -33,6 +44,9 @@ export default function SovereignTheater() {
   const [windows, setWindows] = useState([])
   const [logs, setLogs] = useState([])
   const [knowledge, setKnowledge] = useState(null)
+  const [memory, setMemory] = useState([])
+  const [forge, setForge] = useState([])
+  const [scripts, setScripts] = useState([])
   const [question, setQuestion] = useState('')
   const [shift, setShift] = useState('red')
   const [clientId, setClientId] = useState('')
@@ -67,14 +81,37 @@ export default function SovereignTheater() {
     setKnowledge(d?.knowledge || null)
   }, [])
 
+  const loadMemory = useCallback(async () => {
+    const d = await apiFetch('/api/sovereign/operator/memory?limit=60')
+    setMemory(Array.isArray(d?.memory) ? d.memory : [])
+  }, [])
+
+  const loadForge = useCallback(async () => {
+    const d = await apiFetch('/api/sovereign/operator/forge?limit=30')
+    setForge(Array.isArray(d?.forge) ? d.forge : [])
+  }, [])
+
+  const loadScripts = useCallback(async () => {
+    const d = await apiFetch('/api/sovereign/operator/scripts?limit=30')
+    setScripts(Array.isArray(d?.scripts) ? d.scripts : [])
+  }, [])
+
   const refresh = useCallback(async () => {
     setError('')
     try {
-      await Promise.all([loadSession(), loadWindows(), loadLogs(), loadKnowledge()])
+      await Promise.all([
+        loadSession(),
+        loadWindows(),
+        loadLogs(),
+        loadKnowledge(),
+        loadMemory(),
+        loadForge(),
+        loadScripts(),
+      ])
     } catch (e) {
       setError(e.message || t(`${NS}.load_failed`))
     }
-  }, [loadSession, loadWindows, loadLogs, loadKnowledge, t])
+  }, [loadSession, loadWindows, loadLogs, loadKnowledge, loadMemory, loadForge, loadScripts, t])
 
   useEffect(() => {
     refresh()
@@ -91,6 +128,9 @@ export default function SovereignTheater() {
         if (id) sinceRef.current = Math.max(sinceRef.current, id)
         setLogs((prev) => [...prev.slice(-200), row])
         loadWindows()
+        if (row.phase === 'finding' || row.phase === 'exited') {
+          loadMemory()
+        }
       } catch {
         /* ignore malformed frames */
       }
@@ -99,7 +139,7 @@ export default function SovereignTheater() {
     return () => {
       es.close?.()
     }
-  }, [loadWindows])
+  }, [loadWindows, loadMemory])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView?.({ behavior: 'smooth' })
@@ -115,6 +155,9 @@ export default function SovereignTheater() {
         windows,
         logs,
         knowledge,
+        memory,
+        forge,
+        scripts,
       }
       const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
@@ -126,7 +169,7 @@ export default function SovereignTheater() {
     } finally {
       setExporting(false)
     }
-  }, [sessionId, messages, windows, logs, knowledge])
+  }, [sessionId, messages, windows, logs, knowledge, memory, forge, scripts])
 
   const send = useCallback(async () => {
     const q = question.trim()
@@ -140,14 +183,13 @@ export default function SovereignTheater() {
       })
       if (d?.session_id) setSessionId(d.session_id)
       setQuestion('')
-      await loadSession()
-      await loadWindows()
+      await Promise.all([loadSession(), loadWindows(), loadMemory(), loadForge(), loadScripts()])
     } catch (e) {
       setError(e.message || t(`${NS}.chat_failed`))
     } finally {
       setSending(false)
     }
-  }, [question, sending, sessionId, shift, loadSession, loadWindows, t])
+  }, [question, sending, sessionId, shift, loadSession, loadWindows, loadMemory, loadForge, loadScripts, t])
 
   const runRace = useCallback(async () => {
     const cid = Number(clientId)
@@ -166,26 +208,26 @@ export default function SovereignTheater() {
           shift,
         },
       })
-      await Promise.all([loadSession(), loadWindows(), loadLogs()])
+      await Promise.all([loadSession(), loadWindows(), loadLogs(), loadMemory(), loadForge(), loadScripts()])
     } catch (e) {
       setError(e.message || t(`${NS}.race_failed`))
     } finally {
       setSending(false)
     }
-  }, [clientId, shift, loadSession, loadWindows, loadLogs, t])
+  }, [clientId, shift, loadSession, loadWindows, loadLogs, loadMemory, loadForge, loadScripts, t])
 
   const runTune = useCallback(async () => {
     setSending(true)
     setError('')
     try {
       await apiFetch('/api/sovereign/operator/tune', { method: 'POST', body: {} })
-      await loadWindows()
+      await Promise.all([loadWindows(), loadMemory(), loadForge()])
     } catch (e) {
       setError(e.message || t(`${NS}.tune_failed`))
     } finally {
       setSending(false)
     }
-  }, [loadWindows, t])
+  }, [loadWindows, loadMemory, loadForge, t])
 
   const q = sectionSearch.trim().toLowerCase()
   const thoughts = useMemo(
@@ -221,6 +263,30 @@ export default function SovereignTheater() {
         return `${l.engine_id || ''} ${l.phase || ''} ${l.detail || ''}`.toLowerCase().includes(q)
       }),
     [logs, q],
+  )
+  const filteredMemory = useMemo(
+    () =>
+      memory.filter((m) => {
+        if (!q) return true
+        return `${m.kind || ''} ${m.engine_id || ''} ${m.target || ''} ${m.evidence || ''}`.toLowerCase().includes(q)
+      }),
+    [memory, q],
+  )
+  const filteredForge = useMemo(
+    () =>
+      forge.filter((f) => {
+        if (!q) return true
+        return `${f.engine_id || ''} ${f.title || ''} ${f.status || ''}`.toLowerCase().includes(q)
+      }),
+    [forge, q],
+  )
+  const filteredScripts = useMemo(
+    () =>
+      scripts.filter((s) => {
+        if (!q) return true
+        return `${s.target || ''} ${s.method || ''} ${s.marker || ''}`.toLowerCase().includes(q)
+      }),
+    [scripts, q],
   )
 
   return (
@@ -377,6 +443,93 @@ export default function SovereignTheater() {
                     </div>
                     <div className="opacity-80 truncate">{w.target}</div>
                     {w.detail ? <div className="opacity-70 mt-1">{w.detail}</div> : null}
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <section className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] min-h-[16rem]">
+            <h2 className="px-3 py-2 text-[11px] font-mono uppercase tracking-widest text-emerald-300 border-b border-[var(--border-default)]">
+              {t(`${NS}.memory`)}
+            </h2>
+            <div className="p-3 space-y-2 overflow-auto max-h-[22rem]">
+              {filteredMemory.length === 0 ? (
+                <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.no_memory`)}</p>
+              ) : (
+                filteredMemory.slice(0, 40).map((m) => (
+                  <div
+                    key={m.id || `${m.kind}-${m.ts}`}
+                    className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 font-mono text-[11px]"
+                  >
+                    <div className="flex justify-between gap-2">
+                      <span className="uppercase text-emerald-200">{m.kind}</span>
+                      <span className={m.verified ? 'text-amber-200' : 'text-[var(--text-muted)]'}>
+                        {m.verified ? t(`${NS}.verified`) : t(`${NS}.unverified`)}
+                      </span>
+                    </div>
+                    <div className="opacity-80 truncate">{m.engine_id || '—'} · {m.target || ''}</div>
+                    {m.evidence ? <div className="opacity-70 mt-1 truncate">{m.evidence}</div> : null}
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] min-h-[16rem]">
+            <h2 className="px-3 py-2 text-[11px] font-mono uppercase tracking-widest text-fuchsia-300 border-b border-[var(--border-default)]">
+              {t(`${NS}.forge`)}
+            </h2>
+            <div className="p-3 space-y-2 overflow-auto max-h-[22rem]">
+              {filteredForge.length === 0 ? (
+                <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.no_forge`)}</p>
+              ) : (
+                filteredForge.map((f) => (
+                  <div
+                    key={f.id}
+                    className={`rounded-lg border px-3 py-2 font-mono text-[11px] ${forgeTone(f.status)}`}
+                  >
+                    <div className="flex justify-between gap-2">
+                      <span className="font-semibold">{f.engine_id}</span>
+                      <span className="uppercase">{f.status}</span>
+                    </div>
+                    <div className="opacity-80 truncate">{f.title}</div>
+                    {f.worktree_path ? (
+                      <div className="opacity-60 mt-1 truncate">{f.worktree_path}</div>
+                    ) : null}
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] min-h-[16rem]">
+            <h2 className="px-3 py-2 text-[11px] font-mono uppercase tracking-widest text-orange-300 border-b border-[var(--border-default)]">
+              {t(`${NS}.scripts`)}
+            </h2>
+            <div className="p-3 space-y-2 overflow-auto max-h-[22rem]">
+              {filteredScripts.length === 0 ? (
+                <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.no_scripts`)}</p>
+              ) : (
+                filteredScripts.map((s) => (
+                  <div
+                    key={s.id}
+                    className={`rounded-lg border px-3 py-2 font-mono text-[11px] ${
+                      s.verified
+                        ? 'text-amber-200 border-amber-500/40 bg-amber-500/10'
+                        : 'text-orange-200 border-orange-500/30 bg-orange-500/10'
+                    }`}
+                  >
+                    <div className="flex justify-between gap-2">
+                      <span>{s.method}</span>
+                      <span className="uppercase">
+                        {s.verified ? t(`${NS}.verified`) : t(`${NS}.sandbox_ran`)}
+                      </span>
+                    </div>
+                    <div className="opacity-80 truncate">{s.target}</div>
+                    {s.marker ? <div className="opacity-70 mt-1 truncate">marker {s.marker}</div> : null}
                   </div>
                 ))
               )}

@@ -1,9 +1,12 @@
 //! Owner-only Sovereign Operator — live engine logs, knowledge, tool bus, theater chat.
 
 pub mod chat;
+pub mod forge;
 pub mod hourly;
 pub mod knowledge;
 pub mod log_stream;
+pub mod memory;
+pub mod scripts;
 pub mod tools;
 
 use crate::auth_jwt::AuthContext;

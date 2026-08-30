@@ -1812,7 +1812,7 @@ pub async fn run_asm_result_ctx(
             subdomains.extend(ct);
         }
         if subdomain_sources == "bruteforce" || subdomain_sources == "both" {
-            let wordlist: Vec<String> = if custom_wordlist.is_empty() {
+            let static_list: Vec<String> = if custom_wordlist.is_empty() {
                 DEFAULT_SUBDOMAINS
                     .iter()
                     .map(|s| (*s).to_string())
@@ -1820,6 +1820,7 @@ pub async fn run_asm_result_ctx(
             } else {
                 custom_wordlist.clone()
             };
+            let wordlist = crate::live_knowledge_bus::merge_subdomain_wordlist(&host, static_list);
             let brute = enum_subdomains(&host, &wordlist, 200).await;
             subdomains.extend(brute);
         }
