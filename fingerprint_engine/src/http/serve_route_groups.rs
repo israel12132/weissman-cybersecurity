@@ -248,6 +248,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         // alongside it in http/login_rate_limit.rs.
         .route("/api/agents/session", post(api_agents_session))
         .route("/api/agents/status", get(api_agents_status))
+        .route("/api/agents/queue", get(api_agents_queue))
         .route("/api/agents/dispatch", post(api_agents_dispatch_task))
         .route("/install/agent.sh", get(install_agent_sh))
         .route("/install/agent.ps1", get(install_agent_ps1))

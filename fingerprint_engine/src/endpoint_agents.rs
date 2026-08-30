@@ -5,14 +5,14 @@
 //!     for the currently-active WebSocket session.
 //!   * A new WS connection replaces any prior sender for that agent (latest-connection-wins).
 //!   * Task dispatch reads the registry; if no live agent for the client, the task is queued in
-//!     `endpoint_agent_tasks` with `status='pending'` and an `expires_at` (15min).
+//!     `endpoint_agent_tasks` with `status='pending'` and an `expires_at` (7 days).
 //!   * When an agent comes online, the server replays any non-expired pending tasks for that
 //!     client.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
@@ -496,6 +496,14 @@ pub async fn enqueue_and_dispatch_fleet(
                 .await
                 .is_ok();
             if live {
+                if let Err(e) = mark_task_dispatched(pool, tenant_id, &task_uuid).await {
+                    tracing::warn!(
+                        target: "agents",
+                        task_uuid = %task_uuid,
+                        error = %e,
+                        "live dispatch succeeded but could not mark task running"
+                    );
+                }
                 break;
             }
         }
@@ -807,6 +815,12 @@ pub fn spawn_pending_task_pusher(pool: Arc<PgPool>, registry: Arc<AgentRegistry>
                     );
                 }
                 let _ = push_pending_tasks_to_online(pool.as_ref(), &registry, tid).await;
+                if let Err(e) = expire_stale_agent_tasks(pool.as_ref(), tid).await {
+                    tracing::warn!(
+                        target: "agents", tenant_id = tid, error = %e,
+                        "expired-task sweep failed"
+                    );
+                }
             }
         }
     });
@@ -1194,8 +1208,8 @@ pub async fn enqueue_task(
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
     sqlx::query(
         r#"INSERT INTO endpoint_agent_tasks
-            (task_uuid, tenant_id, client_id, engine, target, params)
-           VALUES ($1, $2, $3, $4, $5, $6)"#,
+            (task_uuid, tenant_id, client_id, engine, target, params, expires_at)
+           VALUES ($1, $2, $3, $4, $5, $6, now() + interval '7 days')"#,
     )
     .bind(task_uuid)
     .bind(tenant_id)
@@ -1238,8 +1252,231 @@ pub async fn mark_task_status(
     .bind(tenant_id)
     .execute(&mut *tx)
     .await?;
+    let scan_job_id: Option<String> = sqlx::query_scalar(
+        r#"SELECT params->>'scan_job_id' FROM endpoint_agent_tasks
+            WHERE task_uuid = $1 AND tenant_id = $2"#,
+    )
+    .bind(task_uuid)
+    .bind(tenant_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .flatten();
     tx.commit().await?;
+    if matches!(status, "done" | "failed" | "expired") {
+        finalize_parent_scan_job(
+            pool,
+            tenant_id,
+            task_uuid,
+            scan_job_id.as_deref(),
+            status,
+            error,
+            findings_count,
+        )
+        .await;
+    }
     Ok(())
+}
+
+/// Expire pending/running tasks past `expires_at` and fail any parked parent scan jobs.
+pub async fn expire_stale_agent_tasks(pool: &PgPool, tenant_id: i64) -> Result<u64, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let rows = sqlx::query_as::<_, (Uuid, Option<String>)>(
+        r#"UPDATE endpoint_agent_tasks
+              SET status = 'expired', completed_at = COALESCE(completed_at, now()),
+                  error = COALESCE(error, 'expired before an endpoint agent ran the task')
+            WHERE tenant_id = $1
+              AND status IN ('pending','running')
+              AND expires_at < now()
+        RETURNING task_uuid, params->>'scan_job_id'"#,
+    )
+    .bind(tenant_id)
+    .fetch_all(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    let n = rows.len() as u64;
+    for (task_uuid, scan_job_id) in rows {
+        finalize_parent_scan_job(
+            pool,
+            tenant_id,
+            &task_uuid,
+            scan_job_id.as_deref(),
+            "expired",
+            Some("endpoint agent task expired before the collector ran it"),
+            0,
+        )
+        .await;
+    }
+    Ok(n)
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AgentQueueItem {
+    pub task_id: String,
+    pub client_id: i64,
+    pub engine: String,
+    pub target: Option<String>,
+    pub status: String,
+    pub findings_count: i32,
+    pub error: Option<String>,
+    pub created_at: String,
+    pub started_at: Option<String>,
+    pub completed_at: Option<String>,
+    pub expires_at: String,
+    pub scan_job_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct AgentQueueSnapshot {
+    pub pending: i64,
+    pub running: i64,
+    pub done: i64,
+    pub failed: i64,
+    pub expired: i64,
+    pub tasks: Vec<AgentQueueItem>,
+}
+
+/// Live agent-required queue for the Command Center (pending/running first).
+pub async fn list_agent_queue(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: Option<i64>,
+    engine: Option<&str>,
+    limit: i64,
+) -> Result<AgentQueueSnapshot, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let counts = sqlx::query_as::<_, (String, i64)>(
+        r#"SELECT status, COUNT(*)::bigint
+             FROM endpoint_agent_tasks
+            WHERE tenant_id = $1
+              AND ($2::bigint IS NULL OR client_id = $2)
+              AND ($3::text IS NULL OR engine = $3)
+            GROUP BY status"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(engine)
+    .fetch_all(&mut *tx)
+    .await?;
+    let rows = sqlx::query(
+        r#"SELECT task_uuid, client_id, engine, target, status, findings_count, error,
+                  created_at, started_at, completed_at, expires_at, params->>'scan_job_id' AS scan_job_id
+             FROM endpoint_agent_tasks
+            WHERE tenant_id = $1
+              AND ($2::bigint IS NULL OR client_id = $2)
+              AND ($3::text IS NULL OR engine = $3)
+            ORDER BY CASE status
+                       WHEN 'pending' THEN 0
+                       WHEN 'running' THEN 1
+                       WHEN 'failed' THEN 2
+                       WHEN 'expired' THEN 3
+                       ELSE 4
+                     END,
+                     created_at DESC
+            LIMIT $4"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(engine)
+    .bind(limit.clamp(1, 500))
+    .fetch_all(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    let mut snap = AgentQueueSnapshot::default();
+    for (status, n) in counts {
+        match status.as_str() {
+            "pending" => snap.pending = n,
+            "running" => snap.running = n,
+            "done" => snap.done = n,
+            "failed" => snap.failed = n,
+            "expired" => snap.expired = n,
+            _ => {}
+        }
+    }
+    for r in rows {
+        let created: chrono::DateTime<chrono::Utc> = r.try_get("created_at")?;
+        let expires: chrono::DateTime<chrono::Utc> = r.try_get("expires_at")?;
+        let started: Option<chrono::DateTime<chrono::Utc>> = r.try_get("started_at")?;
+        let completed: Option<chrono::DateTime<chrono::Utc>> = r.try_get("completed_at")?;
+        let uuid: Uuid = r.try_get("task_uuid")?;
+        snap.tasks.push(AgentQueueItem {
+            task_id: uuid.to_string(),
+            client_id: r.try_get("client_id")?,
+            engine: r.try_get("engine")?,
+            target: r.try_get("target")?,
+            status: r.try_get("status")?,
+            findings_count: r.try_get("findings_count").unwrap_or(0),
+            error: r.try_get("error")?,
+            created_at: created.to_rfc3339(),
+            started_at: started.map(|d| d.to_rfc3339()),
+            completed_at: completed.map(|d| d.to_rfc3339()),
+            expires_at: expires.to_rfc3339(),
+            scan_job_id: r.try_get("scan_job_id")?,
+        });
+    }
+    Ok(snap)
+}
+
+/// Complete or fail the parked parent scan job when the agent task reaches a terminal state.
+pub async fn finalize_parent_scan_job(
+    pool: &PgPool,
+    tenant_id: i64,
+    task_uuid: &Uuid,
+    scan_job_id: Option<&str>,
+    task_status: &str,
+    error: Option<&str>,
+    findings_count: i32,
+) {
+    let Some(jid) = scan_job_id.map(str::trim).filter(|s| !s.is_empty()) else {
+        return;
+    };
+    let Ok(job_id) = Uuid::parse_str(jid) else {
+        return;
+    };
+    let result = json!({
+        "status": if task_status == "done" { "ok" } else { task_status },
+        "agent_task_id": task_uuid.to_string(),
+        "queued_for_agent": false,
+        "findings_count": findings_count,
+        "message": if task_status == "done" {
+            format!("endpoint agent completed task {task_uuid} ({findings_count} finding(s))")
+        } else {
+            format!(
+                "endpoint agent task {task_uuid} {task_status}: {}",
+                error.unwrap_or("no detail")
+            )
+        },
+    });
+    let outcome = if task_status == "done" {
+        weissman_db::job_queue::complete_waiting_agent_job(pool, job_id, &result).await
+    } else {
+        weissman_db::job_queue::fail_waiting_agent_job(
+            pool,
+            job_id,
+            error.unwrap_or("endpoint agent task failed"),
+        )
+        .await
+    };
+    match outcome {
+        Ok(true) => {
+            let telem = json!({
+                "job_id": jid,
+                "status": if task_status == "done" { "completed" } else { "failed" },
+                "message": result.get("message").cloned().unwrap_or(json!("")),
+                "agent_task_id": task_uuid.to_string(),
+                "source": "agent",
+            });
+            let telem = crate::http::tenant_stream::stamp_value(tenant_id, telem);
+            crate::telemetry_bus::publish_bus("telemetry", &telem).await;
+        }
+        Ok(false) => {}
+        Err(e) => tracing::warn!(
+            target: "agents",
+            job_id = %job_id,
+            error = %e,
+            "could not finalize parked scan job after agent task {task_status}"
+        ),
+    }
 }
 
 #[cfg(test)]

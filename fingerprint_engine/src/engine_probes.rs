@@ -707,31 +707,35 @@ pub fn empty_ok(engine_id: &str, target: &str) -> EngineResult {
 /// Build a result for engines that cannot be detected from a remote network probe alone
 /// (process injection, kernel rootkits, air-gap exfil channels, physical attacks, etc.).
 ///
-/// We emit a single *info* finding explaining the limitation and pointing the operator to the
-/// agent-based collector. This is honest: no fake high-severity findings, but the engine isn't
-/// silently empty either.
+/// Honest empty queue state — never invents a host finding. Production dispatch enqueues a
+/// real `endpoint_agent_tasks` row via `run_agent_required_engine`; this helper is the
+/// standalone/no-pool fallback used by individual engine functions.
 pub fn agent_required_ok(
     engine_id: &str,
     target: &str,
     title: &str,
     rationale: &str,
 ) -> EngineResult {
-    let finding = serde_json::json!({
-        "type": engine_id,
-        "category": "agent_required",
-        "title": title,
-        "severity": "info",
-        "mitre_attack": "",
-        "description": format!(
-            "{} requires an endpoint agent to detect (no purely-remote signal exists). {} Install Weissman-Agent on the asset, then re-run the engine.",
-            engine_id, rationale
-        ),
-        "target": target,
-        "agent_required": true,
-    });
-    EngineResult::ok(
-        vec![finding],
-        format!("{}: agent-based collector required", engine_id),
+    let _ = (title, rationale, target);
+    EngineResult::waiting_for_agent(format!(
+        "{}: queued for endpoint agent — no host finding without an enrolled collector",
+        engine_id
+    ))
+}
+
+/// True when a JSON row is an invented agent-required / dispatched placeholder, not evidence.
+#[must_use]
+pub fn is_invented_agent_placeholder(finding: &Value) -> bool {
+    if finding
+        .get("agent_required")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    matches!(
+        finding.get("category").and_then(Value::as_str),
+        Some("agent_required" | "agent_dispatched")
     )
 }
 
@@ -1181,5 +1185,40 @@ mod tests {
         assert!(fp
             .products
             .contains(&("PHP".to_string(), "7.4.3".to_string())));
+    }
+
+    #[test]
+    fn agent_required_ok_invents_no_host_finding() {
+        let r = agent_required_ok(
+            "process_hollowing",
+            "host.local",
+            "unused title",
+            "unused rationale",
+        );
+        assert!(r.is_waiting_for_agent());
+        assert!(r.findings.is_empty());
+        assert!(!r.success);
+        assert!(r.message.contains("process_hollowing"));
+        assert!(r.message.contains("endpoint agent"));
+    }
+
+    #[test]
+    fn invented_agent_placeholder_detects_guidance_rows() {
+        assert!(is_invented_agent_placeholder(&json!({
+            "category": "agent_required",
+            "title": "fake"
+        })));
+        assert!(is_invented_agent_placeholder(&json!({
+            "agent_required": true,
+            "title": "fake"
+        })));
+        assert!(is_invented_agent_placeholder(&json!({
+            "category": "agent_dispatched",
+            "title": "fake"
+        })));
+        assert!(!is_invented_agent_placeholder(&json!({
+            "remote_surface": true,
+            "title": "live perimeter"
+        })));
     }
 }

@@ -946,7 +946,9 @@
     "time_hours": "{{count}}h ago",
     "time_days": "{{count}}d ago",
     "no_filter_title": "No agents match filter",
-    "no_filter_body": "Try a different status filter."
+    "no_filter_body": "Try a different status filter.",
+    "queue_heading": "Agent-required queue",
+    "kpi_queue_waiting": "Waiting for agent"
   },
   "system_config": {
     "title": "System Configuration",
@@ -1138,11 +1140,24 @@
     "no_findings_filtered": "No findings match the current search and severity filters."
   },
   "agentRequired": {
-    "empty_title": "Endpoint agent required",
-    "empty_body": "You must install the Weissman Agent on your endpoint to view this data. Remote scans cannot observe host-local signals for this engine.",
+    "empty_title": "Waiting for endpoint agent",
+    "empty_body": "This engine cannot invent host findings. Run the engine to enqueue a real agent task; results appear only after the Weissman Agent connects and reports evidence.",
     "install_cta": "Open Agent Management",
-    "install_hint": "Generate an enrollment token in Agent Management, run the install script on the target host, then refresh once the agent connects.",
-    "engine_id": "Engine"
+    "install_hint": "Generate an enrollment token in Agent Management, run the install script on the target host, then queued tasks drain automatically.",
+    "engine_id": "Engine",
+    "queue_title": "Agent-required queue",
+    "queue_offline_body": "No endpoint agent is online. Launching this engine enqueues a real host task — it will not complete with fake findings.",
+    "queue_online_body": "{{count}} endpoint agent(s) online. Queued host tasks drain as collectors report evidence.",
+    "queue_empty": "No pending host tasks. Run the engine to enqueue work for the next online agent.",
+    "waiting_count": "{{count}} waiting",
+    "fleet_loading": "fleet…",
+    "fleet_online": "{{count}} online",
+    "fleet_offline": "no agent online",
+    "kpi_pending": "Pending",
+    "kpi_running": "On agent",
+    "kpi_waiting": "Waiting",
+    "kpi_live": "Online agents",
+    "job_waiting": "Scan is queued for an endpoint agent. Host findings will stream when the collector connects — nothing is fabricated."
   },
   "weissmanFindings": {
     "title": "Findings",
@@ -1579,6 +1594,7 @@
       "status_completed": "completed",
       "status_failed": "failed",
       "status_cancelled": "cancelled",
+      "status_waiting_for_agent": "waiting for agent",
       "evidence_notice": "Live async job queue from GET /api/jobs (tenant-scoped). CEO fallback uses /api/ceo/jobs/live when the standard list is unavailable. No simulated job telemetry.",
       "last_updated": "Last sync {{time}}",
       "export_csv": "Export CSV",
@@ -1589,6 +1605,7 @@
       "filter_completed": "Completed",
       "filter_failed": "Failed",
       "filter_cancelled": "Cancelled",
+      "filter_waiting_for_agent": "Waiting for agent",
       "col_target": "Target",
       "copy_id": "Copy job ID",
       "detail_title": "Job detail",

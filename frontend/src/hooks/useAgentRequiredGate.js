@@ -3,8 +3,8 @@ import { useEngineCapabilities } from '../lib/useEngineCapabilities'
 import { useAgentFleetStatus } from './useAgentFleetStatus'
 
 /**
- * Blocks agent-required engine surfaces when no endpoint agent is online.
- * Returns honest empty-state signal — never fabricates findings.
+ * Agent-required engine surfaces: live queue + run controls.
+ * `blocked` is true when no endpoint agent is online — callers must still allow enqueue.
  */
 export function useAgentRequiredGate(engineId) {
   const { byId, loading: capsLoading } = useEngineCapabilities()

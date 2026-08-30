@@ -442,34 +442,22 @@ mod tests {
         assert!(!run_https_c2_masquerade_result("  ").await.success);
     }
 
-    // Agent-required engines return a single deterministic info finding with no IO.
+    // Agent-required engines queue for a collector — no invented host findings.
     #[tokio::test]
     async fn process_hollowing_is_agent_required() {
         let r = run_process_hollowing_result("example.test").await;
-        assert!(r.success);
-        assert_eq!(r.findings.len(), 1);
-        let f = &r.findings[0];
-        assert_eq!(
-            f.get("type").and_then(Value::as_str),
-            Some("process_hollowing")
-        );
-        assert_eq!(f.get("severity").and_then(Value::as_str), Some("info"));
-        assert_eq!(f.get("agent_required").and_then(Value::as_bool), Some(true));
-        assert_eq!(
-            f.get("category").and_then(Value::as_str),
-            Some("agent_required")
-        );
+        assert!(r.is_waiting_for_agent());
+        assert!(!r.success);
+        assert!(r.findings.is_empty());
+        assert!(r.message.contains("process_hollowing"));
     }
 
     #[tokio::test]
     async fn rootkit_simulation_delegates_to_surface_probe() {
         // Legacy alias delegates to the surface probe, which is agent-required.
         let r = run_rootkit_simulation_result("example.test").await;
-        assert!(r.success);
-        assert_eq!(r.findings.len(), 1);
-        assert_eq!(
-            r.findings[0].get("type").and_then(Value::as_str),
-            Some("rootkit_surface_probe")
-        );
+        assert!(r.is_waiting_for_agent());
+        assert!(r.findings.is_empty());
+        assert!(r.message.contains("rootkit_surface_probe"));
     }
 }

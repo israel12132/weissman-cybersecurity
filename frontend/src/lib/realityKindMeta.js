@@ -19,7 +19,7 @@ export const REALITY_KIND_META = {
     color: '#f59e0b',
     border: 'rgba(245,158,11,0.35)',
     bg: 'rgba(245,158,11,0.08)',
-    description: 'Requires the endpoint agent; info-only from a remote scan',
+    description: 'Queued until an enrolled endpoint agent is online — never invents host findings',
   },
   special: {
     label: 'PoE',

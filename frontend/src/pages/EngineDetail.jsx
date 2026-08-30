@@ -531,6 +531,11 @@ export default function EngineDetail() {
             if (line) setLines((prev) => [...prev.slice(-MAX_LINES_REAL), `> ${line}`])
             if (data.finding) addFinding(data.finding)
             if (data.findings && Array.isArray(data.findings)) data.findings.forEach(addFinding)
+            if (data.status === 'waiting_for_agent') {
+              setLastRunStatus('waiting_for_agent')
+              setRunning(false)
+              setLines((prev) => [...prev, `> [WAITING_FOR_AGENT] ${data.message || jid}`])
+            }
             if (data.status === 'completed' || data.status === 'failed') {
               const status = data.status
               setLastRunStatus(status)
@@ -701,7 +706,7 @@ export default function EngineDetail() {
       </AnimatePresence>
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-        <AgentRequiredGate engineId={engineId}>
+        <AgentRequiredGate engineId={engineId} clientId={selectedClientId}>
         <EngineHubForensicHeader
           evidence={t('pages.engineDetail.evidence_notice')}
           engineId={engineId}
@@ -730,6 +735,7 @@ export default function EngineDetail() {
                 {lastRunStatus && !running && (
                   <span className={`text-[10px] font-mono px-2.5 py-1 rounded-md border ${
                     lastRunStatus === 'completed' ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                    : lastRunStatus === 'waiting_for_agent' ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
                     : lastRunStatus === 'stopped'  ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
                     : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
                     {lastRunStatus.toUpperCase()}
@@ -737,6 +743,11 @@ export default function EngineDetail() {
                 )}
               </div>
               <p className="text-sm md:text-base text-[var(--text-tertiary)] leading-relaxed max-w-3xl">{engine.description}</p>
+              {lastRunStatus === 'waiting_for_agent' && (
+                <p className="text-xs text-amber-200/90 border border-amber-500/30 bg-amber-500/10 rounded-lg px-3 py-2 font-mono leading-relaxed max-w-3xl">
+                  {t('agentRequired.job_waiting')}
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
                 {engine.requiresTarget && (
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] bg-[var(--row-hover-bg)]">

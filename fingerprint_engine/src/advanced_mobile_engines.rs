@@ -635,13 +635,9 @@ mod tests {
     #[tokio::test]
     async fn sim_swap_is_agent_required() {
         let r = run_sim_swap_engine_result("example.test").await;
-        assert!(r.success);
-        assert_eq!(r.findings.len(), 1);
-        let f = &r.findings[0];
-        assert_eq!(
-            f.get("type").and_then(Value::as_str),
-            Some("sim_swap_engine")
-        );
-        assert_eq!(f.get("agent_required").and_then(Value::as_bool), Some(true));
+        assert!(r.is_waiting_for_agent());
+        assert!(!r.success);
+        assert!(r.findings.is_empty());
+        assert!(r.message.contains("sim_swap_engine"));
     }
 }

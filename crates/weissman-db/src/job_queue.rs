@@ -530,6 +530,101 @@ pub async fn complete_job_with_result_owned(
     Ok(r.rows_affected() == 1)
 }
 
+/// Park a running job until an endpoint agent executes the queued host task.
+///
+/// Ownership-fenced like [`complete_job_with_result_owned`]. Not claimable (status is not
+/// `pending`/`running`) and not a fake completion.
+pub async fn park_job_waiting_for_agent(
+    pool: &PgPool,
+    job_id: Uuid,
+    worker_id: &str,
+    result: &Value,
+) -> Result<bool, sqlx::Error> {
+    let mut tx = begin_worker_tx(pool).await?;
+    let r = sqlx::query(
+        r#"UPDATE weissman_async_jobs SET status = 'waiting_for_agent', result_json = $3,
+           locked_until = NULL, worker_id = NULL, updated_at = now()
+           WHERE id = $1 AND worker_id = $2 AND status = 'running'"#,
+    )
+    .bind(job_id)
+    .bind(worker_id)
+    .bind(Json(result))
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(r.rows_affected() == 1)
+}
+
+/// Finish a parked agent-required job after the endpoint agent reports `task_done` / `task_error`.
+///
+/// Top-level JSON merge keeps remote-surface findings already stored on the parked row.
+pub async fn complete_waiting_agent_job(
+    pool: &PgPool,
+    job_id: Uuid,
+    result: &Value,
+) -> Result<bool, sqlx::Error> {
+    let mut tx = begin_worker_tx(pool).await?;
+    let r = sqlx::query(
+        r#"UPDATE weissman_async_jobs SET status = 'completed',
+           result_json = COALESCE(result_json, '{}'::jsonb) || $2::jsonb,
+           locked_until = NULL, worker_id = NULL, last_error = NULL, updated_at = now()
+           WHERE id = $1 AND status = 'waiting_for_agent'"#,
+    )
+    .bind(job_id)
+    .bind(Json(result))
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(r.rows_affected() == 1)
+}
+
+/// Fail a running job immediately (no retry). Used when host work cannot be enqueued
+/// (missing client/pool) — never complete as empty success and never park without a task row.
+pub async fn fail_owned_job_terminal(
+    pool: &PgPool,
+    job_id: Uuid,
+    worker_id: &str,
+    err: &str,
+    result: &Value,
+) -> Result<bool, sqlx::Error> {
+    let msg: String = err.chars().take(4000).collect();
+    let mut tx = begin_worker_tx(pool).await?;
+    let r = sqlx::query(
+        r#"UPDATE weissman_async_jobs SET status = 'failed', last_error = $3,
+           result_json = $4, locked_until = NULL, worker_id = NULL, updated_at = now()
+           WHERE id = $1 AND worker_id = $2 AND status = 'running'"#,
+    )
+    .bind(job_id)
+    .bind(worker_id)
+    .bind(&msg)
+    .bind(Json(result))
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(r.rows_affected() == 1)
+}
+
+/// Fail a parked agent-required job when the endpoint agent reports `task_error` or the task expires.
+pub async fn fail_waiting_agent_job(
+    pool: &PgPool,
+    job_id: Uuid,
+    err: &str,
+) -> Result<bool, sqlx::Error> {
+    let msg: String = err.chars().take(4000).collect();
+    let mut tx = begin_worker_tx(pool).await?;
+    let r = sqlx::query(
+        r#"UPDATE weissman_async_jobs SET status = 'failed', last_error = $2,
+           locked_until = NULL, worker_id = NULL, updated_at = now()
+           WHERE id = $1 AND status = 'waiting_for_agent'"#,
+    )
+    .bind(job_id)
+    .bind(&msg)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(r.rows_affected() == 1)
+}
+
 /// Unfenced completion. Prefer [`complete_job_with_result_owned`]; this remains for callers that
 /// genuinely have no worker identity to fence on.
 pub async fn complete_job_with_result(

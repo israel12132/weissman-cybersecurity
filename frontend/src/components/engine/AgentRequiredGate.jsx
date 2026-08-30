@@ -1,17 +1,18 @@
 import { useAgentRequiredGate } from '../../hooks/useAgentRequiredGate'
-import AgentRequiredEmptyState from './AgentRequiredEmptyState'
+import AgentQueuePanel from './AgentQueuePanel'
+import { useEngineHub } from '../../context/EngineHubContext'
 
 /**
- * Renders children only when the engine is not agent-gated or an agent is online.
- * Otherwise shows a strict empty state (no mock / guidance findings).
+ * For agent-required engines, show the live queue (never invented findings)
+ * and keep run controls available so operators can enqueue for the next agent.
  */
-export default function AgentRequiredGate({ engineId, children, className = '' }) {
-  const { blocked, loading, isAgentRequired } = useAgentRequiredGate(engineId)
+export default function AgentRequiredGate({ engineId, clientId, children, className = '' }) {
+  const { loading, isAgentRequired } = useAgentRequiredGate(engineId)
+  const hub = useEngineHub()
+  const resolvedClient = clientId ?? hub?.hubClientId
 
   if (!engineId) return children
 
-  // Only defer the surface while capabilities load for agent-gated engines.
-  // Remote probes (OSINT, ASM, etc.) must stay runnable without waiting on fleet status.
   if (loading && isAgentRequired) {
     return (
       <div className={`rounded-2xl border border-[var(--border-subtle)] bg-[var(--row-hover-bg)] p-10 animate-pulse ${className}`}>
@@ -21,9 +22,12 @@ export default function AgentRequiredGate({ engineId, children, className = '' }
     )
   }
 
-  if (blocked) {
-    return <AgentRequiredEmptyState engineId={engineId} className={className} />
-  }
+  if (!isAgentRequired) return children
 
-  return children
+  return (
+    <div className={`space-y-4 ${className}`}>
+      <AgentQueuePanel engineId={engineId} clientId={resolvedClient} />
+      {children}
+    </div>
+  )
 }

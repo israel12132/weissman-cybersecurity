@@ -6,7 +6,7 @@
 // Classification buckets:
 //   real_probe       : canonical engine with a live dispatch arm (real network/host I/O)
 //   alias            : retag that resolves to another canonical engine (same detection logic)
-//   agent_required   : remote-impossible; returns an info finding pointing to the endpoint agent
+//   agent_required   : remote-impossible; queued on endpoint_agent_tasks until an agent is online
 //   special          : routed via a non-dispatch path (async job / synthesis)
 //   no_path          : in the catalog but with no execution path (must be ZERO; CI-gated)
 

@@ -1198,6 +1198,23 @@ async fn api_openapi_spec() -> Response {
                     ],
                     "responses": { "200": { "description": "Audit entries" } }
                 }
+            },
+
+            "/api/agents/queue": {
+                "get": {
+                    "summary": "Live endpoint-agent task queue (agent-required engines)",
+                    "tags": ["Agents"],
+                    "parameters": [
+                        { "name": "client_id", "in": "query", "schema": { "type": "integer" } },
+                        { "name": "engine", "in": "query", "schema": { "type": "string" } },
+                        { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "maximum": 500 } }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Pending/running/done agent tasks. waiting = pending + running. No invented host findings."
+                        }
+                    }
+                }
             }
         }
     });
