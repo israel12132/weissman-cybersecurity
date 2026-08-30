@@ -125,6 +125,7 @@ import {
   BaselineAndDrift,
   IdentityContextManager,
   IdentitySecurityCenter,
+  PrivilegeEscalationCommandCenter,
   KerberosSecurityCommandCenter,
   SmbNetbiosCommandCenter,
   PasswordSprayCommandCenter,
@@ -239,6 +240,7 @@ export default function TacticalApp() {
           <Route path="jwt-lab" element={<JwtAttackLab />} />
           <Route path="file-upload-lab" element={<FileUploadSecurityLab />} />
           <Route path="identity-security" element={<IdentitySecurityCenter />} />
+          <Route path="privilege-escalation" element={<PrivilegeEscalationCommandCenter />} />
           <Route path="kerberos-security" element={<KerberosSecurityCommandCenter />} />
           <Route path="smb-netbios" element={<SmbNetbiosCommandCenter />} />
           <Route path="password-spray" element={<PasswordSprayCommandCenter />} />
