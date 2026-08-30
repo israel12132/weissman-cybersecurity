@@ -484,8 +484,8 @@
     },
     {
       "techniqueID": "T1068",
-      "score": 1,
-      "comment": "kernel_exploit",
+      "score": 2,
+      "comment": "kernel_exploit, privilege_escalation_credential_access",
       "enabled": true
     },
     {

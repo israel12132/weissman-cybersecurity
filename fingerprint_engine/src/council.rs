@@ -1045,9 +1045,13 @@ pub async fn persist_supreme_council_win(
     } else {
         crate::supreme_weights::embedding_checksum(checksum_src)
     };
+    let token = sovereign.oast_token.trim().to_string();
+    let source = crate::elite_hardening::council_acl::council_persist_source(&token);
+    if !crate::elite_hardening::council_acl::council_write_allowed(source) {
+        return Err("council memory write rejected: untrusted source".into());
+    }
     let provenance_kind = crate::supreme_weights::RAG_PROVENANCE_ENGINE;
     let provenance_issuer = "supreme_council";
-    let source = "oast_success";
     let provenance_hmac = crate::supreme_weights::sign_rag_provenance(
         tenant_id,
         provenance_kind,
@@ -1064,16 +1068,9 @@ pub async fn persist_supreme_council_win(
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| e.to_string())?;
-    sqlx::query(
-        r#"INSERT INTO supreme_council_memory (
-            tenant_id, target_fingerprint, brief_excerpt,
-            orchestrator_instruction, strategy_summary,
-            embedding, embedding_vec, oast_token, source,
-            embedding_checksum, provenance_hmac, provenance_kind, provenance_issuer
-        ) VALUES (
-            $1, $2, $3, $4, $5,
-            $6, NULLIF($7, '')::vector, $8, $9,
-            $10, $11, $12, $13
+    sqlx::query_scalar::<_, i64>(
+        r#"SELECT public.insert_supreme_council_memory(
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
         )"#,
     )
     .bind(tenant_id)
@@ -1083,13 +1080,13 @@ pub async fn persist_supreme_council_win(
     .bind(summary.chars().take(8000).collect::<String>())
     .bind(emb_json)
     .bind(emb_pg_text.unwrap_or_default())
-    .bind(sovereign.oast_token.trim())
+    .bind(&token)
     .bind(source)
     .bind(&checksum)
     .bind(&provenance_hmac)
     .bind(provenance_kind)
     .bind(provenance_issuer)
-    .execute(&mut *tx)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
     tx.commit().await.map_err(|e| e.to_string())?;

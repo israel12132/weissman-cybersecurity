@@ -85,6 +85,12 @@ pub async fn probe_modbus(host: &str) -> Option<OtFingerprint> {
         return None;
     }
     let slice = resp.get(..n)?;
+    if matches!(
+        crate::elite_hardening::ot_fsm::validate_modbus_tcp(&pdu, slice),
+        crate::elite_hardening::ot_fsm::FsmVerdict::Abort { .. }
+    ) {
+        return None;
+    }
     let unit = *slice.get(6)?;
     let fc = *slice.get(7)?;
     let looks_exception = fc & 0x80 != 0;
@@ -149,6 +155,12 @@ pub async fn probe_modbus_function_code(host: &str) -> Option<OtFingerprint> {
         return None;
     }
     let slice = resp.get(..n)?;
+    if matches!(
+        crate::elite_hardening::ot_fsm::validate_modbus_tcp(&pdu, slice),
+        crate::elite_hardening::ot_fsm::FsmVerdict::Abort { .. }
+    ) {
+        return None;
+    }
     let fc = *slice.get(7)?;
     let looks_read = fc == 0x03;
     let looks_exception = fc == 0x83;
@@ -714,6 +726,12 @@ pub async fn probe_s7(host: &str) -> Option<OtFingerprint> {
         return None;
     }
     let slice = resp.get(..n)?;
+    if matches!(
+        crate::elite_hardening::ot_fsm::validate_tpkt(slice),
+        crate::elite_hardening::ot_fsm::FsmVerdict::Abort { .. }
+    ) {
+        return None;
+    }
     if slice.first().copied() != Some(0x03) {
         return None;
     }

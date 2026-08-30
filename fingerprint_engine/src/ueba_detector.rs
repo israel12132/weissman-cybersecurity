@@ -14,12 +14,13 @@
 //! Hybrid baseline (week-1 → week-2):
 //!   * Until 168 global samples (`hour_of_week = -1`) the detector compares
 //!     against the global bucket.
-//!   * From the second week it prefers the specific `hour_of_week` bucket,
-//!     falling back to global when that hour still has fewer than 24 samples.
+//!   * From the second week it prefers the specific `hour_of_week` bucket
+//!     (via `elite_hardening::ueba_stats`, hour n ≥ 3), falling back to global
+//!     when that hour is still thin.
 //! The detector NEVER fires while the chosen baseline is still learning
 //! (`n < 24`). Hour buckets are updated incrementally (Welford) so they can
 //! actually accumulate across weeks; the global row is recomputed from the
-//! rolling 7-day sample window.
+//! rolling 7-day sample window. Scoring uses cloud-safe stddev.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -82,7 +83,7 @@ pub async fn ingest_sample(
         for (k, v) in obj {
             if let Some(num) = v.as_f64() {
                 let global = recompute_global_baseline(&mut tx, tenant_id, &p.agent_id, k).await?;
-                let hour = upsert_hour_baseline(
+                let _hour = upsert_hour_baseline(
                     &mut tx,
                     tenant_id,
                     &p.agent_id,
@@ -92,9 +93,8 @@ pub async fn ingest_sample(
                 )
                 .await?;
                 summary.baselines_updated += 1;
-                let (upd, _lane) = pick_compare_baseline(&global, Some(&hour));
                 if let Some(anom) =
-                    check_anomaly(&mut tx, tenant_id, &p, sample_id, k, num, &upd).await?
+                    check_anomaly(&mut tx, tenant_id, &p, sample_id, k, num, &global).await?
                 {
                     summary.anomalies.push(anom);
                 }
@@ -130,6 +130,25 @@ pub async fn ingest_sample(
                 "top_processes",
                 &observed,
                 "Unfamiliar process observed running on host",
+            )
+            .await?
+            {
+                summary.anomalies.push(a);
+            }
+        }
+        if let Some(users) = obj.get("logged_in_users").and_then(Value::as_array) {
+            let observed: Vec<String> = users
+                .iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect();
+            if let Some(a) = check_new_categorical(
+                &mut tx,
+                tenant_id,
+                &p,
+                sample_id,
+                "logged_in_users",
+                &observed,
+                "New unique user on core asset",
             )
             .await?
             {
@@ -327,26 +346,49 @@ async fn check_anomaly(
     base: &BaselineUpdate,
 ) -> Result<Option<AnomalyRecord>, String> {
     if base.n < MIN_BASELINE_SAMPLES {
-        return Ok(None); // still learning
+        return Ok(None); // still learning (Phase A)
     }
-    if base.stddev < 1e-6 {
-        return Ok(None); // constant baseline — divide-by-zero, can't compute z
-    }
-    let z = (observed - base.mean) / base.stddev;
-    if z.abs() < Z_THRESHOLD {
+    let global = crate::elite_hardening::ueba_stats::BaselineStats {
+        n: base.n,
+        mean: base.mean,
+        stddev: base.stddev,
+        hour_of_week: crate::elite_hardening::ueba_stats::GLOBAL_HOUR_SENTINEL,
+    };
+    let hour_stats = if matches!(
+        crate::elite_hardening::ueba_stats::hybrid_phase(base.n),
+        crate::elite_hardening::ueba_stats::HybridPhase::HourThenGlobal
+    ) {
+        fetch_hour_baseline(tx, tenant_id, &p.agent_id, metric, p.hour_of_week).await
+    } else {
+        None
+    };
+    let Some(scoring) =
+        crate::elite_hardening::ueba_stats::pick_scoring_baseline(global, hour_stats)
+    else {
+        return Ok(None);
+    };
+    let stddev =
+        crate::elite_hardening::ueba_stats::cloud_safe_stddev(scoring.mean, scoring.stddev);
+    let z = (observed - scoring.mean) / stddev;
+    if z.abs() <= Z_THRESHOLD {
         return Ok(None);
     }
-    let severity = if z.abs() > 6.0 { "high" } else { "medium" };
+    let severity = crate::elite_hardening::ueba_stats::severity_for_z(z);
     let direction = if z > 0.0 { "above" } else { "below" };
+    let bucket = if scoring.hour_of_week < 0 {
+        "global".to_string()
+    } else {
+        format!("hour_of_week={}", scoring.hour_of_week)
+    };
     let detail = format!(
-        "Metric `{}` observed {:.2}, baseline {:.2} ± {:.2} (z={:+.2}, {} 3σ).",
-        metric, observed, base.mean, base.stddev, z, direction
+        "Metric `{}` observed {:.2}, baseline {:.2} ± {:.2} (z={:+.2}, {} 3σ, {bucket}).",
+        metric, observed, scoring.mean, stddev, z, direction
     );
     let rec = AnomalyRecord {
         metric: metric.to_string(),
         observed,
-        baseline_mean: base.mean,
-        baseline_stddev: base.stddev,
+        baseline_mean: scoring.mean,
+        baseline_stddev: stddev,
         z_score: z,
         severity: severity.to_string(),
         detail: detail.clone(),
@@ -364,8 +406,8 @@ async fn check_anomaly(
     .bind(sample_id)
     .bind(metric)
     .bind(observed)
-    .bind(base.mean)
-    .bind(base.stddev)
+    .bind(scoring.mean)
+    .bind(stddev)
     .bind(z)
     .bind(severity)
     .bind(&detail)
@@ -373,6 +415,36 @@ async fn check_anomaly(
     .await
     .map_err(|e| format!("insert anomaly: {e}"))?;
     Ok(Some(rec))
+}
+
+async fn fetch_hour_baseline(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    agent_id: &str,
+    metric: &str,
+    hour_of_week: i16,
+) -> Option<crate::elite_hardening::ueba_stats::BaselineStats> {
+    let row: Option<(i64, Option<f64>, Option<f64>)> = sqlx::query_as(
+        r#"SELECT n, mean, stddev
+             FROM agent_metric_hour_baselines
+            WHERE tenant_id = $1 AND agent_id = $2
+              AND metric_name = $3 AND hour_of_week = $4"#,
+    )
+    .bind(tenant_id)
+    .bind(agent_id)
+    .bind(metric)
+    .bind(hour_of_week)
+    .fetch_optional(&mut **tx)
+    .await
+    .ok()
+    .flatten();
+    let (n, mean, stddev) = row?;
+    Some(crate::elite_hardening::ueba_stats::BaselineStats {
+        n: n as i32,
+        mean: mean.unwrap_or(0.0),
+        stddev: stddev.unwrap_or(0.0),
+        hour_of_week,
+    })
 }
 
 /// Categorical anomaly check — fires when an item appears that's not in the
@@ -568,5 +640,21 @@ mod tests {
         let (n, mean, _) = state.unwrap();
         assert_eq!(n, 3);
         assert!((mean - 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn hybrid_scoring_kicks_in_after_a_full_week() {
+        assert_eq!(
+            crate::elite_hardening::ueba_stats::hybrid_phase(MIN_BASELINE_SAMPLES),
+            crate::elite_hardening::ueba_stats::HybridPhase::GlobalOnly
+        );
+        assert_eq!(
+            crate::elite_hardening::ueba_stats::hybrid_phase(168),
+            crate::elite_hardening::ueba_stats::HybridPhase::HourThenGlobal
+        );
+        assert_eq!(
+            crate::elite_hardening::ueba_stats::GLOBAL_HOUR_SENTINEL,
+            GLOBAL_BUCKET
+        );
     }
 }

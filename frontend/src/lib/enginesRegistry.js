@@ -1,5 +1,5 @@
 /**
- * Master registry of all 564 production attack engines.
+ * Master registry of all 565 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 564 production engines in registry order */
+/** All 565 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -4603,6 +4603,14 @@ export const ENGINES_REGISTRY = [
     group: 'crypto',
     mitre: 'T1078',
     description: 'Fusion: password spray + Kerberos + ITDR auth telemetry',
+    requiresTarget: true,
+  },
+  {
+    id: 'privilege_escalation_credential_access',
+    label: 'Privilege Escalation & Credential Access',
+    group: 'crypto',
+    mitre: 'T1068',
+    description: '500-check defensive engine: W^X/syscall integrity, LSASS/identity-daemon protection, token hardening, UAC prevention, service/task ACLs, BYOVD/kernel, credential vaults, telemetry, RLS, CI — live evidence only, no LSASS dumps or UAC bypass payloads',
     requiresTarget: true,
   },
   {

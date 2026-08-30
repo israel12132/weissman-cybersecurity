@@ -10,6 +10,7 @@
 //! |-----------|---------------|
 //! | `external_exposure_supreme` | ASM + email/DNS + cloud posture |
 //! | `identity_attack_chain` | Kerberos + spray + ITDR auth events |
+//! | `privilege_escalation_credential_access` | Host syscall/LSASS/token/UAC/service/kernel/vault + RLS + CI |
 //! | `pipeline_to_runtime_risk` | IaC + supply chain + CI/CD |
 //! | `risk_superposition_collapse` | Multi-engine Bayesian belief + STRIPS + FAIR |
 //! | `sovereign_active_defense_fusion` | MTD + cognitive starvation + deception + CHRONOS |
@@ -20,6 +21,7 @@
 pub const FUSION_ENGINE_IDS: &[&str] = &[
     "external_exposure_supreme",
     "identity_attack_chain",
+    "privilege_escalation_credential_access",
     "pipeline_to_runtime_risk",
     "risk_superposition_collapse",
     "sovereign_active_defense_fusion",
@@ -39,6 +41,7 @@ pub use crate::identity_attack_chain_engine::{
 pub use crate::pipeline_to_runtime_risk_engine::{
     run_pipeline_to_runtime_risk, run_pipeline_to_runtime_risk_result,
 };
+pub use crate::priv_esc_cred_access::{run_priv_esc_cred_access, run_priv_esc_cred_access_result};
 pub use crate::risk_superposition_collapse_engine::{
     run_risk_superposition_collapse, run_risk_superposition_collapse_result,
 };

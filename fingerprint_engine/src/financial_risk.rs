@@ -49,6 +49,20 @@ pub struct ClientFinancialRisk {
     pub path_ale_usd: i64,
     #[serde(default)]
     pub currency: String,
+    #[serde(default)]
+    pub currency_code: String,
+    #[serde(default = "default_fx")]
+    pub fx_rate_to_usd: f64,
+    #[serde(default)]
+    pub remediation_cost_usd: i64,
+    #[serde(default)]
+    pub business_interruption_usd: i64,
+    #[serde(default)]
+    pub data_sources: Value,
+}
+
+fn default_fx() -> f64 {
+    1.0
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -179,6 +193,7 @@ pub async fn compute_and_store(
     let mut sle_worst: i64 = 0;
     let mut ale_total: i64 = 0;
     let mut agent_protected_ale: i64 = 0;
+    let mut ot_high: u32 = 0;
     let mut contributors: Vec<TopContributor> = Vec::with_capacity(rows.len());
 
     for r in rows {
@@ -196,6 +211,11 @@ pub async fn compute_and_store(
         total_value += value;
         if crown {
             crown_value += value;
+        }
+        if crate::elite_hardening::fair_ext::is_ot_asset(&node_type, &label, &graph_key)
+            && (cvss >= 7.0 || crown || kev)
+        {
+            ot_high = ot_high.saturating_add(1);
         }
 
         let sle = supreme_weights::single_loss_expectancy(value, cvss);
@@ -252,30 +272,92 @@ pub async fn compute_and_store(
     .execute(&mut *tx)
     .await;
 
-    // Persist a snapshot for fast UI loads.
+    let fx_rate: f64 = std::env::var("WEISSMAN_FX_RATE_TO_USD")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .filter(|r: &f64| r.is_finite() && *r > 0.0)
+        .unwrap_or(1.0);
+    let currency = std::env::var("WEISSMAN_REPORTING_CURRENCY")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "USD".into());
+    let bi = crate::elite_hardening::fair_ext::business_interruption_usd(
+        if total_value > 0 {
+            total_value / 365
+        } else {
+            0
+        },
+        1.0,
+    );
+    let ot_loss = crate::elite_hardening::fair_ext::ot_process_disruption_usd(
+        ot_high,
+        if total_value > 0 {
+            total_value / 365
+        } else {
+            0
+        },
+        8.0,
+    );
+    let bi = bi.saturating_add(ot_loss);
+    let mut sources = crate::elite_hardening::fair_ext::data_sources_json();
+    if let Some(obj) = sources.as_object_mut() {
+        obj.insert("ot_high_findings".into(), json!(ot_high));
+        obj.insert("ot_process_disruption_usd".into(), json!(ot_loss));
+    }
+    let ale_with_bi = ale_total.saturating_add(bi);
+
+    // Persist a snapshot for fast UI loads. Elite columns land with Part-2 /
+    // Part-6 migrations; fall back to the original column set so compute still
+    // works during rolling deploys.
     let contributors_json: Value = serde_json::to_value(&contributors).unwrap_or(json!([]));
-    let _ = sqlx::query(
+    let elite_ins = sqlx::query(
         r#"INSERT INTO client_financial_risk_snapshots
                  (tenant_id, client_id, computed_at,
                   total_asset_value_usd, sle_worst_usd, ale_annualised_usd,
                   crown_jewel_value_usd, top_contributors,
                   concentration_pct, delay_cost_usd_per_day,
-                  agent_protected_ale_usd, path_ale_usd, currency)
-           VALUES ($1, $2, now(), $3, $4, $5, $6, $7, $8, $9, $10, $11, 'USD')"#,
+                  agent_protected_ale_usd, path_ale_usd, currency,
+                  currency_code, fx_rate_to_usd, remediation_cost_usd,
+                  business_interruption_usd, data_sources)
+           VALUES ($1, $2, now(), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)"#,
     )
     .bind(tenant_id)
     .bind(client_id)
     .bind(total_value)
     .bind(sle_worst)
-    .bind(ale_total)
+    .bind(ale_with_bi)
     .bind(crown_value)
     .bind(&contributors_json)
     .bind(f32::from(concentration))
     .bind(delay_cost)
     .bind(agent_protected_ale)
     .bind(path_ale)
+    .bind(&currency)
+    .bind(&currency)
+    .bind(fx_rate)
+    .bind(0i64)
+    .bind(bi)
+    .bind(&sources)
     .execute(&mut *tx)
     .await;
+    if elite_ins.is_err() {
+        let _ = sqlx::query(
+            r#"INSERT INTO client_financial_risk_snapshots
+                     (tenant_id, client_id, computed_at,
+                      total_asset_value_usd, sle_worst_usd, ale_annualised_usd,
+                      crown_jewel_value_usd, top_contributors)
+               VALUES ($1, $2, now(), $3, $4, $5, $6, $7)"#,
+        )
+        .bind(tenant_id)
+        .bind(client_id)
+        .bind(total_value)
+        .bind(sle_worst)
+        .bind(ale_with_bi)
+        .bind(crown_value)
+        .bind(&contributors_json)
+        .execute(&mut *tx)
+        .await;
+    }
     tx.commit().await.map_err(|e| e.to_string())?;
 
     Ok(ClientFinancialRisk {
@@ -283,7 +365,7 @@ pub async fn compute_and_store(
         total_asset_value_usd: total_value,
         crown_jewel_value_usd: crown_value,
         sle_worst_usd: sle_worst,
-        ale_annualised_usd: ale_total,
+        ale_annualised_usd: ale_with_bi,
         top_contributors: contributors,
         default_asset_value_usd: default_value,
         risk_loss_discount: discount,
@@ -292,7 +374,12 @@ pub async fn compute_and_store(
         delay_cost_usd_per_day: delay_cost,
         agent_protected_ale_usd: agent_protected_ale,
         path_ale_usd: path_ale,
-        currency: "USD".into(),
+        currency: currency.clone(),
+        currency_code: currency,
+        fx_rate_to_usd: fx_rate,
+        remediation_cost_usd: 0,
+        business_interruption_usd: bi,
+        data_sources: sources,
     })
 }
 
@@ -305,7 +392,7 @@ pub async fn latest_snapshot(
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| e.to_string())?;
-    let row = sqlx::query(
+    let elite = sqlx::query(
         r#"SELECT total_asset_value_usd, sle_worst_usd, ale_annualised_usd,
                   crown_jewel_value_usd, top_contributors, computed_at,
                   COALESCE(concentration_pct, 0) AS concentration_pct,
@@ -314,7 +401,12 @@ pub async fn latest_snapshot(
                   COALESCE(path_ale_usd, 0) AS path_ale_usd,
                   COALESCE(currency, 'USD') AS currency,
                   (SELECT default_asset_value_usd FROM clients WHERE id = $2) AS dv,
-                  (SELECT risk_loss_discount     FROM clients WHERE id = $2) AS rd
+                  (SELECT risk_loss_discount     FROM clients WHERE id = $2) AS rd,
+                  COALESCE(currency_code, 'USD') AS currency_code,
+                  COALESCE(fx_rate_to_usd, 1.0) AS fx_rate_to_usd,
+                  COALESCE(remediation_cost_usd, 0) AS remediation_cost_usd,
+                  COALESCE(business_interruption_usd, 0) AS business_interruption_usd,
+                  COALESCE(data_sources, '{}'::jsonb) AS data_sources
              FROM client_financial_risk_snapshots
             WHERE tenant_id = $1 AND client_id = $2
             ORDER BY computed_at DESC
@@ -323,8 +415,25 @@ pub async fn latest_snapshot(
     .bind(tenant_id)
     .bind(client_id)
     .fetch_optional(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
+    .await;
+    let row = match elite {
+        Ok(r) => r,
+        Err(_) => sqlx::query(
+            r#"SELECT total_asset_value_usd, sle_worst_usd, ale_annualised_usd,
+                      crown_jewel_value_usd, top_contributors, computed_at,
+                      (SELECT default_asset_value_usd FROM clients WHERE id = $2) AS dv,
+                      (SELECT risk_loss_discount     FROM clients WHERE id = $2) AS rd
+                 FROM client_financial_risk_snapshots
+                WHERE tenant_id = $1 AND client_id = $2
+                ORDER BY computed_at DESC
+                LIMIT 1"#,
+        )
+        .bind(tenant_id)
+        .bind(client_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?,
+    };
     let _ = tx.commit().await;
     let Some(r) = row else { return Ok(None) };
     let top: Vec<TopContributor> = serde_json::from_value(
@@ -353,6 +462,11 @@ pub async fn latest_snapshot(
         agent_protected_ale_usd: r.try_get("agent_protected_ale_usd").unwrap_or(0),
         path_ale_usd: r.try_get("path_ale_usd").unwrap_or(0),
         currency: r.try_get("currency").unwrap_or_else(|_| "USD".into()),
+        currency_code: r.try_get("currency_code").unwrap_or_else(|_| "USD".into()),
+        fx_rate_to_usd: r.try_get("fx_rate_to_usd").unwrap_or(1.0),
+        remediation_cost_usd: r.try_get("remediation_cost_usd").unwrap_or(0),
+        business_interruption_usd: r.try_get("business_interruption_usd").unwrap_or(0),
+        data_sources: r.try_get("data_sources").unwrap_or(json!({})),
     }))
 }
 

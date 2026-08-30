@@ -320,7 +320,8 @@ async fn api_findings_update_status(
     Path(id): Path<i64>,
     Json(body): Json<FindingStatusBody>,
 ) -> Response {
-    let new_status = body.status.trim().to_uppercase();
+    let new_status =
+        crate::elite_hardening::hack_fix_verify::coerce_operator_status(&body.status.trim().to_uppercase());
     if !FINDING_STATUSES.contains(&new_status.as_str()) {
         return (
             StatusCode::UNPROCESSABLE_ENTITY,

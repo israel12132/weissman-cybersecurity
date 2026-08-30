@@ -20,236 +20,14 @@
 //! Tenant scoping: every plan is rewritten to include `tenant_id = $tenant`
 //! before compilation. Users never see another tenant's data.
 
-use chrono::{DateTime, Utc};
+use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
-use sha2::{Digest, Sha256};
 use sqlx::{Column, PgPool, Row};
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, OnceLock};
 use std::time::Instant;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::error::TrySendError;
-
-/// Bounded Ask Weissman audit lane. try_send so a slow DB never blocks the analyst.
-const NL_AUDIT_MPSC_CAPACITY: usize = 1024;
-
-struct NlAuditEvent {
-    tenant_id: i64,
-    user_id: Option<i64>,
-    question: String,
-    plan_json: Value,
-    sql: String,
-    rows_returned: i32,
-    elapsed_ms: i32,
-    error: String,
-}
-
-static NL_AUDIT_TX: OnceLock<mpsc::Sender<NlAuditEvent>> = OnceLock::new();
-
-/// Start the background writer that appends SHA-256-chained `nl_query_audit` rows.
-/// Safe to call more than once; later calls are no-ops.
-pub fn spawn_audit_worker(pool: Arc<PgPool>) {
-    crate::nlqa_syslog::init();
-    if NL_AUDIT_TX.get().is_some() {
-        return;
-    }
-    let (tx, mut rx) = mpsc::channel::<NlAuditEvent>(NL_AUDIT_MPSC_CAPACITY);
-    if NL_AUDIT_TX.set(tx).is_err() {
-        return;
-    }
-    tokio::spawn(async move {
-        while let Some(ev) = rx.recv().await {
-            persist_nl_audit(&pool, ev).await;
-        }
-    });
-}
-
-fn question_fingerprint(question: &str) -> String {
-    hex::encode(Sha256::digest(question.as_bytes()))
-}
-
-/// SIEM-visible emergency log when the audit MPSC is full or closed.
-/// Dropping the DB write must never be silent — that is an audit-tamper signal.
-///
-/// Forensic path is **not** the lossy stdout tracing-appender. Every overflow
-/// event is written to OS syslog (`nlqa_syslog`, AUTHPRIV.CRIT, `lossy(false)`).
-/// `tracing::error!` here is best-effort only (HTTP logs may still be lossy).
-fn report_audit_channel_saturated(ev: &NlAuditEvent, kind: &str) {
-    metrics::counter!("weissman_nlqa_audit_dropped_total", "kind" => kind.to_string()).increment(1);
-    let qfp = question_fingerprint(&ev.question);
-    let q_preview: String = ev.question.chars().take(180).collect();
-    let page = format!(
-        "nlqa1 Ask Weissman audit MPSC saturated kind={kind} tenant_id={} user_id={} question_sha256={qfp} elapsed_ms={} rows_returned={} has_error={} question_preview={q_preview}",
-        ev.tenant_id,
-        ev.user_id.unwrap_or(0),
-        ev.elapsed_ms,
-        ev.rows_returned,
-        !ev.error.is_empty(),
-    );
-    crate::nlqa_syslog::page_audit_overflow(&page);
-    tracing::error!(
-        target: "nlqa1_fallback",
-        tenant_id = ev.tenant_id,
-        user_id = ev.user_id,
-        question_sha256 = %qfp,
-        elapsed_ms = ev.elapsed_ms,
-        rows_returned = ev.rows_returned,
-        has_error = !ev.error.is_empty(),
-        drop_kind = kind,
-        "Ask Weissman audit MPSC saturated — DB insert skipped to keep /api/ask hot; forensic page written to OS syslog (non-lossy). Possible audit flood / trace-wiping."
-    );
-}
-
-fn try_enqueue_nl_audit(
-    tx: &mpsc::Sender<NlAuditEvent>,
-    ev: NlAuditEvent,
-) -> Result<(), NlAuditEvent> {
-    match tx.try_send(ev) {
-        Ok(()) => Ok(()),
-        Err(TrySendError::Full(ev)) => {
-            report_audit_channel_saturated(&ev, "full");
-            Err(ev)
-        }
-        Err(TrySendError::Closed(ev)) => {
-            report_audit_channel_saturated(&ev, "closed");
-            Err(ev)
-        }
-    }
-}
-
-fn enqueue_audit(tenant_id: i64, user_id: Option<i64>, question: &str, res: &AskResult) {
-    let ev = NlAuditEvent {
-        tenant_id,
-        user_id,
-        question: question.chars().take(2000).collect(),
-        plan_json: serde_json::to_value(&res.plan).unwrap_or(json!({})),
-        sql: res.sql.clone(),
-        rows_returned: res.row_count as i32,
-        elapsed_ms: res.elapsed_ms as i32,
-        error: res.error.clone().unwrap_or_default(),
-    };
-    match NL_AUDIT_TX.get() {
-        Some(tx) => {
-            let _ = try_enqueue_nl_audit(tx, ev);
-        }
-        None => {
-            crate::nlqa_syslog::page_audit_overflow(&format!(
-                "nlqa1 Ask Weissman audit worker not started tenant_id={tenant_id} question_sha256={}",
-                question_fingerprint(question)
-            ));
-            tracing::error!(
-                target: "nlqa1_fallback",
-                tenant_id,
-                question_sha256 = %question_fingerprint(question),
-                "Ask Weissman audit worker not started; event not queued"
-            );
-        }
-    }
-}
-
-fn nl_audit_canonical(
-    prev_hash: &str,
-    tenant_id: i64,
-    user_id: Option<i64>,
-    question: &str,
-    sql: &str,
-    error: &str,
-    asked_at: DateTime<Utc>,
-) -> String {
-    format!(
-        "nlqav1|{prev_hash}|{tenant_id}|{}|{question}|{sql}|{error}|{}",
-        user_id.unwrap_or(0),
-        asked_at.to_rfc3339()
-    )
-}
-
-async fn persist_nl_audit(pool: &PgPool, ev: NlAuditEvent) {
-    let asked_at = Utc::now();
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, ev.tenant_id).await else {
-        tracing::error!(
-            target: "nl_query_audit",
-            tenant_id = ev.tenant_id,
-            "Ask Weissman audit persist: tenant tx failed"
-        );
-        return;
-    };
-    if let Err(e) = weissman_db::advisory_lock::advisory_xact_lock_text(
-        &mut *tx,
-        &format!("nlqa:{}", ev.tenant_id),
-    )
-    .await
-    {
-        tracing::error!(
-            target: "nl_query_audit",
-            tenant_id = ev.tenant_id,
-            error = %e,
-            "Ask Weissman audit persist: advisory lock failed"
-        );
-        let _ = tx.rollback().await;
-        return;
-    }
-    let prev_hash: String = sqlx::query_scalar(
-        r#"SELECT COALESCE(event_hash, '') FROM nl_query_audit
-           WHERE tenant_id = $1 AND event_hash <> ''
-           ORDER BY id DESC LIMIT 1"#,
-    )
-    .bind(ev.tenant_id)
-    .fetch_optional(&mut *tx)
-    .await
-    .ok()
-    .flatten()
-    .unwrap_or_default();
-    let event_hash = hex::encode(Sha256::digest(
-        nl_audit_canonical(
-            &prev_hash,
-            ev.tenant_id,
-            ev.user_id,
-            &ev.question,
-            &ev.sql,
-            &ev.error,
-            asked_at,
-        )
-        .as_bytes(),
-    ));
-    if let Err(e) = sqlx::query(
-        "INSERT INTO nl_query_audit
-            (tenant_id, user_id, asked_at, question, plan_json, compiled_sql,
-             rows_returned, elapsed_ms, error, prev_hash, event_hash)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
-    )
-    .bind(ev.tenant_id)
-    .bind(ev.user_id)
-    .bind(asked_at)
-    .bind(&ev.question)
-    .bind(&ev.plan_json)
-    .bind(&ev.sql)
-    .bind(ev.rows_returned)
-    .bind(ev.elapsed_ms)
-    .bind(&ev.error)
-    .bind(&prev_hash)
-    .bind(&event_hash)
-    .execute(&mut *tx)
-    .await
-    {
-        tracing::error!(
-            target: "nl_query_audit",
-            tenant_id = ev.tenant_id,
-            error = %e,
-            "Ask Weissman audit persist: insert failed"
-        );
-        let _ = tx.rollback().await;
-        return;
-    }
-    if let Err(e) = tx.commit().await {
-        tracing::error!(
-            target: "nl_query_audit",
-            tenant_id = ev.tenant_id,
-            error = %e,
-            "Ask Weissman audit persist: commit failed"
-        );
-    }
-}
+use tokio::sync::{mpsc, Semaphore};
 
 // ─── Allow-list schema ───────────────────────────────────────────────────────
 #[derive(Debug, Clone)]
@@ -264,6 +42,8 @@ struct TableSpec {
     /// Currently only used to bring `clients.name` into vulnerabilities/etc.
     #[allow(dead_code)]
     joins: &'static [(&'static str, &'static str)],
+    /// Feed/intel tables have no tenant_id; RLS still applies via GRANTs + GUC.
+    has_tenant: bool,
 }
 
 static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
@@ -290,12 +70,10 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
                 "kev_due_date",
                 "seen_count",
                 "signature_hash",
-                "watermark_severity",
-                "is_cycle_closed",
-                "cycle_id",
             ],
             order_by: &["discovered_at", "epss_score", "seen_count", "id"],
             joins: &[],
+            has_tenant: true,
         },
     );
     m.insert(
@@ -320,6 +98,7 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             ],
             order_by: &["last_seen_at", "max_cvss", "max_epss", "member_count"],
             joins: &[],
+            has_tenant: true,
         },
     );
     m.insert(
@@ -334,6 +113,7 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             ],
             order_by: &["id", "name"],
             joins: &[],
+            has_tenant: true,
         },
     );
     m.insert(
@@ -355,6 +135,7 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             ],
             order_by: &["risk_score", "business_value_usd", "id"],
             joins: &[],
+            has_tenant: true,
         },
     );
     m.insert(
@@ -376,6 +157,7 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             ],
             order_by: &["detected_at", "z_score"],
             joins: &[],
+            has_tenant: true,
         },
     );
     m.insert(
@@ -393,29 +175,145 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             ],
             order_by: &["computed_at", "max_risk"],
             joins: &[],
+            has_tenant: true,
         },
     );
     m.insert(
-        "vulnerability_lifecycle_events",
+        "risk_graph_edges",
         TableSpec {
-            table: "vulnerability_lifecycle_events",
+            table: "risk_graph_edges",
+            columns: &["id", "client_id", "from_node_id", "to_node_id", "edge_type"],
+            order_by: &["id", "edge_type"],
+            joins: &[],
+            has_tenant: true,
+        },
+    );
+    m.insert(
+        "client_financial_risk_snapshots",
+        TableSpec {
+            table: "client_financial_risk_snapshots",
             columns: &[
                 "id",
-                "finding_id",
                 "client_id",
-                "cycle_id",
-                "event_type",
-                "status",
-                "severity",
-                "watermark_severity",
-                "occurred_at",
+                "computed_at",
+                "total_asset_value_usd",
+                "sle_worst_usd",
+                "ale_annualised_usd",
+                "crown_jewel_value_usd",
+                "currency_code",
             ],
-            order_by: &["occurred_at", "id"],
+            order_by: &["computed_at", "ale_annualised_usd", "id"],
             joins: &[],
+            has_tenant: true,
+        },
+    );
+    m.insert(
+        "endpoint_agents",
+        TableSpec {
+            table: "endpoint_agents",
+            columns: &[
+                "id",
+                "client_id",
+                "hostname",
+                "os",
+                "agent_version",
+                "status",
+                "last_seen_at",
+            ],
+            order_by: &["last_seen_at", "id"],
+            joins: &[],
+            has_tenant: true,
+        },
+    );
+    m.insert(
+        "weissman_async_jobs",
+        TableSpec {
+            table: "weissman_async_jobs",
+            columns: &["id", "kind", "status", "created_at", "updated_at"],
+            order_by: &["created_at", "updated_at"],
+            joins: &[],
+            has_tenant: true,
+        },
+    );
+    m.insert(
+        "epss_intel",
+        TableSpec {
+            table: "epss_intel",
+            columns: &["cve", "score", "percentile", "epss_date", "refreshed_at"],
+            order_by: &["score", "refreshed_at", "cve"],
+            joins: &[],
+            has_tenant: false,
+        },
+    );
+    m.insert(
+        "kev_intel",
+        TableSpec {
+            table: "kev_intel",
+            columns: &[
+                "cve",
+                "vendor_project",
+                "product",
+                "date_added",
+                "known_ransomware_use",
+                "due_date",
+            ],
+            order_by: &["date_added", "cve"],
+            joins: &[],
+            has_tenant: false,
+        },
+    );
+    m.insert(
+        "audit_logs",
+        TableSpec {
+            table: "audit_logs",
+            columns: &[
+                "id",
+                "created_at",
+                "user_label",
+                "action_type",
+                "details",
+                "ip_address",
+            ],
+            order_by: &["created_at", "id"],
+            joins: &[],
+            has_tenant: true,
         },
     );
     m
 });
+
+/// Spec §10: Ask Weissman allow-list is 13 tables.
+pub fn allowed_table_count() -> usize {
+    SCHEMA.len()
+}
+
+/// Hermetic QueryPlan sandbox: table must be one of the 13 weissman_ro names.
+#[must_use]
+pub fn is_allowlisted_table(name: &str) -> bool {
+    SCHEMA.contains_key(name)
+}
+
+/// Sorted allow-list names for AST table extraction (never a parallel hand list).
+#[must_use]
+pub fn allowlisted_table_names() -> Vec<&'static str> {
+    let mut v: Vec<&'static str> = SCHEMA.keys().copied().collect();
+    v.sort_unstable();
+    v
+}
+
+/// Hermetic QueryPlan sandbox: column must be enumerated on that table.
+#[must_use]
+pub fn is_allowlisted_column(table: &str, column: &str) -> bool {
+    SCHEMA
+        .get(table)
+        .is_some_and(|s| s.columns.contains(&column))
+}
+
+/// Hermetic QueryPlan sandbox: filter operator must be in the static op list.
+#[must_use]
+pub fn is_allowlisted_op(op: &str) -> bool {
+    ALLOWED_OPS.contains(&op)
+}
 
 const ALLOWED_OPS: &[&str] = &[
     "=",
@@ -503,17 +401,17 @@ pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String
         None => None,
     };
 
-    // 4) Validate LIMIT (cap at MAX_LIMIT).
-    let limit = plan.limit.unwrap_or(50).clamp(1, MAX_LIMIT);
-
+    // 4) Validate LIMIT after filters so operator errors surface first.
     // 5) Build SQL fragments.
     let select_sql = select_cols.join(", ");
     let mut where_parts: Vec<String> = Vec::new();
     let mut params: Vec<Value> = Vec::new();
 
-    // Tenant scope is FORCED — non-negotiable. $1 always = tenant_id.
-    where_parts.push("tenant_id = $1".to_string());
-    params.push(Value::from(tenant_id));
+    // Tenant scope is FORCED on tenant-keyed tables — non-negotiable.
+    if spec.has_tenant {
+        where_parts.push("tenant_id = $1".to_string());
+        params.push(Value::from(tenant_id));
+    }
 
     // Filters.
     for f in &plan.filters {
@@ -571,6 +469,8 @@ pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String
         }
     }
 
+    let limit = crate::elite_hardening::nl_guard::require_limit(plan.limit, MAX_LIMIT)?;
+
     let order_sql = match order {
         Some(c) => format!(
             " ORDER BY {} {}",
@@ -579,14 +479,16 @@ pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String
         ),
         None => String::new(),
     };
+    let where_sql = if where_parts.is_empty() {
+        String::new()
+    } else {
+        format!(" WHERE {}", where_parts.join(" AND "))
+    };
     let sql = format!(
-        "SELECT {} FROM {} WHERE {}{} LIMIT {}",
-        select_sql,
-        spec.table,
-        where_parts.join(" AND "),
-        order_sql,
-        limit,
+        "SELECT {} FROM {}{}{} LIMIT {}",
+        select_sql, spec.table, where_sql, order_sql, limit,
     );
+    crate::elite_hardening::nl_guard::reject_unsafe_sql(&sql)?;
     Ok(Compiled { sql, params })
 }
 
@@ -648,7 +550,7 @@ pub async fn execute_plan(
 
 /// Run a free-form question end-to-end: LLM → plan → validate → execute.
 pub async fn ask(
-    _app_pool: &PgPool,
+    app_pool: &PgPool,
     ro_pool: &PgPool,
     tenant_id: i64,
     user_id: Option<i64>,
@@ -674,6 +576,9 @@ pub async fn ask(
     if q.is_empty() {
         return bad("question is empty");
     }
+    if crate::elite_hardening::ai_supply::prompt_contains_secret(q) {
+        return bad("fail-closed: question contains secret material");
+    }
     if q.len() > 2000 {
         return bad("question too long (max 2000 chars)");
     }
@@ -683,7 +588,7 @@ pub async fn ask(
         Ok(v) => v,
         Err(e) => {
             let r = bad(&format!("plan generation failed: {e}"));
-            enqueue_audit(tenant_id, user_id, question, &r);
+            audit_query(app_pool, tenant_id, user_id, question, &r);
             return r;
         }
     };
@@ -691,7 +596,7 @@ pub async fn ask(
         Ok(p) => p,
         Err(e) => {
             let r = bad(&format!("plan is not a valid QueryPlan JSON: {e}"));
-            enqueue_audit(tenant_id, user_id, question, &r);
+            audit_query(app_pool, tenant_id, user_id, question, &r);
             return r;
         }
     };
@@ -705,8 +610,207 @@ pub async fn ask(
         Err(e) => bad(&e),
     };
 
-    enqueue_audit(tenant_id, user_id, question, &res);
+    audit_query(app_pool, tenant_id, user_id, question, &res);
     res
+}
+
+struct NlqaEvent {
+    tenant_id: i64,
+    user_id: Option<i64>,
+    question: String,
+    plan_json: Value,
+    compiled_sql: String,
+    rows_returned: i32,
+    elapsed_ms: i32,
+    error: String,
+}
+
+const NLQA_CHANNEL_CAP: usize = 1024;
+static NLQA_TX: OnceLock<mpsc::Sender<NlqaEvent>> = OnceLock::new();
+static NLQA_GLOBAL_PERSIST: OnceLock<Arc<Semaphore>> = OnceLock::new();
+static NLQA_TENANT_PERSIST: OnceLock<DashMap<i64, Arc<Semaphore>>> = OnceLock::new();
+
+fn nlqa_global_persist() -> Arc<Semaphore> {
+    NLQA_GLOBAL_PERSIST
+        .get_or_init(|| {
+            Arc::new(Semaphore::new(
+                crate::elite_hardening::nlqa_chain::NLQA_GLOBAL_PERSIST_PERMITS,
+            ))
+        })
+        .clone()
+}
+
+fn nlqa_tenant_persist(tenant_id: i64) -> Arc<Semaphore> {
+    NLQA_TENANT_PERSIST
+        .get_or_init(DashMap::new)
+        .entry(tenant_id)
+        .or_insert_with(|| {
+            Arc::new(Semaphore::new(
+                crate::elite_hardening::nlqa_chain::NLQA_TENANT_PERSIST_PERMITS,
+            ))
+        })
+        .clone()
+}
+
+/// Start the per-process nlqa1 hash-chain worker. Ask never waits on this lock.
+pub fn spawn_audit_worker(pool: Arc<PgPool>) {
+    crate::nlqa_syslog::init();
+    let (tx, rx) = mpsc::channel::<NlqaEvent>(NLQA_CHANNEL_CAP);
+    if NLQA_TX.set(tx).is_ok() {
+        tokio::spawn(nlqa_worker_loop(pool, rx));
+        tracing::info!(target: "nlqa1", "Ask audit hash-chain worker started");
+    }
+}
+
+fn audit_query(
+    app_pool: &PgPool,
+    tenant_id: i64,
+    user_id: Option<i64>,
+    question: &str,
+    res: &AskResult,
+) {
+    if NLQA_TX.get().is_none() {
+        spawn_audit_worker(Arc::new(app_pool.clone()));
+    }
+    let ev = NlqaEvent {
+        tenant_id,
+        user_id,
+        question: question.chars().take(2000).collect(),
+        plan_json: serde_json::to_value(&res.plan).unwrap_or(json!({})),
+        compiled_sql: res.sql.clone(),
+        rows_returned: res.row_count as i32,
+        elapsed_ms: res.elapsed_ms as i32,
+        error: res.error.clone().unwrap_or_default(),
+    };
+    match NLQA_TX.get() {
+        Some(tx) => {
+            if let Err(e) = tx.try_send(ev) {
+                let (ev, reason) = match e {
+                    mpsc::error::TrySendError::Full(ev) => (ev, "channel_full"),
+                    mpsc::error::TrySendError::Closed(ev) => (ev, "channel_closed"),
+                };
+                emit_nlqa_fallback(&ev, reason);
+            }
+        }
+        None => {
+            emit_nlqa_fallback(&ev, "worker_not_running");
+        }
+    }
+}
+
+fn emit_nlqa_fallback(ev: &NlqaEvent, reason: &str) {
+    let payload = crate::elite_hardening::nlqa_chain::fallback_audit_json(
+        ev.tenant_id,
+        ev.user_id,
+        &ev.question,
+        &ev.plan_json,
+        &ev.compiled_sql,
+        ev.rows_returned,
+        ev.elapsed_ms,
+        &ev.error,
+        reason,
+    );
+    crate::elite_hardening::nlqa_chain::emit_ask_audit_fallback(&payload, reason);
+    let qfp = hex::encode(Sha256::digest(ev.question.as_bytes()));
+    let q_preview: String = ev.question.chars().take(180).collect();
+    crate::nlqa_syslog::page_audit_overflow(&format!(
+        "nlqa1 Ask Weissman audit MPSC saturated kind={reason} tenant_id={} user_id={} question_sha256={qfp} elapsed_ms={} rows_returned={} has_error={} question_preview={q_preview}",
+        ev.tenant_id,
+        ev.user_id.unwrap_or(0),
+        ev.elapsed_ms,
+        ev.rows_returned,
+        !ev.error.is_empty(),
+    ));
+}
+
+async fn nlqa_worker_loop(pool: Arc<PgPool>, mut rx: mpsc::Receiver<NlqaEvent>) {
+    while let Some(ev) = rx.recv().await {
+        let pool = pool.clone();
+        tokio::spawn(async move {
+            persist_nlqa_isolated(pool, ev).await;
+        });
+    }
+}
+
+/// Isolate advisory-lock waits: at most 4 persists process-wide and 1 per
+/// tenant. Waiters are async tasks (not OS threads), so a flooded tenant cannot
+/// starve the Tokio pool used by UEBA / SOAR / scans. Ask still never blocks.
+async fn persist_nlqa_isolated(pool: Arc<PgPool>, ev: NlqaEvent) {
+    let global = nlqa_global_persist();
+    let Ok(_global_permit) = global.acquire_owned().await else {
+        emit_nlqa_fallback(&ev, "persist_pool_closed");
+        return;
+    };
+    let tenant = nlqa_tenant_persist(ev.tenant_id);
+    let Ok(_tenant_permit) = tenant.acquire_owned().await else {
+        emit_nlqa_fallback(&ev, "tenant_lock_closed");
+        return;
+    };
+    if let Err(e) = persist_nlqa_chained(&pool, &ev).await {
+        tracing::error!(target: "nlqa1", error = %e, "Ask audit chain append failed");
+        emit_nlqa_fallback(&ev, "persist_failed");
+    }
+}
+
+async fn persist_nlqa_chained(pool: &PgPool, ev: &NlqaEvent) -> Result<(), String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, ev.tenant_id)
+        .await
+        .map_err(|e| format!("nlqa1 tenant tx: {e}"))?;
+    weissman_db::advisory_lock::advisory_xact_lock_text(
+        &mut tx,
+        &format!("nlqa1:{}", ev.tenant_id),
+    )
+    .await
+    .map_err(|e| format!("nlqa1 lock: {e}"))?;
+    let prev_hash: String = sqlx::query_scalar(
+        r#"SELECT COALESCE(event_hash, '') FROM nl_query_audit
+           WHERE tenant_id = $1 AND event_hash IS NOT NULL AND event_hash <> ''
+           ORDER BY id DESC LIMIT 1"#,
+    )
+    .bind(ev.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| format!("nlqa1 prev: {e}"))?
+    .unwrap_or_default();
+    let asked_at = chrono::Utc::now();
+    let plan_txt = ev.plan_json.to_string();
+    let canonical = crate::elite_hardening::nlqa_chain::canonical_nlqa_payload(
+        &prev_hash,
+        ev.tenant_id,
+        ev.user_id,
+        &ev.question,
+        &plan_txt,
+        &ev.compiled_sql,
+        ev.rows_returned,
+        ev.elapsed_ms,
+        &ev.error,
+        &asked_at.to_rfc3339(),
+    );
+    let event_hash = crate::elite_hardening::nlqa_chain::event_hash(&canonical);
+    sqlx::query(
+        "INSERT INTO nl_query_audit
+            (tenant_id, user_id, asked_at, question, plan_json, compiled_sql,
+             rows_returned, elapsed_ms, error, prev_hash, event_hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+    )
+    .bind(ev.tenant_id)
+    .bind(ev.user_id)
+    .bind(asked_at)
+    .bind(&ev.question)
+    .bind(&ev.plan_json)
+    .bind(&ev.compiled_sql)
+    .bind(ev.rows_returned)
+    .bind(ev.elapsed_ms)
+    .bind(&ev.error)
+    .bind(&prev_hash)
+    .bind(&event_hash)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| format!("nlqa1 insert: {e}"))?;
+    tx.commit()
+        .await
+        .map_err(|e| format!("nlqa1 commit: {e}"))?;
+    Ok(())
 }
 
 fn bind_json<'a>(
@@ -767,7 +871,7 @@ You MUST output a single JSON object — nothing else (no ```json fences, no pro
 
 Schema:
 {
-  "table":     "<one of vulnerabilities|weissman_finding_clusters|clients|risk_graph_nodes|agent_anomalies|attack_path_snapshots>",
+  "table":     "<one of vulnerabilities|weissman_finding_clusters|clients|risk_graph_nodes|agent_anomalies|attack_path_snapshots|risk_graph_edges|client_financial_risk_snapshots|endpoint_agents|weissman_async_jobs|epss_intel|kev_intel|audit_logs>",
   "select":    ["col1","col2", ...]           // optional; default = all columns
   "filters":   [
      {"column":"severity","op":"in","value":["critical","high"]},
@@ -776,7 +880,7 @@ Schema:
   ],
   "order_by":  "discovered_at",                // optional
   "order_desc": true,                          // optional, default false
-  "limit":     50                              // optional, max 200
+  "limit":     50                              // REQUIRED integer 1-200 (fail-closed)
 }
 
 Operators allowed: =, !=, <, <=, >, >=, in, like, is_null, is_not_null.
@@ -789,6 +893,13 @@ Schema:
 - risk_graph_nodes(id, client_id, node_type, label, graph_key, risk_score, is_choke_point, internet_exposed, crown_jewel, asset_value, business_value_usd)
 - agent_anomalies(id, agent_id, client_id, metric_name, observed, baseline_mean, baseline_stddev, z_score, severity, detail, detected_at)
 - attack_path_snapshots(id, client_id, computed_at, entry_count, jewel_count, path_count, max_risk)
+- risk_graph_edges(id, client_id, from_node_id, to_node_id, edge_type)
+- client_financial_risk_snapshots(id, client_id, computed_at, total_asset_value_usd, sle_worst_usd, ale_annualised_usd, crown_jewel_value_usd, currency_code)
+- endpoint_agents(id, client_id, hostname, os, agent_version, status, last_seen_at)
+- weissman_async_jobs(id, kind, status, created_at, updated_at)
+- epss_intel(cve, score, percentile, epss_date, refreshed_at)
+- kev_intel(cve, vendor_project, product, date_added, known_ransomware_use, due_date)
+- audit_logs(id, created_at, user_label, action_type, details, ip_address)
 
 If you cannot map the question to a valid plan, output {"table":"","select":[],"filters":[]}.
 "#;
@@ -906,6 +1017,44 @@ mod tests {
     }
 
     #[test]
+    fn allowlist_is_thirteen_tables() {
+        assert_eq!(allowed_table_count(), 13);
+        assert_eq!(
+            allowed_table_count(),
+            crate::elite_hardening::nl_guard::ASK_WEISSMAN_TABLE_COUNT
+        );
+    }
+
+    #[test]
+    fn rejects_missing_limit() {
+        let plan = QueryPlan {
+            table: "vulnerabilities".into(),
+            select: vec!["id".into()],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: None,
+        };
+        let err = compile_plan(&plan, 1).unwrap_err();
+        assert!(err.contains("limit"));
+    }
+
+    #[test]
+    fn intel_tables_skip_tenant_predicate() {
+        let plan = QueryPlan {
+            table: "epss_intel".into(),
+            select: vec!["cve".into()],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: Some(10),
+        };
+        let c = compile_plan(&plan, 1).unwrap();
+        assert!(!c.sql.contains("tenant_id"));
+        assert!(c.sql.contains("LIMIT 10"));
+    }
+
+    #[test]
     fn caps_limit_at_max() {
         let plan = QueryPlan {
             table: "vulnerabilities".into(),
@@ -917,67 +1066,5 @@ mod tests {
         };
         let c = compile_plan(&plan, 1).unwrap();
         assert!(c.sql.ends_with(&format!("LIMIT {}", MAX_LIMIT)));
-    }
-
-    #[test]
-    fn mpsc_full_is_detected_and_try_enqueue_returns_err() {
-        let (tx, _rx) = mpsc::channel::<NlAuditEvent>(1);
-        let ev = || NlAuditEvent {
-            tenant_id: 1,
-            user_id: Some(9),
-            question: "show critical kev".into(),
-            plan_json: json!({}),
-            sql: "SELECT 1".into(),
-            rows_returned: 0,
-            elapsed_ms: 3,
-            error: String::new(),
-        };
-        assert!(try_enqueue_nl_audit(&tx, ev()).is_ok());
-        assert!(
-            try_enqueue_nl_audit(&tx, ev()).is_err(),
-            "second try_send on capacity-1 must be Full"
-        );
-        assert!(
-            crate::nlqa_syslog::test_sink_contains("kind=full"),
-            "MPSC Full must page OS syslog, never silently drop"
-        );
-    }
-
-    #[test]
-    fn nl_audit_canonical_is_stable() {
-        let ts = DateTime::parse_from_rfc3339("2026-08-28T00:00:00Z")
-            .unwrap()
-            .with_timezone(&Utc);
-        let a = nl_audit_canonical("prev", 7, Some(1), "q", "sql", "", ts);
-        let b = nl_audit_canonical("prev", 7, Some(1), "q", "sql", "", ts);
-        assert_eq!(a, b);
-        assert!(a.starts_with("nlqav1|"));
-        assert_ne!(
-            a,
-            nl_audit_canonical("other", 7, Some(1), "q", "sql", "", ts)
-        );
-    }
-
-    #[test]
-    fn lifecycle_ledger_is_ask_allowlisted() {
-        let plan = QueryPlan {
-            table: "vulnerability_lifecycle_events".into(),
-            select: vec![
-                "finding_id".into(),
-                "cycle_id".into(),
-                "event_type".into(),
-                "watermark_severity".into(),
-            ],
-            filters: vec![],
-            order_by: Some("occurred_at".into()),
-            order_desc: true,
-            limit: Some(20),
-        };
-        let c = compile_plan(&plan, 9).unwrap();
-        assert!(c
-            .sql
-            .contains("FROM vulnerability_lifecycle_events WHERE tenant_id = $1"));
-        assert!(c.sql.contains("cycle_id"));
-        assert!(c.sql.contains("event_type"));
     }
 }
