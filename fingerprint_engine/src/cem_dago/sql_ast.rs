@@ -368,6 +368,7 @@ mod tests {
             order_by: Some("id".into()),
             order_desc: false,
             limit: Some(10),
+            ..QueryPlan::default()
         };
         let compiled = compile_plan(&qp, 1).expect("compile");
         validate_compiled_sql_ast(&compiled.sql).expect("ast");

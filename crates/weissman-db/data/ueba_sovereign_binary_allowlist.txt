@@ -1,0 +1,5 @@
+# Weissman sovereign UEBA binary SHA-256 allow-list (offline-first).
+# One lowercase 64-hex digest per line. Lines starting with # are ignored.
+# Shipped with platform updates. Air-gapped sites load this file (or
+# WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST_FILE) into ueba_sovereign_binary_allowlist.
+# Do not add placeholder or example hashes here — unknown binaries fail closed.

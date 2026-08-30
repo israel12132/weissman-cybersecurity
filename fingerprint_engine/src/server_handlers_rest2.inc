@@ -760,7 +760,11 @@ async fn api_openapi_spec() -> Response {
                     "summary": "List all findings for the current tenant",
                     "tags": ["Findings"],
                     "parameters": [
-                        { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 500 } }
+                        { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 500 } },
+                        { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } },
+                        { "name": "client_id", "in": "query", "schema": { "type": "integer" } },
+                        { "name": "source", "in": "query", "schema": { "type": "string" }, "description": "Engine id (case-insensitive exact match on vulnerabilities.source)" },
+                        { "name": "severity", "in": "query", "schema": { "type": "string" } }
                     ],
                     "responses": {
                         "200": {

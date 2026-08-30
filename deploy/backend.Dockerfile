@@ -8,7 +8,8 @@
 # Compile-time paths (include_str!, workspace members) — ALL must be COPY'd before cargo build:
 #   Cargo.toml/Cargo.lock · fuzz_core · fingerprint_engine · backend · crates · scripts · shared
 #
-# Native deps: openssl-sys, aws-lc-sys (rustls), hwlocality→hwloc+libudev, libsqlite3-sys (sqlx), ring.
+# Native deps: openssl-sys, aws-lc-sys (rustls), hwlocality→hwloc+libudev,
+# libsqlite3-sys (sqlx), ring, tss-esapi-sys (weissman-agent linux-gnu).
 FROM rust:1.91-bookworm AS build
 # Resilient apt: By-Hash fetches indices by content hash (avoids the mirror mid-sync
 # "Hash Sum mismatch"), Retries handles transient CDN blips, No-Cache defeats stale proxies.
@@ -26,7 +27,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libudev-dev \
     zlib1g-dev \
     libsqlite3-dev \
+    libtss2-dev \
     && rm -rf /var/lib/apt/lists/*
+# tss-esapi-sys probes tss2-sys / tss2-esys / tss2-mu / tss2-tctildr via pkg-config.
+# libtss2-dev on bookworm pulls those .so files; stage the ESAPI + device-TCTI
+# sonames for the slim runtime so the gnu agent ELF can load (DT_NEEDED) without
+# apt-installing the esys runtime package in debian:bookworm-slim (Depends:
+# tpm-udev → udev). FAPI is not copied — the agent never links it.
+RUN mkdir -p /opt/tss-runtime \
+    && find /usr/lib /lib \( \
+         -name 'libtss2-esys.so*' \
+         -o -name 'libtss2-sys.so*' \
+         -o -name 'libtss2-mu.so*' \
+         -o -name 'libtss2-tctildr.so*' \
+         -o -name 'libtss2-tcti-device.so*' \
+       \) -exec cp -aL {} /opt/tss-runtime/ \; \
+    && test -n "$(ls -A /opt/tss-runtime)"
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY fuzz_core ./fuzz_core
@@ -70,6 +86,10 @@ RUN printf 'Acquire::Retries "5";\nAcquire::By-Hash "yes";\nAcquire::http::No-Ca
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libssl3 postgresql-client xmlsec1 libhwloc15 libudev1 curl procps git patch \
     && rm -rf /var/lib/apt/lists/*
+# TSS runtime for the in-image gnu weissman-agent (served from /srv/bin/agents).
+# Copied from the builder — do not apt-install the esys runtime package here (udev).
+COPY --from=build /opt/tss-runtime /usr/lib/weissman-tss
+RUN echo /usr/lib/weissman-tss > /etc/ld.so.conf.d/weissman-tss.conf && ldconfig
 RUN useradd -r -s /bin/false -u 65532 weissman
 COPY --from=build /build/target/release/weissman-server /usr/local/bin/weissman-server
 COPY --from=build /build/target/release/weissman-worker /usr/local/bin/weissman-worker

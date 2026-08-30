@@ -100,6 +100,19 @@ pub fn spawn_soar_verification_worker(app_pool: Arc<PgPool>, auth_pool: Arc<PgPo
                 record_cycle_metric("follower_skip");
                 continue;
             }
+            match super::stale::alert_stale_work(app_pool.as_ref(), auth_pool.as_ref()).await {
+                Ok(n) if n > 0 => {
+                    tracing::error!(
+                        target: "soar_worker",
+                        stale = n,
+                        "SEV-2: SOAR work pending longer than 5 minutes"
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(target: "soar_worker", error = %e, "stale SEV-2 scan failed");
+                }
+                _ => {}
+            }
             match run_cycle(app_pool.as_ref(), auth_pool.as_ref()).await {
                 Ok(n) => {
                     record_cycle_metric("ok");

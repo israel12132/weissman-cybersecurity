@@ -105,16 +105,8 @@ async fn run_due_schedule(
         return Err(detail);
     }
 
-    let next = compute_next_run_at(&schedule_type, Utc::now());
-    let _ = sqlx::query(
-        r#"UPDATE weissman_scan_schedules
-           SET last_run_at = now(), next_run_at = $2, run_count = run_count + 1, updated_at = now()
-           WHERE id = $1"#,
-    )
-    .bind(schedule_id)
-    .bind(next)
-    .execute(&mut *tx)
-    .await;
+    // `next_run_at` was already advanced by `claim_due_schedule_ids` under
+    // SKIP LOCKED. This transaction only reads domains / engines for enqueue.
     let _ = tx.commit().await;
 
     for domain in &domains {
@@ -153,23 +145,26 @@ async fn run_due_schedule(
     Ok(())
 }
 
-async fn due_schedule_ids(app_pool: &PgPool, tenant_id: i64) -> Vec<i64> {
+/// Claim due schedules with `FOR UPDATE SKIP LOCKED` and advance `next_run_at`
+/// in the **same transaction**. A peer replica skips locked rows instead of
+/// double-enqueueing the same cron occurrence.
+async fn claim_due_schedule_ids(app_pool: &PgPool, tenant_id: i64) -> Vec<i64> {
     let Ok(mut tx) = crate::db::begin_tenant_tx(app_pool, tenant_id).await else {
         return Vec::new();
     };
-    let due: Vec<i64> = sqlx::query_scalar(
-        r#"SELECT id FROM weissman_scan_schedules
+    let rows = sqlx::query(
+        r#"SELECT id, schedule_type FROM weissman_scan_schedules
            WHERE enabled = true
              AND client_id IS NOT NULL
              AND (next_run_at IS NULL OR next_run_at <= now())
            ORDER BY next_run_at NULLS FIRST
-           LIMIT 50"#,
+           LIMIT 50
+           FOR UPDATE SKIP LOCKED"#,
     )
     .fetch_all(&mut *tx)
     .await
     .unwrap_or_default();
-    if due.is_empty() {
-        // Bootstrap next_run_at for schedules that never had it set.
+    if rows.is_empty() {
         let _ = sqlx::query(
             r#"UPDATE weissman_scan_schedules
                SET next_run_at = now() + interval '1 day', updated_at = now()
@@ -177,8 +172,36 @@ async fn due_schedule_ids(app_pool: &PgPool, tenant_id: i64) -> Vec<i64> {
         )
         .execute(&mut *tx)
         .await;
+        let _ = tx.commit().await;
+        return Vec::new();
     }
-    let _ = tx.commit().await;
+    let mut due = Vec::with_capacity(rows.len());
+    for row in rows {
+        let id: i64 = row.try_get("id").unwrap_or(0);
+        if id == 0 {
+            continue;
+        }
+        let schedule_type: String = row
+            .try_get("schedule_type")
+            .unwrap_or_else(|_| "daily".into());
+        let next = compute_next_run_at(&schedule_type, Utc::now());
+        if sqlx::query(
+            r#"UPDATE weissman_scan_schedules
+               SET last_run_at = now(), next_run_at = $2, run_count = run_count + 1, updated_at = now()
+               WHERE id = $1"#,
+        )
+        .bind(id)
+        .bind(next)
+        .execute(&mut *tx)
+        .await
+        .is_ok()
+        {
+            due.push(id);
+        }
+    }
+    if tx.commit().await.is_err() {
+        return Vec::new();
+    }
     due
 }
 
@@ -189,7 +212,7 @@ async fn tick(app_pool: &PgPool, auth_pool: &PgPool) {
         .unwrap_or_default();
 
     for tenant_id in tenants {
-        for schedule_id in due_schedule_ids(app_pool, tenant_id).await {
+        for schedule_id in claim_due_schedule_ids(app_pool, tenant_id).await {
             if let Err(e) = run_due_schedule(app_pool, auth_pool, tenant_id, schedule_id).await {
                 tracing::warn!(
                     target: "scan_schedule_worker",
@@ -265,5 +288,14 @@ mod tests {
         let next = compute_next_run_at("hourly", from);
         assert!(next > from);
         assert!((next - from).num_minutes() >= 59);
+    }
+
+    #[test]
+    fn claim_sql_uses_skip_locked() {
+        let src = include_str!("scan_schedule_worker.rs");
+        assert!(
+            src.contains("FOR UPDATE SKIP LOCKED"),
+            "cron claim must lock due rows with SKIP LOCKED so two replicas cannot enqueue the same occurrence"
+        );
     }
 }

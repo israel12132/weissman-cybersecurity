@@ -407,6 +407,11 @@ pub async fn persist_engine_findings(
     let epss_map = intel_epss::fetch_epss_for_cves(pool, &scan_cves).await;
     let kev_map = intel_kev::kev_listed_for_cves(pool, &scan_cves).await;
 
+    let bus_on = weissman_job_bus::JobBus::from_env(pool.clone())
+        .await
+        .is_enabled();
+    let mut soar_held: Vec<(uuid::Uuid, serde_json::Value)> = Vec::new();
+
     let mut tx = db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| format!("tenant tx: {e}"))?;
@@ -1016,17 +1021,48 @@ pub async fn persist_engine_findings(
             signature_hash: Some(signature_hash.clone()),
             internet_exposed,
         };
-        let pool_for_dispatch: PgPool = (*pool).clone();
-        tokio::spawn(async move {
-            let _permit = post_persist_db_permit().await;
-            crate::soar::dispatch_record::record_post_persist_dispatch(
-                &pool_for_dispatch,
-                tenant_id,
-                upserted_id,
-                event,
-            )
-            .await;
+        // Durable outbox: same tenant transaction as the finding. Crash after
+        // commit still leaves a `soar_dispatch` job for the SOAR worker to retry.
+        let job_payload = serde_json::json!({
+            "event": event,
+            "finding_id": upserted_id,
         });
+        let enq = if bus_on {
+            weissman_db::job_queue::enqueue_held_in_tx(
+                &mut tx,
+                tenant_id,
+                "soar_dispatch",
+                job_payload.clone(),
+                None,
+                60,
+            )
+            .await
+        } else {
+            weissman_db::job_queue::enqueue_in_tx(
+                &mut tx,
+                tenant_id,
+                "soar_dispatch",
+                job_payload.clone(),
+                None,
+            )
+            .await
+        };
+        match enq {
+            Ok(id) => {
+                if bus_on {
+                    soar_held.push((id, job_payload));
+                }
+            }
+            Err(e) => {
+                tracing::error!(
+                    target: "findings_persist",
+                    tenant_id,
+                    finding_id = upserted_id,
+                    error = %e,
+                    "failed to enqueue durable SOAR dispatch outbox row"
+                );
+            }
+        }
     }
 
     // Bump hit_count telemetry for every suppression rule that matched this run, in one statement
@@ -1034,6 +1070,27 @@ pub async fn persist_engine_findings(
     fp_feedback::bump_suppression_hits(&mut tx, tenant_id, engine, &suppression_hits).await;
 
     tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+
+    for (job_id, payload) in soar_held {
+        if let Err(e) = crate::async_jobs::finalize_held_job(
+            pool,
+            job_id,
+            tenant_id,
+            "soar_dispatch",
+            payload,
+            None,
+        )
+        .await
+        {
+            tracing::error!(
+                target: "findings_persist",
+                tenant_id,
+                job_id = %job_id,
+                error = %e,
+                "SOAR outbox envelope attach failed — job stays held"
+            );
+        }
+    }
 
     if inserted > 0 {
         let pool_arc = std::sync::Arc::new((*pool).clone());

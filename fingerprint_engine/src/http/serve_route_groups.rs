@@ -135,10 +135,19 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/playbooks/fire", post(api_playbooks_fire))
         .route("/api/playbooks/:id/runs", get(api_playbook_runs))
+        .route("/api/soar/executions", get(api_soar_executions_list))
         .route("/api/soar/executions/:id", get(api_soar_execution_get))
         .route(
             "/api/soar/executions/:id/revert",
             post(api_soar_execution_revert),
+        )
+        .route(
+            "/api/soar/executions/:id/hitl/approve",
+            post(api_soar_hitl_approve),
+        )
+        .route(
+            "/api/soar/executions/:id/hitl/deny",
+            post(api_soar_hitl_deny),
         )
         // Financial blast-radius
         .route(
@@ -262,6 +271,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/agents/session", post(api_agents_session))
         .route("/api/agents/status", get(api_agents_status))
         .route("/api/agents/dispatch", post(api_agents_dispatch_task))
+        .route("/api/agents/:id/kill-switch", post(api_agents_kill_switch))
         .route("/install/agent.sh", get(install_agent_sh))
         .route("/install/agent.ps1", get(install_agent_ps1))
         .route(
