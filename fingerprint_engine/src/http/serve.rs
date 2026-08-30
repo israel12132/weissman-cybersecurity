@@ -1683,6 +1683,10 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
             app_pool.clone(),
             state.telemetry_broadcast_tx.clone(),
         );
+        crate::sovereign_operator::hourly::spawn_hourly_loop(
+            app_pool.clone(),
+            state.telemetry_broadcast_tx.clone(),
+        );
         crate::predictive_analyzer::spawn_security_events_llm_loop(
             app_pool.clone(),
             state.telemetry_broadcast_tx.clone(),
@@ -1836,6 +1840,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         ))
         .layer(middleware::from_fn(
             crate::http::ceo_rbac::ceo_rbac_middleware,
+        ))
+        .layer(middleware::from_fn(
+            crate::sovereign_operator::sovereign_operator_rbac_middleware,
         ))
         .layer(middleware::from_fn(crate::rbac::mutation_rbac_middleware))
         .layer(middleware::from_fn(

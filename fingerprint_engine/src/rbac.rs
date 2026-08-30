@@ -145,6 +145,9 @@ pub fn required_min_role(method: &Method, path: &str) -> Option<&'static str> {
     if path.starts_with("/api/ceo") {
         return Some(roles::CEO);
     }
+    if path.starts_with("/api/sovereign/operator") {
+        return Some(roles::CEO);
+    }
     if path.starts_with("/api/admin") {
         return Some(roles::ADMIN);
     }
@@ -286,6 +289,10 @@ mod tests {
         // Privileged prefixes.
         assert_eq!(
             required_min_role(&Method::POST, "/api/ceo/x"),
+            Some(roles::CEO)
+        );
+        assert_eq!(
+            required_min_role(&Method::POST, "/api/sovereign/operator/chat"),
             Some(roles::CEO)
         );
         assert_eq!(

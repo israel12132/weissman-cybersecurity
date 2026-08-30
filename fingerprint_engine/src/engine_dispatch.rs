@@ -113,12 +113,51 @@ pub use engine_dispatch_agent::{
     is_agent_required_engine, run_agent_required_engine, AGENT_REQUIRED_ENGINES,
 };
 
+/// Apply owner/tuner aggression knobs from free-form `job_params` onto stealth.
+pub fn apply_job_params_stealth(ctx: &mut EngineRunContext) {
+    let p = &ctx.job_params;
+    let ghost = p
+        .get("force_ghost_network")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+        || p.get("ghost_network")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+        || p.get("stealth_mode")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+    if ghost {
+        apply_ghost_escalation(&mut ctx.stealth);
+    }
+    if let Some(s) = ctx.stealth.as_mut() {
+        if let Some(n) = p.get("jitter_min_ms").and_then(serde_json::Value::as_u64) {
+            s.jitter_min_ms = n;
+        }
+        if let Some(n) = p.get("jitter_max_ms").and_then(serde_json::Value::as_u64) {
+            s.jitter_max_ms = n;
+        }
+        if p.get("identity_morphing")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+        {
+            s.identity_morphing = true;
+        }
+    }
+}
+
 pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -> EngineResult {
     // Diagnostic breadcrumb: emitted at INFO (captured in the worker log dump) immediately before
     // an engine runs. If an engine aborts the process (e.g. a stack overflow), the LAST such line
     // in the worker log names the culprit engine — the only reliable pinpoint for a fatal abort,
     // which no panic hook can catch.
     tracing::info!(target: "engine_exec", engine = %engine_id, "run_engine begin");
+    crate::sovereign_operator::log_stream::emit_phase(ctx, "entered", engine_id, target, json!({}));
+    let result = run_engine_inner(engine_id, target, ctx).await;
+    crate::sovereign_operator::log_stream::finish_run(ctx, engine_id, target, &result);
+    result
+}
+
+async fn run_engine_inner(engine_id: &str, target: &str, ctx: &EngineRunContext) -> EngineResult {
     let _oast_guard = {
         let listener = ctx.oast_listener_url.as_deref().unwrap_or("").trim();
         let domain = ctx.oast_domain.as_deref().unwrap_or("").trim();
@@ -200,6 +239,13 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
                 ));
             }
         }
+        crate::sovereign_operator::log_stream::emit_phase(
+            ctx,
+            "probe",
+            canonical,
+            target,
+            json!({ "path": "critical_infra" }),
+        );
         let mut result = crate::critical_infra::dispatch(canonical, target, &ctx).await;
         for f in &mut result.findings {
             if let Some(obj) = f.as_object_mut() {
@@ -231,6 +277,13 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
             ctx.memory_payloads = winners.into_iter().map(|w| w.payload).collect();
         }
     }
+    crate::sovereign_operator::log_stream::emit_phase(
+        &ctx,
+        "probe",
+        canonical,
+        target,
+        json!({ "path": "dispatch" }),
+    );
     let mut result = dispatch_engine_match(canonical, target, &ctx).await;
     if raw != canonical || !result.findings.is_empty() {
         for f in &mut result.findings {
@@ -981,5 +1034,23 @@ mod tests {
         let r = run_engine("poe_synthesis", "https://example.com", &ctx).await;
         assert!(!r.success, "expected error without tenant: {}", r.message);
         assert!(r.message.contains("tenant_id"));
+    }
+
+    #[test]
+    fn job_params_stealth_enables_ghost() {
+        let mut ctx = EngineRunContext {
+            job_params: json!({
+                "stealth_mode": true,
+                "jitter_min_ms": 50,
+                "jitter_max_ms": 90,
+                "identity_morphing": true,
+            }),
+            ..Default::default()
+        };
+        apply_job_params_stealth(&mut ctx);
+        let s = ctx.stealth.expect("stealth config");
+        assert!(s.identity_morphing);
+        assert_eq!(s.jitter_min_ms, 50);
+        assert_eq!(s.jitter_max_ms, 90);
     }
 }

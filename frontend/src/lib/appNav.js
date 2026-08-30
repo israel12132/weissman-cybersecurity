@@ -184,6 +184,7 @@ export const NAV_GROUPS = [
       { to: '/admin', labelKey: 'nav.admin', icon: '👑' },
       { to: '/ceo', labelKey: 'nav.ceo', icon: '👔' },
       { to: '/supreme-nerve-center', labelKey: 'nav.supreme_nerve_center', icon: '🧠', hideFromNav: false },
+      { to: '/sovereign', labelKey: 'nav.sovereign_theater', icon: '♔' },
       { to: '/ceo-vault', labelKey: 'nav.ceo_vault', icon: '🔒' },
       { to: '/reports', labelKey: 'nav.reports', icon: '🧾' },
       { to: '/audit-log', labelKey: 'nav.audit_log', icon: '📋' },
@@ -206,6 +207,7 @@ const PATH_OVERRIDES = [
   { prefix: '/digital-twin/', groupId: 'engines', labelKey: 'nav.digital_twin' },
   { prefix: '/ceo', groupId: 'administration', labelKey: 'nav.ceo' },
   { prefix: '/supreme-nerve-center', groupId: 'administration', labelKey: 'nav.supreme_nerve_center' },
+  { prefix: '/sovereign', groupId: 'administration', labelKey: 'nav.sovereign_theater' },
   { prefix: '/operations', groupId: 'command', labelKey: 'nav.operations_view' },
   { prefix: '/system-core', groupId: 'administration', labelKey: 'nav.system_core' },
 ]
@@ -311,6 +313,7 @@ export const NAV_MIN_ROLE = {
   '/ceo-vault': 'ceo',
   '/ceo': 'ceo',
   '/supreme-nerve-center': 'ceo',
+  '/sovereign': 'ceo',
   '/system-config': 'admin',
   '/clients/new': 'ceo',
 }

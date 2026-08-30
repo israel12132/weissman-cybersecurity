@@ -161,6 +161,7 @@ pub mod soar_playbook;
 pub mod sovereign_active_defense_fusion_engine;
 pub mod sovereign_defense_store;
 pub mod sovereign_evolution;
+pub mod sovereign_operator;
 pub mod sso_management;
 pub mod stealth_engine;
 pub mod stealth_queue;
