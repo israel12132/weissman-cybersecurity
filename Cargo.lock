@@ -2711,6 +2711,8 @@ dependencies = [
  "hickory-resolver",
  "hmac 0.12.1",
  "hwlocality",
+ "hyper",
+ "hyper-util",
  "idna",
  "ipnetwork",
  "jsonwebtoken",

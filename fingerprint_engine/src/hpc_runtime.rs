@@ -194,15 +194,16 @@ pub fn cgroup_cpu_quota_cores() -> Option<f64> {
 /// Convert a cgroup CPU quota in cores (may be fractional) into a Tokio worker count.
 ///
 /// Tokio panics on `worker_threads = 0`. Kubernetes `resources.limits.cpu: "250m"` /
-/// `"0.5"` must become **1**, never truncated to 0. Non-integers such as 2.5 **ceil**
-/// to 3 so the fractional remainder is usable instead of leaving two workers to fight
-/// over a leftover slice.
+/// `"0.5"` must become **1**, never truncated to 0. Non-integers use **floor** so
+/// workers never exceed the CFS quota (ceil(2.5)=3 on a 2.5-CPU pod causes end-of-period
+/// throttling, API latency spikes, and agent WSS drops). Floor of a fraction is 0, so
+/// the hard minimum remains 1.
 #[must_use]
 pub fn quota_cores_to_workers(quota: f64) -> usize {
     if !quota.is_finite() || quota <= 0.0 {
         return 1;
     }
-    (quota.ceil() as usize).max(1)
+    (quota.floor() as usize).max(1)
 }
 
 /// Runnable CPUs for this process: `available_parallelism` (affinity) capped by
@@ -615,7 +616,8 @@ core id\t: 1
         assert_eq!(quota_cores_to_workers(0.5), 1);
         assert_eq!(quota_cores_to_workers(0.99), 1);
         assert_eq!(quota_cores_to_workers(1.0), 1);
-        assert_eq!(quota_cores_to_workers(2.5), 3); // ceil, not trunc
+        assert_eq!(quota_cores_to_workers(2.5), 2); // floor: never oversubscribe CFS
+        assert_eq!(quota_cores_to_workers(3.1), 3);
         assert_eq!(quota_cores_to_workers(2.0), 2);
         assert_eq!(quota_cores_to_workers(0.0), 1);
         assert_eq!(quota_cores_to_workers(-4.0), 1);

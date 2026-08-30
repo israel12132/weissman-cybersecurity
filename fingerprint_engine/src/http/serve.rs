@@ -1905,13 +1905,8 @@ pub async fn run_http_tcp_listener(app: Router, port: u16) {
         "[Weissman] Listening on http://0.0.0.0:{} (set PORT in .env to change; Nginx must proxy the same port); tcp_nodelay + keepalive on",
         port
     );
-    if let Err(e) = axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .tcp_nodelay(true)
-    .with_graceful_shutdown(shutdown_signal())
-    .await
+    if let Err(e) =
+        crate::http::http_serve_loop::serve_with_peer_rst(listener, app, shutdown_signal()).await
     {
         eprintln!("[Weissman] FATAL: server exited: {}", e);
         std::process::exit(1);

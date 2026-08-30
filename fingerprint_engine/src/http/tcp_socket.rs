@@ -1,7 +1,12 @@
 //! TCP listen / accept tuning: Nagle off + keepalive so cockpit telemetry is not delayed.
+//! Payload-too-large paths arm an abrupt RST (`SO_LINGER 0` + `shutdown(Both)`) so an
+//! ALB/proxy cannot keep filling VPC buffers after a graceful `Connection: close`.
 
+use axum::http::Request;
 use std::io;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
 
@@ -55,6 +60,78 @@ fn keepalive_spec() -> socket2::TcpKeepalive {
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         ka
+    }
+}
+
+/// Apply `SO_LINGER { linger: 0 }` then `shutdown(Both)` — kernel sends RST, not FIN.
+pub fn apply_tcp_rst(sock: &socket2::SockRef<'_>) {
+    let _ = sock.set_linger(Some(Duration::ZERO));
+    let _ = sock.shutdown(std::net::Shutdown::Both);
+}
+
+/// Dup-handle for tests and optional request extensions. `abort()` is the same RST
+/// sequence as [`abort_tcp_peer`].
+#[derive(Clone)]
+pub struct TcpRstHandle {
+    inner: Arc<RstInner>,
+}
+
+struct RstInner {
+    socket: Option<socket2::Socket>,
+    armed: AtomicBool,
+}
+
+impl TcpRstHandle {
+    /// Handle with no kernel socket (oneshot tests). `abort()` still flips [`Self::is_armed`].
+    #[must_use]
+    pub fn noop() -> Self {
+        Self {
+            inner: Arc::new(RstInner {
+                socket: None,
+                armed: AtomicBool::new(false),
+            }),
+        }
+    }
+
+    /// Duplicate the kernel socket so linger/shutdown apply to the shared TCP PCB.
+    pub fn from_tcp_stream(stream: &TcpStream) -> io::Result<Self> {
+        #[cfg(unix)]
+        {
+            use std::os::fd::AsFd;
+            let owned = stream.as_fd().try_clone_to_owned()?;
+            let socket = socket2::Socket::from(owned);
+            return Ok(Self {
+                inner: Arc::new(RstInner {
+                    socket: Some(socket),
+                    armed: AtomicBool::new(false),
+                }),
+            });
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = stream;
+            Ok(Self::noop())
+        }
+    }
+
+    pub fn abort(&self) {
+        self.inner.armed.store(true, Ordering::SeqCst);
+        if let Some(ref socket) = self.inner.socket {
+            apply_tcp_rst(&socket2::SockRef::from(socket));
+        }
+    }
+
+    #[must_use]
+    pub fn is_armed(&self) -> bool {
+        self.inner.armed.load(Ordering::SeqCst)
+    }
+}
+
+/// RST the request's TCP peer via the handle injected at accept
+/// ([`crate::http::http_serve_loop`]). No-ops on oneshot tests without a handle.
+pub fn abrupt_close_http_peer<B>(req: &Request<B>) {
+    if let Some(h) = req.extensions().get::<TcpRstHandle>() {
+        h.abort();
     }
 }
 
@@ -136,5 +213,41 @@ mod tests {
         assert_eq!(effective_listen_backlog(4096, None), 4096);
         assert_eq!(parse_somaxconn("128\n"), Some(128));
         assert_eq!(parse_somaxconn("0"), None);
+    }
+
+    #[test]
+    fn rst_handle_noop_arms_without_socket() {
+        let h = TcpRstHandle::noop();
+        assert!(!h.is_armed());
+        h.abort();
+        assert!(h.is_armed());
+    }
+
+    #[tokio::test]
+    async fn abort_handle_resets_accepted_peer() {
+        use tokio::io::AsyncReadExt;
+        let listener = bind_http_listener(SocketAddr::from(([127, 0, 0, 1], 0))).expect("bind");
+        let addr = listener.local_addr().expect("local");
+        let mut client = TcpStream::connect(addr).await.expect("connect");
+        let (server, _) = listener.accept().await.expect("accept");
+        let handle = TcpRstHandle::from_tcp_stream(&server).expect("dup");
+        handle.abort();
+        drop(server);
+        let mut buf = [0u8; 16];
+        let result = tokio::time::timeout(Duration::from_secs(2), client.read(&mut buf)).await;
+        match result {
+            Ok(Ok(0)) | Ok(Err(_)) => {}
+            Ok(Ok(n)) => panic!("peer sent {n} bytes after RST"),
+            Err(_) => panic!("timed out waiting for TCP reset"),
+        }
+    }
+
+    #[tokio::test]
+    async fn abrupt_close_http_peer_prefers_request_handle() {
+        let h = TcpRstHandle::noop();
+        let mut req = Request::new(());
+        req.extensions_mut().insert(h.clone());
+        abrupt_close_http_peer(&req);
+        assert!(h.is_armed());
     }
 }

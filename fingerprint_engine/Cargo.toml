@@ -42,6 +42,8 @@ axum = { version = "0.7", features = ["json", "ws"] }
 tower = { version = "0.4", features = ["util"] }
 tower-http = { version = "0.5", features = ["fs", "cors"] }
 socket2 = "0.6"
+hyper = { version = "1", default-features = false, features = ["http1", "http2"] }
+hyper-util = { version = "0.1", default-features = false, features = ["tokio", "server-auto", "server-graceful", "service"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "migrate", "chrono"] }
 openidconnect = { version = "4", default-features = false, features = ["reqwest", "rustls-tls"] }
 oauth2 = { version = "5", default-features = false, features = ["reqwest"] }

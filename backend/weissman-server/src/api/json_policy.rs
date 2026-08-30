@@ -10,15 +10,19 @@ const DEFAULT_MAX_BYTES: usize = 5 * 1024 * 1024;
 /// past this is a bomb: 413 and drop, never gigabytes of RAM.
 pub const MAX_DECOMPRESSED_BODY_BYTES: usize = 4 * 1024 * 1024;
 
-/// Maximum request body size applied at the router (`DefaultBodyLimit`).
-///
-/// Override with `WEISSMAN_MAX_REQUEST_BODY_BYTES` (clamped between 1 KiB and 128 MiB).
+/// Absolute ceiling on the **raw** HTTP buffer (`Content-Length` / `DefaultBodyLimit`).
+/// Uncompressed JSON is not covered by the inflate cap; 8 MiB is the ingest OOM wall.
+pub const MAX_RAW_REQUEST_BODY_BYTES: usize = 8 * 1024 * 1024;
+
+/// Maximum request body size applied at the router (`DefaultBodyLimit`) and the
+/// Content-Length middleware. Override with `WEISSMAN_MAX_REQUEST_BODY_BYTES`
+/// (clamped between 1 KiB and [`MAX_RAW_REQUEST_BODY_BYTES`]).
 #[must_use]
 pub fn max_request_body_bytes() -> usize {
     std::env::var("WEISSMAN_MAX_REQUEST_BODY_BYTES")
         .ok()
         .and_then(|s| s.parse().ok())
-        .filter(|&n| (1024..=128 * 1024 * 1024).contains(&n))
+        .filter(|&n| (1024..=MAX_RAW_REQUEST_BODY_BYTES).contains(&n))
         .unwrap_or(DEFAULT_MAX_BYTES)
 }
 
@@ -42,8 +46,16 @@ mod tests {
         std::env::set_var(key, "512");
         assert_eq!(max_request_body_bytes(), DEFAULT_MAX_BYTES);
 
-        // Above ceiling (128 MiB) rejected -> default.
-        std::env::set_var(key, &(129 * 1024 * 1024).to_string());
+        // Exact 8 MiB ceiling honored.
+        std::env::set_var(key, &MAX_RAW_REQUEST_BODY_BYTES.to_string());
+        assert_eq!(max_request_body_bytes(), MAX_RAW_REQUEST_BODY_BYTES);
+
+        // 50 MiB raw POST (architect OOM case) rejected -> default, never 50 MiB serde.
+        std::env::set_var(key, &(50 * 1024 * 1024).to_string());
+        assert_eq!(max_request_body_bytes(), DEFAULT_MAX_BYTES);
+
+        // Above ceiling (8 MiB + 1) rejected -> default.
+        std::env::set_var(key, &(MAX_RAW_REQUEST_BODY_BYTES + 1).to_string());
         assert_eq!(max_request_body_bytes(), DEFAULT_MAX_BYTES);
 
         // Non-numeric rejected -> default.

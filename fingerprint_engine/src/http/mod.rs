@@ -7,6 +7,7 @@ pub mod bounded_codec;
 pub mod ceo_rbac;
 pub mod client_ip;
 pub mod dashmap_gc;
+pub mod http_serve_loop;
 pub mod login_lockout;
 pub mod login_rate_limit;
 pub mod simd_json;

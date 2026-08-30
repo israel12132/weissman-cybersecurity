@@ -17,5 +17,5 @@ use super::json_policy;
 pub async fn build_full_router(state: Arc<AppState>, static_dir: Option<PathBuf>) -> Router {
     http::build_http_router(state, static_dir)
         .await
-        .layer(DefaultBodyLimit::max(json_policy::max_request_body_bytes()))
+        .layer(DefaultBodyLimit::max(json_policy::max_request_body_bytes())) // ≤ 8 MiB raw buffer
 }

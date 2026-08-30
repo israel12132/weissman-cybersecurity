@@ -4,7 +4,8 @@
 //! a ~10 KiB body can inflate to gigabytes and OOM the Axum process. We decode at
 //! most [`MAX_DECOMPRESSED_BODY_BYTES`] and then 413 + `Connection: close`. Nested
 //! encodings (`gzip, gzip`) are rejected. Unencoded bodies are unchanged (the
-//! router `DefaultBodyLimit` still applies).
+//! router `DefaultBodyLimit` + Content-Length middleware still apply; over → 413
+//! and TCP RST, not a graceful proxy drain).
 
 use crate::api::json_policy::{max_request_body_bytes, MAX_DECOMPRESSED_BODY_BYTES};
 use axum::body::Body;
@@ -12,6 +13,7 @@ use axum::http::{header, Method, Request, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::Router;
+use fingerprint_engine::http::tcp_socket::{abrupt_close_http_peer, TcpRstHandle};
 use std::io::Read;
 
 /// Gzip / deflate / brotli request inflate cap (architect: 4 MiB).
@@ -91,11 +93,12 @@ fn read_limited<R: Read>(mut decoder: R, max: usize) -> Result<Vec<u8>, DecodeEr
     }
 }
 
-fn reject_too_large() -> Response {
+fn reject_too_large(req: &Request<Body>) -> Response {
+    abrupt_close_http_peer(req);
     tracing::error!(
         target: "http",
         max = MAX_INFLATE,
-        "inbound decompress cap exceeded — dropping connection (brotli/gzip bomb defense)"
+        "inbound decompress cap exceeded — TCP RST (brotli/gzip bomb defense)"
     );
     (
         StatusCode::PAYLOAD_TOO_LARGE,
@@ -146,15 +149,28 @@ pub async fn inbound_decode_middleware(req: Request<Body>, next: Next) -> Respon
         return reject_unsupported();
     };
 
+    let rst = req.extensions().get::<TcpRstHandle>().cloned();
     let (parts, body) = req.into_parts();
     let wire_cap = max_request_body_bytes();
     let collected = match axum::body::to_bytes(body, wire_cap).await {
         Ok(b) => b,
-        Err(_) => return reject_too_large(),
+        Err(_) => {
+            if let Some(h) = rst {
+                h.abort();
+            }
+            let dummy = Request::from_parts(parts, Body::empty());
+            return reject_too_large(&dummy);
+        }
     };
     let plain = match decompress_limited(enc, &collected, MAX_INFLATE) {
         Ok(v) => v,
-        Err(DecodeErr::TooLarge) => return reject_too_large(),
+        Err(DecodeErr::TooLarge) => {
+            if let Some(h) = rst {
+                h.abort();
+            }
+            let dummy = Request::from_parts(parts, Body::empty());
+            return reject_too_large(&dummy);
+        }
         Err(DecodeErr::Corrupt) => return reject_corrupt(),
         Err(DecodeErr::Unsupported) => return reject_unsupported(),
     };
@@ -236,19 +252,17 @@ mod tests {
 
     #[tokio::test]
     async fn gzip_bomb_http_is_413_with_connection_close() {
+        let handle = TcpRstHandle::noop();
         let app = apply(Router::new().route("/", post(|| async { "ok" })));
         let gz = gzip(&vec![0u8; MAX_INFLATE + 1024]);
-        let resp = app
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/")
-                    .header(header::CONTENT_ENCODING, "gzip")
-                    .body(Body::from(gz))
-                    .unwrap(),
-            )
-            .await
+        let mut req = Request::builder()
+            .method("POST")
+            .uri("/")
+            .header(header::CONTENT_ENCODING, "gzip")
+            .body(Body::from(gz))
             .unwrap();
+        req.extensions_mut().insert(handle.clone());
+        let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::PAYLOAD_TOO_LARGE);
         let conn = resp
             .headers()
@@ -256,6 +270,7 @@ mod tests {
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
         assert_eq!(conn, "close");
+        assert!(handle.is_armed(), "inflate ceiling must arm TCP RST");
     }
 
     #[tokio::test]
