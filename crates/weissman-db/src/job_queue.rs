@@ -495,6 +495,58 @@ pub async fn complete_job(pool: &PgPool, job_id: Uuid) -> Result<(), sqlx::Error
     Ok(())
 }
 
+/// Map an engine/job result payload to the durable queue status.
+/// RoE / policy denials are first-class `blocked` — never `completed` (empty success).
+#[must_use]
+pub fn terminal_status_for_result(result: &Value) -> &'static str {
+    let status = result.get("status").and_then(Value::as_str).unwrap_or("");
+    if status.eq_ignore_ascii_case("blocked")
+        || result.get("policy_block").and_then(Value::as_bool) == Some(true)
+        || result
+            .get("error_code")
+            .and_then(Value::as_str)
+            .is_some_and(|c| c.eq_ignore_ascii_case("roe_denied"))
+    {
+        "blocked"
+    } else {
+        "completed"
+    }
+}
+
+/// Overlay a stored queue status with a first-class `blocked` result (list + GET).
+#[must_use]
+pub fn overlay_job_status(stored_status: &str, result: Option<&Value>) -> String {
+    if let Some(result) = result {
+        if terminal_status_for_result(result) == "blocked" {
+            return "blocked".to_string();
+        }
+    }
+    stored_status.to_string()
+}
+
+/// API fields so a RoE denial is never an empty completed job in the jobs list.
+#[must_use]
+pub fn policy_block_api_fields(result: Option<&Value>) -> (bool, Option<String>, Option<String>) {
+    let Some(result) = result else {
+        return (false, None, None);
+    };
+    if terminal_status_for_result(result) != "blocked" {
+        return (false, None, None);
+    }
+    let code = result
+        .get("error_code")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let reason = result
+        .get("reason")
+        .or_else(|| result.get("message"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    (true, code, reason)
+}
+
 /// Mark completed and store JSON result for `GET /api/jobs/:id`.
 /// Record a successful outcome, fenced on the caller still owning the row.
 ///
@@ -516,14 +568,16 @@ pub async fn complete_job_with_result_owned(
     result: &Value,
 ) -> Result<bool, sqlx::Error> {
     let mut tx = begin_worker_tx(pool).await?;
+    let terminal = terminal_status_for_result(result);
     let r = sqlx::query(
-        r#"UPDATE weissman_async_jobs SET status = 'completed', result_json = $3,
+        r#"UPDATE weissman_async_jobs SET status = $4, result_json = $3,
            locked_until = NULL, worker_id = NULL, updated_at = now()
            WHERE id = $1 AND worker_id = $2 AND status = 'running'"#,
     )
     .bind(job_id)
     .bind(worker_id)
     .bind(Json(result))
+    .bind(terminal)
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -538,12 +592,14 @@ pub async fn complete_job_with_result(
     result: &Value,
 ) -> Result<(), sqlx::Error> {
     let mut tx = begin_worker_tx(pool).await?;
+    let terminal = terminal_status_for_result(result);
     sqlx::query(
-        r#"UPDATE weissman_async_jobs SET status = 'completed', result_json = $2,
+        r#"UPDATE weissman_async_jobs SET status = $3, result_json = $2,
            locked_until = NULL, worker_id = NULL, updated_at = now() WHERE id = $1"#,
     )
     .bind(job_id)
     .bind(Json(result))
+    .bind(terminal)
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -593,13 +649,14 @@ pub async fn get_job_for_tenant(
     };
     let id: Uuid = row.try_get("id")?;
     let kind: String = row.try_get("kind")?;
-    let status: String = row.try_get("status")?;
+    let stored_status: String = row.try_get("status")?;
     let payload: Json<Value> = row.try_get("payload")?;
     let result_json: Option<Value> = row
         .try_get::<Option<Json<Value>>, _>("result_json")
         .ok()
         .flatten()
         .map(|j| j.0);
+    let status = overlay_job_status(stored_status.as_str(), result_json.as_ref());
     let last_error: Option<String> = row.try_get("last_error").ok();
     let attempt_count: i32 = row.try_get("attempt_count")?;
     let created_at: chrono::DateTime<chrono::Utc> = row.try_get("created_at")?;
@@ -895,5 +952,78 @@ mod worker_pool_role_tests {
             WorkerPoolRole::Mixed | WorkerPoolRole::Research | WorkerPoolRole::Client
         ));
         assert!((0..=2).contains(&role.sql_mode()));
+    }
+}
+
+#[cfg(test)]
+mod terminal_status_tests {
+    use super::{overlay_job_status, policy_block_api_fields, terminal_status_for_result};
+    use serde_json::json;
+
+    #[test]
+    fn ok_engine_result_completes() {
+        assert_eq!(
+            terminal_status_for_result(&json!({"status": "ok", "findings": []})),
+            "completed"
+        );
+    }
+
+    #[test]
+    fn error_engine_result_still_completes_the_job_row() {
+        // Execution errors stay `completed` with status in result_json; RoE uses `blocked`.
+        assert_eq!(
+            terminal_status_for_result(&json!({"status": "error", "message": "boom"})),
+            "completed"
+        );
+    }
+
+    #[test]
+    fn roe_denied_is_first_class_blocked() {
+        assert_eq!(
+            terminal_status_for_result(&json!({
+                "status": "blocked",
+                "error_code": "roe_denied",
+                "policy_block": true,
+                "findings": [{"type": "policy_block"}]
+            })),
+            "blocked"
+        );
+        assert_eq!(
+            terminal_status_for_result(&json!({
+                "status": "ok",
+                "policy_block": true
+            })),
+            "blocked"
+        );
+        assert_eq!(
+            terminal_status_for_result(&json!({
+                "status": "completed",
+                "error_code": "roe_denied"
+            })),
+            "blocked"
+        );
+    }
+
+    #[test]
+    fn overlay_promotes_completed_row_when_result_is_roe_denied() {
+        let result = json!({
+            "status": "blocked",
+            "error_code": "roe_denied",
+            "policy_block": true,
+            "reason": "RoE DENIED (industrial_ot_disabled): OT probing not authorized"
+        });
+        assert_eq!(overlay_job_status("completed", Some(&result)), "blocked");
+        assert_eq!(overlay_job_status("running", None), "running");
+        let (blocked, code, reason) = policy_block_api_fields(Some(&result));
+        assert!(blocked);
+        assert_eq!(code.as_deref(), Some("roe_denied"));
+        assert!(reason
+            .as_deref()
+            .unwrap()
+            .contains("industrial_ot_disabled"));
+        assert_eq!(
+            policy_block_api_fields(Some(&json!({"status": "ok", "findings": []}))),
+            (false, None, None)
+        );
     }
 }

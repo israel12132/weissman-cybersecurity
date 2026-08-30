@@ -26,6 +26,14 @@ impl EngineResult {
             message: message.into(),
         }
     }
+
+    pub fn blocked(findings: Vec<Value>, message: impl Into<String>) -> Self {
+        Self {
+            status: "blocked".to_string(),
+            findings,
+            message: message.into(),
+        }
+    }
 }
 
 /// Print JSON line for CLI / subprocess consumers.
@@ -55,6 +63,13 @@ mod tests {
         assert_eq!(r.status, "error");
         assert!(r.findings.is_empty());
         assert_eq!(r.message, "boom");
+    }
+
+    #[test]
+    fn blocked_is_not_ok_and_keeps_findings() {
+        let r = EngineResult::blocked(vec![serde_json::json!({"type": "policy_block"})], "roe");
+        assert_eq!(r.status, "blocked");
+        assert_eq!(r.findings.len(), 1);
     }
 
     #[test]

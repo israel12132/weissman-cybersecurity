@@ -70,6 +70,8 @@ pub(crate) fn merge_agent_hybrid(
             summary: agent.summary,
             graph_nodes: agent.graph_nodes,
             graph_edges: agent.graph_edges,
+            error_code: None,
+            policy_block: None,
         };
     }
     let has_agent_guidance = findings.iter().any(|f| {

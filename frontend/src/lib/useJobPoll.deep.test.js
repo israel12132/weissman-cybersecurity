@@ -16,6 +16,7 @@ describe('useJobPoll deep', () => {
   it('uiJobStatus maps terminal states', () => {
     expect(uiJobStatus('completed')).toMatch(/complete|done|success/i)
     expect(uiJobStatus('failed')).toMatch(/fail|error/i)
+    expect(uiJobStatus('blocked')).toBe('blocked')
   })
 
   it('extractFindingsFromJob nested arrays', () => {

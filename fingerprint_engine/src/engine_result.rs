@@ -20,6 +20,12 @@ pub struct EngineResult {
     /// Module 3: edges for Attack Surface Graph.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub graph_edges: Option<Vec<super::cloud_hunter::GraphEdge>>,
+    /// First-class policy / RoE denial (never empty `ok`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<String>,
+    /// True when this result is a Rules-of-Engagement / policy block.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub policy_block: Option<bool>,
 }
 
 impl EngineResult {
@@ -33,6 +39,8 @@ impl EngineResult {
             summary: msg,
             graph_nodes: None,
             graph_edges: None,
+            error_code: None,
+            policy_block: None,
         }
     }
     pub fn ok_with_graph(
@@ -50,6 +58,8 @@ impl EngineResult {
             summary: msg,
             graph_nodes: Some(graph_nodes),
             graph_edges: Some(graph_edges),
+            error_code: None,
+            policy_block: None,
         }
     }
     pub fn error(message: impl Into<String>) -> Self {
@@ -62,13 +72,47 @@ impl EngineResult {
             summary: msg,
             graph_nodes: None,
             graph_edges: None,
+            error_code: None,
+            policy_block: None,
         }
+    }
+
+    /// Policy / RoE denial: first-class `blocked` status with an explicit finding.
+    /// Never `ok` with zero findings (that is read as "healthy").
+    pub fn blocked(
+        findings: Vec<serde_json::Value>,
+        message: impl Into<String>,
+        error_code: impl Into<String>,
+    ) -> Self {
+        let msg = message.into();
+        Self {
+            status: "blocked".to_string(),
+            findings,
+            message: msg.clone(),
+            success: false,
+            summary: msg,
+            graph_nodes: None,
+            graph_edges: None,
+            error_code: Some(error_code.into()),
+            policy_block: Some(true),
+        }
+    }
+
+    #[must_use]
+    pub fn is_policy_block(&self) -> bool {
+        self.status.eq_ignore_ascii_case("blocked")
+            || self.policy_block == Some(true)
+            || self
+                .error_code
+                .as_deref()
+                .is_some_and(|c| c.eq_ignore_ascii_case("roe_denied"))
     }
 }
 
 impl From<weissman_engines::EngineResult> for EngineResult {
     fn from(r: weissman_engines::EngineResult) -> Self {
         let is_ok = r.status == "ok";
+        let is_block = r.status.eq_ignore_ascii_case("blocked");
         Self {
             status: r.status,
             findings: r.findings,
@@ -77,6 +121,8 @@ impl From<weissman_engines::EngineResult> for EngineResult {
             summary: r.message,
             graph_nodes: None,
             graph_edges: None,
+            error_code: is_block.then(|| "roe_denied".to_string()),
+            policy_block: is_block.then_some(true),
         }
     }
 }
@@ -92,6 +138,8 @@ impl From<Vec<serde_json::Value>> for EngineResult {
             summary: msg,
             graph_nodes: None,
             graph_edges: None,
+            error_code: None,
+            policy_block: None,
         }
     }
 }
@@ -161,5 +209,28 @@ mod tests {
         assert!(!obj.contains_key("summary"));
         assert!(!obj.contains_key("graph_nodes"));
         assert!(!obj.contains_key("graph_edges"));
+        assert!(!obj.contains_key("error_code"));
+        assert!(!obj.contains_key("policy_block"));
+    }
+
+    #[test]
+    fn blocked_result_is_not_success_and_carries_policy_finding() {
+        let r = EngineResult::blocked(
+            vec![serde_json::json!({"type": "policy_block", "policy_block": true})],
+            "RoE DENIED: industrial_ot_enabled is false",
+            "roe_denied",
+        );
+        assert_eq!(r.status, "blocked");
+        assert!(!r.success);
+        assert!(r.is_policy_block());
+        assert_eq!(r.error_code.as_deref(), Some("roe_denied"));
+        assert_eq!(r.policy_block, Some(true));
+        assert!(!r.findings.is_empty());
+        let v: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&r).unwrap()).unwrap();
+        assert_eq!(v["status"], "blocked");
+        assert_eq!(v["error_code"], "roe_denied");
+        assert_eq!(v["policy_block"], true);
+        assert!(v["findings"].as_array().is_some_and(|a| !a.is_empty()));
     }
 }

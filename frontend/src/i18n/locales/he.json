@@ -1577,6 +1577,7 @@
       "status_queued": "בתור",
       "status_running": "רץ",
       "status_completed": "הושלם",
+      "status_blocked": "נחסם ב-RoE",
       "status_failed": "נכשל",
       "status_cancelled": "בוטל",
       "evidence_notice": "תור משימות אסינכרוני חי מ-GET /api/jobs (מוגבל לטננט). למנכ\"ל: נפילה ל-/api/ceo/jobs/live כשהרשימה הסטנדרטית לא זמינה. ללא טלמטריה מדומה.",
@@ -1587,6 +1588,7 @@
       "filter_queued": "בתור",
       "filter_running": "רץ",
       "filter_completed": "הושלם",
+      "filter_blocked": "נחסם ב-RoE",
       "filter_failed": "נכשל",
       "filter_cancelled": "בוטל",
       "col_target": "יעד",
@@ -1601,7 +1603,9 @@
       "field_created": "נוצר",
       "field_updated": "עודכן",
       "field_heartbeat": "Heartbeat",
-      "field_error": "שגיאה אחרונה"
+      "field_error": "שגיאה אחרונה",
+      "field_roe": "כללי מעורבות",
+      "roe_denied_fallback": "בדיקת OT/ICS נחסמה על ידי כללי המעורבות. זו חסימת מדיניות, לא סריקה נקייה."
     },
     "billing": {
       "title": "חיוב ושימוש",
@@ -2612,6 +2616,7 @@
       "last_scan": "סריקה אחרונה: {{time}}",
       "status_running": "רץ",
       "status_done": "הושלם",
+      "status_blocked": "נחסם ב-RoE",
       "status_error": "שגיאה",
       "status_idle": "ממתין",
       "notice_title": "הודעת אבטחת OT",
@@ -2641,7 +2646,12 @@
       "scan_findings_empty_body": "הפעל סריקת מנוע OT/ICS למעלה. ממצאים מצטברים כאן מ-SCADA, Modbus, BACnet ו-OPC-UA.",
       "scan_findings_ready_title": "מוכן לסריקה",
       "scan_findings_ready_body": "בחר לקוח והפעל מנוע OT/ICS. ממצאים חיים ממשימות שהושלמו יופיעו כאן עם חיפוש, סינון חומרה וייצוא CSV.",
-      "evidence_notice": "probes פרוטוקול OT/ICS ב-POST /api/command-center/scan (ot_ics) על טווחי IP ת industrial מורשים. מצב ריק = אין PLCs/RTUs נגישים ב-scope — לא תעבורת Modbus מדומה."
+      "roe_denied_banner_title": "כללי המעורבות חסמו את בדיקת ה-OT/ICS",
+      "roe_denied_banner_body": "{{count}} ממצא(י) חסימת מדיניות. זו אינה סריקה נקייה — אפס ממצאים אינו אומר שהמערכת בריאה.",
+      "roe_denied_toast": "{{label}} נחסם על ידי RoE: {{reason}}",
+      "roe_denied_fallback": "בדיקות OT/ICS כבויות כברירת מחדל עד שמפעילים OT תעשייתי ומאשרים RoE.",
+      "roe_denied_empty_guard": "RoE חסם את הבדיקה. זו חסימת מדיניות, לא תוצאה ריקה בריאה.",
+      "evidence_notice": "probes פרוטוקול OT/ICS ב-POST /api/command-center/scan (ot_ics) על טווחי IP ת industrial מורשים. מצב ריק = אין PLCs/RTUs נגישים ב-scope — לא תעבורת Modbus מדומה. חסימות RoE מחזירות status blocked עם ממצא policy-block, לעולם לא 0 ממצאים = בריא."
     },
     "networkIntelligence": {
       "title": "מודיעין רשת",

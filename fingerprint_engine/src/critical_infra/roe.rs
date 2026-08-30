@@ -6,6 +6,7 @@
 //! - target on an explicit whitelist (client config, engagement scope, or signed contract)
 
 use crate::engine_probes::extract_host;
+use crate::engine_result::EngineResult;
 use hmac::{Hmac, Mac};
 use serde_json::{json, Value};
 use sha2::Sha256;
@@ -73,6 +74,24 @@ impl fmt::Display for RoeViolation {
     }
 }
 
+impl RoeViolation {
+    /// Stable machine code for API / UI (never a healthy empty scan).
+    #[must_use]
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::CompileTimeDisabled => "compile_time_disabled",
+            Self::MissingTenantContext => "missing_tenant_context",
+            Self::IndustrialOtDisabled => "industrial_ot_disabled",
+            Self::ProbeNotAuthorized => "probe_not_authorized",
+            Self::RoeModeInsufficient => "roe_mode_insufficient",
+            Self::TargetNotInScope => "target_not_in_scope",
+            Self::ContractExpired => "contract_expired",
+            Self::ContractSignatureInvalid => "contract_signature_invalid",
+            Self::NoActiveEngagement => "no_active_engagement",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RoeAuthority {
     SignedContract,
@@ -80,22 +99,86 @@ pub enum RoeAuthority {
     ActiveEngagement,
 }
 
-/// Run full RoE preflight. Returns `Ok(authority)` when execution may proceed.
-pub async fn preflight(input: &RoePreflightInput<'_>) -> Result<RoeAuthority, RoeViolation> {
-    #[cfg(not(feature = "high_risk_engines"))]
-    {
-        let _ = input;
-        return Err(RoeViolation::CompileTimeDisabled);
-    }
+/// First-class policy-block engine result. Never empty `ok`.
+#[must_use]
+pub fn policy_block_result(engine_id: &str, target: &str, violation: RoeViolation) -> EngineResult {
+    let reason = violation.to_string();
+    let code = violation.code();
+    let finding = json!({
+        "type": "policy_block",
+        "category": "roe_denied",
+        "error_code": "roe_denied",
+        "violation_code": code,
+        "title": format!("RoE denied — {engine_id} blocked"),
+        "severity": "info",
+        "description": format!(
+            "Rules of Engagement blocked this OT/ICS probe. This is not a clean scan (0 findings ≠ healthy). Reason: {reason}"
+        ),
+        "target": target,
+        "engine_id": engine_id,
+        "policy_block": true,
+        "roe_denied": true,
+        "healthy": false,
+        "status": "blocked",
+    });
+    EngineResult::blocked(
+        vec![finding],
+        format!("RoE DENIED ({code}): {reason} — engine '{engine_id}' not executed for target '{target}'"),
+        "roe_denied",
+    )
+}
 
-    #[cfg(feature = "high_risk_engines")]
-    {
-        preflight_live(input).await
+/// Run RoE preflight; on denial log + return a blocked result. `None` means execution may proceed.
+pub async fn enforce(
+    pool: Option<&PgPool>,
+    tenant_id: Option<i64>,
+    client_id: Option<i64>,
+    engine_id: &str,
+    target: &str,
+    job_params: &Value,
+) -> Option<EngineResult> {
+    let input = RoePreflightInput {
+        pool,
+        tenant_id,
+        client_id,
+        engine_id,
+        target,
+        job_params,
+    };
+    match preflight(&input).await {
+        Ok(authority) => {
+            tracing::info!(
+                target: "critical_infra_roe",
+                engine_id = %engine_id,
+                probe_target = %target,
+                authority = ?authority,
+                "RoE preflight passed — executing OT/ICS engine"
+            );
+            None
+        }
+        Err(violation) => {
+            log_violation(pool, tenant_id, client_id, engine_id, target, violation).await;
+            Some(policy_block_result(engine_id, target, violation))
+        }
     }
 }
 
-#[cfg(feature = "high_risk_engines")]
-async fn preflight_live(input: &RoePreflightInput<'_>) -> Result<RoeAuthority, RoeViolation> {
+/// Run full RoE preflight. Returns `Ok(authority)` when execution may proceed.
+///
+/// Critical-infrastructure engines additionally require the `high_risk_engines` compile
+/// feature. Other OT/ICS engines use the same runtime gates (industrial OT off +
+/// `safe_proofs` by default) so probes stay denied unless explicitly authorized.
+pub async fn preflight(input: &RoePreflightInput<'_>) -> Result<RoeAuthority, RoeViolation> {
+    #[cfg(not(feature = "high_risk_engines"))]
+    {
+        if super::is_critical_infra_engine(input.engine_id) {
+            return Err(RoeViolation::CompileTimeDisabled);
+        }
+    }
+    preflight_runtime(input).await
+}
+
+async fn preflight_runtime(input: &RoePreflightInput<'_>) -> Result<RoeAuthority, RoeViolation> {
     let (tenant_id, client_id) = match (input.tenant_id, input.client_id) {
         (Some(t), Some(c)) if t > 0 && c > 0 => (t, c),
         _ => {
@@ -108,19 +191,33 @@ async fn preflight_live(input: &RoePreflightInput<'_>) -> Result<RoeAuthority, R
 
     let client_configs = load_client_configs(input.pool, tenant_id, client_id).await;
     let engagement = load_active_engagement(input.pool, tenant_id, client_id).await;
+    evaluate_from_loaded(
+        input.target,
+        &client_configs,
+        engagement.as_ref(),
+        input.job_params,
+    )
+}
 
-    if !industrial_ot_enabled(&client_configs) {
+/// Pure RoE decision after configs are loaded — unit-tested deny vs allow.
+pub(crate) fn evaluate_from_loaded(
+    target: &str,
+    client_configs: &Value,
+    engagement: Option<&EngagementRow>,
+    job_params: &Value,
+) -> Result<RoeAuthority, RoeViolation> {
+    if !industrial_ot_enabled(client_configs) {
         return Err(RoeViolation::IndustrialOtDisabled);
     }
 
-    let whitelist = build_target_whitelist(&client_configs, engagement.as_ref());
+    let whitelist = build_target_whitelist(client_configs, engagement);
 
     // Signed contract path — cryptographically bound targets + expiry.
     if let Some(contract) = client_configs
         .get("critical_infra_contract")
-        .or_else(|| input.job_params.get("critical_infra_contract"))
+        .or_else(|| job_params.get("critical_infra_contract"))
     {
-        match verify_signed_contract(contract, input.target, &whitelist) {
+        match verify_signed_contract(contract, target, &whitelist) {
             Ok(()) => return Ok(RoeAuthority::SignedContract),
             Err(RoeViolation::ContractSignatureInvalid) => {
                 return Err(RoeViolation::ContractSignatureInvalid);
@@ -134,14 +231,14 @@ async fn preflight_live(input: &RoePreflightInput<'_>) -> Result<RoeAuthority, R
     }
 
     // Explicit client flag + weaponized RoE.
-    let weaponized = roe_weaponized(&client_configs);
+    let weaponized = roe_weaponized(client_configs);
     let probe_authorized = client_configs
         .get("critical_infra_probe_authorized")
         .and_then(Value::as_bool)
         .unwrap_or(false);
 
     if probe_authorized && weaponized {
-        if target_in_whitelist(input.target, &whitelist) {
+        if target_in_whitelist(target, &whitelist) {
             return Ok(RoeAuthority::ExplicitClientFlag);
         }
         return Err(RoeViolation::TargetNotInScope);
@@ -158,7 +255,7 @@ async fn preflight_live(input: &RoePreflightInput<'_>) -> Result<RoeAuthority, R
             if scope_auth {
                 let eng_whitelist = scope_targets(&eng.scope_snapshot);
                 let combined = merge_whitelists(&whitelist, &eng_whitelist);
-                if target_in_whitelist(input.target, &combined) {
+                if target_in_whitelist(target, &combined) {
                     return Ok(RoeAuthority::ActiveEngagement);
                 }
                 return Err(RoeViolation::TargetNotInScope);
@@ -218,16 +315,11 @@ pub async fn log_violation(
     }
 }
 
-// The helpers below are used only by `preflight_live`, which is gated on the
-// `high_risk_engines` feature; gate them identically so a default build (feature
-// off) doesn't compile — and warn about — code it can never reach.
-#[cfg(feature = "high_risk_engines")]
 struct EngagementRow {
     roe_mode: String,
     scope_snapshot: Value,
 }
 
-#[cfg(feature = "high_risk_engines")]
 async fn load_client_configs(pool: Option<&PgPool>, tenant_id: i64, client_id: i64) -> Value {
     let Some(pool) = pool else {
         return Value::Object(serde_json::Map::new());
@@ -255,7 +347,6 @@ async fn load_client_configs(pool: Option<&PgPool>, tenant_id: i64, client_id: i
     serde_json::from_str(&raw).unwrap_or_else(|_| Value::Object(serde_json::Map::new()))
 }
 
-#[cfg(feature = "high_risk_engines")]
 async fn load_active_engagement(
     pool: Option<&PgPool>,
     tenant_id: i64,
@@ -288,7 +379,6 @@ async fn load_active_engagement(
     })
 }
 
-#[cfg(feature = "high_risk_engines")]
 fn industrial_ot_enabled(config: &Value) -> bool {
     config
         .get("industrial_ot_enabled")
@@ -296,7 +386,6 @@ fn industrial_ot_enabled(config: &Value) -> bool {
         .unwrap_or(false)
 }
 
-#[cfg(feature = "high_risk_engines")]
 fn roe_weaponized(config: &Value) -> bool {
     config
         .get("roe_mode")
@@ -304,7 +393,6 @@ fn roe_weaponized(config: &Value) -> bool {
         .is_some_and(|m| m.eq_ignore_ascii_case("weaponized_god_mode"))
 }
 
-#[cfg(feature = "high_risk_engines")]
 fn build_target_whitelist(
     client_configs: &Value,
     engagement: Option<&EngagementRow>,
@@ -325,7 +413,6 @@ fn build_target_whitelist(
     dedupe_strings(out)
 }
 
-#[cfg(feature = "high_risk_engines")]
 fn scope_targets(scope: &Value) -> Vec<String> {
     let mut out = Vec::new();
     collect_string_list(scope, "allowed_targets", &mut out);
@@ -342,7 +429,6 @@ fn scope_targets(scope: &Value) -> Vec<String> {
     out
 }
 
-#[cfg(feature = "high_risk_engines")]
 fn collect_string_list(obj: &Value, key: &str, out: &mut Vec<String>) {
     let Some(arr) = obj.get(key).and_then(Value::as_array) else {
         return;
@@ -354,7 +440,6 @@ fn collect_string_list(obj: &Value, key: &str, out: &mut Vec<String>) {
     }
 }
 
-#[cfg(feature = "high_risk_engines")]
 fn push_trimmed(s: &str, out: &mut Vec<String>) {
     let t = s.trim();
     if !t.is_empty() {
@@ -362,21 +447,18 @@ fn push_trimmed(s: &str, out: &mut Vec<String>) {
     }
 }
 
-#[cfg(feature = "high_risk_engines")]
 fn dedupe_strings(mut v: Vec<String>) -> Vec<String> {
     v.sort();
     v.dedup();
     v
 }
 
-#[cfg(feature = "high_risk_engines")]
 fn merge_whitelists(a: &[String], b: &[String]) -> Vec<String> {
     let mut out = a.to_vec();
     out.extend_from_slice(b);
     dedupe_strings(out)
 }
 
-#[cfg(feature = "high_risk_engines")]
 fn verify_signed_contract(
     contract: &Value,
     target: &str,
@@ -434,8 +516,6 @@ fn verify_signed_contract(
     Ok(())
 }
 
-// Also exercised by unit tests under default features, so keep it available for `test`.
-#[cfg(any(feature = "high_risk_engines", test))]
 fn contract_canonical_payload(contract: &Value, targets: &[String]) -> String {
     let v = contract.get("v").and_then(Value::as_i64).unwrap_or(1);
     let expires = contract
@@ -473,7 +553,6 @@ fn signing_secret() -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
-#[cfg(feature = "high_risk_engines")]
 fn verify_hmac(canonical: &str, sig_hex: &str) -> bool {
     let Some(secret) = signing_secret() else {
         return false;
@@ -549,7 +628,6 @@ fn cidr_contains_host(cidr: &str, host: &str) -> bool {
     net.contains(ip)
 }
 
-#[cfg(feature = "high_risk_engines")]
 fn dev_override_allowed(job_params: &Value) -> bool {
     // Hard compile-time guard: the RoE scope bypass can NEVER exist in a release
     // build, regardless of environment variables. Production images are built in
@@ -687,5 +765,131 @@ mod tests {
     #[test]
     fn empty_whitelist_denies() {
         assert!(!target_in_whitelist("10.0.0.1", &[]));
+    }
+
+    fn default_safe_configs() -> Value {
+        json!({
+            "enabled_engines": ["osint"],
+            "roe_mode": "safe_proofs",
+            "industrial_ot_enabled": false
+        })
+    }
+
+    fn authorized_ot_configs(targets: &[&str]) -> Value {
+        json!({
+            "roe_mode": "weaponized_god_mode",
+            "industrial_ot_enabled": true,
+            "critical_infra_probe_authorized": true,
+            "critical_infra_targets": targets
+        })
+    }
+
+    #[test]
+    fn default_client_config_denies_ot_probes() {
+        let err = evaluate_from_loaded("10.0.0.1", &default_safe_configs(), None, &json!({}))
+            .unwrap_err();
+        assert_eq!(err, RoeViolation::IndustrialOtDisabled);
+        assert_eq!(err.code(), "industrial_ot_disabled");
+    }
+
+    #[test]
+    fn industrial_ot_on_but_safe_proofs_is_roe_mode_deny() {
+        let cfg = json!({
+            "roe_mode": "safe_proofs",
+            "industrial_ot_enabled": true,
+            "critical_infra_probe_authorized": true,
+            "critical_infra_targets": ["10.0.0.1"]
+        });
+        let err = evaluate_from_loaded("10.0.0.1", &cfg, None, &json!({})).unwrap_err();
+        assert_eq!(err, RoeViolation::RoeModeInsufficient);
+    }
+
+    #[test]
+    fn weaponized_without_probe_flag_is_deny() {
+        let cfg = json!({
+            "roe_mode": "weaponized_god_mode",
+            "industrial_ot_enabled": true,
+            "critical_infra_probe_authorized": false,
+            "critical_infra_targets": ["10.0.0.1"]
+        });
+        let err = evaluate_from_loaded("10.0.0.1", &cfg, None, &json!({})).unwrap_err();
+        assert_eq!(err, RoeViolation::ProbeNotAuthorized);
+    }
+
+    #[test]
+    fn authorized_weaponized_whitelist_allows() {
+        let cfg = authorized_ot_configs(&["10.0.0.0/8"]);
+        let auth = evaluate_from_loaded("10.0.1.5", &cfg, None, &json!({})).unwrap();
+        assert_eq!(auth, RoeAuthority::ExplicitClientFlag);
+    }
+
+    #[test]
+    fn authorized_weaponized_out_of_scope_denies() {
+        let cfg = authorized_ot_configs(&["10.0.0.0/8"]);
+        let err = evaluate_from_loaded("192.168.1.1", &cfg, None, &json!({})).unwrap_err();
+        assert_eq!(err, RoeViolation::TargetNotInScope);
+    }
+
+    #[test]
+    fn signed_contract_allows_whitelisted_target() {
+        let secret = "unit-test-roe-contract-secret-not-for-prod";
+        std::env::set_var("WEISSMAN_ROE_CONTRACT_SECRET", secret);
+        let targets = vec!["grid.lab.example.com".to_string()];
+        let expires = 4_102_444_800_i64; // 2100-01-01
+        let contract_skel = json!({"v": 1, "expires_unix": expires, "authorized": true});
+        let canonical = contract_canonical_payload(&contract_skel, &targets);
+        let sig = sign_contract_payload(&canonical).expect("hmac");
+        let contract = json!({
+            "v": 1,
+            "expires_unix": expires,
+            "authorized": true,
+            "targets": ["grid.lab.example.com"],
+            "sig": sig
+        });
+        let cfg = json!({
+            "industrial_ot_enabled": true,
+            "roe_mode": "safe_proofs",
+            "critical_infra_contract": contract
+        });
+        let auth = evaluate_from_loaded(
+            "https://grid.lab.example.com/status",
+            &cfg,
+            None,
+            &json!({}),
+        )
+        .expect("signed contract should allow");
+        assert_eq!(auth, RoeAuthority::SignedContract);
+    }
+
+    #[test]
+    fn policy_block_result_is_never_empty_ok() {
+        let r = policy_block_result("scada_ics", "10.0.0.1", RoeViolation::IndustrialOtDisabled);
+        assert_eq!(r.status, "blocked");
+        assert!(!r.success);
+        assert!(r.is_policy_block());
+        assert_eq!(r.error_code.as_deref(), Some("roe_denied"));
+        assert_eq!(r.findings.len(), 1);
+        assert_eq!(r.findings[0]["category"], "roe_denied");
+        assert_eq!(r.findings[0]["policy_block"], true);
+        assert_eq!(r.findings[0]["healthy"], false);
+        assert!(r.message.contains("RoE DENIED"));
+        assert!(r.message.contains("industrial_ot_enabled"));
+    }
+
+    #[test]
+    fn engagement_weaponized_scope_allows() {
+        let cfg = json!({
+            "industrial_ot_enabled": true,
+            "roe_mode": "safe_proofs"
+        });
+        let eng = EngagementRow {
+            roe_mode: "weaponized_god_mode".into(),
+            scope_snapshot: json!({
+                "critical_infra_authorized": true,
+                "allowed_targets": ["10.0.0.1"]
+            }),
+        };
+        let auth = evaluate_from_loaded("10.0.0.1", &cfg, Some(&eng), &json!({})).unwrap();
+        assert_eq!(auth, RoeAuthority::ActiveEngagement);
     }
 }

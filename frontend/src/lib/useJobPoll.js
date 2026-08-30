@@ -1,7 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { apiFetch } from './apiBase'
 
-const TERMINAL = new Set(['completed', 'failed', 'dead', 'cancelled'])
+const TERMINAL = new Set(['completed', 'failed', 'dead', 'cancelled', 'blocked'])
+
+export function isTerminalJobStatus(status) {
+  return TERMINAL.has(String(status || '').toLowerCase())
+}
 
 /**
  * Poll GET /api/jobs/:id until the job reaches a terminal status.
@@ -25,7 +29,7 @@ export function useJobPoll(jobId, { onUpdate, onComplete, intervalMs = 2000, ena
         if (cancelled || !r.ok || !job) return
         onUpdateRef.current?.(job)
         const status = (job.status || '').toLowerCase()
-        if (TERMINAL.has(status)) {
+        if (isTerminalJobStatus(status)) {
           onCompleteRef.current?.(job)
           // Job is finished — stop hitting the endpoint (the hook contract is
           // "poll until terminal"; without this it polls forever once done).
@@ -98,6 +102,7 @@ export async function resolveJobFindings(job, engineId, clientId) {
 export function uiJobStatus(backendStatus) {
   const s = normalizeJobStatus(backendStatus)
   if (s === 'completed') return 'completed'
+  if (s === 'blocked') return 'blocked'
   if (s === 'failed' || s === 'dead' || s === 'cancelled') return 'error'
   if (s === 'running' || s === 'queued') return 'running'
   return 'idle'

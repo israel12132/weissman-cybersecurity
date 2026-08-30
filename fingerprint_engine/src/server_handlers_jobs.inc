@@ -87,12 +87,20 @@ async fn api_async_jobs_list(
             let target = payload.get("target").and_then(Value::as_str).map(|s| s.to_string());
             let engine = payload.get("engine").and_then(Value::as_str).map(|s| s.to_string());
             let client_id = payload.get("client_id").and_then(Value::as_i64);
-            let status = r.try_get::<String, _>("status").unwrap_or_default();
+            let stored_status = r.try_get::<String, _>("status").unwrap_or_default();
+            let result_json: Option<Value> = r
+                .try_get::<Option<sqlx::types::Json<Value>>, _>("result_json")
+                .ok()
+                .flatten()
+                .map(|j| j.0);
+            let status = db::job_queue::overlay_job_status(stored_status.as_str(), result_json.as_ref());
+            let (policy_block, error_code, reason) =
+                db::job_queue::policy_block_api_fields(result_json.as_ref());
             let updated_at = r
                 .try_get::<chrono::DateTime<Utc>, _>("updated_at")
                 .ok()
                 .map(|d| d.to_rfc3339());
-            let completed_at = if status == "completed" {
+            let completed_at = if status == "completed" || status == "blocked" {
                 updated_at.clone()
             } else {
                 None
@@ -111,6 +119,9 @@ async fn api_async_jobs_list(
                 "created_at": r.try_get::<chrono::DateTime<Utc>, _>("created_at").ok().map(|d| d.to_rfc3339()),
                 "updated_at": updated_at,
                 "completed_at": completed_at,
+                "policy_block": policy_block,
+                "error_code": error_code,
+                "reason": reason,
             })
         })
         .collect();

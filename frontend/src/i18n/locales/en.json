@@ -1577,6 +1577,7 @@
       "status_queued": "queued",
       "status_running": "running",
       "status_completed": "completed",
+      "status_blocked": "RoE blocked",
       "status_failed": "failed",
       "status_cancelled": "cancelled",
       "evidence_notice": "Live async job queue from GET /api/jobs (tenant-scoped). CEO fallback uses /api/ceo/jobs/live when the standard list is unavailable. No simulated job telemetry.",
@@ -1587,6 +1588,7 @@
       "filter_queued": "Queued",
       "filter_running": "Running",
       "filter_completed": "Completed",
+      "filter_blocked": "RoE blocked",
       "filter_failed": "Failed",
       "filter_cancelled": "Cancelled",
       "col_target": "Target",
@@ -1601,7 +1603,9 @@
       "field_created": "Created",
       "field_updated": "Updated",
       "field_heartbeat": "Heartbeat",
-      "field_error": "Last error"
+      "field_error": "Last error",
+      "field_roe": "Rules of Engagement",
+      "roe_denied_fallback": "OT/ICS probe denied by Rules of Engagement. This is a policy block, not a clean scan."
     },
     "billing": {
       "title": "Billing & Usage",
@@ -3556,6 +3560,7 @@
       "last_scan": "Last scan: {{time}}",
       "status_running": "Running",
       "status_done": "Done",
+      "status_blocked": "RoE blocked",
       "status_error": "Error",
       "status_idle": "Idle",
       "notice_title": "OT Security Notice",
@@ -3585,7 +3590,12 @@
       "scan_findings_empty_body": "Run an OT/ICS engine scan above. Findings aggregate here across SCADA, Modbus, BACnet, and OPC-UA probes.",
       "scan_findings_ready_title": "Ready to scan",
       "scan_findings_ready_body": "Select a client and run any OT/ICS engine. Live findings from completed jobs appear here with search, severity filters, and CSV export.",
-      "evidence_notice": "OT/ICS protocol probes via POST /api/command-center/scan (ot_ics) against authorized industrial IP ranges. Empty state means no reachable PLCs/RTUs in scope — not simulated Modbus traffic."
+      "roe_denied_banner_title": "Rules of Engagement denied this OT/ICS probe",
+      "roe_denied_banner_body": "{{count}} policy-block finding(s). This is not a clean scan — 0 live signals does not mean healthy.",
+      "roe_denied_toast": "{{label}} blocked by RoE: {{reason}}",
+      "roe_denied_fallback": "OT/ICS probing is off by default until industrial OT is enabled and RoE is authorized.",
+      "roe_denied_empty_guard": "RoE denied this probe. That is a policy block, not a healthy empty result.",
+      "evidence_notice": "OT/ICS protocol probes via POST /api/command-center/scan (ot_ics) against authorized industrial IP ranges. Empty state means no reachable PLCs/RTUs in scope — not simulated Modbus traffic. RoE denials return status blocked with a policy-block finding, never 0 findings = healthy."
     },
     "networkProtocols": {
       "title": "Network Protocol Analysis",
