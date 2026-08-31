@@ -192,7 +192,7 @@ pub const CONTROLS: &[Control] = &[
     c!(89, 9, "Memory-poisoning write ACL (DB trigger + definer)"),
     c!(90, 9, "Hybrid tabular + vector query performance"),
     c!(91, 10, "JSON QueryPlan only — never raw SQL from the LLM"),
-    c!(92, 10, "13-table allow-list for weissman_ro"),
+    c!(92, 10, "17-table allow-list for weissman_ro"),
     c!(93, 10, "weissman_ro SELECT-only, statement_timeout 15s"),
     c!(94, 10, "RLS on 80+ multi-tenant tables"),
     c!(95, 10, "DDL keyword kill in QueryPlan compile"),

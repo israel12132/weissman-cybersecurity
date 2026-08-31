@@ -131,7 +131,7 @@ fn pgvector_hnsw_params_and_hermetic_roles_migrations_exist() {
         .unwrap_or_default();
     assert!(roles.contains("NOBYPASSRLS"));
     assert!(roles.contains("statement_timeout = '15s'"));
-    assert_eq!(weissman_db::role_guard::RO_SELECT_TABLES.len(), 13);
+    assert_eq!(weissman_db::role_guard::RO_SELECT_TABLES.len(), 17);
 }
 
 #[test]
@@ -192,6 +192,8 @@ const RLS_FORCE_ALLOWLIST: &[&str] = &[
     "ueba_sovereign_binary_allowlist",
     // Corrupt MessagePack with no tenant identity cannot insert under FORCE RLS.
     "cem_dago_telemetry_quarantine_global",
+    // Shared intel schema — same model as intel.dynamic_payloads (no tenant RLS).
+    "discovery_knowledge",
 ];
 
 fn sql_idents_after(hay: &str, needle_lc: &str) -> Vec<String> {
@@ -208,6 +210,17 @@ fn sql_idents_after(hay: &str, needle_lc: &str) -> Vec<String> {
         }
         if rest.starts_with("public.") {
             rest = &rest["public.".len()..];
+        }
+        // schema-qualified names (`intel.discovery_knowledge`) — take the relation, not the schema.
+        if let Some(dot) = rest.find('.') {
+            let schema = &rest[..dot];
+            if !schema.is_empty()
+                && schema
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_')
+            {
+                rest = &rest[dot + 1..];
+            }
         }
         let ident: String = rest
             .chars()
@@ -321,6 +334,7 @@ fn post_cast_safety_policies_use_app_current_tenant_id() {
     ];
     let mut offenders = Vec::new();
     let mut saw_cast_safe_followon = false;
+    let mut saw_ot_cast_safe_followon = false;
     for dir in dirs {
         let rd = std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
         for ent in rd.flatten() {
@@ -332,6 +346,9 @@ fn post_cast_safety_policies_use_app_current_tenant_id() {
             if name.starts_with("20260827120600_") {
                 saw_cast_safe_followon = true;
             }
+            if name.starts_with("20260831121000_") {
+                saw_ot_cast_safe_followon = true;
+            }
             let Some(ver) = name.split('_').next() else {
                 continue;
             };
@@ -340,6 +357,11 @@ fn post_cast_safety_policies_use_app_current_tenant_id() {
             }
             // Already-applied; the 20600 follow-on restates the policy.
             if name.starts_with("20260827120000_") {
+                continue;
+            }
+            // Already-applied on main; 20260831121000 restates OT policies with
+            // public.app_current_tenant_id().
+            if name.starts_with("20260827160000_") {
                 continue;
             }
             let text = std::fs::read_to_string(ent.path()).unwrap_or_default();
@@ -354,6 +376,10 @@ fn post_cast_safety_policies_use_app_current_tenant_id() {
     assert!(
         saw_cast_safe_followon,
         "20260827120600_cicd_scan_events_rls_cast_safe.sql must exist in both trees"
+    );
+    assert!(
+        saw_ot_cast_safe_followon,
+        "20260831121000_ot_ics_rls_app_current_tenant_id.sql must exist in both trees"
     );
     assert!(
         offenders.is_empty(),
