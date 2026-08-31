@@ -226,9 +226,13 @@ fn wordlist_express() -> Vec<&'static str> {
     ]
 }
 
-/// Dynamic wordlist from tech-stack fingerprint. Merges up to 50 endpoints per detected stack.
+/// Stack extras plus high-value exposure paths. Does **not** dump the full combinator
+/// seed into `DiscoveryContext` (that would flood every fuzzer with 40k+ unconfirmed paths).
+/// The unbounded public seed is used by ASM DNS/path brute and `expanded_path_wordlist()`.
 pub fn wordlist_for_tech_stack(tech_stack: &[String]) -> Vec<String> {
-    let mut set = HashSet::new();
+    let mut set: HashSet<String> = weissman_engines::discovery_corpus::sensitive_exposure_paths()
+        .into_iter()
+        .collect();
     for t in tech_stack {
         let t = t.to_lowercase();
         let list: Vec<&'static str> = if t.contains("php") || t.contains("wordpress") {
@@ -246,11 +250,11 @@ pub fn wordlist_for_tech_stack(tech_stack: &[String]) -> Vec<String> {
         } else {
             continue;
         };
-        for p in list.into_iter().take(50) {
+        for p in list {
             set.insert(if p.starts_with('/') {
                 p.to_string()
             } else {
-                format!("/{}", p)
+                format!("/{p}")
             });
         }
     }
@@ -292,49 +296,11 @@ pub fn tech_stack_from_asm_findings(findings: &[serde_json::Value]) -> Vec<Strin
     out
 }
 
-/// Expanded path wordlist when no OpenAPI/Swagger (Juice Shop, generic REST, admin, config).
-/// Used by BOLA fallback, Semantic fallback, and as initial discovered_paths for path-aware engines.
+/// Expanded path wordlist: public-knowledge seed (tens of thousands of unique paths).
 pub fn expanded_path_wordlist() -> Vec<String> {
-    let paths: Vec<&str> = vec![
-        "",
-        "/",
-        "/api",
-        "/api/v1",
-        "/api/v2",
-        "/api/v1/users",
-        "/rest",
-        "/rest/user/login",
-        "/rest/user/registration",
-        "/rest/products",
-        "/rest/basket/1",
-        "/api/Users",
-        "/api/Users/1",
-        "/api/Users/2",
-        "/api/Addresss",
-        "/admin",
-        "/admin/login",
-        "/ftp",
-        "/config",
-        "/config/config.json",
-        "/graphql",
-        "/swagger",
-        "/openapi.json",
-        "/api-docs",
-        "/v2/api-docs",
-        "/login",
-        "/register",
-        "/health",
-        "/metrics",
-        "/actuator",
-        "/actuator/health",
-        "/.env",
-        "/debug",
-        "/api/Challenges",
-        "/api/Feedbacks",
-        "/api/SecurityQuestions",
-    ];
-    let static_paths: Vec<String> = paths.into_iter().map(String::from).collect();
-    crate::live_knowledge_bus::merge_live_paths(static_paths)
+    crate::live_knowledge_bus::merge_live_paths(
+        weissman_engines::discovery_corpus::expanded_path_wordlist(),
+    )
 }
 
 /// Web ports that get their own base URL (http(s)://host:port) for scanning.

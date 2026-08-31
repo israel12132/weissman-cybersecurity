@@ -45,8 +45,11 @@ use crate::cloud_hunter;
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_result::{print_result, EngineResult};
 use crate::fingerprint::scan_targets_concurrent_with_stealth;
-use crate::recon::{enum_subdomains, enum_subdomains_default, DEFAULT_SUBDOMAINS};
+use crate::recon::{
+    default_subdomain_wordlist, detect_dns_wildcard, enum_subdomains, enum_subdomains_default,
+};
 use futures::future::join_all;
+use futures::stream::{self, StreamExt};
 use hickory_resolver::config::ResolverConfig;
 use hickory_resolver::net::runtime::TokioRuntimeProvider;
 use hickory_resolver::proto::rr::RecordType;
@@ -141,7 +144,15 @@ pub async fn run_asm_result_with_ports_and_subdomains(
     }
 
     if host.contains('.') && host.parse::<std::net::IpAddr>().is_err() {
-        let subs = if let Some(prefixes) = subdomain_prefixes {
+        let wildcard = detect_dns_wildcard(&host).await;
+        let subs = if wildcard {
+            tracing::warn!(
+                target: "asm",
+                host = %host,
+                "DNS wildcard/catch-all — skipping prefix brute-force"
+            );
+            vec![]
+        } else if let Some(prefixes) = subdomain_prefixes {
             if prefixes.is_empty() {
                 vec![]
             } else {
@@ -151,7 +162,7 @@ pub async fn run_asm_result_with_ports_and_subdomains(
             enum_subdomains_default(&host).await
         };
         let mut urls = vec![format!("https://{}", host), format!("http://{}", host)];
-        for s in subs.iter().take(20) {
+        for s in subs.iter() {
             urls.push(format!("https://{}", s));
             urls.push(format!("http://{}", s));
         }
@@ -1274,13 +1285,33 @@ const SENSITIVE_PATHS: &[(&str, &str, &str)] = &[
     ("/phpinfo.php", "medium", "PHP info disclosure"),
 ];
 
-async fn probe_sensitive_paths(client: &reqwest::Client, host: &str) -> Vec<Value> {
+async fn probe_sensitive_paths(
+    client: &mut reqwest::Client,
+    host: &str,
+    pool: Option<&sqlx::PgPool>,
+    extra_paths: &[String],
+    pace: &crate::discovery_pace::DiscoveryPace,
+    stealth: &mut Option<crate::stealth_engine::StealthConfig>,
+    timeout_ms: u64,
+) -> Vec<Value> {
     let mut out = Vec::new();
     for (path, sev, label) in SENSITIVE_PATHS {
+        pace.before_probe(stealth.as_ref()).await;
         let url = format!("https://{host}{path}");
-        let Ok(resp) = client.get(&url).send().await else {
-            continue;
+        let resp = match client.get(&url).send().await {
+            Ok(resp) => {
+                pace.observe_status(resp.status().as_u16());
+                resp
+            }
+            Err(_) => {
+                pace.observe_connect_error();
+                continue;
+            }
         };
+        if pace.take_trip() {
+            crate::engine_dispatch::apply_ghost_escalation(stealth);
+            *client = build_asm_client(timeout_ms, stealth.as_ref());
+        }
         let status = resp.status().as_u16();
         if !(200..300).contains(&status) {
             continue;
@@ -1324,6 +1355,77 @@ async fn probe_sensitive_paths(client: &reqwest::Client, host: &str) -> Vec<Valu
             "Remove public access; authenticate admin surfaces; delete backup artifacts from web roots.",
         ));
     }
+    let mut extra: Vec<String> = weissman_engines::discovery_corpus::sensitive_exposure_paths()
+        .into_iter()
+        .chain(extra_paths.iter().cloned())
+        .filter(|p| !SENSITIVE_PATHS.iter().any(|(listed, _, _)| listed == p))
+        .collect();
+    extra.sort();
+    extra.dedup();
+    let budget = weissman_engines::discovery_corpus::discovery_probe_budget();
+    if extra.len() > budget {
+        extra.truncate(budget);
+    }
+    let mut confirmed = Vec::new();
+    let mut idx = 0usize;
+    while idx < extra.len() {
+        let conc = pace.concurrency();
+        let end = (idx + conc).min(extra.len());
+        let batch = extra[idx..end].to_vec();
+        idx = end;
+        let stealth_snap = stealth.clone();
+        let extra_hits: Vec<Option<(String, String, u16)>> =
+            stream::iter(batch.into_iter().map(|path| {
+                let client = client.clone();
+                let host = host.to_string();
+                let st = stealth_snap.clone();
+                async move {
+                    pace.before_probe(st.as_ref()).await;
+                    let url = format!("https://{host}{path}");
+                    match client.get(&url).send().await {
+                        Ok(resp) => {
+                            let status = resp.status().as_u16();
+                            pace.observe_status(status);
+                            if !(200..400).contains(&status) || status == 404 {
+                                return None;
+                            }
+                            Some((path, url, status))
+                        }
+                        Err(_) => {
+                            pace.observe_connect_error();
+                            None
+                        }
+                    }
+                }
+            }))
+            .buffer_unordered(conc)
+            .collect()
+            .await;
+        if pace.take_trip() {
+            crate::engine_dispatch::apply_ghost_escalation(stealth);
+            *client = build_asm_client(timeout_ms, stealth.as_ref());
+            tracing::warn!(
+                target: "asm",
+                host,
+                "WAF/connect-failure trip — decelerating sensitive-path probes"
+            );
+        }
+        for hit in extra_hits.into_iter().flatten() {
+            confirmed.push(hit.0.clone());
+            out.push(asm_finding(
+                "sensitive_path",
+                "medium",
+                hit.1.clone(),
+                format!("Sensitive path reachable: {}", hit.0),
+                "T1190",
+                format!("GET {} returned HTTP {}", hit.1, hit.2),
+                "Remove public access; authenticate admin surfaces; delete backup artifacts from web roots.",
+            ));
+        }
+    }
+    if let Some(pool) = pool {
+        crate::discovery_knowledge::remember(pool, "path", &confirmed, "probe_hit", true, "").await;
+    }
     out
 }
 
@@ -1343,7 +1445,11 @@ const ROBOTS_SENSITIVE: &[&str] = &[
     "database",
 ];
 
-async fn harvest_robots_txt(client: &reqwest::Client, host: &str) -> Vec<Value> {
+async fn harvest_robots_txt(
+    client: &reqwest::Client,
+    host: &str,
+    pool: Option<&sqlx::PgPool>,
+) -> Vec<Value> {
     let url = format!("https://{host}/robots.txt");
     let Ok(resp) = client.get(&url).send().await else {
         return Vec::new();
@@ -1356,6 +1462,7 @@ async fn harvest_robots_txt(client: &reqwest::Client, host: &str) -> Vec<Value> 
         return Vec::new();
     }
     let mut flagged = Vec::new();
+    let mut harvested = Vec::new();
     for line in body.lines() {
         let l = line.trim().to_lowercase();
         if !l.starts_with("disallow:") {
@@ -1365,12 +1472,19 @@ async fn harvest_robots_txt(client: &reqwest::Client, host: &str) -> Vec<Value> 
         if path.is_empty() || path == "/" {
             continue;
         }
-        if ROBOTS_SENSITIVE.iter().any(|k| path.contains(k)) {
-            flagged.push(path.to_string());
+        let Some(norm) = weissman_engines::discovery_corpus::sanitize_discovered_path(path) else {
+            continue;
+        };
+        harvested.push(norm.clone());
+        if ROBOTS_SENSITIVE.iter().any(|k| norm.contains(k)) {
+            flagged.push(norm);
         }
     }
     flagged.sort();
     flagged.dedup();
+    if let Some(pool) = pool {
+        crate::discovery_knowledge::remember(pool, "path", &harvested, "robots", true, "").await;
+    }
     if flagged.is_empty() {
         return vec![asm_finding(
             "robots",
@@ -1444,24 +1558,13 @@ fn extend_inventory_graph(
     }
 }
 
-async fn dns_wildcard_detect(resolver: &TokioResolver, domain: &str) -> bool {
-    let token = uuid::Uuid::new_v4()
-        .to_string()
-        .split('-')
-        .next()
-        .unwrap_or("rand")
-        .to_string();
-    let probe = format!("{token}-weissman-probe.{domain}");
-    !lookup_strings(resolver, &probe, RecordType::A)
-        .await
-        .is_empty()
-        || !lookup_strings(resolver, &probe, RecordType::AAAA)
-            .await
-            .is_empty()
-}
-
-async fn analyse_dns_hardening(resolver: &TokioResolver, domain: &str, findings: &mut Vec<Value>) {
-    if dns_wildcard_detect(resolver, domain).await {
+async fn analyse_dns_hardening(
+    resolver: &TokioResolver,
+    domain: &str,
+    findings: &mut Vec<Value>,
+    wildcard: bool,
+) {
+    if wildcard {
         findings.push(asm_finding(
             "dns",
             "medium",
@@ -1469,7 +1572,7 @@ async fn analyse_dns_hardening(resolver: &TokioResolver, domain: &str, findings:
             format!("DNS wildcard detected for {domain}"),
             "T1590.002",
             format!(
-                "A random label under {domain} resolves — wildcard DNS expands the takeover and phishing surface."
+                "At least two fully-random labels under {domain} resolve — wildcard DNS would make unbounded prefix brute-force a false-positive storm."
             ),
             "Remove wildcard A/AAAA records unless strictly required; monitor for unclaimed subdomains.",
         ));
@@ -1722,7 +1825,13 @@ fn surface_grade(score: i32) -> &'static str {
 // Main world-class EASM pipeline
 // ─────────────────────────────────────────────────────────────────────────────
 
-async fn build_client(timeout_ms: u64) -> reqwest::Client {
+fn build_asm_client(
+    timeout_ms: u64,
+    stealth: Option<&crate::stealth_engine::StealthConfig>,
+) -> reqwest::Client {
+    if let Some(s) = stealth {
+        return crate::stealth_engine::build_client(s, (timeout_ms / 1000).max(2));
+    }
     reqwest::Client::builder()
         .timeout(Duration::from_millis(timeout_ms.max(2000)))
         .redirect(reqwest::redirect::Policy::limited(5))
@@ -1770,7 +1879,9 @@ pub async fn run_asm_result_ctx(
     let do_robots = p.bool_or("robots_harvest", true);
     let do_dkim = p.bool_or("dkim_probe", true) && is_domain;
     let subdomain_sources = p.str_or("subdomain_sources", "both").to_ascii_lowercase();
-    let max_subdomains = p.usize_or("max_subdomains", 50).clamp(0, 500);
+    let live_ai = p.bool_or("live_ai_discovery", true);
+    let max_raw = p.usize_or("max_subdomains", 0);
+    let max_subdomains = if max_raw == 0 { usize::MAX } else { max_raw };
     let port_timeout = p
         .u64_or("port_timeout_ms", PORT_TIMEOUT_MS)
         .clamp(100, 5000);
@@ -1789,11 +1900,19 @@ pub async fn run_asm_result_ctx(
     };
     let custom_wordlist = p.list("subdomain_wordlist");
 
-    let client = build_client(http_timeout).await;
+    let mut stealth_owned = stealth.cloned();
+    let mut client = build_asm_client(http_timeout, stealth_owned.as_ref());
     let resolver = build_resolver();
+    let pace = std::sync::Arc::new(crate::discovery_pace::DiscoveryPace::new(32));
 
     let mut findings: Vec<Value> = Vec::new();
     let mut notes: Vec<String> = Vec::new();
+
+    let wildcard_dns = if is_domain && (do_subdomains || do_dns_hardening) {
+        detect_dns_wildcard(&host).await
+    } else {
+        false
+    };
 
     // ── 1. Asset discovery (subdomains: passive CT + active brute) ────────────
     let mut subdomains: BTreeSet<String> = BTreeSet::new();
@@ -1801,8 +1920,32 @@ pub async fn run_asm_result_ctx(
         subdomains.extend(ctx.recon_subdomains.iter().cloned());
     }
     if do_subdomains {
-        if subdomain_sources == "passive" || subdomain_sources == "both" {
-            let ct = crtsh_subdomains(&client, &host, max_subdomains.max(1) * 2).await;
+        if wildcard_dns {
+            notes.push(
+                "DNS wildcard/catch-all detected — unbounded prefix brute-force disabled; Certificate Transparency and focused LLM persist only."
+                    .into(),
+            );
+            findings.push(asm_finding(
+                "dns",
+                "medium",
+                &host,
+                format!("Wildcard DNS — unlimited brute-force suppressed for {host}"),
+                "T1590.002",
+                format!(
+                    "Pre-flight resolved ≥2 random UUID labels under {host}. Active DNS brute-force of the 23k prefix corpus is blocked to prevent a false-positive ingest storm."
+                ),
+                "Keep subdomain inventory on CT logs and confirmed names; remove catch-all records if brute-force discovery is required.",
+            ));
+        }
+        let want_passive =
+            wildcard_dns || subdomain_sources == "passive" || subdomain_sources == "both";
+        if want_passive {
+            let ct_cap = if max_subdomains == usize::MAX {
+                50_000
+            } else {
+                max_subdomains.max(1).saturating_mul(2)
+            };
+            let ct = crtsh_subdomains(&client, &host, ct_cap).await;
             if !ct.is_empty() {
                 notes.push(format!(
                     "Certificate Transparency surfaced {} name(s).",
@@ -1811,17 +1954,77 @@ pub async fn run_asm_result_ctx(
             }
             subdomains.extend(ct);
         }
-        if subdomain_sources == "bruteforce" || subdomain_sources == "both" {
-            let static_list: Vec<String> = if custom_wordlist.is_empty() {
-                DEFAULT_SUBDOMAINS
-                    .iter()
-                    .map(|s| (*s).to_string())
-                    .collect()
+        if wildcard_dns && live_ai {
+            if let Some(pool) = ctx.discovery_knowledge_pool() {
+                let stored = crate::discovery_knowledge::load_subdomain_prefixes(pool).await;
+                let known = crate::discovery_knowledge::merge_unique(&[&stored, &custom_wordlist]);
+                let _ = crate::discovery_ai::generate_and_remember(
+                    Some(pool),
+                    crate::discovery_ai::SurfaceKind::SubdomainPrefix,
+                    &host,
+                    "",
+                    &known,
+                    &ctx.llm_base_url,
+                    &ctx.llm_model,
+                    ctx.tenant_id,
+                    Some(3),
+                )
+                .await;
+            }
+        }
+        let want_brute =
+            !wildcard_dns && (subdomain_sources == "bruteforce" || subdomain_sources == "both");
+        if want_brute {
+            let custom_extra: Vec<String> = custom_wordlist.clone();
+            let wordlist = if live_ai {
+                crate::discovery_ai::hydrate_subdomain_prefixes(
+                    ctx.discovery_knowledge_pool(),
+                    &host,
+                    "",
+                    &custom_extra,
+                    &ctx.llm_base_url,
+                    &ctx.llm_model,
+                    ctx.tenant_id,
+                )
+                .await
+            } else if custom_extra.is_empty() {
+                let mut wl = default_subdomain_wordlist();
+                if let Some(pool) = ctx.discovery_knowledge_pool() {
+                    crate::discovery_knowledge::seed_public_knowledge(pool).await;
+                    let learned = crate::discovery_knowledge::load_subdomain_prefixes(pool).await;
+                    wl = crate::discovery_knowledge::merge_unique(&[&wl, &learned]);
+                }
+                wl
             } else {
-                custom_wordlist.clone()
+                custom_extra
             };
-            let wordlist = crate::live_knowledge_bus::merge_subdomain_wordlist(&host, static_list);
-            let brute = enum_subdomains(&host, &wordlist, 200).await;
+            let wordlist = crate::live_knowledge_bus::merge_subdomain_wordlist(&host, wordlist);
+            let budget = weissman_engines::discovery_corpus::discovery_probe_budget();
+            let wordlist = if wordlist.len() > budget {
+                wordlist.into_iter().take(budget).collect()
+            } else {
+                wordlist
+            };
+            let dns_conc = pace.concurrency().max(8).min(200);
+            let brute = enum_subdomains(&host, &wordlist, dns_conc).await;
+            if let Some(pool) = ctx.discovery_knowledge_pool() {
+                let confirmed: Vec<String> = brute
+                    .iter()
+                    .filter_map(|fqdn| {
+                        fqdn.strip_suffix(&format!(".{host}"))
+                            .map(std::string::ToString::to_string)
+                    })
+                    .collect();
+                crate::discovery_knowledge::remember(
+                    pool,
+                    "subdomain_prefix",
+                    &confirmed,
+                    "probe_hit",
+                    true,
+                    "",
+                )
+                .await;
+            }
             subdomains.extend(brute);
         }
     }
@@ -1868,7 +2071,7 @@ pub async fn run_asm_result_ctx(
                 findings.extend(probe_dkim_selectors(r, &host).await);
             }
             if do_dns_hardening {
-                analyse_dns_hardening(r, &host, &mut findings).await;
+                analyse_dns_hardening(r, &host, &mut findings, wildcard_dns).await;
             }
             if do_asn {
                 for ip in &prof.a {
@@ -1961,9 +2164,30 @@ pub async fn run_asm_result_ctx(
         }
     }
 
-    // ── 4. HTTP & TLS posture (apex + top subdomains) ────────────────────────
+    // ── 4. HTTP & TLS posture (apex + discovered subdomains) ──────────────────
+    let discovery_pool = ctx.discovery_knowledge_pool();
+    let extra_sensitive: Vec<String> = if do_sensitive {
+        if live_ai {
+            crate::discovery_ai::hydrate_paths(
+                discovery_pool,
+                &host,
+                "",
+                &[],
+                &ctx.llm_base_url,
+                &ctx.llm_model,
+                ctx.tenant_id,
+            )
+            .await
+        } else if let Some(pool) = discovery_pool {
+            crate::discovery_knowledge::load_learned_paths(pool).await
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
     let mut posture_hosts: Vec<String> = vec![host.clone()];
-    posture_hosts.extend(subdomains.iter().take(6).cloned());
+    posture_hosts.extend(subdomains.iter().cloned());
     for ph in &posture_hosts {
         if do_http {
             let url = format!("https://{ph}");
@@ -2053,10 +2277,21 @@ pub async fn run_asm_result_ctx(
                 }
             }
             if do_sensitive {
-                findings.extend(probe_sensitive_paths(&client, ph).await);
+                findings.extend(
+                    probe_sensitive_paths(
+                        &mut client,
+                        ph,
+                        discovery_pool,
+                        &extra_sensitive,
+                        pace.as_ref(),
+                        &mut stealth_owned,
+                        http_timeout,
+                    )
+                    .await,
+                );
             }
             if do_robots {
-                findings.extend(harvest_robots_txt(&client, ph).await);
+                findings.extend(harvest_robots_txt(&client, ph, discovery_pool).await);
             }
         }
         if do_tls {
@@ -2155,10 +2390,10 @@ pub async fn run_asm_result_ctx(
     // ── 6. Tech fingerprint ──────────────────────────────────────────────────
     if do_fingerprint {
         let mut urls = vec![format!("https://{}", host), format!("http://{}", host)];
-        for s in subdomains.iter().take(10) {
+        for s in subdomains.iter() {
             urls.push(format!("https://{}", s));
         }
-        let fp = scan_targets_concurrent_with_stealth(&urls, stealth).await;
+        let fp = scan_targets_concurrent_with_stealth(&urls, stealth_owned.as_ref()).await;
         for (url, techs) in fp {
             if !techs.is_empty() {
                 findings.push(asm_finding(
@@ -2183,7 +2418,7 @@ pub async fn run_asm_result_ctx(
     let mut graph_edges: Option<Vec<cloud_hunter::GraphEdge>> = None;
     if do_cloud {
         let (mut nodes, mut edges, cloud_findings) =
-            cloud_hunter::run_cloud_hunter(&host, &subdomains, stealth).await;
+            cloud_hunter::run_cloud_hunter(&host, &subdomains, stealth_owned.as_ref()).await;
         findings.extend(cloud_findings);
         let shadow_set: BTreeSet<String> = findings
             .iter()
