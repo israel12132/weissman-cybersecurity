@@ -1451,11 +1451,17 @@ pub fn new_app_state(
                         let Some(mut senders) = registry_clone.get_mut(&job_id) else {
                             continue;
                         };
+                        let mut spilled = false;
                         senders.retain(|tx| match tx.try_send(json.clone()) {
                             Ok(()) => true,
                             Err(TrySendError::Disconnected(_)) => false,
                             Err(TrySendError::Full(_)) => {
-                                POE_DROPS.record(1);
+                                if !spilled {
+                                    POE_DROPS.record_payload(&json);
+                                    spilled = true;
+                                } else {
+                                    POE_DROPS.record(1);
+                                }
                                 true
                             }
                         });

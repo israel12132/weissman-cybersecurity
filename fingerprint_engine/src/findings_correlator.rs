@@ -6,8 +6,10 @@
 //! creates 3 tickets for 1 problem — analyst fatigue, distorted KPIs.
 //!
 //! This module collapses those signals into **finding clusters**. A cluster is
-//! identified by the triple `(target, vuln_signature, cwe)` hashed to SHA-256
-//! after uniform filtered normalisation (`finding_identity`). Each
+//! identified by SHA-256 of `(tenant_id, target, vuln_signature, cwe)` after
+//! uniform filtered normalisation (`finding_identity`). Tenant salt is mixed
+//! into the digest so two customers with the same vuln never share a
+//! `cluster_key` / auto-suppression signature. Each
 //! `vulnerabilities` row points to its cluster via `cluster_id`. The cluster
 //! row carries the *aggregate* (max severity, engines list, CVE set, KEV flag,
 //! first/last seen) plus a **corroboration boost**: when network and agent
@@ -24,12 +26,12 @@ use crate::finding_identity::{
     engine_plane, normalize_cwe, normalize_target,
 };
 
-/// Stable cluster identity: sha256(normalised_target | normalised_signature | normalised_cwe).
+/// Stable cluster identity: sha256(tenant | normalised_target | normalised_signature | normalised_cwe).
 ///
 /// We intentionally exclude `engine` — that's the whole point of correlation: two
 /// engines that fire on the same vuln must land in the same cluster.
-pub fn build_cluster_key(target: &str, vuln_signature: &str, cwe: &str) -> String {
-    finding_identity::build_cluster_key(target, vuln_signature, cwe)
+pub fn build_cluster_key(tenant_id: i64, target: &str, vuln_signature: &str, cwe: &str) -> String {
+    finding_identity::build_cluster_key(tenant_id, target, vuln_signature, cwe)
 }
 
 /// Severity weight for `MAX(...)` rollups. Higher = worse.
@@ -80,7 +82,7 @@ pub async fn upsert_cluster_for_finding(
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
-        .unwrap_or_else(|| build_cluster_key(attrs.target, &signature, attrs.cwe));
+        .unwrap_or_else(|| build_cluster_key(tenant_id, attrs.target, &signature, attrs.cwe));
     let target_norm = normalize_target(attrs.target);
     let cwe_norm = normalize_cwe(attrs.cwe);
     let plane = engine_plane(attrs.engine);
@@ -388,12 +390,13 @@ mod tests {
     use super::*;
     #[test]
     fn key_is_url_tolerant() {
-        let a = build_cluster_key("https://EXAMPLE.com/foo/", "xss_reflected", "CWE-79");
-        let b = build_cluster_key("https://example.com/foo", "XSS_Reflected", "cwe-79");
-        let c = build_cluster_key("https://example.com/foo?x=1", "xss_reflected", "CWE-79");
+        let a = build_cluster_key(1, "https://EXAMPLE.com/foo/", "xss_reflected", "CWE-79");
+        let b = build_cluster_key(1, "https://example.com/foo", "XSS_Reflected", "cwe-79");
+        let c = build_cluster_key(1, "https://example.com/foo?x=1", "xss_reflected", "CWE-79");
         assert_eq!(a, b);
         assert_eq!(a, c);
         let d = build_cluster_key(
+            1,
             "https://example.com:54321/foo?session=abc",
             "xss_reflected?token=1",
             "CWE-79",
@@ -402,15 +405,17 @@ mod tests {
     }
     #[test]
     fn distinct_targets_distinct_clusters() {
-        let a = build_cluster_key("https://x.com/foo", "xss_reflected", "CWE-79");
-        let b = build_cluster_key("https://y.com/foo", "xss_reflected", "CWE-79");
+        let a = build_cluster_key(1, "https://x.com/foo", "xss_reflected", "CWE-79");
+        let b = build_cluster_key(1, "https://y.com/foo", "xss_reflected", "CWE-79");
         assert_ne!(a, b);
         let public = build_cluster_key(
+            1,
             "https://api.corp/api/v1/public/image/6c084089-0aec",
             "xss",
             "CWE-79",
         );
         let admin = build_cluster_key(
+            1,
             "https://api.corp/api/v1/admin/billing/6c084089-0aec",
             "xss",
             "CWE-79",

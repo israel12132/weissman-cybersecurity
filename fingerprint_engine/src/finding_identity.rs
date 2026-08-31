@@ -8,6 +8,10 @@
 //!
 //! Cluster identity intentionally **excludes** `engine` so network and agent
 //! planes that fire on the same (target, signature, CWE) collapse into one card.
+//!
+//! **Tenant salt:** every SHA-256 (`finding_id`, `cluster_key` / `signature_hash`)
+//! mixes `tenant_id` as a binary prefix so an FP auto-suppress rule cannot match
+//! another tenant even if a caller omitted the RLS `WHERE`.
 
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -677,25 +681,42 @@ pub fn derive_vuln_signature(finding: &Value, fallback_title: &str) -> String {
     normalize_signature(&title)
 }
 
-/// Cluster identity: sha256(normalised_target | normalised_signature | normalised_cwe).
+/// Mix tenant_id as a binary prefix so identical vulns on two tenants never
+/// share `finding_id` / `signature_hash`. Separator 0xff cannot appear inside
+/// the big-endian i64 itself.
+fn mix_tenant(hasher: &mut Sha256, tenant_id: i64) {
+    hasher.update(b"tenant:");
+    hasher.update(tenant_id.to_be_bytes());
+    hasher.update(&[0xff]);
+}
+
+/// Cluster identity: sha256(tenant | normalised_target | normalised_signature | normalised_cwe).
 /// Engine is excluded so independent detectors of the same vuln share one cluster.
 #[must_use]
-pub fn build_cluster_key(target: &str, vuln_signature: &str, cwe: &str) -> String {
-    build_cluster_key_hinted(target, vuln_signature, cwe, &IdentityHint::default())
+pub fn build_cluster_key(tenant_id: i64, target: &str, vuln_signature: &str, cwe: &str) -> String {
+    build_cluster_key_hinted(
+        tenant_id,
+        target,
+        vuln_signature,
+        cwe,
+        &IdentityHint::default(),
+    )
 }
 
 #[must_use]
 pub fn build_cluster_key_hinted(
+    tenant_id: i64,
     target: &str,
     vuln_signature: &str,
     cwe: &str,
     hint: &IdentityHint,
 ) -> String {
-    build_cluster_key_ctx(target, vuln_signature, cwe, hint, None)
+    build_cluster_key_ctx(tenant_id, target, vuln_signature, cwe, hint, None)
 }
 
 #[must_use]
 pub fn build_cluster_key_ctx(
+    tenant_id: i64,
     target: &str,
     vuln_signature: &str,
     cwe: &str,
@@ -706,6 +727,7 @@ pub fn build_cluster_key_ctx(
     let sig_norm = normalize_signature_hinted(vuln_signature, hint);
     let cwe_norm = normalize_cwe(cwe);
     let mut h = Sha256::new();
+    mix_tenant(&mut h, tenant_id);
     h.update(target_norm.as_bytes());
     h.update(b"|");
     h.update(sig_norm.as_bytes());
@@ -715,14 +737,20 @@ pub fn build_cluster_key_ctx(
 }
 
 /// Stable `vulnerabilities.finding_id`: `{engine}-{sha256[:12]}` of
-/// `engine | target | cve | cwe | mitre | signature` (title only when signature is empty).
+/// `tenant | engine | target | cve | cwe | mitre | signature` (title only when signature is empty).
 #[must_use]
-pub fn build_stable_finding_id(engine: &str, target: &str, finding: &Value) -> String {
-    build_stable_finding_id_ctx(engine, target, finding, None)
+pub fn build_stable_finding_id(
+    tenant_id: i64,
+    engine: &str,
+    target: &str,
+    finding: &Value,
+) -> String {
+    build_stable_finding_id_ctx(tenant_id, engine, target, finding, None)
 }
 
 #[must_use]
 pub fn build_stable_finding_id_ctx(
+    tenant_id: i64,
     engine: &str,
     target: &str,
     finding: &Value,
@@ -745,6 +773,7 @@ pub fn build_stable_finding_id_ctx(
     let signature = derive_vuln_signature(finding, &title);
 
     let mut hasher = Sha256::new();
+    mix_tenant(&mut hasher, tenant_id);
     hasher.update(engine.trim().as_bytes());
     hasher.update(b"|");
     hasher.update(normalize_target_ctx(target, &hint, templates).as_bytes());
@@ -991,8 +1020,8 @@ mod tests {
         assert_eq!(public, "https://api.corp/api/v1/public/image/{id}");
         assert_eq!(admin, "https://api.corp/api/v1/admin/billing/{id}");
         assert_ne!(
-            build_cluster_key(&public, "xss", "CWE-79"),
-            build_cluster_key(&admin, "xss", "CWE-79"),
+            build_cluster_key(1, &public, "xss", "CWE-79"),
+            build_cluster_key(1, &admin, "xss", "CWE-79"),
             "public image and admin billing must never share a cluster_key"
         );
         // Year-like intermediate 4-digit tokens stay (not collapsed to /api/{id}/...).
@@ -1056,20 +1085,21 @@ mod tests {
     #[test]
     fn cluster_key_stable_across_volatile_url_and_signature() {
         let a = build_cluster_key(
+            1,
             "https://EXAMPLE.com:54321/foo/?session=abc",
             "xss_reflected?token=1",
             "cwe-79",
         );
-        let b = build_cluster_key("https://example.com/foo", "XSS_Reflected", "CWE-79");
+        let b = build_cluster_key(1, "https://example.com/foo", "XSS_Reflected", "CWE-79");
         assert_eq!(a, b);
         assert_eq!(a.len(), 64);
     }
 
     #[test]
     fn distinct_targets_or_cwes_distinct_clusters() {
-        let a = build_cluster_key("https://x.com/foo", "xss_reflected", "CWE-79");
-        let b = build_cluster_key("https://y.com/foo", "xss_reflected", "CWE-79");
-        let c = build_cluster_key("https://x.com/foo", "xss_reflected", "CWE-89");
+        let a = build_cluster_key(1, "https://x.com/foo", "xss_reflected", "CWE-79");
+        let b = build_cluster_key(1, "https://y.com/foo", "xss_reflected", "CWE-79");
+        let c = build_cluster_key(1, "https://x.com/foo", "xss_reflected", "CWE-89");
         assert_ne!(a, b);
         assert_ne!(a, c);
     }
@@ -1092,9 +1122,13 @@ mod tests {
             "evidence": "body Z",
             "discovered_at": "2026-08-27T00:00:00Z"
         });
-        let id1 =
-            build_stable_finding_id("sqli_engine", "https://Example.com:49152/login?x=1", &first);
-        let id2 = build_stable_finding_id("sqli_engine", "https://example.com/login", &rescan);
+        let id1 = build_stable_finding_id(
+            1,
+            "sqli_engine",
+            "https://Example.com:49152/login?x=1",
+            &first,
+        );
+        let id2 = build_stable_finding_id(1, "sqli_engine", "https://example.com/login", &rescan);
         assert_eq!(id1, id2);
         assert!(id1.starts_with("sqli_engine-"));
     }
@@ -1105,9 +1139,42 @@ mod tests {
         let b = json!({"title": "Issue", "signature": "xss", "cve": "CVE-2021-1234"});
         let target = "https://example.com/login";
         assert_ne!(
-            build_stable_finding_id("eng", target, &a),
-            build_stable_finding_id("eng", target, &b)
+            build_stable_finding_id(1, "eng", target, &a),
+            build_stable_finding_id(1, "eng", target, &b)
         );
+    }
+
+    #[test]
+    fn finding_id_and_cluster_key_are_tenant_isolated() {
+        let finding = json!({
+            "title": "GraphQL Introspection",
+            "signature": "graphql_introspection",
+            "cwe": "CWE-200"
+        });
+        let target = "https://api.example.com/graphql";
+        assert_ne!(
+            build_stable_finding_id(11, "asm", target, &finding),
+            build_stable_finding_id(22, "asm", target, &finding),
+            "tenant salt must change finding_id"
+        );
+        assert_ne!(
+            build_cluster_key(11, target, "graphql_introspection", "CWE-200"),
+            build_cluster_key(22, target, "graphql_introspection", "CWE-200"),
+            "tenant salt must change signature_hash / cluster_key"
+        );
+        assert_eq!(
+            build_cluster_key(11, target, "graphql_introspection", "CWE-200"),
+            build_cluster_key(11, target, "graphql_introspection", "CWE-200"),
+        );
+    }
+
+    #[test]
+    fn mix_tenant_is_the_sha256_prefix() {
+        let src = include_str!("finding_identity.rs");
+        assert!(src.contains("fn mix_tenant"));
+        assert!(src.contains("hasher.update(b\"tenant:\")"));
+        assert!(src.contains("mix_tenant(&mut h, tenant_id)"));
+        assert!(src.contains("mix_tenant(&mut hasher, tenant_id)"));
     }
 
     #[test]

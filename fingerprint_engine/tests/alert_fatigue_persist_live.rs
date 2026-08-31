@@ -86,6 +86,37 @@ async fn persist_dedup_auto_suppress_and_cross_plane_critical() {
         "stable finding_id prefix: {finding_id}"
     );
 
+    // Identical vuln on a second tenant must mint a different finding_id /
+    // signature_hash so 3× FP auto-suppress cannot spill across customers.
+    let (other_tid, other_cid, _) = seed_scope(&pool, "tenant_salt").await;
+    reset_scope(&pool, other_tid, other_cid).await;
+    persist_engine_findings(
+        &pool,
+        other_tid,
+        Some(other_cid),
+        "asm",
+        "https://app.example.com:54321/login?sid=aaa",
+        &[finding(
+            "SQL Injection in /login",
+            "sqli?sid=aaa",
+            "https://app.example.com:54321/login?sid=aaa",
+            "medium",
+        )],
+    )
+    .await
+    .expect("persist other tenant");
+    let other = fetch_vuln(&pool, other_tid, other_cid, "asm").await;
+    let other_fid = other.get::<String, _>("finding_id");
+    let other_sig = other.get::<String, _>("signature_hash");
+    assert_ne!(
+        finding_id, other_fid,
+        "tenant salt must isolate finding_id ({finding_id} vs {other_fid})"
+    );
+    assert_ne!(
+        sig_hash, other_sig,
+        "tenant salt must isolate signature_hash"
+    );
+
     // 2) Same vuln, stripped URL — hard de-duplication must upsert, not mint a new row.
     let n2 = persist_engine_findings(
         &pool,
@@ -275,11 +306,13 @@ async fn persist_dedup_auto_suppress_and_cross_plane_critical() {
     .expect("persist admin billing");
 
     let public_key = fingerprint_engine::finding_identity::build_cluster_key(
+        tenant_id,
         "https://api.corp/api/v1/public/image/6c084089-0aec",
         "xss",
         "CWE-89",
     );
     let admin_key = fingerprint_engine::finding_identity::build_cluster_key(
+        tenant_id,
         "https://api.corp/api/v1/admin/billing/6c084089-0aec",
         "xss",
         "CWE-89",
@@ -416,8 +449,8 @@ async fn persist_dedup_auto_suppress_and_cross_plane_critical() {
     .await
     .expect("relpersistence");
     assert_eq!(
-        persistence, "u",
-        "weissman_cluster_ingest must be UNLOGGED, got {persistence}"
+        persistence, "p",
+        "weissman_cluster_ingest must be LOGGED (relpersistence=p), got {persistence}"
     );
 
     eprintln!("alert-fatigue live contract OK finding_id={finding_id}");
@@ -639,6 +672,13 @@ async fn ensure_cluster_ingest_schema(pool: &sqlx::PgPool) {
         .execute(pool)
         .await
         .expect("apply cluster ingest autovacuum");
+    let logged = include_str!(
+        "../../crates/weissman-db/migrations/20260831180000_cluster_ingest_logged.sql"
+    );
+    sqlx::raw_sql(logged)
+        .execute(pool)
+        .await
+        .expect("apply cluster ingest LOGGED");
 }
 
 async fn seed_scope(pool: &sqlx::PgPool, key: &str) -> (i64, i64, bool) {

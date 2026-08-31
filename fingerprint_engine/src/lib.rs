@@ -46,6 +46,7 @@ pub mod attack_coverage;
 pub mod attack_exposure;
 pub mod attack_path;
 pub mod audit_log;
+pub mod audit_spool;
 pub mod auth_bootstrap;
 pub mod auth_jwt;
 pub mod auth_refresh;

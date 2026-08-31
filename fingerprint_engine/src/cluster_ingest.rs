@@ -10,12 +10,11 @@
 //! failed enqueue aborts the finding write. After commit, [`drain_for_tenant`]
 //! claims pending rows (`FOR UPDATE SKIP LOCKED`), takes a per-`cluster_key`
 //! advisory lock, upserts the cluster, and stamps `vulnerabilities.cluster_id`.
-//! After an unclean Postgres restart an UNLOGGED outbox is truncated. Logged
-//! `vulnerabilities` + `weissman_finding_clusters` are the WAL: [`requeue_lost_outbox`]
-//! rebuilds ingest rows for findings that never clustered **and** for clustered
-//! findings whose `last_seen_at` is newer than the cluster (a persist that
-//! committed after the last drain). Redis/host dual-write cannot join the persist
-//! transaction, so it is not the source of truth.
+//! The ingest table is **LOGGED** (WAL). [`requeue_lost_outbox`] still rebuilds
+//! rows for findings that never clustered **and** for clustered findings whose
+//! `last_seen_at` is newer than the cluster (a persist that committed after the
+//! last drain, or a worker crash mid-claim). Redis/host dual-write cannot join
+//! the persist transaction, so it is not the source of truth.
 
 use std::collections::HashMap;
 
@@ -110,7 +109,7 @@ pub async fn drain_all_tenants(pool: &PgPool, per_tenant: i64) -> Result<u64, St
     Ok(processed)
 }
 
-/// Requeue rows lost with the UNLOGGED outbox, then drain one tenant.
+/// Requeue rows lost between persist commit and drain, then drain one tenant.
 pub async fn recover_tenant(pool: &PgPool, tenant_id: i64, limit: i64) -> Result<u64, String> {
     match requeue_lost_outbox(pool, tenant_id, limit).await {
         Ok(n) if n > 0 => {
@@ -118,7 +117,7 @@ pub async fn recover_tenant(pool: &PgPool, tenant_id: i64, limit: i64) -> Result
                 target: "cluster_ingest",
                 tenant_id,
                 requeued = n,
-                "re-enqueued findings after unlogged outbox loss"
+                "re-enqueued findings after lost ingest rows"
             );
         }
         Ok(_) => {}
@@ -167,10 +166,11 @@ pub async fn vuln_cluster_ids(
     out
 }
 
-/// Logged `vulnerabilities` / clusters are the WAL for the UNLOGGED outbox.
 /// Replay (1) never-clustered rows and (2) clustered rows whose persist is
 /// newer than `weissman_finding_clusters.last_seen_at` (watermark / seen_count
-/// updates that committed, then vanished with the truncated ingest table).
+/// updates that committed before drain, or vanished if a historical UNLOGGED
+/// ingest table was truncated). The table is LOGGED now; this path still
+/// covers crash-between-commit-and-drain.
 const REQUEUE_SQL: &str = r#"INSERT INTO weissman_cluster_ingest (
                 tenant_id, client_id, vuln_id, cluster_key, target, engine, source,
                 title, severity, cwe, vuln_signature, cve, cvss, epss, kev_listed, is_new_member
@@ -370,7 +370,7 @@ mod tests {
     fn requeue_sql_replays_stale_clustered_findings() {
         assert!(
             REQUEUE_SQL.contains("COALESCE(v.last_seen_at, v.discovered_at) > c.last_seen_at"),
-            "UNLOGGED truncate must replay clustered vulns whose persist is newer than the cluster:\n{REQUEUE_SQL}"
+            "replay must include clustered vulns whose persist is newer than the cluster:\n{REQUEUE_SQL}"
         );
         assert!(
             REQUEUE_SQL.contains("v.cluster_id IS NULL"),

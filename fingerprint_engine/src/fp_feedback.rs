@@ -40,6 +40,10 @@ static SUPPRESSION_CACHE: LazyLock<DashMap<(i64, String), CachedRules>> =
 static GLOB_MATCHERS: LazyLock<DashMap<String, Option<globset::GlobMatcher>>> =
     LazyLock::new(DashMap::new);
 static SWR_REFRESH_RUNNING: AtomicBool = AtomicBool::new(false);
+/// Single-writer lock for cache reloads so a burst cannot stampede Postgres
+/// or spin overlapping Arc rebuilds.
+static SUPPRESSION_WRITE: LazyLock<tokio::sync::Mutex<()>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(()));
 
 /// Drop the in-memory glob cache for `(tenant, engine)` after a new rule is written.
 pub fn invalidate_suppression_cache(tenant_id: i64, engine: &str) {
@@ -360,6 +364,12 @@ async fn load_suppression_rules_from_db(
     engine: &str,
 ) -> Vec<SuppressionRule> {
     let cache_key = (tenant_id, engine.to_ascii_lowercase());
+    let _write = SUPPRESSION_WRITE.lock().await;
+    if let Some(hit) = SUPPRESSION_CACHE.get(&cache_key) {
+        if hit.loaded_at.elapsed() < SUPPRESSION_CACHE_TTL {
+            return hit.rules.clone();
+        }
+    }
     let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
         return SUPPRESSION_CACHE
             .get(&cache_key)
@@ -559,8 +569,8 @@ mod tests {
     fn public_vs_admin_route_templates_do_not_share_suppression() {
         let public = "https://api.corp/api/v1/public/image/6c084089-0aec";
         let admin = "https://api.corp/api/v1/admin/billing/6c084089-0aec";
-        let public_key = crate::finding_identity::build_cluster_key(public, "xss", "CWE-79");
-        let admin_key = crate::finding_identity::build_cluster_key(admin, "xss", "CWE-79");
+        let public_key = crate::finding_identity::build_cluster_key(1, public, "xss", "CWE-79");
+        let admin_key = crate::finding_identity::build_cluster_key(1, admin, "xss", "CWE-79");
         assert_ne!(public_key, admin_key);
         let public_rule = [rule(&public_key, Some(public))];
         assert!(is_suppressed_by(&public_rule, &public_key, public));
@@ -664,5 +674,19 @@ mod tests {
     #[test]
     fn swr_jitter_is_bounded_to_five_seconds() {
         assert_eq!(SWR_JITTER_MAX_MS, 5_000);
+    }
+
+    #[test]
+    fn suppression_reload_serializes_writers() {
+        let src = include_str!("fp_feedback.rs");
+        assert!(
+            src.contains("SUPPRESSION_WRITE"),
+            "cache reload must take a single-writer mutex"
+        );
+        assert!(
+            src.contains("tokio::sync::Mutex"),
+            "writer lock is async so ingest reloads do not block the runtime"
+        );
+        assert!(src.contains("let _write = SUPPRESSION_WRITE.lock().await"));
     }
 }

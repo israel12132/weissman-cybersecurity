@@ -108,8 +108,17 @@ pub trait VulnerabilitiesWriter: Sealed {
 /// Stable hash over **normalised Target + Vuln_Type + Payload + Engine**.
 /// Used as a secondary identity; the primary `finding_id` is
 /// [`crate::finding_identity::build_stable_finding_id`].
-pub fn build_dedup_hash(target: &str, vuln_type: &str, payload: &str, engine: &str) -> String {
+pub fn build_dedup_hash(
+    tenant_id: i64,
+    target: &str,
+    vuln_type: &str,
+    payload: &str,
+    engine: &str,
+) -> String {
     let mut hasher = Sha256::new();
+    hasher.update(b"tenant:");
+    hasher.update(tenant_id.to_be_bytes());
+    hasher.update(&[0xff]);
     hasher.update(crate::finding_identity::normalize_target(target).as_bytes());
     hasher.update(b"|");
     hasher.update(crate::finding_identity::normalize_signature(vuln_type).as_bytes());
@@ -222,12 +231,13 @@ fn extract_description(f: &Value) -> String {
 /// Validate raw engine JSON, normalize evidence fields, and produce a gated finding.
 /// Returns `None` when actionable severities lack proof (evidence gate).
 pub fn gate_finding(engine: &str, target: &str, raw: Value) -> Option<PersistableFinding> {
-    gate_finding_with_templates(engine, target, raw, None)
+    gate_finding_with_templates(1, engine, target, raw, None)
 }
 
 /// Gate a raw finding using a tenant path-template index so high-cardinality
 /// segments learned from sibling routes share one `finding_id`.
 pub fn gate_finding_with_templates(
+    tenant_id: i64,
     engine: &str,
     target: &str,
     mut raw: Value,
@@ -312,13 +322,18 @@ pub fn gate_finding_with_templates(
     );
     let vuln_type = extract_vuln_type(&raw);
     let payload = extract_payload(&raw);
-    let dedup_hash = build_dedup_hash(&target_url, &vuln_type, &payload, engine);
+    let dedup_hash = build_dedup_hash(tenant_id, &target_url, &vuln_type, &payload, engine);
     // Primary dedup key: cryptographic hash (target + vuln_type + payload + engine).
     let short_hash: String = dedup_hash.chars().take(24).collect();
     let hash_id = format!("{}-{}", engine, short_hash);
     // Legacy ID (CVE/MITRE/signature) for continuity with pre-migration rows.
-    let legacy_id =
-        crate::finding_identity::build_stable_finding_id_ctx(engine, &target_url, &raw, templates);
+    let legacy_id = crate::finding_identity::build_stable_finding_id_ctx(
+        tenant_id,
+        engine,
+        &target_url,
+        &raw,
+        templates,
+    );
     let finding_id = if legacy_id != hash_id {
         // Prefer legacy when it encodes richer invariant data; fall back to hash_id.
         legacy_id
@@ -356,8 +371,13 @@ pub fn gate_findings(engine: &str, target: &str, findings: &[Value]) -> Vec<Pers
 /// Stable finding_id (CVE/MITRE/signature) for cross-scan dedup continuity.
 /// Delegates to [`crate::finding_identity::build_stable_finding_id`] so persist,
 /// gate, and correlator share one normalised hash.
-pub fn build_legacy_finding_id(engine: &str, target: &str, finding: &Value) -> String {
-    crate::finding_identity::build_stable_finding_id(engine, target, finding)
+pub fn build_legacy_finding_id(
+    tenant_id: i64,
+    engine: &str,
+    target: &str,
+    finding: &Value,
+) -> String {
+    crate::finding_identity::build_stable_finding_id(tenant_id, engine, target, finding)
 }
 
 #[cfg(test)]
@@ -397,15 +417,15 @@ mod tests {
 
     #[test]
     fn dedup_hash_stable_for_same_signature() {
-        let a = build_dedup_hash("https://x.com", "sqli", "' OR 1=1", "eng");
-        let b = build_dedup_hash("HTTPS://X.COM", "sqli", "' OR 1=1", "eng");
+        let a = build_dedup_hash(1, "https://x.com", "sqli", "' OR 1=1", "eng");
+        let b = build_dedup_hash(1, "HTTPS://X.COM", "sqli", "' OR 1=1", "eng");
         assert_eq!(a, b);
     }
 
     #[test]
     fn dedup_hash_changes_with_payload() {
-        let a = build_dedup_hash("https://x.com", "sqli", "a", "eng");
-        let b = build_dedup_hash("https://x.com", "sqli", "b", "eng");
+        let a = build_dedup_hash(1, "https://x.com", "sqli", "a", "eng");
+        let b = build_dedup_hash(1, "https://x.com", "sqli", "b", "eng");
         assert_ne!(a, b);
     }
 
@@ -423,8 +443,15 @@ mod tests {
             "signature": "xss_reflected",
             "cwe": "cwe-79",
         });
-        let id1 = build_legacy_finding_id("asm", "https://app.example.com:49152/x?q=1", &a);
-        let id2 = build_legacy_finding_id("asm", "https://app.example.com/x", &b);
+        let id1 = build_legacy_finding_id(1, "asm", "https://app.example.com:49152/x?q=1", &a);
+        let id2 = build_legacy_finding_id(1, "asm", "https://app.example.com/x", &b);
         assert_eq!(id1, id2);
+    }
+
+    #[test]
+    fn dedup_hash_is_tenant_isolated() {
+        let a = build_dedup_hash(11, "https://x.com", "sqli", "p", "eng");
+        let b = build_dedup_hash(22, "https://x.com", "sqli", "p", "eng");
+        assert_ne!(a, b);
     }
 }

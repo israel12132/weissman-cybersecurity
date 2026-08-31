@@ -1,9 +1,9 @@
-//! Aggregated drop counters for full in-process channels.
+//! Aggregated drop counters plus a bounded local audit spool.
 //!
-//! A bounded `mpsc` / flume queue that falls back to per-event JSON (tracing,
-//! JSONL, or disk) will fill a host disk and drown the customer SIEM under a
-//! DoS or a stuck consumer. Count the drops and emit **one** line per flush
-//! window — never the payload.
+//! A bounded `mpsc` / flume queue must not dump per-event JSON to tracing (SIEM
+//! flood) and must not silently discard security evidence. Count drops, emit one
+//! tracing line per flush, and persist a hashed/previewed copy under
+//! [`crate::audit_spool`].
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -29,6 +29,13 @@ impl DropAggregator {
         self.pending.fetch_add(n, Ordering::Relaxed);
     }
 
+    /// Count a drop **and** spool the payload (hash + preview) so an attacker
+    /// cannot blind the audit trail by flooding the live channel.
+    pub fn record_payload(&self, payload: &str) {
+        self.record(1);
+        crate::audit_spool::append(self.name, payload);
+    }
+
     /// Swap out the pending count and emit at most one tracing line.
     /// Returns the flushed count so tests can assert aggregation.
     pub fn flush(&self) -> Option<u64> {
@@ -36,11 +43,15 @@ impl DropAggregator {
         if n == 0 {
             return None;
         }
+        crate::audit_spool::append(
+            self.name,
+            &format!(r#"{{"aggregated_dropped":{n},"channel":"{}"}}"#, self.name),
+        );
         tracing::warn!(
             target: "overflow_log",
             channel = self.name,
             dropped = n,
-            "full channel; dropped payloads aggregated (not per-event JSON)"
+            "full channel; payloads spooled locally (not per-event SIEM JSON)"
         );
         Some(n)
     }
@@ -79,6 +90,10 @@ mod tests {
             "full SSE mpsc must aggregate drops, not dump JSON"
         );
         assert!(
+            src.contains("record_payload"),
+            "full SSE mpsc must spool the payload, not drop it silently"
+        );
+        assert!(
             !src.contains("tx.send(payload).await"),
             "blocking send on the client mpsc is the SIEM-flood path"
         );
@@ -92,5 +107,11 @@ mod tests {
             "PoE SSE Full() must not stay silent or dump JSON"
         );
         assert!(src.contains("POE_DROPS"));
+        assert!(src.contains("record_payload"));
+        let rest4 = include_str!("server_handlers_rest4.inc");
+        assert!(
+            rest4.contains("record_payload"),
+            "PoE progress Full() must spool, not silently retain"
+        );
     }
 }

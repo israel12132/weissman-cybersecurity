@@ -5,7 +5,7 @@
 //! silently, so the client can refetch authoritative state instead of trusting a gapped feed.
 //!
 //! The per-client `mpsc` is `try_send` only: a full buffer must not block the broadcast
-//! pump (that stalls every other client) and must not dump the JSON payload to disk/SIEM.
+//! pump. Overflowed payloads are hashed into the bounded local audit spool.
 
 use axum::response::sse::Event;
 use futures::stream::Stream;
@@ -44,7 +44,7 @@ where
                             }
                             match tx.try_send(payload) {
                                 Ok(()) => {}
-                                Err(TrySendError::Full(_)) => SSE_DROPS.record(1),
+                                Err(TrySendError::Full(p)) => SSE_DROPS.record_payload(&p),
                                 Err(TrySendError::Closed(_)) => break,
                             }
                         }
@@ -62,7 +62,7 @@ where
                             .to_string();
                             match tx.try_send(notice) {
                                 Ok(()) => {}
-                                Err(TrySendError::Full(_)) => SSE_DROPS.record(1),
+                                Err(TrySendError::Full(p)) => SSE_DROPS.record_payload(&p),
                                 Err(TrySendError::Closed(_)) => break,
                             }
                         }

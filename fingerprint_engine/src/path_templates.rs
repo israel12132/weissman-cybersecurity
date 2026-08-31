@@ -9,10 +9,9 @@
 //! Prefix context is preserved, so `/api/v1/public/image/{id}` never collapses
 //! onto `/api/v1/admin/billing/{id}`.
 //!
-//! The trie is an RCU snapshot (`ArcSwap<TrieNode>`): persist reads a frozen
-//! `Arc` and never waits on writers. Observes clone-modify-swap in the
-//! background so an HTTP flood during boot cannot pin Axum workers on a
-//! write lock.
+//! The trie snapshot is `ArcSwap<TrieNode>`: persist **reads** a frozen `Arc`
+//! and never waits on writers. **Writes** take a short `Mutex` (single-writer)
+//! then `store` the new snapshot — no CAS retry spin under a scan burst.
 
 use arc_swap::ArcSwap;
 use dashmap::DashMap;
@@ -20,7 +19,7 @@ use futures::stream::{self, StreamExt};
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, LazyLock};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
 const LEARN_TTL: Duration = Duration::from_secs(60);
@@ -53,6 +52,9 @@ struct TrieNode {
 pub struct PathTemplateIndex {
     root: ArcSwap<TrieNode>,
     observes: AtomicUsize,
+    /// Serializes writers so a scan burst cannot spin `rcu` to 100% CPU.
+    /// Readers (`apply_segments`) still `load()` a frozen snapshot with no lock.
+    write: Mutex<()>,
 }
 
 impl Default for PathTemplateIndex {
@@ -60,6 +62,7 @@ impl Default for PathTemplateIndex {
         Self {
             root: ArcSwap::from_pointee(TrieNode::default()),
             observes: AtomicUsize::new(0),
+            write: Mutex::new(()),
         }
     }
 }
@@ -82,10 +85,8 @@ impl PathTemplateIndex {
         self.observe_urls(std::iter::once(raw));
     }
 
-    /// Clone-modify-swap through [`ArcSwap::rcu`]: that helper is a CAS loop
-    /// (load → clone → modify → compare-exchange → retry with the winner).
-    /// Two persist workers observing the same tenant cannot lost-update.
-    /// Readers keep walking the previous `Arc` with no write lock.
+    /// Exclusive writer: lock, clone the frozen snapshot, mutate, `store`.
+    /// Readers never take this lock. A scan burst cannot CAS-spin the core.
     pub fn observe_urls(&self, urls: impl IntoIterator<Item = impl AsRef<str>>) {
         if self.is_full() {
             return;
@@ -109,15 +110,18 @@ impl PathTemplateIndex {
             return;
         }
         let take = batch.len().min(remaining);
-        // `rcu` retries the closure against the latest snapshot when another
-        // writer won the swap — this batch is applied on top, never instead.
-        self.root.rcu(|current| {
-            let mut n = (**current).clone();
-            for segs in batch.iter().take(take) {
-                insert_path(&mut n, segs);
-            }
-            Arc::new(n)
-        });
+        let _guard = self.write.lock().unwrap_or_else(|p| p.into_inner());
+        let remaining = MAX_PATHS_PER_TENANT.saturating_sub(self.observes.load(Ordering::Relaxed));
+        if remaining == 0 {
+            return;
+        }
+        let take = take.min(remaining);
+        let current = self.root.load();
+        let mut n = (**current).clone();
+        for segs in batch.iter().take(take) {
+            insert_path(&mut n, segs);
+        }
+        self.root.store(Arc::new(n));
         self.observes.fetch_add(take, Ordering::Relaxed);
     }
 
@@ -417,8 +421,8 @@ mod tests {
         assert_eq!(public, "https://api.corp/api/v1/public/image/{id}");
         assert_eq!(admin, "https://api.corp/api/v1/admin/billing/{id}");
         assert_ne!(
-            build_cluster_key_ctx(&public, "xss", "CWE-79", &hint, Some(&idx)),
-            build_cluster_key_ctx(&admin, "xss", "CWE-79", &hint, Some(&idx))
+            build_cluster_key_ctx(1, &public, "xss", "CWE-79", &hint, Some(&idx)),
+            build_cluster_key_ctx(1, &admin, "xss", "CWE-79", &hint, Some(&idx))
         );
     }
 
@@ -494,8 +498,8 @@ mod tests {
 
     #[test]
     fn concurrent_observe_does_not_lost_update() {
-        // Same tenant, two writers, disjoint prefixes. A load-clone-store (no
-        // CAS retry) would drop one side; `ArcSwap::rcu` must keep both.
+        // Same tenant, two writers, disjoint prefixes. The write mutex serializes
+        // clone-modify-store so both sides land; readers never take the lock.
         for _ in 0..32 {
             let idx = Arc::new(PathTemplateIndex::new());
             let a = idx.clone();
@@ -552,5 +556,22 @@ mod tests {
             Some(idx.as_ref()),
         );
         assert_eq!(carol, "https://api.corp/api/v1/users/{id}");
+    }
+
+    #[test]
+    fn writers_serialize_via_mutex_not_cas_spin() {
+        let src = include_str!("path_templates.rs");
+        assert!(
+            src.contains("write: Mutex<()>"),
+            "trie writes must take a single-writer mutex"
+        );
+        assert!(
+            src.contains("self.root.store"),
+            "exclusive writer stores the snapshot; no CAS retry loop"
+        );
+        assert!(
+            !src.contains("self.root.rcu"),
+            "rcu/CAS spin is forbidden on the observe path"
+        );
     }
 }

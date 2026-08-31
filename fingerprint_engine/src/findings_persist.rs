@@ -269,8 +269,13 @@ impl Sealed for FindingsPersistWriter {}
 impl VulnerabilitiesWriter for FindingsPersistWriter {}
 
 /// Build a stable finding identifier (delegates to evidence gate).
-pub(crate) fn build_finding_id(engine: &str, target: &str, finding: &Value) -> String {
-    findings_gate::build_legacy_finding_id(engine, target, finding)
+pub(crate) fn build_finding_id(
+    tenant_id: i64,
+    engine: &str,
+    target: &str,
+    finding: &Value,
+) -> String {
+    findings_gate::build_legacy_finding_id(tenant_id, engine, target, finding)
 }
 
 /// Create (or reuse) a report_runs row and insert one row per finding.
@@ -368,9 +373,13 @@ pub async fn persist_engine_findings(
 
     let mut inserted: u64 = 0;
     for (finding_index, raw) in findings.iter().cloned().enumerate() {
-        let Some(gated) =
-            gate_finding_with_templates(engine, target, raw, Some(path_templates.as_ref()))
-        else {
+        let Some(gated) = gate_finding_with_templates(
+            tenant_id,
+            engine,
+            target,
+            raw,
+            Some(path_templates.as_ref()),
+        ) else {
             tracing::warn!(
                 target: "findings_persist",
                 engine = %engine,
@@ -525,6 +534,7 @@ pub async fn persist_engine_findings(
         let vuln_signature = crate::finding_identity::derive_vuln_signature(f, &title);
         let identity_hint = crate::finding_identity::identity_hint_from_finding(f);
         let signature_hash = crate::finding_identity::build_cluster_key_ctx(
+            tenant_id,
             &target_url,
             &vuln_signature,
             &cwe,
@@ -1002,8 +1012,8 @@ mod tests {
             "evidence": "body snapshot Z (totally different)",
             "discovered_at": "2026-06-13T00:00:00Z"
         });
-        let id1 = build_finding_id("sqli_engine", "https://Example.com/login", &first);
-        let id2 = build_finding_id("sqli_engine", "https://example.com/login", &rescan);
+        let id1 = build_finding_id(1, "sqli_engine", "https://Example.com/login", &first);
+        let id2 = build_finding_id(1, "sqli_engine", "https://example.com/login", &rescan);
         assert_eq!(
             id1, id2,
             "finding_id must be stable across volatile fields + target case"
@@ -1017,8 +1027,8 @@ mod tests {
         let b = json!({"title": "Issue", "signature": "xss", "cve": "CVE-2021-1234"});
         let target = "https://example.com/login";
         assert_ne!(
-            build_finding_id("eng", target, &a),
-            build_finding_id("eng", target, &b),
+            build_finding_id(1, "eng", target, &a),
+            build_finding_id(1, "eng", target, &b),
             "different vulnerability signature must yield a different finding_id"
         );
     }
@@ -1030,8 +1040,9 @@ mod tests {
             "signature": "xss_reflected?sid=deadbeef",
             "cwe": "CWE-79",
         });
-        let a = build_finding_id("asm", "https://app.example.com:54321/search?q=1", &body);
+        let a = build_finding_id(1, "asm", "https://app.example.com:54321/search?q=1", &body);
         let b = build_finding_id(
+            1,
             "asm",
             "https://app.example.com/search",
             &json!({
@@ -1041,6 +1052,21 @@ mod tests {
             }),
         );
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn finding_id_is_tenant_isolated() {
+        let body = json!({
+            "title": "GraphQL Introspection",
+            "signature": "graphql_introspection",
+            "cwe": "CWE-200",
+        });
+        let target = "https://api.example.com/graphql";
+        assert_ne!(
+            build_finding_id(11, "asm", target, &body),
+            build_finding_id(22, "asm", target, &body),
+            "identical vulns on two tenants must not share finding_id"
+        );
     }
 
     #[test]

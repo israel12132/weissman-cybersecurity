@@ -17,13 +17,15 @@ use sqlx::PgPool;
 /// comparison is signature-accurate (volatile fields ignored).
 #[must_use]
 pub fn finding_still_present(
+    tenant_id: i64,
     original_finding_id: &str,
     engine: &str,
     target: &str,
     rescan_findings: &[Value],
 ) -> bool {
     rescan_findings.iter().any(|f| {
-        crate::findings_persist::build_finding_id(engine, target, f) == original_finding_id
+        crate::findings_persist::build_finding_id(tenant_id, engine, target, f)
+            == original_finding_id
     })
 }
 
@@ -50,7 +52,13 @@ pub async fn run_verification(
         return Err("engine, target and finding_id are required".into());
     }
     let result = run_engine(engine, target, ctx).await;
-    let still = finding_still_present(original_finding_id, engine, target, &result.findings);
+    let still = finding_still_present(
+        tenant_id,
+        original_finding_id,
+        engine,
+        target,
+        &result.findings,
+    );
     let status = if still { "REOPENED" } else { "VERIFIED_FIXED" };
     let outcome = VerificationOutcome {
         closed: !still,
@@ -202,10 +210,11 @@ mod tests {
         let engine = "advanced_web_engines";
         let target = "https://victim.test";
         let f = json!({"title": "XSS", "signature": "reflected_xss", "cve": "CVE-2024-1"});
-        let original = crate::findings_persist::build_finding_id(engine, target, &f);
+        let original = crate::findings_persist::build_finding_id(1, engine, target, &f);
 
         // Same signature reappears on re-scan → still present → NOT closed.
         assert!(finding_still_present(
+            1,
             &original,
             engine,
             target,
@@ -215,6 +224,7 @@ mod tests {
         // Re-scan returns a different finding → original is gone → closed.
         let other = json!({"title": "Other", "signature": "different"});
         assert!(!finding_still_present(
+            1,
             &original,
             engine,
             target,
@@ -222,6 +232,6 @@ mod tests {
         ));
 
         // Empty re-scan → closed.
-        assert!(!finding_still_present(&original, engine, target, &[]));
+        assert!(!finding_still_present(1, &original, engine, target, &[]));
     }
 }

@@ -55,3 +55,28 @@ fn cluster_ingest_is_unlogged_in_both_sqlx_trees() {
         "cluster-ingest UNLOGGED migration drifted between sqlx trees"
     );
 }
+
+const LOGGED_DB: &str = include_str!("../migrations/20260831180000_cluster_ingest_logged.sql");
+const LOGGED_ENGINE: &str =
+    include_str!("../../../fingerprint_engine/migrations/20260831180000_cluster_ingest_logged.sql");
+
+#[test]
+fn cluster_ingest_is_logged_in_both_sqlx_trees() {
+    for (label, sql) in [
+        ("crates/weissman-db/migrations", LOGGED_DB),
+        ("fingerprint_engine/migrations", LOGGED_ENGINE),
+    ] {
+        assert!(
+            sql.contains("ALTER TABLE weissman_cluster_ingest SET LOGGED"),
+            "{label}: missing SET LOGGED\n{sql}"
+        );
+        assert!(
+            sql.contains("weissman_cluster_ingest_tenant_id_fkey"),
+            "{label}: must restore tenant FK after SET LOGGED"
+        );
+    }
+    assert_eq!(
+        LOGGED_DB, LOGGED_ENGINE,
+        "cluster-ingest LOGGED migration drifted between sqlx trees"
+    );
+}
