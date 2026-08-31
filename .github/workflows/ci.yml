@@ -881,6 +881,7 @@ jobs:
           WEISSMAN_AUTH_POOL_MAX: "6"
           WEISSMAN_INTEL_POOL_MAX: "4"
           PORT: "18000"
+          # See worker: no vLLM in this job.
           WEISSMAN_LIVE_AI_DISCOVERY: "0"
         run: ./target/debug/weissman-server > /tmp/weissman-server.log 2>&1 &
 
