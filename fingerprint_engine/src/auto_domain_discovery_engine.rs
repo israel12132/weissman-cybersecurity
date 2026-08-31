@@ -173,7 +173,8 @@ async fn discover_from_ct_logs(domain: &str) -> Vec<String> {
 
 /// Stage 2: DNS subdomain enumeration
 async fn discover_from_dns(domain: &str) -> Vec<String> {
-    let wordlist = default_subdomain_wordlist();
+    let wordlist =
+        crate::live_knowledge_bus::merge_subdomain_wordlist(domain, default_subdomain_wordlist());
 
     enum_subdomains(domain, &wordlist, DNS_CONCURRENCY).await
 }
