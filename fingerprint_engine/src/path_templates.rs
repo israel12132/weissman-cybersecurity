@@ -561,16 +561,17 @@ mod tests {
     #[test]
     fn writers_serialize_via_mutex_not_cas_spin() {
         let src = include_str!("path_templates.rs");
+        let impl_src = src.split("#[cfg(test)]").next().expect("impl before tests");
         assert!(
-            src.contains("write: Mutex<()>"),
+            impl_src.contains("write: Mutex<()>"),
             "trie writes must take a single-writer mutex"
         );
         assert!(
-            src.contains("self.root.store"),
+            impl_src.contains("self.root.store"),
             "exclusive writer stores the snapshot; no CAS retry loop"
         );
         assert!(
-            !src.contains("self.root.rcu"),
+            !impl_src.contains(".rcu("),
             "rcu/CAS spin is forbidden on the observe path"
         );
     }
