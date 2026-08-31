@@ -201,13 +201,15 @@ pub async fn tenant_scan_rate_limit_middleware(
         }
     }
 
-    let limit = per_tenant_scan_per_minute().get() as u64;
+    let refill = per_tenant_scan_per_minute().get();
+    let burst_n = tenant_scan_burst().get();
+    let limit = refill.max(burst_n) as u64;
     if super::rate_limit_redis::is_enabled() {
         if let Some(count) = super::rate_limit_redis::incr_tenant_scan(ctx.tenant_id).await {
             if count > limit {
                 rate_limit_metrics::record_scan_denied(ctx.tenant_id, &path);
                 let retry_after_secs = 60u64;
-                let burst = tenant_scan_burst().get();
+                let burst = burst_n;
                 tracing::warn!(
                     target: "rate_limit",
                     tenant_id = ctx.tenant_id,

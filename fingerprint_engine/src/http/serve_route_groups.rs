@@ -29,11 +29,24 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/intel/suppressions/:id",
             delete(api_intel_suppression_delete),
         )
-        // Attack-path inference (BFS over risk_graph weighted by CVSS+EPSS+KEV).
+        // Attack-path inference (Dijkstra over risk_graph weighted by CVSS+EPSS+KEV).
         .route(
             "/api/attack-paths/:client_id",
             get(api_attack_paths_for_client),
         )
+        .route("/api/cem-dago/status", get(api_cem_dago_status))
+        .route("/api/cem-dago/manifests", get(api_cem_dago_manifests))
+        .route("/api/cem-dago/waves", get(api_cem_dago_waves))
+        .route("/api/cem-dago/blackboard", get(api_cem_dago_blackboard))
+        .route(
+            "/api/attack-paths/:client_id/what-if",
+            post(api_attack_paths_what_if),
+        )
+        .route(
+            "/api/supreme-brain/:client_id",
+            get(api_supreme_brain_for_client),
+        )
+        .route("/api/pentest-memory/stats", get(api_pentest_memory_stats))
         .route(
             "/api/battlespace/topology/:client_id",
             get(api_battlespace_topology),
@@ -122,10 +135,19 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/playbooks/fire", post(api_playbooks_fire))
         .route("/api/playbooks/:id/runs", get(api_playbook_runs))
+        .route("/api/soar/executions", get(api_soar_executions_list))
         .route("/api/soar/executions/:id", get(api_soar_execution_get))
         .route(
             "/api/soar/executions/:id/revert",
             post(api_soar_execution_revert),
+        )
+        .route(
+            "/api/soar/executions/:id/hitl/approve",
+            post(api_soar_hitl_approve),
+        )
+        .route(
+            "/api/soar/executions/:id/hitl/deny",
+            post(api_soar_hitl_deny),
         )
         // Financial blast-radius
         .route(
@@ -249,6 +271,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/agents/session", post(api_agents_session))
         .route("/api/agents/status", get(api_agents_status))
         .route("/api/agents/dispatch", post(api_agents_dispatch_task))
+        .route("/api/agents/:id/kill-switch", post(api_agents_kill_switch))
         .route("/install/agent.sh", get(install_agent_sh))
         .route("/install/agent.ps1", get(install_agent_ps1))
         .route(
@@ -722,6 +745,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/payload-sync/status", get(api_payload_sync_status))
         .route("/api/payload-sync/payloads", get(api_payload_sync_payloads))
         .route("/api/payload-sync/run", post(api_payload_sync_run))
+        .route(
+            "/api/discovery-knowledge/stats",
+            get(api_discovery_knowledge_stats),
+        )
         .route("/api/edge-swarm/nodes", get(api_edge_swarm_nodes))
         .route("/api/edge-swarm/heartbeat", post(api_edge_swarm_heartbeat))
         .route("/api/edge-fuzz/manifest", get(api_edge_fuzz_manifest))

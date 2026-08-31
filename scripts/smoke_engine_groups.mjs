@@ -34,7 +34,11 @@ function isCatalogOnlyError(payload) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(`${BASE_URL}${path}`, options)
+  const { timeoutMs = 30_000, ...fetchOptions } = options
+  const response = await fetch(`${BASE_URL}${path}`, {
+    ...fetchOptions,
+    signal: AbortSignal.timeout(timeoutMs),
+  })
   const rawText = await response.text()
   let body = rawText
   try {
@@ -56,6 +60,22 @@ async function login() {
     throw new Error(`login failed (${response.status}): ${JSON.stringify(body)}`)
   }
   return body.access_token
+}
+
+async function requireOwner(headers) {
+  const { response, body } = await api('/api/auth/me', { headers })
+  if (!response.ok) {
+    throw new Error(`auth/me failed (${response.status}): ${JSON.stringify(body)}`)
+  }
+  if (body?.can_create_clients !== true) {
+    throw new Error(
+      `smoke login ${LOGIN_EMAIL} cannot create clients ` +
+        `(can_create_clients=${body?.can_create_clients}, is_owner=${body?.is_owner}, ` +
+        `is_superadmin=${body?.is_superadmin}, role=${body?.role}). ` +
+        'Client lifecycle is owner-only; use WEISSMAN_ADMIN_EMAIL (promoted is_superadmin), ' +
+        'not a staff bootstrap user.',
+    )
+  }
 }
 
 async function listClients(headers) {
@@ -98,7 +118,12 @@ async function ensureClient(headers) {
       body: JSON.stringify(payload),
     })
     if (!created.response.ok) {
-      throw new Error(`client create failed (${created.response.status}): ${JSON.stringify(created.body)}`)
+      throw new Error(
+        `client create failed (${created.response.status}): ${JSON.stringify(created.body)}` +
+          (created.response.status === 403
+            ? ' Log in as the platform owner (WEISSMAN_ADMIN_EMAIL), not a staff user.'
+            : ''),
+      )
     }
     clients = await listClients(headers)
     client = clients.find((entry) => entry.name === CLIENT_NAME)
@@ -159,6 +184,10 @@ async function waitForJob(headers, jobId) {
   while (Date.now() - startedAt < POLL_TIMEOUT_MS) {
     await sleep(1000)
     const { response, body } = await api(`/api/jobs/${jobId}`, { headers })
+    if (response.status === 401) {
+      headers.authorization = `Bearer ${await login()}`
+      continue
+    }
     if (!response.ok) {
       latest = { status: `http_${response.status}`, error: JSON.stringify(body) }
       continue
@@ -183,56 +212,70 @@ function summariseJob(entry, jobId, job) {
   }
 }
 
+function record(results, failures, summary) {
+  results.push(summary)
+  if (String(summary?.status).toLowerCase() !== 'completed' || isCatalogOnlyError(summary)) {
+    failures.push(summary)
+  }
+  console.log(JSON.stringify(summary))
+}
+
+async function runEngine(headers, clientId, entry) {
+  const queued = await submitScan(headers, clientId, entry)
+  const jobId = queued?.job_id
+  if (!jobId) {
+    throw new Error(`missing job_id in response: ${JSON.stringify(queued)}`)
+  }
+  const job = await waitForJob(headers, jobId)
+  return summariseJob(entry, jobId, job)
+}
+
 async function main() {
   const token = await login()
   const headers = {
     'content-type': 'application/json',
     authorization: `Bearer ${token}`,
   }
+  await requireOwner(headers)
   const client = await ensureClient(headers)
   const results = []
   const failures = []
 
   for (const entry of GROUP_SMOKE_PLAN) {
-    // Refresh the access token before each engine so a long sequential run (many
-    // engines, each polled for up to POLL_TIMEOUT_MS) can never outlive the
-    // ~15-min access-token TTL — otherwise the later engines' submits/polls fail
-    // with HTTP 401 once the token expires mid-run (observed as a cascade of
-    // "scan submit failed (401)" after the first few slow engines).
+    // One login for the whole sweep. CI sets WEISSMAN_ACCESS_TOKEN_MINUTES=120 so
+    // the bearer outlives 14 engines. Re-login-per-engine hits the production
+    // per-IP login limiter (8/min, Redis token-bucket) and 429s the rest of the
+    // run; re-auth only on 401 if a token ever does expire.
     try {
-      const fresh = await login()
-      if (fresh) headers.authorization = `Bearer ${fresh}`
-    } catch {
-      // Keep the existing token if a transient re-login blips; the submit below
-      // still surfaces a real auth failure if the token is genuinely dead.
-    }
-
-    try {
-      const queued = await submitScan(headers, client.id, entry)
-      const jobId = queued?.job_id
-      if (!jobId) {
-        throw new Error(`missing job_id in response: ${JSON.stringify(queued)}`)
-      }
-      const job = await waitForJob(headers, jobId)
-      const summary = summariseJob(entry, jobId, job)
-      results.push(summary)
-      if (String(job?.status).toLowerCase() !== 'completed' || isCatalogOnlyError(job)) {
-        failures.push(summary)
-      }
-      console.log(JSON.stringify(summary))
+      record(results, failures, await runEngine(headers, client.id, entry))
     } catch (error) {
-      const summary = {
-        group: entry.group,
-        engine: entry.engine,
-        target: entry.target,
-        jobId: null,
-        status: 'failed_to_execute',
-        findingsCount: null,
-        error: error instanceof Error ? error.message : String(error),
+      const msg = error instanceof Error ? error.message : String(error)
+      if (/\(401\)/.test(msg)) {
+        try {
+          headers.authorization = `Bearer ${await login()}`
+          record(results, failures, await runEngine(headers, client.id, entry))
+        } catch (retryErr) {
+          record(results, failures, {
+            group: entry.group,
+            engine: entry.engine,
+            target: entry.target,
+            jobId: null,
+            status: 'failed_to_execute',
+            findingsCount: null,
+            error: retryErr instanceof Error ? retryErr.message : String(retryErr),
+          })
+        }
+      } else {
+        record(results, failures, {
+          group: entry.group,
+          engine: entry.engine,
+          target: entry.target,
+          jobId: null,
+          status: 'failed_to_execute',
+          findingsCount: null,
+          error: msg,
+        })
       }
-      results.push(summary)
-      failures.push(summary)
-      console.log(JSON.stringify(summary))
     }
     await sleep(BETWEEN_RUN_DELAY_MS)
   }

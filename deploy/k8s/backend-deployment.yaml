@@ -112,6 +112,16 @@ spec:
                 secretKeyRef:
                   name: weissman-secrets
                   key: auth_database_url
+            - name: WEISSMAN_WORKER_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: worker_database_url
+            - name: WEISSMAN_ANALYTICS_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: analytics_database_url
             - name: WEISSMAN_MIGRATE_URL
               valueFrom:
                 secretKeyRef:
@@ -154,6 +164,11 @@ spec:
                 secretKeyRef:
                   name: weissman-secrets
                   key: metrics_token
+            - name: WEISSMAN_RAG_PROVENANCE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: rag_provenance_secret
             - name: WEISSMAN_MIGRATIONS_DIR
               value: "/srv/migrations"
           readinessProbe:

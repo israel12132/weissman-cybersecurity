@@ -1,9 +1,9 @@
 -- Production Postgres role grants (run as superuser after migrations).
 --
 -- Password rotation is AUTOMATIC on boot: weissman_db::auth_rotation::
--- sync_role_passwords_from_env_on_boot aligns weissman_app / weissman_auth / weissman_ro
--- with the passwords in DATABASE_URL / WEISSMAN_AUTH_DATABASE_URL /
--- WEISSMAN_READ_ONLY_DATABASE_URL using WEISSMAN_MIGRATE_URL (superuser). You no longer
+-- sync_role_passwords_from_env_on_boot aligns weissman_app / weissman_auth / weissman_ro /
+-- weissman_worker / weissman_analytics with the passwords in the matching DSNs using
+-- WEISSMAN_MIGRATE_URL (superuser). You no longer
 -- need to hand-run ALTER ROLE ... PASSWORD; just set strong values in .env.
 --
 -- weissman_app is the RLS-scoped application role. This file grants ONLY what that role
@@ -13,8 +13,8 @@
 -- and the NL->SQL migration whitelists exactly the tables weissman_ro may read). Widening
 -- them here would silently undo that hardening — so we don't.
 
-GRANT CONNECT ON DATABASE weissman TO weissman_app, weissman_auth;
-GRANT USAGE ON SCHEMA public TO weissman_app, weissman_auth;
+GRANT CONNECT ON DATABASE weissman TO weissman_app, weissman_auth, weissman_worker, weissman_analytics;
+GRANT USAGE ON SCHEMA public TO weissman_app, weissman_auth, weissman_worker, weissman_analytics;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO weissman_app;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO weissman_app;
 

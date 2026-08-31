@@ -18,6 +18,89 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use std::sync::LazyLock;
+
+/// Error / empty scans must never close or rewrite existing findings.
+/// Only a successful engine run (`status=ok`) with at least one finding may persist.
+pub fn scan_may_mutate_findings(engine_status: &str, finding_count: usize) -> bool {
+    engine_status.eq_ignore_ascii_case("ok") && finding_count > 0
+}
+
+fn severity_hfv_rank(s: &str) -> u8 {
+    match s.trim().to_ascii_lowercase().as_str() {
+        "critical" | "crit" => 4,
+        "high" => 3,
+        "medium" | "med" => 2,
+        "low" => 1,
+        _ => 0,
+    }
+}
+
+/// High-water finding value while the row is open.
+///
+/// A verified close freezes `existing_watermark` (native severity at close) for SLA
+/// history. A later `REOPENED` cycle ignores that freeze and starts at `incoming_severity`.
+#[must_use]
+pub fn hfv_watermark_after_scan(
+    existing_watermark: Option<&str>,
+    incoming_severity: &str,
+    existing_status: &str,
+    cycle_closed: bool,
+) -> Option<String> {
+    let incoming = incoming_severity.trim();
+    if cycle_closed || existing_status.eq_ignore_ascii_case("VERIFIED_FIXED") {
+        return existing_watermark
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(ToOwned::to_owned)
+            .or_else(|| {
+                if incoming.is_empty() {
+                    None
+                } else {
+                    Some(incoming.to_string())
+                }
+            });
+    }
+    if existing_status.eq_ignore_ascii_case("REOPENED") {
+        if incoming.is_empty() {
+            return None;
+        }
+        return Some(incoming.to_string());
+    }
+    let a = existing_watermark.unwrap_or("").trim();
+    if severity_hfv_rank(a) >= severity_hfv_rank(incoming) && !a.is_empty() {
+        Some(a.to_string())
+    } else if !incoming.is_empty() {
+        Some(incoming.to_string())
+    } else if !a.is_empty() {
+        Some(a.to_string())
+    } else {
+        None
+    }
+}
+
+/// Native severity frozen onto the closed cycle so SLA/FAIR history aggregations
+/// still see the row (never NULL). Historical closed-cycle values live in
+/// `vulnerability_lifecycle_events`; this helper only updates the live inbox row.
+#[must_use]
+pub fn hfv_watermark_on_verified_fixed(native_severity: &str) -> Option<String> {
+    let s = native_severity.trim();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s.to_string())
+    }
+}
+
+/// A `REOPENED` finding always mints a **new** `cycle_id`. Prior cycle ledger
+/// rows in `vulnerability_lifecycle_events` are never updated.
+#[must_use]
+pub fn hfv_cycle_id_for_status(existing: Option<uuid::Uuid>, new_status: &str) -> uuid::Uuid {
+    if new_status.eq_ignore_ascii_case("REOPENED") {
+        uuid::Uuid::new_v4()
+    } else {
+        existing.unwrap_or_else(uuid::Uuid::new_v4)
+    }
+}
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::db;
@@ -280,6 +363,8 @@ pub async fn persist_engine_findings(
     findings: &[Value],
 ) -> Result<u64, String> {
     if findings.is_empty() || client_id.is_none() {
+        // Empty result (including a failed/empty error scan) must not touch
+        // existing rows — never auto-FIXED, never wipe analyst status.
         return Ok(0);
     }
     let client_id = client_id.expect("client_id.is_none() checked above");
@@ -321,6 +406,11 @@ pub async fn persist_engine_findings(
         .collect();
     let epss_map = intel_epss::fetch_epss_for_cves(pool, &scan_cves).await;
     let kev_map = intel_kev::kev_listed_for_cves(pool, &scan_cves).await;
+
+    let bus_on = weissman_job_bus::JobBus::from_env(pool.clone())
+        .await
+        .is_enabled();
+    let mut soar_held: Vec<(uuid::Uuid, serde_json::Value)> = Vec::new();
 
     let mut tx = db::begin_tenant_tx(pool, tenant_id)
         .await
@@ -649,11 +739,12 @@ pub async fn persist_engine_findings(
                  (run_id, tenant_id, client_id, finding_id, title, severity, source,
                   description, status, proof, poc_commitment_sha256, raw_data, discovered_at,
                   signature_hash, epss_score, kev_listed, kev_known_ransomware, kev_due_date,
-                  intel_enriched_at, confidence_multiplier, effective_risk, poc_sealed)
+                  intel_enriched_at, confidence_multiplier, effective_risk, poc_sealed,
+                  watermark_severity, is_cycle_closed, cycle_id)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now(),
                        $13, $14, $15, $16, $17,
                        CASE WHEN $14 IS NOT NULL OR $15 THEN now() ELSE NULL END,
-                       $18, $19, $20)
+                       $18, $19, $20, $6, FALSE, gen_random_uuid())
                ON CONFLICT (tenant_id, client_id, finding_id) DO UPDATE SET
                    run_id               = EXCLUDED.run_id,
                    title                = EXCLUDED.title,
@@ -670,6 +761,21 @@ pub async fn persist_engine_findings(
                    confidence_multiplier = EXCLUDED.confidence_multiplier,
                    effective_risk       = EXCLUDED.effective_risk,
                    poc_sealed           = vulnerabilities.poc_sealed OR EXCLUDED.poc_sealed,
+                   watermark_severity   = CASE
+                       WHEN vulnerabilities.status IN ('VERIFIED_FIXED')
+                            OR vulnerabilities.is_cycle_closed
+                           THEN COALESCE(NULLIF(vulnerabilities.watermark_severity, ''), vulnerabilities.severity)
+                       WHEN CASE lower(COALESCE(NULLIF(vulnerabilities.watermark_severity, ''), vulnerabilities.severity))
+                              WHEN 'critical' THEN 4 WHEN 'high' THEN 3
+                              WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END
+                            >= CASE lower(EXCLUDED.severity)
+                              WHEN 'critical' THEN 4 WHEN 'high' THEN 3
+                              WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END
+                           THEN COALESCE(NULLIF(vulnerabilities.watermark_severity, ''), vulnerabilities.severity)
+                       ELSE EXCLUDED.severity
+                   END,
+                   is_cycle_closed      = (vulnerabilities.status IN ('VERIFIED_FIXED')),
+                   cycle_id             = COALESCE(vulnerabilities.cycle_id, gen_random_uuid()),
                    updated_at           = now(),
                    last_seen_at         = now(),
                    seen_count           = vulnerabilities.seen_count + 1
@@ -915,17 +1021,48 @@ pub async fn persist_engine_findings(
             signature_hash: Some(signature_hash.clone()),
             internet_exposed,
         };
-        let pool_for_dispatch: PgPool = (*pool).clone();
-        tokio::spawn(async move {
-            let _permit = post_persist_db_permit().await;
-            crate::soar::dispatch_record::record_post_persist_dispatch(
-                &pool_for_dispatch,
-                tenant_id,
-                upserted_id,
-                event,
-            )
-            .await;
+        // Durable outbox: same tenant transaction as the finding. Crash after
+        // commit still leaves a `soar_dispatch` job for the SOAR worker to retry.
+        let job_payload = serde_json::json!({
+            "event": event,
+            "finding_id": upserted_id,
         });
+        let enq = if bus_on {
+            weissman_db::job_queue::enqueue_held_in_tx(
+                &mut tx,
+                tenant_id,
+                "soar_dispatch",
+                job_payload.clone(),
+                None,
+                60,
+            )
+            .await
+        } else {
+            weissman_db::job_queue::enqueue_in_tx(
+                &mut tx,
+                tenant_id,
+                "soar_dispatch",
+                job_payload.clone(),
+                None,
+            )
+            .await
+        };
+        match enq {
+            Ok(id) => {
+                if bus_on {
+                    soar_held.push((id, job_payload));
+                }
+            }
+            Err(e) => {
+                tracing::error!(
+                    target: "findings_persist",
+                    tenant_id,
+                    finding_id = upserted_id,
+                    error = %e,
+                    "failed to enqueue durable SOAR dispatch outbox row"
+                );
+            }
+        }
     }
 
     // Bump hit_count telemetry for every suppression rule that matched this run, in one statement
@@ -933,6 +1070,27 @@ pub async fn persist_engine_findings(
     fp_feedback::bump_suppression_hits(&mut tx, tenant_id, engine, &suppression_hits).await;
 
     tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+
+    for (job_id, payload) in soar_held {
+        if let Err(e) = crate::async_jobs::finalize_held_job(
+            pool,
+            job_id,
+            tenant_id,
+            "soar_dispatch",
+            payload,
+            None,
+        )
+        .await
+        {
+            tracing::error!(
+                target: "findings_persist",
+                tenant_id,
+                job_id = %job_id,
+                error = %e,
+                "SOAR outbox envelope attach failed — job stays held"
+            );
+        }
+    }
 
     if inserted > 0 {
         let pool_arc = std::sync::Arc::new((*pool).clone());
@@ -1140,6 +1298,16 @@ mod tests {
     }
 
     #[test]
+    fn empty_or_error_scan_does_not_mutate_findings() {
+        assert!(!scan_may_mutate_findings("error", 0));
+        assert!(!scan_may_mutate_findings("error", 12));
+        assert!(!scan_may_mutate_findings("ok", 0));
+        assert!(!scan_may_mutate_findings("timeout", 3));
+        assert!(scan_may_mutate_findings("ok", 1));
+        assert!(scan_may_mutate_findings("OK", 4));
+    }
+
+    #[test]
     fn finding_id_changes_with_signature() {
         let a = json!({"title": "Issue", "signature": "sqli", "cve": "CVE-2021-1234"});
         let b = json!({"title": "Issue", "signature": "xss", "cve": "CVE-2021-1234"});
@@ -1149,6 +1317,58 @@ mod tests {
             build_finding_id("eng", target, &b),
             "different vulnerability signature must yield a different finding_id"
         );
+    }
+
+    #[test]
+    fn hfv_watermark_rises_and_does_not_fall() {
+        assert_eq!(
+            hfv_watermark_after_scan(Some("medium"), "critical", "OPEN", false).as_deref(),
+            Some("critical")
+        );
+        assert_eq!(
+            hfv_watermark_after_scan(Some("critical"), "low", "OPEN", false).as_deref(),
+            Some("critical")
+        );
+        assert_eq!(
+            hfv_watermark_after_scan(None, "high", "OPEN", false).as_deref(),
+            Some("high")
+        );
+    }
+
+    #[test]
+    fn hfv_watermark_freezes_native_on_verified_fixed_and_reopens_clean() {
+        assert_eq!(
+            hfv_watermark_on_verified_fixed("critical").as_deref(),
+            Some("critical")
+        );
+        assert_eq!(
+            hfv_watermark_after_scan(Some("critical"), "low", "VERIFIED_FIXED", true).as_deref(),
+            Some("critical"),
+            "closed cycle keeps native severity for SLA history aggregations"
+        );
+        assert_eq!(
+            hfv_watermark_after_scan(Some("critical"), "medium", "REOPENED", false).as_deref(),
+            Some("medium"),
+            "regression starts a new cycle at live severity, not the old peak"
+        );
+    }
+
+    #[test]
+    fn hfv_reopened_mints_new_cycle_id_and_preserves_prior() {
+        let cycle1 = uuid::Uuid::from_u128(0x1111);
+        assert_eq!(
+            hfv_cycle_id_for_status(Some(cycle1), "VERIFIED_FIXED"),
+            cycle1,
+            "close keeps the cycle so the ledger close event shares cycle_id"
+        );
+        assert_eq!(hfv_cycle_id_for_status(Some(cycle1), "OPEN"), cycle1);
+        let reopened = hfv_cycle_id_for_status(Some(cycle1), "REOPENED");
+        assert_ne!(
+            reopened, cycle1,
+            "regression must be a new ledger cycle; never mutate the closed cycle row"
+        );
+        let again = hfv_cycle_id_for_status(Some(cycle1), "REOPENED");
+        assert_ne!(again, reopened, "each reopen mints a distinct cycle_id");
     }
 }
 

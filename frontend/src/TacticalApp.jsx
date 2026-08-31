@@ -66,6 +66,7 @@ import {
   AstFuzzingStudio,
   FeedbackLoopVerification,
   CouncilHitlQueue,
+  SoarHitlQueue,
   SelfImprovementConsole,
   RoeApprovals,
   SsoDashboard,
@@ -84,6 +85,8 @@ import {
   VulnIntelDashboard,
   FinancialRisk,
   AttackPaths,
+  SupremeBrain,
+  CemDagoMesh,
   AttackCoverage,
   SecurityPosture,
   IocFeed,
@@ -125,6 +128,7 @@ import {
   BaselineAndDrift,
   IdentityContextManager,
   IdentitySecurityCenter,
+  PrivilegeEscalationCommandCenter,
   KerberosSecurityCommandCenter,
   SmbNetbiosCommandCenter,
   PasswordSprayCommandCenter,
@@ -239,6 +243,7 @@ export default function TacticalApp() {
           <Route path="jwt-lab" element={<JwtAttackLab />} />
           <Route path="file-upload-lab" element={<FileUploadSecurityLab />} />
           <Route path="identity-security" element={<IdentitySecurityCenter />} />
+          <Route path="privilege-escalation" element={<PrivilegeEscalationCommandCenter />} />
           <Route path="kerberos-security" element={<KerberosSecurityCommandCenter />} />
           <Route path="smb-netbios" element={<SmbNetbiosCommandCenter />} />
           <Route path="password-spray" element={<PasswordSprayCommandCenter />} />
@@ -249,6 +254,7 @@ export default function TacticalApp() {
           <Route path="ast-fuzzing" element={<AstFuzzingStudio />} />
           <Route path="feedback-loop" element={<FeedbackLoopVerification />} />
           <Route path="council-queue" element={<CouncilHitlQueue />} />
+          <Route path="soar-hitl" element={<SoarHitlQueue />} />
           <Route path="self-improve" element={<SelfImprovementConsole />} />
           <Route path="roe-approvals" element={<RoeApprovals />} />
           <Route path="sso-config" element={<RequireStaff><SsoDashboard /></RequireStaff>} />
@@ -267,6 +273,8 @@ export default function TacticalApp() {
           <Route path="vuln-intel" element={<VulnIntelDashboard />} />
           <Route path="financial-risk" element={<FinancialRisk />} />
           <Route path="attack-paths" element={<AttackPaths />} />
+          <Route path="supreme-brain" element={<SupremeBrain />} />
+          <Route path="cem-dago" element={<CemDagoMesh />} />
           <Route path="attack-coverage" element={<AttackCoverage />} />
           <Route path="security-posture" element={<SecurityPosture />} />
           <Route path="iocs" element={<IocFeed />} />

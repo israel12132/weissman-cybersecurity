@@ -86,6 +86,7 @@ USER root
 RUN apk add --no-cache curl
 COPY deploy/nginx-gateway.conf          /etc/nginx/conf.d/default.conf
 COPY deploy/nginx-security-headers.inc  /etc/nginx/conf.d/security-headers.inc
+COPY deploy/nginx-strip-internal-headers.inc /etc/nginx/conf.d/strip-internal-headers.inc
 COPY --from=vite-build /build/frontend/dist /usr/share/nginx/html/command-center
 COPY deploy/public                      /usr/share/nginx/html/public
 COPY --from=website-build /build/website/dist/ /usr/share/nginx/html/public/

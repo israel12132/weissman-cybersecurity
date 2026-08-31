@@ -34,6 +34,9 @@ serde_json = "1"
 sonic-rs = "0.5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+# Dedicated background thread + lossy ring buffer so tracing::error! on the HTTP
+# path never waits on stdout/NFS (Ask Weissman nlqa1 fallback under audit flood).
+tracing-appender = "0.2"
 ipnetwork = "0.21"
 urlencoding = "2.1"
 rand = "0.10"
@@ -136,6 +139,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 lettre = { version = "0.11.22", default-features = false, features = ["tokio1-rustls-tls", "builder", "smtp-transport"] }
 aes-gcm = "0.10"
 hex = "0.4"
+zeroize = "1"
 syn = { version = "2.0", features = ["full", "visit"] }
 subtle = "2.6"
 metrics = "0.24"
@@ -146,6 +150,9 @@ flume = { version = "0.12", default-features = false, features = ["async"] }
 governor = "0.6"
 moka = { version = "0.12", features = ["future"] }
 thiserror = "1"
+rmp-serde = "1.3"
+arc-swap = "1.7"
+sqlparser = { version = "0.53", default-features = false, features = ["std"] }
 # Sovereign Shield: OpenSSH-format Ed25519 for phantom SSH canaries
 ssh-key = { version = "0.6", default-features = false, features = ["std", "ed25519", "rand_core"] }
 rand_core = "0.6"
@@ -173,7 +180,9 @@ hwlocality = { version = "1.0.0-alpha.12", optional = true }
 libc = "0.2"
 
 [lints.rust]
-# hpc_runtime::linux_affinity uses libc sched_setaffinity (documented SAFETY in module).
+# Documented unsafe exceptions: hpc_runtime::linux_affinity (sched_setaffinity),
+# secret_zeroize::memlock (mlock / madvise / VirtualLock), and
+# secret_zeroize::raw_environ (libc::environ / GetEnvironmentStringsW).
 # All other modules must remain free of unsafe code.
 unsafe_code = "deny"
 

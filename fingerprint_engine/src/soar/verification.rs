@@ -57,6 +57,11 @@ pub struct PendingVerifyTask {
 }
 
 /// Claim due verification tasks for one tenant.
+///
+/// The `FOR UPDATE SKIP LOCKED` transaction only marks rows `running` and
+/// **commits before returning**. Network probes (`verify_probe`, webhooks, TCP
+/// scans) run in the caller *after* this function, so a slow probe cannot hold
+/// row locks or stall the worker queue.
 pub async fn claim_due_tasks(pool: &PgPool, tenant_id: i64, limit: i64) -> Vec<PendingVerifyTask> {
     let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
         return Vec::new();

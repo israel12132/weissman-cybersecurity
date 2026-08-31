@@ -15,6 +15,7 @@ export const PRIMARY_NAV = [
   { to: '/engines', labelKey: 'nav.engines', icon: '⬡' },
   { to: '/billing', labelKey: 'nav.billing', icon: '💳' },
   { to: '/playbooks', labelKey: 'nav.playbooks', icon: '⚡' },
+  { to: '/soar-hitl', labelKey: 'nav.soar_hitl', icon: '🛡' },
   { to: '/ask', labelKey: 'nav.ask_weissman', icon: '💬' },
 ]
 
@@ -50,6 +51,7 @@ export const INTEL_MAP_QUICKNAV = [
   { to: '/dark-web', labelKey: 'components.intelMap.dark_web', color: 'rgba(167,139,250,0.85)' },
   { to: '/threat-hunting', labelKey: 'components.intelMap.threat_hunt', color: 'rgba(139,92,246,0.85)' },
   { to: '/council-queue', labelKey: 'components.intelMap.council', color: 'rgba(251,191,36,0.7)', separatorBefore: true },
+  { to: '/soar-hitl', labelKey: 'components.intelMap.soar_hitl', color: 'rgba(251,113,133,0.85)' },
   { to: '/sso-config', labelKey: 'components.intelMap.sso', color: 'rgba(168,85,247,0.7)' },
   { to: '/admin', labelKey: 'components.intelMap.admin', color: 'rgba(251,191,36,0.9)' },
   { to: '/system-core', labelKey: 'components.intelMap.system_core' },
@@ -89,10 +91,13 @@ export const NAV_GROUPS = [
     items: [
       { to: '/threat-emulation', labelKey: 'nav.threat_emulation', icon: '◈' },
       { to: '/kill-chain', labelKey: 'nav.kill_chain', icon: '⛓' },
+      { to: '/cem-dago', labelKey: 'nav.cem_dago', icon: '🧠' },
       { to: '/attack-paths', labelKey: 'nav.attack_paths', icon: '🕸' },
+      { to: '/supreme-brain', labelKey: 'nav.supreme_brain', icon: '◈' },
       { to: '/ai-analysis', labelKey: 'nav.ai_analysis', icon: '🧠' },
       { to: '/exploit-lab', labelKey: 'nav.exploit_lab', icon: '🧪' },
       { to: '/council-queue', labelKey: 'nav.council_queue', icon: '⚖' },
+      { to: '/soar-hitl', labelKey: 'nav.soar_hitl', icon: '🛡' },
       { to: '/self-improve', labelKey: 'nav.self_improve', icon: '🧠' },
       { to: '/roe-approvals', labelKey: 'nav.roe_approvals', icon: '📜' },
       { to: '/remediation', labelKey: 'nav.remediation', icon: '🔧' },
@@ -126,6 +131,7 @@ export const NAV_GROUPS = [
       { to: '/tls-posture', labelKey: 'nav.tls_posture', icon: '🔒' },
       { to: '/email-posture', labelKey: 'nav.email_posture', icon: '✉' },
       { to: '/identity-security', labelKey: 'nav.identity_security', icon: '🔐' },
+      { to: '/privilege-escalation', labelKey: 'nav.privilege_escalation', icon: '⛨' },
       { to: '/kerberos-security', labelKey: 'nav.kerberos_security', icon: '🏰' },
       { to: '/smb-netbios', labelKey: 'nav.smb_netbios', icon: '🖧' },
       { to: '/password-spray', labelKey: 'nav.password_spray', icon: '🎯' },
