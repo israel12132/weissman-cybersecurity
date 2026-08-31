@@ -264,6 +264,11 @@ ensure_env() {
     # WEISSMAN_READ_ONLY_DATABASE_URL; without it /api/ask is 503 and the boot role-sync
     # strips LOGIN from weissman_ro.
     DB_RO_PASSWORD
+    # Job-bus claim plane + analytics (BYPASSRLS dedicated roles). Required by the
+    # prod overlay DSNs; without them weissman_app cannot claim jobs under fail-closed
+    # job-bus RLS and midnight billing cannot aggregate across tenants.
+    DB_WORKER_PASSWORD
+    DB_ANALYTICS_PASSWORD
     WEISSMAN_JWT_SECRET
     WEISSMAN_METRICS_TOKEN
     WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET
@@ -295,6 +300,12 @@ ensure_env() {
   if [[ -z "$(env_get WEISSMAN_VAULT_KEY)" ]]; then
     env_set WEISSMAN_VAULT_KEY "$(openssl rand -hex 32)"
     log "Generated WEISSMAN_VAULT_KEY"
+  fi
+
+  # RAG provenance HMAC — 64 hex, dedicated, never a copy of the JWT.
+  if [[ -z "$(env_get WEISSMAN_RAG_PROVENANCE_SECRET)" ]]; then
+    env_set WEISSMAN_RAG_PROVENANCE_SECRET "$(openssl rand -hex 32)"
+    log "Generated WEISSMAN_RAG_PROVENANCE_SECRET"
   fi
 
   if [[ -z "$(env_get WEISSMAN_ADMIN_EMAIL)" ]]; then
@@ -364,6 +375,9 @@ validate_env() {
   # weissman-worker; catching it here beats waiting out the health-check timeout.
   require_len WEISSMAN_JOB_ORCHESTRATOR_SECRET 32 "regenerate with: openssl rand -base64 48"
   require_len WEISSMAN_ADMIN_PASSWORD 12
+  if [[ ! "${WEISSMAN_RAG_PROVENANCE_SECRET:-}" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    die "WEISSMAN_RAG_PROVENANCE_SECRET must be exactly 64 ASCII hex characters (openssl rand -hex 32); load from the vault — no JWT/council fallback"
+  fi
 
   local weak_frags=(weissman_dev_secret weissman_auth_dev)
   for key in DB_APP_PASSWORD DB_AUTH_PASSWORD POSTGRES_PASSWORD; do

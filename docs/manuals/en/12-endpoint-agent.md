@@ -13,6 +13,7 @@ Deploy, enroll, and operate the Weissman endpoint agent (`weissman-agent`) for o
 - HTTPS `WEISSMAN_PUBLIC_BASE_URL` reachable from endpoints
 - Firewall allows outbound WSS to platform
 - Windows or Linux targets in authorized client scope
+- **linux-gnu agent:** distro TPM 2.0 TSS runtime (`libtss2-esys` / `libtss2-tctildr` / `libtss2-sys` / `libtss2-mu`). The installer installs these via `apt-get` when missing. Without them the dynamic linker will not start the process. linux-musl has no TSS link (TPM seal falls back to a 0600 file).
 
 ---
 
@@ -171,6 +172,7 @@ Checklist:
 |---------|-----|
 | Install 404 | Run `package_agent_binaries.sh`; check gateway routes |
 | SHA mismatch | Rebuild and republish binaries |
+| `libtss2-*.so: not found` | Install distro tpm2-tss runtime (or re-run `install.sh` as root so it can `apt-get`) |
 | Agent offline | Firewall blocking WSS; check `journalctl` on host |
 | Empty agent engines | Agent not associated with client; token scope wrong |
 

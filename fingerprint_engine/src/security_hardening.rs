@@ -23,36 +23,79 @@ const SCAN_SCOPE_BLOCKLIST: &[&str] = &[
     "100.100.100.200",
 ];
 
-/// When `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET` is non-empty, the header must match exactly (constant-time on equal lengths).
+/// When `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET` is non-empty, the header **or** JSON
+/// body token (`destructive_confirm`) must match exactly (constant-time on equal
+/// lengths). When both are present they must match each other. The public nginx
+/// gateway blanks inbound `X-Weissman-Destructive-Confirm`, so Command Center
+/// sends the token in the JSON body.
+///
 /// In production, an empty secret denies all destructive actions (fail-closed).
 pub fn destructive_action_authorized(headers: &HeaderMap) -> bool {
+    destructive_action_authorized_with(headers, None)
+}
+
+pub fn destructive_action_authorized_with(headers: &HeaderMap, body_token: Option<&str>) -> bool {
     let secret = std::env::var("WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET").unwrap_or_default();
     if secret.is_empty() {
         return !weissman_core::tls_policy::is_production_environment();
     }
-    let Some(hv) = headers
-        .get("x-weissman-destructive-confirm")
-        .and_then(|v| v.to_str().ok())
-    else {
-        return false;
-    };
-    header_secret_matches(hv, &secret)
+    match resolve_header_or_body_token(headers, "x-weissman-destructive-confirm", body_token) {
+        Some(provided) => header_secret_matches(&provided, &secret),
+        None => false,
+    }
 }
 
-/// Dual approval: second operator must send `X-Weissman-Dual-Approve` matching
-/// `WEISSMAN_DUAL_APPROVAL_SECRET` (independent from primary destructive confirm).
+/// Dual approval: second operator must send `X-Weissman-Dual-Approve` **or**
+/// JSON `dual_approve` matching `WEISSMAN_DUAL_APPROVAL_SECRET`.
 pub fn dual_approval_authorized(headers: &HeaderMap) -> bool {
+    dual_approval_authorized_with(headers, None)
+}
+
+pub fn dual_approval_authorized_with(headers: &HeaderMap, body_token: Option<&str>) -> bool {
     let secret = std::env::var("WEISSMAN_DUAL_APPROVAL_SECRET").unwrap_or_default();
     if secret.is_empty() {
         return !weissman_core::tls_policy::is_production_environment();
     }
-    let Some(hv) = headers
-        .get("x-weissman-dual-approve")
+    match resolve_header_or_body_token(headers, "x-weissman-dual-approve", body_token) {
+        Some(provided) => header_secret_matches(&provided, &secret),
+        None => false,
+    }
+}
+
+/// Non-empty header/body tokens. If both are present they must be equal
+/// (constant-time); a mismatch is treated as absent so the caller fails closed.
+fn resolve_header_or_body_token(
+    headers: &HeaderMap,
+    header_name: &str,
+    body_token: Option<&str>,
+) -> Option<String> {
+    let header = headers
+        .get(header_name)
         .and_then(|v| v.to_str().ok())
-    else {
-        return false;
-    };
-    header_secret_matches(hv, &secret)
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let body = body_token.map(str::trim).filter(|s| !s.is_empty());
+    match (header, body) {
+        (Some(h), Some(b)) => {
+            if header_secret_matches(h, b) {
+                Some(h.to_string())
+            } else {
+                None
+            }
+        }
+        (Some(h), None) => Some(h.to_string()),
+        (None, Some(b)) => Some(b.to_string()),
+        (None, None) => None,
+    }
+}
+
+pub fn nonempty_token(s: &str) -> Option<&str> {
+    let t = s.trim();
+    if t.is_empty() {
+        None
+    } else {
+        Some(t)
+    }
 }
 
 fn header_secret_matches(provided: &str, expected: &str) -> bool {
@@ -64,22 +107,31 @@ fn header_secret_matches(provided: &str, expected: &str) -> bool {
     a.ct_eq(b).into()
 }
 
-/// Destructive SOAR / containment paths: admin role + primary + dual approval headers.
+/// Destructive SOAR / containment paths: admin role + primary + dual approval.
 pub fn destructive_admin_dual_authorized(
     headers: &HeaderMap,
     auth: &crate::auth_jwt::AuthContext,
 ) -> Result<(), Response> {
+    destructive_admin_dual_authorized_with(headers, auth, None, None)
+}
+
+pub fn destructive_admin_dual_authorized_with(
+    headers: &HeaderMap,
+    auth: &crate::auth_jwt::AuthContext,
+    body_confirm: Option<&str>,
+    body_dual: Option<&str>,
+) -> Result<(), Response> {
     if let Err(r) = crate::rbac::require_admin(auth) {
         return Err(r);
     }
-    if !destructive_action_authorized(headers) {
+    if !destructive_action_authorized_with(headers, body_confirm) {
         return Err(destructive_denied_response(
-            "Missing or invalid X-Weissman-Destructive-Confirm header",
+            "Missing or invalid destructive confirm token (header or JSON destructive_confirm)",
         ));
     }
-    if !dual_approval_authorized(headers) {
+    if !dual_approval_authorized_with(headers, body_dual) {
         return Err(destructive_denied_response(
-            "Missing or invalid X-Weissman-Dual-Approve header (dual approval required)",
+            "Missing or invalid dual-approve token (header or JSON dual_approve)",
         ));
     }
     Ok(())
@@ -879,5 +931,62 @@ mod tests {
         // Unparseable entries are unsafe.
         let junk = vec!["not-an-ip".to_string()];
         assert!(!all_ips_public(junk.iter()));
+    }
+
+    #[test]
+    fn header_and_body_tokens_must_match_when_both_present() {
+        let mut h = HeaderMap::new();
+        h.insert(
+            "x-weissman-destructive-confirm",
+            "alpha".parse().expect("header"),
+        );
+        assert!(
+            resolve_header_or_body_token(&h, "x-weissman-destructive-confirm", Some("beta"))
+                .is_none()
+        );
+        assert_eq!(
+            resolve_header_or_body_token(&h, "x-weissman-destructive-confirm", Some("alpha"))
+                .as_deref(),
+            Some("alpha")
+        );
+        assert_eq!(
+            resolve_header_or_body_token(
+                &HeaderMap::new(),
+                "x-weissman-destructive-confirm",
+                Some("gamma")
+            )
+            .as_deref(),
+            Some("gamma")
+        );
+        assert!(resolve_header_or_body_token(
+            &HeaderMap::new(),
+            "x-weissman-destructive-confirm",
+            None
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn nginx_gateway_blanks_dual_control_headers() {
+        let conf = include_str!("../../deploy/nginx-gateway.conf");
+        let inc = include_str!("../../deploy/nginx-strip-internal-headers.inc");
+        assert!(inc.contains("proxy_set_header X-Weissman-Destructive-Confirm \"\""));
+        assert!(inc.contains("proxy_set_header X-Weissman-Dual-Approve \"\""));
+        assert!(inc.contains("proxy_set_header X-Weissman-Proxy-Hmac \"\""));
+        assert!(
+            !inc.contains("proxy_set_header X-Weissman-Signature"),
+            "must not blank HMAC webhook signatures"
+        );
+        assert!(conf.contains("strip-internal-headers.inc"));
+        let n = conf.matches("strip-internal-headers.inc").count();
+        assert!(
+            n >= 5,
+            "strip include must appear on public proxy locations, got {n}"
+        );
+        let serve = include_str!("http/serve.rs");
+        assert!(
+            serve.contains("privilege_header_proxy_middleware"),
+            "Axum must reject privilege headers from non-proxy TCP peers"
+        );
     }
 }

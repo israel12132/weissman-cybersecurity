@@ -79,8 +79,16 @@ pub enum ServerToAgent {
     },
     /// Server-side acknowledgement of a finding (mostly for flow control).
     Ack { task_id: String },
-    /// Asks the agent to shut down (revoked, deprovisioned, …).
+    /// Asks the agent to shut down (revoked, deprovisioned, …). Unsigned — ignored
+    /// unless `WEISSMAN_AGENT_ALLOW_LOCAL_STOP=1`.
     Shutdown { reason: String },
+    /// Signed remote kill — agent verifies HMAC before latching and exiting.
+    KillSwitch {
+        reason: String,
+        nonce: String,
+        issued_at_unix: i64,
+        signature: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,4 +105,7 @@ pub struct Enrollment {
     pub agent_secret: String,
     pub ws_path: String, // e.g. "/ws/agent"
     pub server_message: Option<String>,
+    /// Derived HMAC key so this agent can verify a signed kill-switch. Empty on older servers.
+    #[serde(default)]
+    pub kill_hmac_key: String,
 }

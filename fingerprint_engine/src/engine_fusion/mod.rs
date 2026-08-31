@@ -15,6 +15,7 @@
 //! | `risk_superposition_collapse` | Multi-engine Bayesian belief + STRIPS + FAIR |
 //! | `sovereign_active_defense_fusion` | MTD + cognitive starvation + deception + CHRONOS |
 //! | `fair_exposure_fusion` | External exposure grade + FAIR ALE/SLE roll-up |
+//! | `supreme_path_fair_rag` | Dijkstra attack paths × FAIR dollars × pentest RAG memory |
 
 /// Production fusion engine IDs — must remain a subset of `PRODUCTION_ENGINE_IDS`.
 pub const FUSION_ENGINE_IDS: &[&str] = &[
@@ -25,6 +26,7 @@ pub const FUSION_ENGINE_IDS: &[&str] = &[
     "risk_superposition_collapse",
     "sovereign_active_defense_fusion",
     "fair_exposure_fusion",
+    "supreme_path_fair_rag",
 ];
 
 pub use crate::external_exposure_supreme::{
@@ -45,6 +47,9 @@ pub use crate::risk_superposition_collapse_engine::{
 };
 pub use crate::sovereign_active_defense_fusion_engine::{
     run_sovereign_active_defense_fusion, run_sovereign_active_defense_fusion_result,
+};
+pub use crate::supreme_path_fair_rag_engine::{
+    run_supreme_path_fair_rag, run_supreme_path_fair_rag_result,
 };
 
 #[cfg(test)]
