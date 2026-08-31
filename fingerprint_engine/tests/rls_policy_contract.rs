@@ -181,6 +181,7 @@ const RLS_FORCE_ALLOWLIST: &[&str] = &[
     "compliance_frameworks",
     "compliance_mappings",
     "dynamic_payloads",
+    "discovery_knowledge",
     "endpoint_agent_enroll_attempts",
     "ephemeral_payloads",
     "epss_intel",
@@ -208,6 +209,15 @@ fn sql_idents_after(hay: &str, needle_lc: &str) -> Vec<String> {
         }
         if rest.starts_with("public.") {
             rest = &rest["public.".len()..];
+        } else if let Some(dot) = rest.find('.') {
+            let schema = &rest[..dot];
+            if !schema.is_empty()
+                && schema
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_')
+            {
+                rest = &rest[dot + 1..];
+            }
         }
         let ident: String = rest
             .chars()
@@ -283,6 +293,8 @@ fn hardening_migrations_20260827_identical_in_both_dirs() {
         "20260827120400_nl_query_audit_hash_chain.sql",
         "20260827120500_nl_query_audit_chain_update.sql",
         "20260827120600_cicd_scan_events_rls_cast_safe.sql",
+        "20260827160000_ot_ics_hardening_safety.sql",
+        "20260831190000_ot_ics_rls_cast_safe.sql",
         "20260830140000_nl_audit_chain_epoch_and_sovereign_allowlist.sql",
         "20260830160000_privilege_escalation_controls.sql",
         "20260830180000_cem_dago_telemetry_quarantine.sql",
