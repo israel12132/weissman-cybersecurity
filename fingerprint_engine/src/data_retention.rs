@@ -1,5 +1,7 @@
 //! Periodic cleanup for global intel tables and finished async jobs (configurable via env).
 
+//! `intel.discovery_knowledge` is unbounded (seed + live LLM + confirmed hits) and is
+//! never expired by this worker — only `ephemeral_payloads` and `dynamic_payloads` age out.
 use sqlx::PgPool;
 use std::sync::Arc;
 use std::time::Duration;

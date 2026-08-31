@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
-import { destructiveHeaders } from '../../utils/destructiveConfirm'
+import { destructiveHeaders, dualControlBody } from '../../utils/destructiveConfirm'
 import { Shield, GitPullRequest, CheckCircle, Clock, ExternalLink, Loader2, Container } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
@@ -120,7 +120,7 @@ export default function AutoHealTab() {
       const data = await apiFetch(`/api/clients/${selectedClientId}/auto-heal`, {
         method: 'POST',
         headers: destructiveHeaders({ 'Content-Type': 'application/json' }),
-        body,
+        body: dualControlBody('', '', body),
       })
       // 202-accepted was keyed on status===202 && data.job_id; on a 2xx
       // utils/apiFetch resolves to the parsed body, so key on data.job_id alone

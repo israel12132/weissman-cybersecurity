@@ -11,6 +11,7 @@ use crate::hostobs;
 use crate::ueba_edge::{self, Gate};
 use anyhow::Result;
 use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
 const TOP_PROCESSES_LIMIT: usize = 12;
@@ -126,6 +127,18 @@ fn collect_metrics() -> Value {
                 "unique_users".into(),
                 Value::from(hostobs::unique_user_count(&procs) as u64),
             );
+            let mut hashes = Map::new();
+            for name in top.iter().map(|(n, _)| n.clone()) {
+                if hashes.contains_key(&name) {
+                    continue;
+                }
+                if let Some(p) = procs.iter().find(|pr| pr.basename_lower() == name) {
+                    if let Some(h) = sha256_exe_path(&p.exe) {
+                        hashes.insert(name, Value::String(h));
+                    }
+                }
+            }
+            m.insert("top_process_hashes".into(), Value::Object(hashes));
         }
         Err(e) => {
             sampling_failed = true;
@@ -229,6 +242,25 @@ fn read_failed_logins_24h() -> u32 {
     0
 }
 
+fn sha256_exe_path(exe: &str) -> Option<String> {
+    let path = exe.trim();
+    if path.is_empty() {
+        return None;
+    }
+    let mut f = std::fs::File::open(path).ok()?;
+    let mut buf = [0u8; 64 * 1024];
+    let mut hasher = Sha256::new();
+    use std::io::Read;
+    loop {
+        let n = f.read(&mut buf).ok()?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Some(hex::encode(hasher.finalize()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -249,6 +281,10 @@ mod tests {
         assert!(v.get("open_port_count").is_some());
         assert!(v.get("process_count").is_some());
         assert!(v.get("top_processes").is_some());
+        assert!(v
+            .get("top_process_hashes")
+            .and_then(Value::as_object)
+            .is_some());
         let n = v.get("process_count").and_then(Value::as_u64).unwrap_or(0);
         assert!(n > 0, "native process table returned zero processes");
     }

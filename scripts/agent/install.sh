@@ -69,8 +69,60 @@ if [ "${EXPECTED_SHA}" != "${ACTUAL_SHA}" ]; then
     rm -f "${BIN_PATH}.tmp"
     exit 2
 fi
+
+SIG_TMP="${BIN_PATH}.sig.tmp"
+if curl -sSL --fail "${BASE_URL}/weissman-agent.sig" -o "${SIG_TMP}" 2>/dev/null; then
+    if ! command -v cosign >/dev/null 2>&1; then
+        echo "[weissman-agent] signature present but cosign is not installed" >&2
+        rm -f "${BIN_PATH}.tmp" "${SIG_TMP}"
+        exit 6
+    fi
+    PUB="${WEISSMAN_COSIGN_PUB:-${COSIGN_PUBLIC_KEY:-}}"
+    if [ -z "${PUB}" ]; then
+        echo "[weissman-agent] signature present but WEISSMAN_COSIGN_PUB is unset" >&2
+        rm -f "${BIN_PATH}.tmp" "${SIG_TMP}"
+        exit 6
+    fi
+    if ! cosign verify-blob --key "${PUB}" --signature "${SIG_TMP}" "${BIN_PATH}.tmp"; then
+        echo "[weissman-agent] cosign verify-blob failed" >&2
+        rm -f "${BIN_PATH}.tmp" "${SIG_TMP}"
+        exit 6
+    fi
+    mv "${SIG_TMP}" "${BIN_PATH}.sig"
+    echo "[weissman-agent] cosign signature verified"
+elif [ "${WEISSMAN_REQUIRE_COSIGN:-}" = "1" ]; then
+    echo "[weissman-agent] WEISSMAN_REQUIRE_COSIGN=1 but no weissman-agent.sig was published" >&2
+    rm -f "${BIN_PATH}.tmp"
+    exit 6
+fi
+
 mv "${BIN_PATH}.tmp" "${BIN_PATH}"
 chmod 0755 "${BIN_PATH}"
+
+# linux-gnu is dynamically linked against libtss2 (native ESAPI). Missing
+# libraries make the dynamic linker refuse to start the process at all —
+# TPM sealing never gets a chance to fall back to a 0600 file.
+if [ "${OS}" = "linux" ] && command -v ldd >/dev/null 2>&1; then
+    if ldd "${BIN_PATH}" 2>/dev/null | grep -q 'libtss2-.*not found'; then
+        if command -v apt-get >/dev/null 2>&1 && [ "$(id -u)" -eq 0 ]; then
+            echo "[weissman-agent] installing tpm2-tss runtime (libtss2) for native ESAPI"
+            apt-get update -qq
+            if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                libtss2-esys-3.0.2-0 libtss2-sys1 libtss2-mu0 libtss2-tctildr0 libtss2-tcti-device0; then
+                # Ubuntu 24.04 time64 transition (t64 suffix / mu soname bump).
+                DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                    libtss2-esys-3.0.2-0t64 libtss2-sys1t64 libtss2-mu-4.0.1-0t64 \
+                    libtss2-tctildr0t64 libtss2-tcti-device0t64 \
+                    || true
+            fi
+        fi
+        if ldd "${BIN_PATH}" 2>/dev/null | grep -q 'libtss2-.*not found'; then
+            echo "[weissman-agent] libtss2 is missing; the gnu agent cannot start." >&2
+            echo "  Install your distro's tpm2-tss runtime (Debian/Ubuntu: libtss2-esys + libtss2-tctildr)." >&2
+            exit 7
+        fi
+    fi
+fi
 
 # Enroll ONCE, here, and persist the identity for the service to reuse.
 #
@@ -84,6 +136,11 @@ chmod 0755 "${BIN_PATH}"
 # renewal secret, and prefers that over the token on every subsequent start. The token is a
 # bootstrap, used exactly once, which is what "single-use" was always supposed to mean.
 export WEISSMAN_AGENT_STATE_FILE="${INSTALL_DIR}/agent.state"
+if [ -n "${WEISSMAN_AGENT_TLS_PIN_SHA256:-}" ]; then
+    export WEISSMAN_AGENT_TLS_PIN_SHA256
+elif [[ "${WEISSMAN_SERVER}" == https://* ]]; then
+    export WEISSMAN_AGENT_ALLOW_UNPINNED="${WEISSMAN_AGENT_ALLOW_UNPINNED:-1}"
+fi
 ENROLL_OUT=$("${BIN_PATH}" \
     --server-url "${WEISSMAN_SERVER}" \
     --enrollment-token "${WEISSMAN_TOKEN}" \
@@ -105,12 +162,19 @@ umask 077
 # prefers the state file and will not touch the token while that exists. WEISSMAN_AGENT_STATE_FILE
 # must be present here or the service would look for state next to the binary and, not finding it,
 # fall back to the consumed token.
-cat > "${ENV_FILE}" <<EOF
-WEISSMAN_SERVER_URL=${WEISSMAN_SERVER}
-WEISSMAN_AGENT_STATE_FILE=${INSTALL_DIR}/agent.state
-WEISSMAN_ENROLLMENT_TOKEN=${WEISSMAN_TOKEN}
-RUST_LOG=info
-EOF
+{
+  echo "WEISSMAN_SERVER_URL=${WEISSMAN_SERVER}"
+  echo "WEISSMAN_AGENT_STATE_FILE=${INSTALL_DIR}/agent.state"
+  echo "WEISSMAN_AGENT_SPOOL_FILE=${INSTALL_DIR}/agent.spool.jsonl"
+  echo "WEISSMAN_AGENT_KILL_FILE=${INSTALL_DIR}/agent.killed"
+  echo "WEISSMAN_ENROLLMENT_TOKEN=${WEISSMAN_TOKEN}"
+  echo "RUST_LOG=info"
+  if [ -n "${WEISSMAN_AGENT_TLS_PIN_SHA256:-}" ]; then
+    echo "WEISSMAN_AGENT_TLS_PIN_SHA256=${WEISSMAN_AGENT_TLS_PIN_SHA256}"
+  elif [[ "${WEISSMAN_SERVER}" == https://* ]]; then
+    echo "WEISSMAN_AGENT_ALLOW_UNPINNED=${WEISSMAN_AGENT_ALLOW_UNPINNED:-1}"
+  fi
+} > "${ENV_FILE}"
 chmod 600 "${ENV_FILE}"
 
 if [ "${OS}" = "linux" ]; then
@@ -129,13 +193,17 @@ Restart=always
 RestartSec=5s
 NoNewPrivileges=true
 ProtectSystem=strict
-# ProtectSystem=strict mounts the entire filesystem read-only, so without this the agent cannot
-# write agent.state. The installer pre-writes it, but if it is ever lost the agent must be able to
-# re-enroll and persist — otherwise it would consume a fresh token on every single start and
-# crash-loop again, which is the failure this whole change removes.
 ReadWritePaths=${INSTALL_DIR}
 ProtectHome=true
 PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryMax=256M
+CPUQuota=5%
+TasksMax=64
+# ReadWritePaths keeps agent.state + logs writable under ProtectSystem=strict.
 
 [Install]
 WantedBy=multi-user.target

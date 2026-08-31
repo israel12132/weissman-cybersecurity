@@ -31,6 +31,9 @@ pub struct AgentState {
     /// TOFU SHA-256 of the last accepted Weissman server leaf (64 hex).
     #[serde(default)]
     pub server_cert_sha256: String,
+    /// Persist the kill-switch HMAC key issued at enrollment.
+    #[serde(default)]
+    pub kill_hmac_key: String,
 }
 
 impl AgentState {
@@ -44,6 +47,7 @@ impl AgentState {
             ws_path: e.ws_path.clone(),
             ueba_mac_key: e.ueba_mac_key.clone(),
             server_cert_sha256: String::new(),
+            kill_hmac_key: e.kill_hmac_key.clone(),
         }
     }
 
@@ -59,6 +63,7 @@ impl AgentState {
             ws_path: self.ws_path,
             server_message: None,
             ueba_mac_key: self.ueba_mac_key,
+            kill_hmac_key: self.kill_hmac_key,
         }
     }
 }
@@ -136,6 +141,7 @@ mod tests {
             ws_path: "/ws/agent".into(),
             ueba_mac_key: String::new(),
             server_cert_sha256: String::new(),
+            kill_hmac_key: String::new(),
         }
     }
 

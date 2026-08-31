@@ -14,6 +14,7 @@ pub use login_lockout::{
 pub use login_rate_limit::{is_login_post, login_rate_limit_middleware};
 pub mod client_scope;
 pub mod event_replay;
+pub mod privilege_headers;
 pub mod rate_limit_metrics;
 pub mod rate_limit_redis;
 mod serve;
@@ -23,6 +24,7 @@ pub mod tenant_scan_limit;
 pub mod tenant_stream;
 
 pub use client_ip::extract_client_ip;
+pub use privilege_headers::privilege_header_proxy_middleware;
 pub use serve::{
     build_http_router, new_app_state, run_http_tcp_listener, spawn_http_background_tasks, AppState,
 };

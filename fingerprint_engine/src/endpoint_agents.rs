@@ -88,6 +88,9 @@ pub enum ServerToAgent {
         /// Compact hour-of-week mean/stddev so the agent can gate ueba_baseline locally.
         #[serde(default)]
         ueba_baseline: Option<crate::ueba_detector::UebaCompactSnapshot>,
+        /// Hex-encoded AES-256-GCM key for inner WSS wrapping. Omitted for old agents.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        inner_key_hex: Option<String>,
     },
     Task {
         task_id: String,
@@ -104,6 +107,13 @@ pub enum ServerToAgent {
     },
     Shutdown {
         reason: String,
+    },
+    /// Signed remote kill — agent verifies HMAC before stopping detections.
+    KillSwitch {
+        reason: String,
+        nonce: String,
+        issued_at_unix: i64,
+        signature: String,
     },
 }
 
@@ -129,6 +139,9 @@ pub struct EnrollResponse {
     /// after `WEISSMAN_AGENT_JWT_TTL_MINS` (default 240) — after which the agent was dark forever.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub agent_secret: String,
+    /// Derived HMAC key so the agent can verify a signed kill-switch.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub kill_hmac_key: String,
     pub ws_path: String,
     pub server_message: Option<String>,
     /// Per-agent HMAC key (64 hex) so the agent can verify Welcome / UebaBaseline.
@@ -1414,6 +1427,7 @@ mod tests {
             scan_concurrency: Some(4),
             heartbeat_secs: None,
             ueba_baseline: None,
+            inner_key_hex: None,
         })
         .unwrap();
         assert_eq!(v["type"], "welcome");
@@ -1441,6 +1455,7 @@ mod tests {
             scan_concurrency: None,
             heartbeat_secs: None,
             ueba_baseline: Some(snap),
+            inner_key_hex: None,
         })
         .unwrap();
         assert_eq!(v["type"], "welcome");
@@ -1504,6 +1519,7 @@ mod tests {
             client_id: 2,
             session_jwt: "jwt".to_string(),
             agent_secret: "renewal-secret".to_string(),
+            kill_hmac_key: "aa".to_string(),
             ws_path: "/ws/agent".to_string(),
             server_message: None,
             ueba_mac_key: "ab".repeat(32),

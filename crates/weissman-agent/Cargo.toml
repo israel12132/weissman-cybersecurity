@@ -33,20 +33,23 @@ serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+# CPU governor (hardening) — kept off the hostobs inventory path.
+sysinfo = { version = "0.30", default-features = false }
 hostname = "0.4"
 whoami = "1"
 
-# File hashing + ring-buffer key derivation.
+# File hashing + kill-switch HMAC + TLS pin verifier + ring HKDF.
 sha2 = "0.10"
 hex = "0.4"
+hmac = { version = "0.12", features = ["std"] }
+hkdf = "0.12"
+aes-gcm = "0.10"
 
 # Encrypted in-memory ring (XChaCha20-Poly1305, 192-bit random nonce, 10 MiB cap).
 # Per-frame keys via HKDF-SHA256; master IKM is mlocked / Linux keyring when possible.
 chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
-hkdf = "0.12"
 zeroize = "1"
 getrandom = "0.2"
-hmac = "0.12"
 subtle = "2"
 base64 = "0.22"
 
@@ -70,9 +73,17 @@ anyhow = "1"
 libc = "0.2"
 
 # Platform-specific extras pulled in only on Windows so musl builds stay small.
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
+# Native TPM 2.0 ESAPI. glibc only — musl agent builds stay free of libtss2.
+[target.'cfg(all(target_os = "linux", target_env = "gnu"))'.dependencies]
+tss-esapi = { version = "7.6.0", default-features = false }
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
+    "Win32_Security_Cryptography",
     "Win32_System_Registry",
     "Win32_System_ProcessStatus",
     "Win32_System_Threading",

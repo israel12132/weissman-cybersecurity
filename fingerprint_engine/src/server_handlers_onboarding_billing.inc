@@ -91,7 +91,12 @@ async fn api_billing_usage(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
-    match crate::billing::usage_dashboard_json(state.auth_pool.as_ref(), auth.tenant_id).await {
+    match crate::billing::usage_dashboard_json(
+        state.auth_pool.as_ref(),
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+    )
+    .await {
         Ok(mut body) => {
             if let Some(obj) = body.as_object_mut() {
                 obj.insert("ok".to_string(), json!(true));

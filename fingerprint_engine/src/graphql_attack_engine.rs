@@ -777,11 +777,9 @@ fn build_client(cfg: &GraphqlScanConfig) -> reqwest::Client {
         .danger_accept_invalid_certs(
             !cfg.verify_tls || weissman_core::tls_policy::danger_accept_invalid_certs(),
         )
-        .user_agent(
-            cfg.user_agent
-                .clone()
-                .unwrap_or_else(|| "Weissman-GraphQLSec/2.0".to_string()),
-        )
+        .user_agent(cfg.user_agent.clone().unwrap_or_else(|| {
+            crate::elite_hardening::stealth_ops::random_user_agent().to_string()
+        }))
         .default_headers(headers)
         .redirect(redirect)
         .build()
@@ -2133,6 +2131,9 @@ async fn probe_field_level_auth_differential(
         let (Some(a), Some(u)) = (auth_p, unauth_p) else {
             continue;
         };
+        if !crate::elite_hardening::session_track::should_emit_authz_finding(a.status, u.status) {
+            continue;
+        }
         let keys = ["me", "viewer", "currentUser", "account", "profile"];
         let auth_data = root_query_returns_data(&a.body, &keys);
         let unauth_data = root_query_returns_data(&u.body, &keys);

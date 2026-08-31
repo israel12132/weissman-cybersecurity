@@ -30,7 +30,8 @@ for path in \
   deploy/backend.Dockerfile \
   deploy/frontend.Dockerfile \
   deploy/oast.Dockerfile \
-  deploy/nginx-gateway.conf
+  deploy/nginx-gateway.conf \
+  deploy/nginx-strip-internal-headers.inc
 do
   [[ -e "$path" ]] && ok "exists $path" || bad "missing $path"
 done
@@ -67,6 +68,26 @@ if grep -q 'COPY --from=build /build/target/release/weissman-agent' deploy/backe
   ok "backend copies weissman-agent from build stage"
 else
   bad "backend.Dockerfile must COPY --from=build weissman-agent (not cp from /build in runtime)"
+fi
+# tss-esapi-sys (weissman-agent linux-gnu) probes tss2-sys via pkg-config. Host
+# rust-audit already installs libtss2-dev; the production image must too or
+# `cargo build -p weissman-agent` fails in Docker with "Package tss2-sys was not found".
+if grep -q 'libtss2-dev' deploy/backend.Dockerfile; then
+  ok "backend build stage installs libtss2-dev (native ESAPI)"
+else
+  bad "backend.Dockerfile must apt-install libtss2-dev (weissman-agent links tss-esapi on linux-gnu)"
+fi
+if grep -q '/opt/tss-runtime' deploy/backend.Dockerfile \
+   && grep -q '/usr/lib/weissman-tss' deploy/backend.Dockerfile; then
+  ok "backend stages TSS .so into slim runtime (no apt libtss2-esys → udev)"
+else
+  bad "backend.Dockerfile must copy TSS shared libs into the runtime image"
+fi
+# Apt-installing the esys runtime package on debian:bookworm-slim Depends: tpm-udev → udev.
+if awk '/^FROM debian:bookworm-slim/,/^USER /' deploy/backend.Dockerfile | grep -q 'libtss2-esys'; then
+  bad "backend.Dockerfile must not apt-install libtss2-esys in the slim runtime (pulls udev)"
+else
+  ok "backend slim runtime does not apt-install libtss2-esys"
 fi
 
 section "include_str! external paths (fingerprint_engine)"

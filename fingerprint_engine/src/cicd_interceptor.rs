@@ -67,8 +67,23 @@ fn verify_bitbucket_secret(headers: &HeaderMap, expected: &str) -> bool {
     constant_time_str_eq(t, &expected_header)
 }
 
+fn resolve_cicd_tenant(headers: &HeaderMap) -> Option<i64> {
+    headers
+        .get("x-weissman-tenant-id")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.trim().parse::<i64>().ok())
+        .filter(|&id| id > 0)
+        .or_else(|| {
+            std::env::var("WEISSMAN_CICD_DEFAULT_TENANT_ID")
+                .ok()
+                .and_then(|s| s.trim().parse::<i64>().ok())
+                .filter(|&id| id > 0)
+        })
+}
+
 async fn log_cicd_event(
     pool: Option<&PgPool>,
+    tenant_id: Option<i64>,
     provider: &str,
     ref_name: &str,
     sha: &str,
@@ -76,17 +91,30 @@ async fn log_cicd_event(
     findings: &[CicdFinding],
 ) {
     let Some(p) = pool else { return };
+    let Some(tid) = tenant_id else {
+        tracing::error!(
+            target: "cicd",
+            "refusing to persist CI findings without tenant_id (set X-Weissman-Tenant-Id or WEISSMAN_CICD_DEFAULT_TENANT_ID)"
+        );
+        return;
+    };
     let fj = serde_json::to_string(findings).unwrap_or_else(|_| "[]".into());
+    let Ok(mut tx) = crate::db::begin_tenant_tx(p, tid).await else {
+        return;
+    };
     let _ = sqlx::query(
-        r#"INSERT INTO cicd_scan_events (provider, ref_name, commit_sha, blocked, findings_json) VALUES ($1, $2, $3, $4, $5)"#,
+        r#"INSERT INTO cicd_scan_events (tenant_id, provider, ref_name, commit_sha, blocked, findings_json)
+           VALUES ($1, $2, $3, $4, $5, $6)"#,
     )
+    .bind(tid)
     .bind(provider)
     .bind(ref_name)
     .bind(sha)
     .bind(blocked)
     .bind(&fj)
-    .execute(p)
+    .execute(&mut *tx)
     .await;
+    let _ = tx.commit().await;
 }
 
 fn gate_response(blocked: bool, findings: &[CicdFinding]) -> Response {
@@ -219,7 +247,16 @@ pub async fn github_push_hook(
 
     let findings = cicd_ast_scan::scan_many_files(&files);
     let blocked = cicd_ast_scan::has_critical(&findings);
-    log_cicd_event(pool.as_deref(), "github", ref_name, sha, blocked, &findings).await;
+    log_cicd_event(
+        pool.as_deref(),
+        resolve_cicd_tenant(&headers),
+        "github",
+        ref_name,
+        sha,
+        blocked,
+        &findings,
+    )
+    .await;
     gate_response(blocked, &findings)
 }
 
@@ -322,7 +359,16 @@ pub async fn gitlab_push_hook(
     }
     let findings = cicd_ast_scan::scan_many_files(&files);
     let blocked = cicd_ast_scan::has_critical(&findings);
-    log_cicd_event(pool.as_deref(), "gitlab", ref_name, sha, blocked, &findings).await;
+    log_cicd_event(
+        pool.as_deref(),
+        resolve_cicd_tenant(&headers),
+        "gitlab",
+        ref_name,
+        sha,
+        blocked,
+        &findings,
+    )
+    .await;
     gate_response(blocked, &findings)
 }
 
@@ -436,6 +482,7 @@ pub async fn bitbucket_push_hook(
     let blocked = cicd_ast_scan::has_critical(&findings);
     log_cicd_event(
         pool.as_deref(),
+        resolve_cicd_tenant(&headers),
         "bitbucket",
         &ref_name,
         &sha,
@@ -500,6 +547,7 @@ pub async fn generic_cicd_scan(
     let blocked = cicd_ast_scan::has_critical(&findings);
     log_cicd_event(
         pool.as_deref(),
+        resolve_cicd_tenant(&headers),
         "generic",
         &req.r#ref,
         &req.commit_sha,

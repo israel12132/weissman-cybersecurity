@@ -81,6 +81,8 @@ pub enum ServerToAgent {
         /// Compact hour-of-week mean/stddev so the agent can gate ueba_baseline locally.
         #[serde(default)]
         ueba_baseline: Option<UebaCompactSnapshot>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        inner_key_hex: Option<String>,
     },
     /// Dispatch a detection task.
     Task {
@@ -96,8 +98,16 @@ pub enum ServerToAgent {
         #[serde(flatten)]
         snapshot: UebaCompactSnapshot,
     },
-    /// Asks the agent to shut down (revoked, deprovisioned, …).
+    /// Asks the agent to shut down (revoked, deprovisioned, …). Unsigned — ignored
+    /// unless `WEISSMAN_AGENT_ALLOW_LOCAL_STOP=1`.
     Shutdown { reason: String },
+    /// Signed remote kill — agent verifies HMAC before latching and exiting.
+    KillSwitch {
+        reason: String,
+        nonce: String,
+        issued_at_unix: i64,
+        signature: String,
+    },
 }
 
 /// Compressed 7-day baseline for the current hour-of-week (or rolling-7d fallback).
@@ -159,6 +169,9 @@ pub struct Enrollment {
     /// Per-agent HMAC key (64 hex) for verifying Welcome / UebaBaseline snapshots.
     #[serde(default)]
     pub ueba_mac_key: String,
+    /// Derived HMAC key so this agent can verify a signed kill-switch. Empty on older servers.
+    #[serde(default)]
+    pub kill_hmac_key: String,
 }
 
 #[cfg(test)]
@@ -170,6 +183,7 @@ mod tests {
         let msg = ServerToAgent::Welcome {
             scan_concurrency: Some(8),
             heartbeat_secs: Some(20),
+            inner_key_hex: None,
             ueba_baseline: Some(UebaCompactSnapshot {
                 hour_of_week: 42,
                 z_upload_threshold: 2.0,

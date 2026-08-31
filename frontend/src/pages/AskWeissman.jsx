@@ -12,6 +12,20 @@ import EvidenceNotice from '../components/ui/EvidenceNotice'
 import Button from '../components/ui/Button'
 
 const SAMPLE_KEYS = ['sample_q1', 'sample_q2', 'sample_q3', 'sample_q4', 'sample_q5']
+const AGGREGATE_KEYS = ['sample_count', 'sample_group', 'sample_avg']
+
+function planObject(plan) {
+  if (!plan) return null
+  if (typeof plan === 'object') return plan
+  if (typeof plan === 'string') {
+    try {
+      return JSON.parse(plan)
+    } catch {
+      return null
+    }
+  }
+  return null
+}
 
 function fmtCell(v) {
   if (v === null || v === undefined) return '—'
@@ -64,10 +78,15 @@ export default function AskWeissman() {
   const [question, setQuestion] = useState('')
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(false)
+  const [quota, setQuota] = useState(null)
   const transcriptRef = useRef(null)
 
   const sampleQuestions = useMemo(
     () => SAMPLE_KEYS.map((key) => t(`ask_weissman.${key}`)),
+    [t],
+  )
+  const aggregateQuestions = useMemo(
+    () => AGGREGATE_KEYS.map((key) => t(`ask_weissman.${key}`)),
     [t],
   )
 
@@ -113,6 +132,7 @@ export default function AskWeissman() {
         body: { question: text },
       })
       const result = d?.result || {}
+      if (d?.quota) setQuota(d.quota)
       setHistory((h) => {
         const next = [...h]
         const idx = next.findIndex((x) => x === placeholder)
@@ -135,6 +155,7 @@ export default function AskWeissman() {
       let msg
       if (e?.status) {
         const b = e.response ? await e.response.json().catch(() => ({})) : {}
+        if (b.quota) setQuota(b.quota)
         msg = formatApiErrorFromBody(b, e.status)
       } else {
         msg = e?.message || t('ask_weissman.network_error')
@@ -178,6 +199,11 @@ export default function AskWeissman() {
           <p className="text-xs text-[var(--text-tertiary)] mt-1">
             {t('ask_weissman.subtitle_full')}
           </p>
+          {quota && (
+            <p className="text-[10px] font-mono text-amber-200/70 mt-1">
+              {t('ask_weissman.quota_remaining', { remaining: quota.remaining, limit: quota.limit })}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <ShellScanActions
@@ -201,6 +227,9 @@ export default function AskWeissman() {
       </header>
 
       <EvidenceNotice className="mb-3 shrink-0">{t('pages.askWeissman.evidence_notice')}</EvidenceNotice>
+      <p className="mb-3 text-[11px] text-cyan-200/70 font-mono shrink-0">
+        {t('ask_weissman.aggregate_hint')}
+      </p>
 
       {completedTurns.length > 0 && (
         <WeissmanListToolbar
@@ -222,6 +251,16 @@ export default function AskWeissman() {
             className="text-[10px] font-mono px-2 py-0.5 rounded border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:border-cyan-500/40 hover:text-cyan-200"
           >
             &ldquo;{s}&rdquo;
+          </Button>
+        ))}
+        {aggregateQuestions.map((s) => (
+          <Button variant="unstyled"
+            type="button"
+            key={s}
+            onClick={() => setQuestion(s)}
+            className="text-[10px] font-mono px-2 py-0.5 rounded border border-emerald-500/35 text-emerald-200/80 hover:border-emerald-400/50 hover:text-emerald-100"
+          >
+            Σ {s}
           </Button>
         ))}
       </div>
@@ -263,6 +302,14 @@ export default function AskWeissman() {
                   {turn.row_count != null && !turn.error && (
                     <span className="text-[10px] font-mono text-[var(--text-tertiary)]">
                       {t('ask_weissman.rows', { count: turn.row_count })}
+                    </span>
+                  )}
+                  {planObject(turn.plan)?.aggregate && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-emerald-500/35 text-emerald-200">
+                      {t('ask_weissman.aggregate_badge', {
+                        fn: planObject(turn.plan).aggregate,
+                        group: planObject(turn.plan).group_by || '—',
+                      })}
                     </span>
                   )}
                 </div>

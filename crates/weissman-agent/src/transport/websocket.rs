@@ -27,6 +27,7 @@ pub async fn run_session(
     enrollment: &Enrollment,
     heartbeat_secs: u64,
 ) -> anyhow::Result<()> {
+    let _pins = crate::transport::tls_pin::require_pin_or_dev(server_url)?;
     let ws_url = build_ws_url(server_url, &enrollment.ws_path)?;
     info!(target: "agent", "connecting to {}", scrub_token(&ws_url));
 
@@ -72,6 +73,8 @@ pub async fn run_session(
         crit: crit_tx,
         bulk: bulk_tx,
     };
+    let inner_key: Arc<tokio::sync::Mutex<Option<[u8; 32]>>> =
+        Arc::new(tokio::sync::Mutex::new(None));
 
     // Send Hello immediately (identity — not a finding; bulk is fine).
     let hello = AgentToServer::Hello {
@@ -92,6 +95,23 @@ pub async fn run_session(
     };
     out.bulk.send(hello).await.ok();
 
+    // Replay findings that were written to disk while this agent was offline.
+    let spool_path = crate::transport::spool::spool_path();
+    if let Ok(queued) = crate::transport::spool::drain(&spool_path) {
+        if !queued.is_empty() {
+            info!(
+                target: "agent",
+                n = queued.len(),
+                "draining offline spool after reconnect"
+            );
+            for msg in queued {
+                if emit(&out, msg).await.is_err() {
+                    break;
+                }
+            }
+        }
+    }
+
     // Shared counters for heartbeat + concurrency gate.
     let running_tasks = Arc::new(AtomicU32::new(0));
     let completed_tasks = Arc::new(AtomicU64::new(0));
@@ -110,7 +130,9 @@ pub async fn run_session(
     let hb_out = out.clone();
     let agent_id_hb = enrollment.agent_id.clone();
     let hb_handle = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(heartbeat_secs.max(5)));
+        let mut interval = tokio::time::interval(Duration::from_secs(
+            crate::hardening::jittered_heartbeat_secs(heartbeat_secs),
+        ));
         // Skip the initial immediate tick — Hello already proved liveness.
         interval.tick().await;
         loop {
@@ -138,7 +160,11 @@ pub async fn run_session(
         }
     });
 
-    // Writer: biased select — critical always first.
+    // Writer: biased select — critical always first. Failed sends go to the
+    // encrypted ring AND the disk spool so a crash or disconnect does not drop
+    // findings that already left the detection task.
+    let spool_for_writer = crate::transport::spool::spool_path();
+    let writer_key = Arc::clone(&inner_key);
     let writer_handle = tokio::spawn(async move {
         loop {
             let msg = tokio::select! {
@@ -161,17 +187,35 @@ pub async fn run_session(
                 crate::ringbuf::note_send_rtt(t0.elapsed());
                 continue;
             }
-            let line = match serde_json::to_string(&msg) {
+            let mut line = match serde_json::to_string(&msg) {
                 Ok(l) => l,
                 Err(e) => {
                     error!(target: "agent", error = %e, "serialize outbound");
                     continue;
                 }
             };
+            if let Some(key) = *writer_key.lock().await {
+                if let Ok(wrapped) = crate::inner_crypto::wrap(&key, &line) {
+                    line = wrapped;
+                }
+            }
             let t0 = Instant::now();
             if let Err(e) = sink.send(Message::text(line)).await {
-                error!(target: "agent", error = %e, "ws send failed");
+                error!(target: "agent", error = %e, "ws send failed — spooling remainder");
                 crate::ringbuf::push(&msg);
+                let _ = crate::transport::spool::append(&spool_for_writer, &msg);
+                while let Ok(more) = crit_rx.try_recv() {
+                    if !matches!(more, AgentToServer::KeepAlivePing) {
+                        crate::ringbuf::push(&more);
+                        let _ = crate::transport::spool::append(&spool_for_writer, &more);
+                    }
+                }
+                while let Ok(more) = bulk_rx.try_recv() {
+                    if !matches!(more, AgentToServer::KeepAlivePing) {
+                        crate::ringbuf::push(&more);
+                        let _ = crate::transport::spool::append(&spool_for_writer, &more);
+                    }
+                }
                 break;
             }
             crate::ringbuf::note_send_rtt(t0.elapsed());
@@ -180,6 +224,7 @@ pub async fn run_session(
     });
 
     let mac_key = enrollment.ueba_mac_key.clone();
+    let kill_hmac_key = enrollment.kill_hmac_key.clone();
 
     // Reader: stream → handle ServerToAgent.
     let read_result = async {
@@ -200,8 +245,17 @@ pub async fn run_session(
             };
             match frame {
                 Message::Text(s) => {
+                    let session_key = *inner_key.lock().await;
+                    let plain = match crate::inner_crypto::unwrap_or_plain(session_key.as_ref(), &s)
+                    {
+                        Ok(p) => p,
+                        Err(e) => {
+                            warn!(target: "agent", error = %e, "drop undecryptable frame");
+                            continue;
+                        }
+                    };
                     handle_text(
-                        &s,
+                        &plain,
                         &out,
                         &running_tasks,
                         &completed_tasks,
@@ -209,6 +263,8 @@ pub async fn run_session(
                         &seen_tasks,
                         enrollment.agent_id.clone(),
                         &mac_key,
+                        kill_hmac_key.clone(),
+                        Arc::clone(&inner_key),
                     )
                     .await;
                 }
@@ -286,6 +342,8 @@ async fn handle_text(
     seen: &Arc<tokio::sync::Mutex<SeenTasks>>,
     agent_id: String,
     ueba_mac_key: &str,
+    kill_hmac_key: String,
+    inner_key: Arc<tokio::sync::Mutex<Option<[u8; 32]>>>,
 ) {
     let parsed: Result<ServerToAgent, _> = serde_json::from_str(text);
     let msg = match parsed {
@@ -299,6 +357,7 @@ async fn handle_text(
         ServerToAgent::Welcome {
             scan_concurrency,
             ueba_baseline,
+            inner_key_hex,
             ..
         } => {
             if let Some(n) = scan_concurrency {
@@ -306,6 +365,12 @@ async fn handle_text(
             }
             if let Some(snap) = ueba_baseline {
                 crate::ueba_edge::install_if_mac_valid(snap, ueba_mac_key);
+            }
+            if let Some(hex_key) = inner_key_hex {
+                if let Some(k) = crate::inner_crypto::key_from_hex(&hex_key) {
+                    *inner_key.lock().await = Some(k);
+                    info!(target: "agent", "inner WSS crypto armed");
+                }
             }
             info!(target: "agent", "server welcomed agent");
             if crate::ringbuf::pending() {
@@ -358,10 +423,44 @@ async fn handle_text(
         }
         ServerToAgent::Ack { .. } => {}
         ServerToAgent::Shutdown { reason } => {
-            warn!(target: "agent", reason = %reason, "server requested shutdown");
-            std::process::exit(0);
+            if allow_local_stop() {
+                warn!(target: "agent", reason = %reason, "server requested shutdown");
+                std::process::exit(0);
+            }
+            warn!(
+                target: "agent",
+                reason = %reason,
+                "ignoring unsigned shutdown (self-protect; use signed kill-switch)"
+            );
+        }
+        ServerToAgent::KillSwitch {
+            reason,
+            nonce,
+            issued_at_unix,
+            signature,
+        } => {
+            if crate::transport::kill::verify(
+                &kill_hmac_key,
+                &agent_id,
+                &nonce,
+                issued_at_unix,
+                &reason,
+                &signature,
+            ) {
+                warn!(target: "agent", reason = %reason, "signed kill-switch accepted");
+                let _ = crate::transport::kill::latch(&reason);
+                std::process::exit(0);
+            }
+            warn!(target: "agent", "rejected kill-switch with invalid signature");
         }
     }
+}
+
+fn allow_local_stop() -> bool {
+    matches!(
+        std::env::var("WEISSMAN_AGENT_ALLOW_LOCAL_STOP").as_deref(),
+        Ok("1") | Ok("true") | Ok("TRUE")
+    )
 }
 
 async fn run_task(
@@ -441,6 +540,7 @@ async fn emit(
         Ok(()) => Ok(()),
         Err(e) => {
             crate::ringbuf::push(&e.0);
+            let _ = crate::transport::spool::append(&crate::transport::spool::spool_path(), &e.0);
             Err(e)
         }
     }

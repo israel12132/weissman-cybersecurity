@@ -92,6 +92,7 @@ pub async fn renew_session(
     let client = http_client(agent_version)?;
     let resp = client
         .post(&url)
+        .header("user-agent", format!("weissman-agent/{agent_version}"))
         .json(&Body {
             agent_id,
             agent_secret,

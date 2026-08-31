@@ -16,8 +16,8 @@
     },
     {
       "techniqueID": "T1595",
-      "score": 34,
-      "comment": "ai_cloud_escalation_chain, asm, attack_graph_traversal, attack_surface_quantify, autonomous_pentest, can_bus_surface, compliance_gap_scan, digital_twin, external_exposure_supreme, fair_exposure_fusion, firmware_emulation, firmware_exploit, full_breach_sim, hardware_implant, implantable_device_hack, iot_firmware, jtag_swd_exploitation, kill_chain, lora_attack, medical_device_exploit, mobile_backend_chain, network_topology_map, nexus_sovereign_swarm, ntlm_relay, post_exploitation, printer_mfp_attack, rce_chain, risk_superposition_collapse, smb_netbios, smb_relay, tactic_chain_synthesizer, threat_emulation, threat_model_automation, vuln_chaining",
+      "score": 35,
+      "comment": "ai_cloud_escalation_chain, asm, attack_graph_traversal, attack_surface_quantify, autonomous_pentest, can_bus_surface, compliance_gap_scan, digital_twin, external_exposure_supreme, fair_exposure_fusion, firmware_emulation, firmware_exploit, full_breach_sim, hardware_implant, implantable_device_hack, iot_firmware, jtag_swd_exploitation, kill_chain, lora_attack, medical_device_exploit, mobile_backend_chain, network_topology_map, nexus_sovereign_swarm, ntlm_relay, post_exploitation, printer_mfp_attack, rce_chain, risk_superposition_collapse, smb_netbios, smb_relay, supreme_path_fair_rag, tactic_chain_synthesizer, threat_emulation, threat_model_automation, vuln_chaining",
       "enabled": true
     },
     {
@@ -484,8 +484,8 @@
     },
     {
       "techniqueID": "T1068",
-      "score": 1,
-      "comment": "kernel_exploit",
+      "score": 2,
+      "comment": "kernel_exploit, privilege_escalation_credential_access",
       "enabled": true
     },
     {

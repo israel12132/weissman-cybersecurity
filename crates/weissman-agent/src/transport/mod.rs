@@ -1,4 +1,9 @@
 pub mod enrollment;
+pub mod kill;
+pub mod spool;
 pub mod state;
 pub mod tls;
+pub mod tls_pin;
+#[cfg(target_os = "linux")]
+pub mod tpm_seal;
 pub mod websocket;

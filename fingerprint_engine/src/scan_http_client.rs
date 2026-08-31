@@ -5,10 +5,7 @@ use reqwest::Client;
 use std::time::Duration;
 
 fn pool_max_idle_per_host() -> usize {
-    std::env::var("WEISSMAN_HTTP_POOL_MAX_IDLE")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(256)
+    crate::elite_hardening::probe_io::pool_max_idle()
 }
 
 fn pool_idle_timeout() -> Duration {
@@ -31,10 +28,13 @@ fn tcp_keepalive() -> Duration {
 pub fn scan_client_builder(timeout: Duration) -> reqwest::ClientBuilder {
     reqwest::Client::builder()
         .timeout(timeout)
-        .connect_timeout(Duration::from_secs(45))
+        .connect_timeout(Duration::from_secs(
+            crate::elite_hardening::probe_io::connect_timeout_secs(),
+        ))
         .pool_max_idle_per_host(pool_max_idle_per_host())
         .pool_idle_timeout(Some(pool_idle_timeout()))
         .tcp_keepalive(Some(tcp_keepalive()))
+        .min_tls_version(reqwest::tls::Version::TLS_1_2)
         .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
 }
 
@@ -49,10 +49,13 @@ pub fn scan_http_client(timeout: Duration) -> Client {
 pub fn internal_json_client_builder(timeout: Duration) -> reqwest::ClientBuilder {
     reqwest::Client::builder()
         .timeout(timeout)
-        .connect_timeout(Duration::from_secs(30))
+        .connect_timeout(Duration::from_secs(
+            crate::elite_hardening::probe_io::connect_timeout_secs(),
+        ))
         .pool_max_idle_per_host(pool_max_idle_per_host())
         .pool_idle_timeout(Some(pool_idle_timeout()))
         .tcp_keepalive(Some(tcp_keepalive()))
+        .min_tls_version(reqwest::tls::Version::TLS_1_2)
 }
 
 pub fn internal_json_client(timeout: Duration) -> Client {

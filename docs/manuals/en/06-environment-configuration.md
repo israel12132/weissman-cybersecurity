@@ -68,7 +68,7 @@ WEISSMAN_ADMIN_EMAIL=admin@company.com
 WEISSMAN_ADMIN_PASSWORD=<rotate-after-first-login>
 ```
 
-Master bootstrap (one-time, tenant `default`):
+Master bootstrap (one-time, tenant `default`). Boot promotes this account to platform owner (`is_superadmin`) so it can create and delete clients — the same promotion as `WEISSMAN_ADMIN_EMAIL`:
 
 ```bash
 WEISSMAN_MASTER_BOOTSTRAP_EMAIL=
