@@ -99,6 +99,13 @@ pub fn all_capability_ids() -> Vec<&'static str> {
     ]
 }
 
+/// Opt-in loopback PLC decoy (Modbus :502 / S7 :102). No-op unless
+/// `WEISSMAN_OT_PLC_DECOY=1`. The binary calls this after enroll; `--dry-run`
+/// never reaches it.
+pub fn spawn_ot_plc_decoy() {
+    ot_plc_decoy::spawn();
+}
+
 /// Dispatch a task to its detection.
 pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> DetectionFuture {
     let target = target.map(|s| s.to_string());

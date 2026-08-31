@@ -167,7 +167,7 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    weissman_agent::detections::ot_plc_decoy::spawn();
+    weissman_agent::detections::spawn_ot_plc_decoy();
 
     // Reconnect loop with exponential back-off.
     let mut backoff = cli.backoff_ms_initial.max(250);
