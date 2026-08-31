@@ -320,8 +320,10 @@ export default function AttackSurfaceManagement() {
   const refreshCorpus = useCallback(() => {
     apiFetch('/api/discovery-knowledge/stats')
       .then((d) => { if (d && typeof d === 'object') setCorpus(d) })
-      .catch(() => {
-        // Stats are a live overlay; a down API must not block the ASM console.
+      .catch((err) => {
+        if (import.meta.env.DEV) {
+          console.debug('discovery-knowledge stats skipped', err)
+        }
       })
   }, [])
 
