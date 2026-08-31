@@ -551,6 +551,8 @@ fn migrations_after_cast_safety_do_not_reintroduce_raw_guc_bigint_cast() {
     // Split so this test file does not match its own documentation of the defect.
     let needle = concat!("current_setting('app.current_tenant_id', true)", "::bigint");
     let mut offenders = Vec::new();
+    let mut saw_cicd_followon = false;
+    let mut saw_ot_followon = false;
     for entry in std::fs::read_dir(&dir).expect("weissman-db/migrations") {
         let path = entry.expect("dirent").path();
         let name = path
@@ -561,18 +563,69 @@ fn migrations_after_cast_safety_do_not_reintroduce_raw_guc_bigint_cast() {
         if !name.ends_with(".sql") {
             continue;
         }
+        if name.starts_with("20260827120600_") {
+            saw_cicd_followon = true;
+        }
+        if name.starts_with("20260831121000_") {
+            saw_ot_followon = true;
+        }
         let stamp = name.split('_').next().unwrap_or("");
         if stamp <= cutoff {
             continue;
         }
+        // Already-applied; follow-ons restate the policy with app_current_tenant_id().
+        if name.starts_with("20260827120000_") || name.starts_with("20260827160000_") {
+            continue;
+        }
         let text = std::fs::read_to_string(&path).unwrap_or_default();
-        if text.contains(needle) {
+        let executable = strip_sql_comments(&text);
+        if executable.contains(needle) {
             offenders.push(name);
         }
     }
+    assert!(
+        saw_cicd_followon,
+        "20260827120600_cicd_scan_events_rls_cast_safe.sql must exist"
+    );
+    assert!(
+        saw_ot_followon,
+        "20260831121000_ot_ics_rls_app_current_tenant_id.sql must exist"
+    );
     assert!(
         offenders.is_empty(),
         "migrations after {cutoff} reintroduced current_setting(...)::bigint \
          (empty worker GUC raises). Use public.app_current_tenant_id(): {offenders:?}"
     );
+}
+
+fn strip_sql_comments(sql: &str) -> String {
+    let b = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len());
+    let mut i = 0;
+    let mut in_block = false;
+    while i < b.len() {
+        if in_block {
+            if b[i] == b'*' && i + 1 < b.len() && b[i + 1] == b'/' {
+                in_block = false;
+                i += 2;
+                continue;
+            }
+            i += 1;
+            continue;
+        }
+        if b[i] == b'-' && i + 1 < b.len() && b[i + 1] == b'-' {
+            while i < b.len() && b[i] != b'\n' {
+                i += 1;
+            }
+            continue;
+        }
+        if b[i] == b'/' && i + 1 < b.len() && b[i + 1] == b'*' {
+            in_block = true;
+            i += 2;
+            continue;
+        }
+        out.push(b[i] as char);
+        i += 1;
+    }
+    out
 }
