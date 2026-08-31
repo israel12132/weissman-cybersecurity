@@ -80,6 +80,12 @@ pub async fn probe_modbus_function_code(host: &str) -> Option<OtFingerprint> {
         return None;
     }
     let slice = resp.get(..n)?;
+    if matches!(
+        crate::elite_hardening::ot_fsm::validate_modbus_tcp(&pdu, slice),
+        crate::elite_hardening::ot_fsm::FsmVerdict::Abort { .. }
+    ) {
+        return None;
+    }
     let parsed = crate::ot_ics_hardening::parsers::parse_modbus_frame(slice).ok()?;
     let fc = parsed.pdu.function;
     let looks_read = (fc & 0x7f) == 0x03 && !parsed.pdu.exception;
@@ -647,6 +653,12 @@ pub async fn probe_s7(host: &str) -> Option<OtFingerprint> {
         return None;
     }
     let slice = resp.get(..n)?;
+    if matches!(
+        crate::elite_hardening::ot_fsm::validate_tpkt(slice),
+        crate::elite_hardening::ot_fsm::FsmVerdict::Abort { .. }
+    ) {
+        return None;
+    }
     let parsed = crate::ot_ics_hardening::parsers::parse_s7_iso_on_tcp(slice).ok()?;
     if parsed.tpkt.version != 0x03 {
         return None;

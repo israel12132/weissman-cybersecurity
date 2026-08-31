@@ -787,17 +787,41 @@ async fn fetch_supreme_memory_context(
         };
         let rows = sqlx::query(
             r#"SELECT id, brief_excerpt, strategy_summary, orchestrator_instruction,
-                      (embedding_vec <=> $1::vector) AS distance
+                      target_fingerprint,
+                      (embedding_vec <=> $1::vector) AS distance,
+                      EXTRACT(EPOCH FROM (now() - created_at)) / 86400.0 AS age_days,
+                      COALESCE(reinforcement, 1.0) AS reinforcement,
+                      COALESCE(embedding_checksum, '') AS embedding_checksum,
+                      COALESCE(provenance_hmac, '') AS provenance_hmac,
+                      COALESCE(provenance_kind, '') AS provenance_kind,
+                      COALESCE(provenance_issuer, '') AS provenance_issuer,
+                      COALESCE(source, '') AS source
                  FROM supreme_council_memory
                 WHERE embedding_vec IS NOT NULL
-                ORDER BY embedding_vec <=> $1::vector
+                  AND created_at > now() - interval '12 months'
+                  AND COALESCE(provenance_hmac, '') <> ''
+                ORDER BY (embedding_vec <=> $1::vector)
+                       + CASE WHEN created_at < now() - interval '2 years' THEN 0.15 ELSE 0 END
                 LIMIT $2"#,
         )
         .bind(&qtext)
-        .bind(k)
+        .bind(k * 3)
         .fetch_all(&mut *tx)
         .await;
         if let Ok(rows) = rows {
+            let rows: Vec<_> = rows
+                .into_iter()
+                .filter(|r| {
+                    let checksum: String = r.try_get("embedding_checksum").unwrap_or_default();
+                    let hmac: String = r.try_get("provenance_hmac").unwrap_or_default();
+                    let kind: String = r.try_get("provenance_kind").unwrap_or_default();
+                    let issuer: String = r.try_get("provenance_issuer").unwrap_or_default();
+                    let source: String = r.try_get("source").unwrap_or_default();
+                    crate::supreme_weights::verify_rag_provenance(
+                        tenant_id, &kind, &issuer, &source, &checksum, &hmac,
+                    )
+                })
+                .collect();
             // Audit every RAG retrieval so we can measure recall/precision over time.
             for (rank, r) in rows.iter().enumerate() {
                 let mid: i64 = r.try_get("id").unwrap_or(0);
@@ -816,25 +840,52 @@ async fn fetch_supreme_memory_context(
                 .execute(&mut *tx)
                 .await;
             }
+            let ids: Vec<i64> = rows
+                .iter()
+                .map(|r| r.try_get::<i64, _>("id").unwrap_or(0))
+                .filter(|id| *id > 0)
+                .collect();
+            if !ids.is_empty() {
+                let _ = sqlx::query(
+                    "UPDATE supreme_council_memory SET last_retrieved_at = now() WHERE id = ANY($1)",
+                )
+                .bind(&ids)
+                .execute(&mut *tx)
+                .await;
+            }
             let _ = tx.commit().await;
 
             if rows.is_empty() {
                 return String::new();
             }
-            let mut lines = Vec::with_capacity(rows.len());
+            let mut scored: Vec<(f64, String, String, String, Value)> = Vec::new();
+            let mut seen_fp = std::collections::HashSet::new();
             for r in &rows {
+                let fp: String = r.try_get("target_fingerprint").unwrap_or_default();
+                if !fp.is_empty() && !seen_fp.insert(fp.clone()) {
+                    continue;
+                }
                 let excerpt: String = r.try_get("brief_excerpt").unwrap_or_default();
                 let summary: String = r.try_get("strategy_summary").unwrap_or_default();
                 let orch: Value = r.try_get("orchestrator_instruction").unwrap_or(json!({}));
                 let dist: f64 = r.try_get("distance").unwrap_or(1.0);
-                let sim = (1.0 - dist).clamp(0.0, 1.0);
+                let age: f64 = r.try_get("age_days").unwrap_or(0.0);
+                let reinf: f64 = r.try_get::<f32, _>("reinforcement").unwrap_or(1.0) as f64;
+                let decay = crate::supreme_weights::memory_decay(age);
+                let sim = ((1.0 - dist) * decay * reinf).clamp(0.0, 1.0);
+                scored.push((sim, excerpt, summary, fp, orch));
+            }
+            scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+            scored.truncate(k as usize);
+            let mut lines = Vec::with_capacity(scored.len());
+            for (sim, excerpt, summary, fp, orch) in scored {
                 lines.push(format!(
-                    "- prior_win (sim={:.3}): brief={} summary={} orchestrator={}",
-                    sim, excerpt, summary, orch
+                    "- prior_win (sim={:.3} fp={}): brief={} summary={} orchestrator={}",
+                    sim, fp, excerpt, summary, orch
                 ));
             }
             return format!(
-                "Semantic memory (pgvector ANN-ranked prior wins):\n{}",
+                "Semantic memory (pgvector ANN-ranked prior wins, time-aware + decay):\n{}",
                 lines.join("\n")
             );
         }
@@ -850,8 +901,14 @@ async fn fetch_supreme_memory_context(
         return String::new();
     };
     let rows = sqlx::query(
-        r#"SELECT brief_excerpt, strategy_summary, orchestrator_instruction, embedding
+        r#"SELECT brief_excerpt, strategy_summary, orchestrator_instruction, embedding,
+                  COALESCE(embedding_checksum, '') AS embedding_checksum,
+                  COALESCE(provenance_hmac, '') AS provenance_hmac,
+                  COALESCE(provenance_kind, '') AS provenance_kind,
+                  COALESCE(provenance_issuer, '') AS provenance_issuer,
+                  COALESCE(source, '') AS source
              FROM supreme_council_memory
+            WHERE COALESCE(provenance_hmac, '') <> ''
             ORDER BY created_at DESC
             LIMIT 500"#,
     )
@@ -861,6 +918,19 @@ async fn fetch_supreme_memory_context(
     let Ok(rows) = rows else {
         return String::new();
     };
+    let rows: Vec<_> = rows
+        .into_iter()
+        .filter(|r| {
+            let checksum: String = r.try_get("embedding_checksum").unwrap_or_default();
+            let hmac: String = r.try_get("provenance_hmac").unwrap_or_default();
+            let kind: String = r.try_get("provenance_kind").unwrap_or_default();
+            let issuer: String = r.try_get("provenance_issuer").unwrap_or_default();
+            let source: String = r.try_get("source").unwrap_or_default();
+            crate::supreme_weights::verify_rag_provenance(
+                tenant_id, &kind, &issuer, &source, &checksum, &hmac,
+            )
+        })
+        .collect();
     if rows.is_empty() {
         return String::new();
     }
@@ -969,17 +1039,38 @@ pub async fn persist_supreme_council_win(
     let emb_pg_text: Option<String> = emb_pg
         .as_ref()
         .map(|v| crate::embeddings::vec_to_pg_text(v));
+    let checksum_src = emb_pg.as_ref().unwrap_or(&emb_legacy);
+    let checksum = if checksum_src.is_empty() {
+        String::new()
+    } else {
+        crate::supreme_weights::embedding_checksum(checksum_src)
+    };
+    let token = sovereign.oast_token.trim().to_string();
+    let source = crate::elite_hardening::council_acl::council_persist_source(&token);
+    if !crate::elite_hardening::council_acl::council_write_allowed(source) {
+        return Err("council memory write rejected: untrusted source".into());
+    }
+    let provenance_kind = crate::supreme_weights::RAG_PROVENANCE_ENGINE;
+    let provenance_issuer = "supreme_council";
+    let provenance_hmac = crate::supreme_weights::sign_rag_provenance(
+        tenant_id,
+        provenance_kind,
+        provenance_issuer,
+        source,
+        &checksum,
+    );
+    if !checksum.is_empty() && provenance_hmac.is_empty() {
+        return Err(
+            "RAG provenance HMAC unavailable — set WEISSMAN_RAG_PROVENANCE_SECRET (64 hex in production; no JWT fallback)"
+                .into(),
+        );
+    }
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| e.to_string())?;
-    sqlx::query(
-        r#"INSERT INTO supreme_council_memory (
-            tenant_id, target_fingerprint, brief_excerpt,
-            orchestrator_instruction, strategy_summary,
-            embedding, embedding_vec, oast_token, source
-        ) VALUES (
-            $1, $2, $3, $4, $5,
-            $6, NULLIF($7, '')::vector, $8, $9
+    sqlx::query_scalar::<_, i64>(
+        r#"SELECT public.insert_supreme_council_memory(
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
         )"#,
     )
     .bind(tenant_id)
@@ -989,9 +1080,13 @@ pub async fn persist_supreme_council_win(
     .bind(summary.chars().take(8000).collect::<String>())
     .bind(emb_json)
     .bind(emb_pg_text.unwrap_or_default())
-    .bind(sovereign.oast_token.trim())
-    .bind("oast_success")
-    .execute(&mut *tx)
+    .bind(&token)
+    .bind(source)
+    .bind(&checksum)
+    .bind(&provenance_hmac)
+    .bind(provenance_kind)
+    .bind(provenance_issuer)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
     tx.commit().await.map_err(|e| e.to_string())?;

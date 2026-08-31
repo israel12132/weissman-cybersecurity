@@ -12,10 +12,10 @@ This is a Rust-first monorepo (Cargo workspace) with a React/Vite frontend and l
 ### Canonical platform metrics (code-synced — run audits to verify)
 | Metric | Value | Verify |
 |--------|-------|--------|
-| Production engines | **565** | `node scripts/verify_engine_wiring.mjs` |
-| Command Center routes | **130** (target ≥112) | `node scripts/weissman-ui-audit.mjs` |
-| UI pages (audit) | **111/111** — all pages meet the Weissman UI standard (exit 0) | `node scripts/weissman-ui-audit.mjs` |
-| Real probes | **305** | `node scripts/engine_reality_audit.mjs` |
+| Production engines | **567** | `node scripts/verify_engine_wiring.mjs` |
+| Command Center routes | **134** (target ≥112) | `node scripts/weissman-ui-audit.mjs` |
+| UI pages (audit) | **115/115** — all pages meet the Weissman UI standard (exit 0) | `node scripts/weissman-ui-audit.mjs` |
+| Real probes | **307** | `node scripts/engine_reality_audit.mjs` |
 | Agent-required engines | **48** | same |
 
 ### Required Services
@@ -64,8 +64,8 @@ This is a Rust-first monorepo (Cargo workspace) with a React/Vite frontend and l
 | `scripts/full_audit_gate.sh` | Master G1–G7 gate — must exit 0 before inspection day |
 | `scripts/go_live_check.sh` | Production readiness (K8s, DR, secrets template, OT engines) |
 | `scripts/generate_audit_evidence_pack.sh` | Auditor JSON + PDF (wiring, SBOM, NIST/SOC2 mapping) |
-| `scripts/verify_engine_wiring.mjs` | 565 engine IDs ↔ dispatch — 0 gaps |
-| `scripts/weissman-ui-audit.mjs` | 130 routes (target ≥112), 111/111 pages — live API evidence rules; run for live numbers |
+| `scripts/verify_engine_wiring.mjs` | 567 engine IDs ↔ dispatch — 0 gaps |
+| `scripts/weissman-ui-audit.mjs` | 134 routes (target ≥112), 115/115 pages — live API evidence rules; run for live numbers |
 
 See **`docs/operations/INSPECTION-DAY-RUNBOOK.md`** for 30+30 minute demo and CISO deep-dive scripts.  
 Week 8 sign-off: **`docs/operations/INSPECTION-READY-SIGNOFF.md`**.

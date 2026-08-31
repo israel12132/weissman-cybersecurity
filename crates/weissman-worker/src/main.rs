@@ -22,7 +22,12 @@ const BASE_BACKOFF_SECS: i64 = 5;
 /// Overridable so the same binary works outside a container, where `/tmp` may be shared or
 /// read-only.
 fn liveness_beat_path() -> std::path::PathBuf {
-    std::env::var_os("WEISSMAN_WORKER_LIVENESS_FILE")
+    liveness_beat_path_from(std::env::var_os("WEISSMAN_WORKER_LIVENESS_FILE"))
+}
+
+fn liveness_beat_path_from(override_path: Option<std::ffi::OsString>) -> std::path::PathBuf {
+    override_path
+        .filter(|s| !s.is_empty())
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::path::PathBuf::from("/tmp/weissman-worker-alive"))
 }
@@ -72,14 +77,41 @@ async fn terminalize_exhausted(
 /// Best-effort: a failure to write must never take down the worker, so this only logs. A
 /// persistently unwritable path shows up as a failing healthcheck, which is the correct signal.
 fn touch_liveness_beat() {
-    let path = liveness_beat_path();
-    if let Err(e) = std::fs::write(&path, b"ok") {
+    touch_liveness_beat_at(&liveness_beat_path());
+}
+
+fn touch_liveness_beat_at(path: &std::path::Path) {
+    if let Err(e) = std::fs::write(path, b"ok") {
         warn!(
             target: "weissman_worker",
             path = %path.display(), error = %e,
             "could not write liveness beat file"
         );
     }
+}
+
+fn spawn_billing_snapshot_loop(pool: Arc<PgPool>) {
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(3600));
+        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tick.tick().await;
+            match weissman_db::analytics::refresh_billing_usage_snapshot(pool.as_ref()).await {
+                Ok(n) => {
+                    info!(
+                        target: "weissman_worker",
+                        rows = n,
+                        "billing usage snapshot refreshed"
+                    );
+                }
+                Err(e) => warn!(
+                    target: "weissman_worker",
+                    error = %e,
+                    "billing usage snapshot refresh failed"
+                ),
+            }
+        }
+    });
 }
 
 fn worker_id() -> String {
@@ -139,6 +171,7 @@ fn job_class(kind: &str) -> JobClass {
         // ── Light / control-plane ────────────────────────────────────────────
         // Not heavy (no deep engine dispatch) but genuinely slow, so it keeps its own budget.
         "council_debate" => (false, 20 * 60),
+        "path_inference" => (false, 60),
         "noop" | "ping" => (false, 30),
         _ => (false, 5 * 60),
     };
@@ -188,9 +221,11 @@ const HEAVY_KINDS: &[&str] = &[
 ];
 
 fn worker_concurrency_cap(key: &str, default: usize) -> usize {
-    std::env::var(key)
-        .ok()
-        .and_then(|s| s.parse().ok())
+    worker_concurrency_cap_from(std::env::var(key).ok(), default)
+}
+
+fn worker_concurrency_cap_from(raw: Option<String>, default: usize) -> usize {
+    raw.and_then(|s| s.parse().ok())
         .filter(|&n| n > 0)
         .unwrap_or(default)
 }
@@ -207,12 +242,33 @@ async fn process_one(
     bus: Arc<JobBus>,
     swarm: Option<Arc<WorkerSwarm>>,
     wid: String,
-    job: AsyncJob,
+    mut job: AsyncJob,
 ) {
     // Job-state writes (fail/complete/dead-letter/forensic) go through the control-plane pool so a
     // running scan holding every `app_pool` slot can never starve them. Engine execution below
     // still uses `app_pool`.
     let pool = ctrl_pool.as_ref();
+    match fingerprint_engine::job_envelope::open_job_payload(&job.payload, job.tenant_id) {
+        Ok(plain) => job.payload = plain,
+        Err(e) => {
+            error!(
+                target: "weissman_worker",
+                job_id = %job.id,
+                tenant_id = job.tenant_id,
+                error = %e,
+                "job envelope decrypt failed — cannot read another tenant's ciphertext"
+            );
+            let err_s = format!("job envelope decrypt failed: {e}");
+            if job.attempt_count >= job.max_attempts {
+                let _ = job_queue::fail_job(pool, &job, &wid, &err_s, BASE_BACKOFF_SECS).await;
+            } else {
+                let backoff =
+                    (BASE_BACKOFF_SECS * (1_i64 << job.attempt_count.min(6).max(0))).min(120);
+                let _ = job_queue::release_reserved_job(pool, job.id, &wid, &err_s, backoff).await;
+            }
+            return;
+        }
+    }
     let bus_on = bus.is_enabled();
     info!(
         target: "weissman_worker",
@@ -576,10 +632,21 @@ async fn async_main() {
         eprintln!("[startup] worker security policy refusal: {msg}");
         std::process::exit(2);
     }
+    if let Err(msg) = fingerprint_engine::security_startup::enforce_rag_provenance_policy() {
+        eprintln!("[startup] worker RAG provenance HMAC refusal: {msg}");
+        std::process::exit(2);
+    }
+    fingerprint_engine::security_startup::lock_and_scrub_vault_keys_after_boot();
     if let Err(msg) = fingerprint_engine::http::rate_limit_redis::verify_redis_at_startup().await {
         eprintln!("[startup] worker Redis distributed state refusal: {msg}");
         std::process::exit(2);
     }
+    info!(
+        target: "weissman_worker",
+        cem_dago = fingerprint_engine::cem_dago::is_enabled(),
+        max_parallel = fingerprint_engine::cem_dago::max_parallel(),
+        "CEM-DAGO cognitive mesh (shared blackboard + DAG router)"
+    );
 
     let database_url = match std::env::var("DATABASE_URL") {
         Ok(u) if !u.trim().is_empty() => u,
@@ -633,7 +700,7 @@ async fn async_main() {
     // a connection-hungry scan checks out every app slot and the worker's own "mark this job
     // completed" write times out ("database: pool timed out"), so finished jobs never reach a
     // terminal state and pollers see them hang. A tiny separate pool keeps the control plane alive.
-    let ctrl_pool = match weissman_db::connect_control(database_url.trim()).await {
+    let ctrl_pool = match weissman_db::connect_control_from_env().await {
         Ok(p) => Arc::new(p),
         Err(e) => {
             eprintln!(
@@ -648,6 +715,26 @@ async fn async_main() {
     // against a server max_connections of 100 — see warn_if_pool_budget_exceeds_server.
     weissman_db::warn_if_pool_budget_exceeds_server(ctrl_pool.as_ref(), "worker", 48 + 12 + 12 + 8)
         .await;
+
+    spawn_billing_snapshot_loop(ctrl_pool.clone());
+    match weissman_db::connect_analytics_from_env().await {
+        Ok(Some(_p)) => {
+            info!(
+                target: "weissman_worker",
+                "analytics pool connected (snapshot SELECT only; refresh runs on worker)"
+            );
+        }
+        Ok(None) => {
+            warn!(
+                target: "weissman_worker",
+                "WEISSMAN_ANALYTICS_DATABASE_URL unset — skipping global billing aggregation"
+            );
+        }
+        Err(e) => {
+            eprintln!("weissman-worker: analytics database connect failed: {e}");
+            std::process::exit(1);
+        }
+    }
 
     let light_n = worker_concurrency_cap("WEISSMAN_WORKER_LIGHT_CONCURRENCY", 8);
     let heavy_n = worker_concurrency_cap("WEISSMAN_WORKER_HEAVY_CONCURRENCY", 2);
@@ -949,16 +1036,24 @@ mod tests {
     /// restore exactly the blind spot the beat was added to close.
     #[test]
     fn liveness_beat_is_written_to_the_configured_path() {
-        let dir = std::env::temp_dir().join(format!("weissman-beat-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "weissman-beat-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
         std::fs::create_dir_all(&dir).expect("create temp dir");
         let path = dir.join("alive");
-        // SAFETY: single-threaded test; no other thread reads the environment concurrently.
-        unsafe { std::env::set_var("WEISSMAN_WORKER_LIVENESS_FILE", &path) };
-
-        assert_eq!(liveness_beat_path(), path, "env override must win");
+        assert_eq!(
+            liveness_beat_path_from(Some(path.clone().into_os_string())),
+            path,
+            "configured path must be used as-is"
+        );
         assert!(!path.exists(), "precondition: beat file does not exist yet");
 
-        touch_liveness_beat();
+        touch_liveness_beat_at(&path);
         assert!(
             path.exists(),
             "touch_liveness_beat must create the file the healthcheck stats"
@@ -966,10 +1061,9 @@ mod tests {
 
         // Writing again must refresh it rather than fail on an existing file — the worker calls
         // this on every poll for the lifetime of the process.
-        touch_liveness_beat();
+        touch_liveness_beat_at(&path);
         assert!(path.exists(), "repeated beats must keep the file present");
 
-        unsafe { std::env::remove_var("WEISSMAN_WORKER_LIVENESS_FILE") };
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -977,15 +1071,15 @@ mod tests {
     /// never take the worker process down.
     #[test]
     fn liveness_beat_failure_does_not_panic() {
-        // SAFETY: single-threaded test.
-        unsafe {
-            std::env::set_var(
-                "WEISSMAN_WORKER_LIVENESS_FILE",
-                "/nonexistent-dir-weissman/alive",
-            )
-        };
-        touch_liveness_beat(); // must not panic
-        unsafe { std::env::remove_var("WEISSMAN_WORKER_LIVENESS_FILE") };
+        touch_liveness_beat_at(std::path::Path::new("/nonexistent-dir-weissman/alive"));
+    }
+
+    #[test]
+    fn default_liveness_path_is_tmp() {
+        assert_eq!(
+            liveness_beat_path_from(None),
+            std::path::PathBuf::from("/tmp/weissman-worker-alive")
+        );
     }
 
     // Every job kind whose executor arm dispatches the deep monolithic engine future
@@ -1066,25 +1160,14 @@ mod tests {
 
     #[test]
     fn concurrency_cap_parses_positive_env_value() {
-        let key = "WEISSMAN_TEST_WORKER_CAP_POSITIVE";
-        std::env::set_var(key, "12");
-        assert_eq!(worker_concurrency_cap(key, 4), 12);
-        std::env::remove_var(key);
+        assert_eq!(worker_concurrency_cap_from(Some("12".into()), 4), 12);
     }
 
     #[test]
     fn concurrency_cap_falls_back_on_invalid_or_zero() {
-        let key = "WEISSMAN_TEST_WORKER_CAP_INVALID";
-        std::env::remove_var(key);
-        // Unset -> default.
-        assert_eq!(worker_concurrency_cap(key, 7), 7);
-        // Zero rejected -> default.
-        std::env::set_var(key, "0");
-        assert_eq!(worker_concurrency_cap(key, 7), 7);
-        // Non-numeric rejected -> default.
-        std::env::set_var(key, "abc");
-        assert_eq!(worker_concurrency_cap(key, 7), 7);
-        std::env::remove_var(key);
+        assert_eq!(worker_concurrency_cap_from(None, 7), 7);
+        assert_eq!(worker_concurrency_cap_from(Some("0".into()), 7), 7);
+        assert_eq!(worker_concurrency_cap_from(Some("abc".into()), 7), 7);
     }
 
     #[test]
@@ -1127,6 +1210,7 @@ mod tests {
             "noop",
             "ping",
             "council_debate",
+            "path_inference",
             "definitely_not_a_real_kind",
         ] {
             assert!(!job_class(k).heavy, "{k} must not be heavy");

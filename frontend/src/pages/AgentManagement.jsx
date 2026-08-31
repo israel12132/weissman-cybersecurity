@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { Server, Radio, Zap } from 'lucide-react'
+import { Server, Radio, Zap, Skull } from 'lucide-react'
 import { createColumnHelper } from '@tanstack/react-table'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
@@ -16,6 +16,15 @@ import { apiUrl } from '../lib/apiBase'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import Button from '../components/ui/Button'
 import { useApiQuery } from '../hooks/useApiQuery'
+import DualControlGate from '../components/ui/DualControlGate'
+import { confirmDialog } from '../utils/confirmDialog'
+import {
+  dualControlHeaders,
+  dualControlBody,
+  loadDestructiveConfirmToken,
+  loadDualApproveToken,
+  persistDualControlTokens,
+} from '../utils/destructiveConfirm'
 
 const columnHelper = createColumnHelper()
 
@@ -72,6 +81,12 @@ export default function AgentManagement() {
   const [selectedAgent, setSelectedAgent] = useState(null)
   const [statusFilter, setStatusFilter] = useState('all')
   const [autoRefresh, setAutoRefresh] = useState(true)
+  const [killConfirm, setKillConfirm] = useState(() => loadDestructiveConfirmToken())
+  const [killDual, setKillDual] = useState(() => loadDualApproveToken())
+  const [killReason, setKillReason] = useState('')
+  const [killRemember, setKillRemember] = useState(true)
+  const [killBusy, setKillBusy] = useState(false)
+  const [killResult, setKillResult] = useState(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -121,6 +136,33 @@ export default function AgentManagement() {
       setActionErr(e.message)
     }
   }, [tokenClient, tokenValidity, t])
+
+  const signedKill = useCallback(async () => {
+    if (!selectedAgent?.agent_id) return
+    const ok = await confirmDialog({
+      title: t('agents.kill_title'),
+      message: t('agents.kill_message', { host: selectedAgent.hostname || selectedAgent.agent_id }),
+      confirmLabel: t('agents.kill_confirm'),
+      variant: 'danger',
+    })
+    if (!ok) return
+    persistDualControlTokens(killConfirm, killDual, killRemember)
+    setKillBusy(true)
+    setKillResult(null)
+    setActionErr(null)
+    try {
+      const d = await apiFetch(`/api/agents/${encodeURIComponent(selectedAgent.agent_id)}/kill-switch`, {
+        method: 'POST',
+        headers: dualControlHeaders(killConfirm, killDual),
+        body: dualControlBody(killConfirm, killDual, { reason: killReason || t('agents.kill_default_reason') }),
+      })
+      setKillResult(d)
+    } catch (e) {
+      setActionErr(e.message)
+    } finally {
+      setKillBusy(false)
+    }
+  }, [selectedAgent, killConfirm, killDual, killRemember, killReason, t])
 
   const fleetDispatch = useCallback(async () => {
     const cid = Number(tokenClient)
@@ -421,6 +463,38 @@ export default function AgentManagement() {
                 <Link to="/baseline-drift" className="text-xs text-violet-300/80 hover:text-violet-200 underline">
                   {t('agents.open_baseline')}
                 </Link>
+                <div className="pt-3 border-t border-[var(--border-default)] space-y-3">
+                  <p className="text-[10px] font-mono uppercase text-rose-300/80">{t('agents.kill_heading')}</p>
+                  <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">{t('agents.kill_hint')}</p>
+                  <DualControlGate
+                    confirm={killConfirm}
+                    dual={killDual}
+                    reason={killReason}
+                    onConfirmChange={setKillConfirm}
+                    onDualChange={setKillDual}
+                    onReasonChange={setKillReason}
+                    showReason
+                    remember={killRemember}
+                    onRememberChange={setKillRemember}
+                  />
+                  <Button
+                    variant="unstyled"
+                    type="button"
+                    disabled={killBusy}
+                    onClick={signedKill}
+                    className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-rose-500/40 text-rose-200 font-mono text-xs hover:bg-rose-500/10 disabled:opacity-40"
+                  >
+                    <Skull className="w-3.5 h-3.5" />
+                    {killBusy ? t('agents.kill_sending') : t('agents.kill_button')}
+                  </Button>
+                  {killResult && (
+                    <p className="text-[11px] font-mono text-amber-200/80">
+                      {killResult.live_dispatched
+                        ? t('agents.kill_live')
+                        : t('agents.kill_queued')}
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </aside>

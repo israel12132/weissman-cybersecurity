@@ -870,6 +870,9 @@ pub fn default_compliance(engine_id: &str) -> Vec<&'static str> {
         || engine_id.contains("mfa")
         || engine_id.contains("session")
         || engine_id.contains("kerberos")
+        || engine_id.contains("privilege")
+        || engine_id.contains("credential")
+        || engine_id.contains("token")
     {
         tags.extend_from_slice(&["ISO27001:A.9", "SOC2:CC6.1", "NIS2:Art.21(2)(i)"]);
     }

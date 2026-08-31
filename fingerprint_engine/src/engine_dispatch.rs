@@ -27,6 +27,9 @@ pub struct EngineRunContext {
     /// Pool + agent registry, populated by `api_scan` when known. When set, agent-required
     /// engines try to dispatch live to an enrolled agent and queue an `endpoint_agent_tasks` row.
     pub app_pool: Option<std::sync::Arc<sqlx::PgPool>>,
+    /// Intel pool (`search_path=intel`) for unbounded discovery_knowledge upserts.
+    /// Falls back to `app_pool` when unset (single-DB / CLI / tests).
+    pub intel_pool: Option<std::sync::Arc<sqlx::PgPool>>,
     pub agents: Option<std::sync::Arc<crate::endpoint_agents::AgentRegistry>>,
     pub client_id: Option<i64>,
     /// Extra scan parameters forwarded from POST /api/command-center/scan body.
@@ -47,6 +50,20 @@ pub struct EngineRunContext {
     pub oast_domain: Option<String>,
     /// Tenant OAST API key from `system_configs`.
     pub oast_api_key: Option<String>,
+    /// Optional CEM-DAGO scan blackboard (worker/orchestrator attach this; engines never peer-chat).
+    pub blackboard: Option<std::sync::Arc<crate::cem_dago::ScanBlackboard>>,
+    /// Scan correlation id (async job uuid or `run-{id}-c{client}`).
+    pub scan_id: Option<String>,
+    /// Bounded 90-day payload/target trie pre-warmed by CEM-DAGO (owned Arc, no lifetimes).
+    pub payload_trie: Option<std::sync::Arc<crate::cem_dago::PayloadTrie>>,
+}
+
+impl EngineRunContext {
+    /// Prefer the intel pool for `intel.discovery_knowledge`; fall back to app.
+    #[must_use]
+    pub fn discovery_knowledge_pool(&self) -> Option<&sqlx::PgPool> {
+        self.intel_pool.as_deref().or(self.app_pool.as_deref())
+    }
 }
 
 /// Escalate a run context into the Ghost Network after a WAF/rate-limit block: enable identity
@@ -231,6 +248,10 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
             ctx.memory_payloads = winners.into_iter().map(|w| w.payload).collect();
         }
     }
+    if let Some(trie) = ctx.payload_trie.as_ref() {
+        let extra = trie.payloads_for_target(target);
+        crate::pentest_memory::prepend_memory_payloads(&mut ctx.memory_payloads, &extra);
+    }
     let mut result = dispatch_engine_match(canonical, target, &ctx).await;
     if raw != canonical || !result.findings.is_empty() {
         for f in &mut result.findings {
@@ -382,6 +403,25 @@ async fn dispatch_engine_match(
                 .into()
         }
         "semantic_ai_fuzz" => {
+            let tech = crate::elite_hardening::semantic_gate::fingerprint_target(target);
+            if !crate::elite_hardening::semantic_gate::allow_llm_mutation(
+                &tech,
+                !ctx.discovered_paths.is_empty(),
+            ) {
+                return crate::engine_result::EngineResult::ok(
+                    vec![serde_json::json!({
+                        "type": "semantic_ai_fuzz",
+                        "title": "Semantic fuzzer waiting for technology fingerprint",
+                        "severity": "info",
+                        "description": format!(
+                            "LLM mutation deferred until OpenAPI/fingerprint is available (tech={})",
+                            tech.label
+                        ),
+                        "target": target,
+                    })],
+                    "semantic_ai_fuzz: awaiting fingerprint",
+                );
+            }
             let config = weissman_core::models::semantic::SemanticConfig {
                 llm_base_url: if ctx.llm_base_url.trim().is_empty() {
                     "http://127.0.0.1:8000/v1".to_string()
@@ -746,8 +786,15 @@ async fn dispatch_engine_match(
         "fair_exposure_fusion" => {
             crate::fair_exposure_fusion_engine::run_fair_exposure_fusion_result(target, ctx).await
         }
+        "supreme_path_fair_rag" => {
+            crate::supreme_path_fair_rag_engine::run_supreme_path_fair_rag_result(target, ctx)
+                .await
+        }
         "identity_attack_chain" => {
             crate::identity_attack_chain_engine::run_identity_attack_chain_result(target, ctx).await
+        }
+        "privilege_escalation_credential_access" => {
+            crate::priv_esc_cred_access::run_priv_esc_cred_access_result(target, ctx).await
         }
         "pipeline_to_runtime_risk" => {
             crate::pipeline_to_runtime_risk_engine::run_pipeline_to_runtime_risk_result(target, ctx)

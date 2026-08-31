@@ -21,6 +21,7 @@
 #![allow(clippy::too_many_arguments)]
 
 pub mod context;
+pub mod discovery_corpus;
 pub mod engine_trait;
 pub mod factory;
 pub mod fuzzer;

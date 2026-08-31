@@ -3961,6 +3961,15 @@ export const ENGINES_REGISTRY = [
     requiresTarget: true,
   },
   {
+    id: 'supreme_path_fair_rag',
+    label: 'Supreme Path × FAIR × RAG',
+    group: 'recon',
+    mitre: 'T1595',
+    description:
+      'Dijkstra attack-path inference (KEV/EPSS/CVSS/agent weights) fused with FAIR dollar-at-risk and tenant pentest memory (pgvector HNSW) — live graph only, no simulated paths',
+    requiresTarget: true,
+  },
+  {
     id: 'risk_superposition_collapse',
     label: 'Risk Superposition Collapse',
     group: 'recon',
@@ -4610,6 +4619,14 @@ export const ENGINES_REGISTRY = [
     group: 'crypto',
     mitre: 'T1078',
     description: 'Fusion: password spray + Kerberos + ITDR auth telemetry',
+    requiresTarget: true,
+  },
+  {
+    id: 'privilege_escalation_credential_access',
+    label: 'Privilege Escalation & Credential Access',
+    group: 'crypto',
+    mitre: 'T1068',
+    description: '500-check defensive engine: W^X/syscall integrity, LSASS/identity-daemon protection, token hardening, UAC prevention, service/task ACLs, BYOVD/kernel, credential vaults, telemetry, RLS, CI — live evidence only, no LSASS dumps or UAC bypass payloads',
     requiresTarget: true,
   },
   {

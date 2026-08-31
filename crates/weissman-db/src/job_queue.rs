@@ -17,24 +17,27 @@ pub struct AsyncJob {
     pub trace_id: Option<String>,
 }
 
-/// Open a transaction with the **worker/queue** RLS posture: `app.current_tenant_id = ''`
-/// selects the unrestricted branch of the `weissman_async_jobs` policy
-/// (`NULLIF('','') IS NULL`).
+/// Open a transaction with the **worker/queue** RLS posture: `app.current_tenant_id = ''`.
 ///
-/// `weissman_app` is `NOBYPASSRLS` and migration `20260602180000` set a database-level
-/// default `app.current_tenant_id = '0'`, so an unscoped connection's policy collapses to
-/// `tenant_id = 0` and hides/rejects every real tenant's row. Setting the GUC transaction-locally
-/// (`SET LOCAL` semantics via `set_config(..., true)`) restores the intended "trusted queue
-/// plumbing is unrestricted" branch without leaking scope to the next borrower of the pooled
-/// connection. Tenant-scoped operations (`enqueue`, `get_job_for_tenant`) use
-/// [`crate::begin_tenant_tx`] with a concrete id instead.
+/// Claim/heartbeat/complete run on `weissman_worker` (BYPASSRLS). The empty GUC is
+/// belt-and-suspenders: if this helper is ever pointed at `weissman_app`, fail-closed
+/// job-bus policies (`tenant_id = app_current_tenant_id()`) return zero rows instead of
+/// leaking every tenant's payloads. Do **not** restore an "unset GUC = unrestricted"
+/// policy on `weissman_app`.
 async fn begin_worker_tx(
     pool: &PgPool,
 ) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    sqlx::query("SELECT set_config('app.current_tenant_id', '', true)")
-        .execute(&mut *tx)
-        .await?;
+    // Claim/heartbeat/complete are short catalog updates. SET LOCAL lock_timeout
+    // so a stray wait cannot pin this transaction; SKIP LOCKED itself never waits.
+    // Callers MUST commit before any webhook, scan, or other network I/O.
+    sqlx::query(
+        "SELECT set_config('app.current_tenant_id', '', true), \
+                set_config('lock_timeout', $1, true)",
+    )
+    .bind(crate::advisory_lock::lock_timeout_setting())
+    .execute(&mut *tx)
+    .await?;
     Ok(tx)
 }
 
@@ -96,13 +99,64 @@ pub async fn enqueue_held(
     Ok(id)
 }
 
+/// Insert a claimable job on an **already open tenant transaction** so the outbox
+/// row commits atomically with the business write (finding persist, etc.).
+pub async fn enqueue_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    kind: &str,
+    payload: Value,
+    trace_id: Option<&str>,
+) -> Result<Uuid, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"INSERT INTO weissman_async_jobs (tenant_id, kind, payload, status, trace_id)
+           VALUES ($1, $2, $3, 'pending', $4)
+           RETURNING id"#,
+    )
+    .bind(tenant_id)
+    .bind(kind)
+    .bind(Json(payload))
+    .bind(trace_id)
+    .fetch_one(&mut **tx)
+    .await
+}
+
+/// Held insert on an open tenant transaction (JobBus envelope attach after commit).
+pub async fn enqueue_held_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    kind: &str,
+    payload: Value,
+    trace_id: Option<&str>,
+    hold_secs: i64,
+) -> Result<Uuid, sqlx::Error> {
+    let hold = hold_secs.clamp(1, 300);
+    sqlx::query_scalar(
+        r#"INSERT INTO weissman_async_jobs (tenant_id, kind, payload, status, trace_id, run_after)
+           VALUES ($1, $2, $3, 'pending', $4, now() + ($5::bigint * interval '1 second'))
+           RETURNING id"#,
+    )
+    .bind(tenant_id)
+    .bind(kind)
+    .bind(Json(payload))
+    .bind(trace_id)
+    .bind(hold)
+    .fetch_one(&mut **tx)
+    .await
+}
+
 /// Finalize a [`enqueue_held`] job: replace its payload (now carrying the signed
 /// envelope) and clear `run_after` so it becomes immediately claimable — in one
 /// atomic UPDATE, so a worker never observes a claimable job without its
 /// envelope. Guarded on the row still being held (`run_after IS NOT NULL`) so a
 /// late finalize cannot resurrect a job that was already failed.
-pub async fn release_hold(pool: &PgPool, job_id: Uuid, payload: Value) -> Result<u64, sqlx::Error> {
-    let mut tx = begin_worker_tx(pool).await?;
+pub async fn release_hold(
+    pool: &PgPool,
+    tenant_id: i64,
+    job_id: Uuid,
+    payload: Value,
+) -> Result<u64, sqlx::Error> {
+    let mut tx = crate::begin_tenant_tx(pool, tenant_id).await?;
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs
               SET payload = $2, run_after = NULL, updated_at = now()
@@ -142,14 +196,21 @@ pub async fn enqueue_with_max_attempts(
     Ok(id)
 }
 
-/// Worker process role for **honest** CPU / capacity splitting: set `WEISSMAN_WORKER_POOL=research|client|mixed`.
-/// Research workers only claim LLM-heavy genesis/council jobs; client workers claim everything else. `mixed` = legacy behavior.
+/// Worker process role for **honest** CPU / capacity splitting:
+/// `WEISSMAN_WORKER_POOL=research|client|soar|mixed`.
+///
+/// * Research — LLM-heavy genesis/council jobs only.
+/// * Client / scan — everything except research **and** SOAR (isolate/IR).
+/// * Soar — `soar_*` kinds only (must run as a dedicated process; isolate
+///   must not share an address space with scan engines).
+/// * Mixed — legacy single-process (includes SOAR; lab only).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum WorkerPoolRole {
     #[default]
     Mixed,
     Research,
     Client,
+    Soar,
 }
 
 impl WorkerPoolRole {
@@ -162,16 +223,24 @@ impl WorkerPoolRole {
         {
             "research" | "genesis" => Self::Research,
             "client" | "scan" => Self::Client,
+            "soar" | "ir" => Self::Soar,
             _ => Self::Mixed,
         }
     }
 
-    fn sql_mode(self) -> i32 {
+    #[must_use]
+    pub fn sql_mode(self) -> i32 {
         match self {
             WorkerPoolRole::Mixed => 0,
             WorkerPoolRole::Research => 1,
             WorkerPoolRole::Client => 2,
+            WorkerPoolRole::Soar => 3,
         }
+    }
+
+    #[must_use]
+    pub fn is_soar_kind(kind: &str) -> bool {
+        kind.starts_with("soar_")
     }
 }
 
@@ -294,6 +363,11 @@ pub async fn reserve_next_excluding_with_role(
                     'council_debate',
                     'poe_synthesis_run'
                   )
+                  AND NOT starts_with(kind, 'soar_')
+                )
+                OR (
+                  $3::int = 3
+                  AND starts_with(kind, 'soar_')
                 )
               )
             ORDER BY created_at
@@ -317,6 +391,8 @@ pub async fn reserve_next_excluding_with_role(
     .bind(exclude)
     .fetch_optional(&mut *tx)
     .await?;
+    // Commit BEFORE returning: execute_job / outbound HTTP / network scans must not
+    // hold this FOR UPDATE SKIP LOCKED row lock.
     tx.commit().await?;
 
     let Some(row) = row else {
@@ -413,6 +489,11 @@ pub async fn claim_next_excluding_with_role(
                     'council_debate',
                     'poe_synthesis_run'
                   )
+                  AND NOT starts_with(kind, 'soar_')
+                )
+                OR (
+                  $3::int = 3
+                  AND starts_with(kind, 'soar_')
                 )
               )
             ORDER BY created_at
@@ -437,6 +518,8 @@ pub async fn claim_next_excluding_with_role(
     .bind(exclude)
     .fetch_optional(&mut *tx)
     .await?;
+    // Commit BEFORE returning: execute_job / outbound HTTP / network scans must not
+    // hold this FOR UPDATE SKIP LOCKED row lock.
     tx.commit().await?;
 
     let Some(row) = row else {
@@ -864,16 +947,18 @@ mod worker_pool_role_tests {
         assert_eq!(WorkerPoolRole::Mixed.sql_mode(), 0);
         assert_eq!(WorkerPoolRole::Research.sql_mode(), 1);
         assert_eq!(WorkerPoolRole::Client.sql_mode(), 2);
+        assert_eq!(WorkerPoolRole::Soar.sql_mode(), 3);
         let modes: HashSet<i32> = [
             WorkerPoolRole::Mixed.sql_mode(),
             WorkerPoolRole::Research.sql_mode(),
             WorkerPoolRole::Client.sql_mode(),
+            WorkerPoolRole::Soar.sql_mode(),
         ]
         .into_iter()
         .collect();
         assert_eq!(
             modes.len(),
-            3,
+            4,
             "each role maps to a distinct SQL discriminant"
         );
     }
@@ -892,8 +977,33 @@ mod worker_pool_role_tests {
         let role = WorkerPoolRole::from_env();
         assert!(matches!(
             role,
-            WorkerPoolRole::Mixed | WorkerPoolRole::Research | WorkerPoolRole::Client
+            WorkerPoolRole::Mixed
+                | WorkerPoolRole::Research
+                | WorkerPoolRole::Client
+                | WorkerPoolRole::Soar
         ));
-        assert!((0..=2).contains(&role.sql_mode()));
+        assert!((0..=3).contains(&role.sql_mode()));
+    }
+
+    #[test]
+    fn claim_path_commits_before_any_network_io() {
+        // Worker scans and SOAR outbound HTTP run AFTER claim_next/reserve_next return.
+        // This module must stay a pure SQL control plane so FOR UPDATE SKIP LOCKED
+        // row locks cannot be held across I/O.
+        let src = include_str!("job_queue.rs");
+        let production = src.split("#[cfg(test)]").next().unwrap_or(src);
+        assert!(production.contains("FOR UPDATE SKIP LOCKED"));
+        assert!(
+            production.contains("Commit BEFORE returning"),
+            "claim functions must document that the transaction is closed before job execution"
+        );
+        assert!(
+            !production.contains("reqwest"),
+            "job_queue must not perform HTTP inside the claim transaction"
+        );
+        assert!(
+            production.contains("use sqlx::") && production.contains("use uuid::"),
+            "claim path is SQLx + UUID only"
+        );
     }
 }
