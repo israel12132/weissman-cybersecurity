@@ -239,14 +239,38 @@ pub fn normalize_subdomain_prefix(raw: &str) -> Option<String> {
     Some(s)
 }
 
-/// Probe budget for HTTP existence checks. `0` (default) means no software cap.
+/// Default per-scan DNS/HTTP existence-probe cap when the env is unset.
+///
+/// The intel corpus is still unbounded across scans (every hit is stored). A single
+/// Command Center job must finish: 42k paths × N crt.sh hosts with a 6s HTTP timeout
+/// saturates the UI poll (180s) and ALB idle timeouts. Operators who want no cap
+/// set `WEISSMAN_DISCOVERY_PROBE_BUDGET=0`.
+pub const DEFAULT_DISCOVERY_PROBE_BUDGET: usize = 1024;
+
+/// Per-scan existence-probe cap.
+///
+/// * unset / empty / unparsable → [`DEFAULT_DISCOVERY_PROBE_BUDGET`]
+/// * `0` → unlimited (`usize::MAX`)
+/// * any other positive integer → that cap
 #[must_use]
 pub fn discovery_probe_budget() -> usize {
-    std::env::var("WEISSMAN_DISCOVERY_PROBE_BUDGET")
-        .ok()
-        .and_then(|s| s.parse::<usize>().ok())
-        .filter(|&n| n > 0)
-        .unwrap_or(usize::MAX)
+    discovery_probe_budget_from(
+        std::env::var("WEISSMAN_DISCOVERY_PROBE_BUDGET")
+            .ok()
+            .as_deref(),
+    )
+}
+
+#[must_use]
+pub fn discovery_probe_budget_from(raw: Option<&str>) -> usize {
+    match raw.map(str::trim).filter(|s| !s.is_empty()) {
+        None => DEFAULT_DISCOVERY_PROBE_BUDGET,
+        Some(s) => match s.parse::<usize>() {
+            Ok(0) => usize::MAX,
+            Ok(n) => n,
+            Err(_) => DEFAULT_DISCOVERY_PROBE_BUDGET,
+        },
+    }
 }
 
 #[cfg(test)]
@@ -273,6 +297,24 @@ mod tests {
         assert!(s.iter().any(|x| x == "staging-api"));
         assert!(s.iter().any(|x| x == "autodiscover"));
         assert!(s.iter().any(|x| x == "okta"));
+    }
+
+    #[test]
+    fn probe_budget_unset_is_finite_per_scan() {
+        assert_eq!(
+            discovery_probe_budget_from(None),
+            DEFAULT_DISCOVERY_PROBE_BUDGET
+        );
+        assert_eq!(
+            discovery_probe_budget_from(Some("")),
+            DEFAULT_DISCOVERY_PROBE_BUDGET
+        );
+        assert_eq!(discovery_probe_budget_from(Some("512")), 512);
+        assert_eq!(discovery_probe_budget_from(Some("0")), usize::MAX);
+        assert_eq!(
+            discovery_probe_budget_from(Some("nope")),
+            DEFAULT_DISCOVERY_PROBE_BUDGET
+        );
     }
 
     #[test]

@@ -881,6 +881,7 @@ jobs:
           WEISSMAN_AUTH_POOL_MAX: "6"
           WEISSMAN_INTEL_POOL_MAX: "4"
           PORT: "18000"
+          WEISSMAN_LIVE_AI_DISCOVERY: "0"
         run: ./target/debug/weissman-server > /tmp/weissman-server.log 2>&1 &
 
       - name: Start weissman-worker
@@ -925,6 +926,9 @@ jobs:
           WEISSMAN_POST_PERSIST_DB_CONCURRENCY: "3"
           WEISSMAN_WORKER_HEAVY_CONCURRENCY: "4"
           WEISSMAN_AUTO_SUPERPOSITION_COLLAPSE: "1"
+          # No vLLM in this job. Live AI waves retry 4s×3 against :8000 and add
+          # ~12s before the unbounded #326 corpus; seed+budget still live-probe.
+          WEISSMAN_LIVE_AI_DISCOVERY: "0"
         run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
 
       - name: Wait for API health
