@@ -183,7 +183,7 @@ fn live_status(id: u16) -> ControlStatus {
         ),
         90 => ControlStatus::ok("Hybrid SQL + vector query helpers"),
         91 => ControlStatus::ok("LLM emits QueryPlan JSON only"),
-        92 => ControlStatus::ok("13-table weissman_ro allow-list"),
+        92 => ControlStatus::ok("17-table weissman_ro allow-list"),
         93 => ControlStatus::ok("weissman_ro SELECT-only, statement_timeout 15s"),
         94 => ControlStatus::ok("FORCE RLS on tenant tables"),
         95 => ControlStatus::ok("DDL/DML keywords rejected at compile"),

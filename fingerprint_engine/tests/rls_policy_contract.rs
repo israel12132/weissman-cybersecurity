@@ -131,7 +131,7 @@ fn pgvector_hnsw_params_and_hermetic_roles_migrations_exist() {
         .unwrap_or_default();
     assert!(roles.contains("NOBYPASSRLS"));
     assert!(roles.contains("statement_timeout = '15s'"));
-    assert_eq!(weissman_db::role_guard::RO_SELECT_TABLES.len(), 13);
+    assert_eq!(weissman_db::role_guard::RO_SELECT_TABLES.len(), 17);
 }
 
 #[test]
