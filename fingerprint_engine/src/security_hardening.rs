@@ -289,10 +289,13 @@ pub async fn resolve_and_pin_public_http(raw: &str) -> Result<PinnedHttpTarget, 
     let port = parsed
         .port_or_known_default()
         .unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
+    // Same opt-in as validate_poe_target_url: lab/CI fixtures on loopback must still pin
+    // the resolved sockets (no second lookup). Production leaves the env unset → fail closed.
+    let allow_private = allow_private_scan_targets();
     let mut addrs: Vec<SocketAddr> = Vec::new();
     let mut seen = HashSet::new();
     if let Ok(ip) = host.parse::<IpAddr>() {
-        if is_private_or_reserved_ip(&ip) {
+        if is_private_or_reserved_ip(&ip) && !allow_private {
             return Err(format!("blocked private/reserved pin target {ip}"));
         }
         addrs.push(SocketAddr::new(ip, port));
@@ -302,7 +305,7 @@ pub async fn resolve_and_pin_public_http(raw: &str) -> Result<PinnedHttpTarget, 
             .map_err(|e| format!("dns pin resolve failed: {e}"))?;
         for sa in resolved {
             let ip = sa.ip();
-            if is_private_or_reserved_ip(&ip) {
+            if is_private_or_reserved_ip(&ip) && !allow_private {
                 return Err(format!(
                     "dns pin rejected: {host} resolved to blocked address {ip}"
                 ));
@@ -313,7 +316,7 @@ pub async fn resolve_and_pin_public_http(raw: &str) -> Result<PinnedHttpTarget, 
         }
     }
     if addrs.is_empty() {
-        return Err(format!("dns pin produced no public addresses for {host}"));
+        return Err(format!("dns pin produced no usable addresses for {host}"));
     }
     Ok(PinnedHttpTarget { host, port, addrs })
 }
