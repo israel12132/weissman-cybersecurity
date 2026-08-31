@@ -232,8 +232,18 @@ where
     // Adaptive per-attempt budget: repeated timeouts widen it (up to a cap) instead of
     // hammering the same too-short deadline against a slow-but-alive target.
     let mut current_timeout = attempt_timeout;
+    // Widening across three target variants (45s → 90s → 180s) sums to 315s, which
+    // outlives the CI job poller (180s) and leaves `command_center_engine` stuck
+    // `running`. Cap the whole loop at 2× the original attempt budget so a hung
+    // engine returns instead of stalling the worker.
+    let total_wall = attempt_timeout.saturating_mul(2).min(MAX_ATTEMPT_TIMEOUT);
 
     for variant in &strategies {
+        let elapsed = start.elapsed();
+        if elapsed >= total_wall {
+            break;
+        }
+        let this_timeout = current_timeout.min(total_wall.saturating_sub(elapsed));
         let host = variant.split('/').nth(2).unwrap_or(variant.as_str());
         if crate::elite_hardening::probe_io::is_paused(host) {
             last_error = Some(format!(
@@ -250,7 +260,7 @@ where
             force_ghost_network: matches!(last_class, Some(FailureClass::Waf)),
         };
         let fut = run(variant.clone(), hint);
-        match tokio::time::timeout(current_timeout, AssertUnwindSafe(fut).catch_unwind()).await {
+        match tokio::time::timeout(this_timeout, AssertUnwindSafe(fut).catch_unwind()).await {
             Ok(Ok(result)) => {
                 if should_retry_status(&result.status) {
                     let class = classify_failure(&result.status, &result.message);
@@ -432,6 +442,35 @@ mod tests {
         .await;
         assert_eq!(result.status, "error");
         assert_eq!(telem.status, "timeout");
+    }
+
+    #[tokio::test]
+    async fn timeout_retries_cannot_exceed_two_attempt_budgets() {
+        let started = Instant::now();
+        let (result, telem) = run_with_resilience(
+            "hung",
+            "https://example.com",
+            Duration::from_millis(80),
+            move |_v, _hint| async move {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                EngineResult::ok(vec![], "")
+            },
+        )
+        .await;
+        assert_eq!(result.status, "error");
+        assert_eq!(telem.status, "timeout");
+        // Unbounded widening is 80+160+320ms; the wall is 2×80ms. Stay well under
+        // the unbounded sum so a hung engine cannot stall the job poller.
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < Duration::from_millis(450),
+            "elapsed {elapsed:?} must stay near 2× attempt budget, not 80+160+320"
+        );
+        assert!(
+            telem.attempts <= 2,
+            "attempts={} must stop once the total wall is spent",
+            telem.attempts
+        );
     }
 
     #[test]
