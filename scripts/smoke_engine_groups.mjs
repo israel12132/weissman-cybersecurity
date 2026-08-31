@@ -62,6 +62,22 @@ async function login() {
   return body.access_token
 }
 
+async function requireOwner(headers) {
+  const { response, body } = await api('/api/auth/me', { headers })
+  if (!response.ok) {
+    throw new Error(`auth/me failed (${response.status}): ${JSON.stringify(body)}`)
+  }
+  if (body?.can_create_clients !== true) {
+    throw new Error(
+      `smoke login ${LOGIN_EMAIL} cannot create clients ` +
+        `(can_create_clients=${body?.can_create_clients}, is_owner=${body?.is_owner}, ` +
+        `is_superadmin=${body?.is_superadmin}, role=${body?.role}). ` +
+        'Client lifecycle is owner-only; use WEISSMAN_ADMIN_EMAIL (promoted is_superadmin), ' +
+        'not a staff bootstrap user.',
+    )
+  }
+}
+
 async function listClients(headers) {
   const { response, body } = await api('/api/clients', { headers })
   if (!response.ok || !Array.isArray(body)) {
@@ -89,7 +105,12 @@ async function ensureClient(headers) {
       body: JSON.stringify(payload),
     })
     if (!created.response.ok) {
-      throw new Error(`client create failed (${created.response.status}): ${JSON.stringify(created.body)}`)
+      throw new Error(
+        `client create failed (${created.response.status}): ${JSON.stringify(created.body)}` +
+          (created.response.status === 403
+            ? ' Log in as the platform owner (WEISSMAN_ADMIN_EMAIL), not a staff user.'
+            : ''),
+      )
     }
     clients = await listClients(headers)
     client = clients.find((entry) => entry.name === CLIENT_NAME)
@@ -202,6 +223,7 @@ async function main() {
     'content-type': 'application/json',
     authorization: `Bearer ${token}`,
   }
+  await requireOwner(headers)
   const client = await ensureClient(headers)
   const results = []
   const failures = []

@@ -29,7 +29,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/intel/suppressions/:id",
             delete(api_intel_suppression_delete),
         )
-        // Attack-path inference (BFS over risk_graph weighted by CVSS+EPSS+KEV).
+        // Attack-path inference (Dijkstra over risk_graph weighted by CVSS+EPSS+KEV).
         .route(
             "/api/attack-paths/:client_id",
             get(api_attack_paths_for_client),
@@ -38,6 +38,15 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/cem-dago/manifests", get(api_cem_dago_manifests))
         .route("/api/cem-dago/waves", get(api_cem_dago_waves))
         .route("/api/cem-dago/blackboard", get(api_cem_dago_blackboard))
+        .route(
+            "/api/attack-paths/:client_id/what-if",
+            post(api_attack_paths_what_if),
+        )
+        .route(
+            "/api/supreme-brain/:client_id",
+            get(api_supreme_brain_for_client),
+        )
+        .route("/api/pentest-memory/stats", get(api_pentest_memory_stats))
         .route(
             "/api/battlespace/topology/:client_id",
             get(api_battlespace_topology),

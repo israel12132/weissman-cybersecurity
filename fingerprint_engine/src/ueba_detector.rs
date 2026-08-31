@@ -11,14 +11,16 @@
 //!      up in the learned set) — those are fired at severity `medium` too, once
 //!      the metric has accumulated ≥ 24 observations.
 //!
-//! The detector NEVER fires while a metric is still learning (`n < 24`). After that:
-//!   * Phase B (`24 ≤ n < 168`): Z-score against the global baseline only.
-//!   * Phase C (`n ≥ 168`): Z-score against the current hour-of-week bucket when
-//!     that hour has ≥ 3 samples (view `agent_metric_hour_baselines`); otherwise
-//!     fall back to the global baseline.
-//! Baselines are still *stored* per (agent, metric) under GLOBAL_BUCKET — not 168
-//! upsert rows — so the learning floor stays reachable. Hour overlays are read
-//! from samples at scoring time.
+//! Hybrid baseline (week-1 → week-2):
+//!   * Until 168 global samples (`hour_of_week = -1`) the detector compares
+//!     against the global bucket.
+//!   * From the second week it prefers the specific `hour_of_week` bucket
+//!     (via `elite_hardening::ueba_stats`, hour n ≥ 3), falling back to global
+//!     when that hour is still thin.
+//! The detector NEVER fires while the chosen baseline is still learning
+//! (`n < 24`). Hour buckets are updated incrementally (Welford) so they can
+//! actually accumulate across weeks; the global row is recomputed from the
+//! rolling 7-day sample window. Scoring uses cloud-safe stddev.
 //!
 //! Never-before-seen ports and processes fire after the learning window **and**
 //! after a short onboarding grace (15–30 minutes from `endpoint_agents.enrolled_at`,
@@ -97,15 +99,16 @@ fn scrub_pii_string(s: &str) -> String {
     out
 }
 const MIN_BASELINE_SAMPLES: i32 = 24;
+/// Switch from global-only compare to hour-of-week once a full week of hourly
+/// samples has landed (~168). Below this we stay on the global bucket.
+const HYBRID_SWITCH_SAMPLES: i32 = 168;
+/// Canonical global baseline key. Raw samples still store the real hour (0..=167).
+/// Stored as -1 so Sunday-midnight (hour 0) cannot collide with the global row.
+const GLOBAL_BUCKET: i16 = -1;
 /// Default onboarding grace: 20 minutes. Clamp is 15–30 minutes.
 const DEFAULT_ONBOARDING_GRACE_SECS: i64 = 20 * 60;
 const MIN_ONBOARDING_GRACE_SECS: i64 = 15 * 60;
 const MAX_ONBOARDING_GRACE_SECS: i64 = 30 * 60;
-/// Canonical `hour_of_week` value baselines are stored under. Baselines are kept
-/// per (agent, metric) — the raw samples still record their real hour-of-week —
-/// so a single row accumulates the full rolling window instead of being scattered
-/// across 168 buckets that can never individually reach `MIN_BASELINE_SAMPLES`.
-const GLOBAL_BUCKET: i16 = 0;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UebaIngestPayload {
@@ -187,10 +190,19 @@ pub async fn ingest_sample(
         // Numeric metrics → baseline + z-score check.
         for (k, v) in obj {
             if let Some(num) = v.as_f64() {
-                let upd = recompute_baseline(&mut tx, tenant_id, &p.agent_id, k).await?;
+                let global = recompute_global_baseline(&mut tx, tenant_id, &p.agent_id, k).await?;
+                let _hour = upsert_hour_baseline(
+                    &mut tx,
+                    tenant_id,
+                    &p.agent_id,
+                    k,
+                    hour_bucket(p.hour_of_week),
+                    num,
+                )
+                .await?;
                 summary.baselines_updated += 1;
                 if let Some(anom) =
-                    check_anomaly(&mut tx, tenant_id, &p, sample_id, k, num, &upd).await?
+                    check_anomaly(&mut tx, tenant_id, &p, sample_id, k, num, &global).await?
                 {
                     summary.anomalies.push(anom);
                 }
@@ -294,24 +306,63 @@ pub struct AnomalyRecord {
     pub detail: String,
 }
 
+#[derive(Debug, Clone)]
 struct BaselineUpdate {
     n: i32,
     mean: f64,
     stddev: f64,
 }
 
-/// Recompute the rolling baseline for this (agent, metric) from the last 7 days
-/// of samples across all hours. Cheap because the sample table is bounded by data
-/// retention (no full-history scan).
-async fn recompute_baseline(
+fn hour_bucket(hour_of_week: i16) -> i16 {
+    hour_of_week.clamp(0, 167)
+}
+
+/// Welford one-step update so hour-of-week buckets accumulate across weeks.
+fn welford_add(prev: Option<(i32, f64, f64)>, x: f64) -> (i32, f64, f64) {
+    let (n0, mean0, std0) = prev.unwrap_or((0, 0.0, 0.0));
+    let n = n0 + 1;
+    let delta = x - mean0;
+    let mean = mean0 + delta / (n as f64);
+    let m2 = if n0 > 1 {
+        std0 * std0 * (n0 as f64 - 1.0)
+    } else {
+        0.0
+    } + delta * (x - mean);
+    let stddev = if n > 1 {
+        (m2 / (n as f64 - 1.0)).max(0.0).sqrt()
+    } else {
+        0.0
+    };
+    (n, mean, stddev)
+}
+
+/// Until 168 global samples use the global bucket; afterwards prefer the
+/// hour-of-week row when it has trained (≥24), else fall back to global.
+fn pick_compare_baseline(
+    global: &BaselineUpdate,
+    hour: Option<&BaselineUpdate>,
+) -> (BaselineUpdate, &'static str) {
+    if global.n < HYBRID_SWITCH_SAMPLES {
+        return (global.clone(), "global");
+    }
+    if let Some(h) = hour {
+        if h.n >= MIN_BASELINE_SAMPLES {
+            return (h.clone(), "hour_of_week");
+        }
+    }
+    (global.clone(), "global_fallback")
+}
+
+/// Recompute the rolling GLOBAL baseline (`hour_of_week = -1`) from the last
+/// 7 days of samples across all hours.
+async fn recompute_global_baseline(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: i64,
     agent_id: &str,
     metric: &str,
 ) -> Result<BaselineUpdate, String> {
-    // Pull n, mean, stddev directly from the JSONB samples. We deliberately do NOT
-    // filter by hour-of-week: with a 7-day sample window each hour-of-week value
-    // recurs only once, so a per-bucket count could never reach MIN_BASELINE_SAMPLES.
+    // Global lane: last 7 days across every hour. Hour-specific Welford rows
+    // are updated separately so week-2+ can compare against hour_of_week.
     let row: Option<(Option<i64>, Option<f64>, Option<f64>)> = sqlx::query_as(
         r#"SELECT COUNT(*)::bigint                                              AS n,
                   AVG((metrics->>$3)::double precision)                          AS mean,
@@ -362,6 +413,55 @@ async fn recompute_baseline(
         mean,
         stddev,
     })
+}
+
+async fn upsert_hour_baseline(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    agent_id: &str,
+    metric: &str,
+    hour: i16,
+    observed: f64,
+) -> Result<BaselineUpdate, String> {
+    let prev: Option<(i32, f64, f64)> = sqlx::query_as(
+        r#"SELECT n, mean, stddev
+             FROM agent_metric_baselines
+            WHERE tenant_id = $1 AND agent_id = $2
+              AND metric_name = $3 AND hour_of_week = $4"#,
+    )
+    .bind(tenant_id)
+    .bind(agent_id)
+    .bind(metric)
+    .bind(hour)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(|e| format!("read hour baseline: {e}"))?;
+
+    let (n, mean, stddev) = welford_add(prev, observed);
+
+    sqlx::query(
+        r#"INSERT INTO agent_metric_baselines
+                 (tenant_id, agent_id, metric_name, hour_of_week, n, mean, stddev,
+                  learned_set, last_updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, '[]'::jsonb, now())
+           ON CONFLICT (tenant_id, agent_id, metric_name, hour_of_week) DO UPDATE SET
+               n = EXCLUDED.n,
+               mean = EXCLUDED.mean,
+               stddev = EXCLUDED.stddev,
+               last_updated_at = now()"#,
+    )
+    .bind(tenant_id)
+    .bind(agent_id)
+    .bind(metric)
+    .bind(hour)
+    .bind(n)
+    .bind(mean)
+    .bind(stddev)
+    .execute(&mut **tx)
+    .await
+    .map_err(|e| format!("upsert hour baseline: {e}"))?;
+
+    Ok(BaselineUpdate { n, mean, stddev })
 }
 
 async fn check_anomaly(
@@ -733,6 +833,60 @@ mod tests {
         assert_eq!(parsed(None), DEFAULT_ONBOARDING_GRACE_SECS);
     }
     #[test]
+    fn global_bucket_is_minus_one() {
+        assert_eq!(GLOBAL_BUCKET, -1);
+        assert_eq!(HYBRID_SWITCH_SAMPLES, 168);
+        assert_eq!(hour_bucket(-5), 0);
+        assert_eq!(hour_bucket(200), 167);
+    }
+
+    #[test]
+    fn hybrid_uses_global_until_168_then_hour_with_fallback() {
+        let global_early = BaselineUpdate {
+            n: 40,
+            mean: 10.0,
+            stddev: 1.0,
+        };
+        let hour_thin = BaselineUpdate {
+            n: 3,
+            mean: 99.0,
+            stddev: 2.0,
+        };
+        let (picked, lane) = pick_compare_baseline(&global_early, Some(&hour_thin));
+        assert_eq!(lane, "global");
+        assert_eq!(picked.mean, 10.0);
+
+        let global_ready = BaselineUpdate {
+            n: 168,
+            mean: 10.0,
+            stddev: 1.0,
+        };
+        let (picked, lane) = pick_compare_baseline(&global_ready, Some(&hour_thin));
+        assert_eq!(lane, "global_fallback");
+        assert_eq!(picked.mean, 10.0);
+
+        let hour_ready = BaselineUpdate {
+            n: 24,
+            mean: 42.0,
+            stddev: 2.0,
+        };
+        let (picked, lane) = pick_compare_baseline(&global_ready, Some(&hour_ready));
+        assert_eq!(lane, "hour_of_week");
+        assert_eq!(picked.mean, 42.0);
+    }
+
+    #[test]
+    fn welford_tracks_running_mean() {
+        let mut state = None;
+        for x in [1.0, 3.0, 5.0] {
+            state = Some(welford_add(state, x));
+        }
+        let (n, mean, _) = state.unwrap();
+        assert_eq!(n, 3);
+        assert!((mean - 3.0).abs() < 1e-9);
+    }
+
+    #[test]
     fn hybrid_scoring_kicks_in_after_a_full_week() {
         assert_eq!(
             crate::elite_hardening::ueba_stats::hybrid_phase(MIN_BASELINE_SAMPLES),
@@ -742,6 +896,9 @@ mod tests {
             crate::elite_hardening::ueba_stats::hybrid_phase(168),
             crate::elite_hardening::ueba_stats::HybridPhase::HourThenGlobal
         );
-        assert_eq!(GLOBAL_BUCKET, 0);
+        assert_eq!(
+            crate::elite_hardening::ueba_stats::GLOBAL_HOUR_SENTINEL,
+            GLOBAL_BUCKET
+        );
     }
 }

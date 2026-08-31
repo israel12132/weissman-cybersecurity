@@ -23,6 +23,7 @@
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
 use sqlx::{Column, PgPool, Row};
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, OnceLock};
@@ -760,6 +761,7 @@ fn nlqa_tenant_persist(tenant_id: i64) -> Arc<Semaphore> {
 
 /// Start the per-process nlqa1 hash-chain worker. Ask never waits on this lock.
 pub fn spawn_audit_worker(pool: Arc<PgPool>) {
+    crate::nlqa_syslog::init();
     let (tx, rx) = mpsc::channel::<NlqaEvent>(NLQA_CHANNEL_CAP);
     if NLQA_TX.set(tx).is_ok() {
         tokio::spawn(nlqa_worker_loop(pool, rx));
@@ -816,6 +818,16 @@ fn emit_nlqa_fallback(ev: &NlqaEvent, reason: &str) {
         reason,
     );
     crate::elite_hardening::nlqa_chain::emit_ask_audit_fallback(&payload, reason);
+    let qfp = hex::encode(Sha256::digest(ev.question.as_bytes()));
+    let q_preview: String = ev.question.chars().take(180).collect();
+    crate::nlqa_syslog::page_audit_overflow(&format!(
+        "nlqa1 Ask Weissman audit MPSC saturated kind={reason} tenant_id={} user_id={} question_sha256={qfp} elapsed_ms={} rows_returned={} has_error={} question_preview={q_preview}",
+        ev.tenant_id,
+        ev.user_id.unwrap_or(0),
+        ev.elapsed_ms,
+        ev.rows_returned,
+        !ev.error.is_empty(),
+    ));
 }
 
 async fn nlqa_worker_loop(pool: Arc<PgPool>, mut rx: mpsc::Receiver<NlqaEvent>) {

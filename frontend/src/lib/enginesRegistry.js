@@ -1,5 +1,5 @@
 /**
- * Master registry of all 564 production attack engines.
+ * Master registry of all 565 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 564 production engines in registry order */
+/** All 565 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -3958,6 +3958,15 @@ export const ENGINES_REGISTRY = [
     mitre: 'T1595',
     description:
       'World-first fusion: live external exposure grade × FAIR ALE/SLE dollar-at-risk from risk graph + KEV/EPSS — board-ready evidence, zero LLM',
+    requiresTarget: true,
+  },
+  {
+    id: 'supreme_path_fair_rag',
+    label: 'Supreme Path × FAIR × RAG',
+    group: 'recon',
+    mitre: 'T1595',
+    description:
+      'Dijkstra attack-path inference (KEV/EPSS/CVSS/agent weights) fused with FAIR dollar-at-risk and tenant pentest memory (pgvector HNSW) — live graph only, no simulated paths',
     requiresTarget: true,
   },
   {

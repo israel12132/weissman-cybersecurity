@@ -171,6 +171,7 @@ fn job_class(kind: &str) -> JobClass {
         // ── Light / control-plane ────────────────────────────────────────────
         // Not heavy (no deep engine dispatch) but genuinely slow, so it keeps its own budget.
         "council_debate" => (false, 20 * 60),
+        "path_inference" => (false, 60),
         "noop" | "ping" => (false, 30),
         _ => (false, 5 * 60),
     };
@@ -629,6 +630,10 @@ async fn async_main() {
         fingerprint_engine::security_startup::enforce_worker_production_security_policy()
     {
         eprintln!("[startup] worker security policy refusal: {msg}");
+        std::process::exit(2);
+    }
+    if let Err(msg) = fingerprint_engine::security_startup::enforce_rag_provenance_policy() {
+        eprintln!("[startup] worker RAG provenance HMAC refusal: {msg}");
         std::process::exit(2);
     }
     fingerprint_engine::security_startup::lock_and_scrub_vault_keys_after_boot();
@@ -1205,6 +1210,7 @@ mod tests {
             "noop",
             "ping",
             "council_debate",
+            "path_inference",
             "definitely_not_a_real_kind",
         ] {
             assert!(!job_class(k).heavy, "{k} must not be heavy");
