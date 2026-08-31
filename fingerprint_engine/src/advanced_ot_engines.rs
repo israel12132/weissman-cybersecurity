@@ -63,6 +63,14 @@ pub async fn run_modbus_attack_result(target: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let host = extract_host(target);
+    let policy = crate::ot_ics_hardening::policy::OtSafetyPolicy::default();
+    if let Some(h) = crate::ot_ics_hardening::probes::probe_modbus_safe(&host, &policy).await {
+        let fp = crate::ot_ics_engine::OtFingerprint::from(&h);
+        return EngineResult::ok(
+            vec![ot_fingerprint_finding(&fp, "modbus_attack", target)],
+            "modbus_attack: hardened Modbus/TCP FC03 (nom MBAP) observed".to_string(),
+        );
+    }
     if let Some(fp) = probe_modbus_function_code(&host).await {
         return EngineResult::ok(
             vec![ot_fingerprint_finding(&fp, "modbus_attack", target)],
@@ -443,51 +451,30 @@ pub async fn run_dnp3_attack_result(t: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let host = extract_host(t);
-    let mut findings: Vec<Value> = Vec::new();
+    let policy = crate::ot_ics_hardening::policy::OtSafetyPolicy::default();
+    if let Some(h) = crate::ot_ics_hardening::probes::probe_dnp3_safe(&host, &policy).await {
+        let fp = OtFingerprint::from(&h);
+        return EngineResult::ok(
+            vec![ot_fingerprint_finding(&fp, "dnp3_attack", t)],
+            "dnp3_attack: CRC-validated DNP3 (IEEE 1815, hardened parser)".to_string(),
+        );
+    }
     if tcp_open(&host, 20000).await {
-        let probe: [u8; 12] = [
-            0x05, 0x64, 0x05, 0xC9, 0x02, 0x00, 0x01, 0x00, 0xCB, 0x16, 0x00, 0x00,
-        ];
-        let resp = tcp_probe_response(&host, 20000, &probe).await;
-        if let Some(bytes) = resp.as_deref() {
-            if matches!(
-                crate::elite_hardening::ot_fsm::validate_dnp3(bytes),
-                crate::elite_hardening::ot_fsm::FsmVerdict::Abort { .. }
-            ) {
-                return empty_ok("dnp3_attack", t);
-            }
-        }
-        let confirmed = resp
-            .as_deref()
-            .map(|b| b.len() >= 2 && b[0] == 0x05 && b[1] == 0x64)
-            .unwrap_or(false);
-        findings.push(finding(
-            "dnp3_attack",
-            if confirmed {
-                "DNP3 confirmed (start bytes 0x05 0x64 in reply)"
-            } else {
-                "Port 20000/tcp open (DNP3 candidate)"
-            },
-            "high",
-            "T0843",
-            &format!(
-                "TCP {}:{} reachable. {}",
-                host,
-                20000,
-                if confirmed {
-                    "LINK_STATUS reply confirms DNP3."
-                } else {
-                    "No protocol confirmation."
-                }
-            ),
-            t,
-        ));
+        return EngineResult::ok(
+            vec![finding(
+                "dnp3_attack",
+                "Port 20000/tcp open (DNP3 candidate)",
+                "medium",
+                "T0843",
+                &format!(
+                    "TCP {host}:20000 accepts connections but the hardened IEEE 1815 parser did not confirm a CRC-valid link frame. Direct Operate, Cold/Warm Restart, and file-transfer objects are structurally blocked."
+                ),
+                t,
+            )],
+            "dnp3_attack: port open, protocol unconfirmed".to_string(),
+        );
     }
-    if findings.is_empty() {
-        empty_ok("dnp3_attack", t)
-    } else {
-        EngineResult::ok(findings.clone(), format!("dnp3_attack: {}", findings.len()))
-    }
+    empty_ok("dnp3_attack", t)
 }
 cli_wrapper!(run_dnp3_attack, run_dnp3_attack_result);
 
@@ -720,55 +707,30 @@ pub async fn run_iec61850_attack_result(t: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let host = extract_host(t);
-    let mut findings: Vec<Value> = Vec::new();
+    let policy = crate::ot_ics_hardening::policy::OtSafetyPolicy::default();
+    if let Some(h) = crate::ot_ics_hardening::probes::probe_iec61850_mms_safe(&host, &policy).await {
+        let fp = OtFingerprint::from(&h);
+        return EngineResult::ok(
+            vec![ot_fingerprint_finding(&fp, "iec61850_attack", t)],
+            "iec61850_attack: MMS/ISO-on-TCP confirmed (hardened BER depth-capped parser)".to_string(),
+        );
+    }
     if tcp_open(&host, 102).await {
-        let probe: [u8; 22] = [
-            0x03, 0x00, 0x00, 0x16, 0x11, 0xE0, 0x00, 0x00, 0x00, 0x01, 0x00, 0xC0, 0x01, 0x0A,
-            0xC1, 0x02, 0x01, 0x00, 0xC2, 0x02, 0x01, 0x02,
-        ];
-        let resp = tcp_probe_response(&host, 102, &probe).await;
-        if let Some(bytes) = resp.as_deref() {
-            if matches!(
-                crate::elite_hardening::ot_fsm::validate_tpkt(bytes),
-                crate::elite_hardening::ot_fsm::FsmVerdict::Abort { .. }
-            ) {
-                return empty_ok("iec61850_attack", t);
-            }
-        }
-        let confirmed = resp
-            .as_deref()
-            .map(|b| b.len() >= 4 && b[0] == 0x03 && b[1] == 0x00)
-            .unwrap_or(false);
-        findings.push(finding(
-            "iec61850_attack",
-            if confirmed {
-                "IEC 61850 / MMS confirmed (TPKT reply)"
-            } else {
-                "Port 102/tcp open (IEC 61850 candidate)"
-            },
-            "high",
-            "T0843",
-            &format!(
-                "TCP {}:{} reachable. {}",
-                host,
-                102,
-                if confirmed {
-                    "ISO-TSAP CR/CC handshake confirms IEC 61850 / MMS."
-                } else {
-                    "No TPKT reply observed."
-                }
-            ),
-            t,
-        ));
+        return EngineResult::ok(
+            vec![finding(
+                "iec61850_attack",
+                "Port 102/tcp open (IEC 61850 / S7 candidate)",
+                "medium",
+                "T0843",
+                &format!(
+                    "TCP {host}:102 accepts connections but the hardened MMS/TPKT parser did not confirm a valid ISO-on-TCP session. GOOSE/SV inject and MMS write/control are structurally blocked."
+                ),
+                t,
+            )],
+            "iec61850_attack: port open, protocol unconfirmed".to_string(),
+        );
     }
-    if findings.is_empty() {
-        empty_ok("iec61850_attack", t)
-    } else {
-        EngineResult::ok(
-            findings.clone(),
-            format!("iec61850_attack: {}", findings.len()),
-        )
-    }
+    empty_ok("iec61850_attack", t)
 }
 cli_wrapper!(run_iec61850_attack, run_iec61850_attack_result);
 

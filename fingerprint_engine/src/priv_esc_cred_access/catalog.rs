@@ -578,7 +578,7 @@ pub const STEM: [[&'static str; 50]; 10] = [
         "app.current_tenant_id is SET LOCAL",
         "JSONB stores flexible evidence",
         "async-table bloat is monitored",
-        "weissman_ro whitelist is 13 tables",
+        "weissman_ro whitelist is 17 tables",
         "GUCs manage identity, not literals",
         "XID wraparound is monitored",
         "backups exist on the 48h cadence",

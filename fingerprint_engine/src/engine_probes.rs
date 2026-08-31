@@ -819,10 +819,21 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     if engine_id.contains("s3") || engine_id.contains("cloud_data_exfil") {
         return "Block public ACLs at the AWS account level (`BlockPublicAccess`), set bucket policy to private, and enable S3 Object Ownership = BucketOwnerEnforced.";
     }
+    if engine_id.contains("dnp3") {
+        return "Never expose DNP3 (TCP 20000) from the IT network. Pin source/dest addresses, require Select-Before-Operate at the RTU, and isolate rogue masters — never the outstation — if unsolicited Direct Operate appears. Weissman never emits Direct Operate, restart, or group-70 file transfer.";
+    }
+    if engine_id.contains("iec61850") || engine_id.contains("goose") {
+        return "Segment the Station Bus (GOOSE 0x88B8 / SV 0x88BA) from IT. Pin IED MAC and APPID to the SCL, disable MMS write/control from engineering LANs without MFA, and never inject GOOSE. Isolate the injecting workstation, not the protection relay.";
+    }
+    if engine_id.contains("s7") || engine_id.contains("siemens") {
+        return "Do not expose ISO-on-TCP (TCP 102) outside the OT VLAN. Block CPU Stop/Reset and DB writes at the firewall; Weissman never emits them. Compare SZL firmware against CISA KEV and freeze the engineering station on observed CPU-control opcodes.";
+    }
     if engine_id.contains("scada")
         || engine_id.contains("modbus")
         || engine_id.contains("plc")
         || engine_id.contains("opcua")
+        || engine_id.contains("ot_")
+        || engine_id.contains("ot-")
     {
         return "OT protocols (Modbus, DNP3, OPC-UA, IEC 61850) must never be reachable from the internet. Isolate inside the OT VLAN, place a Purdue-Level 3.5 firewall, and require VPN + MFA for engineering access.";
     }
@@ -872,6 +883,9 @@ pub fn default_compliance(engine_id: &str) -> Vec<&'static str> {
         || engine_id.contains("ot")
         || engine_id.contains("modbus")
         || engine_id.contains("plc")
+        || engine_id.contains("dnp3")
+        || engine_id.contains("iec61850")
+        || engine_id.contains("s7")
     {
         tags.extend_from_slice(&["NIS2:Art.21(2)(h)", "IEC62443"]);
     }
@@ -1184,5 +1198,16 @@ mod tests {
         assert!(fp
             .products
             .contains(&("PHP".to_string(), "7.4.3".to_string())));
+    }
+
+    #[test]
+    fn ot_remediation_never_recommends_writes() {
+        let dnp = default_remediation("dnp3_attack", "high");
+        assert!(dnp.contains("Direct Operate"));
+        assert!(!dnp.to_ascii_lowercase().contains("send a trip"));
+        let iec = default_remediation("iec61850_attack", "high");
+        assert!(iec.contains("GOOSE"));
+        let safety = default_remediation("ot_passive_active_safety", "info");
+        assert!(safety.contains("OT"));
     }
 }

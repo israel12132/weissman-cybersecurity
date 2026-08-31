@@ -1,7 +1,7 @@
 //! Ask Weissman compile-time guards: DDL kill, required LIMIT, fail-closed.
 
-/// Spec §10: Ask Weissman allow-list is 13 tables (original `weissman_ro` GRANT set).
-pub const ASK_WEISSMAN_TABLE_COUNT: usize = 13;
+/// Spec §10: Ask Weissman allow-list (weissman_ro GRANT set, including OT/ICS tables).
+pub const ASK_WEISSMAN_TABLE_COUNT: usize = 17;
 
 const DDL_TOKENS: &[&str] = &[
     " DROP ",

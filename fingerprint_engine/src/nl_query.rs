@@ -303,10 +303,89 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             has_tenant: true,
         },
     );
+    m.insert(
+        "ot_ics_fingerprints",
+        TableSpec {
+            table: "ot_ics_fingerprints",
+            columns: &[
+                "id",
+                "client_id",
+                "host",
+                "port",
+                "protocol",
+                "vendor_hint",
+                "confidence",
+                "created_at",
+            ],
+            order_by: &["created_at", "confidence", "id"],
+            joins: &[],
+            has_tenant: true,
+        },
+    );
+    m.insert(
+        "ot_ics_safety_events",
+        TableSpec {
+            table: "ot_ics_safety_events",
+            columns: &[
+                "id",
+                "client_id",
+                "host",
+                "protocol",
+                "event_kind",
+                "severity",
+                "z_score",
+                "soar_action",
+                "created_at",
+            ],
+            order_by: &["created_at", "z_score", "id"],
+            joins: &[],
+            has_tenant: true,
+        },
+    );
+    m.insert(
+        "ot_ics_protocol_baselines",
+        TableSpec {
+            table: "ot_ics_protocol_baselines",
+            columns: &[
+                "id",
+                "client_id",
+                "host",
+                "protocol",
+                "metric",
+                "mean_rate",
+                "stddev_rate",
+                "sample_count",
+                "updated_at",
+            ],
+            order_by: &["updated_at", "id"],
+            joins: &[],
+            has_tenant: true,
+        },
+    );
+    m.insert(
+        "ot_ics_asset_ranges",
+        TableSpec {
+            table: "ot_ics_asset_ranges",
+            columns: &[
+                "id",
+                "client_id",
+                "host",
+                "protocol",
+                "unit_id",
+                "address_start",
+                "address_end",
+                "allow_write",
+                "is_gateway",
+            ],
+            order_by: &["host", "id"],
+            joins: &[],
+            has_tenant: true,
+        },
+    );
     m
 });
 
-/// Spec §10: Ask Weissman allow-list is 13 tables.
+/// Spec §10: Ask Weissman allow-list includes the OT/ICS safety tables.
 pub fn allowed_table_count() -> usize {
     SCHEMA.len()
 }
@@ -1408,8 +1487,8 @@ mod tests {
     }
 
     #[test]
-    fn allowlist_is_thirteen_tables() {
-        assert_eq!(allowed_table_count(), 13);
+    fn allowlist_matches_ask_weissman_table_count() {
+        assert_eq!(allowed_table_count(), 17);
         assert_eq!(
             allowed_table_count(),
             crate::elite_hardening::nl_guard::ASK_WEISSMAN_TABLE_COUNT

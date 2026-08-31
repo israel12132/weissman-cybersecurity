@@ -2671,6 +2671,7 @@ dependencies = [
  "ml-kem",
  "moka",
  "native-tls",
+ "nom",
  "oauth2",
  "openidconnect",
  "openssl",
