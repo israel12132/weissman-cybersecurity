@@ -112,6 +112,7 @@ export const MetricsDashboard = React$lazy(() => import('../pages/MetricsDashboa
 export const CeoVault = React$lazy(() => import('../pages/CeoVault'))
 export const CeoCommandCenter = React$lazy(() => import('../pages/CeoCommandCenter'))
 export const SupremeNerveCenter = React$lazy(() => import('../pages/SupremeNerveCenter'))
+export const SovereignTheater = React$lazy(() => import('../pages/SovereignTheater'))
 export const RiskGraphVisualization = React$lazy(() => import('../pages/RiskGraphVisualization'))
 export const ComplianceFrameworks = React$lazy(() => import('../pages/ComplianceFrameworks'))
 export const SBOMBrowser = React$lazy(() => import('../pages/SBOMBrowser'))

@@ -19,11 +19,10 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
   only when `|z| > 2` or a new process appears; Welcome / UebaBaseline
   snapshots are **HMAC-signed** with a tenant-derived key. Rolling 7-day
   fire-path rows live in `agent_metric_baselines_global` (hour_of_week stays
-  a physical 0..167 clock). TLS trusts webpki public roots ∪ the host native
-  store (fault-tolerant parse — junk CAs are skipped, they do not fail the
-  bundle), plus optional `WEISSMAN_SERVER_CERT_SHA256` pin / TOFU. Linux musl
-  builds are fully statically linked (`crt-static`); the installer prefers
-  `linux-<arch>-musl`.
+  a physical 0..167 clock). TLS is exclusive dual-leaf pin plus a sovereign
+  Root CA pin (`WEISSMAN_SERVER_CERT_SHA256` / `_BACKUP` / `WEISSMAN_SERVER_ROOT_CA_*`);
+  the OS store is never a fallback. Linux musl builds are fully statically
+  linked (`crt-static`); the installer prefers `linux-<arch>-musl`.
 
 ### Fixed
 

@@ -461,7 +461,7 @@ async fn execute_job_unscoped(
                 })
                 .unwrap_or_default();
             let intelligence_bus = Some(crate::ws_intelligence_bus::IntelligenceBus::new_shared());
-            let ctx = crate::engine_dispatch::EngineRunContext {
+            let mut ctx = crate::engine_dispatch::EngineRunContext {
                 tenant_id: Some(tid),
                 target_list: vec![target.to_string()],
                 discovered_paths,
@@ -481,6 +481,7 @@ async fn execute_job_unscoped(
                 oast_api_key: runtime_cfg.oast_api_key,
                 ..Default::default()
             };
+            crate::engine_dispatch::apply_job_params_stealth(&mut ctx);
             if !weissman_core::models::engine::is_production_engine_id(engine) {
                 return Err(format!("engine '{}' is catalog-only or unknown", engine));
             }
@@ -592,6 +593,15 @@ async fn execute_job_unscoped(
                     );
                 }
                 crate::engine_telemetry::record(&eng_label, &telem);
+                crate::sovereign_operator::log_stream::emit_resilience(
+                    tid,
+                    client_id_opt,
+                    Some(job.id.to_string()),
+                    engine,
+                    target,
+                    Some(app_pool.clone()),
+                    &telem,
+                );
                 last_engine_telemetry = Some(telem);
                 res
             };
@@ -1091,6 +1101,8 @@ async fn execute_job_unscoped(
                         job_id: Some(job.id.to_string()),
                         ..Default::default()
                     };
+                    let mut ctx = ctx;
+                    crate::engine_dispatch::apply_job_params_stealth(&mut ctx);
                     // Batch isolation: each engine runs with panic/timeout isolation + adaptive retry.
                     // A failing, hung, or panicking engine never aborts the batch — every other engine
                     // still runs its own scan. Per-engine telemetry is recorded for the reliability view.
@@ -1113,6 +1125,15 @@ async fn execute_job_unscoped(
                         )
                         .await;
                     crate::engine_telemetry::record(eid, &telem);
+                    crate::sovereign_operator::log_stream::emit_resilience(
+                        tid,
+                        Some(client_id),
+                        Some(job.id.to_string()),
+                        eid,
+                        &target,
+                        Some(app.clone()),
+                        &telem,
+                    );
                     crate::ws_intelligence_bus::merge_params_artifacts(
                         &mut cross_job_params,
                         &intelligence_bus,

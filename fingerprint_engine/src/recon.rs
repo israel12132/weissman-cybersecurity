@@ -278,7 +278,9 @@ pub fn default_subdomain_wordlist() -> Vec<String> {
 
 /// Run subdomain enumeration with the public-knowledge corpus (no prefix cap).
 pub async fn enum_subdomains_default(domain: &str) -> Vec<String> {
-    enum_subdomains(domain, &default_subdomain_wordlist(), DEFAULT_CONCURRENCY).await
+    let wordlist =
+        crate::live_knowledge_bus::merge_subdomain_wordlist(domain, default_subdomain_wordlist());
+    enum_subdomains(domain, &wordlist, DEFAULT_CONCURRENCY).await
 }
 
 #[cfg(test)]
