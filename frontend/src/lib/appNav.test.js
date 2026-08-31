@@ -40,7 +40,7 @@ describe('canAccessNavItem (RBAC nav gating)', () => {
   })
 
   it('blocks restricted targets for non-privileged roles', () => {
-    for (const to of ['/admin', '/ceo-vault', '/ceo', '/supreme-nerve-center']) {
+    for (const to of ['/admin', '/ceo-vault', '/ceo', '/supreme-nerve-center', '/sovereign']) {
       expect(canAccessNavItem({ to }, { role: 'viewer' })).toBe(false)
       expect(canAccessNavItem({ to }, { role: 'analyst' })).toBe(false)
       expect(canAccessNavItem({ to }, null)).toBe(false)

@@ -847,6 +847,58 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/ceo/suspended-graphs/:id", get(api_ceo_suspended_get))
         .route(
+            "/api/sovereign/operator/chat",
+            post(api_sovereign_operator_chat),
+        )
+        .route(
+            "/api/sovereign/operator/session",
+            get(api_sovereign_operator_session_get),
+        )
+        .route(
+            "/api/sovereign/operator/knowledge",
+            get(api_sovereign_operator_knowledge_get),
+        )
+        .route(
+            "/api/sovereign/operator/logs",
+            get(api_sovereign_operator_logs_get),
+        )
+        .route(
+            "/api/sovereign/operator/windows",
+            get(api_sovereign_operator_windows_get),
+        )
+        .route(
+            "/api/sovereign/operator/tools",
+            post(api_sovereign_operator_tools_post),
+        )
+        .route(
+            "/api/sovereign/operator/tune",
+            post(api_sovereign_operator_tune_post),
+        )
+        .route(
+            "/api/sovereign/operator/race",
+            post(api_sovereign_operator_race_post),
+        )
+        .route(
+            "/api/sovereign/operator/stream",
+            get(api_sovereign_operator_stream),
+        )
+        .route(
+            "/api/sovereign/operator/stream-ticket",
+            post(api_sovereign_operator_stream_ticket),
+        )
+        .route(
+            "/api/sovereign/operator/memory",
+            get(api_sovereign_operator_memory_get),
+        )
+        .route(
+            "/api/sovereign/operator/forge",
+            get(api_sovereign_operator_forge_get),
+        )
+        .route(
+            "/api/sovereign/operator/scripts",
+            get(api_sovereign_operator_scripts_get),
+        )
+        .route(
             "/api/security/posture-score",
             get(api_security_posture_score),
         )
