@@ -315,11 +315,14 @@ export default function AttackSurfaceManagement() {
   const [findings, setFindings] = useState([])
   const [toast, setToast] = useState(null)
   const [corpus, setCorpus] = useState(null)
+  const [assetFilter, setAssetFilter] = useState('all')
 
   const refreshCorpus = useCallback(() => {
     apiFetch('/api/discovery-knowledge/stats')
       .then((d) => { if (d && typeof d === 'object') setCorpus(d) })
-      .catch(() => {})
+      .catch(() => {
+        // Stats are a live overlay; a down API must not block the ASM console.
+      })
   }, [])
 
   const report = useMemo(
