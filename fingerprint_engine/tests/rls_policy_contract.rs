@@ -180,6 +180,9 @@ const RLS_FORCE_ALLOWLIST: &[&str] = &[
     "compliance_control_mappings",
     "compliance_frameworks",
     "compliance_mappings",
+    // Shared unbounded discovery corpus (`intel.discovery_knowledge`) — seed +
+    // live LLM + probe hits. Same tenant-agnostic model as dynamic_payloads.
+    "discovery_knowledge",
     "dynamic_payloads",
     "endpoint_agent_enroll_attempts",
     "ephemeral_payloads",
@@ -194,6 +197,28 @@ const RLS_FORCE_ALLOWLIST: &[&str] = &[
     "cem_dago_telemetry_quarantine_global",
 ];
 
+#[test]
+fn sql_idents_after_skips_schema_qualification() {
+    assert_eq!(
+        sql_idents_after(
+            "create table if not exists intel.discovery_knowledge (",
+            "create table"
+        ),
+        vec!["discovery_knowledge".to_string()]
+    );
+    assert_eq!(
+        sql_idents_after(
+            "create table if not exists public.weissman_billing_usage_snapshot (",
+            "create table"
+        ),
+        vec!["weissman_billing_usage_snapshot".to_string()]
+    );
+    assert_eq!(
+        sql_idents_after("alter table cicd_scan_events force", "alter table"),
+        vec!["cicd_scan_events".to_string()]
+    );
+}
+
 fn sql_idents_after(hay: &str, needle_lc: &str) -> Vec<String> {
     let lower = hay.to_ascii_lowercase();
     let mut out = Vec::new();
@@ -206,15 +231,24 @@ fn sql_idents_after(hay: &str, needle_lc: &str) -> Vec<String> {
                 rest = rest[prefix.len()..].trim_start();
             }
         }
-        if rest.starts_with("public.") {
-            rest = &rest["public.".len()..];
-        }
-        let ident: String = rest
-            .chars()
-            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-            .collect();
-        if !ident.is_empty() {
+        // Skip catalog/schema qualification (`public.foo`, `intel.discovery_knowledge`).
+        // Stopping at the first ident used to treat `intel.discovery_knowledge` as
+        // a table named `intel` (schema, not relation) and fail the FORCE-RLS gate.
+        loop {
+            let ident: String = rest
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .collect();
+            if ident.is_empty() {
+                break;
+            }
+            rest = rest[ident.len()..].trim_start();
+            if rest.starts_with('.') {
+                rest = rest[1..].trim_start();
+                continue;
+            }
             out.push(ident);
+            break;
         }
         search_from = after;
     }
@@ -260,6 +294,14 @@ fn every_new_table_forces_rls_unless_allowlisted() {
         !RLS_FORCE_ALLOWLIST.contains(&"cicd_scan_events"),
         "cicd_scan_events must not be on the RLS allowlist"
     );
+    assert!(
+        RLS_FORCE_ALLOWLIST.contains(&"discovery_knowledge"),
+        "intel.discovery_knowledge is shared catalog intel (no tenant column) — must stay allowlisted"
+    );
+    assert!(
+        !forced.contains("discovery_knowledge"),
+        "discovery_knowledge must remain without FORCE RLS (global corpus, same as dynamic_payloads)"
+    );
 
     let allow: BTreeSet<&str> = RLS_FORCE_ALLOWLIST.iter().copied().collect();
     let missing: Vec<String> = created
@@ -288,6 +330,7 @@ fn hardening_migrations_20260827_identical_in_both_dirs() {
         "20260830180000_cem_dago_telemetry_quarantine.sql",
         "20260830184500_nl_epoch_cap_and_sovereign_signature.sql",
         "20260830190000_cem_dago_telemetry_quarantine_global.sql",
+        "20260830203000_discovery_knowledge.sql",
     ];
     for name in names {
         let fe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
