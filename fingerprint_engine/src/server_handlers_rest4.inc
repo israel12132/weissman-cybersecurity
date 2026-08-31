@@ -2518,6 +2518,26 @@ async fn api_sovereign_phantom_trap(
     }
 }
 
+async fn api_discovery_knowledge_stats(State(state): State<Arc<AppState>>) -> Response {
+    let seed_paths = weissman_engines::discovery_corpus::all_http_paths().len();
+    let seed_subs = weissman_engines::discovery_corpus::all_subdomain_prefixes().len();
+    let stored = crate::discovery_knowledge::stats(state.intel_pool.as_ref()).await;
+    (
+        StatusCode::OK,
+        Json(json!({
+            "seed_paths": seed_paths,
+            "seed_subdomain_prefixes": seed_subs,
+            "stored_paths": stored.path_count,
+            "stored_subdomain_prefixes": stored.subdomain_count,
+            "llm_learned": stored.llm_count,
+            "confirmed_hits": stored.confirmed_count,
+            "seed_rows": stored.seed_count,
+            "unbounded": true,
+        })),
+    )
+        .into_response()
+}
+
 async fn api_payload_sync_status(State(state): State<Arc<AppState>>) -> Response {
     match sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*)::bigint FROM dynamic_payloads WHERE added_at >= now() - interval '60 days'",

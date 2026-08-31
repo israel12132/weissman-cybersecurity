@@ -1472,13 +1472,23 @@ async fn run_cycle_for_tenant_inner(
         let mut client_had_crash = false;
         let mut target_list: Vec<String> = client_targets.clone();
         let mut discovery_ctx = pipeline_context::DiscoveryContext::new();
-        discovery_ctx.merge_paths(pipeline_context::expanded_path_wordlist());
         let llm_base = get_config_tx(&mut tx, tenant_id, "llm_base_url")
             .await
             .unwrap_or_else(|| "http://127.0.0.1:8000/v1".to_string());
         let llm_model = get_config_tx(&mut tx, tenant_id, "llm_model")
             .await
             .unwrap_or_default();
+        let hydrated_paths = crate::discovery_ai::hydrate_paths(
+            Some(intel_pool.as_ref()),
+            &target,
+            "",
+            &[],
+            &llm_base,
+            llm_model.as_str(),
+            Some(tenant_id),
+        )
+        .await;
+        discovery_ctx.merge_paths(hydrated_paths);
         broadcast_engine_progress(
             telemetry_tx.as_ref(),
             "discovery",
@@ -1518,6 +1528,7 @@ async fn run_cycle_for_tenant_inner(
                 archival_engine::run_archival_discovery(scan_target, Some(&stealth_config)).await;
             discovery_ctx.merge_paths(archival_paths);
         }
+        let paths_before_spider: std::collections::HashSet<String> = discovery_ctx.paths.clone();
         discovery_engine::run_spider_crawl(
             &target_list,
             Some(&stealth_config),
@@ -1525,11 +1536,35 @@ async fn run_cycle_for_tenant_inner(
             &mut discovery_ctx.paths_403,
         )
         .await;
+        let spider_new: Vec<String> = discovery_ctx
+            .paths
+            .iter()
+            .filter(|p| !paths_before_spider.contains(*p))
+            .cloned()
+            .collect();
+        crate::discovery_knowledge::remember(
+            intel_pool.as_ref(),
+            "path",
+            &spider_new,
+            "crawl",
+            true,
+            "",
+        )
+        .await;
         let predicted = discovery_engine::predict_paths_llm(
             &discovery_ctx.all_paths(),
             &llm_base,
             &llm_model,
             Some(tenant_id),
+        )
+        .await;
+        crate::discovery_knowledge::remember(
+            intel_pool.as_ref(),
+            "path",
+            &predicted,
+            "llm",
+            false,
+            "",
         )
         .await;
         discovery_ctx.merge_paths(predicted);
@@ -1720,10 +1755,28 @@ async fn run_cycle_for_tenant_inner(
                         Some(tenant_id),
                     )
                     .await;
+                    crate::discovery_knowledge::remember(
+                        intel_pool.as_ref(),
+                        "path",
+                        &predicted,
+                        "llm",
+                        false,
+                        "",
+                    )
+                    .await;
                     discovery_ctx.merge_paths(predicted);
                     let graphql_paths = discovery_engine::run_graphql_introspection(
                         &target_list,
                         Some(&stealth_config),
+                    )
+                    .await;
+                    crate::discovery_knowledge::remember(
+                        intel_pool.as_ref(),
+                        "path",
+                        &graphql_paths,
+                        "crawl",
+                        true,
+                        "",
                     )
                     .await;
                     discovery_ctx.merge_paths(graphql_paths);
@@ -2028,6 +2081,7 @@ async fn run_cycle_for_tenant_inner(
                         recon_subdomains: recon_subdomains.clone().unwrap_or_default(),
                         asm_ports: asm_ports.clone(),
                         app_pool: Some(app_pool.clone()),
+                        intel_pool: Some(intel_pool.clone()),
                         agents: Some(crate::endpoint_agents::AgentRegistry::global()),
                         client_id: Some(db_client_id),
                         job_params: cross_job_params.clone(),
