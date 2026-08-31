@@ -450,6 +450,8 @@ async fn execute_job_unscoped(
                 );
             }
             let job_params = job_payload;
+            let attempt_timeout =
+                crate::engine_resilience::attempt_timeout_from_job_params(&job_params);
             let discovered_paths: Vec<String> = p
                 .get("discovered_paths")
                 .and_then(|v| v.as_array())
@@ -561,7 +563,7 @@ async fn execute_job_unscoped(
                         crate::engine_resilience::run_with_resilience(
                             &eng_ref,
                             &tgt,
-                            crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
+                            attempt_timeout,
                             move |variant, hint| {
                                 let eng = eng_outer.clone();
                                 let mut ctx = ctx_owned.clone();
@@ -1108,11 +1110,14 @@ async fn execute_job_unscoped(
                     // still runs its own scan. Per-engine telemetry is recorded for the reliability view.
                     let ctx_ref = &ctx;
                     let eid = engine_id.as_str();
+                    let attempt_timeout = crate::engine_resilience::attempt_timeout_from_job_params(
+                        &cross_job_params,
+                    );
                     let (result, telem) =
                         crate::engine_resilience::run_with_resilience(
                             eid,
                             &target,
-                            crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
+                            attempt_timeout,
                             move |variant, hint| {
                                 let mut c = ctx_ref.clone();
                                 if hint.force_ghost_network {

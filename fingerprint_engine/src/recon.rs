@@ -4,6 +4,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Semaphore;
+use tokio::task::JoinSet;
 
 const DEFAULT_CONCURRENCY: usize = 200;
 
@@ -238,13 +239,16 @@ async fn resolve_one(host: &str) -> Option<String> {
 
 /// Enumerate subdomains for `domain` using `wordlist`. Uses a semaphore to limit concurrency.
 /// Returns list of resolved subdomain hostnames (e.g. "www.example.com").
+///
+/// DNS lookups run in a [`JoinSet`] so dropping this future (scan wall-clock / resilience
+/// timeout) aborts in-flight resolutions instead of leaking 20k+ detached `tokio::spawn` tasks.
 pub async fn enum_subdomains(domain: &str, wordlist: &[String], concurrency: usize) -> Vec<String> {
     let domain = domain.trim().to_lowercase();
     if domain.is_empty() || wordlist.is_empty() {
         return vec![];
     }
     let sem = Arc::new(Semaphore::new(concurrency.min(500)));
-    let mut handles = Vec::with_capacity(wordlist.len());
+    let mut set = JoinSet::new();
     for sub in wordlist {
         let sub = sub.trim().to_lowercase();
         if sub.is_empty() {
@@ -252,16 +256,18 @@ pub async fn enum_subdomains(domain: &str, wordlist: &[String], concurrency: usi
         }
         let host = format!("{}.{}", sub, domain);
         let sem_clone = Arc::clone(&sem);
-        let permit = sem_clone.acquire_owned().await;
-        let handle = tokio::spawn(async move {
+        let permit = match sem_clone.acquire_owned().await {
+            Ok(p) => p,
+            Err(_) => break,
+        };
+        set.spawn(async move {
             let _permit = permit;
             resolve_one(&host).await
         });
-        handles.push(handle);
     }
     let mut out = Vec::new();
-    for h in handles {
-        if let Ok(Some(host)) = h.await {
+    while let Some(res) = set.join_next().await {
+        if let Ok(Some(host)) = res {
             out.push(host);
         }
     }
@@ -304,5 +310,24 @@ mod tests {
     async fn detect_wildcard_skips_empty_and_ip() {
         assert!(!detect_dns_wildcard("").await);
         assert!(!detect_dns_wildcard("10.0.0.1").await);
+    }
+
+    #[tokio::test]
+    async fn enum_subdomains_timeout_aborts_promptly() {
+        let wordlist: Vec<String> = (0..800)
+            .map(|i| format!("no-such-label-{i}-weissman-enum-cancel"))
+            .collect();
+        let started = std::time::Instant::now();
+        let timed = tokio::time::timeout(
+            Duration::from_millis(80),
+            enum_subdomains("invalid", &wordlist, 64),
+        )
+        .await;
+        assert!(timed.is_err(), "JoinSet drop must abort in-flight DNS");
+        assert!(
+            started.elapsed() < Duration::from_millis(800),
+            "elapsed {:?} — leaked tokio::spawn tasks would keep the runtime busy",
+            started.elapsed()
+        );
     }
 }

@@ -469,7 +469,7 @@ async fn run_one(exec: &MeshExec, engine_id: &str, target: &str) -> EngineResult
     let (result, telem) = engine_resilience::run_with_resilience(
         engine_id,
         target,
-        engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
+        engine_resilience::attempt_timeout_from_job_params(&exec.ctx.job_params),
         move |variant, hint| {
             let mut c = ctx.clone();
             if hint.force_ghost_network {

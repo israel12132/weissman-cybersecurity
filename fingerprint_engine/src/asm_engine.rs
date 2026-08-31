@@ -57,11 +57,15 @@ use hickory_resolver::TokioResolver;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::net::SocketAddr;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::net::TcpStream;
 
 /// Fast-fail dead ports; full connect attempt budget is still large when scanning many hosts in parallel upstream.
 const PORT_TIMEOUT_MS: u64 = 500;
+/// Apex + this many extra live names for HTTP/TLS/fingerprint expansion (port scan already uses 8).
+/// Unbounded expansion over a 20k-name CT dump is how a 45s Command Center scan ran past the
+/// 180s UI-audit poller. Operators can raise `max_http_hosts` (0 = no cap, still wall-clocked).
+const MAX_EXPANSION_HOSTS: usize = 8;
 /// Default ports: classic attack surface plus common cloud / API / observability / dev ports.
 pub const TOP_PORTS: [u16; 63] = [
     // Web / API / reverse proxies
@@ -1293,6 +1297,7 @@ async fn probe_sensitive_paths(
     pace: &crate::discovery_pace::DiscoveryPace,
     stealth: &mut Option<crate::stealth_engine::StealthConfig>,
     timeout_ms: u64,
+    deadline: Instant,
 ) -> Vec<Value> {
     let mut out = Vec::new();
     for (path, sev, label) in SENSITIVE_PATHS {
@@ -1369,6 +1374,9 @@ async fn probe_sensitive_paths(
     let mut confirmed = Vec::new();
     let mut idx = 0usize;
     while idx < extra.len() {
+        if Instant::now() >= deadline {
+            break;
+        }
         let conc = pace.concurrency();
         let end = (idx + conc).min(extra.len());
         let batch = extra[idx..end].to_vec();
@@ -1825,6 +1833,21 @@ fn surface_grade(score: i32) -> &'static str {
 // Main world-class EASM pipeline
 // ─────────────────────────────────────────────────────────────────────────────
 
+fn over_budget(deadline: Instant) -> bool {
+    Instant::now() >= deadline
+}
+
+fn remaining_budget(deadline: Instant) -> Duration {
+    deadline.saturating_duration_since(Instant::now())
+}
+
+fn scan_deadline(timeout_secs: u64) -> Instant {
+    // Leave 2s so findings persist before the outer resilience attempt timeout fires
+    // (dropping this future would discard every live finding collected so far).
+    let budget = timeout_secs.saturating_sub(2).max(5);
+    Instant::now() + Duration::from_secs(budget)
+}
+
 fn build_asm_client(
     timeout_ms: u64,
     stealth: Option<&crate::stealth_engine::StealthConfig>,
@@ -1888,6 +1911,17 @@ pub async fn run_asm_result_ctx(
     let http_timeout = p.u64_or("http_timeout_ms", 6000).clamp(1000, 30000);
     let threshold = p.str_or("severity_threshold", "info").to_ascii_lowercase();
     let max_findings = p.usize_or("max_findings", 800).clamp(1, 5000);
+    let timeout_secs = p.u64_or("timeout", 40).clamp(8, 600);
+    let deadline = scan_deadline(timeout_secs);
+    let max_http_hosts = {
+        let n = p.usize_or("max_http_hosts", MAX_EXPANSION_HOSTS);
+        if n == 0 {
+            usize::MAX
+        } else {
+            n
+        }
+    };
+    let mut budget_capped = false;
 
     // Ports: explicit param > ctx.asm_ports > TOP_PORTS
     let ports: Vec<u16> = match p.str("ports") {
@@ -1919,7 +1953,7 @@ pub async fn run_asm_result_ctx(
     if !ctx.recon_subdomains.is_empty() {
         subdomains.extend(ctx.recon_subdomains.iter().cloned());
     }
-    if do_subdomains {
+    if do_subdomains && !over_budget(deadline) {
         if wildcard_dns {
             notes.push(
                 "DNS wildcard/catch-all detected — unbounded prefix brute-force disabled; Certificate Transparency and focused LLM persist only."
@@ -1939,13 +1973,24 @@ pub async fn run_asm_result_ctx(
         }
         let want_passive =
             wildcard_dns || subdomain_sources == "passive" || subdomain_sources == "both";
-        if want_passive {
+        if want_passive && !over_budget(deadline) {
             let ct_cap = if max_subdomains == usize::MAX {
                 50_000
             } else {
                 max_subdomains.max(1).saturating_mul(2)
             };
-            let ct = crtsh_subdomains(&client, &host, ct_cap).await;
+            let ct = match tokio::time::timeout(
+                remaining_budget(deadline),
+                crtsh_subdomains(&client, &host, ct_cap),
+            )
+            .await
+            {
+                Ok(v) => v,
+                Err(_) => {
+                    budget_capped = true;
+                    Vec::new()
+                }
+            };
             if !ct.is_empty() {
                 notes.push(format!(
                     "Certificate Transparency surfaced {} name(s).",
@@ -1954,7 +1999,10 @@ pub async fn run_asm_result_ctx(
             }
             subdomains.extend(ct);
         }
-        if wildcard_dns && live_ai {
+        // Optional LLM waves use a 45s HTTP client — equal to the whole Command Center
+        // attempt budget. Skip them unless this scan still has >55s left.
+        let allow_llm = live_ai && remaining_budget(deadline) > Duration::from_secs(55);
+        if wildcard_dns && allow_llm {
             if let Some(pool) = ctx.discovery_knowledge_pool() {
                 let stored = crate::discovery_knowledge::load_subdomain_prefixes(pool).await;
                 let known = crate::discovery_knowledge::merge_unique(&[&stored, &custom_wordlist]);
@@ -1974,9 +2022,9 @@ pub async fn run_asm_result_ctx(
         }
         let want_brute =
             !wildcard_dns && (subdomain_sources == "bruteforce" || subdomain_sources == "both");
-        if want_brute {
+        if want_brute && !over_budget(deadline) {
             let custom_extra: Vec<String> = custom_wordlist.clone();
-            let wordlist = if live_ai {
+            let wordlist = if allow_llm {
                 crate::discovery_ai::hydrate_subdomain_prefixes(
                     ctx.discovery_knowledge_pool(),
                     &host,
@@ -2006,7 +2054,22 @@ pub async fn run_asm_result_ctx(
                 wordlist
             };
             let dns_conc = pace.concurrency().max(8).min(200);
-            let brute = enum_subdomains(&host, &wordlist, dns_conc).await;
+            let brute = match tokio::time::timeout(
+                remaining_budget(deadline),
+                enum_subdomains(&host, &wordlist, dns_conc),
+            )
+            .await
+            {
+                Ok(v) => v,
+                Err(_) => {
+                    budget_capped = true;
+                    notes.push(
+                        "Active DNS brute-force stopped at scan wall-clock; later modules continue with names already confirmed."
+                            .into(),
+                    );
+                    Vec::new()
+                }
+            };
             if let Some(pool) = ctx.discovery_knowledge_pool() {
                 let confirmed: Vec<String> = brute
                     .iter()
@@ -2046,7 +2109,7 @@ pub async fn run_asm_result_ctx(
     }
 
     // ── 2. DNS intelligence + email posture (apex) ────────────────────────────
-    if do_dns {
+    if do_dns && !over_budget(deadline) {
         if let Some(r) = resolver.as_ref() {
             let prof = dns_profile(r, &host).await;
             findings.push(asm_finding(
@@ -2091,21 +2154,21 @@ pub async fn run_asm_result_ctx(
         }
     }
 
-    if do_rdap && is_domain {
+    if do_rdap && is_domain && !over_budget(deadline) {
         findings.extend(rdap_domain_intel(&client, &host).await);
     }
 
-    if do_shadow_it && !subdomains.is_empty() {
+    if do_shadow_it && !subdomains.is_empty() && !over_budget(deadline) {
         findings.extend(scan_shadow_it(&subdomains, &host));
     }
 
-    if do_cleartext {
+    if do_cleartext && !over_budget(deadline) {
         if let Some(f) = probe_cleartext_http(&client, &host).await {
             findings.push(f);
         }
     }
 
-    if do_wellknown {
+    if do_wellknown && !over_budget(deadline) {
         findings.extend(probe_wellknown(&client, &host).await);
         for sub in subdomains.iter().take(3) {
             findings.extend(probe_wellknown(&client, sub).await);
@@ -2113,7 +2176,7 @@ pub async fn run_asm_result_ctx(
     }
 
     // ── 3. Service exposure (apex + top subdomains) ──────────────────────────
-    if do_ports {
+    if do_ports && !over_budget(deadline) {
         let mut scan_hosts: Vec<String> = vec![host.clone()];
         scan_hosts.extend(subdomains.iter().take(8).cloned());
         for sh in scan_hosts {
@@ -2166,8 +2229,9 @@ pub async fn run_asm_result_ctx(
 
     // ── 4. HTTP & TLS posture (apex + discovered subdomains) ──────────────────
     let discovery_pool = ctx.discovery_knowledge_pool();
-    let extra_sensitive: Vec<String> = if do_sensitive {
-        if live_ai {
+    let extra_sensitive: Vec<String> = if do_sensitive && !over_budget(deadline) {
+        let allow_llm = live_ai && remaining_budget(deadline) > Duration::from_secs(55);
+        if allow_llm {
             crate::discovery_ai::hydrate_paths(
                 discovery_pool,
                 &host,
@@ -2187,8 +2251,13 @@ pub async fn run_asm_result_ctx(
         Vec::new()
     };
     let mut posture_hosts: Vec<String> = vec![host.clone()];
-    posture_hosts.extend(subdomains.iter().cloned());
+    let extra_hosts = max_http_hosts.saturating_sub(1);
+    posture_hosts.extend(subdomains.iter().take(extra_hosts).cloned());
     for ph in &posture_hosts {
+        if over_budget(deadline) {
+            budget_capped = true;
+            break;
+        }
         if do_http {
             let url = format!("https://{ph}");
             if let Some(hp) = http_posture(&client, &url).await {
@@ -2286,6 +2355,7 @@ pub async fn run_asm_result_ctx(
                         pace.as_ref(),
                         &mut stealth_owned,
                         http_timeout,
+                        deadline,
                     )
                     .await,
                 );
@@ -2369,7 +2439,7 @@ pub async fn run_asm_result_ctx(
     }
 
     // ── 5. Cloud attribution via CNAME / PTR (apex) ──────────────────────────
-    if do_dns {
+    if do_dns && !over_budget(deadline) {
         if let Some(r) = resolver.as_ref() {
             for cname in lookup_strings(r, &host, RecordType::CNAME).await {
                 if let Some(provider) = cloud_from_cname(&cname) {
@@ -2388,12 +2458,23 @@ pub async fn run_asm_result_ctx(
     }
 
     // ── 6. Tech fingerprint ──────────────────────────────────────────────────
-    if do_fingerprint {
+    if do_fingerprint && !over_budget(deadline) {
         let mut urls = vec![format!("https://{}", host), format!("http://{}", host)];
-        for s in subdomains.iter() {
+        for s in subdomains.iter().take(max_http_hosts.saturating_sub(1)) {
             urls.push(format!("https://{}", s));
         }
-        let fp = scan_targets_concurrent_with_stealth(&urls, stealth_owned.as_ref()).await;
+        let fp = match tokio::time::timeout(
+            remaining_budget(deadline),
+            scan_targets_concurrent_with_stealth(&urls, stealth_owned.as_ref()),
+        )
+        .await
+        {
+            Ok(v) => v,
+            Err(_) => {
+                budget_capped = true;
+                std::collections::HashMap::new()
+            }
+        };
         for (url, techs) in fp {
             if !techs.is_empty() {
                 findings.push(asm_finding(
@@ -2416,18 +2497,28 @@ pub async fn run_asm_result_ctx(
     // ── 7. Subdomain takeover + exposed storage (graph) ──────────────────────
     let mut graph_nodes: Option<Vec<cloud_hunter::GraphNode>> = None;
     let mut graph_edges: Option<Vec<cloud_hunter::GraphEdge>> = None;
-    if do_cloud {
-        let (mut nodes, mut edges, cloud_findings) =
-            cloud_hunter::run_cloud_hunter(&host, &subdomains, stealth_owned.as_ref()).await;
-        findings.extend(cloud_findings);
-        let shadow_set: BTreeSet<String> = findings
-            .iter()
-            .filter(|f| f.get("asset").and_then(Value::as_str) == Some("shadow_it"))
-            .filter_map(|f| f.get("value").and_then(Value::as_str).map(String::from))
-            .collect();
-        extend_inventory_graph(&mut nodes, &mut edges, &host, &subdomains, &shadow_set);
-        graph_nodes = Some(nodes);
-        graph_edges = Some(edges);
+    if do_cloud && !over_budget(deadline) {
+        match tokio::time::timeout(
+            remaining_budget(deadline),
+            cloud_hunter::run_cloud_hunter(&host, &subdomains, stealth_owned.as_ref()),
+        )
+        .await
+        {
+            Ok((mut nodes, mut edges, cloud_findings)) => {
+                findings.extend(cloud_findings);
+                let shadow_set: BTreeSet<String> = findings
+                    .iter()
+                    .filter(|f| f.get("asset").and_then(Value::as_str) == Some("shadow_it"))
+                    .filter_map(|f| f.get("value").and_then(Value::as_str).map(String::from))
+                    .collect();
+                extend_inventory_graph(&mut nodes, &mut edges, &host, &subdomains, &shadow_set);
+                graph_nodes = Some(nodes);
+                graph_edges = Some(edges);
+            }
+            Err(_) => {
+                budget_capped = true;
+            }
+        }
     } else if is_domain && !subdomains.is_empty() {
         let mut nodes = Vec::new();
         let mut edges = Vec::new();
@@ -2443,8 +2534,18 @@ pub async fn run_asm_result_ctx(
         }
     }
 
-    if do_attack_paths {
+    if do_attack_paths && !over_budget(deadline) {
         findings.extend(derive_exposure_attack_paths(&findings));
+    }
+
+    if over_budget(deadline) {
+        budget_capped = true;
+    }
+    if budget_capped {
+        notes.push(
+            "Scan wall-clock reached — remaining modules skipped; findings so far are live probes."
+                .into(),
+        );
     }
 
     // ── 8. Threshold filter, scoring, report ─────────────────────────────────
@@ -2686,5 +2787,21 @@ mod tests {
         let ctx = EngineRunContext::default();
         let r = run_asm_result_ctx("", &ctx, None).await;
         assert!(!r.success);
+    }
+
+    #[test]
+    fn scan_deadline_leaves_persist_margin() {
+        let before = Instant::now();
+        let d = scan_deadline(45);
+        let left = d.saturating_duration_since(before);
+        assert!(
+            left <= Duration::from_secs(44) && left >= Duration::from_secs(41),
+            "deadline {left:?} should be ~43s (45s timeout minus 2s persist margin)"
+        );
+    }
+
+    #[test]
+    fn expansion_host_cap_is_eight() {
+        assert_eq!(MAX_EXPANSION_HOSTS, 8);
     }
 }

@@ -25,6 +25,33 @@ use std::time::{Duration, Instant};
 /// Default per-attempt wall-clock budget for one engine strategy.
 pub const DEFAULT_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(45);
 
+/// Upper bound on how far an attempt timeout can be widened after repeated timeouts, so a
+/// genuinely hung target can't stall the pipeline indefinitely.
+const MAX_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(180);
+
+/// Total wall-clock across every strategy attempt. Widening per-attempt budgets used to sum
+/// `45 + 90 + 180 = 315s` on an `https://` target (three variants), which outlived the
+/// Command Center UI-audit poller (180s) and left the job `running`. Cap at 2× the caller's
+/// attempt budget (≤ [`MAX_ATTEMPT_TIMEOUT`]) so the job always reaches a terminal status.
+fn total_retry_budget(attempt_timeout: Duration) -> Duration {
+    attempt_timeout.saturating_mul(2).min(MAX_ATTEMPT_TIMEOUT)
+}
+
+/// Honour `POST /api/command-center/scan` `timeout` (seconds). Missing/invalid → default 45s.
+pub fn attempt_timeout_from_job_params(params: &serde_json::Value) -> Duration {
+    let secs = params
+        .get("timeout")
+        .and_then(|v| {
+            v.as_u64()
+                .or_else(|| v.as_i64().and_then(|n| u64::try_from(n).ok()))
+                .or_else(|| v.as_f64().map(|f| f as u64))
+                .or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))
+        })
+        .unwrap_or(DEFAULT_ATTEMPT_TIMEOUT.as_secs())
+        .clamp(5, MAX_ATTEMPT_TIMEOUT.as_secs());
+    Duration::from_secs(secs)
+}
+
 /// Per-engine execution telemetry (surfaced to the job result + metrics + tracing).
 #[derive(Debug, Clone, Serialize)]
 pub struct EngineExecTelemetry {
@@ -63,10 +90,6 @@ impl EngineExecTelemetry {
 pub fn should_retry_status(status: &str) -> bool {
     status.eq_ignore_ascii_case("error")
 }
-
-/// Upper bound on how far an attempt timeout can be widened after repeated timeouts, so a
-/// genuinely hung target can't stall the pipeline indefinitely.
-const MAX_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(180);
 
 /// Why an attempt failed. The retry loop uses this to *escalate* rather than blindly re-run
 /// the same request against a string-permuted target (the previous behaviour).
@@ -232,8 +255,18 @@ where
     // Adaptive per-attempt budget: repeated timeouts widen it (up to a cap) instead of
     // hammering the same too-short deadline against a slow-but-alive target.
     let mut current_timeout = attempt_timeout;
+    let total_budget = total_retry_budget(attempt_timeout);
 
     for variant in &strategies {
+        let elapsed = start.elapsed();
+        if elapsed >= total_budget {
+            break;
+        }
+        let remaining = total_budget.saturating_sub(elapsed);
+        if remaining < Duration::from_millis(50) {
+            break;
+        }
+        current_timeout = current_timeout.min(remaining);
         let host = variant.split('/').nth(2).unwrap_or(variant.as_str());
         if crate::elite_hardening::probe_io::is_paused(host) {
             last_error = Some(format!(
@@ -518,5 +551,72 @@ mod tests {
         // First attempt: no prior failure. Second attempt (after the WAF block): ghost network.
         assert_eq!(recorded.first(), Some(&false));
         assert_eq!(recorded.get(1), Some(&true));
+    }
+
+    #[test]
+    fn total_retry_budget_is_double_capped_at_max_attempt() {
+        assert_eq!(
+            total_retry_budget(Duration::from_secs(45)),
+            Duration::from_secs(90)
+        );
+        assert_eq!(
+            total_retry_budget(Duration::from_secs(180)),
+            Duration::from_secs(180)
+        );
+        assert_eq!(
+            total_retry_budget(Duration::from_millis(40)),
+            Duration::from_millis(80)
+        );
+    }
+
+    #[test]
+    fn attempt_timeout_reads_scan_body_seconds() {
+        assert_eq!(
+            attempt_timeout_from_job_params(&serde_json::json!({})),
+            DEFAULT_ATTEMPT_TIMEOUT
+        );
+        assert_eq!(
+            attempt_timeout_from_job_params(&serde_json::json!({"timeout": 45})),
+            Duration::from_secs(45)
+        );
+        assert_eq!(
+            attempt_timeout_from_job_params(&serde_json::json!({"timeout": "30"})),
+            Duration::from_secs(30)
+        );
+        assert_eq!(
+            attempt_timeout_from_job_params(&serde_json::json!({"timeout": 1})),
+            Duration::from_secs(5),
+            "floor is 5s"
+        );
+        assert_eq!(
+            attempt_timeout_from_job_params(&serde_json::json!({"timeout": 9_999})),
+            MAX_ATTEMPT_TIMEOUT,
+            "ceiling matches per-attempt cap"
+        );
+    }
+
+    #[tokio::test]
+    async fn hung_https_target_does_not_run_past_double_budget() {
+        // Three strategies (https / http / www) used to widen 50+100+180ms. Total budget
+        // is now 2× attempt (100ms). The job must finish well inside the 180s UI-audit poll.
+        let started = Instant::now();
+        let (result, telem) = run_with_resilience(
+            "hung",
+            "https://example.com",
+            Duration::from_millis(50),
+            move |_v, _hint| async move {
+                tokio::time::sleep(Duration::from_secs(30)).await;
+                EngineResult::ok(vec![], "")
+            },
+        )
+        .await;
+        assert_eq!(result.status, "error");
+        assert_eq!(telem.status, "timeout");
+        assert!(
+            started.elapsed() < Duration::from_millis(800),
+            "elapsed {:?} — retries must not stack past 2× attempt timeout",
+            started.elapsed()
+        );
+        assert!(telem.elapsed_ms < 800);
     }
 }
