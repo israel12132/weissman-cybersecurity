@@ -701,6 +701,14 @@ export const EXPLICIT_PARAM_DEFS = {
     { key:'include_fair_model', label:'Include FAIR ALE/SLE Model', type:'select', options:['true','false'], defaultVal:'true' },
     { key:'intensity', label:'Scan Intensity', type:'select', options:['light','normal','aggressive'], defaultVal:'normal' },
   ],
+  supreme_path_fair_rag: [
+    { key:'include_attack_paths', label:'Include Attack-Path Dijkstra', type:'select', options:['true','false'], defaultVal:'true' },
+    { key:'include_fair_model', label:'Include FAIR ALE/SLE Model', type:'select', options:['true','false'], defaultVal:'true' },
+    { key:'include_pentest_memory', label:'Include Pentest RAG Memory', type:'select', options:['true','false'], defaultVal:'true' },
+    { key:'recompute', label:'Recompute Graph Snapshot', type:'select', options:['true','false'], defaultVal:'true' },
+    { key:'attack_path_top_k', label:'Attack Path Top-K', type:'number', placeholder:'15', defaultVal:'15', min:1, max:200 },
+    { key:'intensity', label:'Scan Intensity', type:'select', options:['light','normal','aggressive'], defaultVal:'normal' },
+  ],
   cognitive_starvation: [
     { key:'min_bot_score', label:'Min Bot Score Threshold', type:'number', placeholder:'0.55', defaultVal:'0.55', min:0, max:1 },
     { key:'deploy_shadow', label:'Deploy Shadow Endpoints', type:'select', options:['true','false'], defaultVal:'true' },

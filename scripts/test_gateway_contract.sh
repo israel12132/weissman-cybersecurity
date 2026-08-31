@@ -34,7 +34,28 @@ cleanup() {
 }
 trap cleanup EXIT
 
-command -v docker >/dev/null 2>&1 || { echo "SKIP: docker unavailable"; exit 0; }
+# Static contract — no docker needed: dual-control headers must be blanked at the public edge.
+inc="$ROOT/deploy/nginx-strip-internal-headers.inc"
+gw="$ROOT/deploy/nginx-gateway.conf"
+if grep -q 'proxy_set_header X-Weissman-Destructive-Confirm ""' "$inc" \
+   && grep -q 'proxy_set_header X-Weissman-Dual-Approve ""' "$inc" \
+   && grep -q 'proxy_set_header X-Weissman-Proxy-Hmac ""' "$inc"; then
+  ok "gateway blanks dual-control headers (header smuggling)"
+else
+  bad "gateway does not blank X-Weissman-Destructive-Confirm / Dual-Approve / Proxy-Hmac"
+fi
+if grep -q 'proxy_set_header X-Weissman-Signature' "$inc"; then
+  bad "strip include must not blank HMAC webhook signatures"
+else
+  ok "HMAC X-Weissman-Signature is not blanked"
+fi
+if grep -q 'strip-internal-headers.inc' "$gw"; then
+  ok "nginx-gateway.conf includes strip-internal-headers.inc"
+else
+  bad "nginx-gateway.conf missing strip-internal-headers.inc"
+fi
+
+command -v docker >/dev/null 2>&1 || { echo; printf 'Gateway contract: %d passed, %d failed (docker skipped)\n' "$pass" "$fail"; [[ "$fail" -eq 0 ]]; exit $?; }
 
 # The real config names its upstream `backend:8000`; the stub answers on that name.
 docker network create "$NET" >/dev/null 2>&1 || true
@@ -52,6 +73,7 @@ docker run -d --name "$UPSTREAM" --network "$NET" --network-alias backend \
 mkdir -p "$WORK/conf" "$WORK/html/command-center" "$WORK/html/public/.well-known"
 cp "$ROOT/deploy/nginx-gateway.conf" "$WORK/conf/default.conf"
 cp "$ROOT/deploy/nginx-security-headers.inc" "$WORK/conf/security-headers.inc"
+cp "$ROOT/deploy/nginx-strip-internal-headers.inc" "$WORK/conf/strip-internal-headers.inc"
 printf 'SPA-SHELL\n'  > "$WORK/html/command-center/index.html"
 printf 'MARKETING\n'  > "$WORK/html/index.html"
 # error_page 404 =404 /404.html; lands in the public alias. Keep a branded

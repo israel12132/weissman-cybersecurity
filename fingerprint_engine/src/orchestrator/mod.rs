@@ -941,15 +941,49 @@ async fn load_poe_config(
             .await
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default();
-    if let Ok(rows) = sqlx::query(
-        "SELECT target_library, payload_data FROM dynamic_payloads WHERE added_at >= now() - interval '60 days'",
-    )
-    .fetch_all(intel_pool.as_ref())
-    .await
+    // Bounded keyset pages (90 days, 25k rows) — never SELECT payload_data unbounded.
     {
-        for r in rows {
-            if let (Ok(lib), Ok(data)) = (r.try_get::<String, _>("target_library"), r.try_get::<String, _>("payload_data")) {
-                gadget_chains.insert(lib, data);
+        use crate::cem_dago::payload_trie::{
+            DYNAMIC_PAYLOADS_PREWARM_SQL, PREWARM_BATCH_SIZE, PREWARM_HARD_CAP,
+        };
+        let mut last_id: i64 = 0;
+        loop {
+            if gadget_chains.len() >= PREWARM_HARD_CAP {
+                break;
+            }
+            let take = ((PREWARM_HARD_CAP - gadget_chains.len()) as i64).min(PREWARM_BATCH_SIZE);
+            match sqlx::query(DYNAMIC_PAYLOADS_PREWARM_SQL)
+                .bind(last_id)
+                .bind(take)
+                .fetch_all(intel_pool.as_ref())
+                .await
+            {
+                Ok(rows) if rows.is_empty() => break,
+                Ok(rows) => {
+                    let n = rows.len();
+                    for r in &rows {
+                        if let Ok(id) = r.try_get::<i64, _>("id") {
+                            last_id = last_id.max(id);
+                        }
+                        if let (Ok(lib), Ok(data)) = (
+                            r.try_get::<String, _>("target_library"),
+                            r.try_get::<String, _>("payload_data"),
+                        ) {
+                            gadget_chains.insert(lib, data);
+                        }
+                    }
+                    if n < take as usize {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        target: "poe_synthesis",
+                        error = %e,
+                        "dynamic_payloads pre-warm page failed (continuing with config gadgets)"
+                    );
+                    break;
+                }
             }
         }
     }
@@ -1601,7 +1635,43 @@ async fn run_cycle_for_tenant_inner(
         let mut client_findings_count = 0usize;
         let intelligence_bus = crate::ws_intelligence_bus::IntelligenceBus::new_shared();
         let mut cross_job_params = serde_json::json!({});
-        for source in client_engines.clone() {
+        let scan_id = wr
+            .map(|w| w.job_id.to_string())
+            .unwrap_or_else(|| format!("run-{run_id}-c{db_client_id}"));
+        let blackboard = std::sync::Arc::new(crate::cem_dago::ScanBlackboard::from_env(
+            tenant_id,
+            db_client_id,
+            scan_id,
+        ));
+        crate::cem_dago::seed_scan_context(
+            blackboard.as_ref(),
+            &target,
+            &target_list,
+            &discovered_paths,
+            client_industrial_ot_enabled(client_configs.as_str()),
+        )
+        .await;
+        let partitioned = if crate::cem_dago::is_enabled() {
+            crate::cem_dago::partition_scan_engines(&client_engines)
+        } else {
+            crate::cem_dago::PartitionedEngines {
+                pipeline: client_engines.clone(),
+                mesh: Vec::new(),
+            }
+        };
+        let pipeline_engines = partitioned.pipeline;
+        let mesh_engines = partitioned.mesh;
+        if crate::cem_dago::is_enabled() {
+            tracing::info!(
+                target: "cem_dago",
+                tenant_id,
+                client_id = db_client_id,
+                pipeline = pipeline_engines.len(),
+                mesh = mesh_engines.len(),
+                "CEM-DAGO scan partition (pipeline sequential, mesh DAG waves)"
+            );
+        }
+        for source in pipeline_engines.clone() {
             stealth_engine::apply_behavioral_jitter().await;
             let label = engine_display_label(source.as_str());
             broadcast_engine_progress(
@@ -2015,9 +2085,11 @@ async fn run_cycle_for_tenant_inner(
                         agents: Some(crate::endpoint_agents::AgentRegistry::global()),
                         client_id: Some(db_client_id),
                         job_params: cross_job_params.clone(),
-                        job_id: None,
+                        job_id: wr.map(|w| w.job_id.to_string()),
                         swarm_broadcast: None,
                         intelligence_bus: Some(intelligence_bus.clone()),
+                        blackboard: Some(blackboard.clone()),
+                        scan_id: Some(blackboard.scan_id().to_string()),
                         ..Default::default()
                     };
                     let r = crate::engine_dispatch::run_engine(other, &target, &ctx).await;
@@ -2096,6 +2168,13 @@ async fn run_cycle_for_tenant_inner(
                     ));
                 }
             }
+            crate::cem_dago::record_engine_result(
+                blackboard.as_ref(),
+                source.as_str(),
+                &target,
+                &result,
+            )
+            .await;
             if !result.findings.is_empty() {
                 let n = persist_and_notify_findings(
                     Arc::clone(&app_pool),
@@ -2194,6 +2273,101 @@ async fn run_cycle_for_tenant_inner(
                 tokio::time::sleep(Duration::from_millis(2500)).await;
                 tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
             }
+        }
+        if crate::cem_dago::is_enabled() && !mesh_engines.is_empty() {
+            broadcast_engine_progress(
+                telemetry_tx.as_ref(),
+                "cem_dago",
+                &format!(
+                    "[CEM-DAGO] Cognitive mesh: {} engines, max_parallel={}",
+                    mesh_engines.len(),
+                    crate::cem_dago::max_parallel()
+                ),
+                Some(cid.as_str()),
+                wr,
+            );
+            let github_token = get_config_tx(&mut tx, tenant_id, "github_token")
+                .await
+                .filter(|s| !s.is_empty());
+            tx.commit().await?;
+            crate::ws_intelligence_bus::merge_params_artifacts(
+                &mut cross_job_params,
+                &intelligence_bus,
+            );
+            let mesh_ctx = crate::engine_dispatch::EngineRunContext {
+                stealth: Some(stealth_config.clone()),
+                discovered_paths: discovered_paths.clone(),
+                target_list: target_list.clone(),
+                tenant_id: Some(tenant_id),
+                github_token,
+                llm_base_url: semantic_config.llm_base_url.clone(),
+                llm_model: semantic_config.llm_model.clone(),
+                recon_subdomains: recon_subdomains.clone().unwrap_or_default(),
+                asm_ports: asm_ports.clone(),
+                app_pool: Some(app_pool.clone()),
+                agents: Some(crate::endpoint_agents::AgentRegistry::global()),
+                client_id: Some(db_client_id),
+                job_params: cross_job_params.clone(),
+                job_id: wr.map(|w| w.job_id.to_string()),
+                swarm_broadcast: None,
+                intelligence_bus: Some(intelligence_bus.clone()),
+                blackboard: Some(blackboard.clone()),
+                scan_id: Some(blackboard.scan_id().to_string()),
+                ..Default::default()
+            };
+            let report = crate::cem_dago::execute_mesh(crate::cem_dago::MeshRequest {
+                pool: app_pool.clone(),
+                target: target.clone(),
+                engines: mesh_engines,
+                ctx: mesh_ctx,
+                blackboard: blackboard.clone(),
+                read_only_pool: crate::cem_dago::weissman_ro_pool(),
+            })
+            .await;
+            tracing::info!(
+                target: "cem_dago",
+                tenant_id,
+                client_id = db_client_id,
+                waves = report.waves.len(),
+                outcomes = report.outcomes.len(),
+                pivots = report.pivots.len(),
+                council = report.council_invoked,
+                "cognitive mesh wave complete"
+            );
+            tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
+            for outcome in &report.outcomes {
+                if outcome.success && !outcome.findings.is_empty() {
+                    let n = persist_and_notify_findings(
+                        Arc::clone(&app_pool),
+                        tenant_id,
+                        db_client_id,
+                        &cid,
+                        outcome.engine_id.as_str(),
+                        &target,
+                        &outcome.findings,
+                        telemetry_tx.as_ref(),
+                        wr,
+                    )
+                    .await;
+                    total_findings += n;
+                    client_findings_count += n;
+                }
+                if !outcome.success {
+                    client_had_crash = true;
+                }
+            }
+            broadcast_engine_progress(
+                telemetry_tx.as_ref(),
+                "cem_dago",
+                &format!(
+                    "[CEM-DAGO] Mesh done: {} outcomes, {} pivots, council={}",
+                    report.outcomes.len(),
+                    report.pivots.len(),
+                    report.council_invoked
+                ),
+                Some(cid.as_str()),
+                wr,
+            );
         }
         broadcast_pipeline_stage(
             telemetry_tx.as_ref(),

@@ -101,6 +101,13 @@ pub enum ServerToAgent {
     Shutdown {
         reason: String,
     },
+    /// Signed remote kill — agent verifies HMAC before stopping detections.
+    KillSwitch {
+        reason: String,
+        nonce: String,
+        issued_at_unix: i64,
+        signature: String,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -116,6 +123,9 @@ pub struct EnrollResponse {
     /// after `WEISSMAN_AGENT_JWT_TTL_MINS` (default 240) — after which the agent was dark forever.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub agent_secret: String,
+    /// Derived HMAC key so the agent can verify a signed kill-switch.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub kill_hmac_key: String,
     pub ws_path: String,
     pub server_message: Option<String>,
 }
@@ -1410,6 +1420,7 @@ mod tests {
             client_id: 2,
             session_jwt: "jwt".to_string(),
             agent_secret: "renewal-secret".to_string(),
+            kill_hmac_key: "aa".to_string(),
             ws_path: "/ws/agent".to_string(),
             server_message: None,
         };

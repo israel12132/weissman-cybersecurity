@@ -77,6 +77,13 @@ const ROW_LOCK_ALLOWED: &[&str] = &[
     // for every tenant transaction. Both of these begin with `begin_tenant_tx`.
     "fingerprint_engine/src/council_hitl.rs",
     "fingerprint_engine/src/self_improve.rs",
+    // HITL approve takes FOR UPDATE on the execution row; the tx starts with
+    // `begin_tenant_tx` so `lock_timeout` is set.
+    "fingerprint_engine/src/soar/engine.rs",
+    // Ask Weissman audit hash-chain worker locks unchained rows (`FOR UPDATE`)
+    // inside `begin_tenant_tx`. The HTTP path (`nl_query.rs`) never takes a
+    // row lock — it inserts empty hashes and notifies this worker.
+    "fingerprint_engine/src/nl_audit_chain.rs",
     // Runs on the AUTH pool with no tenant GUC, so it cannot inherit the bound from
     // `set_tenant_tx`; it calls `advisory_lock::bound_lock_wait` explicitly right after `begin()`.
     "fingerprint_engine/src/auth_refresh.rs",
