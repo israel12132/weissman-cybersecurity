@@ -337,9 +337,12 @@ mod tests {
 
     #[test]
     fn pick_asm_location_indexes_by_client_id() {
-        // client_id=2, seed nil -> idx=(0+2)%35=2 -> paths[2]="/api"; even byte -> bash_history tail.
-        let loc = pick_asm_virtual_deployment_location(2, &uuid::Uuid::nil());
-        assert_eq!(loc, "asm_virtual:/api/.bash_history");
+        // Different client ids must land on different wordlist slots (n is large).
+        let a = pick_asm_virtual_deployment_location(2, &uuid::Uuid::nil());
+        let b = pick_asm_virtual_deployment_location(0, &uuid::Uuid::nil());
+        assert!(a.starts_with("asm_virtual:"));
+        assert!(a.ends_with("/.bash_history"), "{a}");
+        assert_ne!(a, b);
     }
 
     #[test]

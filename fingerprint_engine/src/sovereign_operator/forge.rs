@@ -509,6 +509,94 @@ impl Drop for IsolatedWorktree {
     }
 }
 
+/// Age after which a UUID worktree is treated as an orphan (SIGKILL / OOM skip Drop).
+pub const STALE_WORKTREE_SECS: u64 = 600;
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct PurgeStats {
+    pub scanned: u32,
+    pub removed: u32,
+    pub skipped: u32,
+    pub errors: u32,
+}
+
+/// Delete UUID dirs under `FORGE_ROOT` whose mtime is older than `max_age`.
+/// Ignores non-UUID names and symlinks so a planted link cannot escape `/tmp`.
+pub fn purge_stale_worktrees(max_age: std::time::Duration) -> PurgeStats {
+    let mut stats = PurgeStats::default();
+    let root = Path::new(FORGE_ROOT);
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return stats;
+    };
+    let now = std::time::SystemTime::now();
+    for ent in entries.flatten() {
+        let name = ent.file_name();
+        let Some(name) = name.to_str() else {
+            stats.skipped += 1;
+            continue;
+        };
+        if Uuid::parse_str(name).is_err() {
+            stats.skipped += 1;
+            continue;
+        }
+        let path = ent.path();
+        let Ok(meta) = path.symlink_metadata() else {
+            stats.errors += 1;
+            continue;
+        };
+        if meta.file_type().is_symlink() || !meta.is_dir() {
+            stats.skipped += 1;
+            continue;
+        }
+        stats.scanned += 1;
+        let stale = meta
+            .modified()
+            .ok()
+            .and_then(|t| now.duration_since(t).ok())
+            .map(|d| d >= max_age)
+            .unwrap_or(true);
+        if !stale {
+            continue;
+        }
+        match std::fs::remove_dir_all(&path) {
+            Ok(()) => stats.removed += 1,
+            Err(_) => stats.errors += 1,
+        }
+    }
+    stats
+}
+
+/// Per-process janitor: `/tmp` is local, so every replica must sweep its own orphans.
+pub fn spawn_forge_janitor() {
+    tokio::spawn(async {
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tick.tick().await;
+            let stats = tokio::task::spawn_blocking(|| {
+                purge_stale_worktrees(std::time::Duration::from_secs(STALE_WORKTREE_SECS))
+            })
+            .await;
+            match stats {
+                Ok(s) if s.removed > 0 || s.errors > 0 => {
+                    tracing::info!(
+                        target: "sovereign_operator",
+                        scanned = s.scanned,
+                        removed = s.removed,
+                        skipped = s.skipped,
+                        errors = s.errors,
+                        "forge worktree janitor"
+                    );
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::warn!(target: "sovereign_operator", error = %e, "forge janitor join failed");
+                }
+            }
+        }
+    });
+}
+
 fn rustc_metadata(src: &Path, out_dir: &Path) -> (bool, String) {
     let content = std::fs::read_to_string(src).unwrap_or_default();
     let compile_src = if content.contains("crate::") {
@@ -719,5 +807,31 @@ mod tests {
             worktree.dir.join("libsovereign_forge.rmeta").exists()
                 || worktree.dir.join("lib.rs").exists()
         );
+    }
+
+    #[test]
+    fn janitor_removes_stale_uuid_dirs_only() {
+        let _ = std::fs::create_dir_all(FORGE_ROOT);
+        let stale = PathBuf::from(FORGE_ROOT).join(Uuid::new_v4().to_string());
+        let fresh = PathBuf::from(FORGE_ROOT).join(Uuid::new_v4().to_string());
+        let stray = PathBuf::from(FORGE_ROOT).join("not-a-uuid-keep");
+        std::fs::create_dir(&stale).expect("stale dir");
+        std::fs::create_dir(&fresh).expect("fresh dir");
+        let _ = std::fs::create_dir(&stray);
+        let past =
+            std::time::SystemTime::now() - std::time::Duration::from_secs(STALE_WORKTREE_SECS + 30);
+        let times = std::fs::FileTimes::new().set_modified(past);
+        let f = std::fs::File::open(&stale).expect("open stale");
+        f.set_times(times).expect("backdate stale mtime");
+        let stats = purge_stale_worktrees(std::time::Duration::from_secs(STALE_WORKTREE_SECS));
+        assert!(!stale.exists(), "stale UUID worktree must be removed");
+        assert!(fresh.exists(), "fresh UUID worktree must survive");
+        assert!(
+            stray.exists() || stats.skipped > 0,
+            "non-uuid names must not be swept"
+        );
+        let _ = std::fs::remove_dir_all(&fresh);
+        let _ = std::fs::remove_dir_all(&stray);
+        assert!(stats.removed >= 1);
     }
 }

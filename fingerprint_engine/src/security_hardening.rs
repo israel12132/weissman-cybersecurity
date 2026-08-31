@@ -368,6 +368,12 @@ fn is_private_or_reserved_ip(ip: &IpAddr) -> bool {
             if let Some(v4) = v6.to_ipv4_mapped() {
                 return is_private_or_reserved_ip(&IpAddr::V4(v4));
             }
+            // Deprecated IPv4-compatible ::a.b.c.d (not loopback/unspecified).
+            if !v6.is_loopback() && !v6.is_unspecified() {
+                if let Some(v4) = v6.to_ipv4() {
+                    return is_private_or_reserved_ip(&IpAddr::V4(v4));
+                }
+            }
             let seg0 = v6.segments()[0];
             v6.is_loopback()
                 || v6.is_unspecified()
@@ -799,16 +805,57 @@ mod tests {
         assert!(!pin.curl_resolve_args().is_empty());
     }
 
+    #[tokio::test]
+    async fn pin_rejects_ipv6_mapped_link_local_and_ula() {
+        for url in [
+            "http://[::ffff:127.0.0.1]/",
+            "http://[::ffff:10.1.2.3]/",
+            "http://[::ffff:192.168.0.5]/",
+            "http://[::1]/",
+            "http://[fe80::1]/",
+            "http://[fc00::1]/",
+            "http://[fd12:3456:789a::1]/",
+        ] {
+            let err = match resolve_and_pin_public_http(url).await {
+                Err(e) => e,
+                Ok(_) => panic!("expected block for {url}"),
+            };
+            assert!(
+                err.contains("private")
+                    || err.contains("blocked")
+                    || err.contains("loopback")
+                    || err.contains("reserved")
+                    || err.contains("metadata"),
+                "{url} → {err}"
+            );
+        }
+    }
+
     #[test]
-    fn unique_local_and_multicast_v6_are_private() {
+    fn unique_local_link_local_mapped_and_multicast_are_private() {
         assert!(is_private_or_reserved_ip(
             &"fc00::1".parse::<IpAddr>().expect("ula")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"fd12:3456:789a::1".parse::<IpAddr>().expect("ula-fd")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"fe80::1".parse::<IpAddr>().expect("ll")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"::ffff:127.0.0.1".parse::<IpAddr>().expect("mapped-lb")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"::ffff:10.0.0.1".parse::<IpAddr>().expect("mapped-rfc1918")
         ));
         assert!(is_private_or_reserved_ip(
             &"ff02::1".parse::<IpAddr>().expect("mcast")
         ));
         assert!(is_private_or_reserved_ip(
             &"224.0.0.1".parse::<IpAddr>().expect("v4mcast")
+        ));
+        assert!(!is_private_or_reserved_ip(
+            &"::ffff:8.8.8.8".parse::<IpAddr>().expect("mapped-public")
         ));
     }
 
