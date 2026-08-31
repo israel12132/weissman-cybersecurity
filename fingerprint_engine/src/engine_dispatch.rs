@@ -1011,6 +1011,12 @@ async fn dispatch_engine_match(
         "hmi_attack" => crate::advanced_ot_engines::run_hmi_attack_result(target).await,
         "profinet_attack" => crate::advanced_ot_engines::run_profinet_attack_result(target).await,
         "industrial_protocol_fuzz" => crate::advanced_ot_engines::run_industrial_protocol_fuzz_result(target).await,
+        "ot_passive_active_safety" => {
+            crate::ot_ics_hardening::run_ot_passive_active_safety_result(target, ctx).await
+        }
+        "ot_crown_jewel_path" => {
+            crate::ot_ics_hardening::run_ot_crown_jewel_path_result(target, ctx).await
+        }
         "firmware_emulation_attack" => crate::advanced_ot_engines::run_firmware_emulation_attack_result(target).await,
 
         // ── Advanced Stealth engines (new probes / agent_required) ─────────────

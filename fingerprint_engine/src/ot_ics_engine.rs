@@ -48,87 +48,12 @@ fn to_hex_prefix(buf: &[u8], max: usize) -> String {
         .join(" ")
 }
 
-fn modbus_exception_meaning(code: u8) -> &'static str {
-    match code {
-        0x01 => "illegal_function",
-        0x02 => "illegal_data_address",
-        0x03 => "illegal_data_value",
-        0x04 => "slave_device_failure",
-        0x05 => "acknowledge",
-        0x06 => "slave_device_busy",
-        0x08 => "memory_parity_error",
-        0x0a => "gateway_path_unavailable",
-        0x0b => "gateway_target_device_failed_to_respond",
-        _ => "unknown_exception_code",
-    }
-}
-
-/// Modbus TCP: MBAP + illegal function 0xFF — valid stack returns exception 0x81+ or echoes pattern.
+/// Modbus TCP SafeRead: MBAP + FC03 (qty 1). Illegal-function fingerprinting is ROE-blocked.
 pub async fn probe_modbus(host: &str) -> Option<OtFingerprint> {
-    let addr = format!("{}:{}", host, MODBUS_PORT);
-    let mut stream = match tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(&addr)).await {
-        Ok(Ok(s)) => s,
-        _ => return None,
-    };
-    let _ = stream.set_nodelay(true);
-    let pdu: [u8; 8] = [0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x01, 0xFF];
-    match tokio::time::timeout(IO_TIMEOUT, stream.write_all(&pdu)).await {
-        Ok(Ok(())) => {}
-        _ => return None,
-    }
-    let mut resp = [0u8; 256];
-    let n = match tokio::time::timeout(IO_TIMEOUT, stream.read(&mut resp)).await {
-        Ok(Ok(n)) => n,
-        _ => return None,
-    };
-    if n < 9 {
-        return None;
-    }
-    let slice = resp.get(..n)?;
-    if matches!(
-        crate::elite_hardening::ot_fsm::validate_modbus_tcp(&pdu, slice),
-        crate::elite_hardening::ot_fsm::FsmVerdict::Abort { .. }
-    ) {
-        return None;
-    }
-    let unit = *slice.get(6)?;
-    let fc = *slice.get(7)?;
-    let looks_exception = fc & 0x80 != 0;
-    let looks_normal = !looks_exception && fc != 0xFF;
-    if !looks_exception && !looks_normal && n < 8 {
-        return None;
-    }
-    let conf = if looks_exception && unit == 0x01 {
-        0.92f32
-    } else if looks_exception {
-        0.78
-    } else {
-        0.55
-    };
-
-    let mut meta = serde_json::Map::new();
-    meta.insert("unit_id".into(), json!(unit));
-    meta.insert("function_or_exception".into(), json!(fc));
-    meta.insert("probe".into(), json!("illegal_function_0xff"));
-    if looks_exception {
-        if let Some(ec) = slice.get(8).copied() {
-            meta.insert("exception_code".into(), json!(ec));
-            meta.insert(
-                "exception_meaning".into(),
-                json!(modbus_exception_meaning(ec)),
-            );
-        }
-    }
-
-    Some(OtFingerprint {
-        host: host.to_string(),
-        port: MODBUS_PORT,
-        protocol: "modbus_tcp".into(),
-        vendor_hint: "Modbus/TCP stack (exception or response)".into(),
-        confidence: conf,
-        raw_excerpt_hex: to_hex_prefix(slice, 48),
-        metadata: Value::Object(meta),
-    })
+    let policy = crate::ot_ics_hardening::policy::OtSafetyPolicy::default();
+    crate::ot_ics_hardening::probes::probe_modbus_safe(host, &policy)
+        .await
+        .map(|h| OtFingerprint::from(&h))
 }
 
 /// Modbus TCP: MBAP + function 0x03 read holding registers (addr 0, qty 1) — passive FC probe.
@@ -161,9 +86,10 @@ pub async fn probe_modbus_function_code(host: &str) -> Option<OtFingerprint> {
     ) {
         return None;
     }
-    let fc = *slice.get(7)?;
-    let looks_read = fc == 0x03;
-    let looks_exception = fc == 0x83;
+    let parsed = crate::ot_ics_hardening::parsers::parse_modbus_frame(slice).ok()?;
+    let fc = parsed.pdu.function;
+    let looks_read = (fc & 0x7f) == 0x03 && !parsed.pdu.exception;
+    let looks_exception = parsed.pdu.exception && (fc & 0x7f) == 0x03;
     if !looks_read && !looks_exception {
         return None;
     }
@@ -296,8 +222,9 @@ pub async fn modbus_deep_assess(host: &str) -> Option<ModbusAssessment> {
         }
     }
 
-    // Holding-register read (addr 0, qty 1) across common unit ids.
-    for unit in [1u8, 0u8, 255u8] {
+    // Holding-register read (addr 0, qty 1) on a single non-gateway unit.
+    // Unit 0 (broadcast) and 247–255 (serial gateways) are never probed — DoS on RTU-over-TCP.
+    for unit in [1u8] {
         let req = build_modbus_frame(0x0002, unit, &[0x03, 0x00, 0x00, 0x00, 0x01]);
         if let Some(resp) = modbus_txn(host, &req).await {
             if a.raw_hex.is_empty() {
@@ -732,16 +659,13 @@ pub async fn probe_s7(host: &str) -> Option<OtFingerprint> {
     ) {
         return None;
     }
-    if slice.first().copied() != Some(0x03) {
+    let parsed = crate::ot_ics_hardening::parsers::parse_s7_iso_on_tcp(slice).ok()?;
+    if parsed.tpkt.version != 0x03 {
         return None;
     }
-    let tpkt_len = slice
-        .get(2..4)
-        .and_then(|b| <[u8; 2]>::try_from(b).ok())
-        .map(|a| u16::from_be_bytes(a) as usize)
-        .unwrap_or(0);
-    let pdu_type = slice.get(5).copied();
-    let cotp_cc = pdu_type == Some(0xd0) || pdu_type == Some(0xd6);
+    let tpkt_len = parsed.tpkt.length as usize;
+    let pdu_type = Some(parsed.cotp.pdu_type);
+    let cotp_cc = crate::ot_ics_hardening::parsers::cotp_is_cc(parsed.cotp.pdu_type);
 
     let mut meta = serde_json::Map::new();
     meta.insert("tpkt_length_field".into(), json!(tpkt_len));
@@ -788,12 +712,15 @@ pub async fn probe_s7(host: &str) -> Option<OtFingerprint> {
 
 /// Run OT protocol probes **sequentially** on one host (single-IP safety).
 async fn probe_host_passive_sequential(host: String) -> Vec<OtFingerprint> {
+    let policy = crate::ot_ics_hardening::policy::OtSafetyPolicy::default();
     let mut out = Vec::new();
-    if let Some(fp) = probe_modbus(&host).await {
+    if let Some(h) = crate::ot_ics_hardening::probes::probe_modbus_safe(&host, &policy).await {
+        out.push(OtFingerprint::from(&h));
+    } else if let Some(fp) = probe_modbus(&host).await {
         out.push(fp);
     }
-    if let Some(fp) = probe_modbus_function_code(&host).await {
-        if out.iter().all(|e| e.protocol != "modbus_tcp") {
+    if out.iter().all(|e| e.protocol != "modbus_tcp") {
+        if let Some(fp) = probe_modbus_function_code(&host).await {
             out.push(fp);
         }
     }
@@ -806,8 +733,18 @@ async fn probe_host_passive_sequential(host: String) -> Vec<OtFingerprint> {
     if let Some(fp) = probe_enip(&host).await {
         out.push(fp);
     }
-    if let Some(fp) = probe_s7(&host).await {
+    if let Some(h) = crate::ot_ics_hardening::probes::probe_s7_safe(&host, &policy).await {
+        out.push(OtFingerprint::from(&h));
+    } else if let Some(fp) = probe_s7(&host).await {
         out.push(fp);
+    }
+    if let Some(h) = crate::ot_ics_hardening::probes::probe_dnp3_safe(&host, &policy).await {
+        out.push(OtFingerprint::from(&h));
+    }
+    if let Some(h) = crate::ot_ics_hardening::probes::probe_iec61850_mms_safe(&host, &policy).await {
+        if out.iter().all(|e| e.protocol != "s7_iso_tcp") || h.confidence >= 0.85 {
+            out.push(OtFingerprint::from(&h));
+        }
     }
     out
 }

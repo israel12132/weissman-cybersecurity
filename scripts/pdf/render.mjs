@@ -128,7 +128,7 @@ const archHtml = `
       <div class="band__label">${D.bandWorkers}</div>
       <div class="band__nodes">
         ${node('weissman-worker', rtl ? 'תור SKIP LOCKED · timeouts לכל־סוג' : 'SKIP LOCKED queue · per-kind timeouts')}
-        ${node('Engine fleet', rtl ? '563 מזהים · 303 real_probe · 212 alias · 48 agent' : '563 IDs · 303 real_probe · 212 alias · 48 agent')}
+        ${node('Engine fleet', rtl ? '567 מזהים · 307 real_probe · 212 alias · 48 agent' : '567 IDs · 307 real_probe · 212 alias · 48 agent')}
         ${node('weissman-oast-server', rtl ? 'לכידת קריאות DNS + HTTP' : 'DNS + HTTP callback capture')}
       </div>
     </div>
@@ -198,14 +198,14 @@ function escapeHtml(s) {
 
 // "By the numbers" KPI band — injected right after the Executive Summary heading
 const KPIS = rtl ? [
-  { n: '563', u: 'מנועי אבטחה' },
+  { n: '567', u: 'מנועי אבטחה' },
   { n: '~193K', u: 'שורות קוד מקורי' },
   { n: '~130', u: 'נקודות־קצה API' },
   { n: '~88', u: 'טבלאות PostgreSQL' },
   { n: '6', u: 'דרגות RBAC' },
   { n: '0', u: 'ממצאים מזויפים' },
 ] : [
-  { n: '563', u: 'security engines' },
+  { n: '567', u: 'security engines' },
   { n: '~193K', u: 'lines of first-party code' },
   { n: '~130', u: 'API endpoints' },
   { n: '~88', u: 'PostgreSQL tables' },

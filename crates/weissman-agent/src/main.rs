@@ -201,6 +201,8 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    detections::ot_plc_decoy::spawn();
+
     // Reconnect loop with exponential back-off.
     let mut backoff = cli.backoff_ms_initial.max(250);
     loop {
