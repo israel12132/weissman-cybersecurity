@@ -74,6 +74,10 @@ fn cluster_ingest_is_logged_in_both_sqlx_trees() {
             sql.contains("weissman_cluster_ingest_tenant_id_fkey"),
             "{label}: must restore tenant FK after SET LOGGED"
         );
+        assert!(
+            sql.contains("DELETE FROM weissman_cluster_ingest"),
+            "{label}: must drop orphan ingest rows before restoring FKs"
+        );
     }
     assert_eq!(
         LOGGED_DB, LOGGED_ENGINE,

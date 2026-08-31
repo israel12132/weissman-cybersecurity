@@ -6,6 +6,12 @@
 
 ALTER TABLE weissman_cluster_ingest SET LOGGED;
 
+-- Orphan ingest rows would block restoring FKs after the UNLOGGED era
+-- (no tenant/client constraints). Drop them before ADD CONSTRAINT.
+DELETE FROM weissman_cluster_ingest i
+ WHERE NOT EXISTS (SELECT 1 FROM tenants t WHERE t.id = i.tenant_id)
+    OR NOT EXISTS (SELECT 1 FROM clients c WHERE c.id = i.client_id);
+
 DO $$
 BEGIN
     IF NOT EXISTS (
