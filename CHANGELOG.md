@@ -9,6 +9,16 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Added
 
+- **Supreme Brain Part 6 — attack-path inference × FAIR blast radius × pentest RAG.**
+  Dijkstra (BinaryHeap milli-cost) over live `risk_graph_nodes` / `risk_graph_edges`
+  with CISA KEV / EPSS / CVSS / agent weights, what-if (block SMB/445), choke-points,
+  and path ALE. FAIR snapshots gain concentration, delay cost, agent-protected ALE,
+  and path-linked dollars. Pentest memory uses pgvector HNSW (`m=16`,
+  `ef_construction=64`) with decay, checksums, and diversity sampling.
+  New fusion engine `supreme_path_fair_rag`, APIs
+  `GET /api/supreme-brain/:client_id`, `POST /api/attack-paths/:client_id/what-if`,
+  `GET /api/pentest-memory/stats`, Command Center route `/supreme-brain`.
+
 - **Dynamic compliance framework catalog.** `compliance_frameworks` is now the
   authoritative list of in-scope frameworks (migration
   `20260729120000_compliance_frameworks_dynamic_and_onboarding.sql`, mirrored to

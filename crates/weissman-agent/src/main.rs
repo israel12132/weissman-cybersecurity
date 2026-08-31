@@ -7,13 +7,13 @@
 //!   4. for each task: spawn local detection, stream `finding` messages, then `task_done`.
 //!   5. reconnect with exponential backoff on disconnect.
 //!
-//! No persistent storage; all state in memory.
-//!
 //! `--dry-run --probe <engine>` runs one local detection without enrolling (CI).
+//! Dry-run returns before kill-switch / TLS pin so CI does not need enroll or pin.
 
 use clap::Parser;
 use std::time::Duration;
 use tracing::{error, info, warn};
+use weissman_agent::hardening;
 use weissman_agent::probe;
 use weissman_agent::transport;
 
@@ -24,13 +24,9 @@ struct Cli {
     #[arg(long, env = "WEISSMAN_SERVER_URL", required_unless_present = "dry_run")]
     server_url: Option<String>,
 
-    /// One-time enrollment token issued by the dashboard.
-    #[arg(
-        long,
-        env = "WEISSMAN_ENROLLMENT_TOKEN",
-        required_unless_present = "dry_run"
-    )]
-    enrollment_token: Option<String>,
+    /// One-time enrollment token issued by the dashboard. Optional when `agent.state` exists.
+    #[arg(long, env = "WEISSMAN_ENROLLMENT_TOKEN", default_value = "")]
+    enrollment_token: String,
 
     /// Optional: numeric client_id this agent belongs to.
     #[arg(long, env = "WEISSMAN_CLIENT_ID")]
@@ -71,14 +67,26 @@ async fn main() -> anyhow::Result<()> {
         return run_dry_run(cli.probe.as_deref()).await;
     }
 
+    hardening::lock_process();
+    hardening::spawn_cpu_governor();
+
     let server_url = cli
         .server_url
         .as_deref()
         .ok_or_else(|| anyhow::anyhow!("--server-url is required unless --dry-run"))?;
-    let enrollment_token = cli
-        .enrollment_token
-        .as_deref()
-        .ok_or_else(|| anyhow::anyhow!("--enrollment-token is required unless --dry-run"))?;
+
+    if transport::kill::is_latched() {
+        anyhow::bail!(
+            "kill-switch latch present at {} — refusing to start",
+            transport::kill::latch_path().display()
+        );
+    }
+    if transport::kill::debugger_present() && !allow_debugger() {
+        anyhow::bail!("debugger/ptrace attached — refusing to start (WEISSMAN_AGENT_ALLOW_DEBUGGER=1 to override)");
+    }
+    transport::tls_pin::require_pin_or_dev(server_url)?;
+    transport::kill::protect_path(&transport::state::state_path());
+    transport::kill::protect_path(&transport::spool::spool_path());
 
     let hostname = cli
         .hostname_override
@@ -107,9 +115,15 @@ async fn main() -> anyhow::Result<()> {
             saved.into_enrollment(jwt)
         }
         None => {
+            if cli.enrollment_token.trim().is_empty() {
+                anyhow::bail!(
+                    "no persisted identity at {} and WEISSMAN_ENROLLMENT_TOKEN is empty",
+                    state_path.display()
+                );
+            }
             let fresh = transport::enrollment::enroll(
                 server_url,
-                enrollment_token,
+                &cli.enrollment_token,
                 cli.client_id,
                 &hostname,
                 whoami::devicename(),
@@ -140,6 +154,10 @@ async fn main() -> anyhow::Result<()> {
             fresh
         }
     };
+
+    if !cli.enroll_only {
+        install_self_protect_signals();
+    }
 
     if cli.enroll_only {
         // The installer runs this to validate the token. It used to throw the result away and
@@ -207,6 +225,58 @@ async fn run_dry_run(probe: Option<&str>) -> anyhow::Result<()> {
                 })
             );
             Ok(())
+        }
+    }
+}
+
+fn allow_debugger() -> bool {
+    matches!(
+        std::env::var("WEISSMAN_AGENT_ALLOW_DEBUGGER").as_deref(),
+        Ok("1") | Ok("true") | Ok("TRUE")
+    )
+}
+
+fn allow_local_stop() -> bool {
+    matches!(
+        std::env::var("WEISSMAN_AGENT_ALLOW_LOCAL_STOP").as_deref(),
+        Ok("1") | Ok("true") | Ok("TRUE")
+    )
+}
+
+fn install_self_protect_signals() {
+    if allow_local_stop() {
+        return;
+    }
+    tokio::spawn(async move {
+        loop {
+            if tokio::signal::ctrl_c().await.is_err() {
+                break;
+            }
+            tracing::error!(
+                target: "agent",
+                "ignoring SIGINT (self-protect; signed kill-switch or WEISSMAN_AGENT_ALLOW_LOCAL_STOP=1)"
+            );
+        }
+    });
+    #[cfg(unix)]
+    {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut sigterm) => {
+                tokio::spawn(async move {
+                    loop {
+                        if sigterm.recv().await.is_none() {
+                            break;
+                        }
+                        tracing::error!(
+                            target: "agent",
+                            "ignoring SIGTERM (self-protect; signed kill-switch or WEISSMAN_AGENT_ALLOW_LOCAL_STOP=1)"
+                        );
+                    }
+                });
+            }
+            Err(e) => {
+                tracing::warn!(target: "agent", error = %e, "could not install SIGTERM guard")
+            }
         }
     }
 }

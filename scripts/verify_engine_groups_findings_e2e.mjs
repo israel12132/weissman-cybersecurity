@@ -6,7 +6,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { GROUP_SMOKE_PLAN, FINDINGS_E2E_PLAN, collectApprovedDomains } from './lib/group_smoke_plan.mjs'
-import { retryScanIntake, retryLogin } from './lib/scan_intake.mjs'
+import { retryScanIntake, retryLogin, retryShed } from './lib/scan_intake.mjs'
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 
@@ -74,8 +74,12 @@ function validateRiskFields(row) {
 }
 
 async function pollJob(jobId, token) {
+  const label = `job ${String(jobId).slice(0, 8)}`
   for (let i = 0; i < POLL_MAX; i += 1) {
-    const { status, data } = await api('GET', `/api/jobs/${jobId}`, { token })
+    const { status, data } = await retryShed(
+      () => api('GET', `/api/jobs/${jobId}`, { token }),
+      { label, what: 'job poll', retries: 3 },
+    )
     if (status === 200 && terminal(data.status)) return data
     await sleep(POLL_MS)
   }
@@ -107,8 +111,15 @@ async function ensureClient(token) {
 }
 
 async function findingsForEngine(token, clientId, engine) {
-  const r = await api('GET', `/api/findings?client_id=${clientId}&limit=200`, { token })
-  if (r.status !== 200 || r.data?.ok !== true) return []
+  const path = `/api/findings?client_id=${clientId}&limit=500&source=${encodeURIComponent(engine)}`
+  const r = await retryShed(
+    () => api('GET', path, { token }),
+    { label: `findings/${engine}`, what: 'findings list' },
+  )
+  if (r.status !== 200 || r.data?.ok !== true) {
+    console.error(`  ↳ findings list HTTP ${r.status} source=${engine} body=${JSON.stringify(r.data).slice(0, 400)}`)
+    return []
+  }
   const rows = Array.isArray(r.data.findings) ? r.data.findings : []
   return rows.filter((row) => String(row.source || '').toLowerCase() === engine.toLowerCase())
 }
@@ -141,11 +152,17 @@ async function main() {
     // window instead of stalling on unreachable third-party infrastructure.
     if (entry.params && typeof entry.params === 'object') Object.assign(body, entry.params)
 
-    // Refresh the access token before each engine so a long run (many engines,
-    // each polled for minutes) never outlives the token TTL — previously the
-    // later engines failed to enqueue with HTTP 401 once the token expired.
-    const fresh = await login()
-    if (fresh) token = fresh
+    // One login for the sweep. Re-login-per-engine burns the per-IP login quota
+    // (8/min) after Playwright already used 127.0.0.1; CI JWT is 120 minutes.
+    // Refresh only when a later call is unauthorized.
+    if (entry !== ACTIVE_PLAN[0]) {
+      const probe = await api('GET', '/api/clients', { token })
+      if (probe.status === 401) {
+        const fresh = await login()
+        if (fresh) token = fresh
+        else fail(`${label}: token refresh failed`)
+      }
+    }
 
     const scan = await retryScanIntake(
       () => api('POST', '/api/command-center/scan', { token, body }),

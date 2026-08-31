@@ -234,6 +234,14 @@ where
     let mut current_timeout = attempt_timeout;
 
     for variant in &strategies {
+        let host = variant.split('/').nth(2).unwrap_or(variant.as_str());
+        if crate::elite_hardening::probe_io::is_paused(host) {
+            last_error = Some(format!(
+                "host {host} paused after timeout ratio >20%; rotating evasion"
+            ));
+            last_status = String::from("paused");
+            continue;
+        }
         attempts += 1;
         metrics::counter!("weissman_engine_attempt_total").increment(1);
         // After a WAF/rate-limit block, tell the next attempt to go stealthy.
@@ -252,6 +260,8 @@ where
                     last_class = Some(class);
                     continue;
                 }
+                let host = variant.split('/').nth(2).unwrap_or(variant.as_str());
+                let _ = crate::elite_hardening::probe_io::record_attempt(host, false);
                 let telem = EngineExecTelemetry {
                     engine_id: engine_id.to_string(),
                     attempts,
@@ -286,6 +296,8 @@ where
                 last_class = Some(FailureClass::Timeout);
                 escalate_for(FailureClass::Timeout, &mut current_timeout);
                 metrics::counter!("weissman_engine_timeout_total").increment(1);
+                let host = target.split('/').nth(2).unwrap_or(target);
+                let _ = crate::elite_hardening::probe_io::record_attempt(host, true);
                 continue;
             }
         }

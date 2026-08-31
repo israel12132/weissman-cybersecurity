@@ -13,6 +13,7 @@ mod log_integrity;
 mod malware_local;
 mod mobile_local;
 mod network_local;
+mod priv_esc_cred;
 mod process_hollowing;
 mod process_modules;
 mod scheduled_tasks;
@@ -86,6 +87,8 @@ pub fn all_capability_ids() -> Vec<&'static str> {
         "cold_boot_attack",
         // commodity infostealer blast-radius
         "infostealer_emulation",
+        // Privilege escalation & credential access (host auditor — not agent-required)
+        "privilege_escalation_credential_access",
         // sensors
         "usb_enumeration",
         // UEBA — periodic baseline sample
@@ -160,6 +163,7 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
             "tpm_firmware_attack" => hardware_local::run_tpm(&engine).await,
             "cold_boot_attack" => hardware_local::run_cold_boot(&engine).await,
             "infostealer_emulation" => infostealer::run(&engine, target.as_deref(), &params).await,
+            "privilege_escalation_credential_access" => priv_esc_cred::run(&engine).await,
             "ueba_baseline" => baseline::run(&engine).await,
             "chronos" => chronos::run(&engine, &params).await,
             other => Err(anyhow::anyhow!(

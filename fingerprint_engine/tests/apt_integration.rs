@@ -174,6 +174,7 @@ fn nl_query_unknown_table_never_becomes_sql() {
         order_by: None,
         order_desc: false,
         limit: Some(1),
+        ..Default::default()
     };
     let err = compile_plan(&plan, 1).unwrap_err();
     assert!(err.contains("not exposed"));

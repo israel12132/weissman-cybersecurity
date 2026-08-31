@@ -20,14 +20,16 @@
 //! Tenant scoping: every plan is rewritten to include `tenant_id = $tenant`
 //! before compilation. Users never see another tenant's data.
 
+use dashmap::DashMap;
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use sqlx::{Column, PgPool, Row};
 use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use tokio::sync::{mpsc, Semaphore};
 
 type HmacSha256 = Hmac<Sha256>;
 /// v2 binds unix timestamp + nonce into the MAC so a captured v1 signature cannot replay.
@@ -54,6 +56,8 @@ struct TableSpec {
     /// Currently only used to bring `clients.name` into vulnerabilities/etc.
     #[allow(dead_code)]
     joins: &'static [(&'static str, &'static str)],
+    /// Feed/intel tables have no tenant_id; RLS still applies via GRANTs + GUC.
+    has_tenant: bool,
 }
 
 static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
@@ -83,6 +87,7 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             ],
             order_by: &["discovered_at", "epss_score", "seen_count", "id"],
             joins: &[],
+            has_tenant: true,
         },
     );
     m.insert(
@@ -107,6 +112,7 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             ],
             order_by: &["last_seen_at", "max_cvss", "max_epss", "member_count"],
             joins: &[],
+            has_tenant: true,
         },
     );
     m.insert(
@@ -121,6 +127,7 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             ],
             order_by: &["id", "name"],
             joins: &[],
+            has_tenant: true,
         },
     );
     m.insert(
@@ -142,6 +149,7 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             ],
             order_by: &["risk_score", "business_value_usd", "id"],
             joins: &[],
+            has_tenant: true,
         },
     );
     m.insert(
@@ -163,6 +171,7 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             ],
             order_by: &["detected_at", "z_score"],
             joins: &[],
+            has_tenant: true,
         },
     );
     m.insert(
@@ -180,10 +189,155 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             ],
             order_by: &["computed_at", "max_risk"],
             joins: &[],
+            has_tenant: true,
+        },
+    );
+    m.insert(
+        "risk_graph_edges",
+        TableSpec {
+            table: "risk_graph_edges",
+            columns: &[
+                "id",
+                "client_id",
+                "from_node_id",
+                "to_node_id",
+                "edge_type",
+                "created_at",
+            ],
+            order_by: &["created_at", "id", "edge_type"],
+            joins: &[],
+            has_tenant: true,
+        },
+    );
+    m.insert(
+        "client_financial_risk_snapshots",
+        TableSpec {
+            table: "client_financial_risk_snapshots",
+            columns: &[
+                "id",
+                "client_id",
+                "computed_at",
+                "total_asset_value_usd",
+                "sle_worst_usd",
+                "ale_annualised_usd",
+                "crown_jewel_value_usd",
+                "currency_code",
+            ],
+            order_by: &["computed_at", "ale_annualised_usd", "id"],
+            joins: &[],
+            has_tenant: true,
+        },
+    );
+    m.insert(
+        "endpoint_agents",
+        TableSpec {
+            table: "endpoint_agents",
+            columns: &[
+                "id",
+                "client_id",
+                "hostname",
+                "device_name",
+                "os",
+                "arch",
+                "agent_version",
+                "status",
+                "enrolled_at",
+                "last_seen_at",
+            ],
+            order_by: &["last_seen_at", "id"],
+            joins: &[],
+            has_tenant: true,
+        },
+    );
+    m.insert(
+        "report_runs",
+        TableSpec {
+            table: "report_runs",
+            columns: &["id", "region", "created_at", "summary"],
+            order_by: &["created_at", "id"],
+            joins: &[],
+            has_tenant: true,
+        },
+    );
+    m.insert(
+        "epss_intel",
+        TableSpec {
+            table: "epss_intel",
+            columns: &["cve", "score", "percentile", "epss_date", "refreshed_at"],
+            order_by: &["score", "refreshed_at", "cve"],
+            joins: &[],
+            has_tenant: false,
+        },
+    );
+    m.insert(
+        "kev_intel",
+        TableSpec {
+            table: "kev_intel",
+            columns: &[
+                "cve",
+                "vendor_project",
+                "product",
+                "date_added",
+                "known_ransomware_use",
+                "due_date",
+            ],
+            order_by: &["date_added", "cve"],
+            joins: &[],
+            has_tenant: false,
+        },
+    );
+    m.insert(
+        "audit_logs",
+        TableSpec {
+            table: "audit_logs",
+            columns: &[
+                "id",
+                "created_at",
+                "user_label",
+                "action_type",
+                "details",
+                "ip_address",
+            ],
+            order_by: &["created_at", "id"],
+            joins: &[],
+            has_tenant: true,
         },
     );
     m
 });
+
+/// Spec §10: Ask Weissman allow-list is 13 tables.
+pub fn allowed_table_count() -> usize {
+    SCHEMA.len()
+}
+
+/// Hermetic QueryPlan sandbox: table must be one of the 13 weissman_ro names.
+#[must_use]
+pub fn is_allowlisted_table(name: &str) -> bool {
+    SCHEMA.contains_key(name)
+}
+
+/// Sorted allow-list names for AST table extraction (never a parallel hand list).
+#[must_use]
+pub fn allowlisted_table_names() -> Vec<&'static str> {
+    let mut v: Vec<&'static str> = SCHEMA.keys().copied().collect();
+    v.sort_unstable();
+    v
+}
+
+/// Hermetic QueryPlan sandbox: column must be enumerated on that table.
+#[must_use]
+pub fn is_allowlisted_column(table: &str, column: &str) -> bool {
+    SCHEMA
+        .get(table)
+        .is_some_and(|s| s.columns.contains(&column))
+}
+
+/// Hermetic QueryPlan sandbox: filter operator must be in the static op list.
+#[must_use]
+pub fn is_allowlisted_op(op: &str) -> bool {
+    ALLOWED_OPS.contains(&op)
+}
 
 const ALLOWED_OPS: &[&str] = &[
     "=",
@@ -198,6 +352,14 @@ const ALLOWED_OPS: &[&str] = &[
     "is_not_null",
 ];
 const MAX_LIMIT: i64 = 200;
+const ALLOWED_AGGREGATES: &[&str] = &["count", "avg", "sum", "min", "max"];
+
+/// Postgres-side defence: wrap a compiled plan so a slipped LIMIT cannot
+/// return more than [`MAX_LIMIT`] rows even if the inner SQL is wrong.
+#[must_use]
+pub fn wrap_nl_sql(inner: &str) -> String {
+    format!("SELECT * FROM ({inner}) AS weissman_nl_q LIMIT {MAX_LIMIT}")
+}
 
 // ─── Plan structures ─────────────────────────────────────────────────────────
 
@@ -214,6 +376,30 @@ pub struct QueryPlan {
     pub order_desc: bool,
     #[serde(default)]
     pub limit: Option<i64>,
+    /// Allow-listed aggregate: `count` / `avg` / `sum` / `min` / `max`.
+    /// `count` may omit `aggregate_column` (COUNT(*)).
+    #[serde(default)]
+    pub aggregate: Option<String>,
+    #[serde(default)]
+    pub aggregate_column: Option<String>,
+    #[serde(default)]
+    pub group_by: Option<String>,
+}
+
+impl Default for QueryPlan {
+    fn default() -> Self {
+        Self {
+            table: String::new(),
+            select: vec![],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: None,
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -224,42 +410,7 @@ pub struct Filter {
     pub value: Value,
 }
 
-// ─── Plan → typed AST → bound SQL ────────────────────────────────────────────
-//
-// Security boundary: user/LLM strings never reach SQL except as sqlx bound
-// parameters. Table/column/operator tokens are interned `&'static str` from
-// SCHEMA / FilterOp. The wordlist in `reject_raw_sql_or_injection` is only a
-// pre-LLM filter for natural language — it is not the injection control.
-
-#[derive(Debug, Clone, Copy)]
-enum FilterOp {
-    Eq,
-    Ne,
-    Lt,
-    Le,
-    Gt,
-    Ge,
-    In,
-    Like,
-    IsNull,
-    IsNotNull,
-}
-
-struct AstFilter {
-    column: &'static str,
-    op: FilterOp,
-    value: Value,
-}
-
-struct PlanAst {
-    table: &'static str,
-    select: Vec<&'static str>,
-    filters: Vec<AstFilter>,
-    order_by: Option<&'static str>,
-    order_desc: bool,
-    limit: i64,
-    tenant_id: i64,
-}
+// ─── Plan → safe SQL ─────────────────────────────────────────────────────────
 
 #[derive(Debug)]
 pub struct Compiled {
@@ -267,110 +418,109 @@ pub struct Compiled {
     pub params: Vec<Value>,
 }
 
-fn is_sql_ident(s: &str) -> bool {
-    let mut chars = s.chars();
-    match chars.next() {
-        Some(c) if c.is_ascii_lowercase() || c == '_' => {
-            chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
-        }
-        _ => false,
-    }
-}
-
-fn intern_ident(allowed: &[&'static str], raw: &str, what: &str) -> Result<&'static str, String> {
-    if !is_sql_ident(raw) {
-        return Err(format!("{what} '{raw}' not allowed"));
-    }
-    allowed
-        .iter()
-        .copied()
-        .find(|&c| c == raw)
-        .ok_or_else(|| format!("{what} '{raw}' not allowed"))
-}
-
-fn parse_filter_op(raw: &str) -> Result<FilterOp, String> {
-    let op_norm = raw.trim().to_ascii_lowercase();
-    if !ALLOWED_OPS.contains(&op_norm.as_str()) {
-        return Err(format!("operator '{raw}' not allowed"));
-    }
-    Ok(match op_norm.as_str() {
-        "=" => FilterOp::Eq,
-        "!=" => FilterOp::Ne,
-        "<" => FilterOp::Lt,
-        "<=" => FilterOp::Le,
-        ">" => FilterOp::Gt,
-        ">=" => FilterOp::Ge,
-        "in" => FilterOp::In,
-        "like" => FilterOp::Like,
-        "is_null" => FilterOp::IsNull,
-        "is_not_null" => FilterOp::IsNotNull,
-        other => return Err(format!("unsupported query operator '{other}'")),
-    })
-}
-
-fn plan_to_ast(plan: &QueryPlan, tenant_id: i64) -> Result<PlanAst, String> {
-    if !is_sql_ident(&plan.table) {
-        return Err(format!("table '{}' is not a valid identifier", plan.table));
-    }
+/// Compile a QueryPlan to parameterised SQL. This is the **only** function that
+/// emits SQL for `/api/ask`.
+pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String> {
+    // 1) Validate table.
     let spec = SCHEMA
         .get(plan.table.as_str())
         .ok_or_else(|| format!("table '{}' is not exposed to NL queries", plan.table))?;
 
-    let select = if plan.select.is_empty() {
+    let agg = plan
+        .aggregate
+        .as_deref()
+        .map(str::trim)
+        .map(str::to_ascii_lowercase)
+        .filter(|s| !s.is_empty());
+    if let Some(ref fn_name) = agg {
+        if !ALLOWED_AGGREGATES.contains(&fn_name.as_str()) {
+            return Err(format!("aggregate '{fn_name}' is not allowed"));
+        }
+        if fn_name != "count" {
+            let col = plan
+                .aggregate_column
+                .as_deref()
+                .ok_or_else(|| format!("aggregate '{fn_name}' requires aggregate_column"))?;
+            if !spec.columns.contains(&col) {
+                return Err(format!("aggregate column '{col}' not allowed"));
+            }
+        } else if let Some(col) = plan.aggregate_column.as_deref() {
+            if !col.is_empty() && !spec.columns.contains(&col) {
+                return Err(format!("aggregate column '{col}' not allowed"));
+            }
+        }
+        if let Some(g) = plan.group_by.as_deref() {
+            if !spec.columns.contains(&g) {
+                return Err(format!("group_by '{g}' not allowed"));
+            }
+        }
+    }
+
+    // 2) Validate SELECT columns (default to spec.columns if empty).
+    let select_cols: Vec<&str> = if agg.is_some() {
+        Vec::new()
+    } else if plan.select.is_empty() {
         spec.columns.iter().copied().collect()
     } else {
         let mut out = Vec::with_capacity(plan.select.len());
         for c in &plan.select {
-            out.push(intern_ident(spec.columns, c, "column")?);
+            if !spec.columns.contains(&c.as_str()) {
+                return Err(format!(
+                    "column '{}' not allowed on table '{}'",
+                    c, spec.table
+                ));
+            }
+            out.push(c.as_str());
         }
         out
     };
 
-    let order_allowed: &[&str] = if spec.order_by.is_empty() {
-        spec.columns
-    } else {
-        spec.order_by
-    };
-    let order_by = match &plan.order_by {
-        Some(c) => Some(intern_ident(order_allowed, c, "order_by")?),
+    // 3) Validate ORDER BY (optional).
+    let order = match &plan.order_by {
+        Some(c) => {
+            let allowed: &[&str] = if spec.order_by.is_empty() {
+                spec.columns
+            } else {
+                spec.order_by
+            };
+            if !allowed.contains(&c.as_str()) {
+                return Err(format!("order_by '{}' not allowed on '{}'", c, spec.table));
+            }
+            Some(c.as_str())
+        }
         None => None,
     };
 
-    let mut filters = Vec::with_capacity(plan.filters.len());
-    for f in &plan.filters {
-        let column = intern_ident(spec.columns, &f.column, "filter column")?;
-        let op = parse_filter_op(&f.op)?;
-        filters.push(AstFilter {
-            column,
-            op,
-            value: f.value.clone(),
-        });
-    }
-
-    Ok(PlanAst {
-        table: spec.table,
-        select,
-        filters,
-        order_by,
-        order_desc: plan.order_desc,
-        limit: plan.limit.unwrap_or(50).clamp(1, MAX_LIMIT),
-        tenant_id,
-    })
-}
-
-fn ast_to_sql(ast: &PlanAst) -> Result<Compiled, String> {
-    let select_sql = ast.select.join(", ");
+    // 4) Validate LIMIT after filters so operator errors surface first.
+    // 5) Build SQL fragments.
+    let select_sql = select_cols.join(", ");
     let mut where_parts: Vec<String> = Vec::new();
     let mut params: Vec<Value> = Vec::new();
 
-    where_parts.push("tenant_id = $1".to_string());
-    params.push(Value::from(ast.tenant_id));
+    // Tenant scope is FORCED on tenant-keyed tables — non-negotiable.
+    if spec.has_tenant {
+        where_parts.push("tenant_id = $1".to_string());
+        params.push(Value::from(tenant_id));
+    }
 
-    for f in &ast.filters {
-        match f.op {
-            FilterOp::IsNull => where_parts.push(format!("{} IS NULL", f.column)),
-            FilterOp::IsNotNull => where_parts.push(format!("{} IS NOT NULL", f.column)),
-            FilterOp::In => {
+    // Filters.
+    for f in &plan.filters {
+        if !spec.columns.contains(&f.column.as_str()) {
+            return Err(format!("filter column '{}' not allowed", f.column));
+        }
+        let op_norm = f.op.trim().to_ascii_lowercase();
+        if !ALLOWED_OPS.contains(&op_norm.as_str()) {
+            return Err(format!("operator '{}' not allowed", f.op));
+        }
+        match op_norm.as_str() {
+            "is_null" => {
+                where_parts.push(format!("{} IS NULL", f.column));
+            }
+            "is_not_null" => {
+                where_parts.push(format!("{} IS NOT NULL", f.column));
+            }
+            "in" => {
+                // value must be array.
                 let arr = f
                     .value
                     .as_array()
@@ -385,11 +535,12 @@ fn ast_to_sql(ast: &PlanAst) -> Result<Compiled, String> {
                 }
                 where_parts.push(format!("{} IN ({})", f.column, placeholders.join(", ")));
             }
-            FilterOp::Like => {
+            "like" => {
                 let s = f
                     .value
                     .as_str()
                     .ok_or_else(|| "LIKE value must be string".to_string())?;
+                // Wrap in % unless the user already supplied them.
                 let pattern = if s.contains('%') {
                     s.to_string()
                 } else {
@@ -398,50 +549,58 @@ fn ast_to_sql(ast: &PlanAst) -> Result<Compiled, String> {
                 params.push(Value::String(pattern));
                 where_parts.push(format!("{} ILIKE ${}", f.column, params.len()));
             }
-            FilterOp::Eq
-            | FilterOp::Ne
-            | FilterOp::Lt
-            | FilterOp::Le
-            | FilterOp::Gt
-            | FilterOp::Ge => {
-                let sql_op = match f.op {
-                    FilterOp::Eq => "=",
-                    FilterOp::Ne => "!=",
-                    FilterOp::Lt => "<",
-                    FilterOp::Le => "<=",
-                    FilterOp::Gt => ">",
-                    FilterOp::Ge => ">=",
-                    _ => unreachable!(),
-                };
+            sql_op @ ("=" | "!=" | "<" | "<=" | ">" | ">=") => {
                 params.push(f.value.clone());
                 where_parts.push(format!("{} {} ${}", f.column, sql_op, params.len()));
             }
+            // Self-defending: if a new operator is ever added to ALLOWED_OPS without a match arm
+            // here, reject the query instead of panicking the request.
+            other => return Err(format!("unsupported query operator '{other}'")),
         }
     }
 
-    let order_sql = match ast.order_by {
-        Some(c) => format!(
+    let limit = crate::elite_hardening::nl_guard::require_limit(plan.limit, MAX_LIMIT)?;
+
+    let order_sql = match order {
+        Some(c) if agg.is_none() => format!(
             " ORDER BY {} {}",
             c,
-            if ast.order_desc { "DESC" } else { "ASC" }
+            if plan.order_desc { "DESC" } else { "ASC" }
         ),
-        None => String::new(),
+        _ => String::new(),
     };
-    let sql = format!(
-        "SELECT {} FROM {} WHERE {}{} LIMIT {}",
-        select_sql,
-        ast.table,
-        where_parts.join(" AND "),
-        order_sql,
-        ast.limit,
-    );
+    let where_sql = if where_parts.is_empty() {
+        String::new()
+    } else {
+        format!(" WHERE {}", where_parts.join(" AND "))
+    };
+    let sql = if let Some(fn_name) = agg {
+        let agg_sql = match fn_name.as_str() {
+            "count" => match plan.aggregate_column.as_deref().filter(|c| !c.is_empty()) {
+                Some(c) => format!("COUNT({c}) AS value"),
+                None => "COUNT(*) AS value".to_string(),
+            },
+            other => {
+                let c = plan.aggregate_column.as_deref().unwrap_or("id");
+                format!("{}({c}) AS value", other.to_ascii_uppercase())
+            }
+        };
+        let (select_head, group_sql) = match plan.group_by.as_deref() {
+            Some(g) => (format!("{g}, {agg_sql}"), format!(" GROUP BY {g}")),
+            None => (agg_sql, String::new()),
+        };
+        format!(
+            "SELECT {select_head} FROM {}{where_sql}{group_sql} LIMIT {limit}",
+            spec.table
+        )
+    } else {
+        format!(
+            "SELECT {} FROM {}{}{} LIMIT {}",
+            select_sql, spec.table, where_sql, order_sql, limit,
+        )
+    };
+    crate::elite_hardening::nl_guard::reject_unsafe_sql(&sql)?;
     Ok(Compiled { sql, params })
-}
-
-/// Compile a QueryPlan to parameterised SQL. This is the **only** function that
-/// emits SQL for `/api/ask`.
-pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String> {
-    ast_to_sql(&plan_to_ast(plan, tenant_id)?)
 }
 
 // ─── Question ingest (raw SQL / injection rejected; signed QueryPlan is S2S) ─
@@ -729,13 +888,18 @@ pub async fn execute_plan(
     // connection every statement autocommits, which would discard the GUC before the query and
     // collapse RLS to the database default tenant (0) — returning zero rows for every real tenant.
     let mut tx = ro_pool.begin().await.map_err(|e| format!("begin: {e}"))?;
-    sqlx::query("SELECT set_config('app.current_tenant_id', $1::text, true)")
-        .bind(tenant_id.to_string())
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| format!("set tenant guc: {e}"))?;
+    sqlx::query(
+        "SELECT set_config('app.current_tenant_id', $1::text, true), \
+                set_config('statement_timeout', '15s', true), \
+                set_config('idle_in_transaction_session_timeout', '30s', true)",
+    )
+    .bind(tenant_id.to_string())
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| format!("set tenant guc: {e}"))?;
 
-    let mut q = sqlx::query(&compiled.sql);
+    let wrapped = wrap_nl_sql(&compiled.sql);
+    let mut q = sqlx::query(&wrapped);
     for p in &compiled.params {
         q = bind_json(q, p);
     }
@@ -750,7 +914,7 @@ pub async fn execute_plan(
     let json_rows: Vec<Value> = rows.iter().map(row_to_json).collect();
     Ok(AskResult {
         plan,
-        sql: compiled.sql,
+        sql: wrapped,
         row_count: json_rows.len(),
         rows: json_rows,
         elapsed_ms,
@@ -770,14 +934,7 @@ pub async fn ask(
 ) -> AskResult {
     let start = Instant::now();
     let bad = |err: &str| AskResult {
-        plan: QueryPlan {
-            table: String::new(),
-            select: vec![],
-            filters: vec![],
-            order_by: None,
-            order_desc: false,
-            limit: None,
-        },
+        plan: QueryPlan::default(),
         sql: String::new(),
         rows: vec![],
         row_count: 0,
@@ -785,14 +942,30 @@ pub async fn ask(
         error: Some(err.to_string()),
     };
     let q = question.trim();
+    if crate::elite_hardening::ai_supply::prompt_contains_secret(q) {
+        return bad("fail-closed: question contains secret material");
+    }
     if q.len() > 2000 {
         return bad("question too long (max 2000 chars)");
+    }
+
+    match crate::nl_audit_chain::ask_path_is_locked(app_pool, tenant_id).await {
+        Ok(true) => {
+            return bad(
+                "Ask Weissman is fail-closed: audit-chain epoch cap (SOC alert nl_audit_epoch_fragmentation)",
+            );
+        }
+        Ok(false) => {}
+        Err(e) => {
+            tracing::error!(target: "nl_query", error = %e, "ask fail-closed lock check failed");
+            return bad("Ask Weissman is fail-closed: audit chain lock unavailable");
+        }
     }
 
     let plan: QueryPlan = if let Some(plan) = admitted_plan {
         if !q.is_empty() {
             let r = bad("signed QueryPlan must not be mixed with a natural-language question");
-            audit_query(app_pool, tenant_id, user_id, question, &r).await;
+            audit_query(app_pool, tenant_id, user_id, question, &r);
             return r;
         }
         plan
@@ -804,7 +977,7 @@ pub async fn ask(
             Ok(v) => v,
             Err(e) => {
                 let r = bad(&e);
-                audit_query(app_pool, tenant_id, user_id, question, &r).await;
+                audit_query(app_pool, tenant_id, user_id, question, &r);
                 return r;
             }
         };
@@ -814,15 +987,15 @@ pub async fn ask(
                     Ok(v) => v,
                     Err(e) => {
                         let r = bad(&format!("plan generation failed: {e}"));
-                        audit_query(app_pool, tenant_id, user_id, question, &r).await;
+                        audit_query(app_pool, tenant_id, user_id, question, &r);
                         return r;
                     }
                 };
-                match serde_json::from_value(plan_json) {
+                match serde_json::from_value(plan_json.clone()) {
                     Ok(p) => p,
                     Err(e) => {
                         let r = bad(&format!("plan is not a valid QueryPlan JSON: {e}"));
-                        audit_query(app_pool, tenant_id, user_id, question, &r).await;
+                        audit_query(app_pool, tenant_id, user_id, question, &r);
                         return r;
                     }
                 }
@@ -839,36 +1012,181 @@ pub async fn ask(
         Err(e) => bad(&e),
     };
 
-    audit_query(app_pool, tenant_id, user_id, question, &res).await;
+    audit_query(app_pool, tenant_id, user_id, question, &res);
     res
 }
 
-async fn audit_query(
+struct NlqaEvent {
+    tenant_id: i64,
+    user_id: Option<i64>,
+    question: String,
+    plan_json: Value,
+    compiled_sql: String,
+    rows_returned: i32,
+    elapsed_ms: i32,
+    error: String,
+}
+
+const NLQA_CHANNEL_CAP: usize = 1024;
+static NLQA_TX: OnceLock<mpsc::Sender<NlqaEvent>> = OnceLock::new();
+static NLQA_GLOBAL_PERSIST: OnceLock<Arc<Semaphore>> = OnceLock::new();
+static NLQA_TENANT_PERSIST: OnceLock<DashMap<i64, Arc<Semaphore>>> = OnceLock::new();
+
+fn nlqa_global_persist() -> Arc<Semaphore> {
+    NLQA_GLOBAL_PERSIST
+        .get_or_init(|| {
+            Arc::new(Semaphore::new(
+                crate::elite_hardening::nlqa_chain::NLQA_GLOBAL_PERSIST_PERMITS,
+            ))
+        })
+        .clone()
+}
+
+fn nlqa_tenant_persist(tenant_id: i64) -> Arc<Semaphore> {
+    NLQA_TENANT_PERSIST
+        .get_or_init(DashMap::new)
+        .entry(tenant_id)
+        .or_insert_with(|| {
+            Arc::new(Semaphore::new(
+                crate::elite_hardening::nlqa_chain::NLQA_TENANT_PERSIST_PERMITS,
+            ))
+        })
+        .clone()
+}
+
+/// Start the per-process nlqa1 hash-chain worker. Ask never waits on this lock.
+pub fn spawn_audit_worker(pool: Arc<PgPool>) {
+    crate::nlqa_syslog::init();
+    let (tx, rx) = mpsc::channel::<NlqaEvent>(NLQA_CHANNEL_CAP);
+    if NLQA_TX.set(tx).is_ok() {
+        tokio::spawn(nlqa_worker_loop(pool, rx));
+        tracing::info!(target: "nlqa1", "Ask audit hash-chain worker started");
+    }
+}
+
+fn audit_query(
     app_pool: &PgPool,
     tenant_id: i64,
     user_id: Option<i64>,
     question: &str,
     res: &AskResult,
 ) {
-    if let Ok(mut tx) = crate::db::begin_tenant_tx(app_pool, tenant_id).await {
-        let _ = sqlx::query(
-            "INSERT INTO nl_query_audit
-                (tenant_id, user_id, asked_at, question, plan_json, compiled_sql,
-                 rows_returned, elapsed_ms, error)
-             VALUES ($1, $2, now(), $3, $4, $5, $6, $7, $8)",
-        )
-        .bind(tenant_id)
-        .bind(user_id)
-        .bind(question.chars().take(2000).collect::<String>())
-        .bind(serde_json::to_value(&res.plan).unwrap_or(json!({})))
-        .bind(&res.sql)
-        .bind(res.row_count as i32)
-        .bind(res.elapsed_ms as i32)
-        .bind(res.error.clone().unwrap_or_default())
-        .execute(&mut *tx)
-        .await;
-        let _ = tx.commit().await;
+    if NLQA_TX.get().is_none() {
+        spawn_audit_worker(Arc::new(app_pool.clone()));
     }
+    let ev = NlqaEvent {
+        tenant_id,
+        user_id,
+        question: question.chars().take(2000).collect(),
+        plan_json: serde_json::to_value(&res.plan).unwrap_or(json!({})),
+        compiled_sql: res.sql.clone(),
+        rows_returned: res.row_count as i32,
+        elapsed_ms: res.elapsed_ms as i32,
+        error: res.error.clone().unwrap_or_default(),
+    };
+    match NLQA_TX.get() {
+        Some(tx) => {
+            if let Err(e) = tx.try_send(ev) {
+                let (ev, reason) = match e {
+                    mpsc::error::TrySendError::Full(ev) => (ev, "channel_full"),
+                    mpsc::error::TrySendError::Closed(ev) => (ev, "channel_closed"),
+                };
+                emit_nlqa_fallback(&ev, reason);
+            }
+        }
+        None => {
+            emit_nlqa_fallback(&ev, "worker_not_running");
+        }
+    }
+}
+
+fn emit_nlqa_fallback(ev: &NlqaEvent, reason: &str) {
+    let payload = crate::elite_hardening::nlqa_chain::fallback_audit_json(
+        ev.tenant_id,
+        ev.user_id,
+        &ev.question,
+        &ev.plan_json,
+        &ev.compiled_sql,
+        ev.rows_returned,
+        ev.elapsed_ms,
+        &ev.error,
+        reason,
+    );
+    crate::elite_hardening::nlqa_chain::emit_ask_audit_fallback(&payload, reason);
+    let qfp = hex::encode(Sha256::digest(ev.question.as_bytes()));
+    let q_preview: String = ev.question.chars().take(180).collect();
+    crate::nlqa_syslog::page_audit_overflow(&format!(
+        "nlqa1 Ask Weissman audit MPSC saturated kind={reason} tenant_id={} user_id={} question_sha256={qfp} elapsed_ms={} rows_returned={} has_error={} question_preview={q_preview}",
+        ev.tenant_id,
+        ev.user_id.unwrap_or(0),
+        ev.elapsed_ms,
+        ev.rows_returned,
+        !ev.error.is_empty(),
+    ));
+}
+
+async fn nlqa_worker_loop(pool: Arc<PgPool>, mut rx: mpsc::Receiver<NlqaEvent>) {
+    while let Some(ev) = rx.recv().await {
+        let pool = pool.clone();
+        tokio::spawn(async move {
+            persist_nlqa_isolated(pool, ev).await;
+        });
+    }
+}
+
+/// Isolate advisory-lock waits: at most 4 persists process-wide and 1 per
+/// tenant. Waiters are async tasks (not OS threads), so a flooded tenant cannot
+/// starve the Tokio pool used by UEBA / SOAR / scans. Ask still never blocks.
+async fn persist_nlqa_isolated(pool: Arc<PgPool>, ev: NlqaEvent) {
+    let global = nlqa_global_persist();
+    let Ok(_global_permit) = global.acquire_owned().await else {
+        emit_nlqa_fallback(&ev, "persist_pool_closed");
+        return;
+    };
+    let tenant = nlqa_tenant_persist(ev.tenant_id);
+    let Ok(_tenant_permit) = tenant.acquire_owned().await else {
+        emit_nlqa_fallback(&ev, "tenant_lock_closed");
+        return;
+    };
+    if let Err(e) = persist_nlqa_chained(&pool, &ev).await {
+        tracing::error!(target: "nlqa1", error = %e, "Ask audit chain append failed");
+        emit_nlqa_fallback(&ev, "persist_failed");
+    }
+}
+
+async fn persist_nlqa_chained(pool: &PgPool, ev: &NlqaEvent) -> Result<(), String> {
+    // HTTP/Ask never waits on FOR UPDATE. Insert a sealed unchained row; the
+    // `nl_audit_chain` worker stamps prev/event hash + chain_epoch (epoch cap).
+    let mut tx = crate::db::begin_tenant_tx(pool, ev.tenant_id)
+        .await
+        .map_err(|e| format!("nlqa1 tenant tx: {e}"))?;
+    let sealed_q = crate::nl_audit_crypto::seal_text(&ev.question);
+    let sealed_sql = crate::nl_audit_crypto::seal_text(&ev.compiled_sql);
+    let sealed_plan = crate::nl_audit_crypto::seal_plan(&ev.plan_json);
+    sqlx::query(
+        "INSERT INTO nl_query_audit
+            (tenant_id, user_id, asked_at, question, plan_json, compiled_sql,
+             rows_returned, elapsed_ms, error, prev_hash, event_hash)
+         VALUES ($1, $2, now(), $3, $4, $5, $6, $7, $8, $9, $10)",
+    )
+    .bind(ev.tenant_id)
+    .bind(ev.user_id)
+    .bind(&sealed_q)
+    .bind(&sealed_plan)
+    .bind(&sealed_sql)
+    .bind(ev.rows_returned)
+    .bind(ev.elapsed_ms)
+    .bind(&ev.error)
+    .bind(crate::nl_audit_chain::UNCHAINED)
+    .bind(crate::nl_audit_chain::UNCHAINED)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| format!("nlqa1 insert: {e}"))?;
+    tx.commit()
+        .await
+        .map_err(|e| format!("nlqa1 commit: {e}"))?;
+    crate::nl_audit_chain::notify(ev.tenant_id);
+    Ok(())
 }
 
 fn bind_json<'a>(
@@ -929,7 +1247,7 @@ You MUST output a single JSON object — nothing else (no ```json fences, no pro
 
 Schema:
 {
-  "table":     "<one of vulnerabilities|weissman_finding_clusters|clients|risk_graph_nodes|agent_anomalies|attack_path_snapshots>",
+  "table":     "<one of vulnerabilities|weissman_finding_clusters|clients|risk_graph_nodes|agent_anomalies|attack_path_snapshots|risk_graph_edges|client_financial_risk_snapshots|endpoint_agents|report_runs|epss_intel|kev_intel|audit_logs>",
   "select":    ["col1","col2", ...]           // optional; default = all columns
   "filters":   [
      {"column":"severity","op":"in","value":["critical","high"]},
@@ -938,7 +1256,10 @@ Schema:
   ],
   "order_by":  "discovered_at",                // optional
   "order_desc": true,                          // optional, default false
-  "limit":     50                              // optional, max 200
+  "limit":     50,                             // REQUIRED integer 1-200 (fail-closed)
+  "aggregate": "count",                        // optional: count|avg|sum|min|max
+  "aggregate_column": "id",                    // optional; omit for COUNT(*)
+  "group_by":  "severity"                      // optional allow-listed column
 }
 
 Operators allowed: =, !=, <, <=, >, >=, in, like, is_null, is_not_null.
@@ -951,6 +1272,13 @@ Schema:
 - risk_graph_nodes(id, client_id, node_type, label, graph_key, risk_score, is_choke_point, internet_exposed, crown_jewel, asset_value, business_value_usd)
 - agent_anomalies(id, agent_id, client_id, metric_name, observed, baseline_mean, baseline_stddev, z_score, severity, detail, detected_at)
 - attack_path_snapshots(id, client_id, computed_at, entry_count, jewel_count, path_count, max_risk)
+- risk_graph_edges(id, client_id, from_node_id, to_node_id, edge_type, created_at)
+- client_financial_risk_snapshots(id, client_id, computed_at, total_asset_value_usd, sle_worst_usd, ale_annualised_usd, crown_jewel_value_usd, currency_code)
+- endpoint_agents(id, client_id, hostname, device_name, os, arch, agent_version, status, enrolled_at, last_seen_at)
+- report_runs(id, region, created_at, summary)
+- epss_intel(cve, score, percentile, epss_date, refreshed_at)
+- kev_intel(cve, vendor_project, product, date_added, known_ransomware_use, due_date)
+- audit_logs(id, created_at, user_label, action_type, details, ip_address)
 
 If you cannot map the question to a valid plan, output {"table":"","select":[],"filters":[]}.
 "#;
@@ -995,7 +1323,6 @@ async fn llm_to_plan(question: &str, tenant_id: i64) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hmac::Mac;
 
     #[test]
     fn compile_simple_severity_in() {
@@ -1010,6 +1337,9 @@ mod tests {
             order_by: Some("discovered_at".into()),
             order_desc: true,
             limit: Some(50),
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
         };
         let c = compile_plan(&plan, 1).unwrap();
         // Tenant scope ALWAYS first param.
@@ -1031,6 +1361,9 @@ mod tests {
             order_by: None,
             order_desc: false,
             limit: None,
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
         };
         let err = compile_plan(&plan, 1).unwrap_err();
         assert!(err.contains("not exposed"));
@@ -1045,6 +1378,9 @@ mod tests {
             order_by: None,
             order_desc: false,
             limit: None,
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
         };
         let err = compile_plan(&plan, 1).unwrap_err();
         assert!(err.contains("not allowed"));
@@ -1063,9 +1399,56 @@ mod tests {
             order_by: None,
             order_desc: false,
             limit: None,
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
         };
         let err = compile_plan(&plan, 1).unwrap_err();
         assert!(err.contains("operator"));
+    }
+
+    #[test]
+    fn allowlist_is_thirteen_tables() {
+        assert_eq!(allowed_table_count(), 13);
+        assert_eq!(
+            allowed_table_count(),
+            crate::elite_hardening::nl_guard::ASK_WEISSMAN_TABLE_COUNT
+        );
+    }
+
+    #[test]
+    fn rejects_missing_limit() {
+        let plan = QueryPlan {
+            table: "vulnerabilities".into(),
+            select: vec!["id".into()],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: None,
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
+        };
+        let err = compile_plan(&plan, 1).unwrap_err();
+        assert!(err.contains("limit"));
+    }
+
+    #[test]
+    fn intel_tables_skip_tenant_predicate() {
+        let plan = QueryPlan {
+            table: "epss_intel".into(),
+            select: vec!["cve".into()],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: Some(10),
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
+        };
+        let c = compile_plan(&plan, 1).unwrap();
+        assert!(!c.sql.contains("tenant_id"));
+        assert!(c.sql.contains("LIMIT 10"));
     }
 
     #[test]
@@ -1077,9 +1460,101 @@ mod tests {
             order_by: None,
             order_desc: false,
             limit: Some(99_999),
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
         };
         let c = compile_plan(&plan, 1).unwrap();
         assert!(c.sql.ends_with(&format!("LIMIT {}", MAX_LIMIT)));
+    }
+
+    #[test]
+    fn rejects_job_queue_and_users_tables() {
+        for table in ["weissman_async_jobs", "users", "pg_roles"] {
+            let plan = QueryPlan {
+                table: table.into(),
+                select: vec![],
+                filters: vec![],
+                order_by: None,
+                order_desc: false,
+                limit: None,
+                aggregate: None,
+                aggregate_column: None,
+                group_by: None,
+            };
+            assert!(
+                compile_plan(&plan, 1).is_err(),
+                "{table} must not be exposable to Ask Weissman"
+            );
+        }
+    }
+
+    #[test]
+    fn compiler_tables_are_on_the_ro_grant_list() {
+        for table in SCHEMA.keys() {
+            assert!(
+                weissman_db::role_guard::RO_SELECT_TABLES.contains(table),
+                "{table} is in the NL compiler but not granted to weissman_ro"
+            );
+        }
+    }
+
+    #[test]
+    fn compiles_endpoint_agents_with_forced_tenant() {
+        let plan = QueryPlan {
+            table: "endpoint_agents".into(),
+            select: vec!["hostname".into(), "status".into()],
+            filters: vec![],
+            order_by: Some("last_seen_at".into()),
+            order_desc: true,
+            limit: Some(10),
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
+        };
+        let c = compile_plan(&plan, 42).unwrap();
+        assert_eq!(c.params[0], Value::from(42));
+        assert!(c.sql.contains("FROM endpoint_agents WHERE tenant_id = $1"));
+    }
+
+    #[test]
+    fn compile_count_star() {
+        let plan = QueryPlan {
+            table: "vulnerabilities".into(),
+            select: vec![],
+            filters: vec![Filter {
+                column: "severity".into(),
+                op: "=".into(),
+                value: json!("critical"),
+            }],
+            order_by: None,
+            order_desc: false,
+            limit: Some(1),
+            aggregate: Some("count".into()),
+            aggregate_column: None,
+            group_by: None,
+        };
+        let c = compile_plan(&plan, 1).unwrap();
+        assert!(c.sql.contains("COUNT(*) AS value"));
+        assert!(!c.sql.contains("SELECT id,"));
+    }
+
+    #[test]
+    fn wrap_enforces_postgres_limit() {
+        let inner = "SELECT id FROM vulnerabilities WHERE tenant_id = $1 LIMIT 9999";
+        let w = wrap_nl_sql(inner);
+        assert!(w.starts_with("SELECT * FROM ("));
+        assert!(w.ends_with(&format!("LIMIT {MAX_LIMIT}")));
+    }
+
+    #[test]
+    fn rejects_unknown_aggregate() {
+        let plan = QueryPlan {
+            table: "vulnerabilities".into(),
+            aggregate: Some("drop".into()),
+            ..QueryPlan::default()
+        };
+        assert!(compile_plan(&plan, 1).unwrap_err().contains("aggregate"));
     }
 
     #[test]
@@ -1119,10 +1594,8 @@ mod tests {
         let plan = QueryPlan {
             table: "vulnerabilities".into(),
             select: vec!["id".into(), "title".into()],
-            filters: vec![],
-            order_by: None,
-            order_desc: false,
             limit: Some(10),
+            ..QueryPlan::default()
         };
         let key = [0x11u8; 32];
         let ts = queryplan_unix_now();
@@ -1141,10 +1614,8 @@ mod tests {
         let plan = QueryPlan {
             table: "vulnerabilities".into(),
             select: vec!["id".into()],
-            filters: vec![],
-            order_by: None,
-            order_desc: false,
             limit: Some(1),
+            ..QueryPlan::default()
         };
         let key = [0x22u8; 32];
         let nonce = new_queryplan_nonce();
@@ -1166,7 +1637,6 @@ mod tests {
         let mac_ok = sign_query_plan_with_key(&plan, &key, edge, &nonce).expect("sign");
         verify_query_plan_hmac_with_key_at(&plan, &mac_ok, edge, &nonce, &key, now)
             .expect("edge of window must pass");
-        // Architect gate: 3s NTP/cluster skew must not starve S2S Ask.
         let skew3 = now - 3;
         let mac3 = sign_query_plan_with_key(&plan, &key, skew3, &nonce).expect("sign");
         verify_query_plan_hmac_with_key_at(&plan, &mac3, skew3, &nonce, &key, now)
@@ -1185,10 +1655,8 @@ mod tests {
         let plan = QueryPlan {
             table: "vulnerabilities".into(),
             select: vec!["id".into()],
-            filters: vec![],
-            order_by: None,
-            order_desc: false,
             limit: Some(1),
+            ..QueryPlan::default()
         };
         let key = [0x33u8; 32];
         let ts = queryplan_unix_now();
@@ -1208,15 +1676,12 @@ mod tests {
         let plan = QueryPlan {
             table: "vulnerabilities".into(),
             select: vec!["id".into()],
-            filters: vec![],
-            order_by: None,
-            order_desc: false,
             limit: Some(1),
+            ..QueryPlan::default()
         };
         let key = [0x44u8; 32];
         let ts = queryplan_unix_now();
         let nonce = new_queryplan_nonce();
-        // v1 MAC: domain v1 || plan only — must not verify under v2.
         let mut mac = HmacSha256::new_from_slice(&key).expect("key");
         mac.update(b"weissman-queryplan-v1\0");
         mac.update(&canonical_query_plan_bytes(&plan).expect("canon"));
@@ -1232,21 +1697,14 @@ mod tests {
     fn compile_plan_rejects_sql_smuggled_as_table_or_column() {
         let plan = QueryPlan {
             table: "secret_keys".into(),
-            select: vec![],
-            filters: vec![],
-            order_by: None,
-            order_desc: false,
-            limit: None,
+            ..QueryPlan::default()
         };
         assert!(compile_plan(&plan, 1).unwrap_err().contains("not exposed"));
 
         let plan = QueryPlan {
             table: "vulnerabilities".into(),
             select: vec!["id; DROP TABLE clients".into()],
-            filters: vec![],
-            order_by: None,
-            order_desc: false,
-            limit: None,
+            ..QueryPlan::default()
         };
         assert!(compile_plan(&plan, 1).unwrap_err().contains("not allowed"));
 
@@ -1258,9 +1716,7 @@ mod tests {
                 op: "OR 1=1".into(),
                 value: json!("x"),
             }],
-            order_by: None,
-            order_desc: false,
-            limit: None,
+            ..QueryPlan::default()
         };
         assert!(compile_plan(&plan, 1)
             .unwrap_err()
@@ -1278,9 +1734,8 @@ mod tests {
                 op: "=".into(),
                 value: json!("'; DROP TABLE clients; --"),
             }],
-            order_by: None,
-            order_desc: false,
             limit: Some(10),
+            ..QueryPlan::default()
         };
         let c = compile_plan(&plan, 7).unwrap();
         assert!(!c.sql.to_ascii_lowercase().contains("drop table"));

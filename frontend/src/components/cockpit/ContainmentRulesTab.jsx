@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
-import { destructiveHeaders } from '../../utils/destructiveConfirm'
+import { destructiveHeaders, dualControlBody } from '../../utils/destructiveConfirm'
 import { ShieldOff, Plus, AlertTriangle, Server, Container } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
@@ -80,12 +80,12 @@ export default function ContainmentRulesTab() {
       const d = await apiFetch(`/api/clients/${selectedClientId}/containment/execute`, {
         method: 'POST',
         headers: destructiveHeaders({ 'Content-Type': 'application/json' }),
-        body: {
+        body: dualControlBody('', '', {
           rule_id: rid,
           mode: exec.mode,
           aws_instance_id: exec.aws_instance_id || undefined,
           confirm: true,
-        },
+        }),
       })
       setMsg({ ok: true, text: d.detail || d.error || JSON.stringify(d) })
     } catch (e) {

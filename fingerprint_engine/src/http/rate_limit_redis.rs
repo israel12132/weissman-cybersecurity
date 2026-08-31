@@ -1,14 +1,20 @@
 //! Distributed rate-limit counters via Redis (`REDIS_URL`). Falls back to in-process governor when unset.
 //!
 //! In production multi-replica mode (`REDIS_URL` set, `WEISSMAN_ALLOW_SINGLE_NODE` unset), Redis
-//! failures are **fail-closed** — callers must not silently degrade to per-replica memory.
+//! outages **degrade** the request-path governor to a stricter in-memory cap
+//! (`50% / WEISSMAN_REPLICA_COUNT`) and emit a SOC signal — they do **not** 503
+//! legitimate logins (self-inflicted DoS). MFA lockout and other stores that still
+//! require Redis keep [`distributed_store_unavailable_response`].
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use dashmap::DashMap;
 use redis::AsyncCommands;
+use std::num::NonZeroU32;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Bound every Redis acquire/op. Without this, a Redis black-hole (packets dropped, no RST)
 /// makes each op await forever and wedges the whole API on the per-request rate-limit path —
@@ -52,37 +58,6 @@ fn shared() -> Option<Arc<RedisRateLimiter>> {
     .clone()
 }
 
-/// Atomic INCR + EXPIRE as a single Redis EVAL. Split `INCR` then `EXPIRE` is
-/// not atomic: a crash between them leaves a counter with no TTL and 429s the
-/// tenant until an operator deletes the key. Heal keys whose TTL is missing
-/// (`TTL < 0`) — stricter than expire-on-first-INCR-only.
-pub const REDIS_RATE_LIMITER_LUA: &str = r#"
-local n = redis.call('INCR', KEYS[1])
-if n == 1 or redis.call('TTL', KEYS[1]) < 0 then
-  redis.call('EXPIRE', KEYS[1], tonumber(ARGV[1]))
-end
-return n
-"#;
-
-#[must_use]
-pub fn should_set_expire(count: u64, ttl_secs: i64) -> bool {
-    count == 1 || ttl_secs < 0
-}
-
-async fn incr_with_ttl(
-    conn: &mut redis::aio::MultiplexedConnection,
-    key: &str,
-    window: Duration,
-) -> redis::RedisResult<u64> {
-    redis::cmd("EVAL")
-        .arg(REDIS_RATE_LIMITER_LUA)
-        .arg(1)
-        .arg(key)
-        .arg(window.as_secs().max(1))
-        .query_async(conn)
-        .await
-}
-
 async fn incr_window(key: &str, window: Duration) -> Option<u64> {
     // Self-healing fast-fail: if the Redis dependency circuit is open (sustained outage detected by
     // the recovery engine), skip the connect+INCR — which would otherwise each pay REDIS_OP_TIMEOUT
@@ -96,7 +71,41 @@ async fn incr_window(key: &str, window: Duration) -> Option<u64> {
     }
     let rl = shared()?;
     let mut conn = rl.conn().await.ok()?;
-    incr_with_ttl(&mut conn, key, window).await.ok()
+    incr_and_bound_ttl(&mut conn, key, window).await.ok()
+}
+
+/// Atomic `INCR` + `PEXPIRE` when the key has no TTL.
+///
+/// Split `INCR` then `EXPIRE` only when `count == 1` races: a dropped EXPIRE
+/// leaves a 1-second API window immortal, counts climb past the limit, and
+/// live E2E job polls on 127.0.0.1 are 429'd until they look like a job timeout.
+/// A follow-up `TTL` + `EXPIRE` still has a lost-EXPIRE window. One Lua eval
+/// cannot drop the expire independently of the increment.
+const INCR_BOUND_TTL_LUA: &str = r#"
+local n = redis.call('INCR', KEYS[1])
+local ttl_ms = tonumber(ARGV[1])
+if redis.call('PTTL', KEYS[1]) < 0 then
+  redis.call('PEXPIRE', KEYS[1], ttl_ms)
+end
+return n
+"#;
+
+/// Alias for the atomic window incrementer (INCR + PTTL/PEXPIRE heal).
+pub const REDIS_RATE_LIMITER_LUA: &str = INCR_BOUND_TTL_LUA;
+
+async fn incr_and_bound_ttl(
+    conn: &mut redis::aio::MultiplexedConnection,
+    key: &str,
+    window: Duration,
+) -> redis::RedisResult<u64> {
+    let ttl_ms = window.as_millis().max(1) as i64;
+    redis::cmd("EVAL")
+        .arg(INCR_BOUND_TTL_LUA)
+        .arg(1i64)
+        .arg(key)
+        .arg(ttl_ms)
+        .query_async(conn)
+        .await
 }
 
 /// Tenant scan POST counter (60s window). `None` when Redis unavailable.
@@ -360,7 +369,74 @@ pub async fn verify_redis_at_startup() -> Result<(), String> {
     Ok(())
 }
 
+/// True when Redis is required for cluster coherence but the client is missing
+/// or the last async INCR failed. Request-path governors must degrade locally
+/// (`50% / replica_count`) instead of returning 503.
+#[must_use]
+pub fn redis_degraded() -> bool {
+    distributed_state_required() && (!is_enabled() || redis_sync_unhealthy())
+}
+
+/// Replica count for sharded local caps. Production must set
+/// `WEISSMAN_REPLICA_COUNT` to the Deployment size. Unset defaults to 8 so an
+/// omitted var cannot widen the per-pod flood window. Single-node / E2E stacks
+/// default to 1.
+#[must_use]
+pub fn replica_count() -> NonZeroU32 {
+    if let Ok(s) = std::env::var("WEISSMAN_REPLICA_COUNT") {
+        if let Ok(n) = s.trim().parse::<u32>() {
+            if let Some(nz) = NonZeroU32::new(n) {
+                return nz;
+            }
+        }
+    }
+    if crate::security_startup::env_truthy_pub("WEISSMAN_E2E_STACK")
+        || crate::security_startup::env_truthy_pub("WEISSMAN_ALLOW_SINGLE_NODE")
+    {
+        return NonZeroU32::MIN;
+    }
+    NonZeroU32::new(8).expect("8 is non-zero")
+}
+
+/// Local cap when Redis is down: half the global quota, split across replicas.
+/// Floor of 1 so a huge replica count cannot disable the governor entirely.
+#[must_use]
+pub fn degraded_local_quota(global: NonZeroU32) -> NonZeroU32 {
+    degraded_local_quota_with_replicas(global, replica_count())
+}
+
+#[must_use]
+pub fn degraded_local_quota_with_replicas(global: NonZeroU32, replicas: NonZeroU32) -> NonZeroU32 {
+    let half = (global.get() / 2).max(1);
+    NonZeroU32::new((half / replicas.get()).max(1)).unwrap_or(NonZeroU32::MIN)
+}
+
+/// SOC-visible Redis outage. Rate-limited to once per 60s so a spray cannot flood logs.
+pub fn notify_redis_degraded(component: &'static str) {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    static LAST: AtomicU64 = AtomicU64::new(0);
+    let prev = LAST.load(Ordering::Relaxed);
+    if now.saturating_sub(prev) < 60 {
+        return;
+    }
+    if LAST
+        .compare_exchange(prev, now, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
+        return;
+    }
+    tracing::error!(
+        target: "weissman_soc",
+        component,
+        "Redis unavailable or sync unhealthy — governor degraded to 50%/replica in-memory cap (not fail-closed 503)"
+    );
+}
+
 /// Standard 503 when Redis is required but unreachable (fail-closed).
+/// Used by MFA/sqlx paths that cannot degrade; login/API governors must not call this.
 #[must_use]
 pub fn distributed_store_unavailable_response() -> Response {
     (
@@ -385,7 +461,7 @@ async fn incr_window_strict(key: &str, window: Duration) -> StrictOp<u64> {
     let Ok(mut conn) = rl.conn().await else {
         return StrictOp::Unavailable;
     };
-    match incr_with_ttl(&mut conn, key, window).await {
+    match incr_and_bound_ttl(&mut conn, key, window).await {
         Ok(count) => StrictOp::Ok(count),
         Err(_) => StrictOp::Unavailable,
     }
@@ -416,6 +492,76 @@ pub async fn incr_api_ip_strict(client_ip: &str) -> StrictOp<u64> {
         Duration::from_secs(1),
     )
     .await
+}
+
+static REDIS_SYNC_UNHEALTHY: AtomicBool = AtomicBool::new(false);
+
+fn deny_until() -> &'static DashMap<String, Instant> {
+    static M: OnceLock<DashMap<String, Instant>> = OnceLock::new();
+    M.get_or_init(DashMap::new)
+}
+
+fn deny_map_key(kind: &str, ip: &str) -> String {
+    format!("{kind}:{ip}")
+}
+
+/// True when a prior async Redis INCR observed this IP over the global burst.
+#[must_use]
+pub fn distributed_ip_denied(kind: &str, ip: &str) -> bool {
+    let key = deny_map_key(kind, ip);
+    match deny_until().get(&key) {
+        Some(until) if *until > Instant::now() => true,
+        Some(_) => {
+            deny_until().remove(&key);
+            false
+        }
+        None => false,
+    }
+}
+
+/// True when the last async Redis INCR failed (outage). Request path must not await Redis.
+#[must_use]
+pub fn redis_sync_unhealthy() -> bool {
+    REDIS_SYNC_UNHEALTHY.load(Ordering::Relaxed)
+}
+
+fn record_async_incr(kind: &str, ip: &str, max: u64, window: Duration, op: StrictOp<u64>) {
+    match op {
+        StrictOp::Ok(n) if n > max => {
+            deny_until().insert(deny_map_key(kind, ip), Instant::now() + window);
+            REDIS_SYNC_UNHEALTHY.store(false, Ordering::Relaxed);
+        }
+        StrictOp::Ok(_) => {
+            REDIS_SYNC_UNHEALTHY.store(false, Ordering::Relaxed);
+        }
+        StrictOp::Unavailable => {
+            REDIS_SYNC_UNHEALTHY.store(true, Ordering::Relaxed);
+        }
+    }
+}
+
+/// Fire-and-forget Redis token-bucket INCR for login. Does not run on the request task.
+pub fn spawn_incr_login_ip(ip: String, max: u64) {
+    tokio::spawn(async move {
+        let op = incr_login_ip_strict(&ip).await;
+        record_async_incr("login", &ip, max, Duration::from_secs(60), op);
+    });
+}
+
+/// Fire-and-forget Redis token-bucket INCR for agent enroll.
+pub fn spawn_incr_enroll_ip(ip: String, max: u64) {
+    tokio::spawn(async move {
+        let op = incr_enroll_ip_strict(&ip).await;
+        record_async_incr("enroll", &ip, max, Duration::from_secs(60), op);
+    });
+}
+
+/// Fire-and-forget Redis token-bucket INCR for authenticated API traffic.
+pub fn spawn_incr_api_ip(ip: String, max: u64) {
+    tokio::spawn(async move {
+        let op = incr_api_ip_strict(&ip).await;
+        record_async_incr("api", &ip, max, Duration::from_secs(1), op);
+    });
 }
 
 /// Claim a QueryPlan HMAC nonce exactly once (`SET key NX EX`).
@@ -548,6 +694,68 @@ mod tests {
     use super::*;
 
     #[test]
+    fn request_path_governors_must_degrade_not_503() {
+        let src = include_str!("rate_limit_redis.rs");
+        let prod = src.split("#[cfg(test)]").next().expect("production source");
+        assert!(prod.contains("redis_degraded"));
+        assert!(prod.contains("degraded_local_quota"));
+        assert!(prod.contains("WEISSMAN_REPLICA_COUNT"));
+        assert!(prod.contains("weissman_soc"));
+        assert!(prod.contains("50%"));
+        let login = include_str!("login_rate_limit.rs");
+        let login_prod = login.split("#[cfg(test)]").next().expect("login prod");
+        assert!(
+            !login_prod.contains("distributed_store_unavailable_response"),
+            "login governor must not 503 when Redis is unhealthy"
+        );
+        assert!(login_prod.contains("redis_degraded"));
+        assert!(
+            login_prod.contains("weissman_soc") || login_prod.contains("notify_redis_degraded")
+        );
+        let api = include_str!("api_rate_limit.rs");
+        let api_prod = api.split("#[cfg(test)]").next().expect("api prod");
+        assert!(
+            !api_prod.contains("distributed_store_unavailable_response"),
+            "API governor must not 503 when Redis is unhealthy"
+        );
+        assert!(api_prod.contains("redis_degraded"));
+    }
+
+    #[test]
+    fn degraded_quota_splits_half_across_replicas() {
+        use super::degraded_local_quota_with_replicas;
+        use std::num::NonZeroU32;
+        let g = NonZeroU32::new(100).unwrap();
+        let ten = NonZeroU32::new(10).unwrap();
+        let hundred = NonZeroU32::new(100).unwrap();
+        assert_eq!(degraded_local_quota_with_replicas(g, ten).get(), 5); // 50/10
+        assert_eq!(degraded_local_quota_with_replicas(g, hundred).get(), 1); // floor
+        let one = NonZeroU32::MIN;
+        assert_eq!(degraded_local_quota_with_replicas(g, one).get(), 50); // single replica
+    }
+
+    #[test]
+    fn incr_bound_ttl_lua_cannot_incr_without_expire_repair() {
+        let lua = super::INCR_BOUND_TTL_LUA.replace(char::is_whitespace, "");
+        assert!(
+            lua.contains("redis.call('INCR',KEYS[1])"),
+            "window counter must INCR inside Lua"
+        );
+        assert!(
+            lua.contains("redis.call('PEXPIRE',KEYS[1],ttl_ms)"),
+            "missing TTL must be repaired in the same eval as INCR"
+        );
+        assert!(
+            lua.contains("redis.call('PTTL',KEYS[1])<0"),
+            "heal path must look at PTTL, not a client-side count==1"
+        );
+        assert!(
+            !lua.contains("ifn==1"),
+            "must not gate EXPIRE on first INCR only"
+        );
+    }
+
+    #[test]
     fn replica_ack_standalone_ok() {
         assert!(nonce_replica_ack_ok(0, 0));
         assert!(nonce_replica_ack_ok(1, 0));
@@ -569,24 +777,15 @@ mod tests {
     }
 
     #[test]
-    fn expire_on_first_incr_or_missing_ttl() {
-        assert!(should_set_expire(1, -2));
-        assert!(should_set_expire(1, -1));
-        assert!(should_set_expire(40, -1));
-        assert!(!should_set_expire(40, 1));
-        assert!(!should_set_expire(2, 0));
+    fn queryplan_wait_timeout_is_ten_ms() {
+        assert_eq!(QUERYPLAN_NONCE_WAIT_MS, 10);
     }
 
     #[test]
     fn rate_limiter_lua_is_single_eval_with_ttl_heal() {
         assert!(REDIS_RATE_LIMITER_LUA.contains("INCR"));
-        assert!(REDIS_RATE_LIMITER_LUA.contains("EXPIRE"));
-        assert!(REDIS_RATE_LIMITER_LUA.contains("TTL"));
+        assert!(REDIS_RATE_LIMITER_LUA.contains("PEXPIRE"));
+        assert!(REDIS_RATE_LIMITER_LUA.contains("PTTL"));
         assert!(!REDIS_RATE_LIMITER_LUA.contains("MULTI"));
-    }
-
-    #[test]
-    fn queryplan_wait_timeout_is_ten_ms() {
-        assert_eq!(QUERYPLAN_NONCE_WAIT_MS, 10);
     }
 }

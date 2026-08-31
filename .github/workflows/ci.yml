@@ -143,7 +143,18 @@ jobs:
         run: pip install pip-audit ruff pytest httpx
 
       - name: Run pip-audit (known CVEs in Python deps)
-        run: pip-audit -r requirements.txt --progress-spinner off
+        run: |
+          # PyPI OSV lookups reset connections under load; retry so a peer-RST is not a red gate.
+          n=0
+          until pip-audit -r requirements.txt --progress-spinner off; do
+            n=$((n + 1))
+            if [ "$n" -ge 4 ]; then
+              echo "pip-audit failed after $n attempts" >&2
+              exit 1
+            fi
+            echo "pip-audit attempt $n failed (network); retrying…" >&2
+            sleep $((n * 8))
+          done
 
       - name: Run ruff linter
         run: ruff check src/ --select E,F,W --ignore E501
@@ -238,6 +249,11 @@ jobs:
           sudo docker image prune -af || true
           df -h /
 
+      - name: Install TPM 2.0 TSS headers (native ESAPI)
+        # weissman-agent links tss-esapi on linux-gnu. ubuntu-latest does not
+        # ship libtss2-dev; without it the workspace test link fails.
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libtss2-dev pkg-config
+
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
 
@@ -310,16 +326,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Secret scan (gitleaks, working tree + HEAD history)
+      - name: Secret scan (gitleaks, working tree)
         run: |
           ver=8.18.4
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${ver}/gitleaks_${ver}_linux_x64.tar.gz" \
             | tar -xz gitleaks
           ./gitleaks detect --no-git --redact --no-banner --exit-code 1 --source .
-          # checkout fetch-depth: 0 also fetches every origin branch. Without
-          # --log-opts=HEAD, gitleaks walks all of those refs and this job fails
-          # on an unrelated branch's CI fixture (generic-api-key in ci.yml).
-          ./gitleaks detect --redact --no-banner --exit-code 1 --source . --log-opts=HEAD
+          # fetch-depth: 0 materializes every origin head. gitleaks' default git
+          # log includes --all, so a throwaway 64-hex vault pin on an unrelated
+          # agent's branch fails THIS job. Bound history to the checked-out ref
+          # (PR merge = main ∪ this branch; still catches secrets later deleted
+          # from the tree).
+          ./gitleaks detect --redact --no-banner --exit-code 1 --source . \
+            --log-opts='HEAD' \
+            --report-format json --report-path gitleaks-git.json || {
+            echo '--- gitleaks git-history findings ---'
+            cat gitleaks-git.json || true
+            exit 1
+          }
 
       - name: Dependency & IaC vuln scan (Trivy filesystem, CRITICAL+HIGH)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -591,6 +615,9 @@ jobs:
         run: npm run build
         working-directory: frontend
 
+      - name: Install TPM 2.0 TSS headers (native ESAPI)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libtss2-dev pkg-config
+
       - name: Build weissman-server + worker (warm compile for health check)
         run: cargo build -p weissman-server -p weissman-worker
 
@@ -598,6 +625,21 @@ jobs:
         env:
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
         run: cargo run -q -p weissman-db --example run_migrate
+
+      - name: Rotate hermetic role passwords for production-mode smoke
+        # Runtime pools must be weissman_app / weissman_auth (FORCE RLS / BYPASSRLS).
+        # Migration-created passwords are the blocked dev fragments; replace them
+        # with CI-only values before WEISSMAN_ENV=production boot.
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d weissman -v ON_ERROR_STOP=1 <<'SQL'
+          ALTER ROLE weissman_app LOGIN PASSWORD 'ci-app-password-24-chars-minimum';
+          ALTER ROLE weissman_auth LOGIN PASSWORD 'ci-auth-password-24-chars-minimum';
+          ALTER ROLE weissman_worker LOGIN PASSWORD 'ci-worker-password-24-chars-minimum';
+          ALTER ROLE weissman_analytics LOGIN PASSWORD 'ci-analytics-password-24-chars-minimum';
+          GRANT CONNECT ON DATABASE weissman TO weissman_app, weissman_auth, weissman_worker, weissman_analytics;
+          SQL
 
       - name: Bound Postgres lock waits (CI database backstop)
         # Defence in depth behind weissman_db::advisory_lock. That module bounds every advisory
@@ -643,6 +685,7 @@ jobs:
         timeout-minutes: 25
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          REDIS_URL: redis://127.0.0.1:6379
           # Fail (don't skip) the DB-backed integration tests here, so a dropped
           # TEST_DATABASE_URL can never masquerade as a green run.
           WEISSMAN_REQUIRE_DB_TESTS: "1"
@@ -724,26 +767,28 @@ jobs:
             /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
           df -h /
 
+      - name: Verify Docker build context (TSS headers + COPY coverage)
+        # Fast fail: weissman-agent linux-gnu links tss-esapi-sys. If libtss2-dev is
+        # missing from deploy/backend.Dockerfile the image cargo build dies after
+        # minutes with "Package tss2-sys was not found".
+        run: ./scripts/verify_docker_build_integrity.sh
+
       - name: Build Docker production images
-        # `docker compose build` interpolates the ENTIRE compose file at load time, so the
-        # two runtime-only required secrets — ${WEISSMAN_JWT_SECRET:?} and
-        # ${WEISSMAN_ADMIN_PASSWORD:?} in docker-compose.yml — must be present even though a
-        # build never consumes them. Supply CI-throwaway values purely to satisfy parse-time
-        # interpolation; the :? runtime hardening in the compose file is left intact.
-        env:
-          WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
-          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
-        # Override the release profile for THIS CI validation build only: the committed
-        # profile.release (lto=fat, codegen-units=1) makes the in-Docker release build of three
-        # binaries over the 350k-LOC workspace OOM-kill the runner (exit 143 mid-link). Disable
-        # LTO + parallelize codegen so it fits in the runner's memory; the published image (via
-        # the publish job, which passes no build-args) keeps the full fat-LTO profile. The image
-        # here only needs to build + be Trivy-scanned; it never runs the live stack.
+        # Use docker-compose.build.yml (build coordinates only) so runtime :? secrets
+        # are not required just to produce images. Override the release profile for
+        # THIS CI validation build: workspace profile.release (lto=fat, codegen-units=1)
+        # OOM-kills the runner mid-link (exit 143). deploy/backend.Dockerfile now
+        # declares matching ARG so these --build-arg values actually reach rustc.
+        # Sequential: backend (Rust release of three binaries) then gateway (WASM +
+        # Vite) — composing them in one `build backend worker gateway` ran two rustc
+        # trees plus a duplicate backend/worker image build and still OOM'd after
+        # ~1409s. Worker uses the same image as backend, so it is not rebuilt.
         run: |
-          docker compose build \
+          docker compose -f docker-compose.build.yml build \
             --build-arg CARGO_PROFILE_RELEASE_LTO=false \
             --build-arg CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
-            backend worker gateway
+            backend
+          docker compose -f docker-compose.build.yml build gateway
 
       - name: Scan built backend image (Trivy, CRITICAL+HIGH)
         # The fs scan in the security-scan job covers source/deps; this scans the
@@ -766,8 +811,10 @@ jobs:
 
       - name: Start weissman-server
         env:
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
-          WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          DATABASE_URL: postgresql://weissman_app:ci-app-password-24-chars-minimum@127.0.0.1:5432/weissman
+          WEISSMAN_AUTH_DATABASE_URL: postgresql://weissman_auth:ci-auth-password-24-chars-minimum@127.0.0.1:5432/weissman
+          WEISSMAN_WORKER_DATABASE_URL: postgresql://weissman_worker:ci-worker-password-24-chars-minimum@127.0.0.1:5432/weissman
+          WEISSMAN_ANALYTICS_DATABASE_URL: postgresql://weissman_analytics:ci-analytics-password-24-chars-minimum@127.0.0.1:5432/weissman
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           REDIS_URL: redis://127.0.0.1:6379/0
           WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
@@ -779,22 +826,39 @@ jobs:
           # token-signing key to MFA/SOAR/CEO-vault decryption). One 64-hex key satisfies both
           # integrations_vault::key_present() and ceo::vault::key_present(). CI-throwaway value.
           WEISSMAN_VAULT_KEY: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+          # CI-throwaway RAG HMAC (64 hex). Repeating cafebabe — not a vault secret.
+          # Distinct from WEISSMAN_VAULT_KEY and from the JWT (security_startup forbids equality).
+          WEISSMAN_RAG_PROVENANCE_SECRET: cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe
           WEISSMAN_ENV: production
+          # CI has no Paddle. Production defaults billing_strict on; docker-compose
+          # and self-hosted use 0. Without this, enforce_client_create 402s the
+          # engine-group smoke before INSERT.
+          WEISSMAN_BILLING_STRICT: "0"
           WEISSMAN_COOKIE_SECURE: "1"
-          # Client create/delete is owner-only (`is_superadmin` / CEO).
-          # `sync_admin_credentials` promotes WEISSMAN_ADMIN_EMAIL. Smoke and E2E
-          # log in as ci-smoke@localhost, so that account must be the env operator —
-          # a separate admin@localhost stays staff and 403s POST /api/clients with
-          # owner_required.
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
-          WEISSMAN_MASTER_BOOTSTRAP_EMAIL: ci-smoke@localhost
-          WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
+          # Same identity as WEISSMAN_ADMIN_* / WEISSMAN_SMOKE_LOGIN_EMAIL so
+          # bootstrap does not create a second staff user. Client create/delete
+          # is owner-only (is_superadmin / CEO); a distinct ci-smoke@localhost
+          # account is role=admin without superadmin and 403s POST /api/clients.
+          WEISSMAN_MASTER_BOOTSTRAP_EMAIL: admin@localhost
+          WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ci-admin-password-24-chars-minimum
           # The live-scan smoke step logs in ONCE then runs ~18 min (one engine per group,
           # each polled up to 180s). The default access-token TTL is 15 min, so the token
           # expires mid-run and later scan submits/polls 401. Give the CI token room to
           # outlive the whole smoke sweep.
           WEISSMAN_ACCESS_TOKEN_MINUTES: "120"
+          # This job chains smoke + Playwright crawl + pytest + findings E2E from ONE IP
+          # (127.0.0.1) against Redis-backed login/scan/API limiters. Defaults (8 logins/min,
+          # 24 scan POSTs/min, 30 API/s) are correct anti-abuse for production; they shed the
+          # later E2E steps after the earlier ones have already consumed the window. Clamp to
+          # the same ceilings nightly-e2e.yml uses so the gate measures engines, not the limiter.
+          WEISSMAN_LOGIN_PER_MINUTE: "60"
+          WEISSMAN_LOGIN_BURST: "120"
+          WEISSMAN_TENANT_SCAN_POSTS_PER_MINUTE: "240"
+          WEISSMAN_TENANT_SCAN_BURST: "120"
+          WEISSMAN_RATE_LIMIT_PER_SEC: "500"
+          WEISSMAN_RATE_LIMIT_BURST: "2000"
           # Disable the periodic bulk-scan orchestrator for CI. It dispatches a HEAVY
           # `tenant_full_scan` per active tenant every 60s (60-min job timeout). Those jobs
           # share the worker's 2-slot heavy semaphore with the smoke's on-demand
@@ -808,19 +872,6 @@ jobs:
           # (The bulk-vs-interactive head-of-line starvation is a real product concern tracked
           # separately from this CI-scoping change.)
           WEISSMAN_SCANNING_ENABLED: "0"
-          # Live E2E in this job chains Playwright + pytest + engine-group scans on one
-          # IP/tenant. Production defaults (8 logins/min, 24 scan POSTs/min) 429 the later
-          # steps; governor Retry-After is often 1s and burns out inside the same window.
-          # These apply only to this CI server process (OnceLock at boot).
-          WEISSMAN_TENANT_SCAN_POSTS_PER_MINUTE: "120"
-          WEISSMAN_TENANT_SCAN_BURST: "60"
-          WEISSMAN_LOGIN_PER_MINUTE: "60"
-          WEISSMAN_LOGIN_BURST: "60"
-          # Per-IP API limiter. Redis uses a 1s INCR window; burst is now the cap
-          # (max(per_sec, burst)). Match nightly so one Command Center boot from
-          # 127.0.0.1 is not 429'd. Clamp ceilings: 500/s, burst 2000.
-          WEISSMAN_RATE_LIMIT_PER_SEC: "500"
-          WEISSMAN_RATE_LIMIT_BURST: "2000"
           # Server + worker share ONE Postgres (max_connections=100). Each process opens THREE
           # pools (app + auth + intel), so capping only the app pool leaves auth(12)+intel(12)
           # each uncounted. Cap all three to the sizes the repo's own E2E harness uses
@@ -834,8 +885,10 @@ jobs:
 
       - name: Start weissman-worker
         env:
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
-          WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          DATABASE_URL: postgresql://weissman_app:ci-app-password-24-chars-minimum@127.0.0.1:5432/weissman
+          WEISSMAN_AUTH_DATABASE_URL: postgresql://weissman_auth:ci-auth-password-24-chars-minimum@127.0.0.1:5432/weissman
+          WEISSMAN_WORKER_DATABASE_URL: postgresql://weissman_worker:ci-worker-password-24-chars-minimum@127.0.0.1:5432/weissman
+          WEISSMAN_ANALYTICS_DATABASE_URL: postgresql://weissman_analytics:ci-analytics-password-24-chars-minimum@127.0.0.1:5432/weissman
           REDIS_URL: redis://127.0.0.1:6379/0
           WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
           WEISSMAN_JOB_ORCHESTRATOR_SECRET: ci-job-orchestrator-secret-32-bytes-minimum-v1
@@ -848,6 +901,9 @@ jobs:
           # Secrets-at-rest vault key (64 hex): the worker runs the same production startup guard
           # and refuses to boot without integrations_vault + ceo_vault keys. CI-throwaway value.
           WEISSMAN_VAULT_KEY: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+          # CI-throwaway RAG HMAC (64 hex). Repeating cafebabe — not a vault secret.
+          # Distinct from WEISSMAN_VAULT_KEY and from the JWT (security_startup forbids equality).
+          WEISSMAN_RAG_PROVENANCE_SECRET: cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe
           # Heavy scans must run at real parallelism. This env block is worker-only: the server
           # step above stays capped at app/auth/intel = 24/6/4, while the worker runs at
           # app/auth/intel = 48/4/4, so the combined pool budget is 86 plus the worker control
@@ -924,8 +980,8 @@ jobs:
       - name: Smoke one engine per group
         env:
           WEISSMAN_SMOKE_BASE_URL: http://127.0.0.1:18000
-          WEISSMAN_SMOKE_LOGIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-smoke-password
+          WEISSMAN_SMOKE_LOGIN_EMAIL: admin@localhost
+          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_TENANT_SLUG: default
           # Real multi-engine scans against the CI single-Postgres stack can need a couple of retry
           # attempts under transient connection pressure; give the poller headroom beyond one 180s
@@ -936,8 +992,8 @@ jobs:
       - name: Audit UI scan button paths
         env:
           WEISSMAN_SMOKE_BASE_URL: http://127.0.0.1:18000
-          WEISSMAN_SMOKE_LOGIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-smoke-password
+          WEISSMAN_SMOKE_LOGIN_EMAIL: admin@localhost
+          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_TENANT_SLUG: default
           WEISSMAN_UI_AUDIT_POLL_TIMEOUT_MS: "180000"
         run: node scripts/audit_ui_button_scan_paths.mjs
@@ -945,8 +1001,8 @@ jobs:
       - name: Live scan pipeline E2E contract
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_E2E_TENANT: default
           WEISSMAN_E2E_POLL_MS: "2000"
           WEISSMAN_E2E_POLL_MAX: "90"
@@ -974,8 +1030,8 @@ jobs:
         timeout-minutes: 15
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_E2E_TENANT: default
           PLAYWRIGHT_LIVE: "1"
           # Makes the `list` reporter print each test as it STARTS (it is silent on test-begin
@@ -992,8 +1048,8 @@ jobs:
         timeout-minutes: 15
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_E2E_TENANT: default
           PLAYWRIGHT_LIVE: "1"
           PLAYWRIGHT_FORCE_TTY: "1"
@@ -1037,8 +1093,8 @@ jobs:
       - name: Playwright True-Live feature specs (bulk · views · URL filter · density)
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_E2E_TENANT: default
           PLAYWRIGHT_LIVE: "1"
         run: |
@@ -1048,8 +1104,8 @@ jobs:
       - name: Generate audit evidence pack
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_EVIDENCE_OUT: ${{ github.workspace }}/evidence-pack/ci
         run: |
           chmod +x scripts/generate_audit_evidence_pack.sh
@@ -1076,8 +1132,8 @@ jobs:
       - name: Live scan pipeline pytest contract
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_E2E_TENANT: default
           WEISSMAN_E2E_POLL_MS: "2000"
           WEISSMAN_E2E_POLL_MAX: "90"
@@ -1086,8 +1142,8 @@ jobs:
       - name: Engine groups findings + risk E2E
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_E2E_TENANT: default
           WEISSMAN_FINDINGS_E2E_POLL_MS: "2500"
           WEISSMAN_FINDINGS_E2E_POLL_MAX: "72"
@@ -1096,8 +1152,8 @@ jobs:
       - name: SOAR playbook E2E contract
         env:
           WEISSMAN_SMOKE_BASE_URL: http://127.0.0.1:18000
-          WEISSMAN_SMOKE_LOGIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-smoke-password
+          WEISSMAN_SMOKE_LOGIN_EMAIL: admin@localhost
+          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ci-destructive-confirm-secret-32-bytes-minimum
           WEISSMAN_DUAL_APPROVAL_SECRET: ci-dual-approval-secret-32-bytes-minimum-v1
         run: node scripts/verify_soar_playbook_e2e.mjs
@@ -1105,13 +1161,13 @@ jobs:
       - name: FP/TP confidence feedback E2E
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_E2E_TENANT: default
         run: node scripts/verify_fp_tp_confidence_e2e.mjs
 
       # Light SLO smoke against the already-booted live stack: reuses the running server
-      # + ci-smoke admin (proven by the E2E steps above), adds ~20s, and is NON-blocking
+      # + platform owner (proven by the E2E steps above), adds ~20s, and is NON-blocking
       # on PRs (continue-on-error) until the latency/error budget is baselined on this
       # runner class. The full soak (higher VUs / 1m, blocking) runs in nightly-e2e.yml.
       - name: Set up k6 (PR SLO smoke)
@@ -1133,8 +1189,8 @@ jobs:
         continue-on-error: true
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           K6_VUS: "5"
           K6_DURATION: "20s"
         run: k6 run scripts/load/k6_slo.js
@@ -1208,6 +1264,8 @@ jobs:
         with:
           toolchain: 1.91.1
           components: llvm-tools-preview
+      - name: Install TPM 2.0 TSS headers (native ESAPI)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libtss2-dev pkg-config
       - name: Install cargo-llvm-cov
         run: cargo install cargo-llvm-cov --locked
       - name: Coverage (workspace lib tests) — per-crate ratchet

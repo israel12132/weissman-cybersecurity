@@ -6,9 +6,15 @@
 #![recursion_limit = "512"]
 //!
 //! # Safety policy
-//! Unsafe code is denied crate-wide. The sole exception is `hpc_runtime::linux_affinity`, which
-//! calls `libc::sched_setaffinity` for NUMA-aware thread pinning on Linux. That module carries an
-//! explicit `#[allow(unsafe_code)]` with documented SAFETY invariants.
+//! Unsafe code is denied crate-wide. Documented exceptions (each with
+//! `#[allow(unsafe_code)]` and SAFETY invariants):
+//! - `hpc_runtime::linux_affinity` — `libc::sched_setaffinity` for NUMA pin.
+//! - `secret_zeroize::memlock` — `mlock` / `munlock` / `madvise(MADV_DONTDUMP)`
+//!   (Linux) and `VirtualLock` / `VirtualUnlock` (Windows) for vault key pages.
+//! - `secret_zeroize::raw_environ` — **read-only** walk of `libc::environ`
+//!   (Linux/Unix) and `GetEnvironmentStringsW` (Windows) so vault keys never
+//!   pass through `std::env::var_os` heap `OsString`s. Unset is
+//!   `std::env::remove_var` only — never in-place writes into the OS block.
 #![deny(unsafe_code)]
 #![allow(
     clippy::collapsible_if,
@@ -52,6 +58,7 @@ pub mod auth_refresh;
 pub mod battlespace_topology;
 pub mod benchmark;
 pub mod billing;
+pub mod cem_dago;
 pub mod ceo;
 pub mod chronos_engine;
 pub mod client_isolation;
@@ -70,7 +77,11 @@ pub mod data_retention;
 pub mod db;
 pub mod db_backup;
 pub mod demo_request;
+pub mod discovery_ai;
 pub mod discovery_engine;
+pub mod discovery_knowledge;
+pub mod discovery_pace;
+pub mod elite_hardening;
 pub mod embeddings;
 pub mod engine_accounting;
 pub mod engine_capabilities;
@@ -112,11 +123,15 @@ pub mod intel_epss;
 pub mod intel_findings_backfill;
 pub mod intel_http_cache;
 pub mod intel_kev;
+pub mod job_envelope;
 pub mod job_orchestration;
 pub mod leak_hunter_engine;
 pub mod liminal_boundary_engine;
 pub mod liquid_matrix_engine;
+pub mod nl_audit_chain;
+pub mod nl_audit_crypto;
 pub mod nl_query;
+pub mod nlqa_syslog;
 pub mod notifications;
 pub mod nvd_cve;
 pub mod observability;
@@ -130,9 +145,11 @@ pub mod pentest_memory;
 pub mod pipeline_context;
 pub mod pipeline_engine;
 pub mod pipeline_to_runtime_risk_engine;
+pub mod playbook_dsl;
 pub mod poc_sandbox;
 pub mod portfolio_posture;
 pub mod posture_score;
+pub mod priv_esc_cred_access;
 pub mod recon;
 pub mod regex_util;
 pub mod remediation_priority;
@@ -174,6 +191,8 @@ pub mod tenant_quota;
 pub mod threat_intel_engine;
 pub mod timing_engine;
 pub mod ueba_detector;
+pub mod ueba_onboarding;
+pub mod ueba_sovereign_sign;
 pub mod validator;
 
 pub mod admin_users;
@@ -193,6 +212,8 @@ pub mod advanced_stealth_engines;
 pub mod advanced_supply_chain_engines;
 pub mod advanced_web_engines;
 pub mod adversarial_ml_engine;
+pub mod agent_kill;
+pub mod agent_min_version;
 pub mod agent_registry_sync;
 pub mod alert_delivery;
 pub mod alert_evaluator_worker;
@@ -295,6 +316,7 @@ pub mod scada_ics_engine;
 pub mod scan_payload_redaction;
 pub mod scan_routing;
 pub mod scan_schedule_worker;
+pub mod secret_zeroize;
 pub mod security_hardening;
 pub mod security_posture;
 pub mod security_startup;
@@ -311,6 +333,8 @@ pub mod ssti_engine;
 pub mod strategy_engine;
 pub mod supply_chain_engine;
 pub mod supreme_nerve_center;
+pub mod supreme_path_fair_rag_engine;
+pub mod supreme_weights;
 pub mod swarm_orchestrator;
 pub mod threat_analysis;
 pub mod threat_emulation_engine;
@@ -335,6 +359,8 @@ pub use fingerprint::{
 pub use fuzzer::{
     run_fuzzer, run_fuzzer_collect, run_fuzzer_collect_tenant, Baseline, Mutator, ValidatedAnomaly,
 };
-pub use recon::{enum_subdomains, enum_subdomains_default, DEFAULT_SUBDOMAINS};
+pub use recon::{
+    default_subdomain_wordlist, enum_subdomains, enum_subdomains_default, DEFAULT_SUBDOMAINS,
+};
 pub use risk_graph::export_risk_graph_json;
 pub use safe_probe::{safe_probe, SafeProbeResult};
