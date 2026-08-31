@@ -836,23 +836,35 @@ mod tests {
     }
 
     #[test]
-    fn hermetic_roles_migration_grants_thirteen_ro_tables() {
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/migrations/20260827115800_hermetic_db_roles.sql"
-        );
-        let sql = std::fs::read_to_string(path).expect("roles migration");
-        assert!(sql.contains("NOBYPASSRLS"));
-        assert!(sql.contains("ALTER ROLE weissman_auth"));
-        assert!(sql.contains("BYPASSRLS"));
-        assert!(sql.contains("statement_timeout = '15s'"));
+    fn weissman_ro_grants_cover_role_guard_list() {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/migrations");
+        let orig = std::fs::read_to_string(format!("{dir}/20260827115800_hermetic_db_roles.sql"))
+            .expect("roles migration");
+        assert!(orig.contains("NOBYPASSRLS"));
+        assert!(orig.contains("ALTER ROLE weissman_auth"));
+        assert!(orig.contains("BYPASSRLS"));
+        assert!(orig.contains("statement_timeout = '15s'"));
+        // Frozen 13-table GRANT. OT Ask tables land in 20260827160000, not here.
+        assert!(!orig.contains("weissman_async_jobs"));
+        assert!(!orig.contains("ot_ics_fingerprints"));
+
+        let mut corpus = orig;
+        for name in [
+            "20260827120100_weissman_ro_dashboard_grants.sql",
+            "20260827160000_ot_ics_hardening_safety.sql",
+        ] {
+            corpus.push('\n');
+            corpus.push_str(
+                &std::fs::read_to_string(format!("{dir}/{name}"))
+                    .unwrap_or_else(|e| panic!("read {name}: {e}")),
+            );
+        }
         for table in crate::role_guard::RO_SELECT_TABLES {
             assert!(
-                sql.contains(table),
+                corpus.contains(table),
                 "weissman_ro grant list must include {table}"
             );
         }
-        assert!(!sql.contains("weissman_async_jobs"));
     }
 
     #[test]
