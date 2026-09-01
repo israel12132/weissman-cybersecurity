@@ -85,6 +85,9 @@ pub enum ServerToAgent {
     Welcome {
         scan_concurrency: Option<u32>,
         heartbeat_secs: Option<u64>,
+        /// Compact hour-of-week mean/stddev so the agent can gate ueba_baseline locally.
+        #[serde(default)]
+        ueba_baseline: Option<crate::ueba_detector::UebaCompactSnapshot>,
         /// Hex-encoded AES-256-GCM key for inner WSS wrapping. Omitted for old agents.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         inner_key_hex: Option<String>,
@@ -98,6 +101,10 @@ pub enum ServerToAgent {
     Ack {
         task_id: String,
     },
+    UebaBaseline {
+        #[serde(flatten)]
+        snapshot: crate::ueba_detector::UebaCompactSnapshot,
+    },
     Shutdown {
         reason: String,
     },
@@ -108,6 +115,15 @@ pub enum ServerToAgent {
         issued_at_unix: i64,
         signature: String,
     },
+}
+
+/// Last heartbeat extras from a live agent (in-memory; not durable).
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct AgentLiveTelemetry {
+    pub ring_buffer_bytes: u32,
+    pub ring_buffer_frames: u32,
+    pub ueba_suppressed: u64,
+    pub ueba_uploaded: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -128,6 +144,9 @@ pub struct EnrollResponse {
     pub kill_hmac_key: String,
     pub ws_path: String,
     pub server_message: Option<String>,
+    /// Per-agent HMAC key (64 hex) so the agent can verify Welcome / UebaBaseline.
+    #[serde(default)]
+    pub ueba_mac_key: String,
 }
 
 #[derive(Clone, Debug)]
@@ -148,6 +167,7 @@ struct RemotePresence {
 pub struct AgentRegistry {
     inner: RwLock<HashMap<String, LocalSession>>,
     remote: RwLock<HashMap<String, RemotePresence>>,
+    telemetry: RwLock<HashMap<String, AgentLiveTelemetry>>,
     dispatch_cursor: AtomicUsize,
     sync: OnceLock<Arc<crate::agent_registry_sync::AgentRegistrySync>>,
 }
@@ -157,6 +177,7 @@ impl Default for AgentRegistry {
         Self {
             inner: RwLock::new(HashMap::new()),
             remote: RwLock::new(HashMap::new()),
+            telemetry: RwLock::new(HashMap::new()),
             dispatch_cursor: AtomicUsize::new(0),
             sync: OnceLock::new(),
         }
@@ -341,6 +362,24 @@ impl AgentRegistry {
             );
             sync.publish(&event).await;
         }
+    }
+
+    pub async fn record_telemetry(&self, agent_uuid: &str, telem: AgentLiveTelemetry) {
+        let mut g = self.telemetry.write().await;
+        g.insert(agent_uuid.to_string(), telem);
+    }
+
+    pub async fn telemetry(&self, agent_uuid: &str) -> AgentLiveTelemetry {
+        self.telemetry
+            .read()
+            .await
+            .get(agent_uuid)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    pub async fn telemetry_snapshot(&self) -> HashMap<String, AgentLiveTelemetry> {
+        self.telemetry.read().await.clone()
     }
 
     pub async fn send(&self, agent_uuid: &str, msg: ServerToAgent) -> Result<(), String> {
@@ -1357,6 +1396,22 @@ mod tests {
     }
 
     #[test]
+    fn parse_ueba_ingest_preserves_sampling_failed_flag() {
+        let finding = json!({
+            "agent_id": "a",
+            "metrics": {
+                "sampling_failed": true,
+                "sample_error": "syscall:NtQuerySystemInformation"
+            }
+        });
+        let p = parse_ueba_ingest(&finding, 1).unwrap();
+        assert_eq!(
+            crate::ueba_detector::ueba_sample_skip_reason(&p.metrics),
+            Some("sampling_failed")
+        );
+    }
+
+    #[test]
     fn server_to_agent_ack_serializes() {
         let v = serde_json::to_value(ServerToAgent::Ack {
             task_id: "t-1".to_string(),
@@ -1371,12 +1426,56 @@ mod tests {
         let v = serde_json::to_value(ServerToAgent::Welcome {
             scan_concurrency: Some(4),
             heartbeat_secs: None,
+            ueba_baseline: None,
             inner_key_hex: None,
         })
         .unwrap();
         assert_eq!(v["type"], "welcome");
         assert_eq!(v["scan_concurrency"], 4);
         assert!(v["heartbeat_secs"].is_null());
+    }
+
+    #[test]
+    fn server_to_agent_welcome_includes_compact_baseline() {
+        let snap = crate::ueba_detector::UebaCompactSnapshot {
+            hour_of_week: 12,
+            z_upload_threshold: 2.0,
+            min_n: 7,
+            source: "hour_of_week".into(),
+            metrics: vec![crate::ueba_detector::UebaCompactMetric {
+                name: "process_count".into(),
+                mean: 80.0,
+                stddev: 2.0,
+                n: 4,
+            }],
+            learned_processes: vec!["sshd".into()],
+            mac: String::new(),
+        };
+        let v = serde_json::to_value(ServerToAgent::Welcome {
+            scan_concurrency: None,
+            heartbeat_secs: None,
+            ueba_baseline: Some(snap),
+            inner_key_hex: None,
+        })
+        .unwrap();
+        assert_eq!(v["type"], "welcome");
+        assert_eq!(v["ueba_baseline"]["hour_of_week"], 12);
+        assert_eq!(v["ueba_baseline"]["metrics"][0]["mean"], 80.0);
+        assert_eq!(v["ueba_baseline"]["learned_processes"][0], "sshd");
+        let msg = serde_json::to_value(ServerToAgent::UebaBaseline {
+            snapshot: crate::ueba_detector::UebaCompactSnapshot {
+                hour_of_week: 12,
+                z_upload_threshold: 2.0,
+                min_n: 7,
+                source: "rolling_7d".into(),
+                metrics: vec![],
+                learned_processes: vec![],
+                mac: String::new(),
+            },
+        })
+        .unwrap();
+        assert_eq!(msg["type"], "ueba_baseline");
+        assert_eq!(msg["source"], "rolling_7d");
     }
 
     #[test]
@@ -1423,18 +1522,21 @@ mod tests {
             kill_hmac_key: "aa".to_string(),
             ws_path: "/ws/agent".to_string(),
             server_message: None,
+            ueba_mac_key: "ab".repeat(32),
         };
         let v = serde_json::to_value(&e).unwrap();
         assert_eq!(v["agent_id"], "a");
         assert_eq!(v["tenant_id"], 1);
         assert_eq!(v["client_id"], 2);
         assert_eq!(v["ws_path"], "/ws/agent");
+        assert_eq!(v["ueba_mac_key"].as_str().unwrap().len(), 64);
         let back: EnrollResponse = serde_json::from_value(v).unwrap();
         assert_eq!(back.client_id, 2);
         assert_eq!(back.session_jwt, "jwt");
         // The renewal secret must survive the round trip — the agent persists it, and losing it
         // silently would put the agent back to going dark when its JWT expires.
         assert_eq!(back.agent_secret, "renewal-secret");
+        assert_eq!(back.ueba_mac_key.len(), 64);
         assert!(back.server_message.is_none());
     }
 }

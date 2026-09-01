@@ -25,6 +25,12 @@ pub struct AgentState {
     /// Long-lived renewal credential, issued once at enrollment. Only its hash is on the server.
     pub agent_secret: String,
     pub ws_path: String,
+    /// Per-agent HMAC key for UEBA snapshots. Re-issued on session renew.
+    #[serde(default)]
+    pub ueba_mac_key: String,
+    /// TOFU SHA-256 of the last accepted Weissman server leaf (64 hex).
+    #[serde(default)]
+    pub server_cert_sha256: String,
     /// Persist the kill-switch HMAC key issued at enrollment.
     #[serde(default)]
     pub kill_hmac_key: String,
@@ -39,6 +45,8 @@ impl AgentState {
             client_id: e.client_id,
             agent_secret: e.agent_secret.clone(),
             ws_path: e.ws_path.clone(),
+            ueba_mac_key: e.ueba_mac_key.clone(),
+            server_cert_sha256: String::new(),
             kill_hmac_key: e.kill_hmac_key.clone(),
         }
     }
@@ -54,6 +62,7 @@ impl AgentState {
             agent_secret: self.agent_secret,
             ws_path: self.ws_path,
             server_message: None,
+            ueba_mac_key: self.ueba_mac_key,
             kill_hmac_key: self.kill_hmac_key,
         }
     }
@@ -130,6 +139,8 @@ mod tests {
             client_id: 2,
             agent_secret: "s3cr3t-renewal-credential".into(),
             ws_path: "/ws/agent".into(),
+            ueba_mac_key: String::new(),
+            server_cert_sha256: String::new(),
             kill_hmac_key: String::new(),
         }
     }

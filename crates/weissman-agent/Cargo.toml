@@ -15,8 +15,13 @@ path = "src/main.rs"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "sync", "io-util", "net", "fs", "process"] }
 # UEBA baseline uses chrono::Utc + Datelike for hour-of-week computation.
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-# Streaming WebSocket + TLS.
-tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots", "connect"] }
+# Streaming WebSocket + TLS. Pin-first to the Weissman gateway
+# (`WEISSMAN_SERVER_CERT_SHA256` or sticky TOFU). Native CAs are parsed
+# fault-tolerantly but never used to accept the sovereign handshake.
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["rustls-tls-webpki-roots", "connect"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+rustls-native-certs = "0.8"
+webpki-roots = "0.26"
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 url = "2"
 
@@ -28,18 +33,25 @@ serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Local detections — system inventory.
+# CPU governor (hardening) — kept off the hostobs inventory path.
 sysinfo = { version = "0.30", default-features = false }
 hostname = "0.4"
 whoami = "1"
 
-# File hashing + kill-switch HMAC + TLS pin verifier.
+# File hashing + kill-switch HMAC + TLS pin verifier + ring HKDF.
 sha2 = "0.10"
 hex = "0.4"
 hmac = { version = "0.12", features = ["std"] }
 hkdf = "0.12"
 aes-gcm = "0.10"
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+
+# Encrypted in-memory ring (XChaCha20-Poly1305, 192-bit random nonce, 10 MiB cap).
+# Per-frame keys via HKDF-SHA256; master IKM is mlocked / Linux keyring when possible.
+chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
+zeroize = "1"
+getrandom = "0.2"
+subtle = "2"
+base64 = "0.22"
 
 # Random nonce + uuid.
 uuid = { version = "1", features = ["v4"] }
@@ -47,8 +59,8 @@ uuid = { version = "1", features = ["v4"] }
 # JWT verification (only used to sanity-check the enrollment token client-side).
 jsonwebtoken = { version = "9", default-features = false }
 
-# HTTP fetch for enrollment (request a session token).
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "json"] }
+# HTTP fetch for enrollment (custom rustls config: native + webpki + pin).
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots", "json"] }
 
 # CLI parsing.
 clap = { version = "4", features = ["derive", "env"] }
@@ -56,6 +68,9 @@ clap = { version = "4", features = ["derive", "env"] }
 # Errors.
 thiserror = "1"
 anyhow = "1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 # Platform-specific extras pulled in only on Windows so musl builds stay small.
 [target.'cfg(target_os = "linux")'.dependencies]

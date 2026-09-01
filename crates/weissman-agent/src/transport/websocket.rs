@@ -12,7 +12,14 @@ use tracing::{debug, error, info, warn};
 use url::Url;
 
 const CHANNEL_BUFFER: usize = 256;
+const CRITICAL_BUFFER: usize = 64;
 const READ_IDLE_TIMEOUT_SECS: u64 = 90;
+
+#[derive(Clone)]
+struct Outbound {
+    crit: mpsc::Sender<AgentToServer>,
+    bulk: mpsc::Sender<AgentToServer>,
+}
 
 /// Run a single WebSocket session. Returns when the connection closes.
 pub async fn run_session(
@@ -20,7 +27,7 @@ pub async fn run_session(
     enrollment: &Enrollment,
     heartbeat_secs: u64,
 ) -> anyhow::Result<()> {
-    let pins = crate::transport::tls_pin::require_pin_or_dev(server_url)?;
+    let _pins = crate::transport::tls_pin::require_pin_or_dev(server_url)?;
     let ws_url = build_ws_url(server_url, &enrollment.ws_path)?;
     info!(target: "agent", "connecting to {}", scrub_token(&ws_url));
 
@@ -43,22 +50,33 @@ pub async fn run_session(
             enrollment.session_jwt
         ))?,
     );
-    let (ws_stream, _resp) = if pins.is_empty() {
-        tokio_tungstenite::connect_async(request).await?
-    } else {
-        let cfg = crate::transport::tls_pin::pinned_client_config(pins)?;
-        let connector = tokio_tungstenite::Connector::Rustls(std::sync::Arc::new(cfg));
+
+    let (ws_stream, _resp) = if ws_url.scheme() == "wss" {
+        let cfg = Arc::new(super::tls::rustls_client_config()?);
+        let connector = tokio_tungstenite::Connector::Rustls(cfg);
         tokio_tungstenite::connect_async_tls_with_config(request, None, false, Some(connector))
             .await?
+    } else {
+        tokio_tungstenite::connect_async(request).await?
     };
+    super::tls::persist_observed_pin();
+    if super::tls::pin_changed() {
+        info!(target: "agent", "updated TOFU pin after trusted CA rotation");
+    }
     let (mut sink, mut stream) = ws_stream.split();
 
-    // Outbound channel: detections + heartbeat → WebSocket sink.
-    let (out_tx, mut out_rx) = mpsc::channel::<AgentToServer>(CHANNEL_BUFFER);
+    // Dual outbound: critical findings skip the bulk queue so SOC SLA is not
+    // gated on UEBA / heartbeat drain.
+    let (crit_tx, mut crit_rx) = mpsc::channel::<AgentToServer>(CRITICAL_BUFFER);
+    let (bulk_tx, mut bulk_rx) = mpsc::channel::<AgentToServer>(CHANNEL_BUFFER);
+    let out = Outbound {
+        crit: crit_tx,
+        bulk: bulk_tx,
+    };
     let inner_key: Arc<tokio::sync::Mutex<Option<[u8; 32]>>> =
         Arc::new(tokio::sync::Mutex::new(None));
 
-    // Send Hello immediately.
+    // Send Hello immediately (identity — not a finding; bulk is fine).
     let hello = AgentToServer::Hello {
         agent_id: enrollment.agent_id.clone(),
         hostname: hostname::get()
@@ -75,7 +93,7 @@ pub async fn run_session(
             .map(|s| s.to_string())
             .collect(),
     };
-    out_tx.send(hello).await.ok();
+    out.bulk.send(hello).await.ok();
 
     // Replay findings that were written to disk while this agent was offline.
     let spool_path = crate::transport::spool::spool_path();
@@ -87,7 +105,7 @@ pub async fn run_session(
                 "draining offline spool after reconnect"
             );
             for msg in queued {
-                if out_tx.send(msg).await.is_err() {
+                if emit(&out, msg).await.is_err() {
                     break;
                 }
             }
@@ -103,11 +121,13 @@ pub async fn run_session(
     let seen_tasks = Arc::new(tokio::sync::Mutex::new(SeenTasks::default()));
     let max_parallel = Arc::new(AtomicU32::new(4));
     let started_at = Instant::now();
+    let last_ping = Arc::new(std::sync::Mutex::new(None::<Instant>));
+    let last_ping_w = Arc::clone(&last_ping);
 
     // Heartbeat ticker.
     let hb_running = Arc::clone(&running_tasks);
     let hb_completed = Arc::clone(&completed_tasks);
-    let hb_tx = out_tx.clone();
+    let hb_out = out.clone();
     let agent_id_hb = enrollment.agent_id.clone();
     let hb_handle = tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(
@@ -117,35 +137,54 @@ pub async fn run_session(
         interval.tick().await;
         loop {
             interval.tick().await;
-            let msg = AgentToServer::Heartbeat {
-                agent_id: agent_id_hb.clone(),
-                running_tasks: hb_running.load(Ordering::Relaxed),
-                completed_tasks: hb_completed.load(Ordering::Relaxed),
-                uptime_secs: started_at.elapsed().as_secs(),
-            };
-            if hb_tx.send(msg).await.is_err() {
+            let msg = heartbeat_msg(
+                agent_id_hb.clone(),
+                hb_running.load(Ordering::Relaxed),
+                hb_completed.load(Ordering::Relaxed),
+                started_at.elapsed().as_secs(),
+            );
+            if emit(&hb_out, msg).await.is_err() {
                 break;
             }
             // Pair every heartbeat with a Ping. The heartbeat proves the agent is alive TO the
             // server; the Pong it induces proves the server is alive to the agent. Only the second
             // one resets the read-idle deadline.
-            if hb_tx.send(AgentToServer::KeepAlivePing).await.is_err() {
+            if hb_out
+                .crit
+                .send(AgentToServer::KeepAlivePing)
+                .await
+                .is_err()
+            {
                 break;
             }
         }
     });
 
-    // Writer: out_rx → sink. Failed sends go to the disk spool so a crash or
-    // disconnect does not drop findings that already left the detection task.
+    // Writer: biased select — critical always first. Failed sends go to the
+    // encrypted ring AND the disk spool so a crash or disconnect does not drop
+    // findings that already left the detection task.
     let spool_for_writer = crate::transport::spool::spool_path();
     let writer_key = Arc::clone(&inner_key);
     let writer_handle = tokio::spawn(async move {
-        while let Some(msg) = out_rx.recv().await {
+        loop {
+            let msg = tokio::select! {
+                biased;
+                m = crit_rx.recv() => m,
+                m = bulk_rx.recv() => m,
+            };
+            let Some(msg) = msg else {
+                break;
+            };
             if matches!(msg, AgentToServer::KeepAlivePing) {
+                if let Ok(mut g) = last_ping_w.lock() {
+                    *g = Some(Instant::now());
+                }
+                let t0 = Instant::now();
                 if let Err(e) = sink.send(Message::Ping(Vec::new().into())).await {
                     warn!(target: "agent", error = %e, "ping send failed");
                     break;
                 }
+                crate::ringbuf::note_send_rtt(t0.elapsed());
                 continue;
             }
             let mut line = match serde_json::to_string(&msg) {
@@ -160,19 +199,32 @@ pub async fn run_session(
                     line = wrapped;
                 }
             }
+            let t0 = Instant::now();
             if let Err(e) = sink.send(Message::text(line)).await {
                 error!(target: "agent", error = %e, "ws send failed — spooling remainder");
+                crate::ringbuf::push(&msg);
                 let _ = crate::transport::spool::append(&spool_for_writer, &msg);
-                while let Ok(more) = out_rx.try_recv() {
+                while let Ok(more) = crit_rx.try_recv() {
                     if !matches!(more, AgentToServer::KeepAlivePing) {
+                        crate::ringbuf::push(&more);
+                        let _ = crate::transport::spool::append(&spool_for_writer, &more);
+                    }
+                }
+                while let Ok(more) = bulk_rx.try_recv() {
+                    if !matches!(more, AgentToServer::KeepAlivePing) {
+                        crate::ringbuf::push(&more);
                         let _ = crate::transport::spool::append(&spool_for_writer, &more);
                     }
                 }
                 break;
             }
+            crate::ringbuf::note_send_rtt(t0.elapsed());
         }
         let _ = sink.send(Message::Close(None)).await;
     });
+
+    let mac_key = enrollment.ueba_mac_key.clone();
+    let kill_hmac_key = enrollment.kill_hmac_key.clone();
 
     // Reader: stream → handle ServerToAgent.
     let read_result = async {
@@ -204,13 +256,14 @@ pub async fn run_session(
                     };
                     handle_text(
                         &plain,
-                        &out_tx,
+                        &out,
                         &running_tasks,
                         &completed_tasks,
                         &max_parallel,
                         &seen_tasks,
                         enrollment.agent_id.clone(),
-                        enrollment.kill_hmac_key.clone(),
+                        &mac_key,
+                        kill_hmac_key.clone(),
                         Arc::clone(&inner_key),
                     )
                     .await;
@@ -221,7 +274,13 @@ pub async fn run_session(
                 Message::Ping(p) => {
                     debug!(target: "agent", "ws ping {} B", p.len());
                 }
-                Message::Pong(_) => {}
+                Message::Pong(_) => {
+                    if let Ok(mut g) = last_ping.lock() {
+                        if let Some(t) = g.take() {
+                            crate::ringbuf::note_send_rtt(t.elapsed());
+                        }
+                    }
+                }
                 Message::Close(_) => {
                     info!(target: "agent", "ws close received");
                     return Ok(());
@@ -233,7 +292,7 @@ pub async fn run_session(
     .await;
 
     // Tear down workers cleanly.
-    drop(out_tx);
+    drop(out);
     let _ = writer_handle.await;
     hb_handle.abort();
     read_result
@@ -273,14 +332,16 @@ impl SeenTasks {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_text(
     text: &str,
-    out_tx: &mpsc::Sender<AgentToServer>,
+    out: &Outbound,
     running: &Arc<AtomicU32>,
     completed: &Arc<AtomicU64>,
     max_parallel: &Arc<AtomicU32>,
     seen: &Arc<tokio::sync::Mutex<SeenTasks>>,
     agent_id: String,
+    ueba_mac_key: &str,
     kill_hmac_key: String,
     inner_key: Arc<tokio::sync::Mutex<Option<[u8; 32]>>>,
 ) {
@@ -295,11 +356,15 @@ async fn handle_text(
     match msg {
         ServerToAgent::Welcome {
             scan_concurrency,
+            ueba_baseline,
             inner_key_hex,
             ..
         } => {
             if let Some(n) = scan_concurrency {
                 max_parallel.store(n.max(1), Ordering::Relaxed);
+            }
+            if let Some(snap) = ueba_baseline {
+                crate::ueba_edge::install_if_mac_valid(snap, ueba_mac_key);
             }
             if let Some(hex_key) = inner_key_hex {
                 if let Some(k) = crate::inner_crypto::key_from_hex(&hex_key) {
@@ -308,6 +373,15 @@ async fn handle_text(
                 }
             }
             info!(target: "agent", "server welcomed agent");
+            if crate::ringbuf::pending() {
+                let flush_out = out.clone();
+                tokio::spawn(async move {
+                    flush_ring(flush_out).await;
+                });
+            }
+        }
+        ServerToAgent::UebaBaseline { snapshot } => {
+            crate::ueba_edge::install_if_mac_valid(snapshot, ueba_mac_key);
         }
         ServerToAgent::Task {
             task_id,
@@ -322,7 +396,7 @@ async fn handle_text(
                 );
                 return;
             }
-            let out_tx = out_tx.clone();
+            let out = out.clone();
             let running_c = Arc::clone(running);
             let completed_c = Arc::clone(completed);
             let max_parallel_c = Arc::clone(max_parallel);
@@ -339,7 +413,7 @@ async fn handle_text(
                     engine,
                     target,
                     params,
-                    out_tx,
+                    out,
                     running_c,
                     completed_c,
                     agent_id_c,
@@ -394,7 +468,7 @@ async fn run_task(
     engine: String,
     target: Option<String>,
     params: serde_json::Value,
-    out_tx: mpsc::Sender<AgentToServer>,
+    out: Outbound,
     running: Arc<AtomicU32>,
     completed: Arc<AtomicU64>,
     agent_id: String,
@@ -410,8 +484,8 @@ async fn run_task(
         Ok(Ok(findings)) => {
             let count = findings.len() as u32;
             for f in findings {
-                send_or_spool(
-                    &out_tx,
+                let _ = emit(
+                    &out,
                     AgentToServer::Finding {
                         agent_id: agent_id.clone(),
                         task_id: task_id.clone(),
@@ -448,14 +522,66 @@ async fn run_task(
             error: message.unwrap_or_else(|| "unknown".into()),
         }
     };
-    send_or_spool(&out_tx, done).await;
+    let _ = emit(&out, done).await;
     running.fetch_sub(1, Ordering::SeqCst);
     completed.fetch_add(1, Ordering::SeqCst);
 }
 
-async fn send_or_spool(out_tx: &mpsc::Sender<AgentToServer>, msg: AgentToServer) {
-    if out_tx.send(msg.clone()).await.is_err() {
-        let _ = crate::transport::spool::append(&crate::transport::spool::spool_path(), &msg);
+async fn emit(
+    out: &Outbound,
+    msg: AgentToServer,
+) -> Result<(), mpsc::error::SendError<AgentToServer>> {
+    let tx = if crate::ringbuf::is_critical(&msg) || matches!(msg, AgentToServer::KeepAlivePing) {
+        &out.crit
+    } else {
+        &out.bulk
+    };
+    match tx.send(msg).await {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            crate::ringbuf::push(&e.0);
+            let _ = crate::transport::spool::append(&crate::transport::spool::spool_path(), &e.0);
+            Err(e)
+        }
+    }
+}
+
+fn heartbeat_msg(
+    agent_id: String,
+    running_tasks: u32,
+    completed_tasks: u64,
+    uptime_secs: u64,
+) -> AgentToServer {
+    let rs = crate::ringbuf::stats();
+    tracing::debug!(
+        target: "agent",
+        ring_pushed = rs.pushed,
+        ring_flushed = rs.flushed,
+        ring_dropped = rs.dropped,
+        "ring buffer stats"
+    );
+    AgentToServer::Heartbeat {
+        agent_id,
+        running_tasks,
+        completed_tasks,
+        uptime_secs,
+        ring_buffer_bytes: rs.bytes,
+        ring_buffer_frames: rs.frames,
+        ueba_suppressed: crate::ringbuf::ueba_suppressed(),
+        ueba_uploaded: crate::ringbuf::ueba_uploaded(),
+    }
+}
+
+/// Drain the encrypted ring onto the live session. Critical frames skip the
+/// adaptive throttle; bulk starts at 256 KiB/s and backs off on RTT / load.
+async fn flush_ring(out: Outbound) {
+    let mut window = crate::ringbuf::FlushWindow::new();
+    while let Some((lane, msg)) = crate::ringbuf::pop_msg() {
+        let len = serde_json::to_vec(&msg).map(|v| v.len()).unwrap_or(64);
+        crate::ringbuf::throttle_wait(&mut window, len, lane).await;
+        if emit(&out, msg).await.is_err() {
+            break;
+        }
     }
 }
 

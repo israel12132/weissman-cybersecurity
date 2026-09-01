@@ -155,6 +155,47 @@ function discoverScanHubScenarios() {
 
 const UI_BUTTON_SCENARIOS = [...UI_BUTTON_SCENARIOS_BASE, ...discoverScanHubScenarios()]
 
+/**
+ * Per-engine CI bounding params, same contract as `scripts/lib/group_smoke_plan.mjs`:
+ * job_params are read live from the scan body. Auto-discovered hub pages (e.g.
+ * AttackSurfaceManagement → `asm`) otherwise POST `{engine, target, timeout:45}`
+ * with every ASM module on — crt.sh CT for example.com + 23k-prefix brute + 63
+ * ports. That misses the 45s attempt budget; resilience then widens 45→90→180s
+ * and the 180s poller gives up while the job is still `running`.
+ *
+ * Keep a real live probe (DNS + HTTP + well-known) and cut the unbounded fan-out.
+ */
+const ENGINE_CI_PARAMS = {
+  asm: {
+    ports: '80,443',
+    port_scan: true,
+    subdomain_enum: false,
+    subdomain_sources: 'passive',
+    max_subdomains: 8,
+    live_ai_discovery: false,
+    dns_intel: true,
+    dns_hardening: false,
+    dkim_probe: false,
+    rdap_intel: false,
+    ip_asn_enrichment: false,
+    http_posture: true,
+    tls_posture: false,
+    cloud_hunter: false,
+    tech_fingerprint: false,
+    shadow_it_scan: false,
+    wellknown_probe: true,
+    cleartext_http_probe: false,
+    banner_grab: false,
+    cors_probe: false,
+    sensitive_path_probe: false,
+    robots_harvest: false,
+    attack_path_correlation: true,
+    port_timeout_ms: 400,
+    http_timeout_ms: 2500,
+    max_findings: 80,
+  },
+}
+
 const UI_PLACEHOLDER_NOTES = [
   {
     source: 'frontend/src/pages/ThreatEmulation.jsx',
@@ -337,7 +378,8 @@ async function runScenario(headers, clientId, scenario) {
     return summarize(scenario, jobId, job)
   }
 
-  const body = { ...scenario.payload, client_id: clientId, timeout: 45 }
+  const ciParams = ENGINE_CI_PARAMS[scenario.payload?.engine] || {}
+  const body = { ...ciParams, ...scenario.payload, client_id: clientId, timeout: 45 }
   const queued = await retryScanIntake(
     () => api('/api/command-center/scan', {
       method: 'POST',

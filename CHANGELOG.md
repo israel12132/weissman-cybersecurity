@@ -9,6 +9,48 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Added
 
+- **Endpoint agent Core stealth + precision.** Native host observation via
+  `/proc` (Linux), `KERN_PROC` (macOS) and `NtQuerySystemInformation` /
+  `GetExtendedTcpTable` (Windows, **no ToolHelp fallback**). Encrypted 10 MiB
+  in-memory ring uses **XChaCha20-Poly1305** with a fresh 192-bit random nonce
+  per frame. Adaptive drain starts at 256 KiB/s (RTT + host load) with a
+  critical/bulk split so high/critical findings skip the UEBA throttle.
+  Edge UEBA holds a compact hour-of-week mean/stddev and uploads raw samples
+  only when `|z| > 2` or a new process appears; Welcome / UebaBaseline
+  snapshots are **HMAC-signed** with a tenant-derived key. Rolling 7-day
+  fire-path rows live in `agent_metric_baselines_global` (hour_of_week stays
+  a physical 0..167 clock). TLS is exclusive dual-leaf pin plus a sovereign
+  Root CA pin (`WEISSMAN_SERVER_CERT_SHA256` / `_BACKUP` / `WEISSMAN_SERVER_ROOT_CA_*`);
+  the OS store is never a fallback. Linux musl builds are fully statically
+  linked (`crt-static`); the installer prefers `linux-<arch>-musl`.
+
+### Fixed
+
+- **CI gitleaks history scan** uses `--log-opts="HEAD"` so `actions/checkout`
+  `fetch-depth: 0` cannot fail this PR on throwaway fixture strings that exist
+  only on unrelated origin branches. The repeating-`deadbeef`
+  `WEISSMAN_VAULT_KEY` CI fixture is allowlisted (same class as the nightly-e2e
+  hex).
+- **Yanked `chacha20 0.10.0`** (pulled by `rand 0.10.1`) bumped to **0.10.2**
+  so `cargo deny` advisories pass. README DB-box migration count synced to
+  **111**.
+- **RLS GUC cast safety** on `agent_metric_baselines_global` and
+  `agent_telemetry_errors`: policies use `public.app_current_tenant_id()`
+  instead of `current_setting(...)::bigint`, so an empty worker scope cannot
+  raise `invalid input syntax for type bigint: ""`.
+- **Telemetry Blinding lock** stays on until a healthy sample. Every skip after
+  3 consecutive failures writes `agent_anomalies` and persists the SOAR
+  finding; the 15-minute window only gates on-call paging (`last_alerted_at`).
+- **Ring HKDF + zeroize.** Per-frame XChaCha keys are HKDF-SHA256 from a
+  keyring/mlocked master IKM; frame keys and plaintext are zeroized after use.
+- **Dual-pin TLS.** Active leaf pin(s) plus a sovereign Root CA pin/PEM for
+  certificate rotation. OS store is still never a fallback.
+- **Low-Entropy Emergency Mode.** Boot waits on blocking `getrandom`, then a
+  Vault `WEISSMAN_AGENT_ENTROPY_SEED` if CSPRNG is dead; SOC gets a critical
+  finding. No seed and no CSPRNG still fails closed.
+- **CI smoke owner** — `WEISSMAN_MASTER_BOOTSTRAP_EMAIL` (`ci-smoke`) is
+  promoted to `is_superadmin` alongside `WEISSMAN_ADMIN_EMAIL`, so
+  `POST /api/clients` is not 403 `owner_required`.
 - **Supreme Brain Part 6 — attack-path inference × FAIR blast radius × pentest RAG.**
   Dijkstra (BinaryHeap milli-cost) over live `risk_graph_nodes` / `risk_graph_edges`
   with CISA KEV / EPSS / CVSS / agent weights, what-if (block SMB/445), choke-points,
@@ -18,7 +60,6 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
   New fusion engine `supreme_path_fair_rag`, APIs
   `GET /api/supreme-brain/:client_id`, `POST /api/attack-paths/:client_id/what-if`,
   `GET /api/pentest-memory/stats`, Command Center route `/supreme-brain`.
-
 - **Dynamic compliance framework catalog.** `compliance_frameworks` is now the
   authoritative list of in-scope frameworks (migration
   `20260729120000_compliance_frameworks_dynamic_and_onboarding.sql`, mirrored to
@@ -59,6 +100,30 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Fixed
 
+- **Telemetry Blinding.** Three consecutive `sampling_failed` ticks (blocked
+  NtQuery / empty `/proc`) still skip z-score INSERT, but now increment
+  `agent_telemetry_errors` and persist a **critical** finding titled
+  `Telemetry Blinding Attack Detected` (SOAR `finding_persisted`). A healthy
+  sample resets the streak. Re-alert cooldown is 15 minutes.
+- **RDRAND carry-flag fail-closed.** XChaCha nonces require 16+ bytes from
+  CF-checked `rdrand`+`setc` (10 retries, reject 0 / `u64::MAX`) and/or
+  `getrandom(GRND_NONBLOCK)`. PID/time is not a standalone CSPRNG; the agent
+  refuses to start if both sources are empty.
+- **Gateway certificate pin is exclusive.** A pin mismatch never falls through
+  to the OS trust store (SSL-inspection MITM blocked). Bootstrap uses webpki
+  public roots only, then freezes the leaf SHA-256.
+- **UEBA empty-sample Alert Storm.** A blocked `NtQuerySystemInformation` (or
+  empty `/proc` / `KERN_PROC` table) no longer uploads `process_count = 0`.
+  The agent sets `sampling_failed` + `sample_error`; `ueba_detector` skips the
+  tick (no `agent_metric_samples` INSERT, no z-score). Belt-and-suspenders:
+  `process_count <= 0` from older agents is also dropped, so a live baseline
+  cannot produce `Z < -6` / isolate_host from a syscall blip.
+- **XChaCha20 nonce entropy starvation.** Ring nonces are mixed from CPU RDRAND
+  / AArch64 RNDR, Linux `getrandom(GRND_NONBLOCK)`, and SHA-256(seq ‖ nanos ‖
+  pid). The agent no longer blocks on a cold `/dev/urandom` pool.
+- **rustls native CA fault tolerance.** Host trust-store load uses
+  `RootCertStore::add_parsable_certificates`; malformed / rustls-rejected CAs
+  (expired internals, SHA-1) are skipped and webpki public roots still connect.
 - **SOAR playbook E2E verifier is hermetic.** `scripts/verify_soar_playbook_e2e.mjs`
   fired against a hard-coded `tenant_id: 1` / `client_id: 1`, violating the
   `soar_action_executions.client_id → clients(id)` foreign key on any stack where

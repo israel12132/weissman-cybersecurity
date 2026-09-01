@@ -338,6 +338,10 @@ async fn api_agents_enroll(
         kill_hmac_key: crate::agent_kill::derived_kill_key(&agent_uuid.to_string()),
         ws_path: "/ws/agent".into(),
         server_message: Some(format!("welcome host={}", body.hostname)),
+        ueba_mac_key: crate::ueba_snapshot_mac::agent_mac_key_hex(
+            consumed.tenant_id,
+            &agent_uuid.to_string(),
+        ),
     };
     (StatusCode::OK, Json(serde_json::to_value(&resp).unwrap_or(json!({})))).into_response()
 }
@@ -414,6 +418,10 @@ async fn api_agents_session(
             "client_id": client_id,
             "session_jwt": session_jwt,
             "ws_path": "/ws/agent",
+            "ueba_mac_key": crate::ueba_snapshot_mac::agent_mac_key_hex(
+                tenant_id,
+                &agent_uuid.to_string(),
+            ),
         })),
     )
         .into_response()
@@ -450,11 +458,13 @@ async fn api_agents_status(
         }
         Err(_) => Vec::new(),
     };
+    let telem_map = state.endpoint_agents.telemetry_snapshot().await;
     let out: Vec<Value> = rows
         .into_iter()
         .map(|r| {
             let uuid: String = r.try_get("agent_uuid").unwrap_or_default();
             let is_online = online.contains(&uuid);
+            let telem = telem_map.get(&uuid).cloned().unwrap_or_default();
             json!({
                 "agent_id": uuid,
                 "client_id": r.try_get::<i64, _>("client_id").unwrap_or(0),
@@ -468,6 +478,10 @@ async fn api_agents_status(
                 "last_seen_at": r.try_get::<chrono::DateTime<chrono::Utc>, _>("last_seen_at").ok().map(|d| d.to_rfc3339()),
                 "status": r.try_get::<String, _>("status").unwrap_or_default(),
                 "online": is_online,
+                "ring_buffer_bytes": telem.ring_buffer_bytes,
+                "ring_buffer_frames": telem.ring_buffer_frames,
+                "ueba_suppressed": telem.ueba_suppressed,
+                "ueba_uploaded": telem.ueba_uploaded,
             })
         })
         .collect();
@@ -747,11 +761,23 @@ async fn ws_agent(
                                         let _ = crate::endpoint_agents::mark_seen(app_pool.as_ref(), tenant_id, &u, "online").await;
                                         registry.notify_status(&aid, tenant_id, "online").await;
                                     }
+                                    let ueba_baseline =
+                                        match crate::ueba_detector::compact_snapshot_for_agent(
+                                            app_pool.as_ref(),
+                                            tenant_id,
+                                            &aid,
+                                        )
+                                        .await
+                                        {
+                                            Ok(s) if !s.metrics.is_empty() => Some(s),
+                                            _ => None,
+                                        };
                                     let key = crate::elite_hardening::wss_inner::generate_key();
                                     inner_key = Some(key);
                                     let welcome = crate::endpoint_agents::ServerToAgent::Welcome {
                                         scan_concurrency: Some(8),
                                         heartbeat_secs: Some(20),
+                                        ueba_baseline,
                                         inner_key_hex: Some(hex::encode(key)),
                                     };
                                     let line = serde_json::to_string(&welcome).unwrap_or_default();
@@ -774,6 +800,13 @@ async fn ws_agent(
                                             let _ = crate::endpoint_agents::mark_seen(app_pool.as_ref(), tenant_id, &u, "online").await;
                                             registry.notify_status(aid, tenant_id, "online").await;
                                         }
+                                        let telem = crate::endpoint_agents::AgentLiveTelemetry {
+                                            ring_buffer_bytes: v.get("ring_buffer_bytes").and_then(Value::as_u64).unwrap_or(0) as u32,
+                                            ring_buffer_frames: v.get("ring_buffer_frames").and_then(Value::as_u64).unwrap_or(0) as u32,
+                                            ueba_suppressed: v.get("ueba_suppressed").and_then(Value::as_u64).unwrap_or(0),
+                                            ueba_uploaded: v.get("ueba_uploaded").and_then(Value::as_u64).unwrap_or(0),
+                                        };
+                                        registry.record_telemetry(aid, telem).await;
                                     }
                                 }
                                 "finding" => {
@@ -796,6 +829,23 @@ async fn ws_agent(
                                             task_id,
                                         )
                                         .await;
+                                        if engine == "ueba_baseline" {
+                                            if let Some(aid) = agent_uuid.as_deref() {
+                                                if let Ok(snap) = crate::ueba_detector::compact_snapshot_for_agent(
+                                                    app_pool.as_ref(),
+                                                    tenant_id,
+                                                    aid,
+                                                )
+                                                .await
+                                                {
+                                                    let _ = tx_to_agent
+                                                        .send(crate::endpoint_agents::ServerToAgent::UebaBaseline {
+                                                            snapshot: snap,
+                                                        })
+                                                        .await;
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                                 "task_done" | "task_error" => {

@@ -37,7 +37,12 @@ install_one() {
   elif command -v "rustup" >/dev/null 2>&1; then
     echo "[weissman] cross-compiling weissman-agent for ${rust_target}..."
     rustup target add "$rust_target" >/dev/null 2>&1 || true
-    cargo build -p weissman-agent --release --target "$rust_target"
+    extra_flags=()
+    if [[ "$rust_target" == *"-linux-musl" ]]; then
+      # Fully static: no glibc version pin on old workstations.
+      extra_flags=(-C target-feature=+crt-static)
+    fi
+    RUSTFLAGS="${RUSTFLAGS:-} ${extra_flags[*]}" cargo build -p weissman-agent --release --target "$rust_target"
     cp "target/${rust_target}/release/weissman-agent" "$dest"
   else
     # Do NOT fall back to copying the host binary here: that would publish a

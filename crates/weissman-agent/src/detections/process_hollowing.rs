@@ -2,7 +2,7 @@
 //! lets us read it.
 //!
 //! Heuristics implemented:
-//!   1. Enumerate every process via `sysinfo`.
+//!   1. Enumerate every process via native kernel tables (`/proc`, KERN_PROC, NTAPI).
 //!   2. For each process where we can read the on-disk image, hash the first 4 KiB (PE header /
 //!      ELF header) — that's enough to detect hollowing where the file on disk is replaced or
 //!      where two processes claim the same binary path but have different contents.
@@ -14,35 +14,27 @@
 //! correct evidence-based behaviour rather than fabricated.
 
 use super::finding;
+use crate::hostobs;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use sysinfo::{Pid, ProcessRefreshKind, System, UpdateKind};
 
 pub async fn run(engine: &str) -> anyhow::Result<Vec<Value>> {
     let mut findings: Vec<Value> = Vec::new();
-
-    let mut sys = System::new();
-    // `ProcessRefreshKind::new()` is "collect NOTHING optional" (sysinfo 0.30: every field
-    // defaults to false), and the Linux backend gates the /proc/<pid>/exe read on it. So
-    // `proc.exe()` returned None for every process and the loop below skipped all of them —
-    // this detection could never produce a finding, on any host, ever.
-    sys.refresh_processes_specifics(ProcessRefreshKind::new().with_exe(UpdateKind::Always));
+    let procs = hostobs::list_processes();
 
     // First pass: hash on-disk images. Group by absolute path to detect mismatched siblings.
     let mut hashes: HashMap<PathBuf, String> = HashMap::new();
-    let mut missing_images: Vec<(Pid, String, u64)> = Vec::new();
+    let mut missing_images: Vec<(u32, String, u64)> = Vec::new();
 
-    for (pid, proc) in sys.processes() {
-        let path = match proc.exe() {
-            Some(p) if !p.as_os_str().is_empty() => p,
-            _ => continue, // kernel thread / no image
-        };
-        let abs = path.to_path_buf();
-        let proc_name = proc.name().to_string();
+    for proc in procs {
+        if proc.exe.is_empty() {
+            continue; // kernel thread / no image
+        }
+        let abs = PathBuf::from(&proc.exe);
         if !abs.exists() {
-            missing_images.push((*pid, proc_name, proc.virtual_memory()));
+            missing_images.push((proc.pid, proc.name, proc.vmem_bytes));
             continue;
         }
         if hashes.contains_key(&abs) {
@@ -68,7 +60,7 @@ pub async fn run(engine: &str) -> anyhow::Result<Vec<Value>> {
 
     for (pid, name, vmem) in missing_images {
         let mut extras = serde_json::Map::new();
-        extras.insert("pid".into(), json!(usize::from(pid)));
+        extras.insert("pid".into(), json!(pid));
         extras.insert("process_name".into(), Value::String(name.clone()));
         extras.insert("virtual_memory_bytes".into(), json!(vmem));
         findings.push(finding(

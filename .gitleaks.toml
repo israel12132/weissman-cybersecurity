@@ -65,6 +65,8 @@ regexes = [
     '''0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef''',
     '''cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe''',
     '''a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00''',
+    # Throwaway 64-hex WEISSMAN_VAULT_KEY fixture in ci.yml rust-audit-lint-test
+    # env (repeating deadbeef). Same class as the nightly-e2e hex above.
     '''deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef''',
     # SHA-pinned actions/setup-node@v7.0.0 (40-hex commit). Git-history mode
     # scores the added pin as a generic key; the working-tree scan does not.

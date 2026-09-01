@@ -536,3 +536,96 @@ async fn no_role_level_tenant_guc_default_survives() {
          20260811000100_reset_role_tenant_guc_defaults."
     );
 }
+
+/// Source-level twin of `no_rls_policy_casts_the_raw_tenant_guc`.
+///
+/// The live `pg_policy` scan only sees what a migrated database actually installed. A new
+/// table whose `CREATE POLICY` copies the pre-20260811 `::bigint` form is invisible until
+/// CI migrates — and that is exactly how `agent_metric_baselines_global` /
+/// `agent_telemetry_errors` escaped review. Anything dated after the rewrite migration
+/// must use `public.app_current_tenant_id()` in the file itself.
+#[test]
+fn migrations_after_cast_safety_do_not_reintroduce_raw_guc_bigint_cast() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+    let cutoff = "20260811000000";
+    // Split so this test file does not match its own documentation of the defect.
+    let needle = concat!("current_setting('app.current_tenant_id', true)", "::bigint");
+    let mut offenders = Vec::new();
+    let mut saw_cicd_followon = false;
+    let mut saw_ot_followon = false;
+    for entry in std::fs::read_dir(&dir).expect("weissman-db/migrations") {
+        let path = entry.expect("dirent").path();
+        let name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .to_string();
+        if !name.ends_with(".sql") {
+            continue;
+        }
+        if name.starts_with("20260827120600_") {
+            saw_cicd_followon = true;
+        }
+        if name.starts_with("20260831121000_") {
+            saw_ot_followon = true;
+        }
+        let stamp = name.split('_').next().unwrap_or("");
+        if stamp <= cutoff {
+            continue;
+        }
+        // Already-applied; follow-ons restate the policy with app_current_tenant_id().
+        if name.starts_with("20260827120000_") || name.starts_with("20260827160000_") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap_or_default();
+        let executable = strip_sql_comments(&text);
+        if executable.contains(needle) {
+            offenders.push(name);
+        }
+    }
+    assert!(
+        saw_cicd_followon,
+        "20260827120600_cicd_scan_events_rls_cast_safe.sql must exist"
+    );
+    assert!(
+        saw_ot_followon,
+        "20260831121000_ot_ics_rls_app_current_tenant_id.sql must exist"
+    );
+    assert!(
+        offenders.is_empty(),
+        "migrations after {cutoff} reintroduced current_setting(...)::bigint \
+         (empty worker GUC raises). Use public.app_current_tenant_id(): {offenders:?}"
+    );
+}
+
+fn strip_sql_comments(sql: &str) -> String {
+    let b = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len());
+    let mut i = 0;
+    let mut in_block = false;
+    while i < b.len() {
+        if in_block {
+            if b[i] == b'*' && i + 1 < b.len() && b[i + 1] == b'/' {
+                in_block = false;
+                i += 2;
+                continue;
+            }
+            i += 1;
+            continue;
+        }
+        if b[i] == b'-' && i + 1 < b.len() && b[i + 1] == b'-' {
+            while i < b.len() && b[i] != b'\n' {
+                i += 1;
+            }
+            continue;
+        }
+        if b[i] == b'/' && i + 1 < b.len() && b[i + 1] == b'*' {
+            in_block = true;
+            i += 2;
+            continue;
+        }
+        out.push(b[i] as char);
+        i += 1;
+    }
+    out
+}

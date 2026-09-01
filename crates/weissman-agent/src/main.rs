@@ -7,13 +7,17 @@
 //!   4. for each task: spawn local detection, stream `finding` messages, then `task_done`.
 //!   5. reconnect with exponential backoff on disconnect.
 //!
-//! No persistent storage; all state in memory.
+//! Identity is persisted; telemetry ring and UEBA snapshot live in memory only.
 
 mod detections;
 mod hardening;
+mod hostobs;
 mod inner_crypto;
 mod protocol;
+mod ringbuf;
 mod transport;
+mod ueba_edge;
+mod ueba_mac;
 
 use clap::Parser;
 use std::time::Duration;
@@ -89,14 +93,21 @@ async fn main() -> anyhow::Result<()> {
                 target: "agent", agent_id = %saved.agent_id, state = %state_path.display(),
                 "resuming persisted identity"
             );
-            let jwt = transport::enrollment::renew_session(
+            if !saved.server_cert_sha256.is_empty() {
+                transport::tls::set_tofu_pin_hex(&saved.server_cert_sha256);
+            }
+            let tokens = transport::enrollment::renew_session(
                 &cli.server_url,
                 &saved.agent_id,
                 &saved.agent_secret,
                 env!("CARGO_PKG_VERSION"),
             )
             .await?;
-            saved.into_enrollment(jwt)
+            let mut enrollment = saved.into_enrollment(tokens.session_jwt);
+            if !tokens.ueba_mac_key.is_empty() {
+                enrollment.ueba_mac_key = tokens.ueba_mac_key;
+            }
+            enrollment
         }
         None => {
             if cli.enrollment_token.trim().is_empty() {
@@ -135,9 +146,48 @@ async fn main() -> anyhow::Result<()> {
                      enrollment token has already been consumed"
                 );
             }
+            transport::tls::persist_observed_pin();
             fresh
         }
     };
+
+    if let Some(mut st) = transport::state::load(&state_path) {
+        let mut dirty = false;
+        if st.ueba_mac_key != enrollment.ueba_mac_key {
+            st.ueba_mac_key = enrollment.ueba_mac_key.clone();
+            dirty = true;
+        }
+        if st.kill_hmac_key != enrollment.kill_hmac_key && !enrollment.kill_hmac_key.is_empty() {
+            st.kill_hmac_key = enrollment.kill_hmac_key.clone();
+            dirty = true;
+        }
+        if dirty {
+            let _ = transport::state::save(&state_path, &st);
+        }
+    }
+
+    // Encrypted 10 MiB ring is keyed from the renewal secret (HKDF per-frame,
+    // master in keyring/mlock). A dump of ciphertext without the IKM is useless.
+    ringbuf::init(&enrollment.agent_secret)?;
+    if ringbuf::in_entropy_emergency() {
+        error!(
+            target: "agent",
+            "Low-Entropy Emergency Mode: host CSPRNG is dead; using WEISSMAN_AGENT_ENTROPY_SEED"
+        );
+        ringbuf::push(&protocol::AgentToServer::Finding {
+            agent_id: enrollment.agent_id.clone(),
+            task_id: "boot".into(),
+            engine: "entropy_emergency".into(),
+            finding: serde_json::json!({
+                "title": "Host CSPRNG unavailable — Low-Entropy Emergency Mode",
+                "severity": "critical",
+                "description": "RDRAND/RNDR CF-check and getrandom failed at boot. The agent used a Vault-injected WEISSMAN_AGENT_ENTROPY_SEED so it could start instead of crash-looping. Treat this host as degraded until hardware/OS entropy is restored.",
+                "mitre_attack": "T1562.001",
+                "kind": "entropy_emergency",
+                "source": "agent",
+            }),
+        });
+    }
 
     if !cli.enroll_only {
         install_self_protect_signals();
@@ -183,7 +233,16 @@ async fn main() -> anyhow::Result<()> {
             )
             .await
             {
-                Ok(jwt) => enrollment.session_jwt = jwt,
+                Ok(tokens) => {
+                    enrollment.session_jwt = tokens.session_jwt;
+                    if !tokens.ueba_mac_key.is_empty() {
+                        enrollment.ueba_mac_key = tokens.ueba_mac_key;
+                    }
+                    if let Some(mut st) = transport::state::load(&state_path) {
+                        st.ueba_mac_key = enrollment.ueba_mac_key.clone();
+                        let _ = transport::state::save(&state_path, &st);
+                    }
+                }
                 Err(e) => warn!(
                     target: "agent", error = %e,
                     "session renewal failed; reusing the current token for this attempt"

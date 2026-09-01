@@ -28,9 +28,11 @@ case "$ARCH" in
     aarch64|arm64) ARCH=aarch64 ;;
     *) echo "[weissman-agent] unsupported arch '$ARCH'" >&2; exit 1 ;;
 esac
+# Linux prefers the fully-static musl binary (no glibc version pin) and falls
+# back to the gnu build when musl is not published for this arch.
 case "$OS" in
-    linux) PLATFORM="linux-${ARCH}-gnu" ;;
-    darwin) PLATFORM="macos-${ARCH}" ;;
+    linux) CANDIDATES=("linux-${ARCH}-musl" "linux-${ARCH}-gnu") ;;
+    darwin) CANDIDATES=("macos-${ARCH}") ;;
     *) echo "[weissman-agent] unsupported OS '$OS'" >&2; exit 1 ;;
 esac
 
@@ -39,16 +41,24 @@ BIN_DIR="${INSTALL_DIR}/agent"
 BIN_PATH="${BIN_DIR}/weissman-agent"
 mkdir -p "${BIN_DIR}"
 
-BASE_URL="${WEISSMAN_SERVER%/}/install/binaries/${PLATFORM}"
-echo "[weissman-agent] downloading ${BASE_URL}/weissman-agent"
-if ! curl -sSL --fail "${BASE_URL}/weissman-agent" -o "${BIN_PATH}.tmp"; then
-    echo "[weissman-agent] no agent binary published for platform '${PLATFORM}'." >&2
+PLATFORM=""
+for cand in "${CANDIDATES[@]}"; do
+    BASE_URL="${WEISSMAN_SERVER%/}/install/binaries/${cand}"
+    echo "[weissman-agent] trying ${BASE_URL}/weissman-agent"
+    if curl -sSL --fail "${BASE_URL}/weissman-agent" -o "${BIN_PATH}.tmp"; then
+        PLATFORM="$cand"
+        break
+    fi
+    rm -f "${BIN_PATH}.tmp"
+done
+if [ -z "${PLATFORM}" ]; then
+    echo "[weissman-agent] no agent binary published for linux-${ARCH}-musl or linux-${ARCH}-gnu / macos." >&2
     echo "  The server image ships the binary for its own architecture only. To offer this" >&2
     echo "  platform, build it on the server (scripts/package_agent_binaries.sh cross-compiles" >&2
-    echo "  all Linux targets) and place it at \$WEISSMAN_AGENT_BIN_DIR/${PLATFORM}/weissman-agent." >&2
-    rm -f "${BIN_PATH}.tmp"
+    echo "  all Linux targets) and place it at \$WEISSMAN_AGENT_BIN_DIR/<platform>/weissman-agent." >&2
     exit 4
 fi
+BASE_URL="${WEISSMAN_SERVER%/}/install/binaries/${PLATFORM}"
 EXPECTED_SHA=$(curl -sSL --fail "${BASE_URL}/weissman-agent.sha256" | awk '{print $1}')
 ACTUAL_SHA=$(sha256sum "${BIN_PATH}.tmp" 2>/dev/null | awk '{print $1}')
 if [ -z "${ACTUAL_SHA}" ]; then

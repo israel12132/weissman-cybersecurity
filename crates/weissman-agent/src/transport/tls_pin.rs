@@ -10,10 +10,18 @@ use std::time::Duration;
 
 #[must_use]
 pub fn pins_from_env() -> Vec<String> {
-    std::env::var("WEISSMAN_AGENT_TLS_PIN_SHA256")
-        .ok()
-        .unwrap_or_default()
-        .split([',', ' ', '\n'])
+    let mut raw = std::env::var("WEISSMAN_AGENT_TLS_PIN_SHA256").unwrap_or_default();
+    // Dual-pin env used by `transport::tls` (active leaf + backup leaf).
+    for key in [
+        "WEISSMAN_SERVER_CERT_SHA256",
+        "WEISSMAN_SERVER_CERT_SHA256_BACKUP",
+    ] {
+        if let Ok(v) = std::env::var(key) {
+            raw.push(' ');
+            raw.push_str(&v);
+        }
+    }
+    raw.split([',', ' ', '\n'])
         .map(|s| s.trim().to_ascii_lowercase())
         .filter(|s| !s.is_empty())
         .map(|s| s.strip_prefix("sha256/").unwrap_or(&s).replace(':', ""))
@@ -167,8 +175,25 @@ mod tests {
     }
 
     #[test]
+    fn pinned_client_config_builds_for_a_leaf_pin() {
+        let hex = sha256_hex(b"leaf-cert-bytes");
+        assert!(pinned_client_config(vec![hex]).is_ok());
+    }
+
+    #[test]
+    fn http_client_builds_for_plain_http() {
+        std::env::remove_var("WEISSMAN_AGENT_TLS_PIN_SHA256");
+        std::env::remove_var("WEISSMAN_SERVER_CERT_SHA256");
+        std::env::remove_var("WEISSMAN_SERVER_CERT_SHA256_BACKUP");
+        std::env::remove_var("WEISSMAN_AGENT_ALLOW_UNPINNED");
+        assert!(http_client("http://127.0.0.1:1", Duration::from_secs(1)).is_ok());
+    }
+
+    #[test]
     fn https_without_pin_is_refused() {
         std::env::remove_var("WEISSMAN_AGENT_TLS_PIN_SHA256");
+        std::env::remove_var("WEISSMAN_SERVER_CERT_SHA256");
+        std::env::remove_var("WEISSMAN_SERVER_CERT_SHA256_BACKUP");
         std::env::remove_var("WEISSMAN_AGENT_ALLOW_UNPINNED");
         assert!(require_pin_or_dev("https://api.example").is_err());
         assert!(require_pin_or_dev("http://127.0.0.1:8000").is_ok());

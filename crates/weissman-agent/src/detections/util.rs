@@ -1,6 +1,6 @@
 //! Shared helpers for platform command execution and process enumeration.
 
-use sysinfo::{ProcessRefreshKind, System};
+use crate::hostobs;
 
 pub async fn run_cmd(program: &str, args: &[&str]) -> Option<String> {
     let output = tokio::process::Command::new(program)
@@ -30,11 +30,9 @@ pub async fn run_cmd_lossy(program: &str, args: &[&str]) -> Option<String> {
 }
 
 pub fn process_names_lower() -> Vec<String> {
-    let mut sys = System::new();
-    sys.refresh_processes_specifics(ProcessRefreshKind::new());
-    sys.processes()
-        .values()
-        .map(|p| p.name().to_ascii_lowercase())
+    hostobs::list_processes_light()
+        .into_iter()
+        .map(|p| p.basename_lower())
         .collect()
 }
 

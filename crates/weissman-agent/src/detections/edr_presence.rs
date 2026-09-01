@@ -4,8 +4,8 @@
 //! is supposed to have EDR is missing the agent, the absence itself is a critical finding.
 
 use super::finding;
+use crate::hostobs;
 use serde_json::Value;
-use sysinfo::{ProcessRefreshKind, System};
 
 const KNOWN_EDR_PROCESSES: &[(&str, &str)] = &[
     ("MsMpEng", "Microsoft Defender"),
@@ -29,11 +29,10 @@ const KNOWN_EDR_PROCESSES: &[(&str, &str)] = &[
 ];
 
 pub async fn run(engine: &str) -> anyhow::Result<Vec<Value>> {
-    let mut sys = System::new();
-    sys.refresh_processes_specifics(ProcessRefreshKind::new());
+    let procs = hostobs::list_processes_light();
     let mut detected: Vec<(&'static str, &'static str)> = Vec::new();
-    for proc in sys.processes().values() {
-        let name = proc.name().to_ascii_lowercase();
+    for proc in &procs {
+        let name = proc.basename_lower();
         for (needle, vendor) in KNOWN_EDR_PROCESSES {
             if name.contains(&needle.to_ascii_lowercase()) {
                 detected.push((needle, vendor));

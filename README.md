@@ -154,7 +154,7 @@ with the raw 3.1 JSON at <code>/api/openapi.json</code>.
                                            ▼
                                   ┌────────────────────────────────┐
                                   │ PostgreSQL 16 + pgvector       │
-                                  │  • 141 migrations              │
+                                  │  • 144 migrations              │
                                   │  • RLS per-tenant on every     │
                                   │    multi-tenant table          │
                                   │  • _sqlx_migrations w/ no-tx   │
