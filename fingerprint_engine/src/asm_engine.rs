@@ -2009,6 +2009,7 @@ pub async fn run_asm_result_ctx(
             } else {
                 custom_extra
             };
+            let wordlist = crate::live_knowledge_bus::merge_subdomain_wordlist(&host, wordlist);
             let budget = weissman_engines::discovery_corpus::discovery_probe_budget();
             let wordlist = if wordlist.len() > budget {
                 wordlist.into_iter().take(budget).collect()

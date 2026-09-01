@@ -1530,6 +1530,7 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>, job_control_pool: Arc<
     // only ever surfaces as an opaque redirect-mismatch at the IdP.
     crate::oidc_auth::warn_if_sso_base_url_unusable();
     crate::http::dashmap_gc::spawn_eviction_loop();
+    crate::sovereign_operator::forge::spawn_forge_janitor();
     crate::nl_query::spawn_audit_worker(app_pool.clone());
     crate::endpoint_agents::spawn_pending_task_pusher(
         app_pool.clone(),
@@ -1693,6 +1694,10 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>, job_control_pool: Arc<
             app_pool.clone(),
             state.telemetry_broadcast_tx.clone(),
         );
+        crate::sovereign_operator::hourly::spawn_hourly_loop(
+            app_pool.clone(),
+            state.telemetry_broadcast_tx.clone(),
+        );
         crate::predictive_analyzer::spawn_security_events_llm_loop(
             app_pool.clone(),
             state.telemetry_broadcast_tx.clone(),
@@ -1843,6 +1848,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         ))
         .layer(middleware::from_fn(
             crate::http::ceo_rbac::ceo_rbac_middleware,
+        ))
+        .layer(middleware::from_fn(
+            crate::sovereign_operator::sovereign_operator_rbac_middleware,
         ))
         .layer(middleware::from_fn(crate::rbac::mutation_rbac_middleware))
         .layer(middleware::from_fn(

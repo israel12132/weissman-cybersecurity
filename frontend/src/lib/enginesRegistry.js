@@ -288,7 +288,7 @@ export const ENGINES_REGISTRY = [
     label: 'SCADA / ICS',
     group: 'ot',
     mitre: 'T1692.001',
-    description: 'Modbus, DNP3, IEC 61850 protocol fuzzing and unauthorized command detection',
+    description: 'Passive fingerprint of Modbus, DNP3, IEC 61850, BACnet, OPC-UA, EtherNet/IP, and S7 on client scope — SafeRead only',
     requiresTarget: true,
   },
   {
@@ -1734,7 +1734,7 @@ export const ENGINES_REGISTRY = [
     label: 'Modbus TCP Exploitation',
     group: 'ot',
     mitre: 'T0836',
-    description: 'Modbus TCP/RTU attack emulation: unauthenticated register read/write, coil manipulation, forced exception injection, broadcast command flooding, function code enumeration',
+    description: 'Modbus TCP/RTU SafeRead: unauthenticated register read and device identification. Writes, coil force, and broadcast floods are structurally blocked.',
     requiresTarget: true,
   },
   {
@@ -1742,7 +1742,7 @@ export const ENGINES_REGISTRY = [
     label: 'DNP3 Protocol Attack',
     group: 'ot',
     mitre: 'T1692.001',
-    description: 'DNP3 attack emulation: unsolicited response injection, application layer auth bypass, master station spoofing, trip/close relay commands, data integrity attack via replay',
+    description: 'IEEE 1815 DNP3 SafeRead assessment: CRC-validated link-status, Direct Operate/restart/file-transfer structurally blocked, IIN hardware-trouble classification',
     requiresTarget: true,
   },
   {
@@ -1750,7 +1750,7 @@ export const ENGINES_REGISTRY = [
     label: 'IEC 61850 GOOSE / SV Spoofing',
     group: 'ot',
     mitre: 'T1692.002',
-    description: 'IEC 61850 protocol exploitation: GOOSE message injection and spoofing, sampled value (SV) replay, MMS service enumeration, logical node manipulation, substation protection relay bypass',
+    description: 'IEC 61850 MMS/GOOSE/SV SafeRead: TPKT+BER depth-capped parser, GOOSE inject and MMS write blocked, SCL integrity hash, Station Bus isolation recommendation',
     requiresTarget: true,
   },
   {
@@ -2716,7 +2716,7 @@ export const ENGINES_REGISTRY = [
     label: 'Modbus Protocol Attack',
     group: 'ot',
     mitre: 'T0836',
-    description: 'Modbus industrial protocol exploitation: function code enumeration, coil/register read/write, device ID spoofing, Modbus TCP session hijacking, broadcast flooding, unauthorized PLC command injection, process value manipulation',
+    description: 'Modbus/TCP SafeRead: nom MBAP parser, FC03 holding-register read, writes and coil force structurally blocked, unit-ID gateway-hopping guard',
     requiresTarget: true,
   },
   {
@@ -4597,8 +4597,24 @@ export const ENGINES_REGISTRY = [
     description: 'RADIUS/NAC misconfiguration and bypass surface',
     requiresTarget: true,
   },
+    {
+    id: 'ot_passive_active_safety',
+    label: 'OT Passive-Active Safety Interlock',
+    group: 'ot',
+    mitre: 'T0836',
+    description: 'Binary-safe OT scanner: nom parsers for Modbus/S7/DNP3/IEC 61850, read-only ROE, max 2 connections per PLC, Direct Operate and CPU-stop structurally blocked, SOAR isolate_host recommendation',
+    requiresTarget: true,
+  },
   {
-    id: 'identity_attack_chain',
+    id: 'ot_crown_jewel_path',
+    label: 'OT Crown-Jewel Attack Path',
+    group: 'ot',
+    mitre: 'T0888',
+    description: 'Fuses live OT protocol confirmations with FAIR dollar-at-risk, CISA KEV, and SOAR isolate_host targeting rogue masters — not the controller itself',
+    requiresTarget: true,
+  },
+    {
+        id: 'identity_attack_chain',
     label: 'Identity Attack Chain',
     group: 'crypto',
     mitre: 'T1078',

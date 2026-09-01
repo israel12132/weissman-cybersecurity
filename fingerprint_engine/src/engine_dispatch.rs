@@ -130,12 +130,83 @@ pub use engine_dispatch_agent::{
     is_agent_required_engine, run_agent_required_engine, AGENT_REQUIRED_ENGINES,
 };
 
+/// Apply owner/tuner aggression knobs from free-form `job_params` onto stealth.
+pub fn apply_job_params_stealth(ctx: &mut EngineRunContext) {
+    let p = &ctx.job_params;
+    let ghost = p
+        .get("force_ghost_network")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+        || p.get("ghost_network")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+        || p.get("stealth_mode")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+    if ghost {
+        apply_ghost_escalation(&mut ctx.stealth);
+    }
+    if let Some(s) = ctx.stealth.as_mut() {
+        if let Some(n) = p.get("jitter_min_ms").and_then(serde_json::Value::as_u64) {
+            s.jitter_min_ms = n;
+        }
+        if let Some(n) = p.get("jitter_max_ms").and_then(serde_json::Value::as_u64) {
+            s.jitter_max_ms = n;
+        }
+        if p.get("identity_morphing")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+        {
+            s.identity_morphing = true;
+        }
+    }
+}
+
 pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -> EngineResult {
     // Diagnostic breadcrumb: emitted at INFO (captured in the worker log dump) immediately before
     // an engine runs. If an engine aborts the process (e.g. a stack overflow), the LAST such line
     // in the worker log names the culprit engine — the only reliable pinpoint for a fatal abort,
     // which no panic hook can catch.
     tracing::info!(target: "engine_exec", engine = %engine_id, "run_engine begin");
+    let mut ctx_live = ctx.clone();
+    let slice = match (ctx.app_pool.as_ref(), ctx.tenant_id) {
+        (Some(pool), Some(tid)) if tid > 0 => {
+            crate::sovereign_operator::memory::hydrate(pool.as_ref(), tid, engine_id, target).await
+        }
+        _ => crate::live_knowledge_bus::LiveSlice::default(),
+    };
+    crate::live_knowledge_bus::prepend_into_ctx(&mut ctx_live, &slice);
+    crate::sovereign_operator::log_stream::emit_phase(
+        &ctx_live,
+        "entered",
+        engine_id,
+        target,
+        json!({
+            "live_knowledge": {
+                "from_memory": slice.from_memory,
+                "paths": slice.paths.len(),
+                "hosts": slice.hosts.len(),
+                "payloads": slice.payloads.len(),
+                "degraded_static": slice.degraded_static,
+            }
+        }),
+    );
+    let result =
+        crate::live_knowledge_bus::scope(slice, run_engine_inner(engine_id, target, &ctx_live))
+            .await;
+    crate::sovereign_operator::memory::ingest_run(
+        ctx.app_pool.clone(),
+        ctx.tenant_id.unwrap_or(0),
+        ctx.client_id,
+        engine_id,
+        target,
+        &result,
+    );
+    crate::sovereign_operator::log_stream::finish_run(&ctx_live, engine_id, target, &result);
+    result
+}
+
+async fn run_engine_inner(engine_id: &str, target: &str, ctx: &EngineRunContext) -> EngineResult {
     let _oast_guard = {
         let listener = ctx.oast_listener_url.as_deref().unwrap_or("").trim();
         let domain = ctx.oast_domain.as_deref().unwrap_or("").trim();
@@ -217,6 +288,13 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
                 ));
             }
         }
+        crate::sovereign_operator::log_stream::emit_phase(
+            ctx,
+            "probe",
+            canonical,
+            target,
+            json!({ "path": "critical_infra" }),
+        );
         let mut result = crate::critical_infra::dispatch(canonical, target, &ctx).await;
         for f in &mut result.findings {
             if let Some(obj) = f.as_object_mut() {
@@ -245,9 +323,20 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
             )
             .await;
             ctx.memory_path_ids = winners.iter().map(|w| w.id).collect();
-            ctx.memory_payloads = winners.into_iter().map(|w| w.payload).collect();
+            let winner_payloads: Vec<String> = winners.into_iter().map(|w| w.payload).collect();
+            ctx.memory_payloads = crate::live_knowledge_bus::merge_live_first(
+                &std::mem::take(&mut ctx.memory_payloads),
+                winner_payloads,
+            );
         }
     }
+    crate::sovereign_operator::log_stream::emit_phase(
+        &ctx,
+        "probe",
+        canonical,
+        target,
+        json!({ "path": "dispatch" }),
+    );
     if let Some(trie) = ctx.payload_trie.as_ref() {
         let extra = trie.payloads_for_target(target);
         crate::pentest_memory::prepend_memory_payloads(&mut ctx.memory_payloads, &extra);
@@ -922,6 +1011,12 @@ async fn dispatch_engine_match(
         "hmi_attack" => crate::advanced_ot_engines::run_hmi_attack_result(target).await,
         "profinet_attack" => crate::advanced_ot_engines::run_profinet_attack_result(target).await,
         "industrial_protocol_fuzz" => crate::advanced_ot_engines::run_industrial_protocol_fuzz_result(target).await,
+        "ot_passive_active_safety" => {
+            crate::ot_ics_hardening::run_ot_passive_active_safety_result(target, ctx).await
+        }
+        "ot_crown_jewel_path" => {
+            crate::ot_ics_hardening::run_ot_crown_jewel_path_result(target, ctx).await
+        }
         "firmware_emulation_attack" => crate::advanced_ot_engines::run_firmware_emulation_attack_result(target).await,
 
         // ── Advanced Stealth engines (new probes / agent_required) ─────────────
@@ -1006,5 +1101,23 @@ mod tests {
         let r = run_engine("poe_synthesis", "https://example.com", &ctx).await;
         assert!(!r.success, "expected error without tenant: {}", r.message);
         assert!(r.message.contains("tenant_id"));
+    }
+
+    #[test]
+    fn job_params_stealth_enables_ghost() {
+        let mut ctx = EngineRunContext {
+            job_params: json!({
+                "stealth_mode": true,
+                "jitter_min_ms": 50,
+                "jitter_max_ms": 90,
+                "identity_morphing": true,
+            }),
+            ..Default::default()
+        };
+        apply_job_params_stealth(&mut ctx);
+        let s = ctx.stealth.expect("stealth config");
+        assert!(s.identity_morphing);
+        assert_eq!(s.jitter_min_ms, 50);
+        assert_eq!(s.jitter_max_ms, 90);
     }
 }

@@ -279,12 +279,13 @@ pub fn default_subdomain_wordlist() -> Vec<String> {
 /// Run subdomain enumeration with the public-knowledge corpus, truncated to the
 /// per-scan probe budget (corpus itself stays unbounded in `intel.discovery_knowledge`).
 pub async fn enum_subdomains_default(domain: &str) -> Vec<String> {
-    let mut wl = default_subdomain_wordlist();
+    let mut wordlist =
+        crate::live_knowledge_bus::merge_subdomain_wordlist(domain, default_subdomain_wordlist());
     let budget = weissman_engines::discovery_corpus::discovery_probe_budget();
-    if wl.len() > budget {
-        wl.truncate(budget);
+    if wordlist.len() > budget {
+        wordlist.truncate(budget);
     }
-    enum_subdomains(domain, &wl, DEFAULT_CONCURRENCY).await
+    enum_subdomains(domain, &wordlist, DEFAULT_CONCURRENCY).await
 }
 
 #[cfg(test)]

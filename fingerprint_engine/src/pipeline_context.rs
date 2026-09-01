@@ -298,7 +298,9 @@ pub fn tech_stack_from_asm_findings(findings: &[serde_json::Value]) -> Vec<Strin
 
 /// Expanded path wordlist: public-knowledge seed (tens of thousands of unique paths).
 pub fn expanded_path_wordlist() -> Vec<String> {
-    weissman_engines::discovery_corpus::expanded_path_wordlist()
+    crate::live_knowledge_bus::merge_live_paths(
+        weissman_engines::discovery_corpus::expanded_path_wordlist(),
+    )
 }
 
 /// Web ports that get their own base URL (http(s)://host:port) for scanning.

@@ -6,7 +6,7 @@ use axum::response::{IntoResponse, Response};
 use serde_json::Value;
 use sqlx::PgPool;
 use std::collections::HashSet;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use subtle::ConstantTimeEq;
 use tokio::net::lookup_host;
 use url::Url;
@@ -269,6 +269,65 @@ pub fn validate_poe_target_url(raw: &str) -> Result<(), &'static str> {
     Ok(())
 }
 
+/// One-shot public DNS pin for outbound HTTP. Resolves once, rejects RFC1918/loopback/link-local/
+/// CGNAT/metadata, and returns socket addrs the HTTP client must use (no second lookup).
+#[derive(Debug, Clone)]
+pub struct PinnedHttpTarget {
+    pub host: String,
+    pub port: u16,
+    pub addrs: Vec<SocketAddr>,
+}
+
+pub async fn resolve_and_pin_public_http(raw: &str) -> Result<PinnedHttpTarget, String> {
+    validate_poe_target_url(raw).map_err(ToString::to_string)?;
+    let parsed = Url::parse(raw.trim()).map_err(|e| e.to_string())?;
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "missing host".to_string())?
+        .trim_end_matches('.')
+        .to_ascii_lowercase();
+    let port = parsed
+        .port_or_known_default()
+        .unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
+    let mut addrs: Vec<SocketAddr> = Vec::new();
+    let mut seen = HashSet::new();
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        if is_private_or_reserved_ip(&ip) {
+            return Err(format!("blocked private/reserved pin target {ip}"));
+        }
+        addrs.push(SocketAddr::new(ip, port));
+    } else {
+        let resolved = lookup_host((host.as_str(), port))
+            .await
+            .map_err(|e| format!("dns pin resolve failed: {e}"))?;
+        for sa in resolved {
+            let ip = sa.ip();
+            if is_private_or_reserved_ip(&ip) {
+                return Err(format!(
+                    "dns pin rejected: {host} resolved to blocked address {ip}"
+                ));
+            }
+            if seen.insert(ip) {
+                addrs.push(SocketAddr::new(ip, port));
+            }
+        }
+    }
+    if addrs.is_empty() {
+        return Err(format!("dns pin produced no public addresses for {host}"));
+    }
+    Ok(PinnedHttpTarget { host, port, addrs })
+}
+
+impl PinnedHttpTarget {
+    /// `curl --resolve host:port:ip` pins (one per resolved public address).
+    pub fn curl_resolve_args(&self) -> Vec<String> {
+        self.addrs
+            .iter()
+            .map(|sa| format!("{}:{}:{}", self.host, self.port, sa.ip()))
+            .collect()
+    }
+}
+
 fn allow_private_scan_targets() -> bool {
     std::env::var("WEISSMAN_ALLOW_PRIVATE_SCAN_TARGETS")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
@@ -302,13 +361,26 @@ fn is_private_or_reserved_ip(ip: &IpAddr) -> bool {
                 || (o[0] == 192 && o[1] == 168)
                 || (o[0] == 100 && (64..=127).contains(&o[1]))
                 || (o[0] == 169 && o[1] == 254)
+                || o[0] >= 224
                 || *v4 == Ipv4Addr::new(100, 100, 100, 200)
         }
         IpAddr::V6(v6) => {
+            if let Some(v4) = v6.to_ipv4_mapped() {
+                return is_private_or_reserved_ip(&IpAddr::V4(v4));
+            }
+            // Deprecated IPv4-compatible ::a.b.c.d (not loopback/unspecified).
+            if !v6.is_loopback() && !v6.is_unspecified() {
+                if let Some(v4) = v6.to_ipv4() {
+                    return is_private_or_reserved_ip(&IpAddr::V4(v4));
+                }
+            }
+            let seg0 = v6.segments()[0];
             v6.is_loopback()
                 || v6.is_unspecified()
+                || v6.is_multicast()
                 || v6.is_unique_local()
                 || v6.is_unicast_link_local()
+                || (seg0 & 0xffc0) == 0xfec0
         }
     }
 }
@@ -692,6 +764,99 @@ mod tests {
     fn poe_blocks_metadata() {
         assert!(validate_poe_target_url("http://169.254.169.254/latest/meta-data/").is_err());
         assert!(validate_poe_target_url("https://example.com/").is_ok());
+    }
+
+    #[test]
+    fn mapped_ipv6_loopback_is_private() {
+        let ip: IpAddr = "::ffff:127.0.0.1".parse().expect("mapped");
+        assert!(is_private_or_reserved_ip(&ip));
+    }
+
+    #[tokio::test]
+    async fn pin_rejects_loopback_literal() {
+        let err = resolve_and_pin_public_http("http://127.0.0.1/")
+            .await
+            .expect_err("loopback");
+        assert!(
+            err.contains("loopback") || err.contains("private") || err.contains("blocked"),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn pin_rejects_rfc1918_literal() {
+        let err = resolve_and_pin_public_http("http://192.168.1.1/")
+            .await
+            .expect_err("rfc1918");
+        assert!(
+            err.contains("private") || err.contains("blocked") || err.contains("reserved"),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn pin_allows_public_example_host() {
+        let pin = resolve_and_pin_public_http("https://example.com/")
+            .await
+            .expect("example.com must resolve to a public address");
+        assert_eq!(pin.host, "example.com");
+        assert_eq!(pin.port, 443);
+        assert!(!pin.addrs.is_empty());
+        assert!(!pin.curl_resolve_args().is_empty());
+    }
+
+    #[tokio::test]
+    async fn pin_rejects_ipv6_mapped_link_local_and_ula() {
+        for url in [
+            "http://[::ffff:127.0.0.1]/",
+            "http://[::ffff:10.1.2.3]/",
+            "http://[::ffff:192.168.0.5]/",
+            "http://[::1]/",
+            "http://[fe80::1]/",
+            "http://[fc00::1]/",
+            "http://[fd12:3456:789a::1]/",
+        ] {
+            let err = match resolve_and_pin_public_http(url).await {
+                Err(e) => e,
+                Ok(_) => panic!("expected block for {url}"),
+            };
+            assert!(
+                err.contains("private")
+                    || err.contains("blocked")
+                    || err.contains("loopback")
+                    || err.contains("reserved")
+                    || err.contains("metadata"),
+                "{url} → {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn unique_local_link_local_mapped_and_multicast_are_private() {
+        assert!(is_private_or_reserved_ip(
+            &"fc00::1".parse::<IpAddr>().expect("ula")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"fd12:3456:789a::1".parse::<IpAddr>().expect("ula-fd")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"fe80::1".parse::<IpAddr>().expect("ll")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"::ffff:127.0.0.1".parse::<IpAddr>().expect("mapped-lb")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"::ffff:10.0.0.1".parse::<IpAddr>().expect("mapped-rfc1918")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"ff02::1".parse::<IpAddr>().expect("mcast")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"224.0.0.1".parse::<IpAddr>().expect("v4mcast")
+        ));
+        assert!(!is_private_or_reserved_ip(
+            &"::ffff:8.8.8.8".parse::<IpAddr>().expect("mapped-public")
+        ));
     }
 
     #[test]

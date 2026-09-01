@@ -551,6 +551,17 @@ export const GENERATED_PARAM_DEFS = {
       "placeholder": "top | 80,443,8080"
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -596,6 +607,17 @@ export const GENERATED_PARAM_DEFS = {
       "options": [
         "true",
         "false"
+      ]
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
       ]
     },
     {
@@ -647,6 +669,17 @@ export const GENERATED_PARAM_DEFS = {
       ]
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -692,6 +725,17 @@ export const GENERATED_PARAM_DEFS = {
       "options": [
         "true",
         "false"
+      ]
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
       ]
     },
     {
@@ -743,6 +787,17 @@ export const GENERATED_PARAM_DEFS = {
       ]
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -788,6 +843,17 @@ export const GENERATED_PARAM_DEFS = {
       "options": [
         "true",
         "false"
+      ]
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
       ]
     },
     {
@@ -839,6 +905,17 @@ export const GENERATED_PARAM_DEFS = {
       ]
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -887,6 +964,17 @@ export const GENERATED_PARAM_DEFS = {
       ]
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -918,13 +1006,6 @@ export const GENERATED_PARAM_DEFS = {
   ],
   "ot_sis_triton_attack": [
     {
-      "key": "ports",
-      "label": "Ports / Port Range",
-      "type": "text",
-      "defaultVal": "top",
-      "placeholder": "top | 80,443,8080"
-    },
-    {
       "key": "protocol_strict",
       "label": "OT Protocol Strict",
       "type": "select",
@@ -932,6 +1013,24 @@ export const GENERATED_PARAM_DEFS = {
       "options": [
         "true",
         "false"
+      ]
+    },
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
       ]
     },
     {
@@ -983,6 +1082,17 @@ export const GENERATED_PARAM_DEFS = {
       "placeholder": "top | 80,443,8080"
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -1028,6 +1138,17 @@ export const GENERATED_PARAM_DEFS = {
       "options": [
         "true",
         "false"
+      ]
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
       ]
     },
     {
@@ -6876,6 +6997,17 @@ export const GENERATED_PARAM_DEFS = {
       ]
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -7871,6 +8003,17 @@ export const GENERATED_PARAM_DEFS = {
       "placeholder": "top | 80,443,8080"
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -7919,6 +8062,17 @@ export const GENERATED_PARAM_DEFS = {
       "placeholder": "top | 80,443,8080"
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -7964,6 +8118,17 @@ export const GENERATED_PARAM_DEFS = {
       "options": [
         "true",
         "false"
+      ]
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
       ]
     },
     {
@@ -8015,6 +8180,17 @@ export const GENERATED_PARAM_DEFS = {
       "placeholder": "top | 80,443,8080"
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -8063,6 +8239,17 @@ export const GENERATED_PARAM_DEFS = {
       ]
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -8108,6 +8295,17 @@ export const GENERATED_PARAM_DEFS = {
       "options": [
         "true",
         "false"
+      ]
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
       ]
     },
     {
@@ -10795,6 +10993,17 @@ export const GENERATED_PARAM_DEFS = {
       ]
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -11118,6 +11327,17 @@ export const GENERATED_PARAM_DEFS = {
       ]
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -11386,6 +11606,17 @@ export const GENERATED_PARAM_DEFS = {
       "placeholder": "top | 80,443,8080"
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -11600,6 +11831,17 @@ export const GENERATED_PARAM_DEFS = {
       ]
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -11646,6 +11888,17 @@ export const GENERATED_PARAM_DEFS = {
       "type": "text",
       "defaultVal": "top",
       "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
     },
     {
       "key": "depth",
@@ -12089,6 +12342,17 @@ export const GENERATED_PARAM_DEFS = {
       "placeholder": "top | 80,443,8080"
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -12134,6 +12398,17 @@ export const GENERATED_PARAM_DEFS = {
       "options": [
         "true",
         "false"
+      ]
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
       ]
     },
     {
@@ -12394,6 +12669,17 @@ export const GENERATED_PARAM_DEFS = {
       ]
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -12519,6 +12805,17 @@ export const GENERATED_PARAM_DEFS = {
       "placeholder": "top | 80,443,8080"
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -12564,6 +12861,17 @@ export const GENERATED_PARAM_DEFS = {
       "options": [
         "true",
         "false"
+      ]
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
       ]
     },
     {
@@ -13704,6 +14012,17 @@ export const GENERATED_PARAM_DEFS = {
       "options": [
         "true",
         "false"
+      ]
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
       ]
     },
     {
@@ -15307,6 +15626,17 @@ export const GENERATED_PARAM_DEFS = {
       ]
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -15814,6 +16144,17 @@ export const GENERATED_PARAM_DEFS = {
       "options": [
         "true",
         "false"
+      ]
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
       ]
     },
     {
@@ -16388,6 +16729,17 @@ export const GENERATED_PARAM_DEFS = {
       "options": [
         "true",
         "false"
+      ]
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
       ]
     },
     {
@@ -19212,6 +19564,17 @@ export const GENERATED_PARAM_DEFS = {
       "placeholder": "top | 80,443,8080"
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -19260,6 +19623,17 @@ export const GENERATED_PARAM_DEFS = {
       "placeholder": "top | 80,443,8080"
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -19305,6 +19679,17 @@ export const GENERATED_PARAM_DEFS = {
       "options": [
         "true",
         "false"
+      ]
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
       ]
     },
     {
@@ -19356,6 +19741,17 @@ export const GENERATED_PARAM_DEFS = {
       ]
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -19402,6 +19798,17 @@ export const GENERATED_PARAM_DEFS = {
       "type": "text",
       "defaultVal": "top",
       "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
     },
     {
       "key": "depth",
@@ -19452,6 +19859,17 @@ export const GENERATED_PARAM_DEFS = {
       ]
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -19498,6 +19916,17 @@ export const GENERATED_PARAM_DEFS = {
       "type": "text",
       "defaultVal": "top",
       "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
     },
     {
       "key": "depth",
@@ -21529,6 +21958,17 @@ export const GENERATED_PARAM_DEFS = {
       ]
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -21574,6 +22014,17 @@ export const GENERATED_PARAM_DEFS = {
       "options": [
         "true",
         "false"
+      ]
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
       ]
     },
     {
@@ -21625,6 +22076,17 @@ export const GENERATED_PARAM_DEFS = {
       ]
     },
     {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
       "key": "depth",
       "label": "Probe Depth",
       "type": "select",
@@ -21670,6 +22132,17 @@ export const GENERATED_PARAM_DEFS = {
       "options": [
         "true",
         "false"
+      ]
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
       ]
     },
     {
@@ -22566,6 +23039,34 @@ export const GENERATED_PARAM_DEFS = {
     }
   ],
   "ot_it_lateral_chain": [
+    {
+      "key": "protocol_strict",
+      "label": "OT Protocol Strict",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
     {
       "key": "intensity",
       "label": "Scan Intensity",
@@ -23626,6 +24127,124 @@ export const GENERATED_PARAM_DEFS = {
         "low",
         "high"
       ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "ot_passive_active_safety": [
+    {
+      "key": "protocol_strict",
+      "label": "OT Protocol Strict",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
+      "key": "depth",
+      "label": "Probe Depth",
+      "type": "select",
+      "defaultVal": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    {
+      "key": "timeout_ms",
+      "label": "Probe Timeout (ms)",
+      "type": "number",
+      "defaultVal": "8000",
+      "min": 500,
+      "max": 60000
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "ot_crown_jewel_path": [
+    {
+      "key": "protocol_strict",
+      "label": "OT Protocol Strict",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "probe_mode",
+      "label": "OT Probe Mode",
+      "type": "select",
+      "defaultVal": "safe_read",
+      "options": [
+        "passive",
+        "safe_read",
+        "active_validation"
+      ]
+    },
+    {
+      "key": "depth",
+      "label": "Probe Depth",
+      "type": "select",
+      "defaultVal": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    {
+      "key": "timeout_ms",
+      "label": "Probe Timeout (ms)",
+      "type": "number",
+      "defaultVal": "8000",
+      "min": 500,
+      "max": 60000
     },
     {
       "key": "max_findings",

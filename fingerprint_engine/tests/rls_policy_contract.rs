@@ -325,6 +325,8 @@ fn hardening_migrations_20260827_identical_in_both_dirs() {
         "20260827120400_nl_query_audit_hash_chain.sql",
         "20260827120500_nl_query_audit_chain_update.sql",
         "20260827120600_cicd_scan_events_rls_cast_safe.sql",
+        "20260827160000_ot_ics_hardening_safety.sql",
+        "20260827160100_ot_ics_rls_cast_safe.sql",
         "20260830140000_nl_audit_chain_epoch_and_sovereign_allowlist.sql",
         "20260830160000_privilege_escalation_controls.sql",
         "20260830180000_cem_dago_telemetry_quarantine.sql",
@@ -375,14 +377,17 @@ fn post_cast_safety_policies_use_app_current_tenant_id() {
             if name.starts_with("20260827120600_") {
                 saw_cast_safe_followon = true;
             }
+            if name.starts_with("20260827160100_") {
+                saw_cast_safe_followon = true;
+            }
             let Some(ver) = name.split('_').next() else {
                 continue;
             };
             if ver <= "20260811000000" {
                 continue;
             }
-            // Already-applied; the 20600 follow-on restates the policy.
-            if name.starts_with("20260827120000_") {
+            // Already-applied; follow-on restates the policy with app_current_tenant_id().
+            if name.starts_with("20260827120000_") || name.starts_with("20260827160000_") {
                 continue;
             }
             let text = std::fs::read_to_string(ent.path()).unwrap_or_default();

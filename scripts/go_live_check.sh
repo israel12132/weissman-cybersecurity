@@ -163,6 +163,32 @@ for id in "${OT_EXPECTED[@]}"; do
   fi
 done
 
+section "OT/ICS hardening kernel"
+HARDEN_FILE="fingerprint_engine/src/ot_ics_hardening/policy.rs"
+if grep -q 'CONTROL_CATALOG' "$HARDEN_FILE" && grep -q 'DESTRUCTIVE_FOREVER' "$HARDEN_FILE"; then
+  ok "OT hardening kernel present (100 controls + destructive-forever block)"
+else
+  bad "OT hardening kernel missing"
+fi
+for id in ot_passive_active_safety ot_crown_jewel_path; do
+  if grep -q "\"$id\"" backend/weissman-core/src/models/engine.rs; then
+    ok "Engine registered: $id"
+  else
+    bad "Engine missing: $id"
+  fi
+done
+if grep -q 'ot_ics_safety_events' crates/weissman-db/migrations/20260827160000_ot_ics_hardening_safety.sql \
+  && grep -q 'ot_ics_safety_events' fingerprint_engine/migrations/20260827160000_ot_ics_hardening_safety.sql; then
+  ok "OT safety migration (byte-synced)"
+else
+  bad "OT safety migration missing or not synced"
+fi
+if grep -q '/api/ot-ics/safety' fingerprint_engine/src/http/serve_route_groups.rs; then
+  ok "GET /api/ot-ics/safety routed"
+else
+  bad "GET /api/ot-ics/safety not routed"
+fi
+
 section "Monitoring (Prometheus + Grafana)"
 if grep -q 'credentials_file: /etc/prometheus/metrics_token' monitoring/prometheus.yml \
   && grep -q 'type: Bearer' monitoring/prometheus.yml; then
