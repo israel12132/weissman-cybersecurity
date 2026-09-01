@@ -15,12 +15,12 @@
 //!   * `pinned_host` — a dedicated reqwest client (capped time/redirects/body, proxy disabled).
 //!     Always available; used as the portable fallback.
 //!
-//! Safety: the target is resolved **once**, every address is rejected if it is private/loopback/
-//! reserved, and the HTTP client is bound to those sockets via hostname `resolve` (TLS SNI and
-//! certificate verification stay on the original host). Redirects are disabled so a 30x cannot
-//! rebind. Docker curl uses `--resolve` the same way. There is **no fabricated success** — when
-//! neither executor can run, or no deterministic signal is observed, the verdict is
-//! `verified = false`.
+//! Safety: the target is resolved **once**. Private/loopback/reserved addresses are rejected
+//! unless the operator sets `WEISSMAN_ALLOW_PRIVATE_SCAN_TARGETS=1` (lab/CI fixtures). The HTTP
+//! client is bound to those sockets via hostname `resolve` (TLS SNI and certificate verification
+//! stay on the original host). Redirects are disabled so a 30x cannot rebind. Docker curl uses
+//! `--resolve` the same way. There is **no fabricated success** — when neither executor can run,
+//! or no deterministic signal is observed, the verdict is `verified = false`.
 
 use crate::security_hardening::PinnedHttpTarget;
 use sha2::{Digest, Sha256};
