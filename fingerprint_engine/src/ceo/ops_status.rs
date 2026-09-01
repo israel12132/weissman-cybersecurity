@@ -3,20 +3,6 @@
 use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
 
-#[cfg(target_os = "linux")]
-fn resident_set_kb() -> Option<u64> {
-    let s = std::fs::read_to_string("/proc/self/statm").ok()?;
-    let mut it = s.split_whitespace();
-    let _vsize = it.next()?;
-    let resident_pages: u64 = it.next()?.parse().ok()?;
-    Some(resident_pages.saturating_mul(4096) / 1024)
-}
-
-#[cfg(not(target_os = "linux"))]
-fn resident_set_kb() -> Option<u64> {
-    None
-}
-
 /// Pending + running jobs for the tenant (Genesis / Council / engines).
 /// When `filter_client_id` is set, only rows whose JSON `payload.client_id` matches (numeric or string) are returned.
 pub async fn list_live_async_jobs(
@@ -77,7 +63,7 @@ pub async fn build_ceo_telemetry_json(
     tenant_id: i64,
     uptime_secs: u64,
 ) -> Value {
-    let rss = resident_set_kb();
+    let rss = crate::http::blocking_io::resident_set_kb().await;
     let scanning = crate::orchestrator::is_scanning_active();
 
     let strategy = crate::ceo::strategy::get_ceo_strategy_json(app_pool, tenant_id).await;

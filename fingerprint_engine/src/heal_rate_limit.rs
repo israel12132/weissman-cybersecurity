@@ -13,8 +13,9 @@
 //!
 //! Config: `WEISSMAN_HEAL_MAX_PER_HOUR` (default 20). Window is one hour.
 
+use dashmap::DashMap;
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 /// Default heals allowed per tenant per window when `WEISSMAN_HEAL_MAX_PER_HOUR` is unset.
@@ -27,9 +28,9 @@ struct TenantWindow {
     starts: Vec<Instant>,
 }
 
-fn state() -> &'static Mutex<HashMap<i64, TenantWindow>> {
-    static S: OnceLock<Mutex<HashMap<i64, TenantWindow>>> = OnceLock::new();
-    S.get_or_init(|| Mutex::new(HashMap::new()))
+fn state() -> &'static DashMap<i64, TenantWindow> {
+    static S: OnceLock<DashMap<i64, TenantWindow>> = OnceLock::new();
+    S.get_or_init(DashMap::new)
 }
 
 fn max_per_window() -> u32 {
@@ -54,18 +55,15 @@ pub struct HealRateDecision {
 /// Per-replica in-memory sliding window over the last hour.
 #[must_use]
 pub fn check_and_record(tenant_id: i64) -> HealRateDecision {
-    let mut map = state().lock().unwrap_or_else(|e| e.into_inner());
-    decide(
-        &mut map,
-        tenant_id,
-        Instant::now(),
-        max_per_window(),
-        WINDOW,
-    )
+    let mut entry = state()
+        .entry(tenant_id)
+        .or_insert_with(|| TenantWindow { starts: Vec::new() });
+    decide_window(entry.value_mut(), Instant::now(), max_per_window(), WINDOW)
 }
 
 /// Pure core (time/limit/window injected, operates on a supplied map) so the sliding-window
-/// semantics are unit-tested without touching the process-global state or the wall clock.
+/// semantics are unit-tested without touching the process-global DashMap or the wall clock.
+#[cfg(test)]
 fn decide(
     map: &mut HashMap<i64, TenantWindow>,
     tenant_id: i64,
@@ -76,6 +74,15 @@ fn decide(
     let w = map
         .entry(tenant_id)
         .or_insert_with(|| TenantWindow { starts: Vec::new() });
+    decide_window(w, now, limit, window)
+}
+
+fn decide_window(
+    w: &mut TenantWindow,
+    now: Instant,
+    limit: u32,
+    window: Duration,
+) -> HealRateDecision {
     // Drop starts that have aged out of the window.
     let cutoff = now.checked_sub(window);
     w.starts.retain(|&t| cutoff.is_none_or(|c| t >= c));
@@ -93,6 +100,26 @@ fn decide(
         used: used + 1,
         limit,
     }
+}
+
+/// Drop tenants whose sliding window is empty after ageing out old starts.
+pub fn evict_stale() -> usize {
+    evict_older_than(Instant::now(), WINDOW)
+}
+
+fn evict_older_than(now: Instant, window: Duration) -> usize {
+    let cutoff = now.checked_sub(window);
+    let mut dropped = 0usize;
+    state().retain(|_, w| {
+        w.starts.retain(|&t| cutoff.is_none_or(|c| t >= c));
+        if w.starts.is_empty() {
+            dropped += 1;
+            false
+        } else {
+            true
+        }
+    });
+    dropped
 }
 
 #[cfg(test)]
@@ -144,5 +171,20 @@ mod tests {
         assert!(!decide(&mut map, 1, now, 2, WINDOW).allowed);
         // Tenant 2 is unaffected.
         assert!(decide(&mut map, 2, now, 2, WINDOW).allowed);
+    }
+
+    #[test]
+    fn evicts_tenants_whose_window_is_empty() {
+        let tenant = 9_001_401_i64;
+        let now = Instant::now();
+        state().insert(
+            tenant,
+            TenantWindow {
+                starts: vec![now - WINDOW - Duration::from_secs(5)],
+            },
+        );
+        let n = evict_older_than(now, WINDOW);
+        assert!(n >= 1);
+        assert!(state().get(&tenant).is_none());
     }
 }

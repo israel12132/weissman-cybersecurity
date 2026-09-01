@@ -7497,7 +7497,7 @@
   "supremeNerveCenter": {
     "title": "Supreme Nerve Center",
     "ceoOnly": "CEO / superadmin only",
-    "evidence_notice": "Live snapshot from GET /api/ceo/supreme/nerve-center — all 565 engines, subsystem modules, async jobs, and control parameters. No simulated telemetry.",
+    "evidence_notice": "Live snapshot from GET /api/ceo/supreme/nerve-center — all 567 engines, subsystem modules, async jobs, and control parameters. No simulated telemetry.",
     "refresh": "Refresh",
     "pollInterval": "Auto-refresh every {{sec}}s",
     "stuckAlert": "{{count}} engine(s) appear stuck — investigate worker heartbeat and phase updates.",

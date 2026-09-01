@@ -254,7 +254,7 @@ pub async fn hydrate_paths(
     let mut stored_all = Vec::new();
     let mut stored_learned = Vec::new();
     if let Some(p) = pool {
-        crate::discovery_knowledge::seed_public_knowledge(p).await;
+        crate::discovery_knowledge::kick_seed_public_knowledge(p);
         stored_all = crate::discovery_knowledge::load_paths(p).await;
         stored_learned = crate::discovery_knowledge::load_learned_paths(p).await;
     }
@@ -289,7 +289,7 @@ pub async fn hydrate_subdomain_prefixes(
     let seed = weissman_engines::discovery_corpus::all_subdomain_prefixes().to_vec();
     let mut stored = Vec::new();
     if let Some(p) = pool {
-        crate::discovery_knowledge::seed_public_knowledge(p).await;
+        crate::discovery_knowledge::kick_seed_public_knowledge(p);
         stored = crate::discovery_knowledge::load_subdomain_prefixes(p).await;
     }
     let merged = crate::discovery_knowledge::merge_unique(&[&seed, &stored, extra]);

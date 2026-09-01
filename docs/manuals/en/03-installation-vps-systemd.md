@@ -27,6 +27,7 @@ Deploy Weissman on a single Linux VPS or bare-metal host **without Docker**, usi
 ```bash
 sudo apt update && sudo apt install -y postgresql-16 redis-server nginx
 sudo bash deploy/install-build-deps-debian.sh
+sudo bash deploy/apply-listen-sysctl.sh   # net.core.somaxconn=4096 — otherwise listen(4096) is silently truncated
 ```
 
 Create PostgreSQL roles and database using `deploy/grant-postgres-weissman-prod.sql` (adjust passwords):
@@ -103,6 +104,13 @@ See manual **06** for the full variable reference (`PRODUCTION.env.template`).
 Copy `deploy/nginx-weissman.conf` or `deploy/Caddyfile` and point TLS termination to `127.0.0.1:8000`.
 
 Ensure WebSocket upgrade headers for `/ws/*` using `deploy/nginx-snippet-websocket-map.conf`.
+
+JSON Brotli belongs at nginx (not Axum). After `apt install libnginx-mod-http-brotli`:
+
+```bash
+sudo cp deploy/nginx-brotli.inc /etc/nginx/snippets/weissman-brotli.conf
+# then include /etc/nginx/snippets/weissman-brotli.conf; in the TLS server{}
+```
 
 Set `WEISSMAN_PUBLIC_BASE_URL` to the public HTTPS origin — required for SSO redirects and agent installers.
 

@@ -26,7 +26,9 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
+
+use dashmap::DashMap;
 
 use crate::resilience::CircuitBreaker;
 use crate::self_healing::{Diagnosis, HealthSnapshot, RecoveryAction, Subsystem};
@@ -182,7 +184,7 @@ struct RecoveryController {
     pg_circuit: CircuitBreaker,
     redis_circuit: CircuitBreaker,
     /// Last epoch-secs each `(subsystem, action)` fired, for cooldown gating.
-    last_fired: Mutex<HashMap<(&'static str, &'static str), u64>>,
+    last_fired: DashMap<(&'static str, &'static str), u64>,
 }
 
 impl RecoveryController {
@@ -193,7 +195,7 @@ impl RecoveryController {
             prune_requests: AtomicU64::new(0),
             pg_circuit: CircuitBreaker::new(cfg.dep_threshold, cfg.dep_cooldown_secs),
             redis_circuit: CircuitBreaker::new(cfg.dep_threshold, cfg.dep_cooldown_secs),
-            last_fired: Mutex::new(HashMap::new()),
+            last_fired: DashMap::new(),
         }
     }
 
@@ -222,16 +224,18 @@ impl RecoveryController {
         now: u64,
         cfg: &RecoveryConfig,
     ) -> Vec<(PlannedRecovery, RecoveryOutcome)> {
-        let mut guard = self
+        let snapshot: HashMap<(&'static str, &'static str), u64> = self
             .last_fired
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let planned = plan_recovery(diags, &guard, now, cfg.cooldown_secs);
+            .iter()
+            .map(|e| (*e.key(), *e.value()))
+            .collect();
+        let planned = plan_recovery(diags, &snapshot, now, cfg.cooldown_secs);
         let mut results = Vec::with_capacity(planned.len());
         for p in planned {
             if p.fired {
                 self.execute_effect(p.action, now, cfg);
-                guard.insert((p.subsystem.as_str(), p.action.as_str()), now);
+                self.last_fired
+                    .insert((p.subsystem.as_str(), p.action.as_str()), now);
                 results.push((p, RecoveryOutcome::Executed));
             } else {
                 results.push((p, RecoveryOutcome::Cooldown));
@@ -264,6 +268,19 @@ impl RecoveryController {
     fn backoff_active_at(&self, now: u64) -> bool {
         self.backoff_until.load(Ordering::SeqCst) > now
     }
+
+    fn evict_stale_last_fired(&self, now: u64, keep_secs: u64) -> usize {
+        let mut dropped = 0usize;
+        self.last_fired.retain(|_, ts| {
+            if now.saturating_sub(*ts) > keep_secs {
+                dropped += 1;
+                false
+            } else {
+                true
+            }
+        });
+        dropped
+    }
 }
 
 fn config() -> &'static RecoveryConfig {
@@ -279,6 +296,13 @@ fn controller() -> &'static RecoveryController {
 /// Execute recovery for one health round: feed dependency circuits, apply cooldown-gated effects
 /// for the diagnoses, and record `weissman_self_heal_recovery_total{subsystem,action,outcome}`.
 /// No-op when disabled by env.
+/// Drop `(subsystem, action)` last-fired rows older than 4× cooldown (floor 1h).
+pub fn evict_stale_last_fired() -> usize {
+    let cfg = config();
+    let keep = cfg.cooldown_secs.saturating_mul(4).max(3600);
+    controller().evict_stale_last_fired(now_secs(), keep)
+}
+
 pub fn run_recovery(snapshot: &HealthSnapshot, diags: &[Diagnosis]) {
     let cfg = config();
     if !cfg.enabled {

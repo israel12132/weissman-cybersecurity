@@ -71,7 +71,9 @@ async fn spawn(app: Router) -> SocketAddr {
 
 #[tokio::test]
 async fn benchmark_repro_and_fp_against_fixtures() {
-    // The fixtures are loopback; allow private scan targets for the sandbox scope guard.
+    // The fixtures are loopback. URL validation *and* the DNS pin honor this flag; without it
+    // `resolve_and_pin_public_http` fail-closes on 127.0.0.1 and the sandbox reports
+    // executor=none signal=blocked — a false negative, not a real miss.
     std::env::set_var("WEISSMAN_ALLOW_PRIVATE_SCAN_TARGETS", "1");
 
     let vuln = spawn(vulnerable_app()).await;

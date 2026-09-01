@@ -73,6 +73,10 @@ services:
 
   backend:
     logging: *default-logging
+    # Inherit+pin: kernel silently truncates listen(4096) when somaxconn is 128.
+    sysctls:
+      net.core.somaxconn: 4096
+      net.ipv4.tcp_max_syn_backlog: 4096
     # Pull in the operator's full .env so OPTIONAL settings the app reads directly
     # (WEISSMAN_SMTP_*, WEISSMAN_LLM_API_KEY, NVD_API_KEY, WEISSMAN_INTEGRATIONS_VAULT_KEY,
     # PADDLE_*, ...) actually reach the process. Without this, only the ~19 keys listed

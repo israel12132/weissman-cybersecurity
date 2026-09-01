@@ -1034,6 +1034,9 @@ mod tests {
     /// The container healthcheck and the k8s readiness probe both key off this file's mtime, so
     /// the beat must actually land at the configured path. A silent write failure here would
     /// restore exactly the blind spot the beat was added to close.
+    ///
+    /// Does not mutate process env — `cargo llvm-cov --all-targets` (and default `cargo test`)
+    /// run this crate's tests in parallel with `liveness_beat_failure_does_not_panic`.
     #[test]
     fn liveness_beat_is_written_to_the_configured_path() {
         let dir = std::env::temp_dir().join(format!(

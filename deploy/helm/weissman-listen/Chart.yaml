@@ -1,0 +1,10 @@
+apiVersion: v2
+name: weissman-listen
+description: >
+  Raise net.core.somaxconn / tcp_max_syn_backlog so Axum listen(4096) is not
+  silently truncated. Default CNI pods use the *pod* netns — a node sysctl
+  DaemonSet does not fix that. Choose mode: podSysctl, privilegedInit, or
+  preflight (fail-closed read-only check).
+type: application
+version: 0.1.0
+appVersion: "1.0"

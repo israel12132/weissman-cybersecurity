@@ -86,7 +86,20 @@ async function listClients(headers) {
   return body
 }
 
+async function assertOwnerCanCreateClients(headers) {
+  const { response, body } = await api('/api/auth/me', { headers })
+  if (!response.ok) {
+    throw new Error(`auth/me failed (${response.status}): ${JSON.stringify(body)}`)
+  }
+  if (!body?.can_create_clients) {
+    throw new Error(
+      `smoke login is not a platform owner (can_create_clients=${body?.can_create_clients}, is_owner=${body?.is_owner}, is_superadmin=${body?.is_superadmin}). Client create is owner-only; set WEISSMAN_SMOKE_LOGIN_EMAIL to WEISSMAN_ADMIN_EMAIL or WEISSMAN_MASTER_BOOTSTRAP_EMAIL so boot promotion applies.`,
+    )
+  }
+}
+
 async function ensureClient(headers) {
+  await assertOwnerCanCreateClients(headers)
   const approvedDomains = collectApprovedDomainsFromPlan(GROUP_SMOKE_PLAN)
   let clients = await listClients(headers)
   let client = clients.find((entry) => entry.name === CLIENT_NAME)

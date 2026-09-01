@@ -118,6 +118,22 @@ pub struct UebaIngestPayload {
     pub metrics: Value,
 }
 
+/// SIMD parse of `POST /api/ueba/ingest`. Direct decode into owned `'static` fields
+/// (`from_slice_owned`). No `#[serde(borrow)]` / `Cow` — that path parsed into
+/// slices then copied again (`into_owned`), doubling heap work without keeping
+/// zero-copy past the handler boundary.
+pub fn parse_ingest_bytes(buf: &[u8]) -> Result<UebaIngestPayload, String> {
+    let mut p: UebaIngestPayload = crate::http::simd_json::from_slice_owned(buf)?;
+    p.agent_id = p.agent_id.trim().to_string();
+    if p.agent_id.is_empty() {
+        return Err("agent_id is required".into());
+    }
+    if p.metrics.is_null() {
+        return Err("metrics is required".into());
+    }
+    Ok(p)
+}
+
 /// Seconds after first enrollment during which new ports/processes are learned
 /// silently. Operator override `WEISSMAN_UEBA_ONBOARDING_GRACE_SECS` is clamped
 /// to 15–30 minutes so a typo cannot disable the storm shield or extend it forever.
@@ -900,5 +916,35 @@ mod tests {
             crate::elite_hardening::ueba_stats::GLOBAL_HOUR_SENTINEL,
             GLOBAL_BUCKET
         );
+    }
+
+    #[test]
+    fn parse_ingest_bytes_returns_owned_static_payload() {
+        let raw =
+            br#"{"agent_id":"host-aabb","client_id":7,"hour_of_week":13,"metrics":{"load":1.5}}"#;
+        let p = parse_ingest_bytes(raw).expect("parse");
+        assert_eq!(p.agent_id, "host-aabb");
+        assert_eq!(p.client_id, 7);
+        assert_eq!(p.hour_of_week, 13);
+        assert_eq!(p.metrics["load"], 1.5);
+        fn assert_static<T: 'static>(_: &T) {}
+        assert_static(&p);
+    }
+
+    #[test]
+    fn ingest_payload_survives_dropped_request_buffer() {
+        let raw =
+            br#"{"agent_id":"host-aabb","client_id":7,"hour_of_week":13,"metrics":{"load":1.5}}"#
+                .to_vec();
+        let p = parse_ingest_bytes(&raw).expect("parse");
+        drop(raw);
+        assert_eq!(p.agent_id, "host-aabb");
+        assert_eq!(p.metrics["load"], 1.5);
+    }
+
+    #[test]
+    fn parse_ingest_bytes_rejects_empty_agent() {
+        let raw = br#"{"agent_id":"  ","client_id":1,"hour_of_week":0,"metrics":{"x":1}}"#;
+        assert!(parse_ingest_bytes(raw).is_err());
     }
 }

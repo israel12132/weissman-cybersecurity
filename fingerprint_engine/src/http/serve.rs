@@ -916,7 +916,7 @@ async fn ws_command_center(
     let last_event_id = crate::http::event_replay::parse_last_event_id(query.as_deref());
     let tenant_id = auth.tenant_id;
     let assigned_client_id = auth.assigned_client_id;
-    ws.on_upgrade(move |socket| async move {
+    crate::http::bounded_codec::constrain_ws(ws).on_upgrade(move |socket| async move {
         handle_ws_command_center(
             socket,
             pool,
@@ -1529,6 +1529,7 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>, job_control_pool: Arc<
     // provider, not by us — so a localhost or non-TLS value makes login impossible in a way that
     // only ever surfaces as an opaque redirect-mismatch at the IdP.
     crate::oidc_auth::warn_if_sso_base_url_unusable();
+    crate::http::dashmap_gc::spawn_eviction_loop();
     crate::sovereign_operator::forge::spawn_forge_janitor();
     crate::nl_query::spawn_audit_worker(app_pool.clone());
     crate::endpoint_agents::spawn_pending_task_pusher(
@@ -1910,7 +1911,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
 
 pub async fn run_http_tcp_listener(app: Router, port: u16) {
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
-    let listener = match tokio::net::TcpListener::bind(addr).await {
+    let listener = match crate::http::tcp_socket::bind_http_listener(addr) {
         Ok(l) => l,
         Err(e) if e.raw_os_error() == Some(98) => {
             eprintln!(
@@ -1925,15 +1926,11 @@ pub async fn run_http_tcp_listener(app: Router, port: u16) {
         }
     };
     eprintln!(
-        "[Weissman] Listening on http://0.0.0.0:{} (set PORT in .env to change; Nginx must proxy the same port)",
+        "[Weissman] Listening on http://0.0.0.0:{} (set PORT in .env to change; Nginx must proxy the same port); tcp_nodelay + keepalive on",
         port
     );
-    if let Err(e) = axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .with_graceful_shutdown(shutdown_signal())
-    .await
+    if let Err(e) =
+        crate::http::http_serve_loop::serve_with_peer_rst(listener, app, shutdown_signal()).await
     {
         eprintln!("[Weissman] FATAL: server exited: {}", e);
         std::process::exit(1);

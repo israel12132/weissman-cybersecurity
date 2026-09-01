@@ -32,7 +32,8 @@ for f in \
   deploy/k8s/gateway-deployment.yaml \
   deploy/k8s/gateway-service.yaml \
   deploy/k8s/redis-deployment.yaml \
-  deploy/k8s/ingress.yaml
+  deploy/k8s/ingress.yaml \
+  deploy/helm/weissman-listen/Chart.yaml
 do
   [[ -f "$f" ]] && ok "exists $f" || bad "missing $f"
 done

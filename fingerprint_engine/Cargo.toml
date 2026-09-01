@@ -30,6 +30,8 @@ async-stream = "0.3"
 async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# SIMD JSON for Axum ingest / telemetry (serde-compatible; falls back to serde_json).
+sonic-rs = "0.5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 # Dedicated background thread + lossy ring buffer so tracing::error! on the HTTP
@@ -42,6 +44,9 @@ rand = "0.10"
 axum = { version = "0.7", features = ["json", "ws"] }
 tower = { version = "0.4", features = ["util"] }
 tower-http = { version = "0.5", features = ["fs", "cors"] }
+socket2 = "0.6"
+hyper = { version = "1", default-features = false, features = ["http1", "http2"] }
+hyper-util = { version = "0.1", default-features = false, features = ["tokio", "server-auto", "server-graceful", "service"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "migrate", "chrono"] }
 openidconnect = { version = "4", default-features = false, features = ["reqwest", "rustls-tls"] }
 oauth2 = { version = "5", default-features = false, features = ["reqwest"] }

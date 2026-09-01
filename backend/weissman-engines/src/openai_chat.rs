@@ -7,9 +7,9 @@
 //! path remains HTTP JSON against stock OpenAI-compatible servers (loopback UDS/TCP tuning is deployment-level).
 
 use crate::llm_sanitize;
+use dashmap::DashMap;
 use serde::Serialize;
 use serde_json::{json, Value};
-use std::collections::HashMap;
 use std::fmt;
 use std::future::Future;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -75,9 +75,9 @@ struct CircuitEntry {
     open_until: Option<Instant>,
 }
 
-fn circuit_map() -> &'static Mutex<HashMap<String, CircuitEntry>> {
-    static M: OnceLock<Mutex<HashMap<String, CircuitEntry>>> = OnceLock::new();
-    M.get_or_init(|| Mutex::new(HashMap::new()))
+fn circuit_map() -> &'static DashMap<String, CircuitEntry> {
+    static M: OnceLock<DashMap<String, CircuitEntry>> = OnceLock::new();
+    M.get_or_init(DashMap::new)
 }
 
 fn circuit_key(base_url: &str) -> String {
@@ -86,8 +86,7 @@ fn circuit_key(base_url: &str) -> String {
 
 fn circuit_check(base_url: &str) -> Result<(), LlmError> {
     let key = circuit_key(base_url);
-    let mut m = circuit_map().lock().map_err(|_| LlmError::InternalLock)?;
-    let e = m.entry(key).or_insert(CircuitEntry {
+    let mut e = circuit_map().entry(key).or_insert(CircuitEntry {
         failures: 0,
         open_until: None,
     });
@@ -108,29 +107,24 @@ fn circuit_check(base_url: &str) -> Result<(), LlmError> {
 }
 
 fn circuit_on_success(base_url: &str) {
-    if let Ok(mut m) = circuit_map().lock() {
-        let key = circuit_key(base_url);
-        m.insert(
-            key,
-            CircuitEntry {
-                failures: 0,
-                open_until: None,
-            },
-        );
-    }
+    circuit_map().insert(
+        circuit_key(base_url),
+        CircuitEntry {
+            failures: 0,
+            open_until: None,
+        },
+    );
 }
 
 fn circuit_on_failure(base_url: &str) {
-    if let Ok(mut m) = circuit_map().lock() {
-        let key = circuit_key(base_url);
-        let e = m.entry(key).or_insert(CircuitEntry {
-            failures: 0,
-            open_until: None,
-        });
-        e.failures = e.failures.saturating_add(1);
-        if e.failures >= CIRCUIT_FAILURE_THRESHOLD {
-            e.open_until = Some(Instant::now() + Duration::from_secs(CIRCUIT_OPEN_SECS));
-        }
+    let key = circuit_key(base_url);
+    let mut e = circuit_map().entry(key).or_insert(CircuitEntry {
+        failures: 0,
+        open_until: None,
+    });
+    e.failures = e.failures.saturating_add(1);
+    if e.failures >= CIRCUIT_FAILURE_THRESHOLD {
+        e.open_until = Some(Instant::now() + Duration::from_secs(CIRCUIT_OPEN_SECS));
     }
 }
 
@@ -141,9 +135,34 @@ pub fn endpoint_circuit_open(base_url: &str) -> bool {
     matches!(circuit_check(base_url), Err(LlmError::CircuitOpen { .. }))
 }
 
-fn health_cache() -> &'static Mutex<HashMap<String, Instant>> {
-    static H: OnceLock<Mutex<HashMap<String, Instant>>> = OnceLock::new();
-    H.get_or_init(|| Mutex::new(HashMap::new()))
+fn health_cache() -> &'static DashMap<String, Instant> {
+    static H: OnceLock<DashMap<String, Instant>> = OnceLock::new();
+    H.get_or_init(DashMap::new)
+}
+
+/// Drop expired health-probe stamps and closed idle circuits.
+pub fn evict_stale_maps() -> usize {
+    let mut dropped = 0usize;
+    let health_keep = HEALTH_PROBE_TTL.saturating_mul(4);
+    health_cache().retain(|_, t| {
+        if t.elapsed() >= health_keep {
+            dropped += 1;
+            false
+        } else {
+            true
+        }
+    });
+    let now = Instant::now();
+    circuit_map().retain(|_, e| {
+        let open = e.open_until.is_some_and(|until| now < until);
+        if !open && e.failures == 0 {
+            dropped += 1;
+            false
+        } else {
+            true
+        }
+    });
+    dropped
 }
 
 /// GET `/v1/models` with short timeout. Throttled per base URL.
@@ -153,8 +172,7 @@ async fn ensure_llm_reachable(_client: &reqwest::Client, base_url: &str) -> Resu
         .to_string();
     let key = base.clone();
     {
-        let c = health_cache().lock().map_err(|_| LlmError::InternalLock)?;
-        if let Some(t) = c.get(&key) {
+        if let Some(t) = health_cache().get(&key) {
             if t.elapsed() < HEALTH_PROBE_TTL {
                 return Ok(());
             }
@@ -184,9 +202,7 @@ async fn ensure_llm_reachable(_client: &reqwest::Client, base_url: &str) -> Resu
             body_preview: preview,
         });
     }
-    if let Ok(mut c) = health_cache().lock() {
-        c.insert(key, Instant::now());
-    }
+    health_cache().insert(key, Instant::now());
     Ok(())
 }
 
@@ -1192,4 +1208,24 @@ pub async fn resolve_model_with_fallback(
         resolved
     );
     Ok(resolved)
+}
+
+#[cfg(test)]
+mod evict_tests {
+    use super::*;
+
+    #[test]
+    fn evicts_idle_closed_circuit() {
+        let key = "http://dashmap-gc-test.invalid/v1".to_string();
+        circuit_map().insert(
+            key.clone(),
+            CircuitEntry {
+                failures: 0,
+                open_until: None,
+            },
+        );
+        let n = evict_stale_maps();
+        assert!(n >= 1);
+        assert!(circuit_map().get(&key).is_none());
+    }
 }

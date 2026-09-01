@@ -1547,7 +1547,7 @@ async fn api_ask(
 async fn api_ueba_ingest(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
-    Json(p): Json<crate::ueba_detector::UebaIngestPayload>,
+    body: Bytes,
 ) -> Response {
     // The real ingest path is the in-process /ws/agent handler; agent JWTs can never reach this
     // HTTP route (verify_token_for_request requires a user access context). Any human caller here
@@ -1556,6 +1556,16 @@ async fn api_ueba_ingest(
     if let Err(r) = crate::rbac::require_admin(&auth) {
         return r;
     }
+    let p = match crate::ueba_detector::parse_ingest_bytes(&body) {
+        Ok(p) => p,
+        Err(detail) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"ok": false, "detail": detail})),
+            )
+                .into_response();
+        }
+    };
     if !(0..=167).contains(&p.hour_of_week) {
         return (
             StatusCode::BAD_REQUEST,

@@ -14,8 +14,10 @@
                                   ┌───────────▼─────────────┐
                                   │  Nginx gateway (`:80`)  │
                                   │  Strict CSP / HSTS,     │
-                                  │  brotli + gzip,         │
-                                  │  proxy → backend:8000   │
+                                  │  gzip (static) +          │
+                                  │  brotli-4 (Axum JSON;     │
+                                  │  SSE excluded),           │
+                                  │  proxy → backend:8000     │
                                   └───────────┬─────────────┘
                                               │
    ┌──────────────────────────────────────────┴────────────────────────────┐
@@ -79,6 +81,22 @@ In-process background loops (`weissman-server`):
   • Sovereign self-scan (LLM audit-log review) opt-in via env
   • SOAR playbook dispatch                    fire-and-forget on finding persist
 ```
+
+---
+
+## API server performance (weissman-server / Axum)
+
+Sub-millisecond request path for Command Center and agent ingest:
+
+| Control | Where | Notes |
+|---------|--------|--------|
+| SIMD JSON | `fingerprint_engine::http::simd_json` (sonic-rs) | **Ingest + telemetry only.** `parse_ingest_bytes` decodes **directly into owned** `'static` fields (`from_slice_owned`). No borrow/`Cow` then `into_owned()` (double heap). Engines/reports stay on `serde_json`. |
+| Tokio workers | `hpc_runtime::build_scan_runtime` | Default = `min(physical cores, **cgroup/affinity quota**)`. Quota uses **floor**, hard minimum **1** (`quota_cores_to_workers`: 250m/0.5 → 1, 2.5 → 2, never 0, never above CFS). Override: `WEISSMAN_TOKIO_WORKER_THREADS=logical\|smt\|N` (still clamped). LIFO slot on. |
+| TCP | `http::tcp_socket` + `Serve::tcp_nodelay(true)` | Nagle off + keepalive. `listen(4096)` is reduced to `net.core.somaxconn` when the kernel would silently truncate; host/compose/systemd apply `deploy/sysctl.d/99-weissman-listen.conf`. K8s: read-only init preflight + Helm `deploy/helm/weissman-listen` (`podSysctl` / fail-closed Job). |
+| Brotli-4 | nginx gateway / `deploy/nginx-brotli.inc` | **JSON compression is not in Axum** (CPU DoS). Axum Brotli-4 is SPA/static only. SSE excluded. **Inbound** gzip/br inflate is capped at **4 MiB** (`inbound_decode`). **Raw** POST bodies are capped at **8 MiB** (`DefaultBodyLimit` + Content-Length middleware). Over either ceiling → 413, then **TCP RST** (`SO_LINGER 0` + `shutdown(Both)`) so ALB/proxy buffers stop filling. |
+| `spawn_blocking` | `/api/health` RSS, CEO telemetry, report writes | Filesystem I/O never sits on the event-loop worker |
+| Stream caps | `http::bounded_codec` | 1 MiB length-delimited frame / 4 MiB WS message / 1 MiB WS frame — room for agent reconnect batches, hard OOM ceiling. |
+| DashMap | login lockout, agent registry, LLM circuit, AI daily tokens, engine telemetry | Sharded maps. **Eviction sweep** every 15 min (`http::dashmap_gc`; `WEISSMAN_DASHMAP_EVICT_SECS`). Agent remote presence already pruned every 30s. |
 
 ---
 

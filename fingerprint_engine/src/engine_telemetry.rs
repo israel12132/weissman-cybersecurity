@@ -3,12 +3,12 @@
 //! outcome here so the UI can show, per engine: total runs, self-heal (recovered) count, failures,
 //! and the last run's status / attempts / strategy / latency.
 //!
-//! Process-local and lock-guarded (no external store, no fake data). Bounded by the engine catalog
+//! Process-local DashMap (sharded, no process-wide mutex). Bounded by the engine catalog
 //! size, so memory is constant.
 
+use dashmap::DashMap;
 use serde::Serialize;
-use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct EngineHealth {
@@ -23,17 +23,12 @@ pub struct EngineHealth {
     pub updated_ts: i64,
 }
 
-fn store() -> &'static Mutex<HashMap<String, EngineHealth>> {
-    static S: OnceLock<Mutex<HashMap<String, EngineHealth>>> = OnceLock::new();
-    S.get_or_init(|| Mutex::new(HashMap::new()))
+fn store() -> &'static DashMap<String, EngineHealth> {
+    static S: OnceLock<DashMap<String, EngineHealth>> = OnceLock::new();
+    S.get_or_init(DashMap::new)
 }
 
-/// Record the outcome of one resilient engine run.
-pub fn record(engine_id: &str, telem: &crate::engine_resilience::EngineExecTelemetry) {
-    let Ok(mut map) = store().lock() else {
-        return;
-    };
-    let h = map.entry(engine_id.to_string()).or_default();
+fn apply_telem(h: &mut EngineHealth, telem: &crate::engine_resilience::EngineExecTelemetry) {
     h.total_runs += 1;
     if telem.recovered {
         h.recovered_runs += 1;
@@ -49,13 +44,24 @@ pub fn record(engine_id: &str, telem: &crate::engine_resilience::EngineExecTelem
     h.updated_ts = chrono::Utc::now().timestamp();
 }
 
+/// Record the outcome of one resilient engine run.
+pub fn record(engine_id: &str, telem: &crate::engine_resilience::EngineExecTelemetry) {
+    store()
+        .entry(engine_id.to_string())
+        .and_modify(|h| apply_telem(h, telem))
+        .or_insert_with(|| {
+            let mut h = EngineHealth::default();
+            apply_telem(&mut h, telem);
+            h
+        });
+}
+
 /// Snapshot of all observed engines, most-recently-run first.
 pub fn snapshot() -> Vec<(String, EngineHealth)> {
-    let Ok(map) = store().lock() else {
-        return Vec::new();
-    };
-    let mut v: Vec<(String, EngineHealth)> =
-        map.iter().map(|(k, h)| (k.clone(), h.clone())).collect();
+    let mut v: Vec<(String, EngineHealth)> = store()
+        .iter()
+        .map(|e| (e.key().clone(), e.value().clone()))
+        .collect();
     v.sort_by(|a, b| b.1.updated_ts.cmp(&a.1.updated_ts));
     v
 }
@@ -83,6 +89,28 @@ pub fn to_json() -> serde_json::Value {
             "updated_ts": h.updated_ts,
         })).collect::<Vec<_>>(),
     })
+}
+
+/// Drop engines that have not reported in `max_age_secs` (default 30 days).
+pub fn evict_stale() -> usize {
+    evict_older_than(
+        chrono::Utc::now()
+            .timestamp()
+            .saturating_sub(30 * 24 * 3600),
+    )
+}
+
+fn evict_older_than(cutoff_ts: i64) -> usize {
+    let mut dropped = 0usize;
+    store().retain(|_, h| {
+        if h.updated_ts > 0 && h.updated_ts < cutoff_ts {
+            dropped += 1;
+            false
+        } else {
+            true
+        }
+    });
+    dropped
 }
 
 #[cfg(test)]
@@ -135,5 +163,19 @@ mod tests {
             .expect("engine recorded");
         assert!(h.failed_runs >= 1);
         assert_eq!(h.last_status, "timeout");
+    }
+
+    #[test]
+    fn evicts_engines_older_than_cutoff() {
+        store().insert(
+            "telemetry_stale_engine_zzz".into(),
+            EngineHealth {
+                updated_ts: 1,
+                ..EngineHealth::default()
+            },
+        );
+        let n = evict_older_than(1_000);
+        assert!(n >= 1);
+        assert!(store().get("telemetry_stale_engine_zzz").is_none());
     }
 }

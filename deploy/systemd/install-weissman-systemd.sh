@@ -70,6 +70,14 @@ fi
 
 systemctl daemon-reload
 
+if [[ -f "$REPO_ROOT/deploy/sysctl.d/99-weissman-listen.conf" ]]; then
+  echo "[*] listen backlog sysctl (net.core.somaxconn=4096)"
+  install -o root -g root -m 0644 "$REPO_ROOT/deploy/sysctl.d/99-weissman-listen.conf" \
+    /etc/sysctl.d/99-weissman-listen.conf
+  sysctl -w net.core.somaxconn=4096
+  sysctl -w net.ipv4.tcp_max_syn_backlog=4096 || true
+fi
+
 if [[ "$ENV_CREATED" -eq 1 ]]; then
   echo ""
   echo "[!] Created $ENV_DIR/weissman.env — set DATABASE_URL, WEISSMAN_JWT_SECRET, WEISSMAN_COOKIE_SECURE=1, PORT, then:"

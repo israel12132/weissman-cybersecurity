@@ -62,6 +62,10 @@ use tokio::net::TcpStream;
 
 /// Fast-fail dead ports; full connect attempt budget is still large when scanning many hosts in parallel upstream.
 const PORT_TIMEOUT_MS: u64 = 500;
+/// HTTP/TLS/sensitive-path depth on apex + this many discovered subdomains.
+/// Inventory still records every live name; probing 2k paths on every crt.sh hit
+/// never finishes a Command Center job.
+const MAX_DEEP_POSTURE_HOSTS: usize = 16;
 /// Default ports: classic attack surface plus common cloud / API / observability / dev ports.
 pub const TOP_PORTS: [u16; 63] = [
     // Web / API / reverse proxies
@@ -1293,12 +1297,18 @@ async fn probe_sensitive_paths(
     pace: &crate::discovery_pace::DiscoveryPace,
     stealth: &mut Option<crate::stealth_engine::StealthConfig>,
     timeout_ms: u64,
+    remaining_extra: &mut usize,
 ) -> Vec<Value> {
     let mut out = Vec::new();
     for (path, sev, label) in SENSITIVE_PATHS {
         pace.before_probe(stealth.as_ref()).await;
         let url = format!("https://{host}{path}");
-        let resp = match client.get(&url).send().await {
+        let resp = match client
+            .get(&url)
+            .timeout(Duration::from_millis(timeout_ms.min(3_000).max(400)))
+            .send()
+            .await
+        {
             Ok(resp) => {
                 pace.observe_status(resp.status().as_u16());
                 resp
@@ -1362,10 +1372,11 @@ async fn probe_sensitive_paths(
         .collect();
     extra.sort();
     extra.dedup();
-    let budget = weissman_engines::discovery_corpus::discovery_probe_budget();
-    if extra.len() > budget {
-        extra.truncate(budget);
+    if extra.len() > *remaining_extra {
+        extra.truncate(*remaining_extra);
     }
+    *remaining_extra = remaining_extra.saturating_sub(extra.len());
+    let bulk_timeout = Duration::from_millis(timeout_ms.min(2_500).max(400));
     let mut confirmed = Vec::new();
     let mut idx = 0usize;
     while idx < extra.len() {
@@ -1382,7 +1393,7 @@ async fn probe_sensitive_paths(
                 async move {
                     pace.before_probe(st.as_ref()).await;
                     let url = format!("https://{host}{path}");
-                    match client.get(&url).send().await {
+                    match client.get(&url).timeout(bulk_timeout).send().await {
                         Ok(resp) => {
                             let status = resp.status().as_u16();
                             pace.observe_status(status);
@@ -1990,7 +2001,7 @@ pub async fn run_asm_result_ctx(
             } else if custom_extra.is_empty() {
                 let mut wl = default_subdomain_wordlist();
                 if let Some(pool) = ctx.discovery_knowledge_pool() {
-                    crate::discovery_knowledge::seed_public_knowledge(pool).await;
+                    crate::discovery_knowledge::kick_seed_public_knowledge(pool);
                     let learned = crate::discovery_knowledge::load_subdomain_prefixes(pool).await;
                     wl = crate::discovery_knowledge::merge_unique(&[&wl, &learned]);
                 }
@@ -2188,7 +2199,12 @@ pub async fn run_asm_result_ctx(
     };
     let mut posture_hosts: Vec<String> = vec![host.clone()];
     posture_hosts.extend(subdomains.iter().cloned());
-    for ph in &posture_hosts {
+    let deep_hosts: Vec<String> = posture_hosts
+        .into_iter()
+        .take(MAX_DEEP_POSTURE_HOSTS)
+        .collect();
+    let mut extra_budget_left = weissman_engines::discovery_corpus::discovery_probe_budget();
+    for ph in &deep_hosts {
         if do_http {
             let url = format!("https://{ph}");
             if let Some(hp) = http_posture(&client, &url).await {
@@ -2276,7 +2292,7 @@ pub async fn run_asm_result_ctx(
                     findings.push(f);
                 }
             }
-            if do_sensitive {
+            if do_sensitive && ph == &host {
                 findings.extend(
                     probe_sensitive_paths(
                         &mut client,
@@ -2286,6 +2302,7 @@ pub async fn run_asm_result_ctx(
                         pace.as_ref(),
                         &mut stealth_owned,
                         http_timeout,
+                        &mut extra_budget_left,
                     )
                     .await,
                 );
@@ -2390,7 +2407,10 @@ pub async fn run_asm_result_ctx(
     // ── 6. Tech fingerprint ──────────────────────────────────────────────────
     if do_fingerprint {
         let mut urls = vec![format!("https://{}", host), format!("http://{}", host)];
-        for s in subdomains.iter() {
+        for s in subdomains
+            .iter()
+            .take(MAX_DEEP_POSTURE_HOSTS.saturating_sub(1))
+        {
             urls.push(format!("https://{}", s));
         }
         let fp = scan_targets_concurrent_with_stealth(&urls, stealth_owned.as_ref()).await;
@@ -2417,8 +2437,13 @@ pub async fn run_asm_result_ctx(
     let mut graph_nodes: Option<Vec<cloud_hunter::GraphNode>> = None;
     let mut graph_edges: Option<Vec<cloud_hunter::GraphEdge>> = None;
     if do_cloud {
+        let probe_subs: Vec<String> = subdomains
+            .iter()
+            .cloned()
+            .take(MAX_DEEP_POSTURE_HOSTS)
+            .collect();
         let (mut nodes, mut edges, cloud_findings) =
-            cloud_hunter::run_cloud_hunter(&host, &subdomains, stealth_owned.as_ref()).await;
+            cloud_hunter::run_cloud_hunter(&host, &probe_subs, stealth_owned.as_ref()).await;
         findings.extend(cloud_findings);
         let shadow_set: BTreeSet<String> = findings
             .iter()

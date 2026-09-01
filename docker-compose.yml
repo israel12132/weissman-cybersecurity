@@ -134,6 +134,10 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    # Namespaced: so listen(4096) is not silently truncated to somaxconn=128.
+    sysctls:
+      net.core.somaxconn: 4096
+      net.ipv4.tcp_max_syn_backlog: 4096
     logging: *default-logging
     build:
       context: .

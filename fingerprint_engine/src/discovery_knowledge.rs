@@ -464,6 +464,21 @@ pub async fn stats(pool: &PgPool) -> CorpusStats {
     }
 }
 
+/// Fire-and-forget seed so the first Command Center scan is not blocked on 65k UNNESTs.
+/// In-memory `all_http_paths` / `all_subdomain_prefixes` still feed this scan.
+pub fn kick_seed_public_knowledge(pool: &PgPool) {
+    if SEED_DONE.load(Ordering::SeqCst) {
+        return;
+    }
+    remember_pool(pool);
+    let pool = pool.clone();
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.spawn(async move {
+            seed_public_knowledge(&pool).await;
+        });
+    }
+}
+
 /// Idempotent seed insert. Skips when the public seed is already loaded.
 /// Cross-scan workers coordinate via Redis SET NX so parallel ASM jobs do not
 /// UNNEST the 40k+ seed twice.

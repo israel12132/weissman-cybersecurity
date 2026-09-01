@@ -836,19 +836,24 @@ mod tests {
     }
 
     #[test]
-    fn hermetic_roles_migration_grants_thirteen_ro_tables() {
+    fn hermetic_roles_migration_grants_ro_tables() {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/migrations/20260827115800_hermetic_db_roles.sql"
         );
         let sql = std::fs::read_to_string(path).expect("roles migration");
+        let ot_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/migrations/20260827160000_ot_ics_hardening_safety.sql"
+        );
+        let ot_sql = std::fs::read_to_string(ot_path).expect("ot ics grants");
         assert!(sql.contains("NOBYPASSRLS"));
         assert!(sql.contains("ALTER ROLE weissman_auth"));
         assert!(sql.contains("BYPASSRLS"));
         assert!(sql.contains("statement_timeout = '15s'"));
         for table in crate::role_guard::RO_SELECT_TABLES {
             assert!(
-                sql.contains(table),
+                sql.contains(table) || ot_sql.contains(&format!("GRANT SELECT ON {table}")),
                 "weissman_ro grant list must include {table}"
             );
         }

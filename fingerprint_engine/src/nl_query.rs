@@ -377,7 +377,7 @@ pub fn allowed_table_count() -> usize {
     SCHEMA.len()
 }
 
-/// Hermetic QueryPlan sandbox: table must be one of the 13 weissman_ro names.
+/// Hermetic QueryPlan sandbox: table must be one of the 17 weissman_ro names.
 #[must_use]
 pub fn is_allowlisted_table(name: &str) -> bool {
     SCHEMA.contains_key(name)

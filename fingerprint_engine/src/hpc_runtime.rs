@@ -38,21 +38,285 @@ fn tokio_cpu_affinity_cpus() -> Vec<usize> {
         .unwrap_or_default()
 }
 
+/// Count physical cores from `/proc/cpuinfo` (`physical id` + `core id` pairs).
+/// Host topology only — **never** use this as the Tokio worker count in a
+/// container. [`tokio_worker_threads`] clamps it to [`container_parallelism`].
+/// Falls back to `available_parallelism` when the file is missing.
+#[must_use]
+pub fn physical_cpu_count() -> usize {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(text) = std::fs::read_to_string("/proc/cpuinfo") {
+            if let Some(n) = parse_physical_cpus_from_cpuinfo(&text) {
+                if n > 0 {
+                    return n;
+                }
+            }
+        }
+    }
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .max(1)
+}
+
+/// Parse unique `(physical id, core id)` pairs from a `/proc/cpuinfo` dump.
+#[must_use]
+pub fn parse_physical_cpus_from_cpuinfo(text: &str) -> Option<usize> {
+    use std::collections::BTreeSet;
+    let mut phys: Option<u32> = None;
+    let mut core: Option<u32> = None;
+    let mut set = BTreeSet::new();
+    let mut flush = |phys: &mut Option<u32>, core: &mut Option<u32>| {
+        if let (Some(p), Some(c)) = (*phys, *core) {
+            set.insert((p, c));
+        }
+        *phys = None;
+        *core = None;
+    };
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            flush(&mut phys, &mut core);
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("physical id") {
+            phys = rest
+                .rsplit_once(':')
+                .and_then(|(_, v)| v.trim().parse().ok());
+        } else if let Some(rest) = line.strip_prefix("core id") {
+            core = rest
+                .rsplit_once(':')
+                .and_then(|(_, v)| v.trim().parse().ok());
+        }
+    }
+    flush(&mut phys, &mut core);
+    if set.is_empty() {
+        None
+    } else {
+        Some(set.len())
+    }
+}
+
+/// Cgroups v2 `cpu.max` → cores. `"max 100000"` is unlimited (`None`).
+#[must_use]
+pub fn parse_cgroup_v2_cpu_max(text: &str) -> Option<f64> {
+    let mut parts = text.split_whitespace();
+    let quota = parts.next()?.trim();
+    if quota.eq_ignore_ascii_case("max") {
+        return None;
+    }
+    let quota: i64 = quota.parse().ok()?;
+    let period: i64 = parts.next().unwrap_or("100000").parse().ok()?;
+    if quota <= 0 || period <= 0 {
+        return None;
+    }
+    Some(quota as f64 / period as f64)
+}
+
+/// Cgroups v1 `cpu.cfs_quota_us` / `cpu.cfs_period_us`. Quota `-1` is unlimited.
+#[must_use]
+pub fn parse_cgroup_v1_cfs(quota_us: &str, period_us: &str) -> Option<f64> {
+    let quota: i64 = quota_us.trim().parse().ok()?;
+    let period: i64 = period_us.trim().parse().ok()?;
+    if quota < 0 {
+        return None;
+    }
+    if quota == 0 || period <= 0 {
+        return None;
+    }
+    Some(quota as f64 / period as f64)
+}
+
+fn read_cgroup_v2_quota_from_proc() -> Option<f64> {
+    let proc = std::fs::read_to_string("/proc/self/cgroup").ok()?;
+    let rel = proc
+        .lines()
+        .find_map(|l| l.strip_prefix("0::"))?
+        .trim()
+        .trim_start_matches('/');
+    let root = std::path::Path::new("/sys/fs/cgroup");
+    let mut path = if rel.is_empty() {
+        root.to_path_buf()
+    } else {
+        root.join(rel)
+    };
+    let mut tightest: Option<f64> = None;
+    loop {
+        if let Ok(text) = std::fs::read_to_string(path.join("cpu.max")) {
+            if let Some(n) = parse_cgroup_v2_cpu_max(&text) {
+                tightest = Some(match tightest {
+                    Some(t) => t.min(n),
+                    None => n,
+                });
+            }
+        }
+        if path == root {
+            break;
+        }
+        if !path.pop() {
+            break;
+        }
+    }
+    tightest
+}
+
+/// CPU quota in cores from cgroups v2 then v1. `None` = unlimited / unreadable.
+#[must_use]
+pub fn cgroup_cpu_quota_cores() -> Option<f64> {
+    #[cfg(not(target_os = "linux"))]
+    {
+        return None;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(text) = std::fs::read_to_string("/sys/fs/cgroup/cpu.max") {
+            if let Some(n) = parse_cgroup_v2_cpu_max(&text) {
+                return Some(n);
+            }
+            if text
+                .split_whitespace()
+                .next()
+                .is_some_and(|w| w.eq_ignore_ascii_case("max"))
+            {
+                return None;
+            }
+        }
+        if let Some(n) = read_cgroup_v2_quota_from_proc() {
+            return Some(n);
+        }
+        let quota = std::fs::read_to_string("/sys/fs/cgroup/cpu/cpu.cfs_quota_us").ok()?;
+        let period = std::fs::read_to_string("/sys/fs/cgroup/cpu/cpu.cfs_period_us").ok()?;
+        parse_cgroup_v1_cfs(&quota, &period)
+    }
+}
+
+/// Convert a cgroup CPU quota in cores (may be fractional) into a Tokio worker count.
+///
+/// Tokio panics on `worker_threads = 0`. Kubernetes `resources.limits.cpu: "250m"` /
+/// `"0.5"` must become **1**, never truncated to 0. Non-integers use **floor** so
+/// workers never exceed the CFS quota (ceil(2.5)=3 on a 2.5-CPU pod causes end-of-period
+/// throttling, API latency spikes, and agent WSS drops). Floor of a fraction is 0, so
+/// the hard minimum remains 1.
+#[must_use]
+pub fn quota_cores_to_workers(quota: f64) -> usize {
+    if !quota.is_finite() || quota <= 0.0 {
+        return 1;
+    }
+    (quota.floor() as usize).max(1)
+}
+
+/// Runnable CPUs for this process: `available_parallelism` (affinity) capped by
+/// the cgroup quota. Never returns the bare-metal `/proc/cpuinfo` count.
+/// Never returns 0.
+#[must_use]
+pub fn container_parallelism() -> usize {
+    let affinity = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .max(1);
+    match cgroup_cpu_quota_cores() {
+        Some(q) => affinity.min(quota_cores_to_workers(q)),
+        None => affinity,
+    }
+    .max(1)
+}
+
+/// Worker-thread count: cgroup/affinity first, then optional SMT bypass.
+///
+/// Override tokens:
+/// - unset / `physical` → `min(host physical cores, container quota)` (SMT bypass
+///   **inside** the quota — never 128 workers in a 2-CPU pod)
+/// - `logical` / `smt` / `available` → container quota (Hyperthread siblings
+///   that this process may actually run)
+/// - a positive integer → exact count, **still clamped** to the container quota
+#[must_use]
+pub fn tokio_worker_threads() -> usize {
+    let container = container_parallelism();
+    let host_physical = physical_cpu_count();
+    let physical_capped = host_physical.min(container).max(1);
+    let requested = parse_tokio_worker_threads(
+        std::env::var("WEISSMAN_TOKIO_WORKER_THREADS")
+            .ok()
+            .as_deref(),
+        physical_capped,
+        container,
+    );
+    let n = requested.min(container).max(1);
+    if requested > container {
+        tracing::warn!(
+            target: "hpc_runtime",
+            requested,
+            container,
+            cgroup_quota = ?cgroup_cpu_quota_cores(),
+            "Tokio worker count clamped to cgroup/affinity quota (context-switch storm defense)"
+        );
+    }
+    n
+}
+
+/// Resolve worker count from a raw env value (unit-tested without touching process env).
+#[must_use]
+pub fn parse_tokio_worker_threads(raw: Option<&str>, physical: usize, logical: usize) -> usize {
+    let physical = physical.max(1);
+    let logical = logical.max(1);
+    let Some(s) = raw.map(str::trim).filter(|s| !s.is_empty()) else {
+        return physical;
+    };
+    match s.to_ascii_lowercase().as_str() {
+        "physical" => physical,
+        "logical" | "smt" | "available" => logical,
+        other => other
+            .parse::<usize>()
+            .ok()
+            .filter(|&n| n > 0)
+            .unwrap_or(physical),
+    }
+}
+
+/// Tokio LIFO slot stays on unless `WEISSMAN_TOKIO_DISABLE_LIFO_SLOT=1`.
+/// The slot reuses the current worker for wakeups and avoids extra context switches
+/// on short HTTP handlers.
+#[must_use]
+pub fn tokio_lifo_slot_enabled() -> bool {
+    !std::env::var("WEISSMAN_TOKIO_DISABLE_LIFO_SLOT")
+        .map(|v| {
+            matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(false)
+}
+
 /// Build multi-threaded runtime; optionally pins each worker thread to successive PUs.
 pub fn build_scan_runtime() -> io::Result<tokio::runtime::Runtime> {
-    let threads = std::env::var("WEISSMAN_TOKIO_WORKER_THREADS")
-        .ok()
-        .and_then(|s| s.trim().parse::<usize>().ok())
-        .filter(|&n| n > 0)
-        .unwrap_or_else(|| {
-            std::thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(1)
-                .max(1)
-        });
+    let threads = tokio_worker_threads();
+    let blocking = (threads.saturating_mul(4)).clamp(16, 512);
 
     let mut builder = tokio::runtime::Builder::new_multi_thread();
-    builder.enable_all().worker_threads(threads);
+    builder
+        .enable_all()
+        .worker_threads(threads)
+        .max_blocking_threads(blocking);
+    // Tokio's LIFO slot is enabled by default (avoids extra worker hand-offs on short
+    // HTTP handlers). `disable_lifo_slot` is tokio_unstable-only; we keep the default.
+    if !tokio_lifo_slot_enabled() {
+        tracing::warn!(
+            target: "hpc_runtime",
+            "WEISSMAN_TOKIO_DISABLE_LIFO_SLOT is set but tokio requires tokio_unstable to disable the LIFO slot; leaving it enabled"
+        );
+    }
+    tracing::info!(
+        target: "hpc_runtime",
+        worker_threads = threads,
+        max_blocking_threads = blocking,
+        lifo_slot = tokio_lifo_slot_enabled(),
+        container_parallelism = container_parallelism(),
+        host_physical = physical_cpu_count(),
+        cgroup_quota = ?cgroup_cpu_quota_cores(),
+        "tokio runtime workers (cgroup-capped; override WEISSMAN_TOKIO_WORKER_THREADS=logical|N)"
+    );
 
     #[cfg(target_os = "linux")]
     {
@@ -260,5 +524,109 @@ mod tests {
     fn parse_tolerates_internal_whitespace() {
         assert_eq!(parse_cpu_affinity_list(" 0 - 2 "), vec![0, 1, 2]);
         assert_eq!(parse_cpu_affinity_list(" 1 , 3 "), vec![1, 3]);
+    }
+
+    #[test]
+    fn cpuinfo_counts_unique_physical_cores() {
+        let sample = "\
+processor\t: 0
+physical id\t: 0
+core id\t: 0
+
+processor\t: 1
+physical id\t: 0
+core id\t: 0
+
+processor\t: 2
+physical id\t: 0
+core id\t: 1
+
+processor\t: 3
+physical id\t: 0
+core id\t: 1
+";
+        assert_eq!(parse_physical_cpus_from_cpuinfo(sample), Some(2));
+    }
+
+    #[test]
+    fn worker_threads_at_least_one() {
+        assert!(tokio_worker_threads() >= 1);
+        assert!(physical_cpu_count() >= 1);
+        assert!(tokio_lifo_slot_enabled());
+    }
+
+    #[test]
+    fn worker_override_tokens() {
+        assert_eq!(parse_tokio_worker_threads(None, 8, 16), 8);
+        assert_eq!(parse_tokio_worker_threads(Some(""), 8, 16), 8);
+        assert_eq!(parse_tokio_worker_threads(Some("physical"), 8, 16), 8);
+        assert_eq!(parse_tokio_worker_threads(Some("logical"), 8, 16), 16);
+        assert_eq!(parse_tokio_worker_threads(Some("SMT"), 8, 16), 16);
+        assert_eq!(parse_tokio_worker_threads(Some("available"), 8, 16), 16);
+        assert_eq!(parse_tokio_worker_threads(Some("32"), 8, 16), 32);
+        assert_eq!(parse_tokio_worker_threads(Some("0"), 8, 16), 8);
+        assert_eq!(parse_tokio_worker_threads(Some("nope"), 8, 16), 8);
+    }
+
+    #[test]
+    fn cgroup_v2_cpu_max_unlimited() {
+        assert_eq!(parse_cgroup_v2_cpu_max("max 100000"), None);
+        assert_eq!(parse_cgroup_v2_cpu_max("max"), None);
+    }
+
+    #[test]
+    fn cgroup_v2_cpu_max_quota() {
+        assert_eq!(parse_cgroup_v2_cpu_max("200000 100000"), Some(2.0));
+        assert_eq!(parse_cgroup_v2_cpu_max("150000 100000"), Some(1.5));
+        assert_eq!(parse_cgroup_v2_cpu_max("0 100000"), None);
+    }
+
+    #[test]
+    fn cgroup_v1_cfs_quota() {
+        assert_eq!(parse_cgroup_v1_cfs("-1", "100000"), None);
+        assert_eq!(parse_cgroup_v1_cfs("200000", "100000"), Some(2.0));
+        assert_eq!(parse_cgroup_v1_cfs("400000", "100000"), Some(4.0));
+    }
+
+    #[test]
+    fn k8s_two_cpu_limit_never_uses_host_128() {
+        // 128-thread host, 2-CPU pod: physical capped at quota, integer env clamped.
+        let host_physical = 64;
+        let container = 2;
+        let physical_capped = host_physical.min(container);
+        assert_eq!(
+            parse_tokio_worker_threads(None, physical_capped, container),
+            2
+        );
+        assert_eq!(
+            parse_tokio_worker_threads(Some("128"), physical_capped, container).min(container),
+            2
+        );
+    }
+
+    #[test]
+    fn container_parallelism_is_at_least_one() {
+        assert!(container_parallelism() >= 1);
+        assert!(tokio_worker_threads() <= container_parallelism());
+    }
+
+    #[test]
+    fn fractional_cgroup_quota_never_yields_zero_workers() {
+        assert_eq!(quota_cores_to_workers(0.25), 1); // 250m
+        assert_eq!(quota_cores_to_workers(0.5), 1);
+        assert_eq!(quota_cores_to_workers(0.99), 1);
+        assert_eq!(quota_cores_to_workers(1.0), 1);
+        assert_eq!(quota_cores_to_workers(2.5), 2); // floor: never oversubscribe CFS
+        assert_eq!(quota_cores_to_workers(3.1), 3);
+        assert_eq!(quota_cores_to_workers(2.0), 2);
+        assert_eq!(quota_cores_to_workers(0.0), 1);
+        assert_eq!(quota_cores_to_workers(-4.0), 1);
+        assert_eq!(quota_cores_to_workers(f64::NAN), 1);
+        assert_eq!(quota_cores_to_workers(f64::INFINITY), 1);
+        assert_eq!(parse_cgroup_v2_cpu_max("25000 100000"), Some(0.25));
+        assert_eq!(
+            quota_cores_to_workers(parse_cgroup_v2_cpu_max("25000 100000").unwrap()),
+            1
+        );
     }
 }

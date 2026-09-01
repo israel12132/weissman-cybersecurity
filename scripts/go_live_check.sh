@@ -305,6 +305,36 @@ if command -v cargo >/dev/null 2>&1; then
   cargo check -p weissman-server -q && ok "cargo check server" || bad "cargo check"
 fi
 
+section "Listen backlog (agent reconnect bursts)"
+if [[ -r /proc/sys/net/core/somaxconn ]]; then
+  soma="$(tr -d ' \n' </proc/sys/net/core/somaxconn)"
+  if [[ "$soma" =~ ^[0-9]+$ ]] && [[ "$soma" -ge 4096 ]]; then
+    ok "net.core.somaxconn=$soma (>=4096)"
+  else
+    note "net.core.somaxconn=${soma} — kernel silently truncates Axum listen(4096). Run: sudo bash deploy/apply-listen-sysctl.sh"
+  fi
+else
+  note "cannot read /proc/sys/net/core/somaxconn"
+fi
+if [[ -r /proc/sys/net/ipv4/tcp_max_syn_backlog ]]; then
+  synq="$(tr -d ' \n' </proc/sys/net/ipv4/tcp_max_syn_backlog)"
+  if [[ "$synq" =~ ^[0-9]+$ ]] && [[ "$synq" -ge 4096 ]]; then
+    ok "net.ipv4.tcp_max_syn_backlog=$synq (>=4096)"
+  else
+    note "net.ipv4.tcp_max_syn_backlog=${synq} — SYN flood/reconnect bursts drop before accept(). Run: sudo bash deploy/apply-listen-sysctl.sh"
+  fi
+fi
+if [[ -f deploy/sysctl.d/99-weissman-listen.conf ]] && [[ -x deploy/apply-listen-sysctl.sh ]]; then
+  ok "listen-backlog sysctl assets present (deploy/sysctl.d + apply-listen-sysctl.sh)"
+else
+  bad "missing deploy/sysctl.d/99-weissman-listen.conf or deploy/apply-listen-sysctl.sh"
+fi
+if [[ -f deploy/helm/weissman-listen/Chart.yaml ]] && [[ -f deploy/helm/weissman-listen/templates/preflight-job.yaml ]]; then
+  ok "k8s listen Helm chart present (somaxconn fail-closed preflight)"
+else
+  bad "missing deploy/helm/weissman-listen"
+fi
+
 section "Live staging (optional)"
 if [[ -n "$LIVE_URL" ]]; then
   if [[ "$LIVE_URL" == http://* ]] && grep -q 'WEISSMAN_COOKIE_SECURE=1' deploy/env.staging.example 2>/dev/null; then
