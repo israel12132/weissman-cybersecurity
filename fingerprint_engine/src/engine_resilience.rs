@@ -369,7 +369,7 @@ mod tests {
         let c = calls.clone();
         let (result, telem) = run_with_resilience(
             "flaky",
-            "https://example.com",
+            "https://resilience-recover.test",
             Duration::from_secs(2),
             move |_variant, _hint| {
                 let n = c.fetch_add(1, Ordering::SeqCst);
@@ -395,7 +395,7 @@ mod tests {
         let c = calls.clone();
         let (result, telem) = run_with_resilience(
             "quiet",
-            "example.com",
+            "https://resilience-quiet.test",
             Duration::from_secs(2),
             move |_v, _hint| {
                 c.fetch_add(1, Ordering::SeqCst);
@@ -413,7 +413,7 @@ mod tests {
     async fn panic_is_isolated_not_propagated() {
         let (result, telem) = run_with_resilience(
             "panicky",
-            "example.com",
+            "https://resilience-panic.test",
             Duration::from_secs(2),
             move |_v, _hint| async move {
                 panic!("engine blew up");
@@ -432,7 +432,7 @@ mod tests {
     async fn hung_engine_times_out_per_attempt() {
         let (result, telem) = run_with_resilience(
             "hung",
-            "example.com",
+            "https://resilience-hung.test",
             Duration::from_millis(40),
             move |_v, _hint| async move {
                 tokio::time::sleep(Duration::from_secs(5)).await;
@@ -449,7 +449,7 @@ mod tests {
         let started = Instant::now();
         let (result, telem) = run_with_resilience(
             "hung",
-            "https://example.com",
+            "https://resilience-wall.test",
             Duration::from_millis(80),
             move |_v, _hint| async move {
                 tokio::time::sleep(Duration::from_secs(5)).await;
@@ -521,7 +521,7 @@ mod tests {
     async fn failure_class_surfaced_in_telemetry() {
         let (result, telem) = run_with_resilience(
             "blocked",
-            "example.com",
+            "https://resilience-waf-class.test",
             Duration::from_secs(2),
             move |_v, _hint| async move { EngineResult::error("HTTP 403 blocked by WAF") },
         )
@@ -538,7 +538,7 @@ mod tests {
         let c = calls.clone();
         let _ = run_with_resilience(
             "wafed",
-            "https://example.com",
+            "https://resilience-waf.test",
             Duration::from_secs(2),
             move |_v, hint| {
                 h.lock().unwrap().push(hint.force_ghost_network);
