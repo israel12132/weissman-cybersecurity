@@ -432,7 +432,7 @@ async fn call_vllm(
          rationale (string), \
          telemetry_query (optional QueryPlan with table/select/filters/limit for risk_graph_nodes or risk_graph_edges). \
          Use only real Weissman production engine_id values. Do not invent findings. \
-         telemetry_query.table must be one of the 13 weissman_ro tables (never users). \
+         telemetry_query.table must be one of the 17 weissman_ro tables (never users). \
          telemetry_query must contain only allow-listed identifiers — never SQL, never pg_ catalog names.\n\
          Target: {target_safe}\nSignals: {signals:?}\nFailures: {fail_json}"
     );
@@ -642,7 +642,7 @@ mod tests {
     }
 
     #[test]
-    fn weissman_ro_allowlist_is_thirteen_tables() {
+    fn weissman_ro_allowlist_matches_ask_weissman_table_count() {
         assert_eq!(
             crate::nl_query::allowed_table_count(),
             ASK_WEISSMAN_TABLE_COUNT

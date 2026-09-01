@@ -388,7 +388,7 @@ mod tests {
         assert!(names.contains(&"vulnerabilities"));
         assert!(!names.contains(&"users"));
         assert!(!names.contains(&"pg_shadow"));
-        assert_eq!(names.len(), 13);
+        assert_eq!(names.len(), 17);
     }
 
     #[test]
