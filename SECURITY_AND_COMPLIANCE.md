@@ -40,7 +40,10 @@ Inspection-day script: **`docs/operations/INSPECTION-DAY-RUNBOOK.md`**.
   resets it).
 - **NL-query audit.** Every `/api/ask` call is recorded in `nl_query_audit`:
   the question, the LLM-generated plan, the compiled SQL, row count, ms,
-  error message (if any).
+  error message (if any). Direct JSON `QueryPlan` bodies are admitted only
+  with HMAC v2 (`weissman-queryplan-v2`) bound to unix time + nonce;
+  `|now − ts| ≤ 15s`, Redis `SET NX EX 30` followed by `WAIT 1 10` so a
+  lagging replica cannot re-admit a captured nonce; fail-closed (no JWT fallback).
 
 ## 3. Data residency
 

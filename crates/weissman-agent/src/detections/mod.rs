@@ -19,6 +19,7 @@ mod process_hollowing;
 mod process_modules;
 mod scheduled_tasks;
 mod social_local;
+mod syscall_hooks;
 mod timestomp;
 mod usb_devices;
 mod util;
@@ -68,6 +69,7 @@ pub fn all_capability_ids() -> Vec<&'static str> {
         "storage_covert_channel",
         // evasion / hardening
         "av_bypass_engine",
+        "syscall_evasion",
         "log_tampering_engine",
         "timestomping",
         // mobile / social
@@ -95,6 +97,13 @@ pub fn all_capability_ids() -> Vec<&'static str> {
         // CHRONOS — 5ms process-delta ring buffer + SIGSTOP on shell spawn
         "chronos",
     ]
+}
+
+/// Opt-in loopback PLC decoy (Modbus :502 / S7 :102). No-op unless
+/// `WEISSMAN_OT_PLC_DECOY=1`. The binary calls this after enroll; `--dry-run`
+/// never reaches it.
+pub fn spawn_ot_plc_decoy() {
+    ot_plc_decoy::spawn();
 }
 
 /// Dispatch a task to its detection.
@@ -134,7 +143,12 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
             "clipboard_hijack" => clipboard::run(&engine).await,
             "insider_exfil" => social_local::run_insider_threat(&engine).await,
             "storage_covert_channel" => exfil_local::run_storage_covert(&engine).await,
-            "av_bypass_engine" => edr_presence::run(&engine).await,
+            "av_bypass_engine" => {
+                let mut findings = edr_presence::run(&engine).await?;
+                findings.extend(syscall_hooks::run(&engine).await?);
+                Ok(findings)
+            }
+            "syscall_evasion" => syscall_hooks::run(&engine).await,
             "log_tampering_engine" => {
                 let mut findings = log_integrity::run(&engine).await?;
                 findings.extend(timestomp::run(&engine).await?);
@@ -258,6 +272,15 @@ mod tests {
             assert!(caps.contains(id), "missing agent capability: {id}");
         }
     }
+
+    #[test]
+    fn syscall_evasion_is_advertised() {
+        let caps: std::collections::HashSet<_> = all_capability_ids().into_iter().collect();
+        assert!(
+            caps.contains("syscall_evasion"),
+            "agent must advertise Hell's Gate / Halo's Gate syscall_evasion"
+        );
+    }
 }
 
 fn default_remediation(engine: &str, severity: &str) -> &'static str {
@@ -279,6 +302,9 @@ fn default_remediation(engine: &str, severity: &str) -> &'static str {
     }
     if engine.contains("log") {
         return "Forward Windows event log / Linux journald to an immutable SIEM in real time; alert on EventID 1102 (audit log cleared).";
+    }
+    if engine.contains("syscall") {
+        return "Capture the ntdll stub bytes (first 32) for each hooked export, compare against a clean ntdll from the same Windows build, and re-enable Tamper Protection on the EDR. Re-run syscall_evasion after the EDR health check.";
     }
     if engine.contains("av") || engine.contains("edr") {
         return "Run the official EDR health check (Defender 'Get-MpComputerStatus' / CrowdStrike 'rtr'), redeploy the agent if tampered, and require Tamper Protection.";

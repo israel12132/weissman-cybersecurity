@@ -5,7 +5,7 @@
 //! 1. An **OffensiveQueryPlan** — alternative live probes (validated against
 //!    `PRODUCTION_ENGINE_IDS`; findings in the JSON are dropped — 0 fabricated).
 //! 2. Optionally a classic Ask-Weissman [`crate::nl_query::QueryPlan`] executed
-//!    **only** against `weissman_ro` (compile + SELECT-only on the 13-table
+//!    **only** against `weissman_ro` (compile + SELECT-only on the 17-table
 //!    allow-list). The application pool is never used for council SQL.
 //!
 //! If vLLM is unreachable, the planner degrades to a static graph fallback map
@@ -451,7 +451,7 @@ async fn call_vllm(
                 "role": "system",
                 "content": "You are the Weissman Supreme Council Planner. Output ONLY valid JSON. \
     No fabricated vulnerabilities. probes[].engine_id must be a real production engine. \
-    telemetry_query if present must be a QueryPlan (never raw SQL) against the 13-table weissman_ro allow-list."
+    telemetry_query if present must be a QueryPlan (never raw SQL) against the 17-table weissman_ro allow-list."
             },
             {"role": "user", "content": prompt}
         ],

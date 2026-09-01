@@ -134,6 +134,13 @@ In-process background loops (`weissman-server`):
 5. Results returned to UI with the compiled SQL string so the analyst can audit
    what actually ran. Every question + plan + SQL + ms is logged to
    `nl_query_audit`.
+6. Analysts may send natural language only. A JSON `QueryPlan` is admitted
+   solely as service-to-service HMAC v2 (`weissman-queryplan-v2`) over the
+   canonical plan, a unix timestamp, and a hex nonce. The server accepts
+   `|now − ts| ≤ 15` seconds (NTP/cluster skew) and consumes the nonce with
+   Redis `SET NX EX 30` then `WAIT 1 10` (fail-closed on replica lag; standalone
+   Redis with zero slaves is admitted). Unsigned plans are rejected; there is no
+   end-user JWT fallback.
 
 ---
 

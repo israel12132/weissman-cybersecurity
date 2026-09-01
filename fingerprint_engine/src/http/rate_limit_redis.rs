@@ -90,6 +90,9 @@ end
 return n
 "#;
 
+/// Alias for the atomic window incrementer (INCR + PTTL/PEXPIRE heal).
+pub const REDIS_RATE_LIMITER_LUA: &str = INCR_BOUND_TTL_LUA;
+
 async fn incr_and_bound_ttl(
     conn: &mut redis::aio::MultiplexedConnection,
     key: &str,
@@ -561,8 +564,135 @@ pub fn spawn_incr_api_ip(ip: String, max: u64) {
     });
 }
 
+/// Claim a QueryPlan HMAC nonce exactly once (`SET key NX EX`).
+///
+/// `true` = first use. `false` = replay. `Unavailable` when Redis is required
+/// but unreachable (fail-closed). When Redis is unset and distributed state is
+/// not required, a process-local map is used so unit tests and single-node
+/// dev still reject replays.
+pub async fn claim_queryplan_nonce(nonce: &str) -> Result<(), String> {
+    match claim_queryplan_nonce_strict(nonce).await {
+        StrictOp::Ok(true) => Ok(()),
+        StrictOp::Ok(false) => Err("query plan HMAC nonce has already been used".into()),
+        StrictOp::Unavailable => Err(
+            "distributed security store (Redis) is unavailable; QueryPlan replay protection fail-closed"
+                .into(),
+        ),
+    }
+}
+
+fn queryplan_nonce_key(nonce: &str) -> String {
+    format!(
+        "weissman:queryplan:nonce:{}",
+        nonce.trim().to_ascii_lowercase()
+    )
+}
+
+static LOCAL_QUERYPLAN_NONCES: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
+fn local_queryplan_nonce_claim(key: &str, ttl: Duration) -> bool {
+    let Ok(mut g) = LOCAL_QUERYPLAN_NONCES.lock() else {
+        return false;
+    };
+    g.retain(|_, seen| seen.elapsed() < ttl);
+    if g.contains_key(key) {
+        return false;
+    }
+    g.insert(key.to_string(), std::time::Instant::now());
+    true
+}
+
+pub async fn claim_queryplan_nonce_strict(nonce: &str) -> StrictOp<bool> {
+    let ttl = Duration::from_secs(crate::nl_query::QUERYPLAN_NONCE_TTL_SECS);
+    let key = queryplan_nonce_key(nonce);
+    let Some(rl) = shared() else {
+        return if distributed_state_required() {
+            StrictOp::Unavailable
+        } else {
+            StrictOp::Ok(local_queryplan_nonce_claim(&key, ttl))
+        };
+    };
+    let Ok(mut conn) = rl.conn().await else {
+        return StrictOp::Unavailable;
+    };
+    let acquired: Result<Option<String>, _> = redis::cmd("SET")
+        .arg(&key)
+        .arg("1")
+        .arg("NX")
+        .arg("EX")
+        .arg(ttl.as_secs())
+        .query_async(&mut conn)
+        .await;
+    match acquired {
+        Ok(Some(_)) => confirm_nonce_replicated(&mut conn).await,
+        Ok(None) => StrictOp::Ok(false),
+        Err(_) => StrictOp::Unavailable,
+    }
+}
+
+const QUERYPLAN_NONCE_WAIT_REPLICAS: i64 = 1;
+/// Redis `WAIT` timeout (milliseconds) and the Tokio ceiling around it.
+/// 100ms held a multiplexed connection under replica lag and could starve
+/// `/api/ask` when many QueryPlans ran together. 10ms fail-closes instead.
+pub const QUERYPLAN_NONCE_WAIT_MS: i64 = 10;
+
+/// After `SET NX`, wait for one replica so a replay against a lagging replica
+/// cannot re-admit the same nonce. Standalone Redis (`connected_slaves:0`)
+/// skips `WAIT` entirely. Replica lag or a 10ms timeout fail-closes; the nonce
+/// stays claimed.
+pub fn nonce_replica_ack_ok(waited_replicas: i64, connected_slaves: u32) -> bool {
+    waited_replicas >= 1 || connected_slaves == 0
+}
+
+async fn confirm_nonce_replicated(conn: &mut redis::aio::MultiplexedConnection) -> StrictOp<bool> {
+    let slaves = connected_slaves(conn).await.unwrap_or(1);
+    if slaves == 0 {
+        return StrictOp::Ok(true);
+    }
+    let mut wait_cmd = redis::cmd("WAIT");
+    wait_cmd
+        .arg(QUERYPLAN_NONCE_WAIT_REPLICAS)
+        .arg(QUERYPLAN_NONCE_WAIT_MS);
+    let wait_n = match tokio::time::timeout(
+        Duration::from_millis(QUERYPLAN_NONCE_WAIT_MS as u64),
+        wait_cmd.query_async::<i64>(conn),
+    )
+    .await
+    {
+        Ok(Ok(n)) => n,
+        Ok(Err(_)) | Err(_) => return StrictOp::Unavailable,
+    };
+    if nonce_replica_ack_ok(wait_n, slaves) {
+        StrictOp::Ok(true)
+    } else {
+        StrictOp::Unavailable
+    }
+}
+
+async fn connected_slaves(conn: &mut redis::aio::MultiplexedConnection) -> Option<u32> {
+    let info: String = redis::cmd("INFO")
+        .arg("replication")
+        .query_async(conn)
+        .await
+        .ok()?;
+    parse_connected_slaves(&info)
+}
+
+pub fn parse_connected_slaves(info: &str) -> Option<u32> {
+    for line in info.lines() {
+        if let Some(rest) = line.strip_prefix("connected_slaves:") {
+            return rest.trim().parse().ok();
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn request_path_governors_must_degrade_not_503() {
         let src = include_str!("rate_limit_redis.rs");
@@ -623,5 +753,39 @@ mod tests {
             !lua.contains("ifn==1"),
             "must not gate EXPIRE on first INCR only"
         );
+    }
+
+    #[test]
+    fn replica_ack_standalone_ok() {
+        assert!(nonce_replica_ack_ok(0, 0));
+        assert!(nonce_replica_ack_ok(1, 0));
+    }
+
+    #[test]
+    fn replica_ack_requires_wait_when_slaves_exist() {
+        assert!(!nonce_replica_ack_ok(0, 1));
+        assert!(!nonce_replica_ack_ok(0, 3));
+        assert!(nonce_replica_ack_ok(1, 1));
+        assert!(nonce_replica_ack_ok(2, 3));
+    }
+
+    #[test]
+    fn parses_replication_info() {
+        let info = "role:master\r\nconnected_slaves:2\r\nmaster_repl_offset:1\r\n";
+        assert_eq!(parse_connected_slaves(info), Some(2));
+        assert_eq!(parse_connected_slaves("role:master\n"), None);
+    }
+
+    #[test]
+    fn queryplan_wait_timeout_is_ten_ms() {
+        assert_eq!(QUERYPLAN_NONCE_WAIT_MS, 10);
+    }
+
+    #[test]
+    fn rate_limiter_lua_is_single_eval_with_ttl_heal() {
+        assert!(REDIS_RATE_LIMITER_LUA.contains("INCR"));
+        assert!(REDIS_RATE_LIMITER_LUA.contains("PEXPIRE"));
+        assert!(REDIS_RATE_LIMITER_LUA.contains("PTTL"));
+        assert!(!REDIS_RATE_LIMITER_LUA.contains("MULTI"));
     }
 }

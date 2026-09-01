@@ -1,5 +1,5 @@
 /**
- * Master registry of all 565 production attack engines.
+ * Master registry of all 567 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 565 production engines in registry order */
+/** All 567 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -1892,7 +1892,7 @@ export const ENGINES_REGISTRY = [
     label: 'Direct Syscall / NTAPI Evasion',
     group: 'stealth',
     mitre: 'T1685',
-    description: 'AV/EDR evasion via direct syscalls: Heaven\'s Gate (WoW64 bypass), SysWhispers indirect syscalls, SSN dynamic resolution, kernel callback unhooking, ETW patching for telemetry blindness',
+    description: 'AV/EDR evasion via direct syscalls: Hell\'s Gate SSN resolution, Halo\'s Gate neighbor recovery when ntdll is JMP-hooked, Heaven\'s Gate (WoW64 bypass), SysWhispers indirect syscalls, kernel callback unhooking, ETW patching for telemetry blindness. The Weissman endpoint agent recovers SSNs from the live ntdll EAT without calling hooked Win32 APIs.',
     requiresTarget: false,
   },
   {

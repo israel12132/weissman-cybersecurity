@@ -450,17 +450,30 @@ mod tests {
 
     #[test]
     fn scrub_unsets_integrations_vault_env() {
+        // `DEDICATED_AFTER_SCRUB` is process-wide OnceLock. Coverage / --all-targets
+        // may have already primed without a dedicated key; that latch cannot flip.
+        let dedicated_lock_open = DEDICATED_AFTER_SCRUB.get() != Some(&false);
         std::env::set_var(
             "WEISSMAN_INTEGRATIONS_VAULT_KEY",
             "test-vault-key-for-integrations-32b-minimum!!",
         );
         prime_keys_from_env();
-        assert!(dedicated_key_configured());
+        if dedicated_lock_open {
+            assert!(
+                dedicated_key_configured(),
+                "dedicated vault key must load from env when this process primed with it"
+            );
+        }
         scrub_key_env_vars();
         assert!(
             std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY").is_err(),
             "integrations vault env must be wiped after boot"
         );
-        assert!(dedicated_key_configured());
+        if dedicated_lock_open {
+            assert!(
+                dedicated_key_configured(),
+                "OnceLock must remember dedicated key after env scrub"
+            );
+        }
     }
 }

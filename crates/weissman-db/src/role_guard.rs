@@ -27,7 +27,8 @@ pub const WORKER_ROLE: &str = "weissman_worker";
 pub const ANALYTICS_ROLE: &str = "weissman_analytics";
 
 /// Tables `weissman_ro` may `SELECT`. Keep in lock-step with
-/// `20260827115800_hermetic_db_roles.sql`.
+/// `20260827115800_hermetic_db_roles.sql` plus the OT/ICS grants in
+/// `20260827160000_ot_ics_hardening_safety.sql`.
 pub const RO_SELECT_TABLES: &[&str] = &[
     "vulnerabilities",
     "weissman_finding_clusters",
@@ -42,6 +43,10 @@ pub const RO_SELECT_TABLES: &[&str] = &[
     "kev_intel",
     "audit_logs",
     "report_runs",
+    "ot_ics_fingerprints",
+    "ot_ics_safety_events",
+    "ot_ics_protocol_baselines",
+    "ot_ics_asset_ranges",
 ];
 
 /// Ask Weissman hard statement timeout (milliseconds).
@@ -309,11 +314,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ro_select_list_is_exactly_thirteen() {
-        assert_eq!(RO_SELECT_TABLES.len(), 13);
+    fn ro_select_list_matches_ask_weissman_allowlist() {
+        assert_eq!(RO_SELECT_TABLES.len(), 17);
         let mut seen = std::collections::HashSet::new();
         for t in RO_SELECT_TABLES {
             assert!(seen.insert(*t), "duplicate {t}");
+        }
+        for ot in [
+            "ot_ics_fingerprints",
+            "ot_ics_safety_events",
+            "ot_ics_protocol_baselines",
+            "ot_ics_asset_ranges",
+        ] {
+            assert!(RO_SELECT_TABLES.contains(&ot), "missing {ot}");
         }
         assert!(!RO_SELECT_TABLES.contains(&"weissman_async_jobs"));
         assert!(!RO_SELECT_TABLES.contains(&"users"));

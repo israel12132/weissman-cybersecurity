@@ -122,6 +122,20 @@ pub fn api_burst() -> u32 {
     nz_env("WEISSMAN_RATE_LIMIT_BURST", 60, 10, 2000)
 }
 
+/// 1-second Redis INCR window cap. Must be `max(per_sec, burst)` so the distributed
+/// path matches governor's `allow_burst`. Comparing only `per_sec` made
+/// `WEISSMAN_RATE_LIMIT_BURST` a no-op on Redis and 429'd a single Command Center
+/// boot that is legal under the in-memory limiter.
+#[must_use]
+pub fn api_redis_window_cap() -> u32 {
+    redis_window_cap(api_limit_per_sec(), api_burst())
+}
+
+#[must_use]
+pub fn redis_window_cap(per_sec: u32, burst: u32) -> u32 {
+    per_sec.max(burst)
+}
+
 fn unix_minute(now: DateTime<Utc>) -> i64 {
     now.timestamp() / 60
 }
@@ -570,4 +584,17 @@ pub async fn api_rate_limits_analytics(
     let ip = extract_client_ip(&headers, peer);
     let body = analytics_for(auth.tenant_id, &ip, q.range.trim()).await;
     (StatusCode::OK, Json(body)).into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::redis_window_cap;
+
+    #[test]
+    fn redis_window_cap_is_max_of_rate_and_burst() {
+        assert_eq!(redis_window_cap(30, 60), 60);
+        assert_eq!(redis_window_cap(500, 2000), 2000);
+        assert_eq!(redis_window_cap(200, 60), 200);
+        assert_eq!(redis_window_cap(30, 30), 30);
+    }
 }

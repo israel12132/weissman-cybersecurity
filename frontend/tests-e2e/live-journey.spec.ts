@@ -11,7 +11,6 @@ import {
   ensureUiSession,
   liveEnabled,
   pollJobTerminal,
-  uiLogin,
   selectFirstCockpitClient,
 } from './live-helpers'
 
@@ -42,9 +41,7 @@ test('health — backend reachable', async ({ request }) => {
 })
 
 test('UI login — session established', async ({ page }) => {
-  await page.goto('/command-center/operations', { waitUntil: 'domcontentloaded' })
-  await page.getByText('Verifying session').waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {})
-  await expect(page).not.toHaveURL(/\/login/)
+  await ensureUiSession(page)
   await expect(page).toHaveURL(/\/command-center\/operations/)
   await expect(page.locator('#root')).toBeVisible()
 })
@@ -87,7 +84,11 @@ test('journey — client, scan, findings evidence, PDF export', async ({ page, r
   let findingsRes = await apiRequestWithRetry(() =>
     request.get(`/api/findings?client_id=${clientId}&limit=20`, { headers: authHeaders(auth) }),
   )
-  expect(findingsRes.ok()).toBeTruthy()
+  if (!findingsRes.ok()) {
+    throw new Error(
+      `findings GET HTTP ${findingsRes.status()}: ${(await findingsRes.text()).slice(0, 500)}`,
+    )
+  }
   let findingsPayload = await findingsRes.json()
   expect(findingsPayload.ok).toBe(true)
   let rows = Array.isArray(findingsPayload.findings) ? findingsPayload.findings : []

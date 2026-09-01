@@ -269,8 +269,9 @@ pub fn validate_poe_target_url(raw: &str) -> Result<(), &'static str> {
     Ok(())
 }
 
-/// One-shot public DNS pin for outbound HTTP. Resolves once, rejects RFC1918/loopback/link-local/
-/// CGNAT/metadata, and returns socket addrs the HTTP client must use (no second lookup).
+/// One-shot DNS pin for outbound HTTP. Resolves once, rejects RFC1918/loopback/link-local/
+/// CGNAT/metadata (unless `WEISSMAN_ALLOW_PRIVATE_SCAN_TARGETS=1` for lab fixtures),
+/// and returns socket addrs the HTTP client must use (no second lookup).
 #[derive(Debug, Clone)]
 pub struct PinnedHttpTarget {
     pub host: String,
@@ -291,10 +292,18 @@ pub async fn resolve_and_pin_public_http(raw: &str) -> Result<PinnedHttpTarget, 
         .unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
     let mut addrs: Vec<SocketAddr> = Vec::new();
     let mut seen = HashSet::new();
-    if let Ok(ip) = host.parse::<IpAddr>() {
+    let lab_private_ok = allow_private_scan_targets();
+    let reject_private = |ip: IpAddr| -> Result<(), String> {
+        if lab_private_ok {
+            return Ok(());
+        }
         if is_private_or_reserved_ip(&ip) {
             return Err(format!("blocked private/reserved pin target {ip}"));
         }
+        Ok(())
+    };
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        reject_private(ip)?;
         addrs.push(SocketAddr::new(ip, port));
     } else {
         let resolved = lookup_host((host.as_str(), port))
@@ -302,18 +311,14 @@ pub async fn resolve_and_pin_public_http(raw: &str) -> Result<PinnedHttpTarget, 
             .map_err(|e| format!("dns pin resolve failed: {e}"))?;
         for sa in resolved {
             let ip = sa.ip();
-            if is_private_or_reserved_ip(&ip) {
-                return Err(format!(
-                    "dns pin rejected: {host} resolved to blocked address {ip}"
-                ));
-            }
+            reject_private(ip).map_err(|e| format!("dns pin rejected: {host} resolved to {e}"))?;
             if seen.insert(ip) {
                 addrs.push(SocketAddr::new(ip, port));
             }
         }
     }
     if addrs.is_empty() {
-        return Err(format!("dns pin produced no public addresses for {host}"));
+        return Err(format!("dns pin produced no addresses for {host}"));
     }
     Ok(PinnedHttpTarget { host, port, addrs })
 }
@@ -772,8 +777,42 @@ mod tests {
         assert!(is_private_or_reserved_ip(&ip));
     }
 
+    static PIN_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct PrivateScanFlagGuard {
+        prev: Option<String>,
+        _lock: std::sync::MutexGuard<'static, ()>,
+    }
+
+    impl PrivateScanFlagGuard {
+        fn hold() -> Self {
+            let lock = PIN_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let prev = std::env::var("WEISSMAN_ALLOW_PRIVATE_SCAN_TARGETS").ok();
+            Self { prev, _lock: lock }
+        }
+
+        fn unset(&self) {
+            std::env::remove_var("WEISSMAN_ALLOW_PRIVATE_SCAN_TARGETS");
+        }
+
+        fn allow_lab(&self) {
+            std::env::set_var("WEISSMAN_ALLOW_PRIVATE_SCAN_TARGETS", "1");
+        }
+    }
+
+    impl Drop for PrivateScanFlagGuard {
+        fn drop(&mut self) {
+            match &self.prev {
+                Some(v) => std::env::set_var("WEISSMAN_ALLOW_PRIVATE_SCAN_TARGETS", v),
+                None => std::env::remove_var("WEISSMAN_ALLOW_PRIVATE_SCAN_TARGETS"),
+            }
+        }
+    }
+
     #[tokio::test]
     async fn pin_rejects_loopback_literal() {
+        let flag = PrivateScanFlagGuard::hold();
+        flag.unset();
         let err = resolve_and_pin_public_http("http://127.0.0.1/")
             .await
             .expect_err("loopback");
@@ -785,12 +824,30 @@ mod tests {
 
     #[tokio::test]
     async fn pin_rejects_rfc1918_literal() {
+        let flag = PrivateScanFlagGuard::hold();
+        flag.unset();
         let err = resolve_and_pin_public_http("http://192.168.1.1/")
             .await
             .expect_err("rfc1918");
         assert!(
             err.contains("private") || err.contains("blocked") || err.contains("reserved"),
             "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn pin_allows_loopback_when_lab_flag_set() {
+        let flag = PrivateScanFlagGuard::hold();
+        flag.allow_lab();
+        let pin = resolve_and_pin_public_http("http://127.0.0.1:9/")
+            .await
+            .expect("WEISSMAN_ALLOW_PRIVATE_SCAN_TARGETS=1 must pin loopback for lab fixtures");
+        assert_eq!(pin.host, "127.0.0.1");
+        assert_eq!(pin.port, 9);
+        assert!(
+            pin.addrs.iter().all(|sa| sa.ip().is_loopback()),
+            "{:?}",
+            pin.addrs
         );
     }
 
@@ -807,6 +864,8 @@ mod tests {
 
     #[tokio::test]
     async fn pin_rejects_ipv6_mapped_link_local_and_ula() {
+        let flag = PrivateScanFlagGuard::hold();
+        flag.unset();
         for url in [
             "http://[::ffff:127.0.0.1]/",
             "http://[::ffff:10.1.2.3]/",

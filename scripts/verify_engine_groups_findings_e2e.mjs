@@ -54,6 +54,10 @@ async function api(method, urlPath, { body, token } = {}) {
   const text = await r.text()
   let data = {}
   try { data = text ? JSON.parse(text) : {} } catch { data = { raw: text } }
+  const retryAfterHeader = Number(r.headers.get('retry-after'))
+  if (Number.isFinite(retryAfterHeader) && retryAfterHeader > 0 && data.retry_after_seconds == null) {
+    data.retry_after_seconds = retryAfterHeader
+  }
   return { status: r.status, data, text }
 }
 

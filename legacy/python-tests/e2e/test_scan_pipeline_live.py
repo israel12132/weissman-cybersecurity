@@ -32,6 +32,45 @@ pytestmark = pytest.mark.skipif(
 # Ceiling on a single honored Retry-After wait. Must exceed the largest hint the server sends
 # (60s, login per-IP limit) — see _request_with_retry.
 _WAIT_CAP_S = 75.0
+# Ceiling on CUMULATIVE back-off (mirrors scripts/lib/scan_intake.mjs WAIT_TOTAL_BUDGET_MS).
+# One 60s login-window wait plus a short second attempt; six uncapped 60s sleeps would
+# burn six minutes of CI after a shed that a single window already clears.
+_WAIT_TOTAL_BUDGET_S = 90.0
+
+
+def _positive_seconds(raw: object) -> float | None:
+    try:
+        wait = float(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(wait) or wait <= 0:
+        return None
+    return wait
+
+
+def _retry_after_seconds(resp: httpx.Response, url: str) -> float | None:
+    """Honor the server's back-off hint.
+
+    Prefer the `Retry-After` header, then JSON `retry_after_seconds`. CI observed
+    429s on `/api/login` whose JSON carried `retry_after_seconds: 60` while a
+    header-only client used a 0.4s fallback, burned the remaining quota, and
+    failed the fixture in ~6s. Login 429s without any hint default to the
+    documented 60s per-IP window (`http/login_rate_limit.rs`).
+    """
+    hinted = _positive_seconds(resp.headers.get("retry-after"))
+    if hinted is not None:
+        return hinted
+    try:
+        body = resp.json()
+    except (ValueError, json.JSONDecodeError, httpx.DecodingError):
+        body = None
+    if isinstance(body, dict):
+        hinted = _positive_seconds(body.get("retry_after_seconds"))
+        if hinted is not None:
+            return hinted
+    if "/api/login" in url:
+        return 60.0
+    return None
 
 
 def _request_with_retry(
@@ -54,22 +93,22 @@ def _request_with_retry(
     throttled."""
     resp = inner.request(method, url, **kwargs)
     attempt = 0
+    spent = 0.0
     while resp.status_code in (429, 503) and attempt < _retries:
-        ra = resp.headers.get("retry-after")
-        fallback = 0.4 * (attempt + 1)
-        try:
-            wait = float(ra) if ra else fallback
-        except (TypeError, ValueError):
+        fallback = 1.5 * (attempt + 1)
+        wait = _retry_after_seconds(resp, url)
+        if wait is None:
             wait = fallback
-        # `float()` happily returns -1.0, nan and inf, but time.sleep() rejects non-positive and
-        # non-finite waits with a ValueError — which would surface INSTEAD of the HTTP failure we
-        # are actually retrying and make the real cause unreadable. RFC 7231 also permits an
-        # HTTP-date form of Retry-After that float() cannot parse. Treat every unusable hint the
-        # same way: fall back to the linear back-off. Mirrors the guard the Node client already
-        # has (`Number.isFinite(hint) && hint > 0` in scripts/lib/scan_intake.mjs).
-        if not math.isfinite(wait) or wait <= 0:
-            wait = fallback
-        time.sleep(min(wait, _WAIT_CAP_S))
+        wait = min(wait, _WAIT_CAP_S)
+        if spent + wait > _WAIT_TOTAL_BUDGET_S:
+            break
+        print(
+            f"… {method} {url} shed (HTTP {resp.status_code}); "
+            f"backing off {wait:.0f}s (retry {attempt + 1}/{_retries})",
+            flush=True,
+        )
+        time.sleep(wait)
+        spent += wait
         resp = inner.request(method, url, **kwargs)
         attempt += 1
     return resp
