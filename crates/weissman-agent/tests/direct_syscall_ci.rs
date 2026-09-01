@@ -68,32 +68,48 @@ fn hells_gate_halos_gate_parse_and_resolve_is_fast() {
 
 #[test]
 fn allocate_is_not_implemented_off_windows_and_does_not_panic() {
-    let start = Instant::now();
+    // One call under `cargo test --workspace` on ubuntu-latest was 56.7 ms of
+    // scheduler noise on a path that is a straight `return STATUS_NOT_IMPLEMENTED`.
+    // Same contract as `hells_gate_halos_gate_parse_and_resolve_is_fast`: warm up,
+    // then gate the *median* so a real sleep/I/O regression still fails.
     unsafe {
-        let mut base = std::ptr::null_mut();
-        let mut region_size = 4096usize;
-        let status = weissman_allocate_virtual_memory(
-            NT_CURRENT_PROCESS,
-            &mut base,
-            0,
-            &mut region_size,
-            MEM_COMMIT | MEM_RESERVE,
-            PAGE_READWRITE,
-        );
-        if cfg!(all(windows, target_arch = "x86_64")) {
-            assert_eq!(status, 0, "Windows allocation should return STATUS_SUCCESS");
-            assert!(!base.is_null());
-        } else {
-            assert_eq!(status, STATUS_NOT_IMPLEMENTED);
-            assert!(base.is_null());
-        }
+        call_allocate();
     }
-    let duration = start.elapsed();
-    println!("[CI/CD] Direct syscall dispatch latency: {duration:?}");
+
+    let mut samples = Vec::with_capacity(LATENCY_SAMPLES);
+    for _ in 0..LATENCY_SAMPLES {
+        let start = Instant::now();
+        unsafe {
+            call_allocate();
+        }
+        samples.push(start.elapsed());
+    }
+    let duration = median(samples);
+    println!("[CI/CD] Direct syscall dispatch latency median: {duration:?}");
     assert!(
-        duration < Duration::from_millis(5),
-        "dispatch wrapper {duration:?} must stay in the millisecond budget"
+        duration < CI_LATENCY_CEILING,
+        "dispatch wrapper median {duration:?} must stay under {CI_LATENCY_CEILING:?}"
     );
+}
+
+unsafe fn call_allocate() {
+    let mut base = std::ptr::null_mut();
+    let mut region_size = 4096usize;
+    let status = weissman_allocate_virtual_memory(
+        NT_CURRENT_PROCESS,
+        &mut base,
+        0,
+        &mut region_size,
+        MEM_COMMIT | MEM_RESERVE,
+        PAGE_READWRITE,
+    );
+    if cfg!(all(windows, target_arch = "x86_64")) {
+        assert_eq!(status, 0, "Windows allocation should return STATUS_SUCCESS");
+        assert!(!base.is_null());
+    } else {
+        assert_eq!(status, STATUS_NOT_IMPLEMENTED);
+        assert!(base.is_null());
+    }
 }
 
 #[tokio::test]
