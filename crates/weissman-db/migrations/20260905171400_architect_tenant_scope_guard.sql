@@ -65,6 +65,16 @@ CREATE INDEX IF NOT EXISTS ix_user_refresh_tokens_scope_client
 COMMENT ON COLUMN user_refresh_tokens.scope_client_id IS
     'JWT cid for this session (portal lock or staff impersonation). Copied on refresh rotation. NULL = unscoped staff/owner.';
 
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'weissman_auth') THEN
+    GRANT UPDATE (scope_client_id, access_jti, revoked_at) ON user_refresh_tokens TO weissman_auth;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'weissman_app') THEN
+    GRANT UPDATE (scope_client_id, access_jti, revoked_at) ON user_refresh_tokens TO weissman_app;
+  END IF;
+END $$;
+
 -- ── 3. Who may switch to which customer ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS user_client_scope_grants (
     id          BIGSERIAL PRIMARY KEY,
