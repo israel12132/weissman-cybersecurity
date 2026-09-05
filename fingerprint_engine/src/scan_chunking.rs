@@ -641,28 +641,32 @@ pub async fn execute_chunk(
             job_params: cross_job_params.clone(),
             intelligence_bus: Some(intelligence_bus.clone()),
             job_id: Some(job.id.to_string()),
+            worker_id: Some(worker_id.to_string()),
             oast_listener_url: oast_listener_url.clone(),
             oast_domain: oast_domain.clone(),
             oast_api_key: oast_api_key.clone(),
             ..Default::default()
         };
         let ctx_ref = &ctx;
-        let eid = engine_id.as_str();
+        let eid = engine_id.clone();
+        let run_eid = eid.clone();
         let target = spec.target.clone();
+        let attempt = crate::fuzz_campaign::resilience_timeout_for(&eid, true);
         let (result, telem) = crate::engine_resilience::run_with_resilience(
-            eid,
+            &eid,
             &target,
-            crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
+            attempt,
             move |variant, hint| {
                 let mut c = ctx_ref.clone();
+                let eng = run_eid.clone();
                 if hint.force_ghost_network {
                     crate::engine_dispatch::apply_ghost_escalation(&mut c.stealth);
                 }
-                async move { crate::engine_dispatch::run_engine(eid, &variant, &c).await }
+                async move { crate::engine_dispatch::run_engine(&eng, &variant, &c).await }
             },
         )
         .await;
-        crate::engine_telemetry::record(eid, &telem);
+        crate::engine_telemetry::record(eid.as_str(), &telem);
         job_progress::mark(&format!("engine_end:{engine_id}"));
 
         if result.success {

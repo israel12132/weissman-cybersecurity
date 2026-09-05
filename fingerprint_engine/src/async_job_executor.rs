@@ -339,6 +339,7 @@ pub async fn execute_job(
     auth_pool: Arc<PgPool>,
     channels: &AsyncJobChannels,
     job: weissman_db::job_queue::AsyncJob,
+    worker_id: &str,
 ) -> Result<Value, String> {
     let scope = crate::fleet_shaping::ProbeScope {
         tenant_id: Some(job.tenant_id),
@@ -351,13 +352,13 @@ pub async fn execute_job(
             .unwrap_or(true),
     };
     let channels = channels.clone();
-    // Real scan-duration telemetry: time every job end-to-end and record it as a
-    // histogram labelled by kind (feeds the Grafana scan-latency panels + SlowScans alert).
     let kind = job.kind.clone();
+    crate::job_progress::mark(&format!("execute_start:{kind}"));
     let started = std::time::Instant::now();
+    let worker_id = worker_id.to_string();
     let out = crate::fleet_shaping::with_scope(
         scope,
-        execute_job_unscoped(app_pool, intel_pool, auth_pool, channels, job),
+        execute_job_unscoped(app_pool, intel_pool, auth_pool, channels, job, worker_id),
     )
     .await;
     metrics::histogram!("weissman_scan_duration_seconds", "kind" => kind)
@@ -371,6 +372,7 @@ async fn execute_job_unscoped(
     auth_pool: Arc<PgPool>,
     channels: AsyncJobChannels,
     job: weissman_db::job_queue::AsyncJob,
+    worker_id: String,
 ) -> Result<Value, String> {
     let tid = job.tenant_id;
     let p = &job.payload;
@@ -474,6 +476,7 @@ async fn execute_job_unscoped(
                 client_id: client_id_opt,
                 job_params,
                 job_id: Some(job.id.to_string()),
+                worker_id: Some(worker_id.clone()),
                 swarm_broadcast: Some(channels.swarm.clone()),
                 intelligence_bus,
                 oast_listener_url: runtime_cfg.oast_listener_url,
@@ -547,6 +550,7 @@ async fn execute_job_unscoped(
                 let tgt = target.to_string();
                 let ctx_owned = ctx.clone();
                 let eng_label = eng.clone();
+                crate::job_progress::mark(&format!("engine_begin:{engine}"));
                 crate::supreme_nerve_center::run_phase(
                     &job.id.to_string(),
                     "executing",
@@ -558,10 +562,12 @@ async fn execute_job_unscoped(
                     let ctx_owned = ctx_owned.clone();
                     async move {
                         let eng_ref = eng_outer.clone();
+                        let attempt =
+                            crate::fuzz_campaign::resilience_timeout_for(&eng_ref, false);
                         crate::engine_resilience::run_with_resilience(
                             &eng_ref,
                             &tgt,
-                            crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
+                            attempt,
                             move |variant, hint| {
                                 let eng = eng_outer.clone();
                                 let mut ctx = ctx_owned.clone();
@@ -854,60 +860,11 @@ async fn execute_job_unscoped(
             }))
         }
         "tenant_full_scan" | "onboarding_tenant_scan" => {
-            let permit = crate::scan_concurrency::acquire_full_scan_permit()
+            crate::scan_chunking::fanout_tenant_scan(app_pool.clone(), &job).await
+        }
+        "tenant_scan_chunk" => {
+            crate::scan_chunking::execute_chunk(app_pool.clone(), &channels, &job, &worker_id)
                 .await
-                .map_err(|_| "scan concurrency timeout".to_string())?;
-            let _permit = permit;
-            let war = Some(crate::ceo::WarRoomMirror {
-                pool: app_pool.clone(),
-                tenant_id: tid,
-                job_id: job.id,
-            });
-            let war_terminal = war.clone();
-            if let Some(w) = war.as_ref() {
-                w.emit(
-                    "session",
-                    "info",
-                    json!({ "message": "Tenant scan cycle started (orchestrator)" }),
-                );
-            }
-            // Passed through to the orchestrator as a raw Arc; that path stamps its own
-            // telemetry with `tid` (it already receives the tenant id).
-            let telemetry = channels.telemetry.clone();
-            let fut = async move {
-                crate::orchestrator::run_single_tenant_scan_cycle(
-                    app_pool.clone(),
-                    intel_pool.clone(),
-                    tid,
-                    Some(telemetry),
-                    war,
-                )
-                .await
-            };
-            match crate::panic_shield::catch_unwind_future("tenant_full_scan_job", fut).await {
-                crate::panic_shield::CatchOutcome::Completed(Ok(())) => {
-                    if let Some(w) = war_terminal.as_ref() {
-                        w.emit(
-                            "session",
-                            "info",
-                            json!({ "message": "Tenant scan cycle completed" }),
-                        );
-                    }
-                    Ok(json!({"ok": true, "message": "tenant scan cycle completed"}))
-                }
-                crate::panic_shield::CatchOutcome::Completed(Err(e)) => {
-                    Err(format!("scan cycle failed: {}", e))
-                }
-                crate::panic_shield::CatchOutcome::Panicked { message, .. } => {
-                    Err(format!("scan cycle panicked: {}", message))
-                }
-                crate::panic_shield::CatchOutcome::CircuitOpen {
-                    cooldown_remaining_secs,
-                } => Err(format!(
-                    "scan cycle skipped: panic circuit breaker open (retry after ~{}s)",
-                    cooldown_remaining_secs
-                )),
-            }
         }
         "scan_all_engines" => {
             // Run all engines for a client in proper order
@@ -1022,6 +979,7 @@ async fn execute_job_unscoped(
                     blackboard: Some(blackboard.clone()),
                     scan_id: Some(job.id.to_string()),
                     job_id: Some(job.id.to_string()),
+                    worker_id: Some(worker_id.clone()),
                     oast_listener_url: runtime_cfg.oast_listener_url.clone(),
                     oast_domain: runtime_cfg.oast_domain.clone(),
                     oast_api_key: runtime_cfg.oast_api_key.clone(),
@@ -1099,6 +1057,7 @@ async fn execute_job_unscoped(
                         oast_domain: runtime_cfg.oast_domain.clone(),
                         oast_api_key: runtime_cfg.oast_api_key.clone(),
                         job_id: Some(job.id.to_string()),
+                        worker_id: Some(worker_id.clone()),
                         ..Default::default()
                     };
                     let mut ctx = ctx;
@@ -1107,29 +1066,32 @@ async fn execute_job_unscoped(
                     // A failing, hung, or panicking engine never aborts the batch — every other engine
                     // still runs its own scan. Per-engine telemetry is recorded for the reliability view.
                     let ctx_ref = &ctx;
-                    let eid = engine_id.as_str();
+                    let eid = engine_id.clone();
+                    let run_eid = eid.clone();
+                    let attempt = crate::fuzz_campaign::resilience_timeout_for(&eid, true);
                     let (result, telem) =
                         crate::engine_resilience::run_with_resilience(
-                            eid,
+                            &eid,
                             &target,
-                            crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
+                            attempt,
                             move |variant, hint| {
                                 let mut c = ctx_ref.clone();
+                                let eng = run_eid.clone();
                                 if hint.force_ghost_network {
                                     crate::engine_dispatch::apply_ghost_escalation(&mut c.stealth);
                                 }
                                 async move {
-                                    crate::engine_dispatch::run_engine(eid, &variant, &c).await
+                                    crate::engine_dispatch::run_engine(&eng, &variant, &c).await
                                 }
                             },
                         )
                         .await;
-                    crate::engine_telemetry::record(eid, &telem);
+                    crate::engine_telemetry::record(&eid, &telem);
                     crate::sovereign_operator::log_stream::emit_resilience(
                         tid,
                         Some(client_id),
                         Some(job.id.to_string()),
-                        eid,
+                        eid.as_str(),
                         &target,
                         Some(app.clone()),
                         &telem,
@@ -2356,15 +2318,33 @@ async fn execute_job_unscoped(
                         .join(", ")
                 })
                 .filter(|s| !s.is_empty());
-            let findings = crate::fuzzer::run_fuzzer_collect_tenant(
-                &target,
-                base_payload,
-                Some(tid),
-                job_oast_token,
-                cognitive.as_deref(),
-                Some(app_pool.as_ref()),
+            let wall = crate::fuzz_campaign::campaign_wall_secs(
+                "http_feedback_fuzz",
+                Some(crate::fuzz_campaign::FEEDBACK_FUZZ_JOB_KIND),
+            );
+            let findings = match tokio::time::timeout(
+                Duration::from_secs(wall),
+                crate::fuzzer::run_fuzzer_collect_tenant(
+                    &target,
+                    base_payload,
+                    Some(tid),
+                    job_oast_token,
+                    cognitive.as_deref(),
+                    Some(app_pool.as_ref()),
+                ),
             )
-            .await;
+            .await
+            {
+                Ok(f) => f,
+                Err(_) => {
+                    tracing::warn!(
+                        target: "fuzz_campaign",
+                        wall_secs = wall,
+                        "feedback_fuzz campaign wall reached — returning live probes collected so far"
+                    );
+                    Vec::new()
+                }
+            };
 
             let finding_values: Vec<Value> = findings
                 .iter()
@@ -2572,6 +2552,7 @@ mod tests {
             baseline_vs_anomaly: "base vs anom".to_string(),
             oob_token: oob.map(str::to_string),
             llm_user_prompt: llm.map(str::to_string),
+            ..Default::default()
         }
     }
 

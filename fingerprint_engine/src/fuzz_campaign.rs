@@ -103,10 +103,24 @@ pub fn fuzz_resilience_timeout(engine_id: &str) -> Duration {
     Duration::from_secs(wall.saturating_add(FUZZ_RESILIENCE_SLACK_SECS))
 }
 
-/// Per-attempt timeout when a fuzz engine is one of many in `scan_all_engines`.
+/// Per-attempt resilience timeout when a fuzz engine is one of many in `scan_all_engines`.
 #[must_use]
 pub fn batch_fuzz_resilience_timeout() -> Duration {
     Duration::from_secs(BATCH_FUZZ_CAMPAIGN_SECS.saturating_add(BATCH_FUZZ_RESILIENCE_SLACK_SECS))
+}
+
+/// Resilience attempt budget for one engine. Fuzz family uses a campaign wall so
+/// the old 180s fake-timeout finding cannot fire; everything else stays at 45s.
+#[must_use]
+pub fn resilience_timeout_for(engine_id: &str, batch: bool) -> Duration {
+    if !is_fuzz_campaign_engine(engine_id) {
+        return crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT;
+    }
+    if batch {
+        batch_fuzz_resilience_timeout()
+    } else {
+        fuzz_resilience_timeout(engine_id)
+    }
 }
 
 /// Live campaign handle shared by specialized probes, static waves, and the generative producer.
@@ -121,6 +135,7 @@ pub struct FuzzCampaignCtl {
     stages: Arc<Mutex<Vec<String>>>,
     coverage: Arc<Mutex<Vec<String>>>,
     pub job_id: Option<String>,
+    pub worker_id: Option<String>,
     pub tenant_id: Option<i64>,
     pub app_pool: Option<std::sync::Arc<sqlx::PgPool>>,
     pub swarm: Option<std::sync::Arc<tokio::sync::broadcast::Sender<String>>>,
@@ -140,6 +155,7 @@ impl FuzzCampaignCtl {
             stages: Arc::new(Mutex::new(Vec::new())),
             coverage: Arc::new(Mutex::new(Vec::new())),
             job_id: None,
+            worker_id: None,
             tenant_id: None,
             app_pool: None,
             swarm: None,
@@ -162,11 +178,13 @@ impl FuzzCampaignCtl {
         tenant_id: Option<i64>,
         app_pool: Option<std::sync::Arc<sqlx::PgPool>>,
         swarm: Option<std::sync::Arc<tokio::sync::broadcast::Sender<String>>>,
+        worker_id: Option<String>,
     ) {
         self.job_id = job_id;
         self.tenant_id = tenant_id;
         self.app_pool = app_pool;
         self.swarm = swarm;
+        self.worker_id = worker_id;
     }
 
     #[must_use]
@@ -178,13 +196,14 @@ impl FuzzCampaignCtl {
         tenant_id: Option<i64>,
         app_pool: Option<std::sync::Arc<sqlx::PgPool>>,
         swarm: Option<std::sync::Arc<tokio::sync::broadcast::Sender<String>>>,
+        worker_id: Option<String>,
     ) -> Self {
         let mut ctl = Self::new(
             engine_id,
             Duration::from_secs(campaign_wall_secs(engine_id, job_kind)),
         );
         ctl = ctl.with_optional_budget_override(budget_override_secs);
-        ctl.bind_job(job_id, tenant_id, app_pool, swarm);
+        ctl.bind_job(job_id, tenant_id, app_pool, swarm, worker_id);
         ctl
     }
 
@@ -282,6 +301,11 @@ impl FuzzCampaignCtl {
             let _ = tx.send(payload.to_string());
         }
         self.heartbeat_lease().await;
+        crate::job_progress::mark(&format!(
+            "fuzz:{}:{}",
+            self.engine_id,
+            phase.chars().take(40).collect::<String>()
+        ));
     }
 
     async fn heartbeat_lease(&self) {
@@ -303,9 +327,31 @@ impl FuzzCampaignCtl {
         let Ok(uuid) = Uuid::parse_str(jid) else {
             return;
         };
-        if let Err(e) =
+        let result = if let Some(wid) = self.worker_id.as_deref() {
+            match weissman_db::job_queue::heartbeat_owned(
+                pool.as_ref(),
+                uuid,
+                wid,
+                CAMPAIGN_LEASE_SECS,
+            )
+            .await
+            {
+                Ok(true) => Ok(()),
+                Ok(false) => {
+                    warn!(
+                        target: "fuzz_campaign",
+                        job_id = %jid,
+                        "campaign lease heartbeat lost the lock"
+                    );
+                    self.request_cancel();
+                    return;
+                }
+                Err(e) => Err(e),
+            }
+        } else {
             weissman_db::job_queue::heartbeat(pool.as_ref(), uuid, CAMPAIGN_LEASE_SECS).await
-        {
+        };
+        if let Err(e) = result {
             warn!(
                 target: "fuzz_campaign",
                 error = %e,

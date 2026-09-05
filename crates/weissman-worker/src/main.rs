@@ -147,7 +147,9 @@ struct JobClass {
 fn job_class(kind: &str) -> JobClass {
     let (heavy, timeout_secs) = match kind {
         // ── Full-estate scans ────────────────────────────────────────────────
-        "tenant_full_scan" | "onboarding_tenant_scan" => (true, 60 * 60),
+        "tenant_full_scan" | "onboarding_tenant_scan" => (false, 2 * 60),
+        // Claimable micro-batch: a handful of engines, own lease, Force-Abort resume.
+        "tenant_scan_chunk" => (true, 20 * 60),
         // Fans out to ~22 top-tier engines sequentially (each with its own 180s ceiling), so the
         // worst case is ~22x180 = 3960s. The previous 3600s budget was BELOW that, so when several
         // engines hang — exactly what a health probe exists to detect — the probe was killed with
@@ -196,8 +198,7 @@ fn job_is_heavy(kind: &str) -> bool {
 /// asserts this list and `job_class` cannot drift apart, which is what keeps the SQL filter and
 /// the Rust classification the same thing rather than two lists that agree by luck.
 const HEAVY_KINDS: &[&str] = &[
-    "tenant_full_scan",
-    "onboarding_tenant_scan",
+    "tenant_scan_chunk",
     "top_tier_health_probe",
     "scan_all_engines",
     "scan_discovered_domains",
@@ -379,6 +380,7 @@ async fn process_one(
     let lease_tid = job.tenant_id;
     let lease_arc = lease.clone();
     let hb_pool = ctrl_pool.clone();
+    let lease_wid = wid.clone();
     let lease_task = tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(LEASE_EXTEND_INTERVAL_SECS));
         while !lease_stop_bg.load(Ordering::SeqCst) {
@@ -399,10 +401,28 @@ async fn process_one(
                         warn!(target: "weissman_worker", error = %e, "lease extend failed");
                     }
                 }
-            } else if let Err(e) =
-                job_queue::heartbeat(hb_pool.as_ref(), lease_job_id, LOCK_SECS).await
-            {
-                warn!(target: "weissman_worker", job_id = %lease_job_id, error = %e, "heartbeat failed");
+            } else {
+                match job_queue::heartbeat_owned(
+                    hb_pool.as_ref(),
+                    lease_job_id,
+                    &lease_wid,
+                    LOCK_SECS,
+                )
+                .await
+                {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        warn!(
+                            target: "weissman_worker",
+                            job_id = %lease_job_id,
+                            "heartbeat lost the job lock; this host no longer owns the row"
+                        );
+                        break;
+                    }
+                    Err(e) => {
+                        warn!(target: "weissman_worker", job_id = %lease_job_id, error = %e, "heartbeat failed");
+                    }
+                }
             }
         }
     });
@@ -412,22 +432,55 @@ async fn process_one(
     let exec_auth = auth_pool.clone();
     let exec_channels = channels.clone();
     let exec_job = job.clone();
+    let exec_wid = wid.clone();
     let job_kind_for_timeout = exec_job.kind.clone();
     let exec_heavy = job_is_heavy(job_kind_for_timeout.as_str());
-    // Cancellation channel for the heavy path. A heavy job runs on a raw OS thread via
-    // run_on_large_stack, and `abort()` on the awaiting tokio task does NOT stop that thread —
-    // it just drops the receiver. On timeout the worker gave up waiting and requeued the job
-    // while the original engine kept running, holding its DB connections and sockets, so a second
-    // worker started the same scan against a copy that was still executing and could not be
-    // stopped. Signalling the thread lets the future be dropped at its next await, which also
-    // runs its destructors and releases those connections.
+    let progress = fingerprint_engine::job_progress::JobProgress::new();
+    let progress_watch = progress.clone();
     let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel::<()>();
+    let (progress_abort_tx, progress_abort_rx) = tokio::sync::oneshot::channel::<String>();
+    let progress_stop = Arc::new(AtomicBool::new(false));
+    let progress_stop_bg = progress_stop.clone();
+    let progress_pool = ctrl_pool.clone();
+    let progress_job_id = job.id;
+    let progress_task = tokio::spawn(async move {
+        let mut last_flushed = String::new();
+        loop {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            if progress_stop_bg.load(Ordering::SeqCst) {
+                break;
+            }
+            let note = progress_watch.last_note();
+            if note != last_flushed {
+                let _ = job_queue::record_progress(progress_pool.as_ref(), progress_job_id, &note)
+                    .await;
+                last_flushed = note.clone();
+            }
+            if progress_watch.age_secs() >= 60 {
+                let _ = progress_abort_tx.send(note);
+                break;
+            }
+        }
+    });
     let exec_handle = tokio::spawn(async move {
         let fut = async move {
-            match exec_job.kind.as_str() {
-                "noop" | "ping" => Ok(serde_json::json!({"ok": true, "message": "noop"})),
-                _ => execute_job(exec_app, exec_intel, exec_auth, &exec_channels, exec_job).await,
-            }
+            fingerprint_engine::job_progress::scope(progress, async move {
+                match exec_job.kind.as_str() {
+                    "noop" | "ping" => Ok(serde_json::json!({"ok": true, "message": "noop"})),
+                    _ => {
+                        execute_job(
+                            exec_app,
+                            exec_intel,
+                            exec_auth,
+                            &exec_channels,
+                            exec_job,
+                            &exec_wid,
+                        )
+                        .await
+                    }
+                }
+            })
+            .await
         };
         if exec_heavy {
             match fingerprint_engine::engine_stack_runtime::run_on_large_stack_cancellable(
@@ -446,28 +499,40 @@ async fn process_one(
 
     let timeout = job_kind_timeout(&job_kind_for_timeout);
     let exec_abort = exec_handle.abort_handle();
-    let outcome: Result<serde_json::Value, String> =
-        match tokio::time::timeout(timeout, exec_handle).await {
-            Ok(Ok(inner)) => inner,
-            Ok(Err(join_err)) => Err(if join_err.is_cancelled() {
+    let mut cancel_slot = Some(cancel_tx);
+    let outcome: Result<serde_json::Value, String> = tokio::select! {
+        exec = exec_handle => match exec {
+            Ok(inner) => inner,
+            Err(join_err) => Err(if join_err.is_cancelled() {
                 "job task cancelled".to_string()
             } else if join_err.is_panic() {
                 format!("job task panicked: {join_err}")
             } else {
                 format!("job task join error: {join_err}")
             }),
-            Err(_) => {
-                // Signal first: for a heavy job this is the only thing that actually stops the
-                // engine. `abort()` alone leaves it running on its own OS thread.
-                let _ = cancel_tx.send(());
-                exec_abort.abort();
-                Err(format!(
-                    "job timed out after {}s ({})",
-                    timeout.as_secs(),
-                    job_kind_for_timeout
-                ))
+        },
+        note = progress_abort_rx => {
+            if let Some(tx) = cancel_slot.take() {
+                let _ = tx.send(());
             }
-        };
+            exec_abort.abort();
+            let last = note.unwrap_or_else(|_| "job_started".into());
+            Err(format!("no_progress_60s last={last}"))
+        }
+        _ = tokio::time::sleep(timeout) => {
+            if let Some(tx) = cancel_slot.take() {
+                let _ = tx.send(());
+            }
+            exec_abort.abort();
+            Err(format!(
+                "job timed out after {}s ({})",
+                timeout.as_secs(),
+                job_kind_for_timeout
+            ))
+        }
+    };
+    progress_stop.store(true, Ordering::SeqCst);
+    let _ = progress_task.await;
 
     lease_stop.store(true, Ordering::SeqCst);
     lease_notify.notify_one();
@@ -560,6 +625,27 @@ async fn process_one(
                         .await;
                     }
                 }
+            } else if msg.starts_with("no_progress_60s") {
+                match job_queue::fail_job_stuck(pool, &job, &wid, "no_progress_60s", &msg).await {
+                    Ok(0) => {
+                        warn!(
+                            target: "weissman_worker",
+                            job_id = %job.id,
+                            "force-abort matched no running row (lease already lost)"
+                        );
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        error!(target: "weissman_worker", job_id = %job.id, error = %e, "fail_job_stuck failed");
+                        let _ = job_queue::force_requeue_running(
+                            pool,
+                            job.id,
+                            &wid,
+                            &format!("fail_job_stuck: {e}"),
+                        )
+                        .await;
+                    }
+                }
             } else if bus_on {
                 if let Err(e) = bus
                     .on_job_failed(
@@ -574,13 +660,55 @@ async fn process_one(
                 {
                     error!(target: "weissman_worker", job_id = %job.id, error = %e, "event-sourced fail");
                 }
-            } else if let Err(e) =
-                job_queue::fail_job(pool, &job, &wid, &msg, BASE_BACKOFF_SECS).await
+            } else if let Err(e) = job_queue::fail_job_with_reason(
+                pool,
+                &job,
+                &wid,
+                &msg,
+                None,
+                BASE_BACKOFF_SECS,
+            )
+            .await
             {
                 error!(target: "weissman_worker", job_id = %job.id, error = %e, "fail_job failed");
                 let _ =
                     job_queue::force_requeue_running(pool, job.id, &wid, &format!("fail_job: {e}"))
                         .await;
+            }
+            if job.kind == fingerprint_engine::scan_chunking::CHUNK_KIND
+                && msg.starts_with("no_progress_60s")
+            {
+                match job_queue::peek_result_json(pool, job.id).await {
+                    Ok(checkpoint) => {
+                        match fingerprint_engine::scan_chunking::enqueue_resume_after_abort(
+                            app_pool.as_ref(),
+                            &job,
+                            checkpoint.as_ref(),
+                        )
+                        .await
+                        {
+                            Ok(Some(id)) => info!(
+                                target: "weissman_worker",
+                                job_id = %job.id,
+                                resume_job = %id,
+                                "Force-Abort: successor chunk enqueued"
+                            ),
+                            Ok(None) => {}
+                            Err(e) => warn!(
+                                target: "weissman_worker",
+                                job_id = %job.id,
+                                error = %e,
+                                "Force-Abort resume enqueue failed"
+                            ),
+                        }
+                    }
+                    Err(e) => warn!(
+                        target: "weissman_worker",
+                        job_id = %job.id,
+                        error = %e,
+                        "Force-Abort could not read checkpoint"
+                    ),
+                }
             }
             // Overlay the raw error onto the dead row AFTER the event-sourced DLQ
             // projection (which stores only the failure class). Runs last so the
@@ -953,14 +1081,29 @@ async fn async_main() {
                             p = &mut acquire => break p,
                             _ = hb.tick() => {
                                 if !bus.is_enabled() {
-                                    if let Err(e) = job_queue::heartbeat(
-                                        ctrl_pool.as_ref(), job.id, LOCK_SECS,
-                                    ).await {
-                                        warn!(
-                                            target: "weissman_worker",
-                                            job_id = %job.id, error = %e,
-                                            "pre-exec heartbeat failed while awaiting permit"
-                                        );
+                                    match job_queue::heartbeat_owned(
+                                        ctrl_pool.as_ref(),
+                                        job.id,
+                                        &wid,
+                                        LOCK_SECS,
+                                    )
+                                    .await
+                                    {
+                                        Ok(true) => {}
+                                        Ok(false) => {
+                                            warn!(
+                                                target: "weissman_worker",
+                                                job_id = %job.id,
+                                                "pre-exec heartbeat lost the lock while awaiting permit"
+                                            );
+                                        }
+                                        Err(e) => {
+                                            warn!(
+                                                target: "weissman_worker",
+                                                job_id = %job.id, error = %e,
+                                                "pre-exec heartbeat failed while awaiting permit"
+                                            );
+                                        }
                                     }
                                 }
                             }
@@ -1120,11 +1263,15 @@ mod tests {
     fn heavy_jobs_get_long_timeouts() {
         assert_eq!(
             job_kind_timeout("tenant_full_scan"),
-            Duration::from_secs(3600)
+            Duration::from_secs(120)
         );
         assert_eq!(
             job_kind_timeout("onboarding_tenant_scan"),
-            Duration::from_secs(3600)
+            Duration::from_secs(120)
+        );
+        assert_eq!(
+            job_kind_timeout("tenant_scan_chunk"),
+            Duration::from_secs(1200)
         );
         assert_eq!(job_kind_timeout("auto_heal"), Duration::from_secs(1800));
         assert_eq!(
@@ -1144,7 +1291,9 @@ mod tests {
 
     #[test]
     fn job_is_heavy_classifies_known_kinds() {
-        assert!(job_is_heavy("tenant_full_scan"));
+        assert!(job_is_heavy("tenant_scan_chunk"));
+        assert!(!job_is_heavy("tenant_full_scan"));
+        assert!(!job_is_heavy("onboarding_tenant_scan"));
         assert!(job_is_heavy("ai_redteam"));
         assert!(job_is_heavy("scan_discovered_domains"));
         assert!(job_is_heavy("genesis_eternal_fuzz"));
@@ -1211,6 +1360,8 @@ mod tests {
             "ping",
             "council_debate",
             "path_inference",
+            "tenant_full_scan",
+            "onboarding_tenant_scan",
             "definitely_not_a_real_kind",
         ] {
             assert!(!job_class(k).heavy, "{k} must not be heavy");

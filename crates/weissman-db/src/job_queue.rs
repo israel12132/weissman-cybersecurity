@@ -566,6 +566,103 @@ pub async fn heartbeat(pool: &PgPool, job_id: Uuid, lock_secs: i64) -> Result<()
     Ok(())
 }
 
+/// Extend the lock only if `worker_id` still owns a `running` row.
+///
+/// Unfenced [`heartbeat`] would refresh a job another worker just claimed after reclaim,
+/// leaving two hosts "owning" the same scan. Returns `false` when this host lost the row.
+pub async fn heartbeat_owned(
+    pool: &PgPool,
+    job_id: Uuid,
+    worker_id: &str,
+    lock_secs: i64,
+) -> Result<bool, sqlx::Error> {
+    let mut tx = begin_worker_tx(pool).await?;
+    let r = sqlx::query(
+        "UPDATE weissman_async_jobs
+            SET heartbeat_at = now(),
+                locked_until = now() + ($3::bigint * interval '1 second'),
+                updated_at = now()
+          WHERE id = $1 AND worker_id = $2 AND status = 'running'",
+    )
+    .bind(job_id)
+    .bind(worker_id)
+    .bind(lock_secs)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(r.rows_affected() == 1)
+}
+
+/// Stamp physical progress (`progress_at` / `progress_note`). Distinct from [`heartbeat`]:
+/// keep-alive must never impersonate engine/probe/chunk work.
+pub async fn record_progress(pool: &PgPool, job_id: Uuid, note: &str) -> Result<(), sqlx::Error> {
+    let note: String = note.chars().take(200).collect();
+    let mut tx = begin_worker_tx(pool).await?;
+    sqlx::query(
+        r#"UPDATE weissman_async_jobs
+              SET progress_at = now(),
+                  progress_note = $2,
+                  stuck_reason = NULL,
+                  updated_at = now()
+            WHERE id = $1 AND status = 'running'"#,
+    )
+    .bind(job_id)
+    .bind(&note)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Mid-flight result snapshot for resume-after-abort (Force-Abort of a scan chunk).
+/// Fenced on `worker_id` + `status = 'running'` so a superseded worker cannot overwrite
+/// another host's live run.
+pub async fn checkpoint_running_result(
+    pool: &PgPool,
+    job_id: Uuid,
+    worker_id: &str,
+    result: &Value,
+) -> Result<bool, sqlx::Error> {
+    let note = result
+        .get("completed_engines")
+        .and_then(Value::as_array)
+        .and_then(|a| a.last())
+        .and_then(Value::as_str)
+        .map(|s| format!("engine:{s}"))
+        .unwrap_or_else(|| "checkpoint".to_string());
+    let note: String = note.chars().take(200).collect();
+    let mut tx = begin_worker_tx(pool).await?;
+    let r = sqlx::query(
+        r#"UPDATE weissman_async_jobs
+              SET result_json = $3,
+                  progress_at = now(),
+                  progress_note = $4,
+                  stuck_reason = NULL,
+                  updated_at = now()
+            WHERE id = $1 AND worker_id = $2 AND status = 'running'"#,
+    )
+    .bind(job_id)
+    .bind(worker_id)
+    .bind(Json(result))
+    .bind(&note)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(r.rows_affected() == 1)
+}
+
+/// Worker-path peek of `result_json` (BYPASSRLS control pool).
+pub async fn peek_result_json(pool: &PgPool, job_id: Uuid) -> Result<Option<Value>, sqlx::Error> {
+    let mut tx = begin_worker_tx(pool).await?;
+    let row: Option<Json<Value>> =
+        sqlx::query_scalar("SELECT result_json FROM weissman_async_jobs WHERE id = $1")
+            .bind(job_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+    tx.commit().await?;
+    Ok(row.map(|j| j.0))
+}
+
 pub async fn complete_job(pool: &PgPool, job_id: Uuid) -> Result<(), sqlx::Error> {
     let mut tx = begin_worker_tx(pool).await?;
     sqlx::query(
@@ -649,6 +746,12 @@ pub struct JobStatusView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub heartbeat_at: Option<chrono::DateTime<chrono::Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub locked_until: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_after: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worker_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub trace_id: Option<String>,
     pub source: &'static str,
 }
@@ -663,7 +766,7 @@ pub async fn get_job_for_tenant(
 ) -> Result<Option<JobStatusView>, sqlx::Error> {
     let mut tx = crate::begin_tenant_tx(pool, tenant_id).await?;
     let row = sqlx::query(
-        r#"SELECT id, kind, status, payload, result_json, last_error, attempt_count, created_at, updated_at, heartbeat_at, trace_id
+        r#"SELECT id, kind, status, payload, result_json, last_error, attempt_count, created_at, updated_at, heartbeat_at, locked_until, run_after, worker_id, trace_id
            FROM weissman_async_jobs WHERE id = $1 AND tenant_id = $2"#,
     )
     .bind(job_id)
@@ -688,6 +791,9 @@ pub async fn get_job_for_tenant(
     let created_at: chrono::DateTime<chrono::Utc> = row.try_get("created_at")?;
     let updated_at: chrono::DateTime<chrono::Utc> = row.try_get("updated_at")?;
     let heartbeat_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("heartbeat_at").ok();
+    let locked_until: Option<chrono::DateTime<chrono::Utc>> = row.try_get("locked_until").ok();
+    let run_after: Option<chrono::DateTime<chrono::Utc>> = row.try_get("run_after").ok();
+    let worker_id: Option<String> = row.try_get("worker_id").ok();
     let trace_id: Option<String> = row.try_get("trace_id").ok();
     Ok(Some(JobStatusView {
         id,
@@ -700,6 +806,9 @@ pub async fn get_job_for_tenant(
         created_at,
         updated_at,
         heartbeat_at,
+        locked_until,
+        run_after,
+        worker_id,
         trace_id,
         source: "async_job",
     }))
@@ -720,12 +829,25 @@ pub async fn fail_job(
     err: &str,
     base_backoff_secs: i64,
 ) -> Result<(), sqlx::Error> {
+    fail_job_with_reason(pool, job, worker_id, err, None, base_backoff_secs).await
+}
+
+/// Like [`fail_job`] but records a precise `stuck_reason` (Force-Abort / no-progress).
+pub async fn fail_job_with_reason(
+    pool: &PgPool,
+    job: &AsyncJob,
+    worker_id: &str,
+    err: &str,
+    stuck_reason: Option<&str>,
+    base_backoff_secs: i64,
+) -> Result<(), sqlx::Error> {
     let msg: String = err.chars().take(4000).collect();
+    let reason = stuck_reason.map(|s| s.chars().take(80).collect::<String>());
     let mut tx = crate::begin_tenant_tx(pool, job.tenant_id).await?;
     if job.attempt_count >= job.max_attempts {
         sqlx::query(
             r#"UPDATE weissman_async_jobs SET status = 'dead', last_error = $2, locked_until = NULL,
-               worker_id = NULL, updated_at = now()
+               worker_id = NULL, stuck_reason = $4, updated_at = now()
                -- 'pending' as well as 'running': in the zero-trust flow `reserve_next` sets
                -- worker_id and the lock but leaves the row `pending` until the cryptographic
                -- claim promotes it. A claim that is REJECTED therefore never reaches 'running',
@@ -737,6 +859,7 @@ pub async fn fail_job(
         .bind(job.id)
         .bind(&msg)
         .bind(worker_id)
+        .bind(reason.as_deref())
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
@@ -753,7 +876,8 @@ pub async fn fail_job(
     let delay = delay.min(3600);
     sqlx::query(
         r#"UPDATE weissman_async_jobs SET status = 'pending', last_error = $2, locked_until = NULL,
-           worker_id = NULL, run_after = now() + ($3::bigint * interval '1 second'), updated_at = now()
+           worker_id = NULL, run_after = now() + ($3::bigint * interval '1 second'),
+           stuck_reason = $5, updated_at = now()
            -- See the dead-letter branch above: a reserved-but-unclaimed row is 'pending'.
            WHERE id = $1 AND status IN ('pending', 'running') AND worker_id = $4"#,
     )
@@ -761,6 +885,7 @@ pub async fn fail_job(
     .bind(&msg)
     .bind(delay)
     .bind(worker_id)
+    .bind(reason.as_deref())
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -774,6 +899,51 @@ pub async fn fail_job(
     Ok(())
 }
 
+/// Force-Abort: mark an owned `running` job `failed` (no retry), stamp `stuck_reason`,
+/// and free the lease so other tenants can be claimed. Distinct from [`fail_job`],
+/// which requeues. Scan chunks enqueue a resume job separately after this returns.
+pub async fn fail_job_stuck(
+    pool: &PgPool,
+    job: &AsyncJob,
+    worker_id: &str,
+    stuck_reason: &str,
+    err: &str,
+) -> Result<u64, sqlx::Error> {
+    let msg: String = err.chars().take(4000).collect();
+    let reason: String = stuck_reason.chars().take(80).collect();
+    let mut tx = begin_worker_tx(pool).await?;
+    let r = sqlx::query(
+        r#"UPDATE weissman_async_jobs
+              SET status = 'failed',
+                  last_error = $3,
+                  stuck_reason = $4,
+                  locked_until = NULL,
+                  worker_id = NULL,
+                  updated_at = now()
+            WHERE id = $1 AND worker_id = $2 AND status = 'running'"#,
+    )
+    .bind(job.id)
+    .bind(worker_id)
+    .bind(&msg)
+    .bind(&reason)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    tracing::warn!(
+        target: "weissman_worker",
+        job_id = %job.id,
+        stuck_reason = %reason,
+        "job force-aborted as failed; lease released"
+    );
+    Ok(r.rows_affected())
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReclaimedLock {
+    pub id: Uuid,
+    pub previous_status: String,
+    pub new_status: String,
+}
+
 /// Mark `running` rows with expired locks or stale heartbeats as retryable pending (worker crash / hung job).
 ///
 /// Rows that have already exhausted `max_attempts` are dead-lettered instead of requeued. This is
@@ -782,9 +952,22 @@ pub async fn fail_job(
 /// `pending`. One `tenant_full_scan` in this deployment reached **53,620,122** attempts against
 /// `max_attempts = 5`.
 pub async fn reclaim_stale_running_locks(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    let rows = reclaim_stale_locks(pool).await?;
+    Ok(rows
+        .iter()
+        .filter(|r| r.previous_status == "running")
+        .count() as u64)
+}
+
+/// Reclaim expired running locks **and** expired zero-trust reservations.
+///
+/// Reserved rows stay `pending` with a `worker_id` + `locked_until`. If that worker dies
+/// before claim-complete, only this sweep returns the row to the queue.
+pub async fn reclaim_stale_locks(pool: &PgPool) -> Result<Vec<ReclaimedLock>, sqlx::Error> {
     let mut tx = begin_worker_tx(pool).await?;
-    // Retire the exhausted ones first, so the requeue below cannot pick them up.
-    sqlx::query(
+    let mut out = Vec::new();
+
+    let dead: Vec<Uuid> = sqlx::query_scalar(
         r#"UPDATE weissman_async_jobs
               SET status = 'dead',
                   last_error = COALESCE(NULLIF(last_error, ''), 'worker died before reporting an outcome')
@@ -794,17 +977,20 @@ pub async fn reclaim_stale_running_locks(pool: &PgPool) -> Result<u64, sqlx::Err
                   updated_at = now()
             WHERE status = 'running'
               AND attempt_count >= max_attempts
-              AND (heartbeat_at < now() - interval '30 minutes' OR locked_until < now())"#,
+              AND (heartbeat_at < now() - interval '30 minutes' OR locked_until < now())
+            RETURNING id"#,
     )
-    .execute(&mut *tx)
+    .fetch_all(&mut *tx)
     .await?;
+    out.extend(dead.into_iter().map(|id| ReclaimedLock {
+        id,
+        previous_status: "running".into(),
+        new_status: "dead".into(),
+    }));
 
-    let r = sqlx::query(
+    let requeued: Vec<Uuid> = sqlx::query_scalar(
         r#"UPDATE weissman_async_jobs
            SET status = 'pending',
-               -- Append rather than overwrite: the previous value is the only record of WHY the
-               -- job was running when its worker vanished, and clobbering it with a fixed string
-               -- destroyed the diagnostic on exactly the rows that most needed one.
                last_error = CASE
                    WHEN COALESCE(last_error, '') = '' THEN 'stale lock reclaimed'
                    ELSE last_error || ' [stale lock reclaimed]'
@@ -818,12 +1004,43 @@ pub async fn reclaim_stale_running_locks(pool: &PgPool) -> Result<u64, sqlx::Err
              AND (
                heartbeat_at < now() - interval '30 minutes'
                OR locked_until < now()
-             )"#,
+             )
+           RETURNING id"#,
     )
-    .execute(&mut *tx)
+    .fetch_all(&mut *tx)
     .await?;
+    out.extend(requeued.into_iter().map(|id| ReclaimedLock {
+        id,
+        previous_status: "running".into(),
+        new_status: "pending".into(),
+    }));
+
+    let reserved: Vec<Uuid> = sqlx::query_scalar(
+        r#"UPDATE weissman_async_jobs
+              SET locked_until = NULL,
+                  worker_id = NULL,
+                  last_error = CASE
+                      WHEN COALESCE(last_error, '') = '' THEN 'stale reservation reclaimed'
+                      ELSE last_error || ' [stale reservation reclaimed]'
+                  END,
+                  run_after = now() + interval '2 seconds',
+                  updated_at = now()
+            WHERE status = 'pending'
+              AND worker_id IS NOT NULL
+              AND locked_until IS NOT NULL
+              AND locked_until < now()
+            RETURNING id"#,
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    out.extend(reserved.into_iter().map(|id| ReclaimedLock {
+        id,
+        previous_status: "pending".into(),
+        new_status: "pending".into(),
+    }));
+
     tx.commit().await?;
-    Ok(r.rows_affected())
+    Ok(out)
 }
 
 /// Immediately move a job to dead-letter — no retry (HMAC mismatch, expired envelope, etc.).

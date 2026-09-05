@@ -660,6 +660,14 @@ pub async fn active_tenant_ids(pool: &PgPool) -> Result<Vec<i64>, sqlx::Error> {
         .await
 }
 
+/// Slug + display name of active tenants, past RLS, for the pre-auth login picker.
+/// Backed by `public.login_tenant_directory()` (SECURITY DEFINER). Returns no ids.
+pub async fn login_tenant_directory(pool: &PgPool) -> Result<Vec<(String, String)>, sqlx::Error> {
+    sqlx::query_as("SELECT slug, name FROM public.login_tenant_directory()")
+        .fetch_all(pool)
+        .await
+}
+
 /// Like [`begin_tenant_tx`], but takes an owned [`Arc`] so the returned future is [`Send`] when used
 /// from long-lived tasks (e.g. panic-shielded orchestrator cycles) without capturing `&PgPool`.
 pub async fn begin_tenant_tx_arc(
