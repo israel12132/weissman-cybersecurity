@@ -4,6 +4,16 @@
  * stuck/lease truth on the client when the API omitted it.
  */
 
+import { jobIsRoeBlocked } from './roeBlocked.js'
+
+/** Same contract keys as `job_diagnostics::DIAGNOSTICS_REQUIRED_FIELDS`. */
+export const DIAGNOSTICS_REQUIRED_FIELDS = [
+  'redis',
+  'workers',
+  'pending_no_envelope',
+  'stuck_reason',
+]
+
 export const OPERATOR_STATES = [
   'queued',
   'running',
@@ -41,6 +51,7 @@ export const OPERATOR_COLORS = {
 
 export function operatorState(job) {
   if (!job) return 'queued'
+  if (jobIsRoeBlocked(job)) return 'roe_blocked'
   const live = String(job.operator_state || '').toLowerCase()
   if (live) {
     if (live === 'failed' || live === 'dead') return 'error'
@@ -50,6 +61,31 @@ export function operatorState(job) {
   if (st === 'pending') return 'queued'
   if (st === 'failed' || st === 'dead') return 'error'
   return st || 'queued'
+}
+
+/**
+ * Live GET /api/jobs/diagnostics census. Incomplete payloads fail closed —
+ * the dashboard must not paint redis/workers as healthy from missing keys.
+ */
+export function parseDiagnosticsCensus(diag) {
+  if (!diag || typeof diag !== 'object') {
+    return { ok: false, reason: 'missing' }
+  }
+  for (const field of DIAGNOSTICS_REQUIRED_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(diag, field)) {
+      return { ok: false, reason: 'incomplete', field }
+    }
+  }
+  return {
+    ok: true,
+    redisConfigured: Boolean(diag.redis?.configured),
+    redisInspectOk: Boolean(diag.redis?.inspect_ok),
+    workersAlive: Number(diag.workers?.alive ?? 0),
+    workersInspected: Number(diag.workers?.inspected ?? 0),
+    workerIds: Array.isArray(diag.workers?.ids) ? diag.workers.ids : [],
+    pendingNoEnvelope: Number(diag.pending_no_envelope ?? 0),
+    stuck: Array.isArray(diag.stuck_reason) ? diag.stuck_reason : [],
+  }
 }
 
 export function operatorBadgeClass(jobOrState) {
@@ -176,4 +212,15 @@ export function mergeJobDiagnostics(job, diag) {
   if (!job) return diag || null
   if (!diag || typeof diag !== 'object') return job
   return { ...job, ...diag }
+}
+
+export function overlayStuckReasons(jobs, stuckRows) {
+  if (!Array.isArray(jobs) || !Array.isArray(stuckRows) || stuckRows.length === 0) {
+    return jobs || []
+  }
+  const overlay = new Map(stuckRows.map((row) => [String(row.id), row]))
+  return jobs.map((job) => {
+    const extra = overlay.get(String(job.id || job.job_id))
+    return extra ? mergeJobDiagnostics(job, extra) : job
+  })
 }

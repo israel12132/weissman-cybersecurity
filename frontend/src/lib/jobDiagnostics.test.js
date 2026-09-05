@@ -7,6 +7,8 @@ import {
   diagnosticsHaystack,
   jobToCsvRow,
   mergeJobDiagnostics,
+  parseDiagnosticsCensus,
+  overlayStuckReasons,
   OPERATOR_STATES,
 } from './jobDiagnostics.js'
 
@@ -93,6 +95,39 @@ describe('jobDiagnostics', () => {
     expect(row).toContain('worker heartbeat stale 400s')
     expect(row).toContain('host:1')
     expect(row).toContain(false)
+  })
+
+  it('parses a complete diagnostics census and fails closed on missing keys', () => {
+    expect(parseDiagnosticsCensus(null).ok).toBe(false)
+    expect(parseDiagnosticsCensus({ redis: {}, workers: {} }).ok).toBe(false)
+    expect(parseDiagnosticsCensus({ redis: {}, workers: {}, pending_no_envelope: 0 }).field).toBe(
+      'stuck_reason',
+    )
+    const census = parseDiagnosticsCensus({
+      redis: { configured: true, inspect_ok: true },
+      workers: { alive: 2, inspected: 2, ids: ['w1', 'w2'] },
+      pending_no_envelope: 3,
+      stuck_reason: [{ id: 'j1', stuck_reason: 'missing_envelope' }],
+    })
+    expect(census.ok).toBe(true)
+    expect(census.workersAlive).toBe(2)
+    expect(census.pendingNoEnvelope).toBe(3)
+    expect(census.stuck).toHaveLength(1)
+  })
+
+  it('overlays diagnostics stuck_reason onto listed jobs by id', () => {
+    const merged = overlayStuckReasons(
+      [{ id: 'j1', status: 'running' }, { id: 'j2', status: 'queued' }],
+      [{ id: 'j1', stuck_reason: 'redis lease missing' }],
+    )
+    expect(merged[0].stuck_reason).toBe('redis lease missing')
+    expect(merged[1].stuck_reason).toBeUndefined()
+  })
+
+  it('treats nested RoE payload as roe_blocked even without operator_state', () => {
+    expect(operatorState({ status: 'completed', result: { status: 'roe_blocked', roe_blocked: true } })).toBe(
+      'roe_blocked',
+    )
   })
 
   it('merges live diagnostics onto the selected job without dropping identity', () => {

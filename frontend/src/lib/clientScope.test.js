@@ -7,6 +7,10 @@ import {
   canCreateClients,
   canDeleteClients,
   isPortalBlockedPath,
+  allowedClientIds,
+  filterVisibleClients,
+  shouldHideClientPicker,
+  boundClientId,
 } from './clientScope.js'
 
 const owner = { ok: true, role: 'ceo', is_owner: true, can_create_clients: true, can_delete_clients: true }
@@ -59,5 +63,30 @@ describe('clientScope policy', () => {
     expect(isPortalBlockedPath('/findings')).toBe(false)
     expect(isPortalBlockedPath('/clients')).toBe(false)
     expect(isPortalBlockedPath('/engines')).toBe(false)
+  })
+
+  it('hides the picker and overwrites spoofed client ids for portal sessions', () => {
+    const roster = [{ id: 7, name: 'acme' }, { id: 99, name: 'other' }]
+    const scoped = {
+      ...portal,
+      client_picker_hidden: true,
+      allowed_client_ids: [7],
+    }
+    expect(allowedClientIds(scoped)).toEqual([7])
+    expect(filterVisibleClients(scoped, roster)).toEqual([{ id: 7, name: 'acme' }])
+    expect(shouldHideClientPicker(scoped, roster)).toBe(true)
+    expect(boundClientId(scoped, roster, 99)).toBe(7)
+    expect(filterVisibleClients(staff, roster)).toEqual(roster)
+    expect(shouldHideClientPicker(staff, roster)).toBe(false)
+    expect(boundClientId(staff, roster, 99)).toBe(99)
+  })
+
+  it('fails closed on an empty allow-list instead of trusting a spoofed id', () => {
+    const roster = [{ id: 7, name: 'acme' }, { id: 99, name: 'other' }]
+    const empty = { ok: true, role: 'client', is_client_user: true, allowed_client_ids: [] }
+    expect(allowedClientIds(empty)).toEqual([])
+    expect(filterVisibleClients(empty, roster)).toEqual([])
+    expect(shouldHideClientPicker(empty, roster)).toBe(true)
+    expect(boundClientId(empty, roster, 99)).toBeNull()
   })
 })
