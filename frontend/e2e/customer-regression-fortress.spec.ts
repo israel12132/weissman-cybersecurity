@@ -4,7 +4,7 @@ import { PRODUCTION_ENGINE_COUNT } from '../src/lib/platformScale'
 
 /**
  * Customer regression fortress — live UI contracts the other teams must not break:
- * login lives only at /command-center/login, 563 + live backdrop stay, scoped JWT
+ * login lives only at /command-center/login, live engine count + live backdrop stay, scoped JWT
  * never renders select[name=client_id].
  */
 

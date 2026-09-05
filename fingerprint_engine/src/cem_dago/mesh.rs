@@ -604,7 +604,8 @@ pub fn status_json() -> Value {
 /// Manifest dump (id, inputs, outputs, mitre, group) for the UI search table.
 pub fn manifests_json(limit: usize) -> Value {
     use weissman_core::models::engine::production_engine_ids;
-    let cap = limit.clamp(1, 600);
+    let fleet = production_engine_ids().len().max(1);
+    let cap = limit.clamp(1, fleet);
     let rows: Vec<Value> = production_engine_ids()
         .iter()
         .take(cap)
@@ -712,5 +713,18 @@ mod tests {
         let snap = cache.load();
         assert!(snap.has_label("ot_protocol"));
         assert!(snap.has_label("web_port_active"));
+    }
+
+    #[test]
+    fn manifests_cover_the_full_production_fleet() {
+        let fleet = weissman_core::models::engine::PRODUCTION_ENGINE_IDS.len();
+        let all = manifests_json(fleet);
+        assert_eq!(all["count"], fleet);
+        assert_eq!(all["manifests"].as_array().expect("manifests").len(), fleet);
+        let over = manifests_json(fleet.saturating_add(50));
+        assert_eq!(
+            over["count"], fleet,
+            "clamp must not invent engines past the fleet"
+        );
     }
 }

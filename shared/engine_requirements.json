@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-08-31T19:47:50.079Z",
-  "production_engine_count": 567,
+  "generated_at": "2026-09-05T20:27:00.667Z",
+  "production_engine_count": 573,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 424
+      "engine_count": 427
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -286,7 +286,7 @@
         "tenant_ai_entitlement",
         "llm_secops_endpoints"
       ],
-      "engine_count": 48
+      "engine_count": 51
     },
     "oast_blind": {
       "id": "oast_blind",
@@ -6367,6 +6367,75 @@
         "industrial_ot",
         "scope_domains",
         "scope_ips"
+      ]
+    },
+    "advanced_c2_covert_exfil": {
+      "id": "advanced_c2_covert_exfil",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Advanced C2 & Covert Exfil Assessment",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "honey_routing_gateway": {
+      "id": "honey_routing_gateway",
+      "group": "deception",
+      "kind": "real_probe",
+      "label": "Honey-Routing Gateway",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "stealthy_persistence_evasion": {
+      "id": "stealthy_persistence_evasion",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Stealth Persistence & Defense Evasion",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "prompt_injection_brake": {
+      "id": "prompt_injection_brake",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Prompt-Injection Brake",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "jailbreak_cognitive_engine": {
+      "id": "jailbreak_cognitive_engine",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Jailbreak Cognitive Engine",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "rag_poisoning_guard": {
+      "id": "rag_poisoning_guard",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "RAG Poisoning Guard",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
       ]
     }
   }

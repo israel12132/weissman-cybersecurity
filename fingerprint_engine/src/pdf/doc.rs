@@ -1027,6 +1027,7 @@ mod tests {
     use super::*;
     use crate::pdf::charts::Slice;
     use crate::pdf::layout::{CellStyle, Column};
+    use weissman_core::models::engine::PRODUCTION_ENGINE_IDS;
 
     fn meta(lang: Lang) -> DocMeta {
         DocMeta {
@@ -1075,7 +1076,11 @@ mod tests {
                         Metric::new("Critical", "4", Tone::Bad),
                         Metric::new("High", "11", Tone::Warn),
                         Metric::new("Verified", "9", Tone::Good),
-                        Metric::new("Engines", "563", Tone::Brand),
+                        Metric::new(
+                            "Engines",
+                            PRODUCTION_ENGINE_IDS.len().to_string(),
+                            Tone::Brand,
+                        ),
                     ]))
                     .with(Block::Chart(Chart::Donut {
                         slices: vec![

@@ -8,6 +8,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { execSync } from 'node:child_process'
 import MarkdownIt from 'markdown-it'
 import { chromium } from 'playwright-core'
 import subsetFont from 'subset-font'
@@ -22,6 +23,24 @@ if (!inputPath || !outputPath) {
 const lang = (langArg || 'he').toLowerCase()
 const rtl = lang === 'he'
 const dir = rtl ? 'rtl' : 'ltr'
+
+const REPO_ROOT = path.resolve(__dirname, '../..')
+function productionFleet() {
+  const j = JSON.parse(
+    execSync('node scripts/engine_reality_audit.mjs', { cwd: REPO_ROOT, encoding: 'utf8' }),
+  )
+  const p = j.production || {}
+  if (
+    !Number.isInteger(p.total) ||
+    !Number.isInteger(p.real_probe) ||
+    !Number.isInteger(p.alias) ||
+    !Number.isInteger(p.agent_required)
+  ) {
+    throw new Error('engine_reality_audit.mjs did not return production totals')
+  }
+  return p
+}
+const FLEET = productionFleet()
 
 const STR = {
   he: {
@@ -128,7 +147,7 @@ const archHtml = `
       <div class="band__label">${D.bandWorkers}</div>
       <div class="band__nodes">
         ${node('weissman-worker', rtl ? 'תור SKIP LOCKED · timeouts לכל־סוג' : 'SKIP LOCKED queue · per-kind timeouts')}
-        ${node('Engine fleet', rtl ? '567 מזהים · 307 real_probe · 212 alias · 48 agent' : '567 IDs · 307 real_probe · 212 alias · 48 agent')}
+        ${node('Engine fleet', rtl ? `${FLEET.total} מזהים · ${FLEET.real_probe} real_probe · ${FLEET.alias} alias · ${FLEET.agent_required} agent` : `${FLEET.total} IDs · ${FLEET.real_probe} real_probe · ${FLEET.alias} alias · ${FLEET.agent_required} agent`)}
         ${node('weissman-oast-server', rtl ? 'לכידת קריאות DNS + HTTP' : 'DNS + HTTP callback capture')}
       </div>
     </div>
@@ -198,14 +217,14 @@ function escapeHtml(s) {
 
 // "By the numbers" KPI band — injected right after the Executive Summary heading
 const KPIS = rtl ? [
-  { n: '567', u: 'מנועי אבטחה' },
+  { n: String(FLEET.total), u: 'מנועי אבטחה' },
   { n: '~193K', u: 'שורות קוד מקורי' },
   { n: '~130', u: 'נקודות־קצה API' },
   { n: '~88', u: 'טבלאות PostgreSQL' },
   { n: '6', u: 'דרגות RBAC' },
   { n: '0', u: 'ממצאים מזויפים' },
 ] : [
-  { n: '567', u: 'security engines' },
+  { n: String(FLEET.total), u: 'security engines' },
   { n: '~193K', u: 'lines of first-party code' },
   { n: '~130', u: 'API endpoints' },
   { n: '~88', u: 'PostgreSQL tables' },

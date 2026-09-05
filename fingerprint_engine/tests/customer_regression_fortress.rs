@@ -112,7 +112,7 @@ fn login_exists_only_under_command_center() {
 }
 
 #[test]
-fn login_copy_locks_563_and_live_backdrop_css() {
+fn login_copy_locks_engine_count_and_live_backdrop_css() {
     let login = include_str!("../../frontend/src/components/cockpit/Login.jsx");
     let css = include_str!("../../frontend/src/styles/cyber-live-backdrop.css");
     let index = include_str!("../../frontend/src/index.css");

@@ -16,4 +16,4 @@ Individual `*_engine.py` modules emit `DeprecationWarning` on import. They remai
 
 ## Full catalog
 
-563+ production engines — authoritative registry: `backend/weissman-core/src/models/engine.rs`
+573 production engines — authoritative registry: `backend/weissman-core/src/models/engine.rs`

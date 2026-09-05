@@ -7,6 +7,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import ClientOnboardingWizard from '../components/clients/ClientOnboardingWizard'
 import { apiFetch } from '../utils/apiFetch'
 import Button from '../components/ui/Button'
+import { PRODUCTION_ENGINE_COUNT } from '../lib/platformScale'
 
 export default function ClientNew() {
   const { t } = useTranslation()
@@ -73,7 +74,7 @@ export default function ClientNew() {
           placeholder={t('pages.clientNew.search_placeholder')}
           className="w-full max-w-md px-3 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-[var(--text-muted)]"
         />
-        <EvidenceNotice>{t('pages.clientOnboarding.evidence_notice')}</EvidenceNotice>
+        <EvidenceNotice>{t('pages.clientOnboarding.evidence_notice', { engines: PRODUCTION_ENGINE_COUNT })}</EvidenceNotice>
         <ClientOnboardingWizard onSubmit={handleSubmit} submitting={submitting} error={error} filterQuery={searchQuery} />
         <div className="text-center">
           <Button variant="unstyled"

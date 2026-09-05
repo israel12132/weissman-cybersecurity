@@ -6,7 +6,7 @@
 //! ## Status: the [`CyberEngine`] trait system is RETIRED (not the whole crate)
 //!
 //! This crate began as a `CyberEngine`-trait engine framework, but that migration was not
-//! completed: production dispatches all **565** engines through `fingerprint_engine`'s
+//! completed: production dispatches all catalog engines through `fingerprint_engine`'s
 //! `engine_dispatch` match, not through [`CyberEngine`]. Only OSINT + the two fuzzers are
 //! wired as trait engines ([`factory::phase2_cyber_engines`]), so treat the trait/`factory`
 //! surface as **frozen/legacy** — do not add new engines here; add them to

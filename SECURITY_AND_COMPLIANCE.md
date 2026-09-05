@@ -13,10 +13,10 @@ Detailed Q&A is in [`SIG_CAIQ_PREP_QA.md`](SIG_CAIQ_PREP_QA.md); SLA in
 
 | Metric | Value | Audit script |
 |--------|-------|--------------|
-| Production engine IDs | **567** | `scripts/verify_engine_wiring.mjs` |
+| Production engine IDs | **573** | `scripts/verify_engine_wiring.mjs` |
 | Command Center routes | **134** | `scripts/weissman-ui-audit.mjs` |
 | UI pages audited | **115/115** | same |
-| Engine kinds | 307 real_probe (299 distinct impls), 212 alias, 48 agent_required, 0 no_path | `scripts/engine_reality_audit.mjs` |
+| Engine kinds | 313 real_probe (305 distinct impls), 212 alias, 48 agent_required, 0 no_path | `scripts/engine_reality_audit.mjs` |
 
 Global release gate: **`bash scripts/full_audit_gate.sh`** (G1–G7, exit 0).
 Inspection-day script: **`docs/operations/INSPECTION-DAY-RUNBOOK.md`**.
@@ -65,7 +65,7 @@ Inspection-day script: **`docs/operations/INSPECTION-DAY-RUNBOOK.md`**.
 Full control mapping: [`docs/compliance/BANK-OF-ISRAEL-DIRECTIVE-361.md`](docs/compliance/BANK-OF-ISRAEL-DIRECTIVE-361.md).
 
 Summary of key controls:
-- **Cyber risk management:** 567 production engines mapped to MITRE ATT&CK (14/14 tactics)
+- **Cyber risk management:** 573 production engines mapped to MITRE ATT&CK (14/14 tactics)
 - **Tenant isolation:** PostgreSQL RLS on 80+ tables, enforced at DB level
 - **Incident response:** SEV-1 ≤ 15 minutes, 24/7 on-call (see `SLA_AND_STATUS.md`)
 - **DR / BCP:** RTO ≤ 4h, RPO ≤ 1h, PITR backups, restore-verify every 48h

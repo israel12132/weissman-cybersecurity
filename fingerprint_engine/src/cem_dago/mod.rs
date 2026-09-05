@@ -11,9 +11,9 @@
 //!    engines stall — never fabricated findings.
 //!
 //! Production engines still run through [`crate::engine_dispatch::run_engine`].
-//! This module does **not** materialise 563 `Arc<dyn CognitiveEngine>` objects
-//! per scan (that would pin CPU/RAM); manifests are static lookup, execution is
-//! dispatch-on-id.
+//! This module does **not** materialise one `Arc<dyn CognitiveEngine>` per
+//! `PRODUCTION_ENGINE_IDS` entry (that would pin CPU/RAM); manifests are static
+//! lookup, execution is dispatch-on-id.
 
 pub mod blackboard;
 pub mod lanes;

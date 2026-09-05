@@ -10905,7 +10905,7 @@ GET /dashboard |
 |-----|------|
 | עמודים | 605 |
 | לוחות UI | 2 |
-| מנועים | 563 |
+| מנועים | 573 |
 | HTTP API routes | 8 |
 | Surfaces (install, WS, legal) | 10 |
 | Agent-required engines | 48 |

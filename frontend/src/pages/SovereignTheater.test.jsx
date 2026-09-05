@@ -41,7 +41,7 @@ beforeEach(() => {
       })
     }
     if (String(url).includes('/knowledge')) {
-      return Promise.resolve({ knowledge: { production_engine_count: 563, live: true } })
+      return Promise.resolve({ knowledge: { production_engine_count: 573, live: true } })
     }
     if (String(url).includes('/memory')) {
       return Promise.resolve({

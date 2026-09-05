@@ -88,7 +88,7 @@ function isKevListed(f) {
 }
 
 // Registry is static, so precompute a normalized-label → engine index ONCE
-// instead of scanning all ~565 engines on every unmatched lookup. Results are
+// instead of scanning the full registry on every unmatched lookup. Results are
 // memoized by raw input — the accessors below run per-row × per-render over a
 // 2000-row set, so this must be O(1), not an O(n) find per call.
 const _normLabelIndex = (() => {

@@ -8,7 +8,7 @@ Weissman Cybersecurity is an **authorized offensive-security and active-defence 
 - An **async worker** (`weissman-worker`) — scan pipelines and long-running jobs
 - A **React Command Center** — SPA at `/command-center/`
 - An **endpoint agent** (`weissman-agent`) — on-host detections + UEBA
-- **563 production engines** — each wired to real network/host/agent probes
+- **573 production engines** — each wired to real network/host/agent probes
 
 **Critical principle:** Findings come from **live probes only**. Agent-required engines show an honest empty state until an agent is online — never fabricated results.
 

@@ -214,7 +214,7 @@ The platform is multi-tenant by construction:
 |---|---|---|
 | Tenants | Unlimited | Each tenant is RLS-isolated |
 | Concurrent scans | Configurable via worker HPA | `deploy/k8s/worker-hpa.yaml` |
-| Engines per scan | 563 production engines | 303 real_probe + 212 alias + 48 agent |
+| Engines per scan | 573 production engines | 313 real_probe + 212 alias + 48 agent |
 | Users per tenant | Unlimited | 5 RBAC roles |
 | Regions | IL, EU-West, US-East, AU-East | Per-tenant |
 

@@ -8,7 +8,7 @@
 
 | Area | Status | Notes |
 |------|--------|-------|
-| **Engine wiring** | ✅ Complete | `verify_engine_wiring.mjs` → 0 gaps; **563 production engine IDs** |
+| **Engine wiring** | ✅ Complete | `verify_engine_wiring.mjs` → 0 gaps; **573 production engine IDs** |
 | **UI standard** | ✅ Complete | `weissman-ui-audit.mjs` → **95/95 pages**, **112 routes** |
 | **Agent-required UX** | ✅ Complete | Empty state + per-route gates; **48 agent engines** |
 | **Billing / quota** | ✅ Complete | All scan & async enqueue paths gated; strict in production |
@@ -79,7 +79,7 @@
 ## Sales positioning (accurate claims)
 
 **You CAN claim:**
-- **563** production security engine IDs with live probes (303 real_probe + 212 alias + 48 agent_required — no fake findings)
+- **573** production security engine IDs with live probes (313 real_probe + 212 alias + 48 agent_required — no fake findings)
 - **112** Command Center routes with live API evidence banners
 - Multi-tenant RLS, JWT (≥48 char production) + MFA, RBAC, audit log
 - Endpoint agent with 45+ agent-required detection surfaces
@@ -102,7 +102,7 @@ See **`docs/operations/INSPECTION-DAY-RUNBOOK.md`** for the full 60-minute scrip
 1. `bash scripts/full_audit_gate.sh` → **GLOBAL PASS** (exit 0)
 2. `curl -sf https://<host>/api/health` → 200
 3. Login → Command Center loads (`POST /api/login`)
-4. `GET /api/engines/capabilities` → 563 engine IDs with kind legend
+4. `GET /api/engines/capabilities` → 573 engine IDs with kind legend
 5. Create demo client with **authorized domain only**
 6. Run one engine (e.g. `osint`, `asm`) → job completes
 7. Findings panel + PDF export + compliance evidence-pack API

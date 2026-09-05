@@ -101,7 +101,7 @@ const LANES: &[LaneDef] = &[
     LaneDef {
         id: "cloud_cnapp",
         title: "Cloud / CNAPP / IaC",
-        beats: "Wiz, Orca, Prisma, CrowdStrike Falcon Cloud — posture/graph, not offensive 563-engine fabric + Ask",
+        beats: "Wiz, Orca, Prisma, CrowdStrike Falcon Cloud — posture/graph, not offensive live-engine fabric + Ask",
         needles: &[
             "aws",
             "azure",
@@ -312,7 +312,7 @@ fn lane_hits(needles: &[&str]) -> Vec<&'static str> {
 }
 
 /// Public market-research clusters (not live vendor telemetry).
-fn market_research() -> Value {
+fn market_research(engines_total: usize) -> Value {
     json!([
         {
             "cluster": "autonomous_pentest",
@@ -324,7 +324,7 @@ fn market_research() -> Value {
             "cluster": "agentic_web",
             "vendors": ["XBOW", "Strix", "Escape", "FireCompass"],
             "owns": "web/API PoC validators; Strix fix-PR loop; Escape GraphQL/BOLA",
-            "lacks": "AD/network chaining (XBOW), OT/ICS, tenant RLS SQL, 563 production engines, FAIR that refuses to drop ALE on a patch-PR without a later live absence scan"
+            "lacks": format!("AD/network chaining (XBOW), OT/ICS, tenant RLS SQL, {engines_total} production engines, FAIR that refuses to drop ALE on a patch-PR without a later live absence scan")
         },
         {
             "cluster": "bas_ctem",
@@ -342,7 +342,7 @@ fn market_research() -> Value {
             "cluster": "cnapp",
             "vendors": ["Wiz", "Orca", "Prisma Cloud", "CrowdStrike Falcon Cloud"],
             "owns": "agentless graph, pentest-finding *ingest* (Wiz GA 2026)",
-            "lacks": "native 303 live probes, Ask JSON QueryPlan, OT FSM"
+            "lacks": "native live probes, Ask JSON QueryPlan, OT FSM"
         },
         {
             "cluster": "identity_graph",
@@ -354,7 +354,7 @@ fn market_research() -> Value {
             "cluster": "ot_fair",
             "vendors": ["DeNexus DeRISK"],
             "owns": "OT process-disruption finance",
-            "lacks": "563-engine offensive fabric + dual-probe + Ask RLS"
+            "lacks": format!("{engines_total}-engine offensive fabric + dual-probe + Ask RLS")
         },
         {
             "cluster": "llm_redteam",
@@ -429,8 +429,8 @@ pub fn snapshot() -> Value {
             "live": false,
             "as_of": "2026-08-27",
             "method": "public_web_github_forums",
-            "clusters": market_research(),
-            "verdict": "No public product combines 563 live engines + OT protocol FSM + dual-probe evidence-doubt + FAIR-from-graph (ALE priced until Hack-Fix-Verify absence scan) + Ask 13-table RLS + WSS inner crypto + Hebrew Command Center."
+            "clusters": market_research(engines_total),
+            "verdict": format!("No public product combines {engines_total} live engines + OT protocol FSM + dual-probe evidence-doubt + FAIR-from-graph (ALE priced until Hack-Fix-Verify absence scan) + Ask 13-table RLS + WSS inner crypto + Hebrew Command Center.")
         },
         "kernel_sanity": {
             "wss_nonce_bits": 96,
@@ -467,6 +467,14 @@ mod tests {
         let snap = snapshot();
         assert_eq!(snap["market_research"]["live"], false);
         assert_eq!(snap["live"], true);
+        let verdict = snap["market_research"]["verdict"]
+            .as_str()
+            .expect("verdict");
+        assert!(
+            verdict.contains(&format!("{} live engines", PRODUCTION_ENGINE_IDS.len())),
+            "{verdict}"
+        );
+        assert!(!verdict.contains("563 live engines"), "{verdict}");
     }
 
     #[test]

@@ -49,7 +49,7 @@ This directory is the **official delivery documentation pack** for Weissman Cybe
 
 | Book | Description |
 |------|-------------|
-| [WEISSMAN-COMMAND-CENTER-BOOK-en.md](en/WEISSMAN-COMMAND-CENTER-BOOK-en.md) | **Full operations book** — TOC, every board, workflows, 533 engines |
+| [WEISSMAN-COMMAND-CENTER-BOOK-en.md](en/WEISSMAN-COMMAND-CENTER-BOOK-en.md) | **Full operations book** — TOC, every board, workflows, 573 engines |
 | [WEISSMAN-COMMAND-CENTER-BOOK.md](../he/WEISSMAN-COMMAND-CENTER-BOOK.md) | Same book in Hebrew |
 
 ---
