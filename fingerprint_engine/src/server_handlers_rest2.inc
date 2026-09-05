@@ -8,9 +8,16 @@ async fn api_client_findings_all(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({ "findings": [] }))).into_response();
     };
     let rows = sqlx::query(
-        r#"SELECT id, finding_id, title, severity, source, COALESCE(description,''), COALESCE(poc_exploit,''),
-                  COALESCE(poc_sealed, false), COALESCE(poc_commitment_sha256,''),
-                  COALESCE(raw_data, '{}'::jsonb) AS raw_data
+        r#"SELECT id, finding_id, title, severity, source,
+                  COALESCE(description,'') AS description,
+                  COALESCE(poc_exploit,'') AS poc_exploit,
+                  COALESCE(poc_sealed, false) AS poc_sealed,
+                  COALESCE(poc_commitment_sha256,'') AS poc_commitment_sha256,
+                  COALESCE(raw_data, '{}'::jsonb) AS raw_data,
+                  epss_score,
+                  COALESCE(kev_listed, false) AS kev_listed,
+                  COALESCE(status, '') AS status,
+                  discovered_at
              FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC"#,
     )
     .bind(cid)
@@ -37,7 +44,10 @@ async fn api_client_findings_all(
                 .and_then(Value::as_str)
                 .unwrap_or("")
                 .to_string();
-            json!({
+            let epss: Option<f32> = r.try_get("epss_score").ok().flatten();
+            let kev_listed = r.try_get::<bool, _>("kev_listed").unwrap_or(false);
+            let intel = crate::client_assessment::finding_api_fields(&raw_data, epss, kev_listed);
+            let mut finding = json!({
                 "id": row_id,
                 "raw_id": row_id,
                 "finding_id": r.try_get::<String,_>("finding_id").unwrap_or_default(),
@@ -49,9 +59,14 @@ async fn api_client_findings_all(
                 "poc_sealed": r.try_get::<bool,_>("poc_sealed").unwrap_or(false),
                 "poc_commitment_sha256": r.try_get::<String,_>("poc_commitment_sha256").unwrap_or_default(),
                 "target": target,
+                "status": r.try_get::<String,_>("status").unwrap_or_default(),
                 "live_verification": live_verification,
                 "live_verdict": live_verdict,
-            })
+            });
+            if let (Some(base), Value::Object(more)) = (finding.as_object_mut(), intel) {
+                base.extend(more);
+            }
+            finding
         })
         .collect();
     (StatusCode::OK, Json(json!({ "findings": findings }))).into_response()
@@ -141,30 +156,27 @@ async fn api_client_report_pdf(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<i64>,
+    Query(q): Query<LangQuery>,
+    headers: HeaderMap,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
     };
-    let client_name: String = match sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
-        .bind(id)
-        .fetch_optional(&mut *tx)
-        .await
-        .ok()
-        .flatten()
-    {
-        Some(n) => n,
-        None => {
+    let pack = match crate::client_assessment::load(&mut tx, id).await {
+        Ok(p) => p,
+        Err(crate::client_assessment::LoadError::NotFound) => {
             let _ = tx.rollback().await;
             return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
         }
+        Err(crate::client_assessment::LoadError::Db(e)) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "DB error", "detail": scrub_internal_error(&e)})),
+            )
+                .into_response();
+        }
     };
-    let rows = sqlx::query(
-        "SELECT id, title, severity, source, COALESCE(description,''), COALESCE(poc_exploit,'') FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
-    )
-    .bind(id)
-    .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
     let proof = match get_crypto_proof_for_client_tx(&mut tx, auth.tenant_id, id).await {
         Ok(p) => p,
         Err(e) => {
@@ -173,20 +185,8 @@ async fn api_client_report_pdf(
         }
     };
     let _ = tx.commit().await;
-    let findings: Vec<(i64, String, String, String, String, String)> = rows
-        .into_iter()
-        .map(|r| {
-            (
-                r.try_get::<i64, _>("id").unwrap_or(0),
-                r.try_get::<String, _>("title").unwrap_or_default(),
-                r.try_get::<String, _>("severity").unwrap_or_default(),
-                r.try_get::<String, _>("source").unwrap_or_default(),
-                r.try_get::<String, _>("description").unwrap_or_default(),
-                r.try_get::<String, _>("poc_exploit").unwrap_or_default(),
-            )
-        })
-        .collect();
-    let pdf_bytes: Vec<u8> = match crate::pdf_report::build_client_report_pdf(&client_name, &findings, proof.as_ref()) {
+    let lang = report_lang(&q, &headers);
+    let pdf_bytes: Vec<u8> = match crate::pdf::reports::client_assessment_live(&pack, proof.as_ref(), lang) {
         Ok(b) => b,
         Err(e) => {
             return (
@@ -196,19 +196,8 @@ async fn api_client_report_pdf(
                 .into_response();
         }
     };
-    let safe_name = client_name.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect::<String>();
-    let filename = format!("Weissman_Report_{}.pdf", safe_name);
-    let mut res = Response::new(Body::from(pdf_bytes));
-    res.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("application/pdf"));
-    res.headers_mut().insert(
-        CONTENT_DISPOSITION,
-        HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename)).unwrap_or_else(|_| HeaderValue::from_static("attachment")),
-    );
-    res.headers_mut().insert(
-        axum::http::HeaderName::from_static("x-content-type-options"),
-        HeaderValue::from_static("nosniff"),
-    );
-    res
+    let filename = crate::client_assessment::safe_filename(&pack.client_name, "pdf");
+    pdf_response(pdf_bytes, &filename)
 }
 
 async fn api_client_report_crypto_proof(
@@ -891,10 +880,23 @@ async fn api_openapi_spec() -> Response {
                     }
                 }
             },
+            "/api/clients/{id}/export/xlsx": {
+                "get": {
+                    "summary": "Download client assessment Excel workbook",
+                    "description": "Multi-sheet live workbook (Overview, Executive, Findings, Remediation, Intel) with Weissman brand mark. Optional ?lang=he|en.",
+                    "tags": ["Clients","Reports"],
+                    "parameters": [
+                        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+                    ],
+                    "responses": {
+                        "200": { "description": "XLSX file", "content": { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {} } }
+                    }
+                }
+            },
             "/api/clients/{id}/report/pdf": {
                 "get": {
-                    "summary": "Generate Executive PDF report for a client",
-                    "description": "Returns a signed PDF with severity heatmap, CVSS scoring, APT attribution, benchmarking, and SHA-256 audit trail.",
+                    "summary": "Generate executive PDF assessment for a client",
+                    "description": "Live branded PDF (Weissman shield, bilingual) from this client's database rows. CVSS/CVE/EPSS/CISA KEV appear only when recorded. No invented industry average or APT attribution. Optional ?lang=he|en.",
                     "tags": ["Clients","Reports"],
                     "parameters": [
                         { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }

@@ -5,7 +5,7 @@ use crate::pdf::doc::Lang;
 use crate::pdf::spec::{ColumnSpec, SheetSpec, WorkbookSpec};
 use rust_xlsxwriter::{
     Chart, ChartType, Color, ConditionalFormatText, ConditionalFormatTextRule, DocProperties,
-    Format, FormatAlign, FormatBorder, Workbook, XlsxError,
+    Format, FormatAlign, FormatBorder, Image, Workbook, XlsxError,
 };
 use sha2::{Digest, Sha256};
 
@@ -20,6 +20,7 @@ const AMBER: u32 = 0xC2_410C;
 const GOLD: u32 = 0xC7_7A12;
 const TEAL: u32 = BRAND;
 const ZEBRA: u32 = 0xEE_F3F8;
+const SHIELD_PNG: &[u8] = include_bytes!("../assets/weissman-shield.png");
 
 fn rgb(v: u32) -> Color {
     Color::RGB(v)
@@ -128,6 +129,12 @@ fn render_inner(spec: &WorkbookSpec) -> Result<Vec<u8>, XlsxError> {
         sheet.set_column_width(0, 28)?;
         sheet.set_column_width(1, 56)?;
         sheet.merge_range(0, 0, 0, 3, &spec.title, &title_fmt)?;
+        if let Ok(img) = Image::new_from_buffer(SHIELD_PNG) {
+            let img = img
+                .set_scale_height(0.42)
+                .set_alt_text("Weissman Cybersecurity");
+            let _ = sheet.insert_image_with_offset(0, 3, &img, 12, 4);
+        }
         sheet.write_with_format(1, 0, spec.subtitle.as_str(), &band_fmt)?;
         let mut row = 3u32;
         let fields = [
@@ -400,6 +407,13 @@ mod tests {
         let bytes = render_workbook(&sample()).expect("xlsx");
         assert_eq!(&bytes[0..2], b"PK", "xlsx is a zip package");
         assert!(bytes.len() > 2_000);
+    }
+
+    #[test]
+    fn brand_mark_png_is_embedded() {
+        assert_eq!(&SHIELD_PNG[0..8], b"\x89PNG\r\n\x1a\n");
+        let bytes = render_workbook(&sample()).expect("xlsx");
+        assert!(bytes.windows(8).any(|w| w == b"\x89PNG\r\n\x1a\n"));
     }
 
     #[test]

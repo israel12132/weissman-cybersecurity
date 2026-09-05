@@ -86,13 +86,26 @@ fn base_meta(lang: Lang, title: &str, subtitle: &str, client: &str) -> DocMeta {
     }
 }
 
-/// Client executive security assessment.
+/// Client executive security assessment (tuple rows — tests and legacy callers).
 pub fn client_assessment(
     client_name: &str,
     findings: &[FindingRow],
     crypto_proof: Option<&CryptoProof>,
     lang: Lang,
 ) -> Result<Vec<u8>, String> {
+    let pack = crate::client_assessment::ClientAssessment::from_rows(client_name, findings);
+    client_assessment_live(&pack, crypto_proof, lang)
+}
+
+/// Client executive security assessment from a live pack (logo chrome, live intel).
+pub fn client_assessment_live(
+    pack: &crate::client_assessment::ClientAssessment,
+    crypto_proof: Option<&CryptoProof>,
+    lang: Lang,
+) -> Result<Vec<u8>, String> {
+    let rows = pack.finding_rows();
+    let findings = rows.as_slice();
+    let client_name = pack.client_name.as_str();
     let (critical, high, medium, low_info, score) = count_severity(findings);
     let avg_rp = avg_priority(findings);
     let mut meta = base_meta(
@@ -102,11 +115,15 @@ pub fn client_assessment(
         client_name,
     );
     meta.control_fields
-        .push((t::SCOPE.get(lang).to_string(), client_name.to_string()));
+        .push((t::SCOPE.get(lang).to_string(), pack.scope_line.clone()));
     meta.control_fields.push((
         t::FINDINGS_N.get(lang).to_string(),
         findings.len().to_string(),
     ));
+    if !pack.roe_mode.is_empty() {
+        meta.control_fields
+            .push((t::ROE_HEADING.get(lang).to_string(), pack.roe_mode.clone()));
+    }
     if let Some((hash, _, url)) = crypto_proof {
         meta.integrity_hash = Some(hash.clone());
         meta.verify_url = Some(url.clone());
@@ -120,6 +137,11 @@ pub fn client_assessment(
     ];
 
     let mut exec = Section::new(t::EXEC_SUMMARY.get(lang))
+        .with(Block::Callout(Callout::new(
+            Tone::Brand,
+            t::BLUF.get(lang),
+            bluf_paragraph(pack, critical, high, lang),
+        )))
         .with(Block::Metrics(vec![
             Metric::new(t::CRITICAL.get(lang), critical.to_string(), Tone::Bad),
             Metric::new(t::HIGH.get(lang), high.to_string(), Tone::Warn),
@@ -130,6 +152,15 @@ pub fn client_assessment(
                 format!("{avg_rp}/100"),
                 Tone::Neutral,
             ),
+            Metric::new(
+                t::COL_KEV.get(lang),
+                pack.kev_count().to_string(),
+                if pack.kev_count() > 0 {
+                    Tone::Bad
+                } else {
+                    Tone::Neutral
+                },
+            ),
         ]))
         .with(Block::Chart(Chart::Donut {
             slices: slices.clone(),
@@ -139,13 +170,7 @@ pub fn client_assessment(
             cells: risk_cells(findings),
             caption: String::new(),
         }))
-        .with(Block::Chart(Chart::Bars {
-            slices: vec![
-                Slice::new(t::CLIENT_SCORE.get(lang), f64::from(score), theme::BRAND),
-                Slice::new(t::INDUSTRY_AVG.get(lang), 65.0, theme::MUTED),
-            ],
-            caption: t::BENCHMARK.get(lang).to_string(),
-        }));
+        .with(Block::Paragraph(t::POSTURE_NOTE.get(lang).to_string()));
 
     let discovery_n = discovery_noise_count(findings);
     if discovery_n > 0 {
@@ -196,27 +221,41 @@ pub fn client_assessment(
     let mut findings_sec = Section::new(t::FINDINGS.get(lang))
         .on_new_page()
         .with(Block::Paragraph(t::PROOF_FILTER.get(lang).to_string()));
-    if detailed.is_empty() {
+    if pack.findings.is_empty() {
         findings_sec.push(Block::Callout(Callout::new(
             Tone::Neutral,
             "",
-            t::NO_PROOF.get(lang),
+            t::NO_FINDINGS.get(lang),
         )));
     } else {
-        let rows: Vec<Vec<String>> = detailed
+        let table_rows: Vec<Vec<String>> = pack
+            .findings
             .iter()
-            .map(|(id, title, severity, source, desc, poc)| {
-                let rem = remediation_from_desc(desc);
+            .map(|f| {
+                let rem = remediation_from_desc(&f.description);
                 vec![
-                    format!("VLN-{id}"),
-                    title.clone(),
-                    severity.clone(),
-                    source.clone(),
-                    remediation_priority_score_for_row(desc, severity, poc).to_string(),
-                    if poc.trim().is_empty() {
-                        "—".to_string()
+                    format!("VLN-{}", f.id),
+                    f.title.clone(),
+                    f.severity.clone(),
+                    if f.cvss.is_empty() {
+                        "—".into()
                     } else {
-                        poc.clone()
+                        f.cvss.clone()
+                    },
+                    if f.cve.is_empty() {
+                        "—".into()
+                    } else {
+                        f.cve.clone()
+                    },
+                    if f.kev.is_empty() {
+                        "—".into()
+                    } else {
+                        f.kev.clone()
+                    },
+                    if f.epss.is_empty() {
+                        "—".into()
+                    } else {
+                        f.epss.clone()
                     },
                     if rem == "—" { String::new() } else { rem },
                 ]
@@ -224,15 +263,53 @@ pub fn client_assessment(
             .collect();
         findings_sec.push(Block::Table(
             Table::new(vec![
-                Column::new(t::COL_ID.get(lang), 1.1).styled(CellStyle::Mono),
-                Column::new(t::COL_FINDING.get(lang), 2.6).styled(CellStyle::Strong),
-                Column::new(t::COL_SEVERITY.get(lang), 1.1).styled(CellStyle::Severity),
-                Column::new(t::COL_SOURCE.get(lang), 1.0).styled(CellStyle::Muted),
-                Column::new(t::COL_PRIORITY.get(lang), 0.8).styled(CellStyle::Number),
-                Column::new(t::COL_PROOF.get(lang), 2.2).styled(CellStyle::Mono),
-                Column::new(t::COL_REMEDIATION.get(lang), 2.2),
+                Column::new(t::COL_ID.get(lang), 1.0).styled(CellStyle::Mono),
+                Column::new(t::COL_FINDING.get(lang), 2.4).styled(CellStyle::Strong),
+                Column::new(t::COL_SEVERITY.get(lang), 0.9).styled(CellStyle::Severity),
+                Column::new(t::COL_CVSS.get(lang), 0.7).styled(CellStyle::Number),
+                Column::new(t::COL_CVE.get(lang), 1.1).styled(CellStyle::Mono),
+                Column::new(t::COL_KEV.get(lang), 1.0).styled(CellStyle::Muted),
+                Column::new(t::COL_EPSS.get(lang), 0.7).styled(CellStyle::Number),
+                Column::new(t::COL_REMEDIATION.get(lang), 2.0),
             ])
-            .with_rows(rows),
+            .with_rows(table_rows),
+        ));
+    }
+    if !detailed.is_empty() {
+        let proof_rows: Vec<Vec<String>> = detailed
+            .iter()
+            .map(|(id, title, severity, source, desc, poc)| {
+                vec![
+                    format!("VLN-{id}"),
+                    title.clone(),
+                    severity.clone(),
+                    source.clone(),
+                    if poc.trim().is_empty() {
+                        "—".to_string()
+                    } else {
+                        poc.clone()
+                    },
+                    {
+                        let rem = remediation_from_desc(desc);
+                        if rem == "—" {
+                            String::new()
+                        } else {
+                            rem
+                        }
+                    },
+                ]
+            })
+            .collect();
+        findings_sec.push(Block::Table(
+            Table::new(vec![
+                Column::new(t::COL_ID.get(lang), 1.0).styled(CellStyle::Mono),
+                Column::new(t::COL_FINDING.get(lang), 2.4).styled(CellStyle::Strong),
+                Column::new(t::COL_SEVERITY.get(lang), 0.9).styled(CellStyle::Severity),
+                Column::new(t::COL_SOURCE.get(lang), 1.0).styled(CellStyle::Muted),
+                Column::new(t::COL_PROOF.get(lang), 2.4).styled(CellStyle::Mono),
+                Column::new(t::COL_REMEDIATION.get(lang), 2.0),
+            ])
+            .with_rows(proof_rows),
         ));
     }
 
@@ -247,28 +324,100 @@ pub fn client_assessment(
         integrity.push(Block::Paragraph(t::NO_FINDINGS.get(lang).to_string()));
     }
 
+    let intel_tone = if pack.kev_count() > 0 {
+        Tone::Bad
+    } else if pack.epss_count() > 0 || pack.cve_count() > 0 {
+        Tone::Warn
+    } else {
+        Tone::Neutral
+    };
+    let mut scope_sec = Section::new(t::SCOPE_HEADING.get(lang)).with(Block::KeyValues(vec![(
+        t::SCOPE.get(lang).to_string(),
+        pack.scope_line.clone(),
+    )]));
+    if !pack.roe_mode.is_empty() {
+        scope_sec.push(Block::KeyValues(vec![(
+            t::ROE_HEADING.get(lang).to_string(),
+            pack.roe_mode.clone(),
+        )]));
+    }
+
     let bytes = ReportDoc::new(meta)
         .with_hero(Chart::Gauge {
             score,
             caption: t::SECURITY_SCORE.get(lang).to_string(),
         })
         .with_section(exec)
+        .with_section(scope_sec)
         .with_section(roadmap)
         .with_section(
             Section::new(t::THREAT_INTEL.get(lang)).with(Block::Callout(Callout::new(
-                Tone::Warn,
+                intel_tone,
                 t::THREAT_INTEL.get(lang),
-                t::LIKELY_ACTORS.get(lang),
+                intel_paragraph(pack, lang),
             ))),
         )
         .with_section(findings_sec)
         .with_section(integrity)
         .with_section(
             Section::new(t::METHODOLOGY.get(lang))
-                .with(Block::Paragraph(t::METHOD_BODY.get(lang).to_string())),
+                .with(Block::Paragraph(t::METHOD_BODY.get(lang).to_string()))
+                .with(Block::Paragraph(t::METHOD_STANDARDS.get(lang).to_string())),
         )
         .render();
     Ok(bytes)
+}
+
+fn bluf_paragraph(
+    pack: &crate::client_assessment::ClientAssessment,
+    critical: i64,
+    high: i64,
+    lang: Lang,
+) -> String {
+    match lang {
+        Lang::He => format!(
+            "הערכת אבטחה חיה עבור {}. {} ממצאים ({} קריטי, {} גבוה). {} רשומים ב-CISA KEV, {} עם EPSS, {} עם CVE. הציון מחושב רק משורות הלקוח החיות.",
+            pack.client_name,
+            pack.findings.len(),
+            critical,
+            high,
+            pack.kev_count(),
+            pack.epss_count(),
+            pack.cve_count(),
+        ),
+        Lang::En => format!(
+            "Live security assessment of {}. {} findings ({} critical, {} high). {} listed in CISA KEV, {} with EPSS, {} with a CVE. The posture score is computed only from this client's live rows.",
+            pack.client_name,
+            pack.findings.len(),
+            critical,
+            high,
+            pack.kev_count(),
+            pack.epss_count(),
+            pack.cve_count(),
+        ),
+    }
+}
+
+fn intel_paragraph(pack: &crate::client_assessment::ClientAssessment, lang: Lang) -> String {
+    if pack.kev_count() == 0 && pack.epss_count() == 0 && pack.cve_count() == 0 {
+        return t::INTEL_NONE.get(lang).to_string();
+    }
+    match lang {
+        Lang::He => format!(
+            "מודיעין חי על שורות הלקוח: {} CISA KEV, {} EPSS, {} CVE, {} CVSS. אין ייחוס APT מומצא.",
+            pack.kev_count(),
+            pack.epss_count(),
+            pack.cve_count(),
+            pack.cvss_count(),
+        ),
+        Lang::En => format!(
+            "Live intel on this client's rows: {} CISA KEV, {} EPSS, {} CVE, {} CVSS. No invented APT attribution.",
+            pack.kev_count(),
+            pack.epss_count(),
+            pack.cve_count(),
+            pack.cvss_count(),
+        ),
+    }
 }
 
 fn risk_cells(findings: &[FindingRow]) -> [[u32; 5]; 5] {
@@ -595,6 +744,20 @@ mod tests {
         let bytes = client_assessment("לקוח", &[], None, Lang::He).unwrap();
         let text = String::from_utf8_lossy(&bytes);
         assert!(text.contains("/Lang (he-IL)"));
+    }
+
+    #[test]
+    fn client_assessment_does_not_invent_industry_average_or_apt() {
+        let src = include_str!("reports.rs");
+        let fake_avg = format!("{}.0", 65);
+        let apt = format!("APT{}", 28);
+        assert!(
+            !src.contains(&fake_avg),
+            "must not invent an industry-average score"
+        );
+        assert!(!src.contains(&apt));
+        assert!(!src.contains(&format!("FIN{}", 7)));
+        assert!(!src.contains(&["Laz", "arus"].concat()));
     }
 
     #[test]

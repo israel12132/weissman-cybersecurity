@@ -77,6 +77,7 @@ pub const ACTION: Copy = Copy::new("Action", "פעולה");
 pub const EFFICIENCY: Copy = Copy::new("Efficiency", "יעילות");
 pub const COL_ID: Copy = Copy::new("ID", "מזהה");
 pub const COL_FINDING: Copy = Copy::new("Finding", "ממצא");
+pub const COL_FINDING_ID: Copy = Copy::new("Finding ID", "מזהה ממצא");
 pub const COL_SEVERITY: Copy = Copy::new("Severity", "חומרה");
 pub const COL_SOURCE: Copy = Copy::new("Source", "מקור");
 pub const COL_PRIORITY: Copy = Copy::new("Priority", "עדיפות");
@@ -85,6 +86,17 @@ pub const COL_REMEDIATION: Copy = Copy::new("Remediation", "תיקון");
 pub const COL_CONTROL: Copy = Copy::new("Control", "בקרה");
 pub const COL_TITLE: Copy = Copy::new("Title", "כותרת");
 pub const COL_STATUS: Copy = Copy::new("Status", "סטטוס");
+pub const COL_CVE: Copy = Copy::new("CVE", "CVE");
+pub const COL_CVSS: Copy = Copy::new("CVSS", "CVSS");
+pub const COL_CWE: Copy = Copy::new("CWE", "CWE");
+pub const COL_EPSS: Copy = Copy::new("EPSS", "EPSS");
+pub const COL_KEV: Copy = Copy::new("CISA KEV", "CISA KEV");
+pub const COL_MITRE: Copy = Copy::new("MITRE ATT&CK", "MITRE ATT&CK");
+pub const COL_ASSET: Copy = Copy::new("Asset", "נכס");
+pub const COL_DISCOVERED: Copy = Copy::new("First seen", "זוהה לראשונה");
+pub const COL_VERIFIED: Copy = Copy::new("Verified", "מאומת");
+pub const COL_METRIC: Copy = Copy::new("Metric", "מדד");
+pub const COL_VALUE: Copy = Copy::new("Value", "ערך");
 pub const COMPLIANT: Copy = Copy::new("Compliant", "עומד");
 pub const NON_COMPLIANT: Copy = Copy::new("Non-compliant", "לא עומד");
 pub const ALIGNMENT: Copy = Copy::new("Overall alignment", "הלימה כוללת");
@@ -110,18 +122,27 @@ pub const NO_FINDINGS: Copy = Copy::new(
     "אין ממצאים. הנתונים חיים ממסד הנתונים.",
 );
 pub const DISCOVERY: Copy = Copy::new("Attack surface discovery", "גילוי משטח תקיפה");
-pub const BENCHMARK: Copy = Copy::new("Client vs industry benchmark", "הלקוח מול ממוצע הענף");
-pub const INDUSTRY_AVG: Copy = Copy::new("Industry average", "ממוצע ענף");
 pub const CLIENT_SCORE: Copy = Copy::new("Client", "לקוח");
 pub const SHA256: Copy = Copy::new("SHA-256", "SHA-256");
 pub const VERIFY: Copy = Copy::new("Verify", "אימות");
-pub const LIKELY_ACTORS: Copy = Copy::new(
-    "Likely threat actors (contextual): APT28, FIN7, Lazarus — prioritize external exposure and authentication findings.",
-    "גורמי איום סבירים (הקשרי): APT28, FIN7, Lazarus — יש לתעדף חשיפה חיצונית וממצאי אימות.",
-);
+pub const BLUF: Copy = Copy::new("Bottom line", "שורה תחתונה");
+pub const ROE_HEADING: Copy = Copy::new("Rules of engagement", "כללי התקשרות");
+pub const SCOPE_HEADING: Copy = Copy::new("Authorized scope", "היקף מורשה");
 pub const METHOD_BODY: Copy = Copy::new(
     "Every finding in this document was produced by a live Weissman engine against the named scope. Scores, charts and tables are computed from the same database rows the Command Center displays. Nothing here is a placeholder, a canned demo, or a static template filled with sample data.",
     "כל ממצא במסמך זה הופק על ידי מנוע וייסמן חי כנגד ההיקף הנקוב. ציונים, תרשימים וטבלאות מחושבים מאותן שורות מסד שה-Command Center מציג. אין כאן ממלא-מקום, הדגמה מוכנה או תבנית סטטית עם נתוני דוגמה.",
+);
+pub const METHOD_STANDARDS: Copy = Copy::new(
+    "Practice follows OWASP WSTG, PTES, MITRE ATT&CK, and NIST SP 800-115. CVSS, CWE, CVE, EPSS and CISA KEV appear only when a live engine or intel enrichment recorded them. Empty cells are intentional — they are not estimated.",
+    "העבודה נשענת על OWASP WSTG, PTES, MITRE ATT&CK ו-NIST SP 800-115. CVSS, CWE, CVE, EPSS ו-CISA KEV מופיעים רק כשמנוע חי או העשרת מודיעין תיעדו אותם. תאים ריקים הם מכוונים — הם אינם מוערכים.",
+);
+pub const INTEL_NONE: Copy = Copy::new(
+    "No CISA KEV, EPSS or CVE labels on this client's live rows. Blank intel cells are intentional.",
+    "אין תוויות CISA KEV, EPSS או CVE על שורות הלקוח החיות. תאי מודיעין ריקים הם מכוונים.",
+);
+pub const POSTURE_NOTE: Copy = Copy::new(
+    "The posture score is computed only from this client's live finding rows. No industry average is invented.",
+    "ציון המצב מחושב רק משורות הממצאים החיות של הלקוח. אין ממוצע ענף מומצא.",
 );
 pub const PROOF_FILTER: Copy = Copy::new(
     "Proof-of-breach only: findings with a Safe Reproduce (cURL) payload or HIGH/CRITICAL severity and a remediation path.",
@@ -138,6 +159,9 @@ pub const HIGH_MODERATE: Copy =
 pub const MODERATE_EASY: Copy = Copy::new("Moderate impact / easy fix", "השפעה מתונה / תיקון קל");
 pub const OVERVIEW_SHEET: Copy = Copy::new("Overview", "סקירה");
 pub const DATA_SHEET: Copy = Copy::new("Findings", "ממצאים");
+pub const EXEC_SHEET: Copy = Copy::new("Executive", "מנהלים");
+pub const REMEDIATION_SHEET: Copy = Copy::new("Remediation", "תיקון");
+pub const INTEL_SHEET: Copy = Copy::new("Intel", "מודיעין");
 pub const ACTOR: Copy = Copy::new("Requested by", "התבקש על ידי");
 pub const ROW_COUNT: Copy = Copy::new("Rows", "שורות");
 pub const INTEGRITY_HASH: Copy = Copy::new("Integrity hash", "גיבוב שלמות");

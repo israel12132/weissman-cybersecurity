@@ -263,23 +263,29 @@ async fn api_client_export_xlsx(
     Query(q): Query<LangQuery>,
     headers: HeaderMap,
 ) -> Response {
-    let rows = match findings_export_rows(&state, auth.tenant_id, Some(id)).await {
-        Ok(r) => r,
-        Err(st) => {
-            return (st, Json(json!({"error": "DB unavailable"}))).into_response();
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
+    };
+    let pack = match crate::client_assessment::load(&mut tx, id).await {
+        Ok(p) => p,
+        Err(crate::client_assessment::LoadError::NotFound) => {
+            let _ = tx.rollback().await;
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
+        }
+        Err(crate::client_assessment::LoadError::Db(e)) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "DB error", "detail": scrub_internal_error(&e)})),
+            )
+                .into_response();
         }
     };
+    let _ = tx.commit().await;
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
     let lang = report_lang(&q, &headers);
-    match crate::xlsx_report::table_workbook(
-        "Weissman client findings",
-        &format!("client-{id}"),
-        &actor,
-        lang,
-        findings_columns(),
-        rows,
-    ) {
-        Ok(bytes) => xlsx_response(bytes, &format!("Weissman_findings_client_{id}.xlsx")),
+    match crate::client_assessment::client_assessment_workbook(&pack, &actor, lang) {
+        Ok(bytes) => xlsx_response(bytes, &crate::client_assessment::safe_filename(&pack.client_name, "xlsx")),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": "xlsx failed", "detail": e})),

@@ -61,6 +61,7 @@ pub mod billing;
 pub mod cem_dago;
 pub mod ceo;
 pub mod chronos_engine;
+pub mod client_assessment;
 pub mod client_isolation;
 pub mod cloud_hunter;
 pub mod cloud_integration_engine;

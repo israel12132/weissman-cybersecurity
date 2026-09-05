@@ -3,7 +3,7 @@ import { render, screen, cleanup, waitFor, fireEvent, within } from '@testing-li
 
 vi.mock('react-i18next', () => {
   const t = (k) => k
-  return { useTranslation: () => ({ t }) }
+  return { useTranslation: () => ({ t, i18n: { language: 'en' } }) }
 })
 vi.mock('react-router', () => ({ Link: ({ children }) => <a>{children}</a> }))
 vi.mock('../../context/ClientContext', () => ({
