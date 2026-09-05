@@ -7156,7 +7156,7 @@
       "downloading": "מכין את הדוח…",
       "download_failed": "ההורדה נכשלה",
       "download_bar_title": "דוח הערכה ללקוח",
-      "download_bar_hint": "בחר PDF למנהלים או Excel לצוות התיקון. הלוגו, הסיווג והנתונים החיים נכללים.",
+      "download_bar_hint": "בחר PDF למנהלים או Excel לצוות התיקון. לוגו, סימון חסוי, CVSS/CVE/KEV/EPSS חיים ורשם ממצאים מלא.",
       "classification": "חסוי",
       "back_war_room": "← חדר מלחמה",
       "load_failed": "טעינה נכשלה",

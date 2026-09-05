@@ -114,11 +114,24 @@ pub fn client_assessment_live(
         t::ASSESSMENT_SUB.get(lang),
         client_name,
     );
+    meta.doc_id = crate::client_assessment::assessment_doc_id(pack);
+    meta.control_fields.push((
+        t::DOC_ID.get(lang).to_string(),
+        meta.doc_id.clone(),
+    ));
+    meta.control_fields.push((
+        t::PREPARED_FOR.get(lang).to_string(),
+        client_name.to_string(),
+    ));
     meta.control_fields
         .push((t::SCOPE.get(lang).to_string(), pack.scope_line.clone()));
     meta.control_fields.push((
         t::FINDINGS_N.get(lang).to_string(),
         findings.len().to_string(),
+    ));
+    meta.control_fields.push((
+        t::VERIFIED.get(lang).to_string(),
+        pack.verified_count().to_string(),
     ));
     if !pack.roe_mode.is_empty() {
         meta.control_fields
@@ -220,7 +233,7 @@ pub fn client_assessment_live(
 
     let mut findings_sec = Section::new(t::FINDINGS.get(lang))
         .on_new_page()
-        .with(Block::Paragraph(t::PROOF_FILTER.get(lang).to_string()));
+        .with(Block::Paragraph(t::REGISTER_INTRO.get(lang).to_string()));
     if pack.findings.is_empty() {
         findings_sec.push(Block::Callout(Callout::new(
             Tone::Neutral,
@@ -237,45 +250,40 @@ pub fn client_assessment_live(
                     format!("VLN-{}", f.id),
                     f.title.clone(),
                     f.severity.clone(),
-                    if f.cvss.is_empty() {
-                        "—".into()
-                    } else {
-                        f.cvss.clone()
-                    },
-                    if f.cve.is_empty() {
-                        "—".into()
-                    } else {
-                        f.cve.clone()
-                    },
-                    if f.kev.is_empty() {
-                        "—".into()
-                    } else {
-                        f.kev.clone()
-                    },
-                    if f.epss.is_empty() {
-                        "—".into()
-                    } else {
-                        f.epss.clone()
-                    },
+                    dash(&f.cvss),
+                    dash(&f.cvss_vector),
+                    dash(&f.cve),
+                    dash(&f.cwe),
+                    dash(&f.kev),
+                    dash(&f.epss),
+                    dash(&f.mitre),
+                    dash(&f.asset),
+                    dash(&f.status),
                     if rem == "—" { String::new() } else { rem },
                 ]
             })
             .collect();
         findings_sec.push(Block::Table(
             Table::new(vec![
-                Column::new(t::COL_ID.get(lang), 1.0).styled(CellStyle::Mono),
-                Column::new(t::COL_FINDING.get(lang), 2.4).styled(CellStyle::Strong),
-                Column::new(t::COL_SEVERITY.get(lang), 0.9).styled(CellStyle::Severity),
-                Column::new(t::COL_CVSS.get(lang), 0.7).styled(CellStyle::Number),
-                Column::new(t::COL_CVE.get(lang), 1.1).styled(CellStyle::Mono),
-                Column::new(t::COL_KEV.get(lang), 1.0).styled(CellStyle::Muted),
-                Column::new(t::COL_EPSS.get(lang), 0.7).styled(CellStyle::Number),
-                Column::new(t::COL_REMEDIATION.get(lang), 2.0),
+                Column::new(t::COL_ID.get(lang), 0.9).styled(CellStyle::Mono),
+                Column::new(t::COL_FINDING.get(lang), 2.0).styled(CellStyle::Strong),
+                Column::new(t::COL_SEVERITY.get(lang), 0.8).styled(CellStyle::Severity),
+                Column::new(t::COL_CVSS.get(lang), 0.6).styled(CellStyle::Number),
+                Column::new(t::COL_VECTOR.get(lang), 1.4).styled(CellStyle::Mono),
+                Column::new(t::COL_CVE.get(lang), 1.0).styled(CellStyle::Mono),
+                Column::new(t::COL_CWE.get(lang), 0.8).styled(CellStyle::Mono),
+                Column::new(t::COL_KEV.get(lang), 0.9).styled(CellStyle::Muted),
+                Column::new(t::COL_EPSS.get(lang), 0.6).styled(CellStyle::Number),
+                Column::new(t::COL_MITRE.get(lang), 1.0).styled(CellStyle::Mono),
+                Column::new(t::COL_ASSET.get(lang), 1.4),
+                Column::new(t::COL_STATUS.get(lang), 0.8),
+                Column::new(t::COL_REMEDIATION.get(lang), 1.6),
             ])
             .with_rows(table_rows),
         ));
     }
     if !detailed.is_empty() {
+        findings_sec.push(Block::Paragraph(t::PROOF_FILTER.get(lang).to_string()));
         let proof_rows: Vec<Vec<String>> = detailed
             .iter()
             .map(|(id, title, severity, source, desc, poc)| {
@@ -321,8 +329,9 @@ pub fn client_assessment_live(
         ]));
         integrity.push(Block::Mono(vec![hash.clone()]));
     } else {
-        integrity.push(Block::Paragraph(t::NO_FINDINGS.get(lang).to_string()));
+        integrity.push(Block::Paragraph(t::INTEGRITY_NONE.get(lang).to_string()));
     }
+    integrity.push(Block::Paragraph(t::DISTRIBUTION.get(lang).to_string()));
 
     let intel_tone = if pack.kev_count() > 0 {
         Tone::Bad
@@ -358,12 +367,13 @@ pub fn client_assessment_live(
             ))),
         )
         .with_section(findings_sec)
-        .with_section(integrity)
+        .with_section(finding_narratives(pack, lang))
         .with_section(
             Section::new(t::METHODOLOGY.get(lang))
                 .with(Block::Paragraph(t::METHOD_BODY.get(lang).to_string()))
                 .with(Block::Paragraph(t::METHOD_STANDARDS.get(lang).to_string())),
         )
+        .with_section(integrity)
         .render();
     Ok(bytes)
 }
@@ -376,24 +386,22 @@ fn bluf_paragraph(
 ) -> String {
     match lang {
         Lang::He => format!(
-            "הערכת אבטחה חיה עבור {}. {} ממצאים ({} קריטי, {} גבוה). {} רשומים ב-CISA KEV, {} עם EPSS, {} עם CVE. הציון מחושב רק משורות הלקוח החיות.",
+            "שורה תחתונה עבור {}: {} ממצאים חיים, מהם {} קריטיים ו-{} גבוהים. {} נושאים הוכחת-פריצה חתומה. {} רשומים ב-CISA KEV. יש לפעול לפי עדיפויות 1–3 במפת הדרכים.",
             pack.client_name,
             pack.findings.len(),
             critical,
             high,
+            pack.verified_count(),
             pack.kev_count(),
-            pack.epss_count(),
-            pack.cve_count(),
         ),
         Lang::En => format!(
-            "Live security assessment of {}. {} findings ({} critical, {} high). {} listed in CISA KEV, {} with EPSS, {} with a CVE. The posture score is computed only from this client's live rows.",
+            "Bottom line for {}: {} live findings, of which {} are critical and {} are high. {} carry sealed proof-of-breach. {} are listed in CISA KEV. Act first on Priority 1–3 in the remediation roadmap.",
             pack.client_name,
             pack.findings.len(),
             critical,
             high,
+            pack.verified_count(),
             pack.kev_count(),
-            pack.epss_count(),
-            pack.cve_count(),
         ),
     }
 }
@@ -404,20 +412,127 @@ fn intel_paragraph(pack: &crate::client_assessment::ClientAssessment, lang: Lang
     }
     match lang {
         Lang::He => format!(
-            "מודיעין חי על שורות הלקוח: {} CISA KEV, {} EPSS, {} CVE, {} CVSS. אין ייחוס APT מומצא.",
+            "העשרת מודיעין חיה על ממצאי הלקוח: {} CISA KEV, {} FIRST EPSS, {} CVE, {} ציוני CVSS. התאים מתמלאים רק מנתוני מנוע וקטלוג שנרשמו.",
             pack.kev_count(),
             pack.epss_count(),
             pack.cve_count(),
             pack.cvss_count(),
         ),
         Lang::En => format!(
-            "Live intel on this client's rows: {} CISA KEV, {} EPSS, {} CVE, {} CVSS. No invented APT attribution.",
+            "Live enrichment on this client's findings: {} CISA Known Exploited Vulnerabilities, {} FIRST EPSS scores, {} CVE identifiers, {} CVSS scores. Intel cells are populated only from recorded engine and catalog data.",
             pack.kev_count(),
             pack.epss_count(),
             pack.cve_count(),
             pack.cvss_count(),
         ),
     }
+}
+
+fn dash(s: &str) -> String {
+    let s = s.trim();
+    if s.is_empty() {
+        "—".into()
+    } else {
+        s.to_string()
+    }
+}
+
+fn clip_chars(s: &str, max: usize) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() <= max {
+        s.to_string()
+    } else {
+        chars.into_iter().take(max).collect::<String>() + "…"
+    }
+}
+
+fn finding_narratives(
+    pack: &crate::client_assessment::ClientAssessment,
+    lang: Lang,
+) -> Section {
+    let mut sec = Section::new(t::NARRATIVES.get(lang))
+        .on_new_page()
+        .with(Block::Paragraph(t::NARRATIVE_INTRO.get(lang).to_string()));
+    if pack.findings.is_empty() {
+        return sec;
+    }
+    let mut ranked: Vec<&crate::client_assessment::AssessmentFinding> =
+        pack.findings.iter().collect();
+    ranked.sort_by(|a, b| {
+        theme::severity_rank(&a.severity)
+            .cmp(&theme::severity_rank(&b.severity))
+            .then_with(|| {
+                let ka = if a.kev.is_empty() { 1 } else { 0 };
+                let kb = if b.kev.is_empty() { 1 } else { 0 };
+                ka.cmp(&kb)
+            })
+    });
+    for f in ranked.into_iter().take(12) {
+        let rem = remediation_from_desc(&f.description);
+        let narrative = crate::client_assessment::human_description(&f.description);
+        let mut intel = Vec::new();
+        if !f.cvss.is_empty() {
+            intel.push(format!("CVSS {}", f.cvss));
+        }
+        if !f.cvss_vector.is_empty() {
+            intel.push(f.cvss_vector.clone());
+        }
+        if !f.cve.is_empty() {
+            intel.push(f.cve.clone());
+        }
+        if !f.cwe.is_empty() {
+            intel.push(f.cwe.clone());
+        }
+        if !f.kev.is_empty() {
+            intel.push(f.kev.clone());
+        }
+        if !f.epss.is_empty() {
+            intel.push(format!("EPSS {}", f.epss));
+        }
+        if !f.mitre.is_empty() {
+            intel.push(f.mitre.clone());
+        }
+        let mut body = String::new();
+        if !f.asset.is_empty() {
+            body.push_str(&format!("{}: {}\n", t::COL_ASSET.get(lang), f.asset));
+        }
+        if !intel.is_empty() {
+            body.push_str(&format!(
+                "{}: {}\n",
+                t::THREAT_INTEL.get(lang),
+                intel.join(" · ")
+            ));
+        }
+        if !narrative.is_empty() {
+            body.push_str(&format!(
+                "{}: {}\n",
+                t::COL_DESCRIPTION.get(lang),
+                narrative
+            ));
+        }
+        if !f.poc.trim().is_empty() {
+            body.push_str(&format!(
+                "{}: {}\n",
+                t::EVIDENCE.get(lang),
+                clip_chars(f.poc.trim(), 700)
+            ));
+        }
+        if rem != "—" {
+            body.push_str(&format!("{}: {rem}\n", t::ACTION.get(lang)));
+        }
+        body.push_str(&format!(
+            "{}: {} · {}",
+            t::COL_STATUS.get(lang),
+            dash(&f.status),
+            f.verified_label()
+        ));
+        sec.push(Block::Callout(Callout::new(
+            Tone::from_severity(&f.severity),
+            format!("VLN-{} — {} ({})", f.id, f.title, f.severity),
+            body,
+        )));
+    }
+    sec
 }
 
 fn risk_cells(findings: &[FindingRow]) -> [[u32; 5]; 5] {
@@ -758,6 +873,41 @@ mod tests {
         assert!(!src.contains(&apt));
         assert!(!src.contains(&format!("FIN{}", 7)));
         assert!(!src.contains(&["Laz", "arus"].concat()));
+        let invented = format!("{} {}", "invented", "apt");
+        assert!(!src.to_ascii_lowercase().contains(&invented));
+    }
+
+    #[test]
+    fn live_pack_pdf_carries_document_id_and_intel() {
+        let pack = crate::client_assessment::ClientAssessment {
+            client_id: 7,
+            client_name: "Acme".into(),
+            scope_line: "Acme · acme.example".into(),
+            roe_mode: "safe_proofs".into(),
+            findings: vec![crate::client_assessment::AssessmentFinding {
+                id: 1,
+                finding_id: "web-1".into(),
+                title: "Open admin".into(),
+                severity: "critical".into(),
+                source: "web".into(),
+                status: "OPEN".into(),
+                description: r#"{"description":"Admin console on the internet","remediation":"lock it"}"#.into(),
+                poc: "curl https://x".into(),
+                poc_sealed: true,
+                discovered_at: "2026-09-05 12:00:00 UTC".into(),
+                cve: "CVE-2024-1234".into(),
+                cwe: "CWE-287".into(),
+                cvss: "9.8".into(),
+                cvss_vector: "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H".into(),
+                epss: "0.972".into(),
+                kev: "CISA KEV".into(),
+                mitre: "T1190".into(),
+                asset: "https://acme.example".into(),
+            }],
+        };
+        let bytes = client_assessment_live(&pack, None, Lang::En).unwrap();
+        assert!(bytes.starts_with(b"%PDF-1."));
+        assert!(crate::client_assessment::assessment_doc_id(&pack).starts_with("WSM-ASR-7-"));
     }
 
     #[test]

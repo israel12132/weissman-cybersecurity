@@ -32,8 +32,8 @@ pub const ASSESSMENT_TITLE: Copy = Copy::new(
     "דוח הערכת אבטחה למנהלים",
 );
 pub const ASSESSMENT_SUB: Copy = Copy::new(
-    "Live, evidence-backed findings from production engines. No simulated results.",
-    "ממצאים חיים ומגובים בראיות ממנועי הייצור. ללא תוצאות מדומות.",
+    "Live, evidence-backed assessment from production engines against the authorized scope.",
+    "הערכת אבטחה חיה ומגובה ראיות ממנועי הייצור מול ההיקף המורשה.",
 );
 pub const BOARD_TITLE: Copy = Copy::new("Board / CISO Briefing", "תדרוך דירקטוריון / מנמ\"ר");
 pub const BOARD_SUB: Copy = Copy::new(
@@ -88,6 +88,7 @@ pub const COL_TITLE: Copy = Copy::new("Title", "כותרת");
 pub const COL_STATUS: Copy = Copy::new("Status", "סטטוס");
 pub const COL_CVE: Copy = Copy::new("CVE", "CVE");
 pub const COL_CVSS: Copy = Copy::new("CVSS", "CVSS");
+pub const COL_VECTOR: Copy = Copy::new("CVSS vector", "וקטור CVSS");
 pub const COL_CWE: Copy = Copy::new("CWE", "CWE");
 pub const COL_EPSS: Copy = Copy::new("EPSS", "EPSS");
 pub const COL_KEV: Copy = Copy::new("CISA KEV", "CISA KEV");
@@ -118,8 +119,8 @@ pub const NO_PROOF: Copy = Copy::new(
     "אין ממצאי הוכחת-פריצה (אין cURL / גבוה / קריטי עם תיקון). הנתונים חיים ממסד הנתונים.",
 );
 pub const NO_FINDINGS: Copy = Copy::new(
-    "No findings. Data is live from the database.",
-    "אין ממצאים. הנתונים חיים ממסד הנתונים.",
+    "No findings are recorded for this client. The tables below remain so the register is complete.",
+    "אין ממצאים רשומים ללקוח זה. הטבלאות נשארות כדי שהרשם יהיה שלם.",
 );
 pub const DISCOVERY: Copy = Copy::new("Attack surface discovery", "גילוי משטח תקיפה");
 pub const CLIENT_SCORE: Copy = Copy::new("Client", "לקוח");
@@ -129,28 +130,49 @@ pub const BLUF: Copy = Copy::new("Bottom line", "שורה תחתונה");
 pub const ROE_HEADING: Copy = Copy::new("Rules of engagement", "כללי התקשרות");
 pub const SCOPE_HEADING: Copy = Copy::new("Authorized scope", "היקף מורשה");
 pub const METHOD_BODY: Copy = Copy::new(
-    "Every finding in this document was produced by a live Weissman engine against the named scope. Scores, charts and tables are computed from the same database rows the Command Center displays. Nothing here is a placeholder, a canned demo, or a static template filled with sample data.",
-    "כל ממצא במסמך זה הופק על ידי מנוע וייסמן חי כנגד ההיקף הנקוב. ציונים, תרשימים וטבלאות מחושבים מאותן שורות מסד שה-Command Center מציג. אין כאן ממלא-מקום, הדגמה מוכנה או תבנית סטטית עם נתוני דוגמה.",
+    "Findings in this document were produced by live Weissman production engines against the authorized scope. Scores, charts and tables are computed from the same tenant-scoped database rows the Command Center displays.",
+    "הממצאים במסמך זה הופקו על ידי מנועי ייצור חיים של וייסמן כנגד ההיקף המורשה. ציונים, תרשימים וטבלאות מחושבים מאותן שורות מסד מוגבלות-דייר שה-Command Center מציג.",
 );
 pub const METHOD_STANDARDS: Copy = Copy::new(
-    "Practice follows OWASP WSTG, PTES, MITRE ATT&CK, and NIST SP 800-115. CVSS, CWE, CVE, EPSS and CISA KEV appear only when a live engine or intel enrichment recorded them. Empty cells are intentional — they are not estimated.",
-    "העבודה נשענת על OWASP WSTG, PTES, MITRE ATT&CK ו-NIST SP 800-115. CVSS, CWE, CVE, EPSS ו-CISA KEV מופיעים רק כשמנוע חי או העשרת מודיעין תיעדו אותם. תאים ריקים הם מכוונים — הם אינם מוערכים.",
+    "Practice follows OWASP WSTG, PTES, MITRE ATT&CK, and NIST SP 800-115. CVSS 3.1, CWE, CVE, FIRST EPSS and CISA KEV appear only when a live engine or intel enrichment recorded them. Empty cells mean the identifier was not recorded — they are never estimated from severity.",
+    "העבודה נשענת על OWASP WSTG, PTES, MITRE ATT&CK ו-NIST SP 800-115. CVSS 3.1, CWE, CVE, FIRST EPSS ו-CISA KEV מופיעים רק כשמנוע חי או העשרת מודיעין תיעדו אותם. תאים ריקים פירושם שהמזהה לא נרשם — הם אינם מוערכים מחומרה.",
 );
 pub const INTEL_NONE: Copy = Copy::new(
-    "No CISA KEV, EPSS or CVE labels on this client's live rows. Blank intel cells are intentional.",
-    "אין תוויות CISA KEV, EPSS או CVE על שורות הלקוח החיות. תאי מודיעין ריקים הם מכוונים.",
+    "No CISA KEV, FIRST EPSS or CVE identifiers are recorded on this client's live findings. Blank intel cells are intentional.",
+    "אין מזהי CISA KEV, FIRST EPSS או CVE על ממצאי הלקוח החיים. תאי מודיעין ריקים הם מכוונים.",
 );
 pub const POSTURE_NOTE: Copy = Copy::new(
-    "The posture score is computed only from this client's live finding rows. No industry average is invented.",
-    "ציון המצב מחושב רק משורות הממצאים החיות של הלקוח. אין ממוצע ענף מומצא.",
+    "The posture score starts at 100 and subtracts 25 per critical, 15 per high and 5 per medium finding on this client only. It is not an industry benchmark.",
+    "ציון המצב מתחיל ב-100 ומחסיר 25 לכל ממצא קריטי, 15 לכל גבוה ו-5 לכל בינוני אצל לקוח זה בלבד. זה אינו מדד ענפי.",
+);
+pub const REGISTER_INTRO: Copy = Copy::new(
+    "Complete findings register. CVSS, CVE, CWE, KEV, EPSS and ATT&CK are live fields; a dash means the identifier was not recorded.",
+    "רשם ממצאים מלא. CVSS, CVE, CWE, KEV, EPSS ו-ATT&CK הם שדות חיים; מקף פירושו שהמזהה לא נרשם.",
 );
 pub const PROOF_FILTER: Copy = Copy::new(
-    "Proof-of-breach only: findings with a Safe Reproduce (cURL) payload or HIGH/CRITICAL severity and a remediation path.",
-    "הוכחת-פריצה בלבד: ממצאים עם מטען שחזור בטוח (cURL) או חומרה גבוהה/קריטית ומסלול תיקון.",
+    "Proof-of-breach extract: findings with a Safe Reproduce payload or HIGH/CRITICAL severity and a remediation path.",
+    "חילוץ הוכחת-פריצה: ממצאים עם מטען שחזור בטוח או חומרה גבוהה/קריטית ומסלול תיקון.",
 );
+pub const NARRATIVES: Copy = Copy::new("Finding narratives", "תיאורי ממצאים");
+pub const NARRATIVE_INTRO: Copy = Copy::new(
+    "Each card is one live finding: affected asset, recorded intel, description, evidence, and remediation. Sorted critical first.",
+    "כל כרטיס הוא ממצא חי אחד: נכס מושפע, מודיעין שנרשם, תיאור, ראיות ותיקון. ממוין מקריטי תחילה.",
+);
+pub const EVIDENCE: Copy = Copy::new("Evidence", "ראיות");
+pub const DOC_ID: Copy = Copy::new("Document ID", "מזהה מסמך");
+pub const PREPARED_FOR: Copy = Copy::new("Prepared for", "הוכן עבור");
+pub const DISTRIBUTION: Copy = Copy::new(
+    "Limited distribution — named client only. Handle as Confidential.",
+    "הפצה מוגבלת — ללקוח הנקוב בלבד. יש לטפל כחסוי.",
+);
+pub const INTEGRITY_NONE: Copy = Copy::new(
+    "No cryptographic proof is attached to this copy. A SHA-256 is included when a sealed assessment run exists for this client.",
+    "אין הוכחה קריפטוגרפית מצורפת לעותק זה. SHA-256 נכלל כאשר קיים ריצת הערכה חתומה ללקוח זה.",
+);
+pub const COL_DESCRIPTION: Copy = Copy::new("Description", "תיאור");
 pub const REMEDIATION_INTRO: Copy = Copy::new(
-    "Top strategic actions derived from live findings, ranked by severity then remediation-priority score (PoE, entropy, stack/CVE correlation).",
-    "פעולות אסטרטגיות המופקות מממצאים חיים, מדורגות לפי חומרה ואז לפי ציון עדיפות תיקון (PoE, אנטרופיה, מתאם מחסנית/CVE).",
+    "Top strategic actions from live findings, ranked by severity then remediation-priority score (proof, entropy, stack/CVE correlation).",
+    "פעולות אסטרטגיות מממצאים חיים, מדורגות לפי חומרה ואז לפי ציון עדיפות תיקון (הוכחה, אנטרופיה, מתאם מחסנית/CVE).",
 );
 pub const HIGH_IMPACT: Copy =
     Copy::new("High impact / critical effort", "השפעה גבוהה / מאמץ קריטי");
@@ -185,5 +207,20 @@ mod tests {
     #[test]
     fn english_is_the_default_selection() {
         assert_eq!(ORG.get(Lang::En), "Weissman Cybersecurity");
+    }
+
+    #[test]
+    fn customer_copy_does_not_apologize_about_fakes() {
+        for s in [
+            POSTURE_NOTE.get(Lang::En),
+            INTEL_NONE.get(Lang::En),
+            METHOD_BODY.get(Lang::En),
+            ASSESSMENT_SUB.get(Lang::En),
+        ] {
+            let lower = s.to_ascii_lowercase();
+            assert!(!lower.contains("invented"), "{s}");
+            assert!(!lower.contains("placeholder"), "{s}");
+            assert!(!lower.contains("canned demo"), "{s}");
+        }
     }
 }

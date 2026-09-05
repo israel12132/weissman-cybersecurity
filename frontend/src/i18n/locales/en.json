@@ -7156,7 +7156,7 @@
       "downloading": "Preparing…",
       "download_failed": "Download failed",
       "download_bar_title": "Client assessment deliverable",
-      "download_bar_hint": "Choose a board PDF or an analyst Excel workbook. Logo, classification, and live findings only.",
+      "download_bar_hint": "Choose a board PDF or an analyst Excel workbook. Cover logo, Confidential marking, live CVSS/CVE/KEV/EPSS, and a full findings register.",
       "classification": "Confidential",
       "back_war_room": "← War Room",
       "load_failed": "Load failed",

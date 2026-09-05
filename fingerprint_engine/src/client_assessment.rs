@@ -131,6 +131,67 @@ impl ClientAssessment {
     }
 }
 
+/// Stable document identifier printed on the cover and in Excel metadata.
+#[must_use]
+pub fn assessment_doc_id(pack: &ClientAssessment) -> String {
+    let date = Utc::now().format("%Y%m%d");
+    if pack.client_id > 0 {
+        return format!("WSM-ASR-{}-{date}", pack.client_id);
+    }
+    let slug: String = pack
+        .client_name
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(12)
+        .collect();
+    let slug = if slug.is_empty() {
+        "CLIENT".to_string()
+    } else {
+        slug.to_ascii_uppercase()
+    };
+    format!("WSM-ASR-{slug}-{date}")
+}
+
+/// Plain-language finding body. JSON blobs are never dumped into a customer report.
+#[must_use]
+pub fn human_description(desc: &str) -> String {
+    let desc = desc.trim();
+    if desc.is_empty() {
+        return String::new();
+    }
+    if let Ok(v) = serde_json::from_str::<Value>(desc) {
+        for key in [
+            "description",
+            "summary",
+            "detail",
+            "narrative",
+            "impact",
+            "message",
+            "body",
+        ] {
+            if let Some(s) = v
+                .get(key)
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                return clip_text(s, 1600);
+            }
+        }
+        return String::new();
+    }
+    clip_text(desc, 1600)
+}
+
+fn clip_text(s: &str, max: usize) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() <= max {
+        s.to_string()
+    } else {
+        chars.into_iter().take(max).collect()
+    }
+}
+
 /// Load the named client and every live finding row. Fail closed if the client
 /// is missing; surface database errors instead of emitting an empty report.
 pub async fn load(
@@ -424,6 +485,7 @@ pub fn client_assessment_workbook(
         col(t::COL_FINDING.get(lang), 3.0, "strong"),
         col(t::COL_SEVERITY.get(lang), 1.0, "severity"),
         col(t::COL_CVSS.get(lang), 0.8, "number"),
+        col(t::COL_VECTOR.get(lang), 1.6, "mono"),
         col(t::COL_CVE.get(lang), 1.2, "mono"),
         col(t::COL_CWE.get(lang), 1.0, "mono"),
         col(t::COL_KEV.get(lang), 1.2, ""),
@@ -434,6 +496,7 @@ pub fn client_assessment_workbook(
         col(t::COL_STATUS.get(lang), 1.0, ""),
         col(t::COL_VERIFIED.get(lang), 1.0, ""),
         col(t::COL_DISCOVERED.get(lang), 1.4, ""),
+        col(t::COL_DESCRIPTION.get(lang), 2.8, ""),
         col(t::COL_PROOF.get(lang), 2.2, "mono"),
         col(t::COL_REMEDIATION.get(lang), 2.4, ""),
     ];
@@ -448,6 +511,7 @@ pub fn client_assessment_workbook(
                 f.title.clone(),
                 f.severity.clone(),
                 f.cvss.clone(),
+                f.cvss_vector.clone(),
                 f.cve.clone(),
                 f.cwe.clone(),
                 f.kev.clone(),
@@ -458,6 +522,7 @@ pub fn client_assessment_workbook(
                 f.status.clone(),
                 f.verified_label().to_string(),
                 f.discovered_at.clone(),
+                human_description(&f.description),
                 f.poc.clone(),
                 if rem == "—" { String::new() } else { rem },
             ]
@@ -498,6 +563,7 @@ pub fn client_assessment_workbook(
         col(t::COL_FINDING.get(lang), 2.6, "strong"),
         col(t::COL_CVE.get(lang), 1.2, "mono"),
         col(t::COL_CVSS.get(lang), 0.8, "number"),
+        col(t::COL_VECTOR.get(lang), 1.8, "mono"),
         col(t::COL_EPSS.get(lang), 0.8, "number"),
         col(t::COL_KEV.get(lang), 1.4, ""),
         col(t::COL_CWE.get(lang), 1.0, "mono"),
@@ -513,6 +579,7 @@ pub fn client_assessment_workbook(
                 f.title.clone(),
                 f.cve.clone(),
                 f.cvss.clone(),
+                f.cvss_vector.clone(),
                 f.epss.clone(),
                 f.kev.clone(),
                 f.cwe.clone(),
@@ -526,7 +593,10 @@ pub fn client_assessment_workbook(
         col(t::COL_VALUE.get(lang), 4.0, ""),
     ];
     let (crit, high, med, low) = severity_counts(pack);
+    let doc_id = assessment_doc_id(pack);
     let exec_rows = vec![
+        vec![t::DOC_ID.get(lang).to_string(), doc_id.clone()],
+        vec![t::PREPARED_FOR.get(lang).to_string(), pack.client_name.clone()],
         vec![t::SCOPE.get(lang).to_string(), pack.scope_line.clone()],
         vec![
             t::FINDINGS_N.get(lang).to_string(),
@@ -572,6 +642,15 @@ pub fn client_assessment_workbook(
         org: t::ORG.get(lang).to_string(),
         client: pack.client_name.clone(),
         classification: t::CLASSIFICATION.get(lang).to_string(),
+        doc_id: doc_id.clone(),
+        control_fields: vec![
+            (t::DOC_ID.get(lang).to_string(), doc_id),
+            (t::SCOPE.get(lang).to_string(), pack.scope_line.clone()),
+            (
+                t::ROE_HEADING.get(lang).to_string(),
+                pack.roe_mode.clone(),
+            ),
+        ],
         lang: match lang {
             Lang::He => "he".into(),
             Lang::En => "en".into(),
@@ -703,5 +782,21 @@ mod tests {
         assert!(name.starts_with("Weissman_Assessment_"));
         assert!(name.ends_with(".pdf"));
         assert!(name.contains("לקוח"));
+    }
+
+    #[test]
+    fn human_description_extracts_json_and_drops_raw_blobs() {
+        assert_eq!(
+            human_description(r#"{"description":"Admin console exposed","remediation":"lock it"}"#),
+            "Admin console exposed"
+        );
+        assert_eq!(human_description(r#"{"remediation":"lock it"}"#), "");
+        assert_eq!(human_description("plain text finding"), "plain text finding");
+    }
+
+    #[test]
+    fn document_id_uses_client_id() {
+        let id = assessment_doc_id(&sample());
+        assert!(id.starts_with("WSM-ASR-7-"));
     }
 }

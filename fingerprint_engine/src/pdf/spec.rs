@@ -172,9 +172,13 @@ pub struct WorkbookSpec {
     #[serde(default)]
     pub classification: String,
     #[serde(default)]
+    pub doc_id: String,
+    #[serde(default)]
     pub lang: String,
     #[serde(default)]
     pub actor: String,
+    #[serde(default)]
+    pub control_fields: Vec<(String, String)>,
     #[serde(default)]
     pub sheets: Vec<SheetSpec>,
 }
@@ -438,8 +442,15 @@ impl WorkbookSpec {
         out.org = clip(&self.org, 120);
         out.client = clip(&self.client, 160);
         out.classification = clip(&self.classification, 40);
+        out.doc_id = clip(&self.doc_id, 64);
         out.lang = clip(&self.lang, 8);
         out.actor = clip(&self.actor, 120);
+        out.control_fields = self
+            .control_fields
+            .iter()
+            .take(24)
+            .map(|(k, v)| (clip(k, 80), clip(v, 240)))
+            .collect();
         out.sheets = self
             .sheets
             .iter()
@@ -559,6 +570,8 @@ mod tests {
             classification: String::new(),
             lang: String::new(),
             actor: String::new(),
+            doc_id: String::new(),
+            control_fields: vec![],
             sheets: vec![],
         };
         assert!(spec.sanitized().is_err());
