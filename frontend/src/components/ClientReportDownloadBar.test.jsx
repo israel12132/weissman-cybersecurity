@@ -29,6 +29,11 @@ describe('ClientReportDownloadBar', () => {
     )
   })
 
+  it('renders the Weissman shield mark', () => {
+    render(<ClientReportDownloadBar clientId={12} />)
+    expect(screen.getByRole('img', { name: 'Weissman' })).toBeTruthy()
+  })
+
   it('renders nothing without a client', () => {
     const { container } = render(<ClientReportDownloadBar />)
     expect(container.firstChild).toBeNull()

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Button from './ui/Button'
 import EvidenceNotice from './ui/EvidenceNotice'
+import Logo from './Logo'
 import { downloadClientReport } from '../lib/downloadClientReport'
 
 /**
@@ -34,11 +35,7 @@ export default function ClientReportDownloadBar({ clientId, className = '' }) {
       <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-cyan-400 via-teal-500 to-sky-400" />
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4 min-w-0">
-          <img
-            src="/logo.svg"
-            alt="Weissman Cybersecurity"
-            className="h-10 w-auto shrink-0"
-          />
+          <Logo compact size={40} className="shrink-0" />
           <div className="min-w-0">
             <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-cyan-400/80">
               {t('components.reportView.classification')}
