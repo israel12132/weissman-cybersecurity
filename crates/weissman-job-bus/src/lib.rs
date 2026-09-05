@@ -22,7 +22,8 @@ pub use cqrs::project_event;
 pub use error::JobBusError;
 pub use events::{append_event, fetch_event_chain_hash, JobEventKind, JobEventRecord};
 pub use forensic::{enqueue_forensic_dlq, ForensicBundle, MemorySnapshot};
-pub use lease::{DistributedLease, LeaseHandle};
+pub use keepalive::{evaluate_keepalive, KeepAliveDecision, StuckReason};
+pub use lease::{lease_key, new_claim_token, DistributedLease, LeaseHandle, LeaseInspect};
 pub use live_inspect::{
     inspect_orchestration, inspect_swarm_census, redis_url_configured, LeaseView,
     LiveOrchestrationView, LiveSwarmCensus, WorkerLivenessView,

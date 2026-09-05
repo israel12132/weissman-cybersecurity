@@ -919,7 +919,22 @@ async fn api_openapi_spec() -> Response {
                     "responses": {
                         "202": { "description": "Scan queued" },
                         "400": {
-                            "description": "Empty target returns HTTP 400 with error_code target_required"
+                            "description": "Empty target returns HTTP 400",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "ok": { "type": "boolean", "example": false },
+                                            "error_code": {
+                                                "type": "string",
+                                                "enum": ["target_required"]
+                                            },
+                                            "detail": { "type": "string" }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

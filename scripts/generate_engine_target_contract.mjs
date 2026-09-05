@@ -34,7 +34,17 @@ function main() {
     console.error(`engine target contract: parsed only ${entries.length} engines from registry`)
     process.exit(2)
   }
-  const targetless_ids = entries.filter((e) => !e.requiresTarget).map((e) => e.id)
+  const extraTargetless = new Set([
+    // Scan-only aliases not listed in enginesRegistry.js (EXTRA_SCAN_ENGINE_IDS).
+    // zero_day_radar is intel-only — RouteDef requires: [].
+    'zero_day_radar',
+  ])
+  const targetless_ids = [
+    ...new Set([
+      ...entries.filter((e) => !e.requiresTarget).map((e) => e.id),
+      ...extraTargetless,
+    ]),
+  ]
   targetless_ids.sort()
   const payload = {
     generated_by: 'scripts/generate_engine_target_contract.mjs',

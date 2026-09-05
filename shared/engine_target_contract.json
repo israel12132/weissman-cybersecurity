@@ -205,6 +205,7 @@
     "worm_propagation",
     "wpa3_attack_engine",
     "zero_day_prediction",
+    "zero_day_radar",
     "zigbee_attack"
   ]
 }
