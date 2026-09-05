@@ -255,3 +255,8 @@ export function useClient() {
   if (!ctx) throw new Error('useClient must be used within ClientProvider')
   return ctx
 }
+
+/** Safe outside ClientProvider (unit tests, intel-map CommandBar). */
+export function useClientOptional() {
+  return useContext(ClientContext)
+}

@@ -17,6 +17,7 @@ import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import { downloadBytes } from '../lib/pdfExport'
 import Button from '../components/ui/Button'
+import { BoundClientScanField } from '../components/scan/ClientScanBinding'
 
 const ENGINE_ID = 'oauth_oidc'
 const ACCENT = '#22d3ee'
@@ -647,11 +648,12 @@ export default function IdentitySecurityCenter() {
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <label className="flex items-center gap-2 text-xs font-mono text-[var(--text-tertiary)]">
           {L.client}
-          <select value={clientId ?? ''} onChange={(e) => setClientId(e.target.value || null)}
-            className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40">
-            <option value="">{L.selectClient}</option>
-            {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          <BoundClientScanField
+            clients={clients}
+            selectedClientId={clientId ?? ''}
+            onChange={(id) => setClientId(id || null)}
+            emptyLabel={L.selectClient}
+          />
         </label>
         <Link to="/identity-context" className="text-[11px] font-mono text-violet-300/80 hover:text-violet-200 border border-violet-500/25 rounded-lg px-3 py-1.5">
           {L.uebaLink} →

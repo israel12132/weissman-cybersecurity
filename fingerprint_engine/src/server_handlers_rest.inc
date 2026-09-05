@@ -1988,10 +1988,13 @@ async fn api_scan_all_engines(
             .into_response();
     }
 
-    // Get target from client if not provided
-    let target = if let Some(ref t) = body.target {
-        t.clone()
+    // Get target from client if not provided. Targetless-only batches must not 400.
+    let mut target = if let Some(ref t) = body.target {
+        t.trim().to_string()
     } else {
+        String::new()
+    };
+    if target.is_empty() {
         let domains_result: Option<String> = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
             Ok(mut tx) => {
                 let r = sqlx::query_scalar::<_, String>(
@@ -2009,34 +2012,43 @@ async fn api_scan_all_engines(
             Err(_) => None,
         };
 
-        domains_result
-            .and_then(|d| {
-                serde_json::from_str::<Vec<String>>(&d)
-                    .ok()
-                    .and_then(|arr| arr.first().cloned())
-            })
-            .unwrap_or_default()
+        let domains = crate::engine_target_contract::parse_client_domain_list(
+            domains_result.as_deref().unwrap_or(""),
+        );
+        if let Some(bound) = crate::engine_target_contract::first_assigned_target(&domains) {
+            target = bound;
+        }
     };
 
+    let any_requires_target = engines
+        .iter()
+        .any(|e| crate::engine_target_contract::engine_requires_target(e));
+
     // A blank target would otherwise enqueue a no-op scan that still consumes quota AND skip the
-    // scope check. Reject it, and always run scope validation before enqueueing.
-    if target.trim().is_empty() {
+    // scope check — but only for engines whose catalog flag requires a URL/domain.
+    if any_requires_target && target.trim().is_empty() {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({"ok": false, "detail": "No scan target resolved for this client"})),
+            Json(json!({
+                "ok": false,
+                "detail": "target required for engine batch — provide a URL/domain or bind a client with authorized domains",
+                "code": "bad_request",
+            })),
         )
             .into_response();
     }
-    if let Err(detail) = crate::security_hardening::validate_scan_target_in_scope(
-        state.app_pool.as_ref(),
-        auth.tenant_id,
-        &target,
-        Some(body.client_id),
-    )
-    .await
-    {
-        return (StatusCode::FORBIDDEN, Json(json!({"ok": false, "detail": detail})))
-            .into_response();
+    if any_requires_target {
+        if let Err(detail) = crate::security_hardening::validate_scan_target_in_scope(
+            state.app_pool.as_ref(),
+            auth.tenant_id,
+            &target,
+            Some(body.client_id),
+        )
+        .await
+        {
+            return (StatusCode::FORBIDDEN, Json(json!({"ok": false, "detail": detail})))
+                .into_response();
+        }
     }
 
     // Queue scan-all-engines job

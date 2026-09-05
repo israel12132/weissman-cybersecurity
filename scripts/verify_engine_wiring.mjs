@@ -14,6 +14,11 @@ if (gen.status !== 0) {
   console.error(gen.stderr || gen.stdout || 'generate_engine_param_defs.mjs --check failed (param defs out of date)')
   process.exit(gen.status ?? 1)
 }
+const targetContractGen = spawnSync('node', ['scripts/generate_engine_target_contract.mjs', '--check'], { cwd: root, encoding: 'utf8' })
+if (targetContractGen.status !== 0) {
+  console.error(targetContractGen.stderr || targetContractGen.stdout || 'generate_engine_target_contract.mjs --check failed')
+  process.exit(targetContractGen.status ?? 1)
+}
 const frontendModule = await import(pathToFileURL(path.join(root, 'frontend/src/lib/enginesRegistry.js')).href)
 const engineRs = fs.readFileSync(path.join(root, 'backend/weissman-core/src/models/engine.rs'), 'utf8')
 const dispatchRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/engine_dispatch.rs'), 'utf8')
@@ -129,6 +134,31 @@ for (const id of productionIds) {
   productionWithoutExecutionPath.push(id)
 }
 
+const contractPath = path.join(root, 'shared/engine_target_contract.json')
+const targetContract = JSON.parse(fs.readFileSync(contractPath, 'utf8'))
+const contractTargetless = new Set(targetContract.targetless_ids || [])
+const requiresTargetMismatch = []
+for (const engine of frontendModule.ENGINES_REGISTRY) {
+  const uiRequires = engine.requiresTarget !== false
+  const contractRequires = !contractTargetless.has(engine.id)
+  if (uiRequires !== contractRequires) {
+    requiresTargetMismatch.push({
+      id: engine.id,
+      registryRequiresTarget: uiRequires,
+      contractRequiresTarget: contractRequires,
+    })
+  }
+}
+const rustTargetContract = fs.readFileSync(path.join(root, 'fingerprint_engine/src/engine_target_contract.rs'), 'utf8')
+if (!rustTargetContract.includes('engine_target_contract.json')) {
+  requiresTargetMismatch.push({
+    id: '_rust_embed',
+    registryRequiresTarget: true,
+    contractRequiresTarget: false,
+    detail: 'engine_target_contract.rs must embed shared/engine_target_contract.json',
+  })
+}
+
 const summary = {
   frontendTotal: frontendIds.length,
   productionTotal: productionIds.size,
@@ -140,11 +170,19 @@ const summary = {
   unresolvedFrontendCount: unresolvedFrontend.length,
   aliasWithoutRunnerCount: aliasWithoutRunner.length,
   productionWithoutExecutionPathCount: productionWithoutExecutionPath.length,
+  requiresTargetMismatchCount: requiresTargetMismatch.length,
 }
 
 console.log(
   JSON.stringify(
-    { summary, missingFromProduction, unresolvedFrontend, aliasWithoutRunner, productionWithoutExecutionPath },
+    {
+      summary,
+      missingFromProduction,
+      unresolvedFrontend,
+      aliasWithoutRunner,
+      productionWithoutExecutionPath,
+      requiresTargetMismatch,
+    },
     null,
     2,
   ),
@@ -154,7 +192,8 @@ if (
   missingFromProduction.length > 0 ||
   unresolvedFrontend.length > 0 ||
   aliasWithoutRunner.length > 0 ||
-  productionWithoutExecutionPath.length > 0
+  productionWithoutExecutionPath.length > 0 ||
+  requiresTargetMismatch.length > 0
 ) {
   process.exit(1)
 }

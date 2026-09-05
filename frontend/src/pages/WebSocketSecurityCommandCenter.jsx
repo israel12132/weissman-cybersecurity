@@ -11,6 +11,7 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
+import { BoundClientScanField } from '../components/scan/ClientScanBinding'
 
 const ENGINE = 'websocket_attack'
 const ACCENT = '#22d3ee'
@@ -505,11 +506,12 @@ export default function WebSocketSecurityCommandCenter() {
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.websocketSecurity.client', 'Client')}</label>
-            <select value={clientId} onChange={(e) => { setClientId(e.target.value); setTargetTouched(false) }}
-              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono min-w-[180px] focus:outline-none focus:border-cyan-500/40">
-              <option value="">{t('pages.websocketSecurity.select_client', '— Select client —')}</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <BoundClientScanField
+              clients={clients}
+              selectedClientId={clientId}
+              onChange={(id) => { setClientId(id || ''); setTargetTouched(false) }}
+              emptyLabel={t('pages.websocketSecurity.select_client', '— Select client —')}
+            />
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
             <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.websocketSecurity.target', 'Target URL')}</label>

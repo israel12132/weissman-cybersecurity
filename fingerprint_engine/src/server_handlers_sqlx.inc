@@ -1133,12 +1133,22 @@ async fn api_config_public(Extension(auth): Extension<AuthContext>) -> Response 
 async fn api_engines_production() -> Response {
     let ids = weissman_core::models::engine::production_engine_ids();
     let live_count = ids.len();
+    let requires_target: serde_json::Map<String, Value> = ids
+        .iter()
+        .map(|&id| {
+            (
+                id.to_string(),
+                json!(crate::engine_target_contract::engine_requires_target(id)),
+            )
+        })
+        .collect();
     (StatusCode::OK, Json(json!({
         "production": ids,
         "production_count": live_count,
         "catalog_count": 0,
         "all_runnable": true,
         "frontend_total": live_count,
+        "requires_target": requires_target,
     }))).into_response()
 }
 

@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next'
 import { formatApiErrorFromBody, formatApiErrorResponse } from '../lib/apiError.js'
 import { apiFetch } from '../utils/apiFetch'
 import { launchEngineScan } from '../lib/launchEngineScan'
+import { firstClientTarget, engineRequiresTarget, resolveEnqueueTarget } from '../lib/clientTarget'
+import { useClientOptional } from '../context/ClientContext'
 import Button from './ui/Button'
 
 const ENGINE_IDS = [
@@ -26,22 +28,31 @@ const COLOR_CLASSES = {
 }
 
 function getFirstTarget(client) {
-  if (!client?.domains) return ''
-  try {
-    const arr = typeof client.domains === 'string' ? JSON.parse(client.domains) : client.domains
-    if (Array.isArray(arr) && arr.length) return arr[0]
-  } catch (_) { /* best-effort; non-fatal */ }
-  return client?.name || ''
+  return firstClientTarget(client)
 }
 
 export default function CommandBar({ onScanLaunched, onError }) {
   const { t } = useTranslation()
+  const clientCtx = useClientOptional()
+  const clientScopeLocked = clientCtx?.clientScopeLocked === true
   const [target, setTarget] = useState('')
-  const [clients, setClients] = useState([])
+  const [localClients, setLocalClients] = useState([])
   const [clientsError, setClientsError] = useState(null)
-  const [selectedClientId, setSelectedClientId] = useState('')
+  const [localSelectedId, setLocalSelectedId] = useState('')
   const [loading, setLoading] = useState(null)
   const [lastResult, setLastResult] = useState(null)
+
+  const clients = clientCtx?.clients?.length ? clientCtx.clients : localClients
+  const selectedClientId = clientScopeLocked
+    ? String(clientCtx?.selectedClientId ?? '')
+    : (clientCtx?.selectedClientId != null ? String(clientCtx.selectedClientId) : localSelectedId)
+  const selectedClient = clients.find((c) => String(c?.id) === String(selectedClientId))
+
+  const setSelectedClientId = (id) => {
+    if (clientScopeLocked) return
+    if (clientCtx?.setSelectedClientId) clientCtx.setSelectedClientId(id || null)
+    setLocalSelectedId(id)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -49,11 +60,11 @@ export default function CommandBar({ onScanLaunched, onError }) {
       try {
         const list = await apiFetch('/api/clients')
         if (cancelled) return
-        setClients(Array.isArray(list) ? list : [])
+        setLocalClients(Array.isArray(list) ? list : [])
         setClientsError(Array.isArray(list) ? null : t('components.commandBar.clients_error'))
       } catch (e) {
         if (!cancelled) {
-          setClients([])
+          setLocalClients([])
           setClientsError(e?.response ? await formatApiErrorResponse(e.response) : (e?.message || t('components.commandBar.network_error')))
         }
       }
@@ -87,8 +98,13 @@ export default function CommandBar({ onScanLaunched, onError }) {
   }
 
   async function launchScan(engineId) {
-    const tTarget = (target || '').trim()
-    if (!tTarget) {
+    const resolved = resolveEnqueueTarget({
+      engineId,
+      target,
+      client: selectedClient,
+      clientScopeLocked,
+    })
+    if (engineRequiresTarget(engineId) && !resolved) {
       if (onError) onError(t('components.commandBar.no_target_error'))
       return
     }
@@ -98,7 +114,9 @@ export default function CommandBar({ onScanLaunched, onError }) {
       const { ok, data, status } = await launchEngineScan({
         engineId,
         clientId: selectedClientId || undefined,
-        target: tTarget,
+        target: resolved,
+        client: selectedClient,
+        clientScopeLocked,
       })
       if (!ok) {
         const msg = formatApiErrorFromBody(data, status)
@@ -126,19 +144,26 @@ export default function CommandBar({ onScanLaunched, onError }) {
       )}
       <div className="soc-command-bar-inner">
         <label className="soc-command-bar-label">{t('components.commandBar.target_label')}</label>
-        <select
-          className="soc-command-bar-select"
-          value={selectedClientId}
-          onChange={(e) => setSelectedClientId(e.target.value)}
-          aria-label={t('components.commandBar.client_aria')}
-        >
-          <option value="">{t('components.commandBar.select_client')}</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name || c.id} {getFirstTarget(c) ? `(${getFirstTarget(c)})` : ''}
-            </option>
-          ))}
-        </select>
+        {clientScopeLocked ? (
+          <div className="soc-command-bar-select" data-testid="command-bar-client-locked">
+            {(selectedClient?.name || t('engines.workspace_locked'))}
+            {getFirstTarget(selectedClient) ? ` · ${getFirstTarget(selectedClient)}` : ''}
+          </div>
+        ) : (
+          <select
+            className="soc-command-bar-select"
+            value={selectedClientId}
+            onChange={(e) => setSelectedClientId(e.target.value)}
+            aria-label={t('components.commandBar.client_aria')}
+          >
+            <option value="">{t('components.commandBar.select_client')}</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name || c.id} {getFirstTarget(c) ? `(${getFirstTarget(c)})` : ''}
+              </option>
+            ))}
+          </select>
+        )}
         <input
           type="text"
           placeholder={t('components.commandBar.target_url_placeholder')}

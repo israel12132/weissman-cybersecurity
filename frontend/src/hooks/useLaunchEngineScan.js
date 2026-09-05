@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useEngineHub } from '../context/EngineHubContext'
+import { useClientOptional } from '../context/ClientContext'
 import { launchEngineScan } from '../lib/launchEngineScan'
 import { useClientIntegrations } from './useClientIntegrations'
 
@@ -46,6 +47,7 @@ export function useHubEngineFocus(engineId, { active = true } = {}) {
 export function useLaunchEngineScan(clientId) {
   const { hubExtraParams, hubEngineId } = useEngineHub()
   const { integrations } = useClientIntegrations(clientId)
+  const clientCtx = useClientOptional()
 
   return useCallback(
     (opts = {}) => {
@@ -57,12 +59,14 @@ export function useLaunchEngineScan(clientId) {
         ...opts,
         clientId: opts.clientId ?? clientId,
         integrations: opts.integrations ?? integrations,
+        client: opts.client ?? clientCtx?.selectedClient ?? null,
+        clientScopeLocked: opts.clientScopeLocked ?? clientCtx?.clientScopeLocked ?? false,
         extraParams: {
           ...(shouldMergeHub ? hubExtraParams : {}),
           ...(opts.extraParams || {}),
         },
       })
     },
-    [clientId, hubExtraParams, hubEngineId, integrations],
+    [clientId, hubExtraParams, hubEngineId, integrations, clientCtx],
   )
 }

@@ -22,6 +22,7 @@ import { apiFetch } from '../utils/apiFetch'
 import { fmtUsd } from '../lib/riskFormat'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
+import { BoundClientScanField } from '../components/scan/ClientScanBinding'
 
 const NS = 'pages.financialRisk'
 const columnHelper = createColumnHelper()
@@ -196,19 +197,12 @@ export default function FinancialRisk() {
       icon={<DollarSign className="w-5 h-5" />}
       actions={
         <div className="flex items-center gap-2">
-          <select
-            value={selectedClientId ?? ''}
-            onChange={(e) => setSelectedClientId(e.target.value ? Number(e.target.value) : null)}
-            className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] focus:outline-none focus:border-emerald-500/40"
-            aria-label={t(`${NS}.select_client`)}
-          >
-            <option value="">{t(`${NS}.select_client`)}</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name || c.domain || `#${c.id}`}
-              </option>
-            ))}
-          </select>
+          <BoundClientScanField
+            clients={clients}
+            selectedClientId={selectedClientId ?? ''}
+            onChange={(id) => setSelectedClientId(id ? Number(id) : null)}
+            emptyLabel={t(`${NS}.select_client`)}
+          />
           <Button variant="unstyled"
             type="button"
             onClick={() => load(true)}

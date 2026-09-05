@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 import { apiFetch } from '../utils/apiFetch'
+import { resolveEnqueueTarget } from '../lib/clientTarget'
+import ClientScanBinding from '../components/scan/ClientScanBinding'
+import { useClient } from '../context/ClientContext'
 import { buildSimpleTextPdf, downloadBytes } from '../lib/pdfExport'
 import { normalizeIntegrations, TOP_TIER_PARAM_ROUTES } from '../lib/engineClientPrefill'
 import { getTopTierProfile, isTopTierEngine } from '../lib/topTierEngineProfiles'
@@ -49,8 +52,14 @@ export default function TopTierEngineProfile() {
   const [audit, setAudit] = useState(null)
   const [history, setHistory] = useState(null)
   const [historyLoading, setHistoryLoading] = useState(true)
-  const [clients, setClients] = useState([])
-  const [clientId, setClientId] = useState('')
+  const {
+    clients,
+    selectedClientId,
+    setSelectedClientId,
+    selectedClient,
+    clientScopeLocked,
+  } = useClient()
+  const clientId = selectedClientId ?? ''
   const [target, setTarget] = useState('')
   const [runState, setRunState] = useState({ running: false, msg: '' })
   const [activeJobId, setActiveJobId] = useState('')
@@ -88,18 +97,6 @@ export default function TopTierEngineProfile() {
   }, [reloadAll])
 
   useEffect(() => {
-    let cancelled = false
-    async function loadClients() {
-      const d = await apiFetch('/api/clients').catch(() => null)
-      if (!cancelled && Array.isArray(d)) setClients(d)
-    }
-    loadClients()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
     if (!clientId) {
       setClientIntegrations(null)
       return
@@ -116,12 +113,18 @@ export default function TopTierEngineProfile() {
   const effectivePayload = useMemo(() => {
     const p = { engine: engineId, ...(profile?.samplePayload || {}) }
     if (clientId) p.client_id = Number(clientId)
-    if (target.trim()) p.target = target.trim()
+    const resolved = resolveEnqueueTarget({
+      engineId,
+      target,
+      client: selectedClient,
+      clientScopeLocked,
+    })
+    if (resolved) p.target = resolved
     for (const [k, v] of Object.entries(extraParams)) {
       if (v !== '' && v != null) p[k] = v
     }
     return p
-  }, [profile, clientId, target, engineId, extraParams])
+  }, [profile, clientId, target, engineId, extraParams, selectedClient, clientScopeLocked])
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const jobs = Array.isArray(history?.jobs) ? history.jobs : []
@@ -352,16 +355,12 @@ export default function TopTierEngineProfile() {
         <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
           <h2 className="text-sm font-semibold text-white">{t('pages.topTierEngineProfile.run_live')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <select
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]"
-            >
-              <option value="">{t('pages.topTierEngineProfile.select_client')}</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <ClientScanBinding
+              clients={clients}
+              selectedClientId={selectedClientId}
+              onChange={(id) => setSelectedClientId(id)}
+              locked={clientScopeLocked}
+            />
             <input
               value={target}
               onChange={(e) => setTarget(e.target.value)}

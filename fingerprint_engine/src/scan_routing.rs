@@ -635,9 +635,9 @@ fn validate_requires(
         match r {
             Requires::NonEmptyTarget => {
                 if ctx.target.is_empty() {
-                    return Err(RouteError::BadRequest(format!(
-                        "target required for {engine_label}"
-                    )));
+                    return Err(RouteError::BadRequest(
+                        crate::engine_target_contract::missing_target_detail(engine_label),
+                    ));
                 }
             }
             Requires::ClientId => {
@@ -890,6 +890,28 @@ fn inject_oast_token(mut payload: Value, token: Uuid) -> Value {
     payload
 }
 
+async fn load_client_authorized_domains(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+) -> Result<Vec<String>, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("tenant tx for client domains: {e}"))?;
+    let raw: Option<String> = sqlx::query_scalar(
+        "SELECT COALESCE(domains, '') FROM clients WHERE id = $1 AND tenant_id = $2",
+    )
+    .bind(client_id)
+    .bind(tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| format!("read client domains: {e}"))?;
+    let _ = tx.commit().await;
+    Ok(crate::engine_target_contract::parse_client_domain_list(
+        raw.as_deref().unwrap_or(""),
+    ))
+}
+
 fn parse_client_id(ctx: &ScanBodyFields) -> Option<i64> {
     let v = ctx.client_id.as_ref()?;
     if let Some(id) = v.as_i64() {
@@ -995,25 +1017,55 @@ pub async fn route_scan_job(
         hydrate_extras_from_tenant(&mut ctx.extras, &secrets);
     }
 
+    let client_domains = if let Some(cid) = client_id {
+        load_client_authorized_domains(pool, tenant_id, cid)
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!(
+                    target: "scan_routing",
+                    error = %e,
+                    client_id = cid,
+                    "load client domains for auto-target"
+                );
+                Vec::new()
+            })
+    } else {
+        Vec::new()
+    };
+    match crate::engine_target_contract::resolve_enqueue_target(
+        engine,
+        &ctx.target,
+        &client_domains,
+    ) {
+        Ok(Some(bound)) => ctx.target = bound,
+        Ok(None) => ctx.target.clear(),
+        Err(detail) => {
+            let has_repo = ctx.repo_url.as_ref().is_some_and(|s| !s.is_empty());
+            if !has_repo {
+                return Err(RouteError::BadRequest(detail));
+            }
+        }
+    }
+
     // ── BLOCKER #1: Strict scope validation ──────────────────────────────────
     //
-    // Every scan with a target MUST be inside the client's approved scope
+    // Engines that require a target MUST be inside the client's approved scope
     // unless the engine is explicitly exempt (`pipeline` operates on repo
-    // URLs, `zero_day_radar` is intel-only). In all other cases:
-    //   - target must be non-empty AND
-    //   - client_id must be supplied AND
-    //   - target must resolve to / match an approved domain or IP range
+    // URLs, `zero_day_radar` is intel-only). Targetless catalog engines never
+    // 400 for a missing URL. Scoped users auto-bind their assigned domain
+    // before this check.
     //
     // `enforce_scope_strict` system_config can be set to `false` for a
     // tenant to opt out (e.g. red-team-as-a-service mode). Default = strict.
+    let requires_target = crate::engine_target_contract::engine_requires_target(engine);
     let enforce_strict = enforce_scope_strict(pool, tenant_id)
         .await
         .map_err(|e| RouteError::Internal { detail: e })?;
-    let scope_outcome = if enforce_scope_validation_for_engine(engine) {
+    let scope_outcome = if enforce_scope_validation_for_engine(engine) && requires_target {
         if ctx.target.is_empty() {
-            return Err(RouteError::BadRequest(format!(
-                "target required for engine '{engine}' (scope-enforced)"
-            )));
+            return Err(RouteError::BadRequest(
+                crate::engine_target_contract::missing_target_detail(engine),
+            ));
         }
         if enforce_strict && client_id.is_none() {
             return Err(RouteError::BadRequest(format!(
@@ -1054,7 +1106,9 @@ pub async fn route_scan_job(
     }
 
     // Default: command_center_engine (known engines + extras not in explicit table)
-    validate_requires(&[Requires::NonEmptyTarget], &ctx, engine)?;
+    if requires_target {
+        validate_requires(&[Requires::NonEmptyTarget], &ctx, engine)?;
+    }
     let ent = entitlement_for_fallback_engine(engine);
     check_tenant_entitlement(pool, tenant_id, engine, ent).await?;
 
@@ -1151,6 +1205,31 @@ mod tests {
         assert!(!enforce_scope_validation_for_engine("pipeline"));
         assert!(!enforce_scope_validation_for_engine("zero_day_radar"));
         assert!(enforce_scope_validation_for_engine("osint"));
+    }
+
+    #[test]
+    fn target_contract_matches_catalog_flags() {
+        assert!(crate::engine_target_contract::engine_requires_target(
+            "osint"
+        ));
+        assert!(!crate::engine_target_contract::engine_requires_target(
+            "aws_attack"
+        ));
+        let err =
+            crate::engine_target_contract::resolve_enqueue_target("osint", "", &[]).unwrap_err();
+        assert!(err.contains("target required for engine 'osint'"));
+        assert_eq!(
+            crate::engine_target_contract::resolve_enqueue_target("cloud_posture", "", &[]),
+            Ok(None)
+        );
+        let ctx = extract_fields(&json!({ "engine": "osint" }));
+        let err = validate_requires(&[Requires::NonEmptyTarget], &ctx, "osint").unwrap_err();
+        assert!(
+            err.detail()
+                .starts_with("target required for engine 'osint'"),
+            "400 wording must match the catalog contract, got {}",
+            err.detail()
+        );
     }
 
     #[test]

@@ -16,6 +16,7 @@ import { apiFetch } from '../utils/apiFetch'
 import { clientPrimaryTargetUrl } from '../lib/clientTarget'
 import { useJobPoll, resolveJobFindings } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
+import { BoundClientScanField } from '../components/scan/ClientScanBinding'
 
 /** UI ids aligned with backend `APT_SCENARIOS` in threat_emulation_engine.rs */
 const APT_GROUPS = [
@@ -379,14 +380,12 @@ export default function ThreatEmulation() {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.threatEmulation.target_client')}</span>
-          <select
-            value={selectedClientId ?? ''}
-            onChange={(e) => setSelectedClientId(e.target.value || null)}
-            className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
-          >
-            <option value="">{t('pages.threatEmulation.select_placeholder')}</option>
-            {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          <BoundClientScanField
+            clients={clients}
+            selectedClientId={selectedClientId ?? ''}
+            onChange={(id) => setSelectedClientId(id || null)}
+            emptyLabel={t('pages.threatEmulation.select_placeholder')}
+          />
         </div>
         <Button variant="unstyled"
           type="button"

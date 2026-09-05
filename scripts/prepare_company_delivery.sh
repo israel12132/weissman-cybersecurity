@@ -8,6 +8,7 @@ echo "== Weissman company delivery prep =="
 node scripts/generate_engine_requirements.mjs
 node scripts/generate_platform_encyclopedia.mjs
 ./scripts/staging-qa.sh
+node scripts/generate_engine_target_contract.mjs --check >/dev/null
 node scripts/verify_engine_wiring.mjs >/dev/null
 node scripts/weissman-ui-audit.mjs >/dev/null
 

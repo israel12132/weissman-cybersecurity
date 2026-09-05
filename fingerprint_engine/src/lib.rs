@@ -93,6 +93,7 @@ pub mod engine_requirements;
 pub mod engine_resilience;
 pub mod engine_result;
 pub mod engine_stack_runtime;
+pub mod engine_target_contract;
 pub mod engine_telemetry;
 pub mod engine_ui_manifest;
 pub mod eternal_fuzz;

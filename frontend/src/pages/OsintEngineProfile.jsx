@@ -12,6 +12,8 @@ import { openSseStream, SSE_CLOSED } from '../lib/sseStream'
 import { normalizeIntegrations } from '../lib/engineClientPrefill'
 import { useRegisterHubClient } from '../context/EngineHubContext'
 import { useClient } from '../context/ClientContext'
+import { firstClientTarget, resolveEnqueueTarget } from '../lib/clientTarget'
+import ClientScanBinding from '../components/scan/ClientScanBinding'
 import { useLaunchEngineScan, useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import { useEngineScanParams } from '../hooks/useEngineScanParams'
 import EngineScanParamsPanel from '../components/engine/EngineScanParamsPanel'
@@ -72,9 +74,13 @@ function Terminal({ lines }) {
 
 export default function OsintEngineProfile() {
   const { t } = useTranslation()
-  const { selectedClientId: cockpitClientId } = useClient()
-  const [clients, setClients] = useState([])
-  const [selectedClientId, setSelectedClientId] = useState('')
+  const {
+    clients,
+    selectedClientId,
+    setSelectedClientId,
+    selectedClient,
+    clientScopeLocked,
+  } = useClient()
   const [target, setTarget] = useState('')
   const [running, setRunning] = useState(false)
   const [lines, setLines] = useState([])
@@ -106,14 +112,9 @@ export default function OsintEngineProfile() {
   )
 
   useEffect(() => {
-    if (cockpitClientId) setSelectedClientId(String(cockpitClientId))
-  }, [cockpitClientId])
-
-  useEffect(() => {
-    apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      .catch((err) => { if (import.meta.env.DEV) console.warn('[OsintEngineProfile] clients load failed:', err) })
-  }, [])
+    const assigned = firstClientTarget(selectedClient)
+    if (assigned) setTarget((prev) => prev || assigned)
+  }, [selectedClient])
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true)
@@ -128,18 +129,6 @@ export default function OsintEngineProfile() {
   useEffect(() => {
     loadHistory()
   }, [loadHistory])
-
-  useEffect(() => {
-    if (!selectedClientId) return
-    const client = clients.find((c) => String(c.id) === String(selectedClientId))
-    if (!client) return
-    let domains = client.domains
-    if (typeof domains === 'string') {
-      try { domains = JSON.parse(domains) } catch { domains = [] }
-    }
-    const first = Array.isArray(domains) ? (domains[0] || '') : ''
-    if (first) setTarget(first.startsWith('http') ? first : `https://${first}`)
-  }, [selectedClientId, clients])
 
   useEffect(() => {
     if (!selectedClientId) {
@@ -229,7 +218,13 @@ export default function OsintEngineProfile() {
       showToast('error', t('pages.osintEngineProfile.select_client_first'))
       return
     }
-    if (!target.trim()) {
+    const resolvedTarget = resolveEnqueueTarget({
+      engineId: ENGINE_ID,
+      target,
+      client: selectedClient,
+      clientScopeLocked,
+    })
+    if (!resolvedTarget) {
       showToast('error', t('pages.osintEngineProfile.target_required'))
       return
     }
@@ -241,7 +236,7 @@ export default function OsintEngineProfile() {
       const { ok, data, status } = await launchScan({
         engineId: ENGINE_ID,
         clientId: selectedClientId,
-        target: target.trim(),
+        target: resolvedTarget,
         integrations: clientIntegrations,
         extraParams,
       })
@@ -300,7 +295,7 @@ export default function OsintEngineProfile() {
       showToast('error', e?.message ?? t('pages.osintEngineProfile.network_error'))
       setRunning(false)
     }
-  }, [closeStream, selectedClientId, target, clientIntegrations, extraParams, launchScan, showToast, t])
+  }, [closeStream, selectedClientId, selectedClient, clientScopeLocked, target, clientIntegrations, extraParams, launchScan, showToast, t])
 
   return (
     <PageShell
@@ -412,16 +407,13 @@ export default function OsintEngineProfile() {
             <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('pages.osintEngineProfile.run_heading')}</h3>
             <div>
               <label className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">{t('pages.osintEngineProfile.client_label')}</label>
-              <select
-                value={selectedClientId}
-                onChange={(e) => setSelectedClientId(e.target.value)}
-                className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40"
-              >
-                <option value="">{t('pages.osintEngineProfile.select_client')}</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <ClientScanBinding
+                clients={clients}
+                selectedClientId={selectedClientId}
+                onChange={(id) => setSelectedClientId(id)}
+                locked={clientScopeLocked}
+                selectClassName="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40"
+              />
               <div className="text-[10px] text-[var(--text-muted)] font-mono mt-1">{t('pages.osintEngineProfile.active_client', { name: selectedClientName })}</div>
             </div>
             <div>

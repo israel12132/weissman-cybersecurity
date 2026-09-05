@@ -36,6 +36,12 @@ describe('clientScope policy', () => {
     expect(assignedClientId(staff)).toBe(null)
   })
 
+  it('never exposes a client picker for portal sessions', () => {
+    expect(isClientUser(portal)).toBe(true)
+    expect(assignedClientId(portal)).toBe(7)
+    expect(isPlatformOwner(portal)).toBe(false)
+  })
+
   it('only the owner may create or delete clients', () => {
     expect(canCreateClients(owner)).toBe(true)
     expect(canDeleteClients(owner)).toBe(true)

@@ -11,6 +11,7 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, extractFindingsFromJob } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
+import { BoundClientScanField } from '../components/scan/ClientScanBinding'
 
 const ENGINE_ID = 'pqc_scanner'
 
@@ -423,14 +424,12 @@ export default function PqcRadar() {
         <div className="flex items-end gap-3 flex-wrap">
           <label className="space-y-1">
             <span className="block text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{tt('client_label', 'Client')}</span>
-            <select
-              value={selectedClientId ?? ''}
-              onChange={(e) => { setSelectedClientId(e.target.value || null); setTargetTouched(false) }}
-              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#10b981]/40 min-w-[180px]"
-            >
-              <option value="">{tt('select_client', '— Select client —')}</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <BoundClientScanField
+              clients={clients}
+              selectedClientId={selectedClientId ?? ''}
+              onChange={(id) => { setSelectedClientId(id || null); setTargetTouched(false) }}
+              emptyLabel={tt('select_client', '— Select client —')}
+            />
           </label>
           <label className="space-y-1">
             <span className="block text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{tt('target_label', 'Target host')}</span>
