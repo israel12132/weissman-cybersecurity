@@ -73,6 +73,7 @@ pub mod council_hitl;
 pub mod council_synthesis;
 pub mod critical_infra;
 pub mod crypto_engine;
+pub mod csv_safe;
 pub mod data_retention;
 pub mod db;
 pub mod db_backup;

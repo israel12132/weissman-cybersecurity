@@ -137,6 +137,7 @@ export default function PlaybookTemplateGallery({
             variant="unstyled"
             type="button"
             data-testid="playbook-blank"
+            data-testid="playbook-blank"
             onClick={onCreateBlank}
             className="group flex min-h-[168px] flex-col items-start justify-between rounded-2xl border border-dashed border-violet-400/30 bg-gradient-to-br from-violet-500/[0.08] to-cyan-500/[0.04] p-4 text-start transition-all hover:border-violet-400/50 hover:from-violet-500/[0.14] hover:shadow-lg hover:shadow-violet-500/10"
           >

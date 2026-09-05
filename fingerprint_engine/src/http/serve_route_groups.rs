@@ -16,7 +16,13 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/findings", get(api_findings))
         .route("/api/findings/clusters", get(api_findings_clusters))
         .route("/api/findings/export/csv", get(api_findings_export_csv))
+        .route("/api/findings/export/xlsx", get(api_findings_export_xlsx))
         .route("/api/export/findings", get(api_findings_export_csv))
+        .route("/api/export/document", post(api_export_document))
+        .route("/api/export/workbook", post(api_export_workbook))
+        .route("/api/ai/readiness", get(api_ai_readiness))
+        .route("/api/ai/readiness/probe", post(api_ai_readiness_probe))
+        .route("/api/analytics/attack-vectors", get(api_analytics_attack_vectors))
         .route(
             "/api/findings/:id/status",
             patch(api_findings_update_status),
@@ -384,6 +390,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/clients/:id/findings", get(api_client_findings_all))
         .route("/api/clients/:id/export/csv", get(api_client_export_csv))
+        .route("/api/clients/:id/export/xlsx", get(api_client_export_xlsx))
         .route("/api/clients/:id/report/pdf", get(api_client_report_pdf))
         .route(
             "/api/clients/:id/report/crypto-proof",
@@ -807,6 +814,22 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             get(api_ceo_vault_export_criticals),
         )
         .route(
+            "/api/ceo/vault/export/criticals.xlsx",
+            get(api_ceo_vault_export_criticals_xlsx),
+        )
+        .route(
+            "/api/ceo/platform-keys",
+            get(api_ceo_platform_keys_get).put(api_ceo_platform_keys_put),
+        )
+        .route(
+            "/api/ceo/platform-keys/:env_name/reveal",
+            post(api_ceo_platform_keys_reveal),
+        )
+        .route(
+            "/api/ceo/platform-keys/:env_name",
+            delete(api_ceo_platform_keys_delete),
+        )
+        .route(
             "/api/ceo/vault/secrets",
             get(api_ceo_vault_secrets_alias).post(api_ceo_vault_secrets_post),
         )
@@ -927,11 +950,11 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             get(api_honey_routing_session),
         )
         .route(
-            "/api/honey-routing/:client_id/isolate",
+            "/api/honey-routing/:client_id/sessions/:session_id/isolate-request",
             post(api_honey_routing_isolate_request),
         )
         .route(
-            "/api/honey-routing/:client_id/isolate/approve",
+            "/api/honey-routing/:client_id/sessions/:session_id/isolate-approve",
             post(api_honey_routing_isolate_approve),
         )
         .route(
@@ -942,23 +965,27 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/llm-ultra-guard/events", get(api_llm_ultra_guard_events))
         .route("/api/llm-ultra-guard/rag", get(api_llm_ultra_guard_rag))
         .route(
-            "/api/stealthy-persistence/catalog",
+            "/api/llm-ultra-guard/rag-integrity",
+            get(api_llm_ultra_guard_rag),
+        )
+        .route(
+            "/api/stealthy-persistence-evasion/catalog",
             get(api_stealthy_persistence_catalog),
         )
         .route(
-            "/api/stealthy-persistence/:client_id/status",
+            "/api/stealthy-persistence-evasion/status",
             get(api_stealthy_persistence_status),
         )
         .route(
-            "/api/stealthy-persistence/:client_id/fail-safe",
+            "/api/stealthy-persistence-evasion/fail-safe",
             post(api_stealthy_persistence_fail_safe),
         )
         .route(
-            "/api/stealthy-persistence/:client_id/auto-remediate",
+            "/api/stealthy-persistence-evasion/auto-remediate",
             post(api_stealthy_persistence_auto_remediate),
         )
         .route(
-            "/api/stealthy-persistence/:client_id/plant-deception",
+            "/api/stealthy-persistence-evasion/plant-deception",
             post(api_stealthy_persistence_plant_deception),
         )
 }

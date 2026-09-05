@@ -23,7 +23,7 @@ import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import Button from '../components/ui/Button'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../utils/apiFetch'
-import { fairAleLabel, fairSleLabel } from '../lib/riskFormat'
+import { fmtUsd } from '../lib/riskFormat'
 import { useClient } from '../context/ClientContext'
 import ScopedClientControl from '../components/clients/ScopedClientControl'
 import EngineRealityBadge from '../components/EngineRealityBadge'
@@ -94,7 +94,6 @@ export default function KillChainCommander() {
 
   const stages = Array.isArray(snap?.stages) ? snap.stages : []
   const edges = Array.isArray(snap?.edges) ? snap.edges : []
-  const pricing = snap?.pricing || {}
   const honesty = snap?.honesty || {}
   const jobs = Array.isArray(snap?.jobs) ? snap.jobs : []
   const empty = Boolean(snap?.empty_reason)
@@ -170,10 +169,9 @@ export default function KillChainCommander() {
     }
   }
 
-  const liveFindings = stages.reduce((n, s) => n + (s.finding_count || 0), 0)
-  const formula = pricing.formula || {}
-  const fair = snap?.headline_risk || pricing.fair || {}
-  const aleLabel = fairAleLabel(fair)
+  const liveFindings = Number(snap?.findings_considered) || stages.reduce((n, s) => n + (s.finding_count || 0), 0)
+  const aleLabel = snap?.fair_ale_usd != null ? fmtUsd(snap.fair_ale_usd) : ''
+  const sleLabel = snap?.fair_sle_usd != null ? fmtUsd(snap.fair_sle_usd) : ''
   const fairPriced = Boolean(aleLabel)
 
   return (
@@ -203,7 +201,7 @@ export default function KillChainCommander() {
           <HonestyChip on={honesty.no_fabricated_apt !== false} label={t(`${NS}.badge_no_apt`)} hint={t(`${NS}.badge_no_apt_hint`)} />
           <HonestyChip on={honesty.fail_closed_empty !== false} label={t(`${NS}.badge_fail_closed`)} hint={t(`${NS}.badge_fail_closed_hint`)} />
           <HonestyChip on={Boolean(snap?.client_id)} label={t(`${NS}.badge_bound`)} hint={t(`${NS}.badge_bound_hint`)} />
-          <HonestyChip on={honesty.formula_published !== false} label={t(`${NS}.badge_formula`)} hint={formula.expression || ''} />
+          <HonestyChip on={snap?.live !== false} label={t(`${NS}.badge_formula`)} hint={t(`${NS}.badge_live_hint`)} />
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -251,21 +249,21 @@ export default function KillChainCommander() {
                 accent={fairPriced ? '#ef4444' : '#fbbf24'}
                 hint={
                   fairPriced
-                    ? t(`${NS}.kpi_fair_hint_priced`, { sle: fairSleLabel(fair) || '—' })
-                    : (fair.cannot_price_reason || t(`${NS}.kpi_fair_hint_cannot`))
+                    ? t(`${NS}.kpi_fair_hint_priced`, { sle: sleLabel || '—' })
+                    : t(`${NS}.kpi_fair_hint_cannot`)
                 }
               />
               <ExecutiveWidget
                 label={t(`${NS}.kpi_micro`)}
-                value={(Number(pricing.total_risk_points) || 0).toFixed(1)}
+                value={String(Number(snap?.micro_severity_points) || 0)}
                 accent="#f97316"
                 hint={t(`${NS}.kpi_micro_hint`)}
               />
               <ExecutiveWidget
-                label={t(`${NS}.kpi_residual`)}
-                value={(Number(pricing.residual_if_top3_fixed) || 0).toFixed(1)}
+                label={t(`${NS}.kpi_findings`)}
+                value={String(liveFindings)}
                 accent="#22d3ee"
-                hint={t(`${NS}.kpi_residual_hint`, { pct: pricing.residual_reduction_pct ?? 0 })}
+                hint={t(`${NS}.kpi_findings_hint`, { n: liveFindings })}
               />
               <ExecutiveWidget
                 label={t(`${NS}.kpi_scope`)}
@@ -323,57 +321,49 @@ export default function KillChainCommander() {
                           {(st.findings || []).length === 0 ? (
                             <li className="text-[11px] text-[var(--text-muted)]">{t(`${NS}.stage_empty`)}</li>
                           ) : (
-                            (st.findings || []).map((f) => (
-                              <li key={`${st.stage}-${f.id}`}>
+                            (st.findings || []).map((f, fi) => {
+                              const fid = f.id || `${st.stage}-${fi}`
+                              const mitreIds = Array.isArray(f.mitre)
+                                ? f.mitre.map((m) => (typeof m === 'string' ? m : m.id)).filter(Boolean)
+                                : String(f.mitre || '').split(/[,\s]+/).filter(Boolean)
+                              return (
+                              <li key={`${st.stage}-${fid}`}>
                                 <button
                                   type="button"
-                                  onClick={() => setOpenId(openId === f.id ? null : f.id)}
+                                  onClick={() => setOpenId(openId === fid ? null : fid)}
                                   className="w-full text-start rounded-lg border border-white/5 bg-black/30 px-2 py-1.5 hover:border-white/20 transition-colors"
                                 >
                                   <div className="flex items-center justify-between gap-2">
                                     <span className="text-[12px] text-[var(--text-primary)] truncate">{f.title}</span>
                                     <span
                                       className="text-[10px] font-mono shrink-0 tabular-nums"
-                                      style={{ color: riskTone(f.risk_points) }}
+                                      style={{ color: riskTone(f.severity === 'critical' ? 24 : f.severity === 'high' ? 16 : 8) }}
                                     >
-                                      {Number(f.risk_points).toFixed(1)}
+                                      {f.severity}
                                     </span>
                                   </div>
                                   <div className="mt-1 flex flex-wrap gap-1">
                                     <span className="text-[8px] font-mono uppercase tracking-widest text-[var(--text-muted)]">
-                                      {f.severity} · {Math.round((f.confidence || 0) * 100)}%
+                                      {f.engine_id || f.source || 'live'}
                                     </span>
-                                    {(f.mitre || []).slice(0, 3).map((m) => (
+                                    {mitreIds.slice(0, 3).map((id) => (
                                       <span
-                                        key={m.id}
+                                        key={id}
                                         className="text-[8px] font-mono px-1 rounded border border-violet-400/30 text-violet-200/90"
-                                        title={m.name || m.id}
                                       >
-                                        {m.id}
+                                        {id}
                                       </span>
                                     ))}
                                   </div>
-                                  {openId === f.id && (
+                                  {openId === fid && (
                                     <div className="mt-2 space-y-1 text-[10px] font-mono text-[var(--text-secondary)]">
-                                      <div>{t(`${NS}.cite_id`)} {f.finding_id} · {f.source}</div>
-                                      {f.proof_snippet && (
-                                        <div className="rounded bg-black/40 border border-white/5 p-2 whitespace-pre-wrap text-[var(--text-primary)]">
-                                          {f.proof_snippet}
-                                        </div>
-                                      )}
-                                      <div>
-                                        {t(`${NS}.formula_line`, {
-                                          sev: f.formula_inputs?.severity_weight,
-                                          crit: f.formula_inputs?.asset_criticality,
-                                          exp: f.formula_inputs?.exposure_weight,
-                                          expLabel: f.formula_inputs?.exposure,
-                                        })}
-                                      </div>
+                                      <div>{t(`${NS}.cite_id`)} {f.target || f.engine_id || '—'}</div>
                                     </div>
                                   )}
                                 </button>
                               </li>
-                            ))
+                              )
+                            })
                           )}
                         </ul>
                       </div>
@@ -401,50 +391,33 @@ export default function KillChainCommander() {
                   {aleLabel || t(`${NS}.cannot_price`)}
                 </p>
                 <p className="text-[11px] font-mono text-[var(--text-muted)] leading-relaxed">
-                  {fair.expression || t(`${NS}.fair_method`)}
+                  {t(`${NS}.fair_method`)}
                 </p>
                 {!fairPriced && (
                   <p className="text-[11px] text-amber-200/90 leading-relaxed">
-                    {fair.cannot_price_reason || t(`${NS}.kpi_fair_hint_cannot`)}
+                    {t(`${NS}.kpi_fair_hint_cannot`)}
                   </p>
                 )}
                 <h3 className="text-[10px] font-mono uppercase tracking-[0.18em] text-cyan-300/80 pt-2">
                   {t(`${NS}.micro_formula_title`)}
                 </h3>
                 <p className="text-sm text-[var(--text-primary)] font-mono">
-                  {formula.expression || t(`${NS}.formula_short`)}
+                  {t(`${NS}.formula_short`)}
                 </p>
                 <dl className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
-                  {Object.entries(formula.severity_weights || {}).map(([k, v]) => (
-                    <div key={k} className="rounded-lg border border-white/5 px-2 py-1.5">
-                      <dt className="text-[9px] uppercase tracking-widest text-[var(--text-muted)]">{k}</dt>
-                      <dd className="font-mono text-[var(--text-primary)]">{v}</dd>
-                    </div>
-                  ))}
-                  {Object.entries(formula.exposure || {}).map(([k, v]) => (
-                    <div key={k} className="rounded-lg border border-white/5 px-2 py-1.5">
-                      <dt className="text-[9px] uppercase tracking-widest text-[var(--text-muted)]">{k}</dt>
-                      <dd className="font-mono text-[var(--text-primary)]">×{v}</dd>
-                    </div>
-                  ))}
+                  <div className="rounded-lg border border-white/5 px-2 py-1.5">
+                    <dt className="text-[9px] uppercase tracking-widest text-[var(--text-muted)]">ALE</dt>
+                    <dd className="font-mono text-[var(--text-primary)]">{aleLabel || '—'}</dd>
+                  </div>
+                  <div className="rounded-lg border border-white/5 px-2 py-1.5">
+                    <dt className="text-[9px] uppercase tracking-widest text-[var(--text-muted)]">SLE</dt>
+                    <dd className="font-mono text-[var(--text-primary)]">{sleLabel || '—'}</dd>
+                  </div>
+                  <div className="rounded-lg border border-white/5 px-2 py-1.5">
+                    <dt className="text-[9px] uppercase tracking-widest text-[var(--text-muted)]">Micro</dt>
+                    <dd className="font-mono text-[var(--text-primary)]">{Number(snap?.micro_severity_points) || 0}</dd>
+                  </div>
                 </dl>
-                <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">{formula.usd_overlay}</p>
-                <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">{formula.residual}</p>
-                {(pricing.top3_fixes || []).length > 0 && (
-                  <ol className="space-y-2">
-                    {(pricing.top3_fixes || []).map((fix, idx) => (
-                      <li key={fix.id} className="rounded-xl border border-white/5 px-3 py-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[11px] font-mono text-amber-200/80">#{idx + 1} {fix.stage}</span>
-                          <span className="text-[11px] font-mono tabular-nums" style={{ color: riskTone(fix.risk_points) }}>
-                            −{Number(fix.risk_points).toFixed(1)}
-                          </span>
-                        </div>
-                        <div className="text-sm text-[var(--text-primary)] truncate">{fix.title}</div>
-                      </li>
-                    ))}
-                  </ol>
-                )}
               </section>
 
               <section className="xl:col-span-5 rounded-2xl border border-[var(--border-default)] bg-black/25 p-4 space-y-3">

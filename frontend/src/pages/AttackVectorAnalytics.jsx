@@ -172,6 +172,7 @@ export default function AttackVectorAnalytics() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -188,7 +189,16 @@ export default function AttackVectorAnalytics() {
 
   useEffect(() => { load() }, [load])
 
-  const vectors = useMemo(() => (Array.isArray(data?.vectors) ? data.vectors : []), [data])
+  const vectors = useMemo(() => {
+    const all = Array.isArray(data?.vectors) ? data.vectors : []
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return all
+    return all.filter((v) =>
+      `${v.name} ${v.narrative} ${v.severity} ${(v.mitre_chain || []).join(' ')} ${(v.tactics || []).join(' ')}`
+        .toLowerCase()
+        .includes(q),
+    )
+  }, [data, searchQuery])
 
   const kpis = useMemo(() => {
     const critical = vectors.filter((v) => (v.severity || '').toLowerCase() === 'critical').length
@@ -223,6 +233,17 @@ export default function AttackVectorAnalytics() {
           {t('pages.attackVectors.load_error', { error })}
         </div>
       )}
+
+      <label className="block mb-6">
+        <span className="sr-only">{t('pages.attackVectors.search')}</span>
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder={t('pages.attackVectors.search', { defaultValue: 'Search vectors, MITRE, tactics…' })}
+          className="w-full rounded-xl bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-2 text-xs font-mono text-[var(--text-secondary)]"
+        />
+      </label>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         {[

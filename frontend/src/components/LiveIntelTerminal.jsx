@@ -43,7 +43,7 @@ export default function LiveIntelTerminal({ events, highlightedEventId, connecti
 
   useEffect(() => {
     if (listRef.current && parsed.length > 0)
-      listRef.current.scrollToItem(parsed.length - 1, 'end')
+      listRef.current.scrollToRow({ index: parsed.length - 1, align: 'end' })
   }, [parsed.length])
 
   const Row = ({ index, style }) => {

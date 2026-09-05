@@ -314,19 +314,9 @@ async fn api_ceo_vault_export_criticals_xlsx(
 /// GET /api/ai/readiness — catalog of LLM + enrichment keys (fingerprints only).
 async fn api_ai_readiness(Extension(_auth): Extension<AuthContext>) -> Response {
     let catalog = weissman_engines::llm_providers::catalog();
-    let endpoints: Vec<_> = weissman_engines::llm_router::resolve_endpoints()
+    let endpoints: Vec<_> = weissman_engines::llm_providers::discover_endpoints()
         .into_iter()
-        .map(|e| {
-            json!({
-                "label": e.label,
-                "provider": e.provider,
-                "base_url": e.base_url,
-                "model": e.model,
-                "auth": e.auth,
-                "key_configured": e.api_key.is_some(),
-                "key_fingerprint": e.api_key.as_deref().map(weissman_engines::llm_providers::fingerprint),
-            })
-        })
+        .map(|e| e.public())
         .collect();
     let enrichment = [
         (
@@ -389,7 +379,7 @@ async fn api_ai_readiness(Extension(_auth): Extension<AuthContext>) -> Response 
 
 /// POST /api/ai/readiness/probe — reachability check against the primary endpoint.
 async fn api_ai_readiness_probe(Extension(_auth): Extension<AuthContext>) -> Response {
-    let endpoints = weissman_engines::llm_router::resolve_endpoints();
+    let endpoints = weissman_engines::llm_providers::discover_endpoints();
     let Some(ep) = endpoints.first() else {
         return (
             StatusCode::OK,
