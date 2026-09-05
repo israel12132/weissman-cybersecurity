@@ -64,6 +64,21 @@ impl EngineResult {
             graph_edges: None,
         }
     }
+
+    /// RoE / policy denial — not an empty success and not a probe error.
+    /// Findings stay empty so OT/ICS scanners cannot report a clean bill of health.
+    pub fn roe_blocked(message: impl Into<String>) -> Self {
+        let msg = message.into();
+        Self {
+            status: "roe_blocked".to_string(),
+            findings: vec![],
+            message: msg.clone(),
+            success: false,
+            summary: msg,
+            graph_nodes: None,
+            graph_edges: None,
+        }
+    }
 }
 
 impl From<weissman_engines::EngineResult> for EngineResult {

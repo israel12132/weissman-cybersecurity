@@ -661,6 +661,13 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "radius_nac_bypass",
     "ot_passive_active_safety",
     "ot_crown_jewel_path",
+    // ── Unified landing: live assessment engines from unfinished agent PRs ──
+    "advanced_c2_covert_exfil",
+    "honey_routing_gateway",
+    "stealthy_persistence_evasion",
+    "prompt_injection_brake",
+    "jailbreak_cognitive_engine",
+    "rag_poisoning_guard",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -833,6 +840,12 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "industrial_protocol_fuzz",
     "ot_passive_active_safety",
     "ot_crown_jewel_path",
+    "advanced_c2_covert_exfil",
+    "honey_routing_gateway",
+    "stealthy_persistence_evasion",
+    "prompt_injection_brake",
+    "jailbreak_cognitive_engine",
+    "rag_poisoning_guard",
     "dll_hijacking_engine",
     "sandbox_evasion",
     "rootkit_surface_probe",

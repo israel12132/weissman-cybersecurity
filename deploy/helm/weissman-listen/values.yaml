@@ -1,0 +1,18 @@
+# How to make listen(4096) real inside the backend pod network namespace.
+#
+# podSysctl: spec.securityContext.sysctls (needs kubelet allowedUnsafeSysctls)
+# privilegedInit: privileged initContainer writes sysctl in the pod netns
+# preflight: read-only init; pod fails with a clear error if somaxconn < 4096
+mode: preflight
+
+# Node-level DaemonSet (hostNetwork). Does not change default CNI pod netns.
+# Enable for hostNetwork gateways or as a last-resort privileged node agent.
+daemonSet:
+  enabled: false
+  image: busybox:1.36
+
+preflight:
+  image: busybox:1.36
+
+privilegedInit:
+  image: busybox:1.36

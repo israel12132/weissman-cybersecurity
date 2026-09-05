@@ -9,11 +9,14 @@ pub mod advisory_lock;
 pub mod analytics;
 pub mod auth_access;
 pub mod auth_rotation;
+pub mod bulk_copy;
 pub mod env_bootstrap;
 pub mod job_queue;
 pub mod llm_usage;
 pub mod no_tx_migrations;
+pub mod pg_binary_copy;
 pub mod role_guard;
+pub mod secret;
 
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::{Postgres, Transaction};

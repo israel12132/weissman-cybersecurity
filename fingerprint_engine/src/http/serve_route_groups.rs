@@ -907,4 +907,62 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/compliance/evidence-pack/:client_id",
             get(api_compliance_evidence_pack),
         )
+        // Unified landing — unfinished agent surfaces
+        .route("/api/kill-chain-commander", get(api_kill_chain_commander))
+        .route(
+            "/api/kill-chain-commander/compose",
+            post(api_kill_chain_commander_compose),
+        )
+        .route("/api/pdf-intelligence", get(api_pdf_intelligence))
+        .route(
+            "/api/pdf-intelligence/compose",
+            post(api_pdf_intelligence_compose),
+        )
+        .route(
+            "/api/honey-routing/:client_id/dashboard",
+            get(api_honey_routing_dashboard),
+        )
+        .route(
+            "/api/honey-routing/:client_id/sessions/:session_id",
+            get(api_honey_routing_session),
+        )
+        .route(
+            "/api/honey-routing/:client_id/isolate",
+            post(api_honey_routing_isolate_request),
+        )
+        .route(
+            "/api/honey-routing/:client_id/isolate/approve",
+            post(api_honey_routing_isolate_approve),
+        )
+        .route(
+            "/api/llm-ultra-guard/inspect",
+            post(api_llm_ultra_guard_inspect),
+        )
+        .route("/api/llm-ultra-guard/status", get(api_llm_ultra_guard_status))
+        .route("/api/llm-ultra-guard/events", get(api_llm_ultra_guard_events))
+        .route("/api/llm-ultra-guard/rag", get(api_llm_ultra_guard_rag))
+        .route(
+            "/api/stealthy-persistence/catalog",
+            get(api_stealthy_persistence_catalog),
+        )
+        .route(
+            "/api/stealthy-persistence/:client_id/status",
+            get(api_stealthy_persistence_status),
+        )
+        .route(
+            "/api/stealthy-persistence/:client_id/fail-safe",
+            post(api_stealthy_persistence_fail_safe),
+        )
+        .route(
+            "/api/stealthy-persistence/:client_id/auto-remediate",
+            post(api_stealthy_persistence_auto_remediate),
+        )
+        .route(
+            "/api/stealthy-persistence/:client_id/plant-deception",
+            post(api_stealthy_persistence_plant_deception),
+        )
+        .route("/api/export/document", post(api_export_document))
+        .route("/api/export/workbook", post(api_export_workbook))
+        .route("/api/ai-readiness", get(api_ai_readiness))
+        .route("/api/ai-readiness/probe", post(api_ai_readiness_probe))
 }

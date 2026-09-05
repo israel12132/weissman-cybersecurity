@@ -1,0 +1,36 @@
+{{- if .Values.daemonSet.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ .Release.Name }}-listen-sysctl
+  labels:
+    app.kubernetes.io/name: weissman-listen
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: weissman-listen
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: weissman-listen
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      hostNetwork: true
+      hostPID: true
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: sysctl
+          image: {{ .Values.daemonSet.image | quote }}
+          securityContext:
+            privileged: true
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              sysctl -w net.core.somaxconn=4096
+              sysctl -w net.ipv4.tcp_max_syn_backlog=4096 || true
+              echo "applied host listen sysctls; sleeping"
+              sleep inf
+{{- end }}

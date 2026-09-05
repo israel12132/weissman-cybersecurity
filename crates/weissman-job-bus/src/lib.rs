@@ -12,7 +12,9 @@ mod cqrs;
 mod error;
 mod events;
 mod forensic;
+pub mod keepalive;
 mod lease;
+pub mod live_inspect;
 mod signing;
 mod swarm;
 

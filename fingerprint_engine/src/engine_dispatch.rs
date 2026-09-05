@@ -1064,6 +1064,33 @@ async fn dispatch_engine_match(
         "printer_mfp_attack" => crate::initial_access_engines::run_printer_mfp_attack_result(target, ctx).await,
         "radius_nac_bypass" => crate::initial_access_engines::run_radius_nac_bypass_result(target, ctx).await,
 
+        // ── Unified landing: live assessment engines from unfinished agent PRs ──
+        "advanced_c2_covert_exfil" => {
+            crate::advanced_c2_covert_exfil_engine::run_advanced_c2_covert_exfil_result_ctx(
+                target, ctx,
+            )
+            .await
+        }
+        "honey_routing_gateway" => {
+            crate::honey_routing_gateway_engine::run_honey_routing_gateway_result(target, ctx)
+                .await
+        }
+        "stealthy_persistence_evasion" => {
+            crate::stealthy_persistence_evasion::run_stealthy_persistence_evasion_result(
+                target, ctx,
+            )
+            .await
+        }
+        "prompt_injection_brake" => {
+            crate::llm_ultra_guard::run_prompt_injection_brake_result(target, ctx).await
+        }
+        "jailbreak_cognitive_engine" => {
+            crate::llm_ultra_guard::run_jailbreak_cognitive_engine_result(target, ctx).await
+        }
+        "rag_poisoning_guard" => {
+            crate::llm_ultra_guard::run_rag_poisoning_guard_result(target, ctx).await
+        }
+
         _ => EngineResult::error(
             format!(
                 "Engine '{}' is registered in PRODUCTION_ENGINE_IDS but has no dispatch runner in engine_dispatch",
