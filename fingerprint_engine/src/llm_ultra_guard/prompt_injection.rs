@@ -4,7 +4,6 @@ use crate::llm_ultra_guard::signatures::INJECTION_NEEDLES;
 use crate::llm_ultra_guard::tuning::SANITIZATION;
 use crate::llm_ultra_guard::{flags, GuardHit};
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
-use rayon::prelude::*;
 use std::sync::LazyLock;
 
 static INJECTION_AC: LazyLock<AhoCorasick> = LazyLock::new(|| {
@@ -15,17 +14,6 @@ static INJECTION_AC: LazyLock<AhoCorasick> = LazyLock::new(|| {
         .expect("injection automaton")
 });
 
-/// Dedicated pool, hard-capped at 50% of host cores. Combined with
-/// `tokio::task::spawn_blocking` on the Ask / inspect path this keeps Rayon
-/// from starving Tokio I/O workers (WebSocket pings, health checks) when an
-/// attacker floods nested Aho-Corasick haystacks.
-static GUARD_RAYON: LazyLock<rayon::ThreadPool> = LazyLock::new(|| {
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(crate::llm_ultra_guard::tuning::guard_cpu_slots())
-        .thread_name(|i| format!("llm-ug-{i}"))
-        .build()
-        .expect("llm ultra-guard rayon pool")
-});
 
 #[derive(Debug, Default)]
 pub struct InjectionScore {
@@ -47,15 +35,7 @@ pub fn score_layers(layers: &[String], entropy: f32, fast_path: bool) -> Injecti
         return InjectionScore::default();
     }
 
-    let per_layer: Vec<(u8, Vec<GuardHit>)> = if layers.len() > 1 && layers.iter().map(|l| l.len()).sum::<usize>() > 256 {
-        GUARD_RAYON.install(|| {
-            layers
-                .par_iter()
-                .enumerate()
-                .map(|(i, layer)| (i as u8, scan_layer(i as u8, layer)))
-                .collect()
-        })
-    } else {
+    let per_layer: Vec<(u8, Vec<GuardHit>)> = {
         layers
             .iter()
             .enumerate()

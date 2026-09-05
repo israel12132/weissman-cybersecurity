@@ -42,7 +42,7 @@ fn israel_now() -> String {
         .to_string()
 }
 
-fn remediation_from_desc(desc: &str) -> String {
+pub(crate) fn remediation_from_desc(desc: &str) -> String {
     let desc = desc.trim();
     if desc.is_empty() {
         return "—".to_string();
@@ -98,7 +98,7 @@ fn derive_remediation_priority_from_signals(
 }
 
 /// Reads `remediation_priority_score` from stored JSON when present; otherwise derives from hardening signals.
-fn remediation_priority_score_for_row(desc: &str, severity: &str, poc_exploit: &str) -> i32 {
+pub(crate) fn remediation_priority_score_for_row(desc: &str, severity: &str, poc_exploit: &str) -> i32 {
     let has_poc = !poc_exploit.trim().is_empty();
     if let Ok(v) = serde_json::from_str::<JsonValue>(desc) {
         if let Some(n) = v.get("remediation_priority_score").and_then(|x| x.as_i64()) {
@@ -124,7 +124,7 @@ fn remediation_priority_score_for_row(desc: &str, severity: &str, poc_exploit: &
 
 /// Proof-of-breach filter: include in Detailed Findings only if the finding has a proof (cURL) or
 /// is HIGH/CRITICAL, and has meaningful content (remediation or poc). Excludes ASM/info noise.
-fn should_include_in_detailed_findings(row: &FindingRow) -> bool {
+pub(crate) fn should_include_in_detailed_findings(row: &FindingRow) -> bool {
     let (_id, _title, severity, _source, desc, poc_exploit) = row;
     let has_poc = !poc_exploit.trim().is_empty();
     let sev_lower = severity.to_lowercase();
@@ -134,7 +134,7 @@ fn should_include_in_detailed_findings(row: &FindingRow) -> bool {
 }
 
 /// Count discovery-only findings (asm/osint, not included in detailed) for Reconnaissance Summary.
-fn discovery_noise_count(findings: &[FindingRow]) -> usize {
+pub(crate) fn discovery_noise_count(findings: &[FindingRow]) -> usize {
     findings
         .iter()
         .filter(|f| {

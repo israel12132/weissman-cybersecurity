@@ -134,7 +134,3 @@ include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/src/server_handlers_stealthy_persistence.inc"
 ));
-include!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/src/server_handlers_export.inc"
-));

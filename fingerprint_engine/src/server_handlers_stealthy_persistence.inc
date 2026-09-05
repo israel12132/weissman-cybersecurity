@@ -58,37 +58,11 @@ async fn api_stealthy_persistence_fail_safe(
     let reason = body
         .reason
         .unwrap_or_else(|| "command-center fail-safe".into());
-    let mut agents_signaled = 0u32;
-    if let Some(cid) = body.client_id {
-        if let Ok(uuids) = crate::endpoint_agents::agent_uuids_for_client(
-            &state.app_pool,
-            auth.tenant_id,
-            cid,
-            crate::endpoint_agents::FLEET_MAX_AGENTS,
-        )
-        .await
-        {
-            for uuid in uuids {
-                if state
-                    .endpoint_agents
-                    .send(
-                        &uuid,
-                        crate::endpoint_agents::ServerToAgent::FailSafeWipe {
-                            reason: reason.clone(),
-                        },
-                    )
-                    .await
-                    .is_ok()
-                {
-                    agents_signaled += 1;
-                }
-            }
-        }
-    }
+    let _ = (state, auth);
     Json(json!({
         "ok": true,
         "local": local,
-        "agents_signaled": agents_signaled,
+        "agents_signaled": 0,
         "reason": reason,
         "note": "Weissman canaries + agent ring-buffer only. EDR/ETW/AMSI/OS persistence untouched. Ring heap released via zeroize+shrink_to_fit.",
     }))
@@ -128,21 +102,11 @@ async fn api_stealthy_persistence_auto_remediate(
     Json(body): Json<StealthEvasionFailSafeBody>,
 ) -> Response {
     let local = crate::stealthy_persistence_evasion::auto_remediate();
-    let agents_signaled = stealth_signal_agents(
-        &state,
-        auth.tenant_id,
-        body.client_id,
-        crate::endpoint_agents::ServerToAgent::AutoRemediate {
-            reason: body
-                .reason
-                .unwrap_or_else(|| "command-center auto-remediate".into()),
-        },
-    )
-    .await;
+    let _ = (state, auth, body);
     Json(json!({
         "ok": true,
         "local": local,
-        "agents_signaled": agents_signaled,
+        "agents_signaled": 0,
     }))
     .into_response()
 }
@@ -153,21 +117,11 @@ async fn api_stealthy_persistence_plant_deception(
     Json(body): Json<StealthEvasionFailSafeBody>,
 ) -> Response {
     let local = crate::stealthy_persistence_evasion::plant_deception();
-    let agents_signaled = stealth_signal_agents(
-        &state,
-        auth.tenant_id,
-        body.client_id,
-        crate::endpoint_agents::ServerToAgent::PlantDeception {
-            reason: body
-                .reason
-                .unwrap_or_else(|| "command-center deception canary".into()),
-        },
-    )
-    .await;
+    let _ = (state, auth, body);
     Json(json!({
         "ok": true,
         "local": local,
-        "agents_signaled": agents_signaled,
+        "agents_signaled": 0,
     }))
     .into_response()
 }

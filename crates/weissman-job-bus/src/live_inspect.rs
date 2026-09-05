@@ -1,17 +1,36 @@
 //! Read-only operator view of live Redis lease + swarm keys.
 //!
-//! Consumes the same key layout as [`crate::lease::DistributedLease`] and the swarm
-//! registry. Never acquires, extends, releases, or orphans.
+//! Uses the same key layout as [`crate::lease`] (`weissman:job:lease:`) and
+//! [`crate::swarm`] (`weissman:swarm:worker:`). Never acquires, extends, or deletes.
 
-use crate::error::JobBusError;
-use crate::lease::{DistributedLease, LeaseView};
-use crate::swarm::{inspect_workers, shared_redis, WorkerLivenessView};
+use crate::swarm::redis_manager_from_env;
+use redis::AsyncCommands;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::time::Duration;
 use uuid::Uuid;
 
 const INSPECT_TIMEOUT: Duration = Duration::from_secs(2);
+const LEASE_PREFIX: &str = "weissman:job:lease:";
+const SWARM_PREFIX: &str = "weissman:swarm:worker:";
+
+/// Snapshot of one Redis job lease (GET only).
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct LeaseView {
+    pub job_id: Uuid,
+    pub present: bool,
+    pub ttl_secs: i64,
+    pub worker_id: Option<String>,
+}
+
+/// Snapshot of one swarm liveness key (GET only).
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct WorkerLivenessView {
+    pub worker_id: String,
+    pub present: bool,
+    pub ttl_secs: i64,
+    pub payload: Option<String>,
+}
 
 /// Combined live orchestration snapshot for a batch of jobs.
 #[derive(Debug, Clone, Default, Serialize)]
@@ -48,12 +67,41 @@ pub async fn inspect_orchestration(
         };
     }
     let fut = async {
-        let mut conn = shared_redis().await.ok_or(JobBusError::Redis(
-            "redis connection manager unavailable".into(),
-        ))?;
-        let leases = DistributedLease::inspect_many(&mut conn, job_ids).await?;
-        let workers = inspect_workers(&mut conn, worker_ids).await?;
-        Ok::<_, JobBusError>((leases, workers))
+        let mut conn = redis_manager_from_env().await.ok_or_else(|| {
+            anyhow_msg("redis connection manager unavailable")
+        })?;
+        let mut leases = HashMap::new();
+        for job_id in job_ids {
+            let key = format!("{LEASE_PREFIX}{job_id}");
+            let value: Option<String> = conn.get(&key).await.unwrap_or(None);
+            let ttl: i64 = conn.ttl(&key).await.unwrap_or(-2);
+            let worker_id = value.as_ref().and_then(|v| v.split(':').next().map(str::to_string));
+            leases.insert(
+                *job_id,
+                LeaseView {
+                    job_id: *job_id,
+                    present: value.is_some(),
+                    ttl_secs: ttl,
+                    worker_id,
+                },
+            );
+        }
+        let mut workers = HashMap::new();
+        for worker_id in worker_ids {
+            let key = format!("{SWARM_PREFIX}{worker_id}");
+            let payload: Option<String> = conn.get(&key).await.unwrap_or(None);
+            let ttl: i64 = conn.ttl(&key).await.unwrap_or(-2);
+            workers.insert(
+                worker_id.clone(),
+                WorkerLivenessView {
+                    worker_id: worker_id.clone(),
+                    present: payload.is_some(),
+                    ttl_secs: ttl,
+                    payload,
+                },
+            );
+        }
+        Ok::<_, String>((leases, workers))
     };
     match tokio::time::timeout(INSPECT_TIMEOUT, fut).await {
         Ok(Ok((leases, workers))) => LiveOrchestrationView {
@@ -81,4 +129,8 @@ pub async fn inspect_orchestration(
             }
         }
     }
+}
+
+fn anyhow_msg(msg: impl Into<String>) -> String {
+    msg.into()
 }

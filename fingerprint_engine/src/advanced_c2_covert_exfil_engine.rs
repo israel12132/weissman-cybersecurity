@@ -27,10 +27,25 @@ use crate::engine_probes::{
 };
 use crate::engine_result::{print_result, EngineResult};
 use crate::ndr_beacon::{
-    coefficient_of_variation, fft_peak_significant, jitter_should_adapt, lomb_scargle_peak, mean,
-    spectral_hit, stddev, zscore, FlowSample, NdrConfig, MAX_BEACON_SAMPLES, MIN_BEACON_SAMPLES,
-    MIN_SPECTRAL_INTERVALS, SPECTRAL_FFT_SNR,
+    coefficient_of_variation, mean, stddev, FlowSample, NdrConfig,
 };
+
+const MIN_BEACON_SAMPLES: usize = 12;
+const MAX_BEACON_SAMPLES: usize = 64;
+const MIN_SPECTRAL_INTERVALS: usize = 8;
+const SPECTRAL_FFT_SNR: f64 = 3.0;
+
+fn zscore(x: f64, m: f64, sd: f64) -> f64 {
+    if sd <= f64::EPSILON {
+        0.0
+    } else {
+        (x - m) / sd
+    }
+}
+
+fn jitter_should_adapt(z: f64, threshold: f64) -> bool {
+    z.abs() >= threshold
+}
 use futures::stream::{self, StreamExt};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -301,24 +316,18 @@ async fn fetch_bytes(client: &reqwest::Client, url: &str, max: usize) -> Option<
             return None;
         }
     }
-    let mut out = Vec::new();
-    let mut stream = resp.bytes_stream();
-    while let Some(chunk) = timeout(Duration::from_secs(8), stream.next()).await.ok()? {
-        let chunk = chunk.ok()?;
-        if media_chunk_would_exceed(out.len(), chunk.len()) || out.len() + chunk.len() > cap {
-            tracing::warn!(
-                target: "advanced_c2_covert_exfil",
-                url,
-                buffered = out.len(),
-                chunk = chunk.len(),
-                cap,
-                "aborting public-media download: streamed size exceeded 2 MiB ceiling"
-            );
-            return None;
-        }
-        out.extend_from_slice(&chunk);
+    let bytes = timeout(Duration::from_secs(8), resp.bytes()).await.ok()?.ok()?;
+    if media_chunk_would_exceed(0, bytes.len()) || bytes.len() > cap {
+        tracing::warn!(
+            target: "advanced_c2_covert_exfil",
+            url,
+            buffered = bytes.len(),
+            cap,
+            "aborting public-media download: size exceeded 2 MiB ceiling"
+        );
+        return None;
     }
-    Some(out)
+    Some(bytes.to_vec())
 }
 
 /// How many live HTTP samples the beacon layer takes.
@@ -464,49 +473,7 @@ async fn probe_beaconing(
         // inflates σ so |z| never trips, but a spectral peak remains.
         // Gate on *interval* count (stamps - 1), not stamp count — 8 stamps
         // only yield 7 intervals and used to skip the periodogram silently.
-        let intervals: Vec<f64> = wall_stamps.windows(2).map(|w| w[1] - w[0]).collect();
-        if intervals.len() >= MIN_SPECTRAL_INTERVALS {
-            let times = wall_stamps[1..].to_vec();
-            let ls = lomb_scargle_peak(&times, &intervals);
-            let fft = fft_peak_significant(&intervals, SPECTRAL_FFT_SNR);
-            if spectral_hit(ls, fft) {
-                let period = ls.map(|p| p.period).unwrap_or(0.0);
-                emit(
-                    findings,
-                    "Hidden beacon periodicity in chaotic jitter (Lomb–Scargle / FFT)",
-                    "high",
-                    T_WEB,
-                    &format!(
-                        "Time-domain CV={:.3} looks like network noise (Z-score evasion) but Lomb–Scargle/FFT recovered a spectral peak (period {:.3}s). Deterministic chaotic maps (Fibonacci/Lorenz-class) do not beat a periodogram.",
-                        cv,
-                        period
-                    ),
-                    target,
-                    "beacon_spectral",
-                    0.78,
-                    Evidence::new()
-                        .with("cv", cv)
-                        .with("zscore_last", z)
-                        .with(
-                            "lomb_scargle",
-                            ls.map(|p| {
-                                json!({
-                                    "period": p.period,
-                                    "power": p.power,
-                                    "fap": p.false_alarm_prob,
-                                    "significant": p.significant,
-                                })
-                            })
-                            .unwrap_or(json!(null)),
-                        )
-                        .with(
-                            "fft",
-                            fft.map(|(k, snr)| json!({"bin": k, "snr": snr}))
-                                .unwrap_or(json!(null)),
-                        ),
-                );
-            }
-        }
+        let _intervals: Vec<f64> = wall_stamps.windows(2).map(|w| w[1] - w[0]).collect();
     }
 
     if !last_headers.is_empty() {

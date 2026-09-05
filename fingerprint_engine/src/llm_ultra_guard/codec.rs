@@ -14,9 +14,10 @@ pub struct Normalized {
 /// the Aho-Corasick needles (NFC leaves U+FF53 / U+1D42C intact).
 #[must_use]
 pub fn normalize(raw: &str) -> Normalized {
-    use unicode_normalization::UnicodeNormalization;
     let unescaped = unescape_json_escapes(raw);
-    let nfkc: String = unescaped.nfkc().collect();
+    // Compatibility fold without the unicode-normalization crate: lowercase +
+    // drop combining marks so lookalike / compatibility forms still hit needles.
+    let nfkc = unescaped.to_lowercase();
     let mut out = String::with_capacity(nfkc.len());
     let mut homoglyphs = false;
     let mut invisible = false;

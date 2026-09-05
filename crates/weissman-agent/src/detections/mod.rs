@@ -12,8 +12,6 @@ mod infostealer;
 mod log_integrity;
 mod malware_local;
 pub mod onboarding_exec_gate;
-pub mod stealth_integrity;
-pub mod syscall_hooks;
 mod mobile_local;
 mod network_local;
 pub(crate) mod ot_plc_decoy;

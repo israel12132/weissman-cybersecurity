@@ -961,8 +961,4 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/stealthy-persistence/:client_id/plant-deception",
             post(api_stealthy_persistence_plant_deception),
         )
-        .route("/api/export/document", post(api_export_document))
-        .route("/api/export/workbook", post(api_export_workbook))
-        .route("/api/ai-readiness", get(api_ai_readiness))
-        .route("/api/ai-readiness/probe", post(api_ai_readiness_probe))
 }

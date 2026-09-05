@@ -71,7 +71,7 @@ describe('Login fortress — live cockpit must stay replaced', () => {
 
   it(`locks the live engine count at ${PRODUCTION_ENGINE_COUNT}`, () => {
     render(<Login />)
-    expect(PRODUCTION_ENGINE_COUNT).toBe(563)
+    expect(PRODUCTION_ENGINE_COUNT).toBe(573)
     expect(screen.getAllByText(`${PRODUCTION_ENGINE_COUNT} engines`).length).toBeGreaterThan(0)
     expect(screen.getByText(`Correlate findings across ${PRODUCTION_ENGINE_COUNT} attack engines.`)).toBeTruthy()
     expect(screen.queryByText('254')).toBeNull()

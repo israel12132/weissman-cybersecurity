@@ -25,6 +25,7 @@ ml-kem = "0.2.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking", "http2"] }
 tokio = { version = "1", features = ["full", "sync"] }
 regex = "1.10"
+aho-corasick = "1"
 futures = "0.3"
 async-stream = "0.3"
 async-trait = "0.1"
@@ -60,6 +61,8 @@ chrono-tz = "0.10"
 # Module 1: Immutable Audit Trail & RFC 3161-style PDF signing
 openssl = "0.10"
 sha2 = "0.10"
+# Board-grade XLSX exports (weissman-docgen + live workbook API)
+rust_xlsxwriter = "0.80"
 hmac = "0.12"
 qrcode = "0.14"
 base64 = "0.22"
