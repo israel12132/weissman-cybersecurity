@@ -92,7 +92,7 @@ pub struct AppState {
     poe_job_registry: PoeJobRegistry,
     poe_job_updates_tx: flume::Sender<(String, String)>,
     /// Global error telemetry: broadcast to all connected Cockpit clients for Toast. Payload: JSON { engine, message, severity }.
-    telemetry_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
+    pub(crate) telemetry_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
     /// Sequenced Command Center telemetry: raw telemetry tagged with a monotonic `_seq` by the
     /// replay recorder; consumed by `/ws/command-center` so a live client can track its position.
     cc_sequenced_tx: Arc<tokio::sync::broadcast::Sender<String>>,
@@ -250,6 +250,8 @@ static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
     ),
     (Method::POST, "/api/auth/signup", RouteGate::Always),
     (Method::GET, "/api/auth/verify", RouteGate::Always),
+    // Login workspace picker — unauthenticated by design (filled in before any JWT).
+    (Method::GET, "/api/auth/tenant-directory", RouteGate::Always),
     (Method::POST, "/api/public/demo-request", RouteGate::Always),
     (Method::POST, "/api/v1/alerts/aws-canary", RouteGate::Always),
     // Public service status (SLA_AND_STATUS.md §4) — must be readable during an incident.
@@ -296,6 +298,11 @@ async fn auth_guard(
     // Everything else reachable without a JWT is declared once in PUBLIC_ROUTES.
     if is_public_route(method, path) {
         return next.run(request).await;
+    }
+    // Honey-routing decoys must answer unauthenticated attackers. Real API paths never
+    // use `/api/v1/auth/admin` or `/api/v1/debug/shell`.
+    if crate::honey_routing::is_decoy_path(path) {
+        return crate::http::honey_routing_mw::serve_honey(state, request).await;
     }
     if path.starts_with("/api/") || path.starts_with("/ws/") {
         let extracted = extract_token_from_request(&request, path);
@@ -1545,6 +1552,30 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>, job_control_pool: Arc<
     // Every replica: Ask Weissman hash-chain is per-process mpsc + DB sweep.
     // FOR UPDATE lives here, never on the HTTP insert path.
     crate::nl_audit_chain::spawn(app_pool.clone());
+    crate::postgres_bulk_copy::spawn(app_pool.clone());
+    crate::suppression_cache_sync::spawn_suppression_cache_redis_sync(app_pool.clone());
+    {
+        let drain_pool = app_pool.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+            loop {
+                interval.tick().await;
+                match crate::cluster_ingest::drain_all_tenants(drain_pool.as_ref(), 200).await {
+                    Ok(n) if n > 0 => tracing::info!(
+                        target: "cluster_ingest",
+                        processed = n,
+                        "drained finding-cluster ingest"
+                    ),
+                    Ok(_) => {}
+                    Err(e) => tracing::warn!(
+                        target: "cluster_ingest",
+                        error = %e,
+                        "cluster ingest drain failed"
+                    ),
+                }
+            }
+        });
+    }
     // Cross-replica real-time: bridge the live telemetry broadcast over Redis pub/sub so
     // SSE/WS clients on every replica see events produced on any replica (no-op without REDIS_URL).
     crate::telemetry_bus::spawn_bridge("telemetry", (*state.telemetry_broadcast_tx).clone());
@@ -1989,6 +2020,7 @@ mod public_route_guard_tests {
             (Method::POST, "/api/integrations/slack/interactivity"),
             (Method::POST, "/api/auth/signup"),
             (Method::GET, "/api/auth/verify"),
+            (Method::GET, "/api/auth/tenant-directory"),
             (Method::POST, "/api/public/demo-request"),
             (Method::POST, "/api/v1/alerts/aws-canary"),
             (Method::GET, "/status"),

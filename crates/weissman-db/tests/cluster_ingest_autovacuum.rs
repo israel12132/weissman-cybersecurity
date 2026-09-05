@@ -2,9 +2,9 @@
 //! outbox. Relied-on-as-runbook notes are not enough — the SET lives in both
 //! sqlx trees so every environment (API + worker) inherits it.
 
-const DB_SQL: &str = include_str!("../migrations/20260827190000_cluster_ingest_autovacuum.sql");
+const DB_SQL: &str = include_str!("../migrations/20260905170500_cluster_ingest_autovacuum.sql");
 const ENGINE_SQL: &str = include_str!(
-    "../../../fingerprint_engine/migrations/20260827190000_cluster_ingest_autovacuum.sql"
+    "../../../fingerprint_engine/migrations/20260905170500_cluster_ingest_autovacuum.sql"
 );
 
 const REQUIRED: &str = "ALTER TABLE weissman_cluster_ingest SET (\n    autovacuum_vacuum_scale_factor = 0.05,\n    autovacuum_vacuum_threshold = 1000";
@@ -34,9 +34,9 @@ fn cluster_ingest_autovacuum_is_enforced_in_both_sqlx_trees() {
     );
 }
 
-const UNLOGGED_DB: &str = include_str!("../migrations/20260829120000_cluster_ingest_unlogged.sql");
+const UNLOGGED_DB: &str = include_str!("../migrations/20260905170600_cluster_ingest_unlogged.sql");
 const UNLOGGED_ENGINE: &str = include_str!(
-    "../../../fingerprint_engine/migrations/20260829120000_cluster_ingest_unlogged.sql"
+    "../../../fingerprint_engine/migrations/20260905170600_cluster_ingest_unlogged.sql"
 );
 
 #[test]
@@ -56,9 +56,9 @@ fn cluster_ingest_is_unlogged_in_both_sqlx_trees() {
     );
 }
 
-const LOGGED_DB: &str = include_str!("../migrations/20260831180000_cluster_ingest_logged.sql");
+const LOGGED_DB: &str = include_str!("../migrations/20260905170700_cluster_ingest_logged.sql");
 const LOGGED_ENGINE: &str =
-    include_str!("../../../fingerprint_engine/migrations/20260831180000_cluster_ingest_logged.sql");
+    include_str!("../../../fingerprint_engine/migrations/20260905170700_cluster_ingest_logged.sql");
 
 #[test]
 fn cluster_ingest_is_logged_in_both_sqlx_trees() {

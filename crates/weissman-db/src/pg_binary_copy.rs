@@ -45,7 +45,7 @@ pub const PG_EPOCH_UNIX_MICROS: i64 = 946_684_800_000_000;
 /// Version of the `agent_metric_samples` binary COPY contract.
 ///
 /// Bump together with [`AGENT_METRIC_SAMPLES_COPY_COLUMNS`] and the table COMMENT
-/// written by migration `20260827180000_agent_metric_samples_copy_schema_v1`.
+/// written by migration `20260905171300_agent_metric_samples_copy_schema_v1`.
 pub const AGENT_METRIC_SAMPLES_SCHEMA_VERSION: u32 = 1;
 
 /// One column in the binary COPY stream (name + PostgreSQL `pg_type.typname`).
@@ -824,7 +824,7 @@ mod tests {
     #[test]
     fn copy_schema_v1_migration_records_the_same_version() {
         let sql =
-            include_str!("../migrations/20260827180000_agent_metric_samples_copy_schema_v1.sql");
+            include_str!("../migrations/20260905171300_agent_metric_samples_copy_schema_v1.sql");
         assert!(sql.contains(&format!(
             "weissman:copy-schema-version={AGENT_METRIC_SAMPLES_SCHEMA_VERSION}"
         )));

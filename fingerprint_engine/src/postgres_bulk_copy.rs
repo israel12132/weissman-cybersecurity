@@ -214,6 +214,12 @@ pub async fn submit_ueba_sample(
     payload: UebaIngestPayload,
     wait: Option<Duration>,
 ) -> Result<UebaIngestSummary, SubmitError> {
+    let payload = crate::ueba_detector::UebaIngestPayload {
+        agent_id: payload.agent_id,
+        client_id: payload.client_id,
+        hour_of_week: payload.hour_of_week,
+        metrics: crate::ueba_detector::scrub_ueba_metrics(&payload.metrics),
+    };
     let raw_size_bytes = serde_json::to_string(&payload.metrics)
         .map(|s| s.len() as i32)
         .unwrap_or(0);
@@ -447,6 +453,7 @@ impl BulkIngestManager {
 
         let mut buf = PgBinaryCopyBuf::new();
         for (req, id) in reqs.iter().zip(ids.iter()) {
+            let metrics = crate::ueba_detector::scrub_ueba_metrics(&req.payload.metrics);
             encode_agent_metric_sample(
                 &mut buf,
                 *id,
@@ -455,7 +462,7 @@ impl BulkIngestManager {
                 req.payload.client_id,
                 req.sampled_at.timestamp_micros(),
                 req.payload.hour_of_week,
-                &req.payload.metrics,
+                &metrics,
                 req.raw_size_bytes,
             );
         }
@@ -490,27 +497,52 @@ impl BulkIngestManager {
         // COMMIT only after the stream finished and Postgres confirmed the row count.
         tx.commit().await.map_err(|e| format!("copy commit: {e}"))?;
 
-        // Detector after COPY so the cockpit sees samples immediately; anomalies follow
-        // in a second tenant transaction (same as a crash between INSERT and baseline
-        // would have behaved on the historical path).
+        // Detector after COPY so the cockpit sees samples immediately. A detector
+        // failure must not re-INSERT the same rows (they are already durable).
         let mut summaries = Vec::with_capacity(n);
-        let mut analyze_tx = crate::db::begin_tenant_tx(&self.db_pool, tenant_id)
-            .await
-            .map_err(|e| format!("analyze tx: {e}"))?;
-        for (req, id) in reqs.iter().zip(ids.iter()) {
-            let summary = crate::ueba_detector::analyze_sample_in_tx(
-                &mut analyze_tx,
-                tenant_id,
-                *id,
-                &req.payload,
-            )
-            .await?;
-            summaries.push(summary);
+        match crate::db::begin_tenant_tx(&self.db_pool, tenant_id).await {
+            Ok(mut analyze_tx) => {
+                for (req, id) in reqs.iter().zip(ids.iter()) {
+                    match crate::ueba_detector::analyze_sample_in_tx(
+                        &mut analyze_tx,
+                        tenant_id,
+                        *id,
+                        &req.payload,
+                    )
+                    .await
+                    {
+                        Ok(summary) => summaries.push(summary),
+                        Err(e) => {
+                            tracing::error!(
+                                target: "ueba_copy",
+                                tenant_id,
+                                sample_id = *id,
+                                error = %e,
+                                "UEBA detector failed after COPY commit"
+                            );
+                            summaries.push(crate::ueba_detector::UebaIngestSummary::default());
+                        }
+                    }
+                }
+                if let Err(e) = analyze_tx.commit().await {
+                    tracing::error!(
+                        target: "ueba_copy",
+                        tenant_id,
+                        error = %e,
+                        "UEBA analyze commit failed after COPY"
+                    );
+                }
+            }
+            Err(e) => {
+                tracing::error!(
+                    target: "ueba_copy",
+                    tenant_id,
+                    error = %e,
+                    "UEBA analyze tx failed after COPY commit"
+                );
+                summaries.resize(n, crate::ueba_detector::UebaIngestSummary::default());
+            }
         }
-        analyze_tx
-            .commit()
-            .await
-            .map_err(|e| format!("analyze commit: {e}"))?;
         Ok(summaries)
     }
 }

@@ -659,21 +659,21 @@ async fn unlogged_truncate_replays_stale_cluster_watermark() {
 
 async fn ensure_cluster_ingest_schema(pool: &sqlx::PgPool) {
     let sql = include_str!(
-        "../../crates/weissman-db/migrations/20260827173000_cluster_ingest_watermark.sql"
+        "../../crates/weissman-db/migrations/20260905170400_cluster_ingest_watermark.sql"
     );
     sqlx::raw_sql(sql)
         .execute(pool)
         .await
         .expect("apply cluster ingest + watermark schema");
     let av = include_str!(
-        "../../crates/weissman-db/migrations/20260827190000_cluster_ingest_autovacuum.sql"
+        "../../crates/weissman-db/migrations/20260905170500_cluster_ingest_autovacuum.sql"
     );
     sqlx::raw_sql(av)
         .execute(pool)
         .await
         .expect("apply cluster ingest autovacuum");
     let logged = include_str!(
-        "../../crates/weissman-db/migrations/20260831180000_cluster_ingest_logged.sql"
+        "../../crates/weissman-db/migrations/20260905170700_cluster_ingest_logged.sql"
     );
     sqlx::raw_sql(logged)
         .execute(pool)

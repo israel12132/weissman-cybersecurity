@@ -312,8 +312,6 @@ async fn drain_once(pool: &PgPool, tenant_id: i64, limit: i64) -> Result<u64, St
                 epss_score: epss,
                 kev_listed,
                 is_new_member,
-                vuln_signature: Some(&vuln_signature),
-                cluster_key: Some(&cluster_key),
             },
         )
         .await

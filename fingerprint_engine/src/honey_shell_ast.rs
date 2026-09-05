@@ -8,7 +8,7 @@ use nom::{
     combinator::{map, opt},
     multi::many0,
     sequence::{delimited, preceded},
-    IResult,
+    IResult, Parser,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,7 +97,8 @@ fn single_quoted(i: &str) -> IResult<&str, String> {
             s.unwrap_or("").to_string()
         }),
         char('\''),
-    )(i)
+    )
+    .parse(i)
 }
 
 fn double_quoted(i: &str) -> IResult<&str, String> {
@@ -107,20 +108,21 @@ fn double_quoted(i: &str) -> IResult<&str, String> {
             s.unwrap_or("").to_string()
         }),
         char('"'),
-    )(i)
+    )
+    .parse(i)
 }
 
 fn bare_word(i: &str) -> IResult<&str, String> {
-    map(take_while1(word_char), |s: &str| s.to_string())(i)
+    map(take_while1(word_char), |s: &str| s.to_string()).parse(i)
 }
 
 fn token(i: &str) -> IResult<&str, String> {
-    preceded(space0, alt((single_quoted, double_quoted, bare_word)))(i)
+    preceded(space0, alt((single_quoted, double_quoted, bare_word))).parse(i)
 }
 
 fn command(i: &str) -> IResult<&str, Command> {
     let (i, first) = token(i)?;
-    let (i, rest) = many0(token)(i)?;
+    let (i, rest) = many0(token).parse(i)?;
     let mut argv = vec![first];
     argv.extend(rest);
     // Drop redirections so `cmd 2>/dev/null` still looks like bash, not "command not found".
@@ -133,7 +135,7 @@ fn command(i: &str) -> IResult<&str, Command> {
 
 fn pipeline(i: &str) -> IResult<&str, Pipeline> {
     let (i, first) = command(i)?;
-    let (i, rest) = many0(preceded(delimited(space0, tag("|"), space0), command))(i)?;
+    let (i, rest) = many0(preceded(delimited(space0, tag("|"), space0), command)).parse(i)?;
     let mut cmds = vec![first];
     cmds.extend(rest);
     Ok((i, Pipeline { cmds }))
@@ -147,7 +149,8 @@ fn seq_op(i: &str) -> IResult<&str, SeqOp> {
             map(tag("||"), |_| SeqOp::Or),
             map(tag(";"), |_| SeqOp::Seq),
         )),
-    )(i)
+    )
+    .parse(i)
 }
 
 fn and_or(i: &str) -> IResult<&str, AndOr> {

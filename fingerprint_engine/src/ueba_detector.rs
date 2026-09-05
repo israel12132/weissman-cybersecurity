@@ -140,13 +140,13 @@ pub fn in_onboarding_grace(enrolled_at: DateTime<Utc>, now: DateTime<Utc>) -> bo
 pub async fn ingest_sample(
     pool: &PgPool,
     tenant_id: i64,
-    p: UebaIngestPayload,
+    mut p: UebaIngestPayload,
 ) -> Result<UebaIngestSummary, String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| format!("tenant tx: {e}"))?;
-    let scrubbed = scrub_ueba_metrics(&p.metrics);
-    let raw_size = serde_json::to_string(&scrubbed)
+    p.metrics = scrub_ueba_metrics(&p.metrics);
+    let raw_size = serde_json::to_string(&p.metrics)
         .map(|s| s.len() as i32)
         .unwrap_or(0);
     let sample_id: i64 = sqlx::query_scalar(
@@ -160,12 +160,28 @@ pub async fn ingest_sample(
     .bind(&p.agent_id)
     .bind(p.client_id)
     .bind(p.hour_of_week)
-    .bind(&scrubbed)
+    .bind(&p.metrics)
     .bind(raw_size)
     .fetch_one(&mut *tx)
     .await
     .map_err(|e| format!("insert sample: {e}"))?;
 
+    let summary = analyze_sample_in_tx(&mut tx, tenant_id, sample_id, &p).await?;
+    tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+    Ok(summary)
+}
+
+/// Detector only — the sample row is already durable (INSERT or binary COPY).
+///
+/// COPY ingest commits first so a detector failure cannot roll back telemetry
+/// and must never trigger a second INSERT of the same rows.
+pub async fn analyze_sample_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    sample_id: i64,
+    p: &UebaIngestPayload,
+) -> Result<UebaIngestSummary, String> {
+    let scrubbed = scrub_ueba_metrics(&p.metrics);
     let enrolled_at: Option<DateTime<Utc>> = if let Ok(uuid) = p.agent_id.parse::<uuid::Uuid>() {
         sqlx::query_scalar(
             "SELECT enrolled_at FROM endpoint_agents
@@ -173,7 +189,7 @@ pub async fn ingest_sample(
         )
         .bind(tenant_id)
         .bind(uuid)
-        .fetch_optional(&mut *tx)
+        .fetch_optional(&mut **tx)
         .await
         .ok()
         .flatten()
@@ -190,9 +206,9 @@ pub async fn ingest_sample(
         // Numeric metrics → baseline + z-score check.
         for (k, v) in obj {
             if let Some(num) = v.as_f64() {
-                let global = recompute_global_baseline(&mut tx, tenant_id, &p.agent_id, k).await?;
+                let global = recompute_global_baseline(tx, tenant_id, &p.agent_id, k).await?;
                 let _hour = upsert_hour_baseline(
-                    &mut tx,
+                    tx,
                     tenant_id,
                     &p.agent_id,
                     k,
@@ -202,7 +218,7 @@ pub async fn ingest_sample(
                 .await?;
                 summary.baselines_updated += 1;
                 if let Some(anom) =
-                    check_anomaly(&mut tx, tenant_id, &p, sample_id, k, num, &global).await?
+                    check_anomaly(tx, tenant_id, p, sample_id, k, num, &global).await?
                 {
                     summary.anomalies.push(anom);
                 }
@@ -212,9 +228,9 @@ pub async fn ingest_sample(
         if let Some(ports) = obj.get("open_ports").and_then(Value::as_array) {
             let observed: HashSet<i64> = ports.iter().filter_map(|v| v.as_i64()).collect();
             if let Some(a) = check_new_categorical(
-                &mut tx,
+                tx,
                 tenant_id,
-                &p,
+                p,
                 sample_id,
                 "open_ports",
                 &observed.iter().map(|n| n.to_string()).collect::<Vec<_>>(),
@@ -247,9 +263,9 @@ pub async fn ingest_sample(
                 })
                 .unwrap_or_default();
             if let Some(a) = check_new_categorical(
-                &mut tx,
+                tx,
                 tenant_id,
-                &p,
+                p,
                 sample_id,
                 "top_processes",
                 &observed,
@@ -268,9 +284,9 @@ pub async fn ingest_sample(
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
                 .collect();
             if let Some(a) = check_new_categorical(
-                &mut tx,
+                tx,
                 tenant_id,
-                &p,
+                p,
                 sample_id,
                 "logged_in_users",
                 &observed,
@@ -285,7 +301,6 @@ pub async fn ingest_sample(
         }
     }
 
-    tx.commit().await.map_err(|e| format!("commit: {e}"))?;
     Ok(summary)
 }
 

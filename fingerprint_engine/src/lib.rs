@@ -359,28 +359,50 @@ pub mod xxe_engine;
 pub mod zero_day_prediction_engine;
 
 // ── Unified landing: unfinished agent work (architect review) ──
-// Only modules that compile against current main APIs are declared.
-// Stale PR copies that called removed symbols stay on disk, unwired.
+// Modules compile against current main APIs. Stale PR copies that called
+// removed symbols were deleted rather than left as dead disk.
 pub mod advanced_c2_covert_exfil_engine;
 pub mod api_cloud_intel;
+pub mod ask_oracle_guard;
+pub mod ask_rag;
+pub mod ask_vector_caps;
 pub mod attack_vector_synthesis;
+pub mod audit_spool;
 pub mod c2_runtime_guards;
 pub mod client_scan_target;
 pub mod client_sector;
+pub mod cluster_ingest;
+pub mod engine_target_contract;
 pub mod finding_identity;
+pub mod fuzz_campaign;
+pub mod fuzz_specialized;
 pub mod gaussian;
 pub mod path_templates;
+pub mod honey_deception_node;
 pub mod honey_mimicry;
 pub mod honey_routing;
 pub mod honey_routing_gateway_engine;
 pub mod honey_routing_store;
+pub mod honey_shell_ast;
+pub mod honey_shell_session;
 pub mod job_diagnostics;
+pub mod job_operator_diagnostics;
 pub mod job_progress;
 pub mod kill_chain_commander;
 pub mod llm_ultra_guard;
 pub mod micro_severity;
+pub mod overflow_log;
 pub mod pdf_intelligence;
+pub mod postgres_bulk_copy;
+pub mod proxy_hmac;
+pub mod proxy_protocol;
+pub mod scan_chunking;
+pub mod scope_switch;
 pub mod stealthy_persistence_evasion;
+pub mod suppression_cache_sync;
+pub mod tenant_directory;
+pub mod tls_client_hello;
+pub mod vault_config_crypto;
 
 pub use fingerprint::{
     get_top_ports, scan_ip_range, scan_ip_ranges_concurrent,

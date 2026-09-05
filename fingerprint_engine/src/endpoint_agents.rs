@@ -994,7 +994,13 @@ pub async fn store_finding_for_task(
 ) -> Result<(), sqlx::Error> {
     if engine == "ueba_baseline" {
         if let Some(payload) = parse_ueba_ingest(finding, client_id) {
-            let _ = crate::ueba_detector::ingest_sample(pool, tenant_id, payload).await;
+            let _ = crate::postgres_bulk_copy::submit_ueba_sample(
+                pool,
+                tenant_id,
+                payload,
+                None,
+            )
+            .await;
         }
         return Ok(());
     }

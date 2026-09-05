@@ -779,15 +779,20 @@ async fn api_intel_suppression_delete(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
-    let res = sqlx::query("DELETE FROM finding_suppressions WHERE id = $1 AND tenant_id = $2")
-        .bind(id).bind(auth.tenant_id)
-        .execute(&mut *tx).await;
+    let deleted = sqlx::query_scalar::<_, String>(
+        "DELETE FROM finding_suppressions WHERE id = $1 AND tenant_id = $2 RETURNING engine",
+    )
+    .bind(id)
+    .bind(auth.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await;
     let _ = tx.commit().await;
-    match res {
-        Ok(r) if r.rows_affected() > 0 => {
+    match deleted {
+        Ok(Some(engine)) => {
+            crate::fp_feedback::invalidate_suppression_cache(auth.tenant_id, &engine);
             (StatusCode::OK, Json(json!({"ok": true, "deleted": id}))).into_response()
         }
-        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false}))).into_response(),
     }
 }

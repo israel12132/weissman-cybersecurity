@@ -1515,6 +1515,9 @@ async fn api_ask(
         )
             .into_response();
     }
+    if let Err(r) = crate::ask_oracle_guard::admit_ask(auth.user_id, &body.question).await {
+        return r;
+    }
     let ro_pool = match state.read_only_pool.as_ref() {
         Some(p) => p,
         None => {
@@ -1563,9 +1566,28 @@ async fn api_ueba_ingest(
         )
             .into_response();
     }
-    match crate::ueba_detector::ingest_sample(&state.app_pool, auth.tenant_id, p).await {
+    match crate::postgres_bulk_copy::submit_ueba_sample(
+        &state.app_pool,
+        auth.tenant_id,
+        p,
+        Some(std::time::Duration::from_secs(5)),
+    )
+    .await
+    {
         Ok(s) => (StatusCode::OK, Json(json!({"ok": true, "summary": s}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": e}))).into_response(),
+        Err(crate::postgres_bulk_copy::SubmitError::Backpressure(bp)) => (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({
+                "ok": false,
+                "code": "ueba_ingest_backpressure",
+                "detail": bp.reason,
+                "retry_after_ms": bp.retry_after_ms,
+            })),
+        )
+            .into_response(),
+        Err(crate::postgres_bulk_copy::SubmitError::Failed(e)) => {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": e}))).into_response()
+        }
     }
 }
 

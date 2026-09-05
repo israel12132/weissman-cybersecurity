@@ -33,6 +33,17 @@ fn live_runs() -> &'static DashMap<String, LiveEngineRun> {
     S.get_or_init(DashMap::new)
 }
 
+/// Seconds since last phase update for a live engine run, if this process registered it.
+#[must_use]
+pub fn live_run_phase(job_id: &str) -> Option<(String, i64)> {
+    let run = live_runs().get(job_id)?;
+    let idle = Utc::now()
+        .signed_duration_since(run.last_phase_at)
+        .num_seconds()
+        .max(0);
+    Some((run.phase.clone(), idle))
+}
+
 /// Worker invoked an engine run — register for nerve-center live view.
 pub fn run_start(
     job_id: &str,

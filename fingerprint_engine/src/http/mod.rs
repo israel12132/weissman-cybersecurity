@@ -3,6 +3,7 @@
 pub mod api_rate_limit;
 pub mod ceo_rbac;
 pub mod client_ip;
+pub mod honey_routing_mw;
 pub mod login_lockout;
 pub mod login_rate_limit;
 
