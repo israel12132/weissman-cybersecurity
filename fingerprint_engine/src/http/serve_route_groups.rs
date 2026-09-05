@@ -258,6 +258,11 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             get(crate::http::rate_limit_metrics::api_rate_limits_analytics),
         )
         .route("/api/login", post(api_login))
+        .route(
+            "/api/auth/tenant-directory",
+            get(crate::tenant_directory::api_auth_tenant_directory),
+        )
+        .route("/api/auth/scope-switch", post(crate::scope_switch::api_scope_switch))
         .route("/api/logout", post(api_logout))
         .route("/api/auth/refresh", post(api_auth_refresh))
         .route("/api/auth/mfa/verify", post(api_auth_mfa_verify))
@@ -505,6 +510,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/latency-probe", post(api_latency_probe))
         .route("/api/poe-scan/run", post(api_poe_scan_run))
         .route("/api/jobs", get(api_async_jobs_list))
+        .route("/api/jobs/diagnostics", get(api_jobs_diagnostics))
         .route("/api/jobs/:job_id", get(api_async_job_status))
         .route("/api/poe-scan/status/:job_id", get(api_poe_scan_status))
         .route("/api/poe-scan/stream/:job_id", get(api_poe_scan_stream))

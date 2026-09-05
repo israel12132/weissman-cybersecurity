@@ -43,6 +43,7 @@ pub struct JobFacts {
     pub result_message: Option<String>,
     pub result_agent_required: bool,
     pub result_agent_live_dispatched: bool,
+    pub result_roe_blocked: bool,
     pub worker_id: Option<String>,
     /// Seconds since last heartbeat. `None` if the row has never heartbeated.
     pub heartbeat_stale_secs: Option<i64>,
@@ -122,9 +123,9 @@ pub fn looks_like_agent_block(text: &str) -> bool {
 }
 
 #[must_use]
-pub fn inspect_result_signals(result: Option<&Value>) -> (Option<String>, bool, bool) {
+pub fn inspect_result_signals(result: Option<&Value>) -> (Option<String>, bool, bool, bool) {
     let Some(r) = result else {
-        return (None, false, false);
+        return (None, false, false, false);
     };
     let msg = r
         .get("message")
@@ -167,7 +168,10 @@ pub fn inspect_result_signals(result: Option<&Value>) -> (Option<String>, bool, 
             live = true;
         }
     }
-    (msg, agent_req, live)
+    let roe = r.get("status").and_then(Value::as_str) == Some("roe_blocked")
+        || r.get("roe_blocked").and_then(Value::as_bool).unwrap_or(false)
+        || msg.as_deref().is_some_and(looks_like_roe);
+    (msg, agent_req, live, roe)
 }
 
 fn haystack(facts: &JobFacts) -> String {
@@ -208,10 +212,10 @@ fn stuck_reasons(facts: &JobFacts) -> Vec<String> {
         if facts.redis_configured && facts.lease_inspect_ok {
             match &facts.lease {
                 Some(l) if l.present => {
-                    if l.no_ttl {
+                    if l.ttl_secs < 0 {
                         reasons.push("redis lease has no TTL (wedge risk)".into());
                     }
-                    if let (Some(owner), Some(wid)) = (&l.owner_worker_id, &facts.worker_id) {
+                    if let (Some(owner), Some(wid)) = (&l.worker_id, &facts.worker_id) {
                         if owner != wid {
                             reasons.push(format!("lease owner mismatch: redis={owner} db={wid}"));
                         }
@@ -265,7 +269,7 @@ pub fn classify(facts: &JobFacts) -> JobDiagnostics {
             .unwrap_or(false);
 
     let hay = haystack(facts);
-    let roe = looks_like_roe(&hay);
+    let roe = looks_like_roe(&hay) || facts.result_roe_blocked;
     let agent_text = looks_like_agent_block(&hay) || facts.result_agent_required;
     let live_dispatch = facts.result_agent_live_dispatched;
     let status = facts.status.to_ascii_lowercase();
@@ -273,14 +277,20 @@ pub fn classify(facts: &JobFacts) -> JobDiagnostics {
     let lease_owner = facts
         .lease
         .as_ref()
-        .and_then(|l| l.owner_worker_id.clone())
+        .and_then(|l| l.worker_id.clone())
         .or_else(|| facts.worker_id.clone());
     let lease_present = if facts.lease_inspect_ok {
         Some(facts.lease.as_ref().map(|l| l.present).unwrap_or(false))
     } else {
         None
     };
-    let lease_ttl_secs = facts.lease.as_ref().and_then(|l| l.ttl_secs);
+    let lease_ttl_secs = facts.lease.as_ref().and_then(|l| {
+        if l.ttl_secs >= 0 {
+            Some(l.ttl_secs)
+        } else {
+            None
+        }
+    });
 
     let pack = |operator_state: &'static str, stuck_reason: Option<String>| JobDiagnostics {
         operator_state,
@@ -405,7 +415,7 @@ pub async fn apply_live_orchestration(facts: &mut [JobFacts]) {
         if live.inspect_ok {
             f.lease = live.leases.get(&f.id).cloned();
             if let Some(wid) = &f.worker_id {
-                f.swarm_worker_alive = live.workers.get(wid).map(|w| w.alive);
+                f.swarm_worker_alive = live.workers.get(wid).map(|w| w.present);
             }
         }
         if let Some((phase, idle)) = crate::supreme_nerve_center::live_run_phase(&f.id.to_string())
@@ -456,7 +466,7 @@ impl JobFacts {
             .get("engine")
             .and_then(Value::as_str)
             .map(|s| s.to_string());
-        let (result_message, result_agent_required, result_agent_live_dispatched) =
+        let (result_message, result_agent_required, result_agent_live_dispatched, result_roe_blocked) =
             inspect_result_signals(view.result.as_ref());
         Self {
             id: view.id,
@@ -466,6 +476,7 @@ impl JobFacts {
             result_message,
             result_agent_required,
             result_agent_live_dispatched,
+            result_roe_blocked,
             worker_id: view.worker_id.clone(),
             heartbeat_stale_secs: stale_secs(view.heartbeat_at, now),
             lock_expired_secs: expired_secs(view.locked_until, now),
@@ -497,10 +508,10 @@ mod tests {
             lease_inspect_ok: true,
             redis_configured: true,
             lease: Some(LeaseView {
+                job_id: Uuid::nil(),
                 present: true,
-                owner_worker_id: Some("box:1".into()),
-                ttl_secs: Some(200),
-                no_ttl: false,
+                ttl_secs: 200,
+                worker_id: Some("box:1".into()),
             }),
             swarm_worker_alive: Some(true),
             ..Default::default()
@@ -533,10 +544,10 @@ mod tests {
     fn missing_redis_lease_is_stuck_when_inspect_ok() {
         let mut f = base_running();
         f.lease = Some(LeaseView {
+            job_id: Uuid::nil(),
             present: false,
-            owner_worker_id: None,
-            ttl_secs: None,
-            no_ttl: false,
+            ttl_secs: -2,
+            worker_id: None,
         });
         let d = classify(&f);
         assert_eq!(d.operator_state, OPERATOR_STUCK);
@@ -659,9 +670,24 @@ mod tests {
             "message": "usb_enumeration: requires endpoint agent",
             "findings": [{"agent_required": true, "category": "agent_required"}]
         });
-        let (msg, req, live) = inspect_result_signals(Some(&v));
+        let (msg, req, live, roe) = inspect_result_signals(Some(&v));
         assert!(msg.unwrap().contains("usb_enumeration"));
         assert!(req);
         assert!(!live);
+        assert!(!roe);
+    }
+
+    #[test]
+    fn inspect_result_signals_roe_blocked_status() {
+        let v = json!({
+            "status": "roe_blocked",
+            "roe_blocked": true,
+            "message": "RoE blocked: industrial_ot_enabled is false",
+            "findings": []
+        });
+        let (_msg, req, live, roe) = inspect_result_signals(Some(&v));
+        assert!(!req);
+        assert!(!live);
+        assert!(roe);
     }
 }

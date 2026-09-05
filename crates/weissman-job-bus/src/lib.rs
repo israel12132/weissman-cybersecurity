@@ -23,6 +23,10 @@ pub use error::JobBusError;
 pub use events::{append_event, fetch_event_chain_hash, JobEventKind, JobEventRecord};
 pub use forensic::{enqueue_forensic_dlq, ForensicBundle, MemorySnapshot};
 pub use lease::{DistributedLease, LeaseHandle};
+pub use live_inspect::{
+    inspect_orchestration, inspect_swarm_census, redis_url_configured, LeaseView,
+    LiveOrchestrationView, LiveSwarmCensus, WorkerLivenessView,
+};
 pub use signing::{
     forensic_seal_key_from_env, sign_job_envelope, verify_job_envelope, SignedJobEnvelope,
 };

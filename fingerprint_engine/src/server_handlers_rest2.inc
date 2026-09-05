@@ -464,6 +464,10 @@ async fn api_findings_update_status(
 
     let _ = tx.commit().await;
 
+    if matches!(new_status.as_str(), "FALSE_POSITIVE") && !engine.is_empty() {
+        crate::fp_feedback::invalidate_suppression_cache(auth.tenant_id, &engine);
+    }
+
     // Closed-loop remediation verification: when an analyst marks a finding FIXED,
     // re-run the same engine against the same target to prove the vector is actually
     // closed (→ VERIFIED_FIXED) or detect a regression (→ REOPENED).
@@ -723,6 +727,15 @@ async fn api_openapi_spec() -> Response {
                     "properties": {
                         "status": { "type": "string", "enum": ["OPEN","ACKNOWLEDGED","IN_PROGRESS","FIXED","FALSE_POSITIVE"] }
                     }
+                },
+                "ScanRequest": {
+                    "type": "object",
+                    "required": ["engine"],
+                    "properties": {
+                        "engine": { "type": "string", "description": "Production engine id" },
+                        "target": { "type": "string", "description": "URL, host, or IP. Required for engines with requiresTarget=true." },
+                        "client_id": { "type": "integer" }
+                    }
                 }
             }
         },
@@ -893,10 +906,33 @@ async fn api_openapi_spec() -> Response {
             },
             "/api/command-center/scan": {
                 "post": {
-                    "summary": "Trigger a full platform scan",
+                    "summary": "Enqueue a Command Center engine scan",
                     "tags": ["Scan"],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/ScanRequest" }
+                            }
+                        }
+                    },
                     "responses": {
-                        "200": { "description": "Scan started" }
+                        "202": { "description": "Scan queued" },
+                        "400": {
+                            "description": "Empty target returns HTTP 400 with error_code target_required"
+                        }
+                    }
+                }
+            },
+            "/api/jobs/diagnostics": {
+                "get": {
+                    "summary": "Live job-queue operator diagnostics",
+                    "description": "Census of Redis, live workers, pending_no_envelope count, and per-row stuck_reason (missing_envelope, waiting_for_worker, heartbeat stale).",
+                    "tags": ["Jobs"],
+                    "responses": {
+                        "200": {
+                            "description": "redis, workers, pending_no_envelope, stuck_reason"
+                        }
                     }
                 }
             },

@@ -131,6 +131,92 @@ pub async fn inspect_orchestration(
     }
 }
 
+/// Live census of swarm liveness keys (`weissman:swarm:worker:*`). SCAN only — never KEYS.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct LiveSwarmCensus {
+    pub redis_configured: bool,
+    pub inspect_ok: bool,
+    pub workers: Vec<WorkerLivenessView>,
+}
+
+/// Enumerate currently registered workers from Redis. Fail-open (empty + inspect_ok=false)
+/// when Redis is unset, unreachable, or slow — never invent a live fleet.
+pub async fn inspect_swarm_census() -> LiveSwarmCensus {
+    let redis_configured = redis_url_configured();
+    if !redis_configured {
+        return LiveSwarmCensus {
+            redis_configured: false,
+            inspect_ok: false,
+            workers: Vec::new(),
+        };
+    }
+    let fut = async {
+        let mut conn = redis_manager_from_env()
+            .await
+            .ok_or_else(|| anyhow_msg("redis connection manager unavailable"))?;
+        let mut keys: Vec<String> = Vec::new();
+        let mut cursor: u64 = 0;
+        loop {
+            let (next, batch): (u64, Vec<String>) = redis::cmd("SCAN")
+                .arg(cursor)
+                .arg("MATCH")
+                .arg(format!("{SWARM_PREFIX}*"))
+                .arg("COUNT")
+                .arg(100i64)
+                .query_async(&mut conn)
+                .await
+                .map_err(|e| e.to_string())?;
+            keys.extend(batch);
+            cursor = next;
+            if cursor == 0 || keys.len() >= 2048 {
+                break;
+            }
+        }
+        let mut workers = Vec::with_capacity(keys.len());
+        for key in keys {
+            let worker_id = key
+                .strip_prefix(SWARM_PREFIX)
+                .unwrap_or(key.as_str())
+                .to_string();
+            if worker_id.is_empty() {
+                continue;
+            }
+            let payload: Option<String> = conn.get(&key).await.unwrap_or(None);
+            let ttl: i64 = conn.ttl(&key).await.unwrap_or(-2);
+            workers.push(WorkerLivenessView {
+                worker_id,
+                present: payload.is_some(),
+                ttl_secs: ttl,
+                payload,
+            });
+        }
+        Ok::<_, String>(workers)
+    };
+    match tokio::time::timeout(INSPECT_TIMEOUT, fut).await {
+        Ok(Ok(workers)) => LiveSwarmCensus {
+            redis_configured: true,
+            inspect_ok: true,
+            workers,
+        },
+        Ok(Err(e)) => {
+            tracing::warn!(target: "job_bus_inspect", error = %e, "swarm census failed");
+            LiveSwarmCensus {
+                redis_configured: true,
+                inspect_ok: false,
+                workers: Vec::new(),
+            }
+        }
+        Err(_) => {
+            tracing::warn!(target: "job_bus_inspect", "swarm census timed out");
+            LiveSwarmCensus {
+                redis_configured: true,
+                inspect_ok: false,
+                workers: Vec::new(),
+            }
+        }
+    }
+}
+
 fn anyhow_msg(msg: impl Into<String>) -> String {
     msg.into()
 }

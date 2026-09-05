@@ -36,6 +36,8 @@ pub struct EngineRunContext {
     pub job_params: serde_json::Value,
     /// Async job id when running under `command_center_engine` — used for live SSE/WS telemetry.
     pub job_id: Option<String>,
+    /// Owning worker id when the engine runs under weissman-worker (fenced heartbeats).
+    pub worker_id: Option<String>,
     /// Live swarm bus (server in-process); worker runs use Redis `publish_bus` instead.
     pub swarm_broadcast: Option<std::sync::Arc<tokio::sync::broadcast::Sender<String>>>,
     /// Cross-protocol Memory Intelligence Bus — WS artifacts shared with HTTP/API engines in the same job.
@@ -283,9 +285,12 @@ async fn run_engine_inner(engine_id: &str, target: &str, ctx: &EngineRunContext)
                     violation,
                 )
                 .await;
-                return EngineResult::error(format!(
-                    "RoE VIOLATION: {violation} — critical infrastructure engine '{canonical}' blocked for target '{target}'"
-                ));
+                return crate::critical_infra::roe::blocked_engine_result(
+                    canonical,
+                    target,
+                    ctx.client_id,
+                    violation,
+                );
             }
         }
         crate::sovereign_operator::log_stream::emit_phase(
@@ -664,18 +669,37 @@ async fn dispatch_engine_match(
             crate::timing_engine::run_timing_attack_urls(&urls_for, stealth, &cfg, None).await
         }
         "http_feedback_fuzz" => {
-            let anomalies = if let Some(tid) = ctx.tenant_id {
-                crate::fuzzer::run_fuzzer_collect_tenant(
-                    target,
-                    "",
-                    Some(tid),
-                    None,
-                    None,
-                    ctx.app_pool.as_deref(),
-                )
+            let wall = crate::fuzz_campaign::campaign_wall_secs(
+                "http_feedback_fuzz",
+                ctx.job_params.get("job_kind").and_then(|v| v.as_str()),
+            );
+            let run = async {
+                if let Some(tid) = ctx.tenant_id {
+                    crate::fuzzer::run_fuzzer_collect_tenant(
+                        target,
+                        "",
+                        Some(tid),
+                        None,
+                        None,
+                        ctx.app_pool.as_deref(),
+                    )
+                    .await
+                } else {
+                    crate::fuzzer::run_fuzzer_collect(target, "").await
+                }
+            };
+            let anomalies = match tokio::time::timeout(std::time::Duration::from_secs(wall), run)
                 .await
-            } else {
-                crate::fuzzer::run_fuzzer_collect(target, "").await
+            {
+                Ok(a) => a,
+                Err(_) => {
+                    tracing::warn!(
+                        target: "fuzz_campaign",
+                        wall_secs = wall,
+                        "http_feedback_fuzz campaign wall reached"
+                    );
+                    Vec::new()
+                }
             };
             let verified_oob = anomalies.iter().filter(|a| a.oob_token.is_some()).count();
             let findings: Vec<serde_json::Value> = anomalies

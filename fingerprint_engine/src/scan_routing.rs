@@ -67,6 +67,18 @@ pub enum RouteError {
     Internal {
         detail: String,
     },
+    /// Bound customer has no domain / verified asset to aim at.
+    NoDefaultScanTarget {
+        detail: String,
+    },
+    /// Explicit target is outside this customer's authorized domains / assets.
+    TargetOutOfScope {
+        detail: String,
+    },
+    /// Target-requiring engine was invoked with an empty target.
+    TargetRequired {
+        detail: String,
+    },
 }
 
 impl RouteError {
@@ -78,6 +90,9 @@ impl RouteError {
             RouteError::Forbidden { .. } => StatusCode::FORBIDDEN,
             RouteError::QuotaExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
             RouteError::Internal { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            RouteError::NoDefaultScanTarget { .. } => StatusCode::BAD_REQUEST,
+            RouteError::TargetOutOfScope { .. } => StatusCode::FORBIDDEN,
+            RouteError::TargetRequired { .. } => StatusCode::BAD_REQUEST,
         }
     }
 
@@ -89,6 +104,9 @@ impl RouteError {
             RouteError::Forbidden { detail } => detail.as_str(),
             RouteError::QuotaExceeded { detail, .. } => detail.as_str(),
             RouteError::Internal { detail } => detail.as_str(),
+            RouteError::NoDefaultScanTarget { detail } => detail.as_str(),
+            RouteError::TargetOutOfScope { detail } => detail.as_str(),
+            RouteError::TargetRequired { detail } => detail.as_str(),
         }
     }
 
@@ -100,7 +118,32 @@ impl RouteError {
             RouteError::Forbidden { .. } => "forbidden",
             RouteError::QuotaExceeded { .. } => "quota_exceeded",
             RouteError::Internal { .. } => "internal_error",
+            RouteError::NoDefaultScanTarget { .. } => {
+                crate::client_scan_target::ERROR_CODE_NO_DEFAULT
+            }
+            RouteError::TargetOutOfScope { .. } => {
+                crate::client_scan_target::ERROR_CODE_OUT_OF_SCOPE
+            }
+            RouteError::TargetRequired { .. } => TARGET_REQUIRED_ERROR_CODE,
         }
+    }
+
+    /// Structured JSON for HTTP + tests. Includes `ok`/`code`/`error_code` and
+    /// an `action` hint when the customer must add a domain.
+    #[must_use]
+    pub fn json_body(&self) -> Value {
+        let mut body = json!({
+            "ok": false,
+            "detail": self.detail(),
+            "code": self.error_code(),
+            "error_code": self.error_code(),
+        });
+        if matches!(self, RouteError::NoDefaultScanTarget { .. }) {
+            if let Some(obj) = body.as_object_mut() {
+                obj.insert("action".into(), json!("add_client_domain"));
+            }
+        }
+        body
     }
 
     /// Quota-related metadata for `Retry-After` header / JSON body.
@@ -120,6 +163,20 @@ impl RouteError {
 
 /// Default daily quota for AI-heavy scans when the tenant has no explicit `ai_daily_scan_quota`.
 pub const DEFAULT_AI_DAILY_SCAN_QUOTA: u64 = 50;
+
+/// Stable machine code for empty-target HTTP 400s (OpenAPI + UI).
+pub const TARGET_REQUIRED_ERROR_CODE: &str = "target_required";
+
+/// Fail closed when a target-requiring engine is invoked without a host/URL.
+pub fn reject_empty_target(engine: &str, target: &str) -> Result<(), RouteError> {
+    if crate::engine_target_contract::engine_requires_target(engine) && target.trim().is_empty() {
+        Err(RouteError::TargetRequired {
+            detail: crate::engine_target_contract::missing_target_detail(engine),
+        })
+    } else {
+        Ok(())
+    }
+}
 
 fn parse_boolish(s: &str) -> Option<bool> {
     match s.trim().to_ascii_lowercase().as_str() {
@@ -634,11 +691,7 @@ fn validate_requires(
     for r in reqs {
         match r {
             Requires::NonEmptyTarget => {
-                if ctx.target.is_empty() {
-                    return Err(RouteError::BadRequest(format!(
-                        "target required for {engine_label}"
-                    )));
-                }
+                reject_empty_target(engine_label, &ctx.target)?;
             }
             Requires::ClientId => {
                 if ctx.client_id.is_none() {
@@ -995,6 +1048,38 @@ pub async fn route_scan_job(
         hydrate_extras_from_tenant(&mut ctx.extras, &secrets);
     }
 
+    // Bound customer: empty target uses Client Configuration / Asset Snapshot.
+    // Explicit target must belong to that customer. Fail closed with structured codes.
+    if let Some(cid) = client_id {
+        if enforce_scope_validation_for_engine(engine)
+            && (crate::engine_target_contract::engine_requires_target(engine)
+                || !ctx.target.is_empty())
+        {
+            let explicit = (!ctx.target.is_empty()).then_some(ctx.target.as_str());
+            match crate::client_scan_target::resolve_scan_target(
+                pool,
+                tenant_id,
+                Some(cid),
+                explicit,
+            )
+            .await
+            {
+                Ok(resolved) => {
+                    ctx.target = resolved.target;
+                }
+                Err(crate::client_scan_target::ScanTargetError::NoDefault { detail }) => {
+                    return Err(RouteError::NoDefaultScanTarget { detail });
+                }
+                Err(crate::client_scan_target::ScanTargetError::OutOfScope { detail }) => {
+                    return Err(RouteError::TargetOutOfScope { detail });
+                }
+                Err(crate::client_scan_target::ScanTargetError::Internal { detail }) => {
+                    return Err(RouteError::Internal { detail });
+                }
+            }
+        }
+    }
+
     // ── BLOCKER #1: Strict scope validation ──────────────────────────────────
     //
     // Every scan with a target MUST be inside the client's approved scope
@@ -1011,25 +1096,28 @@ pub async fn route_scan_job(
         .map_err(|e| RouteError::Internal { detail: e })?;
     let scope_outcome = if enforce_scope_validation_for_engine(engine) {
         if ctx.target.is_empty() {
-            return Err(RouteError::BadRequest(format!(
-                "target required for engine '{engine}' (scope-enforced)"
-            )));
-        }
-        if enforce_strict && client_id.is_none() {
+            if crate::engine_target_contract::engine_requires_target(engine) {
+                return Err(RouteError::TargetRequired {
+                    detail: crate::engine_target_contract::missing_target_detail(engine),
+                });
+            }
+            None
+        } else if enforce_strict && client_id.is_none() {
             return Err(RouteError::BadRequest(format!(
                 "client_id required for engine '{engine}' (scope is enforced per-client)"
             )));
-        }
-        Some(
-            crate::security_hardening::validate_scan_target_in_scope(
-                pool,
-                tenant_id,
-                &ctx.target,
-                client_id,
+        } else {
+            Some(
+                crate::security_hardening::validate_scan_target_in_scope(
+                    pool,
+                    tenant_id,
+                    &ctx.target,
+                    client_id,
+                )
+                .await
+                .map_err(|detail| RouteError::Forbidden { detail })?,
             )
-            .await
-            .map_err(|detail| RouteError::Forbidden { detail })?,
-        )
+        }
     } else {
         None
     };
@@ -1144,6 +1232,15 @@ mod tests {
             extras.get("oast_domain").and_then(Value::as_str),
             Some("oast.example")
         );
+    }
+
+    #[test]
+    fn reject_empty_target_is_target_required() {
+        let err = reject_empty_target("osint", "").expect_err("empty");
+        assert_eq!(err.error_code(), TARGET_REQUIRED_ERROR_CODE);
+        assert_eq!(err.status_code(), StatusCode::BAD_REQUEST);
+        assert!(err.detail().contains("target required"));
+        assert!(reject_empty_target("osint", "https://in-scope.example").is_ok());
     }
 
     #[test]

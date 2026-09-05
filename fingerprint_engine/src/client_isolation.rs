@@ -41,6 +41,14 @@ pub fn is_client_scoped(auth: &AuthContext) -> bool {
     auth.agent_id.is_none() && (auth.assigned_client_id.is_some() || is_client_role(&auth.role))
 }
 
+/// Bound customer-portal identity (`role=client`). Staff impersonation also carries
+/// a JWT `cid` but is **not** a portal identity — those users may scope-switch.
+#[inline]
+#[must_use]
+pub fn is_portal_identity(auth: &AuthContext) -> bool {
+    auth.agent_id.is_none() && is_client_role(&auth.role)
+}
+
 #[inline]
 #[must_use]
 pub fn is_staff(auth: &AuthContext) -> bool {
@@ -70,6 +78,16 @@ pub fn capabilities_json(auth: &AuthContext) -> Value {
         "is_client_user": is_client_scoped(auth),
         "can_create_clients": can_create_clients(auth),
         "can_delete_clients": can_delete_clients(auth),
+        "client_picker_hidden": is_client_scoped(auth),
+        "allowed_client_ids": if is_client_scoped(auth) {
+            json!(auth
+                .assigned_client_id
+                .into_iter()
+                .filter(|id| *id > 0)
+                .collect::<Vec<_>>())
+        } else {
+            Value::Null
+        },
     })
 }
 
@@ -123,6 +141,35 @@ pub fn inject_query_client_id(query: Option<&str>, cid: i64) -> Option<String> {
         None | Some("") => format!("client_id={cid}"),
         Some(q) => format!("{q}&client_id={cid}"),
     })
+}
+
+/// Rewrite every `client_id` / `clientId` query pair to the bound customer.
+/// Always returns a query string when `cid > 0` so a spoofed id cannot stick.
+#[must_use]
+pub fn force_query_client_id(query: Option<&str>, cid: i64) -> Option<String> {
+    if cid <= 0 {
+        return None;
+    }
+    let q = query.unwrap_or("").trim();
+    if q.is_empty() {
+        return Some(format!("client_id={cid}"));
+    }
+    let mut parts: Vec<String> = Vec::new();
+    let mut found = false;
+    for pair in q.split('&') {
+        let mut kv = pair.splitn(2, '=');
+        let key = kv.next().unwrap_or("");
+        if key == "client_id" || key == "clientId" {
+            found = true;
+            parts.push(format!("{key}={cid}"));
+        } else {
+            parts.push(pair.to_string());
+        }
+    }
+    if !found {
+        parts.push(format!("client_id={cid}"));
+    }
+    Some(parts.join("&"))
 }
 
 #[must_use]
@@ -202,22 +249,37 @@ pub fn payload_visible_to(auth: &AuthContext, payload: &Value) -> bool {
 }
 
 /// Inject `client_id` into a JSON object for portal users (engines auto-aim).
-/// Returns `Err` when the body already names a different client.
+/// Spoofed `client_id` keys — including nested objects — are overwritten, never trusted.
 pub fn force_json_client_id(auth: &AuthContext, body: &mut Value) -> Result<(), Response> {
-    let Some(cid) = auth.assigned_client_id else {
+    let Some(cid) = auth.assigned_client_id.filter(|id| *id > 0) else {
         return Ok(());
     };
-    match body {
+    overwrite_client_id_keys(body, cid);
+    if let Value::Object(map) = body {
+        map.insert("client_id".to_string(), json!(cid));
+    }
+    Ok(())
+}
+
+fn overwrite_client_id_keys(value: &mut Value, cid: i64) {
+    match value {
         Value::Object(map) => {
-            if let Some(existing) = json_client_id(&Value::Object(map.clone())) {
-                if existing != cid {
-                    return Err(not_found(auth));
-                }
+            if map.contains_key("client_id") {
+                map.insert("client_id".to_string(), json!(cid));
             }
-            map.insert("client_id".to_string(), json!(cid));
-            Ok(())
+            if map.contains_key("clientId") {
+                map.insert("clientId".to_string(), json!(cid));
+            }
+            for v in map.values_mut() {
+                overwrite_client_id_keys(v, cid);
+            }
         }
-        _ => Ok(()),
+        Value::Array(arr) => {
+            for v in arr {
+                overwrite_client_id_keys(v, cid);
+            }
+        }
+        _ => {}
     }
 }
 
@@ -359,6 +421,15 @@ mod tests {
     }
 
     #[test]
+    fn portal_identity_is_role_client_not_staff_impersonation() {
+        assert!(is_portal_identity(&ctx("client", false, Some(4))));
+        assert!(is_portal_identity(&ctx("client", false, None)));
+        assert!(!is_portal_identity(&ctx("operator", false, Some(3))));
+        assert!(!is_portal_identity(&ctx("ceo", true, None)));
+        assert!(!is_portal_identity(&ctx("viewer", false, Some(4))));
+    }
+
+    #[test]
     fn path_client_id_extraction() {
         assert_eq!(extract_path_client_id("/api/clients/42"), Some(42));
         assert_eq!(extract_path_client_id("/api/clients/42/findings"), Some(42));
@@ -398,7 +469,34 @@ mod tests {
         assert_eq!(body["client_id"], json!(8));
 
         let mut bad = json!({"client_id": 99});
-        assert!(force_json_client_id(&portal, &mut bad).is_err());
+        force_json_client_id(&portal, &mut bad).unwrap();
+        assert_eq!(bad["client_id"], json!(8));
+
+        let mut nested = json!({"engine": "asm", "data": {"client_id": 3}});
+        force_json_client_id(&portal, &mut nested).unwrap();
+        assert_eq!(nested["client_id"], json!(8));
+        assert_eq!(nested["data"]["client_id"], json!(8));
+    }
+
+    #[test]
+    fn force_query_overwrites_spoofed_client_id() {
+        assert_eq!(
+            force_query_client_id(Some("limit=10&client_id=99"), 5).as_deref(),
+            Some("limit=10&client_id=5")
+        );
+        assert_eq!(
+            force_query_client_id(Some("limit=10"), 5).as_deref(),
+            Some("limit=10&client_id=5")
+        );
+    }
+
+    #[test]
+    fn capabilities_hide_picker_for_portal() {
+        let caps = capabilities_json(&ctx("client", false, Some(4)));
+        assert_eq!(caps["client_picker_hidden"], json!(true));
+        assert_eq!(caps["allowed_client_ids"], json!([4]));
+        let staff = capabilities_json(&ctx("operator", false, None));
+        assert_eq!(staff["client_picker_hidden"], json!(false));
     }
 
     #[test]

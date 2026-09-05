@@ -105,10 +105,15 @@ pub async fn dispatch(canonical: &str, target: &str, ctx: &EngineRunContext) -> 
 }
 
 #[cfg(not(feature = "high_risk_engines"))]
-pub async fn dispatch(canonical: &str, _target: &str, _ctx: &EngineRunContext) -> EngineResult {
-    EngineResult::error(format!(
-        "critical infrastructure engine '{canonical}' requires binary compiled with `high_risk_engines` feature"
-    ))
+pub async fn dispatch(canonical: &str, target: &str, ctx: &EngineRunContext) -> EngineResult {
+    // Dispatch is only reachable after preflight; keep the same structured
+    // fail-closed shape if a caller bypasses `run_engine`.
+    crate::critical_infra::roe::blocked_engine_result(
+        canonical,
+        target,
+        ctx.client_id,
+        crate::critical_infra::roe::RoeViolation::CompileTimeDisabled,
+    )
 }
 
 /// Ensure every finding carries CRITICAL_RISK tags and emit immediate telemetry.

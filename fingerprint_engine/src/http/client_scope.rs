@@ -4,8 +4,9 @@
 //! [`crate::db::REQUEST_CLIENT_SCOPE`] task-local so every `begin_tenant_tx` on
 //! this task stamps `app.current_client_id` for RLS. Also:
 //!
-//! * Rejects cross-client ids in path, query, and JSON body (404, no leak).
-//! * Injects `client_id` into JSON mutations so engines auto-aim at the bound customer.
+//! * Rejects cross-client ids in the URL path (404, no leak).
+//! * Overwrites spoofed `client_id` in query and JSON body so engines auto-aim
+//!   at the bound customer (never trust a portal-supplied id).
 //! * Blocks client create/delete and staff-only prefixes for portal users.
 
 use axum::body::{to_bytes, Body};
@@ -45,7 +46,6 @@ async fn enforce(auth: Option<&AuthContext>, req: Request) -> Result<Request, Re
 
     let method = req.method().clone();
     let path = req.uri().path().to_string();
-    let query = req.uri().query().map(str::to_string);
 
     if !client_isolation::is_client_scoped(auth) {
         if client_isolation::is_client_create_path(&method, &path) {
@@ -85,13 +85,8 @@ async fn enforce(auth: Option<&AuthContext>, req: Request) -> Result<Request, Re
             return Err(r);
         }
     }
-    if let Some(q_cid) = client_isolation::extract_query_client_id(query.as_deref()) {
-        if let Err(r) = client_isolation::bind_requested_client(auth, Some(q_cid)) {
-            return Err(r);
-        }
-    }
 
-    let req = match inject_missing_query_client_id(auth, req) {
+    let req = match force_query_client_id_on_req(auth, req) {
         Ok(r) => r,
         Err(resp) => return Err(resp),
     };
@@ -102,14 +97,17 @@ async fn enforce(auth: Option<&AuthContext>, req: Request) -> Result<Request, Re
     Ok(req)
 }
 
-/// Portal GETs that omit `?client_id=` still auto-aim at the bound customer.
-fn inject_missing_query_client_id(auth: &AuthContext, req: Request) -> Result<Request, Response> {
+/// Portal requests that omit or spoof `?client_id=` are forced onto the bound customer.
+fn force_query_client_id_on_req(auth: &AuthContext, req: Request) -> Result<Request, Response> {
     let Some(cid) = auth.assigned_client_id else {
         return Ok(req);
     };
-    let Some(new_q) = client_isolation::inject_query_client_id(req.uri().query(), cid) else {
+    let Some(new_q) = client_isolation::force_query_client_id(req.uri().query(), cid) else {
         return Ok(req);
     };
+    if req.uri().query() == Some(new_q.as_str()) {
+        return Ok(req);
+    }
     let path = req.uri().path().to_string();
     let rebuilt = format!("{path}?{new_q}");
     let Ok(uri) = rebuilt.parse() else {
