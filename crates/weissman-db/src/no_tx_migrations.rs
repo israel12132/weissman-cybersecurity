@@ -843,7 +843,7 @@ mod tests {
         );
         let ot = concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/migrations/20260827160000_ot_ics_hardening_safety.sql"
+            "/migrations/20260827165000_ot_ics_hardening_safety.sql"
         );
         let sql = std::fs::read_to_string(hermetic).expect("roles migration");
         let ot_sql = std::fs::read_to_string(ot).expect("ot ics grants");
@@ -865,7 +865,7 @@ mod tests {
     fn analytics_worker_roles_migration_matches_role_guard_lists() {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/migrations/20260829120000_hermetic_analytics_worker_roles.sql"
+            "/migrations/20260829120050_hermetic_analytics_worker_roles.sql"
         );
         let sql = std::fs::read_to_string(path).expect("analytics/worker roles migration");
         assert!(sql.contains("BYPASSRLS"));

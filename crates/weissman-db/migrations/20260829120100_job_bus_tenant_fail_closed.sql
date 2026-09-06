@@ -6,7 +6,7 @@
 -- (injection, missing begin_tenant_tx, compromised replica).
 --
 -- Cross-tenant claim now belongs to weissman_worker (BYPASSRLS, job-bus GRANTs
--- only — 20260829120000). weissman_app must set a real tenant GUC; empty/unset
+-- only — 20260829120050). weissman_app must set a real tenant GUC; empty/unset
 -- GUC yields zero rows (app_current_tenant_id() is NULL).
 
 DROP POLICY IF EXISTS async_jobs_tenant_or_worker ON weissman_async_jobs;

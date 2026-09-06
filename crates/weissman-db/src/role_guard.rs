@@ -28,7 +28,7 @@ pub const ANALYTICS_ROLE: &str = "weissman_analytics";
 
 /// Tables `weissman_ro` may `SELECT`. Keep in lock-step with
 /// `20260827115800_hermetic_db_roles.sql` (core 13) plus
-/// `20260827160000_ot_ics_hardening_safety.sql` (4 OT/ICS tables).
+/// `20260827165000_ot_ics_hardening_safety.sql` (4 OT/ICS tables).
 pub const RO_SELECT_TABLES: &[&str] = &[
     "vulnerabilities",
     "weissman_finding_clusters",
@@ -63,7 +63,7 @@ pub const ANALYTICS_STATEMENT_TIMEOUT_MS: u64 = 15_000;
 pub const ANALYTICS_SELECT_TABLES: &[&str] = &["billing_plans", "weissman_billing_usage_snapshot"];
 
 /// Job-bus tables `weissman_worker` may DML. Keep in lock-step with
-/// `20260829120000_hermetic_analytics_worker_roles.sql`.
+/// `20260829120050_hermetic_analytics_worker_roles.sql`.
 pub const WORKER_JOB_BUS_TABLES: &[&str] = &[
     "weissman_async_jobs",
     "weissman_job_events",

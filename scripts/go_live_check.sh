@@ -177,8 +177,8 @@ for id in ot_passive_active_safety ot_crown_jewel_path; do
     bad "Engine missing: $id"
   fi
 done
-if grep -q 'ot_ics_safety_events' crates/weissman-db/migrations/20260827160000_ot_ics_hardening_safety.sql \
-  && grep -q 'ot_ics_safety_events' fingerprint_engine/migrations/20260827160000_ot_ics_hardening_safety.sql; then
+if grep -q 'ot_ics_safety_events' crates/weissman-db/migrations/20260827165000_ot_ics_hardening_safety.sql \
+  && grep -q 'ot_ics_safety_events' fingerprint_engine/migrations/20260827165000_ot_ics_hardening_safety.sql; then
   ok "OT safety migration (byte-synced)"
 else
   bad "OT safety migration missing or not synced"
