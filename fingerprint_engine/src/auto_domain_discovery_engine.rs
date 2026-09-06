@@ -11,7 +11,7 @@
 //! 8. Common pattern generation
 
 use crate::engine_result::EngineResult;
-use crate::recon::{enum_subdomains, DEFAULT_SUBDOMAINS};
+use crate::recon::{default_subdomain_wordlist, enum_subdomains};
 use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -173,7 +173,8 @@ async fn discover_from_ct_logs(domain: &str) -> Vec<String> {
 
 /// Stage 2: DNS subdomain enumeration
 async fn discover_from_dns(domain: &str) -> Vec<String> {
-    let wordlist: Vec<String> = DEFAULT_SUBDOMAINS.iter().map(|s| s.to_string()).collect();
+    let wordlist =
+        crate::live_knowledge_bus::merge_subdomain_wordlist(domain, default_subdomain_wordlist());
 
     enum_subdomains(domain, &wordlist, DNS_CONCURRENCY).await
 }

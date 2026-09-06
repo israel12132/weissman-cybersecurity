@@ -577,7 +577,12 @@ fn ot_ics_infer_device_type(protocol: &str, vendor: &str) -> &'static str {
     let v = vendor.to_ascii_lowercase();
     if v.contains("plc") || p.contains("modbus") || p.contains("s7") || p.contains("profinet") {
         "plc"
-    } else if v.contains("scada") || p.contains("scada") {
+    } else if v.contains("scada")
+        || p.contains("scada")
+        || p.contains("iec61850")
+        || p.contains("mms")
+        || p.contains("goose")
+    {
         "scada"
     } else if p.contains("dnp3") || p.contains("rtu") {
         "rtu"
@@ -730,6 +735,8 @@ async fn api_ot_ics_devices(
               OR lower(COALESCE(source,'')) LIKE '%opc-ua%'
               OR lower(COALESCE(source,'')) LIKE '%ot_ics%'
               OR lower(COALESCE(source,'')) LIKE '%dnp3%'
+              OR lower(COALESCE(source,'')) LIKE '%ot_passive%'
+              OR lower(COALESCE(source,'')) LIKE '%ot_crown%'
               OR lower(COALESCE(source,'')) LIKE '%iec61850%'
               OR lower(COALESCE(source,'')) LIKE '%profinet%'
               OR lower(COALESCE(source,'')) LIKE '%mqtt%'
@@ -858,6 +865,97 @@ async fn api_ot_ics_devices(
             "protocols": protocols,
             "findings": findings,
         })),
+    )
+        .into_response()
+}
+
+fn ot_ics_safety_event_from_row(r: &sqlx::postgres::PgRow) -> Value {
+    json!({
+        "id": r.try_get::<i64, _>("id").unwrap_or(0),
+        "client_id": r.try_get::<Option<i64>, _>("client_id").ok().flatten(),
+        "host": r.try_get::<String, _>("host").unwrap_or_default(),
+        "protocol": r.try_get::<String, _>("protocol").unwrap_or_default(),
+        "event_kind": r.try_get::<String, _>("event_kind").unwrap_or_default(),
+        "severity": r.try_get::<String, _>("severity").unwrap_or_else(|_| "info".into()),
+        "z_score": r.try_get::<Option<f64>, _>("z_score").ok().flatten(),
+        "detail": r.try_get::<Value, _>("detail").unwrap_or(json!({})),
+        "binary_signature": r.try_get::<String, _>("binary_signature").unwrap_or_default(),
+        "soar_action": r.try_get::<String, _>("soar_action").unwrap_or_default(),
+        "created_at": r.try_get::<Option<chrono::DateTime<chrono::Utc>>, _>("created_at").ok().flatten().map(|t| t.to_rfc3339()),
+    })
+}
+
+async fn ot_ics_safety_payload(
+    pool: &sqlx::PgPool,
+    tenant_id: i64,
+    client_id: Option<i64>,
+) -> Value {
+    let mut events: Vec<Value> = Vec::new();
+    if let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await {
+        let rows = if let Some(cid) = client_id {
+            sqlx::query(
+                r#"SELECT id, client_id, host, protocol, event_kind, severity, z_score, detail,
+                          binary_signature, soar_action, created_at
+                   FROM ot_ics_safety_events
+                   WHERE tenant_id = $1 AND client_id = $2
+                   ORDER BY created_at DESC LIMIT 100"#,
+            )
+            .bind(tenant_id)
+            .bind(cid)
+            .fetch_all(&mut *tx)
+            .await
+            .unwrap_or_default()
+        } else {
+            sqlx::query(
+                r#"SELECT id, client_id, host, protocol, event_kind, severity, z_score, detail,
+                          binary_signature, soar_action, created_at
+                   FROM ot_ics_safety_events
+                   WHERE tenant_id = $1
+                   ORDER BY created_at DESC LIMIT 100"#,
+            )
+            .bind(tenant_id)
+            .fetch_all(&mut *tx)
+            .await
+            .unwrap_or_default()
+        };
+        let _ = tx.commit().await;
+        events = rows.iter().map(ot_ics_safety_event_from_row).collect();
+    }
+    let fair = if let Some(cid) = client_id {
+        crate::financial_risk::latest_snapshot(pool, tenant_id, cid)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|r| serde_json::to_value(r).ok())
+    } else {
+        None
+    };
+    crate::ot_ics_hardening::safety_api_document(events, fair)
+}
+
+/// GET /api/ot-ics/safety — compiled ROE interlock + live safety events.
+async fn api_ot_ics_safety(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let client_id = q.get("client_id").and_then(|s| s.parse::<i64>().ok());
+    (
+        StatusCode::OK,
+        Json(ot_ics_safety_payload(&state.app_pool, auth.tenant_id, client_id).await),
+    )
+        .into_response()
+}
+
+/// GET /api/clients/:id/ot-ics/safety — client-scoped events + FAIR snapshot.
+async fn api_client_ot_ics_safety(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+) -> Response {
+    (
+        StatusCode::OK,
+        Json(ot_ics_safety_payload(&state.app_pool, auth.tenant_id, Some(client_id)).await),
     )
         .into_response()
 }

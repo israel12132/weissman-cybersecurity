@@ -29,11 +29,24 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/intel/suppressions/:id",
             delete(api_intel_suppression_delete),
         )
-        // Attack-path inference (BFS over risk_graph weighted by CVSS+EPSS+KEV).
+        // Attack-path inference (Dijkstra over risk_graph weighted by CVSS+EPSS+KEV).
         .route(
             "/api/attack-paths/:client_id",
             get(api_attack_paths_for_client),
         )
+        .route("/api/cem-dago/status", get(api_cem_dago_status))
+        .route("/api/cem-dago/manifests", get(api_cem_dago_manifests))
+        .route("/api/cem-dago/waves", get(api_cem_dago_waves))
+        .route("/api/cem-dago/blackboard", get(api_cem_dago_blackboard))
+        .route(
+            "/api/attack-paths/:client_id/what-if",
+            post(api_attack_paths_what_if),
+        )
+        .route(
+            "/api/supreme-brain/:client_id",
+            get(api_supreme_brain_for_client),
+        )
+        .route("/api/pentest-memory/stats", get(api_pentest_memory_stats))
         .route(
             "/api/battlespace/topology/:client_id",
             get(api_battlespace_topology),
@@ -122,10 +135,19 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/playbooks/fire", post(api_playbooks_fire))
         .route("/api/playbooks/:id/runs", get(api_playbook_runs))
+        .route("/api/soar/executions", get(api_soar_executions_list))
         .route("/api/soar/executions/:id", get(api_soar_execution_get))
         .route(
             "/api/soar/executions/:id/revert",
             post(api_soar_execution_revert),
+        )
+        .route(
+            "/api/soar/executions/:id/hitl/approve",
+            post(api_soar_hitl_approve),
+        )
+        .route(
+            "/api/soar/executions/:id/hitl/deny",
+            post(api_soar_hitl_deny),
         )
         // Financial blast-radius
         .route(
@@ -138,6 +160,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         // Ask Weissman (NL → safe SQL)
         .route("/api/ask", post(api_ask))
+        .route(
+            "/api/elite-hardening/status",
+            get(api_elite_hardening_status),
+        )
         // UEBA + baseline/drift dashboard
         .route("/api/ueba/ingest", post(api_ueba_ingest))
         // NDR / ITDR live data ingest (feeds network beaconing/exfil + identity-threat detectors).
@@ -245,6 +271,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/agents/session", post(api_agents_session))
         .route("/api/agents/status", get(api_agents_status))
         .route("/api/agents/dispatch", post(api_agents_dispatch_task))
+        .route("/api/agents/:id/kill-switch", post(api_agents_kill_switch))
         .route("/install/agent.sh", get(install_agent_sh))
         .route("/install/agent.ps1", get(install_agent_ps1))
         .route(
@@ -618,6 +645,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/integrations/:id/test", post(api_integrations_test))
         .route("/api/integrations/:id", delete(api_integrations_delete))
         .route("/api/ot-ics/devices", get(api_ot_ics_devices))
+        .route("/api/ot-ics/safety", get(api_ot_ics_safety))
         .route("/api/mobile-security/apps", get(api_mobile_security_apps))
         .route("/api/soc/incidents", get(api_soc_incidents))
         .route(
@@ -718,6 +746,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/payload-sync/status", get(api_payload_sync_status))
         .route("/api/payload-sync/payloads", get(api_payload_sync_payloads))
         .route("/api/payload-sync/run", post(api_payload_sync_run))
+        .route(
+            "/api/discovery-knowledge/stats",
+            get(api_discovery_knowledge_stats),
+        )
         .route("/api/edge-swarm/nodes", get(api_edge_swarm_nodes))
         .route("/api/edge-swarm/heartbeat", post(api_edge_swarm_heartbeat))
         .route("/api/edge-fuzz/manifest", get(api_edge_fuzz_manifest))
@@ -726,6 +758,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route(
             "/api/clients/:id/ot-ics/fingerprints",
             get(api_client_ot_ics_fingerprints),
+        )
+        .route(
+            "/api/clients/:id/ot-ics/safety",
+            get(api_client_ot_ics_safety),
         )
         .route(
             "/api/ceo/council/sessions/:job_id/stream",
@@ -810,6 +846,58 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             post(api_ceo_suspended_resume),
         )
         .route("/api/ceo/suspended-graphs/:id", get(api_ceo_suspended_get))
+        .route(
+            "/api/sovereign/operator/chat",
+            post(api_sovereign_operator_chat),
+        )
+        .route(
+            "/api/sovereign/operator/session",
+            get(api_sovereign_operator_session_get),
+        )
+        .route(
+            "/api/sovereign/operator/knowledge",
+            get(api_sovereign_operator_knowledge_get),
+        )
+        .route(
+            "/api/sovereign/operator/logs",
+            get(api_sovereign_operator_logs_get),
+        )
+        .route(
+            "/api/sovereign/operator/windows",
+            get(api_sovereign_operator_windows_get),
+        )
+        .route(
+            "/api/sovereign/operator/tools",
+            post(api_sovereign_operator_tools_post),
+        )
+        .route(
+            "/api/sovereign/operator/tune",
+            post(api_sovereign_operator_tune_post),
+        )
+        .route(
+            "/api/sovereign/operator/race",
+            post(api_sovereign_operator_race_post),
+        )
+        .route(
+            "/api/sovereign/operator/stream",
+            get(api_sovereign_operator_stream),
+        )
+        .route(
+            "/api/sovereign/operator/stream-ticket",
+            post(api_sovereign_operator_stream_ticket),
+        )
+        .route(
+            "/api/sovereign/operator/memory",
+            get(api_sovereign_operator_memory_get),
+        )
+        .route(
+            "/api/sovereign/operator/forge",
+            get(api_sovereign_operator_forge_get),
+        )
+        .route(
+            "/api/sovereign/operator/scripts",
+            get(api_sovereign_operator_scripts_get),
+        )
         .route(
             "/api/security/posture-score",
             get(api_security_posture_score),

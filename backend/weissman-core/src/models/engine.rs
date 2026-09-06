@@ -304,7 +304,9 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "attack_surface_quantify",
     "external_exposure_supreme",
     "fair_exposure_fusion",
+    "supreme_path_fair_rag",
     "identity_attack_chain",
+    "privilege_escalation_credential_access",
     "pipeline_to_runtime_risk",
     "risk_superposition_collapse",
     "chronos",
@@ -657,6 +659,8 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "infostealer_emulation",
     "printer_mfp_attack",
     "radius_nac_bypass",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -827,6 +831,8 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "profinet_attack",
     "rfid_nfc_attack",
     "industrial_protocol_fuzz",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
     "dll_hijacking_engine",
     "sandbox_evasion",
     "rootkit_surface_probe",
@@ -974,7 +980,9 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "attack_surface_quantify",
     "external_exposure_supreme",
     "fair_exposure_fusion",
+    "supreme_path_fair_rag",
     "identity_attack_chain",
+    "privilege_escalation_credential_access",
     "pipeline_to_runtime_risk",
     "risk_superposition_collapse",
     "chronos",
@@ -1466,6 +1474,10 @@ pub fn resolve_engine_id(id: &str) -> &str {
         "fair-exposure-fusion" | "business_risk_exposure" | "fair_blast_radius" => {
             "fair_exposure_fusion"
         }
+        "supreme-path-fair-rag"
+        | "attack_path_inference"
+        | "path_fair_rag"
+        | "supreme_attack_path" => "supreme_path_fair_rag",
         other => other,
     }
 }

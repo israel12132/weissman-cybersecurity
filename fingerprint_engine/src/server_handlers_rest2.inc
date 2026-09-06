@@ -320,7 +320,8 @@ async fn api_findings_update_status(
     Path(id): Path<i64>,
     Json(body): Json<FindingStatusBody>,
 ) -> Response {
-    let new_status = body.status.trim().to_uppercase();
+    let new_status =
+        crate::elite_hardening::hack_fix_verify::coerce_operator_status(&body.status.trim().to_uppercase());
     if !FINDING_STATUSES.contains(&new_status.as_str()) {
         return (
             StatusCode::UNPROCESSABLE_ENTITY,
@@ -337,7 +338,7 @@ async fn api_findings_update_status(
     // Capture engine + signature_hash BEFORE the update so the FP/TP feedback loop
     // can record the right (tenant, engine, signature) tuple. We also need them to
     // cascade the status change down into the finding cluster (if any).
-    let pre = sqlx::query(
+    let pre = match sqlx::query(
         "SELECT source, signature_hash, cluster_id, raw_data->>'target' AS target, finding_id, client_id
            FROM vulnerabilities
           WHERE id = $1 AND tenant_id = $2",
@@ -346,8 +347,18 @@ async fn api_findings_update_status(
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(row) => row,
+        Err(e) => {
+            tracing::error!(target: "findings", error = %e, finding_id = id, "findings status lookup failed");
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": "DB error"})),
+            )
+                .into_response();
+        }
+    };
 
     let (engine, sig_hash, cluster_id, target_url, finding_id, client_id) = match pre {
         Some(r) => (
@@ -750,7 +761,11 @@ async fn api_openapi_spec() -> Response {
                     "summary": "List all findings for the current tenant",
                     "tags": ["Findings"],
                     "parameters": [
-                        { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 500 } }
+                        { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 500 } },
+                        { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } },
+                        { "name": "client_id", "in": "query", "schema": { "type": "integer" } },
+                        { "name": "source", "in": "query", "schema": { "type": "string" }, "description": "Engine id (case-insensitive exact match on vulnerabilities.source)" },
+                        { "name": "severity", "in": "query", "schema": { "type": "string" } }
                     ],
                     "responses": {
                         "200": {

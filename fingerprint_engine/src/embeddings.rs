@@ -109,11 +109,23 @@ fn fit_vec(v: Vec<f32>) -> Option<Vec<f32>> {
 /// Embed a single string. Returns `Ok(None)` when no provider is configured
 /// or the call fails — caller must degrade gracefully.
 pub async fn embed_one(text: &str) -> Result<Option<Vec<f32>>, String> {
+    if crate::elite_hardening::ai_supply::prompt_contains_secret(text) {
+        return Err("fail-closed: secret material in embedding input".into());
+    }
+    if crate::elite_hardening::ai_supply::embedding_text_has_hidden_code(text) {
+        return Err("fail-closed: hidden code in embedding input".into());
+    }
     let Some(cfg) = EmbeddingsConfig::from_env() else {
         return Ok(None);
     };
     let mut v = embed_batch(&cfg, &[text]).await?;
-    Ok(v.pop().flatten())
+    let vec = v.pop().flatten();
+    if let Some(ref numbers) = vec {
+        if crate::elite_hardening::ai_supply::vector_is_anomalous(numbers) {
+            return Ok(None);
+        }
+    }
+    Ok(vec)
 }
 
 /// Embed a batch of strings. Returns one `Option<Vec<f32>>` per input (None

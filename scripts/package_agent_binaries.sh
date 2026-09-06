@@ -11,6 +11,9 @@ TARGETS=(
   "aarch64-unknown-linux-musl:linux-aarch64-musl"
 )
 
+# linux-gnu links tss-esapi-sys (pkg-config: tss2-sys / tss2-esys / tss2-mu /
+# tss2-tctildr). Install libtss2-dev on the build host first. linux-musl is
+# cfg-gated off tss-esapi and stays free of libtss2.
 echo "[weissman] building weissman-agent (release, host native)..."
 cargo build -p weissman-agent --release
 HOST_BIN="target/release/weissman-agent"
@@ -55,6 +58,17 @@ install_one() {
   bytes=$(wc -c < "$dest")
   echo "${sha}  ${platform}/weissman-agent" >> "$MANIFEST"
   echo "  -> $dest (${bytes} bytes, sha256=${sha:0:16}…)"
+
+  # Cosign blob signature (optional). Installer verifies when .sig is published
+  # or WEISSMAN_REQUIRE_COSIGN=1. Keyless/OIDC is out of band; file key here.
+  if [[ -n "${COSIGN_KEY:-}" ]] && command -v cosign >/dev/null 2>&1; then
+    echo "[weissman] signing ${dest} with cosign sign-blob"
+    cosign sign-blob --yes --key "$COSIGN_KEY" --output-signature "${dest}.sig" "$dest"
+    echo "  -> ${dest}.sig"
+  elif [[ "${WEISSMAN_REQUIRE_COSIGN:-}" == "1" ]]; then
+    echo "error: WEISSMAN_REQUIRE_COSIGN=1 but COSIGN_KEY/cosign missing" >&2
+    exit 1
+  fi
 }
 
 echo "[weissman] installing agent binaries + SHA256 manifest..."

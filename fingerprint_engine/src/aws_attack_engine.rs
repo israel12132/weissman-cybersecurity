@@ -667,34 +667,40 @@ async fn scan_iam(sdk: &aws_types::SdkConfig, cfg: &AwsScanConfig, target: &str)
     }
 
     // Per-user hygiene: console-without-MFA, stale keys, multiple keys, direct admin.
-    if let Ok(out) = iam.list_users().send().await {
-        let users = out.users();
-        let now = i64::try_from(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0),
-        )
-        .unwrap_or(0);
-        let max_age = i64::try_from(cfg.access_key_max_age_days).unwrap_or(90);
-        for u in users.iter().take(cfg.max_users_scanned) {
-            let name = u.user_name().to_string();
-            let has_console = iam
-                .get_login_profile()
-                .user_name(&name)
-                .send()
-                .await
-                .is_ok();
-            if has_console {
-                let mfa_empty = iam
-                    .list_mfa_devices()
+    // Quiet-by-default: skip ListUsers fan-out (CloudTrail SOC noise) unless intensity is Aggressive.
+    let iam_mode = crate::elite_hardening::quiet_iam::IamMode::from_intensity_and_flag(
+        None,
+        matches!(cfg.intensity, crate::arsenal_config::Intensity::Aggressive),
+    );
+    if iam_mode.allow_list_users() {
+        if let Ok(out) = iam.list_users().send().await {
+            let users = out.users();
+            let now = i64::try_from(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0),
+            )
+            .unwrap_or(0);
+            let max_age = i64::try_from(cfg.access_key_max_age_days).unwrap_or(90);
+            for u in users.iter().take(cfg.max_users_scanned) {
+                let name = u.user_name().to_string();
+                let has_console = iam
+                    .get_login_profile()
                     .user_name(&name)
                     .send()
                     .await
-                    .map(|r| r.mfa_devices().is_empty())
-                    .unwrap_or(false);
-                if mfa_empty {
-                    f.push(aws_finding(
+                    .is_ok();
+                if has_console {
+                    let mfa_empty = iam
+                        .list_mfa_devices()
+                        .user_name(&name)
+                        .send()
+                        .await
+                        .map(|r| r.mfa_devices().is_empty())
+                        .unwrap_or(false);
+                    if mfa_empty {
+                        f.push(aws_finding(
                         Domain::Identity,
                         &format!("IAM console user without MFA: {name}"),
                         "high",
@@ -708,19 +714,19 @@ async fn scan_iam(sdk: &aws_types::SdkConfig, cfg: &AwsScanConfig, target: &str)
                             .check("get_login_profile", true, "present")
                             .check("list_mfa_devices", true, "empty"),
                     ));
-                }
-            }
-            if let Ok(keys) = iam.list_access_keys().user_name(&name).send().await {
-                let mut active = 0;
-                for k in keys.access_key_metadata() {
-                    if !matches!(k.status(), Some(StatusType::Active)) {
-                        continue;
                     }
-                    active += 1;
-                    if let Some(created) = k.create_date() {
-                        let age_days = (now - created.secs()).max(0) / 86_400;
-                        if age_days > max_age {
-                            f.push(aws_finding(
+                }
+                if let Ok(keys) = iam.list_access_keys().user_name(&name).send().await {
+                    let mut active = 0;
+                    for k in keys.access_key_metadata() {
+                        if !matches!(k.status(), Some(StatusType::Active)) {
+                            continue;
+                        }
+                        active += 1;
+                        if let Some(created) = k.create_date() {
+                            let age_days = (now - created.secs()).max(0) / 86_400;
+                            if age_days > max_age {
+                                f.push(aws_finding(
                                 Domain::Identity,
                                 &format!("Stale IAM access key: {name}"),
                                 "medium",
@@ -735,11 +741,11 @@ async fn scan_iam(sdk: &aws_types::SdkConfig, cfg: &AwsScanConfig, target: &str)
                                     .with("access_key_id", k.access_key_id().unwrap_or(""))
                                     .check("key_rotation", true, age_days),
                             ));
+                            }
                         }
                     }
-                }
-                if active > 1 {
-                    f.push(aws_finding(
+                    if active > 1 {
+                        f.push(aws_finding(
                         Domain::Identity,
                         &format!("IAM user has multiple active access keys: {name}"),
                         "low",
@@ -750,18 +756,18 @@ async fn scan_iam(sdk: &aws_types::SdkConfig, cfg: &AwsScanConfig, target: &str)
                         &format!("User '{name}' has {active} active access keys; keep at most one active key per user."),
                         Evidence::new().with("user", name.clone()).with("active_keys", active),
                     ));
+                    }
                 }
-            }
-            if let Ok(att) = iam
-                .list_attached_user_policies()
-                .user_name(&name)
-                .send()
-                .await
-            {
-                for p in att.attached_policies() {
-                    let arn = p.policy_arn().unwrap_or("");
-                    if arn.ends_with(":policy/AdministratorAccess") {
-                        f.push(aws_finding(
+                if let Ok(att) = iam
+                    .list_attached_user_policies()
+                    .user_name(&name)
+                    .send()
+                    .await
+                {
+                    for p in att.attached_policies() {
+                        let arn = p.policy_arn().unwrap_or("");
+                        if arn.ends_with(":policy/AdministratorAccess") {
+                            f.push(aws_finding(
                             Domain::Identity,
                             &format!("AdministratorAccess attached directly to user: {name}"),
                             "high",
@@ -772,6 +778,7 @@ async fn scan_iam(sdk: &aws_types::SdkConfig, cfg: &AwsScanConfig, target: &str)
                             &format!("User '{name}' has the AWS-managed AdministratorAccess policy attached directly. Grant admin via groups/roles with least privilege."),
                             Evidence::new().with("user", name.clone()).with("policy_arn", arn),
                         ));
+                        }
                     }
                 }
             }
@@ -779,9 +786,6 @@ async fn scan_iam(sdk: &aws_types::SdkConfig, cfg: &AwsScanConfig, target: &str)
     }
     f
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CSPM — S3 data-security posture (CIS AWS Foundations §2.1)
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn map_bucket_location(constraint: Option<&str>) -> String {

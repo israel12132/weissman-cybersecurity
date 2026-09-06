@@ -6,12 +6,14 @@
 #![forbid(unsafe_code)]
 
 pub mod advisory_lock;
+pub mod analytics;
 pub mod auth_access;
 pub mod auth_rotation;
 pub mod env_bootstrap;
 pub mod job_queue;
 pub mod llm_usage;
 pub mod no_tx_migrations;
+pub mod role_guard;
 
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::{Postgres, Transaction};
@@ -41,6 +43,7 @@ pub fn resolve_auth_database_url() -> Result<String, std::env::VarError> {
 }
 
 /// Compile-time crate migrations path (valid in dev / CI where the crate tree exists).
+/// Touched when adding 20260830184500 (epoch cap + UEBA sovereign_signature).
 const COMPILE_TIME_MIGRATIONS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/migrations");
 
 /// Resolve the on-disk migrations directory for the no-tx pre-runner.
@@ -245,7 +248,8 @@ async fn connect_app_with_pool_tuning(
     acquire_timeout: Duration,
     stmt_ms: u64,
 ) -> Result<PgPool, sqlx::Error> {
-    PgPoolOptions::new()
+    role_guard::warn_if_runtime_dsn_not_app_role(database_url);
+    let pool = PgPoolOptions::new()
         .max_connections(max)
         .min_connections(min)
         .acquire_timeout(acquire_timeout)
@@ -260,7 +264,9 @@ async fn connect_app_with_pool_tuning(
             })
         })
         .connect(database_url)
-        .await
+        .await?;
+    role_guard::assert_pool_role(&pool, role_guard::PoolKind::App).await?;
+    Ok(pool)
 }
 
 /// App pool: `WEISSMAN_APP_POOL_MAX` (default 48), `WEISSMAN_APP_POOL_MIN` (default 2).
@@ -309,6 +315,10 @@ fn statement_timeout_ms(var: &str, default_ms: u64) -> u64 {
 /// the duration of a run; routing the worker's job-STATE writes through a separate, tiny pool keeps
 /// the control plane responsive even while the data plane (a running scan) holds every app slot.
 /// Short statement timeout — these are all fast single-row UPDATEs / event appends.
+///
+/// Production DSN is `weissman_worker` (`WEISSMAN_WORKER_DATABASE_URL`). That role BYPASSRLS
+/// with GRANT only on the job-bus tables, so fail-closed tenant RLS on `weissman_app` cannot
+/// hide or leak other tenants' jobs.
 pub async fn connect_control(database_url: &str) -> Result<PgPool, sqlx::Error> {
     let max: u32 = std::env::var("WEISSMAN_CONTROL_POOL_MAX")
         .ok()
@@ -316,7 +326,7 @@ pub async fn connect_control(database_url: &str) -> Result<PgPool, sqlx::Error> 
         .filter(|&n| n > 0)
         .unwrap_or(8);
     let stmt_ms = statement_timeout_ms("WEISSMAN_CONTROL_STATEMENT_TIMEOUT_MS", 30_000);
-    PgPoolOptions::new()
+    let pool = PgPoolOptions::new()
         .max_connections(max)
         .min_connections(1)
         .acquire_timeout(Duration::from_secs(30))
@@ -329,7 +339,76 @@ pub async fn connect_control(database_url: &str) -> Result<PgPool, sqlx::Error> 
             })
         })
         .connect(database_url)
-        .await
+        .await?;
+    role_guard::assert_pool_role(&pool, role_guard::PoolKind::Worker).await?;
+    Ok(pool)
+}
+
+/// `WEISSMAN_WORKER_DATABASE_URL`, or `DATABASE_URL` when unset (dev/superuser fixtures).
+pub fn worker_database_url_from_env() -> Result<String, std::env::VarError> {
+    match std::env::var("WEISSMAN_WORKER_DATABASE_URL") {
+        Ok(s) if !s.trim().is_empty() => Ok(s),
+        _ => std::env::var("DATABASE_URL"),
+    }
+}
+
+pub async fn connect_control_from_env() -> Result<PgPool, sqlx::Error> {
+    let url = worker_database_url_from_env().map_err(|e| {
+        sqlx::Error::Configuration(
+            format!("WEISSMAN_WORKER_DATABASE_URL / DATABASE_URL: {e}").into(),
+        )
+    })?;
+    let t = url.trim();
+    if t.is_empty() {
+        return Err(sqlx::Error::Configuration(
+            "resolved worker database URL is empty".into(),
+        ));
+    }
+    env_bootstrap::validate_database_url(t)
+        .map_err(|msg| sqlx::Error::Configuration(format!("worker database URL: {msg}").into()))?;
+    connect_control(t).await
+}
+
+/// Analytics pool: `weissman_analytics`, SELECT-only snapshot/catalog, 15s statement timeout, read-only tx.
+pub async fn connect_analytics(database_url: &str) -> Result<PgPool, sqlx::Error> {
+    let t = database_url.trim();
+    if t.is_empty() {
+        return Err(sqlx::Error::Configuration(
+            "WEISSMAN_ANALYTICS_DATABASE_URL is empty".into(),
+        ));
+    }
+    env_bootstrap::validate_database_url(t).map_err(|msg| {
+        sqlx::Error::Configuration(format!("WEISSMAN_ANALYTICS_DATABASE_URL: {msg}").into())
+    })?;
+    let stmt_ms = role_guard::ANALYTICS_STATEMENT_TIMEOUT_MS;
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .min_connections(1)
+        .acquire_timeout(Duration::from_secs(10))
+        .after_connect(move |conn, _| {
+            Box::pin(async move {
+                sqlx::query(&format!("SET statement_timeout = {stmt_ms}"))
+                    .execute(&mut *conn)
+                    .await?;
+                sqlx::query("SET default_transaction_read_only = on")
+                    .execute(&mut *conn)
+                    .await?;
+                Ok(())
+            })
+        })
+        .connect(t)
+        .await?;
+    role_guard::assert_pool_role(&pool, role_guard::PoolKind::Analytics).await?;
+    Ok(pool)
+}
+
+/// Connect the analytics pool from `WEISSMAN_ANALYTICS_DATABASE_URL`.
+pub async fn connect_analytics_from_env() -> Result<Option<PgPool>, sqlx::Error> {
+    let url = match std::env::var("WEISSMAN_ANALYTICS_DATABASE_URL") {
+        Ok(s) if !s.trim().is_empty() => s,
+        _ => return Ok(None),
+    };
+    connect_analytics(url.trim()).await.map(Some)
 }
 
 /// Connect app pool using `DATABASE_URL` from the environment.
@@ -356,7 +435,7 @@ pub async fn connect_auth(database_url: &str) -> Result<PgPool, sqlx::Error> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(12);
     let stmt_ms = statement_timeout_ms("WEISSMAN_AUTH_STATEMENT_TIMEOUT_MS", 30_000);
-    PgPoolOptions::new()
+    let pool = PgPoolOptions::new()
         .max_connections(max)
         .min_connections(1)
         .acquire_timeout(Duration::from_secs(15))
@@ -369,7 +448,58 @@ pub async fn connect_auth(database_url: &str) -> Result<PgPool, sqlx::Error> {
             })
         })
         .connect(database_url)
-        .await
+        .await?;
+    role_guard::assert_pool_role(&pool, role_guard::PoolKind::Auth).await?;
+    Ok(pool)
+}
+
+/// Read-only Ask Weissman pool: `weissman_ro`, SELECT-only, 15s statement timeout.
+pub async fn connect_readonly(database_url: &str) -> Result<PgPool, sqlx::Error> {
+    let t = database_url.trim();
+    if t.is_empty() {
+        return Err(sqlx::Error::Configuration(
+            "WEISSMAN_READ_ONLY_DATABASE_URL is empty".into(),
+        ));
+    }
+    env_bootstrap::validate_database_url(t).map_err(|msg| {
+        sqlx::Error::Configuration(format!("WEISSMAN_READ_ONLY_DATABASE_URL: {msg}").into())
+    })?;
+    // Hard 15s budget for Ask Weissman — do not honor a higher env override.
+    let stmt_ms = role_guard::RO_STATEMENT_TIMEOUT_MS;
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .min_connections(1)
+        .acquire_timeout(Duration::from_secs(5))
+        .after_connect(move |conn, _| {
+            Box::pin(async move {
+                sqlx::query(&format!("SET statement_timeout = {stmt_ms}"))
+                    .execute(&mut *conn)
+                    .await?;
+                sqlx::query("SET idle_in_transaction_session_timeout = '30s'")
+                    .execute(&mut *conn)
+                    .await?;
+                sqlx::query("SET lock_timeout = '5s'")
+                    .execute(&mut *conn)
+                    .await?;
+                sqlx::query("SET default_transaction_read_only = on")
+                    .execute(&mut *conn)
+                    .await?;
+                Ok(())
+            })
+        })
+        .connect(t)
+        .await?;
+    role_guard::assert_pool_role(&pool, role_guard::PoolKind::ReadOnly).await?;
+    Ok(pool)
+}
+
+/// Connect the Ask Weissman read-only pool from `WEISSMAN_READ_ONLY_DATABASE_URL`.
+pub async fn connect_readonly_from_env() -> Result<Option<PgPool>, sqlx::Error> {
+    let url = match std::env::var("WEISSMAN_READ_ONLY_DATABASE_URL") {
+        Ok(s) if !s.trim().is_empty() => s,
+        _ => return Ok(None),
+    };
+    connect_readonly(url.trim()).await.map(Some)
 }
 
 /// Connect auth pool using `WEISSMAN_AUTH_DATABASE_URL` or `DATABASE_URL`.
@@ -400,7 +530,7 @@ pub async fn connect_intel(database_url: &str) -> Result<PgPool, sqlx::Error> {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(12);
-    PgPoolOptions::new()
+    let pool = PgPoolOptions::new()
         .max_connections(max)
         .min_connections(1)
         .acquire_timeout(Duration::from_secs(30))
@@ -417,7 +547,9 @@ pub async fn connect_intel(database_url: &str) -> Result<PgPool, sqlx::Error> {
             })
         })
         .connect(database_url)
-        .await
+        .await?;
+    role_guard::assert_pool_role(&pool, role_guard::PoolKind::App).await?;
+    Ok(pool)
 }
 
 pub async fn connect_intel_from_env() -> Result<PgPool, sqlx::Error> {
@@ -641,6 +773,8 @@ pub async fn ensure_admin_user(auth_pool: &PgPool) -> Result<(), sqlx::Error> {
 
 /// One-time bootstrap admin in `default` tenant when **`WEISSMAN_MASTER_BOOTSTRAP_EMAIL`** is set together with
 /// `WEISSMAN_MASTER_BOOTSTRAP_PASSWORD` or `WEISSMAN_MASTER_BOOTSTRAP_BCRYPT`. No hardcoded identity in source.
+/// Inserts `role=admin`; boot-time auth bootstrap then promotes the row to `is_superadmin`
+/// so owner-only client create/delete works.
 pub async fn ensure_master_bootstrap_user(auth_pool: &PgPool) -> Result<(), sqlx::Error> {
     let email = std::env::var("WEISSMAN_MASTER_BOOTSTRAP_EMAIL")
         .ok()

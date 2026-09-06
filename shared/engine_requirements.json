@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-08-18T03:34:38.169Z",
-  "production_engine_count": 563,
+  "generated_at": "2026-08-31T19:47:50.079Z",
+  "production_engine_count": 567,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 420
+      "engine_count": 424
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -245,7 +245,7 @@
         "ad_domain",
         "scope_domains"
       ],
-      "engine_count": 50
+      "engine_count": 51
     },
     "endpoint_agent": {
       "id": "endpoint_agent",
@@ -275,7 +275,7 @@
         "industrial_ot",
         "scope_ips"
       ],
-      "engine_count": 42
+      "engine_count": 44
     },
     "ai_redteam": {
       "id": "ai_redteam",
@@ -2680,11 +2680,32 @@
         "scope_domains"
       ]
     },
+    "supreme_path_fair_rag": {
+      "id": "supreme_path_fair_rag",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Supreme Path × FAIR × RAG",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
     "identity_attack_chain": {
       "id": "identity_attack_chain",
       "group": "crypto",
       "kind": "real_probe",
       "label": "Identity Attack Chain",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "privilege_escalation_credential_access": {
+      "id": "privilege_escalation_credential_access",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Privilege Escalation & Credential Access",
       "requirements": [
         "ad_domain",
         "contact_email",
@@ -6320,6 +6341,30 @@
       "label": "RADIUS NAC Bypass",
       "requirements": [
         "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "ot_passive_active_safety": {
+      "id": "ot_passive_active_safety",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "OT Passive-Active Safety Interlock",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "ot_crown_jewel_path": {
+      "id": "ot_crown_jewel_path",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "OT Crown-Jewel Attack Path",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
         "scope_domains",
         "scope_ips"
       ]

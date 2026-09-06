@@ -1,47 +1,17 @@
-//! Fallback paths when no OpenAPI (Juice Shop, generic REST).
-//! Recursive expansion appends high-yield segments to prefixes that returned a non-404 response.
+//! Fallback paths when no OpenAPI. Recursive expansion appends high-yield segments
+//! to prefixes that returned a non-404 response. Seed lists live in `discovery_corpus`.
 
-/// Segments appended to “live” path prefixes for a second discovery wave (BFS-style, one level).
-const RECURSIVE_DIR_SUFFIXES: &[&str] = &[
-    "v1",
-    "v2",
-    "v3",
-    "internal",
-    "private",
-    "admin",
-    "debug",
-    "test",
-    "staging",
-    "graphql",
-    "swagger",
-    "docs",
-    "openapi.json",
-    "api",
-    "rest",
-    "ws",
-    "actuator",
-    "actuator/health",
-    "health",
-    "metrics",
-    "users",
-    "user",
-    "login",
-    "signin",
-    "signup",
-    "register",
-    "config",
-    "backup",
-    "uploads",
-    "static",
-    "assets",
-    "api-docs",
-    "v2/api-docs",
-];
+use crate::discovery_corpus;
 
 /// Given path prefixes that responded with something other than “gone”, synthesize child paths
-/// for a deeper crawl (deduplicated, capped).
+/// for a deeper crawl (deduplicated). `max_total == 0` means no cap.
 #[must_use]
 pub fn expand_recursive_directory_paths(seed_paths: &[String], max_total: usize) -> Vec<String> {
+    let cap = if max_total == 0 {
+        usize::MAX
+    } else {
+        max_total
+    };
     let mut out = Vec::new();
     let mut seen = std::collections::HashSet::<String>::new();
     for seed in seed_paths {
@@ -52,15 +22,15 @@ pub fn expand_recursive_directory_paths(seed_paths: &[String], max_total: usize)
         let norm = if base.starts_with('/') {
             base.to_string()
         } else {
-            format!("/{}", base)
+            format!("/{base}")
         };
         let norm = norm.trim_end_matches('/').to_string();
-        for suf in RECURSIVE_DIR_SUFFIXES {
-            let child = format!("{}/{}", norm, suf);
+        for suf in discovery_corpus::recursive_dir_suffixes() {
+            let child = format!("{norm}/{suf}");
             if seen.insert(child.clone()) {
                 out.push(child);
             }
-            if out.len() >= max_total {
+            if out.len() >= cap {
                 return out;
             }
         }
@@ -68,48 +38,10 @@ pub fn expand_recursive_directory_paths(seed_paths: &[String], max_total: usize)
     out
 }
 
-/// Expanded path wordlist (same as legacy `pipeline_context::expanded_path_wordlist`).
+/// Public-knowledge HTTP path seed (unbounded corpus; tens of thousands of unique paths).
 #[must_use]
 pub fn expanded_path_wordlist() -> Vec<String> {
-    let paths: Vec<&str> = vec![
-        "",
-        "/",
-        "/api",
-        "/api/v1",
-        "/api/v2",
-        "/api/v1/users",
-        "/rest",
-        "/rest/user/login",
-        "/rest/user/registration",
-        "/rest/products",
-        "/rest/basket/1",
-        "/api/Users",
-        "/api/Users/1",
-        "/api/Users/2",
-        "/api/Addresss",
-        "/admin",
-        "/admin/login",
-        "/ftp",
-        "/config",
-        "/config/config.json",
-        "/graphql",
-        "/swagger",
-        "/openapi.json",
-        "/api-docs",
-        "/v2/api-docs",
-        "/login",
-        "/register",
-        "/health",
-        "/metrics",
-        "/actuator",
-        "/actuator/health",
-        "/.env",
-        "/debug",
-        "/api/Challenges",
-        "/api/Feedbacks",
-        "/api/SecurityQuestions",
-    ];
-    paths.into_iter().map(String::from).collect()
+    discovery_corpus::expanded_path_wordlist()
 }
 
 #[cfg(test)]
@@ -140,10 +72,19 @@ mod tests {
     }
 
     #[test]
+    fn expand_zero_means_unlimited() {
+        let seeds = vec!["a".to_string(), "b".to_string()];
+        let capped = expand_recursive_directory_paths(&seeds, 5);
+        let uncapped = expand_recursive_directory_paths(&seeds, 0);
+        assert_eq!(capped.len(), 5);
+        assert!(uncapped.len() > capped.len());
+    }
+
+    #[test]
     fn wordlist_has_known_paths() {
         let w = expanded_path_wordlist();
         assert!(w.contains(&"/graphql".to_string()));
         assert!(w.contains(&"/.env".to_string()));
-        assert!(w.len() > 20);
+        assert!(w.len() > 1_000);
     }
 }

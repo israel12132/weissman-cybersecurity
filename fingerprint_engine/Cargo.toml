@@ -33,6 +33,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+# Dedicated background thread + lossy ring buffer so tracing::error! on the HTTP
+# path never waits on stdout/NFS (Ask Weissman nlqa1 fallback under audit flood).
+tracing-appender = "0.2"
 ipnetwork = "0.21"
 urlencoding = "2.1"
 rand = "0.10"
@@ -68,7 +71,7 @@ serde_yaml = "0.9"
 # Production: granular locking for SSE registry (no global RwLock contention)
 dashmap = "6"
 # RCU pointer swap for the per-tenant path-template trie (ingest reads never take a write lock)
-arc-swap = "1"
+arc-swap = "1.7"
 # Binary PDF generation (Executive Report) is done natively in `pdf_report.rs`
 # (self-contained %PDF-1.4 writer, base-14 Helvetica) — no third-party PDF crate, so the
 # tree stays free of the printpdf/lopdf/time-0.2 supply-chain advisories.
@@ -134,16 +137,21 @@ tokio-util = { version = "0.7", features = ["codec"] }
 lettre = { version = "0.11.22", default-features = false, features = ["tokio1-rustls-tls", "builder", "smtp-transport"] }
 aes-gcm = "0.10"
 hex = "0.4"
+zeroize = "1"
 syn = { version = "2.0", features = ["full", "visit"] }
 subtle = "2.6"
 metrics = "0.24"
 metrics-exporter-prometheus = "0.18"
 # HPC: lock-free async channels + zero-copy helpers; NUMA CPU bind (Linux) via hwloc.
 bytes = "1.6"
+# OT/ICS: streaming, context-tagged binary parsers (Modbus MBAP, TPKT/COTP, DNP3, IEC 61850).
+nom = "8"
 flume = { version = "0.12", default-features = false, features = ["async"] }
 governor = "0.6"
 moka = { version = "0.12", features = ["future"] }
 thiserror = "1"
+rmp-serde = "1.3"
+sqlparser = { version = "0.53", default-features = false, features = ["std"] }
 # Sovereign Shield: OpenSSH-format Ed25519 for phantom SSH canaries
 ssh-key = { version = "0.6", default-features = false, features = ["std", "ed25519", "rand_core"] }
 rand_core = "0.6"
@@ -171,7 +179,9 @@ hwlocality = { version = "1.0.0-alpha.12", optional = true }
 libc = "0.2"
 
 [lints.rust]
-# hpc_runtime::linux_affinity uses libc sched_setaffinity (documented SAFETY in module).
+# Documented unsafe exceptions: hpc_runtime::linux_affinity (sched_setaffinity),
+# secret_zeroize::memlock (mlock / madvise / VirtualLock), and
+# secret_zeroize::raw_environ (libc::environ / GetEnvironmentStringsW).
 # All other modules must remain free of unsafe code.
 unsafe_code = "deny"
 
