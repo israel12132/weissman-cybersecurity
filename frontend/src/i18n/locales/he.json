@@ -676,6 +676,8 @@
     "matrix_subtitle": "{{live}} live · {{catalog}} catalog · {{groups}} domains",
     "client_label": "Client",
     "select_client": "— Select client —",
+    "workspace_locked": "נעול ללקוח זה",
+    "no_assigned_domain": "אין דומיין משויך ללקוח זה",
     "select_client_warning": "Select a client above to enable toggle controls and run engines. Browse is available without a client.",
     "enabled_short": "{{count}} enabled",
     "run_all_engines": "Run All Engines ({{count}})",
