@@ -34,6 +34,71 @@ const TOP_TIER_ENGINES: &[&str] = &[
     "http2_attack",
 ];
 
+/// Dispatch one production engine on the large-stack thread, cancellable at the
+/// operator wall-clock. `run_on_large_stack` (uncancellable) left timed-out ASM
+/// jobs running while the UI audit poller gave up — aborting the Tokio task only
+/// drops the oneshot, it does not stop the OS thread.
+async fn dispatch_engine_with_wall(
+    engine: String,
+    target: String,
+    ctx: crate::engine_dispatch::EngineRunContext,
+    wall: Duration,
+) -> (
+    crate::engine_result::EngineResult,
+    crate::engine_resilience::EngineExecTelemetry,
+) {
+    let attempt = crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT.min(wall);
+    let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
+    let eng_label = engine.clone();
+    let mut work = std::pin::pin!(crate::engine_stack_runtime::run_on_large_stack_cancellable(
+        move || {
+            let eng_outer = engine.clone();
+            let tgt = target.clone();
+            let ctx_owned = ctx.clone();
+            async move {
+                let eng_ref = eng_outer.clone();
+                crate::engine_resilience::run_with_resilience(
+                    &eng_ref,
+                    &tgt,
+                    attempt,
+                    move |variant, hint| {
+                        let eng = eng_outer.clone();
+                        let mut ctx = ctx_owned.clone();
+                        if hint.force_ghost_network {
+                            crate::engine_dispatch::apply_ghost_escalation(&mut ctx.stealth);
+                        }
+                        async move { crate::engine_dispatch::run_engine(&eng, &variant, &ctx).await }
+                    },
+                )
+                .await
+            }
+        },
+        cancel_rx,
+    ));
+    tokio::select! {
+        v = &mut work => v.unwrap_or_else(|| {
+            (
+                crate::engine_result::EngineResult::error(
+                    "scan cancelled (worker wall-clock budget)",
+                ),
+                crate::engine_resilience::EngineExecTelemetry::wall_timeout(&eng_label, wall),
+            )
+        }),
+        _ = tokio::time::sleep(wall) => {
+            let _ = cancel_tx.send(());
+            work.await.unwrap_or_else(|| {
+                (
+                    crate::engine_result::EngineResult::error(format!(
+                        "scan exceeded {}s wall-clock budget",
+                        wall.as_secs()
+                    )),
+                    crate::engine_resilience::EngineExecTelemetry::wall_timeout(&eng_label, wall),
+                )
+            })
+        }
+    }
+}
+
 /// Channels for streaming engines; worker supplies minimal broadcast buses.
 #[derive(Clone)]
 pub struct AsyncJobChannels {
@@ -543,6 +608,9 @@ async fn execute_job_unscoped(
                 // Cross-cutting resilience: panic isolation + adaptive multi-strategy retry +
                 // per-attempt timeout. Engine dispatch runs on a large-stack thread so Tokio's
                 // default worker stack cannot overflow on deep `dispatch_engine_match` futures.
+                // The thread is cancellable: operator `timeout` (UI audit sends 45s) is a real
+                // wall, not a field stripped at enqueue.
+                let wall = crate::scan_routing::scan_wall_clock(p);
                 let eng = engine.to_string();
                 let tgt = target.to_string();
                 let ctx_owned = ctx.clone();
@@ -552,34 +620,7 @@ async fn execute_job_unscoped(
                     "executing",
                     Some(&format!("dispatch: {engine}")),
                 );
-                let (res, telem) = crate::engine_stack_runtime::run_on_large_stack(move || {
-                    let eng_outer = eng.clone();
-                    let tgt = tgt.clone();
-                    let ctx_owned = ctx_owned.clone();
-                    async move {
-                        let eng_ref = eng_outer.clone();
-                        crate::engine_resilience::run_with_resilience(
-                            &eng_ref,
-                            &tgt,
-                            crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
-                            move |variant, hint| {
-                                let eng = eng_outer.clone();
-                                let mut ctx = ctx_owned.clone();
-                                // WAF/rate-limit retry → go stealthy on this attempt.
-                                if hint.force_ghost_network {
-                                    crate::engine_dispatch::apply_ghost_escalation(
-                                        &mut ctx.stealth,
-                                    );
-                                }
-                                async move {
-                                    crate::engine_dispatch::run_engine(&eng, &variant, &ctx).await
-                                }
-                            },
-                        )
-                        .await
-                    }
-                })
-                .await;
+                let (res, telem) = dispatch_engine_with_wall(eng, tgt, ctx_owned, wall).await;
                 if telem.attempts > 1 || telem.status != "ok" {
                     tracing::info!(
                         target: "engine_resilience",
@@ -589,6 +630,7 @@ async fn execute_job_unscoped(
                         strategy = %telem.strategy,
                         recovered = telem.recovered,
                         elapsed_ms = telem.elapsed_ms,
+                        wall_secs = wall.as_secs(),
                         "resilient engine run"
                     );
                 }
