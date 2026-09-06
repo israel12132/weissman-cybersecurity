@@ -24254,5 +24254,238 @@ export const GENERATED_PARAM_DEFS = {
       "min": 1,
       "max": 5000
     }
+  ],
+  "advanced_c2_covert_exfil": [
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    },
+    {
+      "key": "stealth_level",
+      "label": "Stealth Level (1-5)",
+      "type": "number",
+      "defaultVal": "3",
+      "min": 1,
+      "max": 5
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "honey_routing_gateway": [
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "timeout_ms",
+      "label": "Probe Timeout (ms)",
+      "type": "number",
+      "defaultVal": "8000",
+      "min": 500,
+      "max": 60000
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    },
+    {
+      "key": "evidence_mode",
+      "label": "Evidence Mode",
+      "type": "select",
+      "defaultVal": "standard",
+      "options": [
+        "standard",
+        "strict",
+        "forensic"
+      ]
+    }
+  ],
+  "stealthy_persistence_evasion": [
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    },
+    {
+      "key": "stealth_level",
+      "label": "Stealth Level (1-5)",
+      "type": "number",
+      "defaultVal": "3",
+      "min": 1,
+      "max": 5
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "prompt_injection_brake": [
+    {
+      "key": "llm_base_url",
+      "label": "LLM Base URL",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "http://127.0.0.1:11434/v1"
+    },
+    {
+      "key": "llm_model",
+      "label": "LLM Model",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "gpt-4o"
+    },
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    },
+    {
+      "key": "safe_mode",
+      "label": "Safe Mode (no destructive exec)",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    }
+  ],
+  "jailbreak_cognitive_engine": [
+    {
+      "key": "llm_base_url",
+      "label": "LLM Base URL",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "http://127.0.0.1:11434/v1"
+    },
+    {
+      "key": "llm_model",
+      "label": "LLM Model",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "gpt-4o"
+    },
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    },
+    {
+      "key": "safe_mode",
+      "label": "Safe Mode (no destructive exec)",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    }
+  ],
+  "rag_poisoning_guard": [
+    {
+      "key": "llm_base_url",
+      "label": "LLM Base URL",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "http://127.0.0.1:11434/v1"
+    },
+    {
+      "key": "llm_model",
+      "label": "LLM Model",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "gpt-4o"
+    },
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    },
+    {
+      "key": "safe_mode",
+      "label": "Safe Mode (no destructive exec)",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    }
   ]
 }

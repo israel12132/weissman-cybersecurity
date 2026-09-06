@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next'
 import { formatApiErrorFromBody, formatApiErrorResponse } from '../lib/apiError.js'
 import { apiFetch } from '../utils/apiFetch'
 import { launchEngineScan } from '../lib/launchEngineScan'
+import { BoundClientScanField } from './scan/ClientScanBinding'
+import { useClientOptional } from '../context/ClientContext'
 import Button from './ui/Button'
 
 const ENGINE_IDS = [
@@ -36,6 +38,8 @@ function getFirstTarget(client) {
 
 export default function CommandBar({ onScanLaunched, onError }) {
   const { t } = useTranslation()
+  const clientCtx = useClientOptional()
+  const portalLocked = clientCtx?.clientScopeLocked === true
   const [target, setTarget] = useState('')
   const [clients, setClients] = useState([])
   const [clientsError, setClientsError] = useState(null)
@@ -126,19 +130,13 @@ export default function CommandBar({ onScanLaunched, onError }) {
       )}
       <div className="soc-command-bar-inner">
         <label className="soc-command-bar-label">{t('components.commandBar.target_label')}</label>
-        <select
-          className="soc-command-bar-select"
-          value={selectedClientId}
-          onChange={(e) => setSelectedClientId(e.target.value)}
-          aria-label={t('components.commandBar.client_aria')}
-        >
-          <option value="">{t('components.commandBar.select_client')}</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name || c.id} {getFirstTarget(c) ? `(${getFirstTarget(c)})` : ''}
-            </option>
-          ))}
-        </select>
+        <BoundClientScanField
+          clients={clients}
+          selectedClientId={selectedClientId}
+          onChange={(id) => setSelectedClientId(id || '')}
+          selectClassName="soc-command-bar-select"
+          id="command-bar-client"
+        />
         <input
           type="text"
           placeholder={t('components.commandBar.target_url_placeholder')}
@@ -147,6 +145,7 @@ export default function CommandBar({ onScanLaunched, onError }) {
           className="soc-command-bar-input"
           aria-label={t('components.commandBar.target_placeholder')}
         />
+        {!portalLocked && (
         <Button variant="unstyled"
           type="button"
           disabled={loading != null}
@@ -156,6 +155,7 @@ export default function CommandBar({ onScanLaunched, onError }) {
         >
           {loading === 'run-all' ? '…' : t('components.commandBar.scan_all')}
         </Button>
+        )}
         <div className="soc-command-bar-engines">
           {ENGINE_IDS.map(({ id, color }) => {
             const label = t(`components.commandBar.engines.${id}.label`)

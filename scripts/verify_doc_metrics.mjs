@@ -60,6 +60,9 @@ const REFS = [
   { file: 'AGENTS.md', metric: 'total', re: /Production engines \| \*\*(\d+)\*\*/, label: 'Production engines' },
   { file: 'AGENTS.md', metric: 'real_probe', re: /Real probes \| \*\*(\d+)\*\*/, label: 'Real probes' },
   { file: 'AGENTS.md', metric: 'agent_required', re: /Agent-required engines \| \*\*(\d+)\*\*/, label: 'Agent-required engines' },
+  { file: 'AGENTS.md', metric: 'total', re: /verify_engine_wiring\.mjs` \| (\d+) engine IDs/, label: 'wiring script engine IDs' },
+  { file: 'website/src/content/metrics.ts', metric: 'total', re: /productionEngines:\s*\{\s*value:\s*(\d+)/, label: 'website productionEngines' },
+  { file: 'website/src/content/metrics.ts', metric: 'real_probe', re: /liveProbes:\s*\{\s*value:\s*(\d+)/, label: 'website liveProbes' },
 
   // README.md — headline sentence + engines breakdown + DB box.
   { file: 'README.md', metric: 'total', re: /\*\*(\d+) production engine IDs\*\*/, label: 'production engine IDs' },

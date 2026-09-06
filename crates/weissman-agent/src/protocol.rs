@@ -69,6 +69,9 @@ pub enum ServerToAgent {
         heartbeat_secs: Option<u64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         inner_key_hex: Option<String>,
+        /// Compact hour-of-week mean/stddev so the agent can gate ueba_baseline locally.
+        #[serde(default)]
+        ueba_baseline: Option<UebaCompactSnapshot>,
     },
     /// Dispatch a detection task.
     Task {
@@ -79,6 +82,11 @@ pub enum ServerToAgent {
     },
     /// Server-side acknowledgement of a finding (mostly for flow control).
     Ack { task_id: String },
+    /// Mid-session refresh of the compact UEBA snapshot (after ingest recomputes baselines).
+    UebaBaseline {
+        #[serde(flatten)]
+        snapshot: UebaCompactSnapshot,
+    },
     /// Asks the agent to shut down (revoked, deprovisioned, …). Unsigned — ignored
     /// unless `WEISSMAN_AGENT_ALLOW_LOCAL_STOP=1`.
     Shutdown { reason: String },
@@ -89,6 +97,46 @@ pub enum ServerToAgent {
         issued_at_unix: i64,
         signature: String,
     },
+}
+
+/// Compressed 7-day baseline for the current hour-of-week (or rolling-7d fallback).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UebaCompactSnapshot {
+    pub hour_of_week: i16,
+    #[serde(default = "default_z_upload")]
+    pub z_upload_threshold: f64,
+    #[serde(default = "default_min_n")]
+    pub min_n: i32,
+    #[serde(default)]
+    pub source: String,
+    #[serde(default)]
+    pub metrics: Vec<UebaCompactMetric>,
+    #[serde(default)]
+    pub learned_processes: Vec<String>,
+    #[serde(default)]
+    pub mac: String,
+}
+
+fn default_z_upload() -> f64 {
+    2.0
+}
+fn default_min_n() -> i32 {
+    7
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UebaCompactMetric {
+    pub name: String,
+    pub mean: f64,
+    pub stddev: f64,
+    pub n: i32,
+}
+
+impl UebaCompactSnapshot {
+    #[must_use]
+    pub fn metric(&self, name: &str) -> Option<&UebaCompactMetric> {
+        self.metrics.iter().find(|m| m.name == name)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,4 +156,7 @@ pub struct Enrollment {
     /// Derived HMAC key so this agent can verify a signed kill-switch. Empty on older servers.
     #[serde(default)]
     pub kill_hmac_key: String,
+    /// Per-agent HMAC key for verifying Welcome / UebaBaseline snapshots.
+    #[serde(default)]
+    pub ueba_mac_key: String,
 }

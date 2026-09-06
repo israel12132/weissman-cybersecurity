@@ -135,6 +135,16 @@ import {
   PasswordSprayCommandCenter,
   SamlSecurityCommandCenter,
   KillChainOrchestrator,
+  KillChainCommander,
+  PdfCommandCenter,
+  C2CovertExfilCommandCenter,
+  HoneyRoutingGateway,
+  LlmUltraGuard,
+  StealthyPersistenceEvasion,
+  FindingClusters,
+  CeoKeysCockpit,
+  AttackVectorAnalytics,
+  AiReadiness,
   AIAnalysisEngine,
   ExploitResearchLab,
   Clients,
@@ -324,6 +334,16 @@ export default function TacticalApp() {
           <Route path="baseline-drift" element={<BaselineAndDrift />} />
           <Route path="identity-context" element={<IdentityContextManager />} />
           <Route path="kill-chain" element={<KillChainOrchestrator />} />
+          <Route path="kill-chain-commander" element={<KillChainCommander />} />
+          <Route path="pdf-intelligence" element={<PdfCommandCenter />} />
+          <Route path="c2-covert-exfil" element={<C2CovertExfilCommandCenter />} />
+          <Route path="honey-routing" element={<HoneyRoutingGateway />} />
+          <Route path="llm-ultra-guard" element={<LlmUltraGuard />} />
+          <Route path="stealth-persistence" element={<StealthyPersistenceEvasion />} />
+          <Route path="finding-clusters" element={<FindingClusters />} />
+          <Route path="attack-vectors" element={<AttackVectorAnalytics />} />
+          <Route path="ai-readiness" element={<AiReadiness />} />
+          <Route path="ceo-keys" element={<CeoProtectedRoute><CeoKeysCockpit /></CeoProtectedRoute>} />
           <Route path="ai-analysis" element={<AIAnalysisEngine />} />
           <Route path="exploit-lab" element={<ExploitResearchLab />} />
           <Route path="agents" element={<AgentManagement />} />

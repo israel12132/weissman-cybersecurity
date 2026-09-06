@@ -10,9 +10,9 @@
 
 | Metric | Value | Verify |
 |--------|-------|--------|
-| Production engines | **567** | `node scripts/verify_engine_wiring.mjs` |
-| Command Center routes | **134** | `node scripts/weissman-ui-audit.mjs` |
-| UI pages audited | **115/115** | same |
+| Production engines | **573** | `node scripts/verify_engine_wiring.mjs` |
+| Command Center routes | **146** | `node scripts/weissman-ui-audit.mjs` |
+| UI pages audited | **127/127** | same |
 | Engine `no_path` | **0** | `node scripts/engine_reality_audit.mjs` |
 | Fusion engines | **7** | `fingerprint_engine/src/engine_fusion/mod.rs` |
 | JWT minimum (production) | **48 chars** | `security_startup.rs` |
@@ -38,7 +38,7 @@ bash scripts/full_audit_gate.sh
 - [x] G1 Build — `cargo build --workspace` + `frontend npm run build`
 - [x] G2 Tests — `cargo test --workspace --all-targets` + `npm run test:coverage`
 - [x] G3 Lint — clippy + `cargo fmt --check`
-- [x] G4 Wiring — 567 engine IDs, 0 gaps
+- [x] G4 Wiring — 573 engine IDs, 0 gaps
 - [x] G5 Reality — 0 `no_path`
 - [x] G6 Migrations — `check-migration-sync.sh`
 - [x] G7 Live + evidence — UI audit, staging-qa, evidence pack, go_live_check, Playwright live

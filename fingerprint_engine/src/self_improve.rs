@@ -16,6 +16,7 @@ use sqlx::{PgPool, Row};
 use std::sync::Arc;
 use tokio::sync::broadcast::Sender;
 use uuid::Uuid;
+use weissman_core::models::engine::PRODUCTION_ENGINE_IDS;
 
 /// One improvement suggestion produced by a cycle.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -535,13 +536,14 @@ pub async fn run_cycle(
         let model = weissman_engines::openai_chat::resolve_llm_model(&llm_model);
         let user = format!(
             "You are the lead architect of an autonomous offensive-security platform (Rust + React, \
-             563 engine IDs, Postgres+RLS). Propose concrete, safe improvements. Categories allowed: \
+             {} engine IDs, Postgres+RLS). Propose concrete, safe improvements. Categories allowed: \
              new_engine, improve_engine, new_module, improve_module, wiring, sync, gap, cleanliness. \
              Live signals: {signal_summary}. \
              Respond ONLY minified JSON: {{\"proposals\":[{{\"category\":\"...\",\"title\":\"...\",\
              \"rationale\":\"...\",\"risk\":\"low|medium|high\",\"impact\":\"low|medium|high\",\
              \"effort\":\"low|medium|high\",\"proposed_diff_summary\":\"...\",\"affected_files\":[\"...\"]}}]}}. \
-             Max 8 proposals, highest impact first."
+             Max 8 proposals, highest impact first.",
+            PRODUCTION_ENGINE_IDS.len(),
         );
         match weissman_engines::openai_chat::chat_completion_text(
             &client,

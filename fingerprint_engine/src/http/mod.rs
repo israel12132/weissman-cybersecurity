@@ -1,10 +1,18 @@
 //! Axum HTTP server (API, dashboard, WebSockets).
 
+pub mod ai_quota_mem;
 pub mod api_rate_limit;
+pub mod blocking_io;
+pub mod bounded_codec;
 pub mod ceo_rbac;
 pub mod client_ip;
+pub mod dashmap_gc;
+pub mod honey_routing_mw;
+pub mod http_serve_loop;
 pub mod login_lockout;
 pub mod login_rate_limit;
+pub mod simd_json;
+pub mod tcp_socket;
 
 pub use api_rate_limit::api_rate_limit_middleware;
 pub use login_lockout::{

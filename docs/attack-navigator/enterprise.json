@@ -16,8 +16,8 @@
     },
     {
       "techniqueID": "T1595",
-      "score": 35,
-      "comment": "ai_cloud_escalation_chain, asm, attack_graph_traversal, attack_surface_quantify, autonomous_pentest, can_bus_surface, compliance_gap_scan, digital_twin, external_exposure_supreme, fair_exposure_fusion, firmware_emulation, firmware_exploit, full_breach_sim, hardware_implant, implantable_device_hack, iot_firmware, jtag_swd_exploitation, kill_chain, lora_attack, medical_device_exploit, mobile_backend_chain, network_topology_map, nexus_sovereign_swarm, ntlm_relay, post_exploitation, printer_mfp_attack, rce_chain, risk_superposition_collapse, smb_netbios, smb_relay, supreme_path_fair_rag, tactic_chain_synthesizer, threat_emulation, threat_model_automation, vuln_chaining",
+      "score": 36,
+      "comment": "ai_cloud_escalation_chain, asm, attack_graph_traversal, attack_surface_quantify, autonomous_pentest, can_bus_surface, compliance_gap_scan, digital_twin, external_exposure_supreme, fair_exposure_fusion, firmware_emulation, firmware_exploit, full_breach_sim, hardware_implant, honey_routing_gateway, implantable_device_hack, iot_firmware, jtag_swd_exploitation, kill_chain, lora_attack, medical_device_exploit, mobile_backend_chain, network_topology_map, nexus_sovereign_swarm, ntlm_relay, post_exploitation, printer_mfp_attack, rce_chain, risk_superposition_collapse, smb_netbios, smb_relay, supreme_path_fair_rag, tactic_chain_synthesizer, threat_emulation, threat_model_automation, vuln_chaining",
       "enabled": true
     },
     {
@@ -196,8 +196,8 @@
     },
     {
       "techniqueID": "T1566",
-      "score": 7,
-      "comment": "cognitive_starvation, deepfake_genai, email_dns_posture, external_exposure_supreme, fair_exposure_fusion, malvertising_seo_poison, sovereign_active_defense_fusion",
+      "score": 8,
+      "comment": "cognitive_starvation, deepfake_genai, email_dns_posture, external_exposure_supreme, fair_exposure_fusion, malvertising_seo_poison, prompt_injection_brake, sovereign_active_defense_fusion",
       "enabled": true
     },
     {
@@ -340,14 +340,14 @@
     },
     {
       "techniqueID": "T1595.002",
-      "score": 7,
-      "comment": "ai_cloud_escalation_chain, digital_twin, kill_chain, mobile_backend_chain, rce_chain, tactic_chain_synthesizer, vuln_chaining",
+      "score": 8,
+      "comment": "ai_cloud_escalation_chain, digital_twin, honey_routing_gateway, kill_chain, mobile_backend_chain, rce_chain, tactic_chain_synthesizer, vuln_chaining",
       "enabled": true
     },
     {
       "techniqueID": "T1071",
-      "score": 8,
-      "comment": "apt_c2_infra, botnet_c2_engine, c2_emulation, c2_rotation_engine, icmp_covert_channel, network_covert_channel, oast_oob, obfuscated_c2",
+      "score": 9,
+      "comment": "advanced_c2_covert_exfil, apt_c2_infra, botnet_c2_engine, c2_emulation, c2_rotation_engine, icmp_covert_channel, network_covert_channel, oast_oob, obfuscated_c2",
       "enabled": true
     },
     {
@@ -382,8 +382,8 @@
     },
     {
       "techniqueID": "T1583",
-      "score": 2,
-      "comment": "apt_c2_infra, threat_emulation",
+      "score": 3,
+      "comment": "apt_c2_infra, honey_routing_gateway, threat_emulation",
       "enabled": true
     },
     {
@@ -580,8 +580,8 @@
     },
     {
       "techniqueID": "T1059.008",
-      "score": 5,
-      "comment": "gpt_plugin_attack, llm_guardrail_bypass, llm_jailbreak, llm_system_prompt_leak, prompt_injection_chain",
+      "score": 6,
+      "comment": "gpt_plugin_attack, jailbreak_cognitive_engine, llm_guardrail_bypass, llm_jailbreak, llm_system_prompt_leak, prompt_injection_chain",
       "enabled": true
     },
     {
@@ -604,8 +604,8 @@
     },
     {
       "techniqueID": "T1565",
-      "score": 5,
-      "comment": "ai_bias_exploit, ai_poisoning, rag_poisoning, rag_poisoning_engine, risk_superposition_collapse",
+      "score": 7,
+      "comment": "ai_bias_exploit, ai_poisoning, honey_routing_gateway, rag_poisoning, rag_poisoning_engine, rag_poisoning_guard, risk_superposition_collapse",
       "enabled": true
     },
     {
@@ -1096,8 +1096,8 @@
     },
     {
       "techniqueID": "T1547",
-      "score": 1,
-      "comment": "persistence_mechanism",
+      "score": 2,
+      "comment": "persistence_mechanism, stealthy_persistence_evasion",
       "enabled": true
     },
     {

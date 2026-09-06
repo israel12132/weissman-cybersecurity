@@ -72,6 +72,21 @@ fn clear_failures_mem(tenant_id: i64, email: &str) {
     store().remove(&key(tenant_id, email));
 }
 
+/// Drop expired lockouts so the in-process map cannot grow without bound.
+pub fn evict_stale() -> usize {
+    let now = Instant::now();
+    let mut dropped = 0usize;
+    store().retain(|_, cell| {
+        let entry = cell.lock().unwrap_or_else(|poison| poison.into_inner());
+        if entry.locked_until.is_some_and(|until| now < until) {
+            return true;
+        }
+        dropped += 1;
+        false
+    });
+    dropped
+}
+
 // ── Public API: distributed via Redis when REDIS_URL is set, else in-memory ────
 
 /// Outcome of a lockout probe (fail-closed when Redis is required but down).

@@ -61,6 +61,17 @@ describe('Command Center login is a single live surface', () => {
     expect(loginSrc).not.toMatch(/\b254\b/)
   })
 
+  it('onboarding and nerve-center copy interpolate {{engines}} instead of a stale fleet size', () => {
+    expect(en.pages.clientOnboarding.evidence_notice).toContain('{{engines}}')
+    expect(he.pages.clientOnboarding.evidence_notice).toContain('{{engines}}')
+    expect(en.supremeNerveCenter.evidence_notice).toContain('{{engines}}')
+    expect(he.supremeNerveCenter.evidence_notice).toContain('{{engines}}')
+    expect(en.pages.clientOnboarding.evidence_notice).not.toMatch(/\b(254|546|563|565|567)\b/)
+    expect(he.pages.clientOnboarding.evidence_notice).not.toMatch(/\b(254|546|563|565|567)\b/)
+    expect(en.supremeNerveCenter.evidence_notice).not.toMatch(/\b(254|546|563|565|567)\b/)
+    expect(he.supremeNerveCenter.evidence_notice).not.toMatch(/\b(254|546|563|565|567)\b/)
+  })
+
   it('is the only login page the SPA can route to', () => {
     expect(routeChunksSrc).toMatch(
       /export const Login = React\$lazy\(\(\) => import\([^)]*components\/cockpit\/Login/,

@@ -255,3 +255,8 @@ export function useClient() {
   if (!ctx) throw new Error('useClient must be used within ClientProvider')
   return ctx
 }
+
+/** Same as `useClient` but returns null outside a provider (scan-binding lock). */
+export function useClientOptional() {
+  return useContext(ClientContext)
+}

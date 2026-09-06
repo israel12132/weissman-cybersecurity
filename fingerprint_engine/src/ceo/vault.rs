@@ -463,6 +463,91 @@ pub async fn export_vault_criticals_csv(
     Ok(w)
 }
 
+/// Same live vault query as CSV, rendered through the board-grade XLSX engine.
+pub async fn export_vault_criticals_xlsx(
+    pool: &PgPool,
+    tenant_id: i64,
+    lang: crate::pdf::Lang,
+) -> Result<Vec<u8>, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let rows = sqlx::query(
+        r#"SELECT id, tech_fingerprint, component_ref, severity, detection_signature,
+                  LEFT(remediation_patch, 2000) AS patch_excerpt, created_at
+           FROM genesis_vaccine_vault
+           WHERE lower(trim(severity)) = 'critical'
+           ORDER BY id DESC
+           LIMIT 2000"#,
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    let _ = tx.commit().await;
+    let table_rows: Vec<Vec<String>> = rows
+        .into_iter()
+        .map(|r| {
+            let id: i64 = r.try_get("id").unwrap_or(0);
+            let ct: chrono::DateTime<chrono::Utc> = r
+                .try_get("created_at")
+                .unwrap_or_else(|_| chrono::Utc::now());
+            vec![
+                id.to_string(),
+                r.try_get::<String, _>("tech_fingerprint").unwrap_or_default(),
+                r.try_get::<String, _>("component_ref").unwrap_or_default(),
+                r.try_get::<String, _>("severity").unwrap_or_default(),
+                r.try_get::<String, _>("detection_signature").unwrap_or_default(),
+                r.try_get::<String, _>("patch_excerpt").unwrap_or_default(),
+                ct.to_rfc3339(),
+            ]
+        })
+        .collect();
+    crate::xlsx_report::table_workbook(
+        "Genesis vault — criticals",
+        "vault",
+        "ceo",
+        lang,
+        vec![
+            crate::pdf::spec::ColumnSpec {
+                title: "ID".into(),
+                weight: 1.0,
+                style: "mono".into(),
+            },
+            crate::pdf::spec::ColumnSpec {
+                title: "Fingerprint".into(),
+                weight: 2.0,
+                style: "mono".into(),
+            },
+            crate::pdf::spec::ColumnSpec {
+                title: "Component".into(),
+                weight: 1.5,
+                style: "".into(),
+            },
+            crate::pdf::spec::ColumnSpec {
+                title: "Severity".into(),
+                weight: 1.0,
+                style: "severity".into(),
+            },
+            crate::pdf::spec::ColumnSpec {
+                title: "Signature".into(),
+                weight: 2.0,
+                style: "".into(),
+            },
+            crate::pdf::spec::ColumnSpec {
+                title: "Patch excerpt".into(),
+                weight: 3.0,
+                style: "".into(),
+            },
+            crate::pdf::spec::ColumnSpec {
+                title: "Created".into(),
+                weight: 1.4,
+                style: "".into(),
+            },
+        ],
+        table_rows,
+    )
+}
+
 #[derive(Debug, Serialize)]
 pub struct SuspendedRowOut {
     pub id: i64,

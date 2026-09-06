@@ -104,7 +104,7 @@ pub fn hfv_cycle_id_for_status(existing: Option<uuid::Uuid>, new_status: &str) -
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::db;
-use crate::findings_correlator::{self, ClusterAttrs};
+use crate::findings_correlator;
 use crate::findings_gate::{self, gate_finding, Sealed, VulnerabilitiesWriter};
 use crate::fp_feedback;
 use crate::intel_epss;
@@ -860,38 +860,29 @@ pub async fn persist_engine_findings(
             }
         }
 
-        // ── Correlate into a finding_cluster ─────────────────────────────────
-        let source_label = engine;
-        let cluster = findings_correlator::upsert_cluster_for_finding(
-            &mut tx,
-            tenant_id,
-            client_id,
-            &f,
-            ClusterAttrs {
-                target: &target_url,
-                engine,
-                source: source_label,
-                title: &title,
-                severity: &severity,
-                cwe: &cwe,
-                cve: if cve.is_empty() { None } else { Some(&cve) },
-                cvss: Some(cvss),
-                epss_score,
-                kev_listed,
-                is_new_member: vuln_is_new,
-            },
-        )
-        .await
-        .ok();
-
-        // Stamp the new cluster_id onto the vulnerability row.
-        if let Some((cid, ref _key)) = cluster {
-            let _ = sqlx::query("UPDATE vulnerabilities SET cluster_id = $1 WHERE id = $2")
-                .bind(cid)
-                .bind(upserted_id)
-                .execute(&mut *tx)
-                .await;
-        }
+        // ── Correlate into a finding_cluster (out-of-band) ────────────────────
+        // The persist transaction must not lock weissman_finding_clusters
+        // (lock-order inversion vs concurrent workers). Enqueue an ingest row in
+        // this same TX so a failed insert rolls back the finding write.
+        let ingest_row = crate::cluster_ingest::ClusterIngestRow {
+            vuln_id: upserted_id,
+            cluster_key: signature_hash.clone(),
+            target: target_url.clone(),
+            engine: engine.to_string(),
+            source: engine.to_string(),
+            title: title.clone(),
+            severity: severity.clone(),
+            cwe: cwe.clone(),
+            vuln_signature: vuln_signature.clone(),
+            cve: if cve.is_empty() { None } else { Some(cve.clone()) },
+            cvss: Some(cvss),
+            epss: epss_score,
+            kev_listed,
+            is_new_member: vuln_is_new,
+        };
+        crate::cluster_ingest::enqueue(&mut tx, tenant_id, client_id, &ingest_row)
+            .await?;
+        let cluster: Option<(i64, String)> = None;
 
         inserted += 1;
         let _ = upserted_id; // silence unused warning when not building tests
@@ -1070,6 +1061,21 @@ pub async fn persist_engine_findings(
     fp_feedback::bump_suppression_hits(&mut tx, tenant_id, engine, &suppression_hits).await;
 
     tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+
+    if inserted > 0 {
+        let drain_pool = pool.clone();
+        tokio::spawn(async move {
+            if let Err(e) = crate::cluster_ingest::drain_for_tenant(&drain_pool, tenant_id, 200).await
+            {
+                tracing::warn!(
+                    target: "cluster_ingest",
+                    tenant_id,
+                    error = %e,
+                    "post-persist cluster drain failed"
+                );
+            }
+        });
+    }
 
     for (job_id, payload) in soar_held {
         if let Err(e) = crate::async_jobs::finalize_held_job(

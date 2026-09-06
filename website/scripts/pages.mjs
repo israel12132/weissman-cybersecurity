@@ -8,7 +8,7 @@ export const pages = [
     path: '/',
     title: 'Weissman Cybersecurity — Live evidence. Clearer response.',
     description:
-      'Weissman continuously probes authorised attack surfaces with 563 production engines, verifies findings with live evidence, and helps SOC teams prioritise and respond.',
+      'Weissman continuously probes authorised attack surfaces with 573 production engines, verifies findings with live evidence, and helps SOC teams prioritise and respond.',
   },
   {
     id: 'platform',
@@ -32,7 +32,7 @@ export const pages = [
     path: '/platform/vulnerability-research/',
     title: 'Vulnerability Research — Weissman Cybersecurity',
     description:
-      '303 live probes across web, cloud, OT, identity, and supply chain — every finding from a real network or host check.',
+      '313 live probes across web, cloud, OT, identity, and supply chain — every finding from a real network or host check.',
   },
   {
     id: 'detection-response',

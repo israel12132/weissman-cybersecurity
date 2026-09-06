@@ -16,6 +16,7 @@ export const ENGINE_GROUP_DEFS = [
   { id: 'mobile', label: 'Mobile / Apps', color: '#7c3aed' },
   { id: 'data', label: 'Data Exfiltration', color: '#0891b2' },
   { id: 'defense', label: 'Active Defense', color: '#14b8a6' },
+  { id: 'deception', label: 'Deception / Honeynet', color: '#e11d48' },
 ]
 
 export const ENGINE_GROUPS = Object.fromEntries(ENGINE_GROUP_DEFS.map((g) => [g.id, g]))

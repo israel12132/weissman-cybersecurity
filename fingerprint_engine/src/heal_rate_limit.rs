@@ -95,6 +95,24 @@ fn decide(
     }
 }
 
+/// Drop tenants whose sliding window is empty after ageing out old starts.
+pub fn evict_stale() -> usize {
+    let now = Instant::now();
+    let cutoff = now.checked_sub(WINDOW);
+    let mut dropped = 0usize;
+    let mut map = state().lock().unwrap_or_else(|e| e.into_inner());
+    map.retain(|_, w| {
+        w.starts.retain(|&t| cutoff.is_none_or(|c| t >= c));
+        if w.starts.is_empty() {
+            dropped += 1;
+            false
+        } else {
+            true
+        }
+    });
+    dropped
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -63,7 +63,9 @@ pub async fn build_session_cookie_headers(
         assigned_client_id,
     )?;
     let access_line = crate::auth_jwt::session_cookie_value(&minted.token);
-    let refresh = issue_refresh_token(pool, user_id, tenant_id, Some(&minted.jti)).await?;
+    let refresh =
+        issue_refresh_token(pool, user_id, tenant_id, Some(&minted.jti), assigned_client_id)
+            .await?;
     Ok((minted.token, access_line, refresh_cookie_value(&refresh)))
 }
 
@@ -161,6 +163,28 @@ pub async fn store_refresh_access_jti(
     Ok(())
 }
 
+/// Persist impersonation / portal `cid` on the refresh row so rotation keeps the JWT scope.
+pub async fn update_refresh_scope(
+    pool: &PgPool,
+    refresh_raw: &str,
+    scope_client_id: Option<i64>,
+    access_jti: &str,
+) -> Result<(), sqlx::Error> {
+    let th = hash_token(refresh_raw);
+    let cid = scope_client_id.filter(|id| *id > 0);
+    sqlx::query(
+        r#"UPDATE user_refresh_tokens
+           SET scope_client_id = $2, access_jti = $3
+           WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()"#,
+    )
+    .bind(&th)
+    .bind(cid)
+    .bind(access_jti)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 /// Revoke opaque refresh token from cookie value.
 pub async fn revoke_refresh_token_by_raw(pool: &PgPool, raw: &str) -> Result<(), sqlx::Error> {
     let th = hash_token(raw);
@@ -210,29 +234,34 @@ pub async fn issue_refresh_token(
     user_id: i64,
     tenant_id: i64,
     access_jti: Option<&str>,
+    scope_client_id: Option<i64>,
 ) -> Result<String, sqlx::Error> {
     let raw = generate_opaque_token();
     let th = hash_token(&raw);
     let exp = chrono::Utc::now() + chrono::Duration::days(refresh_ttl_days());
+    let cid = scope_client_id.filter(|id| *id > 0);
     sqlx::query(
-        r#"INSERT INTO user_refresh_tokens (user_id, tenant_id, token_hash, expires_at, access_jti)
-           VALUES ($1, $2, $3, $4, $5)"#,
+        r#"INSERT INTO user_refresh_tokens
+               (user_id, tenant_id, token_hash, expires_at, access_jti, scope_client_id)
+           VALUES ($1, $2, $3, $4, $5, $6)"#,
     )
     .bind(user_id)
     .bind(tenant_id)
     .bind(&th)
     .bind(exp)
     .bind(access_jti)
+    .bind(cid)
     .execute(pool)
     .await?;
     Ok(raw)
 }
 
-/// Validates `raw`, revokes that row, inserts a new token, returns the new raw secret and session ids.
+/// Validates `raw`, revokes that row, inserts a new token, returns the new raw secret,
+/// session ids, and the persisted impersonation `cid` (copied from the old row).
 pub async fn rotate_refresh_token(
     pool: &PgPool,
     raw: &str,
-) -> Result<(i64, i64, String), RefreshTokenError> {
+) -> Result<(i64, i64, String, Option<i64>), RefreshTokenError> {
     let th = hash_token(raw);
     let mut tx = pool.begin().await?;
     // Bound the `FOR UPDATE` below. This runs on the AUTH pool with no tenant GUC, so it does
@@ -249,7 +278,7 @@ pub async fn rotate_refresh_token(
     )
     .await?;
     let row = sqlx::query(
-        r#"SELECT id, user_id, tenant_id FROM user_refresh_tokens
+        r#"SELECT id, user_id, tenant_id, scope_client_id FROM user_refresh_tokens
            WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()
            FOR UPDATE"#,
     )
@@ -310,19 +339,26 @@ pub async fn rotate_refresh_token(
     let old_id: i64 = row.try_get("id")?;
     let user_id: i64 = row.try_get("user_id")?;
     let tenant_id: i64 = row.try_get("tenant_id")?;
+    let scope_client_id: Option<i64> = row
+        .try_get::<Option<i64>, _>("scope_client_id")
+        .ok()
+        .flatten()
+        .filter(|id| *id > 0);
 
     let new_raw = generate_opaque_token();
     let new_hash = hash_token(&new_raw);
     let exp = chrono::Utc::now() + chrono::Duration::days(refresh_ttl_days());
 
     let new_id: i64 = sqlx::query_scalar(
-        r#"INSERT INTO user_refresh_tokens (user_id, tenant_id, token_hash, expires_at, access_jti)
-           VALUES ($1, $2, $3, $4, NULL) RETURNING id"#,
+        r#"INSERT INTO user_refresh_tokens
+               (user_id, tenant_id, token_hash, expires_at, access_jti, scope_client_id)
+           VALUES ($1, $2, $3, $4, NULL, $5) RETURNING id"#,
     )
     .bind(user_id)
     .bind(tenant_id)
     .bind(&new_hash)
     .bind(exp)
+    .bind(scope_client_id)
     .fetch_one(&mut *tx)
     .await?;
 
@@ -335,7 +371,7 @@ pub async fn rotate_refresh_token(
     .await?;
 
     tx.commit().await?;
-    Ok((user_id, tenant_id, new_raw))
+    Ok((user_id, tenant_id, new_raw, scope_client_id))
 }
 
 fn refresh_secure_suffix() -> &'static str {
@@ -415,5 +451,21 @@ mod tests {
         assert!(c.starts_with("weissman_refresh=;"));
         assert!(c.contains("Max-Age=0"));
         assert!(c.contains("Path=/api/auth"));
+    }
+
+    #[test]
+    fn refresh_sql_persists_scope_client_id() {
+        let src = include_str!("auth_refresh.rs");
+        let prod = src.split("#[cfg(test)]").next().expect("production source");
+        assert!(prod.contains("scope_client_id"));
+        assert!(prod.contains("fn update_refresh_scope"));
+        assert!(
+            prod.contains("SET scope_client_id = $2, access_jti = $3"),
+            "scope-switch must stamp cid + access jti on the live refresh row"
+        );
+        assert!(
+            prod.contains("(user_id, tenant_id, token_hash, expires_at, access_jti, scope_client_id)"),
+            "issue and rotate must insert scope_client_id"
+        );
     }
 }

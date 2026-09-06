@@ -6,10 +6,13 @@
 //! - target on an explicit whitelist (client config, engagement scope, or signed contract)
 
 use crate::engine_probes::extract_host;
+use crate::engine_result::EngineResult;
 use hmac::{Hmac, Mac};
 use serde_json::{json, Value};
 use sha2::Sha256;
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
+#[cfg(feature = "high_risk_engines")]
+use sqlx::Row;
 use std::fmt;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -70,6 +73,64 @@ impl fmt::Display for RoeViolation {
                 "no active engagement with critical_infra_authorized scope"
             ),
         }
+    }
+}
+
+/// Structured fail-closed result for a RoE denial. Findings stay empty; OT/ICS
+/// probes never look like a completed empty scan.
+#[must_use]
+pub fn blocked_engine_result(
+    engine: &str,
+    target: &str,
+    client_id: Option<i64>,
+    violation: RoeViolation,
+) -> EngineResult {
+    let (control, control_value) = violation_control(violation);
+    let roe = json!({
+        "roe_blocked": true,
+        "engine": engine,
+        "target": target,
+        "client_id": client_id,
+        "violation": violation_name(violation),
+        "detail": violation.to_string(),
+        "control": control,
+        "control_value": control_value,
+        "auto_enable": false,
+        "never_auto_enabled": true,
+    });
+    EngineResult::roe_blocked_with(
+        format!("RoE blocked: {violation} — engine '{engine}' not authorized for target '{target}'"),
+        Some(roe),
+    )
+}
+
+fn violation_name(v: RoeViolation) -> &'static str {
+    match v {
+        RoeViolation::CompileTimeDisabled => "compile_time_disabled",
+        RoeViolation::MissingTenantContext => "missing_tenant_context",
+        RoeViolation::IndustrialOtDisabled => "industrial_ot_disabled",
+        RoeViolation::ProbeNotAuthorized => "probe_not_authorized",
+        RoeViolation::RoeModeInsufficient => "roe_mode_insufficient",
+        RoeViolation::TargetNotInScope => "target_not_in_scope",
+        RoeViolation::ContractExpired => "contract_expired",
+        RoeViolation::ContractSignatureInvalid => "contract_signature_invalid",
+        RoeViolation::NoActiveEngagement => "no_active_engagement",
+    }
+}
+
+fn violation_control(v: RoeViolation) -> (&'static str, Value) {
+    match v {
+        RoeViolation::IndustrialOtDisabled => ("industrial_ot_enabled", json!(false)),
+        RoeViolation::CompileTimeDisabled => ("high_risk_engines", json!(false)),
+        RoeViolation::MissingTenantContext => ("tenant_and_client_id", Value::Null),
+        RoeViolation::ProbeNotAuthorized => ("critical_infra_probe_authorized", json!(false)),
+        RoeViolation::RoeModeInsufficient => ("roe_mode", json!("insufficient")),
+        RoeViolation::TargetNotInScope => ("critical_infra_targets", Value::Null),
+        RoeViolation::ContractExpired => ("critical_infra_contract", json!("expired")),
+        RoeViolation::ContractSignatureInvalid => {
+            ("critical_infra_contract", json!("invalid_signature"))
+        }
+        RoeViolation::NoActiveEngagement => ("engagement", Value::Null),
     }
 }
 
@@ -687,5 +748,23 @@ mod tests {
     #[test]
     fn empty_whitelist_denies() {
         assert!(!target_in_whitelist("10.0.0.1", &[]));
+    }
+
+    #[test]
+    fn industrial_ot_disabled_is_structured_block() {
+        let r = blocked_engine_result(
+            "smart_grid_dlms_attack",
+            "10.0.0.1",
+            Some(42),
+            RoeViolation::IndustrialOtDisabled,
+        );
+        assert_eq!(r.status, "roe_blocked");
+        assert!(r.roe_blocked);
+        assert!(r.findings.is_empty());
+        let roe = r.roe.as_ref().expect("roe");
+        assert_eq!(roe["control"], json!("industrial_ot_enabled"));
+        assert_eq!(roe["control_value"], json!(false));
+        assert_eq!(roe["auto_enable"], json!(false));
+        assert_eq!(roe["never_auto_enabled"], json!(true));
     }
 }

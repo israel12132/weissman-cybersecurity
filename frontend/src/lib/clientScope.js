@@ -79,3 +79,65 @@ export function sessionIdentityLabel(session, t) {
   if (isStaffUser(session)) return t('profile.staff')
   return normRole(session) || t('profile.signed_in')
 }
+
+function clientRecordId(client) {
+  const n = Number(client?.id ?? client?.client_id)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/**
+ * Server `allowed_client_ids` from GET /api/auth/me wins.
+ * Portal / impersonation: a one-element allow-list.
+ * Staff / owner: `null` means unrestricted (the API already scopes SQL).
+ */
+export function allowedClientIds(session) {
+  const raw = session?.allowed_client_ids ?? session?.capabilities?.allowed_client_ids
+  if (Array.isArray(raw)) {
+    return raw.map((v) => Number(v)).filter((n) => Number.isFinite(n) && n > 0)
+  }
+  const assigned = assignedClientId(session)
+  return assigned ? [assigned] : null
+}
+
+export function filterVisibleClients(session, clients) {
+  const list = Array.isArray(clients) ? clients : []
+  const allowed = allowedClientIds(session)
+  // `null` = unrestricted staff/owner. `[]` = scoped session with no id — fail closed.
+  if (allowed === null) return list
+  const allow = new Set(allowed)
+  return list.filter((c) => {
+    const id = clientRecordId(c)
+    return id != null && allow.has(id)
+  })
+}
+
+export function shouldHideClientPicker(session, visibleClients) {
+  if (session?.client_picker_hidden === true) return true
+  if (isClientUser(session)) return true
+  const allowed = allowedClientIds(session)
+  if (Array.isArray(allowed) && allowed.length <= 1) return true
+  if (Array.isArray(visibleClients) && visibleClients.length <= 1) return true
+  return false
+}
+
+/**
+ * Force the bound customer id. Portal / impersonation never trusts a spoofed
+ * `requested` value — same fail-closed overwrite as `force_json_client_id`.
+ */
+export function boundClientId(session, visibleClients, requested) {
+  const allowed = allowedClientIds(session)
+  const requestedId = Number(requested)
+  const requestedOk = Number.isFinite(requestedId) && requestedId > 0 ? requestedId : null
+
+  if (Array.isArray(allowed)) {
+    if (allowed.length === 0) return null
+    if (allowed.length === 1) return allowed[0]
+    if (requestedOk && allowed.includes(requestedOk)) return requestedOk
+    return allowed[0]
+  }
+
+  if (requestedOk) return requestedOk
+  const vis = Array.isArray(visibleClients) ? visibleClients : []
+  if (vis.length === 1) return clientRecordId(vis[0])
+  return null
+}

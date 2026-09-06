@@ -383,6 +383,19 @@ if grep -q 'wasm-bindgen-cli.*--version' deploy/frontend.Dockerfile; then
 else
   bad "wasm-bindgen-cli is unpinned — schema-version drift can break the build"
 fi
+# The pin helper must resolve Cargo.lock from the repo root. `cd frontend && npm run build`
+# sources this file; a cwd-relative Cargo.lock read installs `--version ''` and deletes wasm-bindgen.
+if grep -q '_weissman_repo_root' scripts/ensure-wasm-bindgen-cli.sh \
+  && ! grep -qE 'Path\("Cargo.lock"\)' scripts/ensure-wasm-bindgen-cli.sh; then
+  pin_ver="$(cd frontend && bash -c 'source ../scripts/ensure-wasm-bindgen-cli.sh && wanted_wasm_bindgen_cli')"
+  if [[ "$pin_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    ok "wasm-bindgen pin helper reads Cargo.lock from repo root even from frontend/ ($pin_ver)"
+  else
+    bad "wasm-bindgen pin helper from frontend/ cwd returned '$pin_ver'"
+  fi
+else
+  bad "ensure-wasm-bindgen-cli.sh still reads Cargo.lock from cwd — npm run build from frontend/ breaks the pin"
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 head_ "13. start_weissman.sh — full-stack dispatcher (post-pull launcher)"

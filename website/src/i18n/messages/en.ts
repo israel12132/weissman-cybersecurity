@@ -7,7 +7,7 @@ export const en = {
     home: {
       title: 'Weissman Cybersecurity — Live evidence. Clearer response.',
       description:
-        'Weissman continuously probes authorised attack surfaces with 563 production engines, verifies findings with live evidence, and helps SOC teams prioritise and respond.',
+        'Weissman continuously probes authorised attack surfaces with 573 production engines, verifies findings with live evidence, and helps SOC teams prioritise and respond.',
     },
     platform: {
       title: 'Platform — Weissman Cybersecurity',
@@ -22,7 +22,7 @@ export const en = {
     'vulnerability-research': {
       title: 'Vulnerability Research — Weissman Cybersecurity',
       description:
-        '303 live probes across web, cloud, OT, identity, and supply chain — every finding from a real network or host check.',
+        '313 live probes across web, cloud, OT, identity, and supply chain — every finding from a real network or host check.',
     },
     'detection-response': {
       title: 'Detection and Response — Weissman Cybersecurity',
@@ -544,10 +544,10 @@ export const en = {
       eyebrow: 'Research',
       title: 'Vulnerability research with a live-probe bar',
       summary:
-        '303 live probes — web, API, cloud, OT/ICS, identity, supply chain, AI/LLM, and more. Aliases resolve to a real implementation. CI fails if they do not.',
+        '313 live probes — web, API, cloud, OT/ICS, identity, supply chain, AI/LLM, and more. Aliases resolve to a real implementation. CI fails if they do not.',
       ctaLabel: 'Explore research engines',
       outcomes: [
-        '563 production IDs, every one wired to a runner',
+        '573 production IDs, every one wired to a runner',
         '226 MITRE ATT&CK techniques against the current v19.1 Enterprise, Mobile, and ICS set',
         'No fabricated or randomised findings in the persist path',
       ],
@@ -721,11 +721,11 @@ export const en = {
       },
       'mitre-coverage': {
         title: 'ATT&CK coverage against v19.1',
-        summary: '226 techniques: 192 primary mappings plus 34 code-grounded secondary tags.',
+        summary: '226 techniques: 194 primary mappings plus 32 code-grounded secondary tags.',
       },
       'engine-integrity': {
         title: 'Engine integrity accounting',
-        summary: '563 IDs classified as live probe, alias, or agent-required — CI-gated, no silent catalog entries.',
+        summary: '573 IDs classified as live probe, alias, or agent-required — CI-gated, no silent catalog entries.',
       },
       'platform-overview': {
         title: 'Platform technical overview',

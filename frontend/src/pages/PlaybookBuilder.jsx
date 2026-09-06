@@ -30,6 +30,13 @@ import Button from '../components/ui/Button'
 import PlaybookGraph from '../components/PlaybookGraph'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 import { playbookActionsHaveBlockedWebhook } from '../lib/playbookFlow'
+import PlaybookTemplateGallery from '../components/PlaybookTemplateGallery'
+import {
+  BUILTIN_PLAYBOOKS,
+  loadCustomTemplates,
+  parseImportedPlaybook,
+  deleteCustomTemplate,
+} from '../lib/playbookCatalog'
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
 const SEV_COLORS = {
@@ -300,6 +307,19 @@ export default function PlaybookBuilder() {
       actions: [],
     })
     setStatusMsg(null)
+    setFireResult(null)
+  }
+
+  const applyCatalogTemplate = (template) => {
+    const parsed = parseImportedPlaybook({
+      ...template,
+      name: template.fallbackName || template.name || '',
+      description: template.fallbackDescription || template.description || '',
+    })
+    if (!parsed) return
+    setSelected(null)
+    setDraft(parsed)
+    setStatusMsg({ kind: 'info', text: t('playbooks.catalog.use') })
     setFireResult(null)
   }
 
@@ -633,11 +653,16 @@ export default function PlaybookBuilder() {
         {/* Center — Editor */}
         <main className="overflow-y-auto custom-scroll p-5 lg:p-6">
           {!draft ? (
-            <div className="flex h-full min-h-[320px] flex-col items-center justify-center text-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--row-hover-bg)] ring-1 ring-white/[0.08]">
-                <Zap className="h-7 w-7 text-[var(--text-disabled)]" />
-              </div>
-              <p className="max-w-sm text-[14px] text-[var(--text-muted)]">{t('playbooks.pick_playbook')}</p>
+            <div className="p-1">
+              <PlaybookTemplateGallery
+                templates={[...BUILTIN_PLAYBOOKS, ...loadCustomTemplates()]}
+                onSelect={applyCatalogTemplate}
+                onCreateBlank={startNew}
+                onDeleteCustom={(id) => {
+                  deleteCustomTemplate(id)
+                  setStatusMsg({ kind: 'ok', text: t('playbooks.catalog.delete_custom') })
+                }}
+              />
             </div>
           ) : (
             <div className="mx-auto max-w-3xl space-y-6">
@@ -645,6 +670,7 @@ export default function PlaybookBuilder() {
               <div className="space-y-3">
                 <input
                   type="text"
+                  data-testid="playbook-name"
                   value={draft.name}
                   onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
                   placeholder={t('playbooks.name_placeholder')}

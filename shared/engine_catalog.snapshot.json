@@ -1,23 +1,23 @@
 {
-  "generated_at": "2026-08-31T19:47:50.041Z",
+  "generated_at": "2026-09-05T20:27:00.627Z",
   "source": {
     "production": "backend/weissman-core/src/models/engine.rs",
     "agent_required": "backend/weissman-core/src/models/engine_agent.rs",
     "frontend": "frontend/src/lib/enginesRegistry.js"
   },
   "counts": {
-    "production": 567,
-    "frontend": 567,
+    "production": 573,
+    "frontend": 573,
     "agent_required": 48,
-    "groups": 15
+    "groups": 16
   },
   "groups": {
     "recon": 45,
     "web": 71,
-    "ai": 46,
+    "ai": 49,
     "cloud": 48,
     "ot": 44,
-    "stealth": 53,
+    "stealth": 55,
     "crypto": 44,
     "network": 56,
     "supply_chain": 33,
@@ -26,7 +26,8 @@
     "social": 16,
     "mobile": 15,
     "data": 15,
-    "defense": 4
+    "defense": 4,
+    "deception": 1
   },
   "agent_required_ids": [
     "process_hollowing",

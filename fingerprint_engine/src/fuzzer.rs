@@ -315,6 +315,7 @@ async fn process_post_anomaly(
         baseline_vs_anomaly: baseline_vs,
         oob_token,
         llm_user_prompt,
+        ..Default::default()
     })
 }
 
@@ -457,6 +458,7 @@ async fn collect_oob_verified_findings(
                 baseline_vs_anomaly: baseline_vs,
                 oob_token: Some(token.clone()),
                 llm_user_prompt: None,
+                ..Default::default()
             });
         }
     }
@@ -523,6 +525,7 @@ async fn process_get_anomaly(
         baseline_vs_anomaly: baseline_vs,
         oob_token: None,
         llm_user_prompt,
+        ..Default::default()
     })
 }
 
@@ -1240,6 +1243,7 @@ async fn param_injection_pass_with_urls(
                 baseline_vs_anomaly: baseline_vs.clone(),
                 oob_token: None,
                 llm_user_prompt: llm_p,
+                ..Default::default()
             })
         });
     }

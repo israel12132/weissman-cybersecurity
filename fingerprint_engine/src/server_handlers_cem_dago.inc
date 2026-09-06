@@ -4,15 +4,19 @@ async fn api_cem_dago_status() -> Response {
     (StatusCode::OK, Json(crate::cem_dago::status_json())).into_response()
 }
 
-async fn api_cem_dago_manifests(Query(q): Query<std::collections::HashMap<String, String>>) -> Response {
+async fn api_cem_dago_manifests(
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
     let limit = q
         .get("limit")
         .and_then(|s| s.parse::<usize>().ok())
-        .unwrap_or(563);
+        .unwrap_or_else(|| weissman_core::models::engine::PRODUCTION_ENGINE_IDS.len());
     (StatusCode::OK, Json(crate::cem_dago::manifests_json(limit))).into_response()
 }
 
-async fn api_cem_dago_waves(Query(q): Query<std::collections::HashMap<String, String>>) -> Response {
+async fn api_cem_dago_waves(
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
     let engines: Vec<String> = q
         .get("engines")
         .map(|s| {

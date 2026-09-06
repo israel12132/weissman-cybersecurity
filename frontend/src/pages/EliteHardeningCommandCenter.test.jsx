@@ -53,7 +53,7 @@ describe('EliteHardeningCommandCenter', () => {
       live_probes_target: 303,
       moat: {
         unmatched_stack: true,
-        engines_total: 563,
+        engines_total: 573,
         lanes_covered: 16,
         lanes_total: 16,
         lanes: [

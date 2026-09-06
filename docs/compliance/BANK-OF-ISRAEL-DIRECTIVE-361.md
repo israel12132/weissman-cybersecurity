@@ -23,7 +23,7 @@
 
 | דרישת חוזר 361 | בקרה בפלטפורמה | מיקום בקוד / מסמך |
 |---|---|---|
-| מיפוי נכסי מידע קריטיים | 563 מנועי סריקה, מיפוי לפי MITRE ATT&CK | `scripts/verify_engine_wiring.mjs` |
+| מיפוי נכסי מידע קריטיים | 573 מנועי סריקה, מיפוי לפי MITRE ATT&CK | `scripts/verify_engine_wiring.mjs` |
 | הערכת סיכון שוטפת | סריקה אוטומטית ב-tenant intervals + intelligence feeds | `fingerprint_engine/src/orchestrator.rs` |
 | תגובה לאירוע (SIRT) | SEV-1 ≤ 15 דקות, SEV-2 ≤ 1 שעה, 24/7 on-call | `SLA_AND_STATUS.md` §4, `docs/operations/INCIDENT-ONCALL-RUNBOOK-he.md` |
 | בקרת גישה לפי צורך (Least Privilege) | RBAC 5 רמות: `viewer < analyst < operator < admin < ceo` | `fingerprint_engine/src/rbac.rs` |

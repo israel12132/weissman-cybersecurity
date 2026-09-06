@@ -49,7 +49,7 @@
 
 | ספר | תיאור |
 |-----|--------|
-| **[WEISSMAN-COMMAND-CENTER-BOOK.md](he/WEISSMAN-COMMAND-CENTER-BOOK.md)** | **ספר הפעלה** — workflows, 533 מנועים (למפעיל SOC) |
+| **[WEISSMAN-COMMAND-CENTER-BOOK.md](he/WEISSMAN-COMMAND-CENTER-BOOK.md)** | **ספר הפעלה** — workflows, 573 מנועים (למפעיל SOC) |
 | **[WEISSMAN-PLATFORM-ENCYCLOPEDIA.md](../sales/WEISSMAN-PLATFORM-ENCYCLOPEDIA.md)** | **ספר מוצר למכירות** — 659 עמודים, מה·למה·מתי·איפה·איך·כמה |
 | [WEISSMAN-COMMAND-CENTER-BOOK-en.md](en/WEISSMAN-COMMAND-CENTER-BOOK-en.md) | Same book in English |
 

@@ -16,7 +16,13 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/findings", get(api_findings))
         .route("/api/findings/clusters", get(api_findings_clusters))
         .route("/api/findings/export/csv", get(api_findings_export_csv))
+        .route("/api/findings/export/xlsx", get(api_findings_export_xlsx))
         .route("/api/export/findings", get(api_findings_export_csv))
+        .route("/api/export/document", post(api_export_document))
+        .route("/api/export/workbook", post(api_export_workbook))
+        .route("/api/ai/readiness", get(api_ai_readiness))
+        .route("/api/ai/readiness/probe", post(api_ai_readiness_probe))
+        .route("/api/analytics/attack-vectors", get(api_analytics_attack_vectors))
         .route(
             "/api/findings/:id/status",
             patch(api_findings_update_status),
@@ -252,6 +258,11 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             get(crate::http::rate_limit_metrics::api_rate_limits_analytics),
         )
         .route("/api/login", post(api_login))
+        .route(
+            "/api/auth/tenant-directory",
+            get(crate::tenant_directory::api_auth_tenant_directory),
+        )
+        .route("/api/auth/scope-switch", post(crate::scope_switch::api_scope_switch))
         .route("/api/logout", post(api_logout))
         .route("/api/auth/refresh", post(api_auth_refresh))
         .route("/api/auth/mfa/verify", post(api_auth_mfa_verify))
@@ -384,6 +395,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/clients/:id/findings", get(api_client_findings_all))
         .route("/api/clients/:id/export/csv", get(api_client_export_csv))
+        .route("/api/clients/:id/export/xlsx", get(api_client_export_xlsx))
         .route("/api/clients/:id/report/pdf", get(api_client_report_pdf))
         .route(
             "/api/clients/:id/report/crypto-proof",
@@ -498,6 +510,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/latency-probe", post(api_latency_probe))
         .route("/api/poe-scan/run", post(api_poe_scan_run))
         .route("/api/jobs", get(api_async_jobs_list))
+        .route("/api/jobs/diagnostics", get(api_jobs_diagnostics))
         .route("/api/jobs/:job_id", get(api_async_job_status))
         .route("/api/poe-scan/status/:job_id", get(api_poe_scan_status))
         .route("/api/poe-scan/stream/:job_id", get(api_poe_scan_stream))
@@ -807,6 +820,22 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             get(api_ceo_vault_export_criticals),
         )
         .route(
+            "/api/ceo/vault/export/criticals.xlsx",
+            get(api_ceo_vault_export_criticals_xlsx),
+        )
+        .route(
+            "/api/ceo/platform-keys",
+            get(api_ceo_platform_keys_get).put(api_ceo_platform_keys_put),
+        )
+        .route(
+            "/api/ceo/platform-keys/:env_name/reveal",
+            post(api_ceo_platform_keys_reveal),
+        )
+        .route(
+            "/api/ceo/platform-keys/:env_name",
+            delete(api_ceo_platform_keys_delete),
+        )
+        .route(
             "/api/ceo/vault/secrets",
             get(api_ceo_vault_secrets_alias).post(api_ceo_vault_secrets_post),
         )
@@ -906,5 +935,63 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route(
             "/api/compliance/evidence-pack/:client_id",
             get(api_compliance_evidence_pack),
+        )
+        // Unified landing — unfinished agent surfaces
+        .route("/api/kill-chain-commander", get(api_kill_chain_commander))
+        .route(
+            "/api/kill-chain-commander/compose",
+            post(api_kill_chain_commander_compose),
+        )
+        .route("/api/pdf-intelligence", get(api_pdf_intelligence))
+        .route(
+            "/api/pdf-intelligence/compose",
+            post(api_pdf_intelligence_compose),
+        )
+        .route(
+            "/api/honey-routing/:client_id/dashboard",
+            get(api_honey_routing_dashboard),
+        )
+        .route(
+            "/api/honey-routing/:client_id/sessions/:session_id",
+            get(api_honey_routing_session),
+        )
+        .route(
+            "/api/honey-routing/:client_id/sessions/:session_id/isolate-request",
+            post(api_honey_routing_isolate_request),
+        )
+        .route(
+            "/api/honey-routing/:client_id/sessions/:session_id/isolate-approve",
+            post(api_honey_routing_isolate_approve),
+        )
+        .route(
+            "/api/llm-ultra-guard/inspect",
+            post(api_llm_ultra_guard_inspect),
+        )
+        .route("/api/llm-ultra-guard/status", get(api_llm_ultra_guard_status))
+        .route("/api/llm-ultra-guard/events", get(api_llm_ultra_guard_events))
+        .route("/api/llm-ultra-guard/rag", get(api_llm_ultra_guard_rag))
+        .route(
+            "/api/llm-ultra-guard/rag-integrity",
+            get(api_llm_ultra_guard_rag),
+        )
+        .route(
+            "/api/stealthy-persistence-evasion/catalog",
+            get(api_stealthy_persistence_catalog),
+        )
+        .route(
+            "/api/stealthy-persistence-evasion/status",
+            get(api_stealthy_persistence_status),
+        )
+        .route(
+            "/api/stealthy-persistence-evasion/fail-safe",
+            post(api_stealthy_persistence_fail_safe),
+        )
+        .route(
+            "/api/stealthy-persistence-evasion/auto-remediate",
+            post(api_stealthy_persistence_auto_remediate),
+        )
+        .route(
+            "/api/stealthy-persistence-evasion/plant-deception",
+            post(api_stealthy_persistence_plant_deception),
         )
 }

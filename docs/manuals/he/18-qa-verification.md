@@ -34,7 +34,7 @@ bash scripts/full_audit_gate.sh
 node scripts/verify_engine_wiring.mjs
 ```
 
-**Pass:** exit 0. **563 מנועים**, 0 gaps.
+**Pass:** exit 0. **573 מנועים**, 0 gaps.
 
 ### 2. Engine reality
 
@@ -96,7 +96,7 @@ cd frontend && npm run test:coverage
 
 ```
   [ ] full_audit_gate.sh — GLOBAL PASS
-  [ ] 563 engine IDs, 130 routes, 0 gaps
+  [ ] 573 engine IDs, 130 routes, 0 gaps
   [ ] evidence-pack JSON + PDF
   [ ] login + scan + findings + PDF
 ```

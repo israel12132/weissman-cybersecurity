@@ -81,7 +81,7 @@ async fn api_auth_refresh(
             .into_response();
     };
     match crate::auth_refresh::rotate_refresh_token(state.auth_pool.as_ref(), &raw).await {
-        Ok((user_id, tenant_id, new_refresh)) => {
+        Ok((user_id, tenant_id, new_refresh, scope_client_id)) => {
             let (role, is_superadmin, assigned_client_id) =
                 match crate::auth_refresh::user_rbac_snapshot(state.auth_pool.as_ref(), user_id).await
                 {
@@ -102,6 +102,13 @@ async fn api_auth_refresh(
                             .into_response();
                     }
                 };
+            // Portal lock: provisioned assigned_client_id always wins.
+            // Staff impersonation: refresh.scope_client_id is the JWT cid.
+            let jwt_cid = if crate::client_isolation::is_client_role(&role) {
+                assigned_client_id
+            } else {
+                scope_client_id.filter(|id| *id > 0)
+            };
             let binding = crate::auth_jwt::StreamBinding::from_http(&headers, addr);
             let minted = match crate::auth_jwt::create_access_token(
                 user_id,
@@ -109,7 +116,7 @@ async fn api_auth_refresh(
                 role.as_str(),
                 is_superadmin,
                 &binding,
-                assigned_client_id,
+                jwt_cid,
             ) {
                 Ok(t) => t,
                 Err(e) => {
@@ -138,7 +145,7 @@ async fn api_auth_refresh(
                     "tenant_id": tenant_id,
                     "role": role,
                     "is_superadmin": is_superadmin,
-                    "assigned_client_id": assigned_client_id,
+                    "assigned_client_id": jwt_cid,
                     "access_token": minted.token,
                 })),
             )

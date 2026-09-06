@@ -13,6 +13,7 @@ import { normalizeIntegrations } from '../lib/engineClientPrefill'
 import { firstClientTarget } from '../lib/clientTarget'
 import { useRegisterHubClient } from '../context/EngineHubContext'
 import { useClient } from '../context/ClientContext'
+import { BoundClientScanField } from '../components/scan/ClientScanBinding'
 import { useLaunchEngineScan } from '../hooks/useLaunchEngineScan'
 import { useProductionEngines } from '../lib/useProductionEngines'
 import { useEngineCapabilities } from '../lib/useEngineCapabilities'
@@ -738,16 +739,13 @@ export default function EngineMatrix() {
 
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('engines.client_label')}:</span>
-              <select
-                value={selectedClientId ?? ''}
-                onChange={(e) => setSelectedClientId(e.target.value || null)}
-                className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
-              >
-                <option value="">{t('engines.select_client')}</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <BoundClientScanField
+                clients={clients}
+                selectedClientId={selectedClientId}
+                onChange={(id) => setSelectedClientId(id || null)}
+                selectClassName="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
+                id="engine-matrix-client"
+              />
               {(configLoading || productionLoading) && (
                 <div className="w-3.5 h-3.5 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
               )}

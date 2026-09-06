@@ -16,8 +16,116 @@
 //!     preloads suppression rules once per `(tenant, engine)` and bumps hit-counts in one batch
 //!   * [`confidence_multiplier`] — called from `findings_persist` and the read API
 
+use dashmap::DashMap;
 use sqlx::{PgPool, Postgres, Transaction};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
+
+/// Local suppression snapshot TTL. Redis pub/sub busts this immediately on
+/// analyst FP/delete; reconnect uses stale-while-revalidate instead of a fleet-wide clear.
+const SUPPRESSION_CACHE_TTL: Duration = Duration::from_secs(30);
+
+struct SuppressionCacheEntry {
+    loaded_at: Instant,
+    rules: Vec<SuppressionRule>,
+}
+
+fn suppression_cache() -> &'static DashMap<(i64, String), SuppressionCacheEntry> {
+    static CACHE: OnceLock<DashMap<(i64, String), SuppressionCacheEntry>> = OnceLock::new();
+    CACHE.get_or_init(DashMap::new)
+}
+
+static SUPPRESSION_SWR: AtomicBool = AtomicBool::new(false);
+
+fn cache_key(tenant_id: i64, engine: &str) -> (i64, String) {
+    (tenant_id, engine.trim().to_ascii_lowercase())
+}
+
+/// Drop one `(tenant, engine)` snapshot on this replica and publish a fleet bust.
+pub fn invalidate_suppression_cache(tenant_id: i64, engine: &str) {
+    invalidate_suppression_cache_local(tenant_id, engine);
+    crate::suppression_cache_sync::publish_bust(tenant_id, Some(engine));
+}
+
+/// Drop every engine snapshot for a tenant and publish a fleet bust.
+pub fn invalidate_suppression_cache_tenant(tenant_id: i64) {
+    invalidate_suppression_cache_tenant_local(tenant_id);
+    crate::suppression_cache_sync::publish_bust(tenant_id, None);
+}
+
+/// Local-only drop (Redis subscriber / same-replica publisher).
+pub fn invalidate_suppression_cache_local(tenant_id: i64, engine: &str) {
+    suppression_cache().remove(&cache_key(tenant_id, engine));
+}
+
+/// Local-only drop of every engine for a tenant.
+pub fn invalidate_suppression_cache_tenant_local(tenant_id: i64) {
+    suppression_cache().retain(|(tid, _), _| *tid != tenant_id);
+}
+
+/// Pub/Sub reconnect: keep serving cached rules, refresh from Postgres after jitter.
+pub fn mark_suppression_cache_stale_for_swr() {
+    SUPPRESSION_SWR.store(true, Ordering::Relaxed);
+}
+
+/// Jittered Postgres reload of currently cached keys. Never empties the DashMap.
+pub fn schedule_suppression_cache_swr_refresh(pool: Arc<PgPool>) {
+    if tokio::runtime::Handle::try_current().is_err() {
+        return;
+    }
+    tokio::spawn(async move {
+        let jitter_ms = rand::random_range(0u64..=5_000);
+        tokio::time::sleep(Duration::from_millis(jitter_ms)).await;
+        let keys: Vec<(i64, String)> = suppression_cache()
+            .iter()
+            .map(|e| e.key().clone())
+            .collect();
+        for (tenant_id, engine) in keys {
+            let rules = load_active_suppressions(&pool, tenant_id, &engine).await;
+            suppression_cache().insert(
+                (tenant_id, engine),
+                SuppressionCacheEntry {
+                    loaded_at: Instant::now(),
+                    rules,
+                },
+            );
+        }
+        SUPPRESSION_SWR.store(false, Ordering::Relaxed);
+    });
+}
+
+async fn load_active_suppressions(
+    pool: &PgPool,
+    tenant_id: i64,
+    engine: &str,
+) -> Vec<SuppressionRule> {
+    if engine.is_empty() {
+        return Vec::new();
+    }
+    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
+        return Vec::new();
+    };
+    let rows: Vec<(String, Option<String>)> = sqlx::query_as(
+        r#"SELECT signature_hash, target_glob FROM finding_suppressions
+            WHERE tenant_id = $1
+              AND engine = $2
+              AND (expires_at IS NULL OR expires_at > now())"#,
+    )
+    .bind(tenant_id)
+    .bind(engine)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let _ = tx.commit().await;
+    rows.into_iter()
+        .map(|(signature_hash, target_glob)| SuppressionRule {
+            signature_hash,
+            target_glob,
+        })
+        .collect()
+}
 
 const AUTO_SUPPRESS_FP_THRESHOLD: i32 = 3;
 
@@ -225,12 +333,9 @@ pub async fn confidence_multipliers_batch(
     out
 }
 
-/// Batch-load the set of **active** suppression signature-hashes for one `(tenant, engine)` in a
-/// single query. Replaces the per-finding [`is_suppressed`] call in the persist write path (which
-/// opened one tenant transaction + query *per finding* — an N+1 that, on a scan yielding hundreds
-/// of findings, cost hundreds of extra round-trips). All findings in a `persist_engine_findings`
-/// call share one engine, so we can resolve suppression once. Hit-count telemetry is applied
-/// separately via [`bump_suppression_hits`] inside the caller's existing transaction.
+/// Batch-load the set of **active** suppression signature-hashes for one `(tenant, engine)`.
+/// Hits a 30s DashMap first; Redis pub/sub busts it on analyst FP/delete so replica B cannot
+/// keep dispatching SOAR after replica A already suppressed.
 pub async fn active_suppressions_for_engine(
     pool: &PgPool,
     tenant_id: i64,
@@ -239,27 +344,23 @@ pub async fn active_suppressions_for_engine(
     if engine.is_empty() {
         return Vec::new();
     }
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Vec::new();
-    };
-    let rows: Vec<(String, Option<String>)> = sqlx::query_as(
-        r#"SELECT signature_hash, target_glob FROM finding_suppressions
-            WHERE tenant_id = $1
-              AND engine = $2
-              AND (expires_at IS NULL OR expires_at > now())"#,
-    )
-    .bind(tenant_id)
-    .bind(engine)
-    .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
-    rows.into_iter()
-        .map(|(signature_hash, target_glob)| SuppressionRule {
-            signature_hash,
-            target_glob,
-        })
-        .collect()
+    let key = cache_key(tenant_id, engine);
+    let swr = SUPPRESSION_SWR.load(Ordering::Relaxed);
+    if let Some(entry) = suppression_cache().get(&key) {
+        let fresh = entry.loaded_at.elapsed() < SUPPRESSION_CACHE_TTL;
+        if fresh || swr {
+            return entry.rules.clone();
+        }
+    }
+    let rules = load_active_suppressions(pool, tenant_id, &key.1).await;
+    suppression_cache().insert(
+        key,
+        SuppressionCacheEntry {
+            loaded_at: Instant::now(),
+            rules: rules.clone(),
+        },
+    );
+    rules
 }
 
 /// One active `finding_suppressions` row. `target_glob == None` (or empty) suppresses the

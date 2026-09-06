@@ -1,0 +1,33 @@
+# Generated when the host cgroup v2 hierarchy cannot attach domain controllers
+# (memory/io). Nested/sandboxed hosts often only delegate cpu+cpuset+pids, and
+# runc then refuses to start any container that has deploy.resources.limits.memory.
+# The launcher writes the live copy next to this file when that is the case.
+services:
+  postgres:
+    deploy: !reset
+  redis:
+    deploy: !reset
+  backend:
+    deploy: !reset
+  worker:
+    deploy: !reset
+  gateway:
+    deploy: !reset
+  prometheus:
+    deploy: !reset
+  grafana:
+    deploy: !reset
+  alertmanager:
+    deploy: !reset
+  node-exporter:
+    deploy: !reset
+  redis-exporter:
+    deploy: !reset
+  postgres-exporter:
+    deploy: !reset
+  blackbox-exporter:
+    deploy: !reset
+  tempo:
+    deploy: !reset
+  oast:
+    deploy: !reset

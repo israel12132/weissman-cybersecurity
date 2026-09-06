@@ -1567,7 +1567,7 @@ async fn api_scan(
         {
             Ok(x) => x,
             Err(e) => {
-                let mut body_json = json!({"detail": e.detail(), "code": e.error_code()});
+                let mut body_json = e.json_body();
                 let mut response_headers = axum::http::HeaderMap::new();
                 if let Some((reset_at, limit, used)) = e.quota_metadata() {
                     let retry_after = (reset_at - chrono::Utc::now().timestamp()).max(1);
@@ -1586,12 +1586,20 @@ async fn api_scan(
                 return resp;
             }
         };
-    if let Some(t) = scan_body
+    let enrich_target = payload
         .get("target")
         .and_then(Value::as_str)
-        .map(|s| s.trim())
+        .map(str::trim)
         .filter(|s| !s.is_empty())
-    {
+        .map(str::to_string)
+        .or_else(|| {
+            scan_body
+                .get("target")
+                .and_then(Value::as_str)
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        });
+    if let Some(ref t) = enrich_target {
         crate::edge_swarm_intel::enrich_scan_payload_with_edge_node(
             state.app_pool.as_ref(),
             auth.tenant_id,
@@ -1640,7 +1648,7 @@ async fn ws_timing(
     let tenant_id = auth.tenant_id;
     let viewer_cid = auth.assigned_client_id;
     let mut rx = state.timing_broadcast_tx.subscribe();
-    ws.on_upgrade(move |mut socket| async move {
+    crate::http::bounded_codec::constrain_ws(ws).on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
             if let Some(scoped) = crate::http::tenant_stream::visible_to_scoped(&msg, tenant_id, viewer_cid) {
                 if socket.send(Message::Text(scoped)).await.is_err() { break; }
@@ -1657,7 +1665,7 @@ async fn ws_ai_redteam(
     let tenant_id = auth.tenant_id;
     let viewer_cid = auth.assigned_client_id;
     let mut rx = state.redteam_broadcast_tx.subscribe();
-    ws.on_upgrade(move |mut socket| async move {
+    crate::http::bounded_codec::constrain_ws(ws).on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
             if let Some(scoped) = crate::http::tenant_stream::visible_to_scoped(&msg, tenant_id, viewer_cid) {
                 if socket.send(Message::Text(scoped)).await.is_err() { break; }
@@ -1674,7 +1682,7 @@ async fn ws_threat_intel(
     let tenant_id = auth.tenant_id;
     let viewer_cid = auth.assigned_client_id;
     let mut rx = state.radar_broadcast_tx.subscribe();
-    ws.on_upgrade(move |mut socket| async move {
+    crate::http::bounded_codec::constrain_ws(ws).on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
             if let Some(scoped) = crate::http::tenant_stream::visible_to_scoped(&msg, tenant_id, viewer_cid) {
                 if socket.send(Message::Text(scoped)).await.is_err() { break; }

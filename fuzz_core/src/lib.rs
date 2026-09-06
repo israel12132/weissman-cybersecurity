@@ -62,7 +62,7 @@ pub struct Baseline {
     pub content_length: usize,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct ValidatedAnomaly {
     pub target_url: String,
     pub payload: String,
@@ -74,6 +74,71 @@ pub struct ValidatedAnomaly {
     /// vLLM user prompt that produced this payload (generative fuzzing provenance).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub llm_user_prompt: Option<String>,
+    /// Live HTTP status from the confirming probe (required for `verified=true` unless OAST).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub http_status: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub http_method: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub response_excerpt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub location_header: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<f64>,
+    /// Specialized campaign kind (`reflected_xss`, `csrf`, `open_redirect`, `race`, …).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_kind: Option<String>,
+}
+
+impl ValidatedAnomaly {
+    #[must_use]
+    pub fn new(
+        target_url: impl Into<String>,
+        payload: impl Into<String>,
+        anomaly_type: impl Into<String>,
+        baseline_vs_anomaly: impl Into<String>,
+    ) -> Self {
+        Self {
+            target_url: target_url.into(),
+            payload: payload.into(),
+            anomaly_type: anomaly_type.into(),
+            baseline_vs_anomaly: baseline_vs_anomaly.into(),
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn with_http_proof(
+        mut self,
+        method: impl Into<String>,
+        status: u16,
+        excerpt: impl Into<String>,
+        latency_ms: f64,
+    ) -> Self {
+        self.http_method = Some(method.into());
+        self.http_status = Some(status);
+        self.response_excerpt = Some(excerpt.into());
+        self.latency_ms = Some(latency_ms);
+        self
+    }
+
+    #[must_use]
+    pub fn with_location(mut self, location: impl Into<String>) -> Self {
+        self.location_header = Some(location.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_kind(mut self, kind: impl Into<String>) -> Self {
+        self.evidence_kind = Some(kind.into());
+        self
+    }
+
+    /// True when the anomaly carries a live HTTP status from the confirming probe.
+    #[must_use]
+    pub fn has_http_proof(&self) -> bool {
+        self.http_status.is_some()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -558,6 +623,27 @@ mod tests {
     }
 
     // ---- Mutator ----------------------------------------------------------
+
+    #[test]
+    fn validated_anomaly_http_proof_constructors() {
+        let a = ValidatedAnomaly::new("https://t", "p", "title", "base vs");
+        assert!(a.http_status.is_none());
+        let proved = a
+            .with_http_proof("GET", 200, "<svg>canary</svg>", 12.4)
+            .with_location("https://evil.example/")
+            .with_kind("open_redirect");
+        assert_eq!(proved.http_status, Some(200));
+        assert_eq!(proved.http_method.as_deref(), Some("GET"));
+        assert_eq!(proved.latency_ms, Some(12.4));
+        assert_eq!(proved.evidence_kind.as_deref(), Some("open_redirect"));
+        assert_eq!(
+            proved.location_header.as_deref(),
+            Some("https://evil.example/")
+        );
+        let json = serde_json::to_value(&proved).unwrap();
+        assert_eq!(json["http_status"], 200);
+        assert!(json.get("oob_token").is_none());
+    }
 
     #[test]
     fn mutator_base_roundtrips() {

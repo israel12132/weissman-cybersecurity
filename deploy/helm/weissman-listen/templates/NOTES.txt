@@ -1,0 +1,17 @@
+Weissman listen backlog (somaxconn)
+
+mode={{ .Values.mode }}  daemonSet.enabled={{ .Values.daemonSet.enabled }}
+
+Default CNI pods use the *pod* network namespace. `sysctl -w` on the node
+does not change Axum's listen() backlog. Pick one:
+
+- preflight (default): Helm hook Job + backend initContainer fail-closed if
+  somaxconn < 4096. No privileged containers.
+- podSysctl: kubelet allowedUnsafeSysctls, then pod securityContext.sysctls.
+  See ConfigMap {{ .Release.Name }}-pod-sysctl.
+- privilegedInit: PSS exception; merge the init container from ConfigMap
+  {{ .Release.Name }}-privileged-init into weissman-backend.
+
+Optional: --set daemonSet.enabled=true for hostNetwork listeners only.
+
+kubectl logs job/{{ .Release.Name }}-listen-preflight

@@ -74,7 +74,7 @@ cd docs/sales/viewer && python3 -m http.server 8765
 | Install, WS, legal, webhooks | 10 | ג׳ |
 | **כל לוח UI** | 108+ | ד׳ |
 | **כל API domain + index** | 12 | ה׳ |
-| **כל מנוע** | 563 | ו׳ |
+| **כל מנוע** | 573 | ו׳ |
 
 **סה״כ ~680+ עמודים** — כל אחד: מה · למה · מתי · איפה · איך · כמה.
 
@@ -94,5 +94,5 @@ node scripts/generate_platform_encyclopedia.mjs
 
 - **אל** תפתח את `docs/manuals/` בפגישת CEO — זה DevOps.
 - **כן** תפתח `viewer/index.html` — זה Product Bible.
-- הדגש: **Live Only** (עמוד 008) + **563 engine IDs** (303 real probes + 212 aliases + 48 agent) (חלק ו׳).
+- הדגש: **Live Only** (עמוד 008) + **573 engine IDs** (313 real probes + 212 aliases + 48 agent) (חלק ו׳).
 - אם שואלים "מה חסר?" — חפש במסמך; אם לא נמצא, זה באג בתיעוד — לא feature gap.

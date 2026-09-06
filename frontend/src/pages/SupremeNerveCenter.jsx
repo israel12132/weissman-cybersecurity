@@ -20,6 +20,7 @@ import DataTable from '../components/ui/DataTable'
 import { apiFetch } from '../utils/apiFetch'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import Button from '../components/ui/Button'
+import { PRODUCTION_ENGINE_COUNT } from '../lib/platformScale'
 
 // 10s cadence: each poll is a ~500-row DB query plus an O(engines × live_runs) scan
 // and a several-hundred-KB snapshot, so sub-10s polling is pure waste.
@@ -291,7 +292,7 @@ function SupremeNerveCenterInner() {
       </aside>
 
       <main className="flex-1 overflow-auto p-6">
-        <EvidenceNotice>{t('supremeNerveCenter.evidence_notice')}</EvidenceNotice>
+        <EvidenceNotice>{t('supremeNerveCenter.evidence_notice', { engines: summary.engines_total ?? PRODUCTION_ENGINE_COUNT })}</EvidenceNotice>
 
         <header className="mb-6 mt-4 flex flex-wrap items-center justify-between gap-4">
           <div>

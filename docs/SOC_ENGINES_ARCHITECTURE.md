@@ -18,7 +18,7 @@ longer dispatches scans through them.
 
 The authoritative list is in `backend/weissman-core/src/models/engine.rs`:
 
-- `PRODUCTION_ENGINE_IDS` — **563 entries** (verify the live count with
+- `PRODUCTION_ENGINE_IDS` — **573 entries** (verify the live count with
   `node scripts/verify_engine_wiring.mjs`). Every ID maps to a real Rust
   function returning `EngineResult`. The orchestrator and the
   `/api/command-center/scan` endpoint will only dispatch IDs in this list
@@ -124,7 +124,7 @@ negative.
 
 ## 5. Frontend orientation
 
-- **Engine Matrix** (`/engines`) — all 563 engine IDs, status toggles, click-to-run.
+- **Engine Matrix** (`/engines`) — all 573 engine IDs, status toggles, click-to-run.
 - **Engine Detail** (`/engines/:engineId`) — per-engine docs, parameters,
   run-history table.
 - **Findings Command Center** (`/findings`) — TanStack-Table view, drawer

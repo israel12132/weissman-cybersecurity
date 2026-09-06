@@ -9,11 +9,14 @@ pub mod advisory_lock;
 pub mod analytics;
 pub mod auth_access;
 pub mod auth_rotation;
+pub mod bulk_copy;
 pub mod env_bootstrap;
 pub mod job_queue;
 pub mod llm_usage;
 pub mod no_tx_migrations;
+pub mod pg_binary_copy;
 pub mod role_guard;
+pub mod secret;
 
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::{Postgres, Transaction};
@@ -653,6 +656,14 @@ pub async fn begin_tenant_tx_scoped(
 /// needs to enumerate does not have to be handed a BYPASSRLS connection.
 pub async fn active_tenant_ids(pool: &PgPool) -> Result<Vec<i64>, sqlx::Error> {
     sqlx::query_scalar("SELECT * FROM public.active_tenant_ids()")
+        .fetch_all(pool)
+        .await
+}
+
+/// Slug + display name of active tenants, past RLS, for the pre-auth login picker.
+/// Backed by `public.login_tenant_directory()` (SECURITY DEFINER). Returns no ids.
+pub async fn login_tenant_directory(pool: &PgPool) -> Result<Vec<(String, String)>, sqlx::Error> {
+    sqlx::query_as("SELECT slug, name FROM public.login_tenant_directory()")
         .fetch_all(pool)
         .await
 }

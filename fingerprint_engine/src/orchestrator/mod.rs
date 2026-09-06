@@ -35,6 +35,7 @@ use tokio::sync::broadcast;
 
 mod discovery_ui_snapshot;
 pub mod dispatch;
+pub mod scan_budget;
 
 pub(crate) use weissman_core::{
     finding_description, finding_title_and_severity, infer_poc_exploit,

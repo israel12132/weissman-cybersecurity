@@ -25,24 +25,43 @@ pub struct RedisRateLimiter {
     client: redis::Client,
 }
 
+/// Ask Weissman Redis acquire/op budget. `/api/ask` is on the request path;
+/// a 2s hang would stall the cockpit. 50ms fail-closed is the contract
+/// (`ask_oracle_guard` tests this constant).
+pub const ASK_REDIS_ACQUIRE_TIMEOUT_MS: u64 = 50;
+
 impl RedisRateLimiter {
     /// Multiplexed connection whose acquire and every command are bounded by
     /// [`REDIS_OP_TIMEOUT`]; a hung Redis surfaces as an error (→ fail-closed) instead of a hang.
     async fn conn(&self) -> redis::RedisResult<redis::aio::MultiplexedConnection> {
+        self.conn_timeout(REDIS_OP_TIMEOUT).await
+    }
+
+    async fn conn_timeout(
+        &self,
+        timeout: Duration,
+    ) -> redis::RedisResult<redis::aio::MultiplexedConnection> {
         // Bound the acquire with tokio::timeout, and bound every subsequent command with the
         // connection's own response timeout — together these turn a hung Redis into an error
         // (→ fail-closed) instead of an unbounded await on the per-request hot path.
-        let mut conn = tokio::time::timeout(
-            REDIS_OP_TIMEOUT,
-            self.client.get_multiplexed_async_connection(),
-        )
-        .await
-        .map_err(|_| {
-            redis::RedisError::from((redis::ErrorKind::IoError, "redis connect timeout"))
-        })??;
-        conn.set_response_timeout(REDIS_OP_TIMEOUT);
+        let mut conn = tokio::time::timeout(timeout, self.client.get_multiplexed_async_connection())
+            .await
+            .map_err(|_| {
+                redis::RedisError::from((redis::ErrorKind::IoError, "redis connect timeout"))
+            })??;
+        conn.set_response_timeout(timeout);
         Ok(conn)
     }
+}
+
+/// True when `REDIS_URL` is set to a non-empty value (the intended distributed store),
+/// even if the client failed to initialize.
+#[must_use]
+pub fn redis_url_configured() -> bool {
+    std::env::var("REDIS_URL")
+        .ok()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
 }
 
 fn shared() -> Option<Arc<RedisRateLimiter>> {
@@ -89,6 +108,35 @@ if redis.call('PTTL', KEYS[1]) < 0 then
 end
 return n
 "#;
+
+/// GET a UTF-8 string key. `None` when Redis is unset, the key is missing, or the op times out.
+pub async fn kv_get(key: &str) -> Option<String> {
+    if !crate::self_heal_recovery::dependency_available(
+        crate::self_heal_recovery::Dependency::Redis,
+    ) {
+        return None;
+    }
+    let rl = shared()?;
+    let mut conn = rl.conn().await.ok()?;
+    let v: Option<String> = conn.get(key).await.ok()?;
+    v.filter(|s| !s.is_empty())
+}
+
+/// SET + EXPIRE in one command. `Ok(false)` when Redis is not configured (LRU fallback).
+pub async fn kv_set_ex(key: &str, value: &str, ttl: Duration) -> Result<bool, redis::RedisError> {
+    let Some(rl) = shared() else {
+        return Ok(false);
+    };
+    if !crate::self_heal_recovery::dependency_available(
+        crate::self_heal_recovery::Dependency::Redis,
+    ) {
+        return Ok(false);
+    }
+    let mut conn = rl.conn().await?;
+    let secs = ttl.as_secs().max(1);
+    let _: () = conn.set_ex(key, value, secs).await?;
+    Ok(true)
+}
 
 async fn incr_and_bound_ttl(
     conn: &mut redis::aio::MultiplexedConnection,
@@ -473,6 +521,38 @@ pub async fn incr_login_ip_strict(client_ip: &str) -> StrictOp<u64> {
     .await
 }
 
+/// Per-user Ask Weissman counter (60s window). Acquire is bounded by
+/// [`ASK_REDIS_ACQUIRE_TIMEOUT_MS`] so a hung Redis is 503, never a bypass.
+pub async fn incr_ask_user_strict(user_id: i64) -> StrictOp<u64> {
+    incr_window_strict_timeout(
+        &format!("weissman:rl:ask:{user_id}"),
+        Duration::from_secs(60),
+        Duration::from_millis(ASK_REDIS_ACQUIRE_TIMEOUT_MS),
+    )
+    .await
+}
+
+async fn incr_window_strict_timeout(
+    key: &str,
+    window: Duration,
+    op_timeout: Duration,
+) -> StrictOp<u64> {
+    let Some(rl) = shared() else {
+        return if distributed_state_required() {
+            StrictOp::Unavailable
+        } else {
+            StrictOp::Ok(0)
+        };
+    };
+    let Ok(mut conn) = rl.conn_timeout(op_timeout).await else {
+        return StrictOp::Unavailable;
+    };
+    match incr_and_bound_ttl(&mut conn, key, window).await {
+        Ok(count) => StrictOp::Ok(count),
+        Err(_) => StrictOp::Unavailable,
+    }
+}
+
 /// Like [`incr_enroll_ip`] but fail-closed aware for middleware.
 pub async fn incr_enroll_ip_strict(client_ip: &str) -> StrictOp<u64> {
     incr_window_strict(
@@ -623,5 +703,14 @@ mod tests {
             !lua.contains("ifn==1"),
             "must not gate EXPIRE on first INCR only"
         );
+    }
+
+    #[test]
+    fn honey_shell_kv_helpers_exist() {
+        let src = include_str!("rate_limit_redis.rs");
+        let prod = src.split("#[cfg(test)]").next().expect("production source");
+        assert!(prod.contains("pub async fn kv_get"));
+        assert!(prod.contains("pub async fn kv_set_ex"));
+        assert!(prod.contains("set_ex(key, value, secs)"));
     }
 }

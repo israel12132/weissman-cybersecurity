@@ -12,7 +12,8 @@ pub fn new_claim_token() -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
-fn lease_key(job_id: Uuid) -> String {
+#[must_use]
+pub fn lease_key(job_id: Uuid) -> String {
     format!("{}{}", LEASE_PREFIX, job_id)
 }
 
@@ -82,10 +83,29 @@ impl LeaseHandle {
     }
 }
 
+/// Read-only snapshot of one Redis job lease (GET + TTL). Never mutates.
+#[derive(Debug, Clone, Default)]
+pub struct LeaseInspect {
+    pub exists: bool,
+    /// Redis TTL: `-2` missing, `-1` immortal (no EXPIRE), `>= 0` remaining seconds.
+    pub ttl_secs: i64,
+    pub holder_worker_id: Option<String>,
+}
+
+impl LeaseInspect {
+    #[must_use]
+    pub fn is_immortal(&self) -> bool {
+        self.exists && self.ttl_secs == -1
+    }
+}
+
 pub struct DistributedLease;
 
 impl DistributedLease {
     /// Acquire exclusive lease — SET NX with worker_id:claim_token binding.
+    ///
+    /// An existing key with **no TTL** (the historical SET-without-EX crash window) is
+    /// stolen once so a tenant scan can resume. A healthy TTL'd lease is never stolen.
     pub async fn acquire(
         redis: redis::aio::ConnectionManager,
         job_id: Uuid,
@@ -95,29 +115,132 @@ impl DistributedLease {
     ) -> Result<LeaseHandle, JobBusError> {
         let key = lease_key(job_id);
         let value = lease_value(worker_id, claim_token);
+        let ttl = lock_secs.max(1);
         let mut conn = redis.clone();
-        // Atomic `SET key value NX EX secs`. A separate `EXPIRE` after `SET NX` leaves the
-        // lease with no TTL — wedged forever — if the process dies between the two calls.
-        let acquired: Option<String> = redis::cmd("SET")
+        for attempt in 0..2 {
+            let acquired: Option<String> = redis::cmd("SET")
+                .arg(&key)
+                .arg(&value)
+                .arg("NX")
+                .arg("EX")
+                .arg(ttl)
+                .query_async(&mut conn)
+                .await
+                .map_err(|e| JobBusError::Redis(e.to_string()))?;
+            if acquired.is_some() {
+                return Ok(LeaseHandle {
+                    redis,
+                    job_id,
+                    worker_id: worker_id.to_string(),
+                    claim_token: claim_token.to_string(),
+                });
+            }
+            let inspect = Self::inspect(&redis, job_id).await?;
+            if inspect.is_immortal() {
+                tracing::warn!(
+                    target: "job_bus_lease",
+                    %job_id,
+                    previous_worker = ?inspect.holder_worker_id,
+                    "stealing immortal lease (no TTL) so the job can resume"
+                );
+                let _: i64 = redis::cmd("DEL")
+                    .arg(&key)
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| JobBusError::Redis(e.to_string()))?;
+                if attempt == 0 {
+                    continue;
+                }
+            }
+            break;
+        }
+        Err(JobBusError::LeaseDenied(format!(
+            "job {job_id} already leased"
+        )))
+    }
+
+    /// GET + TTL for one job. `ttl_secs == -1` means the key has no expire.
+    pub async fn inspect(
+        redis: &redis::aio::ConnectionManager,
+        job_id: Uuid,
+    ) -> Result<LeaseInspect, JobBusError> {
+        let mut conn = redis.clone();
+        let key = lease_key(job_id);
+        let value: Option<String> = redis::cmd("GET")
             .arg(&key)
-            .arg(&value)
-            .arg("NX")
-            .arg("EX")
-            .arg(lock_secs.max(1))
             .query_async(&mut conn)
             .await
             .map_err(|e| JobBusError::Redis(e.to_string()))?;
-        if acquired.is_none() {
-            return Err(JobBusError::LeaseDenied(format!(
-                "job {job_id} already leased"
-            )));
-        }
-        Ok(LeaseHandle {
-            redis,
-            job_id,
-            worker_id: worker_id.to_string(),
-            claim_token: claim_token.to_string(),
+        let ttl: i64 = redis::cmd("TTL")
+            .arg(&key)
+            .query_async(&mut conn)
+            .await
+            .map_err(|e| JobBusError::Redis(e.to_string()))?;
+        Ok(LeaseInspect {
+            exists: value.is_some(),
+            ttl_secs: ttl,
+            holder_worker_id: value
+                .as_ref()
+                .and_then(|v| v.split(':').next())
+                .filter(|s| !s.is_empty())
+                .map(str::to_string),
         })
+    }
+
+    pub async fn inspect_many(
+        redis: &redis::aio::ConnectionManager,
+        job_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, LeaseInspect>, JobBusError> {
+        let mut out = std::collections::HashMap::with_capacity(job_ids.len());
+        for id in job_ids {
+            out.insert(*id, Self::inspect(redis, *id).await?);
+        }
+        Ok(out)
+    }
+
+    /// Delete lease keys that have no TTL (TTL -1). A process crash between SET NX and
+    /// EXPIRE used to leave keys that no worker could ever steal. Returns how many were removed.
+    pub async fn heal_immortal_leases(
+        redis: &redis::aio::ConnectionManager,
+    ) -> Result<u64, JobBusError> {
+        let mut conn = redis.clone();
+        let mut cursor: u64 = 0;
+        let mut keys: Vec<String> = Vec::new();
+        loop {
+            let (next, batch): (u64, Vec<String>) = redis::cmd("SCAN")
+                .arg(cursor)
+                .arg("MATCH")
+                .arg(format!("{LEASE_PREFIX}*"))
+                .arg("COUNT")
+                .arg(100i64)
+                .query_async(&mut conn)
+                .await
+                .map_err(|e| JobBusError::Redis(e.to_string()))?;
+            keys.extend(batch);
+            cursor = next;
+            if cursor == 0 || keys.len() >= 4096 {
+                break;
+            }
+        }
+        let mut healed = 0u64;
+        for key in keys {
+            let ttl: i64 = redis::cmd("TTL")
+                .arg(&key)
+                .query_async(&mut conn)
+                .await
+                .map_err(|e| JobBusError::Redis(e.to_string()))?;
+            if ttl == -1 {
+                let n: i64 = redis::cmd("DEL")
+                    .arg(&key)
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| JobBusError::Redis(e.to_string()))?;
+                if n > 0 {
+                    healed += 1;
+                }
+            }
+        }
+        Ok(healed)
     }
 
     /// Force-release the lease of a worker the coordinator has declared dead.

@@ -25,6 +25,7 @@ ml-kem = "0.2.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking", "http2"] }
 tokio = { version = "1", features = ["full", "sync"] }
 regex = "1.10"
+aho-corasick = "1"
 futures = "0.3"
 async-stream = "0.3"
 async-trait = "0.1"
@@ -60,6 +61,8 @@ chrono-tz = "0.10"
 # Module 1: Immutable Audit Trail & RFC 3161-style PDF signing
 openssl = "0.10"
 sha2 = "0.10"
+# Board-grade XLSX exports (weissman-docgen + live workbook API)
+rust_xlsxwriter = "0.80"
 hmac = "0.12"
 qrcode = "0.14"
 base64 = "0.22"
@@ -131,6 +134,10 @@ aws-sdk-sfn = { version = "1.14", default-features = false, features = ["default
 aws-sdk-ssoadmin = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-types = "1"
 tokio-util = { version = "0.7", features = ["codec"] }
+sonic-rs = "0.5"
+socket2 = "0.6"
+hyper = { version = "1", default-features = false, features = ["http1", "http2"] }
+hyper-util = { version = "0.1", default-features = false, features = ["tokio", "server-auto", "server-graceful", "service"] }
 lettre = { version = "0.11.22", default-features = false, features = ["tokio1-rustls-tls", "builder", "smtp-transport"] }
 aes-gcm = "0.10"
 hex = "0.4"

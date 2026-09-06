@@ -4,6 +4,7 @@
 mod arp_table;
 mod baseline;
 mod chronos;
+pub(crate) mod ueba;
 mod clipboard;
 mod edr_presence;
 mod exfil_local;
@@ -11,6 +12,7 @@ mod hardware_local;
 mod infostealer;
 mod log_integrity;
 mod malware_local;
+pub mod onboarding_exec_gate;
 mod mobile_local;
 mod network_local;
 pub(crate) mod ot_plc_decoy;
@@ -19,6 +21,7 @@ mod process_hollowing;
 mod process_modules;
 mod scheduled_tasks;
 mod social_local;
+mod syscall_hooks;
 mod timestomp;
 mod usb_devices;
 mod util;
@@ -94,7 +97,14 @@ pub fn all_capability_ids() -> Vec<&'static str> {
         "ueba_baseline",
         // CHRONOS — 5ms process-delta ring buffer + SIGSTOP on shell spawn
         "chronos",
+        // Host-resident ntdll stub integrity (Hell's Gate / Halo's Gate)
+        "syscall_evasion",
     ]
+}
+
+/// Start the OT/PLC decoy listener (host-resident deception).
+pub fn spawn_ot_plc_decoy() {
+    ot_plc_decoy::spawn();
 }
 
 /// Dispatch a task to its detection.
@@ -160,6 +170,7 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
             "privilege_escalation_credential_access" => priv_esc_cred::run(&engine).await,
             "ueba_baseline" => baseline::run(&engine).await,
             "chronos" => chronos::run(&engine, &params).await,
+            "syscall_evasion" => syscall_hooks::run(&engine).await,
             "deception_honeypot" => ot_plc_decoy::run(&engine).await,
             other => Err(anyhow::anyhow!(
                 "agent has no implementation for engine '{other}'"

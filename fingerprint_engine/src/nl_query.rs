@@ -486,6 +486,9 @@ pub struct Compiled {
 
 pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String> {
     // 1) Validate table.
+    if crate::ask_vector_caps::is_blocked_vector_table(&plan.table) {
+        return Err(format!("table '{}' is not exposed to NL queries", plan.table));
+    }
     let spec = SCHEMA
         .get(plan.table.as_str())
         .ok_or_else(|| format!("table '{}' is not exposed to NL queries", plan.table))?;
@@ -770,7 +773,7 @@ pub async fn ask(
     }
 
     // 1) LLM → plan JSON.
-    let plan_json = match llm_to_plan(q, tenant_id).await {
+    let plan_json = match llm_to_plan(q, tenant_id, app_pool).await {
         Ok(v) => v,
         Err(e) => {
             let r = bad(&format!("plan generation failed: {e}"));
@@ -1067,7 +1070,7 @@ Schema:
 If you cannot map the question to a valid plan, output {"table":"","select":[],"filters":[]}.
 "#;
 
-async fn llm_to_plan(question: &str, tenant_id: i64) -> Result<Value, String> {
+async fn llm_to_plan(question: &str, tenant_id: i64, app_pool: &PgPool) -> Result<Value, String> {
     // Ask Weissman planner. Routes through the multi-provider failover chain
     // (`weissman_engines::llm_router`, configured by WEISSMAN_LLM_ENDPOINTS) so the planner now
     // inherits per-endpoint retry, circuit breaking, cross-provider failover, and per-tenant LLM
@@ -1076,6 +1079,14 @@ async fn llm_to_plan(question: &str, tenant_id: i64) -> Result<Value, String> {
     // behavior is unchanged. Strict-JSON mode keeps the plan parseable; the question is untrusted
     // user input, so it is sanitized. WEISSMAN_NL_QUERY_MODEL still selects a dedicated planner
     // model (applied to any endpoint that does not name its own).
+    //
+    // Council memory is fetched on the app pool with a fixed SQL template (ask_rag) and
+    // appended as server-authored context. It never becomes a QueryPlan table.
+    let rag = crate::ask_rag::planner_context(app_pool, tenant_id, question).await;
+    let user_content = match rag {
+        Some(ctx) => format!("{question}\n\n{ctx}"),
+        None => question.to_string(),
+    };
     let model_override = std::env::var("WEISSMAN_NL_QUERY_MODEL")
         .ok()
         .filter(|s| !s.trim().is_empty());
@@ -1091,7 +1102,7 @@ async fn llm_to_plan(question: &str, tenant_id: i64) -> Result<Value, String> {
     let text = weissman_engines::llm_router::routed_chat_completion_text_json_object(
         &client,
         Some(PLANNER_PROMPT),
-        question,
+        &user_content,
         0.0,
         max_tokens,
         Some(tenant_id),
@@ -1140,6 +1151,23 @@ mod tests {
     fn rejects_unknown_table() {
         let plan = QueryPlan {
             table: "users".into(),
+            select: vec![],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: None,
+            aggregate: None,
+            aggregate_column: None,
+            group_by: None,
+        };
+        let err = compile_plan(&plan, 1).unwrap_err();
+        assert!(err.contains("not exposed"));
+    }
+
+    #[test]
+    fn rejects_blocked_vector_memory_tables() {
+        let plan = QueryPlan {
+            table: "supreme_council_memory".into(),
             select: vec![],
             filters: vec![],
             order_by: None,
