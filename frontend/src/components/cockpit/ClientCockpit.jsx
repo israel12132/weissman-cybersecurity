@@ -1,30 +1,31 @@
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
-const OverviewTab = lazy(() => import('./OverviewTab'))
-const EngineRoomTab = lazy(() => import('./EngineRoomTab'))
-const FindingsTab = lazy(() => import('./FindingsTab'))
-const IdentityMatrixTab = lazy(() => import('./IdentityMatrixTab'))
-const RiskGraphTab = lazy(() => import('./RiskGraphTab'))
-const AutoHealTab = lazy(() => import('./AutoHealTab'))
-const DeceptionGridTab = lazy(() => import('./DeceptionGridTab'))
-const LivePipelineMonitor = lazy(() => import('./LivePipelineMonitor'))
-const AuditTrailTab = lazy(() => import('./AuditTrailTab'))
-const SettingsAlertsTab = lazy(() => import('./SettingsAlertsTab'))
-const ComplianceDashboardTab = lazy(() => import('./ComplianceDashboardTab'))
-const SwarmMindTab = lazy(() => import('./SwarmMindTab'))
-const ContainmentRulesTab = lazy(() => import('./ContainmentRulesTab'))
-const AIModelRiskTab = lazy(() => import('./AIModelRiskTab'))
-const GlobalEdgeSwarmMap = lazy(() => import('./GlobalEdgeSwarmMap'))
-const SatelliteDroneMap = lazy(() => import('../warroom/SatelliteDroneMap'))
-const NeuralEngineWeb = lazy(() => import('../warroom/NeuralEngineWeb'))
-const SystemPulseEKG = lazy(() => import('../warroom/SystemPulseEKG'))
+import { lazyWithRetry } from '../../routing/lazyWithRetry'
+const OverviewTab = lazyWithRetry(() => import('./OverviewTab'))
+const EngineRoomTab = lazyWithRetry(() => import('./EngineRoomTab'))
+const FindingsTab = lazyWithRetry(() => import('./FindingsTab'))
+const IdentityMatrixTab = lazyWithRetry(() => import('./IdentityMatrixTab'))
+const RiskGraphTab = lazyWithRetry(() => import('./RiskGraphTab'))
+const AutoHealTab = lazyWithRetry(() => import('./AutoHealTab'))
+const DeceptionGridTab = lazyWithRetry(() => import('./DeceptionGridTab'))
+const LivePipelineMonitor = lazyWithRetry(() => import('./LivePipelineMonitor'))
+const AuditTrailTab = lazyWithRetry(() => import('./AuditTrailTab'))
+const SettingsAlertsTab = lazyWithRetry(() => import('./SettingsAlertsTab'))
+const ComplianceDashboardTab = lazyWithRetry(() => import('./ComplianceDashboardTab'))
+const SwarmMindTab = lazyWithRetry(() => import('./SwarmMindTab'))
+const ContainmentRulesTab = lazyWithRetry(() => import('./ContainmentRulesTab'))
+const AIModelRiskTab = lazyWithRetry(() => import('./AIModelRiskTab'))
+const GlobalEdgeSwarmMap = lazyWithRetry(() => import('./GlobalEdgeSwarmMap'))
+const SatelliteDroneMap = lazyWithRetry(() => import('../warroom/SatelliteDroneMap'))
+const NeuralEngineWeb = lazyWithRetry(() => import('../warroom/NeuralEngineWeb'))
+const SystemPulseEKG = lazyWithRetry(() => import('../warroom/SystemPulseEKG'))
 import TacticalFindingOverlay from '../warroom/TacticalFindingOverlay'
 import WarRoomSoundscape from '../warroom/WarRoomSoundscape'
 import CockpitTabErrorBoundary from './CockpitTabErrorBoundary'
-const CeoMissionControlTab = lazy(() => import('./CeoMissionControlTab'))
+const CeoMissionControlTab = lazyWithRetry(() => import('./CeoMissionControlTab'))
 import { useContainerChartSize } from '../../hooks/useViewportChartSize'
 import { apiFetch } from '../../utils/apiFetch'
 import { useToast } from '../ui/Toaster'
