@@ -4,6 +4,7 @@
 mod arp_table;
 mod baseline;
 mod chronos;
+pub(crate) mod ueba;
 mod clipboard;
 mod edr_presence;
 mod exfil_local;

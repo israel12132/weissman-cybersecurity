@@ -336,6 +336,10 @@ async fn api_agents_enroll(
         // its short-lived session JWT without a second (single-use) enrollment token.
         agent_secret,
         kill_hmac_key: crate::agent_kill::derived_kill_key(&agent_uuid.to_string()),
+        ueba_mac_key: crate::ueba_snapshot_mac::agent_mac_key_hex(
+            consumed.tenant_id,
+            &agent_uuid.to_string(),
+        ),
         ws_path: "/ws/agent".into(),
         server_message: Some(format!("welcome host={}", body.hostname)),
     };
@@ -413,6 +417,10 @@ async fn api_agents_session(
             "tenant_id": tenant_id,
             "client_id": client_id,
             "session_jwt": session_jwt,
+            "ueba_mac_key": crate::ueba_snapshot_mac::agent_mac_key_hex(
+                tenant_id,
+                &agent_uuid.to_string(),
+            ),
             "ws_path": "/ws/agent",
         })),
     )
@@ -655,7 +663,7 @@ async fn ws_agent(
     let app_pool = state.app_pool.clone();
     let registry = state.endpoint_agents.clone();
     let tenant_id = auth.tenant_id;
-    ws.on_upgrade(move |mut socket| async move {
+    crate::http::bounded_codec::constrain_ws(ws).on_upgrade(move |mut socket| async move {
         let (tx_to_agent, mut rx_to_agent) =
             tokio::sync::mpsc::channel::<crate::endpoint_agents::ServerToAgent>(256);
         let mut agent_uuid: Option<String> = None;
@@ -753,6 +761,7 @@ async fn ws_agent(
                                         scan_concurrency: Some(8),
                                         heartbeat_secs: Some(20),
                                         inner_key_hex: Some(hex::encode(key)),
+                                        ueba_baseline: None,
                                     };
                                     let line = serde_json::to_string(&welcome).unwrap_or_default();
                                     let _ = socket.send(Message::Text(line)).await;

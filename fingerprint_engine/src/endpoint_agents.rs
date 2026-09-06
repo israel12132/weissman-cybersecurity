@@ -76,15 +76,19 @@ fn parse_ueba_ingest(
             .unwrap_or(client_id),
         hour_of_week,
         metrics,
+        ..Default::default()
     })
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerToAgent {
-    Welcome {
+        Welcome {
         scan_concurrency: Option<u32>,
         heartbeat_secs: Option<u64>,
+        /// Compact hour-of-week mean/stddev so the agent can gate ueba_baseline locally.
+        #[serde(default)]
+        ueba_baseline: Option<crate::ueba_detector::UebaCompactSnapshot>,
         /// Hex-encoded AES-256-GCM key for inner WSS wrapping. Omitted for old agents.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         inner_key_hex: Option<String>,
@@ -97,6 +101,11 @@ pub enum ServerToAgent {
     },
     Ack {
         task_id: String,
+    },
+    /// Mid-session refresh of the compact UEBA snapshot (after ingest recomputes baselines).
+    UebaBaseline {
+        #[serde(flatten)]
+        snapshot: crate::ueba_detector::UebaCompactSnapshot,
     },
     Shutdown {
         reason: String,
@@ -126,6 +135,9 @@ pub struct EnrollResponse {
     /// Derived HMAC key so the agent can verify a signed kill-switch.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub kill_hmac_key: String,
+    /// Per-agent HMAC key for verifying Welcome / UebaBaseline snapshots.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub ueba_mac_key: String,
     pub ws_path: String,
     pub server_message: Option<String>,
 }
@@ -1378,6 +1390,7 @@ mod tests {
             scan_concurrency: Some(4),
             heartbeat_secs: None,
             inner_key_hex: None,
+            ueba_baseline: None,
         })
         .unwrap();
         assert_eq!(v["type"], "welcome");
@@ -1427,6 +1440,7 @@ mod tests {
             session_jwt: "jwt".to_string(),
             agent_secret: "renewal-secret".to_string(),
             kill_hmac_key: "aa".to_string(),
+            ueba_mac_key: String::new(),
             ws_path: "/ws/agent".to_string(),
             server_message: None,
         };

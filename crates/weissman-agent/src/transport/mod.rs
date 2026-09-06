@@ -3,6 +3,7 @@ pub mod kill;
 pub mod spool;
 pub mod state;
 pub mod tls_pin;
+pub mod encrypted_ring;
 #[cfg(target_os = "linux")]
 pub mod tpm_seal;
 pub mod websocket;

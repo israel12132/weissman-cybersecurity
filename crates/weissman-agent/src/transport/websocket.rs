@@ -162,9 +162,15 @@ pub async fn run_session(
             }
             if let Err(e) = sink.send(Message::text(line)).await {
                 error!(target: "agent", error = %e, "ws send failed — spooling remainder");
+                if let AgentToServer::Finding { finding, .. } = &msg {
+                    crate::detections::ueba::push_offline(finding.clone());
+                }
                 let _ = crate::transport::spool::append(&spool_for_writer, &msg);
                 while let Ok(more) = out_rx.try_recv() {
                     if !matches!(more, AgentToServer::KeepAlivePing) {
+                        if let AgentToServer::Finding { finding, .. } = &more {
+                            crate::detections::ueba::push_offline(finding.clone());
+                        }
                         let _ = crate::transport::spool::append(&spool_for_writer, &more);
                     }
                 }
@@ -211,6 +217,7 @@ pub async fn run_session(
                         &seen_tasks,
                         enrollment.agent_id.clone(),
                         enrollment.kill_hmac_key.clone(),
+                        enrollment.ueba_mac_key.clone(),
                         Arc::clone(&inner_key),
                     )
                     .await;
@@ -282,6 +289,7 @@ async fn handle_text(
     seen: &Arc<tokio::sync::Mutex<SeenTasks>>,
     agent_id: String,
     kill_hmac_key: String,
+    ueba_mac_key: String,
     inner_key: Arc<tokio::sync::Mutex<Option<[u8; 32]>>>,
 ) {
     let parsed: Result<ServerToAgent, _> = serde_json::from_str(text);
@@ -296,6 +304,7 @@ async fn handle_text(
         ServerToAgent::Welcome {
             scan_concurrency,
             inner_key_hex,
+            ueba_baseline,
             ..
         } => {
             if let Some(n) = scan_concurrency {
@@ -305,6 +314,11 @@ async fn handle_text(
                 if let Some(k) = crate::inner_crypto::key_from_hex(&hex_key) {
                     *inner_key.lock().await = Some(k);
                     info!(target: "agent", "inner WSS crypto armed");
+                }
+            }
+            if let Some(snap) = ueba_baseline {
+                if crate::ueba_edge::install_if_mac_valid(snap, &ueba_mac_key) {
+                    info!(target: "agent", "installed signed UEBA compact snapshot");
                 }
             }
             info!(target: "agent", "server welcomed agent");
@@ -348,6 +362,13 @@ async fn handle_text(
             });
         }
         ServerToAgent::Ack { .. } => {}
+        ServerToAgent::UebaBaseline { snapshot } => {
+            if crate::ueba_edge::install_if_mac_valid(snapshot, &ueba_mac_key) {
+                info!(target: "agent", "installed signed UEBA compact snapshot");
+            } else {
+                warn!(target: "agent", "refused unsigned or mismatched UEBA snapshot");
+            }
+        }
         ServerToAgent::Shutdown { reason } => {
             if allow_local_stop() {
                 warn!(target: "agent", reason = %reason, "server requested shutdown");

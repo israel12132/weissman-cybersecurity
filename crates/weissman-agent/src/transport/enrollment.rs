@@ -44,6 +44,12 @@ pub async fn enroll(
         .json(&body)
         .send()
         .await?;
+    let date = resp
+        .headers()
+        .get("date")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    crate::detections::ueba::note_http_date(date.as_deref());
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
     if !status.is_success() {
@@ -68,6 +74,22 @@ pub async fn renew_session(
     agent_secret: &str,
     agent_version: &str,
 ) -> anyhow::Result<String> {
+    Ok(renew_session_full(server_url, agent_id, agent_secret, agent_version)
+        .await?
+        .session_jwt)
+}
+
+pub struct SessionRenewal {
+    pub session_jwt: String,
+    pub ueba_mac_key: String,
+}
+
+pub async fn renew_session_full(
+    server_url: &str,
+    agent_id: &str,
+    agent_secret: &str,
+    agent_version: &str,
+) -> anyhow::Result<SessionRenewal> {
     #[derive(Serialize)]
     struct Body<'a> {
         agent_id: &'a str,
@@ -76,6 +98,8 @@ pub async fn renew_session(
     #[derive(serde::Deserialize)]
     struct Resp {
         session_jwt: String,
+        #[serde(default)]
+        ueba_mac_key: String,
     }
     let url = format!("{}/api/agents/session", server_url.trim_end_matches('/'));
     let client = crate::transport::tls_pin::http_client(server_url, Duration::from_secs(20))?;
@@ -88,6 +112,12 @@ pub async fn renew_session(
         })
         .send()
         .await?;
+    let date = resp
+        .headers()
+        .get("date")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    crate::detections::ueba::note_http_date(date.as_deref());
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
     if !status.is_success() {
@@ -98,5 +128,8 @@ pub async fn renew_session(
     if parsed.session_jwt.trim().is_empty() {
         anyhow::bail!("session response missing session_jwt");
     }
-    Ok(parsed.session_jwt)
+    Ok(SessionRenewal {
+        session_jwt: parsed.session_jwt,
+        ueba_mac_key: parsed.ueba_mac_key,
+    })
 }

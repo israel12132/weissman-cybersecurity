@@ -219,6 +219,7 @@ pub async fn submit_ueba_sample(
         client_id: payload.client_id,
         hour_of_week: payload.hour_of_week,
         metrics: crate::ueba_detector::scrub_ueba_metrics(&payload.metrics),
+        ..Default::default()
     };
     let raw_size_bytes = serde_json::to_string(&payload.metrics)
         .map(|s| s.len() as i32)

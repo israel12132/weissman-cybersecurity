@@ -923,7 +923,7 @@ async fn ws_command_center(
     let last_event_id = crate::http::event_replay::parse_last_event_id(query.as_deref());
     let tenant_id = auth.tenant_id;
     let assigned_client_id = auth.assigned_client_id;
-    ws.on_upgrade(move |socket| async move {
+    crate::http::bounded_codec::constrain_ws(ws).on_upgrade(move |socket| async move {
         handle_ws_command_center(
             socket,
             pool,
@@ -1553,6 +1553,7 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>, job_control_pool: Arc<
     // FOR UPDATE lives here, never on the HTTP insert path.
     crate::nl_audit_chain::spawn(app_pool.clone());
     crate::postgres_bulk_copy::spawn(app_pool.clone());
+    crate::http::dashmap_gc::spawn_eviction_loop();
     crate::suppression_cache_sync::spawn_suppression_cache_redis_sync(app_pool.clone());
     {
         let drain_pool = app_pool.clone();
@@ -1941,7 +1942,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
 
 pub async fn run_http_tcp_listener(app: Router, port: u16) {
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
-    let listener = match tokio::net::TcpListener::bind(addr).await {
+    let listener = match crate::http::tcp_socket::bind_http_listener(addr) {
         Ok(l) => l,
         Err(e) if e.raw_os_error() == Some(98) => {
             eprintln!(
@@ -1959,11 +1960,11 @@ pub async fn run_http_tcp_listener(app: Router, port: u16) {
         "[Weissman] Listening on http://0.0.0.0:{} (set PORT in .env to change; Nginx must proxy the same port)",
         port
     );
-    if let Err(e) = axum::serve(
+    if let Err(e) = crate::http::http_serve_loop::serve_with_peer_rst(
         listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
+        app,
+        shutdown_signal(),
     )
-    .with_graceful_shutdown(shutdown_signal())
     .await
     {
         eprintln!("[Weissman] FATAL: server exited: {}", e);

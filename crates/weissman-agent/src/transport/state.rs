@@ -28,6 +28,9 @@ pub struct AgentState {
     /// Persist the kill-switch HMAC key issued at enrollment.
     #[serde(default)]
     pub kill_hmac_key: String,
+    /// Persist the UEBA snapshot MAC key issued at enrollment.
+    #[serde(default)]
+    pub ueba_mac_key: String,
 }
 
 impl AgentState {
@@ -40,6 +43,7 @@ impl AgentState {
             agent_secret: e.agent_secret.clone(),
             ws_path: e.ws_path.clone(),
             kill_hmac_key: e.kill_hmac_key.clone(),
+            ueba_mac_key: e.ueba_mac_key.clone(),
         }
     }
 
@@ -55,6 +59,7 @@ impl AgentState {
             ws_path: self.ws_path,
             server_message: None,
             kill_hmac_key: self.kill_hmac_key,
+            ueba_mac_key: self.ueba_mac_key,
         }
     }
 }
@@ -131,6 +136,7 @@ mod tests {
             agent_secret: "s3cr3t-renewal-credential".into(),
             ws_path: "/ws/agent".into(),
             kill_hmac_key: String::new(),
+            ueba_mac_key: String::new(),
         }
     }
 

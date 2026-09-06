@@ -85,14 +85,21 @@ async fn main() -> anyhow::Result<()> {
                 target: "agent", agent_id = %saved.agent_id, state = %state_path.display(),
                 "resuming persisted identity"
             );
-            let jwt = transport::enrollment::renew_session(
+            let renewed = transport::enrollment::renew_session_full(
                 &cli.server_url,
                 &saved.agent_id,
                 &saved.agent_secret,
                 env!("CARGO_PKG_VERSION"),
             )
             .await?;
-            saved.into_enrollment(jwt)
+            let mut saved = saved;
+            if !renewed.ueba_mac_key.trim().is_empty()
+                && saved.ueba_mac_key != renewed.ueba_mac_key
+            {
+                saved.ueba_mac_key = renewed.ueba_mac_key;
+                let _ = transport::state::save(&state_path, &saved);
+            }
+            saved.into_enrollment(renewed.session_jwt)
         }
         None => {
             if cli.enrollment_token.trim().is_empty() {
@@ -171,7 +178,7 @@ async fn main() -> anyhow::Result<()> {
         // back. Renewal failure is not fatal: keep the existing token and retry on the next loop,
         // because a transient server outage must not end the agent's life.
         if !enrollment.agent_secret.trim().is_empty() {
-            match transport::enrollment::renew_session(
+            match transport::enrollment::renew_session_full(
                 &cli.server_url,
                 &enrollment.agent_id,
                 &enrollment.agent_secret,
@@ -179,7 +186,18 @@ async fn main() -> anyhow::Result<()> {
             )
             .await
             {
-                Ok(jwt) => enrollment.session_jwt = jwt,
+                Ok(renewed) => {
+                    enrollment.session_jwt = renewed.session_jwt;
+                    if !renewed.ueba_mac_key.trim().is_empty()
+                        && enrollment.ueba_mac_key != renewed.ueba_mac_key
+                    {
+                        enrollment.ueba_mac_key = renewed.ueba_mac_key;
+                        let _ = transport::state::save(
+                            &state_path,
+                            &transport::state::AgentState::from_enrollment(&enrollment),
+                        );
+                    }
+                }
                 Err(e) => warn!(
                     target: "agent", error = %e,
                     "session renewal failed; reusing the current token for this attempt"
