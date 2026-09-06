@@ -194,8 +194,7 @@ async fn run_retention_locked(pool: &PgPool) -> Result<RetentionReport, sqlx::Er
 
     // Age learned_set entries. Values are either a legacy unix timestamp or
     // `{t, n}`; `_evicted` is a reserved resurrection map (7-day window in Rust).
-    let _ = sqlx::query(
-        r#"UPDATE agent_metric_baselines
+    let age_learned = r#"UPDATE {table}
               SET learned_set = COALESCE((
                     SELECT jsonb_object_agg(e.key, e.value)
                       FROM jsonb_each(learned_set) e
@@ -209,10 +208,12 @@ async fn run_retention_locked(pool: &PgPool) -> Result<RetentionReport, sqlx::Er
                                END > extract(epoch from now()) - 30*86400
                        )
               ), learned_set)
-            WHERE jsonb_typeof(learned_set) = 'object'"#,
-    )
-    .execute(pool)
-    .await;
+            WHERE jsonb_typeof(learned_set) = 'object'"#;
+    for table in ["agent_metric_baselines", "agent_metric_baselines_global"] {
+        let _ = sqlx::query(&age_learned.replace("{table}", table))
+            .execute(pool)
+            .await;
+    }
 
     let elapsed_ms = started.elapsed().as_millis() as u64;
 
@@ -296,7 +297,7 @@ pub fn spawn_baseline_recompute_loop(pool: Arc<PgPool>) {
 async fn recompute_all_baselines(pool: &PgPool) -> Result<(), sqlx::Error> {
     // Isolation: READ COMMITTED, outside the API write path. We only touch baseline rows.
     sqlx::query(
-        r#"UPDATE agent_metric_baselines b
+        r#"UPDATE agent_metric_baselines_global b
               SET n = s.n,
                   mean = s.mean,
                   stddev = s.stddev,
@@ -319,8 +320,7 @@ async fn recompute_all_baselines(pool: &PgPool) -> Result<(), sqlx::Error> {
                  GROUP BY agent_id, key
              ) s
             WHERE b.agent_id = s.agent_id
-              AND b.metric_name = s.metric_name
-              AND b.hour_of_week = 0"#,
+              AND b.metric_name = s.metric_name"#,
     )
     .execute(pool)
     .await?;

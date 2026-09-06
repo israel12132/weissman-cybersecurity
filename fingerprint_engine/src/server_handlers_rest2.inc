@@ -1177,12 +1177,72 @@ async fn api_openapi_spec() -> Response {
             "/api/ueba/anomalies": {
                 "get": {
                     "summary": "Recent UEBA anomalies detected on endpoint agents",
+                    "description": "analyst+ only. Returns live `agent_anomalies` rows (z-score, weighted score, disposition status) for the caller's tenant.",
                     "tags": ["UEBA"],
                     "parameters": [
                         { "name": "limit",    "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 500 } },
                         { "name": "agent_id", "in": "query", "schema": { "type": "string" } }
                     ],
                     "responses": { "200": { "description": "Anomaly list" } }
+                }
+            },
+            "/api/ueba/anomalies/{id}/disposition": {
+                "post": {
+                    "summary": "Mark a UEBA anomaly as approved or false-positive (analyst+)",
+                    "description": "Writes disposition to `agent_anomalies` and `audit_logs`. Three false-positive marks for the same (agent, metric) auto-suppress future alerts.",
+                    "tags": ["UEBA"],
+                    "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+                    "requestBody": {
+                        "required": true,
+                        "content": { "application/json": { "schema": {
+                            "type": "object",
+                            "required": ["status"],
+                            "properties": {
+                                "status": { "type": "string", "enum": ["approved", "false_positive", "open"] },
+                                "reason": { "type": "string" }
+                            }
+                        } } }
+                    },
+                    "responses": { "200": { "description": "Disposition recorded" } }
+                }
+            },
+            "/api/ueba/policy": {
+                "get": {
+                    "summary": "Tenant UEBA policy (learn window, business hours, holidays)",
+                    "tags": ["UEBA"],
+                    "responses": { "200": { "description": "Policy" } }
+                },
+                "put": {
+                    "summary": "Update tenant UEBA policy (operator+)",
+                    "tags": ["UEBA"],
+                    "responses": { "200": { "description": "Saved" } }
+                }
+            },
+            "/api/ueba/whitelist": {
+                "get": {
+                    "summary": "Global / per-client process whitelist for categorical UEBA",
+                    "tags": ["UEBA"],
+                    "responses": { "200": { "description": "Whitelist items" } }
+                },
+                "post": {
+                    "summary": "Add a process to the UEBA whitelist (operator+)",
+                    "tags": ["UEBA"],
+                    "responses": { "200": { "description": "Created" } }
+                }
+            },
+            "/api/ueba/whitelist/{id}": {
+                "delete": {
+                    "summary": "Remove a process whitelist entry (operator+)",
+                    "tags": ["UEBA"],
+                    "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+                    "responses": { "200": { "description": "Deleted" } }
+                }
+            },
+            "/api/ueba/fleet": {
+                "get": {
+                    "summary": "Endpoint-agent UEBA fleet snapshot (learning flag, 24h anomalies)",
+                    "tags": ["UEBA"],
+                    "responses": { "200": { "description": "Agents" } }
                 }
             },
             "/api/ueba/ingest": {

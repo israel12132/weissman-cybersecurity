@@ -4,6 +4,7 @@
 //! `spawn_retention_loop`) so WebSocket findings and HTTP ingest keep working.
 
 mod categorical;
+mod compact;
 mod health;
 mod ingest;
 mod retention;
@@ -12,6 +13,9 @@ mod stats;
 mod time;
 mod validate;
 
+pub use compact::{
+    assemble_compact_snapshot, compact_snapshot_for_agent, BaselineRow, EDGE_Z_UPLOAD,
+};
 pub use health::{
     as_json as health_json, failsafe, host_cpu_busy_pct, set_failsafe, snapshot as health_snapshot,
     UebaHealth,
@@ -119,7 +123,7 @@ pub struct UebaCompactSnapshot {
 }
 
 fn default_z_upload() -> f64 {
-    2.0
+    compact::EDGE_Z_UPLOAD
 }
 fn default_min_n() -> i32 {
     7
@@ -865,14 +869,13 @@ async fn update_ewmv(
     let row: Option<(i32, f64, f64, f64, f64, f64, f64)> = sqlx::query_as(
         r#"SELECT n, mean, stddev, COALESCE(welford_m2, 0), COALESCE(mad, 0),
                   COALESCE(ewmv_w, 0), COALESCE(ewmv_v2, 0)
-             FROM agent_metric_baselines
+             FROM agent_metric_baselines_global
             WHERE tenant_id = $1 AND agent_id = $2
-              AND metric_name = $3 AND hour_of_week = $4"#,
+              AND metric_name = $3"#,
     )
     .bind(tenant_id)
     .bind(agent_id)
     .bind(metric)
-    .bind(GLOBAL_BUCKET)
     .fetch_optional(&mut **tx)
     .await
     .map_err(|_| "ingest failed".to_string())?;
@@ -887,11 +890,11 @@ async fn update_ewmv(
     let stddev = effective_stddev(e.stddev(), mad).max(sigma_floor_for(metric));
 
     sqlx::query(
-        r#"INSERT INTO agent_metric_baselines
-                 (tenant_id, agent_id, metric_name, hour_of_week, n, mean, stddev,
+        r#"INSERT INTO agent_metric_baselines_global
+                 (tenant_id, agent_id, metric_name, n, mean, stddev,
                   welford_m2, mad, ewmv_w, ewmv_v2, learned_set, last_updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, '{}'::jsonb, now())
-           ON CONFLICT (tenant_id, agent_id, metric_name, hour_of_week) DO UPDATE SET
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, '{}'::jsonb, now())
+           ON CONFLICT (tenant_id, agent_id, metric_name) DO UPDATE SET
                n = EXCLUDED.n,
                mean = EXCLUDED.mean,
                stddev = EXCLUDED.stddev,
@@ -904,7 +907,6 @@ async fn update_ewmv(
     .bind(tenant_id)
     .bind(agent_id)
     .bind(metric)
-    .bind(GLOBAL_BUCKET)
     .bind(e.n as i32)
     .bind(sanitize_f64(e.mean))
     .bind(sanitize_f64(stddev))
@@ -1014,13 +1016,11 @@ async fn handle_uptime(
     is_learning: bool,
 ) -> Result<(), String> {
     let prev: Option<f64> = sqlx::query_scalar(
-        r#"SELECT mean FROM agent_metric_baselines
-            WHERE tenant_id = $1 AND agent_id = $2 AND metric_name = 'uptime_seconds'
-              AND hour_of_week = $3"#,
+        r#"SELECT mean FROM agent_metric_baselines_global
+            WHERE tenant_id = $1 AND agent_id = $2 AND metric_name = 'uptime_seconds'"#,
     )
     .bind(tenant_id)
     .bind(&p.agent_id)
-    .bind(GLOBAL_BUCKET)
     .fetch_optional(&mut **tx)
     .await
     .ok()
@@ -1033,15 +1033,15 @@ async fn handle_uptime(
         || prev.map(|v| observed + 60.0 < v).unwrap_or(false);
     // Always store the current value as the "mean" so the next sample can delta.
     let _ = sqlx::query(
-        r#"INSERT INTO agent_metric_baselines
-                 (tenant_id, agent_id, metric_name, hour_of_week, n, mean, stddev, learned_set, last_updated_at)
-           VALUES ($1, $2, 'uptime_seconds', $3, 1, $4, 0, '{}'::jsonb, now())
-           ON CONFLICT (tenant_id, agent_id, metric_name, hour_of_week) DO UPDATE SET
-               mean = EXCLUDED.mean, last_updated_at = now(), n = agent_metric_baselines.n + 1"#,
+        r#"INSERT INTO agent_metric_baselines_global
+                 (tenant_id, agent_id, metric_name, n, mean, stddev, learned_set, last_updated_at)
+           VALUES ($1, $2, 'uptime_seconds', 1, $3, 0, '{}'::jsonb, now())
+           ON CONFLICT (tenant_id, agent_id, metric_name) DO UPDATE SET
+               mean = EXCLUDED.mean, last_updated_at = now(),
+               n = agent_metric_baselines_global.n + 1"#,
     )
     .bind(tenant_id)
     .bind(&p.agent_id)
-    .bind(GLOBAL_BUCKET)
     .bind(sanitize_f64(observed))
     .execute(&mut **tx)
     .await;
@@ -1076,13 +1076,12 @@ async fn check_new_categorical(
     whitelist: &HashSet<String>,
 ) -> Result<Option<AnomalyRecord>, String> {
     let row: Option<(Value, i32)> = sqlx::query_as(
-        r#"SELECT learned_set, n FROM agent_metric_baselines
-            WHERE tenant_id = $1 AND agent_id = $2 AND metric_name = $3 AND hour_of_week = $4"#,
+        r#"SELECT learned_set, n FROM agent_metric_baselines_global
+            WHERE tenant_id = $1 AND agent_id = $2 AND metric_name = $3"#,
     )
     .bind(tenant_id)
     .bind(&p.agent_id)
     .bind(metric)
-    .bind(GLOBAL_BUCKET)
     .fetch_optional(&mut **tx)
     .await
     .map_err(|_| "ingest failed".to_string())?;
@@ -1113,19 +1112,18 @@ async fn check_new_categorical(
         learned.prune(now);
     }
     let _ = sqlx::query(
-        r#"INSERT INTO agent_metric_baselines
-                 (tenant_id, agent_id, metric_name, hour_of_week, n, mean, stddev,
+        r#"INSERT INTO agent_metric_baselines_global
+                 (tenant_id, agent_id, metric_name, n, mean, stddev,
                   learned_set, last_updated_at)
-           VALUES ($1, $2, $3, $4, 1, 0, 0, $5, now())
-           ON CONFLICT (tenant_id, agent_id, metric_name, hour_of_week) DO UPDATE SET
-               n = agent_metric_baselines.n + 1,
+           VALUES ($1, $2, $3, 1, 0, 0, $4, now())
+           ON CONFLICT (tenant_id, agent_id, metric_name) DO UPDATE SET
+               n = agent_metric_baselines_global.n + 1,
                learned_set = EXCLUDED.learned_set,
                last_updated_at = now()"#,
     )
     .bind(tenant_id)
     .bind(&p.agent_id)
     .bind(metric)
-    .bind(GLOBAL_BUCKET)
     .bind(learned.to_json())
     .execute(&mut **tx)
     .await;
@@ -1230,7 +1228,7 @@ async fn fleet_other_hosts(
 ) -> Result<i64, sqlx::Error> {
     let token = detail.trim();
     sqlx::query_scalar(
-        r#"SELECT COUNT(DISTINCT agent_id) FROM agent_metric_baselines
+        r#"SELECT COUNT(DISTINCT agent_id) FROM agent_metric_baselines_global
             WHERE tenant_id = $1 AND metric_name = 'top_processes'
               AND agent_id <> $3
               AND learned_set::text LIKE '%' || $2 || '%'"#,
@@ -1257,7 +1255,7 @@ async fn fleet_uniqueness(
     .await?;
     let token = detail.trim();
     let hosts: i64 = sqlx::query_scalar(
-        r#"SELECT COUNT(DISTINCT agent_id) FROM agent_metric_baselines
+        r#"SELECT COUNT(DISTINCT agent_id) FROM agent_metric_baselines_global
             WHERE tenant_id = $1 AND metric_name = 'top_processes'
               AND learned_set::text LIKE '%' || $2 || '%'"#,
     )

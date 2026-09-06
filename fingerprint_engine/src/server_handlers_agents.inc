@@ -757,11 +757,21 @@ async fn ws_agent(
                                     }
                                     let key = crate::elite_hardening::wss_inner::generate_key();
                                     inner_key = Some(key);
+                                    let ueba_baseline = match crate::ueba_detector::compact_snapshot_for_agent(
+                                        app_pool.as_ref(),
+                                        tenant_id,
+                                        &aid,
+                                    )
+                                    .await
+                                    {
+                                        Ok(s) if !s.metrics.is_empty() => Some(s),
+                                        _ => None,
+                                    };
                                     let welcome = crate::endpoint_agents::ServerToAgent::Welcome {
                                         scan_concurrency: Some(8),
                                         heartbeat_secs: Some(20),
                                         inner_key_hex: Some(hex::encode(key)),
-                                        ueba_baseline: None,
+                                        ueba_baseline,
                                     };
                                     let line = serde_json::to_string(&welcome).unwrap_or_default();
                                     let _ = socket.send(Message::Text(line)).await;
@@ -805,6 +815,26 @@ async fn ws_agent(
                                             task_id,
                                         )
                                         .await;
+                                        if engine == "ueba_baseline" {
+                                            if let Some(aid) = agent_uuid.as_deref() {
+                                                if let Ok(snap) =
+                                                    crate::ueba_detector::compact_snapshot_for_agent(
+                                                        app_pool.as_ref(),
+                                                        tenant_id,
+                                                        aid,
+                                                    )
+                                                    .await
+                                                {
+                                                    if !snap.metrics.is_empty() {
+                                                        let _ = tx_to_agent
+                                                            .send(crate::endpoint_agents::ServerToAgent::UebaBaseline {
+                                                                snapshot: snap,
+                                                            })
+                                                            .await;
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                                 "task_done" | "task_error" => {
