@@ -516,7 +516,11 @@ mod tests {
 
     #[test]
     fn golden_image_fleet_majority_is_not_a_learn_path() {
-        let detector = include_str!("ueba_detector.rs");
+        let detector = concat!(
+            include_str!("ueba_detector/mod.rs"),
+            include_str!("ueba_detector/categorical.rs"),
+            include_str!("ueba_detector/ingest.rs"),
+        );
         assert!(
             !detector.contains("fleet_consensus_hit"),
             "detector must not Learn from fleet consensus (golden-image poisoning)"

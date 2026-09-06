@@ -34,6 +34,14 @@ pub enum AgentToServer {
         running_tasks: u32,
         completed_tasks: u64,
         uptime_secs: u64,
+        #[serde(default)]
+        ring_buffer_bytes: u32,
+        #[serde(default)]
+        ring_buffer_frames: u32,
+        #[serde(default)]
+        ueba_suppressed: u64,
+        #[serde(default)]
+        ueba_uploaded: u64,
     },
     /// Engine-style finding produced by a local detection.
     Finding {

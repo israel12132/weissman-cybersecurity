@@ -117,11 +117,16 @@ pub async fn run_session(
         interval.tick().await;
         loop {
             interval.tick().await;
+            let ring = crate::ringbuf::stats();
             let msg = AgentToServer::Heartbeat {
                 agent_id: agent_id_hb.clone(),
                 running_tasks: hb_running.load(Ordering::Relaxed),
                 completed_tasks: hb_completed.load(Ordering::Relaxed),
                 uptime_secs: started_at.elapsed().as_secs(),
+                ring_buffer_bytes: ring.bytes,
+                ring_buffer_frames: ring.frames,
+                ueba_suppressed: crate::ringbuf::ueba_suppressed(),
+                ueba_uploaded: crate::ringbuf::ueba_uploaded(),
             };
             if hb_tx.send(msg).await.is_err() {
                 break;

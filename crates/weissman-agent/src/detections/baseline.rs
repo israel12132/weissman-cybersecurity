@@ -42,6 +42,7 @@ pub async fn run(engine: &str) -> Result<Vec<Value>> {
     match crate::ueba_edge::decide(&metrics, hour) {
         crate::ueba_edge::Gate::Suppress { z_max } => {
             tracing::debug!(target: "agent", z_max, "UEBA edge suppressed quiet sample");
+            crate::ringbuf::note_ueba_suppressed();
             return Ok(vec![]);
         }
         crate::ueba_edge::Gate::Upload { reason, z_max } => {
@@ -51,6 +52,7 @@ pub async fn run(engine: &str) -> Result<Vec<Value>> {
                 z_max,
                 "UEBA edge upload"
             );
+            crate::ringbuf::note_ueba_uploaded();
         }
     }
     let mut extras: Map<String, Value> = Map::new();
