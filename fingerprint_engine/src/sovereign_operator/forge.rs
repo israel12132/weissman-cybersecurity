@@ -597,6 +597,27 @@ pub fn spawn_forge_janitor() {
     });
 }
 
+fn rustc_bin() -> PathBuf {
+    // cargo-llvm-cov can leave `rustc` off PATH. The cargo that compiled this
+    // crate still has a sibling rustc on disk.
+    let sibling = Path::new(env!("CARGO")).with_file_name("rustc");
+    if sibling.exists() {
+        return sibling;
+    }
+    if let Ok(out) = Command::new("rustup").args(["which", "rustc"]).output() {
+        if out.status.success() {
+            let p = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+            if !p.is_empty() {
+                return PathBuf::from(p);
+            }
+        }
+    }
+    std::env::var_os("RUSTC")
+        .filter(|p| !p.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("rustc"))
+}
+
 fn rustc_metadata(src: &Path, out_dir: &Path) -> (bool, String) {
     let content = std::fs::read_to_string(src).unwrap_or_default();
     let compile_src = if content.contains("crate::") {
@@ -630,7 +651,7 @@ mod candidate;
         src.to_path_buf()
     };
     let out = out_dir.join("libsovereign_forge.rmeta");
-    let spawned = Command::new("rustc")
+    let spawned = Command::new(rustc_bin())
         .current_dir(out_dir)
         .env("TMPDIR", out_dir)
         .env("TMP", out_dir)

@@ -15,8 +15,42 @@ use axum::http::StatusCode;
 use chrono::Utc;
 use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
+use std::time::Duration;
 use uuid::Uuid;
 use weissman_core::models::engine::is_production_engine_id;
+
+/// Default job wall when the scan body omits `timeout`. Caps resilience retry
+/// widening (45s → 90s → 180s) so a hung engine cannot occupy the worker past
+/// this budget. Operator `timeout` (seconds) replaces this when present.
+const DEFAULT_SCAN_WALL_SECS: u64 = 180;
+
+/// Parse operator `timeout` from a Command Center scan body or stored job payload.
+/// Accepts JSON number or numeric string; clamped to 5..=600 seconds.
+pub fn parse_scan_timeout_secs(payload: &Value) -> Option<u64> {
+    let v = payload.get("timeout")?;
+    let secs = v
+        .as_u64()
+        .or_else(|| v.as_i64().and_then(|n| u64::try_from(n).ok()))
+        .or_else(|| {
+            v.as_f64().and_then(|f| {
+                if f.is_finite() && f > 0.0 {
+                    Some(f as u64)
+                } else {
+                    None
+                }
+            })
+        })
+        .or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))?;
+    if secs == 0 {
+        return None;
+    }
+    Some(secs.clamp(5, 600))
+}
+
+/// Wall-clock budget for one `command_center_engine` job.
+pub fn scan_wall_clock(payload: &Value) -> Duration {
+    Duration::from_secs(parse_scan_timeout_secs(payload).unwrap_or(DEFAULT_SCAN_WALL_SECS))
+}
 
 /// Extra engine ids accepted by the scan API beyond `PRODUCTION_ENGINE_IDS` (DAG / Engine Room).
 /// All entries here are legacy/alias IDs that aren't in the production set but are still wired.
@@ -577,6 +611,7 @@ struct ScanBodyFields {
     ai_endpoint: Option<Value>,
     repo_url: Option<String>,
     base_payload: String,
+    timeout: Option<u64>,
     extras: std::collections::HashMap<String, Value>,
 }
 
@@ -599,6 +634,7 @@ fn extract_fields(body: &Value) -> ScanBodyFields {
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
+    let timeout = parse_scan_timeout_secs(body);
     let reserved = [
         "target",
         "client_id",
@@ -622,6 +658,7 @@ fn extract_fields(body: &Value) -> ScanBodyFields {
         ai_endpoint,
         repo_url,
         base_payload,
+        timeout,
         extras,
     }
 }
@@ -797,7 +834,7 @@ fn build_payload(
             detail: "scan payload: expected JSON object".into(),
         })
     }
-    match kind {
+    let mut p = match kind {
         PayloadKind::DeepFuzz => {
             let mut p = json!({ "target": &ctx.target });
             if let Some(ref cid) = ctx.client_id {
@@ -878,7 +915,11 @@ fn build_payload(
             }
             Ok(p)
         }
+    }?;
+    if let Some(secs) = ctx.timeout {
+        obj_mut(&mut p)?.insert("timeout".into(), json!(secs));
     }
+    Ok(p)
 }
 
 fn inject_oast_token(mut payload: Value, token: Uuid) -> Value {
@@ -1096,6 +1137,45 @@ mod tests {
         assert_eq!(ctx.target, "https://example.com");
         assert!(ctx.extras.contains_key("depth"));
         assert!(!ctx.extras.contains_key("github_token"));
+    }
+
+    #[test]
+    fn extract_fields_captures_operator_timeout() {
+        let body = json!({
+            "engine": "asm",
+            "target": "https://example.com",
+            "client_id": 1,
+            "timeout": 45,
+            "port_scan": true
+        });
+        let ctx = extract_fields(&body);
+        assert_eq!(ctx.timeout, Some(45));
+        assert!(!ctx.extras.contains_key("timeout"));
+        assert!(ctx.extras.contains_key("port_scan"));
+        let p = build_payload(PayloadKind::CommandCenterDefault, &ctx, "asm").unwrap();
+        assert_eq!(p.get("timeout").and_then(Value::as_u64), Some(45));
+        assert_eq!(p.get("engine").and_then(Value::as_str), Some("asm"));
+    }
+
+    #[test]
+    fn parse_scan_timeout_secs_clamps_and_accepts_string() {
+        assert_eq!(parse_scan_timeout_secs(&json!({"timeout": 45})), Some(45));
+        assert_eq!(parse_scan_timeout_secs(&json!({"timeout": "45"})), Some(45));
+        assert_eq!(parse_scan_timeout_secs(&json!({"timeout": 1})), Some(5));
+        assert_eq!(
+            parse_scan_timeout_secs(&json!({"timeout": 9999})),
+            Some(600)
+        );
+        assert_eq!(parse_scan_timeout_secs(&json!({"timeout": 0})), None);
+        assert_eq!(parse_scan_timeout_secs(&json!({})), None);
+        assert_eq!(
+            scan_wall_clock(&json!({"timeout": 45})),
+            Duration::from_secs(45)
+        );
+        assert_eq!(
+            scan_wall_clock(&json!({})),
+            Duration::from_secs(DEFAULT_SCAN_WALL_SECS)
+        );
     }
 
     #[test]

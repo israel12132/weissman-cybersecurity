@@ -27,7 +27,8 @@ pub const WORKER_ROLE: &str = "weissman_worker";
 pub const ANALYTICS_ROLE: &str = "weissman_analytics";
 
 /// Tables `weissman_ro` may `SELECT`. Keep in lock-step with
-/// `20260827115800_hermetic_db_roles.sql`.
+/// `20260827115800_hermetic_db_roles.sql` (core 13) plus
+/// `20260827165000_ot_ics_hardening_safety.sql` (4 OT/ICS tables).
 pub const RO_SELECT_TABLES: &[&str] = &[
     "vulnerabilities",
     "weissman_finding_clusters",
@@ -42,6 +43,10 @@ pub const RO_SELECT_TABLES: &[&str] = &[
     "kev_intel",
     "audit_logs",
     "report_runs",
+    "ot_ics_fingerprints",
+    "ot_ics_safety_events",
+    "ot_ics_protocol_baselines",
+    "ot_ics_asset_ranges",
 ];
 
 /// Ask Weissman hard statement timeout (milliseconds).
@@ -58,7 +63,7 @@ pub const ANALYTICS_STATEMENT_TIMEOUT_MS: u64 = 15_000;
 pub const ANALYTICS_SELECT_TABLES: &[&str] = &["billing_plans", "weissman_billing_usage_snapshot"];
 
 /// Job-bus tables `weissman_worker` may DML. Keep in lock-step with
-/// `20260829120000_hermetic_analytics_worker_roles.sql`.
+/// `20260829120050_hermetic_analytics_worker_roles.sql`.
 pub const WORKER_JOB_BUS_TABLES: &[&str] = &[
     "weissman_async_jobs",
     "weissman_job_events",
@@ -309,8 +314,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ro_select_list_is_exactly_thirteen() {
-        assert_eq!(RO_SELECT_TABLES.len(), 13);
+    fn ro_select_list_is_exactly_seventeen() {
+        assert_eq!(RO_SELECT_TABLES.len(), 17);
         let mut seen = std::collections::HashSet::new();
         for t in RO_SELECT_TABLES {
             assert!(seen.insert(*t), "duplicate {t}");

@@ -56,6 +56,22 @@ impl EngineExecTelemetry {
             "failure_class": self.failure_class,
         })
     }
+
+    pub fn wall_timeout(engine_id: &str, elapsed: Duration) -> Self {
+        Self {
+            engine_id: engine_id.to_string(),
+            attempts: 0,
+            strategy: String::from("wall_clock"),
+            elapsed_ms: elapsed.as_millis() as u64,
+            status: String::from("timeout"),
+            recovered: false,
+            error: Some(format!(
+                "scan exceeded {}s wall-clock budget",
+                elapsed.as_secs().max(1)
+            )),
+            failure_class: Some(String::from("timeout")),
+        }
+    }
 }
 
 /// Only genuine execution failures are retried. A successful run that simply observed no signal
@@ -476,6 +492,15 @@ mod tests {
         let mut t2 = Duration::from_secs(45);
         escalate_for(FailureClass::Waf, &mut t2);
         assert_eq!(t2, Duration::from_secs(45));
+    }
+
+    #[test]
+    fn wall_timeout_telemetry_is_timeout_class() {
+        let t = EngineExecTelemetry::wall_timeout("asm", Duration::from_secs(45));
+        assert_eq!(t.status, "timeout");
+        assert_eq!(t.strategy, "wall_clock");
+        assert_eq!(t.engine_id, "asm");
+        assert!(t.error.as_deref().unwrap_or("").contains("45s"));
     }
 
     #[tokio::test]

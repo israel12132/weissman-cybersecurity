@@ -131,7 +131,7 @@ fn pgvector_hnsw_params_and_hermetic_roles_migrations_exist() {
         .unwrap_or_default();
     assert!(roles.contains("NOBYPASSRLS"));
     assert!(roles.contains("statement_timeout = '15s'"));
-    assert_eq!(weissman_db::role_guard::RO_SELECT_TABLES.len(), 13);
+    assert_eq!(weissman_db::role_guard::RO_SELECT_TABLES.len(), 17);
 }
 
 #[test]
@@ -181,6 +181,9 @@ const RLS_FORCE_ALLOWLIST: &[&str] = &[
     "compliance_frameworks",
     "compliance_mappings",
     "dynamic_payloads",
+    // Shared intel corpus (`intel.discovery_knowledge`) — no tenant identity,
+    // same model as intel.dynamic_payloads.
+    "discovery_knowledge",
     "endpoint_agent_enroll_attempts",
     "ephemeral_payloads",
     "epss_intel",
@@ -206,8 +209,18 @@ fn sql_idents_after(hay: &str, needle_lc: &str) -> Vec<String> {
                 rest = rest[prefix.len()..].trim_start();
             }
         }
-        if rest.starts_with("public.") {
-            rest = &rest["public.".len()..];
+        // Strip any schema qualifier (`public.foo`, `intel.bar`). Only
+        // `public.` used to be skipped, so `CREATE TABLE intel.discovery_knowledge`
+        // was recorded as the ident `intel` and failed FORCE RLS.
+        if let Some(dot) = rest.find('.') {
+            let schema = &rest[..dot];
+            if !schema.is_empty()
+                && schema
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_')
+            {
+                rest = &rest[dot + 1..];
+            }
         }
         let ident: String = rest
             .chars()
@@ -271,6 +284,70 @@ fn every_new_table_forces_rls_unless_allowlisted() {
         "these CREATE TABLE names have no FORCE ROW LEVEL SECURITY \
          (add FORCE RLS + tenant policy, or justify a catalog allowlist entry): {missing:?}"
     );
+}
+
+#[test]
+fn sqlx_migration_versions_unique_and_trees_byte_identical() {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    fn load(dir: &std::path::Path) -> (BTreeMap<String, String>, BTreeMap<String, String>) {
+        let mut by_ver: BTreeMap<String, String> = BTreeMap::new();
+        let mut by_name: BTreeMap<String, String> = BTreeMap::new();
+        for entry in
+            std::fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()))
+        {
+            let path = entry.expect("entry").path();
+            if path.extension().and_then(|e| e.to_str()) != Some("sql") {
+                continue;
+            }
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .expect("utf8 filename")
+                .to_string();
+            let ver = name
+                .split('_')
+                .next()
+                .expect("sqlx version prefix")
+                .to_string();
+            assert!(
+                ver.len() == 14 && ver.chars().all(|c| c.is_ascii_digit()),
+                "sqlx version must be 14 digits: {name}"
+            );
+            if let Some(prev) = by_ver.insert(ver.clone(), name.clone()) {
+                panic!(
+                    "duplicate sqlx version {ver}: {prev} and {name} in {}",
+                    dir.display()
+                );
+            }
+            let text = std::fs::read_to_string(&path).unwrap_or_default();
+            by_name.insert(name, text);
+        }
+        (by_ver, by_name)
+    }
+
+    let fe_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+    let db_dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/weissman-db/migrations");
+    let (fe_ver, fe_files) = load(&fe_dir);
+    let (db_ver, db_files) = load(&db_dir);
+    assert_eq!(
+        fe_ver, db_ver,
+        "sqlx version→filename map must match across migration trees"
+    );
+    let fe_names: BTreeSet<_> = fe_files.keys().cloned().collect();
+    let db_names: BTreeSet<_> = db_files.keys().cloned().collect();
+    assert_eq!(
+        fe_names, db_names,
+        "migration filenames must match across trees"
+    );
+    for name in &fe_names {
+        assert_eq!(
+            fe_files.get(name),
+            db_files.get(name),
+            "{name} must be byte-identical in both migration dirs"
+        );
+    }
 }
 
 #[test]

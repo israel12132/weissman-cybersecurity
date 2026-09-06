@@ -19,10 +19,10 @@ fi
 
 mkdir -p "$OUT_DIR"
 
-BINDGEN="$(command -v wasm-bindgen || true)"
+BINDGEN="$(bash "$ROOT/scripts/ensure_wasm_bindgen_cli.sh")"
 if [[ -z "${BINDGEN}" ]]; then
-  cargo install wasm-bindgen-cli --locked 2>/dev/null || true
-  BINDGEN="$(command -v wasm-bindgen)"
+  echo "ERROR: wasm-bindgen-cli required (pin via scripts/ensure_wasm_bindgen_cli.sh)" >&2
+  exit 1
 fi
 
 "$BINDGEN" "$WASM_PATH" \

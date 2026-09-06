@@ -8,7 +8,7 @@
  * `scripts/verify_engine_wiring.mjs` in turn holds equal to the backend's `PRODUCTION_ENGINE_IDS`.
  * That chain is what keeps this honest; do not edit the value without running those.
  */
-export const PRODUCTION_ENGINE_COUNT = 565
+export const PRODUCTION_ENGINE_COUNT = 567
 
 /** Current CalVer release shown on pre-auth surfaces. Keep in lockstep with CHANGELOG.md. */
 export const PLATFORM_RELEASE = '2026.06.2'

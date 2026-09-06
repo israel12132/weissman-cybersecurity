@@ -378,7 +378,8 @@ else
   bad "alertmanager has no persistent data volume — silences lost on restart"
 fi
 # wasm-bindgen-cli must be version-pinned for reproducible frontend builds.
-if grep -q 'wasm-bindgen-cli.*--version' deploy/frontend.Dockerfile; then
+if grep -q 'wasm-bindgen-cli.*--version' deploy/frontend.Dockerfile \
+  && grep -q 'wasm-bindgen-cli --locked --force --version' scripts/ensure_wasm_bindgen_cli.sh; then
   ok "wasm-bindgen-cli is version-pinned"
 else
   bad "wasm-bindgen-cli is unpinned — schema-version drift can break the build"
