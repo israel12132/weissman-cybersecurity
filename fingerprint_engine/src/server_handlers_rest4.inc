@@ -675,9 +675,18 @@ fn poe_spawn_job(
                     .send_async((job_key.clone(), payload.clone()))
                     .await;
                 if let Some(mut subs) = reg_fwd.get_mut(&job_key) {
+                    let mut spilled = false;
                     subs.retain(|s| match s.try_send(payload.clone()) {
                         Ok(()) => true,
-                        Err(flume::TrySendError::Full(_)) => true,
+                        Err(flume::TrySendError::Full(_)) => {
+                            if !spilled {
+                                POE_DROPS.record_payload(&payload);
+                                spilled = true;
+                            } else {
+                                POE_DROPS.record(1);
+                            }
+                            true
+                        }
                         Err(flume::TrySendError::Disconnected(_)) => false,
                     });
                 }
@@ -761,6 +770,7 @@ fn poe_spawn_job(
                             .unwrap_or("high");
                         let poc_exploit = obj.get("poc_exploit").and_then(Value::as_str).unwrap_or("");
                         let fid = crate::findings_persist::build_finding_id(
+                            tenant_id,
                             "poe_synthesis",
                             &target,
                             f,

@@ -657,7 +657,8 @@ pub async fn verify_finding_live(
                         0.25,
                     );
                 } else {
-                    reproducible = finding_still_present(&fid, &engine, &target, &result.findings);
+                    reproducible =
+                        finding_still_present(tenant_id, &fid, &engine, &target, &result.findings);
                     push_check(
                         &mut checks,
                         "engine_rescan",

@@ -253,7 +253,7 @@ async fn apply_hfv_after_ok_scan(
 ) {
     let present: Vec<String> = findings
         .iter()
-        .map(|f| crate::findings_persist::build_finding_id(engine, target, f))
+        .map(|f| crate::findings_persist::build_finding_id(tenant_id, engine, target, f))
         .collect();
     if let Err(e) = crate::findings_persist::apply_hack_fix_verify_after_ok_scan(
         app_pool, tenant_id, client_id, engine, target, &present,

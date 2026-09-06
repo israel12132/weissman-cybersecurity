@@ -53,6 +53,7 @@ use crate::dag_pipeline;
 use crate::db;
 use crate::deception_engine;
 use crate::exploit_synthesis_engine;
+use crate::overflow_log::DropAggregator;
 use crate::risk_graph;
 use crate::threat_intel_engine;
 
@@ -72,6 +73,8 @@ struct PoEJobState {
 /// Bounded central channel for PoE job updates; try_send prevents slow clients from exhausting RAM.
 const POE_UPDATES_CHANNEL_CAPACITY: usize = 100;
 type PoeJobRegistry = Arc<DashMap<String, Vec<flume::Sender<String>>>>;
+
+static POE_DROPS: DropAggregator = DropAggregator::new("poe_sse");
 
 /// Global error/telemetry broadcast: engine failures (timeout, DB lock, LLM unreachable, etc.) so UI can show Toast.
 const TELEMETRY_BROADCAST_CAPACITY: usize = 128;
@@ -1441,25 +1444,45 @@ pub fn new_app_state(
     let poe_job_registry: PoeJobRegistry = Arc::new(DashMap::new());
     let registry_clone = poe_job_registry.clone();
     tokio::spawn(async move {
-        while let Ok((job_id, json)) = poe_updates_rx.recv_async().await {
-            // Prune disconnected SSE subscribers as we forward. If no subscribers remain
-            // for this job_id after pruning, drop the map entry too — otherwise the
-            // DashMap accumulates one orphan key per scan forever (slow leak).
-            let drop_key = {
-                let Some(mut senders) = registry_clone.get_mut(&job_id) else {
-                    continue;
-                };
-                senders.retain(|tx| match tx.try_send(json.clone()) {
-                    Ok(()) => true,
-                    Err(TrySendError::Disconnected(_)) => false,
-                    Err(TrySendError::Full(_)) => true,
-                });
-                senders.is_empty()
-            };
-            if drop_key {
-                registry_clone.remove(&job_id);
+        let mut flush = tokio::time::interval(Duration::from_secs(5));
+        flush.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tokio::select! {
+                recv = poe_updates_rx.recv_async() => {
+                    let Ok((job_id, json)) = recv else { break; };
+                    // Prune disconnected SSE subscribers as we forward. If no subscribers remain
+                    // for this job_id after pruning, drop the map entry too — otherwise the
+                    // DashMap accumulates one orphan key per scan forever (slow leak).
+                    let drop_key = {
+                        let Some(mut senders) = registry_clone.get_mut(&job_id) else {
+                            continue;
+                        };
+                        let mut spilled = false;
+                        senders.retain(|tx| match tx.try_send(json.clone()) {
+                            Ok(()) => true,
+                            Err(TrySendError::Disconnected(_)) => false,
+                            Err(TrySendError::Full(_)) => {
+                                if !spilled {
+                                    POE_DROPS.record_payload(&json);
+                                    spilled = true;
+                                } else {
+                                    POE_DROPS.record(1);
+                                }
+                                true
+                            }
+                        });
+                        senders.is_empty()
+                    };
+                    if drop_key {
+                        registry_clone.remove(&job_id);
+                    }
+                }
+                _ = flush.tick() => {
+                    let _ = POE_DROPS.flush();
+                }
             }
         }
+        let _ = POE_DROPS.flush();
     });
     let (telemetry_tx, _) = tokio::sync::broadcast::channel::<String>(TELEMETRY_BROADCAST_CAPACITY);
     let telemetry_broadcast_tx = Arc::new(telemetry_tx);
@@ -1542,6 +1565,8 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>, job_control_pool: Arc<
         );
     }
     crate::agent_registry_sync::spawn_agent_registry_redis_sync(state.endpoint_agents.clone());
+    crate::suppression_cache_sync::spawn_suppression_cache_redis_sync(app_pool.clone());
+    crate::path_templates::spawn_prewarm(app_pool.clone());
     // Every replica: Ask Weissman hash-chain is per-process mpsc + DB sweep.
     // FOR UPDATE lives here, never on the HTTP insert path.
     crate::nl_audit_chain::spawn(app_pool.clone());

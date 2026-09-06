@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import useFocusTrap from '../../hooks/useFocusTrap'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -296,9 +297,12 @@ export default function FindingDrawer({
                       </span>
                     )}
                     {clusterId != null && (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-cyan-500/20 text-cyan-300/70">
-                        Cluster #{clusterId}
-                      </span>
+                      <Link
+                        to={`/finding-clusters?id=${encodeURIComponent(clusterId)}`}
+                        className="text-[10px] font-mono px-2 py-0.5 rounded border border-cyan-500/20 text-cyan-300/90 hover:text-cyan-200 hover:border-cyan-400/40"
+                      >
+                        {t('components.findingDrawer.cluster', { id: clusterId })}
+                      </Link>
                     )}
                     <LiveVerdictBadge
                       verification={finding.live_verification || finding.raw?.live_verification}

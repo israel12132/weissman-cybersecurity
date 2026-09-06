@@ -104,8 +104,7 @@ pub fn hfv_cycle_id_for_status(existing: Option<uuid::Uuid>, new_status: &str) -
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::db;
-use crate::findings_correlator::{self, ClusterAttrs};
-use crate::findings_gate::{self, gate_finding, Sealed, VulnerabilitiesWriter};
+use crate::findings_gate::{self, gate_finding_with_templates, Sealed, VulnerabilitiesWriter};
 use crate::fp_feedback;
 use crate::intel_epss;
 use crate::intel_kev;
@@ -348,8 +347,13 @@ impl Sealed for FindingsPersistWriter {}
 impl VulnerabilitiesWriter for FindingsPersistWriter {}
 
 /// Build a stable finding identifier (delegates to evidence gate).
-pub(crate) fn build_finding_id(engine: &str, target: &str, finding: &Value) -> String {
-    findings_gate::build_legacy_finding_id(engine, target, finding)
+pub(crate) fn build_finding_id(
+    tenant_id: i64,
+    engine: &str,
+    target: &str,
+    finding: &Value,
+) -> String {
+    findings_gate::build_legacy_finding_id(tenant_id, engine, target, finding)
 }
 
 /// Create (or reuse) a report_runs row and insert one row per finding.
@@ -407,6 +411,14 @@ pub async fn persist_engine_findings(
     let epss_map = intel_epss::fetch_epss_for_cves(pool, &scan_cves).await;
     let kev_map = intel_kev::kev_listed_for_cves(pool, &scan_cves).await;
 
+    // Learn route templates from this tenant (and this batch) before hashing
+    // identities so emails / filenames / sibling slugs share one key.
+    let path_templates = crate::path_templates::index_for_tenant(pool, tenant_id).await;
+    let observe_batch: Vec<String> = findings
+        .iter()
+        .map(|raw| extract_target(raw, target))
+        .collect();
+    path_templates.observe_urls(&observe_batch);
     let bus_on = weissman_job_bus::JobBus::from_env(pool.clone())
         .await
         .is_enabled();
@@ -444,7 +456,13 @@ pub async fn persist_engine_findings(
 
     let mut inserted: u64 = 0;
     for (finding_index, raw) in findings.iter().cloned().enumerate() {
-        let Some(gated) = gate_finding(engine, target, raw) else {
+        let Some(gated) = gate_finding_with_templates(
+            tenant_id,
+            engine,
+            target,
+            raw,
+            Some(path_templates.as_ref()),
+        ) else {
             tracing::warn!(
                 target: "findings_persist",
                 engine = %engine,
@@ -596,9 +614,16 @@ pub async fn persist_engine_findings(
         // The signature_hash is the same triple used by the correlator so
         // suppression rules transfer naturally across engines hitting the
         // exact same vulnerability. We also need it for record_fp()/record_tp().
-        let vuln_signature = derive_vuln_signature_for_persist(f, &title);
-        let signature_hash =
-            findings_correlator::build_cluster_key(&target_url, &vuln_signature, &cwe);
+        let vuln_signature = crate::finding_identity::derive_vuln_signature(f, &title);
+        let identity_hint = crate::finding_identity::identity_hint_from_finding(f);
+        let signature_hash = crate::finding_identity::build_cluster_key_ctx(
+            tenant_id,
+            &target_url,
+            &vuln_signature,
+            &cwe,
+            &identity_hint,
+            Some(path_templates.as_ref()),
+        );
         // Prefer cryptographic dedup hash when correlator signature is empty.
         let signature_hash = if signature_hash.trim().is_empty() {
             dedup_hash.clone()
@@ -640,6 +665,19 @@ pub async fn persist_engine_findings(
             obj.insert("confidence_multiplier".to_string(), json!(conf_mult));
             obj.insert("effective_risk".to_string(), json!(effective_risk));
             obj.insert("verified".to_string(), json!(poc_sealed));
+            obj.insert(
+                "identity".to_string(),
+                json!({
+                    "target_normalized": crate::finding_identity::normalize_target_ctx(
+                        &target_url,
+                        &identity_hint,
+                        Some(path_templates.as_ref()),
+                    ),
+                    "signature_normalized": vuln_signature,
+                    "cwe_normalized": crate::finding_identity::normalize_cwe(&cwe),
+                    "engine_plane": crate::finding_identity::engine_plane(engine),
+                }),
+            );
             if poc_sealed {
                 obj.insert("verification_status".to_string(), json!("verified"));
             } else {
@@ -651,10 +689,21 @@ pub async fn persist_engine_findings(
         // still persist (audit trail) but the inbox stays clean. Membership is checked against the
         // set preloaded once above (no per-finding round-trip); matched hashes get their hit_count
         // bumped in a single statement before commit.
-        let suppressed =
-            fp_feedback::is_suppressed_by(&active_suppressions, &signature_hash, &target_url);
+        let suppressed = fp_feedback::is_suppressed_by(
+            &active_suppressions,
+            &signature_hash,
+            &crate::finding_identity::normalize_target_ctx(
+                &target_url,
+                &identity_hint,
+                Some(path_templates.as_ref()),
+            ),
+        );
         if suppressed {
             suppression_hits.push(signature_hash.clone());
+            if let Value::Object(obj) = &mut raw_data_enriched {
+                obj.insert("auto_suppressed".to_string(), json!(true));
+                obj.insert("soar_skipped".to_string(), json!(true));
+            }
         }
         let effective_status = if suppressed { "FALSE_POSITIVE" } else { "OPEN" };
 
@@ -731,9 +780,9 @@ pub async fn persist_engine_findings(
 
         // True dedup: target a UNIQUE (tenant_id, client_id, finding_id) constraint.
         // On a repeat detection we refresh evidence (description/proof/raw_data + run_id)
-        // and *do not* reset ACKNOWLEDGED / FALSE_POSITIVE. Hack-Fix-Verify *does*
-        // reopen FIXED / VERIFIED_FIXED when the corroboration key is reproduced —
-        // a claim of "fixed" is not allowed to hide a live finding (control 56).
+        // and *do not* reset ACKNOWLEDGED. Auto-suppression demotes to FALSE_POSITIVE.
+        // Hack-Fix-Verify *does* reopen FIXED / VERIFIED_FIXED when the corroboration
+        // key is reproduced — a claim of "fixed" is not allowed to hide a live finding.
         let (upserted_id, vuln_is_new, prior_status): (i64, bool, String) = sqlx::query_as(
             r#"INSERT INTO vulnerabilities
                  (run_id, tenant_id, client_id, finding_id, title, severity, source,
@@ -761,6 +810,13 @@ pub async fn persist_engine_findings(
                    confidence_multiplier = EXCLUDED.confidence_multiplier,
                    effective_risk       = EXCLUDED.effective_risk,
                    poc_sealed           = vulnerabilities.poc_sealed OR EXCLUDED.poc_sealed,
+                   -- Auto-suppression wins even on re-detect: an OPEN row matching a 3-FP
+                   -- rule is demoted without resetting an analyst ACKNOWLEDGED state
+                   -- unless the incoming persist is itself FALSE_POSITIVE.
+                   status               = CASE
+                       WHEN EXCLUDED.status = 'FALSE_POSITIVE' THEN 'FALSE_POSITIVE'
+                       ELSE vulnerabilities.status
+                   END,
                    watermark_severity   = CASE
                        WHEN vulnerabilities.status IN ('VERIFIED_FIXED')
                             OR vulnerabilities.is_cycle_closed
@@ -860,43 +916,51 @@ pub async fn persist_engine_findings(
             }
         }
 
-        // ── Correlate into a finding_cluster ─────────────────────────────────
-        let source_label = engine;
-        let cluster = findings_correlator::upsert_cluster_for_finding(
+        // Cluster assignment is *not* in this TX — enqueue only (append-only, no
+        // weissman_finding_clusters row lock). A serial ingest drain after commit
+        // upserts the cluster under a per-key advisory lock. Enqueue errors must
+        // fail this persist: a swallowed SQL error aborts the TX while COMMIT
+        // still returns success (it becomes ROLLBACK).
+        let target_norm = crate::finding_identity::normalize_target_ctx(
+            &target_url,
+            &identity_hint,
+            Some(path_templates.as_ref()),
+        );
+        crate::cluster_ingest::enqueue(
             &mut tx,
             tenant_id,
             client_id,
-            &f,
-            ClusterAttrs {
-                target: &target_url,
-                engine,
-                source: source_label,
-                title: &title,
-                severity: &severity,
-                cwe: &cwe,
-                cve: if cve.is_empty() { None } else { Some(&cve) },
+            &crate::cluster_ingest::ClusterIngestRow {
+                vuln_id: upserted_id,
+                cluster_key: signature_hash.clone(),
+                target: target_norm,
+                engine: engine.to_string(),
+                source: engine.to_string(),
+                title: title.clone(),
+                severity: severity.clone(),
+                cwe: cwe.clone(),
+                vuln_signature: vuln_signature.clone(),
+                cve: if cve.is_empty() {
+                    None
+                } else {
+                    Some(cve.clone())
+                },
                 cvss: Some(cvss),
-                epss_score,
+                epss: epss_score,
                 kev_listed,
                 is_new_member: vuln_is_new,
             },
         )
-        .await
-        .ok();
-
-        // Stamp the new cluster_id onto the vulnerability row.
-        if let Some((cid, ref _key)) = cluster {
-            let _ = sqlx::query("UPDATE vulnerabilities SET cluster_id = $1 WHERE id = $2")
-                .bind(cid)
-                .bind(upserted_id)
-                .execute(&mut *tx)
-                .await;
-        }
+        .await?;
 
         inserted += 1;
-        let _ = upserted_id; // silence unused warning when not building tests
 
-        if crate::critical_infra::is_critical_risk_finding(&f) {
+        // Auto-suppression loop: persist as FALSE_POSITIVE at the worker persist
+        // gate and skip SOAR / pentest-memory / critical-infra fan-out so a known
+        // noisy signature cannot burn playbook webhooks or isolate_host actions.
+        let dispatch_soar = crate::finding_identity::should_dispatch_soar_playbooks(&prior_status);
+
+        if dispatch_soar && crate::critical_infra::is_critical_risk_finding(&f) {
             let eng_alert = engine.to_string();
             let target_alert = target_url.clone();
             let fid_alert = finding_id.clone();
@@ -926,7 +990,7 @@ pub async fn persist_engine_findings(
                 "fuzz_payload",
             ],
         );
-        if !payload.is_empty() && effective_status != "FALSE_POSITIVE" {
+        if dispatch_soar && !payload.is_empty() {
             let host = target_url
                 .trim_start_matches("https://")
                 .trim_start_matches("http://")
@@ -990,78 +1054,85 @@ pub async fn persist_engine_findings(
             });
         }
 
-        // Reuse the batch tenant transaction's connection (already RLS-scoped to this tenant)
-        // instead of acquiring a separate pooled connection + tenant tx per finding.
-        let internet_exposed = resolve_internet_exposed(&mut *tx, client_id, &target_url, &f).await;
+        if dispatch_soar {
+            // Reuse the batch tenant transaction's connection (already RLS-scoped to this tenant)
+            // instead of acquiring a separate pooled connection + tenant tx per finding.
+            let internet_exposed =
+                resolve_internet_exposed(&mut *tx, client_id, &target_url, &f).await;
 
-        // ── SOAR playbook dispatch (fire-and-forget) ────────────────────────
-        // Built outside the tx so a slow webhook doesn't extend the DB lock.
-        // We snapshot the event here while we still have all the data and
-        // tokio::spawn the dispatch after commit.
-        let event = crate::soar_playbook::PlaybookEvent {
-            kind: "finding_persisted".to_string(),
-            tenant_id,
-            client_id: Some(client_id),
-            finding_id: Some(upserted_id),
-            cluster_id: cluster.map(|(cid, _)| cid),
-            title: title.clone(),
-            severity: severity.clone(),
-            source: engine.to_string(),
-            target: target_url.clone(),
-            status: effective_status.to_string(),
-            cvss: Some(cvss as f32),
-            epss: epss_score,
-            kev: kev_listed,
-            kev_known_ransomware,
-            cve: if cve.is_empty() {
-                None
+            // Durable SOAR outbox in the same tenant TX. FALSE_POSITIVE never
+            // enters this arm — playbooks stay idle.
+            let event = crate::soar_playbook::PlaybookEvent {
+                kind: "finding_persisted".to_string(),
+                tenant_id,
+                client_id: Some(client_id),
+                finding_id: Some(upserted_id),
+                cluster_id: None,
+                title: title.clone(),
+                severity: severity.clone(),
+                source: engine.to_string(),
+                target: target_url.clone(),
+                status: prior_status.clone(),
+                cvss: Some(cvss as f32),
+                epss: epss_score,
+                kev: kev_listed,
+                kev_known_ransomware,
+                cve: if cve.is_empty() {
+                    None
+                } else {
+                    Some(cve.clone())
+                },
+                signature_hash: Some(signature_hash.clone()),
+                internet_exposed,
+            };
+            let job_payload = serde_json::json!({
+                "event": event,
+                "finding_id": upserted_id,
+            });
+            let enq = if bus_on {
+                weissman_db::job_queue::enqueue_held_in_tx(
+                    &mut tx,
+                    tenant_id,
+                    "soar_dispatch",
+                    job_payload.clone(),
+                    None,
+                    60,
+                )
+                .await
             } else {
-                Some(cve.clone())
-            },
-            signature_hash: Some(signature_hash.clone()),
-            internet_exposed,
-        };
-        // Durable outbox: same tenant transaction as the finding. Crash after
-        // commit still leaves a `soar_dispatch` job for the SOAR worker to retry.
-        let job_payload = serde_json::json!({
-            "event": event,
-            "finding_id": upserted_id,
-        });
-        let enq = if bus_on {
-            weissman_db::job_queue::enqueue_held_in_tx(
-                &mut tx,
-                tenant_id,
-                "soar_dispatch",
-                job_payload.clone(),
-                None,
-                60,
-            )
-            .await
-        } else {
-            weissman_db::job_queue::enqueue_in_tx(
-                &mut tx,
-                tenant_id,
-                "soar_dispatch",
-                job_payload.clone(),
-                None,
-            )
-            .await
-        };
-        match enq {
-            Ok(id) => {
-                if bus_on {
-                    soar_held.push((id, job_payload));
+                weissman_db::job_queue::enqueue_in_tx(
+                    &mut tx,
+                    tenant_id,
+                    "soar_dispatch",
+                    job_payload.clone(),
+                    None,
+                )
+                .await
+            };
+            match enq {
+                Ok(id) => {
+                    if bus_on {
+                        soar_held.push((id, job_payload));
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(
+                        target: "findings_persist",
+                        tenant_id,
+                        finding_id = upserted_id,
+                        error = %e,
+                        "failed to enqueue durable SOAR dispatch outbox row"
+                    );
                 }
             }
-            Err(e) => {
-                tracing::error!(
-                    target: "findings_persist",
-                    tenant_id,
-                    finding_id = upserted_id,
-                    error = %e,
-                    "failed to enqueue durable SOAR dispatch outbox row"
-                );
-            }
+        } else {
+            tracing::info!(
+                target: "findings_persist",
+                engine = %engine,
+                finding_id = %finding_id,
+                status = %prior_status,
+                "skipping SOAR playbooks — FALSE_POSITIVE auto-suppression"
+            );
         }
     }
 
@@ -1070,6 +1141,13 @@ pub async fn persist_engine_findings(
     fp_feedback::bump_suppression_hits(&mut tx, tenant_id, engine, &suppression_hits).await;
 
     tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+
+    // Cluster upsert + watermark corroboration — separate TXes, advisory-locked per key.
+    if inserted > 0 {
+        if let Err(e) = crate::cluster_ingest::drain_for_tenant(pool, tenant_id, 500).await {
+            tracing::warn!(target: "findings_persist", error = %e, "cluster ingest drain failed");
+        }
+    }
 
     for (job_id, payload) in soar_held {
         if let Err(e) = crate::async_jobs::finalize_held_job(
@@ -1288,8 +1366,8 @@ mod tests {
             "evidence": "body snapshot Z (totally different)",
             "discovered_at": "2026-06-13T00:00:00Z"
         });
-        let id1 = build_finding_id("sqli_engine", "https://Example.com/login", &first);
-        let id2 = build_finding_id("sqli_engine", "https://example.com/login", &rescan);
+        let id1 = build_finding_id(1, "sqli_engine", "https://Example.com/login", &first);
+        let id2 = build_finding_id(1, "sqli_engine", "https://example.com/login", &rescan);
         assert_eq!(
             id1, id2,
             "finding_id must be stable across volatile fields + target case"
@@ -1313,10 +1391,56 @@ mod tests {
         let b = json!({"title": "Issue", "signature": "xss", "cve": "CVE-2021-1234"});
         let target = "https://example.com/login";
         assert_ne!(
-            build_finding_id("eng", target, &a),
-            build_finding_id("eng", target, &b),
+            build_finding_id(1, "eng", target, &a),
+            build_finding_id(1, "eng", target, &b),
             "different vulnerability signature must yield a different finding_id"
         );
+    }
+
+    #[test]
+    fn finding_id_strips_ephemeral_port_and_query() {
+        let body = json!({
+            "title": "XSS in search",
+            "signature": "xss_reflected?sid=deadbeef",
+            "cwe": "CWE-79",
+        });
+        let a = build_finding_id(1, "asm", "https://app.example.com:54321/search?q=1", &body);
+        let b = build_finding_id(
+            1,
+            "asm",
+            "https://app.example.com/search",
+            &json!({
+                "title": "XSS in search",
+                "signature": "xss_reflected",
+                "cwe": "cwe-79",
+            }),
+        );
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn finding_id_is_tenant_isolated() {
+        let body = json!({
+            "title": "GraphQL Introspection",
+            "signature": "graphql_introspection",
+            "cwe": "CWE-200",
+        });
+        let target = "https://api.example.com/graphql";
+        assert_ne!(
+            build_finding_id(11, "asm", target, &body),
+            build_finding_id(22, "asm", target, &body),
+            "identical vulns on two tenants must not share finding_id"
+        );
+    }
+
+    #[test]
+    fn soar_gate_matches_identity_helper() {
+        assert!(!crate::finding_identity::should_dispatch_soar_playbooks(
+            "FALSE_POSITIVE"
+        ));
+        assert!(crate::finding_identity::should_dispatch_soar_playbooks(
+            "OPEN"
+        ));
     }
 
     #[test]

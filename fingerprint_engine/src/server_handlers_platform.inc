@@ -1804,6 +1804,7 @@ async fn api_soc_social_engineering_campaigns_post(
     let row_id: i64 = match persist_result {
         Ok(n) if n > 0 => {
             let fid = crate::findings_persist::build_finding_id(
+                auth.tenant_id,
                 "social_engineering_phishing",
                 &scan_target,
                 &campaign_finding,

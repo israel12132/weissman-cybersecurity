@@ -92,6 +92,7 @@ import {
   IocFeed,
   UebaAnomalies,
   FindingSuppressions,
+  FindingClusters,
   CryptoPosture,
   LiveFeed,
   ReportHistory,
@@ -268,6 +269,7 @@ export default function TacticalApp() {
           <Route path="cicd-security" element={<CicdPipelineSecurityCommandCenter />} />
           <Route path="serverless-security" element={<ServerlessSecurityCommandCenter />} />
           <Route path="findings" element={<FindingsCommandCenter />} />
+          <Route path="finding-clusters" element={<FindingClusters />} />
           <Route path="threat-intel" element={<ThreatIntelHub />} />
           <Route path="intel-map" element={<App />} />
           <Route path="incident-response" element={<IncidentResponseCenter />} />

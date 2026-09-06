@@ -813,6 +813,40 @@ async fn async_main() {
         }
     });
 
+    fingerprint_engine::suppression_cache_sync::spawn_suppression_cache_redis_sync(
+        app_pool.clone(),
+    );
+    fingerprint_engine::path_templates::spawn_prewarm(app_pool.clone());
+
+    // Serial cluster-ingest drain — crash recovery for persist TXes that committed
+    // findings + enqueue rows but died before the after-commit drain.
+    let cluster_pool = app_pool.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(5));
+        loop {
+            interval.tick().await;
+            match fingerprint_engine::cluster_ingest::drain_all_tenants(cluster_pool.as_ref(), 200)
+                .await
+            {
+                Ok(n) if n > 0 => {
+                    info!(
+                        target: "weissman_worker",
+                        drained = n,
+                        "cluster ingest drained"
+                    );
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    warn!(
+                        target: "weissman_worker",
+                        error = %e,
+                        "cluster ingest drain failed"
+                    );
+                }
+            }
+        }
+    });
+
     // Reclaim jobs left `running` after worker crash / network partition (self-healing queue).
     let reclaim_pool = ctrl_pool.clone();
     tokio::spawn(async move {

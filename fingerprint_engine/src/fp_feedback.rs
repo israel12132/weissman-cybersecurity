@@ -16,10 +16,113 @@
 //!     preloads suppression rules once per `(tenant, engine)` and bumps hit-counts in one batch
 //!   * [`confidence_multiplier`] — called from `findings_persist` and the read API
 
+use dashmap::DashMap;
+use globset::Glob;
+use rand::RngExt;
 use sqlx::{PgPool, Postgres, Transaction};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, LazyLock};
+use std::time::{Duration, Instant};
 
 const AUTO_SUPPRESS_FP_THRESHOLD: i32 = 3;
+const SUPPRESSION_CACHE_TTL: Duration = Duration::from_secs(30);
+/// Upper bound for stale-while-revalidate jitter after a Redis pub/sub gap.
+pub const SWR_JITTER_MAX_MS: u64 = 5_000;
+
+struct CachedRules {
+    loaded_at: Instant,
+    rules: Vec<SuppressionRule>,
+}
+
+static SUPPRESSION_CACHE: LazyLock<DashMap<(i64, String), CachedRules>> =
+    LazyLock::new(DashMap::new);
+static GLOB_MATCHERS: LazyLock<DashMap<String, Option<globset::GlobMatcher>>> =
+    LazyLock::new(DashMap::new);
+static SWR_REFRESH_RUNNING: AtomicBool = AtomicBool::new(false);
+/// Single-writer lock for cache reloads so a burst cannot stampede Postgres
+/// or spin overlapping Arc rebuilds.
+static SUPPRESSION_WRITE: LazyLock<tokio::sync::Mutex<()>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(()));
+
+/// Drop the in-memory glob cache for `(tenant, engine)` after a new rule is written.
+pub fn invalidate_suppression_cache(tenant_id: i64, engine: &str) {
+    invalidate_suppression_cache_local(tenant_id, engine);
+    crate::suppression_cache_sync::publish_bust(tenant_id, Some(engine));
+}
+
+/// Local-only bust (Redis subscriber / tests). Does not re-publish.
+pub fn invalidate_suppression_cache_local(tenant_id: i64, engine: &str) {
+    SUPPRESSION_CACHE.remove(&(tenant_id, engine.to_ascii_lowercase()));
+}
+
+/// Drop every cached engine for a tenant (rule delete / test reset).
+pub fn invalidate_suppression_cache_tenant(tenant_id: i64) {
+    invalidate_suppression_cache_tenant_local(tenant_id);
+    crate::suppression_cache_sync::publish_bust(tenant_id, None);
+}
+
+/// Local-only tenant bust (Redis subscriber / tests). Does not re-publish.
+pub fn invalidate_suppression_cache_tenant_local(tenant_id: i64) {
+    SUPPRESSION_CACHE.retain(|k, _| k.0 != tenant_id);
+}
+
+/// Drop every cached rule set on this replica. Tests / tenant wipe only.
+/// Production Redis reconnect must **not** call this — see
+/// [`mark_suppression_cache_stale_for_swr`].
+pub fn invalidate_suppression_cache_all_local() {
+    SUPPRESSION_CACHE.clear();
+}
+
+/// Mark every cached rule set expired without dropping it. Persist keeps
+/// serving the stale globset (stale-while-revalidate) so a fleet-wide Redis
+/// blip cannot stampede Postgres.
+pub fn mark_suppression_cache_stale_for_swr() {
+    let expired_at = Instant::now()
+        .checked_sub(SUPPRESSION_CACHE_TTL)
+        .unwrap_or_else(Instant::now);
+    for mut entry in SUPPRESSION_CACHE.iter_mut() {
+        entry.loaded_at = expired_at;
+    }
+}
+
+/// After a pub/sub gap, one replica waits a random 0..=5000 ms then reloads
+/// every cached `(tenant, engine)` sequentially. Other persist calls keep serving
+/// stale rules until this finishes.
+pub fn schedule_suppression_cache_swr_refresh(pool: Arc<PgPool>) {
+    if tokio::runtime::Handle::try_current().is_err() {
+        return;
+    }
+    if SUPPRESSION_CACHE.is_empty() {
+        return;
+    }
+    if SWR_REFRESH_RUNNING
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return;
+    }
+    tokio::spawn(async move {
+        struct ClearFlag;
+        impl Drop for ClearFlag {
+            fn drop(&mut self) {
+                SWR_REFRESH_RUNNING.store(false, Ordering::SeqCst);
+            }
+        }
+        let _clear = ClearFlag;
+        let jitter_ms = rand::rng().random_range(0..=SWR_JITTER_MAX_MS);
+        tokio::time::sleep(Duration::from_millis(jitter_ms)).await;
+        let keys: Vec<(i64, String)> = SUPPRESSION_CACHE.iter().map(|e| e.key().clone()).collect();
+        for (tenant_id, engine) in keys {
+            let _ = load_suppression_rules_from_db(pool.as_ref(), tenant_id, &engine).await;
+        }
+        tracing::info!(
+            target: "fp_feedback",
+            jitter_ms,
+            "suppression cache SWR refresh complete"
+        );
+    });
+}
 
 #[inline]
 fn multiplier_from_counts(tp: i32, fp: i32) -> f64 {
@@ -82,6 +185,7 @@ pub async fn record_fp(
     .execute(&mut **tx)
     .await
     .map_err(|e| format!("insert suppression: {e}"))?;
+    invalidate_suppression_cache(tenant_id, engine);
     Ok(inserted.rows_affected() > 0)
 }
 
@@ -239,8 +343,38 @@ pub async fn active_suppressions_for_engine(
     if engine.is_empty() {
         return Vec::new();
     }
+    let cache_key = (tenant_id, engine.to_ascii_lowercase());
+    if let Some(hit) = SUPPRESSION_CACHE.get(&cache_key) {
+        if hit.loaded_at.elapsed() < SUPPRESSION_CACHE_TTL {
+            return hit.rules.clone();
+        }
+        // Expired but present: serve stale and let the jittered SWR worker
+        // (or a single in-process refresh) reload from Postgres.
+        let stale = hit.rules.clone();
+        drop(hit);
+        schedule_suppression_cache_swr_refresh(Arc::new(pool.clone()));
+        return stale;
+    }
+    load_suppression_rules_from_db(pool, tenant_id, engine).await
+}
+
+async fn load_suppression_rules_from_db(
+    pool: &PgPool,
+    tenant_id: i64,
+    engine: &str,
+) -> Vec<SuppressionRule> {
+    let cache_key = (tenant_id, engine.to_ascii_lowercase());
+    let _write = SUPPRESSION_WRITE.lock().await;
+    if let Some(hit) = SUPPRESSION_CACHE.get(&cache_key) {
+        if hit.loaded_at.elapsed() < SUPPRESSION_CACHE_TTL {
+            return hit.rules.clone();
+        }
+    }
     let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Vec::new();
+        return SUPPRESSION_CACHE
+            .get(&cache_key)
+            .map(|h| h.rules.clone())
+            .unwrap_or_default();
     };
     let rows: Vec<(String, Option<String>)> = sqlx::query_as(
         r#"SELECT signature_hash, target_glob FROM finding_suppressions
@@ -254,12 +388,21 @@ pub async fn active_suppressions_for_engine(
     .await
     .unwrap_or_default();
     let _ = tx.commit().await;
-    rows.into_iter()
+    let rules: Vec<SuppressionRule> = rows
+        .into_iter()
         .map(|(signature_hash, target_glob)| SuppressionRule {
             signature_hash,
             target_glob,
         })
-        .collect()
+        .collect();
+    SUPPRESSION_CACHE.insert(
+        cache_key,
+        CachedRules {
+            loaded_at: Instant::now(),
+            rules: rules.clone(),
+        },
+    );
+    rules
 }
 
 /// One active `finding_suppressions` row. `target_glob == None` (or empty) suppresses the
@@ -272,15 +415,43 @@ pub struct SuppressionRule {
 
 /// True when some active rule suppresses `(signature_hash, target_url)`. Respecting `target_glob`
 /// is essential: an FP vote on one host must not suppress the same signature on every host.
+///
+/// Matching uses the same filtered target normalisation as `finding_identity` so an ephemeral
+/// source port or query-string session token cannot dodge a 3-FP auto-suppression rule.
 #[must_use]
 pub fn is_suppressed_by(rules: &[SuppressionRule], signature_hash: &str, target_url: &str) -> bool {
+    let target_norm = crate::finding_identity::normalize_target(target_url);
     rules.iter().any(|r| {
         r.signature_hash == signature_hash
             && match r.target_glob.as_deref().map(str::trim) {
                 None | Some("") => true,
-                Some(glob) => glob_matches(glob, target_url),
+                Some(glob) => {
+                    let glob_norm = crate::finding_identity::normalize_target(glob);
+                    glob_matches_fast(glob, target_url)
+                        || (!target_norm.is_empty() && glob_matches_fast(glob, &target_norm))
+                        || (!glob_norm.is_empty()
+                            && !target_norm.is_empty()
+                            && glob_matches_fast(&glob_norm, &target_norm))
+                }
             }
     })
+}
+
+/// In-memory glob match via a process-wide `globset` automaton cache.
+/// Exact strings skip the automaton. Invalid patterns fall back to two-pointer.
+fn glob_matches_fast(pattern: &str, text: &str) -> bool {
+    let pat = pattern.to_ascii_lowercase();
+    let txt = text.to_ascii_lowercase();
+    if !pat.contains('*') && !pat.contains('?') && !pat.contains('[') {
+        return pat == txt;
+    }
+    let entry = GLOB_MATCHERS
+        .entry(pat.clone())
+        .or_insert_with(|| Glob::new(&pat).ok().map(|g| g.compile_matcher()));
+    match entry.as_ref() {
+        Some(m) => m.is_match(&txt),
+        None => glob_matches(&pat, &txt),
+    }
 }
 
 /// Case-insensitive `*`/`?` glob match (standard two-pointer wildcard algorithm). A pattern with
@@ -347,7 +518,12 @@ pub async fn bump_suppression_hits(
 
 #[cfg(test)]
 mod tests {
-    use super::{is_suppressed_by, multiplier_from_counts, SuppressionRule};
+    use super::{
+        invalidate_suppression_cache_all_local, invalidate_suppression_cache_tenant_local,
+        is_suppressed_by, mark_suppression_cache_stale_for_swr, multiplier_from_counts,
+        CachedRules, SuppressionRule, SUPPRESSION_CACHE, SUPPRESSION_CACHE_TTL, SWR_JITTER_MAX_MS,
+    };
+    use std::time::Instant;
 
     fn rule(sig: &str, glob: Option<&str>) -> SuppressionRule {
         SuppressionRule {
@@ -390,6 +566,43 @@ mod tests {
     }
 
     #[test]
+    fn public_vs_admin_route_templates_do_not_share_suppression() {
+        let public = "https://api.corp/api/v1/public/image/6c084089-0aec";
+        let admin = "https://api.corp/api/v1/admin/billing/6c084089-0aec";
+        let public_key = crate::finding_identity::build_cluster_key(1, public, "xss", "CWE-79");
+        let admin_key = crate::finding_identity::build_cluster_key(1, admin, "xss", "CWE-79");
+        assert_ne!(public_key, admin_key);
+        let public_rule = [rule(&public_key, Some(public))];
+        assert!(is_suppressed_by(&public_rule, &public_key, public));
+        assert!(!is_suppressed_by(&public_rule, &admin_key, admin));
+    }
+
+    #[test]
+    fn suppression_matches_ephemeral_port_and_query_variants() {
+        let sig = "stable-cluster-key";
+        // Analyst marked FP against a URL that still carried an OS-allocated port + session.
+        let scoped = [rule(
+            sig,
+            Some("https://app.example.com:54321/login?sid=deadbeef"),
+        )];
+        assert!(is_suppressed_by(
+            &scoped,
+            sig,
+            "https://app.example.com/login"
+        ));
+        assert!(is_suppressed_by(
+            &scoped,
+            sig,
+            "https://APP.example.com:49152/login?x=1"
+        ));
+        assert!(!is_suppressed_by(
+            &scoped,
+            sig,
+            "https://other.example.com/login"
+        ));
+    }
+
+    #[test]
     fn multiplier_from_counts_matches_formula() {
         assert!((multiplier_from_counts(0, 0) - 1.0).abs() < 1e-6);
         assert!(multiplier_from_counts(0, 3) < 0.5);
@@ -405,5 +618,75 @@ mod tests {
         assert!(m(0.0, 3.0) < 0.5);
         assert!(m(0.0, 3.0) >= 0.1);
         assert!(m(4.0, 1.0) > 0.5);
+    }
+
+    fn cache_empty(tenant_id: i64, engine: &str) {
+        SUPPRESSION_CACHE.insert(
+            (tenant_id, engine.to_ascii_lowercase()),
+            CachedRules {
+                loaded_at: Instant::now(),
+                rules: Vec::new(),
+            },
+        );
+    }
+
+    #[test]
+    fn tenant_bust_leaves_other_tenants_cached() {
+        let a = 9_001_i64;
+        let b = 9_002_i64;
+        cache_empty(a, "asm");
+        cache_empty(b, "asm");
+        invalidate_suppression_cache_tenant_local(a);
+        assert!(!SUPPRESSION_CACHE.contains_key(&(a, "asm".into())));
+        assert!(SUPPRESSION_CACHE.contains_key(&(b, "asm".into())));
+        SUPPRESSION_CACHE.remove(&(b, "asm".into()));
+    }
+
+    /// Redis Pub/Sub is at-most-once. After a dropped subscription, reconnect
+    /// must keep serving stale rules (SWR) rather than emptying the DashMap.
+    #[test]
+    fn redis_reconnect_swr_keeps_stale_entries() {
+        let a = 9_011_i64;
+        let b = 9_012_i64;
+        cache_empty(a, "asm");
+        cache_empty(b, "nmap");
+        mark_suppression_cache_stale_for_swr();
+        assert!(
+            SUPPRESSION_CACHE.contains_key(&(a, "asm".into())),
+            "SWR must not drop tenant A"
+        );
+        assert!(
+            SUPPRESSION_CACHE.contains_key(&(b, "nmap".into())),
+            "SWR must not drop tenant B"
+        );
+        let a_age = SUPPRESSION_CACHE
+            .get(&(a, "asm".into()))
+            .expect("a")
+            .loaded_at
+            .elapsed();
+        assert!(
+            a_age >= SUPPRESSION_CACHE_TTL,
+            "SWR marks entries expired so the jittered worker reloads them"
+        );
+        invalidate_suppression_cache_all_local();
+    }
+
+    #[test]
+    fn swr_jitter_is_bounded_to_five_seconds() {
+        assert_eq!(SWR_JITTER_MAX_MS, 5_000);
+    }
+
+    #[test]
+    fn suppression_reload_serializes_writers() {
+        let src = include_str!("fp_feedback.rs");
+        assert!(
+            src.contains("SUPPRESSION_WRITE"),
+            "cache reload must take a single-writer mutex"
+        );
+        assert!(
+            src.contains("tokio::sync::Mutex"),
+            "writer lock is async so ingest reloads do not block the runtime"
+        );
+        assert!(src.contains("let _write = SUPPRESSION_WRITE.lock().await"));
     }
 }

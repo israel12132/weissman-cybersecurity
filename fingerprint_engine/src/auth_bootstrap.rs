@@ -209,6 +209,17 @@ async fn promote_env_operator(auth_pool: &PgPool, app_pool: &PgPool, email: &str
     );
 }
 
+/// Promote one default-tenant operator to `is_superadmin`.
+/// Used by boot and by the live owner-bootstrap test.
+pub async fn sync_one_owner(
+    auth_pool: &PgPool,
+    app_pool: &PgPool,
+    email: &str,
+    _seed_password: Option<&str>,
+) {
+    promote_env_operator(auth_pool, app_pool, email).await;
+}
+
 async fn seed_admin_password_if_empty(
     app_pool: &PgPool,
     row: &OwnerRow,

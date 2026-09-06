@@ -880,6 +880,18 @@ jobs:
           WEISSMAN_APP_POOL_MAX: "24"
           WEISSMAN_AUTH_POOL_MAX: "6"
           WEISSMAN_INTEL_POOL_MAX: "4"
+          # All live E2E steps in this job share 127.0.0.1. Default per-IP API
+          # (30/s), login (8/min), and tenant-scan (24/min) limits are anti-abuse
+          # for distributed clients — one CI IP legitimately burns them after
+          # smoke + Playwright + findings E2E. Nightly already lifts the API
+          # pair; these values are the clamp ceilings in rate_limit_metrics.rs.
+          # Production defaults are unchanged. See docs/TECH_DEBT_live_e2e_runtime.md.
+          WEISSMAN_RATE_LIMIT_PER_SEC: "500"
+          WEISSMAN_RATE_LIMIT_BURST: "2000"
+          WEISSMAN_TENANT_SCAN_POSTS_PER_MINUTE: "240"
+          WEISSMAN_TENANT_SCAN_BURST: "120"
+          WEISSMAN_LOGIN_PER_MINUTE: "60"
+          WEISSMAN_LOGIN_BURST: "120"
           PORT: "18000"
         run: ./target/debug/weissman-server > /tmp/weissman-server.log 2>&1 &
 

@@ -90,7 +90,7 @@ async fn persist_and_notify_findings(
     if persist_ok {
         let present: Vec<String> = findings
             .iter()
-            .map(|f| crate::findings_persist::build_finding_id(engine, target, f))
+            .map(|f| crate::findings_persist::build_finding_id(tenant_id, engine, target, f))
             .collect();
         if let Err(e) = crate::findings_persist::apply_hack_fix_verify_after_ok_scan(
             app_pool.as_ref(),
@@ -112,7 +112,7 @@ async fn persist_and_notify_findings(
         let (title, severity) = finding_title_and_severity(obj);
         let desc = finding_description(obj);
         let poc = infer_poc_exploit(obj, target);
-        let fid = crate::findings_persist::build_finding_id(engine, target, f);
+        let fid = crate::findings_persist::build_finding_id(tenant_id, engine, target, f);
         broadcast_finding_created(telemetry_tx, cid, &fid, &title, &severity, &desc, &poc, wr);
         if matches!(severity.as_str(), "critical" | "high") {
             notifications::spawn_critical_poe_alert(
