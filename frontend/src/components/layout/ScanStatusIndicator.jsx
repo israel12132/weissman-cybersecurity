@@ -9,9 +9,8 @@ const POLL_MS = 15000
 /**
  * Global "scan in progress" indicator for the app header.
  *
- * Polls the live GET /api/scan/status ({ scanning_active }) and shows a subtle
- * pulsing pill only while a scan is running — an at-a-glance signal that the
- * platform is actively working, without adding clutter when idle.
+ * Polls GET /api/scan/status (`scan_in_progress`, `running_async_jobs`, `scanning_active`)
+ * and shows a pulsing pill while a worker job or operator scan is actually running.
  */
 export default function ScanStatusIndicator() {
   const { t } = useTranslation()
@@ -20,7 +19,12 @@ export default function ScanStatusIndicator() {
   const poll = useCallback(async () => {
     try {
       const d = await apiFetch('/api/scan/status')
-      setActive(d.scanning_active === true)
+      const jobs = Number(d.running_async_jobs) || 0
+      setActive(
+        d.scan_in_progress === true
+          || d.scanning_active === true
+          || jobs > 0,
+      )
     } catch {
       setActive(false)
     }

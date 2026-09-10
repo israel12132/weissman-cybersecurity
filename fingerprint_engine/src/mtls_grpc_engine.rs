@@ -1049,8 +1049,8 @@ async fn probe_headers_and_cookies(
     posture.https_reachable = true;
 
     // ── HSTS ──────────────────────────────────────────────────────────────────
-    match header_value(&p.headers, "strict-transport-security") {
-        None => {
+    match crate::live_truth::observe_hsts_probe(&p) {
+        crate::live_truth::HstsObservation::Missing => {
             posture.hsts_missing = true;
             findings.push(with_fields(
                 finding_rich(
@@ -1066,21 +1066,19 @@ async fn probe_headers_and_cookies(
                 &[("category", json!("hsts"))],
             ));
         }
-        Some(v) => {
-            let lower = v.to_ascii_lowercase();
-            let max_age = lower
-                .split(';')
-                .find_map(|p| p.trim().strip_prefix("max-age="))
-                .and_then(|n| n.trim().parse::<u64>().ok())
-                .unwrap_or(0);
-            if max_age < min_hsts_age || !lower.contains("includesubdomains") {
+        crate::live_truth::HstsObservation::Present {
+            max_age,
+            include_subdomains,
+        } => {
+            let v = header_value(&p.headers, "strict-transport-security").unwrap_or("");
+            if max_age < min_hsts_age || !include_subdomains {
                 findings.push(with_fields(
                     finding_rich(
                         ENGINE_ID,
                         "Weak HSTS policy",
                         "medium",
                         T_MITM,
-                        &format!("HSTS is set ({}) but is weak: max-age={} (recommended ≥ {}){}. Strengthen to a 1-year max-age with includeSubDomains and preload.", v, max_age, min_hsts_age, if lower.contains("includesubdomains") { "" } else { ", missing includeSubDomains" }),
+                        &format!("HSTS is set ({}) but is weak: max-age={} (recommended ≥ {}){}. Strengthen to a 1-year max-age with includeSubDomains and preload.", v, max_age, min_hsts_age, if include_subdomains { "" } else { ", missing includeSubDomains" }),
                         target,
                         0.85,
                         Evidence::new().with("hsts", v).with("max_age", max_age),
@@ -1089,6 +1087,9 @@ async fn probe_headers_and_cookies(
                 ));
             }
         }
+        crate::live_truth::HstsObservation::UnknownWaf
+        | crate::live_truth::HstsObservation::UnknownStatus
+        | crate::live_truth::HstsObservation::UnknownUnreachable => {}
     }
 
     // ── CSP ───────────────────────────────────────────────────────────────────

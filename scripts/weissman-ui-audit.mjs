@@ -179,7 +179,7 @@ function extractInnerComponent(expr) {
   if (expr.type === 'JSXElement') {
     if (expr.openingElement.name.type === 'JSXIdentifier') {
       const name = expr.openingElement.name.name
-      const WRAP = new Set(['ProtectedRoute', 'CeoProtectedRoute', 'Suspense'])
+      const WRAP = new Set(['ProtectedRoute', 'CeoProtectedRoute', 'Suspense', 'RequireRole', 'RequireStaff'])
       if (!WRAP.has(name)) return name
     }
     for (const child of expr.children) {

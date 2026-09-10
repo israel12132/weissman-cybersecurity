@@ -598,6 +598,7 @@ fn emit_tls_findings(
     host: &str,
     tls: &TlsProbeResult,
     hsts: &HstsInfo,
+    emit_missing_hsts: bool,
     scores: &mut PostureScores,
     findings: &mut Vec<Value>,
 ) {
@@ -796,7 +797,7 @@ fn emit_tls_findings(
         ));
     }
 
-    if !hsts.present {
+    if emit_missing_hsts && !hsts.present {
         scores.tls = scores.tls.saturating_sub(10);
         findings.push(finding_rich(
             ENGINE_ID,
@@ -808,7 +809,7 @@ fn emit_tls_findings(
             0.85,
             Evidence::new().with("hsts_present", false),
         ));
-    } else if !hsts.strong {
+    } else if hsts.present && !hsts.strong {
         scores.tls = scores.tls.saturating_sub(5);
         findings.push(finding_rich(
             ENGINE_ID,
@@ -1026,16 +1027,36 @@ pub async fn run_crypto_engine_result(target: &str) -> EngineResult {
 
     let client = crate::engine_probes::http_client().await;
     let probe = http_get(&client, &url).await;
-    let (headers, body, hsts) = if let Some(p) = probe {
-        let hsts = header_value(&p.headers, "strict-transport-security")
-            .map(parse_hsts)
-            .unwrap_or_default();
-        (p.headers, p.body, hsts)
+    let (headers, body, hsts, emit_missing_hsts) = if let Some(p) = probe {
+        match crate::live_truth::observe_hsts_probe(&p) {
+            crate::live_truth::HstsObservation::Present { .. } => {
+                let hsts = header_value(&p.headers, "strict-transport-security")
+                    .map(parse_hsts)
+                    .unwrap_or_default();
+                (p.headers, p.body, hsts, false)
+            }
+            crate::live_truth::HstsObservation::Missing => {
+                (p.headers, p.body, HstsInfo::default(), true)
+            }
+            crate::live_truth::HstsObservation::UnknownWaf
+            | crate::live_truth::HstsObservation::UnknownStatus
+            | crate::live_truth::HstsObservation::UnknownUnreachable => {
+                (p.headers, p.body, HstsInfo::default(), false)
+            }
+        }
     } else {
-        (vec![], String::new(), HstsInfo::default())
+        (vec![], String::new(), HstsInfo::default(), false)
     };
 
-    emit_tls_findings(target, &host, &tls, &hsts, &mut scores, &mut findings);
+    emit_tls_findings(
+        target,
+        &host,
+        &tls,
+        &hsts,
+        emit_missing_hsts,
+        &mut scores,
+        &mut findings,
+    );
 
     if !headers.is_empty() || !body.is_empty() {
         let secret_kinds = scan_http_secrets(&headers, &body);

@@ -16,6 +16,8 @@
 #
 # Prerequisites: Docker 24+ with Compose v2, 8 GB RAM recommended,
 # ports 80 + 3000 + 9090 free (9090/3000 only when monitoring is enabled).
+# OAST (when WEISSMAN_OAST_DOMAIN is set): host TCP 9091 + UDP 8053 on loopback;
+# never UDP 5353 (IANA mDNS / Avahi).
 # =============================================================================
 set -euo pipefail
 
@@ -39,6 +41,8 @@ Flags (start only):
 
 Prerequisites: Docker 24+ with Compose v2, 8 GB RAM recommended,
 ports 80 + 3000 + 9090 free (3000/9090 only with monitoring enabled).
+OAST (WEISSMAN_OAST_DOMAIN set): 127.0.0.1:9091/tcp and 127.0.0.1:8053/udp
+by default — never host UDP 5353 (mDNS).
 USAGE
 }
 
@@ -138,42 +142,50 @@ parse_args() {
   done
 }
 
-# True when something is listening on $1. Returns 2 when we have no way to tell, so the
-# caller can warn instead of silently "passing" the check (the old code piped `ss` through
-# 2>/dev/null, so a host without iproute2 skipped port detection without saying so).
+# True when something is listening on $1. $2 is tcp (default) or udp.
+# Returns 2 when we have no way to tell, so the caller can warn instead of
+# silently "passing" the check (the old code piped `ss` through 2>/dev/null,
+# so a host without iproute2 skipped port detection without saying so).
 port_in_use() {
-  local port="$1"
+  local port="$1" proto="${2:-tcp}"
+  local ss_flag netstat_flag
+  case "$proto" in
+    tcp) ss_flag="-ltn"; netstat_flag="-ltn" ;;
+    udp) ss_flag="-lun"; netstat_flag="-lun" ;;
+    *) return 2 ;;
+  esac
   if command -v ss >/dev/null 2>&1; then
-    ss -ltn 2>/dev/null | awk '{print $4}' | grep -q ":${port}\$"
+    # Column 4 is Local Address:Port on iproute2 ss. IPv6 shows as [::]:PORT.
+    ss $ss_flag 2>/dev/null | awk '{print $4}' | grep -Eq ":${port}\]$|:${port}$"
   elif command -v netstat >/dev/null 2>&1; then
-    netstat -ltn 2>/dev/null | awk '{print $4}' | grep -q ":${port}\$"
+    netstat $netstat_flag 2>/dev/null | awk '{print $4}' | grep -Eq ":${port}\]$|:${port}$"
   else
     return 2
   fi
 }
 
+docker_publishes_port() {
+  local port="$1"
+  docker ps --format '{{.Ports}}' 2>/dev/null | grep -Eq ":${port}->"
+}
+
 check_ports_free() {
-  # Every port this stack PUBLISHES to the host. 9090 (Prometheus) was missing, so a
+  # Every TCP port this stack PUBLISHES to the host. 9090 (Prometheus) was missing, so a
   # conflict there only surfaced as a `compose up` failure after .env had been rewritten.
+  # OAST UDP/TCP is checked in preflight_oast_host_ports after .env is sourced — that
+  # step also remaps IANA mDNS 5353 before compose interpolates it.
   local ports=(80)
   if [[ "$WITH_MONITORING" -eq 1 ]]; then
     ports+=(3000 9090)
   fi
-  # OAST may be enabled via the shell env OR a pre-existing .env; check_ports_free runs
-  # before .env is sourced, so consult both (not just the pre-source WITH_OAST latch).
-  if [[ "$WITH_OAST" -eq 1 || -n "$OAST_DOMAIN_CLI" || -n "$(env_get WEISSMAN_OAST_DOMAIN)" ]]; then
-    # OAST HTTP callback catcher (TCP). The DNS listener is UDP and not pre-checked here.
-    local ohp; ohp="$(env_get WEISSMAN_OAST_HTTP_PORT)"
-    ports+=("${WEISSMAN_OAST_HTTP_PORT:-${ohp:-9091}}")
-  fi
 
   local unknown=0 port rc
   for port in "${ports[@]}"; do
-    port_in_use "$port" && rc=0 || rc=$?
+    port_in_use "$port" tcp && rc=0 || rc=$?
     case "$rc" in
       0)
         # Already ours (a previous run of this stack) is fine; anything else is a conflict.
-        if ! docker ps --format '{{.Ports}}' 2>/dev/null | grep -q ":${port}->"; then
+        if ! docker_publishes_port "$port"; then
           die "port :${port} is already in use — free it or run ./start_weissman_live.sh stop"
         fi
         ;;
@@ -183,6 +195,139 @@ check_ports_free() {
   if [[ "$unknown" -eq 1 ]]; then
     log "WARN: neither 'ss' nor 'netstat' found — skipping host port pre-check (install iproute2 for a clearer error on conflicts)"
   fi
+}
+
+# IANA 5353/udp is multicast DNS. Avahi (Linux) and mDNSResponder (macOS) bind it
+# on every desktop and on many servers. Publishing OAST there is a guaranteed
+# compose failure, not an edge case.
+OAST_MDNS_PORT=5353
+OAST_DNS_FALLBACKS=(8053 10053 15353 65353)
+
+pick_free_udp_port() {
+  local candidate rc
+  for candidate in "${OAST_DNS_FALLBACKS[@]}"; do
+    port_in_use "$candidate" udp && rc=0 || rc=$?
+    case "$rc" in
+      0)
+        if docker_publishes_port "$candidate"; then
+          echo "$candidate"
+          return 0
+        fi
+        ;;
+      2) echo "$candidate"; return 0 ;;
+      *) echo "$candidate"; return 0 ;;
+    esac
+  done
+  return 1
+}
+
+preflight_oast_host_ports() {
+  [[ "$WITH_OAST" -eq 1 ]] || return 0
+
+  local bind port http_port rc legacy
+  bind="$(env_get WEISSMAN_OAST_BIND)"
+  if [[ -z "${bind// }" ]]; then
+    bind="$(env_get WEISSMAN_OAST_DNS53_HOST)"
+  fi
+  bind="${bind:-127.0.0.1}"
+  env_set WEISSMAN_OAST_BIND "$bind"
+  export WEISSMAN_OAST_BIND="$bind"
+
+  http_port="$(env_get WEISSMAN_OAST_HTTP_PORT)"
+  http_port="${WEISSMAN_OAST_HTTP_PORT:-${http_port:-9091}}"
+  env_set WEISSMAN_OAST_HTTP_PORT "$http_port"
+  export WEISSMAN_OAST_HTTP_PORT="$http_port"
+
+  port_in_use "$http_port" tcp && rc=0 || rc=$?
+  case "$rc" in
+    0)
+      if ! docker_publishes_port "$http_port"; then
+        die "OAST HTTP port :${http_port} is already in use — set WEISSMAN_OAST_HTTP_PORT to a free TCP port"
+      fi
+      ;;
+    2) log "WARN: cannot probe TCP :${http_port} (no ss/netstat)" ;;
+  esac
+
+  port="$(env_get WEISSMAN_OAST_DNS_PORT)"
+  port="${WEISSMAN_OAST_DNS_PORT:-${port:-8053}}"
+  if [[ "$port" == "$OAST_MDNS_PORT" ]]; then
+    legacy="$(env_get WEISSMAN_OAST_DNS5353_HOST_PORT)"
+    if [[ -n "${legacy// }" && "$legacy" != "$OAST_MDNS_PORT" ]]; then
+      log "OAST DNS host port ${OAST_MDNS_PORT} is IANA mDNS (Avahi/Bonjour). Using WEISSMAN_OAST_DNS5353_HOST_PORT=${legacy} instead."
+      port="$legacy"
+    else
+      log "OAST DNS host port ${OAST_MDNS_PORT} is IANA mDNS (Avahi/Bonjour) — remapping off 5353."
+      port=""
+    fi
+  fi
+
+  if [[ -z "$port" ]]; then
+    port="$(pick_free_udp_port)" || die "no free OAST DNS UDP port among ${OAST_DNS_FALLBACKS[*]} — set WEISSMAN_OAST_DNS_PORT"
+  else
+    port_in_use "$port" udp && rc=0 || rc=$?
+    case "$rc" in
+      0)
+        if ! docker_publishes_port "$port"; then
+          local next
+          next="$(pick_free_udp_port)" || die "OAST DNS UDP :${port} is in use and no fallback port is free"
+          log "OAST DNS UDP :${port} is in use — publishing on :${next} instead"
+          port="$next"
+        fi
+        ;;
+      2) log "WARN: cannot probe UDP :${port} (no ss/netstat)" ;;
+    esac
+  fi
+
+  if [[ "$port" == "$OAST_MDNS_PORT" ]]; then
+    die "refusing to publish OAST DNS on UDP ${OAST_MDNS_PORT} (IANA mDNS). Set WEISSMAN_OAST_DNS_PORT=8053"
+  fi
+
+  env_set WEISSMAN_OAST_DNS_PORT "$port"
+  export WEISSMAN_OAST_DNS_PORT="$port"
+  log "OAST host publish ${bind}:${http_port}/tcp and ${bind}:${port}/udp (container DNS stays on 5353)"
+}
+
+# After images exist, refuse to start if this checkout or the live DB has a
+# migration the backend image does not ship. sqlx will otherwise crash-loop:
+# "migration N was previously applied but is missing in the resolved migrations".
+assert_image_migrations() {
+  local img="weissman-backend:stable"
+  docker image inspect "$img" >/dev/null 2>&1 || die "backend image $img is missing"
+
+  local host_dir="$ROOT/crates/weissman-db/migrations"
+  [[ -d "$host_dir" ]] || die "missing $host_dir"
+
+  local host_list image_list
+  host_list="$(find "$host_dir" -maxdepth 1 -name '*.sql' -printf '%f\n' | sort)"
+  image_list="$(docker run --rm --entrypoint sh "$img" -c 'ls -1 /srv/migrations/*.sql 2>/dev/null | sed "s|.*/||"' | sort)"
+  [[ -n "$image_list" ]] || die "$img has no SQL files in /srv/migrations"
+
+  local missing
+  missing="$(comm -23 <(printf '%s\n' "$host_list") <(printf '%s\n' "$image_list") || true)"
+  if [[ -n "$missing" ]]; then
+    log "ERROR: $img is missing migration files that exist in the checkout:"
+    printf '%s\n' "$missing" | sed 's/^/  - /'
+    die "rebuild backend — the Docker build context was frozen before these files existed. A live database that already applied them will refuse to boot."
+  fi
+
+  local pg running ver
+  pg="$(dc ps -q postgres 2>/dev/null || true)"
+  if [[ -n "$pg" ]]; then
+    running="$(docker inspect -f '{{.State.Running}}' "$pg" 2>/dev/null || echo false)"
+    if [[ "$running" == "true" ]]; then
+      while IFS= read -r ver; do
+        ver="${ver// /}"
+        [[ -z "$ver" ]] && continue
+        if ! printf '%s\n' "$image_list" | grep -qE "^${ver}_"; then
+          die "live database has applied migration ${ver}, but $img does not ship it — restore crates/weissman-db/migrations/${ver}_*.sql and rebuild"
+        fi
+      done < <(docker exec "$pg" psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-weissman}" -tAc "SELECT version FROM _sqlx_migrations WHERE success" 2>/dev/null || true)
+    fi
+  fi
+
+  local n
+  n="$(printf '%s\n' "$image_list" | grep -c . || true)"
+  log "Backend image ships ${n} SQL migrations covering the checkout and live database"
 }
 
 check_prereqs() {
@@ -390,15 +535,21 @@ env_truthy() {
 }
 
 compose_up() {
-  local up_args=(up -d)
-  if [[ "$SKIP_BUILD" -eq 0 ]]; then
-    up_args+=(--build)
-  fi
   local extras=""
   if [[ "$WITH_MONITORING" -eq 1 ]]; then extras+=" + monitoring"; fi
   if [[ "$WITH_OAST" -eq 1 ]]; then extras+=" + OAST listener"; fi
   log "Starting LIVE stack (Postgres, Redis, API, Worker, Gateway${extras})..."
-  dc "${up_args[@]}"
+
+  # Build images FIRST, then verify baked migrations against the checkout and
+  # the live DB, THEN start containers. `up --build` used to recreate backend
+  # from a stale context and only then fail on an OAST port bind, leaving the
+  # API crash-looping on "migration missing in the resolved migrations".
+  if [[ "$SKIP_BUILD" -eq 0 ]]; then
+    log "Building images (backend compile is the slow part on first/changed crates)..."
+    dc build
+  fi
+  assert_image_migrations
+  dc up -d --no-build
 }
 
 # Services this run expects to come up, in the order we report them.
@@ -653,6 +804,7 @@ cmd_start() {
   fi
   validate_env
   preflight_monitoring
+  preflight_oast_host_ports
   compose_up
   wait_healthy
   verify_live

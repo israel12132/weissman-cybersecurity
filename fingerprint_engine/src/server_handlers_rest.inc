@@ -124,11 +124,18 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
     let uptime_secs = state.started_at.elapsed().as_secs();
     let postgres_ok = db_ping_ok(state.app_pool.as_ref()).await;
     let scanning_enabled = crate::orchestrator::is_scanning_active();
-    let scan_in_progress = crate::orchestrator::scan_in_progress();
+    let mut scan_in_progress = crate::orchestrator::scan_in_progress();
     let active_tenant_cycles = crate::orchestrator::active_tenant_scan_count();
+    let mut running_async_jobs: i64 = 0;
     let mut engines: Vec<String> = vec![];
     let mut safe_mode = false;
     if postgres_ok {
+        running_async_jobs = weissman_db::job_queue::count_running_jobs(state.app_pool.as_ref())
+            .await
+            .unwrap_or(0);
+        if running_async_jobs > 0 {
+            scan_in_progress = true;
+        }
         if let Some(tid) = sqlx::query_scalar::<_, i64>("SELECT id FROM tenants WHERE slug = 'default' AND active = true LIMIT 1")
             .fetch_optional(state.auth_pool.as_ref())
             .await
@@ -177,6 +184,7 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
         "scanning_enabled": scanning_enabled,
         "scan_in_progress": scan_in_progress,
         "active_tenant_cycles": active_tenant_cycles,
+        "running_async_jobs": running_async_jobs,
         "active_engines": engines,
         "global_safe_mode": safe_mode,
         "process_rss_kb": rss_kb,
@@ -1460,9 +1468,25 @@ async fn api_scan_stop(
 }
 
 #[allow(dead_code)]
-async fn api_scan_status() -> Response {
-    let active = crate::orchestrator::is_scanning_active();
-    (StatusCode::OK, Json(json!({ "scanning_active": active }))).into_response()
+async fn api_scan_status(State(state): State<Arc<AppState>>) -> Response {
+    let scanning_active = crate::orchestrator::is_scanning_active();
+    let mut scan_in_progress = crate::orchestrator::scan_in_progress();
+    let running_async_jobs = weissman_db::job_queue::count_running_jobs(state.app_pool.as_ref())
+        .await
+        .unwrap_or(0);
+    if running_async_jobs > 0 {
+        scan_in_progress = true;
+    }
+    (
+        StatusCode::OK,
+        Json(json!({
+            "scanning_active": scanning_active || scan_in_progress,
+            "scanning_enabled": scanning_active,
+            "scan_in_progress": scan_in_progress,
+            "running_async_jobs": running_async_jobs,
+        })),
+    )
+        .into_response()
 }
 
 #[allow(dead_code)]
@@ -1895,6 +1919,11 @@ struct ScanAllEnginesRequest {
     target: Option<String>,
     #[serde(default)]
     engines: Option<Vec<String>>,
+    /// `light` | `normal` | `aggressive` — forwarded into each engine's job_params.
+    #[serde(default)]
+    intensity: Option<String>,
+    #[serde(default)]
+    deep: Option<bool>,
 }
 
 #[allow(dead_code)]
@@ -2037,6 +2066,8 @@ async fn api_scan_all_engines(
         "client_id": body.client_id,
         "target": target,
         "engines": engines,
+        "intensity": body.intensity,
+        "deep": body.deep,
     });
 
     match crate::async_jobs::enqueue(

@@ -1062,6 +1062,12 @@ async fn execute_feedback_fuzz(
     cognitive_osint: Option<&str>,
     app_pool: Option<&PgPool>,
 ) -> Vec<ValidatedAnomaly> {
+    if crate::live_truth::skip_if_edge_block("http_feedback_fuzz", target_url)
+        .await
+        .is_some()
+    {
+        return Vec::new();
+    }
     if generative_legacy_mode() {
         execute_legacy_feedback_fuzz(
             target_url,

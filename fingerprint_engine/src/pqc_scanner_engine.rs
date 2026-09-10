@@ -976,8 +976,12 @@ pub async fn run_pqc_scanner_result_ctx(target: &str, ctx: &EngineRunContext) ->
         if let Some(p) = http_get(&client, &base).await {
             posture.http_reachable = true;
             let hsts = header_value(&p.headers, "strict-transport-security").unwrap_or("");
-            posture.hsts = !hsts.is_empty();
-            if hsts.is_empty() {
+            posture.hsts = !hsts.is_empty()
+                && matches!(
+                    crate::live_truth::observe_hsts_probe(&p),
+                    crate::live_truth::HstsObservation::Present { .. }
+                );
+            if crate::live_truth::observe_hsts_probe(&p).emit_missing() {
                 findings.push(pqc_finding(
                     "Missing HSTS during PQC migration window",
                     "medium",

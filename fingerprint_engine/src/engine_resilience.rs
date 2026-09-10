@@ -5,8 +5,11 @@
 //!     job, the batch, or the other engines. Everyone keeps running their own work.
 //!   * **Adaptive multi-strategy retry** — on a *real execution failure* (error status, panic, or
 //!     timeout) the engine is retried against alternate target variants (scheme swap, `www` toggle)
-//!     until one works or the strategies are exhausted. A clean "no live signal" (`ok` with empty
+//!     until one works or the strategies are exhausted. **WAF/403/429 fail-fast**: an edge block
+//!     is not retried (no scheme/`www` variants, no Ghost Network). The attempt is converted to
+//!     an empty `ok` skip so the catalog scan moves on. A clean "no live signal" (`ok` with empty
 //!     findings) is a SUCCESS and is never retried — that would manufacture noise.
+//!     RoE refusals also fail-fast (hard error, no retry).
 //!   * **Per-attempt timeout** — a hung engine can't stall the pipeline.
 //!   * **Per-engine telemetry** — attempts, winning strategy, elapsed, recovered, status — surfaced
 //!     to the job result and metrics so operators can see exactly what every engine did.
@@ -80,6 +83,8 @@ pub enum FailureClass {
     Dns,
     /// TCP reset / refused / broken pipe.
     ConnReset,
+    /// Rules of engagement / critical-infra contract refused the engine. Do not retry.
+    Roe,
     /// Anything else.
     Generic,
 }
@@ -91,18 +96,27 @@ impl FailureClass {
             FailureClass::Timeout => "timeout",
             FailureClass::Dns => "dns",
             FailureClass::ConnReset => "conn_reset",
+            FailureClass::Roe => "roe",
             FailureClass::Generic => "generic",
         }
     }
 }
 
 /// Passed to each retry attempt so the engine can *act* on why the previous attempt failed
-/// rather than blindly re-running. `force_ghost_network` is set after a WAF/rate-limit block
-/// so the next attempt turns on the Ghost Network (identity morphing + jitter + proxy swarm).
+/// rather than blindly re-running.
+///
+/// `force_ghost_network` is kept for call-site compatibility. Reliability policy: it is
+/// **never** set. A WAF/403 is a skip, not a stealth-retry.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct EscalationHint {
     pub attempt: u32,
     pub force_ghost_network: bool,
+}
+
+/// WAF/edge and RoE must not consume remaining target variants (or widen into a 180s×3 stall).
+#[must_use]
+pub fn is_fail_fast(class: FailureClass) -> bool {
+    matches!(class, FailureClass::Waf | FailureClass::Roe)
 }
 
 /// Classify a failed attempt from its status + message. Mirrors the heuristics in
@@ -112,6 +126,13 @@ pub fn classify_failure(status: &str, message: &str) -> FailureClass {
         return FailureClass::Timeout;
     }
     let m = message.to_ascii_lowercase();
+    if m.contains("roe violation")
+        || m.contains("roe_mode")
+        || m.contains("critical_infra_contract")
+        || m.contains("weaponized_god_mode")
+    {
+        return FailureClass::Roe;
+    }
     if m.contains("403")
         || m.contains("429")
         || m.contains("503")
@@ -148,8 +169,7 @@ pub fn classify_failure(status: &str, message: &str) -> FailureClass {
 
 /// Escalate retry behaviour based on *why* the last attempt failed, instead of re-running the
 /// same request against a string-permuted target. Widens the per-attempt budget on timeouts and
-/// records WAF blocks; the WAF case ALSO flips [`EscalationHint::force_ghost_network`] for the
-/// next attempt (applied by the caller's closure via `engine_dispatch::apply_ghost_escalation`).
+/// records WAF blocks (fail-fast; no Ghost Network retry).
 fn escalate_for(class: FailureClass, current_timeout: &mut Duration) {
     match class {
         FailureClass::Timeout => {
@@ -160,7 +180,7 @@ fn escalate_for(class: FailureClass, current_timeout: &mut Duration) {
         }
         // Dns is already addressed by the scheme/`www` target variants; ConnReset/Generic
         // fall through to the next strategy unchanged.
-        FailureClass::Dns | FailureClass::ConnReset | FailureClass::Generic => {}
+        FailureClass::Dns | FailureClass::ConnReset | FailureClass::Generic | FailureClass::Roe => {}
     }
 }
 
@@ -211,8 +231,8 @@ fn panic_message(p: Box<dyn std::any::Any + Send>) -> String {
 ///
 /// `run(variant, hint)` produces the engine future for a given target variant; it is invoked
 /// once per strategy until one returns a non-error result (success, including a clean empty
-/// result) or all strategies are exhausted. `hint` lets the caller escalate evasion after a
-/// WAF/rate-limit block (see [`EscalationHint`]). Never panics or times out the caller.
+/// result) or all strategies are exhausted. WAF/403 fail-fast (empty skip). RoE fail-fast
+/// (hard error). Never panics or times out the caller.
 pub async fn run_with_resilience<F, Fut>(
     engine_id: &str,
     target: &str,
@@ -236,20 +256,42 @@ where
     for variant in &strategies {
         attempts += 1;
         metrics::counter!("weissman_engine_attempt_total").increment(1);
-        // After a WAF/rate-limit block, tell the next attempt to go stealthy.
         let hint = EscalationHint {
             attempt: attempts,
-            force_ghost_network: matches!(last_class, Some(FailureClass::Waf)),
+            force_ghost_network: false,
         };
         let fut = run(variant.clone(), hint);
         match tokio::time::timeout(current_timeout, AssertUnwindSafe(fut).catch_unwind()).await {
             Ok(Ok(result)) => {
                 if should_retry_status(&result.status) {
                     let class = classify_failure(&result.status, &result.message);
-                    escalate_for(class, &mut current_timeout);
                     last_error = Some(result.message.clone());
                     last_status = String::from("error");
                     last_class = Some(class);
+                    escalate_for(class, &mut current_timeout);
+                    if is_fail_fast(class) {
+                        if class == FailureClass::Waf {
+                            let telem = EngineExecTelemetry {
+                                engine_id: engine_id.to_string(),
+                                attempts,
+                                strategy: variant.clone(),
+                                elapsed_ms: start.elapsed().as_millis() as u64,
+                                status: String::from("ok"),
+                                recovered: false,
+                                error: None,
+                                failure_class: Some(class.as_str().to_string()),
+                            };
+                            return (
+                                crate::live_truth::edge_block_skip_result(
+                                    engine_id,
+                                    variant,
+                                    &result.message,
+                                ),
+                                telem,
+                            );
+                        }
+                        break;
+                    }
                     continue;
                 }
                 let telem = EngineExecTelemetry {
@@ -426,6 +468,13 @@ mod tests {
     fn classify_failure_maps_signals() {
         assert_eq!(classify_failure("timeout", ""), FailureClass::Timeout);
         assert_eq!(
+            classify_failure(
+                "error",
+                "RoE VIOLATION: roe_mode must be weaponized_god_mode or a valid signed critical_infra_contract must be present — engine blocked for target"
+            ),
+            FailureClass::Roe
+        );
+        assert_eq!(
             classify_failure("error", "HTTP 403 Forbidden"),
             FailureClass::Waf
         );
@@ -475,36 +524,70 @@ mod tests {
             move |_v, _hint| async move { EngineResult::error("HTTP 403 blocked by WAF") },
         )
         .await;
-        assert_eq!(result.status, "error");
+        assert_eq!(result.status, "ok");
+        assert!(result.findings.is_empty());
+        assert!(result.message.contains("skipped"));
         assert_eq!(telem.failure_class.as_deref(), Some("waf"));
+        assert_eq!(telem.status, "ok");
+        assert_eq!(telem.attempts, 1);
     }
 
     #[tokio::test]
-    async fn waf_block_forces_ghost_network_on_next_attempt() {
+    async fn waf_block_fails_fast_no_retry_no_ghost() {
         let hints: Arc<std::sync::Mutex<Vec<bool>>> = Arc::new(std::sync::Mutex::new(Vec::new()));
         let h = hints.clone();
         let calls = Arc::new(AtomicU32::new(0));
         let c = calls.clone();
-        let _ = run_with_resilience(
+        let (result, telem) = run_with_resilience(
             "wafed",
             "https://example.com",
             Duration::from_secs(2),
             move |_v, hint| {
                 h.lock().unwrap().push(hint.force_ghost_network);
-                let n = c.fetch_add(1, Ordering::SeqCst);
-                async move {
-                    if n == 0 {
-                        EngineResult::error("HTTP 403 blocked by WAF")
-                    } else {
-                        EngineResult::ok(vec![], "ok")
-                    }
-                }
+                c.fetch_add(1, Ordering::SeqCst);
+                async move { EngineResult::error("HTTP 403 blocked by WAF") }
             },
         )
         .await;
         let recorded = hints.lock().unwrap().clone();
-        // First attempt: no prior failure. Second attempt (after the WAF block): ghost network.
-        assert_eq!(recorded.first(), Some(&false));
-        assert_eq!(recorded.get(1), Some(&true));
+        assert_eq!(recorded, vec![false]);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(result.status, "ok");
+        assert_eq!(telem.attempts, 1);
+        assert_eq!(telem.failure_class.as_deref(), Some("waf"));
+        assert!(!telem.recovered);
+    }
+
+    #[test]
+    fn waf_and_roe_are_fail_fast() {
+        assert!(is_fail_fast(FailureClass::Waf));
+        assert!(is_fail_fast(FailureClass::Roe));
+        assert!(!is_fail_fast(FailureClass::Timeout));
+        assert!(!is_fail_fast(FailureClass::Dns));
+        assert!(!is_fail_fast(FailureClass::Generic));
+    }
+
+    #[tokio::test]
+    async fn roe_fail_fast_stays_error() {
+        let calls = Arc::new(AtomicU32::new(0));
+        let c = calls.clone();
+        let (result, telem) = run_with_resilience(
+            "ot_sis_triton_attack",
+            "https://example.com",
+            Duration::from_secs(2),
+            move |_v, _hint| {
+                c.fetch_add(1, Ordering::SeqCst);
+                async move {
+                    EngineResult::error(
+                        "RoE VIOLATION: roe_mode must be weaponized_god_mode — engine blocked for target",
+                    )
+                }
+            },
+        )
+        .await;
+        assert_eq!(result.status, "error");
+        assert_eq!(telem.attempts, 1);
+        assert_eq!(telem.failure_class.as_deref(), Some("roe"));
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 }

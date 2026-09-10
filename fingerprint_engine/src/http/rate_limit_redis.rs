@@ -386,6 +386,24 @@ pub async fn incr_enroll_ip_strict(client_ip: &str) -> StrictOp<u64> {
     .await
 }
 
+/// Agent session renewal (separate key from enroll so a consumed-token 401 loop cannot 429 renewals).
+pub async fn incr_agent_session_ip_strict(client_ip: &str) -> StrictOp<u64> {
+    incr_window_strict(
+        &format!("weissman:rl:agent-session:{client_ip}"),
+        Duration::from_secs(60),
+    )
+    .await
+}
+
+/// Per-agent UEBA HTTP ingest (WSS remains the primary path).
+pub async fn incr_ueba_agent_strict(agent_id: &str) -> StrictOp<u64> {
+    incr_window_strict(
+        &format!("weissman:rl:ueba:{agent_id}"),
+        Duration::from_secs(60),
+    )
+    .await
+}
+
 /// Like [`incr_api_ip`] but fail-closed aware for middleware.
 pub async fn incr_api_ip_strict(client_ip: &str) -> StrictOp<u64> {
     incr_window_strict(

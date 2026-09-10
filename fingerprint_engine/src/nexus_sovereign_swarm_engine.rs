@@ -2210,8 +2210,21 @@ async fn run_scout_probe(
     let set_cookie = header_str(&resp, "set-cookie");
     let content_type = header_str(&resp, "content-type");
     let csp = resp.headers().get("content-security-policy").is_some();
-    let hsts = resp.headers().get("strict-transport-security").is_some();
     let xfo = resp.headers().get("x-frame-options").is_some();
+    let mut hsts_headers_blob = String::new();
+    for (k, v) in resp.headers().iter() {
+        hsts_headers_blob.push_str(&format!("{}: {}\n", k.as_str(), v.to_str().unwrap_or("")));
+    }
+    let hsts_obs = crate::live_truth::observe_hsts(status, &hsts_headers_blob, "", &task.url);
+    let hsts = matches!(
+        hsts_obs,
+        crate::live_truth::HstsObservation::Present { .. }
+    );
+    let hsts_json = match hsts_obs {
+        crate::live_truth::HstsObservation::Present { .. } => json!(true),
+        crate::live_truth::HstsObservation::Missing => json!(false),
+        _ => Value::Null,
+    };
     let internal_hdrs = scan_internal_disclosure_headers(&resp);
     let cors_cred_wildcard = cors_credentials_wildcard(&resp);
 
@@ -2352,7 +2365,7 @@ async fn run_scout_probe(
         "via": via,
         "cors_allow_origin": cors,
         "cors_credentials_wildcard": cors_cred_wildcard,
-        "security_headers": { "csp": csp, "hsts": hsts, "x_frame_options": xfo },
+        "security_headers": { "csp": csp, "hsts": hsts_json, "x_frame_options": xfo },
         "fingerprint_blob": blob,
         "extracted_paths": extracted_paths,
         "dir_listing": dir_listing,

@@ -483,6 +483,60 @@ pub async fn heartbeat(pool: &PgPool, job_id: Uuid, lock_secs: i64) -> Result<()
     Ok(())
 }
 
+/// Persist in-flight progress on a `running` row without completing it.
+///
+/// Used by `scan_all_engines` so a wall-clock timeout / worker restart can skip engines already
+/// finished. `fail_job` retries do **not** clear `result_json`.
+pub async fn save_running_progress(
+    pool: &PgPool,
+    job_id: Uuid,
+    progress: &Value,
+) -> Result<(), sqlx::Error> {
+    let mut tx = begin_worker_tx(pool).await?;
+    sqlx::query(
+        r#"UPDATE weissman_async_jobs
+              SET progress_json = $2, result_json = $2, updated_at = now()
+            WHERE id = $1 AND status = 'running'"#,
+    )
+    .bind(job_id)
+    .bind(Json(progress))
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Load `result_json` for resume (any status — retries keep the column).
+pub async fn load_result_json(pool: &PgPool, job_id: Uuid) -> Result<Option<Value>, sqlx::Error> {
+    let mut tx = begin_worker_tx(pool).await?;
+    let row = sqlx::query(
+        "SELECT COALESCE(progress_json, result_json) AS checkpoint FROM weissman_async_jobs WHERE id = $1",
+    )
+        .bind(job_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    let v: Option<Json<Value>> = row.try_get("checkpoint")?;
+    Ok(v.map(|j| j.0))
+}
+
+/// Count `running` jobs across tenants. Must use the worker RLS GUC: the database-level
+/// default `app.current_tenant_id = '0'` would otherwise hide every real tenant's row and
+/// the health endpoint would report `scan_in_progress: false` while engines are running.
+pub async fn count_running_jobs(pool: &PgPool) -> Result<i64, sqlx::Error> {
+    let mut tx = begin_worker_tx(pool).await?;
+    let n: i64 = sqlx::query_scalar(
+        "SELECT count(*)::bigint FROM weissman_async_jobs WHERE status = 'running'",
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(n)
+}
+
 pub async fn complete_job(pool: &PgPool, job_id: Uuid) -> Result<(), sqlx::Error> {
     let mut tx = begin_worker_tx(pool).await?;
     sqlx::query(

@@ -115,6 +115,13 @@ services:
       WEISSMAN_OAST_DOMAIN: ${WEISSMAN_OAST_DOMAIN:-}
       WEISSMAN_OAST_API_KEY: ${WEISSMAN_OAST_API_KEY:-}
       WEISSMAN_OAST_LISTENER_URL: ${WEISSMAN_OAST_LISTENER_URL:-http://oast:9090}
+    # Checkout SQL is the source of truth for this launcher. sqlx loads /srv/migrations
+    # at runtime; bind-mounting the git tree means a file added while an image compiled
+    # still reaches the live volume. Image-only deploys without this repo keep the
+    # files baked into weissman-backend:stable. The directory is in git, so Docker
+    # cannot materialise an empty mount over the baked copy.
+    volumes:
+      - ./crates/weissman-db/migrations:/srv/migrations:ro
 
   worker:
     logging: *default-logging
@@ -146,6 +153,10 @@ services:
   # the app DB (oast_interaction_hits); the engines poll it at WEISSMAN_OAST_LISTENER_URL.
   oast:
     logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     build:
       context: .
       dockerfile: deploy/oast.Dockerfile
@@ -161,21 +172,26 @@ services:
       WEISSMAN_OAST_DOMAIN: ${WEISSMAN_OAST_DOMAIN:-}
       WEISSMAN_OAST_API_KEY: ${WEISSMAN_OAST_API_KEY:-}
       OAST_HTTP_LISTEN: 0.0.0.0:9090
+      # Container-local UDP listen. 5353 here is isolated inside the netns; it is NOT
+      # published on the host (IANA 5353 is mDNS / Avahi / Bonjour).
       OAST_DNS_LISTEN: 0.0.0.0:5353
     ports:
-      # HTTP callback catcher (also serves the correlation API). Default host 9091 so it does
-      # not clash with Prometheus on 9090. Route your public HTTP callbacks here.
-      - "${WEISSMAN_OAST_HTTP_PORT:-9091}:9090"
-      # DNS callback catcher (UDP). Delegate your zone's NS to this host:port; forward public
-      # :53/udp -> this if your host cannot bind 53 directly.
-      - "${WEISSMAN_OAST_DNS_PORT:-5353}:5353/udp"
+      # Loopback by default — same reason the gateway binds 127.0.0.1: this is a DNS
+      # server plus an unauthenticated-looking HTTP catcher. Set WEISSMAN_OAST_BIND=0.0.0.0
+      # only when a real zone is delegated to this host and you intend LAN/WAN callbacks.
+      # HTTP default 9091 avoids Prometheus on 9090.
+      - "${WEISSMAN_OAST_BIND:-127.0.0.1}:${WEISSMAN_OAST_HTTP_PORT:-9091}:9090"
+      # Host UDP port must NOT default to 5353 (mDNS). 8053 is the product default;
+      # production NS delegation typically DNAT public :53/udp here, or set
+      # WEISSMAN_OAST_DNS_PORT=53 (Docker's userland proxy binds 53 as root).
+      - "${WEISSMAN_OAST_BIND:-127.0.0.1}:${WEISSMAN_OAST_DNS_PORT:-8053}:5353/udp"
     expose:
       - "9090"
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf --connect-timeout 2 http://127.0.0.1:9090/ >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -sf --connect-timeout 2 http://127.0.0.1:9090/healthz >/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5

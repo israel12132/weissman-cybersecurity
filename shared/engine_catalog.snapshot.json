@@ -1,32 +1,32 @@
 {
-  "generated_at": "2026-08-10T23:02:23.290Z",
+  "generated_at": "2026-09-07T22:34:26.356Z",
   "source": {
     "production": "backend/weissman-core/src/models/engine.rs",
     "agent_required": "backend/weissman-core/src/models/engine_agent.rs",
     "frontend": "frontend/src/lib/enginesRegistry.js"
   },
   "counts": {
-    "production": 563,
-    "frontend": 563,
-    "agent_required": 48,
+    "production": 580,
+    "frontend": 580,
+    "agent_required": 58,
     "groups": 15
   },
   "groups": {
-    "recon": 44,
+    "recon": 46,
     "web": 71,
-    "ai": 46,
-    "cloud": 48,
-    "ot": 42,
+    "ai": 47,
+    "cloud": 51,
+    "ot": 43,
     "stealth": 53,
-    "crypto": 43,
-    "network": 56,
+    "crypto": 44,
+    "network": 59,
     "supply_chain": 33,
-    "apt": 62,
+    "apt": 65,
     "malware": 15,
     "social": 16,
     "mobile": 15,
     "data": 15,
-    "defense": 4
+    "defense": 7
   },
   "agent_required_ids": [
     "process_hollowing",
@@ -76,7 +76,17 @@
     "voltage_glitch_attack",
     "tpm_firmware_attack",
     "cold_boot_attack",
-    "infostealer_emulation"
+    "infostealer_emulation",
+    "sandbox_evasion",
+    "rop_chain_engine",
+    "heap_exploitation",
+    "jit_spray",
+    "com_hijacking",
+    "parent_pid_spoof",
+    "host_isolation",
+    "host_privilege_escalation",
+    "ebpf_sensor",
+    "ioc_yara_hunt"
   ],
   "parity": {
     "frontend_subset_of_production": true,

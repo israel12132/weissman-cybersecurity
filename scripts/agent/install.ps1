@@ -23,9 +23,9 @@ function Install-WeissmanAgent {
 
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     $binary = Join-Path $InstallDir "weissman-agent.exe"
-    Write-Host "[weissman-agent] downloading $base/weissman-agent.exe"
-    Invoke-WebRequest -Uri "$base/weissman-agent.exe" -OutFile "$binary.tmp" -UseBasicParsing
-    $expected = (Invoke-WebRequest -Uri "$base/weissman-agent.exe.sha256" -UseBasicParsing).Content.Split(' ')[0]
+    Write-Host "[weissman-agent] downloading $base/weissman-agent"
+    Invoke-WebRequest -Uri "$base/weissman-agent" -OutFile "$binary.tmp" -UseBasicParsing
+    $expected = (Invoke-WebRequest -Uri "$base/weissman-agent.sha256" -UseBasicParsing).Content.Split(' ')[0]
     $actual = (Get-FileHash -Algorithm SHA256 "$binary.tmp").Hash
     if ($expected.ToLower() -ne $actual.ToLower()) {
         Remove-Item -Force "$binary.tmp"

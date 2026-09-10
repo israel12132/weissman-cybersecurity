@@ -12,13 +12,13 @@ Regenerate: `node scripts/engine_coverage_accuracy_report.mjs` · Gate: `--check
 
 | Class | Count | Share |
 |-------|------:|------:|
-| **Live probes** (real network / host / TLS / DNS I/O) | 303 | 53.8% |
-| Aliases (retag → a live probe, same detection logic) | 212 | 37.7% |
-| Agent-required (host-level; endpoint agent performs the detection) | 48 | 8.5% |
+| **Live probes** (real network / host / TLS / DNS I/O) | 318 | 54.8% |
+| Aliases (retag → a live probe, same detection logic) | 204 | 35.2% |
+| Agent-required (host-level; endpoint agent performs the detection) | 58 | 10.0% |
 | **No execution path** (catalog entries that do nothing) | 0 | 0.0% |
-| **Catalog total** | **563** | 100% |
+| **Catalog total** | **580** | 100% |
 
-- **295 distinct probe implementations** back the 303 live
+- **310 distinct probe implementations** back the 318 live
   probes (delegates that share one implementation are counted once).
 - **0 engines with no execution path** — the catalog headline is fully backed.
 - A companion gate, `engine_reality_audit.mjs`, independently proves the same *depth* invariant.
@@ -26,27 +26,27 @@ Regenerate: `node scripts/engine_coverage_accuracy_report.mjs` · Gate: `--check
 ## 2. Breadth spans every attack domain
 
 The catalog covers **15 attack domains** and maps to
-**192 distinct MITRE ATT&CK techniques**, with
+**198 distinct MITRE ATT&CK techniques**, with
 **0 engines unmapped**. Every domain carries live probes — no domain
 is pure-alias "coverage theater".
 
 | Attack domain | Engines | Live probes | Aliases | Agent | MITRE techniques |
 |---------------|--------:|------------:|--------:|------:|-----------------:|
-| Web / API | 71 | 41 | 30 | 0 | 21 |
-| APT / Top-Tier | 62 | 31 | 30 | 1 | 29 |
-| Network / Protocol | 56 | 21 | 24 | 11 | 31 |
-| Stealth / Evasion | 53 | 16 | 25 | 12 | 35 |
-| Cloud / Infra | 48 | 25 | 23 | 0 | 24 |
-| AI / LLM | 46 | 28 | 18 | 0 | 22 |
-| Recon & OSINT | 44 | 23 | 21 | 0 | 27 |
-| Crypto / Identity | 43 | 21 | 19 | 3 | 24 |
-| OT / ICS / IoT | 42 | 30 | 10 | 2 | 19 |
+| Web / API | 71 | 48 | 23 | 0 | 21 |
+| APT / Top-Tier | 65 | 31 | 30 | 4 | 31 |
+| Network / Protocol | 59 | 25 | 23 | 11 | 32 |
+| Stealth / Evasion | 53 | 11 | 25 | 17 | 35 |
+| Cloud / Infra | 51 | 28 | 23 | 0 | 24 |
+| AI / LLM | 47 | 29 | 18 | 0 | 23 |
+| Recon & OSINT | 46 | 25 | 21 | 0 | 27 |
+| Crypto / Identity | 44 | 22 | 19 | 3 | 24 |
+| OT / ICS / IoT | 43 | 31 | 10 | 2 | 20 |
 | Supply Chain | 33 | 21 | 12 | 0 | 11 |
 | Social Engineering | 16 | 12 | 0 | 4 | 8 |
 | Malware & Ransomware | 15 | 11 | 0 | 4 | 15 |
 | Mobile / Apps | 15 | 12 | 0 | 3 | 10 |
 | Data Exfiltration | 15 | 7 | 0 | 8 | 7 |
-| Active Defense | 4 | 4 | 0 | 0 | 3 |
+| Active Defense | 7 | 5 | 0 | 2 | 6 |
 
 ## 3. Accuracy: findings are discounted and suppressed, not just emitted
 
@@ -64,8 +64,8 @@ False positives are handled by a per-`(tenant, engine, signature_hash)` feedback
 
 ## 4. Why this matters against XSOAR / Splunk SOAR / Torq / Tines / Swimlane
 
-Those platforms orchestrate *other people's* detections. Weissman ships **303 in-house
-offensive probes across 15 domains and 192 ATT&CK
+Those platforms orchestrate *other people's* detections. Weissman ships **318 in-house
+offensive probes across 15 domains and 198 ATT&CK
 techniques**, each wired to real I/O and each discounted by a live accuracy loop — offensive
 coverage plus in-house threat intelligence in one backend, not a workflow engine bolted onto
 third-party feeds.

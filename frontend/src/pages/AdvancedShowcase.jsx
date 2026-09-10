@@ -124,10 +124,18 @@ export default function AdvancedShowcase() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
+      <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+        <strong>Design-system catalog only.</strong> Widgets below use local demo props (Acme, fake hashes, staged comments).
+        They are not tenant telemetry. Partner posture lives at{' '}
+        <a href="/command-center/mssp-portal" className="underline text-accent-cyan">
+          MSSP Partner Portal
+        </a>
+        — live GET /api/portfolio/posture.
+      </div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-semibold text-text-primary">Advanced Components</h1>
-          <p className="text-sm text-text-muted">AI · WarRoom · SOAR · Enterprise — the acquisition-grade surface.</p>
+          <p className="text-sm text-text-muted">Developer design-system gallery — not a sales or SOC product surface.</p>
         </div>
         <a href="/command-center/design-system" className="text-xs text-accent-cyan hover:underline">
           ← Core gallery

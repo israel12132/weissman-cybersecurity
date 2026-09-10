@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="Weissman Endpoint Agent" Language="1033" Version="1.0.0"
+           Manufacturer="Weissman Cybersecurity" UpgradeCode="A3C8E1F0-9B12-4D55-8E01-7F2C4B91A0D3">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Feature Id="ProductFeature" Title="Weissman Agent" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+    </Feature>
+  </Product>
+  <Fragment>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="Weissman">
+          <Directory Id="AGENTFOLDER" Name="Agent" />
+        </Directory>
+      </Directory>
+    </Directory>
+  </Fragment>
+  <Fragment>
+    <ComponentGroup Id="ProductComponents" Directory="AGENTFOLDER">
+      <Component Id="AgentExe" Guid="B7D91C22-4E18-4A70-9C33-1F8A6E0B2C11">
+        <File Id="WeissmanAgentExe" Source="weissman-agent.exe" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

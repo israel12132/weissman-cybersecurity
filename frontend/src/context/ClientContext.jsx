@@ -40,6 +40,7 @@ export function ClientProvider({ children }) {
   const [poeJobId, setPoeJobId] = useState(null)
   const [clientIntegrations, setClientIntegrations] = useState(null)
   const [integrationsLoading, setIntegrationsLoading] = useState(false)
+  const [roePending, setRoePending] = useState(null)
   const selectedClientIdRef = useRef(null)
   // Monotonic request sequences: a response from a superseded selection must not
   // overwrite the current client's data, and — the bug this fixes — must not clear
@@ -66,7 +67,10 @@ export function ClientProvider({ children }) {
     }
   }, [clientScopeLocked, lockedClientId])
 
-  const dismissConfigError = useCallback(() => setConfigError(null), [])
+  const dismissConfigError = useCallback(() => {
+    setConfigError(null)
+    setRoePending(null)
+  }, [])
   const dismissClientsError = useCallback(() => setClientsError(null), [])
 
   const refreshClients = useCallback(async () => {
@@ -75,6 +79,14 @@ export function ClientProvider({ children }) {
       if (Array.isArray(data)) {
         setClients(data)
         setClientsError(null)
+        if (
+          !clientScopeLocked &&
+          selectedClientIdRef.current == null &&
+          data.length === 1 &&
+          data[0]?.id != null
+        ) {
+          setSelectedClientIdState(data[0].id)
+        }
       } else {
         setClients([])
         setClientsError('Unexpected response from /api/clients (expected a list).')
@@ -83,7 +95,7 @@ export function ClientProvider({ children }) {
       setClients([])
       setClientsError(e?.response ? await formatApiErrorResponse(e.response) : (e?.message || 'Network error'))
     }
-  }, [])
+  }, [clientScopeLocked])
 
   const refreshConfig = useCallback(async (clientId) => {
     // Bump on every call — including the null branch — so switching away
@@ -160,13 +172,24 @@ export function ClientProvider({ children }) {
       if (data.config && selectedClientIdRef.current === clientId) {
         setClientConfigState(parseConfigFromResponse(data.config))
       }
+      if (patch?.roe_mode) setRoePending(null)
       return true
     } catch (e) {
       if (e?.status === 409) {
-        const data = e?.response ? await e.response.json().catch(() => null) : null
+        const data = e.body && typeof e.body === 'object'
+          ? e.body
+          : (e?.response ? await e.response.clone().json().catch(() => null) : null)
         if (data?.error_code === 'roe_approval_required') {
           const reqId = data.request_id ? `Request #${data.request_id}` : 'Request created'
-          setConfigError(`Weaponized ROE requires 2 admin approvals. ${reqId}. Go to /roe-approvals to approve.`)
+          setRoePending({
+            requestId: data.request_id,
+            approvalsHave: Number(data.approvals_have) || 0,
+            approvalsNeeded: Number(data.approvals_needed) || 2,
+            adminUrl: data.admin_url || '/roe-approvals',
+            detail: data.detail || '',
+            clientId,
+          })
+          setConfigError(`Weaponized ROE requires 2 admin approvals. ${reqId}. Open /roe-approvals to approve as a distinct admin.`)
           return false
         }
       }
@@ -174,6 +197,29 @@ export function ClientProvider({ children }) {
     }
     return false
   }, [])
+
+  const submitRoeApproval = useCallback(async () => {
+    if (!roePending?.requestId) return false
+    try {
+      await apiFetch(`/api/roe/override-requests/${roePending.requestId}/approve`, { method: 'POST' })
+      const data = await apiFetch('/api/roe/override-requests?status=pending')
+      const req = (data.requests || []).find((r) => Number(r.id) === Number(roePending.requestId))
+      const have = req
+        ? Number(!!req.first_approved_by_user_id) + Number(!!req.second_approved_by_user_id)
+        : Math.min((roePending.approvalsHave || 0) + 1, 2)
+      setRoePending((prev) => (prev ? { ...prev, approvalsHave: have } : prev))
+      setConfigError(
+        have >= 2
+          ? 'Two-admin ROE approval complete. Re-apply weaponized mode.'
+          : 'Your approval was recorded. A second distinct admin must sign in and approve at /roe-approvals.',
+      )
+      return true
+    } catch (e) {
+      const data = e.body && typeof e.body === 'object' ? e.body : null
+      setConfigError(data?.detail || e?.message || 'ROE approval failed')
+      return false
+    }
+  }, [roePending])
 
   const selectedClient = useMemo(
     () => clients.find((c) => String(c.id) === String(selectedClientId)),
@@ -219,6 +265,8 @@ export function ClientProvider({ children }) {
       clientIntegrations,
       integrationsLoading,
       refreshIntegrations: refreshSelectedIntegrations,
+      roePending,
+      submitRoeApproval,
     }),
     [
       clients,
@@ -240,6 +288,8 @@ export function ClientProvider({ children }) {
       clientIntegrations,
       integrationsLoading,
       refreshSelectedIntegrations,
+      roePending,
+      submitRoeApproval,
     ],
   )
 

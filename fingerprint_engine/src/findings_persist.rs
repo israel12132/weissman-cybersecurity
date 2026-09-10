@@ -563,10 +563,38 @@ pub async fn persist_engine_findings(
         // bumped in a single statement before commit.
         let suppressed =
             fp_feedback::is_suppressed_by(&active_suppressions, &signature_hash, &target_url);
-        if suppressed {
+        let waf_noise =
+            crate::waf_signals::finding_is_waf_noise(engine, &title, &raw_data_enriched);
+        let stale_mail =
+            crate::live_truth::stale_www_mail_claim(&title, &target_url);
+        let stale_hsts = crate::live_truth::title_claims_missing_hsts(&title)
+            && (waf_noise
+                || crate::waf_signals::finding_is_waf_noise("ssrf", &title, &raw_data_enriched));
+        if waf_noise || stale_mail || stale_hsts {
+            let _ = fp_feedback::record_fp(
+                &mut tx,
+                tenant_id,
+                engine,
+                &signature_hash,
+                Some(target_url.as_str()).filter(|s| !s.is_empty()),
+                None,
+            )
+            .await;
+            let _ = fp_feedback::insert_waf_suppression(
+                &mut tx,
+                tenant_id,
+                engine,
+                &signature_hash,
+                Some(target_url.as_str()).filter(|s| !s.is_empty()),
+            )
+            .await;
             suppression_hits.push(signature_hash.clone());
         }
-        let effective_status = if suppressed { "FALSE_POSITIVE" } else { "OPEN" };
+        let effective_status = if suppressed || waf_noise || stale_mail || stale_hsts {
+            "FALSE_POSITIVE"
+        } else {
+            "OPEN"
+        };
 
         // True dedup: target a UNIQUE (tenant_id, client_id, finding_id) constraint.
         // On a repeat detection we refresh evidence (description/proof/raw_data + run_id)
@@ -598,6 +626,12 @@ pub async fn persist_engine_findings(
                    confidence_multiplier = EXCLUDED.confidence_multiplier,
                    effective_risk       = EXCLUDED.effective_risk,
                    poc_sealed           = vulnerabilities.poc_sealed OR EXCLUDED.poc_sealed,
+                   status               = CASE
+                       WHEN EXCLUDED.status = 'FALSE_POSITIVE'
+                            AND vulnerabilities.status = 'OPEN'
+                       THEN 'FALSE_POSITIVE'
+                       ELSE vulnerabilities.status
+                   END,
                    updated_at           = now(),
                    last_seen_at         = now(),
                    seen_count           = vulnerabilities.seen_count + 1

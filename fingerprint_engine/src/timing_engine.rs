@@ -238,6 +238,11 @@ pub async fn run_timing_attack_urls(
     if url_list.is_empty() {
         return EngineResult::error("target required");
     }
+    if let Some(skip) =
+        crate::live_truth::skip_if_edge_block("microsecond_timing", &url_list[0]).await
+    {
+        return skip;
+    }
     let deadline = (config.budget_secs > 0)
         .then(|| Instant::now() + std::time::Duration::from_secs(config.budget_secs));
     for url in url_list.clone() {
@@ -373,6 +378,9 @@ pub async fn run_timing_attack(
     let url = normalize_timing_url(target);
     if url.is_empty() {
         return EngineResult::error("target required");
+    }
+    if let Some(skip) = crate::live_truth::skip_if_edge_block("microsecond_timing", &url).await {
+        return skip;
     }
     let stealth_owned: Option<stealth_engine::StealthConfig> = stealth.cloned();
     let config = config.clone();

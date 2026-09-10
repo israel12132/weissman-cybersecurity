@@ -196,6 +196,10 @@ fn verify_token_for_request(token: &str, path: &str, source: TokenSource) -> Opt
         TokenSource::HeaderOrCookie => {
             if path == "/ws/agent" {
                 auth_jwt::verify_agent_session_token(token)
+            } else if path == "/api/ueba/ingest" {
+                auth_jwt::verify_agent_session_token(token).or_else(|| {
+                    auth_jwt::verify_access_token(token).filter(auth_jwt::is_user_access_context)
+                })
             } else {
                 auth_jwt::verify_access_token(token).filter(auth_jwt::is_user_access_context)
             }
@@ -1269,8 +1273,10 @@ struct CouncilDebateBody {
 
 #[derive(Deserialize)]
 struct PipelineStateQuery {
-    run_id: i64,
-    client_id: String,
+    #[serde(default)]
+    run_id: Option<i64>,
+    #[serde(default)]
+    client_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -1646,6 +1652,7 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
             app_pool.clone(),
             auth_pool.clone(),
         );
+        crate::cnapp_scheduler::spawn_cnapp_scheduler(app_pool.clone(), auth_pool.clone());
         crate::alert_evaluator_worker::spawn_alert_evaluator_worker(
             app_pool.clone(),
             auth_pool.clone(),

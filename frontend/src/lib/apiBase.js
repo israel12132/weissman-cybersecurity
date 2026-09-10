@@ -268,6 +268,12 @@ export function formatHttpApiError(response, bodyDetail) {
     )
   }
   if (st === 403) return detail || 'Forbidden — CEO role or superadmin required for this endpoint.'
+  if (st === 409) {
+    return (
+      detail ||
+      'Conflict (HTTP 409). Weaponized ROE needs a second distinct admin at /roe-approvals — this is not a failed scan.'
+    )
+  }
   if (st === 400) return detail || 'Bad request (HTTP 400) — check the submitted data.'
   if (st === 502 || st === 503) return detail || `Upstream unavailable (HTTP ${st}).`
   if (st != null && st >= 500 && st < 600) {

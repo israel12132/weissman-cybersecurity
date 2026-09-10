@@ -1247,6 +1247,9 @@ pub async fn run_ssti_result_ctx(target: &str, ctx: &EngineRunContext) -> Engine
     if target.is_empty() {
         return EngineResult::error("target required");
     }
+    if let Some(skip) = crate::live_truth::skip_if_edge_block(ENGINE_ID, target).await {
+        return skip;
+    }
 
     let cfg = ScanConfig::load(&ArsenalConfig::from_ctx(ctx), ctx.memory_payloads.clone());
     let client = http_client().await;

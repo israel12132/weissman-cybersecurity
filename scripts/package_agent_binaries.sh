@@ -9,6 +9,9 @@ TARGETS=(
   "aarch64-unknown-linux-gnu:linux-aarch64-gnu"
   "x86_64-unknown-linux-musl:linux-x86_64-musl"
   "aarch64-unknown-linux-musl:linux-aarch64-musl"
+  "x86_64-pc-windows-gnu:windows-x86_64-msvc"
+  "x86_64-apple-darwin:macos-x86_64"
+  "aarch64-apple-darwin:macos-aarch64"
 )
 
 echo "[weissman] building weissman-agent (release, host native)..."
@@ -26,34 +29,53 @@ mkdir -p bin/agents
 install_one() {
   local rust_target="$1"
   local platform="$2"
-  local dest="bin/agents/${platform}/weissman-agent"
+  local bin_name="weissman-agent"
+  if [[ "$platform" == windows-* ]]; then
+    bin_name="weissman-agent.exe"
+  fi
+  local dest="bin/agents/${platform}/${bin_name}"
   mkdir -p "bin/agents/${platform}"
 
   if [[ "$rust_target" == "$(rustc -vV | awk '/host:/ {print $2}')" ]]; then
-    cp "$HOST_BIN" "$dest"
+    if [[ "$bin_name" == *.exe ]]; then
+      cp "$HOST_BIN" "$dest" 2>/dev/null || {
+        echo "[weissman] warn: skipping ${platform} — host binary is not a Windows PE" >&2
+        rmdir "bin/agents/${platform}" 2>/dev/null || true
+        return 0
+      }
+    else
+      cp "$HOST_BIN" "$dest"
+    fi
   elif command -v "rustup" >/dev/null 2>&1; then
     echo "[weissman] cross-compiling weissman-agent for ${rust_target}..."
     rustup target add "$rust_target" >/dev/null 2>&1 || true
-    cargo build -p weissman-agent --release --target "$rust_target"
-    cp "target/${rust_target}/release/weissman-agent" "$dest"
+    if ! cargo build -p weissman-agent --release --target "$rust_target"; then
+      echo "[weissman] warn: skipping ${platform} — cross-build ${rust_target} failed; refusing to publish a wrong-arch binary" >&2
+      rmdir "bin/agents/${platform}" 2>/dev/null || true
+      return 0
+    fi
+    local built="target/${rust_target}/release/weissman-agent"
+    if [[ "$bin_name" == *.exe ]]; then
+      built="target/${rust_target}/release/weissman-agent.exe"
+    fi
+    if [[ ! -f "$built" ]]; then
+      echo "[weissman] warn: skipping ${platform} — ${built} missing after build" >&2
+      rmdir "bin/agents/${platform}" 2>/dev/null || true
+      return 0
+    fi
+    cp "$built" "$dest"
   else
-    # Do NOT fall back to copying the host binary here: that would publish a
-    # wrong-architecture ELF under ${platform}/ and hash it into MANIFEST.sha256,
-    # so the installer's SHA-256 integrity check would PASS on a binary that
-    # cannot exec on the target host. Skip the platform entirely instead — the
-    # server then returns its existing 404 for this platform rather than a
-    # broken binary that vouches for itself.
     echo "[weissman] warn: skipping ${platform} — cannot cross-build ${rust_target} (no rustup); refusing to publish a wrong-arch binary" >&2
     rmdir "bin/agents/${platform}" 2>/dev/null || true
     return 0
   fi
 
-  chmod 755 "$dest"
+  chmod 755 "$dest" 2>/dev/null || true
   local sha
   sha=$(sha256sum "$dest" | awk '{print $1}')
   local bytes
   bytes=$(wc -c < "$dest")
-  echo "${sha}  ${platform}/weissman-agent" >> "$MANIFEST"
+  echo "${sha}  ${platform}/${bin_name}" >> "$MANIFEST"
   echo "  -> $dest (${bytes} bytes, sha256=${sha:0:16}…)"
 }
 
@@ -64,3 +86,9 @@ for pair in "${TARGETS[@]}"; do
 done
 
 echo "[weissman] agent binaries ready under bin/agents/ (manifest: ${MANIFEST})"
+
+if [[ -f "bin/agents/windows-x86_64-msvc/weissman-agent.exe" ]]; then
+  bash "$ROOT/scripts/package_windows_msi.sh" \
+    "bin/agents/windows-x86_64-msvc/weissman-agent.exe" \
+    "bin/agents/windows-x86_64-msvc" || true
+fi

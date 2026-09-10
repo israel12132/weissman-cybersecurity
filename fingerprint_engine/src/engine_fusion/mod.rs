@@ -14,6 +14,12 @@
 //! | `risk_superposition_collapse` | Multi-engine Bayesian belief + STRIPS + FAIR |
 //! | `sovereign_active_defense_fusion` | MTD + cognitive starvation + deception + CHRONOS |
 //! | `fair_exposure_fusion` | External exposure grade + FAIR ALE/SLE roll-up |
+//! | `control_plane_of_controls` | EDR/WAF/email-DNS/cloud control proof |
+//! | `ot_cloud_identity_killpath` | OT + cloud + identity kill path |
+//! | `bec_ato_chain` | Email DNS + BEC + OAuth + ITDR |
+//! | `ai_casb_saas` | LLM agent hijack + OAuth SaaS grants |
+//! | `dns_security_posture_fusion` | DNS exfil + email DNS + ASM |
+//! | `toxic_combo_runtime_proof` | CNAPP + IMDS + S3 + IAM + K8s |
 
 /// Production fusion engine IDs — must remain a subset of `PRODUCTION_ENGINE_IDS`.
 pub const FUSION_ENGINE_IDS: &[&str] = &[
@@ -23,6 +29,12 @@ pub const FUSION_ENGINE_IDS: &[&str] = &[
     "risk_superposition_collapse",
     "sovereign_active_defense_fusion",
     "fair_exposure_fusion",
+    "control_plane_of_controls",
+    "ot_cloud_identity_killpath",
+    "bec_ato_chain",
+    "ai_casb_saas",
+    "dns_security_posture_fusion",
+    "toxic_combo_runtime_proof",
 ];
 
 pub use crate::external_exposure_supreme::{

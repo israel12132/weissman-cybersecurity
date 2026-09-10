@@ -5,7 +5,10 @@
 //! - `WEISSMAN_OAST_DOMAIN` — preferred; e.g. `weissmancyber.com` (parse `{uuid}.weissmancyber.com`).
 //! - `WEISSMAN_OAST_BASE_DOMAIN` — legacy alias for the same suffix.
 //! - `OAST_HTTP_LISTEN` — default `0.0.0.0:9090`.
-//! - `OAST_DNS_LISTEN` — default `0.0.0.0:5353` (set `OAST_DNS_ENABLE=0` to disable).
+//! - `OAST_DNS_LISTEN` — default `0.0.0.0:5353` inside the process netns
+//!   (set `OAST_DNS_ENABLE=0` to disable). Do **not** publish host UDP/5353:
+//!   that is IANA mDNS (Avahi/Bonjour). Compose maps host `WEISSMAN_OAST_DNS_PORT`
+//!   (default 8053) onto this container port.
 //! - `WEISSMAN_OAST_API_KEY` — optional Bearer for `/api/oast/*`.
 
 use axum::body::Body;
@@ -198,6 +201,22 @@ async fn insert_hit(
     .execute(pool)
     .await?;
     Ok(())
+}
+
+/// Liveness for compose/k8s. Must not require an OAST token or API key — GET `/`
+/// is a callback catcher and returns 404 without a Host token, so it cannot be
+/// the health probe (`curl -sf` treats 404 as failure and marked the listener unhealthy).
+async fn healthz(State(state): State<AppState>) -> impl IntoResponse {
+    match sqlx::query_scalar::<_, i32>("SELECT 1")
+        .fetch_one(&state.pool)
+        .await
+    {
+        Ok(_) => (StatusCode::OK, "ok").into_response(),
+        Err(e) => {
+            warn!(target: "oast", error = %e, "healthz database ping failed");
+            (StatusCode::SERVICE_UNAVAILABLE, "db").into_response()
+        }
+    }
 }
 
 async fn http_catch_all(
@@ -572,6 +591,7 @@ async fn run() -> Result<(), String> {
         .map_err(|e| format!("OAST_HTTP_LISTEN: invalid socket address: {e}"))?;
 
     let app = Router::new()
+        .route("/healthz", get(healthz))
         .route("/api/oast/status/:token", get(api_status_plain))
         .route("/api/oast/hits/:token", get(api_hits_json))
         .route("/i/:token", get(http_path_token).post(http_path_token))

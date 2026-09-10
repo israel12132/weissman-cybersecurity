@@ -6,6 +6,8 @@
 
 The runtime migrator (`weissman-db`, started via `WEISSMAN_MIGRATE_URL` on boot) reads SQL from
 `WEISSMAN_MIGRATIONS_DIR` (Docker: `/srv/migrations`) or this directory in native dev.
+`sqlx::migrate!()` (compile-time embed) is forbidden here: a live volume can already contain a
+version that was added to this tree after `COPY crates` in a long image build.
 
 ## Mirror tree (CI sync only)
 

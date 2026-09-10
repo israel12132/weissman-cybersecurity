@@ -135,7 +135,7 @@ async fn persist_payloads(
 ) -> Result<(), sqlx::Error> {
     for r in rows {
         sqlx::query(
-            "INSERT INTO dynamic_payloads (target_library, payload_data, source, source_url) VALUES ($1, $2, $3, $4)",
+            "INSERT INTO intel.dynamic_payloads (target_library, payload_data, source, source_url) VALUES ($1, $2, $3, $4)",
         )
         .bind(&r.target_library)
         .bind(&r.payload_data)
@@ -145,7 +145,7 @@ async fn persist_payloads(
         .await?;
     }
     sqlx::query(
-        "DELETE FROM dynamic_payloads WHERE added_at < now() - ($1::bigint * interval '1 day')",
+        "DELETE FROM intel.dynamic_payloads WHERE added_at < now() - ($1::bigint * interval '1 day')",
     )
     .bind(ROLLING_DAYS)
     .execute(intel_pool)

@@ -52,10 +52,30 @@ fn enroll_limiter() -> Arc<RateLimiter<String, DefaultKeyedStateStore<String>, D
     .clone()
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+fn agent_session_per_minute() -> NonZeroU32 {
+    NonZeroU32::new(rate_limit_metrics::agent_session_limit_per_minute()).unwrap_or(NonZeroU32::MIN)
+}
+
+fn agent_session_burst() -> NonZeroU32 {
+    NonZeroU32::new(rate_limit_metrics::agent_session_burst()).unwrap_or(NonZeroU32::MIN)
+}
+
+fn agent_session_limiter() -> Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>>
+{
+    static LIM: OnceLock<Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>>> =
+        OnceLock::new();
+    LIM.get_or_init(|| {
+        let q = Quota::per_minute(agent_session_per_minute()).allow_burst(agent_session_burst());
+        Arc::new(RateLimiter::keyed(q))
+    })
+    .clone()
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum UnauthPostKind {
     Login,
     Enroll,
+    AgentSession,
 }
 
 #[must_use]
@@ -71,10 +91,11 @@ fn unauth_post_kind(method: &axum::http::Method, path: &str) -> Option<UnauthPos
     if is_account_lockout_post(method, path) {
         return Some(UnauthPostKind::Login);
     }
-    // Both agent credential endpoints share the Enroll bucket: /session takes a bearer secret
-    // and is unauthenticated, so it is brute-forceable exactly like /enroll.
-    if path == "/api/agents/enroll" || path == "/api/agents/session" {
+    if path == "/api/agents/enroll" {
         return Some(UnauthPostKind::Enroll);
+    }
+    if path == "/api/agents/session" {
+        return Some(UnauthPostKind::AgentSession);
     }
     None
 }
@@ -99,12 +120,21 @@ pub async fn login_rate_limit_middleware(
             enroll_burst(),
             "Agent enroll",
         ),
+        UnauthPostKind::AgentSession => (
+            agent_session_limiter(),
+            agent_session_per_minute(),
+            agent_session_burst(),
+            "Agent session",
+        ),
     };
 
     if super::rate_limit_redis::is_enabled() {
         let redis_count = match kind {
             UnauthPostKind::Login => super::rate_limit_redis::incr_login_ip_strict(&ip).await,
             UnauthPostKind::Enroll => super::rate_limit_redis::incr_enroll_ip_strict(&ip).await,
+            UnauthPostKind::AgentSession => {
+                super::rate_limit_redis::incr_agent_session_ip_strict(&ip).await
+            }
         };
         match redis_count {
             super::rate_limit_redis::StrictOp::Ok(count) => {
@@ -208,4 +238,25 @@ pub async fn login_rate_limit_middleware(
 
     rate_limit_metrics::record_login_allowed(&ip);
     next.run(request).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enroll_and_session_are_separate_buckets() {
+        assert_eq!(
+            unauth_post_kind(&axum::http::Method::POST, "/api/agents/enroll"),
+            Some(UnauthPostKind::Enroll)
+        );
+        assert_eq!(
+            unauth_post_kind(&axum::http::Method::POST, "/api/agents/session"),
+            Some(UnauthPostKind::AgentSession)
+        );
+        assert_ne!(
+            unauth_post_kind(&axum::http::Method::POST, "/api/agents/enroll"),
+            unauth_post_kind(&axum::http::Method::POST, "/api/agents/session")
+        );
+    }
 }

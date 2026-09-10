@@ -12,21 +12,11 @@ import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
 
 /**
- * IntegrationManager - Third-party integrations hub
+ * IntegrationManager — third-party integrations hub.
  *
- * Supported Integrations:
- * - SIEM: Splunk, QRadar, Sentinel, Chronicle
- * - Ticketing: Jira, ServiceNow, GitHub Issues
- * - Communication: Slack, Teams, Discord, PagerDuty
- * - DevOps: GitHub Actions, GitLab CI, Jenkins
- * - Cloud: AWS Security Hub, Azure Defender, GCP SCC
- *
- * Features:
- * - OAuth/API key authentication
- * - Webhook configuration
- * - Connection test (manual — no background sync)
- * - Connection testing
- * - Event filtering
+ * Catalog entries match live SOAR adapters in
+ * fingerprint_engine/src/soar/adapters (REGISTERED_ADAPTER_IDS).
+ * Do not list a vendor here without an adapter.
  */
 export default function IntegrationManager() {
   const { t } = useTranslation();
@@ -48,9 +38,11 @@ export default function IntegrationManager() {
     { id: 'opsgenie', name: 'OpsGenie', category: 'SOAR', icon: '📟', color: 'blue', fields: ['api_key'] },
     { id: 'slack', name: 'Slack', category: 'SOAR', icon: '💬', color: 'purple', fields: ['webhook_url', 'bot_token', 'channel'] },
     { id: 'servicenow', name: 'ServiceNow', category: 'SOAR', icon: '🎫', color: 'green', fields: ['instance_url', 'username', 'password'] },
-    { id: 'splunk', name: 'Splunk', category: 'SIEM', icon: '📊', color: 'green' },
-    { id: 'sentinel', name: 'Microsoft Sentinel', category: 'SIEM', icon: '🛡️', color: 'cyan' },
-    { id: 'jira', name: 'Jira', category: 'Ticketing', icon: '📝', color: 'blue' },
+    { id: 'splunk', name: 'Splunk HEC', category: 'SIEM', icon: '📊', color: 'green', fields: ['hec_url', 'hec_token'] },
+    { id: 'sentinel', name: 'Microsoft Sentinel', category: 'SIEM', icon: '🛡️', color: 'cyan', fields: ['ingest_url', 'access_token'] },
+    { id: 'jira', name: 'Jira Cloud', category: 'Ticketing', icon: '📝', color: 'blue', fields: ['base_url', 'email', 'api_token', 'project_key'] },
+    { id: 'teams', name: 'Microsoft Teams', category: 'Communication', icon: '💬', color: 'indigo', fields: ['webhook_url'] },
+    { id: 'weissman_agent', name: 'Weissman Agent Isolate', category: 'SOAR', icon: '🛡', color: 'cyan', fields: ['client_id'] },
   ];
   const [vaultEnabled, setVaultEnabled] = useState(false);
 

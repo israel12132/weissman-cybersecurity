@@ -62,6 +62,16 @@ pub const AGENT_REQUIRED_ENGINES: &[&str] = &[
     // Host-resident collector
     "infostealer_emulation",
     // NOTE: chronos is NOT agent-only — server hybrid runs via chronos_engine
+    "sandbox_evasion",
+    "rop_chain_engine",
+    "heap_exploitation",
+    "jit_spray",
+    "com_hijacking",
+    "parent_pid_spoof",
+    "host_isolation",
+    "host_privilege_escalation",
+    "ebpf_sensor",
+    "ioc_yara_hunt",
 ];
 
 /// True when `id` must dispatch to the endpoint agent fleet for host-resident collection.

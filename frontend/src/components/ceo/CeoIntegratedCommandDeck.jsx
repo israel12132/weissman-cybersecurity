@@ -10,6 +10,7 @@ import CeoVaccineVault from './CeoVaccineVault'
 import CeoSovereignLab from './CeoSovereignLab'
 import GodModeDiscoveryStrip from './GodModeDiscoveryStrip'
 import GodModeEngineMatrix from './GodModeEngineMatrix'
+import CeoWarPowerPanel from './CeoWarPowerPanel'
 import Button from '../ui/Button'
 
 function formatUptime(sec, t) {
@@ -381,6 +382,8 @@ export default function CeoIntegratedCommandDeck() {
           </div>
         </div>
       </div>
+
+      <CeoWarPowerPanel onFlagsChanged={async () => { await loadTelemetry(); await loadGodSnapshot() }} />
 
       <GodModeDiscoveryStrip discovery={god?.discovery} godErr={godErr} />
 

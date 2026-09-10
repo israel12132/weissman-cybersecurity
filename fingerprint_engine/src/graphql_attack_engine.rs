@@ -1026,6 +1026,12 @@ fn finding(
 
 /// Does this HTTP response look like it came from a GraphQL engine?
 fn looks_like_graphql(p: &HttpProbe) -> bool {
+    if p.is_waf_block() {
+        return false;
+    }
+    if p.status == 403 {
+        return false;
+    }
     if let Ok(v) = serde_json::from_str::<Value>(&p.body) {
         if v.get("data").is_some() || v.get("errors").is_some() {
             return true;
@@ -4702,6 +4708,16 @@ mod tests {
             final_url: "u".to_string(),
         };
         assert!(!looks_like_graphql(&html));
+        let cf_403 = HttpProbe {
+            status: 403,
+            headers: vec![
+                ("server".into(), "cloudflare".into()),
+                ("cf-ray".into(), "9abc".into()),
+            ],
+            body: "<html>Attention Required! | Cloudflare</html>".to_string(),
+            final_url: "u".to_string(),
+        };
+        assert!(!looks_like_graphql(&cf_403));
     }
 
     #[test]

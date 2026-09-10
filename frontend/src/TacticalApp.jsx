@@ -144,6 +144,13 @@ import {
   PlaybookBuilder,
   AskWeissman,
   Billing,
+  MsspPartnerPortal,
+  WhiteLabelBrand,
+  ControlPlaneOfControls,
+  ItdrCommandCenter,
+  CasbDlpCenter,
+  NgfwGate,
+  EndpointEdr,
 } from './routing/routeChunks'
 
 function ChainPredictor() {
@@ -198,7 +205,7 @@ export default function TacticalApp() {
           <Route path="operations" element={<Cockpit />} />
           <Route path="system-core" element={<SystemCore />} />
           <Route path="design-system" element={<DesignSystemGallery />} />
-          <Route path="design-system/advanced" element={<AdvancedShowcase />} />
+          <Route path="design-system/advanced" element={<RequireRole min="admin"><AdvancedShowcase /></RequireRole>} />
           <Route path="report/:clientId" element={<ReportView />} />
           <Route path="attack-surface-graph/:clientId" element={<AttackSurfaceGraph />} />
           <Route path="semantic-logic/:clientId" element={<SemanticLogicEngine />} />
@@ -320,6 +327,13 @@ export default function TacticalApp() {
           <Route path="billing" element={<RequireStaff><Billing /></RequireStaff>} />
           <Route path="playbooks" element={<PlaybookBuilder />} />
           <Route path="ask" element={<AskWeissman />} />
+          <Route path="mssp-portal" element={<MsspPartnerPortal />} />
+          <Route path="white-label" element={<RequireRole min="admin"><WhiteLabelBrand /></RequireRole>} />
+          <Route path="control-plane" element={<ControlPlaneOfControls />} />
+          <Route path="itdr" element={<ItdrCommandCenter />} />
+          <Route path="casb-dlp" element={<CasbDlpCenter />} />
+          <Route path="ngfw-gate" element={<NgfwGate />} />
+          <Route path="endpoint-edr" element={<EndpointEdr />} />
           <Route path="ceo" element={<CeoProtectedRoute><CeoCommandCenter /></CeoProtectedRoute>} />
           <Route path="supreme-nerve-center" element={<RequireRole min="ceo"><SupremeNerveCenter /></RequireRole>} />
           <Route path="*" element={<NotFound />} />

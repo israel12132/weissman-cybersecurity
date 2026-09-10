@@ -53,6 +53,7 @@ struct FindingRow {
     client_id: Option<i64>,
     raw_data: Value,
     discovered_at: String,
+    signature_hash: String,
 }
 
 fn push_check(
@@ -85,7 +86,11 @@ fn verdict_from(
     confidence: f64,
     reproducible: bool,
     evidence_ok: bool,
+    waf_blocked: bool,
 ) -> (&'static str, Option<&'static str>) {
+    if waf_blocked {
+        return ("FALSE_POSITIVE", Some("FALSE_POSITIVE"));
+    }
     if !evidence_ok && confidence < 0.35 {
         return ("NOISE", Some("FALSE_POSITIVE"));
     }
@@ -243,9 +248,7 @@ fn evidence_markers(raw: &Value) -> Vec<String> {
     }
     if let Some(ev) = raw.get("evidence") {
         if let Some(s) = ev.get("proof").and_then(Value::as_str) {
-            for token in [
-                "HTTP/", "status=", "status:", "200", "301", "302", "403", "404", "500",
-            ] {
+            for token in ["HTTP/", "status=", "status:", "200", "301", "302", "404", "500"] {
                 if s.contains(token) {
                     markers.push(token.to_string());
                 }
@@ -267,15 +270,44 @@ async fn http_probe(url: &str) -> (bool, String, u16) {
         Ok(c) => c,
         Err(e) => return (false, format!("client: {e}"), 0),
     };
-    let resp = match client.head(url).send().await {
+    // GET (not HEAD): Cloudflare challenge pages put the vendor tokens in the body.
+    let resp = match client.get(url).send().await {
         Ok(r) => r,
-        Err(_) => match client.get(url).send().await {
-            Ok(r) => r,
-            Err(e) => return (false, format!("unreachable: {e}"), 0),
-        },
+        Err(e) => return (false, format!("unreachable: {e}"), 0),
     };
     let status = resp.status().as_u16();
-    (status > 0, format!("HTTP {status}"), status)
+    let hsts = resp
+        .headers()
+        .get("strict-transport-security")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    let headers_blob = resp
+        .headers()
+        .iter()
+        .map(|(k, v)| format!("{}: {}", k, v.to_str().unwrap_or("")))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let body = if matches!(status, 401 | 403 | 405 | 406 | 429 | 503) {
+        resp.text().await.unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let waf = crate::waf_signals::classify_http(status, &headers_blob, &body);
+    if waf.blocked {
+        return (false, waf.reason, status);
+    }
+    let reachable = (200..400).contains(&status);
+    let hsts_tag = if hsts.is_empty() {
+        "hsts=absent"
+    } else {
+        "hsts=present"
+    };
+    (
+        reachable,
+        format!("HTTP {status} {hsts_tag}"),
+        status,
+    )
 }
 
 async fn replay_curl_proof(proof: &str) -> (bool, String) {
@@ -306,9 +338,20 @@ async fn replay_curl_proof(proof: &str) -> (bool, String) {
             match req.send().await {
                 Ok(r) => {
                     let st = r.status().as_u16();
+                    let headers_blob = r
+                        .headers()
+                        .iter()
+                        .map(|(k, v)| format!("{}: {}", k, v.to_str().unwrap_or("")))
+                        .collect::<Vec<_>>()
+                        .join("\n");
                     let body_snip = r.text().await.unwrap_or_default();
                     let snip = body_snip.chars().take(120).collect::<String>();
-                    (st > 0, format!("replay HTTP {st} — {snip}"))
+                    let waf = crate::waf_signals::classify_http(st, &headers_blob, &body_snip);
+                    if waf.blocked {
+                        return (false, format!("{} — {snip}", waf.reason));
+                    }
+                    let ok = (200..400).contains(&st);
+                    (ok, format!("replay HTTP {st} — {snip}"))
                 }
                 Err(e) => (false, format!("replay failed: {e}")),
             }
@@ -320,7 +363,8 @@ async fn replay_curl_proof(proof: &str) -> (bool, String) {
 const LOAD_FINDING_SQL: &str = r#"SELECT id, finding_id, title, severity, source,
                   COALESCE(raw_data->>'target', '') AS target,
                   client_id, COALESCE(raw_data, '{}'::jsonb) AS raw_data,
-                  COALESCE(to_char(discovered_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), '') AS discovered_at
+                  COALESCE(to_char(discovered_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), '') AS discovered_at,
+                  COALESCE(signature_hash, '') AS signature_hash
              FROM vulnerabilities
             WHERE tenant_id = $1
               AND (
@@ -354,6 +398,7 @@ fn map_finding_row(row: sqlx::postgres::PgRow) -> FindingRow {
             .or_else(|| row.try_get::<i64, _>("client_id").ok()),
         raw_data,
         discovered_at: row.try_get("discovered_at").unwrap_or_default(),
+        signature_hash: row.try_get("signature_hash").unwrap_or_default(),
     }
 }
 
@@ -398,8 +443,9 @@ async fn load_client_domains(pool: &PgPool, tenant_id: i64, client_id: i64) -> V
 async fn persist_verification(
     pool: &PgPool,
     tenant_id: i64,
-    row_id: i64,
+    row: &FindingRow,
     payload: &Value,
+    recommended_fp: bool,
 ) -> Result<(), String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
@@ -416,11 +462,44 @@ async fn persist_verification(
             WHERE id = $2 AND tenant_id = $3"#,
     )
     .bind(payload.to_string())
-    .bind(row_id)
+    .bind(row.id)
     .bind(tenant_id)
     .execute(&mut *tx)
     .await
     .map_err(|e| format!("persist verification: {e}"))?;
+    if recommended_fp {
+        sqlx::query(
+            r#"UPDATE vulnerabilities
+                  SET status = 'FALSE_POSITIVE', updated_at = now()
+                WHERE id = $1 AND tenant_id = $2
+                  AND COALESCE(status, 'OPEN') NOT IN ('FIXED', 'ACKNOWLEDGED', 'VERIFIED_FIXED')"#,
+        )
+        .bind(row.id)
+        .bind(tenant_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| format!("persist verification status: {e}"))?;
+        let engine = row.source.trim();
+        if !engine.is_empty() && !row.signature_hash.is_empty() {
+            let _ = crate::fp_feedback::record_fp(
+                &mut tx,
+                tenant_id,
+                engine,
+                &row.signature_hash,
+                Some(row.target.as_str()).filter(|s| !s.is_empty()),
+                None,
+            )
+            .await;
+            let _ = crate::fp_feedback::insert_waf_suppression(
+                &mut tx,
+                tenant_id,
+                engine,
+                &row.signature_hash,
+                Some(row.target.as_str()).filter(|s| !s.is_empty()),
+            )
+            .await;
+        }
+    }
     tx.commit()
         .await
         .map_err(|e| format!("persist verification: {e}"))?;
@@ -549,12 +628,28 @@ pub async fn verify_finding_live(
 
     let mut reachable = false;
     let mut reach_detail = "no probe URL".to_string();
+    let mut waf_blocked =
+        crate::waf_signals::finding_is_waf_noise(&row.source, &row.title, &row.raw_data);
     if let Some(url) = probe_url.as_deref() {
         let (ok, detail, status) = http_probe(url).await;
         reachable = ok;
-        reach_detail = detail;
+        reach_detail = detail.clone();
+        if crate::waf_signals::live_403_is_noise(&row.source, status, &detail, &detail)
+            || detail.contains("WAF block")
+        {
+            waf_blocked = true;
+            reachable = false;
+            push_check(
+                &mut checks,
+                "waf_block",
+                "WAF / CDN challenge (not a vulnerability)",
+                false,
+                detail.clone(),
+                0.22,
+            );
+        }
         let markers = evidence_markers(&row.raw_data);
-        if !markers.is_empty() && status > 0 {
+        if !markers.is_empty() && status > 0 && !waf_blocked {
             let marker_hit = markers
                 .iter()
                 .any(|m| m.parse::<u16>().ok() == Some(status))
@@ -572,6 +667,33 @@ pub async fn verify_finding_live(
                 0.12,
             );
         }
+    }
+    if crate::live_truth::stale_www_mail_claim(&row.title, &row.target)
+        || crate::live_truth::stale_www_mail_claim(&row.title, probe_url.as_deref().unwrap_or(""))
+    {
+        waf_blocked = true;
+        push_check(
+            &mut checks,
+            "mail_apex",
+            "Mail policy is on the organisational domain, not www",
+            false,
+            "SPF/DMARC claims against www are stale; evaluate the apex.".into(),
+            0.22,
+        );
+    }
+    if crate::live_truth::title_claims_missing_hsts(&row.title)
+        && reach_detail.contains("hsts=present")
+    {
+        waf_blocked = true;
+        reachable = true;
+        push_check(
+            &mut checks,
+            "hsts_live",
+            "Live HTTPS already sends HSTS",
+            false,
+            reach_detail.clone(),
+            0.22,
+        );
     }
     push_check(
         &mut checks,
@@ -684,7 +806,7 @@ pub async fn verify_finding_live(
     }
 
     let confidence = weighted_confidence(&checks);
-    let (verdict, recommended) = verdict_from(confidence, reproducible, evidence_ok);
+    let (verdict, recommended) = verdict_from(confidence, reproducible, evidence_ok, waf_blocked);
     let verified_at = chrono::Utc::now().to_rfc3339();
 
     let result = LiveVerifyResult {
@@ -710,9 +832,17 @@ pub async fn verify_finding_live(
         "rescan_finding_count": result.rescan_finding_count,
         "deep": deep_rescan,
         "method": "multi_tier_live",
+        "waf_blocked": waf_blocked,
     });
 
-    persist_verification(pool, tenant_id, row.id, &payload).await?;
+    persist_verification(
+        pool,
+        tenant_id,
+        &row,
+        &payload,
+        waf_blocked,
+    )
+    .await?;
 
     Ok(result)
 }
@@ -733,8 +863,16 @@ mod tests {
 
     #[test]
     fn verdict_confirmed_when_high_confidence() {
-        let (v, _) = verdict_from(0.9, false, true);
+        let (v, rec) = verdict_from(0.9, false, true, false);
         assert_eq!(v, "CONFIRMED");
+        assert_eq!(rec, Some("ACKNOWLEDGED"));
+    }
+
+    #[test]
+    fn verdict_waf_block_is_false_positive_not_likely_valid() {
+        let (v, rec) = verdict_from(0.9, false, true, true);
+        assert_eq!(v, "FALSE_POSITIVE");
+        assert_eq!(rec, Some("FALSE_POSITIVE"));
     }
 
     #[test]

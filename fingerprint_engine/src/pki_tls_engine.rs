@@ -1585,11 +1585,11 @@ async fn http_hardening(target: &str, host: &str, cfg: &TlsScanConfig) -> HttpHa
     let client = http_client().await;
     let base = normalize_url(target);
     if let Some(p) = http_get(&client, &base).await {
-        match header_value(&p.headers, "strict-transport-security") {
-            Some(hsts) => {
-                let max_age = parse_hsts_max_age(hsts);
+        match crate::live_truth::observe_hsts_probe(&p) {
+            crate::live_truth::HstsObservation::Present { max_age, .. } => {
                 hsts_ok = max_age >= 15_768_000;
                 if !hsts_ok {
+                    let hsts = header_value(&p.headers, "strict-transport-security").unwrap_or("");
                     findings.push(finding_rich(
                         ENGINE_ID,
                         "HSTS max-age too short",
@@ -1606,7 +1606,7 @@ async fn http_hardening(target: &str, host: &str, cfg: &TlsScanConfig) -> HttpHa
                     ));
                 }
             }
-            None => {
+            crate::live_truth::HstsObservation::Missing => {
                 findings.push(finding_rich(
                     ENGINE_ID,
                     "Missing HSTS header",
@@ -1618,6 +1618,9 @@ async fn http_hardening(target: &str, host: &str, cfg: &TlsScanConfig) -> HttpHa
                     Evidence::new().with("final_url", p.final_url.clone()),
                 ));
             }
+            crate::live_truth::HstsObservation::UnknownWaf
+            | crate::live_truth::HstsObservation::UnknownStatus
+            | crate::live_truth::HstsObservation::UnknownUnreachable => {}
         }
         if cfg.check_security_headers {
             for (hdr, title) in [

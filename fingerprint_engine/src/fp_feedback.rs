@@ -85,6 +85,35 @@ pub async fn record_fp(
     Ok(inserted.rows_affected() > 0)
 }
 
+/// Immediate suppression for a confirmed WAF/CDN block (does not wait for 3 analyst FP votes).
+pub async fn insert_waf_suppression(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: i64,
+    engine: &str,
+    signature_hash: &str,
+    target: Option<&str>,
+) -> Result<bool, String> {
+    if engine.is_empty() || signature_hash.is_empty() {
+        return Ok(false);
+    }
+    let inserted = sqlx::query(
+        r#"INSERT INTO finding_suppressions
+                 (tenant_id, engine, signature_hash, target_glob,
+                  reason, fp_count_at_create, created_by_user_id, created_at)
+           VALUES ($1, $2, $3, $4, 'auto:waf_block', 1, NULL, now())
+           ON CONFLICT (tenant_id, engine, signature_hash, COALESCE(target_glob, ''))
+           DO NOTHING"#,
+    )
+    .bind(tenant_id)
+    .bind(engine)
+    .bind(signature_hash)
+    .bind(target)
+    .execute(&mut **tx)
+    .await
+    .map_err(|e| format!("insert waf suppression: {e}"))?;
+    Ok(inserted.rows_affected() > 0)
+}
+
 /// Record a true-positive vote (analyst marked FIXED / ACKNOWLEDGED / IN_PROGRESS).
 /// Also decays prior `fp_count` by 1 so an engine that fixes its behaviour can
 /// climb out of suppression organically.

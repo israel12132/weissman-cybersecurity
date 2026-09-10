@@ -104,6 +104,25 @@ export function ThemeProvider({ children }) {
     }
   }, [brand])
 
+  // Tenant-persisted brand (GET /api/tenant/brand) wins over session localStorage
+  // once the operator is authenticated. Failures stay silent (login page, tests).
+  useEffect(() => {
+    let cancelled = false
+    const ac = typeof AbortController !== 'undefined' ? new AbortController() : null
+    fetch('/api/tenant/brand', { credentials: 'include', signal: ac?.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.ok || !d.brand || typeof d.brand !== 'object') return
+        if (Object.keys(d.brand).length === 0) return
+        setBrandState(d.brand)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+      ac?.abort()
+    }
+  }, [])
+
   const setTheme = useCallback((next) => {
     setThemeState(THEMES.includes(next) ? next : 'dark')
   }, [])

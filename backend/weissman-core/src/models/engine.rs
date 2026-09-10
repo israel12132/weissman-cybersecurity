@@ -657,6 +657,24 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "infostealer_emulation",
     "printer_mfp_attack",
     "radius_nac_bypass",
+    // ── Supreme layers vs PANW ──
+    "control_plane_of_controls",
+    "ot_cloud_identity_killpath",
+    "bec_ato_chain",
+    "ai_casb_saas",
+    "dns_security_posture_fusion",
+    "toxic_combo_runtime_proof",
+    "itdr",
+    "casb_saas_posture",
+    "dlp_content_scan",
+    "cnapp_continuous",
+    "host_privilege_escalation",
+    "host_isolation",
+    "ebpf_sensor",
+    "ioc_yara_hunt",
+    "ngfw_posture",
+    "malware_detonation",
+    "weissman_vngfw",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -1239,6 +1257,23 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "zero_day_chain",
     "zero_trust_bypass",
     "zigbee_attack",
+    "control_plane_of_controls",
+    "ot_cloud_identity_killpath",
+    "bec_ato_chain",
+    "ai_casb_saas",
+    "dns_security_posture_fusion",
+    "toxic_combo_runtime_proof",
+    "itdr",
+    "casb_saas_posture",
+    "dlp_content_scan",
+    "cnapp_continuous",
+    "host_privilege_escalation",
+    "host_isolation",
+    "ebpf_sensor",
+    "ioc_yara_hunt",
+    "ngfw_posture",
+    "malware_detonation",
+    "weissman_vngfw",
 ];
 
 /// Map catalog-only registry IDs to a production engine implementation.
@@ -1302,9 +1337,6 @@ pub fn resolve_engine_id(id: &str) -> &str {
         "dns_enum" => "passive_dns_forensics",
         "shodan_mass_scan" => "asm",
         "differential_privacy_exploit" => "model_inversion_attack",
-        // Legacy web / appsec aliases.
-        "sqli_advanced" | "api_fuzzing" | "xss_advanced" | "csrf_exploit"
-        | "race_condition_web" | "nosql_injection" | "open_redirect" => "http_feedback_fuzz",
         "graphql_injection" | "graphql_batching" => "graphql_attack",
         "container_escape" | "container_k8s_escape" | "gke_rbac_exploit" => "k8s_container",
         "web_cache_poison" | "web_cache_deception" => "cache_poisoning",
@@ -1360,8 +1392,7 @@ pub fn resolve_engine_id(id: &str) -> &str {
         "terraform_state_steal" => "terraform_state_attack",
         "cloud_cost_dos"
         | "sdn_controller_exploit"
-        | "nfv_mano_attack"
-        | "sase_security_bypass" => "cloud_network_attack",
+        | "nfv_mano_attack" => "cloud_network_attack",
         "ecr_image_poison" => "ecr_registry_attack",
         // Legacy OT / embedded aliases.
         "firmware_exploit"
@@ -1532,4 +1563,30 @@ pub fn order_engines_by_registry(engines: &[String]) -> Vec<String> {
         .collect();
     ordered.sort_by_key(|(pos, _)| *pos);
     ordered.into_iter().map(|(_, e)| e).collect()
+}
+
+#[cfg(test)]
+mod production_registry_tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn production_engine_ids_are_unique() {
+        let mut seen = HashSet::new();
+        for id in PRODUCTION_ENGINE_IDS {
+            assert!(
+                seen.insert(*id),
+                "duplicate production engine id: {id}"
+            );
+        }
+        assert_eq!(
+            PRODUCTION_ENGINE_IDS.len(),
+            seen.len(),
+            "PRODUCTION_ENGINE_IDS must be the canonical live registry (workspace is 580; a 563 count is a stale binary, not extra IDs to delete)"
+        );
+        assert!(
+            PRODUCTION_ENGINE_IDS.len() >= 580,
+            "do not shrink the registry to match an old container image"
+        );
+    }
 }

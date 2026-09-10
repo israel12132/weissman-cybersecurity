@@ -43,7 +43,7 @@ pub fn resolve_auth_database_url() -> Result<String, std::env::VarError> {
 /// Compile-time crate migrations path (valid in dev / CI where the crate tree exists).
 const COMPILE_TIME_MIGRATIONS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/migrations");
 
-/// Resolve the on-disk migrations directory for the no-tx pre-runner.
+/// Resolve the on-disk migrations directory for both the no-tx pre-runner and sqlx.
 ///
 /// Production containers bake `CARGO_MANIFEST_DIR` at build time (`/build/crates/...`) but do
 /// not ship that tree at runtime. Set `WEISSMAN_MIGRATIONS_DIR` (Docker: `/srv/migrations`) to
@@ -57,15 +57,17 @@ pub fn migrations_dir() -> std::path::PathBuf {
         .unwrap_or_else(|| std::path::PathBuf::from(COMPILE_TIME_MIGRATIONS_DIR))
 }
 
-/// Superuser or owner URL to run embedded migrations (optional at runtime).
+/// Superuser or owner URL to run on-disk migrations (optional at runtime).
 ///
 /// Two-phase application:
 ///   1. [`no_tx_migrations::apply_no_tx_migrations`] handles any file whose first
 ///      line is `-- weissman:no-transaction` — these are executed OUTSIDE a
 ///      transaction (CREATE INDEX CONCURRENTLY etc.) and their rows are recorded
 ///      in `_sqlx_migrations` manually with the SQLx-compatible SHA-384 checksum.
-///   2. `sqlx::migrate!()` then runs as usual; it sees the no-tx files as
-///      already applied and skips them.
+///   2. [`sqlx::migrate::Migrator::new`] then loads the same directory at runtime
+///      (not `sqlx::migrate!()`, which embeds the tree at compile time). A live
+///      volume that already applied a file added after `COPY crates` would otherwise
+///      refuse to boot: "previously applied but is missing in the resolved migrations".
 ///
 /// On a CI/CD pipeline this means: zero downtime, zero manual intervention,
 /// zero "did we remember to apply the index" tickets. Failure modes:
@@ -82,7 +84,7 @@ pub async fn run_migrations(database_url: &str) -> Result<(), sqlx::migrate::Mig
 
     // Phase 1 — no-transaction migrations (CONCURRENTLY index builds, etc.).
     // Reads from disk via [`migrations_dir`] (runtime `WEISSMAN_MIGRATIONS_DIR` or compile-time
-    // crate path). Phase 2 embeds SQL at compile time via `sqlx::migrate!`.
+    // crate path). Phase 2 uses the same directory so embed and disk cannot diverge.
     let migrations_dir = migrations_dir();
     let deferred = match no_tx_migrations::apply_no_tx_migrations(&pool, &migrations_dir).await {
         Ok(d) => {
@@ -103,8 +105,29 @@ pub async fn run_migrations(database_url: &str) -> Result<(), sqlx::migrate::Mig
     };
 
     // Phase 2 — standard transactional migrations (these create the tables that
-    // any deferred no-tx index builds depend on).
-    sqlx::migrate!("./migrations").run(&pool).await?;
+    // any deferred no-tx index builds depend on). Loaded from disk so a checkout
+    // bind-mount or a rebuilt `/srv/migrations` is what the live database sees.
+    tracing::info!(
+        target: "weissman_db",
+        dir = %migrations_dir.display(),
+        "loading sqlx migrations from disk"
+    );
+    let migrator = sqlx::migrate::Migrator::new(migrations_dir.as_path()).await?;
+    tracing::info!(
+        target: "weissman_db",
+        dir = %migrations_dir.display(),
+        count = migrator.iter().count(),
+        "sqlx migrations resolved from disk"
+    );
+    if let Err(e) = migrator.run(&pool).await {
+        tracing::error!(
+            target: "weissman_db",
+            dir = %migrations_dir.display(),
+            error = %e,
+            "sqlx migrate failed — every version in _sqlx_migrations must exist as <version>_*.sql in this directory"
+        );
+        return Err(e);
+    }
 
     // Phase 3 — finalize no-tx migrations deferred in phase 1 now that phase 2 has
     // created their dependencies (e.g. CREATE INDEX CONCURRENTLY on a table that a
@@ -754,6 +777,32 @@ mod url_and_path_helper_tests {
         assert_eq!(worker_pool_warm_min(6), 6);
         assert_eq!(worker_pool_warm_min(64), 8);
         std::env::remove_var("WEISSMAN_WORKER_HEAVY_CONCURRENCY");
+    }
+
+    #[test]
+    fn canonical_migrations_tree_ships_sql_files() {
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations");
+        let n = std::fs::read_dir(&dir)
+            .unwrap_or_else(|e| panic!("read {}: {e}", dir.display()))
+            .filter_map(Result::ok)
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "sql"))
+            .count();
+        assert!(
+            n >= 111,
+            "crates/weissman-db/migrations must ship the full schema tree, found {n} .sql files"
+        );
+        let login_directory = std::fs::read_dir(&dir)
+            .expect("migrations dir")
+            .filter_map(Result::ok)
+            .any(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with("20260824120000_")
+            });
+        assert!(
+            login_directory,
+            "20260824120000_login_tenant_directory_function.sql must exist — a live volume that already applied it will refuse to boot without the file"
+        );
     }
 
     #[test]

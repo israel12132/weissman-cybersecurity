@@ -167,6 +167,11 @@ export async function apiFetch(url, options = {}) {
     const error = new Error(errorMessage)
     error.status = response.status
     error.response = response
+    try {
+      error.body = await response.clone().json()
+    } catch {
+      error.body = null
+    }
     return retryOrThrow(error)
   }
 

@@ -218,7 +218,7 @@ pub async fn run_zero_trust_bypass_result(t: &str) -> EngineResult {
     let url = normalize_url(t);
     let mut findings: Vec<Value> = Vec::new();
     if let Some(p) = http_get(&client, &url).await {
-        if header_value(&p.headers, "strict-transport-security").is_none() {
+        if crate::live_truth::observe_hsts_probe(&p).emit_missing() {
             findings.push(finding(
                 "zero_trust_bypass",
                 "No HSTS on protected resource",

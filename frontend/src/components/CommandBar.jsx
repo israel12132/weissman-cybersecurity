@@ -1,6 +1,6 @@
 /**
  * SOC Command Bar: Launch scans from dashboard clients (no manual target) or single-engine on selected target.
- * "Scan all clients" runs all 5 engines on all clients from DB.
+ * Tenant-wide "Scan all clients" requires a second confirm click and a 15s fetch timeout so the map stays usable.
  */
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -8,6 +8,9 @@ import { formatApiErrorFromBody, formatApiErrorResponse } from '../lib/apiError.
 import { apiFetch } from '../utils/apiFetch'
 import { launchEngineScan } from '../lib/launchEngineScan'
 import Button from './ui/Button'
+
+const RUN_ALL_TIMEOUT_MS = 15_000
+const CONFIRM_WINDOW_MS = 8_000
 
 const ENGINE_IDS = [
   { id: 'supply_chain', color: 'emerald' },
@@ -42,6 +45,7 @@ export default function CommandBar({ onScanLaunched, onError }) {
   const [selectedClientId, setSelectedClientId] = useState('')
   const [loading, setLoading] = useState(null)
   const [lastResult, setLastResult] = useState(null)
+  const [confirmAll, setConfirmAll] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -49,8 +53,12 @@ export default function CommandBar({ onScanLaunched, onError }) {
       try {
         const list = await apiFetch('/api/clients')
         if (cancelled) return
-        setClients(Array.isArray(list) ? list : [])
+        const rows = Array.isArray(list) ? list : []
+        setClients(rows)
         setClientsError(Array.isArray(list) ? null : t('components.commandBar.clients_error'))
+        if (rows.length === 1 && rows[0]?.id != null) {
+          setSelectedClientId(String(rows[0].id))
+        }
       } catch (e) {
         if (!cancelled) {
           setClients([])
@@ -69,21 +77,43 @@ export default function CommandBar({ onScanLaunched, onError }) {
     setTarget(getFirstTarget(c))
   }, [selectedClientId, clients])
 
+  useEffect(() => {
+    if (!confirmAll) return undefined
+    const timer = setTimeout(() => setConfirmAll(false), CONFIRM_WINDOW_MS)
+    return () => clearTimeout(timer)
+  }, [confirmAll])
+
   async function runFullScanAllClients() {
     setLoading('run-all')
     setLastResult(null)
+    setConfirmAll(false)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), RUN_ALL_TIMEOUT_MS)
     try {
-      const data = await apiFetch('/api/scan/run-all', { method: 'POST' })
-      setLastResult({ engine: 'run-all', job_id: 'all', status: 'started' })
+      const data = await apiFetch('/api/scan/run-all', { method: 'POST', signal: controller.signal })
+      setLastResult({ engine: 'run-all', job_id: data?.job_id || 'all', status: data?.status || 'started' })
       if (onScanLaunched) onScanLaunched('run-all', data)
     } catch (e) {
+      const timedOut = e?.name === 'AbortError'
       const b = e?.response ? await e.response.json().catch(() => null) : null
-      const msg = formatApiErrorFromBody(b, e?.status)
+      const msg = timedOut
+        ? t('components.commandBar.scan_all_timeout')
+        : formatApiErrorFromBody(b, e?.status) || e?.message || t('components.commandBar.network_error')
       if (onError) onError(msg)
       setLastResult({ engine: 'run-all', error: msg })
     } finally {
+      clearTimeout(timer)
       setLoading(null)
     }
+  }
+
+  function onScanAllClick() {
+    if (loading != null) return
+    if (!confirmAll) {
+      setConfirmAll(true)
+      return
+    }
+    void runFullScanAllClients()
   }
 
   async function launchScan(engineId) {
@@ -118,15 +148,16 @@ export default function CommandBar({ onScanLaunched, onError }) {
   }
 
   return (
-    <div className="soc-command-bar">
+    <div className="soc-command-bar" data-testid="intel-map-command-bar">
       {clientsError && (
         <div className="px-3 py-2 text-xs text-rose-300 bg-rose-950/40 border-b border-rose-500/30" role="alert">
           {t('components.commandBar.clients_prefix')} {clientsError}
         </div>
       )}
       <div className="soc-command-bar-inner">
-        <label className="soc-command-bar-label">{t('components.commandBar.target_label')}</label>
+        <label className="soc-command-bar-label" htmlFor="intel-map-client-select">{t('components.commandBar.target_label')}</label>
         <select
+          id="intel-map-client-select"
           className="soc-command-bar-select"
           value={selectedClientId}
           onChange={(e) => setSelectedClientId(e.target.value)}
@@ -140,6 +171,7 @@ export default function CommandBar({ onScanLaunched, onError }) {
           ))}
         </select>
         <input
+          id="intel-map-target-input"
           type="text"
           placeholder={t('components.commandBar.target_url_placeholder')}
           value={target}
@@ -147,15 +179,6 @@ export default function CommandBar({ onScanLaunched, onError }) {
           className="soc-command-bar-input"
           aria-label={t('components.commandBar.target_placeholder')}
         />
-        <Button variant="unstyled"
-          type="button"
-          disabled={loading != null}
-          onClick={runFullScanAllClients}
-          className="soc-command-bar-btn bg-violet-500/20 border-violet-400/50 text-violet-300 hover:bg-violet-500/30 hover:border-violet-400 font-semibold"
-          title={t('components.commandBar.scan_all_hint')}
-        >
-          {loading === 'run-all' ? '…' : t('components.commandBar.scan_all')}
-        </Button>
         <div className="soc-command-bar-engines">
           {ENGINE_IDS.map(({ id, color }) => {
             const label = t(`components.commandBar.engines.${id}.label`)
@@ -163,17 +186,34 @@ export default function CommandBar({ onScanLaunched, onError }) {
             return (
               <Button variant="unstyled"
                 key={id}
+                id={`intel-map-engine-${id}-btn`}
                 type="button"
-                disabled={loading != null}
+                disabled={loading === id}
                 onClick={() => launchScan(id)}
                 className={`soc-command-bar-btn ${COLOR_CLASSES[color]}`}
                 title={label}
               >
-                {loading === id ? '…' : short}
+                {loading === id ? t('components.commandBar.launching') : short}
               </Button>
             )
           })}
         </div>
+        <Button variant="unstyled"
+          id="intel-map-scan-all-clients-btn"
+          type="button"
+          disabled={loading === 'run-all'}
+          onClick={onScanAllClick}
+          data-dangerous="true"
+          aria-label={t('components.commandBar.scan_all')}
+          className={`soc-command-bar-btn soc-command-bar-btn-all ${confirmAll ? 'soc-command-bar-btn-armed' : ''} bg-violet-500/20 border-violet-400/50 text-violet-300 hover:bg-violet-500/30 hover:border-violet-400 font-semibold`}
+          title={confirmAll ? t('components.commandBar.scan_all_armed_hint') : t('components.commandBar.scan_all_hint')}
+        >
+          {loading === 'run-all'
+            ? t('components.commandBar.launching')
+            : confirmAll
+              ? t('components.commandBar.scan_all_confirm')
+              : t('components.commandBar.scan_all')}
+        </Button>
       </div>
       {lastResult?.error && (
         <div className="soc-command-bar-error" role="alert">

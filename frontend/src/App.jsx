@@ -51,7 +51,7 @@ export default function App() {
   }, [connectionStatus])
 
   return (
-    <div className="soc-intel-map-root">
+    <div className="soc-intel-map-root" id="soc-intel-map-root">
       <CinematicBackground />
       <EmergencyAlert message={emergencyMessage} onComplete={() => setEmergencyMessage('')} />
 
@@ -75,7 +75,7 @@ export default function App() {
           ))}
           <span className="text-white/10" aria-hidden="true">|</span>
           <a href={apiUrl('/api/export/findings')} className="nav-link" download>{t('components.intelMap.export_csv')}</a>
-          <Button variant="unstyled" type="button" onClick={() => logout()} className="nav-link nav-link-danger">{t('components.intelMap.logout')}</Button>
+          <Button variant="unstyled" type="button" id="intel-map-logout-btn" onClick={() => logout()} className="nav-link nav-link-danger">{t('components.intelMap.logout')}</Button>
         </nav>
       </header>
 

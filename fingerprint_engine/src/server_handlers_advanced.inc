@@ -1174,13 +1174,39 @@ async fn api_ask(
 async fn api_ueba_ingest(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
-    Json(p): Json<crate::ueba_detector::UebaIngestPayload>,
+    Json(mut p): Json<crate::ueba_detector::UebaIngestPayload>,
 ) -> Response {
-    // The real ingest path is the in-process /ws/agent handler; agent JWTs can never reach this
-    // HTTP route (verify_token_for_request requires a user access context). Any human caller here
-    // is supplying an arbitrary agent_id/client_id, which forges behavioural baselines/anomalies.
-    // Restrict it to admins and range-check hour_of_week so it cannot be used to poison detection.
-    if let Err(r) = crate::rbac::require_admin(&auth) {
+    if auth.role.eq_ignore_ascii_case("agent") {
+        let Some(aid) = auth.agent_id.as_deref() else {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({"ok": false, "detail": "agent JWT missing agent_id"})),
+            )
+                .into_response();
+        };
+        p.agent_id = aid.to_string();
+        if crate::http::rate_limit_redis::is_enabled() {
+            match crate::http::rate_limit_redis::incr_ueba_agent_strict(aid).await {
+                crate::http::rate_limit_redis::StrictOp::Ok(count) if count > 120 => {
+                    let mut resp = (
+                        StatusCode::TOO_MANY_REQUESTS,
+                        Json(json!({
+                            "ok": false,
+                            "code": "rate_limited",
+                            "detail": "UEBA ingest rate limit (120/min per agent). Retry in 60s.",
+                            "retry_after_seconds": 60,
+                        })),
+                    )
+                        .into_response();
+                    if let Ok(v) = axum::http::HeaderValue::from_str("60") {
+                        resp.headers_mut().insert("Retry-After", v);
+                    }
+                    return resp;
+                }
+                _ => {}
+            }
+        }
+    } else if let Err(r) = crate::rbac::require_admin(&auth) {
         return r;
     }
     if !(0..=167).contains(&p.hour_of_week) {

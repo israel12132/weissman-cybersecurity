@@ -535,7 +535,7 @@ pub async fn run_cycle(
         let model = weissman_engines::openai_chat::resolve_llm_model(&llm_model);
         let user = format!(
             "You are the lead architect of an autonomous offensive-security platform (Rust + React, \
-             563 engine IDs, Postgres+RLS). Propose concrete, safe improvements. Categories allowed: \
+             580 engine IDs, Postgres+RLS). Propose concrete, safe improvements. Categories allowed: \
              new_engine, improve_engine, new_module, improve_module, wiring, sync, gap, cleanliness. \
              Live signals: {signal_summary}. \
              Respond ONLY minified JSON: {{\"proposals\":[{{\"category\":\"...\",\"title\":\"...\",\

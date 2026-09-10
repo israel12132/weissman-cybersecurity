@@ -1,5 +1,5 @@
 /**
- * Master registry of all 563 production attack engines.
+ * Master registry of all 580 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 563 production engines in registry order */
+/** All 580 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -684,7 +684,7 @@ export const ENGINES_REGISTRY = [
     label: 'Zero Trust Bypass',
     group: 'stealth',
     mitre: 'T1078',
-    description: 'Conditional access bypass, device-posture spoofing, MFA fatigue bombing, token exfiltration',
+    description: 'Live ZTNA/IdP posture: authorization endpoint, session cookies vs device signals, and reachable apps — not an HSTS-only check',
     requiresTarget: true,
   },
   {
@@ -756,7 +756,7 @@ export const ENGINES_REGISTRY = [
     label: 'Advanced SQLi',
     group: 'web',
     mitre: 'T1190',
-    description: 'Time-based blind, error-based, OOB DNS exfil, second-order SQLi, stored procedure abuse',
+    description: 'Dedicated SQL injection probe: error-based leaks, time-based delay vs baseline, and OAST callbacks on a live HTTP target',
     requiresTarget: true,
   },
   {
@@ -846,7 +846,7 @@ export const ENGINES_REGISTRY = [
     label: 'Intelligent API Fuzzing',
     group: 'web',
     mitre: 'T1190',
-    description: 'OpenAPI/Swagger-guided API fuzzing: mass assignment, business-logic bypass, rate-limit evasion, hidden endpoint discovery, parameter pollution',
+    description: 'Dedicated API fuzz: OpenAPI/common REST paths with live status/body differentials — not the shared http_feedback_fuzz alias',
     requiresTarget: true,
   },
 
@@ -1432,7 +1432,7 @@ export const ENGINES_REGISTRY = [
     label: 'Advanced XSS Engine',
     group: 'web',
     mitre: 'T1059.007',
-    description: 'Comprehensive XSS exploitation: DOM-based, stored, reflected, mutation-based, polyglot payload bypass, CSP bypass techniques, XSS-to-account-takeover chain',
+    description: 'Dedicated reflected-XSS probe: unique canary in query/body, reports only when the live response reflects the payload',
     requiresTarget: true,
   },
   {
@@ -1440,7 +1440,7 @@ export const ENGINES_REGISTRY = [
     label: 'CSRF Token Bypass',
     group: 'web',
     mitre: 'T1185',
-    description: 'CSRF attack vectors: token prediction, SameSite bypass, subdomain-based origin confusion, flash-based CSRF, multipart CSRF, SPA-specific state forgery',
+    description: 'Dedicated CSRF probe: missing/weak SameSite and token checks on state-changing forms discovered from the live origin',
     requiresTarget: true,
   },
   {
@@ -1464,7 +1464,7 @@ export const ENGINES_REGISTRY = [
     label: 'Web Race Condition (TOCTOU)',
     group: 'web',
     mitre: 'T1499.003',
-    description: 'HTTP-level race condition exploitation: single-packet attack, limit overrun, TOCTOU in payment flows, concurrent request state corruption, Turbo Intruder automation',
+    description: 'Dedicated concurrent-request race probe: duplicate POSTs and reports only when live responses diverge (TOCTOU), not a generic HTTP fuzzer alias',
     requiresTarget: true,
   },
   {
@@ -1504,7 +1504,7 @@ export const ENGINES_REGISTRY = [
     label: 'NoSQL Injection Engine',
     group: 'web',
     mitre: 'T1190',
-    description: 'NoSQL injection exploitation: MongoDB operator injection ($where, $regex), CouchDB Mango query bypass, Redis command injection, Elasticsearch DSL injection, Cassandra CQL injection',
+    description: 'Dedicated NoSQL operator injection probe ($gt/$ne JSON bodies) against live endpoints — findings only from error/auth bypass evidence',
     requiresTarget: true,
   },
   {
@@ -1520,7 +1520,7 @@ export const ENGINES_REGISTRY = [
     label: 'Open Redirect Chain',
     group: 'web',
     mitre: 'T1190',
-    description: 'Open redirect exploitation chain: phishing pre-text, OAuth redirect_uri bypass, SSRF amplification via trusted redirect, browser history manipulation',
+    description: 'Dedicated open-redirect probe: crafted next/url/redirect params, reports only when Location/meta-refresh leaves the origin',
     requiresTarget: true,
   },
   {
@@ -3975,7 +3975,7 @@ export const ENGINES_REGISTRY = [
     group: 'defense',
     mitre: 'T1055',
     description:
-      '5ms process-delta ring buffer on endpoint agent + eBPF syscall ingest; autonomous SIGSTOP on web-server→shell spawn with live rollback evidence',
+      '5ms process-delta ring buffer on the endpoint agent (sysinfo polling). Autonomous SIGSTOP on web-server→shell spawn with live rollback evidence. Linux eBPF syscall ingest is a separate engine (ebpf_sensor) when CAP_BPF/bpftrace are present',
     requiresTarget: true,
     requiresAgent: true,
   },
@@ -4327,7 +4327,7 @@ export const ENGINES_REGISTRY = [
     label: 'SASE / SSE Security Bypass Engine',
     group: 'network',
     mitre: 'T1685',
-    description: 'SASE (Secure Access Service Edge) and SSE bypass: Zscaler/Netskope/Palo Alto Prisma tunnel bypass via split DNS, CASB policy evasion via cloud storage direct IP access, SWG (Secure Web Gateway) category bypass, DLP bypass via file encoding/chunking, ZTNA connection broker impersonation, SASE agent MITM via trusted root injection',
+    description: 'Live probe of ZTNA/SASE/SWG control planes (product headers, IdP portals, device-posture endpoints). Findings only from HTTP/TLS/DNS I/O — not an ASM alias',
     requiresTarget: true,
   },
   {
@@ -4602,6 +4602,146 @@ export const ENGINES_REGISTRY = [
     group: 'supply_chain',
     mitre: 'T1195',
     description: 'Fusion: IaC misconfig + supply chain + CI/CD pipeline',
+    requiresTarget: true,
+  },
+  {
+    id: 'control_plane_of_controls',
+    label: 'Control Plane of Controls',
+    group: 'defense',
+    mitre: 'T1518.001',
+    description: 'Fusion: prove installed EDR/WAF/email-DNS/cloud controls and name the gaps from live child probes',
+    requiresTarget: true,
+  },
+  {
+    id: 'ot_cloud_identity_killpath',
+    label: 'OT × Cloud × Identity Kill Path',
+    group: 'ot',
+    mitre: 'T0883',
+    description: 'Fusion: Modbus/SCADA + OT↔IT lateral + Azure/AWS + identity attack chain in one scan',
+    requiresTarget: true,
+  },
+  {
+    id: 'bec_ato_chain',
+    label: 'BEC → Account Takeover Chain',
+    group: 'recon',
+    mitre: 'T1566.002',
+    description: 'Fusion: email DNS posture + BEC + OAuth/OIDC + ITDR auth telemetry',
+    requiresTarget: true,
+  },
+  {
+    id: 'ai_casb_saas',
+    label: 'AI CASB / SaaS Agents',
+    group: 'ai',
+    mitre: 'T1528',
+    description: 'Fusion: LLM agent hijack + OAuth grants + discovered SaaS — CASB for AI agents',
+    requiresTarget: true,
+  },
+  {
+    id: 'dns_security_posture_fusion',
+    label: 'DNS Security Posture Fusion',
+    group: 'network',
+    mitre: 'T1071.004',
+    description: 'Fusion: DNS exfil + email DNS posture + ASM — product bridge to DNS Security',
+    requiresTarget: true,
+  },
+  {
+    id: 'toxic_combo_runtime_proof',
+    label: 'Toxic Combo Runtime Proof',
+    group: 'cloud',
+    mitre: 'T1078.004',
+    description: 'Fusion: CNAPP + IMDS + S3 + IAM + K8s with a safe live exposure attempt',
+    requiresTarget: true,
+  },
+  {
+    id: 'itdr',
+    label: 'ITDR (Identity Threat Detection)',
+    group: 'crypto',
+    mitre: 'T1078',
+    description: 'Identity threat detection from Entra/Okta/Google connectors and ingested auth events',
+    requiresTarget: true,
+  },
+  {
+    id: 'casb_saas_posture',
+    label: 'CASB SaaS Posture',
+    group: 'cloud',
+    mitre: 'T1530',
+    description: 'SaaS discovery and OAuth grant posture via live HTTP/API (M365/Google when credentials exist)',
+    requiresTarget: true,
+  },
+  {
+    id: 'dlp_content_scan',
+    label: 'DLP Content Scan',
+    group: 'recon',
+    mitre: 'T1530',
+    description: 'Content DLP assessment over reachable files/mail APIs — no fabricated leaks',
+    requiresTarget: true,
+  },
+  {
+    id: 'cnapp_continuous',
+    label: 'CNAPP Continuous Graph',
+    group: 'cloud',
+    mitre: 'T1580',
+    description: 'Continuous multi-cloud inventory + drift + toxic combos (AWS/Azure/GCP APIs when configured)',
+    requiresTarget: true,
+  },
+  {
+    id: 'host_privilege_escalation',
+    label: 'Host Privilege Escalation',
+    group: 'apt',
+    mitre: 'T1068',
+    description: 'Agent-resident PrivEsc inventory: extra UID 0, sudoers.d, scheduled tasks — not an edr_evasion alias',
+    requiresTarget: false,
+    requiresAgent: true,
+  },
+  {
+    id: 'host_isolation',
+    label: 'Host Isolation / Quarantine',
+    group: 'defense',
+    mitre: 'T1489',
+    description: 'Agent applies nftables or Windows firewall isolation/quarantine on command and reports apply/fail honestly',
+    requiresTarget: false,
+    requiresAgent: true,
+  },
+  {
+    id: 'ebpf_sensor',
+    label: 'eBPF Syscall Sensor',
+    group: 'defense',
+    mitre: 'T1059',
+    description: 'Linux agent eBPF/bpftrace execve ingest when BTF and CAP_BPF exist — never fake syscall telemetry',
+    requiresTarget: false,
+    requiresAgent: true,
+  },
+  {
+    id: 'ioc_yara_hunt',
+    label: 'IOC / YARA Hunt',
+    group: 'apt',
+    mitre: 'T1083',
+    description: 'Agent filesystem hunt for SHA-256 and strings supplied by the platform — idle if no IOCs',
+    requiresTarget: false,
+    requiresAgent: true,
+  },
+  {
+    id: 'ngfw_posture',
+    label: 'NGFW Policy Posture',
+    group: 'network',
+    mitre: 'T1595',
+    description: 'Read PAN-OS/Forti/NSG control planes via API/HTTP and prove reachable management surfaces',
+    requiresTarget: true,
+  },
+  {
+    id: 'malware_detonation',
+    label: 'Malware Detonation Farm',
+    group: 'apt',
+    mitre: 'T1204.002',
+    description: 'Submit executables/URLs to WEISSMAN_DETONATION_URL — distinct from heal verification_sandbox',
+    requiresTarget: true,
+  },
+  {
+    id: 'weissman_vngfw',
+    label: 'Weissman Gate (vNGFW)',
+    group: 'network',
+    mitre: 'T1686',
+    description: 'Software NGFW control plane. Errors if WEISSMAN_VNGFW_ADMIN dataplane is down — never pretends the firewall is live',
     requiresTarget: true,
   },
 ]

@@ -23,7 +23,7 @@ pub struct AdapterContext<'a> {
     pub integration: &'a IntegrationRecord,
 }
 
-/// All live SOAR provider adapters (8+).
+/// All live SOAR provider adapters.
 pub const REGISTERED_ADAPTER_IDS: &[&str] = &[
     "aws_ec2",
     "azure_vm",
@@ -33,6 +33,11 @@ pub const REGISTERED_ADAPTER_IDS: &[&str] = &[
     "opsgenie",
     "slack",
     "servicenow",
+    "splunk",
+    "sentinel",
+    "jira",
+    "teams",
+    "weissman_agent",
 ];
 
 #[must_use]
@@ -81,19 +86,29 @@ pub mod azure_vm;
 pub mod common;
 pub mod crowdstrike_falcon;
 pub mod github;
+pub mod jira;
 pub mod opsgenie;
 pub mod pagerduty;
+pub mod sentinel;
 pub mod servicenow;
 pub mod slack;
+pub mod splunk;
+pub mod teams;
+pub mod weissman_agent;
 
 use aws_ec2::AwsEc2IsolateAdapter;
 use azure_vm::AzureVmIsolateAdapter;
 use crowdstrike_falcon::CrowdStrikeFalconAdapter;
 use github::GithubPrAdapter;
+use jira::JiraAdapter;
 use opsgenie::OpsGenieAdapter;
 use pagerduty::PagerDutyAdapter;
+use sentinel::SentinelAdapter;
 use servicenow::{CreateIncidentAdapter, ServiceNowAdapter};
 use slack::{SlackAdapter, SlackNotifyAdapter};
+use splunk::SplunkHecAdapter;
+use teams::TeamsAdapter;
+use weissman_agent::WeissmanAgentIsolateAdapter;
 
 fn normalize_provider(provider: &str) -> String {
     provider.trim().to_ascii_lowercase().replace('-', "_")
@@ -108,6 +123,9 @@ async fn dispatch_isolate(
         "azure" | "azure_vm" | "azure_defender" => AzureVmIsolateAdapter.isolate(ctx).await,
         "crowdstrike" | "crowdstrike_falcon" | "falcon" => {
             CrowdStrikeFalconAdapter.isolate(ctx).await
+        }
+        "weissman_agent" | "weissman" | "endpoint_agent" => {
+            WeissmanAgentIsolateAdapter.isolate(ctx).await
         }
         other => Err(AdapterError::Config(format!(
             "no isolate adapter for provider {other}"
@@ -145,8 +163,20 @@ pub async fn dispatch(
         "isolate_host" => dispatch_isolate(provider, &ctx).await,
         "open_pr" => GithubPrAdapter.open_pr(&ctx).await,
         "page_oncall" => dispatch_page(provider, &ctx).await,
-        "slack_notify" => SlackAdapter.notify(&ctx).await,
-        "create_incident" => ServiceNowAdapter.create_incident(&ctx).await,
+        "slack_notify" => match normalize_provider(provider).as_str() {
+            "teams" => TeamsAdapter.notify(&ctx).await,
+            "splunk" => SplunkHecAdapter.notify(&ctx).await,
+            "sentinel" => SentinelAdapter.notify(&ctx).await,
+            _ => SlackAdapter.notify(&ctx).await,
+        },
+        "siem_ingest" => match normalize_provider(provider).as_str() {
+            "sentinel" => SentinelAdapter.notify(&ctx).await,
+            _ => SplunkHecAdapter.notify(&ctx).await,
+        },
+        "create_incident" => match normalize_provider(provider).as_str() {
+            "jira" => JiraAdapter.create_incident(&ctx).await,
+            _ => ServiceNowAdapter.create_incident(&ctx).await,
+        },
         other => Err(AdapterError::Skipped(format!("no adapter for {other}"))),
     }
 }

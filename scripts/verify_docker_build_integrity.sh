@@ -69,6 +69,23 @@ else
   bad "backend.Dockerfile must COPY --from=build weissman-agent (not cp from /build in runtime)"
 fi
 
+section "Runtime SQL migrations (disk, not compile-time embed)"
+if grep -qE '^COPY crates/weissman-db/migrations /srv/migrations' deploy/backend.Dockerfile; then
+  ok "runtime copies migrations from the build context"
+else
+  bad "backend.Dockerfile must COPY crates/weissman-db/migrations /srv/migrations from context (not only from a stale cargo build stage)"
+fi
+if grep -E '^[[:space:]]*sqlx::migrate!' crates/weissman-db/src/lib.rs >/dev/null; then
+  bad "sqlx::migrate! compile-time embed in weissman-db — a live DB can apply a file the image does not contain"
+else
+  ok "sqlx migrations load from disk at runtime"
+fi
+if [[ -f crates/weissman-db/migrations/20260824120000_login_tenant_directory_function.sql ]]; then
+  ok "login tenant directory migration is in the canonical tree"
+else
+  bad "missing 20260824120000_login_tenant_directory_function.sql — live volumes that applied it will refuse to boot"
+fi
+
 section "include_str! external paths (fingerprint_engine)"
 while IFS= read -r line; do
   if [[ "$line" =~ include_str!\(\"([^\"]+)\"\) ]]; then

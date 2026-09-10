@@ -299,20 +299,18 @@ pub async fn run_ssl_pinning_bypass_result(t: &str) -> EngineResult {
                 ),
                 t,
             ));
-        } else if ct.contains("json") && !p.body.contains("Strict-Transport-Security") {
-            if header_value(&p.headers, "strict-transport-security").is_none() {
-                findings.push(mobile_finding(
-                    "ssl_pinning_bypass",
-                    "JSON mobile API without HSTS",
-                    "medium",
-                    "T1556",
-                    &format!(
-                        "{} serves JSON without Strict-Transport-Security — downgrade/MITM risk on first connect.",
-                        p.final_url
-                    ),
-                    t,
-                ));
-            }
+        } else if ct.contains("json") && crate::live_truth::observe_hsts_probe(&p).emit_missing() {
+            findings.push(mobile_finding(
+                "ssl_pinning_bypass",
+                "JSON mobile API without HSTS",
+                "medium",
+                "T1556",
+                &format!(
+                    "{} serves JSON without Strict-Transport-Security — downgrade/MITM risk on first connect.",
+                    p.final_url
+                ),
+                t,
+            ));
         }
     }
     if findings.is_empty() {

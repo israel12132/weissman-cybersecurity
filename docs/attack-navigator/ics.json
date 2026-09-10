@@ -34,8 +34,8 @@
     },
     {
       "techniqueID": "T0883",
-      "score": 3,
-      "comment": "hospital_hl7_attack, satellite_attack, satellite_comm_attack",
+      "score": 4,
+      "comment": "hospital_hl7_attack, ot_cloud_identity_killpath, satellite_attack, satellite_comm_attack",
       "enabled": true
     },
     {
@@ -120,6 +120,12 @@
       "techniqueID": "T0826",
       "score": 3,
       "comment": "hospital_hl7_attack, implantable_device_hack, medical_device_exploit",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T0866",
+      "score": 1,
+      "comment": "ot_cloud_identity_killpath",
       "enabled": true
     }
   ],

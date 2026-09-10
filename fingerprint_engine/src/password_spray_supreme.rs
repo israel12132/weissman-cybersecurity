@@ -23,12 +23,7 @@ const WEBAUTHN_MARKERS: &[&str] = &[
 
 pub async fn probe_hsts_auth_surface(client: &Client, url: &str, target: &str) -> Option<Value> {
     let resp = http_get(client, url).await?;
-    let hsts = resp
-        .headers
-        .iter()
-        .find(|(k, _)| k.eq_ignore_ascii_case("strict-transport-security"))
-        .map(|(_, v)| v.clone());
-    if hsts.is_some() {
+    if !crate::live_truth::observe_hsts_probe(&resp).emit_missing() {
         return None;
     }
     Some(with_fields(

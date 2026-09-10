@@ -924,7 +924,7 @@ async fn load_poe_config(
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default();
     if let Ok(rows) = sqlx::query(
-        "SELECT target_library, payload_data FROM dynamic_payloads WHERE added_at >= now() - interval '60 days'",
+        "SELECT target_library, payload_data FROM intel.dynamic_payloads WHERE added_at >= now() - interval '60 days'",
     )
     .fetch_all(intel_pool.as_ref())
     .await

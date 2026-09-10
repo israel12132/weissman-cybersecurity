@@ -16,6 +16,53 @@ struct EnrollRequest<'a> {
     capabilities: Vec<&'a str>,
 }
 
+#[derive(Debug)]
+pub struct AgentHttpError {
+    pub status: u16,
+    pub retry_after_secs: Option<u64>,
+    pub body: String,
+}
+
+impl std::fmt::Display for AgentHttpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "HTTP {}{}",
+            self.status,
+            if self.body.is_empty() {
+                String::new()
+            } else {
+                format!(": {}", self.body.chars().take(240).collect::<String>())
+            }
+        )
+    }
+}
+
+impl std::error::Error for AgentHttpError {}
+
+impl AgentHttpError {
+    pub fn is_unauthorized(&self) -> bool {
+        self.status == 401
+    }
+
+    pub fn is_rate_limited(&self) -> bool {
+        self.status == 429
+    }
+
+    pub fn wait(&self, fallback: Duration) -> Duration {
+        self.retry_after_secs
+            .map(|s| Duration::from_secs(s.max(1)))
+            .unwrap_or(fallback)
+    }
+}
+
+fn retry_after_from(resp: &reqwest::Response) -> Option<u64> {
+    resp.headers()
+        .get("retry-after")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<u64>().ok())
+}
+
 pub async fn enroll(
     server_url: &str,
     enrollment_token: &str,
@@ -42,10 +89,16 @@ pub async fn enroll(
         .user_agent(format!("weissman-agent/{}", agent_version))
         .build()?;
     let resp = client.post(&url).json(&body).send().await?;
+    let retry_after = retry_after_from(&resp);
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
     if !status.is_success() {
-        anyhow::bail!("enrollment failed (HTTP {}): {}", status, text);
+        return Err(AgentHttpError {
+            status: status.as_u16(),
+            retry_after_secs: retry_after,
+            body: text,
+        }
+        .into());
     }
     let enrollment: Enrollment = serde_json::from_str(&text)
         .map_err(|e| anyhow::anyhow!("invalid enrollment response: {} (body={})", e, text))?;
@@ -88,10 +141,16 @@ pub async fn renew_session(
         })
         .send()
         .await?;
+    let retry_after = retry_after_from(&resp);
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
     if !status.is_success() {
-        anyhow::bail!("session renewal failed (HTTP {}): {}", status, text);
+        return Err(AgentHttpError {
+            status: status.as_u16(),
+            retry_after_secs: retry_after,
+            body: text,
+        }
+        .into());
     }
     let parsed: Resp = serde_json::from_str(&text)
         .map_err(|e| anyhow::anyhow!("invalid session response: {} (body={})", e, text))?;
@@ -99,4 +158,60 @@ pub async fn renew_session(
         anyhow::bail!("session response missing session_jwt");
     }
     Ok(parsed.session_jwt)
+}
+
+/// Keep retrying session renewal. Never falls back to a consumed enrollment token.
+pub async fn renew_session_with_backoff(
+    server_url: &str,
+    agent_id: &str,
+    agent_secret: &str,
+    agent_version: &str,
+) -> anyhow::Result<String> {
+    let mut delay = Duration::from_secs(2);
+    loop {
+        match renew_session(server_url, agent_id, agent_secret, agent_version).await {
+            Ok(jwt) => return Ok(jwt),
+            Err(e) => {
+                let http = e.downcast_ref::<AgentHttpError>();
+                if let Some(http) = http {
+                    let wait = http.wait(delay);
+                    tracing::warn!(
+                        target: "agent",
+                        status = http.status,
+                        retry_after_secs = wait.as_secs(),
+                        "session renewal HTTP {}; sleeping (will not re-enroll)",
+                        http.status
+                    );
+                    tokio::time::sleep(wait).await;
+                    delay = delay.saturating_mul(2).min(Duration::from_secs(120));
+                    continue;
+                }
+                tracing::warn!(target: "agent", error = %e, "session renewal transport error; backing off");
+                tokio::time::sleep(delay).await;
+                delay = delay.saturating_mul(2).min(Duration::from_secs(60));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retry_after_honours_header_seconds() {
+        let e = AgentHttpError {
+            status: 429,
+            retry_after_secs: Some(17),
+            body: String::new(),
+        };
+        assert!(e.is_rate_limited());
+        assert_eq!(e.wait(Duration::from_secs(2)), Duration::from_secs(17));
+        assert!(AgentHttpError {
+            status: 401,
+            retry_after_secs: None,
+            body: String::new(),
+        }
+        .is_unauthorized());
+    }
 }

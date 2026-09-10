@@ -2069,6 +2069,9 @@ pub async fn run_password_spray_result_ctx(target: &str, ctx: &EngineRunContext)
     if target.is_empty() {
         return EngineResult::error("target required");
     }
+    if let Some(skip) = crate::live_truth::skip_if_edge_block(ENGINE_ID, target).await {
+        return skip;
+    }
     let base = normalize_url(target);
     let host = extract_host(&base);
     let cfg = ScanConfig::load(&ArsenalConfig::from_ctx(ctx), &host);

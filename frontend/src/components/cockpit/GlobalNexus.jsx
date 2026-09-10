@@ -384,6 +384,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                 <li key={id} className="flex items-center group">
                   <Button variant="unstyled"
                     type="button"
+                    id={`cockpit-client-${id}`}
                     onClick={() => {
                       if (clientScopeLocked) return
                       setSelectedClientId(id)

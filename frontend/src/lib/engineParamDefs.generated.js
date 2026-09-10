@@ -23635,5 +23635,815 @@ export const GENERATED_PARAM_DEFS = {
       "min": 1,
       "max": 5000
     }
+  ],
+  "control_plane_of_controls": [
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "evidence_mode",
+      "label": "Evidence Mode",
+      "type": "select",
+      "defaultVal": "standard",
+      "options": [
+        "standard",
+        "strict",
+        "forensic"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "ot_cloud_identity_killpath": [
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "protocol_strict",
+      "label": "OT Protocol Strict",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "key": "depth",
+      "label": "Probe Depth",
+      "type": "select",
+      "defaultVal": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    {
+      "key": "timeout_ms",
+      "label": "Probe Timeout (ms)",
+      "type": "number",
+      "defaultVal": "8000",
+      "min": 500,
+      "max": 60000
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "bec_ato_chain": [
+    {
+      "key": "campaign_name",
+      "label": "Campaign Name",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "Red Team Q2"
+    },
+    {
+      "key": "depth",
+      "label": "Probe Depth",
+      "type": "select",
+      "defaultVal": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "github_token",
+      "label": "GitHub Token (optional)",
+      "type": "password",
+      "defaultVal": "",
+      "placeholder": "ghp_..."
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "ai_casb_saas": [
+    {
+      "key": "llm_base_url",
+      "label": "LLM Base URL",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "http://127.0.0.1:11434/v1"
+    },
+    {
+      "key": "llm_model",
+      "label": "LLM Model",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "gpt-4o"
+    },
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    },
+    {
+      "key": "safe_mode",
+      "label": "Safe Mode (no destructive exec)",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    }
+  ],
+  "dns_security_posture_fusion": [
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "timeout_ms",
+      "label": "Probe Timeout (ms)",
+      "type": "number",
+      "defaultVal": "8000",
+      "min": 500,
+      "max": 60000
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "toxic_combo_runtime_proof": [
+    {
+      "key": "aws_cross_account_role_arn",
+      "label": "AWS Cross-Account Role ARN",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "arn:aws:iam::123:role/WeissmanReadOnly"
+    },
+    {
+      "key": "aws_external_id",
+      "label": "AWS External ID",
+      "type": "password",
+      "defaultVal": "",
+      "placeholder": "external-id"
+    },
+    {
+      "key": "gcp_project",
+      "label": "GCP Project ID",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "my-project"
+    },
+    {
+      "key": "azure_subscription_id",
+      "label": "Azure Subscription ID",
+      "type": "text",
+      "defaultVal": ""
+    },
+    {
+      "key": "azure_tenant_id",
+      "label": "Azure Tenant ID",
+      "type": "text",
+      "defaultVal": ""
+    },
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    }
+  ],
+  "itdr": [
+    {
+      "key": "domain",
+      "label": "Target Domain (AD/DNS)",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "corp.example.com"
+    },
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "casb_saas_posture": [
+    {
+      "key": "aws_cross_account_role_arn",
+      "label": "AWS Cross-Account Role ARN",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "arn:aws:iam::123:role/WeissmanReadOnly"
+    },
+    {
+      "key": "aws_external_id",
+      "label": "AWS External ID",
+      "type": "password",
+      "defaultVal": "",
+      "placeholder": "external-id"
+    },
+    {
+      "key": "gcp_project",
+      "label": "GCP Project ID",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "my-project"
+    },
+    {
+      "key": "azure_subscription_id",
+      "label": "Azure Subscription ID",
+      "type": "text",
+      "defaultVal": ""
+    },
+    {
+      "key": "azure_tenant_id",
+      "label": "Azure Tenant ID",
+      "type": "text",
+      "defaultVal": ""
+    },
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    }
+  ],
+  "dlp_content_scan": [
+    {
+      "key": "depth",
+      "label": "Probe Depth",
+      "type": "select",
+      "defaultVal": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "github_token",
+      "label": "GitHub Token (optional)",
+      "type": "password",
+      "defaultVal": "",
+      "placeholder": "ghp_..."
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "cnapp_continuous": [
+    {
+      "key": "aws_cross_account_role_arn",
+      "label": "AWS Cross-Account Role ARN",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "arn:aws:iam::123:role/WeissmanReadOnly"
+    },
+    {
+      "key": "aws_external_id",
+      "label": "AWS External ID",
+      "type": "password",
+      "defaultVal": "",
+      "placeholder": "external-id"
+    },
+    {
+      "key": "gcp_project",
+      "label": "GCP Project ID",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "my-project"
+    },
+    {
+      "key": "azure_subscription_id",
+      "label": "Azure Subscription ID",
+      "type": "text",
+      "defaultVal": ""
+    },
+    {
+      "key": "azure_tenant_id",
+      "label": "Azure Tenant ID",
+      "type": "text",
+      "defaultVal": ""
+    },
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    }
+  ],
+  "host_privilege_escalation": [
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "campaign_name",
+      "label": "Campaign Name",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "Red Team Q2"
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    },
+    {
+      "key": "evidence_mode",
+      "label": "Evidence Mode",
+      "type": "select",
+      "defaultVal": "standard",
+      "options": [
+        "standard",
+        "strict",
+        "forensic"
+      ]
+    }
+  ],
+  "host_isolation": [
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "evidence_mode",
+      "label": "Evidence Mode",
+      "type": "select",
+      "defaultVal": "standard",
+      "options": [
+        "standard",
+        "strict",
+        "forensic"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "ebpf_sensor": [
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "evidence_mode",
+      "label": "Evidence Mode",
+      "type": "select",
+      "defaultVal": "standard",
+      "options": [
+        "standard",
+        "strict",
+        "forensic"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "ioc_yara_hunt": [
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "campaign_name",
+      "label": "Campaign Name",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "Red Team Q2"
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    },
+    {
+      "key": "evidence_mode",
+      "label": "Evidence Mode",
+      "type": "select",
+      "defaultVal": "standard",
+      "options": [
+        "standard",
+        "strict",
+        "forensic"
+      ]
+    }
+  ],
+  "ngfw_posture": [
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "timeout_ms",
+      "label": "Probe Timeout (ms)",
+      "type": "number",
+      "defaultVal": "8000",
+      "min": 500,
+      "max": 60000
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "malware_detonation": [
+    {
+      "key": "safe_mode",
+      "label": "Safe Mode (no destructive exec)",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "campaign_name",
+      "label": "Campaign Name",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "Red Team Q2"
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    },
+    {
+      "key": "evidence_mode",
+      "label": "Evidence Mode",
+      "type": "select",
+      "defaultVal": "standard",
+      "options": [
+        "standard",
+        "strict",
+        "forensic"
+      ]
+    }
+  ],
+  "weissman_vngfw": [
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "timeout_ms",
+      "label": "Probe Timeout (ms)",
+      "type": "number",
+      "defaultVal": "8000",
+      "min": 500,
+      "max": 60000
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
   ]
 }

@@ -17,6 +17,12 @@ describe('apiBase deep', () => {
     expect(formatHttpApiError({ status: 404 }, '')).toMatch(/404|not found/i)
   })
 
+  it('formatHttpApiError 409 ROE', () => {
+    expect(formatHttpApiError({ status: 409 }, 'Weaponized ROE requires 2 distinct admin approvals.')).toMatch(
+      /ROE|409|approv/i,
+    )
+  })
+
   it('formatHttpApiError payment required', () => {
     expect(formatHttpApiError({ status: 402 }, 'upgrade')).toContain('upgrade')
   })

@@ -5,9 +5,11 @@ mod arp_table;
 mod baseline;
 mod chronos;
 mod clipboard;
+mod ebpf_sensor;
 mod edr_presence;
 mod exfil_local;
 mod hardware_local;
+mod host_isolation;
 mod infostealer;
 mod log_integrity;
 mod malware_local;
@@ -17,9 +19,11 @@ mod process_hollowing;
 mod process_modules;
 mod scheduled_tasks;
 mod social_local;
+mod stealth_host;
 mod timestomp;
 mod usb_devices;
 mod util;
+mod yara_hunt;
 
 use serde_json::Value;
 
@@ -90,6 +94,16 @@ pub fn all_capability_ids() -> Vec<&'static str> {
         "ueba_baseline",
         // CHRONOS — 5ms process-delta ring buffer + SIGSTOP on shell spawn
         "chronos",
+        "sandbox_evasion",
+        "rop_chain_engine",
+        "heap_exploitation",
+        "jit_spray",
+        "com_hijacking",
+        "parent_pid_spoof",
+        "host_isolation",
+        "host_privilege_escalation",
+        "ebpf_sensor",
+        "ioc_yara_hunt",
     ]
 }
 
@@ -155,6 +169,29 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
             "infostealer_emulation" => infostealer::run(&engine, target.as_deref(), &params).await,
             "ueba_baseline" => baseline::run(&engine).await,
             "chronos" => chronos::run(&engine, &params).await,
+            "sandbox_evasion" => stealth_host::run_sandbox_evasion(&engine).await,
+            "rop_chain_engine" => {
+                stealth_host::run_memory_technique(&engine, "T1055", "ROP/JOP host runtime inventory")
+                    .await
+            }
+            "heap_exploitation" => {
+                stealth_host::run_memory_technique(
+                    &engine,
+                    "T1055",
+                    "Heap-spray / high-memory interpreter inventory",
+                )
+                .await
+            }
+            "jit_spray" => {
+                stealth_host::run_memory_technique(&engine, "T1055", "JIT/RWX process inventory")
+                    .await
+            }
+            "com_hijacking" => stealth_host::run_com_hijack(&engine).await,
+            "parent_pid_spoof" => stealth_host::run_ppid_spoof(&engine).await,
+            "host_isolation" => host_isolation::run(&engine, &params).await,
+            "host_privilege_escalation" => stealth_host::run_privesc(&engine).await,
+            "ebpf_sensor" => ebpf_sensor::run(&engine, &params).await,
+            "ioc_yara_hunt" => yara_hunt::run(&engine, &params).await,
             other => Err(anyhow::anyhow!(
                 "agent has no implementation for engine '{other}'"
             )),
@@ -243,6 +280,16 @@ mod tests {
         "cold_boot_attack",
         "infostealer_emulation",
         "chronos",
+        "sandbox_evasion",
+        "rop_chain_engine",
+        "heap_exploitation",
+        "jit_spray",
+        "com_hijacking",
+        "parent_pid_spoof",
+        "host_isolation",
+        "host_privilege_escalation",
+        "ebpf_sensor",
+        "ioc_yara_hunt",
     ];
 
     #[test]

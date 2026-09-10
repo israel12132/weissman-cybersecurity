@@ -1466,7 +1466,9 @@ async fn probe_tls_downgrade(engine_id: &str, canonical: &str, target: &str) -> 
     let mut findings = Vec::new();
     if tcp_open(&host, 80).await {
         if let Some(p) = http_get(&http_client().await, &format!("http://{host}")).await {
-            if !has_header(&p.headers, "strict-transport-security") {
+            if p.is_waf_block() {
+                // Edge challenge is not proof the origin lacks HSTS.
+            } else if !has_header(&p.headers, "strict-transport-security") {
                 findings.push(alias_finding(
                     engine_id,
                     "HTTP without HSTS — TLS downgrade possible",

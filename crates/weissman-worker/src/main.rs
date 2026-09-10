@@ -121,7 +121,12 @@ fn job_class(kind: &str) -> JobClass {
         // engines hang — exactly what a health probe exists to detect — the probe was killed with
         // a generic timeout instead of returning its per-engine pass/fail table.
         "top_tier_health_probe" => (true, 75 * 60),
-        "scan_all_engines" | "scan_discovered_domains" => (true, 45 * 60),
+        // Full catalog is hundreds of sequential engines. Live rate ~50s/engine (45s
+        // per-engine resilience ceiling). 45 minutes (2700s) timed out after ~54 engines
+        // and retried from engine 0. Eight hours covers one full pass; the executor also
+        // persists completed_engines so a timeout/retry resumes instead of rewinding.
+        "scan_all_engines" => (true, 8 * 60 * 60),
+        "scan_discovered_domains" => (true, 45 * 60),
         // ── Long-running engine work ─────────────────────────────────────────
         "auto_heal" | "deep_fuzz" | "feedback_fuzz" | "ai_redteam" => (true, 30 * 60),
         "pipeline_scan" | "threat_intel_run" => (true, 20 * 60),
@@ -1035,6 +1040,10 @@ mod tests {
         assert_eq!(job_kind_timeout("auto_heal"), Duration::from_secs(1800));
         assert_eq!(
             job_kind_timeout("scan_all_engines"),
+            Duration::from_secs(8 * 60 * 60)
+        );
+        assert_eq!(
+            job_kind_timeout("scan_discovered_domains"),
             Duration::from_secs(2700)
         );
         assert_eq!(job_kind_timeout("pipeline_scan"), Duration::from_secs(1200));

@@ -474,7 +474,8 @@ textarea:focus-visible {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   color: #d4d4d8;
 }
 
@@ -526,6 +527,77 @@ textarea:focus-visible {
   font-size: 0.7rem;
   font-family: 'Space Mono', monospace;
   padding: 0.4rem 1.25rem;
+}
+
+.soc-command-bar {
+  position: relative;
+  z-index: 25;
+  margin: 0.45rem 1.25rem 0;
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  background: rgba(0, 0, 0, 0.78);
+  border-radius: 0.5rem;
+  backdrop-filter: blur(10px);
+}
+.soc-command-bar-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+}
+.soc-command-bar-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  color: rgba(34, 211, 238, 0.75);
+  flex-shrink: 0;
+}
+.soc-command-bar-select,
+.soc-command-bar-input {
+  min-width: 12rem;
+  max-width: 22rem;
+  flex: 1 1 12rem;
+  background: rgba(9, 9, 11, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e4e4e7;
+  font-size: 0.75rem;
+  border-radius: 0.35rem;
+  padding: 0.35rem 0.55rem;
+}
+.soc-command-bar-engines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.soc-command-bar-btn {
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  padding: 0.32rem 0.65rem;
+  font-size: 0.7rem;
+  font-family: 'Space Mono', monospace;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.soc-command-bar-btn-all {
+  margin-inline-start: auto;
+}
+.soc-command-bar-btn-armed {
+  border-color: rgba(251, 191, 36, 0.7) !important;
+  color: #fde68a !important;
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.25);
+}
+.soc-command-bar-error {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.7rem;
+  font-family: 'Space Mono', monospace;
+  color: #fca5a5;
+  background: rgba(127, 29, 29, 0.4);
+}
+.soc-command-bar-success {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.7rem;
+  font-family: 'Space Mono', monospace;
+  color: #86efac;
 }
 
 /* Branding HUD banner */

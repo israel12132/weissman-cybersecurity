@@ -13,9 +13,9 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 
 ## Headline
 
-- **226 distinct ATT&CK techniques** covered by
-  **563 mapped engines** (101 of them sub-techniques).
-- That is **192 primary** engine mappings plus **34
+- **231 distinct ATT&CK techniques** covered by
+  **580 mapped engines** (102 of them sub-techniques).
+- That is **198 primary** engine mappings plus **33
   code-grounded secondary** techniques — the extra ATT&CK T-codes each engine's own implementation
   tags on the findings it emits (`mitre: "Txxxx"` / kill-chain `mitre_path`). Secondary techniques
   are extracted from source, not asserted: if the code doesn't perform it, it isn't counted.
@@ -28,25 +28,25 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 *"Techniques covered" counts distinct ATT&CK techniques the catalog maps within that tactic;
 "% of tactic" is against the total techniques MITRE lists for that tactic in the current release.*
 
-### Enterprise ATT&CK — 198 techniques, 15/15 tactics
+### Enterprise ATT&CK — 202 techniques, 15/15 tactics
 
 | Tactic | Techniques covered | % of tactic | Engines |
 |--------|-------------------:|------------:|--------:|
-| Reconnaissance | 21 / 46 | 46% | 69 |
+| Reconnaissance | 21 / 46 | 46% | 72 |
 | Resource Development | 15 / 50 | 30% | 33 |
-| Initial Access | 19 / 22 | 86% | 163 |
-| Execution | 15 / 64 | 23% | 59 |
-| Persistence | 15 / 113 | 13% | 53 |
-| Privilege Escalation | 14 / 96 | 15% | 52 |
-| Stealth | 26 / 148 | 18% | 68 |
-| Defense Impairment | 10 / 56 | 18% | 51 |
-| Credential Access | 28 / 67 | 42% | 93 |
-| Discovery | 16 / 49 | 33% | 31 |
-| Lateral Movement | 12 / 23 | 52% | 31 |
-| Collection | 15 / 41 | 37% | 58 |
-| Command and Control | 12 / 45 | 27% | 30 |
+| Initial Access | 19 / 22 | 86% | 169 |
+| Execution | 15 / 64 | 23% | 61 |
+| Persistence | 15 / 113 | 13% | 56 |
+| Privilege Escalation | 14 / 96 | 15% | 56 |
+| Stealth | 26 / 148 | 18% | 71 |
+| Defense Impairment | 11 / 56 | 20% | 52 |
+| Credential Access | 29 / 67 | 43% | 96 |
+| Discovery | 17 / 49 | 35% | 34 |
+| Lateral Movement | 12 / 23 | 52% | 32 |
+| Collection | 15 / 41 | 37% | 61 |
+| Command and Control | 12 / 45 | 27% | 31 |
 | Exfiltration | 7 / 19 | 37% | 21 |
-| Impact | 12 / 33 | 36% | 38 |
+| Impact | 13 / 33 | 39% | 39 |
 
 ### Mobile ATT&CK — 9 techniques, 7/12 tactics
 
@@ -65,17 +65,17 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 | Exfiltration | 0 / 3 | 0% | 0 |
 | Impact | 0 / 11 | 0% | 0 |
 
-### ICS ATT&CK — 19 techniques, 10/12 tactics
+### ICS ATT&CK — 20 techniques, 10/12 tactics
 
 | Tactic | Techniques covered | % of tactic | Engines |
 |--------|-------------------:|------------:|--------:|
-| Initial Access | 5 / 12 | 42% | 8 |
+| Initial Access | 6 / 12 | 50% | 9 |
 | Execution | 1 / 10 | 10% | 1 |
 | Persistence | 1 / 10 | 10% | 1 |
 | Privilege Escalation | 0 / 2 | 0% | 0 |
 | Evasion | 2 / 9 | 22% | 13 |
 | Discovery | 2 / 8 | 25% | 2 |
-| Lateral Movement | 2 / 11 | 18% | 13 |
+| Lateral Movement | 3 / 11 | 27% | 14 |
 | Collection | 2 / 11 | 18% | 2 |
 | Command and Control | 0 / 3 | 0% | 0 |
 | Inhibit Response Function | 2 / 20 | 10% | 4 |

@@ -1518,9 +1518,12 @@ async fn phase_internal_ports(
         .await;
 
     for (t, p) in results.into_iter().flatten() {
+        if p.is_waf_block() {
+            continue;
+        }
         let delta = (p.body.len() as i64 - baseline.body_len as i64).unsigned_abs();
         let reachable =
-            (p.status >= 200 && p.status < 500 && p.status != baseline.status) || delta > 256;
+            (p.status >= 200 && p.status < 400 && p.status != baseline.status) || delta > 256;
         if !reachable {
             continue;
         }
@@ -2491,6 +2494,9 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
 
     for (i, resp) in responses {
         let Some(p) = resp else { continue };
+        if p.is_waf_block() {
+            continue;
+        }
         let probe = &work[i];
 
         match probe.kind {

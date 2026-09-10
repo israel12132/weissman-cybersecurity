@@ -4269,33 +4269,40 @@ pub async fn run_bgp_dns_hijacking_result_ctx(
     if cfg.check_hsts && posture.resolved {
         posture.hsts_checked = true;
         if let Some(https) = http_get(&client, &format!("https://{domain}/")).await {
-            let hsts = http_header(&https.headers, "strict-transport-security");
-            posture.hsts_present = hsts
-                .as_ref()
-                .is_some_and(|h| h.to_ascii_lowercase().contains("max-age"));
-            if !posture.hsts_present {
-                findings.push(bgp_finding(
-                    &format!("No HSTS for {domain}"),
-                    "low",
-                    "T1557",
-                    &format!("HTTPS response for {domain} lacks Strict-Transport-Security. After DNS/BGP hijack, clients can be downgraded to plaintext unless HSTS is preloaded."),
-                    target,
-                    "Deploy HSTS with max-age ≥ 31536000, includeSubDomains, and consider HSTS preload list submission.",
-                    0.62,
-                    Evidence::new().with("domain", domain.clone()).check("hsts_present", false, "missing"),
-                ));
-            } else {
-                let hsts_val = hsts.clone().unwrap_or_default();
-                findings.push(bgp_finding(
-                    &format!("HSTS active for {domain}"),
-                    "info",
-                    "T1557",
-                    &format!("Strict-Transport-Security: {hsts_val} — mitigates sslstrip after routing incidents."),
-                    target,
-                    "Keep max-age high and monitor cert/HSTS header drift.",
-                    0.7,
-                    Evidence::new().with("domain", domain.clone()).with("hsts", hsts_val),
-                ));
+            match crate::live_truth::observe_hsts_probe(&https) {
+                crate::live_truth::HstsObservation::Present { .. } => {
+                    let hsts_val = http_header(&https.headers, "strict-transport-security")
+                        .unwrap_or_default();
+                    posture.hsts_present = true;
+                    findings.push(bgp_finding(
+                        &format!("HSTS active for {domain}"),
+                        "info",
+                        "T1557",
+                        &format!("Strict-Transport-Security: {hsts_val} — mitigates sslstrip after routing incidents."),
+                        target,
+                        "Keep max-age high and monitor cert/HSTS header drift.",
+                        0.7,
+                        Evidence::new().with("domain", domain.clone()).with("hsts", hsts_val),
+                    ));
+                }
+                crate::live_truth::HstsObservation::Missing => {
+                    posture.hsts_present = false;
+                    findings.push(bgp_finding(
+                        &format!("No HSTS for {domain}"),
+                        "low",
+                        "T1557",
+                        &format!("HTTPS response for {domain} lacks Strict-Transport-Security. After DNS/BGP hijack, clients can be downgraded to plaintext unless HSTS is preloaded."),
+                        target,
+                        "Deploy HSTS with max-age ≥ 31536000, includeSubDomains, and consider HSTS preload list submission.",
+                        0.62,
+                        Evidence::new().with("domain", domain.clone()).check("hsts_present", false, "missing"),
+                    ));
+                }
+                crate::live_truth::HstsObservation::UnknownWaf
+                | crate::live_truth::HstsObservation::UnknownStatus
+                | crate::live_truth::HstsObservation::UnknownUnreachable => {
+                    posture.hsts_present = false;
+                }
             }
         }
     }

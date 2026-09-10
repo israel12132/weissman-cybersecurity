@@ -83,8 +83,12 @@ RUN set -eu; \
     mkdir -p "/srv/bin/agents/$platform"; \
     mv /tmp/weissman-agent "/srv/bin/agents/$platform/weissman-agent"; \
     chmod 755 "/srv/bin/agents/$platform/weissman-agent"
-# No-tx migration pre-runner reads SQL from disk at runtime (compile-time CARGO_MANIFEST_DIR is /build/...).
-COPY --from=build /build/crates/weissman-db/migrations /srv/migrations
+# Runtime sqlx Migrator + no-tx pre-runner read SQL from disk. Copy from the
+# *build context* (not the cargo build-stage snapshot): a 90-minute compile
+# otherwise ships the tree from `COPY crates` at minute 0, while the live
+# Postgres volume may already have applied files added to the checkout after
+# that. CARGO_MANIFEST_DIR inside the binary is /build/... and is not shipped.
+COPY crates/weissman-db/migrations /srv/migrations
 ENV WEISSMAN_MIGRATIONS_DIR=/srv/migrations
 ENV WEISSMAN_AGENT_BIN_DIR=/srv/bin/agents
 USER weissman

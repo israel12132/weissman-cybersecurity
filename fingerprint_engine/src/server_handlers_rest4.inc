@@ -1091,35 +1091,75 @@ async fn api_pipeline_state_get(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!(null))).into_response();
     };
-    let row = sqlx::query(
-        r#"SELECT run_id, client_id, current_stage, paused, skip_to_stage, updated_at
-           FROM pipeline_run_state WHERE tenant_id = $1 AND run_id = $2 AND client_id = $3"#,
-    )
-    .bind(auth.tenant_id)
-    .bind(q.run_id)
-    .bind(&q.client_id)
-    .fetch_optional(&mut *tx)
-    .await
-    .ok()
-    .flatten();
+    let row = if let (Some(run_id), Some(client_id)) = (q.run_id, q.client_id.as_ref()) {
+        sqlx::query(
+            r#"SELECT run_id, client_id, current_stage, paused, skip_to_stage, updated_at
+               FROM pipeline_run_state WHERE tenant_id = $1 AND run_id = $2 AND client_id = $3"#,
+        )
+        .bind(auth.tenant_id)
+        .bind(run_id)
+        .bind(client_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
+    } else if let Some(client_id) = q.client_id.as_ref() {
+        sqlx::query(
+            r#"SELECT run_id, client_id, current_stage, paused, skip_to_stage, updated_at
+               FROM pipeline_run_state WHERE tenant_id = $1 AND client_id = $2
+               ORDER BY updated_at DESC LIMIT 1"#,
+        )
+        .bind(auth.tenant_id)
+        .bind(client_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
+    } else {
+        sqlx::query(
+            r#"SELECT run_id, client_id, current_stage, paused, skip_to_stage, updated_at
+               FROM pipeline_run_state WHERE tenant_id = $1
+               ORDER BY updated_at DESC LIMIT 1"#,
+        )
+        .bind(auth.tenant_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
+    };
     let _ = tx.commit().await;
     match row {
         Some(r) => {
             let skip: Option<i32> = r.try_get("skip_to_stage").ok();
+            let current = r.try_get::<i32, _>("current_stage").unwrap_or(0);
             (
                 StatusCode::OK,
                 Json(json!({
                     "run_id": r.try_get::<i64,_>("run_id").unwrap_or(0),
                     "client_id": r.try_get::<String,_>("client_id").unwrap_or_default(),
-                    "current_stage": r.try_get::<i32,_>("current_stage").unwrap_or(0),
+                    "current_stage": current,
                     "paused": r.try_get::<bool,_>("paused").unwrap_or(false),
                     "skip_to_stage": skip,
                     "updated_at": r.try_get::<chrono::DateTime<Utc>,_>("updated_at").map(|d| d.to_rfc3339()).unwrap_or_default(),
+                    "states": [],
+                    "stage_labels": [],
                 })),
             )
                 .into_response()
         }
-        None => (StatusCode::NOT_FOUND, Json(json!(null))).into_response(),
+        None => (
+            StatusCode::OK,
+            Json(json!({
+                "run_id": null,
+                "client_id": q.client_id,
+                "current_stage": 0,
+                "paused": false,
+                "skip_to_stage": null,
+                "states": [],
+                "stage_labels": [],
+            })),
+        )
+            .into_response(),
     }
 }
 
@@ -2505,7 +2545,7 @@ async fn api_sovereign_phantom_trap(
 
 async fn api_payload_sync_status(State(state): State<Arc<AppState>>) -> Response {
     match sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*)::bigint FROM dynamic_payloads WHERE added_at >= now() - interval '60 days'",
+        "SELECT COUNT(*)::bigint FROM intel.dynamic_payloads WHERE added_at >= now() - interval '60 days'",
     )
     .fetch_one(state.intel_pool.as_ref())
     .await
@@ -2524,7 +2564,7 @@ async fn api_payload_sync_status(State(state): State<Arc<AppState>>) -> Response
 
 async fn api_payload_sync_payloads(State(state): State<Arc<AppState>>) -> Response {
     match sqlx::query(
-        "SELECT target_library, source, source_url, added_at FROM dynamic_payloads ORDER BY added_at DESC LIMIT 200",
+        "SELECT target_library, source, source_url, added_at FROM intel.dynamic_payloads ORDER BY added_at DESC LIMIT 200",
     )
     .fetch_all(state.intel_pool.as_ref())
     .await

@@ -36,6 +36,7 @@ describe('AdvancedShowcase', () => {
         <AdvancedShowcase />
       </ThemeProvider>,
     )
+    expect(screen.getByText(/Design-system catalog only/i)).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Advanced Components' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'AI Command Console' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'SOAR playbook builder' })).toBeInTheDocument()

@@ -348,10 +348,52 @@ else
 fi
 # The oast service must NOT use \${VAR:?} for its domain — Compose interpolates every
 # service on `up`, so a :? there would abort the default (OAST-off) launch.
+if sed -n '/^  oast:/,/^  [a-z#]/p' docker-compose.prod.yml | grep -q '/healthz'; then
+  ok "oast healthcheck probes /healthz (GET / is a 404 catcher)"
+else
+  bad "oast healthcheck must not use GET / — that returns 404 without a callback token and marks the listener unhealthy"
+fi
 if sed -n '/^  oast:/,/^  [a-z#]/p' docker-compose.prod.yml | grep -q 'WEISSMAN_OAST_DOMAIN.*:?'; then
   bad "oast service uses \${WEISSMAN_OAST_DOMAIN:?} — breaks the default (OAST-off) up"
 else
   ok "oast service does not hard-require WEISSMAN_OAST_DOMAIN via :? (default up stays green)"
+fi
+# Host UDP 5353 is IANA mDNS (Avahi). Publishing OAST there fails on every Linux desktop.
+if grep -qE 'WEISSMAN_OAST_DNS_PORT:-5353' docker-compose.prod.yml; then
+  bad "OAST DNS host port defaults to IANA mDNS 5353 — compose up dies when Avahi is running"
+elif grep -qE 'WEISSMAN_OAST_DNS_PORT:-8053' docker-compose.prod.yml; then
+  ok "OAST DNS host port defaults to 8053 (not mDNS)"
+else
+  bad "OAST DNS host port default is missing or unexpected"
+fi
+if grep -qE 'WEISSMAN_OAST_BIND:-127.0.0.1' docker-compose.prod.yml; then
+  ok "OAST host publish defaults to loopback"
+else
+  bad "OAST host publish is not loopback by default — a DNS catcher would be on 0.0.0.0"
+fi
+if grep -qE '^WEISSMAN_OAST_DNS_PORT=5353$' PRODUCTION.env.template; then
+  bad "PRODUCTION.env.template still defaults WEISSMAN_OAST_DNS_PORT to mDNS 5353"
+elif grep -qE '^WEISSMAN_OAST_DNS_PORT=8053$' PRODUCTION.env.template; then
+  ok "PRODUCTION.env.template documents WEISSMAN_OAST_DNS_PORT=8053"
+else
+  bad "PRODUCTION.env.template missing WEISSMAN_OAST_DNS_PORT=8053"
+fi
+if grep -q 'preflight_oast_host_ports' "$LAUNCHER" && grep -q 'port_in_use \".*\" udp' "$LAUNCHER"; then
+  ok "launcher preflights OAST UDP ports and remaps mDNS 5353"
+else
+  bad "launcher does not preflight OAST UDP / mDNS 5353"
+fi
+if grep -q 'assert_image_migrations' "$LAUNCHER" \
+   && sed -n '/^compose_up()/,/^}/p' "$LAUNCHER" | grep -q 'assert_image_migrations' \
+   && sed -n '/^compose_up()/,/^}/p' "$LAUNCHER" | grep -q 'up -d --no-build'; then
+  ok "launcher verifies baked migrations after build and before compose up"
+else
+  bad "launcher must assert image migrations after build and start with --no-build"
+fi
+if sed -n '/^  backend:/,/^  [a-z]/p' docker-compose.prod.yml | grep -q 'crates/weissman-db/migrations:/srv/migrations'; then
+  ok "prod overlay bind-mounts checkout migrations over /srv/migrations"
+else
+  bad "prod overlay must mount crates/weissman-db/migrations so a long image build cannot ship a stale schema"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────

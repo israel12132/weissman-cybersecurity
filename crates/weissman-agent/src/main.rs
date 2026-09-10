@@ -72,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
                 target: "agent", agent_id = %saved.agent_id, state = %state_path.display(),
                 "resuming persisted identity"
             );
-            let jwt = transport::enrollment::renew_session(
+            let jwt = transport::enrollment::renew_session_with_backoff(
                 &cli.server_url,
                 &saved.agent_id,
                 &saved.agent_secret,
@@ -155,10 +155,23 @@ async fn main() -> anyhow::Result<()> {
             .await
             {
                 Ok(jwt) => enrollment.session_jwt = jwt,
-                Err(e) => warn!(
-                    target: "agent", error = %e,
-                    "session renewal failed; reusing the current token for this attempt"
-                ),
+                Err(e) => {
+                    if let Some(http) = e.downcast_ref::<transport::enrollment::AgentHttpError>() {
+                        let wait = http.wait(Duration::from_millis(backoff));
+                        warn!(
+                            target: "agent",
+                            status = http.status,
+                            retry_after_secs = wait.as_secs(),
+                            "session renewal failed; honouring Retry-After and reusing current JWT"
+                        );
+                        tokio::time::sleep(wait).await;
+                    } else {
+                        warn!(
+                            target: "agent", error = %e,
+                            "session renewal failed; reusing the current token for this attempt"
+                        );
+                    }
+                }
             }
         }
     }

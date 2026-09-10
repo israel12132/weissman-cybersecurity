@@ -105,6 +105,18 @@ pub fn enroll_burst() -> u32 {
     nz_env("WEISSMAN_AGENT_ENROLL_BURST", 10, 2, 120)
 }
 
+/// Session renewal is a legitimate reconnect path (JWT TTL 4h + WSS backoff). It must not
+/// share the enroll bucket or a 401 storm on a consumed enrollment token locks out renewals.
+#[must_use]
+pub fn agent_session_limit_per_minute() -> u32 {
+    nz_env("WEISSMAN_AGENT_SESSION_PER_MINUTE", 30, 6, 180)
+}
+
+#[must_use]
+pub fn agent_session_burst() -> u32 {
+    nz_env("WEISSMAN_AGENT_SESSION_BURST", 20, 4, 240)
+}
+
 #[must_use]
 pub fn api_limit_per_sec() -> u32 {
     nz_env("WEISSMAN_RATE_LIMIT_PER_SEC", 30, 5, 500)

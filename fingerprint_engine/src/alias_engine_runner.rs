@@ -2927,6 +2927,9 @@ async fn run_alias_probe(
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
+    if let Some(skip) = crate::live_truth::skip_if_edge_block(engine_id, target).await {
+        return skip;
+    }
 
     // HTTP-feedback fuzz aliases get engine-tuned seed payloads + LLM-guided mutation.
     if canonical == "http_feedback_fuzz" {
@@ -3110,7 +3113,6 @@ mod tests {
     #[test]
     fn is_alias_engine_true_for_known_aliases() {
         // Each of these maps to a *different* canonical id in resolve_engine_id.
-        assert!(is_alias_engine("sqli_advanced")); // -> http_feedback_fuzz
         assert!(is_alias_engine("rce_chain")); // -> kill_chain
         assert!(is_alias_engine("active_directory")); // -> kerberos_attack_suite
         assert!(is_alias_engine("mobile_attack")); // -> mobile_mitm

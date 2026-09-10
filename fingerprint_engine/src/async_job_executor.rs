@@ -5,6 +5,7 @@
 use crate::db;
 use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast;
@@ -33,6 +34,35 @@ const TOP_TIER_ENGINES: &[&str] = &[
     "grpc_reflection_attack",
     "http2_attack",
 ];
+
+fn completed_engines_from_progress(progress: &Value) -> Vec<String> {
+    progress
+        .get("completed_engines")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn prior_scan_all_results(progress: &Value) -> Vec<Value> {
+    progress
+        .get("results")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn remaining_scan_all_engines(ordered: &[String], completed: &[String]) -> Vec<String> {
+    let done: HashSet<&str> = completed.iter().map(String::as_str).collect();
+    ordered
+        .iter()
+        .filter(|e| !done.contains(e.as_str()))
+        .cloned()
+        .collect()
+}
 
 /// Channels for streaming engines; worker supplies minimal broadcast buses.
 #[derive(Clone)]
@@ -859,10 +889,6 @@ async fn execute_job_unscoped(
             let app = app_pool.clone();
             let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Starting scan-all-engines: {} engines for client {}","status":"running"}}"#, job.id, engines.len(), client_id));
 
-            let mut results = Vec::new();
-            let mut succeeded = 0usize;
-            let mut failed = 0usize;
-
             let production_engines: Vec<String> = engines
                 .iter()
                 .filter(|e| weissman_core::models::engine::is_production_engine_id(e))
@@ -905,14 +931,67 @@ async fn execute_job_unscoped(
             let ordered_engines: Vec<String> =
                 selection.ranked.into_iter().map(|c| c.engine_id).collect();
 
+            let prior_progress = weissman_db::job_queue::load_result_json(app.as_ref(), job.id)
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| json!({}));
+            let mut completed_engines = completed_engines_from_progress(&prior_progress);
+            let mut results = prior_scan_all_results(&prior_progress);
+            let mut succeeded = prior_progress
+                .get("succeeded")
+                .and_then(Value::as_u64)
+                .unwrap_or(0) as usize;
+            let mut failed = prior_progress
+                .get("failed")
+                .and_then(Value::as_u64)
+                .unwrap_or(0) as usize;
+            let remaining_engines = remaining_scan_all_engines(&ordered_engines, &completed_engines);
+            if !completed_engines.is_empty() {
+                let _ = telemetry.send(format!(
+                    r#"{{"job_id":"{}","message":"Resuming scan-all-engines: {} already done, {} remaining","status":"running"}}"#,
+                    job.id,
+                    completed_engines.len(),
+                    remaining_engines.len()
+                ));
+            }
+
             let intelligence_bus = crate::ws_intelligence_bus::IntelligenceBus::new_shared();
             let mut cross_job_params = serde_json::json!({});
+            if let Some(intensity) = p.get("intensity").and_then(Value::as_str) {
+                if !intensity.trim().is_empty() {
+                    cross_job_params["intensity"] = json!(intensity);
+                }
+            }
+            if p.get("deep").and_then(Value::as_bool) == Some(true) {
+                cross_job_params["deep"] = json!(true);
+            }
 
-            for engine_id in &ordered_engines {
+            for engine_id in &remaining_engines {
                 let _ = telemetry.send(format!(
                     r#"{{"job_id":"{}","message":"Running engine: {}","status":"running"}}"#,
                     job.id, engine_id
                 ));
+                let inflight = json!({
+                    "ok": true,
+                    "partial": true,
+                    "completed_engines": completed_engines,
+                    "current_engine": engine_id,
+                    "succeeded": succeeded,
+                    "failed": failed,
+                    "results": results,
+                });
+                if let Err(e) =
+                    weissman_db::job_queue::save_running_progress(app.as_ref(), job.id, &inflight)
+                        .await
+                {
+                    tracing::warn!(
+                        job_id = %job.id,
+                        engine = %engine_id,
+                        error = %e,
+                        "scan_all_engines start-of-engine checkpoint failed"
+                    );
+                }
 
                 crate::ws_intelligence_bus::merge_params_artifacts(
                     &mut cross_job_params,
@@ -980,6 +1059,28 @@ async fn execute_job_unscoped(
                     &result.findings,
                 )
                 .await;
+
+                completed_engines.push(engine_id.clone());
+                let progress = json!({
+                    "ok": true,
+                    "partial": true,
+                    "completed_engines": completed_engines,
+                    "succeeded": succeeded,
+                    "failed": failed,
+                    "last_engine": engine_id,
+                    "results": results,
+                });
+                if let Err(e) =
+                    weissman_db::job_queue::save_running_progress(app.as_ref(), job.id, &progress)
+                        .await
+                {
+                    tracing::warn!(
+                        job_id = %job.id,
+                        engine = %engine_id,
+                        error = %e,
+                        "scan_all_engines progress persist failed"
+                    );
+                }
             }
 
             let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Scan-all-engines completed: {}/{} succeeded","status":"completed"}}"#, job.id, succeeded, ordered_engines.len()));
@@ -997,10 +1098,12 @@ async fn execute_job_unscoped(
 
             Ok(json!({
                 "ok": true,
+                "partial": false,
                 "client_id": client_id,
                 "engines_total": ordered_engines.len(),
                 "succeeded": succeeded,
                 "failed": failed,
+                "completed_engines": completed_engines,
                 "results": results,
             }))
         }
@@ -2307,6 +2410,34 @@ mod tests {
         assert_eq!(payload_client_id(&json!({})), None);
         assert_eq!(payload_client_id(&json!({ "client_id": null })), None);
         assert_eq!(payload_client_id(&json!({ "client_id": "abc" })), None);
+    }
+
+    #[test]
+    fn scan_all_engines_resume_skips_completed() {
+        let ordered = vec![
+            "webauthn_fido2_bypass".into(),
+            "websocket_attack".into(),
+            "graphql_attack".into(),
+        ];
+        let done = vec!["webauthn_fido2_bypass".into()];
+        assert_eq!(
+            remaining_scan_all_engines(&ordered, &done),
+            vec!["websocket_attack".to_string(), "graphql_attack".into()]
+        );
+        let progress = json!({
+            "completed_engines": ["webauthn_fido2_bypass", "websocket_attack"],
+            "succeeded": 2,
+            "results": [{"engine": "webauthn_fido2_bypass"}]
+        });
+        assert_eq!(
+            completed_engines_from_progress(&progress),
+            vec!["webauthn_fido2_bypass", "websocket_attack"]
+        );
+        assert_eq!(prior_scan_all_results(&progress).len(), 1);
+        assert_eq!(
+            remaining_scan_all_engines(&ordered, &completed_engines_from_progress(&progress)),
+            vec!["graphql_attack".to_string()]
+        );
     }
 
     fn anomaly(oob: Option<&str>, llm: Option<&str>) -> fuzz_core::ValidatedAnomaly {

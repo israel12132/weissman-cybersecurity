@@ -393,9 +393,7 @@ fn scan_http_hygiene(profile: &ActorProfile, probe: &HttpProbe, target: &str) ->
         ));
     }
 
-    if probe.final_url.starts_with("https://")
-        && (200..400).contains(&probe.status)
-        && !has_header(&probe.headers, "strict-transport-security")
+    if crate::live_truth::observe_hsts_probe(probe).emit_missing()
         && !has_header(&probe.headers, "content-security-policy")
     {
         findings.push(actor_finding(

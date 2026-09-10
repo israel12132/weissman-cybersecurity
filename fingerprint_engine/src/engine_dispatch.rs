@@ -49,9 +49,9 @@ pub struct EngineRunContext {
     pub oast_api_key: Option<String>,
 }
 
-/// Escalate a run context into the Ghost Network after a WAF/rate-limit block: enable identity
-/// morphing + human-cadence jitter and load the proxy swarm (`WEISSMAN_PROXY_SWARM`) if set.
-/// Called by the resilient retry loop when the previous attempt classified as `Waf`.
+/// Escalate a run context into the Ghost Network (identity morphing + jitter + optional
+/// `WEISSMAN_PROXY_SWARM`). Kept for operator-configured stealth. WAF/403 retries no longer
+/// call this — edge blocks fail-fast as an empty skip (see `engine_resilience`).
 pub fn apply_ghost_escalation(stealth: &mut Option<StealthConfig>) {
     let s = stealth.get_or_insert_with(StealthConfig::default);
     s.identity_morphing = true;
@@ -535,6 +535,10 @@ async fn dispatch_engine_match(
             crate::timing_engine::run_timing_attack_urls(&urls_for, stealth, &cfg, None).await
         }
         "http_feedback_fuzz" => {
+            if let Some(skip) = crate::live_truth::skip_if_edge_block("http_feedback_fuzz", target).await
+            {
+                return skip;
+            }
             let anomalies = if let Some(tid) = ctx.tenant_id {
                 crate::fuzzer::run_fuzzer_collect_tenant(
                     target,
@@ -644,7 +648,6 @@ async fn dispatch_engine_match(
         "mfa_bypass_engine" => crate::advanced_crypto_engines::run_mfa_bypass_engine_result(target).await,
         "credential_stuffing" => crate::advanced_crypto_engines::run_credential_stuffing_result(target).await,
         "kerberos_attack_suite" => crate::advanced_crypto_engines::run_kerberos_attack_suite_result(target).await,
-        "zero_trust_bypass" => crate::advanced_crypto_engines::run_zero_trust_bypass_result(target).await,
         "pki_hierarchy_attack" => crate::advanced_crypto_engines::run_pki_hierarchy_attack_result(target).await,
         "session_fixation_adv" => crate::advanced_crypto_engines::run_session_fixation_adv_result(target).await,
         "password_hash_crack" => crate::advanced_crypto_engines::run_password_hash_crack_result(target).await,
@@ -921,6 +924,32 @@ async fn dispatch_engine_match(
         "infostealer_emulation" => crate::initial_access_engines::run_infostealer_emulation_result(target, ctx).await,
         "printer_mfp_attack" => crate::initial_access_engines::run_printer_mfp_attack_result(target, ctx).await,
         "radius_nac_bypass" => crate::initial_access_engines::run_radius_nac_bypass_result(target, ctx).await,
+
+        // ── Dedicated web / ZTNA / SASE (no longer aliases) ───────────────────
+        "sqli_advanced" => crate::dedicated_web_ztna_engines::run_sqli_advanced_result(target).await,
+        "xss_advanced" => crate::dedicated_web_ztna_engines::run_xss_advanced_result(target).await,
+        "csrf_exploit" => crate::dedicated_web_ztna_engines::run_csrf_exploit_result(target).await,
+        "nosql_injection" => crate::dedicated_web_ztna_engines::run_nosql_injection_result(target).await,
+        "open_redirect" => crate::dedicated_web_ztna_engines::run_open_redirect_result(target).await,
+        "race_condition_web" => crate::dedicated_web_ztna_engines::run_race_condition_web_result(target).await,
+        "api_fuzzing" => crate::dedicated_web_ztna_engines::run_api_fuzzing_result(target).await,
+        "zero_trust_bypass" => crate::dedicated_web_ztna_engines::run_zero_trust_bypass_result(target).await,
+        "sase_security_bypass" => crate::dedicated_web_ztna_engines::run_sase_security_bypass_result(target).await,
+
+        // ── Supreme fusion + product layers ───────────────────────────────────
+        "control_plane_of_controls" => crate::supreme_layer_engines::run_control_plane_of_controls_result(target, ctx).await,
+        "ot_cloud_identity_killpath" => crate::supreme_layer_engines::run_ot_cloud_identity_killpath_result(target, ctx).await,
+        "bec_ato_chain" => crate::supreme_layer_engines::run_bec_ato_chain_result(target, ctx).await,
+        "ai_casb_saas" => crate::supreme_layer_engines::run_ai_casb_saas_result(target, ctx).await,
+        "dns_security_posture_fusion" => crate::supreme_layer_engines::run_dns_security_posture_fusion_result(target, ctx).await,
+        "toxic_combo_runtime_proof" => crate::supreme_layer_engines::run_toxic_combo_runtime_proof_result(target, ctx).await,
+        "itdr" => crate::supreme_layer_engines::run_itdr_result(target, ctx).await,
+        "casb_saas_posture" => crate::supreme_layer_engines::run_casb_saas_posture_result(target, ctx).await,
+        "dlp_content_scan" => crate::supreme_layer_engines::run_dlp_content_scan_result(target, ctx).await,
+        "cnapp_continuous" => crate::supreme_layer_engines::run_cnapp_continuous_result(target, ctx).await,
+        "ngfw_posture" => crate::supreme_layer_engines::run_ngfw_posture_result(target).await,
+        "malware_detonation" => crate::supreme_layer_engines::run_malware_detonation_result(target).await,
+        "weissman_vngfw" => crate::supreme_layer_engines::run_weissman_vngfw_result(target).await,
 
         _ => EngineResult::error(
             format!(

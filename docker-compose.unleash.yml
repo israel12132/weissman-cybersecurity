@@ -1,0 +1,30 @@
+# Live-only overlay: raise scan intake + worker parallelism on THIS host.
+# Does not enable vNGFW nft apply, does not disable auth.
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.unleash.yml up -d --no-build --force-recreate backend worker
+services:
+  backend:
+    environment:
+      WEISSMAN_FLEET_SHAPING: "0"
+      WEISSMAN_TENANT_SCAN_POSTS_PER_MINUTE: "240"
+      WEISSMAN_TENANT_SCAN_BURST: "240"
+      WEISSMAN_SCAN_QUOTA_ENABLED: "0"
+      WEISSMAN_BILLING_STRICT: "0"
+    deploy:
+      resources:
+        limits:
+          cpus: "8.0"
+          memory: 12G
+  worker:
+    environment:
+      WEISSMAN_FLEET_SHAPING: "0"
+      WEISSMAN_FLEET_BASE_RATE: "250"
+      WEISSMAN_FLEET_BURST: "500"
+      WEISSMAN_WORKER_LIGHT_CONCURRENCY: "24"
+      WEISSMAN_WORKER_HEAVY_CONCURRENCY: "8"
+      WEISSMAN_BILLING_STRICT: "0"
+    deploy:
+      resources:
+        limits:
+          cpus: "12.0"
+          memory: 20G

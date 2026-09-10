@@ -218,6 +218,23 @@ pub struct HttpProbe {
     pub final_url: String,
 }
 
+impl HttpProbe {
+    #[must_use]
+    pub fn headers_blob(&self) -> String {
+        self.headers
+            .iter()
+            .map(|(k, v)| format!("{k}: {v}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// Cloudflare / peer WAF challenge — not application evidence.
+    #[must_use]
+    pub fn is_waf_block(&self) -> bool {
+        crate::waf_signals::is_waf_block(self.status, &self.headers_blob(), &self.body)
+    }
+}
+
 /// GET with optional extra headers (for cache-oracle / rewrite probes).
 pub async fn http_get_with_headers(
     client: &Client,

@@ -636,8 +636,19 @@ async fn http_posture(client: &reqwest::Client, url: &str) -> Option<HttpPosture
 
     let mut missing: Vec<&'static str> = Vec::new();
     let present = |k: &str| headers.contains_key(k);
-    if url.starts_with("https://") && !present("strict-transport-security") {
-        missing.push("Strict-Transport-Security");
+    if url.starts_with("https://")
+        && (200..400).contains(&status)
+        && !present("strict-transport-security")
+    {
+        let hdr_blob = headers
+            .iter()
+            .map(|(k, v)| format!("{k}: {}", v.to_str().unwrap_or("")))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let body_l = "";
+        if crate::live_truth::observe_hsts(status, &hdr_blob, body_l, &final_url).emit_missing() {
+            missing.push("Strict-Transport-Security");
+        }
     }
     if !present("content-security-policy") {
         missing.push("Content-Security-Policy");
@@ -1862,9 +1873,19 @@ pub async fn run_asm_result_ctx(
                 ),
                 "Confirm every published record is intentional; remove stale entries.",
             ));
-            analyse_email_posture(r, &host, &prof.txt, &prof.mx, &mut findings).await;
+            let mail_host = {
+                let org = crate::live_truth::organizational_domain(&host);
+                if org.is_empty() {
+                    host.clone()
+                } else {
+                    org
+                }
+            };
+            let mail_prof = dns_profile(r, &mail_host).await;
+            analyse_email_posture(r, &mail_host, &mail_prof.txt, &mail_prof.mx, &mut findings)
+                .await;
             if do_dkim {
-                findings.extend(probe_dkim_selectors(r, &host).await);
+                findings.extend(probe_dkim_selectors(r, &mail_host).await);
             }
             if do_dns_hardening {
                 analyse_dns_hardening(r, &host, &mut findings).await;

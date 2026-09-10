@@ -110,18 +110,6 @@ const DEFAULT_DKIM_SELECTORS: &[&str] = &[
     "sf2",
 ];
 
-/// Two-level public suffixes we recognise so the organisational (registrable) domain is computed
-/// correctly for inputs like `mail.corp.co.uk`. Not the full PSL, but covers the common cases.
-const MULTI_PART_SUFFIXES: &[&str] = &[
-    "co.uk", "org.uk", "gov.uk", "ac.uk", "me.uk", "ltd.uk", "plc.uk", "net.uk", "sch.uk", "co.il",
-    "org.il", "ac.il", "gov.il", "net.il", "muni.il", "k12.il", "idf.il", "co.jp", "or.jp",
-    "ne.jp", "go.jp", "ac.jp", "co.kr", "or.kr", "go.kr", "com.au", "net.au", "org.au", "edu.au",
-    "gov.au", "com.br", "net.br", "org.br", "gov.br", "com.cn", "net.cn", "org.cn", "gov.cn",
-    "edu.cn", "com.tr", "gov.tr", "edu.tr", "co.za", "org.za", "gov.za", "co.nz", "net.nz",
-    "org.nz", "govt.nz", "com.mx", "com.ar", "com.sg", "com.hk", "com.tw", "com.ua", "com.pl",
-    "com.ph", "co.in", "net.in", "org.in", "gov.in",
-];
-
 // ─── Parameters (from job_params / GUI) ──────────────────────────────────────────
 
 struct PostureConfig {
@@ -457,19 +445,7 @@ fn is_ip_literal(host: &str) -> bool {
 }
 
 fn organizational_domain(host: &str) -> String {
-    let h = host.trim().trim_end_matches('.').to_ascii_lowercase();
-    if h.is_empty() || is_ip_literal(&h) {
-        return h;
-    }
-    let labels: Vec<&str> = h.split('.').collect();
-    if labels.len() <= 2 {
-        return h;
-    }
-    let last2 = format!("{}.{}", labels[labels.len() - 2], labels[labels.len() - 1]);
-    if MULTI_PART_SUFFIXES.iter().any(|s| *s == last2) && labels.len() >= 3 {
-        return format!("{}.{}", labels[labels.len() - 3], last2);
-    }
-    last2
+    crate::live_truth::organizational_domain(host)
 }
 
 // ─── Scoring accumulator ─────────────────────────────────────────────────────────
@@ -3098,11 +3074,9 @@ async fn dns_snapshot(resolver: &TokioResolver, domain: &str) -> DnsSnapshot {
 }
 
 async fn host_has_mail_surface(resolver: &TokioResolver, fqdn: &str) -> bool {
-    if !mx_records(resolver, fqdn).await.is_empty() {
-        return true;
-    }
-    answer_count(resolver, fqdn, RecordType::A).await > 0
-        || answer_count(resolver, fqdn, RecordType::AAAA).await > 0
+    // A/AAAA alone is a web site (e.g. mail.example.com → Google Sites). Mail
+    // impersonation only applies when the name actually receives mail.
+    !mx_records(resolver, fqdn).await.is_empty()
 }
 
 async fn analyze_spf_blast_radius(

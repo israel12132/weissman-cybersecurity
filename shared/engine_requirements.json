@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-08-18T03:34:38.169Z",
-  "production_engine_count": 563,
+  "generated_at": "2026-09-07T22:34:26.405Z",
+  "production_engine_count": 580,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 420
+      "engine_count": 423
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -245,7 +245,7 @@
         "ad_domain",
         "scope_domains"
       ],
-      "engine_count": 50
+      "engine_count": 51
     },
     "endpoint_agent": {
       "id": "endpoint_agent",
@@ -255,7 +255,7 @@
         "endpoint_agent",
         "scope_domains"
       ],
-      "engine_count": 48
+      "engine_count": 58
     },
     "iac_supply_chain": {
       "id": "iac_supply_chain",
@@ -275,7 +275,7 @@
         "industrial_ot",
         "scope_ips"
       ],
-      "engine_count": 42
+      "engine_count": 43
     },
     "ai_redteam": {
       "id": "ai_redteam",
@@ -286,7 +286,7 @@
         "tenant_ai_entitlement",
         "llm_secops_endpoints"
       ],
-      "engine_count": 48
+      "engine_count": 49
     },
     "oast_blind": {
       "id": "oast_blind",
@@ -2981,10 +2981,11 @@
     "heap_exploitation": {
       "id": "heap_exploitation",
       "group": "apt",
-      "kind": "real_probe",
+      "kind": "agent_required",
       "label": "Heap Exploitation",
       "requirements": [
         "contact_email",
+        "endpoint_agent",
         "scope_domains"
       ]
     },
@@ -3368,10 +3369,11 @@
     "com_hijacking": {
       "id": "com_hijacking",
       "group": "stealth",
-      "kind": "real_probe",
+      "kind": "agent_required",
       "label": "COM Object Hijacking",
       "requirements": [
         "contact_email",
+        "endpoint_agent",
         "scope_domains"
       ]
     },
@@ -3580,10 +3582,11 @@
     "jit_spray": {
       "id": "jit_spray",
       "group": "stealth",
-      "kind": "real_probe",
+      "kind": "agent_required",
       "label": "JIT Spray Attack Engine",
       "requirements": [
         "contact_email",
+        "endpoint_agent",
         "scope_domains"
       ]
     },
@@ -3753,10 +3756,11 @@
     "parent_pid_spoof": {
       "id": "parent_pid_spoof",
       "group": "stealth",
-      "kind": "real_probe",
+      "kind": "agent_required",
       "label": "Parent PID Spoofing Engine",
       "requirements": [
         "contact_email",
+        "endpoint_agent",
         "scope_domains"
       ]
     },
@@ -3829,10 +3833,11 @@
     "rop_chain_engine": {
       "id": "rop_chain_engine",
       "group": "stealth",
-      "kind": "real_probe",
+      "kind": "agent_required",
       "label": "ROP Chain Construction Engine",
       "requirements": [
         "contact_email",
+        "endpoint_agent",
         "scope_domains"
       ]
     },
@@ -3861,10 +3866,11 @@
     "sandbox_evasion": {
       "id": "sandbox_evasion",
       "group": "stealth",
-      "kind": "real_probe",
+      "kind": "agent_required",
       "label": "Sandbox Evasion Engine",
       "requirements": [
         "contact_email",
+        "endpoint_agent",
         "scope_domains"
       ]
     },
@@ -6318,6 +6324,189 @@
       "group": "network",
       "kind": "real_probe",
       "label": "RADIUS NAC Bypass",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "control_plane_of_controls": {
+      "id": "control_plane_of_controls",
+      "group": "defense",
+      "kind": "real_probe",
+      "label": "Control Plane of Controls",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ot_cloud_identity_killpath": {
+      "id": "ot_cloud_identity_killpath",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "OT × Cloud × Identity Kill Path",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "bec_ato_chain": {
+      "id": "bec_ato_chain",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "BEC → Account Takeover Chain",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ai_casb_saas": {
+      "id": "ai_casb_saas",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "AI CASB / SaaS Agents",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "dns_security_posture_fusion": {
+      "id": "dns_security_posture_fusion",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "DNS Security Posture Fusion",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "toxic_combo_runtime_proof": {
+      "id": "toxic_combo_runtime_proof",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Toxic Combo Runtime Proof",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "itdr": {
+      "id": "itdr",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "ITDR (Identity Threat Detection)",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "casb_saas_posture": {
+      "id": "casb_saas_posture",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "CASB SaaS Posture",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "dlp_content_scan": {
+      "id": "dlp_content_scan",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "DLP Content Scan",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cnapp_continuous": {
+      "id": "cnapp_continuous",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "CNAPP Continuous Graph",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "host_privilege_escalation": {
+      "id": "host_privilege_escalation",
+      "group": "apt",
+      "kind": "agent_required",
+      "label": "Host Privilege Escalation",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "host_isolation": {
+      "id": "host_isolation",
+      "group": "defense",
+      "kind": "agent_required",
+      "label": "Host Isolation / Quarantine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "ebpf_sensor": {
+      "id": "ebpf_sensor",
+      "group": "defense",
+      "kind": "agent_required",
+      "label": "eBPF Syscall Sensor",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "ioc_yara_hunt": {
+      "id": "ioc_yara_hunt",
+      "group": "apt",
+      "kind": "agent_required",
+      "label": "IOC / YARA Hunt",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "ngfw_posture": {
+      "id": "ngfw_posture",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "NGFW Policy Posture",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "malware_detonation": {
+      "id": "malware_detonation",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Malware Detonation Farm",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "weissman_vngfw": {
+      "id": "weissman_vngfw",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "Weissman Gate (vNGFW)",
       "requirements": [
         "contact_email",
         "scope_domains",
