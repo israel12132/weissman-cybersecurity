@@ -13,6 +13,7 @@
 - HTTPS `WEISSMAN_PUBLIC_BASE_URL` נגיש מ-endpoints
 - firewall — egress WSS
 - Windows/Linux ב-scope
+- **linux-gnu:** ספריות TSS בזמן ריצה (`libtss2`). ה-installer מתקין אותן ב-apt כשחסרות. בלי זה ה-dynamic linker לא יעלה את התהליך. linux-musl בלי קישור TSS.
 
 ---
 

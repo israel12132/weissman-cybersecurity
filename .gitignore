@@ -66,6 +66,9 @@ reports/
 # + migration ledger the coverage gate reads), not runtime output — keep it tracked.
 !scripts/data/
 !scripts/data/**
+# Packaged sovereign UEBA SHA-256 catalog (offline-first, air-gapped).
+!crates/weissman-db/data/
+!crates/weissman-db/data/**
 
 # Company legal details (copy from deploy/company.details.example.json)
 deploy/company.details.json

@@ -29,7 +29,7 @@ async fn api_metrics_dashboard(
             .into_response();
     }
 
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({
@@ -162,7 +162,7 @@ async fn live_security_score_from_vulns(
 }
 
 async fn api_dashboard_stats(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"total_vulnerabilities":0,"active_scans":0,"security_score":0,"assets_monitored":0,"threats_mitigated":0}))).into_response();
     };
     let vuln_count: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
@@ -243,7 +243,7 @@ async fn api_dashboard_exec_kpis(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({ "ok": false, "detail": "Database unavailable" })),
@@ -655,14 +655,15 @@ async fn api_findings_clusters(
     let only_kev = q.get("kev").map(|s| s == "1" || s == "true").unwrap_or(false);
     let client_filter: Option<i64> = q.get("client_id").and_then(|s| s.parse().ok());
 
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false, "detail": "DB unavailable"}))).into_response();
     };
 
     let rows = sqlx::query(
         r#"SELECT id, client_id, target, cwe, vuln_signature, title,
                   member_count, engines, sources, cves,
-                  max_severity, max_cvss, max_epss, kev_listed,
+                  max_severity, native_severity, watermark_severity, corroboration_boost, engine_planes,
+                  max_cvss, max_epss, kev_listed,
                   status, first_seen_at, last_seen_at
              FROM weissman_finding_clusters
             WHERE ($3::text  IS NULL OR lower(max_severity) = $3)
@@ -702,6 +703,10 @@ async fn api_findings_clusters(
 
     let clusters: Vec<Value> = rows.into_iter().map(|r| {
         let max_severity: String = r.try_get("max_severity").unwrap_or_else(|_| "info".to_string());
+        let native_severity: String = r.try_get("native_severity").unwrap_or_else(|_| max_severity.clone());
+        let watermark_severity: String = r.try_get("watermark_severity").unwrap_or_else(|_| max_severity.clone());
+        let corroboration_boost: String = r.try_get("corroboration_boost").unwrap_or_else(|_| "none".to_string());
+        let engine_planes: Vec<String> = r.try_get("engine_planes").unwrap_or_default();
         let max_cvss: Option<f32> = r.try_get("max_cvss").ok();
         let max_epss: Option<f32> = r.try_get("max_epss").ok();
         let engines: Vec<String> = r.try_get("engines").unwrap_or_default();
@@ -719,6 +724,11 @@ async fn api_findings_clusters(
             "sources":        sources,
             "cves":           cves,
             "max_severity":   max_severity,
+            "native_severity": native_severity,
+            "watermark_severity": watermark_severity,
+            "corroboration_boost": corroboration_boost,
+            "engine_planes":  engine_planes,
+            "corroborated":   corroboration_boost != "none",
             "max_cvss":       max_cvss,
             "max_epss":       max_epss,
             "kev_listed":     r.try_get::<bool, _>("kev_listed").unwrap_or(false),
@@ -785,6 +795,7 @@ async fn api_intel_suppression_delete(
     let _ = tx.commit().await;
     match res {
         Ok(r) if r.rows_affected() > 0 => {
+            crate::fp_feedback::invalidate_suppression_cache_tenant(auth.tenant_id);
             (StatusCode::OK, Json(json!({"ok": true, "deleted": id}))).into_response()
         }
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
@@ -856,8 +867,21 @@ async fn api_findings(
         Ok(v) => v,
         Err(r) => return r,
     };
+    let source_filter: Option<String> = q.get("source").and_then(|s| {
+        let t = s.trim();
+        if t.is_empty() || t.len() > 128 {
+            return None;
+        }
+        if t.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            Some(t.to_string())
+        } else {
+            None
+        }
+    });
 
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({"ok": false, "detail": "Database unavailable", "findings": []})),
@@ -866,8 +890,7 @@ async fn api_findings(
     };
 
     // Build SQL with deterministic bind ordering: $1 = limit, $2 = offset, $3 = severity (or
-    // NULL placeholder), $4 = client_id (or NULL placeholder). Postgres ignores params we don't
-    // reference, but using identical positions for the count query keeps things simple.
+    // NULL placeholder), $4 = client_id (or NULL placeholder), $5 = source (or NULL).
     let rows = sqlx::query(
         "SELECT id, finding_id, title, severity, source, status, client_id::text AS client_id, \
          COALESCE(description,'') AS description, discovered_at, \
@@ -881,6 +904,7 @@ async fn api_findings(
          FROM vulnerabilities \
          WHERE ($3::text[] IS NULL OR lower(severity) = ANY($3)) \
            AND ($4::bigint IS NULL OR client_id = $4) \
+           AND ($5::text IS NULL OR lower(source) = lower($5)) \
          ORDER BY \
             CASE WHEN kev_listed THEN 0 ELSE 1 END, \
             COALESCE(epss_score, 0) DESC, \
@@ -891,6 +915,7 @@ async fn api_findings(
     .bind(offset)
     .bind(severity_filter.as_ref().map(|v| v.as_slice()))
     .bind(client_filter)
+    .bind(source_filter.as_deref())
     .fetch_all(&mut *tx)
     .await;
     // A read failure (statement timeout, RLS/GUC problem, missing column after a partial
@@ -910,10 +935,12 @@ async fn api_findings(
     let total: i64 = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*)::bigint FROM vulnerabilities \
          WHERE ($1::text[] IS NULL OR lower(severity) = ANY($1)) \
-           AND ($2::bigint IS NULL OR client_id = $2)",
+           AND ($2::bigint IS NULL OR client_id = $2) \
+           AND ($3::text IS NULL OR lower(source) = lower($3))",
     )
     .bind(severity_filter.as_ref().map(|v| v.as_slice()))
     .bind(client_filter)
+    .bind(source_filter.as_deref())
     .fetch_one(&mut *tx)
     .await
     .unwrap_or(0);
@@ -1919,11 +1946,12 @@ async fn collect_engine_history_json(
     .map_err(|e| format!("direct jobs query: {}", e))?;
 
     for r in direct_rows {
-        let payload = r
+        let stored = r
             .try_get::<Option<serde_json::Value>, _>("payload")
             .ok()
             .flatten()
             .unwrap_or_else(|| json!({}));
+        let payload = crate::job_envelope::reveal_job_payload_for_tenant(&stored, tenant_id);
         let result_json = r
             .try_get::<Option<serde_json::Value>, _>("result_json")
             .ok()
@@ -2200,13 +2228,19 @@ async fn api_engine_export(
 
     if let Some(job_id_str) = q.job_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         if let Ok(job_uuid) = uuid::Uuid::parse_str(job_id_str) {
-            if let Ok(Some(status)) = db::job_queue::get_job_for_tenant(
+            if let Ok(Some(mut status)) = db::job_queue::get_job_for_tenant(
                 state.app_pool.as_ref(),
                 auth.tenant_id,
                 job_uuid,
             )
             .await
             {
+                status.payload = crate::scan_payload_redaction::redact_for_api(
+                    &crate::job_envelope::reveal_job_payload_for_tenant(
+                        &status.payload,
+                        auth.tenant_id,
+                    ),
+                );
                 if let Some(obj) = out.as_object_mut() {
                     obj.insert("selected_job".into(), json!(status));
                 }
@@ -2272,13 +2306,19 @@ async fn api_top_tier_engine_export(
 
     if let Some(job_id_str) = q.job_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         if let Ok(job_uuid) = uuid::Uuid::parse_str(job_id_str) {
-            if let Ok(Some(status)) = db::job_queue::get_job_for_tenant(
+            if let Ok(Some(mut status)) = db::job_queue::get_job_for_tenant(
                 state.app_pool.as_ref(),
                 auth.tenant_id,
                 job_uuid,
             )
             .await
             {
+                status.payload = crate::scan_payload_redaction::redact_for_api(
+                    &crate::job_envelope::reveal_job_payload_for_tenant(
+                        &status.payload,
+                        auth.tenant_id,
+                    ),
+                );
                 if let Some(obj) = out.as_object_mut() {
                     obj.insert("selected_job".into(), json!(status));
                 }

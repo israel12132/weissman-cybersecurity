@@ -145,12 +145,17 @@ services:
       # Read-only role for "Ask Weissman" (NL->SQL, /api/ask). SELECT-only, 15s statement
       # timeout, RLS-scoped (migration 20260608140300). Without it the endpoint returns 503.
       WEISSMAN_READ_ONLY_DATABASE_URL: postgresql://${DB_RO_USER:-weissman_ro}:${DB_RO_PASSWORD:-weissman_ro_dev}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_WORKER_DATABASE_URL: postgresql://${DB_WORKER_USER:-weissman_worker}:${DB_WORKER_PASSWORD:-weissman_worker_dev}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_ANALYTICS_DATABASE_URL: postgresql://${DB_ANALYTICS_USER:-weissman_analytics}:${DB_ANALYTICS_PASSWORD:-weissman_analytics_dev}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_MIGRATE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_MIGRATIONS_DIR: /srv/migrations
       REDIS_URL: redis://redis:6379/0
       WEISSMAN_PUBLIC_BASE_URL: ${WEISSMAN_PUBLIC_BASE_URL:-http://localhost}
       # Required secrets — set in `.env` (see .env.example). Compose refuses to start without them.
       WEISSMAN_JWT_SECRET: "${WEISSMAN_JWT_SECRET:?Set WEISSMAN_JWT_SECRET in .env (openssl rand -base64 48)}"
+      # RAG vector HMAC. Required 64 hex in production (security_startup.rs). Empty here so
+      # local compose still starts; production .env must set a vault-issued value.
+      WEISSMAN_RAG_PROVENANCE_SECRET: ${WEISSMAN_RAG_PROVENANCE_SECRET:-}
       # Optional: require X-Weissman-Destructive-Confirm header (exact match) for Auto-Heal, containment execute, deception cloud deploy
       WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ${WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET:-}
       # Zero-trust job bus HMAC signing (server signs, worker verifies — they MUST match).
@@ -217,11 +222,17 @@ services:
     environment:
       DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_WORKER_DATABASE_URL: postgresql://${DB_WORKER_USER:-weissman_worker}:${DB_WORKER_PASSWORD:-weissman_worker_dev}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_ANALYTICS_DATABASE_URL: postgresql://${DB_ANALYTICS_USER:-weissman_analytics}:${DB_ANALYTICS_PASSWORD:-weissman_analytics_dev}@postgres:5432/${POSTGRES_DB:-weissman}
       REDIS_URL: redis://redis:6379/0
       WEISSMAN_JWT_SECRET: "${WEISSMAN_JWT_SECRET:?Set WEISSMAN_JWT_SECRET in .env}"
+      WEISSMAN_RAG_PROVENANCE_SECRET: ${WEISSMAN_RAG_PROVENANCE_SECRET:-}
       # Must be byte-identical to the backend's value — the worker verifies job envelopes the server signed.
       WEISSMAN_JOB_ORCHESTRATOR_SECRET: ${WEISSMAN_JOB_ORCHESTRATOR_SECRET:-}
       WEISSMAN_BILLING_STRICT: ${WEISSMAN_BILLING_STRICT:-0}
+      # Lab default stays mixed so one worker still runs SOAR. Production:
+      # WEISSMAN_WORKER_POOL=client plus the `soar` profile below.
+      WEISSMAN_WORKER_POOL: ${WEISSMAN_WORKER_POOL:-mixed}
     depends_on:
       backend:
         condition: service_healthy
@@ -257,6 +268,56 @@ services:
           memory: 6G
         reservations:
           memory: 512M
+
+  # Dedicated SOAR / isolate_host worker. Start with:
+  #   docker compose --profile soar up -d
+  # and set the scan worker to WEISSMAN_WORKER_POOL=client so isolate never
+  # shares the scan-engine process or its secrets surface.
+  worker-soar:
+    profiles: ["soar"]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
+    stop_grace_period: 40s
+    build:
+      context: .
+      dockerfile: deploy/backend.Dockerfile
+    image: weissman-backend:stable
+    entrypoint: ["/usr/local/bin/weissman-worker"]
+    environment:
+      DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
+      REDIS_URL: redis://redis:6379/0
+      WEISSMAN_JWT_SECRET: "${WEISSMAN_JWT_SECRET:?Set WEISSMAN_JWT_SECRET in .env}"
+      WEISSMAN_JOB_ORCHESTRATOR_SECRET: ${WEISSMAN_JOB_ORCHESTRATOR_SECRET:-}
+      WEISSMAN_BILLING_STRICT: ${WEISSMAN_BILLING_STRICT:-0}
+      WEISSMAN_WORKER_POOL: soar
+      WEISSMAN_WORKER_LIVENESS_FILE: /tmp/weissman-worker-soar-alive
+    depends_on:
+      backend:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - test -n "$$(find /tmp/weissman-worker-soar-alive -mmin -2 2>/dev/null)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          memory: 256M
 
   gateway:
     # Least privilege. The stack previously ran every container with the full default

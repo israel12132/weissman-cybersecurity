@@ -49,6 +49,8 @@ rest (AES-256-GCM). **Production fails closed at startup if no key material is s
 
 > **Rotation:** set the new key, move the old value into `*_PREVIOUS`, restart. Old
 > ciphertext still decrypts via the previous key; MFA seeds re-encrypt opportunistically.
+> Boot loads keys into `zeroize::Zeroizing` heap containers, then overwrites and
+> unsets the env vars (`/proc/self/environ` plus leftover `String` copies).
 
 ### LLM / embeddings (used by Council RAG, NL-Query, Predictive)
 
@@ -72,11 +74,14 @@ rest (AES-256-GCM). **Production fails closed at startup if no key material is s
 
 ### Pool tuning
 
-| Var | Default |
-|-----|---------|
-| `WEISSMAN_APP_POOL_MAX` | 48 |
-| `WEISSMAN_APP_POOL_MIN` | 2 |
-| `WEISSMAN_SOVEREIGN_MPSC_CAPACITY` | unset → unbounded |
+| Var | Default | Effect |
+|-----|---------|--------|
+| `WEISSMAN_APP_POOL_MAX` | 48 | App SQLx pool size |
+| `WEISSMAN_APP_POOL_MIN` | 2 | App SQLx pool floor |
+| `WEISSMAN_SOVEREIGN_MPSC_CAPACITY` | unset → unbounded | In-process job channel bound |
+| `WEISSMAN_HNSW_MAINTENANCE_WORK_MEM` | `256MB` | Session `maintenance_work_mem` for HNSW `CREATE INDEX CONCURRENTLY` (allowlist: 64MB, 128MB, 256MB, 512MB, 1GB). `SET LOCAL` cannot wrap CONCURRENTLY. |
+| `WEISSMAN_LOGIN_PER_MINUTE` | 8 | Pre-auth login / MFA / refresh POSTs per IP |
+| `WEISSMAN_LOGIN_BURST` | 12 | Burst for the login governor |
 
 ### TLS policy
 
@@ -90,6 +95,12 @@ rest (AES-256-GCM). **Production fails closed at startup if no key material is s
 |-----|--------|
 | `WEISSMAN_TRUST_PROXY_HEADERS` | Enables use of `X-Forwarded-For` / `X-Real-IP` for audit + rate limit client identity |
 | `WEISSMAN_TRUST_PROXY_CIDRS` | Optional comma-separated trusted proxy CIDRs; when set, only peers in this list are allowed to supply forwarded client IP |
+| `WEISSMAN_PROXY_SIGNING_SECRET` | ≥32 chars. Short-lived `X-Weissman-Proxy-Hmac` (`v1={unix}.{nonce}.{hex}`) required before Axum will consume dual-control headers. Production also claims the nonce in Redis (`SET NX EX 60`). CIDR is never enough. |
+| `WEISSMAN_AGENT_STATE_DIR` | Reboot-stable directory for agent spool IKM (native TPM ESAPI when `/dev/tpmrm0` exists). Never `/tmp`. linux-gnu agent needs distro `libtss2` at process start (`libtss2-dev` to *build*). musl builds have no TSS link. |
+| `WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST` | Comma-separated SHA-256 hex of binaries allowed to enter `learned_set` during onboarding. Fleet majority never grants Learn. |
+| `WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST_FILE` | Offline/USB drop of the same hashes (one 64-hex digest per line). Merged into the local `ueba_sovereign_binary_allowlist` table only when signed with `WEISSMAN_UEBA_SOVEREIGN_SIGNING_KEY`. Air-gapped; no outbound HTTP. |
+| `WEISSMAN_UEBA_SOVEREIGN_SIGNING_KEY` | 64-hex Ed25519 seed matching the public key compiled into `fingerprint_engine`. Required to insert signed catalog rows. Unsigned DB hashes never grant Learn. |
+| `WEISSMAN_NL_AUDIT_MAX_HOLE_DISTANCE` | Max BIGSERIAL distance a late Ask-Weissman audit id may sit behind the tip before the worker freezes the current `chain_epoch` and starts a parallel chain (default 100). At most 3 parallel epochs; a fourth forced fork fail-closes Ask and pages the SOC. |
 
 ---
 
@@ -117,8 +128,10 @@ The pre-runner in `crates/weissman-db/src/no_tx_migrations.rs`:
 1. Detects the header.
 2. Computes the file's SHA-384 (SQLx-compatible).
 3. Looks up `_sqlx_migrations` by version.
-4. If absent: executes every statement on a fresh connection **outside** any
-   transaction, then INSERTs a row in `_sqlx_migrations` with the SHA-384.
+4. If absent: executes every statement on a **pinned** connection **outside** any
+   transaction (HNSW builds also `SET maintenance_work_mem` on that session and
+   `DROP INDEX CONCURRENTLY` any INVALID leftovers), then INSERTs a row in
+   `_sqlx_migrations` with the SHA-384.
 5. If present with matching checksum: skip.
 6. If present with mismatching checksum: **refuse to boot** with
    `NoTxMigrateError::ChecksumMismatch` — operator must restore the file or

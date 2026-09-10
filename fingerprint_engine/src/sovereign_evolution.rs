@@ -439,6 +439,7 @@ pub async fn maybe_enqueue_credential_hunt(
         "engine": "leak_hunter",
         "target": t,
     });
+    let payload = crate::job_envelope::seal_job_payload_sqlx(payload, tenant_id)?;
     let id =
         weissman_db::job_queue::enqueue(pool, tenant_id, "command_center_engine", payload, None)
             .await?;
@@ -464,6 +465,7 @@ pub async fn maybe_enqueue_learning_on_failure(
         "target_seed": seed,
         "failure_context": failure_context,
     });
+    let payload = crate::job_envelope::seal_job_payload_sqlx(payload, tenant_id)?;
     let id = weissman_db::job_queue::enqueue(
         pool,
         tenant_id,

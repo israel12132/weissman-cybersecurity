@@ -145,6 +145,9 @@ pub fn required_min_role(method: &Method, path: &str) -> Option<&'static str> {
     if path.starts_with("/api/ceo") {
         return Some(roles::CEO);
     }
+    if path.starts_with("/api/sovereign/operator") {
+        return Some(roles::CEO);
+    }
     if path.starts_with("/api/admin") {
         return Some(roles::ADMIN);
     }
@@ -202,6 +205,19 @@ pub async fn mutation_rbac_middleware(req: Request, next: Next) -> Response {
         return next.run(req).await;
     }
     let path = req.uri().path().to_string();
+    // Owner plane is hidden, not forbidden: staff must not learn that
+    // `/api/sovereign/operator/*` exists (404, same as the GET middleware).
+    if path == "/api/sovereign/operator" || path.starts_with("/api/sovereign/operator/") {
+        let owner = auth.is_superadmin || auth.role.eq_ignore_ascii_case(roles::CEO);
+        if owner {
+            return next.run(req).await;
+        }
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "ok": false, "detail": "not found" })),
+        )
+            .into_response();
+    }
     if let Some(min_role) = required_min_role(&method, &path) {
         if let Err(resp) = require_role(&auth, min_role) {
             return resp;
@@ -286,6 +302,14 @@ mod tests {
         // Privileged prefixes.
         assert_eq!(
             required_min_role(&Method::POST, "/api/ceo/x"),
+            Some(roles::CEO)
+        );
+        assert_eq!(
+            required_min_role(&Method::POST, "/api/sovereign/operator/chat"),
+            Some(roles::CEO)
+        );
+        assert_eq!(
+            required_min_role(&Method::POST, "/api/sovereign/operator/stream-ticket"),
             Some(roles::CEO)
         );
         assert_eq!(

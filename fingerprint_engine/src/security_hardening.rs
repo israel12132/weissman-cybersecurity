@@ -6,7 +6,7 @@ use axum::response::{IntoResponse, Response};
 use serde_json::Value;
 use sqlx::PgPool;
 use std::collections::HashSet;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use subtle::ConstantTimeEq;
 use tokio::net::lookup_host;
 use url::Url;
@@ -23,36 +23,79 @@ const SCAN_SCOPE_BLOCKLIST: &[&str] = &[
     "100.100.100.200",
 ];
 
-/// When `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET` is non-empty, the header must match exactly (constant-time on equal lengths).
+/// When `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET` is non-empty, the header **or** JSON
+/// body token (`destructive_confirm`) must match exactly (constant-time on equal
+/// lengths). When both are present they must match each other. The public nginx
+/// gateway blanks inbound `X-Weissman-Destructive-Confirm`, so Command Center
+/// sends the token in the JSON body.
+///
 /// In production, an empty secret denies all destructive actions (fail-closed).
 pub fn destructive_action_authorized(headers: &HeaderMap) -> bool {
+    destructive_action_authorized_with(headers, None)
+}
+
+pub fn destructive_action_authorized_with(headers: &HeaderMap, body_token: Option<&str>) -> bool {
     let secret = std::env::var("WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET").unwrap_or_default();
     if secret.is_empty() {
         return !weissman_core::tls_policy::is_production_environment();
     }
-    let Some(hv) = headers
-        .get("x-weissman-destructive-confirm")
-        .and_then(|v| v.to_str().ok())
-    else {
-        return false;
-    };
-    header_secret_matches(hv, &secret)
+    match resolve_header_or_body_token(headers, "x-weissman-destructive-confirm", body_token) {
+        Some(provided) => header_secret_matches(&provided, &secret),
+        None => false,
+    }
 }
 
-/// Dual approval: second operator must send `X-Weissman-Dual-Approve` matching
-/// `WEISSMAN_DUAL_APPROVAL_SECRET` (independent from primary destructive confirm).
+/// Dual approval: second operator must send `X-Weissman-Dual-Approve` **or**
+/// JSON `dual_approve` matching `WEISSMAN_DUAL_APPROVAL_SECRET`.
 pub fn dual_approval_authorized(headers: &HeaderMap) -> bool {
+    dual_approval_authorized_with(headers, None)
+}
+
+pub fn dual_approval_authorized_with(headers: &HeaderMap, body_token: Option<&str>) -> bool {
     let secret = std::env::var("WEISSMAN_DUAL_APPROVAL_SECRET").unwrap_or_default();
     if secret.is_empty() {
         return !weissman_core::tls_policy::is_production_environment();
     }
-    let Some(hv) = headers
-        .get("x-weissman-dual-approve")
+    match resolve_header_or_body_token(headers, "x-weissman-dual-approve", body_token) {
+        Some(provided) => header_secret_matches(&provided, &secret),
+        None => false,
+    }
+}
+
+/// Non-empty header/body tokens. If both are present they must be equal
+/// (constant-time); a mismatch is treated as absent so the caller fails closed.
+fn resolve_header_or_body_token(
+    headers: &HeaderMap,
+    header_name: &str,
+    body_token: Option<&str>,
+) -> Option<String> {
+    let header = headers
+        .get(header_name)
         .and_then(|v| v.to_str().ok())
-    else {
-        return false;
-    };
-    header_secret_matches(hv, &secret)
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let body = body_token.map(str::trim).filter(|s| !s.is_empty());
+    match (header, body) {
+        (Some(h), Some(b)) => {
+            if header_secret_matches(h, b) {
+                Some(h.to_string())
+            } else {
+                None
+            }
+        }
+        (Some(h), None) => Some(h.to_string()),
+        (None, Some(b)) => Some(b.to_string()),
+        (None, None) => None,
+    }
+}
+
+pub fn nonempty_token(s: &str) -> Option<&str> {
+    let t = s.trim();
+    if t.is_empty() {
+        None
+    } else {
+        Some(t)
+    }
 }
 
 fn header_secret_matches(provided: &str, expected: &str) -> bool {
@@ -64,22 +107,31 @@ fn header_secret_matches(provided: &str, expected: &str) -> bool {
     a.ct_eq(b).into()
 }
 
-/// Destructive SOAR / containment paths: admin role + primary + dual approval headers.
+/// Destructive SOAR / containment paths: admin role + primary + dual approval.
 pub fn destructive_admin_dual_authorized(
     headers: &HeaderMap,
     auth: &crate::auth_jwt::AuthContext,
 ) -> Result<(), Response> {
+    destructive_admin_dual_authorized_with(headers, auth, None, None)
+}
+
+pub fn destructive_admin_dual_authorized_with(
+    headers: &HeaderMap,
+    auth: &crate::auth_jwt::AuthContext,
+    body_confirm: Option<&str>,
+    body_dual: Option<&str>,
+) -> Result<(), Response> {
     if let Err(r) = crate::rbac::require_admin(auth) {
         return Err(r);
     }
-    if !destructive_action_authorized(headers) {
+    if !destructive_action_authorized_with(headers, body_confirm) {
         return Err(destructive_denied_response(
-            "Missing or invalid X-Weissman-Destructive-Confirm header",
+            "Missing or invalid destructive confirm token (header or JSON destructive_confirm)",
         ));
     }
-    if !dual_approval_authorized(headers) {
+    if !dual_approval_authorized_with(headers, body_dual) {
         return Err(destructive_denied_response(
-            "Missing or invalid X-Weissman-Dual-Approve header (dual approval required)",
+            "Missing or invalid dual-approve token (header or JSON dual_approve)",
         ));
     }
     Ok(())
@@ -217,6 +269,65 @@ pub fn validate_poe_target_url(raw: &str) -> Result<(), &'static str> {
     Ok(())
 }
 
+/// One-shot public DNS pin for outbound HTTP. Resolves once, rejects RFC1918/loopback/link-local/
+/// CGNAT/metadata, and returns socket addrs the HTTP client must use (no second lookup).
+#[derive(Debug, Clone)]
+pub struct PinnedHttpTarget {
+    pub host: String,
+    pub port: u16,
+    pub addrs: Vec<SocketAddr>,
+}
+
+pub async fn resolve_and_pin_public_http(raw: &str) -> Result<PinnedHttpTarget, String> {
+    validate_poe_target_url(raw).map_err(ToString::to_string)?;
+    let parsed = Url::parse(raw.trim()).map_err(|e| e.to_string())?;
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "missing host".to_string())?
+        .trim_end_matches('.')
+        .to_ascii_lowercase();
+    let port = parsed
+        .port_or_known_default()
+        .unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
+    let mut addrs: Vec<SocketAddr> = Vec::new();
+    let mut seen = HashSet::new();
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        if is_private_or_reserved_ip(&ip) {
+            return Err(format!("blocked private/reserved pin target {ip}"));
+        }
+        addrs.push(SocketAddr::new(ip, port));
+    } else {
+        let resolved = lookup_host((host.as_str(), port))
+            .await
+            .map_err(|e| format!("dns pin resolve failed: {e}"))?;
+        for sa in resolved {
+            let ip = sa.ip();
+            if is_private_or_reserved_ip(&ip) {
+                return Err(format!(
+                    "dns pin rejected: {host} resolved to blocked address {ip}"
+                ));
+            }
+            if seen.insert(ip) {
+                addrs.push(SocketAddr::new(ip, port));
+            }
+        }
+    }
+    if addrs.is_empty() {
+        return Err(format!("dns pin produced no public addresses for {host}"));
+    }
+    Ok(PinnedHttpTarget { host, port, addrs })
+}
+
+impl PinnedHttpTarget {
+    /// `curl --resolve host:port:ip` pins (one per resolved public address).
+    pub fn curl_resolve_args(&self) -> Vec<String> {
+        self.addrs
+            .iter()
+            .map(|sa| format!("{}:{}:{}", self.host, self.port, sa.ip()))
+            .collect()
+    }
+}
+
 fn allow_private_scan_targets() -> bool {
     std::env::var("WEISSMAN_ALLOW_PRIVATE_SCAN_TARGETS")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
@@ -250,13 +361,26 @@ fn is_private_or_reserved_ip(ip: &IpAddr) -> bool {
                 || (o[0] == 192 && o[1] == 168)
                 || (o[0] == 100 && (64..=127).contains(&o[1]))
                 || (o[0] == 169 && o[1] == 254)
+                || o[0] >= 224
                 || *v4 == Ipv4Addr::new(100, 100, 100, 200)
         }
         IpAddr::V6(v6) => {
+            if let Some(v4) = v6.to_ipv4_mapped() {
+                return is_private_or_reserved_ip(&IpAddr::V4(v4));
+            }
+            // Deprecated IPv4-compatible ::a.b.c.d (not loopback/unspecified).
+            if !v6.is_loopback() && !v6.is_unspecified() {
+                if let Some(v4) = v6.to_ipv4() {
+                    return is_private_or_reserved_ip(&IpAddr::V4(v4));
+                }
+            }
+            let seg0 = v6.segments()[0];
             v6.is_loopback()
                 || v6.is_unspecified()
+                || v6.is_multicast()
                 || v6.is_unique_local()
                 || v6.is_unicast_link_local()
+                || (seg0 & 0xffc0) == 0xfec0
         }
     }
 }
@@ -643,6 +767,99 @@ mod tests {
     }
 
     #[test]
+    fn mapped_ipv6_loopback_is_private() {
+        let ip: IpAddr = "::ffff:127.0.0.1".parse().expect("mapped");
+        assert!(is_private_or_reserved_ip(&ip));
+    }
+
+    #[tokio::test]
+    async fn pin_rejects_loopback_literal() {
+        let err = resolve_and_pin_public_http("http://127.0.0.1/")
+            .await
+            .expect_err("loopback");
+        assert!(
+            err.contains("loopback") || err.contains("private") || err.contains("blocked"),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn pin_rejects_rfc1918_literal() {
+        let err = resolve_and_pin_public_http("http://192.168.1.1/")
+            .await
+            .expect_err("rfc1918");
+        assert!(
+            err.contains("private") || err.contains("blocked") || err.contains("reserved"),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn pin_allows_public_example_host() {
+        let pin = resolve_and_pin_public_http("https://example.com/")
+            .await
+            .expect("example.com must resolve to a public address");
+        assert_eq!(pin.host, "example.com");
+        assert_eq!(pin.port, 443);
+        assert!(!pin.addrs.is_empty());
+        assert!(!pin.curl_resolve_args().is_empty());
+    }
+
+    #[tokio::test]
+    async fn pin_rejects_ipv6_mapped_link_local_and_ula() {
+        for url in [
+            "http://[::ffff:127.0.0.1]/",
+            "http://[::ffff:10.1.2.3]/",
+            "http://[::ffff:192.168.0.5]/",
+            "http://[::1]/",
+            "http://[fe80::1]/",
+            "http://[fc00::1]/",
+            "http://[fd12:3456:789a::1]/",
+        ] {
+            let err = match resolve_and_pin_public_http(url).await {
+                Err(e) => e,
+                Ok(_) => panic!("expected block for {url}"),
+            };
+            assert!(
+                err.contains("private")
+                    || err.contains("blocked")
+                    || err.contains("loopback")
+                    || err.contains("reserved")
+                    || err.contains("metadata"),
+                "{url} → {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn unique_local_link_local_mapped_and_multicast_are_private() {
+        assert!(is_private_or_reserved_ip(
+            &"fc00::1".parse::<IpAddr>().expect("ula")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"fd12:3456:789a::1".parse::<IpAddr>().expect("ula-fd")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"fe80::1".parse::<IpAddr>().expect("ll")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"::ffff:127.0.0.1".parse::<IpAddr>().expect("mapped-lb")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"::ffff:10.0.0.1".parse::<IpAddr>().expect("mapped-rfc1918")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"ff02::1".parse::<IpAddr>().expect("mcast")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"224.0.0.1".parse::<IpAddr>().expect("v4mcast")
+        ));
+        assert!(!is_private_or_reserved_ip(
+            &"::ffff:8.8.8.8".parse::<IpAddr>().expect("mapped-public")
+        ));
+    }
+
+    #[test]
     fn scope_normalize_domain() {
         assert_eq!(
             normalize_scope_domain("*.Example.com"),
@@ -761,5 +978,62 @@ mod tests {
         // Unparseable entries are unsafe.
         let junk = vec!["not-an-ip".to_string()];
         assert!(!all_ips_public(junk.iter()));
+    }
+
+    #[test]
+    fn header_and_body_tokens_must_match_when_both_present() {
+        let mut h = HeaderMap::new();
+        h.insert(
+            "x-weissman-destructive-confirm",
+            "alpha".parse().expect("header"),
+        );
+        assert!(
+            resolve_header_or_body_token(&h, "x-weissman-destructive-confirm", Some("beta"))
+                .is_none()
+        );
+        assert_eq!(
+            resolve_header_or_body_token(&h, "x-weissman-destructive-confirm", Some("alpha"))
+                .as_deref(),
+            Some("alpha")
+        );
+        assert_eq!(
+            resolve_header_or_body_token(
+                &HeaderMap::new(),
+                "x-weissman-destructive-confirm",
+                Some("gamma")
+            )
+            .as_deref(),
+            Some("gamma")
+        );
+        assert!(resolve_header_or_body_token(
+            &HeaderMap::new(),
+            "x-weissman-destructive-confirm",
+            None
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn nginx_gateway_blanks_dual_control_headers() {
+        let conf = include_str!("../../deploy/nginx-gateway.conf");
+        let inc = include_str!("../../deploy/nginx-strip-internal-headers.inc");
+        assert!(inc.contains("proxy_set_header X-Weissman-Destructive-Confirm \"\""));
+        assert!(inc.contains("proxy_set_header X-Weissman-Dual-Approve \"\""));
+        assert!(inc.contains("proxy_set_header X-Weissman-Proxy-Hmac \"\""));
+        assert!(
+            !inc.contains("proxy_set_header X-Weissman-Signature"),
+            "must not blank HMAC webhook signatures"
+        );
+        assert!(conf.contains("strip-internal-headers.inc"));
+        let n = conf.matches("strip-internal-headers.inc").count();
+        assert!(
+            n >= 5,
+            "strip include must appear on public proxy locations, got {n}"
+        );
+        let serve = include_str!("http/serve.rs");
+        assert!(
+            serve.contains("privilege_header_proxy_middleware"),
+            "Axum must reject privilege headers from non-proxy TCP peers"
+        );
     }
 }

@@ -259,6 +259,7 @@ WEISSMAN_MIGRATE_URL=postgres://postgres:postgres@127.0.0.1:${PG_PORT}/weissman
 REDIS_URL=redis://127.0.0.1:${REDIS_PORT}/0
 WEISSMAN_JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')
 WEISSMAN_JOB_ORCHESTRATOR_SECRET=$(openssl rand -base64 48 | tr -d '\n')
+WEISSMAN_RAG_PROVENANCE_SECRET=$(openssl rand -hex 32)
 WEISSMAN_ADMIN_EMAIL=${WEISSMAN_ADMIN_EMAIL:-admin@localhost}
 WEISSMAN_ADMIN_PASSWORD=${WEISSMAN_ADMIN_PASSWORD:-weissman-local-admin}
 WEISSMAN_PUBLIC_BASE_URL=http://127.0.0.1:8000
@@ -272,6 +273,8 @@ EOF
     export DATABASE_URL="postgres://postgres:postgres@127.0.0.1:${PG_PORT}/weissman"
   fi
   export WEISSMAN_AUTH_DATABASE_URL="${WEISSMAN_AUTH_DATABASE_URL:-$DATABASE_URL}"
+  export WEISSMAN_WORKER_DATABASE_URL="${WEISSMAN_WORKER_DATABASE_URL:-$DATABASE_URL}"
+  export WEISSMAN_ANALYTICS_DATABASE_URL="${WEISSMAN_ANALYTICS_DATABASE_URL:-$DATABASE_URL}"
   export WEISSMAN_MIGRATE_URL="${WEISSMAN_MIGRATE_URL:-$DATABASE_URL}"
   export REDIS_URL="${REDIS_URL:-redis://127.0.0.1:${REDIS_PORT}/0}"
   export PORT="${PORT:-8000}"
@@ -279,6 +282,12 @@ EOF
   export WEISSMAN_ENV="${WEISSMAN_ENV:-development}"
   export WEISSMAN_COOKIE_SECURE="${WEISSMAN_COOKIE_SECURE:-0}"
   export WEISSMAN_BILLING_STRICT="${WEISSMAN_BILLING_STRICT:-0}"
+  # Release binaries fail-closed on HMAC. Debug `cargo build` may fall back; still
+  # mint a dedicated 64-hex so a later --release local binary does not JWT-fallback.
+  if [[ -z "${WEISSMAN_RAG_PROVENANCE_SECRET:-}" || ! "${WEISSMAN_RAG_PROVENANCE_SECRET}" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    WEISSMAN_RAG_PROVENANCE_SECRET="$(openssl rand -hex 32)"
+    export WEISSMAN_RAG_PROVENANCE_SECRET
+  fi
 }
 
 # ── local Docker datastores ──────────────────────────────────────────────────

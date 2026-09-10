@@ -182,6 +182,55 @@ pub async fn sync_role_passwords_from_env_on_boot() -> Result<(), sqlx::Error> {
         }
     }
 
+    let is_production = std::env::var("WEISSMAN_ENV")
+        .map(|v| v.trim().eq_ignore_ascii_case("production"))
+        .unwrap_or(false);
+
+    for (var, default_role) in [
+        ("WEISSMAN_WORKER_DATABASE_URL", "weissman_worker"),
+        ("WEISSMAN_ANALYTICS_DATABASE_URL", "weissman_analytics"),
+    ] {
+        let url = std::env::var(var)
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        match url {
+            Some(url) => {
+                if let Some((user, pw)) = parse_pg_user_password(&url) {
+                    alter_role_password(&pool, &user, &pw).await?;
+                }
+                let role = parse_pg_user(&url).unwrap_or_else(|| default_role.to_string());
+                if role.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                    if let Err(e) = sqlx::query(&format!("ALTER ROLE {role} LOGIN"))
+                        .execute(&pool)
+                        .await
+                    {
+                        tracing::warn!(
+                            target: "auth_rotation",
+                            role = %role,
+                            error = %e,
+                            "could not restore LOGIN on dedicated role"
+                        );
+                    }
+                }
+            }
+            None if is_production => {
+                if let Err(e) = sqlx::query(&format!("ALTER ROLE {default_role} NOLOGIN"))
+                    .execute(&pool)
+                    .await
+                {
+                    tracing::warn!(
+                        target: "auth_rotation",
+                        role = default_role,
+                        error = %e,
+                        "could not disable login on unused dedicated role"
+                    );
+                }
+            }
+            None => {}
+        }
+    }
+
     Ok(())
 }
 

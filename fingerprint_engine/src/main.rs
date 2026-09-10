@@ -314,10 +314,7 @@ fn main() {
 
     if args.first().map(std::string::String::as_str) == Some("subdomains") {
         let domain = args.get(1).map_or("", String::as_str).to_string();
-        let mut wordlist: Vec<String> = fingerprint_engine::DEFAULT_SUBDOMAINS
-            .iter()
-            .map(|s| (*s).to_string())
-            .collect();
+        let mut wordlist: Vec<String> = fingerprint_engine::default_subdomain_wordlist();
         let mut i = 2;
         while i < args.len() {
             if args.get(i).map(std::string::String::as_str) == Some("--wordlist") && i + 1 < args.len() {

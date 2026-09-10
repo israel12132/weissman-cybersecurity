@@ -25,6 +25,8 @@ jobs:
       WEISSMAN_METRICS_TOKEN: nightly-e2e-metrics-token-min-32-chars-0123456789
       WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: nightly-e2e-destructive-confirm-min-32-chars-0123456789
       WEISSMAN_VAULT_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      # Dedicated RAG HMAC (64 hex). Production refuses JWT/council fallback.
+      WEISSMAN_RAG_PROVENANCE_SECRET: cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe
       # Cap DB pools so weissman-server + weissman-worker together stay well under
       # postgres max_connections (default 100). At defaults each process opens
       # ~68 connections (app 48 + auth 12 + intel 8); two processes exceeded 100,
@@ -47,6 +49,9 @@ jobs:
       # ephemeral-DB fsync tuning: CI infra config, not a change to the gate).
       WEISSMAN_RATE_LIMIT_PER_SEC: "500"
       WEISSMAN_RATE_LIMIT_BURST: "2000"
+      WEISSMAN_ALLOW_SUPERUSER_DSN: "1"
+      WEISSMAN_WORKER_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+      WEISSMAN_ANALYTICS_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -147,6 +152,12 @@ jobs:
           # findings-E2E's explicit per-engine scans (they timed out). The E2E
           # drives scans itself via /api/command-center/scan.
           WEISSMAN_SCANNING_ENABLED: "0"
+          WEISSMAN_RATE_LIMIT_PER_SEC: "200"
+          WEISSMAN_RATE_LIMIT_BURST: "400"
+          WEISSMAN_LOGIN_PER_MINUTE: "60"
+          WEISSMAN_LOGIN_BURST: "80"
+          WEISSMAN_TENANT_SCAN_POSTS_PER_MINUTE: "120"
+          WEISSMAN_TENANT_SCAN_BURST: "40"
         run: ./target/debug/weissman-server > /tmp/weissman-server.log 2>&1 &
 
       - name: Start weissman-worker

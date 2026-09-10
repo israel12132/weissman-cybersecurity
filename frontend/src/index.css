@@ -1,6 +1,7 @@
 /* Fonts are self-hosted — see public/fonts/fonts.css (loaded from index.html).
    No third-party font requests (works under the strict CSP, offline, private). */
 @import './styles/tokens.css';
+@import './styles/cyber-live-backdrop.css';
 
 @tailwind base;
 @tailwind components;

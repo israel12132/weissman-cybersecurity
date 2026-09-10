@@ -15,11 +15,14 @@
 //!   * `pinned_host` — a dedicated reqwest client (capped time/redirects/body, proxy disabled).
 //!     Always available; used as the portable fallback.
 //!
-//! Safety: the target is re-validated through [`crate::security_hardening::validate_poe_target_url`]
-//! (SSRF / scheme / cloud-metadata guard) before any request leaves the process. There is **no
-//! fabricated success** — when neither executor can run, or no deterministic signal is observed,
-//! the verdict is `verified = false`.
+//! Safety: the target is resolved **once**, every address is rejected if it is private/loopback/
+//! reserved, and the HTTP client is bound to those sockets via hostname `resolve` (TLS SNI and
+//! certificate verification stay on the original host). Redirects are disabled so a 30x cannot
+//! rebind. Docker curl uses `--resolve` the same way. There is **no fabricated success** — when
+//! neither executor can run, or no deterministic signal is observed, the verdict is
+//! `verified = false`.
 
+use crate::security_hardening::PinnedHttpTarget;
 use sha2::{Digest, Sha256};
 use std::process::Stdio;
 use std::time::Duration;
@@ -222,11 +225,12 @@ pub async fn verify_poc(
     oast_client: &reqwest::Client,
 ) -> PocVerdict {
     let scoped = ensure_scheme(target);
-    // Defense-in-depth scope/SSRF guard — refuse to fire at metadata/loopback/non-http targets even
-    // though upstream scan-scope validation already ran.
-    if let Err(e) = crate::security_hardening::validate_poe_target_url(&scoped) {
-        return PocVerdict::blocked(e);
-    }
+    // One DNS lookup, then pin those public sockets for the HTTP client. A second lookup at
+    // connect time is how DNS rebinding bypasses an SSRF check.
+    let pin = match crate::security_hardening::resolve_and_pin_public_http(&scoped).await {
+        Ok(p) => p,
+        Err(e) => return PocVerdict::blocked(&e),
+    };
 
     // OAST correlation is independent of the HTTP executor: the callback (if any) already happened
     // when the engine fired the payload; here we confirm it was observed by the collaborator.
@@ -238,7 +242,7 @@ pub async fn verify_poc(
     };
 
     let (executor, executed, status, transcript, exec_err) =
-        run_in_executor(&scoped, method, poc_payload).await;
+        run_in_executor(&scoped, method, poc_payload, &pin).await;
 
     let marker_matched = !expected_marker.is_empty() && transcript.contains(expected_marker);
     let (verified, confidence, mut signal) = decide_signal(oast_correlated, marker_matched, status);
@@ -266,13 +270,14 @@ async fn run_in_executor(
     target: &str,
     method: &str,
     poc: &str,
+    pin: &PinnedHttpTarget,
 ) -> (String, bool, u16, String, Option<String>) {
     if let Some(image) = docker_image() {
         if docker_available().await {
-            return run_in_docker(&image, target, method, poc).await;
+            return run_in_docker(&image, target, method, poc, pin).await;
         }
     }
-    run_pinned_host(target, method, poc).await
+    run_pinned_host(target, method, poc, pin).await
 }
 
 async fn docker_available() -> bool {
@@ -295,6 +300,7 @@ async fn run_in_docker(
     target: &str,
     method: &str,
     poc: &str,
+    pin: &PinnedHttpTarget,
 ) -> (String, bool, u16, String, Option<String>) {
     let executor = format!("docker:{image}");
     let (m, url, body) = build_http_request(target, method, poc);
@@ -320,12 +326,17 @@ async fn run_in_docker(
         .arg("-sS")
         .arg("-k")
         .arg("-i")
+        .arg("--max-redirs")
+        .arg("0")
         .arg("-m")
         .arg(SANDBOX_TIMEOUT_SECS.to_string())
         .arg("-w")
         .arg("\nWEISSMAN_HTTP_STATUS:%{http_code}\n")
         .arg("-X")
         .arg(&method_up);
+    for pin_arg in pin.curl_resolve_args() {
+        cmd.arg("--resolve").arg(pin_arg);
+    }
     if let Some(b) = &body {
         cmd.arg("-d").arg(b);
     }
@@ -381,6 +392,7 @@ async fn run_pinned_host(
     target: &str,
     method: &str,
     poc: &str,
+    pin: &PinnedHttpTarget,
 ) -> (String, bool, u16, String, Option<String>) {
     let executor = "pinned_host".to_string();
     let (m, url, body) = build_http_request(target, method, poc);
@@ -388,8 +400,9 @@ async fn run_pinned_host(
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(SANDBOX_TIMEOUT_SECS))
         .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
-        .redirect(reqwest::redirect::Policy::limited(3))
+        .redirect(reqwest::redirect::Policy::none())
         .no_proxy()
+        .resolve_to_addrs(&pin.host, &pin.addrs)
         .build()
     {
         Ok(c) => c,
@@ -530,5 +543,20 @@ mod tests {
         assert!(!v.verified);
         assert!(!v.executed);
         assert_eq!(v.signal, "blocked");
+    }
+
+    #[tokio::test]
+    async fn blocks_loopback_and_rfc1918_before_connect() {
+        let dummy = reqwest::Client::new();
+        for target in [
+            "http://127.0.0.1/",
+            "http://10.0.0.1/",
+            "http://192.168.1.1/",
+        ] {
+            let v = verify_poc(target, "GET", "x", "", None, &dummy).await;
+            assert!(!v.verified, "{target}");
+            assert!(!v.executed, "{target}");
+            assert_eq!(v.signal, "blocked", "{target} {:?}", v.error);
+        }
     }
 }

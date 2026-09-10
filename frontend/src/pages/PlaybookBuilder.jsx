@@ -29,6 +29,7 @@ import { confirmDialog } from '../utils/confirmDialog'
 import Button from '../components/ui/Button'
 import PlaybookGraph from '../components/PlaybookGraph'
 import { downloadCsv } from '../lib/exportFindingsCsv'
+import { playbookActionsHaveBlockedWebhook } from '../lib/playbookFlow'
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
 const SEV_COLORS = {
@@ -47,6 +48,7 @@ const ACTION_KINDS = [
   { kind: 'isolate_host', labelKey: 'playbooks.action.isolate_host', params: { target: '{{target}}', duration_seconds: 900 } },
   { kind: 'page_oncall',  labelKey: 'playbooks.action.page_oncall',  params: { team: 'sec-oncall', severity: '{{severity}}' } },
   { kind: 'http_post',    labelKey: 'playbooks.action.http_post',    params: { url: '', body: { } } },
+  { kind: 'create_incident', labelKey: 'playbooks.action.create_incident', params: { short_description: '{{title}}', severity: '{{severity}}' } },
 ]
 
 function exportPlaybooksCsv(list) {
@@ -323,6 +325,10 @@ export default function PlaybookBuilder() {
 
   const save = async () => {
     if (!draft?.name?.trim()) { setStatusMsg({ kind: 'err', text: t('playbooks.name_required') }); return }
+    if (playbookActionsHaveBlockedWebhook(draft.actions || [])) {
+      setStatusMsg({ kind: 'err', text: t('playbooks.webhook_blocked') })
+      return
+    }
     setSaving(true)
     setStatusMsg(null)
     const body = {
@@ -525,6 +531,9 @@ export default function PlaybookBuilder() {
               refreshLoading={loading}
               exportDisabled={!list.length}
             />
+            <Link to="/soar-hitl" className="px-3 py-2 text-[12px] text-rose-300/80 transition-colors hover:text-rose-200">
+              {t('nav.soar_hitl')}
+            </Link>
             <Link to="/" className="px-3 py-2 text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]">
               ← {t('nav.cockpit')}
             </Link>

@@ -66,6 +66,7 @@ import {
   AstFuzzingStudio,
   FeedbackLoopVerification,
   CouncilHitlQueue,
+  SoarHitlQueue,
   SelfImprovementConsole,
   RoeApprovals,
   SsoDashboard,
@@ -84,11 +85,14 @@ import {
   VulnIntelDashboard,
   FinancialRisk,
   AttackPaths,
+  SupremeBrain,
+  CemDagoMesh,
   AttackCoverage,
   SecurityPosture,
   IocFeed,
   UebaAnomalies,
   FindingSuppressions,
+  FindingClusters,
   CryptoPosture,
   LiveFeed,
   ReportHistory,
@@ -97,6 +101,7 @@ import {
   DarkWebMonitor,
   TargetIntelligence,
   StealthOperations,
+  EliteHardeningCommandCenter,
   ThreatHuntingWorkbench,
   ThreatAnalysisCenter,
   EngineClientCatalog,
@@ -114,6 +119,7 @@ import {
   CeoVault,
   CeoCommandCenter,
   SupremeNerveCenter,
+  SovereignTheater,
   RiskGraphVisualization,
   ComplianceFrameworks,
   SBOMBrowser,
@@ -124,6 +130,7 @@ import {
   BaselineAndDrift,
   IdentityContextManager,
   IdentitySecurityCenter,
+  PrivilegeEscalationCommandCenter,
   KerberosSecurityCommandCenter,
   SmbNetbiosCommandCenter,
   PasswordSprayCommandCenter,
@@ -245,6 +252,7 @@ export default function TacticalApp() {
           <Route path="jwt-lab" element={<JwtAttackLab />} />
           <Route path="file-upload-lab" element={<FileUploadSecurityLab />} />
           <Route path="identity-security" element={<IdentitySecurityCenter />} />
+          <Route path="privilege-escalation" element={<PrivilegeEscalationCommandCenter />} />
           <Route path="kerberos-security" element={<KerberosSecurityCommandCenter />} />
           <Route path="smb-netbios" element={<SmbNetbiosCommandCenter />} />
           <Route path="password-spray" element={<PasswordSprayCommandCenter />} />
@@ -255,6 +263,7 @@ export default function TacticalApp() {
           <Route path="ast-fuzzing" element={<AstFuzzingStudio />} />
           <Route path="feedback-loop" element={<FeedbackLoopVerification />} />
           <Route path="council-queue" element={<CouncilHitlQueue />} />
+          <Route path="soar-hitl" element={<SoarHitlQueue />} />
           <Route path="self-improve" element={<SelfImprovementConsole />} />
           <Route path="roe-approvals" element={<RoeApprovals />} />
           <Route path="sso-config" element={<RequireStaff><SsoDashboard /></RequireStaff>} />
@@ -267,12 +276,15 @@ export default function TacticalApp() {
           <Route path="cicd-security" element={<CicdPipelineSecurityCommandCenter />} />
           <Route path="serverless-security" element={<ServerlessSecurityCommandCenter />} />
           <Route path="findings" element={<FindingsCommandCenter />} />
+          <Route path="finding-clusters" element={<FindingClusters />} />
           <Route path="threat-intel" element={<ThreatIntelHub />} />
           <Route path="intel-map" element={<App />} />
           <Route path="incident-response" element={<IncidentResponseCenter />} />
           <Route path="vuln-intel" element={<VulnIntelDashboard />} />
           <Route path="financial-risk" element={<FinancialRisk />} />
           <Route path="attack-paths" element={<AttackPaths />} />
+          <Route path="supreme-brain" element={<SupremeBrain />} />
+          <Route path="cem-dago" element={<CemDagoMesh />} />
           <Route path="attack-coverage" element={<AttackCoverage />} />
           <Route path="security-posture" element={<SecurityPosture />} />
           <Route path="iocs" element={<IocFeed />} />
@@ -285,6 +297,7 @@ export default function TacticalApp() {
           <Route path="dark-web" element={<DarkWebMonitor />} />
           <Route path="target-intel" element={<TargetIntelligence />} />
           <Route path="stealth-ops" element={<StealthOperations />} />
+          <Route path="elite-hardening" element={<EliteHardeningCommandCenter />} />
           <Route path="threat-hunting" element={<ThreatHuntingWorkbench />} />
           <Route path="threat-analysis" element={<ThreatAnalysisCenter />} />
           <Route path="engine-catalog" element={<EngineClientCatalog />} />
@@ -336,6 +349,7 @@ export default function TacticalApp() {
           <Route path="endpoint-edr" element={<EndpointEdr />} />
           <Route path="ceo" element={<CeoProtectedRoute><CeoCommandCenter /></CeoProtectedRoute>} />
           <Route path="supreme-nerve-center" element={<RequireRole min="ceo"><SupremeNerveCenter /></RequireRole>} />
+          <Route path="sovereign" element={<CeoProtectedRoute><SovereignTheater /></CeoProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

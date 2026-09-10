@@ -19,6 +19,7 @@ pub fn is_sse_stream_path(path: &str) -> bool {
         || path == "/api/ceo/war-room/stream"
         || (path.starts_with("/api/ceo/council/sessions/") && path.ends_with("/stream"))
         || path.starts_with("/api/poe-scan/stream/")
+        || path == "/api/sovereign/operator/stream"
 }
 
 /// TLS / JA3 fingerprint from terminating proxy headers (when present).
@@ -102,6 +103,7 @@ mod tests {
     fn recognizes_sse_paths() {
         assert!(is_sse_stream_path("/api/telemetry/stream"));
         assert!(is_sse_stream_path("/api/poe-scan/stream/abc"));
+        assert!(is_sse_stream_path("/api/sovereign/operator/stream"));
         assert!(!is_sse_stream_path("/api/login"));
     }
 }

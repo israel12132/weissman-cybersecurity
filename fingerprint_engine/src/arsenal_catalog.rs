@@ -173,6 +173,7 @@ pub fn category_of(id: &str) -> &'static str {
             "mfa",
             "password",
             "credential",
+            "privilege",
             "hash",
             "pqc",
             "padding_oracle",

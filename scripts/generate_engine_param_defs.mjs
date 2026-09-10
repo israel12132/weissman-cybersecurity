@@ -59,6 +59,7 @@ const SHARED = {
   github: P('github_token', 'GitHub Token (optional)', 'password', { placeholder: 'ghp_...', defaultVal: '' }),
   safe: P('safe_mode', 'Safe Mode (no destructive exec)', 'select', { options: ['true', 'false'], defaultVal: 'true' }),
   otStrict: P('protocol_strict', 'OT Protocol Strict', 'select', { options: ['true', 'false'], defaultVal: 'true' }),
+  probeMode: P('probe_mode', 'OT Probe Mode', 'select', { options: ['passive', 'safe_read', 'active_validation'], defaultVal: 'safe_read' }),
   campaign: P('campaign_name', 'Campaign Name', 'text', { placeholder: 'Red Team Q2', defaultVal: '' }),
   platform: P('platform', 'Platform', 'select', { options: ['both', 'android', 'ios'], defaultVal: 'both' }),
 }
@@ -83,7 +84,7 @@ function byGroup(group) {
     case 'cloud':
       return [SHARED.awsRole, SHARED.awsExt, SHARED.gcp, SHARED.azureSub, SHARED.azureTenant, SHARED.intensity, SHARED.stealth]
     case 'ot':
-      return [SHARED.ports, SHARED.otStrict, SHARED.depth, SHARED.timeout, SHARED.maxFindings]
+      return [SHARED.ports, SHARED.otStrict, SHARED.probeMode, SHARED.depth, SHARED.timeout, SHARED.maxFindings]
     case 'crypto':
       return [SHARED.domain, SHARED.intensity, SHARED.ports, SHARED.stealth, SHARED.maxFindings]
     case 'network':
@@ -131,8 +132,8 @@ function byPattern(id) {
   if (/^github_|gitlab_|cicd_|pipeline|terraform|helm_|sbom_|devsecops/.test(id)) {
     extra.push(SHARED.repo, SHARED.github)
   }
-  if (/^scada_|^iot_|^modbus|^dnp3|^bacnet|^iec61850|^ics_|^plc_|^hmi_/.test(id)) {
-    extra.push(SHARED.otStrict, SHARED.ports)
+  if (/^scada_|^iot_|^modbus|^dnp3|^bacnet|^iec61850|^ics_|^plc_|^hmi_|^ot_/.test(id)) {
+    extra.push(SHARED.otStrict, SHARED.ports, SHARED.probeMode)
   }
   if (/mobile|android|ios|apk_/.test(id)) extra.push(SHARED.platform)
   if (/phish|spear_|vishing|smish|bec_|pretext/.test(id)) extra.push(SHARED.campaign)

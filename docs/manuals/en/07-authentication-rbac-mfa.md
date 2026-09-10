@@ -116,7 +116,7 @@ TOTP-based MFA via standard endpoints:
 | `POST /api/auth/mfa/disable` | Remove MFA (requires re-auth) |
 | `GET /api/auth/mfa/status` | Check MFA state for current user |
 
-Login lockout paths include `/api/login` and `/api/auth/mfa/verify` (Redis-backedbased).
+Login lockout paths include `/api/login` and `/api/auth/mfa/verify` (Redis-backed). Token refresh (`/api/auth/refresh`) shares the pre-auth login rate-limit bucket so it cannot exhaust the `weissman_auth` pool.
 
 **Procedure for new admins:**
 

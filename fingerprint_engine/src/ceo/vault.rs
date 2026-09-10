@@ -4,10 +4,10 @@ use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Row};
 use std::sync::OnceLock;
+use zeroize::Zeroizing;
 
 // ── Secret-at-rest encryption (AES-256-GCM) ────────────────────────────────────
 // Tenant secrets stored in the vault are encrypted at rest. The key is a dedicated
@@ -17,48 +17,49 @@ use std::sync::OnceLock;
 
 const VAULT_PREFIX: &str = "wzv1:";
 
-fn derive_key(domain: &[u8], material: &str) -> [u8; 32] {
-    let mut h = Sha256::new();
-    h.update(domain);
-    h.update(material.as_bytes());
-    let mut k = [0u8; 32];
-    k.copy_from_slice(&h.finalize());
-    k
-}
-
-fn hex32(raw: &str) -> Option<[u8; 32]> {
-    let b = hex::decode(raw.trim()).ok()?;
-    if b.len() == 32 {
-        let mut k = [0u8; 32];
-        k.copy_from_slice(&b);
-        Some(k)
-    } else {
-        None
-    }
-}
-
-fn vault_key() -> Option<[u8; 32]> {
-    static KEY: OnceLock<Option<[u8; 32]>> = OnceLock::new();
-    *KEY.get_or_init(|| {
-        if let Ok(raw) = std::env::var("WEISSMAN_VAULT_KEY") {
-            let t = raw.trim();
-            if !t.is_empty() {
-                if let Some(k) = hex32(t) {
-                    return Some(k);
-                }
-                eprintln!(
-                    "[Weissman][vault] WEISSMAN_VAULT_KEY must be 64 hex chars (32 bytes); ignoring"
-                );
+pub(crate) fn vault_key() -> Option<[u8; 32]> {
+    static KEY: OnceLock<Option<Zeroizing<[u8; 32]>>> = OnceLock::new();
+    KEY.get_or_init(|| {
+        if let Some(raw) = crate::secret_zeroize::take_env_bytes_locked("WEISSMAN_VAULT_KEY") {
+            if let Some(k) = crate::secret_zeroize::hex32(raw.trim_ascii()) {
+                return Some(Zeroizing::new(k));
+            }
+            eprintln!(
+                "[Weissman][vault] WEISSMAN_VAULT_KEY must be 64 hex chars (32 bytes); ignoring"
+            );
+        }
+        if let Some(js) = crate::secret_zeroize::take_env_bytes_locked("WEISSMAN_JWT_SECRET") {
+            if js.trim_ascii().len() >= 16 {
+                return Some(Zeroizing::new(crate::secret_zeroize::derive_aes256_key(
+                    b"weissman-vault-key-v1|",
+                    js.trim_ascii(),
+                )));
             }
         }
-        let js = std::env::var("WEISSMAN_JWT_SECRET").unwrap_or_default();
-        if js.trim().len() < 16 {
-            // No key material. In production the startup guard (key_present) refuses
-            // boot; in dev the CEO vault stores plaintext (no managed secrets there).
-            return None;
-        }
-        Some(derive_key(b"weissman-vault-key-v1|", js.trim()))
+        // No key material. In production the startup guard (key_present) refuses
+        // boot; in dev the CEO vault stores plaintext (no managed secrets there).
+        None
     })
+    .as_ref()
+    .map(|z| **z)
+}
+
+static DEDICATED_AFTER_SCRUB: OnceLock<bool> = OnceLock::new();
+
+/// Load the encryption keyring from the environment. Call once at boot before
+/// [`scrub_key_env_vars`] so decrypt still works after the env copies are wiped.
+pub fn prime_keys_from_env() {
+    let _ = DEDICATED_AFTER_SCRUB
+        .get_or_init(|| crate::secret_zeroize::env_is_hex32_key("WEISSMAN_VAULT_KEY"));
+    let _ = vault_key();
+    let _ = decrypt_keyring();
+}
+
+/// Wipe `WEISSMAN_VAULT_KEY*` from the process environment after the keyring is in memory.
+pub fn scrub_key_env_vars() {
+    for name in ["WEISSMAN_VAULT_KEY", "WEISSMAN_VAULT_KEY_PREVIOUS"] {
+        crate::secret_zeroize::scrub_env_var(name);
+    }
 }
 
 /// True when a key is available to encrypt CEO-vault secrets at rest — including the JWT-derived
@@ -78,45 +79,58 @@ pub fn key_present() -> bool {
 /// guard was unconditionally true. It never once fired.
 #[must_use]
 pub fn dedicated_key_configured() -> bool {
-    std::env::var("WEISSMAN_VAULT_KEY")
-        .ok()
-        .and_then(|v| hex32(v.trim()))
-        .is_some()
+    if let Some(&flag) = DEDICATED_AFTER_SCRUB.get() {
+        return flag;
+    }
+    crate::secret_zeroize::env_is_hex32_key("WEISSMAN_VAULT_KEY")
 }
 
 /// Decrypt keyring: current key, then rotated-out previous keys
 /// (`WEISSMAN_VAULT_KEY_PREVIOUS` hex + the `WEISSMAN_JWT_SECRET_PREVIOUS`
 /// rotation keyring) so key rotation never orphans encrypted CEO-vault rows.
 fn decrypt_keyring() -> &'static [[u8; 32]] {
-    static KEYS: OnceLock<Vec<[u8; 32]>> = OnceLock::new();
+    static KEYS: OnceLock<Zeroizing<Vec<[u8; 32]>>> = OnceLock::new();
     KEYS.get_or_init(|| {
         let mut v: Vec<[u8; 32]> = Vec::new();
         if let Some(k) = vault_key() {
             v.push(k);
         }
-        if let Ok(csv) = std::env::var("WEISSMAN_VAULT_KEY_PREVIOUS") {
-            v.extend(csv.split(',').filter_map(hex32));
+        if let Some(csv) =
+            crate::secret_zeroize::take_env_bytes_locked("WEISSMAN_VAULT_KEY_PREVIOUS")
+        {
+            v.extend(
+                crate::secret_zeroize::split_csv(csv.as_bytes())
+                    .filter_map(crate::secret_zeroize::hex32),
+            );
         }
         // Legacy rows encrypted with the CURRENT JWT secret, before a dedicated WEISSMAN_VAULT_KEY
         // existed. Without this, setting that key — what the hardened startup guard now demands —
         // orphans every existing CEO-vault secret, because the JWT-derived key only reached this
         // keyring via *_PREVIOUS. See the matching note in soar/integrations_vault.rs.
-        if let Ok(js) = std::env::var("WEISSMAN_JWT_SECRET") {
-            if js.trim().len() >= 16 {
-                let legacy = derive_key(b"weissman-vault-key-v1|", js.trim());
+        if let Some(js) = crate::secret_zeroize::take_env_bytes_locked("WEISSMAN_JWT_SECRET") {
+            if js.trim_ascii().len() >= 16 {
+                let legacy = crate::secret_zeroize::derive_aes256_key(
+                    b"weissman-vault-key-v1|",
+                    js.trim_ascii(),
+                );
                 if !v.contains(&legacy) {
                     v.push(legacy);
                 }
             }
         }
-        if let Ok(csv) = std::env::var("WEISSMAN_JWT_SECRET_PREVIOUS") {
-            for e in csv.split(',') {
-                if e.trim().len() >= 16 {
-                    v.push(derive_key(b"weissman-vault-key-v1|", e.trim()));
+        if let Some(csv) =
+            crate::secret_zeroize::take_env_bytes_locked("WEISSMAN_JWT_SECRET_PREVIOUS")
+        {
+            for e in crate::secret_zeroize::split_csv(csv.as_bytes()) {
+                if e.len() >= 16 {
+                    v.push(crate::secret_zeroize::derive_aes256_key(
+                        b"weissman-vault-key-v1|",
+                        e,
+                    ));
                 }
             }
         }
-        v
+        Zeroizing::new(v)
     })
     .as_slice()
 }
@@ -543,6 +557,8 @@ pub async fn post_resume_suspended_job(
     trace: Option<&str>,
 ) -> Result<uuid::Uuid, String> {
     let body = json!({ "resume_suspended_id": suspended_id });
+    let body =
+        crate::job_envelope::seal_job_payload(&body, tenant_id).map_err(|e| e.to_string())?;
     weissman_db::job_queue::enqueue(pool, tenant_id, "genesis_eternal_fuzz", body, trace)
         .await
         .map_err(|e| e.to_string())
@@ -577,5 +593,23 @@ mod tests {
             decrypt_secret("legacy-plaintext-signature"),
             "legacy-plaintext-signature"
         );
+    }
+
+    #[test]
+    fn scrub_unsets_vault_key_env_but_keeps_dedicated_flag() {
+        let hex: String = "ab".repeat(32);
+        std::env::set_var("WEISSMAN_VAULT_KEY", &hex);
+        prime_keys_from_env();
+        assert!(dedicated_key_configured());
+        scrub_key_env_vars();
+        assert!(
+            std::env::var("WEISSMAN_VAULT_KEY").is_err(),
+            "env copy must be gone after boot scrub"
+        );
+        assert!(
+            dedicated_key_configured(),
+            "dedicated-key flag must survive env wipe"
+        );
+        std::env::remove_var("WEISSMAN_VAULT_KEY");
     }
 }

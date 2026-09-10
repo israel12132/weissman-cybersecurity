@@ -145,6 +145,20 @@ def enumerate_subdomains_ct(domain: str, timeout: int = ENTERPRISE_HTTP_TIMEOUT)
 # DNS brute (Python fallback; Rust used when binary available)
 # ---------------------------------------------------------------------------
 
+def _public_subdomain_prefixes() -> list[str]:
+    here = Path(__file__).resolve()
+    candidates = [parent / "shared" / "discovery" / "subdomain_prefixes.txt" for parent in here.parents]
+    candidates.append(Path.cwd() / "shared" / "discovery" / "subdomain_prefixes.txt")
+    for p in candidates:
+        if p.is_file():
+            return [
+                ln.strip()
+                for ln in p.read_text(encoding="utf-8").splitlines()
+                if ln.strip() and not ln.startswith("#")
+            ]
+    return list(COMMON_SUBDOMAINS)
+
+
 COMMON_SUBDOMAINS = [
     "www", "mail", "ftp", "admin", "api", "dev", "staging", "test", "beta", "app",
     "portal", "secure", "vpn", "git", "jenkins", "ci", "cdn", "static", "assets",
@@ -170,7 +184,7 @@ def _run_rust_dns_enum(domain: str, wordlist_path: str | None = None) -> list[st
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=60,
+                timeout=300,
                 cwd=str(root),
             )
             if out.returncode == 0 and out.stdout and out.stdout.strip():
@@ -192,7 +206,7 @@ def enumerate_subdomains_dns(domain: str, wordlist: list[str] | None = None) -> 
     domain = (domain or "").strip().lower()
     if not domain:
         return []
-    wordlist = wordlist or COMMON_SUBDOMAINS
+    wordlist = wordlist or _public_subdomain_prefixes()
     # Prefer Rust for speed
     found = _run_rust_dns_enum(domain)
     if not found:

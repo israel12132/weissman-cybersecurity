@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { makeNode, connect, removeNode, serializeGraph } from './playbookFlow.js'
+import { makeNode, connect, removeNode, serializeGraph, isBlockedWebhookUrl, playbookActionsHaveBlockedWebhook } from './playbookFlow.js'
 
 describe('playbookFlow', () => {
   it('builds a typed node with a deterministic id', () => {
@@ -43,5 +43,18 @@ describe('playbookFlow', () => {
       { id: 'n2', type: 'action', position: { x: 0, y: 0 } },
     ])
     expect(g.edges).toEqual([{ source: 'n1', target: 'n2' }])
+  })
+
+  it('blocks metadata and private webhook hosts', () => {
+    expect(isBlockedWebhookUrl('http://169.254.169.254/latest/meta-data/')).toBe(true)
+    expect(isBlockedWebhookUrl('http://127.0.0.1/hook')).toBe(true)
+    expect(isBlockedWebhookUrl('http://localhost/hook')).toBe(true)
+    expect(isBlockedWebhookUrl('https://hooks.slack.com/services/T/B/X')).toBe(false)
+    expect(playbookActionsHaveBlockedWebhook([
+      { kind: 'webhook', params: { url: 'http://169.254.169.254/' } },
+    ])).toBe(true)
+    expect(playbookActionsHaveBlockedWebhook([
+      { kind: 'set_status', params: { status: 'OPEN' } },
+    ])).toBe(false)
   })
 })

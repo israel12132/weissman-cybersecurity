@@ -90,10 +90,10 @@ warm from the second route onward, instead of a fresh context per test.
   accumulate and cross-attribute errors to the wrong route).
 - Estimated ~6 h including CI iteration; expected crawl runtime ~8–12 min.
 
-Also outstanding, from `nightly-e2e.yml` which already solves them and was never ported to
-`ci.yml`: `WEISSMAN_RATE_LIMIT_PER_SEC` / `_BURST` lift (a 100-route crawl trips per-IP limits;
-429s were invisible until this change added them to the error class) and Postgres `fsync=off`
-for the CI container.
+`ci.yml` now lifts `WEISSMAN_RATE_LIMIT_PER_SEC` / `_BURST` plus the tenant-scan and
+login-per-minute ceilings on the live server (same clamp values as `rate_limit_metrics.rs`,
+same spirit as `nightly-e2e.yml`). Postgres `fsync=off` for the CI container is still
+outstanding.
 
 ## Rules
 

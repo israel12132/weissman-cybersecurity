@@ -13,6 +13,7 @@
 //!   "open_port_count": 3,
 //!   "process_count":   142,
 //!   "top_processes":   ["nginx", "postgres", "weissman-agent"],
+//!   "top_process_hashes": {"nginx": "<sha256 of /proc/<pid>/exe>"},
 //!   "unique_users":    1,
 //!   "uptime_seconds":  872315,
 //!   "load_1m":         0.42,
@@ -28,7 +29,10 @@
 
 use anyhow::Result;
 use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::io::Read;
+use std::path::Path;
 
 const TOP_PROCESSES_LIMIT: usize = 12;
 
@@ -97,7 +101,7 @@ fn collect_metrics() -> Value {
     );
 
     // ── Processes (Linux /proc/*/comm + uid)  ───────────────────────────────
-    let (procs_by_name, unique_users) = read_process_table();
+    let (procs_by_name, unique_users, pids) = read_process_table();
     m.insert(
         "process_count".into(),
         Value::from(procs_by_name.values().sum::<u64>()),
@@ -113,6 +117,15 @@ fn collect_metrics() -> Value {
                 .collect(),
         ),
     );
+    let mut hashes = Map::new();
+    for (name, _) in &top {
+        if let Some(pid) = pids.get(name) {
+            if let Some(h) = sha256_exe(pid) {
+                hashes.insert(name.clone(), Value::String(h));
+            }
+        }
+    }
+    m.insert("top_process_hashes".into(), Value::Object(hashes));
     m.insert("unique_users".into(), Value::from(unique_users as u64));
 
     // ── Uptime + load + memory (Linux /proc/uptime, /proc/loadavg, /proc/meminfo)
@@ -169,12 +182,37 @@ fn read_listening_tcp_ports() -> Vec<u16> {
     Vec::new()
 }
 
+fn sha256_file(path: &Path) -> Option<String> {
+    let mut f = std::fs::File::open(path).ok()?;
+    let mut hasher = Sha256::new();
+    let mut buf = [0u8; 8192];
+    loop {
+        let n = f.read(&mut buf).ok()?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Some(hex::encode(hasher.finalize()))
+}
+
 #[cfg(target_os = "linux")]
-fn read_process_table() -> (HashMap<String, u64>, usize) {
+fn sha256_exe(pid: &str) -> Option<String> {
+    sha256_file(Path::new(&format!("/proc/{pid}/exe")))
+}
+
+#[cfg(not(target_os = "linux"))]
+fn sha256_exe(_pid: &str) -> Option<String> {
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn read_process_table() -> (HashMap<String, u64>, usize, HashMap<String, String>) {
     let Ok(read) = std::fs::read_dir("/proc") else {
-        return (HashMap::new(), 0);
+        return (HashMap::new(), 0, HashMap::new());
     };
     let mut counts: HashMap<String, u64> = HashMap::new();
+    let mut pids: HashMap<String, String> = HashMap::new();
     let mut users: std::collections::HashSet<u32> = std::collections::HashSet::new();
     for entry in read.flatten() {
         let Some(name) = entry.file_name().to_str().map(|s| s.to_string()) else {
@@ -187,6 +225,7 @@ fn read_process_table() -> (HashMap<String, u64>, usize) {
             let comm = comm.trim();
             if !comm.is_empty() {
                 *counts.entry(comm.to_string()).or_insert(0) += 1;
+                pids.entry(comm.to_string()).or_insert_with(|| name.clone());
             }
         }
         if let Ok(status) = std::fs::read_to_string(entry.path().join("status")) {
@@ -202,12 +241,12 @@ fn read_process_table() -> (HashMap<String, u64>, usize) {
             }
         }
     }
-    (counts, users.len())
+    (counts, users.len(), pids)
 }
 
 #[cfg(not(target_os = "linux"))]
-fn read_process_table() -> (HashMap<String, u64>, usize) {
-    (HashMap::new(), 0)
+fn read_process_table() -> (HashMap<String, u64>, usize, HashMap<String, String>) {
+    (HashMap::new(), 0, HashMap::new())
 }
 
 #[cfg(target_os = "linux")]
@@ -298,5 +337,29 @@ mod tests {
         assert!(v.get("open_port_count").is_some());
         assert!(v.get("process_count").is_some());
         assert!(v.get("top_processes").is_some());
+        assert!(v
+            .get("top_process_hashes")
+            .and_then(Value::as_object)
+            .is_some());
+    }
+
+    #[test]
+    fn sha256_file_is_live_digest() {
+        let dir = std::env::temp_dir().join(format!(
+            "ws-hash-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("blob");
+        std::fs::write(&path, b"abc").unwrap();
+        assert_eq!(
+            sha256_file(&path).unwrap(),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

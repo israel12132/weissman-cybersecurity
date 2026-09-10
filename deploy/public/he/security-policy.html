@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" data-page="security-policy" data-locale="he">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#07090c" />
+  <title>דיווח אחראי — Weissman Cybersecurity</title>
+  <meta name="description" content="איך לדווח על חולשת אבטחה ל-Weissman Cybersecurity." />
+  <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://weissman.io/he/security-policy.html" />
+  <link rel="alternate" hreflang="en" href="https://weissman.io/security-policy.html" />
+  <link rel="alternate" hreflang="he" href="https://weissman.io/he/security-policy.html" />
+  <link rel="alternate" hreflang="x-default" href="https://weissman.io/security-policy.html" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Weissman Cybersecurity" />
+  <meta property="og:locale" content="he_IL" />
+  <meta property="og:locale:alternate" content="en_US" />
+  <meta property="og:title" content="דיווח אחראי — Weissman Cybersecurity" />
+  <meta property="og:description" content="איך לדווח על חולשת אבטחה ל-Weissman Cybersecurity." />
+  <meta property="og:image" content="https://weissman.io/og-cover.svg" />
+  <meta property="og:url" content="https://weissman.io/he/security-policy.html" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="דיווח אחראי — Weissman Cybersecurity" />
+  <meta name="twitter:description" content="איך לדווח על חולשת אבטחה ל-Weissman Cybersecurity." />
+  <script id="weissman-ld-0" type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Weissman Cybersecurity Ltd.","url":"https://weissman.io/he/","email":"weissmancybersecurity@gmail.com","inLanguage":"he","address":{"@type":"PostalAddress","addressLocality":"תל אביב-יפו","addressCountry":"IL"}}</script>
+  <script id="weissman-ld-1" type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Weissman Cybersecurity Platform","applicationCategory":"SecurityApplication","operatingSystem":"Web, Linux, macOS, Windows","url":"https://weissman.io/he/","inLanguage":"he","offers":{"@type":"Offer","url":"https://weissman.io/he/contact/","description":"מי שרוצה את Weissman בארגון יוצר קשר. אין תוכניות מדף באתר. לקוחות קיימים נכנסים ל-Command Center."},"description":"פלטפורמת אבטחה התקפית אוטונומית והגנה פעילה, עם בדיקות חיות, מודיעין נתיבי תקיפה ו-Command Center למרכז תפעול אבטחה (SOC)."}</script>
+  <script type="module" crossorigin src="/assets/main-DX3eQnZu.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/main-BndqxW4e.css">
+</head>
+<body>
+  <div id="root"><article class="legal-doc"><h1>Responsible Disclosure Policy</h1>
+    <p class="meta">Effective: 2026-06-03 · We run a security platform — we know how this works.</p>
+
+    <h2>If you find a vulnerability</h2>
+    <p>Please email <a href="mailto:security@weissman.io">security@weissman.io</a> with:</p>
+    <ul>
+      <li>A clear description of the issue and the affected component.</li>
+      <li>Steps to reproduce (URLs, payloads, expected vs. observed).</li>
+      <li>Your name or handle for credit (optional — we honour anonymous reports too).</li>
+    </ul>
+    <!-- The published fingerprint was the placeholder 0A1B 2C3D... and /.well-known/pgp-key.txt
+     404s, so a reporter who tried to encrypt a vulnerability report could not — and might
+     not send it at all. Offering no PGP is honest; offering a fake key is not. Restore this
+     block with a real fingerprint and a real key file when one exists. -->
+    <p>Encrypted reports: email <a href="mailto:security@weissman.io">security@weissman.io</a>
+       and ask for our current PGP key before sending sensitive details.</p>
+
+    <h2>Our promise</h2>
+    <ul>
+      <li>Acknowledge receipt within <strong>24 hours</strong>.</li>
+      <li>Triage and provide a severity assessment within <strong>5 business days</strong>.</li>
+      <li>Patch critical issues within <strong>14 days</strong> (high: 30 days, medium: 60 days).</li>
+      <li>Public credit in our changelog (with your consent).</li>
+      <li>No legal action for good-faith research that follows this policy.</li>
+    </ul>
+
+    <h2>Scope</h2>
+    <p>In scope: <code>*.weissman.io</code>, the Cloud SaaS at <code>app.weissman.io</code>, our official binaries and Docker images, our open-source repositories.</p>
+    <p>Out of scope: third-party SaaS we use (report directly to them), social-engineering of staff, physical attacks, DoS attempts, automated scanner output without manual validation.</p>
+
+    <h2>What we ask</h2>
+    <ul>
+      <li>Do not exfiltrate data beyond what's required to prove the issue.</li>
+      <li>Do not run automated scans that degrade service availability.</li>
+      <li>Give us a reasonable window to remediate before public disclosure (90 days is our default).</li>
+    </ul>
+
+    <p>This program runs on goodwill — there is no monetary bounty today, but we celebrate every report publicly.</p>
+</article></div>
+</body>
+</html>

@@ -313,10 +313,15 @@ fi
 head_ "11. Feature wiring — Ask Weissman (NL->SQL) and OAST"
 # The read-only role must be generated AND reach the backend, or /api/ask is 503 and the
 # boot role-sync strips LOGIN from weissman_ro.
-if grep -qE "^[[:space:]]*DB_RO_PASSWORD$" "$LAUNCHER"; then
-  ok "launcher generates DB_RO_PASSWORD"
+if grep -qE "^[[:space:]]*DB_WORKER_PASSWORD$" "$LAUNCHER"; then
+  ok "launcher generates DB_WORKER_PASSWORD"
 else
-  bad "DB_RO_PASSWORD not generated — Ask Weissman (/api/ask) will be disabled"
+  bad "DB_WORKER_PASSWORD not generated — job-bus claim plane cannot log in"
+fi
+if grep -qE "^[[:space:]]*DB_ANALYTICS_PASSWORD$" "$LAUNCHER"; then
+  ok "launcher generates DB_ANALYTICS_PASSWORD"
+else
+  bad "DB_ANALYTICS_PASSWORD not generated — analytics billing pool cannot log in"
 fi
 if sed -n '/^  backend:/,/^  [a-z]/p' docker-compose.prod.yml | grep -q 'WEISSMAN_READ_ONLY_DATABASE_URL'; then
   ok "backend receives WEISSMAN_READ_ONLY_DATABASE_URL (prod overlay)"

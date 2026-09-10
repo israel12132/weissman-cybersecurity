@@ -13,6 +13,9 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 static PROMETHEUS: OnceLock<Option<PrometheusHandle>> = OnceLock::new();
+/// Must outlive the process: dropping it flushes then joins the non-blocking log thread.
+static NON_BLOCKING_LOG_GUARD: OnceLock<tracing_appender::non_blocking::WorkerGuard> =
+    OnceLock::new();
 
 /// Logs panics through `tracing` (target `sovereign`) then chains the default hook.
 /// Call after [`init_tracing_from_env`] so subscribers are installed.
@@ -128,15 +131,30 @@ fn build_otel_layer(
 
 /// Production JSON logs when `WEISSMAN_LOG_FORMAT=json` (plain text otherwise).
 /// When `WEISSMAN_OTLP_ENDPOINT` is set, also exports OpenTelemetry spans via OTLP/HTTP.
+///
+/// General HTTP `fmt` logs use a **lossy** non-blocking stdout appender so a
+/// stuck container log driver / NFS cannot stall Tokio workers.
+///
+/// Ask Weissman forensic pages (`nlqa1`) do **not** ride this lossy ring.
+/// `nlqa_syslog` uses `NonBlockingBuilder { lossy: false }` + OS syslog.
 pub fn init_tracing_from_env() {
     use tracing_subscriber::prelude::*;
     use tracing_subscriber::Layer;
+
+    crate::nlqa_syslog::init();
 
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
     let json_logs = std::env::var("WEISSMAN_LOG_FORMAT")
         .map(|s| s.eq_ignore_ascii_case("json"))
         .unwrap_or(false);
+
+    // Lossy is correct for HTTP/app logs. Audit overflow uses nlqa_syslog (lossy=false).
+    let (nb_writer, guard) = tracing_appender::non_blocking::NonBlockingBuilder::default()
+        .lossy(true)
+        .buffered_lines_limit(1024)
+        .thread_name("weissman-fmt-logs".into())
+        .finish(std::io::stdout());
 
     let mut layers: Vec<
         Box<dyn tracing_subscriber::Layer<tracing_subscriber::Registry> + Send + Sync>,
@@ -146,16 +164,28 @@ pub fn init_tracing_from_env() {
             tracing_subscriber::fmt::layer()
                 .json()
                 .flatten_event(true)
+                .with_writer(nb_writer)
                 .with_filter(filter)
                 .boxed(),
         );
     } else {
-        layers.push(tracing_subscriber::fmt::layer().with_filter(filter).boxed());
+        layers.push(
+            tracing_subscriber::fmt::layer()
+                .with_writer(nb_writer)
+                .with_filter(filter)
+                .boxed(),
+        );
     }
     if let Some(otel) = build_otel_layer() {
         layers.push(otel);
     }
-    let _ = tracing_subscriber::registry().with(layers).try_init();
+    if tracing_subscriber::registry()
+        .with(layers)
+        .try_init()
+        .is_ok()
+    {
+        let _ = NON_BLOCKING_LOG_GUARD.set(guard);
+    }
 }
 
 /// Spawns background inserts into `tenant_llm_usage` for each LLM completion (see `weissman_engines::openai_chat`).

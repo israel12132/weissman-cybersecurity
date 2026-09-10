@@ -66,14 +66,11 @@ pub fn visible_to_scoped(raw: &str, viewer_tid: i64, viewer_cid: Option<i64>) ->
     }
     if let Some(cid) = viewer_cid {
         if tid != SYSTEM_TENANT {
-            let event_cid = v
-                .get("client_id")
-                .or_else(|| v.get("_cid"))
-                .and_then(|x| {
-                    x.as_i64()
-                        .or_else(|| x.as_u64().and_then(|n| i64::try_from(n).ok()))
-                        .or_else(|| x.as_str().and_then(|s| s.trim().parse::<i64>().ok()))
-                });
+            let event_cid = v.get("client_id").or_else(|| v.get("_cid")).and_then(|x| {
+                x.as_i64()
+                    .or_else(|| x.as_u64().and_then(|n| i64::try_from(n).ok()))
+                    .or_else(|| x.as_str().and_then(|s| s.trim().parse::<i64>().ok()))
+            });
             match event_cid {
                 Some(id) if id == cid => {}
                 _ => return None,

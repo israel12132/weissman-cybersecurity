@@ -63,37 +63,64 @@ async function main() {
   if (clients.status !== 200 || !Array.isArray(clients.data) || !clients.data[0]?.id) {
     fail('clients'); process.exit(1)
   }
-  const clientId = clients.data[0].id
+
+  // Prefer a live-scan client. cargo-test leftovers (persist_real_pool_starvation)
+  // used source=starve_engine; GET /api/clients is ORDER BY id so clients[0] can
+  // be that leftover and PATCH 404s when the row's tenant_id ≠ login tenant.
+  const TEST_ONLY_SOURCES = new Set(['starve_engine', 'hfv_cascade_probe'])
+  function isLiveCandidate(row) {
+    const src = String(row?.source || '')
+    const rawId = Number(row?.raw_id)
+    if (!Number.isInteger(rawId) || rawId <= 0) return false
+    if (!src || TEST_ONLY_SOURCES.has(src)) return false
+    return true
+  }
+
+  const preferredNames = new Set(['E2E Findings Client', 'E2E Pipeline Client', 'Py E2E Example Client'])
+  const orderedClients = [
+    ...clients.data.filter((c) => preferredNames.has(String(c.name || ''))),
+    ...clients.data.filter((c) => !preferredNames.has(String(c.name || ''))),
+  ]
+
+  let clientId = null
+  let candidate = null
+  let fp = null
+  for (const c of orderedClients) {
+    const id = c?.id
+    if (id == null) continue
+    const findings = await api('GET', `/api/findings?client_id=${id}&limit=100`, { token })
+    if (findings.status !== 200 || findings.data?.ok !== true) continue
+    const rows = Array.isArray(findings.data.findings) ? findings.data.findings : []
+    const ranked = [
+      ...rows.filter((r) => isLiveCandidate(r) && r.signature_hash),
+      ...rows.filter((r) => isLiveCandidate(r) && !r.signature_hash),
+    ]
+    for (const hit of ranked) {
+      const attempt = await api('PATCH', `/api/findings/${hit.raw_id}/status`, {
+        token,
+        body: { status: 'FALSE_POSITIVE' },
+      })
+      if (attempt.status === 200 && attempt.data?.ok) {
+        clientId = id
+        candidate = hit
+        fp = attempt
+        break
+      }
+    }
+    if (candidate) break
+  }
+  if (!clientId || !candidate || !fp) {
+    fail('findings_list', 'no patchable live-scan finding for FP/TP loop')
+    process.exit(1)
+  }
   ok('client', `id=${clientId}`)
 
-  const findings = await api('GET', `/api/findings?client_id=${clientId}&limit=100`, { token })
-  if (findings.status !== 200 || findings.data?.ok !== true) {
-    fail('findings_list', `HTTP ${findings.status}`)
-    process.exit(1)
-  }
-  const rows = Array.isArray(findings.data.findings) ? findings.data.findings : []
-  if (!rows.length) {
-    fail('findings_list', 'no findings to exercise FP/TP loop — run osint scan first')
-    process.exit(1)
-  }
-
-  const candidate = rows.find((r) => r.signature_hash && r.raw_id && r.source) || rows[0]
   const rawId = candidate.raw_id
   const sig = candidate.signature_hash || ''
   const engine = candidate.source
   const beforeCm = Number(candidate.confidence_multiplier ?? 1)
   ok('finding_pick', `raw_id=${rawId} engine=${engine} cm=${beforeCm}`)
-
-  const fp = await api('PATCH', `/api/findings/${rawId}/status`, {
-    token,
-    body: { status: 'FALSE_POSITIVE' },
-  })
-  if (fp.status === 200 && fp.data?.ok) {
-    ok('mark_false_positive', `suppression_added=${fp.data.suppression_added ?? false}`)
-  } else {
-    fail('mark_false_positive', `HTTP ${fp.status} ${fp.data?.detail || ''}`)
-    process.exit(1)
-  }
+  ok('mark_false_positive', `suppression_added=${fp.data.suppression_added ?? false}`)
 
   const after = await api('GET', `/api/findings?client_id=${clientId}&limit=100`, { token })
   const updated = (after.data?.findings || []).find((r) => r.raw_id === rawId)

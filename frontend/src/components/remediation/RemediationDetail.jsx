@@ -8,6 +8,7 @@ import { apiFetch } from '../../utils/apiFetch'
 import { apiUrl } from '../../lib/apiBase'
 import Button from '../ui/Button'
 import useFocusTrap from '../../hooks/useFocusTrap'
+import { dualControlHeaders, dualControlBody } from '../../utils/destructiveConfirm'
 
 /**
  * RemediationDetail — the "wow" surface. For a single finding it shows a bilingual (he/en)
@@ -199,20 +200,17 @@ export default function RemediationDetail({ finding, onClose }) {
     }
     setHealing(true)
     try {
-      const headers = { 'Content-Type': 'application/json' }
-      if (destructiveConfirm.trim()) headers['X-Weissman-Destructive-Confirm'] = destructiveConfirm.trim()
-      if (dualApprove.trim()) headers['X-Weissman-Dual-Approve'] = dualApprove.trim()
       const d = await apiFetch(`/api/clients/${clientId}/auto-heal`, {
         method: 'POST',
-        headers,
-        body: {
+        headers: dualControlHeaders(destructiveConfirm, dualApprove, { 'Content-Type': 'application/json' }),
+        body: dualControlBody(destructiveConfirm, dualApprove, {
           finding_id: findingId,
           repo_slug: repoSlug.trim() || undefined,
           git_token: gitToken.trim() || undefined,
           base_branch: baseBranch.trim() || 'main',
           channel,
           health_check_curl: healthCurl.trim() || undefined,
-        },
+        }),
       })
       if (d.job_id) {
         setJobId(d.job_id) // triggers the polling effect
@@ -235,19 +233,16 @@ export default function RemediationDetail({ finding, onClose }) {
     setReverting(true)
     setHealError(null)
     try {
-      const headers = { 'Content-Type': 'application/json' }
-      if (destructiveConfirm.trim()) headers['X-Weissman-Destructive-Confirm'] = destructiveConfirm.trim()
-      if (dualApprove.trim()) headers['X-Weissman-Dual-Approve'] = dualApprove.trim()
       await apiFetch(`/api/clients/${clientId}/heal-revert`, {
         method: 'POST',
-        headers,
-        body: {
+        headers: dualControlHeaders(destructiveConfirm, dualApprove, { 'Content-Type': 'application/json' }),
+        body: dualControlBody(destructiveConfirm, dualApprove, {
           finding_id: findingId,
           repo_slug: repoSlug.trim(),
           git_token: gitToken.trim(),
           channel,
           delete_branch: true,
-        },
+        }),
       })
       setReverted(true)
     } catch (e) {

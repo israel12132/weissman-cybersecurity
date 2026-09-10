@@ -15,12 +15,15 @@ require() {
 
 require DATABASE_URL
 require WEISSMAN_AUTH_DATABASE_URL
+require WEISSMAN_WORKER_DATABASE_URL
+require WEISSMAN_ANALYTICS_DATABASE_URL
 require WEISSMAN_MIGRATE_URL
 require WEISSMAN_JWT_SECRET
 require REDIS_URL
 require WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET
 require WEISSMAN_JOB_ORCHESTRATOR_SECRET
 require WEISSMAN_METRICS_TOKEN
+require WEISSMAN_RAG_PROVENANCE_SECRET
 
 if [[ "${#WEISSMAN_JWT_SECRET}" -lt 48 ]]; then
   echo "error: WEISSMAN_JWT_SECRET must be >= 48 chars" >&2
@@ -33,6 +36,10 @@ for v in WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET WEISSMAN_JOB_ORCHESTRATOR_SECRET WE
     exit 1
   fi
 done
+if [[ ! "${WEISSMAN_RAG_PROVENANCE_SECRET}" =~ ^[0-9a-fA-F]{64}$ ]]; then
+  echo "error: WEISSMAN_RAG_PROVENANCE_SECRET must be exactly 64 ASCII hex (openssl rand -hex 32); vault-loaded, no JWT fallback" >&2
+  exit 1
+fi
 
 cat <<EOF
 apiVersion: v1
@@ -44,6 +51,8 @@ type: Opaque
 stringData:
   database_url: "${DATABASE_URL}"
   auth_database_url: "${WEISSMAN_AUTH_DATABASE_URL}"
+  worker_database_url: "${WEISSMAN_WORKER_DATABASE_URL}"
+  analytics_database_url: "${WEISSMAN_ANALYTICS_DATABASE_URL}"
   migrate_url: "${WEISSMAN_MIGRATE_URL}"
   jwt_secret: "${WEISSMAN_JWT_SECRET}"
   redis_url: "${REDIS_URL}"
@@ -52,6 +61,7 @@ stringData:
   destructive_confirm_secret: "${WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET}"
   job_orchestrator_secret: "${WEISSMAN_JOB_ORCHESTRATOR_SECRET}"
   metrics_token: "${WEISSMAN_METRICS_TOKEN}"
+  rag_provenance_secret: "${WEISSMAN_RAG_PROVENANCE_SECRET}"
   integrations_vault_key: "${WEISSMAN_INTEGRATIONS_VAULT_KEY:-}"
   dual_approval_secret: "${WEISSMAN_DUAL_APPROVAL_SECRET:-}"
 EOF

@@ -53,7 +53,8 @@ const DEFAULT_PARAMS = {
   port_scan: true,
   subdomain_enum: true,
   subdomain_sources: 'both',
-  max_subdomains: 50,
+  max_subdomains: 0,
+  live_ai_discovery: true,
   dns_intel: true,
   dns_hardening: true,
   dkim_probe: true,
@@ -98,6 +99,7 @@ const TOGGLES = [
   { key: 'shadow_it_scan', labelKey: 'pages.attackSurfaceManagement.toggle_shadow_it_scan_label', hintKey: 'pages.attackSurfaceManagement.toggle_shadow_it_scan_hint' },
   { key: 'tech_fingerprint', labelKey: 'pages.attackSurfaceManagement.toggle_tech_fingerprint_label', hintKey: 'pages.attackSurfaceManagement.toggle_tech_fingerprint_hint' },
   { key: 'attack_path_correlation', labelKey: 'pages.attackSurfaceManagement.toggle_attack_path_correlation_label', hintKey: 'pages.attackSurfaceManagement.toggle_attack_path_correlation_hint' },
+  { key: 'live_ai_discovery', labelKey: 'pages.attackSurfaceManagement.toggle_live_ai_discovery_label', hintKey: 'pages.attackSurfaceManagement.toggle_live_ai_discovery_hint' },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -312,7 +314,18 @@ export default function AttackSurfaceManagement() {
   const [jobId, setJobId] = useState(null)
   const [findings, setFindings] = useState([])
   const [toast, setToast] = useState(null)
+  const [corpus, setCorpus] = useState(null)
   const [assetFilter, setAssetFilter] = useState('all')
+
+  const refreshCorpus = useCallback(() => {
+    apiFetch('/api/discovery-knowledge/stats')
+      .then((d) => { if (d && typeof d === 'object') setCorpus(d) })
+      .catch((err) => {
+        if (import.meta.env.DEV) {
+          console.debug('discovery-knowledge stats skipped', err)
+        }
+      })
+  }, [])
 
   const report = useMemo(
     () => findings.find((f) => f.type === 'attack_surface_report' || f.asset === 'report'),
@@ -353,11 +366,8 @@ export default function AttackSurfaceManagement() {
   }, [refreshFromHistory, setLastUpdated, setLastJobId])
 
   useEffect(() => {
-    apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
-  }, [])
+    refreshCorpus()
+  }, [refreshCorpus])
 
   useEffect(() => {
     const c = clients.find((x) => String(x.id) === String(selectedClientId))
@@ -382,6 +392,7 @@ export default function AttackSurfaceManagement() {
       setLastUpdated(new Date().toISOString())
       if (job?.id) setLastJobId(String(job.id))
       setJobId(null)
+      refreshCorpus()
     },
   })
 
@@ -523,6 +534,30 @@ export default function AttackSurfaceManagement() {
           </span>
         </div>
 
+        {corpus && (
+          <div className="mt-4 rounded-xl border border-cyan-500/20 bg-gradient-to-br from-cyan-950/30 to-black/40 p-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-cyan-300/80">{t('pages.attackSurfaceManagement.corpus_title')}</p>
+              <p className="text-[10px] font-mono text-cyan-200/60">{t('pages.attackSurfaceManagement.corpus_unbounded')}</p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+              {[
+                [t('pages.attackSurfaceManagement.corpus_seed_paths'), corpus.seed_paths],
+                [t('pages.attackSurfaceManagement.corpus_seed_subs'), corpus.seed_subdomain_prefixes],
+                [t('pages.attackSurfaceManagement.corpus_stored_paths'), corpus.stored_paths],
+                [t('pages.attackSurfaceManagement.corpus_stored_subs'), corpus.stored_subdomain_prefixes],
+                [t('pages.attackSurfaceManagement.corpus_llm'), corpus.llm_learned],
+                [t('pages.attackSurfaceManagement.corpus_confirmed'), corpus.confirmed_hits],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg border border-white/[0.06] bg-black/30 px-2.5 py-2">
+                  <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)] truncate">{label}</p>
+                  <p className="text-lg font-bold text-white tabular-nums">{Number(value ?? 0).toLocaleString()}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── Config panel ──────────────────────────────────────────── */}
         <AnimatePresence>
           {showConfig && (
@@ -558,8 +593,9 @@ export default function AttackSurfaceManagement() {
                       </select>
                     </Field>
                     <Field label={t('pages.attackSurfaceManagement.field_max_subdomains')}>
-                      <input type="number" className={inputCls} value={params.max_subdomains} min={0} max={500}
+                      <input type="number" className={inputCls} value={params.max_subdomains} min={0} max={100000}
                         onChange={(e) => setParam('max_subdomains', Number(e.target.value))} />
+                      <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1">{t('pages.attackSurfaceManagement.field_max_subdomains_hint')}</p>
                     </Field>
                     <Field label={t('pages.attackSurfaceManagement.field_severity_threshold')}>
                       <select className={inputCls} value={params.severity_threshold} onChange={(e) => setParam('severity_threshold', e.target.value)}>

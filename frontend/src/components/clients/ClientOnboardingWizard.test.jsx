@@ -57,8 +57,8 @@ describe('ClientOnboardingWizard — sector dropdown', () => {
     const msaCheckbox = screen.getByRole('checkbox', { hidden: true })
     fireEvent.click(msaCheckbox)
 
-    // emergency_contact_phone input
-    const phoneInput = screen.getByRole('textbox', { hidden: true })
+    const [nameInput, phoneInput] = screen.getAllByRole('textbox', { hidden: true })
+    fireEvent.change(nameInput, { target: { value: 'Ops lead' } })
     fireEvent.change(phoneInput, { target: { value: '+972501234567' } })
 
     // Click Next to advance to step 1 (basic info)

@@ -85,7 +85,7 @@ function parseSseBlock(block) {
  *
  * @param {string} pathOrUrl - API path or absolute URL (no auth in query string)
  * @param {object} [options]
- * @param {() => string} [options.getReconnectUrl] - dynamic URL for cursor-based resume
+ * @param {() => (string|Promise<string>)} [options.getReconnectUrl] - dynamic URL (async OK) for cursor-based resume
  * @param {number} [options.minBackoffMs]
  * @param {number} [options.maxBackoffMs]
  */
@@ -193,7 +193,18 @@ export class SseStream {
     const controller = new AbortController()
     this._abort = controller
 
-    const url = this._getReconnectUrl ? resolveUrl(this._getReconnectUrl()) : this._initialUrl
+    let url = this._initialUrl
+    if (this._getReconnectUrl) {
+      try {
+        const next = await Promise.resolve(this._getReconnectUrl())
+        url = resolveUrl(next)
+      } catch (err) {
+        if (controller.signal.aborted || this._closed) return
+        this._dispatch('error', err)
+        this._scheduleReconnect()
+        return
+      }
+    }
     this.url = url
 
     let response

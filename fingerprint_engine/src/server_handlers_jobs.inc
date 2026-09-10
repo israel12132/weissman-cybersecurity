@@ -79,11 +79,13 @@ async fn api_async_jobs_list(
     .unwrap_or(0);
     let _ = tx.commit().await;
 
+    let tenant_id = auth.tenant_id;
     let out: Vec<Value> = rows
         .into_iter()
         .map(|r| {
             let id_uuid: uuid::Uuid = r.try_get("id").unwrap_or_else(|_| uuid::Uuid::nil());
-            let payload: Value = r.try_get("payload").unwrap_or(Value::Null);
+            let stored: Value = r.try_get("payload").unwrap_or(Value::Null);
+            let payload = crate::job_envelope::reveal_job_payload_for_tenant(&stored, tenant_id);
             let target = payload.get("target").and_then(Value::as_str).map(|s| s.to_string());
             let engine = payload.get("engine").and_then(Value::as_str).map(|s| s.to_string());
             let client_id = payload.get("client_id").and_then(Value::as_i64);
@@ -136,7 +138,12 @@ async fn api_async_job_status(
 ) -> Response {
     match db::job_queue::get_job_for_tenant(state.app_pool.as_ref(), auth.tenant_id, job_id).await {
         Ok(Some(mut status)) => {
-            status.payload = crate::scan_payload_redaction::redact_for_api(&status.payload);
+            status.payload = crate::scan_payload_redaction::redact_for_api(
+                &crate::job_envelope::reveal_job_payload_for_tenant(
+                    &status.payload,
+                    auth.tenant_id,
+                ),
+            );
             if !crate::client_isolation::payload_visible_to(&auth, &status.payload) {
                 return (
                     StatusCode::NOT_FOUND,

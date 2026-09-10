@@ -20,6 +20,8 @@ pub struct BlastRadiusInput {
     pub client_id: Option<i64>,
     pub target_id: String,
     pub force_approved: bool,
+    /// Set only after a human approved a `pending_hitl` execution — never from playbook JSON.
+    pub hitl_approved: bool,
     pub expected_vpc_tag: Option<String>,
 }
 
@@ -106,30 +108,52 @@ pub async fn evaluate(pool: &PgPool, input: &BlastRadiusInput) -> BlastRadiusRep
         .saturating_add(report.neighbor_asset_value_usd);
     let ceiling = blast_radius_ceiling_usd();
 
-    if input.force_approved {
-        report.blocked = false;
-        report.block_reason = "operator pre_approved in playbook params".into();
-        return report;
-    }
+    apply_blast_decision(
+        &mut report,
+        total,
+        ceiling,
+        input.force_approved,
+        input.hitl_approved,
+    );
+    report
+}
+
+/// Pure decision: crown jewels always require HITL; playbook `pre_approved` cannot bypass that.
+pub fn apply_blast_decision(
+    report: &mut BlastRadiusReport,
+    total: i64,
+    ceiling: i64,
+    force_approved: bool,
+    hitl_approved: bool,
+) {
     if report.vpc_tag_mismatch {
         report.blocked = true;
+        report.requires_hitl = false;
         report.block_reason =
             "target VPC/tag does not match expected topology — wrong isolation scope".into();
-        return report;
+        return;
     }
-    if report.crown_jewel_touched && total > ceiling / 2 {
+    if report.crown_jewel_touched && !hitl_approved {
         report.blocked = true;
+        report.requires_hitl = true;
         report.block_reason =
-            format!("crown-jewel asset in blast radius (${total} exposure > ceiling/2)");
-        return report;
+            "crown-jewel asset requires human approval (HITL) before isolate".into();
+        return;
     }
-    if total > ceiling {
+    if force_approved && !report.crown_jewel_touched {
+        report.blocked = false;
+        report.requires_hitl = false;
+        report.block_reason = "operator pre_approved in playbook params (non-crown)".into();
+        return;
+    }
+    if total > ceiling && !hitl_approved {
         report.blocked = true;
+        report.requires_hitl = false;
         report.block_reason = format!("aggregate blast radius ${total} exceeds ceiling ${ceiling}");
-        return report;
+        return;
     }
     report.blocked = false;
-    report
+    report.requires_hitl = false;
 }
 
 impl BlastRadiusReport {
@@ -142,7 +166,46 @@ impl BlastRadiusReport {
             "neighbor_count": self.neighbor_count,
             "vpc_tag_mismatch": self.vpc_tag_mismatch,
             "blocked": self.blocked,
+            "requires_hitl": self.requires_hitl,
             "block_reason": self.block_reason,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn crown_jewel_always_requires_hitl_even_when_pre_approved() {
+        let mut r = BlastRadiusReport {
+            crown_jewel_touched: true,
+            ..Default::default()
+        };
+        apply_blast_decision(&mut r, 1_000, 500_000, true, false);
+        assert!(r.requires_hitl);
+        assert!(r.blocked);
+        apply_blast_decision(&mut r, 1_000, 500_000, true, true);
+        assert!(!r.requires_hitl);
+        assert!(!r.blocked);
+    }
+
+    #[test]
+    fn pre_approved_cannot_bypass_vpc_mismatch() {
+        let mut r = BlastRadiusReport {
+            vpc_tag_mismatch: true,
+            ..Default::default()
+        };
+        apply_blast_decision(&mut r, 0, 500_000, true, false);
+        assert!(r.blocked);
+        assert!(!r.requires_hitl);
+    }
+
+    #[test]
+    fn dollar_ceiling_blocks_non_crown() {
+        let mut r = BlastRadiusReport::default();
+        apply_blast_decision(&mut r, 1_000_000, 500_000, false, false);
+        assert!(r.blocked);
+        assert!(!r.requires_hitl);
     }
 }

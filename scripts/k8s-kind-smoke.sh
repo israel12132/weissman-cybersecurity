@@ -62,7 +62,7 @@ else
 fi
 
 section "Required secret keys in template"
-for key in destructive_confirm_secret job_orchestrator_secret metrics_token database_url migrate_url; do
+for key in destructive_confirm_secret job_orchestrator_secret metrics_token rag_provenance_secret database_url migrate_url; do
   if grep -q "$key:" deploy/k8s/secret.example.yaml; then
     ok "secret key $key"
   else

@@ -357,15 +357,14 @@ pub async fn api_admin_users_create(
 
     if crate::client_isolation::is_client_role(&role) {
         let cid = assigned_client_id.unwrap();
-        let exists_client: Option<i64> = sqlx::query_scalar(
-            "SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1",
-        )
-        .bind(cid)
-        .bind(auth.tenant_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .ok()
-        .flatten();
+        let exists_client: Option<i64> =
+            sqlx::query_scalar("SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1")
+                .bind(cid)
+                .bind(auth.tenant_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .ok()
+                .flatten();
         if exists_client.is_none() {
             let _ = tx.rollback().await;
             return (
@@ -607,15 +606,14 @@ pub async fn api_admin_users_update(
             )
                 .into_response();
         };
-        let exists_client: Option<i64> = sqlx::query_scalar(
-            "SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1",
-        )
-        .bind(cid)
-        .bind(auth.tenant_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .ok()
-        .flatten();
+        let exists_client: Option<i64> =
+            sqlx::query_scalar("SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1")
+                .bind(cid)
+                .bind(auth.tenant_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .ok()
+                .flatten();
         if exists_client.is_none() {
             let _ = tx.rollback().await;
             return (

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Wrench, Loader2, X, CheckCircle, AlertTriangle } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
+import { dualControlHeaders, dualControlBody } from '../../utils/destructiveConfirm'
 
 const CHANNELS = ['github_pr', 'github_direct_commit', 'gitlab_mr', 'bitbucket_pr', 'azure_repos_pr', 'diff_download', 'virtual_patch']
 
@@ -42,16 +43,19 @@ export default function BatchHealPanel({ findings, onClose }) {
     setError(null)
     setResult(null)
     try {
-      const headers = { 'Content-Type': 'application/json' }
-      if (destructiveConfirm.trim()) headers['X-Weissman-Destructive-Confirm'] = destructiveConfirm.trim()
-      if (dualApprove.trim()) headers['X-Weissman-Dual-Approve'] = dualApprove.trim()
+      const headers = dualControlHeaders(destructiveConfirm, dualApprove, { 'Content-Type': 'application/json' })
       let enqueued = 0
       let skipped = 0
       for (const [clientId, findingIds] of byClient.entries()) {
         const d = await apiFetch(`/api/clients/${clientId}/heal-batch`, {
           method: 'POST',
           headers,
-          body: { finding_ids: findingIds, repo_slug: repoSlug.trim(), git_token: gitToken.trim(), channel },
+          body: dualControlBody(destructiveConfirm, dualApprove, {
+            finding_ids: findingIds,
+            repo_slug: repoSlug.trim(),
+            git_token: gitToken.trim(),
+            channel,
+          }),
         })
         enqueued += d.enqueued || 0
         skipped += d.skipped || 0

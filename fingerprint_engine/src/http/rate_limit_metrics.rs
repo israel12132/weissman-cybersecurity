@@ -77,7 +77,14 @@ fn nz_env(name: &str, default: u32, min: u32, max: u32) -> u32 {
 
 #[must_use]
 pub fn scan_limit_per_minute() -> u32 {
-    nz_env("WEISSMAN_TENANT_SCAN_POSTS_PER_MINUTE", 24, 4, 240)
+    let base = nz_env("WEISSMAN_TENANT_SCAN_POSTS_PER_MINUTE", 24, 4, 240);
+    let tags = std::env::var("WEISSMAN_SCAN_ASSET_CLASS")
+        .ok()
+        .map(|s| vec![s])
+        .unwrap_or_default();
+    let factor =
+        crate::elite_hardening::stealth_ops::AssetClass::from_tags(&tags).scan_quota_factor();
+    ((base as f64) * factor).round().clamp(4.0, 240.0) as u32
 }
 
 #[must_use]

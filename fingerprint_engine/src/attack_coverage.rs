@@ -139,7 +139,23 @@ pub const COVERAGE: &[Technique] = &[
         id: "T1068",
         name: "Exploitation for Privilege Escalation",
         tactic: "Privilege Escalation",
-        engines: &["cloud_iam_escalation", "kubernetes_rbac_escape"],
+        engines: &[
+            "cloud_iam_escalation",
+            "kubernetes_rbac_escape",
+            "privilege_escalation_credential_access",
+        ],
+    },
+    Technique {
+        id: "T1134",
+        name: "Access Token Manipulation",
+        tactic: "Privilege Escalation",
+        engines: &["privilege_escalation_credential_access"],
+    },
+    Technique {
+        id: "T1548.002",
+        name: "Abuse Elevation Control Mechanism: Bypass User Account Control",
+        tactic: "Privilege Escalation",
+        engines: &["privilege_escalation_credential_access"],
     },
     // ── Defense Evasion ─────────────────────────────────────────────────────
     Technique {
@@ -186,7 +202,14 @@ pub const COVERAGE: &[Technique] = &[
             "secrets_manager_attack",
             "leak_hunter",
             "ai_supply_chain_attack",
+            "privilege_escalation_credential_access",
         ],
+    },
+    Technique {
+        id: "T1003",
+        name: "OS Credential Dumping",
+        tactic: "Credential Access",
+        engines: &["privilege_escalation_credential_access"],
     },
     Technique {
         id: "T1539",

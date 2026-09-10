@@ -119,13 +119,15 @@ Never set `WEISSMAN_ALLOW_INSECURE_TLS=1` in production.
 REDIS_URL=redis://redis-host:6379/0
 ```
 
-Required for multi-replica rate limits, login lockout (`/api/login`, `/api/auth/mfa/verify`), and agent fleet registry. When Redis is configured in production, middleware **fail-closed** (503) if Redis is unreachable — no silent in-memory fallback.
+Required for multi-replica rate limits, login lockout (`/api/login`, `/api/auth/mfa/verify`, `/api/auth/refresh`), and agent fleet registry. When Redis is configured in production and becomes unreachable, login and API governors **degrade** to a stricter in-memory cap (`50% / WEISSMAN_REPLICA_COUNT`, default 8 replicas if unset) and emit a SOC signal — they do not 503 legitimate clients. That split closes the load-balancer flood where each pod would otherwise allow a full 50%. Set `WEISSMAN_REPLICA_COUNT` to the live Deployment size. The login governor runs **in-process first** (before Redis and before any `weissman_auth` pool checkout) so a password-spray cannot exhaust the dedicated auth connections. Boot still refuses to start if Redis is required and cannot be pinged.
 
 Zero-trust job bus (requires `REDIS_URL` + dedicated orchestrator secret):
 
 ```bash
 WEISSMAN_JOB_ORCHESTRATOR_SECRET=<openssl rand -base64 48>
 ```
+
+Durable `weissman_async_jobs.payload` rows are AES-256-GCM sealed per tenant from the vault KEK (`WEISSMAN_INTEGRATIONS_VAULT_KEY` / vault key). A table dump is ciphertext. GCM AAD binds `tenant_id` plus the plaintext `client_id` / `engine` siblings, so swapping those fields next to the ciphertext fails open. The worker decrypts on claim; `GET /api/jobs/:id` decrypts the caller's tenant row and then redacts secrets. There is no bulk-decrypt helper. `target`, `validated_scope`, and tokens stay inside the envelope.
 
 See `docs/operations/AUTH-DB-ROTATION.md` for zero-downtime `weissman_auth` password rotation.
 

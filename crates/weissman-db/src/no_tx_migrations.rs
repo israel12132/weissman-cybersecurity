@@ -44,6 +44,7 @@
 //!     the CONCURRENTLY index migration that ships with the bootstrap.
 
 use sha2::{Digest, Sha384};
+use sqlx::postgres::PgConnection;
 use sqlx::{Executor, PgPool};
 use std::fs;
 use std::path::Path;
@@ -160,7 +161,7 @@ pub async fn apply_no_tx_migrations<P: AsRef<Path>>(
             version,
             description,
             sql: String::from_utf8_lossy(&bytes).into_owned(),
-            checksum: Sha384::digest(&bytes).to_vec(),
+            checksum: sqlx_sha384(&bytes),
         });
     }
     candidates.sort_by_key(|m| m.version);
@@ -170,16 +171,30 @@ pub async fn apply_no_tx_migrations<P: AsRef<Path>>(
     // the SELECT below.
     ensure_sqlx_migrations_table(pool).await?;
 
+    // One batched SELECT for all no-tx versions (typical boot: all already applied).
+    // Per-file SELECTs used to add tens of milliseconds of serial latency.
+    let versions: Vec<i64> = candidates.iter().map(|m| m.version).collect();
+    let recorded = load_recorded_checksums(pool, &versions).await?;
+
     let mut deferred: Vec<NoTxMigration> = Vec::new();
     for m in &candidates {
-        if migration_already_recorded(pool, m).await? {
-            tracing::debug!(
-                target: "weissman_db::no_tx",
-                version = m.version,
-                description = %m.description,
-                "already applied — skip"
-            );
-            continue;
+        match recorded.get(&m.version) {
+            Some(existing) if existing == &m.checksum => {
+                tracing::debug!(
+                    target: "weissman_db::no_tx",
+                    version = m.version,
+                    description = %m.description,
+                    "already applied — skip"
+                );
+                continue;
+            }
+            Some(_) => {
+                return Err(NoTxMigrateError::ChecksumMismatch {
+                    version: m.version,
+                    description: m.description.clone(),
+                });
+            }
+            None => {}
         }
         match run_no_tx_statements(pool, m).await {
             Ok(elapsed_ms) => record_no_tx_applied(pool, m, elapsed_ms).await?,
@@ -278,6 +293,36 @@ fn parse_version_and_description(name: &str) -> Option<(i64, String)> {
     Some((version, description))
 }
 
+/// SQLx-compatible SHA-384 (48 bytes). Used for `_sqlx_migrations.checksum`.
+#[must_use]
+pub fn sqlx_sha384(bytes: &[u8]) -> Vec<u8> {
+    Sha384::digest(bytes).to_vec()
+}
+
+async fn load_recorded_checksums(
+    pool: &PgPool,
+    versions: &[i64],
+) -> Result<std::collections::HashMap<i64, Vec<u8>>, NoTxMigrateError> {
+    let mut map = std::collections::HashMap::new();
+    if versions.is_empty() {
+        return Ok(map);
+    }
+    let rows: Vec<(i64, Vec<u8>)> = sqlx::query_as(
+        "SELECT version, checksum FROM _sqlx_migrations WHERE success = true AND version = ANY($1)",
+    )
+    .bind(versions)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| NoTxMigrateError::Record {
+        version: 0,
+        source: e,
+    })?;
+    for (v, c) in rows {
+        map.insert(v, c);
+    }
+    Ok(map)
+}
+
 async fn ensure_sqlx_migrations_table(pool: &PgPool) -> Result<(), NoTxMigrateError> {
     pool.execute(
         r#"CREATE TABLE IF NOT EXISTS _sqlx_migrations (
@@ -297,43 +342,53 @@ async fn ensure_sqlx_migrations_table(pool: &PgPool) -> Result<(), NoTxMigrateEr
     Ok(())
 }
 
-async fn migration_already_recorded(
-    pool: &PgPool,
-    m: &NoTxMigration,
-) -> Result<bool, NoTxMigrateError> {
-    let row: Option<(Vec<u8>,)> = sqlx::query_as(
-        "SELECT checksum FROM _sqlx_migrations WHERE version = $1 AND success = true",
-    )
-    .bind(m.version)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| NoTxMigrateError::Record {
-        version: m.version,
-        source: e,
-    })?;
-    match row {
-        Some((existing_sum,)) => {
-            if existing_sum == m.checksum {
-                Ok(true)
-            } else {
-                Err(NoTxMigrateError::ChecksumMismatch {
-                    version: m.version,
-                    description: m.description.clone(),
-                })
-            }
-        }
-        None => Ok(false),
-    }
-}
-
 /// Execute the migration SQL outside any transaction. Statements are split on
 /// `;` boundaries that aren't inside string literals or dollar-quoted blocks.
 /// Returns the wall-clock execution time (ms). The raw SQLx error is preserved
 /// (not wrapped) so the caller can inspect its SQLSTATE — see
 /// [`is_missing_dependency`].
+///
+/// HNSW / `CREATE INDEX CONCURRENTLY` files pin a **single** connection so
+/// `SET maintenance_work_mem` survives for the whole build (`SET LOCAL` is a
+/// no-op outside a transaction, and CONCURRENTLY cannot run inside one).
+/// Invalid leftover indexes are dropped before the build and again if a
+/// statement fails, so a crashed CONCURRENTLY run cannot leak disk.
 async fn run_no_tx_statements(pool: &PgPool, m: &NoTxMigration) -> Result<i64, sqlx::Error> {
     let started = Instant::now();
     let statements = split_sql_statements(&m.sql);
+    if needs_pinned_index_connection(&m.sql) {
+        let mut conn = pool.acquire().await?;
+        let hnsw = sql_has_hnsw_concurrent_create(&m.sql);
+        if hnsw {
+            apply_hnsw_maintenance_work_mem(&mut conn).await?;
+        }
+        let exec = match drop_invalid_indexes(&mut conn).await {
+            Ok(_) => exec_no_tx_statements(&mut conn, m, &statements).await,
+            Err(e) => Err(e),
+        };
+        if exec.is_err() {
+            if let Err(e) = drop_invalid_indexes(&mut conn).await {
+                tracing::warn!(
+                    target: "weissman_db::no_tx",
+                    version = m.version,
+                    error = %e,
+                    "could not drop INVALID leftover indexes after failed no-tx build"
+                );
+            }
+        }
+        if hnsw {
+            if let Err(e) = reset_maintenance_work_mem(&mut conn).await {
+                tracing::warn!(
+                    target: "weissman_db::no_tx",
+                    version = m.version,
+                    error = %e,
+                    "could not RESET maintenance_work_mem after HNSW build"
+                );
+            }
+        }
+        exec?;
+        return Ok(started.elapsed().as_millis() as i64);
+    }
     for (i, stmt) in statements.iter().enumerate() {
         let trimmed = stmt.trim();
         if trimmed.is_empty() {
@@ -349,6 +404,123 @@ async fn run_no_tx_statements(pool: &PgPool, m: &NoTxMigration) -> Result<i64, s
         pool.execute(trimmed).await?;
     }
     Ok(started.elapsed().as_millis() as i64)
+}
+
+async fn exec_no_tx_statements(
+    conn: &mut PgConnection,
+    m: &NoTxMigration,
+    statements: &[String],
+) -> Result<(), sqlx::Error> {
+    for (i, stmt) in statements.iter().enumerate() {
+        let trimmed = stmt.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        tracing::info!(
+            target: "weissman_db::no_tx",
+            version = m.version,
+            description = %m.description,
+            statement_index = i,
+            "executing no-tx statement"
+        );
+        conn.execute(trimmed).await?;
+    }
+    Ok(())
+}
+
+fn needs_pinned_index_connection(sql: &str) -> bool {
+    let u = sql.to_ascii_uppercase();
+    u.contains("CREATE INDEX CONCURRENTLY") || u.contains("DROP INDEX CONCURRENTLY")
+}
+
+fn sql_has_hnsw_concurrent_create(sql: &str) -> bool {
+    let u = sql.to_ascii_uppercase();
+    u.contains("CREATE INDEX CONCURRENTLY") && u.contains("USING HNSW")
+}
+
+/// Allowlisted `maintenance_work_mem` for HNSW CONCURRENTLY builds.
+///
+/// `SET` cannot take a bind parameter, so the value MUST come from this
+/// allowlist — never interpolate operator input verbatim.
+fn hnsw_maintenance_work_mem() -> &'static str {
+    parse_hnsw_maintenance_work_mem(
+        std::env::var("WEISSMAN_HNSW_MAINTENANCE_WORK_MEM")
+            .ok()
+            .as_deref(),
+    )
+}
+
+fn parse_hnsw_maintenance_work_mem(raw: Option<&str>) -> &'static str {
+    const DEFAULT: &str = "256MB";
+    match raw.map(str::trim) {
+        None | Some("") => DEFAULT,
+        Some("64MB") => "64MB",
+        Some("128MB") => "128MB",
+        Some("256MB") => "256MB",
+        Some("512MB") => "512MB",
+        Some("1GB") => "1GB",
+        Some(other) => {
+            tracing::warn!(
+                target: "weissman_db::no_tx",
+                value = other,
+                "invalid WEISSMAN_HNSW_MAINTENANCE_WORK_MEM (allow 64MB|128MB|256MB|512MB|1GB); using 256MB"
+            );
+            DEFAULT
+        }
+    }
+}
+
+async fn apply_hnsw_maintenance_work_mem(conn: &mut PgConnection) -> Result<(), sqlx::Error> {
+    let mem = hnsw_maintenance_work_mem();
+    tracing::info!(
+        target: "weissman_db::no_tx",
+        maintenance_work_mem = mem,
+        "HNSW CONCURRENTLY build: session maintenance_work_mem (SET LOCAL is invalid outside a transaction)"
+    );
+    sqlx::query(&format!("SET maintenance_work_mem = '{mem}'"))
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}
+
+async fn reset_maintenance_work_mem(conn: &mut PgConnection) -> Result<(), sqlx::Error> {
+    sqlx::query("RESET maintenance_work_mem")
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}
+
+fn pg_quote_ident(ident: &str) -> String {
+    format!("\"{}\"", ident.replace('"', "\"\""))
+}
+
+/// Drop leftover INVALID indexes (crashed `CREATE INDEX CONCURRENTLY`) so they
+/// cannot consume production disk until the next successful rebuild.
+async fn drop_invalid_indexes(conn: &mut PgConnection) -> Result<usize, sqlx::Error> {
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        r#"SELECT n.nspname, c.relname
+           FROM pg_class c
+           JOIN pg_index i ON i.indexrelid = c.oid
+           JOIN pg_namespace n ON n.oid = c.relnamespace
+           WHERE c.relkind = 'i'
+             AND NOT i.indisvalid
+             AND n.nspname NOT IN ('pg_catalog', 'information_schema')"#,
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+    let n = rows.len();
+    for (schema, name) in &rows {
+        let ident = format!("{}.{}", pg_quote_ident(schema), pg_quote_ident(name));
+        tracing::warn!(
+            target: "weissman_db::no_tx",
+            index = %ident,
+            "dropping INVALID leftover index before/after CONCURRENTLY build"
+        );
+        sqlx::query(&format!("DROP INDEX CONCURRENTLY IF EXISTS {ident}"))
+            .execute(&mut *conn)
+            .await?;
+    }
+    Ok(n)
 }
 
 /// Record a no-tx migration as applied in `_sqlx_migrations` with its
@@ -596,12 +768,153 @@ mod tests {
     #[test]
     fn checksum_matches_known_sha384_for_empty_input() {
         // Sanity: SHA-384 of empty input is the well-known FIPS 180-4 constant.
-        let d = Sha384::digest(b"");
+        let d = sqlx_sha384(b"");
         let hex = d.iter().map(|b| format!("{:02x}", b)).collect::<String>();
         assert_eq!(
             hex,
             "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b",
         );
+        assert_eq!(d, Sha384::digest(b"").to_vec());
+        assert_eq!(d.len(), 48, "SHA-384 digest is 48 bytes (SQLx BYTEA width)");
+    }
+
+    #[test]
+    fn pgvector_hnsw_no_tx_migration_pins_m16_ef64() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/migrations/20260827115700_pgvector_hnsw_m16_ef64.sql"
+        );
+        let sql = std::fs::read_to_string(path).expect("hnsw migration");
+        assert!(
+            sql.starts_with("-- weissman:no-transaction"),
+            "must be a no-tx pre-runner file"
+        );
+        assert!(sql.contains("m = 16"));
+        assert!(sql.contains("ef_construction = 64"));
+        assert!(sql.contains("ix_supreme_council_mem_embedding_hnsw"));
+        assert!(sql.contains("ix_pwp_embedding_hnsw"));
+        assert!(sql.contains("CREATE INDEX CONCURRENTLY"));
+    }
+
+    #[test]
+    fn hnsw_sql_is_detected_as_pinned_concurrent_build() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/migrations/20260827115700_pgvector_hnsw_m16_ef64.sql"
+        );
+        let sql = std::fs::read_to_string(path).expect("hnsw migration");
+        assert!(sql_has_hnsw_concurrent_create(&sql));
+        assert!(needs_pinned_index_connection(&sql));
+        assert!(!sql_has_hnsw_concurrent_create(
+            "CREATE INDEX CONCURRENTLY ix ON t(x)"
+        ));
+        assert!(needs_pinned_index_connection(
+            "DROP INDEX CONCURRENTLY IF EXISTS ix_async_jobs_pending"
+        ));
+    }
+
+    #[test]
+    fn hnsw_maintenance_work_mem_is_allowlisted() {
+        assert_eq!(parse_hnsw_maintenance_work_mem(None), "256MB");
+        assert_eq!(parse_hnsw_maintenance_work_mem(Some("")), "256MB");
+        assert_eq!(parse_hnsw_maintenance_work_mem(Some("512MB")), "512MB");
+        assert_eq!(parse_hnsw_maintenance_work_mem(Some("1GB")), "1GB");
+        assert_eq!(parse_hnsw_maintenance_work_mem(Some("64MB")), "64MB");
+        assert_eq!(
+            parse_hnsw_maintenance_work_mem(Some("'; DROP TABLE students; --")),
+            "256MB"
+        );
+    }
+
+    #[test]
+    fn pg_quote_ident_escapes_double_quotes() {
+        assert_eq!(
+            pg_quote_ident("ix_pwp_embedding_hnsw"),
+            "\"ix_pwp_embedding_hnsw\""
+        );
+        assert_eq!(pg_quote_ident("odd\"name"), "\"odd\"\"name\"");
+    }
+
+    #[test]
+    fn hermetic_roles_migration_grants_thirteen_ro_tables() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/migrations/20260827115800_hermetic_db_roles.sql"
+        );
+        let sql = std::fs::read_to_string(path).expect("roles migration");
+        assert!(sql.contains("NOBYPASSRLS"));
+        assert!(sql.contains("ALTER ROLE weissman_auth"));
+        assert!(sql.contains("BYPASSRLS"));
+        assert!(sql.contains("statement_timeout = '15s'"));
+        for table in crate::role_guard::RO_SELECT_TABLES {
+            assert!(
+                sql.contains(table),
+                "weissman_ro grant list must include {table}"
+            );
+        }
+        assert!(!sql.contains("weissman_async_jobs"));
+    }
+
+    #[test]
+    fn analytics_worker_roles_migration_matches_role_guard_lists() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/migrations/20260829120000_hermetic_analytics_worker_roles.sql"
+        );
+        let sql = std::fs::read_to_string(path).expect("analytics/worker roles migration");
+        assert!(sql.contains("BYPASSRLS"));
+        assert!(sql.contains("weissman_analytics"));
+        assert!(sql.contains("weissman_worker"));
+        // Historical file granted raw meter tables; do not point ANALYTICS_SELECT_TABLES at it.
+        for table in [
+            "billing_plans",
+            "tenant_usage_counters",
+            "weissman_tenant_quota_usage",
+            "tenant_llm_usage",
+        ] {
+            assert!(
+                sql.contains(table),
+                "legacy analytics grants must include {table}"
+            );
+        }
+        for table in crate::role_guard::WORKER_JOB_BUS_TABLES {
+            assert!(sql.contains(table), "worker grants must include {table}");
+        }
+        assert!(!sql.contains("vulnerabilities"));
+        assert!(!sql.contains("agent_anomalies"));
+        let fail_closed = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/migrations/20260829120100_job_bus_tenant_fail_closed.sql"
+        );
+        let pol = std::fs::read_to_string(fail_closed).expect("job-bus fail-closed");
+        assert!(pol.contains("app_current_tenant_id()"));
+        assert!(!pol.contains("NULLIF(current_setting('app.current_tenant_id'"));
+    }
+
+    #[test]
+    fn billing_usage_snapshot_migration_matches_current_analytics_grants() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/migrations/20260830120000_billing_usage_snapshot_15s.sql"
+        );
+        let sql = std::fs::read_to_string(path).expect("billing snapshot migration");
+        assert!(sql.contains("statement_timeout = '15s'"));
+        assert!(sql.contains("weissman_billing_usage_snapshot"));
+        assert!(sql.contains("weissman_refresh_billing_usage_snapshot"));
+        assert!(
+            sql.contains("SET search_path = pg_catalog, public, pg_temp"),
+            "SECURITY DEFINER must pin search_path (pg_temp last) against hijack"
+        );
+        assert!(
+            sql.contains("REVOKE SELECT ON public.tenant_usage_counters FROM weissman_analytics")
+        );
+        for table in crate::role_guard::ANALYTICS_SELECT_TABLES {
+            assert!(
+                sql.contains(table),
+                "current analytics grants must include {table}"
+            );
+        }
+        assert!(!sql.contains("GRANT SELECT ON public.tenant_usage_counters TO weissman_analytics"));
     }
 
     #[test]

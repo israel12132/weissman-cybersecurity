@@ -31,7 +31,7 @@ function fmtUsdFull(n) {
 }
 
 function contributorsCsv(rows) {
-  const header = ['label', 'node_type', 'business_value_usd', 'crown_jewel', 'kev_present', 'max_cvss', 'max_epss', 'sle_usd', 'ale_usd']
+  const header = ['label', 'node_type', 'business_value_usd', 'crown_jewel', 'kev_present', 'max_cvss', 'max_epss', 'sle_usd', 'ale_usd', 'agent_present', 'roi_if_patched_usd', 'delay_cost_usd_per_day']
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
   const lines = [
     header.join(','),
@@ -46,6 +46,9 @@ function contributorsCsv(rows) {
         r.max_epss,
         r.sle_usd,
         r.ale_usd,
+        r.agent_present,
+        r.roi_if_patched_usd,
+        r.delay_cost_usd_per_day,
       ].map(esc).join(','),
     ),
   ]
@@ -157,6 +160,25 @@ export default function FinancialRisk() {
         header: t(`${NS}.col_ale`),
         cell: (ctx) => <span className="tabular-nums text-rose-300/90 font-semibold">{fmtUsd(ctx.getValue())}</span>,
       }),
+      columnHelper.accessor('agent_present', {
+        header: t(`${NS}.col_agent`),
+        cell: (ctx) =>
+          ctx.getValue() ? (
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-300">
+              UEBA
+            </span>
+          ) : (
+            <span className="text-[var(--text-disabled)]">—</span>
+          ),
+      }),
+      columnHelper.accessor('roi_if_patched_usd', {
+        header: t(`${NS}.col_roi`),
+        cell: (ctx) => <span className="tabular-nums text-emerald-300/90">{fmtUsd(ctx.getValue())}</span>,
+      }),
+      columnHelper.accessor('delay_cost_usd_per_day', {
+        header: t(`${NS}.col_delay`),
+        cell: (ctx) => <span className="tabular-nums text-amber-300/80">{fmtUsd(ctx.getValue())}</span>,
+      }),
     ],
     [t],
   )
@@ -265,6 +287,32 @@ export default function FinancialRisk() {
                 value={fmtUsd(snapshot.total_asset_value_usd)}
                 hint={t(`${NS}.kpi_total_hint`)}
                 accent="#22d3ee"
+              />
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <ExecutiveWidget
+                label={t(`${NS}.kpi_concentration`)}
+                value={`${snapshot.concentration_pct ?? 0}%`}
+                hint={t(`${NS}.kpi_concentration_hint`)}
+                accent="#a78bfa"
+              />
+              <ExecutiveWidget
+                label={t(`${NS}.kpi_delay`)}
+                value={fmtUsd(snapshot.delay_cost_usd_per_day)}
+                hint={t(`${NS}.kpi_delay_hint`)}
+                accent="#f97316"
+              />
+              <ExecutiveWidget
+                label={t(`${NS}.kpi_agent`)}
+                value={fmtUsd(snapshot.agent_protected_ale_usd)}
+                hint={t(`${NS}.kpi_agent_hint`)}
+                accent="#4ade80"
+              />
+              <ExecutiveWidget
+                label={t(`${NS}.kpi_path_ale`)}
+                value={fmtUsd(snapshot.path_ale_usd)}
+                hint={t(`${NS}.kpi_path_ale_hint`)}
+                accent="#f59e0b"
               />
             </div>
 

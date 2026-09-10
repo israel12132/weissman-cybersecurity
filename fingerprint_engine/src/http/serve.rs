@@ -53,6 +53,7 @@ use crate::dag_pipeline;
 use crate::db;
 use crate::deception_engine;
 use crate::exploit_synthesis_engine;
+use crate::overflow_log::DropAggregator;
 use crate::risk_graph;
 use crate::threat_intel_engine;
 
@@ -73,6 +74,8 @@ struct PoEJobState {
 const POE_UPDATES_CHANNEL_CAPACITY: usize = 100;
 type PoeJobRegistry = Arc<DashMap<String, Vec<flume::Sender<String>>>>;
 
+static POE_DROPS: DropAggregator = DropAggregator::new("poe_sse");
+
 /// Global error/telemetry broadcast: engine failures (timeout, DB lock, LLM unreachable, etc.) so UI can show Toast.
 const TELEMETRY_BROADCAST_CAPACITY: usize = 128;
 
@@ -81,8 +84,8 @@ pub struct AppState {
     pub intel_pool: Arc<PgPool>,
     pub auth_pool: Arc<PgPool>,
     /// Optional read-only pool (separate role with SELECT-only grants).
-    /// When `Some`, `nl_query::ask` will use this for the compiled SQL execution
-    /// step. Defense-in-depth: even if validation breaks, Postgres rejects writes.
+    /// When `Some`, Ask Weissman and Command Center dashboard reads use this
+    /// pool (`weissman_ro`). Defense-in-depth: even if validation breaks, Postgres rejects writes.
     pub read_only_pool: Option<Arc<PgPool>>,
     started_at: Instant,
     timing_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
@@ -113,6 +116,14 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// Dashboard and other read-only surfaces. Prefers `weissman_ro` when configured.
+    #[must_use]
+    pub fn read_pool(&self) -> &PgPool {
+        self.read_only_pool
+            .as_deref()
+            .unwrap_or(self.app_pool.as_ref())
+    }
+
     pub(crate) fn take_sovereign_swarm_rx(
         &self,
     ) -> Option<tokio::sync::mpsc::Receiver<crate::sovereign_c2::SovereignSwarmCmd>> {
@@ -246,6 +257,7 @@ static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
     ),
     (Method::POST, "/api/auth/signup", RouteGate::Always),
     (Method::GET, "/api/auth/verify", RouteGate::Always),
+    (Method::POST, "/api/public/demo-request", RouteGate::Always),
     (Method::POST, "/api/v1/alerts/aws-canary", RouteGate::Always),
     // Public service status (SLA_AND_STATUS.md §4) — must be readable during an incident.
     (Method::GET, "/status", RouteGate::Always),
@@ -502,7 +514,7 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
     )
     .await
     {
-        Some(tid) => match db::begin_tenant_tx(&state.app_pool, tid).await {
+        Some(tid) => match db::begin_tenant_tx(state.read_pool(), tid).await {
             Ok(mut tx) => {
                 let v: i64 =
                     sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
@@ -1126,7 +1138,7 @@ async fn api_command_center_ticker(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (StatusCode::OK, Json(json!({ "events": [] }))).into_response();
     };
     let rows = sqlx::query(
@@ -1195,6 +1207,8 @@ struct ClientConfigBody {
     critical_infra_probe_authorized: Option<bool>,
     /// Target whitelist for critical-infrastructure probes (hosts, CIDRs, domains).
     critical_infra_targets: Option<Vec<String>>,
+    #[serde(default, skip_serializing)]
+    destructive_confirm: String,
 }
 
 #[derive(Deserialize)]
@@ -1327,6 +1341,10 @@ struct AutoHealBody {
     channel: Option<String>,
     /// Optional curl for the post-patch health/control probe; empty ⇒ GET the app root.
     health_check_curl: Option<String>,
+    #[serde(default, skip_serializing)]
+    destructive_confirm: String,
+    #[serde(default)]
+    dual_approve: String,
 }
 
 #[derive(Deserialize)]
@@ -1338,6 +1356,10 @@ struct HealRevertBody {
     gitlab_host: Option<String>,
     #[serde(default)]
     delete_branch: Option<bool>,
+    #[serde(default, skip_serializing)]
+    destructive_confirm: String,
+    #[serde(default)]
+    dual_approve: String,
 }
 
 #[derive(Deserialize)]
@@ -1348,6 +1370,10 @@ struct HealBatchBody {
     base_branch: Option<String>,
     channel: Option<String>,
     health_check_curl: Option<String>,
+    #[serde(default, skip_serializing)]
+    destructive_confirm: String,
+    #[serde(default)]
+    dual_approve: String,
 }
 
 #[derive(Deserialize)]
@@ -1390,6 +1416,8 @@ struct DeceptionDeployCloudBody {
     s3_object_key: Option<String>,
     s3_region: Option<String>,
     ssm_parameter_path: Option<String>,
+    #[serde(default, skip_serializing)]
+    destructive_confirm: String,
 }
 
 const DEFAULT_CLIENT_CONFIGS_JSON: &str = r#"{"enabled_engines":["osint","asm","supply_chain","bola_idor","llm_path_fuzz","semantic_ai_fuzz","microsecond_timing","ai_adversarial_redteam","nexus_sovereign_swarm"],"roe_mode":"safe_proofs","stealth_level":50,"industrial_ot_enabled":false}"#;
@@ -1412,26 +1440,8 @@ pub fn new_app_state(
     app_pool: Arc<PgPool>,
     auth_pool: Arc<PgPool>,
     intel_pool: Arc<PgPool>,
+    read_only_pool: Option<Arc<PgPool>>,
 ) -> Arc<AppState> {
-    // Optional read-only pool for /api/ask. Falls back to None if the env var
-    // isn't set — endpoint will then return 503 with a clear "configure this" hint.
-    let read_only_pool: Option<Arc<PgPool>> = match std::env::var("WEISSMAN_READ_ONLY_DATABASE_URL")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-    {
-        Some(url) => match sqlx::postgres::PgPoolOptions::new()
-            .max_connections(5)
-            .acquire_timeout(std::time::Duration::from_secs(5))
-            .connect_lazy(&url)
-        {
-            Ok(p) => Some(Arc::new(p)),
-            Err(e) => {
-                tracing::warn!(target: "nl_query", error = %e, "read-only pool init failed");
-                None
-            }
-        },
-        None => None,
-    };
     let (timing_tx, _) = tokio::sync::broadcast::channel::<String>(256);
     let (redteam_tx, _) = tokio::sync::broadcast::channel::<String>(256);
     let (radar_tx, _) = tokio::sync::broadcast::channel::<String>(256);
@@ -1440,25 +1450,45 @@ pub fn new_app_state(
     let poe_job_registry: PoeJobRegistry = Arc::new(DashMap::new());
     let registry_clone = poe_job_registry.clone();
     tokio::spawn(async move {
-        while let Ok((job_id, json)) = poe_updates_rx.recv_async().await {
-            // Prune disconnected SSE subscribers as we forward. If no subscribers remain
-            // for this job_id after pruning, drop the map entry too — otherwise the
-            // DashMap accumulates one orphan key per scan forever (slow leak).
-            let drop_key = {
-                let Some(mut senders) = registry_clone.get_mut(&job_id) else {
-                    continue;
-                };
-                senders.retain(|tx| match tx.try_send(json.clone()) {
-                    Ok(()) => true,
-                    Err(TrySendError::Disconnected(_)) => false,
-                    Err(TrySendError::Full(_)) => true,
-                });
-                senders.is_empty()
-            };
-            if drop_key {
-                registry_clone.remove(&job_id);
+        let mut flush = tokio::time::interval(Duration::from_secs(5));
+        flush.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tokio::select! {
+                recv = poe_updates_rx.recv_async() => {
+                    let Ok((job_id, json)) = recv else { break; };
+                    // Prune disconnected SSE subscribers as we forward. If no subscribers remain
+                    // for this job_id after pruning, drop the map entry too — otherwise the
+                    // DashMap accumulates one orphan key per scan forever (slow leak).
+                    let drop_key = {
+                        let Some(mut senders) = registry_clone.get_mut(&job_id) else {
+                            continue;
+                        };
+                        let mut spilled = false;
+                        senders.retain(|tx| match tx.try_send(json.clone()) {
+                            Ok(()) => true,
+                            Err(TrySendError::Disconnected(_)) => false,
+                            Err(TrySendError::Full(_)) => {
+                                if !spilled {
+                                    POE_DROPS.record_payload(&json);
+                                    spilled = true;
+                                } else {
+                                    POE_DROPS.record(1);
+                                }
+                                true
+                            }
+                        });
+                        senders.is_empty()
+                    };
+                    if drop_key {
+                        registry_clone.remove(&job_id);
+                    }
+                }
+                _ = flush.tick() => {
+                    let _ = POE_DROPS.flush();
+                }
             }
         }
+        let _ = POE_DROPS.flush();
     });
     let (telemetry_tx, _) = tokio::sync::broadcast::channel::<String>(TELEMETRY_BROADCAST_CAPACITY);
     let telemetry_broadcast_tx = Arc::new(telemetry_tx);
@@ -1511,7 +1541,7 @@ pub fn new_app_state(
     })
 }
 
-pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
+pub fn spawn_http_background_tasks(state: &Arc<AppState>, job_control_pool: Arc<PgPool>) {
     let app_pool = state.app_pool.clone();
     let intel_pool = state.intel_pool.clone();
     let auth_pool = state.auth_pool.clone();
@@ -1528,6 +1558,8 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
     // provider, not by us — so a localhost or non-TLS value makes login impossible in a way that
     // only ever surfaces as an opaque redirect-mismatch at the IdP.
     crate::oidc_auth::warn_if_sso_base_url_unusable();
+    crate::sovereign_operator::forge::spawn_forge_janitor();
+    crate::nl_query::spawn_audit_worker(app_pool.clone());
     crate::endpoint_agents::spawn_pending_task_pusher(
         app_pool.clone(),
         state.endpoint_agents.clone(),
@@ -1539,6 +1571,11 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         );
     }
     crate::agent_registry_sync::spawn_agent_registry_redis_sync(state.endpoint_agents.clone());
+    crate::suppression_cache_sync::spawn_suppression_cache_redis_sync(app_pool.clone());
+    crate::path_templates::spawn_prewarm(app_pool.clone());
+    // Every replica: Ask Weissman hash-chain is per-process mpsc + DB sweep.
+    // FOR UPDATE lives here, never on the HTTP insert path.
+    crate::nl_audit_chain::spawn(app_pool.clone());
     // Cross-replica real-time: bridge the live telemetry broadcast over Redis pub/sub so
     // SSE/WS clients on every replica see events produced on any replica (no-op without REDIS_URL).
     crate::telemetry_bus::spawn_bridge("telemetry", (*state.telemetry_broadcast_tx).clone());
@@ -1665,7 +1702,7 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
             state.telemetry_broadcast_tx.clone(),
         );
         crate::data_retention::spawn_data_retention_loop(app_pool.clone(), intel_pool.clone());
-        crate::async_jobs::spawn_stale_lock_reclaim_loop(app_pool.clone());
+        crate::async_jobs::spawn_stale_lock_reclaim_loop(job_control_pool);
         // Threat-intel mirrors (CISA KEV + FIRST EPSS). Both are best-effort, idempotent,
         // and gated by env vars so dev/offline runs can skip outbound HTTP.
         crate::intel_kev::bootstrap_kev_catalog(app_pool.clone());
@@ -1685,6 +1722,10 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         // Autonomous self-improvement engine — hourly, toggled live from the Command Center
         // (`self_improve_enabled`). Proposes improvements; approval opens a PR, never touches main.
         crate::self_improve::spawn_self_improve_loop(
+            app_pool.clone(),
+            state.telemetry_broadcast_tx.clone(),
+        );
+        crate::sovereign_operator::hourly::spawn_hourly_loop(
             app_pool.clone(),
             state.telemetry_broadcast_tx.clone(),
         );
@@ -1832,9 +1873,6 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             .route("/dashboard", get(dashboard_page))
     };
     let api = serve_route_groups::mount_api_routes(root_routes)
-        .layer(middleware::from_fn(
-            crate::http::login_rate_limit_middleware,
-        ))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             crate::http::tenant_scan_limit::tenant_scan_rate_limit_middleware,
@@ -1842,18 +1880,32 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .layer(middleware::from_fn(
             crate::http::ceo_rbac::ceo_rbac_middleware,
         ))
+        .layer(middleware::from_fn(
+            crate::sovereign_operator::sovereign_operator_rbac_middleware,
+        ))
         .layer(middleware::from_fn(crate::rbac::mutation_rbac_middleware))
-        .layer(middleware::from_fn(crate::http::client_scope::client_scope_middleware))
+        .layer(middleware::from_fn(
+            crate::http::client_scope::client_scope_middleware,
+        ))
         .layer(middleware::from_fn(
             crate::http::sse_context::sse_context_middleware,
         ))
         .layer(middleware::from_fn_with_state(state.clone(), auth_guard))
         .layer(middleware::from_fn(crate::http::api_rate_limit_middleware))
+        // Pre-auth: later `.layer()` is outer (runs first). Login rate-limit must
+        // sit outside `auth_guard` so a password-spray is rejected before any
+        // weissman_auth pool checkout / bcrypt.
+        .layer(middleware::from_fn(
+            crate::http::login_rate_limit_middleware,
+        ))
         .layer(middleware::from_fn(
             crate::observability::http_metrics_middleware,
         ))
         .layer(middleware::from_fn(
             crate::request_trace::trace_http_middleware,
+        ))
+        .layer(middleware::from_fn(
+            crate::http::privilege_header_proxy_middleware,
         ))
         .with_state(state);
     // Frontend is built with base: '/command-center/' so assets at /command-center/assets/...
@@ -1969,6 +2021,7 @@ mod public_route_guard_tests {
             (Method::POST, "/api/integrations/slack/interactivity"),
             (Method::POST, "/api/auth/signup"),
             (Method::GET, "/api/auth/verify"),
+            (Method::POST, "/api/public/demo-request"),
             (Method::POST, "/api/v1/alerts/aws-canary"),
             (Method::GET, "/status"),
             (Method::POST, "/api/agents/enroll"),
@@ -1989,6 +2042,30 @@ mod public_route_guard_tests {
         // Correct public path but wrong method is not public.
         assert!(!is_public_route(&Method::GET, "/api/logout"));
         assert!(!is_public_route(&Method::POST, "/api/health"));
+    }
+
+    /// Axum runs the *last* `.layer()` first. Login rate-limit must be layered
+    /// after `auth_guard` so brute-force POSTs never check out a weissman_auth
+    /// connection before the in-process governor.
+    #[test]
+    fn login_rate_limit_layer_is_outside_auth_guard() {
+        let src = include_str!("serve.rs");
+        let start = src
+            .find("pub async fn build_http_router")
+            .expect("build_http_router");
+        let chunk = &src[start..];
+        let end = chunk.find(".with_state(state)").unwrap_or(chunk.len());
+        let layers = &chunk[..end];
+        let auth = layers
+            .find("from_fn_with_state(state.clone(), auth_guard)")
+            .expect("auth_guard layer");
+        let login = layers
+            .find("login_rate_limit_middleware")
+            .expect("login_rate_limit layer");
+        assert!(
+            login > auth,
+            "login_rate_limit_middleware must be layered after auth_guard (outer / pre-auth)"
+        );
     }
 }
 

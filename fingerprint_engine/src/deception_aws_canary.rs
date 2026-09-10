@@ -337,9 +337,14 @@ mod tests {
 
     #[test]
     fn pick_asm_location_indexes_by_client_id() {
-        // client_id=2, seed nil -> idx=(0+2)%35=2 -> paths[2]="/api"; even byte -> bash_history tail.
+        // client_id=2, seed nil -> idx=2 in the same wordlist the picker uses;
+        // even first byte -> bash_history tail. Do not freeze a path index.
+        let paths = crate::pipeline_context::expanded_path_wordlist();
+        let expected_base = paths[2].trim_end_matches('/');
         let loc = pick_asm_virtual_deployment_location(2, &uuid::Uuid::nil());
-        assert_eq!(loc, "asm_virtual:/api/.bash_history");
+        assert_eq!(loc, format!("asm_virtual:{expected_base}/.bash_history"));
+        let loc0 = pick_asm_virtual_deployment_location(0, &uuid::Uuid::nil());
+        assert_ne!(loc, loc0);
     }
 
     #[test]

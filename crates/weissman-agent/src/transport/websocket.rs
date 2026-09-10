@@ -20,6 +20,7 @@ pub async fn run_session(
     enrollment: &Enrollment,
     heartbeat_secs: u64,
 ) -> anyhow::Result<()> {
+    let pins = crate::transport::tls_pin::require_pin_or_dev(server_url)?;
     let ws_url = build_ws_url(server_url, &enrollment.ws_path)?;
     info!(target: "agent", "connecting to {}", scrub_token(&ws_url));
 
@@ -42,11 +43,20 @@ pub async fn run_session(
             enrollment.session_jwt
         ))?,
     );
-    let (ws_stream, _resp) = tokio_tungstenite::connect_async(request).await?;
+    let (ws_stream, _resp) = if pins.is_empty() {
+        tokio_tungstenite::connect_async(request).await?
+    } else {
+        let cfg = crate::transport::tls_pin::pinned_client_config(pins)?;
+        let connector = tokio_tungstenite::Connector::Rustls(std::sync::Arc::new(cfg));
+        tokio_tungstenite::connect_async_tls_with_config(request, None, false, Some(connector))
+            .await?
+    };
     let (mut sink, mut stream) = ws_stream.split();
 
     // Outbound channel: detections + heartbeat → WebSocket sink.
     let (out_tx, mut out_rx) = mpsc::channel::<AgentToServer>(CHANNEL_BUFFER);
+    let inner_key: Arc<tokio::sync::Mutex<Option<[u8; 32]>>> =
+        Arc::new(tokio::sync::Mutex::new(None));
 
     // Send Hello immediately.
     let hello = AgentToServer::Hello {
@@ -67,6 +77,23 @@ pub async fn run_session(
     };
     out_tx.send(hello).await.ok();
 
+    // Replay findings that were written to disk while this agent was offline.
+    let spool_path = crate::transport::spool::spool_path();
+    if let Ok(queued) = crate::transport::spool::drain(&spool_path) {
+        if !queued.is_empty() {
+            info!(
+                target: "agent",
+                n = queued.len(),
+                "draining offline spool after reconnect"
+            );
+            for msg in queued {
+                if out_tx.send(msg).await.is_err() {
+                    break;
+                }
+            }
+        }
+    }
+
     // Shared counters for heartbeat + concurrency gate.
     let running_tasks = Arc::new(AtomicU32::new(0));
     let completed_tasks = Arc::new(AtomicU64::new(0));
@@ -83,7 +110,9 @@ pub async fn run_session(
     let hb_tx = out_tx.clone();
     let agent_id_hb = enrollment.agent_id.clone();
     let hb_handle = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(heartbeat_secs.max(5)));
+        let mut interval = tokio::time::interval(Duration::from_secs(
+            crate::hardening::jittered_heartbeat_secs(heartbeat_secs),
+        ));
         // Skip the initial immediate tick — Hello already proved liveness.
         interval.tick().await;
         loop {
@@ -106,16 +135,12 @@ pub async fn run_session(
         }
     });
 
-    // Writer: out_rx → sink.
+    // Writer: out_rx → sink. Failed sends go to the disk spool so a crash or
+    // disconnect does not drop findings that already left the detection task.
+    let spool_for_writer = crate::transport::spool::spool_path();
+    let writer_key = Arc::clone(&inner_key);
     let writer_handle = tokio::spawn(async move {
         while let Some(msg) = out_rx.recv().await {
-            // A `Ping` request from the heartbeat loop, not an application message. Sent so the
-            // server's WebSocket layer answers with a Pong, which is inbound traffic and therefore
-            // resets the read-idle deadline below. Without it the connection was torn down every
-            // READ_IDLE_TIMEOUT_SECS on a perfectly healthy link: this protocol is
-            // agent-talks-first, the server has nothing to say between tasks, and it sends no
-            // keepalive of its own — so read-idle was measuring "the server had no work", not
-            // "the connection is dead", and the agent reconnected every 90 seconds forever.
             if matches!(msg, AgentToServer::KeepAlivePing) {
                 if let Err(e) = sink.send(Message::Ping(Vec::new().into())).await {
                     warn!(target: "agent", error = %e, "ping send failed");
@@ -123,15 +148,26 @@ pub async fn run_session(
                 }
                 continue;
             }
-            let line = match serde_json::to_string(&msg) {
+            let mut line = match serde_json::to_string(&msg) {
                 Ok(l) => l,
                 Err(e) => {
                     error!(target: "agent", error = %e, "serialize outbound");
                     continue;
                 }
             };
+            if let Some(key) = *writer_key.lock().await {
+                if let Ok(wrapped) = crate::inner_crypto::wrap(&key, &line) {
+                    line = wrapped;
+                }
+            }
             if let Err(e) = sink.send(Message::text(line)).await {
-                error!(target: "agent", error = %e, "ws send failed");
+                error!(target: "agent", error = %e, "ws send failed — spooling remainder");
+                let _ = crate::transport::spool::append(&spool_for_writer, &msg);
+                while let Ok(more) = out_rx.try_recv() {
+                    if !matches!(more, AgentToServer::KeepAlivePing) {
+                        let _ = crate::transport::spool::append(&spool_for_writer, &more);
+                    }
+                }
                 break;
             }
         }
@@ -157,14 +193,25 @@ pub async fn run_session(
             };
             match frame {
                 Message::Text(s) => {
+                    let session_key = *inner_key.lock().await;
+                    let plain = match crate::inner_crypto::unwrap_or_plain(session_key.as_ref(), &s)
+                    {
+                        Ok(p) => p,
+                        Err(e) => {
+                            warn!(target: "agent", error = %e, "drop undecryptable frame");
+                            continue;
+                        }
+                    };
                     handle_text(
-                        &s,
+                        &plain,
                         &out_tx,
                         &running_tasks,
                         &completed_tasks,
                         &max_parallel,
                         &seen_tasks,
                         enrollment.agent_id.clone(),
+                        enrollment.kill_hmac_key.clone(),
+                        Arc::clone(&inner_key),
                     )
                     .await;
                 }
@@ -234,6 +281,8 @@ async fn handle_text(
     max_parallel: &Arc<AtomicU32>,
     seen: &Arc<tokio::sync::Mutex<SeenTasks>>,
     agent_id: String,
+    kill_hmac_key: String,
+    inner_key: Arc<tokio::sync::Mutex<Option<[u8; 32]>>>,
 ) {
     let parsed: Result<ServerToAgent, _> = serde_json::from_str(text);
     let msg = match parsed {
@@ -245,10 +294,18 @@ async fn handle_text(
     };
     match msg {
         ServerToAgent::Welcome {
-            scan_concurrency, ..
+            scan_concurrency,
+            inner_key_hex,
+            ..
         } => {
             if let Some(n) = scan_concurrency {
                 max_parallel.store(n.max(1), Ordering::Relaxed);
+            }
+            if let Some(hex_key) = inner_key_hex {
+                if let Some(k) = crate::inner_crypto::key_from_hex(&hex_key) {
+                    *inner_key.lock().await = Some(k);
+                    info!(target: "agent", "inner WSS crypto armed");
+                }
             }
             info!(target: "agent", "server welcomed agent");
         }
@@ -292,10 +349,44 @@ async fn handle_text(
         }
         ServerToAgent::Ack { .. } => {}
         ServerToAgent::Shutdown { reason } => {
-            warn!(target: "agent", reason = %reason, "server requested shutdown");
-            std::process::exit(0);
+            if allow_local_stop() {
+                warn!(target: "agent", reason = %reason, "server requested shutdown");
+                std::process::exit(0);
+            }
+            warn!(
+                target: "agent",
+                reason = %reason,
+                "ignoring unsigned shutdown (self-protect; use signed kill-switch)"
+            );
+        }
+        ServerToAgent::KillSwitch {
+            reason,
+            nonce,
+            issued_at_unix,
+            signature,
+        } => {
+            if crate::transport::kill::verify(
+                &kill_hmac_key,
+                &agent_id,
+                &nonce,
+                issued_at_unix,
+                &reason,
+                &signature,
+            ) {
+                warn!(target: "agent", reason = %reason, "signed kill-switch accepted");
+                let _ = crate::transport::kill::latch(&reason);
+                std::process::exit(0);
+            }
+            warn!(target: "agent", "rejected kill-switch with invalid signature");
         }
     }
+}
+
+fn allow_local_stop() -> bool {
+    matches!(
+        std::env::var("WEISSMAN_AGENT_ALLOW_LOCAL_STOP").as_deref(),
+        Ok("1") | Ok("true") | Ok("TRUE")
+    )
 }
 
 async fn run_task(
@@ -319,14 +410,16 @@ async fn run_task(
         Ok(Ok(findings)) => {
             let count = findings.len() as u32;
             for f in findings {
-                let _ = out_tx
-                    .send(AgentToServer::Finding {
+                send_or_spool(
+                    &out_tx,
+                    AgentToServer::Finding {
                         agent_id: agent_id.clone(),
                         task_id: task_id.clone(),
                         engine: engine.clone(),
                         finding: f,
-                    })
-                    .await;
+                    },
+                )
+                .await;
             }
             (count, "ok".to_string(), None)
         }
@@ -355,9 +448,15 @@ async fn run_task(
             error: message.unwrap_or_else(|| "unknown".into()),
         }
     };
-    let _ = out_tx.send(done).await;
+    send_or_spool(&out_tx, done).await;
     running.fetch_sub(1, Ordering::SeqCst);
     completed.fetch_add(1, Ordering::SeqCst);
+}
+
+async fn send_or_spool(out_tx: &mpsc::Sender<AgentToServer>, msg: AgentToServer) {
+    if out_tx.send(msg.clone()).await.is_err() {
+        let _ = crate::transport::spool::append(&crate::transport::spool::spool_path(), &msg);
+    }
 }
 
 fn build_ws_url(server_url: &str, path: &str) -> anyhow::Result<Url> {

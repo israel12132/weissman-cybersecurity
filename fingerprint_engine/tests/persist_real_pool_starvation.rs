@@ -109,9 +109,15 @@ async fn real_persist_survives_starved_pool() {
         "expected persisted rows; got 0 (findings did not gate through?)"
     );
 
-    // Cleanup (best-effort).
+    // Cleanup (best-effort). Ledger rows CASCADE from clients once the append-only
+    // trigger allows nested FK deletes (20260830130000).
     let _ = sqlx::query("DELETE FROM clients WHERE id = $1")
         .bind(client_id)
+        .execute(&pool)
+        .await;
+    let _ = sqlx::query("DELETE FROM tenants WHERE id = $1 AND slug = $2")
+        .bind(tenant_id)
+        .bind(slug)
         .execute(&pool)
         .await;
 }

@@ -3,7 +3,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { destructiveHeaders } from '../../utils/destructiveConfirm'
+import { destructiveHeaders, dualControlBody } from '../../utils/destructiveConfirm'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { ShieldAlert, Plus, MapPin, AlertTriangle, Key, Cloud, Loader2 } from 'lucide-react'
@@ -105,7 +105,7 @@ export default function DeceptionGridTab() {
       const d = await apiFetch(`/api/clients/${selectedClientId}/deception/deploy-cloud`, {
         method: 'POST',
         headers: destructiveHeaders({ 'Content-Type': 'application/json' }),
-        body,
+        body: dualControlBody('', '', body),
       })
       if (d?.ok) {
         setDeployMsg({

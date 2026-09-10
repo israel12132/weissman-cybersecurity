@@ -29,19 +29,12 @@ pub async fn enqueue(
     // claim the still-envelopeless `pending` row in the insert->UPDATE window
     // and kill it ("missing signed envelope"). Non-bus path keeps the plain
     // immediately-`pending` insert.
+    let stored = crate::job_envelope::seal_job_payload_sqlx(payload.clone(), tenant_id)?;
     let id = if bus_enabled {
-        weissman_db::job_queue::enqueue_held(
-            pool,
-            tenant_id,
-            kind,
-            payload.clone(),
-            trace_id.as_deref(),
-            30,
-        )
-        .await?
-    } else {
-        weissman_db::job_queue::enqueue(pool, tenant_id, kind, payload.clone(), trace_id.as_deref())
+        weissman_db::job_queue::enqueue_held(pool, tenant_id, kind, stored, trace_id.as_deref(), 30)
             .await?
+    } else {
+        weissman_db::job_queue::enqueue(pool, tenant_id, kind, stored, trace_id.as_deref()).await?
     };
 
     if bus_enabled {
@@ -52,6 +45,7 @@ pub async fn enqueue(
             Ok(Some(envelope)) => {
                 let mut enriched = payload;
                 attach_signed_envelope(&mut enriched, envelope);
+                let sealed = crate::job_envelope::seal_job_payload_sqlx(enriched, tenant_id)?;
                 // Atomic: attach envelope AND release the hold (run_after=NULL)
                 // so the worker only ever sees this job claimable WITH its
                 // envelope present.
@@ -63,7 +57,8 @@ pub async fn enqueue(
                 // and logged "enqueued". Every job entered the queue envelope-less and was
                 // dead-lettered on claim. A failure here must be as loud and as terminal for
                 // this attempt as the sibling Ok(None) / Err arms below.
-                let released = weissman_db::job_queue::release_hold(pool, id, enriched).await;
+                let released =
+                    weissman_db::job_queue::release_hold(pool, tenant_id, id, sealed).await;
                 let attach_error = match released {
                     Ok(1) => None,
                     // 0 rows: the row is no longer `pending` with a hold — already failed,
@@ -83,25 +78,18 @@ pub async fn enqueue(
                     // Fail it here rather than leave a held row to become claimable when
                     // run_after expires: an envelope-less claim is an irreversible dead-letter,
                     // whereas `failed` is visible, counted, and recoverable.
-                    let _ = sqlx::query(
-                        "UPDATE weissman_async_jobs SET status = 'failed', last_error = $2, \
-                         run_after = NULL, updated_at = now() WHERE id = $1",
-                    )
-                    .bind(id)
-                    .bind(&reason)
-                    .execute(pool)
-                    .await;
+                    let _ = mark_job_failed(pool, tenant_id, id, &reason).await;
                     return Err(sqlx::Error::Protocol(reason));
                 }
             }
             Ok(None) => {
                 if weissman_core::tls_policy::is_production_environment() {
-                    let _ = sqlx::query(
-                        "UPDATE weissman_async_jobs SET status = 'failed', last_error = $2 WHERE id = $1",
+                    let _ = mark_job_failed(
+                        pool,
+                        tenant_id,
+                        id,
+                        "job bus dispatch produced no signed envelope in production",
                     )
-                    .bind(id)
-                    .bind("job bus dispatch produced no signed envelope in production")
-                    .execute(pool)
                     .await;
                     return Err(sqlx::Error::Protocol(
                         "job bus dispatch produced no signed envelope".into(),
@@ -110,12 +98,12 @@ pub async fn enqueue(
             }
             Err(e) => {
                 if weissman_core::tls_policy::is_production_environment() {
-                    let _ = sqlx::query(
-                        "UPDATE weissman_async_jobs SET status = 'failed', last_error = $2 WHERE id = $1",
+                    let _ = mark_job_failed(
+                        pool,
+                        tenant_id,
+                        id,
+                        &format!("job bus dispatch failed: {e}"),
                     )
-                    .bind(id)
-                    .bind(format!("job bus dispatch failed: {e}"))
-                    .execute(pool)
                     .await;
                     return Err(sqlx::Error::Protocol(format!(
                         "job bus dispatch failed: {e}"
@@ -132,12 +120,12 @@ pub async fn enqueue(
     } else if weissman_core::tls_policy::is_production_environment()
         && crate::http::rate_limit_redis::is_enabled()
     {
-        let _ = sqlx::query(
-            "UPDATE weissman_async_jobs SET status = 'failed', last_error = $2 WHERE id = $1",
+        let _ = mark_job_failed(
+            pool,
+            tenant_id,
+            id,
+            "zero-trust job bus not enabled despite production Redis + orchestrator policy",
         )
-        .bind(id)
-        .bind("zero-trust job bus not enabled despite production Redis + orchestrator policy")
-        .execute(pool)
         .await;
         return Err(sqlx::Error::Protocol(
             "zero-trust job bus not enabled in production".into(),
@@ -145,6 +133,74 @@ pub async fn enqueue(
     }
 
     Ok(id)
+}
+
+async fn mark_job_failed(
+    pool: &PgPool,
+    tenant_id: i64,
+    id: Uuid,
+    reason: &str,
+) -> Result<(), sqlx::Error> {
+    let mut tx = weissman_db::begin_tenant_tx(pool, tenant_id).await?;
+    sqlx::query(
+        "UPDATE weissman_async_jobs SET status = 'failed', last_error = $2, \
+         run_after = NULL, updated_at = now() WHERE id = $1",
+    )
+    .bind(id)
+    .bind(reason)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Attach a JobBus envelope to a row inserted with [`weissman_db::job_queue::enqueue_held_in_tx`]
+/// and release the hold. No-op when the bus is disabled (caller should have inserted
+/// a claimable row instead).
+pub async fn finalize_held_job(
+    pool: &PgPool,
+    id: Uuid,
+    tenant_id: i64,
+    kind: &str,
+    payload: Value,
+    trace_id: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    let bus = JobBus::from_env(pool.clone()).await;
+    if !bus.is_enabled() {
+        // Caller inserted a held row even without a bus — clear the hold so it is claimable.
+        let sealed = crate::job_envelope::seal_job_payload_sqlx(payload, tenant_id)?;
+        let _ = weissman_db::job_queue::release_hold(pool, tenant_id, id, sealed).await;
+        return Ok(());
+    }
+    match bus
+        .on_job_dispatched(id, tenant_id, kind, &payload, trace_id)
+        .await
+    {
+        Ok(Some(envelope)) => {
+            let mut enriched = payload;
+            attach_signed_envelope(&mut enriched, envelope);
+            let sealed = crate::job_envelope::seal_job_payload_sqlx(enriched, tenant_id)?;
+            match weissman_db::job_queue::release_hold(pool, tenant_id, id, sealed).await {
+                Ok(1) => Ok(()),
+                Ok(n) => {
+                    let reason = format!(
+                        "envelope attach matched {n} rows (expected 1); job no longer held"
+                    );
+                    tracing::error!(target: "async_jobs", job_id = %id, reason = %reason);
+                    Err(sqlx::Error::Protocol(reason))
+                }
+                Err(e) => Err(e),
+            }
+        }
+        Ok(None) | Err(_) => {
+            tracing::error!(
+                target: "async_jobs",
+                job_id = %id,
+                "JobBus produced no envelope for held SOAR job — leaving held so it is not claimed envelope-less"
+            );
+            Ok(())
+        }
+    }
 }
 
 /// Every 5 minutes, orphan recovery via swarm coordinator (sub-second) + legacy reclaim fallback.

@@ -19,6 +19,7 @@ const EXACT = {
   '/ast-fuzzing': () => import(/* webpackChunkName: "page-ast-fuzzing" */ '../pages/AstFuzzingStudio'),
   '/intel-map': () => import(/* webpackChunkName: "page-intel-map" */ '../App'),
   '/findings': () => import(/* webpackChunkName: "page-findings" */ '../pages/FindingsCommandCenter'),
+  '/finding-clusters': () => import(/* webpackChunkName: "page-finding-clusters" */ '../pages/FindingClusters'),
   '/kill-chain': () => import(/* webpackChunkName: "page-kill-chain" */ '../pages/KillChainOrchestrator'),
   '/jwt-lab': () => import(/* webpackChunkName: "page-jwt-lab" */ '../pages/JwtAttackLab'),
   '/waf-bypass': () => import(/* webpackChunkName: "page-waf-bypass" */ '../pages/WafBypassLab'),

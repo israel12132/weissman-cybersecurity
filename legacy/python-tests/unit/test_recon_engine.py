@@ -18,6 +18,7 @@ from unittest.mock import MagicMock, patch
 from src.recon_engine import (
     DiscoveredAsset,
     _normalize_asset_id,
+    _public_subdomain_prefixes,
     group_assets_by_confidence_and_risk,
     enumerate_subdomains_ct,
     enumerate_subdomains_dns,
@@ -29,6 +30,20 @@ from src.recon_engine import (
     normalized_asset_ids,
     get_new_assets_for_discovery_alert,
 )
+
+
+# ---------------------------------------------------------------------------
+# Public discovery corpus
+# ---------------------------------------------------------------------------
+
+class TestPublicSubdomainCorpus:
+    def test_seed_file_is_large_and_includes_high_value(self):
+        wl = _public_subdomain_prefixes()
+        assert len(wl) > 2_000
+        assert "api" in wl
+        assert "staging-api" in wl
+        assert "okta" in wl
+        assert "autodiscover" in wl
 
 
 # ---------------------------------------------------------------------------

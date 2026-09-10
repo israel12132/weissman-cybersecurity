@@ -40,8 +40,8 @@
     },
     {
       "techniqueID": "T0836",
-      "score": 10,
-      "comment": "coap_attack, hmi_attack, industrial_protocol_fuzz, modbus_attack, modbus_exploit, mqtt_attack, opcua_attack, plc_logic_attack, profinet_attack, satellite_comm_attack",
+      "score": 11,
+      "comment": "coap_attack, hmi_attack, industrial_protocol_fuzz, modbus_attack, modbus_exploit, mqtt_attack, opcua_attack, ot_passive_active_safety, plc_logic_attack, profinet_attack, satellite_comm_attack",
       "enabled": true
     },
     {
@@ -52,8 +52,8 @@
     },
     {
       "techniqueID": "T0888",
-      "score": 1,
-      "comment": "modbus_exploit",
+      "score": 2,
+      "comment": "modbus_exploit, ot_crown_jewel_path",
       "enabled": true
     },
     {

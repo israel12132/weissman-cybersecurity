@@ -131,9 +131,9 @@ pub async fn edge_multi_rate_limit_middleware(request: Request<Body>, next: Next
                 false
             }
         }
-        ("POST", "/api/onboarding/register") | ("POST", "/api/auth/signup") => {
-            limiter_signup().check_key(&key).is_err()
-        }
+        ("POST", "/api/onboarding/register")
+        | ("POST", "/api/auth/signup")
+        | ("POST", "/api/public/demo-request") => limiter_signup().check_key(&key).is_err(),
         ("POST", "/api/webhooks/paddle") => limiter_paddle().check_key(&key).is_err(),
         // Default per-IP limiter — API surface only. Static SPA assets, the SPA shell, legal
         // pages, health probes and WS upgrades fall through to the exempt arm below so the

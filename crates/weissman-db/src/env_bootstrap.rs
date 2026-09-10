@@ -67,9 +67,32 @@ pub fn load_process_environment() {
     }
 }
 
+/// Postgres role name from `postgres://user[:password]@host/db` (password optional).
+#[must_use]
+pub fn postgres_user_from_url(url: &str) -> Option<String> {
+    let rest = url
+        .trim()
+        .strip_prefix("postgres://")
+        .or_else(|| url.trim().strip_prefix("postgresql://"))?;
+    let at = rest.find('@')?;
+    let userinfo = &rest[..at];
+    if userinfo.is_empty() {
+        return None;
+    }
+    let user = match userinfo.find(':') {
+        Some(colon) => &userinfo[..colon],
+        None => userinfo,
+    };
+    if user.is_empty() {
+        None
+    } else {
+        Some(user.to_string())
+    }
+}
+
 /// Production detection mirroring weissman_core::tls_policy::is_production_environment.
 /// Duplicated (not imported) because weissman-db does not depend on weissman-core.
-fn is_production_env() -> bool {
+pub fn is_production_env() -> bool {
     [
         "WEISSMAN_ENV",
         "RUST_ENV",
@@ -152,5 +175,19 @@ mod tests {
         assert!(
             validate_database_url("postgres://postgres:secret@localhost/weissman_prod").is_ok()
         );
+    }
+
+    #[test]
+    fn postgres_user_from_url_reads_userinfo() {
+        assert_eq!(
+            postgres_user_from_url("postgres://weissman_app:secret@localhost/weissman").as_deref(),
+            Some("weissman_app")
+        );
+        assert_eq!(
+            postgres_user_from_url("postgresql://weissman_ro@/weissman?host=/var/run/postgresql")
+                .as_deref(),
+            Some("weissman_ro")
+        );
+        assert!(postgres_user_from_url("postgres://localhost/weissman").is_none());
     }
 }

@@ -61,7 +61,18 @@ fn period_ym_now() -> String {
     format!("{:04}-{:02}", n.year(), n.month())
 }
 
-pub async fn enforce_client_create(pool: &PgPool, tenant_id: i64) -> Result<(), String> {
+/// Enforce plan client quota before `INSERT INTO clients`.
+///
+/// Subscription catalog rows are read on `auth_pool` (`weissman_auth` holds
+/// GRANT + BYPASSRLS on `tenant_subscriptions` / `billing_plans`). The live
+/// client count must **not** use that pool: `weissman_auth` has no privilege
+/// on `clients` (sovereign auth plane). Count inside a tenant-scoped app
+/// transaction so FORCE RLS sees the caller's tenant.
+pub async fn enforce_client_create(
+    auth_pool: &PgPool,
+    app_pool: &PgPool,
+    tenant_id: i64,
+) -> Result<(), String> {
     if !billing_strict_enabled() {
         return Ok(());
     }
@@ -72,7 +83,7 @@ pub async fn enforce_client_create(pool: &PgPool, tenant_id: i64) -> Result<(), 
            WHERE ts.tenant_id = $1"#,
     )
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(auth_pool)
     .await
     .map_err(|e| e.to_string())?;
     let Some(r) = row else {
@@ -86,12 +97,7 @@ pub async fn enforce_client_create(pool: &PgPool, tenant_id: i64) -> Result<(), 
         ));
     }
     let max_c: i32 = r.try_get("max_clients").map_err(|e| e.to_string())?;
-    let count: i64 =
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients WHERE tenant_id = $1")
-            .bind(tenant_id)
-            .fetch_one(pool)
-            .await
-            .map_err(|e| e.to_string())?;
+    let count = count_tenant_clients(app_pool, tenant_id).await?;
     if count >= max_c as i64 {
         return Err(format!(
             "Client limit reached ({}/{}). Upgrade your plan.",
@@ -99,6 +105,21 @@ pub async fn enforce_client_create(pool: &PgPool, tenant_id: i64) -> Result<(), 
         ));
     }
     Ok(())
+}
+
+/// `clients` is FORCE RLS and not granted to `weissman_auth`. Count on the app pool.
+async fn count_tenant_clients(app_pool: &PgPool, tenant_id: i64) -> Result<i64, String> {
+    let mut tx = weissman_db::begin_tenant_tx(app_pool, tenant_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let count: i64 =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients WHERE tenant_id = $1")
+            .bind(tenant_id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+    let _ = tx.commit().await;
+    Ok(count)
 }
 
 pub async fn enforce_scan_start(pool: &PgPool, tenant_id: i64) -> Result<(), String> {
@@ -213,7 +234,11 @@ fn subscription_allows_usage(status: &str) -> bool {
     matches!(status.to_lowercase().as_str(), "active" | "trialing")
 }
 
-pub async fn usage_dashboard_json(pool: &PgPool, tenant_id: i64) -> Result<Value, String> {
+pub async fn usage_dashboard_json(
+    auth_pool: &PgPool,
+    app_pool: &PgPool,
+    tenant_id: i64,
+) -> Result<Value, String> {
     let row = sqlx::query(
         r#"SELECT ts.status, ts.plan_slug, ts.paddle_subscription_id, ts.current_period_end,
                   bp.display_name, bp.max_clients, bp.max_scans_month
@@ -222,7 +247,7 @@ pub async fn usage_dashboard_json(pool: &PgPool, tenant_id: i64) -> Result<Value
            WHERE ts.tenant_id = $1"#,
     )
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(auth_pool)
     .await
     .map_err(|e| e.to_string())?;
     let Some(r) = row else {
@@ -240,22 +265,28 @@ pub async fn usage_dashboard_json(pool: &PgPool, tenant_id: i64) -> Result<Value
     let paddle_sub: Option<String> = r.try_get("paddle_subscription_id").ok();
     let period_end: Option<chrono::DateTime<Utc>> = r.try_get("current_period_end").ok();
 
-    let client_count: i64 =
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients WHERE tenant_id = $1")
-            .bind(tenant_id)
-            .fetch_one(pool)
-            .await
-            .map_err(|e| e.to_string())?;
+    let client_count = count_tenant_clients(app_pool, tenant_id).await?;
     let period = period_ym_now();
-    let scans_used: i64 = sqlx::query_scalar::<_, i64>(
-        "SELECT COALESCE(scans_started,0)::bigint FROM tenant_usage_counters WHERE tenant_id = $1 AND period_ym = $2",
+    let scans_used: i64 = match sqlx::query_scalar::<_, i64>(
+        "SELECT scans_started FROM weissman_billing_usage_snapshot WHERE tenant_id = $1 AND period_ym = $2",
     )
     .bind(tenant_id)
     .bind(&period)
-    .fetch_optional(pool)
+    .fetch_optional(app_pool)
     .await
     .map_err(|e| e.to_string())?
-    .unwrap_or(0);
+    {
+        Some(n) => n,
+        None => sqlx::query_scalar::<_, i64>(
+            "SELECT COALESCE(scans_started,0)::bigint FROM tenant_usage_counters WHERE tenant_id = $1 AND period_ym = $2",
+        )
+        .bind(tenant_id)
+        .bind(&period)
+        .fetch_optional(app_pool)
+        .await
+        .map_err(|e| e.to_string())?
+        .unwrap_or(0),
+    };
 
     Ok(json!({
         "billing_strict": billing_strict_enabled(),
@@ -830,4 +861,22 @@ pub async fn register_tenant_and_admin(
     .map_err(|e| e.to_string())?;
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok((tid, uid))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn client_quota_counts_inside_app_tenant_tx() {
+        // weissman_auth must not SELECT public.clients (sovereign auth plane).
+        // Quota enforcement opens a tenant tx on the app pool instead.
+        let src = include_str!("mod.rs");
+        assert!(
+            src.contains("begin_tenant_tx(app_pool, tenant_id)"),
+            "client COUNT must run inside begin_tenant_tx on the app pool"
+        );
+        assert!(
+            src.contains("async fn count_tenant_clients"),
+            "usage dashboard and quota share one app-pool COUNT helper"
+        );
+    }
 }

@@ -14,6 +14,7 @@ use std::sync::Arc;
 pub struct Pools {
     pub app: Arc<PgPool>,
     pub auth: Arc<PgPool>,
+    pub job_control: Arc<PgPool>,
 }
 
 pub async fn connect_pools() -> Result<Pools, sqlx::Error> {
@@ -40,12 +41,27 @@ pub async fn connect_pools() -> Result<Pools, sqlx::Error> {
         ));
     }
     let auth = fingerprint_engine::db::connect_auth(auth_url.trim()).await?;
-    // app 48 + auth 12 + intel 12 (intel is opened in lib.rs). See
+    let worker_url = std::env::var("WEISSMAN_WORKER_DATABASE_URL").unwrap_or_else(|_| {
+        tracing::warn!(
+            target: "weissman_db",
+            "WEISSMAN_WORKER_DATABASE_URL unset — job-control pool reusing DATABASE_URL; \
+             fail-closed job-bus RLS will hide all jobs from weissman_app"
+        );
+        database_url.clone()
+    });
+    if let Err(msg) = weissman_db::env_bootstrap::validate_database_url(worker_url.trim()) {
+        return Err(sqlx::Error::Configuration(
+            format!("WEISSMAN_WORKER_DATABASE_URL: {msg}").into(),
+        ));
+    }
+    let job_control = fingerprint_engine::db::connect_control(worker_url.trim()).await?;
+    // app 48 + auth 12 + intel 12 + control 8 (intel is opened in lib.rs). See
     // warn_if_pool_budget_exceeds_server for why this warns at boot rather than only failing
     // under the load the pools exist to survive.
-    weissman_db::warn_if_pool_budget_exceeds_server(&app, "backend", 48 + 12 + 12).await;
+    weissman_db::warn_if_pool_budget_exceeds_server(&app, "backend", 48 + 12 + 12 + 8).await;
     Ok(Pools {
         app: Arc::new(app),
         auth: Arc::new(auth),
+        job_control: Arc::new(job_control),
     })
 }

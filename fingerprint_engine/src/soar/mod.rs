@@ -9,9 +9,10 @@ pub mod idempotency;
 pub mod integrations;
 pub mod integrations_vault;
 pub mod revert;
+pub mod stale;
 pub mod types;
 pub mod verification;
 pub mod worker;
 
-pub use engine::{execute_armored_action, revert_execution};
+pub use engine::{approve_hitl, deny_hitl, execute_armored_action, revert_execution};
 pub use types::{ActionOutcome, ExecutionStatus};

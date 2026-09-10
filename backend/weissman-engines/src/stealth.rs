@@ -97,20 +97,8 @@ pub fn build_client(config: &StealthConfig, timeout_secs: u64) -> reqwest::Clien
     builder.build().unwrap_or_else(|_| reqwest::Client::new())
 }
 
-const USER_AGENTS: &[&str] = &[
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36",
-];
-const ACCEPT_LANGUAGES: &[&str] = &[
-    "en-US,en;q=0.9",
-    "en-GB,en;q=0.9",
-    "he-IL,he;q=0.9,en;q=0.8",
-    "de-DE,de;q=0.9,en;q=0.8",
-];
+const USER_AGENTS: &[&str] = weissman_core::stealth_identity::USER_AGENTS;
+const ACCEPT_LANGUAGES: &[&str] = weissman_core::stealth_identity::ACCEPT_LANGUAGES;
 const SEC_CH_UA: &[&str] = &[
     "\"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\", \"Not-A.Brand\";v=\"24\"",
     "\"Not_A Brand\";v=\"8.0.0.0\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"",

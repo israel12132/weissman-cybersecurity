@@ -143,6 +143,8 @@ if (!fs.existsSync(redactMod)) {
   violations.push('scan_payload_redaction.rs: missing')
 } else if (!jobsInc.includes('scan_payload_redaction::redact_for_api')) {
   violations.push('server_handlers_jobs.inc: job GET must redact payload secrets')
+} else if (!jobsInc.includes('reveal_job_payload_for_tenant')) {
+  violations.push('server_handlers_jobs.inc: job GET must decrypt the tenant envelope before redact')
 }
 const asyncExec = fs.readFileSync(path.join(root, 'fingerprint_engine/src/async_job_executor.rs'), 'utf8')
 if (!asyncExec.includes('engine_stack_runtime::run_on_large_stack')) {
@@ -176,6 +178,20 @@ for (const needle of ['"github_token": mask_secret_field', '"oast_domain"', '"oa
 for (const script of ['run_e2e_stack.sh', 'verify_scan_pipeline_e2e.mjs', 'verify_engine_groups_findings_e2e.mjs']) {
   if (!fs.existsSync(path.join(root, 'scripts', script))) {
     violations.push(`scripts/${script}: missing (runtime E2E gate)`)
+  }
+}
+
+// retryShed is a runtime binding. node --check does not catch a missing import;
+// CI then dies at pollJob after the live stack (login + enqueue already succeeded).
+{
+  const findingsE2ePath = path.join(root, 'scripts', 'verify_engine_groups_findings_e2e.mjs')
+  if (fs.existsSync(findingsE2ePath)) {
+    const findingsE2e = fs.readFileSync(findingsE2ePath, 'utf8')
+    if (!/import\s*\{[^}]*\bretryShed\b[^}]*\}\s*from\s*['\"]\.\/lib\/scan_intake\.mjs['\"]/.test(findingsE2e)) {
+      violations.push(
+        'verify_engine_groups_findings_e2e.mjs: pollJob uses retryShed but does not import it from scan_intake.mjs',
+      )
+    }
   }
 }
 
