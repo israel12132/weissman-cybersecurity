@@ -43,7 +43,7 @@ FE-surface (need backend) or the explicit finish items listed at the bottom.
 | D2 | `DryRunSimulator` (sample-event trace) | 🟢 | ✅ |
 | D3 | AI-assisted generation (via `AiCommandConsole` surface) | 🟡 (LLM BE) | 🚧 |
 | D4 | `ApprovalWorkflow` + `Stepper` (versioning/approval) | 🟡 | ✅ UI |
-| — | Full @xyflow drag-drop **canvas** (wire nodes) | 🟢 | ⬜ finish item |
+| — | Full @xyflow drag-drop **canvas** (wire nodes) | 🟢 | ✅ |
 
 ## F — Compliance & Enterprise
 
@@ -76,8 +76,6 @@ FE-surface (need backend) or the explicit finish items listed at the bottom.
 
 - **Storybook** — the `/design-system` gallery is the live catalog today; Storybook
   is a heavier dev-dependency install to add on top.
-- **Full @xyflow playbook canvas** — `NodePalette` + `PlaybookNode` exist; the
-  drag-drop wiring canvas is the remaining piece.
 - **Gallery integration of the newest ~20 primitives** (they exist + are tested;
   showcasing them all in `/design-system` is incremental).
 - **Audit-trail export (F3)**.

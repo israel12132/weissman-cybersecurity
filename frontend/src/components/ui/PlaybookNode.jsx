@@ -27,7 +27,19 @@ const STATUS_DOT = {
  * @param {boolean} [selected=false] @param {()=>void} [onClick] @param {React.ReactNode} [icon]
  */
 const PlaybookNode = forwardRef(function PlaybookNode(
-  { type = 'action', title, summary, status = 'idle', selected = false, onClick, icon, className, ...props },
+  {
+    type = 'action',
+    title,
+    summary,
+    status = 'idle',
+    selected = false,
+    onClick,
+    icon,
+    className,
+    typeLabel,
+    showPorts = true,
+    ...props
+  },
   ref,
 ) {
   const meta = TYPE[type] ?? TYPE.action
@@ -39,17 +51,18 @@ const PlaybookNode = forwardRef(function PlaybookNode(
 
   const body = (
     <>
-      {/* input port */}
-      <span
-        className="absolute -top-1 start-1/2 size-2 -translate-x-1/2 rounded-full bg-border-strong ring-2 ring-bg-1"
-        aria-hidden="true"
-      />
+      {showPorts && (
+        <span
+          className="absolute -top-1 start-1/2 size-2 -translate-x-1/2 rounded-full bg-border-strong ring-2 ring-bg-1"
+          aria-hidden="true"
+        />
+      )}
 
       <div className="flex items-center gap-2">
         <span className={cn('inline-flex size-6 items-center justify-center rounded-md bg-bg-3 [&>svg]:size-3.5', meta.accent)}>
           {icon ?? <Icon aria-hidden="true" />}
         </span>
-        <span className="text-[10px] uppercase tracking-widest text-text-muted">{meta.label}</span>
+        <span className="text-[10px] uppercase tracking-widest text-text-muted">{typeLabel || meta.label}</span>
         {StatusIcon && (
           <StatusIcon
             className={cn('ms-auto size-3.5', STATUS_DOT[status], status === 'running' && 'animate-spin')}
@@ -61,15 +74,14 @@ const PlaybookNode = forwardRef(function PlaybookNode(
       <div className="mt-1.5 text-sm font-medium text-text-primary">{title}</div>
       {summary != null && <div className="mt-0.5 text-xs text-text-tertiary">{summary}</div>}
 
-      {/* output port(s) */}
-      {isCondition ? (
+      {showPorts && (isCondition ? (
         <>
           <span className="absolute -bottom-1 start-1/3 size-2 -translate-x-1/2 rounded-full bg-status-active ring-2 ring-bg-1" aria-hidden="true" title="true" />
           <span className="absolute -bottom-1 start-2/3 size-2 -translate-x-1/2 rounded-full bg-severity-critical ring-2 ring-bg-1" aria-hidden="true" title="false" />
         </>
       ) : (
         <span className="absolute -bottom-1 start-1/2 size-2 -translate-x-1/2 rounded-full bg-border-strong ring-2 ring-bg-1" aria-hidden="true" />
-      )}
+      ))}
     </>
   )
 

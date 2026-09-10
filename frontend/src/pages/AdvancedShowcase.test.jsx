@@ -10,10 +10,14 @@ vi.mock('@xyflow/react', async () => {
     ReactFlowProvider: ({ children }) => <>{children}</>,
     Background: () => null,
     Controls: () => null,
+    MiniMap: () => null,
     Handle: () => null,
     Position: { Top: 'top', Bottom: 'bottom' },
     MarkerType: { ArrowClosed: 'arrowclosed' },
     addEdge: (edge, eds) => [...eds, edge],
+    useReactFlow: () => ({
+      screenToFlowPosition: ({ x, y }) => ({ x, y }),
+    }),
     useNodesState: (init) => {
       const [s, set] = React.useState(init)
       return [s, set, () => {}]

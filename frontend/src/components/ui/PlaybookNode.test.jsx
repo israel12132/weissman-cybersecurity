@@ -32,6 +32,11 @@ describe('PlaybookNode', () => {
     expect(container.querySelector('.animate-spin')).not.toBeNull()
   })
 
+  it('hides decorative ports when showPorts is false', () => {
+    const { container } = render(<PlaybookNode title="Wired" showPorts={false} />)
+    expect(container.querySelector('[aria-hidden="true"].rounded-full')).toBeNull()
+  })
+
   it('renders as a non-interactive div without onClick', () => {
     render(<PlaybookNode title="Static" />)
     expect(screen.queryByRole('button')).not.toBeInTheDocument()

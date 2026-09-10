@@ -27,29 +27,18 @@ import { downloadBytes } from '../lib/pdfExport'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { confirmDialog } from '../utils/confirmDialog'
 import Button from '../components/ui/Button'
-import PlaybookGraph from '../components/PlaybookGraph'
+import Tabs, { TabList, Tab, TabPanel } from '../components/ui/Tabs'
+import PlaybookCanvas from '../components/ui/PlaybookCanvas'
+import { PlaybookTriggerFields } from '../components/ui/PlaybookInspector'
 import { downloadCsv } from '../lib/exportFindingsCsv'
-import { playbookActionsHaveBlockedWebhook } from '../lib/playbookFlow'
+import {
+  ACTION_KIND_CATALOG,
+  playbookActionsHaveBlockedWebhook,
+  stripCanvas,
+  logicalPlaybookKey,
+} from '../lib/playbookFlow'
 
-const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
-const SEV_COLORS = {
-  critical: { bg: 'bg-rose-500/15', ring: 'ring-rose-500/40', text: 'text-rose-200' },
-  high:     { bg: 'bg-orange-500/15', ring: 'ring-orange-500/40', text: 'text-orange-200' },
-  medium:   { bg: 'bg-amber-500/15', ring: 'ring-amber-500/40', text: 'text-amber-200' },
-  low:      { bg: 'bg-sky-500/15', ring: 'ring-sky-500/40', text: 'text-sky-200' },
-  info:     { bg: 'bg-[var(--border-strong)]/15', ring: 'ring-[var(--border-strong)]/40', text: 'text-[var(--text-secondary)]' },
-}
-
-const ACTION_KINDS = [
-  { kind: 'set_status',   labelKey: 'playbooks.action.set_status',   params: { status: 'IN_PROGRESS' } },
-  { kind: 'slack_notify', labelKey: 'playbooks.action.slack_notify', params: { url: '', template: '{{severity}}: {{title}} on {{target}}' } },
-  { kind: 'webhook',      labelKey: 'playbooks.action.webhook',      params: { url: '', template: '{{title}}' } },
-  { kind: 'open_pr',      labelKey: 'playbooks.action.open_pr',      params: { title: 'Auto-fix: {{title}}' } },
-  { kind: 'isolate_host', labelKey: 'playbooks.action.isolate_host', params: { target: '{{target}}', duration_seconds: 900 } },
-  { kind: 'page_oncall',  labelKey: 'playbooks.action.page_oncall',  params: { team: 'sec-oncall', severity: '{{severity}}' } },
-  { kind: 'http_post',    labelKey: 'playbooks.action.http_post',    params: { url: '', body: { } } },
-  { kind: 'create_incident', labelKey: 'playbooks.action.create_incident', params: { short_description: '{{title}}', severity: '{{severity}}' } },
-]
+const ACTION_KINDS = ACTION_KIND_CATALOG
 
 function exportPlaybooksCsv(list) {
   // Reuse the shared exporter so cells are neutralized against spreadsheet formula
@@ -142,25 +131,6 @@ function JsonEditor({ value, onChange, error, label, invalidLabel }) {
   )
 }
 
-function ToggleChip({ active, onClick, children, accent = 'cyan' }) {
-  const activeCls = accent === 'amber'
-    ? 'bg-amber-500/15 ring-amber-400/35 text-amber-200'
-    : 'bg-cyan-500/15 ring-cyan-400/35 text-cyan-200'
-  return (
-    <Button variant="unstyled"
-      type="button"
-      onClick={onClick}
-      className={`rounded-full px-3 py-1.5 text-[11px] font-medium ring-1 transition-all ${
-        active
-          ? activeCls
-          : 'bg-[var(--row-hover-bg)] ring-white/[0.08] text-[var(--text-muted)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-secondary)]'
-      }`}
-    >
-      {children}
-    </Button>
-  )
-}
-
 function ActionCard({ action, index, total, label, onMoveUp, onMoveDown, onRemove, onParamsChange, invalidLabel, moveUpLabel, moveDownLabel, removeLabel }) {
   const [paramsText, setParamsText] = useState(JSON.stringify(action.params || {}, null, 2))
   const [jsonError, setJsonError] = useState(false)
@@ -248,6 +218,8 @@ export default function PlaybookBuilder() {
   const [jsonSource, setJsonSource] = useState('')
   const [jsonError, setJsonError] = useState(false)
   const [librarySearch, setLibrarySearch] = useState('')
+  const [editorTab, setEditorTab] = useState('canvas')
+  const [graphIssues, setGraphIssues] = useState([])
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -285,10 +257,11 @@ export default function PlaybookBuilder() {
       setJsonError(false)
       return
     }
-    setJsonSource(JSON.stringify({ trigger: draft.trigger, actions: draft.actions }, null, 2))
+    setJsonSource(JSON.stringify({ trigger: stripCanvas(draft.trigger), actions: draft.actions }, null, 2))
     setJsonError(false)
+    // Layout-only `_canvas` updates must not rewrite the JSON editor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft?.trigger, draft?.actions])
+  }, [draft ? logicalPlaybookKey(draft.trigger, draft.actions) : ''])
 
   const startNew = () => {
     setSelected(null)
@@ -301,6 +274,8 @@ export default function PlaybookBuilder() {
     })
     setStatusMsg(null)
     setFireResult(null)
+    setEditorTab('canvas')
+    setGraphIssues([])
   }
 
   const startEdit = (pb) => {
@@ -314,6 +289,8 @@ export default function PlaybookBuilder() {
     })
     setStatusMsg(null)
     setFireResult(null)
+    setEditorTab('canvas')
+    setGraphIssues([])
   }
 
   const insertExample = () => {
@@ -321,12 +298,18 @@ export default function PlaybookBuilder() {
     setDraft(JSON.parse(JSON.stringify(buildExamplePlaybook(t))))
     setStatusMsg({ kind: 'info', text: t('playbooks.loaded_example') })
     setFireResult(null)
+    setEditorTab('canvas')
+    setGraphIssues([])
   }
 
   const save = async () => {
     if (!draft?.name?.trim()) { setStatusMsg({ kind: 'err', text: t('playbooks.name_required') }); return }
     if (playbookActionsHaveBlockedWebhook(draft.actions || [])) {
       setStatusMsg({ kind: 'err', text: t('playbooks.webhook_blocked') })
+      return
+    }
+    if (graphIssues.some((i) => i.level === 'error')) {
+      setStatusMsg({ kind: 'err', text: t('playbooks.canvas.fix_graph') })
       return
     }
     setSaving(true)
@@ -416,21 +399,11 @@ export default function PlaybookBuilder() {
     }
   }
 
-  const updateTrigger = (patch) =>
-    setDraft((d) => ({ ...d, trigger: { ...(d.trigger || {}), ...patch } }))
-
-  const toggleSev = (s) =>
-    updateTrigger({
-      severity: (draft.trigger?.severity || []).includes(s)
-        ? draft.trigger.severity.filter((x) => x !== s)
-        : [...(draft.trigger?.severity || []), s],
-    })
-
   const addAction = (kind) => {
     const template = ACTION_KINDS.find((a) => a.kind === kind) || ACTION_KINDS[0]
     setDraft((d) => ({
       ...d,
-      actions: [...(d.actions || []), JSON.parse(JSON.stringify({ kind: template.kind, params: template.params }))],
+      actions: [...(d.actions || []), JSON.parse(JSON.stringify({ kind: template.kind, params: template.defaultParams }))],
     }))
   }
 
@@ -462,7 +435,10 @@ export default function PlaybookBuilder() {
       setJsonError(false)
       setDraft((d) => ({
         ...d,
-        trigger: parsed.trigger ?? d.trigger,
+        trigger: {
+          ...stripCanvas(parsed.trigger ?? d.trigger),
+          _canvas: parsed.trigger?._canvas ?? d.trigger?._canvas,
+        },
         actions: parsed.actions ?? d.actions,
       }))
     } catch (_) {
@@ -500,10 +476,7 @@ export default function PlaybookBuilder() {
     downloadBytes(bytes, `${slug || 'playbook'}.json`, 'application/json')
   }
 
-  const actionLabel = (kind) => {
-    const entry = ACTION_KINDS.find((a) => a.kind === kind)
-    return entry?.labelKey ? t(entry.labelKey) : kind
-  }
+  const actionLabel = (kind) => t(`playbooks.action.${kind}`)
 
   return (
     <div id="main-content" tabIndex={-1} className="playbook-builder-root min-h-[100dvh] bg-[var(--bg-0)] text-[var(--text-secondary)] outline-none">
@@ -570,14 +543,14 @@ export default function PlaybookBuilder() {
               {t('playbooks.library')}
             </h2>
             <div className="relative mb-3">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-disabled)] pointer-events-none" />
+              <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-disabled)] pointer-events-none" />
               <input
                 type="search"
                 value={librarySearch}
                 onChange={(e) => setLibrarySearch(e.target.value)}
                 aria-label={t('playbooks.library_search')}
                 placeholder={t('playbooks.library_search')}
-                className="w-full rounded-lg bg-[var(--bg-2)] pl-8 pr-3 py-2 text-[11px] text-[var(--text-secondary)] ring-1 ring-white/[0.08] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-cyan-400/30"
+                className="w-full rounded-lg bg-[var(--bg-2)] ps-8 pe-3 py-2 text-[11px] text-[var(--text-secondary)] ring-1 ring-white/[0.08] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-cyan-400/30"
               />
             </div>
             {loadError && (
@@ -640,7 +613,7 @@ export default function PlaybookBuilder() {
               <p className="max-w-sm text-[14px] text-[var(--text-muted)]">{t('playbooks.pick_playbook')}</p>
             </div>
           ) : (
-            <div className="mx-auto max-w-3xl space-y-6">
+            <div className={editorTab === 'canvas' ? 'mx-auto w-full max-w-6xl space-y-6' : 'mx-auto max-w-3xl space-y-6'}>
               {/* Meta */}
               <div className="space-y-3">
                 <input
@@ -668,140 +641,92 @@ export default function PlaybookBuilder() {
                 </label>
               </div>
 
-              {/* Trigger builder */}
-              <section className="rounded-2xl bg-[var(--bg-1)]/40 p-5 ring-1 ring-white/[0.07]">
-                <h3 className="mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-300/80">
-                  <Zap className="h-3.5 w-3.5" />
-                  {t('playbooks.when_conditions')}
-                </h3>
-                <div className="space-y-4">
-                  <div>
-                    <p className="mb-2 text-[11px] text-[var(--text-muted)]">{t('playbooks.severity_any')}</p>
-                    <div className="flex flex-wrap gap-2">
-                      {SEVERITIES.map((s) => {
-                        const active = (draft.trigger?.severity || []).includes(s)
-                        const colors = SEV_COLORS[s]
-                        return (
-                          <Button variant="unstyled"
-                            type="button"
-                            key={s}
-                            onClick={() => toggleSev(s)}
-                            className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wider ring-1 transition-all ${
-                              active
-                                ? `${colors.bg} ${colors.ring} ${colors.text}`
-                                : 'bg-[var(--row-hover-bg)] ring-white/[0.08] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'
-                            }`}
-                          >
-                            {t(`playbooks.severity.${s}`)}
-                          </Button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <ToggleChip
-                      active={!!draft.trigger?.kev}
-                      onClick={() => updateTrigger({ kev: draft.trigger?.kev ? undefined : true })}
-                      accent="amber"
-                    >
-                      {t('playbooks.require_kev')}
-                    </ToggleChip>
-                    <ToggleChip
-                      active={!!draft.trigger?.exposed}
-                      onClick={() => updateTrigger({ exposed: draft.trigger?.exposed ? undefined : true })}
-                    >
-                      {t('playbooks.require_exposed')}
-                    </ToggleChip>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="block">
-                      <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">{t('playbooks.epss_min')}</span>
-                      <input
-                        type="number"
-                        min="0" max="1" step="0.05"
-                        value={draft.trigger?.epss_min ?? ''}
-                        onChange={(e) => updateTrigger({
-                          epss_min: e.target.value === '' ? undefined : Number(e.target.value),
-                        })}
-                        className="mt-1 block w-full rounded-lg bg-[var(--bg-2)] px-3 py-2 text-[13px] text-[var(--text-primary)] ring-1 ring-white/[0.08] focus:outline-none focus:ring-cyan-400/30"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">{t('playbooks.cooldown')}</span>
-                      <input
-                        type="number"
-                        min="0" step="60"
-                        value={draft.trigger?.cooldown_seconds ?? ''}
-                        onChange={(e) => updateTrigger({
-                          cooldown_seconds: e.target.value === '' ? undefined : Number(e.target.value),
-                        })}
-                        className="mt-1 block w-full rounded-lg bg-[var(--bg-2)] px-3 py-2 text-[13px] text-[var(--text-primary)] ring-1 ring-white/[0.08] focus:outline-none focus:ring-cyan-400/30"
-                      />
-                    </label>
-                  </div>
-                </div>
-              </section>
+              <Tabs value={editorTab} onValueChange={setEditorTab} variant="pill">
+                <TabList aria-label={t('playbooks.editor_modes')}>
+                  <Tab value="canvas">{t('playbooks.editor_canvas')}</Tab>
+                  <Tab value="list">{t('playbooks.editor_list')}</Tab>
+                  <Tab value="json">{t('playbooks.editor_json')}</Tab>
+                </TabList>
 
-              {/* Actions */}
-              <section className="rounded-2xl bg-[var(--bg-1)]/40 p-5 ring-1 ring-white/[0.07]">
-                <h3 className="mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-300/80">
-                  <Play className="h-3.5 w-3.5" />
-                  {t('playbooks.do_actions')}
-                </h3>
-                <div className="mb-4 flex flex-wrap gap-1.5">
-                  {ACTION_KINDS.map((a) => (
-                    <Button variant="unstyled"
-                      type="button"
-                      key={a.kind}
-                      onClick={() => addAction(a.kind)}
-                      className="rounded-lg bg-[var(--row-hover-bg)] px-2.5 py-1 text-[10px] font-medium text-[var(--text-tertiary)] ring-1 ring-white/[0.08] transition-all hover:bg-cyan-500/10 hover:text-cyan-200 hover:ring-cyan-400/25"
-                    >
-                      + {t(a.labelKey)}
-                    </Button>
-                  ))}
-                </div>
-                {(draft.actions || []).length > 0 && (
-                  <div className="mb-4">
-                    <PlaybookGraph
-                      trigger={draft.trigger}
-                      actions={draft.actions}
-                      onDryRun={dryRun}
+                <TabPanel value="canvas" className="!p-0">
+                  <PlaybookCanvas
+                    key={selected?.id ?? 'new'}
+                    trigger={draft.trigger}
+                    actions={draft.actions}
+                    height={560}
+                    onDslChange={({ trigger: nextTrigger, actions: nextActions, issues }) => {
+                      setGraphIssues(issues || [])
+                      setDraft((d) => ({ ...d, trigger: nextTrigger, actions: nextActions }))
+                    }}
+                  />
+                </TabPanel>
+
+                <TabPanel value="list" className="!p-0 space-y-6">
+                  <section className="rounded-2xl bg-[var(--bg-1)]/40 p-5 ring-1 ring-white/[0.07]">
+                    <h3 className="mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-300/80">
+                      <Zap className="h-3.5 w-3.5" />
+                      {t('playbooks.when_conditions')}
+                    </h3>
+                    <PlaybookTriggerFields
+                      trigger={draft.trigger || {}}
+                      onChange={(next) => setDraft((d) => ({ ...d, trigger: { ...next, _canvas: d.trigger?._canvas } }))}
+                      idPrefix="list-trigger"
                     />
-                  </div>
-                )}
-                {(draft.actions || []).length === 0 ? (
-                  <p className="py-8 text-center text-[12px] text-[var(--text-muted)]">{t('playbooks.no_actions')}</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {(draft.actions || []).map((a, i) => (
-                      <ActionCard
-                        key={`${a.kind}-${i}`}
-                        action={a}
-                        index={i}
-                        total={draft.actions.length}
-                        label={actionLabel(a.kind)}
-                        onMoveUp={() => moveAction(i, -1)}
-                        onMoveDown={() => moveAction(i, +1)}
-                        onRemove={() => removeAction(i)}
-                        onParamsChange={(json) => updateActionParams(i, json)}
-                        invalidLabel={t('playbooks.json_invalid')}
-                        moveUpLabel={t('a11y.move_up')}
-                        moveDownLabel={t('a11y.move_down')}
-                        removeLabel={t('a11y.remove_action')}
-                      />
-                    ))}
-                  </ul>
-                )}
-              </section>
+                  </section>
 
-              {/* JSON source */}
-              <JsonEditor
-                value={jsonSource}
-                onChange={handleJsonSourceChange}
-                error={jsonError}
-                label={t('playbooks.json_source')}
-                invalidLabel={t('playbooks.json_invalid')}
-              />
+                  <section className="rounded-2xl bg-[var(--bg-1)]/40 p-5 ring-1 ring-white/[0.07]">
+                    <h3 className="mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-300/80">
+                      <Play className="h-3.5 w-3.5" />
+                      {t('playbooks.do_actions')}
+                    </h3>
+                    <div className="mb-4 flex flex-wrap gap-1.5">
+                      {ACTION_KINDS.map((a) => (
+                        <Button variant="unstyled"
+                          type="button"
+                          key={a.kind}
+                          onClick={() => addAction(a.kind)}
+                          className="rounded-lg bg-[var(--row-hover-bg)] px-2.5 py-1 text-[10px] font-medium text-[var(--text-tertiary)] ring-1 ring-white/[0.08] transition-all hover:bg-cyan-500/10 hover:text-cyan-200 hover:ring-cyan-400/25"
+                        >
+                          + {t(`playbooks.action.${a.kind}`)}
+                        </Button>
+                      ))}
+                    </div>
+                    {(draft.actions || []).length === 0 ? (
+                      <p className="py-8 text-center text-[12px] text-[var(--text-muted)]">{t('playbooks.no_actions')}</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {(draft.actions || []).map((a, i) => (
+                          <ActionCard
+                            key={`${a.kind}-${i}`}
+                            action={a}
+                            index={i}
+                            total={draft.actions.length}
+                            label={actionLabel(a.kind)}
+                            onMoveUp={() => moveAction(i, -1)}
+                            onMoveDown={() => moveAction(i, +1)}
+                            onRemove={() => removeAction(i)}
+                            onParamsChange={(json) => updateActionParams(i, json)}
+                            invalidLabel={t('playbooks.json_invalid')}
+                            moveUpLabel={t('a11y.move_up')}
+                            moveDownLabel={t('a11y.move_down')}
+                            removeLabel={t('a11y.remove_action')}
+                          />
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                </TabPanel>
+
+                <TabPanel value="json" className="!p-0">
+                  <JsonEditor
+                    value={jsonSource}
+                    onChange={handleJsonSourceChange}
+                    error={jsonError}
+                    label={t('playbooks.json_source')}
+                    invalidLabel={t('playbooks.json_invalid')}
+                  />
+                </TabPanel>
+              </Tabs>
 
               {/* Toolbar */}
               <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-4">

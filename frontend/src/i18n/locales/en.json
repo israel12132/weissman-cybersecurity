@@ -365,7 +365,16 @@
       "open_pr": "Auto-PR",
       "isolate_host": "Isolate Host",
       "page_oncall": "Page On-call",
-      "http_post": "HTTP POST"
+      "http_post": "HTTP POST",
+      "create_incident": "Create Incident",
+      "set_status_desc": "Update finding workflow status",
+      "slack_notify_desc": "Post a Slack or webhook message",
+      "webhook_desc": "POST an HTTP webhook",
+      "open_pr_desc": "Queue a verified auto-heal PR",
+      "isolate_host_desc": "Contain the affected host",
+      "page_oncall_desc": "Page the on-call responder",
+      "http_post_desc": "POST a JSON body to a URL",
+      "create_incident_desc": "Open an incident ticket"
     },
     "example_name": "Critical KEV → isolate + page",
     "example_description": "Any critical finding with a CISA-KEV listed CVE on an internet-exposed asset isolates the host and pages on-call.",
@@ -379,7 +388,64 @@
     "no_library_match": "No playbooks match your search.",
     "json_invalid": "Invalid JSON",
     "saving": "Saving…",
-    "actions_ok": "{{ok}}/{{total}} ok · {{failed}} failed"
+    "actions_ok": "{{ok}}/{{total}} ok · {{failed}} failed",
+    "webhook_blocked": "Webhook/HTTP URL is blocked (localhost, metadata, or private address).",
+    "editor_modes": "Playbook editor views",
+    "editor_canvas": "Canvas",
+    "editor_list": "List",
+    "editor_json": "JSON",
+    "severity_any_short": "any",
+    "palette": {
+      "group": "Playbook node palette",
+      "add": "Add {{type}} node"
+    },
+    "nodes": {
+      "trigger": "Trigger",
+      "trigger_desc": "When the finding matches",
+      "action": "Action",
+      "action_desc": "Run a SOAR action",
+      "condition": "Condition",
+      "condition_desc": "Visual branch (not persisted)",
+      "delay": "Delay",
+      "delay_desc": "Visual wait (not persisted)",
+      "notify": "Notify",
+      "notify_desc": "Alert a channel"
+    },
+    "canvas": {
+      "label": "Playbook canvas",
+      "empty": "Drag nodes from the palette, or click a type to place it.",
+      "skipped_visual": "Condition and delay nodes are visual-only and are not saved to the SOAR DSL.",
+      "fix_graph": "Fix canvas errors before saving (trigger required, no cycles).",
+      "issue_no_trigger": "Add a Trigger node — playbooks start with when {conditions}.",
+      "issue_multiple_triggers": "Only one Trigger node is allowed.",
+      "issue_cycle": "Remove the cycle — SOAR actions run as an ordered list.",
+      "issue_orphans": "{{count}} action(s) are not wired from the trigger; they will still run last.",
+      "issue_visual_only": "{{count}} visual-only node(s) will not be saved."
+    },
+    "inspector": {
+      "title": "Inspector",
+      "node": "Node",
+      "edge": "Edge",
+      "no_selection": "Select a node to edit trigger conditions or action params. Drag between handles to wire the playbook.",
+      "delete_node": "Delete node",
+      "delete_edge": "Delete edge",
+      "kind": "Action kind",
+      "json_hint": "JSON is applied as you type when valid."
+    },
+    "field": {
+      "status": "Status",
+      "url": "URL",
+      "template": "Template",
+      "channel": "Channel",
+      "body": "JSON body",
+      "title": "Title",
+      "repo": "Repository",
+      "target": "Target",
+      "duration_seconds": "Duration (seconds)",
+      "team": "Team",
+      "severity": "Severity",
+      "short_description": "Short description"
+    }
   },
   "clients_page": {
     "title": "Client Management",

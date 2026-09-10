@@ -355,7 +355,16 @@
       "open_pr": "PR אוטומטי",
       "isolate_host": "בידוד מארח",
       "page_oncall": "קריאה לתורנות",
-      "http_post": "HTTP POST"
+      "http_post": "HTTP POST",
+      "create_incident": "צור אירוע",
+      "set_status_desc": "עדכן סטטוס workflow של הממצא",
+      "slack_notify_desc": "שלח הודעת Slack או webhook",
+      "webhook_desc": "POST ל-HTTP webhook",
+      "open_pr_desc": "הוסף PR לתיקון מאומת",
+      "isolate_host_desc": "בלום את המארח המושפע",
+      "page_oncall_desc": "זמן את התורן",
+      "http_post_desc": "POST גוף JSON לכתובת",
+      "create_incident_desc": "פתח כרטיס אירוע"
     },
     "example_name": "KEV קריטי → בידוד + קריאה לתורנות",
     "example_description": "כל ממצא קריטי עם CVE ברשימת CISA-KEV על נכס חשוף לאינטרנט — מבודד את המארח ומזמן את צוות התורנות.",
@@ -369,7 +378,64 @@
     "no_library_match": "אין מדריכים התואמים לחיפוש.",
     "json_invalid": "JSON לא תקין",
     "saving": "שומר…",
-    "actions_ok": "{{ok}}/{{total}} הצליחו · {{failed}} נכשלו"
+    "actions_ok": "{{ok}}/{{total}} הצליחו · {{failed}} נכשלו",
+    "webhook_blocked": "כתובת Webhook/HTTP חסומה (localhost, metadata או כתובת פרטית).",
+    "editor_modes": "תצוגות עורך המדריך",
+    "editor_canvas": "קנבס",
+    "editor_list": "רשימה",
+    "editor_json": "JSON",
+    "severity_any_short": "כל",
+    "palette": {
+      "group": "לוח צמתי מדריך",
+      "add": "הוסף צומת {{type}}"
+    },
+    "nodes": {
+      "trigger": "טריגר",
+      "trigger_desc": "כאשר הממצא תואם",
+      "action": "פעולה",
+      "action_desc": "הרץ פעולת SOAR",
+      "condition": "תנאי",
+      "condition_desc": "ענף חזותי (לא נשמר)",
+      "delay": "השהיה",
+      "delay_desc": "המתנה חזותית (לא נשמרת)",
+      "notify": "התראה",
+      "notify_desc": "התרע לערוץ"
+    },
+    "canvas": {
+      "label": "קנבס מדריך",
+      "empty": "גרור צמתים מהלוח, או לחץ על סוג כדי למקם אותו.",
+      "skipped_visual": "צמתי תנאי והשהיה הם חזותיים בלבד ואינם נשמרים ב-DSL של SOAR.",
+      "fix_graph": "תקן שגיאות בקנבס לפני השמירה (נדרש טריגר, בלי מעגלים).",
+      "issue_no_trigger": "הוסף צומת טריגר — מדריכים מתחילים ב-when {conditions}.",
+      "issue_multiple_triggers": "מותר צומת טריגר אחד בלבד.",
+      "issue_cycle": "הסר את המעגל — פעולות SOAR רצות כרשימה ממוינת.",
+      "issue_orphans": "{{count}} פעולות אינן מחוברות מהטריגר; הן עדיין ירוצו בסוף.",
+      "issue_visual_only": "{{count}} צמתים חזותיים לא יישמרו."
+    },
+    "inspector": {
+      "title": "מפקח",
+      "node": "צומת",
+      "edge": "קשת",
+      "no_selection": "בחר צומת כדי לערוך תנאי טריגר או פרמטרי פעולה. גרור בין הידיות כדי לחבר את המדריך.",
+      "delete_node": "מחק צומת",
+      "delete_edge": "מחק קשת",
+      "kind": "סוג פעולה",
+      "json_hint": "JSON מוחל בזמן ההקלדה כשהוא תקין."
+    },
+    "field": {
+      "status": "סטטוס",
+      "url": "כתובת",
+      "template": "תבנית",
+      "channel": "ערוץ",
+      "body": "גוף JSON",
+      "title": "כותרת",
+      "repo": "מאגר",
+      "target": "יעד",
+      "duration_seconds": "משך (שניות)",
+      "team": "צוות",
+      "severity": "חומרה",
+      "short_description": "תיאור קצר"
+    }
   },
   "clients_page": {
     "title": "ניהול לקוחות",
