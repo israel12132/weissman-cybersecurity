@@ -268,7 +268,20 @@ export function canConnect(nodes, edges, source, target) {
   const targetNode = (nodes || []).find((n) => n.id === target)
   if (isTriggerNode(targetNode)) return false
   if (wouldCreateCycle(edges, source, target)) return false
+  if ((edges || []).some((e) => e.source === source && e.target === target)) return false
   return true
+}
+
+/** Wire a newly placed action onto the end of the trigger chain (SOAR is linear). */
+export function autoConnectNewNode(nodes, edges, newId) {
+  const created = (nodes || []).find((n) => n.id === newId)
+  if (!created || isTriggerNode(created)) return edges
+  const others = (nodes || []).filter((n) => n.id !== newId)
+  const { ordered, triggerNode } = analyzeGraph(others, edges)
+  const source = ordered[ordered.length - 1] || triggerNode
+  if (!source) return edges
+  if (!canConnect(nodes, edges, source.id, newId)) return edges
+  return connect(edges, source.id, newId)
 }
 
 /** Remove a node and any edges touching it. */

@@ -141,6 +141,8 @@ describe('PlaybookCanvas', () => {
     expect(last.actions.some((a) => a.kind === 'isolate_host')).toBe(true)
     expect(last.trigger.severity).toEqual(['critical'])
     expect(last.trigger._canvas.nodes.length).toBeGreaterThan(1)
+    expect(last.trigger._canvas.edges.length).toBeGreaterThan(0)
+    expect(last.issues.some((i) => i.code === 'orphans')).toBe(false)
   })
 
   it('wires two nodes through onConnect', () => {

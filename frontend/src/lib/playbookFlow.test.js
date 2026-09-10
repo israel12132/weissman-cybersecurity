@@ -17,6 +17,7 @@ import {
   validatePlaybookGraph,
   autoLayoutFlow,
   logicalPlaybookKey,
+  autoConnectNewNode,
   nodeTitleKey,
   summarizeTrigger,
   summarizeAction,
@@ -172,6 +173,7 @@ describe('playbookFlow', () => {
     expect(canConnect(nodes, edges, 'n2', 'n1')).toBe(false)
     expect(canConnect(nodes, edges, 'n2', 'n3')).toBe(true)
     edges = connect(edges, 'n2', 'n3')
+    expect(canConnect(nodes, edges, 'n2', 'n3')).toBe(false)
     expect(wouldCreateCycle(edges, 'n3', 'n1')).toBe(true)
     expect(wouldCreateCycle(edges, 'n3', 'n2')).toBe(true)
     expect(graphHasCycle(nodes, connect(edges, 'n3', 'n1'))).toBe(true)
@@ -218,5 +220,16 @@ describe('playbookFlow', () => {
     expect(readNodeDragType({
       getData: (mime) => (mime === 'text/plain' ? 'https://example.com' : ''),
     })).toBe('')
+  })
+
+  it('auto-connects a new action onto the end of the trigger chain', () => {
+    const trigger = makeNode('trigger', 1)
+    const status = makeNode('set_status', 2, { x: 0, y: 80 })
+    let edges = connect([], 'n1', 'n2')
+    const page = makeNode('page_oncall', 3, { x: 0, y: 180 })
+    const nodes = [trigger, status, page]
+    edges = autoConnectNewNode(nodes, edges, 'n3')
+    expect(edges.some((e) => e.source === 'n2' && e.target === 'n3')).toBe(true)
+    expect(flowToDsl(nodes, edges).actions.map((a) => a.kind)).toEqual(['set_status', 'page_oncall'])
   })
 })

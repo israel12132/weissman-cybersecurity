@@ -9,7 +9,6 @@ import {
   Handle,
   Position,
   MarkerType,
-  addEdge,
   useNodesState,
   useEdgesState,
   useReactFlow,
@@ -28,6 +27,8 @@ import {
   logicalPlaybookKey,
   nextNumericId,
   canConnect,
+  connect,
+  autoConnectNewNode,
   patchNode,
   removeNode,
   removeEdge,
@@ -139,8 +140,13 @@ function CanvasInner({
   const [selectedNodeId, setSelectedNodeId] = useState(null)
   const [selectedEdgeId, setSelectedEdgeId] = useState(null)
   const lastLogical = useRef(soarMode ? logicalPlaybookKey(trigger, actions) : '')
+  const pendingConnectId = useRef(null)
   const wrapperRef = useRef(null)
   const { screenToFlowPosition, fitView } = useReactFlow()
+  const screenToFlowPositionRef = useRef(screenToFlowPosition)
+  const fitViewRef = useRef(fitView)
+  screenToFlowPositionRef.current = screenToFlowPosition
+  fitViewRef.current = fitView
   const rtl = (i18n.dir?.() || i18n.language) === 'rtl' || i18n.language === 'he'
   const onChangeRef = useRef(onChange)
   const onDslChangeRef = useRef(onDslChange)
@@ -176,17 +182,18 @@ function CanvasInner({
     const key = logicalPlaybookKey(trigger, actions)
     if (key === lastLogical.current) return
     lastLogical.current = key
+    pendingConnectId.current = null
     const next = dslToFlow(trigger, actions)
     setNodes(next.nodes)
     setEdges(next.edges)
     requestAnimationFrame(() => {
       try {
-        fitView({ padding: 0.2, duration: 180 })
+        fitViewRef.current?.({ padding: 0.2, duration: 180 })
       } catch {
         /* canvas unmounted */
       }
     })
-  }, [soarMode, trigger, actions, setNodes, setEdges, fitView])
+  }, [soarMode, trigger, actions, setNodes, setEdges])
 
   useEffect(() => {
     onChangeRef.current?.(serializeGraph(nodes, edges))
@@ -200,10 +207,16 @@ function CanvasInner({
     (params) => {
       const source = params.source || params.from
       const target = params.target || params.to
-      if (!canConnect(nodes, edges, source, target)) return
-      setEdges((eds) => addEdge({ ...params, source, target, ...defaultEdgeOptions }, eds))
+      setEdges((eds) => {
+        if (!canConnect(nodes, eds, source, target)) return eds
+        return connect(eds, source, target, {
+          ...defaultEdgeOptions,
+          ...(params.sourceHandle ? { sourceHandle: params.sourceHandle } : {}),
+          ...(params.targetHandle ? { targetHandle: params.targetHandle } : {}),
+        })
+      })
     },
-    [nodes, edges, setEdges],
+    [nodes, setEdges],
   )
 
   const isValidConnection = useCallback(
@@ -226,6 +239,7 @@ function CanvasInner({
       setNodes((nds) => {
         if (type === 'trigger' && nds.some(isTriggerNode)) return nds
         const node = makeNode(type, nextNumericId(nds), position)
+        pendingConnectId.current = node.id
         setSelectedNodeId(node.id)
         setSelectedEdgeId(null)
         return [...nds.map((n) => ({ ...n, selected: false })), { ...node, selected: true }]
@@ -234,6 +248,13 @@ function CanvasInner({
     [setNodes],
   )
 
+  useEffect(() => {
+    const id = pendingConnectId.current
+    if (!id) return
+    pendingConnectId.current = null
+    setEdges((eds) => autoConnectNewNode(nodes, eds, id))
+  }, [nodes, setEdges])
+
   const onDrop = useCallback(
     (e) => {
       e.preventDefault()
@@ -241,14 +262,14 @@ function CanvasInner({
       if (!type) return
       let position = { x: e.clientX, y: e.clientY }
       try {
-        position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
+        position = screenToFlowPositionRef.current({ x: e.clientX, y: e.clientY })
       } catch {
         const bounds = wrapperRef.current?.getBoundingClientRect?.() || { left: 0, top: 0 }
         position = { x: e.clientX - bounds.left, y: e.clientY - bounds.top }
       }
       addNodeOfType(type, position)
     },
-    [addNodeOfType, screenToFlowPosition],
+    [addNodeOfType],
   )
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null
