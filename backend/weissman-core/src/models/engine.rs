@@ -78,6 +78,8 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "osint",
     "asm",
     "first_mover_surface_delta",
+    "first_mover_delta_fusion",
+    "first_seen_osv_nvd",
     "leak_hunter",
     "discovery_engine",
     "recon",
@@ -691,6 +693,7 @@ pub const DEFAULT_ORCHESTRATOR_ENGINES: &[&str] = &[
     "pki_tls",
     "subdomain_takeover",
     "supply_chain",
+    "first_seen_osv_nvd",
     "bola_idor",
     "jwt_attack",
     "oauth_oidc",
@@ -705,6 +708,8 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "osint",
     "asm",
     "first_mover_surface_delta",
+    "first_mover_delta_fusion",
+    "first_seen_osv_nvd",
     "leak_hunter",
     "discovery_engine",
     "recon",
@@ -1617,6 +1622,8 @@ mod production_registry_tests {
         }
         assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"asm"));
         assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_mover_surface_delta"));
+        assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_seen_osv_nvd"));
+        assert!(!DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_mover_delta_fusion"));
         assert!(
             !DEFAULT_ORCHESTRATOR_ENGINES
                 .iter()

@@ -16,8 +16,8 @@
     },
     {
       "techniqueID": "T1595",
-      "score": 38,
-      "comment": "ai_cloud_escalation_chain, asm, attack_graph_traversal, attack_surface_quantify, autonomous_pentest, can_bus_surface, compliance_gap_scan, control_plane_of_controls, digital_twin, external_exposure_supreme, fair_exposure_fusion, firmware_emulation, firmware_exploit, first_mover_surface_delta, full_breach_sim, hardware_implant, implantable_device_hack, iot_firmware, jtag_swd_exploitation, kill_chain, lora_attack, medical_device_exploit, mobile_backend_chain, network_topology_map, nexus_sovereign_swarm, ngfw_posture, ntlm_relay, post_exploitation, printer_mfp_attack, rce_chain, risk_superposition_collapse, smb_netbios, smb_relay, tactic_chain_synthesizer, threat_emulation, threat_model_automation, vuln_chaining, weissman_vngfw",
+      "score": 39,
+      "comment": "ai_cloud_escalation_chain, asm, attack_graph_traversal, attack_surface_quantify, autonomous_pentest, can_bus_surface, compliance_gap_scan, control_plane_of_controls, digital_twin, external_exposure_supreme, fair_exposure_fusion, firmware_emulation, firmware_exploit, first_mover_delta_fusion, first_mover_surface_delta, full_breach_sim, hardware_implant, implantable_device_hack, iot_firmware, jtag_swd_exploitation, kill_chain, lora_attack, medical_device_exploit, mobile_backend_chain, network_topology_map, nexus_sovereign_swarm, ngfw_posture, ntlm_relay, post_exploitation, printer_mfp_attack, rce_chain, risk_superposition_collapse, smb_netbios, smb_relay, tactic_chain_synthesizer, threat_emulation, threat_model_automation, vuln_chaining, weissman_vngfw",
       "enabled": true
     },
     {
@@ -60,6 +60,12 @@
       "techniqueID": "T1592.002",
       "score": 3,
       "comment": "asm, metadata_harvest, shodan_mass_scan",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1595.002",
+      "score": 8,
+      "comment": "ai_cloud_escalation_chain, digital_twin, first_seen_osv_nvd, kill_chain, mobile_backend_chain, rce_chain, tactic_chain_synthesizer, vuln_chaining",
       "enabled": true
     },
     {
@@ -336,12 +342,6 @@
       "techniqueID": "T1587.001",
       "score": 6,
       "comment": "ai_cloud_escalation_chain, kill_chain, mobile_backend_chain, rce_chain, tactic_chain_synthesizer, vuln_chaining",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1595.002",
-      "score": 7,
-      "comment": "ai_cloud_escalation_chain, digital_twin, kill_chain, mobile_backend_chain, rce_chain, tactic_chain_synthesizer, vuln_chaining",
       "enabled": true
     },
     {

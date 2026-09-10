@@ -483,8 +483,18 @@ fn parse_settings(ctx: &EngineRunContext) -> Settings {
         oob_enabled: cfg.bool_or("check_oob", true),
         oast_domain: cfg
             .string("oast_domain")
-            .or_else(|| cfg.string("collaborator")),
-        oast_token: cfg.string("oast_token"),
+            .or_else(|| cfg.string("collaborator"))
+            .or_else(|| {
+                ctx.oast_domain
+                    .as_ref()
+                    .map(|s| s.trim().trim_end_matches('.').to_ascii_lowercase())
+                    .filter(|s| !s.is_empty())
+            })
+            .or_else(crate::fuzz_oob::oast_hook_domain),
+        oast_token: cfg
+            .string("oast_token")
+            .filter(|t| !t.trim().is_empty())
+            .or_else(|| Some(uuid::Uuid::new_v4().simple().to_string())),
         auth_headers: parse_auth_headers(&cfg),
         provider_filter,
         extra_points,
@@ -1211,48 +1221,39 @@ fn build_work(settings: &Settings, points: &[String]) -> Vec<Probe> {
         .as_deref()
         .filter(|_| settings.oob_enabled)
     {
-        let token = settings
-            .oast_token
-            .clone()
-            .filter(|t| !t.trim().is_empty())
-            .unwrap_or_else(|| {
-                format!(
-                    "w{}",
-                    chrono::Utc::now()
-                        .timestamp_nanos_opt()
-                        .unwrap_or(0)
-                        .unsigned_abs()
-                )
+        if let Some(token) = settings.oast_token.clone().filter(|t| !t.trim().is_empty()) {
+            let oob_url = crate::fuzz_oob::oast_embed_url_for_token(&token).unwrap_or_else(|| {
+                format!("http://{token}.{}/", dom.trim().trim_start_matches('.'))
             });
-        let oob_url = format!("http://{token}.{}/", dom.trim().trim_start_matches('.'));
-        for point in points {
-            for param in settings.params.iter().take(12) {
-                work.push(Probe {
-                    kind: TestKind::Oob,
-                    point_label: format!("param '{param}'"),
-                    url: add_query(point, param, &oob_url),
-                    headers: Vec::new(),
-                    payload: oob_url.clone(),
-                    provider: "oob",
-                    canaries: &[],
-                    base_severity: "info",
-                    note: "out-of-band SSRF probe planted — confirm via interaction server",
-                });
+            for point in points {
+                for param in settings.params.iter().take(12) {
+                    work.push(Probe {
+                        kind: TestKind::Oob,
+                        point_label: format!("param '{param}'"),
+                        url: add_query(point, param, &oob_url),
+                        headers: Vec::new(),
+                        payload: oob_url.clone(),
+                        provider: "oob",
+                        canaries: &[],
+                        base_severity: "info",
+                        note: "out-of-band SSRF probe planted — confirm via interaction server",
+                    });
+                }
             }
-        }
-        if settings.test_headers {
-            for h in SSRF_HEADERS.iter().take(6) {
-                work.push(Probe {
-                    kind: TestKind::Oob,
-                    point_label: format!("header '{h}'"),
-                    url: points[0].clone(),
-                    headers: vec![(h.to_string(), oob_url.clone())],
-                    payload: oob_url.clone(),
-                    provider: "oob",
-                    canaries: &[],
-                    base_severity: "info",
-                    note: "out-of-band SSRF probe planted in header",
-                });
+            if settings.test_headers {
+                for h in SSRF_HEADERS.iter().take(6) {
+                    work.push(Probe {
+                        kind: TestKind::Oob,
+                        point_label: format!("header '{h}'"),
+                        url: points[0].clone(),
+                        headers: vec![(h.to_string(), oob_url.clone())],
+                        payload: oob_url.clone(),
+                        provider: "oob",
+                        canaries: &[],
+                        base_severity: "info",
+                        note: "out-of-band SSRF probe planted in header",
+                    });
+                }
             }
         }
     }
@@ -2726,11 +2727,11 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
                 }
             }
             TestKind::Oob => {
-                // We cannot poll a third-party interaction server here, so we honestly report the
-                // probe as planted (verify out-of-band). Only one summary row per scan.
+                // Planted only — critical requires a live OAST callback (polled after this loop).
                 if !posture.oob_planted {
                     posture.oob_planted = true;
-                    let title = "SSRF out-of-band probes planted".to_string();
+                    let title =
+                        "SSRF out-of-band probes planted (awaiting live callback)".to_string();
                     posture.record("info", &title);
                     let ev = Evidence::new()
                         .with("payload", probe.payload.clone())
@@ -2742,16 +2743,65 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
                     findings.push(mk_finding(
                         &title,
                         "info",
-                        &format!(
-                            "Out-of-band SSRF payloads ({}…) were injected across parameters/headers. Check your interaction server for DNS/HTTP callbacks to confirm blind SSRF.",
-                            probe.payload
-                        ),
+                        "Out-of-band SSRF payloads were injected. This is not a confirmed vulnerability — a live OAST callback is required for proof-grade blind SSRF.",
                         &host,
                         &probe.url,
-                        0.5,
+                        0.4,
                         "oob",
                         "oob_planted",
                         ev,
+                    ));
+                }
+            }
+        }
+    }
+
+    if posture.oob_planted {
+        if let Some(token) = settings
+            .oast_token
+            .as_deref()
+            .filter(|t| !t.trim().is_empty())
+        {
+            if crate::fuzz_oob::oast_correlation_enabled() {
+                let confirmed =
+                    crate::fuzz_oob::poll_oob_token_confirmed(&client, token, 4, 2500).await;
+                if confirmed {
+                    let title = "Blind SSRF confirmed via live OAST callback".to_string();
+                    if seen_titles.insert(title.clone()) {
+                        posture.record("critical", &title);
+                        let ev = Evidence::new()
+                            .with("oast_token", token.to_string())
+                            .with(
+                                "interaction_domain",
+                                settings.oast_domain.clone().unwrap_or_default(),
+                            )
+                            .check("oob_callback_confirmed", true, token.to_string());
+                        findings.push(mk_finding(
+                            &title,
+                            "critical",
+                            "The target fetched the Weissman OAST listener (HTTP/DNS callback recorded). Blind SSRF is proven — not inferred from a planted payload.",
+                            &host,
+                            &base,
+                            0.99,
+                            "oob",
+                            "oob_confirmed",
+                            ev,
+                        ));
+                    }
+                }
+            } else {
+                let title = "Blind SSRF not proven — OAST listener is not configured".to_string();
+                if seen_titles.insert(title.clone()) {
+                    findings.push(mk_finding(
+                        &title,
+                        "info",
+                        "Set WEISSMAN_OAST_DOMAIN + WEISSMAN_OAST_LISTENER_URL (or tenant oast_domain) so planted tokens can be correlated. Without a real callback there is no proof-grade blind SSRF.",
+                        &host,
+                        &base,
+                        0.2,
+                        "oob",
+                        "oob_unconfigured",
+                        Evidence::new().check("oast_configured", false, "missing"),
                     ));
                 }
             }

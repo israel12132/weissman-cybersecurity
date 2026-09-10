@@ -19,6 +19,14 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub const ENGINE_ID: &str = "first_mover_surface_delta";
 const MITRE: &str = "T1595";
+/// Web engines fired on each *added* FQDN (enqueue from first-mover, inline from delta fusion).
+pub const DELTA_FOLLOW_ON_ENGINES: &[&str] = &[
+    "subdomain_takeover",
+    "leak_hunter",
+    "bola_idor",
+    "jwt_attack",
+];
+const MAX_CHAIN_HOSTS: usize = 6;
 const MAX_DISCOVERY: usize = 40;
 const MAX_TOTAL_HOSTS: usize = 80;
 const MAX_NEW_HTTP: usize = 20;
@@ -254,7 +262,30 @@ async fn crt_sh_names(apex: &str) -> Vec<String> {
     names.into_iter().collect()
 }
 
-fn merge_host_list(apex: &str, ct: Vec<String>, previous: &[SurfaceAsset]) -> Vec<String> {
+#[must_use]
+pub(crate) fn extra_hosts_from_params(params: &Value) -> Vec<String> {
+    match params.get("extra_hosts") {
+        Some(Value::Array(a)) => a
+            .iter()
+            .filter_map(|v| v.as_str())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect(),
+        Some(Value::String(s)) => s
+            .split([',', ' ', '\n'])
+            .map(|x| x.trim().to_string())
+            .filter(|x| !x.is_empty())
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn merge_host_list(
+    apex: &str,
+    ct: Vec<String>,
+    previous: &[SurfaceAsset],
+    extra: &[String],
+) -> Vec<String> {
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut out: Vec<String> = Vec::new();
     fn push(raw: &str, apex: &str, seen: &mut BTreeSet<String>, out: &mut Vec<String>) {
@@ -268,6 +299,10 @@ fn merge_host_list(apex: &str, ct: Vec<String>, previous: &[SurfaceAsset]) -> Ve
     }
     push(apex, apex, &mut seen, &mut out);
     push(&format!("www.{apex}"), apex, &mut seen, &mut out);
+    // Certstream / operator-pushed names first so they win the HTTP budget.
+    for n in extra {
+        push(n, apex, &mut seen, &mut out);
+    }
     // Always re-probe the last snapshot so missing crt.sh rows are not false removals.
     for a in previous {
         push(&a.fqdn, apex, &mut seen, &mut out);
@@ -287,6 +322,7 @@ async fn enumerate_live(
     include_ct: bool,
     include_http: bool,
     previous: Option<&SurfaceSnapshot>,
+    extra: &[String],
 ) -> SurfaceSnapshot {
     let ct = if include_ct {
         crt_sh_names(apex).await
@@ -294,7 +330,7 @@ async fn enumerate_live(
         vec![]
     };
     let prev_assets = previous.map(|p| p.assets.as_slice()).unwrap_or(&[]);
-    let selected = merge_host_list(apex, ct, prev_assets);
+    let selected = merge_host_list(apex, ct, prev_assets, extra);
     let prev_watch: BTreeSet<&str> = prev_assets
         .iter()
         .filter(|a| a.cname.is_some() || a.a.is_empty() || a.http_status.is_some())
@@ -503,6 +539,90 @@ async fn persist_snapshot(
     Ok(())
 }
 
+/// Hosts that receive the immediate BOLA/JWT/takeover/leak kill-chain.
+/// Baseline snapshots do not chain the whole surface — only Certstream `extra_hosts`
+/// (a newly issued name is new even if this is the client's first snapshot).
+#[must_use]
+pub fn hosts_for_follow_on(
+    apex: &str,
+    deltas: &[AssetDelta],
+    baseline: bool,
+    extra: &[String],
+) -> Vec<String> {
+    let extra: Vec<String> = extra
+        .iter()
+        .map(|h| h.trim().trim_end_matches('.').to_ascii_lowercase())
+        .filter(|h| !h.is_empty() && h.contains('.') && in_authorized_scope(apex, h))
+        .collect();
+    if baseline {
+        return extra;
+    }
+    let mut added: Vec<String> = deltas
+        .iter()
+        .filter(|d| d.kind == AssetDeltaKind::Added)
+        .map(|d| d.fqdn.clone())
+        .collect();
+    for h in extra {
+        if !added.iter().any(|x| x == &h) {
+            added.push(h);
+        }
+    }
+    added
+}
+
+#[must_use]
+pub fn follow_on_payloads(client_id: i64, added_fqdns: &[String]) -> Vec<(String, Value)> {
+    let mut out = Vec::new();
+    for host in added_fqdns.iter().take(MAX_CHAIN_HOSTS) {
+        let h = host.trim().trim_end_matches('.').to_ascii_lowercase();
+        if h.is_empty() || !h.contains('.') {
+            continue;
+        }
+        for eng in DELTA_FOLLOW_ON_ENGINES {
+            out.push((
+                (*eng).to_string(),
+                json!({
+                    "engine": *eng,
+                    "target": format!("https://{h}"),
+                    "client_id": client_id,
+                    "trigger": "first_mover_delta",
+                    "parent_fqdn": h,
+                    "chain_web_engines": false,
+                }),
+            ));
+        }
+    }
+    out
+}
+
+async fn enqueue_delta_follow_ons(
+    ctx: &EngineRunContext,
+    apex: &str,
+    deltas: &[AssetDelta],
+    baseline: bool,
+) {
+    if !pbool(&ctx.job_params, "chain_web_engines", true) {
+        return;
+    }
+    let (Some(pool), Some(tid), Some(cid)) = (ctx.app_pool.as_ref(), ctx.tenant_id, ctx.client_id)
+    else {
+        return;
+    };
+    let extra = extra_hosts_from_params(&ctx.job_params);
+    let added = hosts_for_follow_on(apex, deltas, baseline, &extra);
+    if added.is_empty() {
+        return;
+    }
+    for (_eng, payload) in follow_on_payloads(cid, &added) {
+        if let Err(e) =
+            crate::async_jobs::enqueue(pool.as_ref(), tid, "command_center_engine", payload, None)
+                .await
+        {
+            tracing::warn!(target: "first_mover", error = %e, "delta follow-on enqueue failed");
+        }
+    }
+}
+
 /// Live JSON for GET /api/clients/:id/surface-diff (no new probes).
 pub async fn api_surface_diff_json(
     pool: &sqlx::PgPool,
@@ -622,6 +742,7 @@ pub async fn run_first_mover_surface_delta_result(
 
     let include_ct = pbool(&ctx.job_params, "include_ct", true);
     let include_http = pbool(&ctx.job_params, "include_http", true);
+    let extra = extra_hosts_from_params(&ctx.job_params);
 
     let previous = match (ctx.app_pool.as_ref(), ctx.tenant_id, ctx.client_id) {
         (Some(pool), Some(tid), Some(cid)) => match load_previous_snapshot(pool, tid, cid).await {
@@ -633,7 +754,7 @@ pub async fn run_first_mover_surface_delta_result(
         _ => None,
     };
 
-    let current = enumerate_live(&apex, include_ct, include_http, previous.as_ref()).await;
+    let current = enumerate_live(&apex, include_ct, include_http, previous.as_ref(), &extra).await;
     if current.assets.is_empty() {
         return empty_ok(ENGINE_ID, target);
     }
@@ -665,6 +786,7 @@ pub async fn run_first_mover_surface_delta_result(
     }
 
     let findings = findings_from_delta(&apex, &deltas, baseline);
+    enqueue_delta_follow_ons(ctx, &apex, &deltas, baseline).await;
     if findings.is_empty() {
         return empty_ok(ENGINE_ID, target);
     }
@@ -756,7 +878,7 @@ mod tests {
             a: vec!["1.1.1.1".into()],
             ..SurfaceAsset::default()
         }];
-        let merged = merge_host_list("example.com", vec![], &prev);
+        let merged = merge_host_list("example.com", vec![], &prev, &[]);
         assert!(merged.contains(&"example.com".into()));
         assert!(merged.contains(&"www.example.com".into()));
         assert!(merged.contains(&"shop.example.com".into()));
@@ -783,5 +905,56 @@ mod tests {
         assert!(f
             .iter()
             .any(|x| x["severity"] == "high" && x["title"].as_str().unwrap().contains("dangling")));
+    }
+
+    #[test]
+    fn extra_hosts_win_scope_and_merge() {
+        let extra =
+            extra_hosts_from_params(&json!({"extra_hosts": ["api.example.com", "evil.test"]}));
+        assert_eq!(extra, vec!["api.example.com", "evil.test"]);
+        let merged = merge_host_list("example.com", vec![], &[], &extra);
+        assert!(merged.contains(&"api.example.com".into()));
+        assert!(!merged.iter().any(|h| h == "evil.test"));
+    }
+
+    #[test]
+    fn baseline_chains_only_certstream_extra_hosts() {
+        let deltas = vec![AssetDelta {
+            kind: AssetDeltaKind::Added,
+            fqdn: "www.example.com".into(),
+            previous: None,
+            current: None,
+            evidence: "baseline".into(),
+        }];
+        let extra = vec!["api.example.com".into(), "evil.test".into()];
+        let h = hosts_for_follow_on("example.com", &deltas, true, &extra);
+        assert_eq!(h, vec!["api.example.com"]);
+        assert!(hosts_for_follow_on("example.com", &deltas, true, &[]).is_empty());
+    }
+
+    #[test]
+    fn drift_chains_added_plus_in_scope_extra() {
+        let deltas = vec![AssetDelta {
+            kind: AssetDeltaKind::Added,
+            fqdn: "shop.example.com".into(),
+            previous: None,
+            current: None,
+            evidence: "new".into(),
+        }];
+        let extra = vec!["api.example.com".into()];
+        let h = hosts_for_follow_on("example.com", &deltas, false, &extra);
+        assert_eq!(h, vec!["shop.example.com", "api.example.com"]);
+    }
+
+    #[test]
+    fn follow_on_payloads_cover_kill_chain_per_host() {
+        let p = follow_on_payloads(7, &["shop.acme.test".into()]);
+        assert_eq!(p.len(), DELTA_FOLLOW_ON_ENGINES.len());
+        assert!(p.iter().all(|(_, v)| v["client_id"] == 7));
+        assert!(p
+            .iter()
+            .all(|(_, v)| v["target"] == "https://shop.acme.test"));
+        assert!(p.iter().any(|(e, _)| e == "bola_idor"));
+        assert!(p.iter().any(|(e, _)| e == "jwt_attack"));
     }
 }

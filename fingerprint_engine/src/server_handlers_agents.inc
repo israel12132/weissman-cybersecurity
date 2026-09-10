@@ -339,6 +339,21 @@ async fn api_agents_enroll(
         ws_path: "/ws/agent".into(),
         server_message: Some(format!("welcome host={}", body.hostname)),
     };
+    let pool = state.app_pool.clone();
+    let registry = state.endpoint_agents.clone();
+    let enroll_tenant = consumed.tenant_id;
+    let enroll_client = consumed.client_id;
+    let enroll_host = body.hostname.clone();
+    tokio::spawn(async move {
+        let _ = crate::endpoint_agents::dispatch_enroll_baseline_hunt(
+            pool.as_ref(),
+            &registry,
+            enroll_tenant,
+            enroll_client,
+            &enroll_host,
+        )
+        .await;
+    });
     (StatusCode::OK, Json(serde_json::to_value(&resp).unwrap_or(json!({})))).into_response()
 }
 

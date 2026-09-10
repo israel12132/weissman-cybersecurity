@@ -14,6 +14,7 @@ import Button from '../components/ui/Button'
 
 const ENGINE = 'asm'
 const DELTA_ENGINE = 'first_mover_surface_delta'
+const FUSION_ENGINE = 'first_mover_delta_fusion'
 const ACCENT = '#22d3ee'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -258,8 +259,11 @@ export function FirstMoverDeltaPanel({
   diff,
   loading,
   hunting,
+  fusionHunting,
   onHunt,
+  onFusion,
   huntDisabled,
+  nerve,
 }) {
   const { t } = useTranslation()
   const added = Array.isArray(diff?.added) ? diff.added : []
@@ -280,6 +284,9 @@ export function FirstMoverDeltaPanel({
     changed: 'pages.attackSurfaceManagement.first_mover_kind_changed',
     removed: 'pages.attackSurfaceManagement.first_mover_kind_removed',
   }
+  const cs = nerve?.certstream || {}
+  const oast = nerve?.oast || {}
+  const nvd = nerve?.nvd || {}
 
   return (
     <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-950/40 via-black/40 to-cyan-950/30 p-4 mb-5">
@@ -292,17 +299,63 @@ export function FirstMoverDeltaPanel({
             {t('pages.attackSurfaceManagement.first_mover_subtitle')}
           </p>
         </div>
-        <Button
-          variant="unstyled"
-          type="button"
-          onClick={onHunt}
-          disabled={huntDisabled || hunting}
-          className="px-4 py-2 rounded-lg text-sm font-mono font-semibold bg-amber-500/20 border border-amber-400/40 text-amber-100 hover:bg-amber-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-        >
-          {hunting
-            ? `⟳ ${t('pages.attackSurfaceManagement.first_mover_hunting')}`
-            : `⚡ ${t('pages.attackSurfaceManagement.first_mover_hunt')}`}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="unstyled"
+            type="button"
+            onClick={onHunt}
+            disabled={huntDisabled || hunting}
+            className="px-4 py-2 rounded-lg text-sm font-mono font-semibold bg-amber-500/20 border border-amber-400/40 text-amber-100 hover:bg-amber-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            {hunting
+              ? `⟳ ${t('pages.attackSurfaceManagement.first_mover_hunting')}`
+              : `⚡ ${t('pages.attackSurfaceManagement.first_mover_hunt')}`}
+          </Button>
+          <Button
+            variant="unstyled"
+            type="button"
+            onClick={onFusion}
+            disabled={huntDisabled || fusionHunting}
+            className="px-4 py-2 rounded-lg text-sm font-mono font-semibold bg-fuchsia-500/20 border border-fuchsia-400/40 text-fuchsia-100 hover:bg-fuchsia-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            {fusionHunting
+              ? `⟳ ${t('pages.attackSurfaceManagement.first_mover_fusing')}`
+              : `⛓ ${t('pages.attackSurfaceManagement.first_mover_fusion')}`}
+          </Button>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2 mb-3">
+        {[
+          [
+            t('pages.attackSurfaceManagement.nerve_certstream'),
+            cs.connected
+              ? t('pages.attackSurfaceManagement.nerve_live')
+              : (cs.enabled ? t('pages.attackSurfaceManagement.nerve_reconnect') : t('pages.attackSurfaceManagement.nerve_off')),
+            cs.connected ? '#34d399' : '#fbbf24',
+          ],
+          [
+            t('pages.attackSurfaceManagement.nerve_oast'),
+            oast.configured
+              ? t('pages.attackSurfaceManagement.nerve_live')
+              : t('pages.attackSurfaceManagement.nerve_off'),
+            oast.configured ? '#34d399' : '#f97316',
+          ],
+          [
+            t('pages.attackSurfaceManagement.nerve_nvd'),
+            nvd.api_key_configured
+              ? t('pages.attackSurfaceManagement.nerve_live')
+              : t('pages.attackSurfaceManagement.nerve_nvd_osv_only'),
+            nvd.api_key_configured ? '#34d399' : '#22d3ee',
+          ],
+        ].map(([label, value, color]) => (
+          <span
+            key={label}
+            className="text-[10px] font-mono px-2 py-1 rounded-lg border border-white/[0.08] bg-black/30"
+            style={{ color }}
+          >
+            {label}: {value}
+          </span>
+        ))}
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
         {[
@@ -424,6 +477,8 @@ export default function AttackSurfaceManagement() {
   const [surfaceDiff, setSurfaceDiff] = useState(null)
   const [deltaLoading, setDeltaLoading] = useState(false)
   const [deltaJobId, setDeltaJobId] = useState(null)
+  const [fusionJobId, setFusionJobId] = useState(null)
+  const [nerve, setNerve] = useState(null)
 
   const refreshCorpus = useCallback(() => {
     apiFetch('/api/discovery-knowledge/stats')
@@ -487,6 +542,17 @@ export default function AttackSurfaceManagement() {
     }
   }, [])
 
+  const loadNerve = useCallback(async () => {
+    try {
+      const d = await apiFetch('/api/first-mover/nerve')
+      if (d && typeof d === 'object') setNerve(d)
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.debug('first-mover nerve skipped', err)
+      }
+    }
+  }, [])
+
   const handleRefresh = useCallback(async () => {
     const run = await refreshFromHistory()
     applyHistoryFindings(run, setFindings, { setLastUpdated, setJobId: setLastJobId })
@@ -500,6 +566,12 @@ export default function AttackSurfaceManagement() {
   useEffect(() => {
     loadSurfaceDiff(selectedClientId)
   }, [selectedClientId, loadSurfaceDiff])
+
+  useEffect(() => {
+    loadNerve()
+    const id = setInterval(loadNerve, 20000)
+    return () => clearInterval(id)
+  }, [loadNerve])
 
   useEffect(() => {
     refreshCorpus()
@@ -538,6 +610,16 @@ export default function AttackSurfaceManagement() {
     onComplete: async () => {
       setDeltaJobId(null)
       await loadSurfaceDiff(selectedClientId)
+      loadNerve()
+    },
+  })
+
+  useJobPoll(fusionJobId, {
+    enabled: Boolean(fusionJobId),
+    onComplete: async () => {
+      setFusionJobId(null)
+      await loadSurfaceDiff(selectedClientId)
+      loadNerve()
     },
   })
 
@@ -586,6 +668,30 @@ export default function AttackSurfaceManagement() {
       const jid = d.job_id ?? ''
       showToast('info', t('pages.attackSurfaceManagement.toast_scan_queued', { jid }))
       if (jid) setDeltaJobId(jid)
+    } catch (e) {
+      showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
+    }
+  }, [selectedClientId, target, postScan, showToast, t])
+
+  const handleDeltaFusion = useCallback(async () => {
+    if (!selectedClientId) { showToast('error', t('pages.attackSurfaceManagement.toast_select_client')); return }
+    if (!target.trim()) { showToast('error', t('pages.attackSurfaceManagement.toast_enter_target')); return }
+    try {
+      const { ok, data: d, status } = await postScan({
+        engine: FUSION_ENGINE,
+        client_id: Number(selectedClientId),
+        target: target.trim(),
+        include_ct: true,
+        include_http: true,
+        chain_web_engines: false,
+      })
+      if (!ok) {
+        showToast('error', d.detail || d.error || t('pages.attackSurfaceManagement.toast_scan_failed', { status }))
+        return
+      }
+      const jid = d.job_id ?? ''
+      showToast('info', t('pages.attackSurfaceManagement.toast_scan_queued', { jid }))
+      if (jid) setFusionJobId(jid)
     } catch (e) {
       showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
     }
@@ -799,8 +905,11 @@ export default function AttackSurfaceManagement() {
         diff={surfaceDiff}
         loading={deltaLoading}
         hunting={Boolean(deltaJobId)}
+        fusionHunting={Boolean(fusionJobId)}
         onHunt={handleFirstMoverHunt}
+        onFusion={handleDeltaFusion}
         huntDisabled={!selectedClientId || status === 'running'}
+        nerve={nerve}
       />
 
       {/* ── Results ─────────────────────────────────────────────────── */}

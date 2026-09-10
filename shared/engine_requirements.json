@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-09-10T14:42:10.129Z",
-  "production_engine_count": 581,
+  "generated_at": "2026-09-10T15:48:50.483Z",
+  "production_engine_count": 583,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 424
+      "engine_count": 426
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -295,7 +295,7 @@
       "requirements": [
         "tenant_oast"
       ],
-      "engine_count": 1
+      "engine_count": 4
     }
   },
   "engines": {
@@ -324,6 +324,26 @@
       "group": "recon",
       "kind": "real_probe",
       "label": "First-Mover Surface Delta",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "first_mover_delta_fusion": {
+      "id": "first_mover_delta_fusion",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "First-Mover Delta Fusion",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "first_seen_osv_nvd": {
+      "id": "first_seen_osv_nvd",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "First-Seen OSV vs NVD",
       "requirements": [
         "contact_email",
         "scope_domains"
@@ -439,7 +459,8 @@
       "label": "SSRF Advanced",
       "requirements": [
         "contact_email",
-        "scope_domains"
+        "scope_domains",
+        "tenant_oast"
       ]
     },
     "xxe": {
@@ -449,7 +470,8 @@
       "label": "XXE",
       "requirements": [
         "contact_email",
-        "scope_domains"
+        "scope_domains",
+        "tenant_oast"
       ]
     },
     "ssti": {
@@ -1036,7 +1058,8 @@
       "label": "OAST / OOB",
       "requirements": [
         "contact_email",
-        "scope_domains"
+        "scope_domains",
+        "tenant_oast"
       ]
     },
     "deception_honeypot": {

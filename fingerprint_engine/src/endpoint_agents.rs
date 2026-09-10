@@ -48,6 +48,22 @@ pub const NSSI_BRIDGE_ENGINES: &[&str] = &[
     "dns_tunneling_c2",
 ];
 
+/// Host engines dispatched the moment an agent enrolls (queued until the WS session is up).
+/// Curated baseline — not all 58 — so the first connect actually produces inventory instead of a
+/// silent empty fleet.
+pub const ENROLL_BASELINE_ENGINES: &[&str] = &[
+    "process_inventory",
+    "persistence_mechanism",
+    "host_privilege_escalation",
+    "av_bypass_engine",
+    "usb_enumeration",
+    "log_tampering_engine",
+    "ioc_yara_hunt",
+    "sandbox_evasion",
+    "com_hijacking",
+    "parent_pid_spoof",
+];
+
 fn parse_ueba_ingest(
     finding: &Value,
     client_id: i64,
@@ -549,6 +565,54 @@ pub async fn bridge_nssi_fleet(
         }
     }
     bridged
+}
+
+/// After enroll: queue the host baseline hunt. Tasks sit in `endpoint_agent_tasks` until the
+/// agent opens `/ws/agent` (pending pusher + reconnect replay).
+pub async fn dispatch_enroll_baseline_hunt(
+    pool: &PgPool,
+    registry: &Arc<AgentRegistry>,
+    tenant_id: i64,
+    client_id: i64,
+    hostname: &str,
+) -> u32 {
+    let params = json!({
+        "trigger": "enroll_baseline",
+        "priority": "high",
+        "hostname": hostname,
+    });
+    let target = if hostname.trim().is_empty() {
+        None
+    } else {
+        Some(hostname)
+    };
+    let mut n = 0u32;
+    for engine in ENROLL_BASELINE_ENGINES {
+        match enqueue_and_dispatch_fleet(
+            pool, registry, tenant_id, client_id, engine, target, &params,
+        )
+        .await
+        {
+            Ok(_) => n += 1,
+            Err(e) => tracing::warn!(
+                target: "agents",
+                tenant_id,
+                client_id,
+                engine,
+                error = %e,
+                "enroll baseline hunt enqueue failed"
+            ),
+        }
+    }
+    tracing::info!(
+        target: "agents",
+        tenant_id,
+        client_id,
+        hostname,
+        tasks = n,
+        "enroll baseline hunt queued (runs when the agent WebSocket is live)"
+    );
+    n
 }
 
 /// Compute storage hash for an enrollment token. The plaintext is sent once over HTTPS.
@@ -1292,6 +1356,15 @@ mod tests {
         assert_eq!(NSSI_BRIDGE_ENGINES.len(), 10);
         assert!(NSSI_BRIDGE_ENGINES.contains(&"process_inventory"));
         assert!(NSSI_BRIDGE_ENGINES.contains(&"ueba_baseline"));
+        assert_eq!(ENROLL_BASELINE_ENGINES.len(), 10);
+        assert!(ENROLL_BASELINE_ENGINES.contains(&"process_inventory"));
+        assert!(ENROLL_BASELINE_ENGINES.contains(&"host_privilege_escalation"));
+        for e in ENROLL_BASELINE_ENGINES {
+            assert!(
+                weissman_core::models::engine_agent::is_agent_required_engine(e),
+                "{e} must be agent-required"
+            );
+        }
     }
 
     #[test]

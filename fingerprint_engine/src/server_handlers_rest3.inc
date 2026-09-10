@@ -116,6 +116,29 @@ async fn api_client_surface_diff(
     }
 }
 
+async fn api_first_mover_nerve(Extension(_auth): Extension<AuthContext>) -> Response {
+    let oast_domain = crate::fuzz_oob::oast_hook_domain().unwrap_or_default();
+    let body = json!({
+        "certstream": crate::certstream_watcher::watcher_status_json(),
+        "oast": {
+            "configured": crate::fuzz_oob::oast_correlation_enabled(),
+            "domain": oast_domain,
+        },
+        "nvd": {
+            "api_key_configured": crate::nvd_cve::nvd_api_key_present(),
+        },
+        "agents": {
+            "enroll_baseline_engines": crate::endpoint_agents::ENROLL_BASELINE_ENGINES,
+        },
+        "fusion": {
+            "follow_on_engines": crate::first_mover_surface_delta::DELTA_FOLLOW_ON_ENGINES,
+            "inline_engine": "first_mover_delta_fusion",
+        },
+        "first_seen_engine": "first_seen_osv_nvd",
+    });
+    (StatusCode::OK, Json(body)).into_response()
+}
+
 async fn api_client_semantic_state_machine(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,

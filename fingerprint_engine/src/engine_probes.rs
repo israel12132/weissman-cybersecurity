@@ -859,6 +859,9 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     if engine_id.contains("first_mover") {
         return "Investigate new or changed internet-facing DNS/HTTP assets immediately: claim or remove dangling CNAMEs, confirm ownership of new hosts, and restrict accidental exposure. Re-run first_mover_surface_delta after DNS changes.";
     }
+    if engine_id.contains("first_seen") {
+        return "Patch or isolate the affected SBOM component. The OSV advisory hit this inventory before (or without) an NVD CVE — do not wait for a weekly scanner or a CVE number.";
+    }
     if engine_id.contains("s3") || engine_id.contains("cloud_data_exfil") {
         return "Block public ACLs at the AWS account level (`BlockPublicAccess`), set bucket policy to private, and enable S3 Object Ownership = BucketOwnerEnforced.";
     }

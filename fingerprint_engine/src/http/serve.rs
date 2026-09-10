@@ -1420,7 +1420,7 @@ struct DeceptionDeployCloudBody {
     destructive_confirm: String,
 }
 
-const DEFAULT_CLIENT_CONFIGS_JSON: &str = r#"{"enabled_engines":["osint","asm","first_mover_surface_delta","leak_hunter","email_dns_posture","pki_tls","subdomain_takeover","supply_chain","bola_idor","jwt_attack","oauth_oidc","external_exposure_supreme","microsecond_timing"],"roe_mode":"safe_proofs","stealth_level":50,"industrial_ot_enabled":false}"#;
+const DEFAULT_CLIENT_CONFIGS_JSON: &str = r#"{"enabled_engines":["osint","asm","first_mover_surface_delta","leak_hunter","email_dns_posture","pki_tls","subdomain_takeover","supply_chain","first_seen_osv_nvd","bola_idor","jwt_attack","oauth_oidc","external_exposure_supreme","microsecond_timing"],"roe_mode":"safe_proofs","stealth_level":50,"industrial_ot_enabled":false}"#;
 
 // Logs an internal error server-side and returns a generic, non-leaking detail string
 // for the client. Used at `INTERNAL_SERVER_ERROR` sites so raw sqlx/internal error text
@@ -1709,6 +1709,11 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>, job_control_pool: Arc<
         crate::intel_kev::spawn_kev_refresh_worker(app_pool.clone());
         crate::intel_epss::bootstrap_epss_backfill(app_pool.clone());
         crate::intel_epss::spawn_epss_backfill_worker(app_pool.clone());
+        crate::certstream_watcher::spawn_certstream_watcher(app_pool.clone(), auth_pool.clone());
+        crate::first_seen_osv_nvd_engine::spawn_first_seen_worker(
+            app_pool.clone(),
+            auth_pool.clone(),
+        );
         crate::intel_findings_backfill::bootstrap_findings_intel_backfill(
             app_pool.clone(),
             auth_pool.clone(),

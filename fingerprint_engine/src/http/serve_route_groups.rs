@@ -142,7 +142,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/ueba/ingest", post(api_ueba_ingest))
         // NDR / ITDR live data ingest (feeds network beaconing/exfil + identity-threat detectors).
         .route("/api/ndr/flows", post(api_ndr_flows_ingest))
-        .route("/api/itdr/auth-events", post(api_itdr_auth_ingest).get(api_itdr_auth_events_list))
+        .route(
+            "/api/itdr/auth-events",
+            post(api_itdr_auth_ingest).get(api_itdr_auth_events_list),
+        )
         .route("/api/ueba/anomalies", get(api_ueba_anomalies))
         .route("/api/baseline/summary", get(api_baseline_summary))
         .route("/api/baseline/drift", get(api_baseline_drift))
@@ -241,10 +244,22 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/agents/session", post(api_agents_session))
         .route("/api/agents/status", get(api_agents_status))
         .route("/api/agents/dispatch", post(api_agents_dispatch_task))
-        .route("/api/agents/isolate", post(api_agents_isolate).get(api_agents_isolate_status))
-        .route("/api/tenant/brand", get(api_tenant_brand_get).put(api_tenant_brand_put))
-        .route("/api/brand", get(api_tenant_brand_get).put(api_tenant_brand_put))
-        .route("/api/itdr/connectors", get(api_itdr_connectors_get).put(api_itdr_connectors_put))
+        .route(
+            "/api/agents/isolate",
+            post(api_agents_isolate).get(api_agents_isolate_status),
+        )
+        .route(
+            "/api/tenant/brand",
+            get(api_tenant_brand_get).put(api_tenant_brand_put),
+        )
+        .route(
+            "/api/brand",
+            get(api_tenant_brand_get).put(api_tenant_brand_put),
+        )
+        .route(
+            "/api/itdr/connectors",
+            get(api_itdr_connectors_get).put(api_itdr_connectors_put),
+        )
         .route("/api/itdr/connectors/pull", post(api_itdr_connectors_pull))
         .route("/api/itdr", get(api_itdr_connectors_get))
         .route("/api/vngfw/status", get(api_vngfw_status))
@@ -381,6 +396,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/clients/:id/surface-diff",
             get(api_client_surface_diff),
         )
+        .route("/api/first-mover/nerve", get(api_first_mover_nerve))
         .route(
             "/api/clients/:id/semantic-state-machine",
             get(api_client_semantic_state_machine),

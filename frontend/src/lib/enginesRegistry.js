@@ -1,5 +1,5 @@
 /**
- * Master registry of all 581 production attack engines.
+ * Master registry of all 583 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 581 production engines in registry order */
+/** All 583 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -39,6 +39,22 @@ export const ENGINES_REGISTRY = [
     group: 'recon',
     mitre: 'T1595',
     description: 'Live DNS/HTTP/CT snapshot vs last run — emits only new, removed, or changed internet-facing hosts with takeover and A-record-flip evidence. Finds exposure hours before weekly scanners.',
+    requiresTarget: true,
+  },
+  {
+    id: 'first_mover_delta_fusion',
+    label: 'First-Mover Delta Fusion',
+    group: 'recon',
+    mitre: 'T1595',
+    description: 'New host from live surface delta immediately gets subdomain takeover, leak hunter, BOLA, and JWT on that same FQDN — not a separate later hunt.',
+    requiresTarget: true,
+  },
+  {
+    id: 'first_seen_osv_nvd',
+    label: 'First-Seen OSV vs NVD',
+    group: 'recon',
+    mitre: 'T1595.002',
+    description: 'Live SBOM queried against OSV; claims pre-NVD only when the OSV hit has no CVE alias or NIST NVD has no catalog row. Never fabricates first-seen.',
     requiresTarget: true,
   },
   {
