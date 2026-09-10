@@ -257,7 +257,7 @@ async fn crt_sh_names(apex: &str) -> Vec<String> {
 fn merge_host_list(apex: &str, ct: Vec<String>, previous: &[SurfaceAsset]) -> Vec<String> {
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut out: Vec<String> = Vec::new();
-    let mut push = |raw: &str| {
+    fn push(raw: &str, apex: &str, seen: &mut BTreeSet<String>, out: &mut Vec<String>) {
         let h = raw.trim().trim_end_matches('.').to_ascii_lowercase();
         if h.is_empty() || !in_authorized_scope(apex, &h) {
             return;
@@ -265,19 +265,19 @@ fn merge_host_list(apex: &str, ct: Vec<String>, previous: &[SurfaceAsset]) -> Ve
         if seen.insert(h.clone()) {
             out.push(h);
         }
-    };
-    push(apex);
-    push(&format!("www.{apex}"));
+    }
+    push(apex, apex, &mut seen, &mut out);
+    push(&format!("www.{apex}"), apex, &mut seen, &mut out);
     // Always re-probe the last snapshot so missing crt.sh rows are not false removals.
     for a in previous {
-        push(&a.fqdn);
+        push(&a.fqdn, apex, &mut seen, &mut out);
     }
     let room = MAX_TOTAL_HOSTS.saturating_sub(out.len()).min(MAX_DISCOVERY);
     for n in ct.into_iter().take(room) {
-        push(&n);
         if out.len() >= MAX_TOTAL_HOSTS {
             break;
         }
+        push(&n, apex, &mut seen, &mut out);
     }
     out
 }
