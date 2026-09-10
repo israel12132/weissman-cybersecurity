@@ -36,6 +36,7 @@ pub mod ai_redteam_engine;
 pub mod alias_engine_runner;
 pub mod alias_specialized_probes;
 pub mod api_docs;
+pub mod apt_emulation_profiles;
 pub mod archival_engine;
 pub mod arsenal_catalog;
 pub mod arsenal_integrity;

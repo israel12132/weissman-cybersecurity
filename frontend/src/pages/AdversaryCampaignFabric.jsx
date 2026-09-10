@@ -5,12 +5,13 @@
  * seeded from live findings (FP-suppressed rows excluded). Each step dispatches a
  * real engine job inside authorized scope. Route: /campaigns
  *
- * Live APIs: GET/POST /api/campaigns, POST …/start|pause, GET …/plan, GET …/steps.
+ * Live APIs: GET/POST /api/campaigns, GET /api/campaigns/profiles,
+ * POST …/start|pause|/remediate, GET …/plan, GET …/steps.
  */
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { Crosshair, Play, Pause, GitBranch, FlaskConical, Loader2 } from 'lucide-react'
+import { Crosshair, Play, Pause, GitBranch, FlaskConical, Loader2, Wrench, ShieldAlert } from 'lucide-react'
 import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
@@ -42,6 +43,24 @@ const STEP_TONE = {
   skipped: 'text-[var(--text-disabled)] border-[var(--border-default)]',
 }
 
+const STAGE_TONE = {
+  pending: 'text-[var(--text-muted)] border-[var(--border-default)]',
+  in_progress: 'text-cyan-300 border-cyan-500/40 bg-cyan-500/10',
+  proven: 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10',
+  blocked: 'text-rose-300 border-rose-500/40 bg-rose-500/10',
+}
+
+const GAP_TONE = {
+  proof_failed: 'border-amber-500/40 bg-amber-500/10',
+  job_failed: 'border-rose-500/40 bg-rose-500/10',
+  control_blocked: 'border-orange-500/40 bg-orange-500/10',
+  roe_blocked: 'border-violet-500/40 bg-violet-500/10',
+}
+
+function profileI18nKey(id) {
+  return String(id || '').replace(/-/g, '_')
+}
+
 function StatusBadge({ status, ns = 'status' }) {
   const { t } = useTranslation()
   const tone = STATUS_TONE[status] || STEP_TONE[status] || 'text-[var(--text-muted)] border-[var(--border-default)]'
@@ -53,8 +72,8 @@ function StatusBadge({ status, ns = 'status' }) {
 }
 
 function exportCampaignsCsv(rows) {
-  const header = ['id', 'client_id', 'goal_fact', 'status', 'asset_key', 'updated_at']
-  const data = rows.map((c) => [c.id, c.client_id, c.goal_fact, c.status, c.asset_key, c.updated_at])
+  const header = ['id', 'client_id', 'goal_fact', 'status', 'profile_id', 'asset_key', 'updated_at']
+  const data = rows.map((c) => [c.id, c.client_id, c.goal_fact, c.status, c.profile_id || '', c.asset_key, c.updated_at])
   downloadCsv(data, header, 'weissman-campaigns')
 }
 
@@ -69,6 +88,8 @@ export default function AdversaryCampaignFabric() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [goal, setGoal] = useState('impact:objective')
+  const [profileId, setProfileId] = useState('')
+  const [profiles, setProfiles] = useState([])
   const [provenOnly, setProvenOnly] = useState(false)
   const [provingStep, setProvingStep] = useState(null)
 
@@ -83,6 +104,8 @@ export default function AdversaryCampaignFabric() {
       if (Array.isArray(data?.allowed_goals) && data.allowed_goals.length) {
         setAllowedGoals(data.allowed_goals)
       }
+      const catalog = Array.isArray(data?.profiles) ? data.profiles : []
+      setProfiles(catalog)
     } catch (e) {
       setError(e.message || t(`${NS}.load_failed`))
       setCampaigns([])
@@ -121,6 +144,19 @@ export default function AdversaryCampaignFabric() {
   }, [loadList])
 
   useEffect(() => {
+    let cancelled = false
+    apiFetch('/api/campaigns/profiles')
+      .then((data) => {
+        const catalog = Array.isArray(data?.profiles) ? data.profiles : []
+        if (!cancelled && catalog.length) setProfiles(catalog)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     if (loading || active?.campaign?.id) return
     if (campaigns.length) loadOne(campaigns[0].id)
   }, [loading, campaigns, active?.campaign?.id, loadOne])
@@ -140,9 +176,11 @@ export default function AdversaryCampaignFabric() {
     setBusy(true)
     setError('')
     try {
+      const body = { client_id: selectedClientId, goal }
+      if (profileId) body.profile_id = profileId
       const data = await apiFetch('/api/campaigns', {
         method: 'POST',
-        body: JSON.stringify({ client_id: selectedClientId, goal }),
+        body: JSON.stringify(body),
       })
       await loadList()
       if (data?.campaign?.id) await loadOne(data.campaign.id)
@@ -151,7 +189,7 @@ export default function AdversaryCampaignFabric() {
     } finally {
       setBusy(false)
     }
-  }, [selectedClientId, goal, loadList, loadOne, t])
+  }, [selectedClientId, goal, profileId, loadList, loadOne, t])
 
   const startCampaign = useCallback(async (id) => {
     setBusy(true)
@@ -199,6 +237,21 @@ export default function AdversaryCampaignFabric() {
     }
   }, [loadList, t])
 
+  const queueRemediation = useCallback(async (id) => {
+    if (!id) return
+    setBusy(true)
+    setError('')
+    try {
+      const data = await apiFetch(`/api/campaigns/${encodeURIComponent(id)}/remediate`, { method: 'POST' })
+      setActive(data)
+      await loadList()
+    } catch (e) {
+      setError(e.message || t(`${NS}.remediate_failed`))
+    } finally {
+      setBusy(false)
+    }
+  }, [loadList, t])
+
   const campaignRows = useMemo(
     () =>
       campaigns.map((c) => ({
@@ -208,6 +261,7 @@ export default function AdversaryCampaignFabric() {
         type: c.status,
         description: c.asset_key || '',
         resource: String(c.client_id ?? ''),
+        profile_id: c.profile_id || '',
       })),
     [campaigns],
   )
@@ -216,7 +270,7 @@ export default function AdversaryCampaignFabric() {
     campaignRows,
     {
       csvPrefix: 'weissman-campaigns',
-      haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource} ${f.id}`,
+      haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource} ${f.id} ${f.profile_id || ''}`,
     },
   )
 
@@ -242,6 +296,9 @@ export default function AdversaryCampaignFabric() {
   const mesh = active?.mesh
   const spine = active?.spine
   const council = active?.council
+  const emulation = active?.emulation
+  const detectionGaps = Array.isArray(active?.detection_gaps) ? active.detection_gaps : []
+  const remediation = active?.remediation
   const campaignQuery = campaign?.id ? `campaign_id=${encodeURIComponent(campaign.id)}` : ''
 
   return (
@@ -263,6 +320,24 @@ export default function AdversaryCampaignFabric() {
             {clients.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name || c.domain || `#${c.id}`}
+              </option>
+            ))}
+          </select>
+          <select
+            value={profileId}
+            onChange={(e) => {
+              const next = e.target.value
+              setProfileId(next)
+              const p = profiles.find((x) => x.id === next)
+              if (p?.goal_fact) setGoal(p.goal_fact)
+            }}
+            className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] focus:outline-none"
+            aria-label={t(`${NS}.select_profile`)}
+          >
+            <option value="">{t(`${NS}.profile_generic`)}</option>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {t(`${NS}.profile_${profileI18nKey(p.id)}_name`)}
               </option>
             ))}
           </select>
@@ -370,6 +445,11 @@ export default function AdversaryCampaignFabric() {
                     <StatusBadge status={c.status} />
                   </div>
                   <div className="mt-1 text-sm text-[var(--text-primary)] font-medium">{c.goal_fact}</div>
+                  {c.profile_id ? (
+                    <div className="text-[11px] font-mono text-rose-200/80">
+                      {t(`${NS}.profile_${profileI18nKey(c.profile_id)}_name`)}
+                    </div>
+                  ) : null}
                   <div className="text-[11px] font-mono text-[var(--text-muted)]">
                     {c.asset_key || t(`${NS}.no_asset`)}
                   </div>
@@ -443,9 +523,70 @@ export default function AdversaryCampaignFabric() {
                     >
                       {t(`${NS}.open_mesh`)}
                     </Link>
+                    <Link
+                      to={`/remediation${campaign?.client_id != null ? `?client_id=${encodeURIComponent(campaign.client_id)}` : ''}`}
+                      className="inline-flex items-center gap-1 text-[11px] font-mono text-cyan-300 hover:underline"
+                    >
+                      <Wrench className="w-3.5 h-3.5" />
+                      {t(`${NS}.open_fix_first`)}
+                    </Link>
+                    <Link
+                      to="/threat-emulation"
+                      className="text-[11px] font-mono text-cyan-300 hover:underline"
+                    >
+                      {t(`${NS}.open_threat_emulation`)}
+                    </Link>
                   </div>
                   {campaign.last_error && (
                     <p className="text-[11px] font-mono text-rose-300">{campaign.last_error}</p>
+                  )}
+
+                  {(emulation?.profile_id || campaign.profile_id) && (
+                    <div data-testid="campaign-apt-profile">
+                      <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+                        {t(`${NS}.profile_heading`)}
+                      </h2>
+                      <p className="text-sm text-[var(--text-primary)] font-medium">
+                        {t(`${NS}.profile_${profileI18nKey(emulation?.profile_id || campaign.profile_id)}_name`)}
+                      </p>
+                      <p className="text-[12px] text-[var(--text-secondary)] mt-1">
+                        {t(`${NS}.profile_${profileI18nKey(emulation?.profile_id || campaign.profile_id)}_blurb`)}
+                      </p>
+                      <p className="text-[11px] font-mono text-cyan-200/80 mt-2">{t(`${NS}.mitre_set`)}</p>
+                      <p className="text-[11px] font-mono text-[var(--text-muted)]">
+                        {(emulation?.profile?.mitre || []).join(' · ')}
+                      </p>
+                      <p className="text-[12px] text-[var(--text-secondary)] mt-2">{t(`${NS}.roe_notes`)}</p>
+                      <p className="text-[11px] text-[var(--text-muted)]">{emulation?.profile?.roe_notes || t(`${NS}.rails_roe`)}</p>
+                      <p className="text-[12px] text-[var(--text-secondary)] mt-2">{t(`${NS}.honest_coverage`)}</p>
+                      <p className="text-[11px] text-[var(--text-muted)]">{emulation?.profile?.honest_coverage}</p>
+                    </div>
+                  )}
+
+                  {Array.isArray(emulation?.stages) && emulation.stages.length > 0 && (
+                    <div data-testid="campaign-apt-stages">
+                      <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+                        {t(`${NS}.stages_heading`)}
+                      </h2>
+                      <ol className="grid sm:grid-cols-2 gap-2">
+                        {emulation.stages.map((st) => (
+                          <li
+                            key={st.id}
+                            className={`rounded-xl border p-3 ${STAGE_TONE[st.status] || STAGE_TONE.pending}`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[12px] font-medium">
+                                {t(`${NS}.stage_${st.id}`)}
+                              </span>
+                              <StatusBadge status={st.status} ns="stage" />
+                            </div>
+                            <div className="text-[10px] font-mono text-[var(--text-disabled)] mt-1">
+                              {st.mitre_tactic}
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
                   )}
 
                   <div>
@@ -605,6 +746,77 @@ export default function AdversaryCampaignFabric() {
                         ))}
                       </ol>
                     )}
+                  </div>
+
+                  <div data-testid="campaign-detection-gaps">
+                    <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+                      {t(`${NS}.detection_gaps_heading`)}
+                    </h2>
+                    {detectionGaps.length === 0 ? (
+                      <p className="text-[12px] text-[var(--text-muted)]">{t(`${NS}.no_detection_gaps`)}</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {detectionGaps.map((g) => (
+                          <li
+                            key={g.id || `${g.technique_id}-${g.gap_kind}`}
+                            className={`rounded-xl border p-3 ${GAP_TONE[g.gap_kind] || 'border-[var(--border-default)]'}`}
+                          >
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <span className="inline-flex items-center gap-1.5 text-[11px] font-mono">
+                                <ShieldAlert className="w-3.5 h-3.5" />
+                                {t(`${NS}.gap_${g.gap_kind}`)}
+                              </span>
+                              <span className="text-[10px] font-mono uppercase tracking-wider">
+                                {t(`${NS}.control_${g.control_surface || 'unknown'}`)}
+                              </span>
+                            </div>
+                            <p className="text-[12px] text-[var(--text-secondary)] mt-1">{g.summary}</p>
+                            <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-1">
+                              {g.technique_id} · {g.engine_id} · {g.mitre}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  <div data-testid="campaign-remediation">
+                    <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+                      {t(`${NS}.remediation_heading`)}
+                    </h2>
+                    <p className="text-[12px] text-[var(--text-secondary)]">{t(`${NS}.remediation_note`)}</p>
+                    {remediation?.choke_point_proven && (
+                      <p className="text-[11px] font-mono text-emerald-300 mt-1">{t(`${NS}.choke_point_proven`)}</p>
+                    )}
+                    {Array.isArray(remediation?.program) && remediation.program.length > 0 && (
+                      <ol className="mt-2 space-y-1">
+                        {remediation.program.slice(0, 5).map((item) => (
+                          <li key={item.rank || item.title} className="text-[11px] font-mono text-[var(--text-secondary)]">
+                            {item.rank}. {item.title}
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Link
+                        to={remediation?.fix_first_path || '/remediation'}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-cyan-500/40 text-cyan-200 text-[11px] font-mono hover:bg-cyan-500/10"
+                      >
+                        <Wrench className="w-3.5 h-3.5" />
+                        {t(`${NS}.open_fix_first`)}
+                      </Link>
+                      {(campaign.status === 'completed' || remediation?.choke_point_proven) && (
+                        <Button
+                          variant="unstyled"
+                          type="button"
+                          onClick={() => queueRemediation(campaign.id)}
+                          disabled={busy}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-500/40 text-emerald-200 text-[11px] font-mono hover:bg-emerald-500/10 disabled:opacity-40"
+                        >
+                          {t(`${NS}.queue_verify`)}
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   <div>

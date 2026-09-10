@@ -1331,6 +1331,32 @@ async fn apply_step_verdict(
         )
         .await?;
     }
+    if verdict.status == ProofStatus::FailedProof {
+        let engine = crate::adversary_campaign::engine_for_technique(technique_id).unwrap_or("");
+        let mitre = related
+            .first()
+            .and_then(|f| {
+                f.json
+                    .get("mitre_attack")
+                    .or_else(|| f.json.get("mitre"))
+                    .and_then(Value::as_str)
+            })
+            .unwrap_or("");
+        let _ = crate::adversary_campaign::record_detection_gap_in_tx(
+            tx,
+            tenant_id,
+            campaign_id,
+            client_id,
+            Some(step_id),
+            technique_id,
+            engine,
+            mitre,
+            "proof_failed",
+            &verdict.reason,
+            json!({ "adapter": verdict.adapter }),
+        )
+        .await;
+    }
     Ok(())
 }
 

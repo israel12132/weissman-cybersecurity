@@ -3,7 +3,7 @@
 Sync layer that turns isolated production engines into a coordinated,
 evidence-grounded adversary campaign. **This document is P0.** Safe
 exploitability validation that upgrades steps from observed → proven lives in
-**[proof-layer.md](./proof-layer.md) (P1)**. P2 APT profiles are out of scope.
+**[proof-layer.md](./proof-layer.md) (P1)**. **[apt-emulation-profiles.md](./apt-emulation-profiles.md) (P2)** stacks named TTP playbooks on this fabric.
 
 ## Why it exists
 
@@ -33,7 +33,8 @@ Event kinds (v1): `campaign_created`, `campaign_started`, `campaign_paused`,
 `world_state_snapshot`, `finding_observed`, `path_snapshot_taken`,
 `technique_planned`, `technique_dispatched`, `technique_proven`,
 `technique_failed`, `goal_reached`, `campaign_blocked`,
-`mesh_blackboard_seeded`, `remediation_verified`, `proof_failed` (P1).
+`mesh_blackboard_seeded`, `remediation_verified`, `proof_failed` (P1),
+`detection_gap_recorded` (P2).
 
 This is **not** a fourth bus. Jobs stay on weissman-job-bus (payload
 `campaign_id`). Redis/CEM-DAGO blackboard `campaign:{uuid}` is the live
@@ -88,8 +89,12 @@ Spine columns (correlation only, never widen scope):
 | `GET /api/campaigns/:id/steps` | Step ledger | authenticated |
 | `GET /api/campaigns/:id/events` | Event chain | authenticated |
 | `POST /api/campaigns/:id/steps/:step_id/proof` | P1 safe-proof retry for one step | operator+ |
+| `GET /api/campaigns/profiles` | P2 APT emulation catalog | authenticated |
+| `POST /api/campaigns/:id/remediate` | Queue `remediation_verify` for FIXED findings | operator+ |
 
 Portal sessions are pinned via `force_json_client_id` / `assigned_client_id`.
+
+P2 how-to: `docs/architecture/apt-emulation-profiles.md`.
 
 ## Command Center
 
@@ -137,5 +142,14 @@ P1 proof how-to: `docs/architecture/proof-layer.md`.
 | `exfiltrate_db` | `database_exfil` |
 | `exfiltrate_crown_jewel` | `cloud_data_exfil` |
 
+P2 profile extras (not in the default library; only when a named APT profile opts in):
+
+| Technique | Engine |
+|-----------|--------|
+| `identity_spray` | `password_spray` |
+| `cloud_iam_abuse` | `cloud_iam_escalation` |
+| `supply_chain_adjacent` | `supply_chain` |
+| `ot_passive_recon` | `scada_ics` |
+
 All ids must pass `is_production_engine_id`. Effects are never assumed from a
-successful job.
+successful job. P2 extras never mint privilege facts without P1 `proof_status=proven`.

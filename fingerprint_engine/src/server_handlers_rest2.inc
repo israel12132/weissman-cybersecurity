@@ -1162,7 +1162,7 @@ async fn api_openapi_spec() -> Response {
                 },
                 "post": {
                     "summary": "Create a draft adversary campaign",
-                    "description": "Body: `{ client_id, goal?, profile? }`. Goal must be a grounded planner fact (default `impact:objective`). RBAC: operator+. Scope is the named client only.",
+                    "description": "Body: `{ client_id, goal?, profile?, profile_id? }`. Goal must be a grounded planner fact (default from the APT profile, else `impact:objective`). `profile_id` selects a named P2 emulation playbook. RBAC: operator+. Scope is the named client only.",
                     "tags": ["Campaign"],
                     "requestBody": {
                         "required": true,
@@ -1172,7 +1172,8 @@ async fn api_openapi_spec() -> Response {
                             "properties": {
                                 "client_id": { "type": "integer" },
                                 "goal": { "type": "string", "example": "impact:objective" },
-                                "profile": { "type": "object" }
+                                "profile": { "type": "object" },
+                                "profile_id": { "type": "string", "example": "ransomware-affiliate" }
                             }
                         } } }
                     },
@@ -1183,10 +1184,18 @@ async fn api_openapi_spec() -> Response {
                     }
                 }
             },
+            "/api/campaigns/profiles": {
+                "get": {
+                    "summary": "List P2 APT emulation profiles",
+                    "description": "Named TTP playbooks that seed Campaign Fabric. Each profile maps only to production engines. Privilege facts still require proof_status=proven.",
+                    "tags": ["Campaign"],
+                    "responses": { "200": { "description": "Profile catalog" } }
+                }
+            },
             "/api/campaigns/{id}": {
                 "get": {
                     "summary": "Get campaign, WorldState, plan, and steps",
-                    "description": "Bundle includes spine (campaign_id across jobs/findings/paths/SOAR), CEM-DAGO mesh wave preview (does not enqueue), and Council HITL status. Probe executor is always engine_dispatch.",
+                    "description": "Bundle includes spine (campaign_id across jobs/findings/paths/SOAR), CEM-DAGO mesh wave preview (does not enqueue), Council HITL, P2 APT profile stages, detection gaps, and Fix-First remediation. Probe executor is always engine_dispatch.",
                     "tags": ["Campaign"],
                     "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
                     "responses": { "200": { "description": "Campaign bundle" }, "404": { "description": "Not found" } }
@@ -1195,7 +1204,7 @@ async fn api_openapi_spec() -> Response {
             "/api/campaigns/{id}/start": {
                 "post": {
                     "summary": "Start or resume a campaign",
-                    "description": "Seeds WorldState from live findings (FP-suppressed rows excluded), plans a STRIPS chain, and enqueues the next mapped engine job inside client scope.",
+                    "description": "Seeds WorldState from live findings (FP-suppressed rows excluded), plans a STRIPS chain (profile-biased costs), and enqueues the next mapped engine job inside client scope.",
                     "tags": ["Campaign"],
                     "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
                     "responses": { "200": { "description": "Updated campaign" }, "403": { "description": "RBAC" } }
@@ -1247,6 +1256,15 @@ async fn api_openapi_spec() -> Response {
                         "200": { "description": "Updated campaign bundle including proof_status on steps" },
                         "404": { "description": "Campaign or step not found" }
                     }
+                }
+            },
+            "/api/campaigns/{id}/remediate": {
+                "post": {
+                    "summary": "Queue closed-loop remediation_verify for FIXED campaign findings",
+                    "description": "Does not mark OPEN findings fixed. Emits remediation_verified only when verify reports outcome.closed. Surfaces the existing Fix-First program. RBAC: operator+.",
+                    "tags": ["Campaign"],
+                    "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+                    "responses": { "200": { "description": "Campaign bundle plus remediation_queue" } }
                 }
             },
             "/api/risk-graph/nodes/{node_id}/flags": {

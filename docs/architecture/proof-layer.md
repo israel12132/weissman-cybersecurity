@@ -9,7 +9,7 @@ shell, and never runs destructive payloads.
 
 P0 campaign fabric remains the planner + dispatch spine
 (`docs/architecture/adversary-campaign-fabric.md`). This document is **P1
-only**. P2 APT profiles are out of scope.
+only**. **[apt-emulation-profiles.md](./apt-emulation-profiles.md) (P2)** selects named TTP playbooks that still obey this gate.
 
 ## Why it exists
 
@@ -158,3 +158,5 @@ cd frontend && npx vitest run \
 node scripts/verify_i18n_no_default_values.mjs
 bash scripts/check-migration-sync.sh
 ```
+
+P2 APT emulation how-to: `docs/architecture/apt-emulation-profiles.md`.

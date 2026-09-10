@@ -368,6 +368,10 @@ export default function ThreatEmulation() {
     >
       <div className="rounded-xl border border-amber-500/20 bg-amber-950/20 px-4 py-3 text-xs text-amber-100/75 mb-6 leading-relaxed">
         {t('pages.threatEmulation.engine_notice')}
+        {' '}
+        <Link to="/campaigns" className="text-cyan-300 hover:underline font-mono">
+          {t('pages.threatEmulation.open_campaigns')}
+        </Link>
       </div>
 
       {error && (

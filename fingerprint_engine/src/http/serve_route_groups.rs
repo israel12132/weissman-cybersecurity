@@ -666,6 +666,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/campaigns",
             get(api_campaigns_list).post(api_campaigns_create),
         )
+        .route("/api/campaigns/profiles", get(api_campaigns_profiles))
         .route("/api/campaigns/:id", get(api_campaigns_get))
         .route("/api/campaigns/:id/start", post(api_campaigns_start))
         .route("/api/campaigns/:id/pause", post(api_campaigns_pause))
@@ -675,6 +676,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route(
             "/api/campaigns/:id/steps/:step_id/proof",
             post(api_campaigns_step_proof),
+        )
+        .route(
+            "/api/campaigns/:id/remediate",
+            post(api_campaigns_remediate),
         )
         .route("/api/soc/exploit-lab", get(api_soc_exploit_lab))
         .route("/api/soc/ai-patterns", get(api_soc_ai_patterns))

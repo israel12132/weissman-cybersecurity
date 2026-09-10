@@ -46,6 +46,7 @@ pub const CAMPAIGN_EVENT_KINDS: &[&str] = &[
     "mesh_blackboard_seeded",
     "remediation_verified",
     "proof_failed",
+    "detection_gap_recorded",
 ];
 
 /// Goal facts the operator may request. All appear in the default STRIPS library.
@@ -84,7 +85,9 @@ pub fn engine_for_technique(technique_id: &str) -> Option<&'static str> {
         "reach_crown_jewel" => "kill_chain",
         "exfiltrate_db" => "database_exfil",
         "exfiltrate_crown_jewel" => "cloud_data_exfil",
-        _ => return None,
+        _ => {
+            return crate::apt_emulation_profiles::extra_engine_for_technique(technique_id);
+        }
     };
     if is_production_engine_id(engine) {
         Some(engine)
@@ -326,6 +329,9 @@ pub struct CreateCampaignRequest {
     pub goal: Option<String>,
     #[serde(default)]
     pub profile: Option<Value>,
+    /// P2 named APT profile id (e.g. `ransomware-affiliate`).
+    #[serde(default)]
+    pub profile_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -339,6 +345,7 @@ pub struct CampaignRecord {
     pub created_by: Option<i64>,
     pub asset_key: String,
     pub last_error: Option<String>,
+    pub profile_id: String,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -355,6 +362,7 @@ impl CampaignRecord {
             "created_by": self.created_by,
             "asset_key": self.asset_key,
             "last_error": self.last_error,
+            "profile_id": self.profile_id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         })
@@ -374,6 +382,7 @@ fn row_campaign(r: &sqlx::postgres::PgRow) -> Result<CampaignRecord, String> {
         created_by: r.try_get("created_by").ok(),
         asset_key: r.try_get("asset_key").unwrap_or_default(),
         last_error: r.try_get("last_error").ok(),
+        profile_id: r.try_get("profile_id").unwrap_or_default(),
         created_at: r
             .try_get::<chrono::DateTime<chrono::Utc>, _>("created_at")
             .map(|d| d.to_rfc3339())
@@ -543,11 +552,30 @@ pub async fn create_campaign(
     actor_user_id: Option<i64>,
     req: &CreateCampaignRequest,
 ) -> Result<Value, String> {
+    let profile_id = req
+        .profile_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("");
+    let named = if profile_id.is_empty() {
+        None
+    } else {
+        Some(
+            crate::apt_emulation_profiles::get(profile_id).ok_or_else(|| {
+                format!(
+                    "unknown APT profile '{profile_id}'; known: {}",
+                    crate::apt_emulation_profiles::PROFILE_IDS.join(", ")
+                )
+            })?,
+        )
+    };
     let goal = req
         .goal
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
+        .or_else(|| named.map(|p| p.goal_fact))
         .unwrap_or(DEFAULT_GOAL);
     if !is_allowed_goal(goal) {
         return Err(format!(
@@ -555,14 +583,34 @@ pub async fn create_campaign(
             ALLOWED_GOALS.join(", ")
         ));
     }
-    let mut profile = req
-        .profile
-        .clone()
-        .unwrap_or_else(|| json!({ "stub": true }));
+    let mut profile = if let Some(p) = named {
+        let mut snap = p.to_json();
+        if let Some(extra) = req.profile.clone() {
+            if let (Some(base), Some(over)) = (snap.as_object_mut(), extra.as_object()) {
+                for (k, v) in over {
+                    if k != "stub" && k != "profile_id" {
+                        base.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+        }
+        snap
+    } else {
+        req.profile
+            .clone()
+            .unwrap_or_else(|| json!({ "stub": true }))
+    };
     if let Some(obj) = profile.as_object_mut() {
-        obj.entry("stub").or_insert(json!(true));
+        if named.is_none() {
+            obj.entry("stub").or_insert(json!(true));
+        } else {
+            obj.insert("stub".into(), json!(false));
+            obj.insert("profile_id".into(), json!(profile_id));
+        }
         obj.insert("disclose_externally".into(), json!(false));
         obj.insert("council_hitl_required".into(), json!(true));
+        obj.insert("safety_rails_no_shells".into(), json!(true));
+        obj.insert("privilege_facts_require_proven".into(), json!(true));
     }
     if let Some(arr) = profile
         .get("council_proposed_techniques")
@@ -584,15 +632,16 @@ pub async fn create_campaign(
     require_client(&mut tx, tenant_id, req.client_id).await?;
     let id: Uuid = sqlx::query_scalar(
         r#"INSERT INTO weissman_campaigns
-             (tenant_id, client_id, goal_fact, status, profile_stub, created_by)
-           VALUES ($1, $2, $3, 'draft', $4, $5)
+             (tenant_id, client_id, goal_fact, status, profile_stub, created_by, profile_id)
+           VALUES ($1, $2, $3, 'draft', $4, $5, $6)
            RETURNING id"#,
     )
     .bind(tenant_id)
     .bind(req.client_id)
     .bind(goal)
-    .bind(profile)
+    .bind(&profile)
     .bind(actor_user_id)
+    .bind(profile_id)
     .fetch_one(&mut *tx)
     .await
     .map_err(|e| format!("insert campaign: {e}"))?;
@@ -605,7 +654,7 @@ pub async fn create_campaign(
         "draft",
         actor_user_id,
         "created",
-        json!({ "goal": goal }),
+        json!({ "goal": goal, "profile_id": profile_id }),
     )
     .await?;
     insert_event(
@@ -614,7 +663,7 @@ pub async fn create_campaign(
         tenant_id,
         req.client_id,
         "campaign_created",
-        json!({ "goal": goal }),
+        json!({ "goal": goal, "profile_id": profile_id }),
     )
     .await?;
     tx.commit().await.map_err(|e| format!("commit: {e}"))?;
@@ -632,7 +681,7 @@ pub async fn list_campaigns(
     let rows = if let Some(cid) = client_id {
         sqlx::query(
             r#"SELECT id, tenant_id, client_id, goal_fact, status, profile_stub, created_by,
-                      asset_key, last_error, created_at, updated_at
+                      asset_key, last_error, profile_id, created_at, updated_at
                  FROM weissman_campaigns
                 WHERE tenant_id = $1 AND client_id = $2
                 ORDER BY updated_at DESC
@@ -645,7 +694,7 @@ pub async fn list_campaigns(
     } else {
         sqlx::query(
             r#"SELECT id, tenant_id, client_id, goal_fact, status, profile_stub, created_by,
-                      asset_key, last_error, created_at, updated_at
+                      asset_key, last_error, profile_id, created_at, updated_at
                  FROM weissman_campaigns
                 WHERE tenant_id = $1
                 ORDER BY updated_at DESC
@@ -666,6 +715,7 @@ pub async fn list_campaigns(
         "campaigns": campaigns,
         "allowed_goals": ALLOWED_GOALS,
         "technique_engines": technique_engine_catalog(),
+        "profiles": crate::apt_emulation_profiles::catalog_json(),
     }))
 }
 
@@ -688,7 +738,7 @@ pub async fn get_campaign(pool: &PgPool, tenant_id: i64, id: Uuid) -> Result<Val
         .map_err(|e| format!("tx: {e}"))?;
     let row = sqlx::query(
         r#"SELECT id, tenant_id, client_id, goal_fact, status, profile_stub, created_by,
-                  asset_key, last_error, created_at, updated_at
+                  asset_key, last_error, profile_id, created_at, updated_at
              FROM weissman_campaigns WHERE id = $1 AND tenant_id = $2"#,
     )
     .bind(id)
@@ -705,16 +755,12 @@ pub async fn get_campaign(pool: &PgPool, tenant_id: i64, id: Uuid) -> Result<Val
     let steps = load_steps(&mut tx, id).await?;
     let audit = load_audit(&mut tx, id).await?;
     let events = load_events(&mut tx, id).await?;
+    let gaps = load_detection_gaps(&mut tx, id).await.unwrap_or_default();
     let _ = tx.commit().await;
-    let mesh = mesh_status_json(
-        campaign.tenant_id,
-        campaign.client_id,
-        campaign.id,
-        &steps,
-        &world,
-    )
-    .await;
+    let mesh = mesh_status_json(&campaign, &steps, &world).await;
     let council = council_status_json(&campaign);
+    let remediation = remediation_bundle(pool, &campaign, &steps).await;
+    let emulation = emulation_json(&campaign, &steps, &gaps, &remediation);
     Ok(json!({
         "ok": true,
         "campaign": campaign.to_json(),
@@ -732,6 +778,10 @@ pub async fn get_campaign(pool: &PgPool, tenant_id: i64, id: Uuid) -> Result<Val
             "statuses": crate::proof_layer::PROOF_STATUSES,
             "safety_rails_no_shells": true,
         },
+        "emulation": emulation,
+        "detection_gaps": gaps,
+        "remediation": remediation,
+        "profiles": crate::apt_emulation_profiles::catalog_json(),
     }))
 }
 
@@ -884,13 +934,10 @@ pub async fn list_events(pool: &PgPool, tenant_id: i64, id: Uuid) -> Result<Valu
     }))
 }
 
-async fn mesh_status_json(
-    tenant_id: i64,
-    client_id: i64,
-    campaign_id: Uuid,
-    steps: &[Value],
-    world: &Value,
-) -> Value {
+async fn mesh_status_json(campaign: &CampaignRecord, steps: &[Value], world: &Value) -> Value {
+    let tenant_id = campaign.tenant_id;
+    let client_id = campaign.client_id;
+    let campaign_id = campaign.id;
     let scan_id = campaign_blackboard_scan_id(campaign_id);
     let mut facts_on_board = false;
     if crate::cem_dago::is_enabled() {
@@ -901,22 +948,21 @@ async fn mesh_status_json(
             }
         }
     }
-    let mut engine_ids: Vec<String> = steps
-        .iter()
-        .filter_map(|s| {
-            s.get("engine_id")
-                .and_then(Value::as_str)
-                .map(|s| s.to_string())
-        })
-        .filter(|id| is_production_engine_id(id))
-        .collect();
+    let mut engine_ids =
+        crate::apt_emulation_profiles::preferred_engines_from_stub(&campaign.profile_stub);
+    for s in steps {
+        if let Some(id) = s.get("engine_id").and_then(Value::as_str) {
+            if is_production_engine_id(id) && !engine_ids.iter().any(|e| e == id) {
+                engine_ids.push(id.to_string());
+            }
+        }
+    }
     if engine_ids.is_empty() {
         engine_ids = attack_chain_planner::default_technique_library()
             .iter()
             .filter_map(|t| engine_for_technique(&t.id).map(|s| s.to_string()))
             .collect();
     }
-    engine_ids.sort();
     engine_ids.dedup();
     let mut present = HashSet::new();
     present.insert("internet_exposed".to_string());
@@ -938,7 +984,8 @@ async fn mesh_status_json(
         "waves": waves,
         "waves_are_preview": true,
         "probe_executor": "engine_dispatch",
-        "note": "CEM-DAGO blackboard is the live projection; Postgres campaign events are durable. engine_dispatch remains the only probe executor. Waves are a schedule preview — they do not enqueue engines.",
+        "profile_id": campaign.profile_id,
+        "note": "CEM-DAGO blackboard is the live projection; Postgres campaign events are durable. engine_dispatch remains the only probe executor. Waves are a schedule preview — they never enqueue engines. Profile preferred engines only bias the preview order.",
     })
 }
 
@@ -972,7 +1019,313 @@ fn plan_json_from_steps(campaign: &CampaignRecord, steps: &[Value], world: &Valu
         "reached_goal": facts.iter().any(|f| f.as_str() == Some(campaign.goal_fact.as_str())),
         "asset_key": campaign.asset_key,
         "steps": steps,
+        "profile_id": campaign.profile_id,
     })
+}
+
+fn emulation_json(
+    campaign: &CampaignRecord,
+    steps: &[Value],
+    gaps: &[Value],
+    remediation: &Value,
+) -> Value {
+    let profile = crate::apt_emulation_profiles::get(&campaign.profile_id)
+        .map(|p| p.to_json())
+        .unwrap_or_else(|| campaign.profile_stub.clone());
+    let stages = crate::apt_emulation_profiles::get(&campaign.profile_id)
+        .map(|p| crate::apt_emulation_profiles::stage_progress(p, steps))
+        .unwrap_or_else(|| json!([]));
+    let choke = steps.iter().any(|s| {
+        s.get("proof_status").and_then(Value::as_str) == Some("proven")
+            && s.get("technique_id")
+                .and_then(Value::as_str)
+                .is_some_and(crate::apt_emulation_profiles::choke_technique)
+    });
+    json!({
+        "profile": profile,
+        "profile_id": campaign.profile_id,
+        "stages": stages,
+        "detection_gap_count": gaps.len(),
+        "choke_point_proven": choke,
+        "privilege_facts_require_proven": true,
+        "probe_executor": "engine_dispatch",
+        "safety_rails_no_shells": true,
+        "disclose_externally": false,
+        "remediation_path": remediation.get("fix_first_path").cloned().unwrap_or(json!("/remediation")),
+    })
+}
+
+async fn load_detection_gaps(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    campaign_id: Uuid,
+) -> Result<Vec<Value>, String> {
+    let rows = sqlx::query(
+        r#"SELECT id, step_id, technique_id, engine_id, mitre, gap_kind, control_surface,
+                  summary, evidence, created_at
+             FROM weissman_campaign_detection_gaps
+            WHERE campaign_id = $1
+            ORDER BY created_at DESC
+            LIMIT 80"#,
+    )
+    .bind(campaign_id)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(|e| format!("gaps: {e}"))?;
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            json!({
+                "id": r.try_get::<Uuid, _>("id").ok().map(|u| u.to_string()),
+                "step_id": r.try_get::<Option<Uuid>, _>("step_id").ok().flatten().map(|u| u.to_string()),
+                "technique_id": r.try_get::<String, _>("technique_id").unwrap_or_default(),
+                "engine_id": r.try_get::<String, _>("engine_id").unwrap_or_default(),
+                "mitre": r.try_get::<String, _>("mitre").unwrap_or_default(),
+                "gap_kind": r.try_get::<String, _>("gap_kind").unwrap_or_default(),
+                "control_surface": r.try_get::<String, _>("control_surface").unwrap_or_else(|_| "unknown".into()),
+                "summary": r.try_get::<String, _>("summary").unwrap_or_default(),
+                "evidence": r.try_get::<Value, _>("evidence").unwrap_or_else(|_| json!({})),
+                "created_at": r.try_get::<chrono::DateTime<chrono::Utc>, _>("created_at")
+                    .map(|d| d.to_rfc3339())
+                    .unwrap_or_default(),
+            })
+        })
+        .collect())
+}
+
+/// Record a purple-team detection/control gap. Deduped per (campaign, step, kind).
+pub async fn record_detection_gap_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    campaign_id: Uuid,
+    client_id: i64,
+    step_id: Option<Uuid>,
+    technique_id: &str,
+    engine_id: &str,
+    mitre: &str,
+    gap_kind: &str,
+    reason: &str,
+    extra: Value,
+) -> Result<(), String> {
+    if !matches!(
+        gap_kind,
+        "proof_failed" | "job_failed" | "control_blocked" | "roe_blocked"
+    ) {
+        return Err(format!("unknown detection gap kind {gap_kind}"));
+    }
+    let surface = crate::apt_emulation_profiles::classify_control_surface(reason);
+    let summary = if reason.trim().is_empty() {
+        format!("{gap_kind} on {technique_id}")
+    } else {
+        reason.chars().take(500).collect()
+    };
+    let evidence = json!({
+        "reason": reason,
+        "invented": false,
+        "measurable": surface != "unknown",
+        "extra": extra,
+        "safety_rails_no_shells": true,
+    });
+    let res = sqlx::query(
+        r#"INSERT INTO weissman_campaign_detection_gaps
+             (campaign_id, tenant_id, client_id, step_id, technique_id, engine_id, mitre,
+              gap_kind, control_surface, summary, evidence)
+           SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+            WHERE NOT EXISTS (
+              SELECT 1 FROM weissman_campaign_detection_gaps
+               WHERE campaign_id = $1
+                 AND gap_kind = $8
+                 AND step_id IS NOT DISTINCT FROM $4
+            )"#,
+    )
+    .bind(campaign_id)
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(step_id)
+    .bind(technique_id)
+    .bind(engine_id)
+    .bind(mitre)
+    .bind(gap_kind)
+    .bind(surface)
+    .bind(&summary)
+    .bind(&evidence)
+    .execute(&mut **tx)
+    .await;
+    match res {
+        Ok(r) if r.rows_affected() > 0 => {
+            insert_event(
+                tx,
+                campaign_id,
+                tenant_id,
+                client_id,
+                "detection_gap_recorded",
+                json!({
+                    "gap_kind": gap_kind,
+                    "control_surface": surface,
+                    "technique_id": technique_id,
+                    "engine_id": engine_id,
+                    "step_id": step_id.map(|u| u.to_string()),
+                    "invented": false,
+                }),
+            )
+            .await
+        }
+        Ok(_) => Ok(()),
+        Err(e) => {
+            let msg = e.to_string();
+            if msg.contains("duplicate") || msg.contains("unique") {
+                Ok(())
+            } else {
+                Err(format!("detection gap: {e}"))
+            }
+        }
+    }
+}
+
+async fn remediation_bundle(pool: &PgPool, campaign: &CampaignRecord, steps: &[Value]) -> Value {
+    let choke = steps.iter().any(|s| {
+        s.get("proof_status").and_then(Value::as_str) == Some("proven")
+            && s.get("technique_id")
+                .and_then(Value::as_str)
+                .is_some_and(crate::apt_emulation_profiles::choke_technique)
+    });
+    let completed = campaign.status == "completed";
+    let ranked = crate::remediation_priority::load_and_rank(
+        pool,
+        campaign.tenant_id,
+        campaign.client_id,
+        80,
+    )
+    .await
+    .unwrap_or_else(|_| json!({ "ok": false, "program": [] }));
+    let program = ranked
+        .get("program")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let top: Vec<Value> = program.into_iter().take(8).collect();
+    json!({
+        "fix_first_path": format!("/remediation?client_id={}", campaign.client_id),
+        "verify_kind": "remediation_verify",
+        "choke_point_proven": choke,
+        "campaign_completed": completed,
+        "surface": completed || choke,
+        "program": top,
+        "totals": {
+            "remediation_actions": ranked.get("remediation_actions").cloned().unwrap_or(json!(0)),
+            "choke_point_actions": ranked.get("choke_point_actions").cloned().unwrap_or(json!(0)),
+        },
+        "note": "Analyst marks findings FIXED; closed-loop remediation_verify emits remediation_verified when the engine no longer reproduces the finding. Campaigns never invent a fix.",
+        "invented": false,
+    })
+}
+
+/// Operator action: enqueue remediation_verify for FIXED campaign findings (not OPEN).
+pub async fn queue_campaign_remediation(
+    pool: &PgPool,
+    tenant_id: i64,
+    campaign_id: Uuid,
+) -> Result<Value, String> {
+    let bundle = get_campaign(pool, tenant_id, campaign_id).await?;
+    let campaign = bundle
+        .get("campaign")
+        .cloned()
+        .ok_or_else(|| "campaign not found".to_string())?;
+    let client_id = campaign
+        .get("client_id")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| "client_id missing".to_string())?;
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("tx: {e}"))?;
+    let rows = sqlx::query(
+        r#"SELECT finding_id, source, COALESCE(raw_data->>'target', '') AS target, status
+             FROM vulnerabilities
+            WHERE tenant_id = $1 AND client_id = $2
+              AND COALESCE(status, 'OPEN') = 'FIXED'
+              AND (
+                    raw_data->>'campaign_id' = $3
+                 OR $3 = ''
+              )
+            ORDER BY id DESC
+            LIMIT 10"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(campaign_id.to_string())
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| format!("fixed findings: {e}"))?;
+    let _ = tx.commit().await;
+    let mut queued = 0u32;
+    let mut skipped = 0u32;
+    for r in rows {
+        let finding_id: String = r.try_get("finding_id").unwrap_or_default();
+        let engine: String = r.try_get("source").unwrap_or_default();
+        let target: String = r.try_get("target").unwrap_or_default();
+        if finding_id.is_empty() || target.is_empty() || !is_production_engine_id(&engine) {
+            skipped += 1;
+            continue;
+        }
+        let body = json!({
+            "engine": engine,
+            "target": target,
+            "finding_id": finding_id,
+            "client_id": client_id,
+            "campaign_id": campaign_id.to_string(),
+        });
+        match crate::async_jobs::enqueue(
+            pool,
+            tenant_id,
+            "remediation_verify",
+            body,
+            Some(format!("campaign:{campaign_id}")),
+        )
+        .await
+        {
+            Ok(_) => queued += 1,
+            Err(_) => skipped += 1,
+        }
+    }
+    let mut out = bundle;
+    if let Some(obj) = out.as_object_mut() {
+        obj.insert(
+            "remediation_queue".to_string(),
+            json!({
+                "queued": queued,
+                "skipped": skipped,
+                "kind": "remediation_verify",
+                "note": "Only FIXED findings are verified. OPEN rows are not auto-closed.",
+            }),
+        );
+    }
+    Ok(out)
+}
+
+pub fn list_profiles_json() -> Value {
+    json!({
+        "ok": true,
+        "profiles": crate::apt_emulation_profiles::catalog_json(),
+        "count": crate::apt_emulation_profiles::PROFILE_IDS.len(),
+        "privilege_facts_require_proven": true,
+        "probe_executor": "engine_dispatch",
+        "disclose_externally": false,
+    })
+}
+
+fn chain_from_technique(goal: &str, t: &attack_chain_planner::Technique) -> AttackChain {
+    AttackChain {
+        goal: goal.to_string(),
+        reached_goal: false,
+        total_cost: t.cost,
+        mitre_path: vec![t.mitre.clone()],
+        steps: vec![attack_chain_planner::PlannedStep {
+            technique_id: t.id.clone(),
+            name: t.name.clone(),
+            mitre: t.mitre.clone(),
+            cost: t.cost,
+            gained: t.effects.clone(),
+        }],
+    }
 }
 
 pub async fn list_steps(pool: &PgPool, tenant_id: i64, id: Uuid) -> Result<Value, String> {
@@ -1040,7 +1393,7 @@ async fn lock_campaign(
 ) -> Result<CampaignRecord, String> {
     let row = sqlx::query(
         r#"SELECT id, tenant_id, client_id, goal_fact, status, profile_stub, created_by,
-                  asset_key, last_error, created_at, updated_at
+                  asset_key, last_error, profile_id, created_at, updated_at
              FROM weissman_campaigns
             WHERE id = $1 AND tenant_id = $2
             FOR UPDATE"#,
@@ -1424,7 +1777,7 @@ async fn bind_job_outcome(
     detail: &str,
 ) -> Result<Option<Uuid>, String> {
     let row = sqlx::query(
-        r#"SELECT id, campaign_id, tenant_id, client_id, technique_id
+        r#"SELECT id, campaign_id, tenant_id, client_id, technique_id, engine_id, mitre
              FROM weissman_campaign_steps
             WHERE job_id = $1 AND status = 'dispatched'"#,
     )
@@ -1474,8 +1827,99 @@ async fn bind_job_outcome(
             }),
         )
         .await?;
+        let engine: String = row.try_get("engine_id").unwrap_or_default();
+        let mitre: String = row.try_get("mitre").unwrap_or_default();
+        let kind = if crate::apt_emulation_profiles::classify_control_surface(detail) == "ot_roe" {
+            "roe_blocked"
+        } else if crate::apt_emulation_profiles::classify_control_surface(detail) == "waf" {
+            "control_blocked"
+        } else {
+            "job_failed"
+        };
+        let _ = record_detection_gap_in_tx(
+            tx,
+            tenant_id,
+            campaign_id,
+            client_id,
+            Some(step_id),
+            &technique_id,
+            &engine,
+            &mitre,
+            kind,
+            detail,
+            json!({ "job_id": job_id.to_string() }),
+        )
+        .await;
     }
     Ok(Some(campaign_id))
+}
+
+async fn record_gaps_for_needed_failures(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    campaign: &CampaignRecord,
+    needed: &HashSet<&str>,
+    gap_kind: &str,
+) -> Result<(), String> {
+    let rows = sqlx::query(
+        r#"SELECT id, technique_id, engine_id, mitre, last_error, proof_status, status
+             FROM weissman_campaign_steps
+            WHERE campaign_id = $1"#,
+    )
+    .bind(campaign.id)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(|e| format!("gap steps: {e}"))?;
+    for r in rows {
+        let technique_id: String = r.try_get("technique_id").unwrap_or_default();
+        if !needed.contains(technique_id.as_str()) {
+            continue;
+        }
+        let status: String = r.try_get("status").unwrap_or_default();
+        let proof: String = r.try_get("proof_status").unwrap_or_default();
+        let matches = match gap_kind {
+            "job_failed" => status == "failed",
+            "proof_failed" => proof == "failed_proof",
+            _ => false,
+        };
+        if !matches {
+            continue;
+        }
+        let step_id: Uuid = r.try_get("id").map_err(|e| e.to_string())?;
+        let engine: String = r.try_get("engine_id").unwrap_or_default();
+        let mitre: String = r.try_get("mitre").unwrap_or_default();
+        let err: String = r
+            .try_get::<Option<String>, _>("last_error")
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        let reason = if err.is_empty() {
+            format!("{gap_kind}:{technique_id}")
+        } else {
+            err
+        };
+        let kind = if crate::apt_emulation_profiles::classify_control_surface(&reason) == "ot_roe" {
+            "roe_blocked"
+        } else if crate::apt_emulation_profiles::classify_control_surface(&reason) == "waf" {
+            "control_blocked"
+        } else {
+            gap_kind
+        };
+        let _ = record_detection_gap_in_tx(
+            tx,
+            campaign.tenant_id,
+            campaign.id,
+            campaign.client_id,
+            Some(step_id),
+            &technique_id,
+            &engine,
+            &mitre,
+            kind,
+            &reason,
+            json!({ "needed": true }),
+        )
+        .await;
+    }
+    Ok(())
 }
 
 /// Enqueue the mapped engine through the real scan router (scope pin + entitlements).
@@ -1555,6 +1999,7 @@ async fn pick_dispatchable_step(
     campaign_id: Uuid,
     chain: &AttackChain,
     facts: &HashSet<Fact>,
+    techniques: &[attack_chain_planner::Technique],
 ) -> Result<Option<(Uuid, String, String)>, String> {
     let keep: HashSet<&str> = chain
         .steps
@@ -1575,7 +2020,7 @@ async fn pick_dispatchable_step(
         if !keep.contains(technique_id.as_str()) {
             continue;
         }
-        if !attack_chain_planner::technique_preconditions_met(&technique_id, facts) {
+        if !attack_chain_planner::technique_preconditions_met_in(&technique_id, facts, techniques) {
             return Ok(None);
         }
         let id: Uuid = r.try_get("id").map_err(|e| e.to_string())?;
@@ -1866,8 +2311,12 @@ async fn tick_one(
     .await?;
 
     let planner_findings = crate::proof_layer::findings_for_planner(&findings);
-    let planned =
-        attack_chain_planner::plan_strongest_asset(&planner_findings, &campaign.goal_fact);
+    let lib = crate::apt_emulation_profiles::technique_library_from_stub(&campaign.profile_stub);
+    let planned = attack_chain_planner::plan_strongest_asset_with(
+        &planner_findings,
+        &campaign.goal_fact,
+        &lib,
+    );
     let proven_from_steps = load_proven_step_facts(&mut tx, campaign.id).await;
     let (asset_key, chain, _facts) = match planned {
         Some(t) => t,
@@ -1895,6 +2344,27 @@ async fn tick_one(
                     None,
                 )
                 .await?;
+                tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+                crate::proof_layer::spawn_live_proofs(
+                    pool.clone(),
+                    tenant_id,
+                    campaign.client_id,
+                    campaign.id,
+                    need_live,
+                );
+                return Ok(());
+            }
+            let already = existing_technique_ids(&mut tx, campaign.id).await?;
+            if let Some(g) = crate::apt_emulation_profiles::next_gather_technique(
+                &campaign.profile_id,
+                &facts,
+                &already,
+            ) {
+                (
+                    campaign.asset_key.clone(),
+                    chain_from_technique(&campaign.goal_fact, &g),
+                    facts,
+                )
             } else {
                 set_status(
                     &mut tx,
@@ -1902,20 +2372,20 @@ async fn tick_one(
                     "blocked",
                     actor_user_id,
                     "goal_unreachable_from_observed_facts",
-                    json!({ "goal": campaign.goal_fact }),
+                    json!({ "goal": campaign.goal_fact, "profile_id": campaign.profile_id }),
                     Some("planner returned no chain — refusing to invent capability"),
                 )
                 .await?;
+                tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+                crate::proof_layer::spawn_live_proofs(
+                    pool.clone(),
+                    tenant_id,
+                    campaign.client_id,
+                    campaign.id,
+                    need_live,
+                );
+                return Ok(());
             }
-            tx.commit().await.map_err(|e| format!("commit: {e}"))?;
-            crate::proof_layer::spawn_live_proofs(
-                pool.clone(),
-                tenant_id,
-                campaign.client_id,
-                campaign.id,
-                need_live,
-            );
-            return Ok(());
         }
     };
 
@@ -1965,7 +2435,7 @@ async fn tick_one(
     skip_stale_planned_steps(&mut tx, &campaign, &chain).await?;
 
     let dispatch = if inflight_count(&mut tx, campaign.id).await? == 0 {
-        pick_dispatchable_step(&mut tx, campaign.id, &chain, &facts).await?
+        pick_dispatchable_step(&mut tx, campaign.id, &chain, &facts, &lib).await?
     } else {
         None
     };
@@ -1995,6 +2465,7 @@ async fn tick_one(
                 Some("required technique failed; refusing to invent a substitute"),
             )
             .await?;
+            record_gaps_for_needed_failures(&mut tx, &campaign, &needed, "job_failed").await?;
         } else {
             let proof_failed: Vec<String> = sqlx::query_scalar(
                 r#"SELECT technique_id FROM weissman_campaign_steps
@@ -2015,6 +2486,8 @@ async fn tick_one(
                     Some("safe-proof gate failed; unproven steps do not unlock higher WorldState facts"),
                 )
                 .await?;
+                record_gaps_for_needed_failures(&mut tx, &campaign, &needed, "proof_failed")
+                    .await?;
             }
         }
     }
@@ -2352,6 +2825,7 @@ mod tests {
     #[test]
     fn spine_and_event_kinds_include_remediation_verified() {
         assert!(CAMPAIGN_EVENT_KINDS.contains(&"remediation_verified"));
+        assert!(CAMPAIGN_EVENT_KINDS.contains(&"detection_gap_recorded"));
         let id = Uuid::nil();
         let s = spine_json(id);
         assert_eq!(s["disclose_externally"], false);
@@ -2359,6 +2833,39 @@ mod tests {
         assert_eq!(s["event_bus"], "weissman_campaign_events");
         assert_eq!(s["job_bus"], "weissman-job-bus");
         assert_eq!(s["roe"], "authorized-tenant+scope_pin+no_auto_disclosure");
+    }
+
+    #[test]
+    fn profile_extras_dispatch_only_through_engine_for_technique() {
+        for id in [
+            "identity_spray",
+            "cloud_iam_abuse",
+            "supply_chain_adjacent",
+            "ot_passive_recon",
+        ] {
+            let engine = engine_for_technique(id).expect(id);
+            assert!(is_production_engine_id(engine));
+        }
+        assert!(engine_for_technique("ransomware_encrypt").is_none());
+        assert!(engine_for_technique("ot_sis_triton").is_none());
+    }
+
+    #[test]
+    fn api_create_accepts_profile_id() {
+        let req: CreateCampaignRequest = serde_json::from_value(json!({
+            "client_id": 7,
+            "profile_id": "web-initial-access"
+        }))
+        .unwrap();
+        assert_eq!(req.profile_id.as_deref(), Some("web-initial-access"));
+        assert!(crate::apt_emulation_profiles::get("web-initial-access").is_some());
+        let catalog = crate::apt_emulation_profiles::catalog_json();
+        assert_eq!(catalog.as_array().unwrap().len(), 6);
+        let listed = list_profiles_json();
+        assert_eq!(listed["count"], 6);
+        assert_eq!(listed["probe_executor"], "engine_dispatch");
+        assert_eq!(listed["privilege_facts_require_proven"], true);
+        assert_eq!(listed["disclose_externally"], false);
     }
 
     #[test]

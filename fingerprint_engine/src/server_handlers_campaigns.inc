@@ -7,6 +7,7 @@ fn campaign_err_status(detail: &str) -> StatusCode {
     } else if detail.contains("illegal campaign transition") || detail.contains("cannot pause") {
         StatusCode::CONFLICT
     } else if detail.contains("unsupported goal")
+        || detail.contains("unknown APT profile")
         || detail.contains("no authorized domains")
         || detail.contains("client_id")
         || detail.contains("planner returned")
@@ -231,6 +232,47 @@ async fn api_campaigns_step_proof(
         auth.tenant_id,
         p.id,
         p.step_id,
+    )
+    .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => {
+            let status = campaign_err_status(&e);
+            let detail = if matches!(
+                status,
+                StatusCode::NOT_FOUND | StatusCode::BAD_REQUEST | StatusCode::CONFLICT
+            ) {
+                json!(e)
+            } else {
+                json!(scrub_internal_error(&e))
+            };
+            (status, Json(json!({ "ok": false, "detail": detail }))).into_response()
+        }
+    }
+}
+
+async fn api_campaigns_profiles(
+    Extension(_auth): Extension<AuthContext>,
+) -> Response {
+    (
+        StatusCode::OK,
+        Json(crate::adversary_campaign::list_profiles_json()),
+    )
+        .into_response()
+}
+
+async fn api_campaigns_remediate(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<uuid::Uuid>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    match crate::adversary_campaign::queue_campaign_remediation(
+        &state.app_pool,
+        auth.tenant_id,
+        id,
     )
     .await
     {

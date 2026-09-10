@@ -401,6 +401,21 @@ pub fn facts_from_findings(findings: &[serde_json::Value]) -> HashSet<Fact> {
         {
             facts.insert("cloud:exposed".to_string());
         }
+        if hay.contains("supply chain")
+            || hay.contains("typosquat")
+            || hay.contains("dependency confusion")
+            || hay.contains("sbom")
+        {
+            facts.insert("supply:exposed".to_string());
+        }
+        if hay.contains("ot/ics")
+            || hay.contains("scada")
+            || hay.contains("modbus")
+            || hay.contains("dnp3")
+            || hay.contains("ics device")
+        {
+            facts.insert("ot:exposed".to_string());
+        }
         // A verified exploit is direct evidence of a foothold when it is high/critical by
         // categorical severity OR by its EPSS/KEV-adjusted effective_risk. A finding whose base
         // severity is only "medium" but is known-exploited (KEV) or scored >= 8.5 by the intel
@@ -429,6 +444,15 @@ fn field(v: &serde_json::Value, key: &str) -> String {
 
 /// Convenience: plan from real findings toward a goal using the default technique library.
 pub fn plan_from_findings(findings: &[serde_json::Value], goal: &str) -> Option<AttackChain> {
+    plan_from_findings_with(findings, goal, &default_technique_library())
+}
+
+/// Same as [`plan_from_findings`] with a caller-supplied STRIPS library (P2 profile bias).
+pub fn plan_from_findings_with(
+    findings: &[serde_json::Value],
+    goal: &str,
+    techniques: &[Technique],
+) -> Option<AttackChain> {
     // Group findings by asset (normalized host) and plan PER ASSET. Merging every finding into
     // one global fact set would collapse, e.g., SSRF on host A + RCE on host B + a leaked cred on
     // host C into a single fabricated cross-host kill chain that exists on no real system and
@@ -441,10 +465,9 @@ pub fn plan_from_findings(findings: &[serde_json::Value], goal: &str) -> Option<
             .or_default()
             .push(f.clone());
     }
-    let lib = default_technique_library();
     by_asset
         .values()
-        .filter_map(|group| plan(&facts_from_findings(group), &lib, goal, 50_000))
+        .filter_map(|group| plan(&facts_from_findings(group), techniques, goal, 50_000))
         .max_by_key(|chain| (chain.reached_goal, chain.steps.len()))
 }
 
@@ -454,6 +477,15 @@ pub fn plan_strongest_asset(
     findings: &[serde_json::Value],
     goal: &str,
 ) -> Option<(String, AttackChain, HashSet<Fact>)> {
+    plan_strongest_asset_with(findings, goal, &default_technique_library())
+}
+
+/// P2: same as [`plan_strongest_asset`] using a profile-biased technique library.
+pub fn plan_strongest_asset_with(
+    findings: &[serde_json::Value],
+    goal: &str,
+    techniques: &[Technique],
+) -> Option<(String, AttackChain, HashSet<Fact>)> {
     let mut by_asset: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
     for f in findings {
         by_asset
@@ -461,12 +493,11 @@ pub fn plan_strongest_asset(
             .or_default()
             .push(f.clone());
     }
-    let lib = default_technique_library();
     by_asset
         .into_iter()
         .filter_map(|(asset, group)| {
             let facts = facts_from_findings(&group);
-            plan(&facts, &lib, goal, 50_000).map(|chain| (asset, chain, facts))
+            plan(&facts, techniques, goal, 50_000).map(|chain| (asset, chain, facts))
         })
         .max_by_key(|(_, chain, _)| {
             (
@@ -477,19 +508,29 @@ pub fn plan_strongest_asset(
         })
 }
 
-/// Normalized host a finding pertains to, so attack-chain planning stays within one asset.
-/// Empty string groups findings with no locatable host together (a conservative shared bucket).
 /// True iff `technique_id` exists in the library and every precondition is in `facts`.
 /// Used by the campaign fabric so we never enqueue an engine whose STRIPS preconditions
 /// are not already evidenced.
 #[must_use]
 pub fn technique_preconditions_met(technique_id: &str, facts: &HashSet<Fact>) -> bool {
-    default_technique_library()
+    technique_preconditions_met_in(technique_id, facts, &default_technique_library())
+}
+
+/// P2: same check against a profile-biased library (includes extras).
+#[must_use]
+pub fn technique_preconditions_met_in(
+    technique_id: &str,
+    facts: &HashSet<Fact>,
+    techniques: &[Technique],
+) -> bool {
+    techniques
         .iter()
         .find(|t| t.id == technique_id)
         .is_some_and(|t| t.applicable(facts))
 }
 
+/// Normalized host a finding pertains to, so attack-chain planning stays within one asset.
+/// Empty string groups findings with no locatable host together (a conservative shared bucket).
 pub fn finding_asset_key(f: &serde_json::Value) -> String {
     for key in ["target", "url", "host", "asset", "evidence_url"] {
         let v = field(f, key);
@@ -730,5 +771,47 @@ mod tests {
             &set(&["service:web"])
         ));
         assert!(!technique_preconditions_met("not_a_real_technique", &ready));
+    }
+
+    #[test]
+    fn supply_and_ot_signals_are_facts_not_footholds() {
+        let findings = vec![serde_json::json!({
+            "finding_id": "sbom-1",
+            "type": "web",
+            "title": "Exposed SBOM and supply chain typosquat on https://app.example",
+            "severity": "medium",
+        })];
+        let facts = facts_from_findings(&findings);
+        assert!(facts.contains("supply:exposed"));
+        assert!(!facts.contains("access:foothold"));
+
+        let ot = facts_from_findings(&[serde_json::json!({
+            "finding_id": "ics-1",
+            "type": "ot",
+            "title": "SCADA / Modbus ICS device banner",
+            "severity": "info",
+        })]);
+        assert!(ot.contains("ot:exposed"));
+        assert!(!ot.contains("access:foothold"));
+    }
+
+    #[test]
+    fn profile_library_plans_with_caller_techniques() {
+        let findings = vec![serde_json::json!({
+            "finding_id": "1",
+            "type": "web",
+            "title": "RCE and SQL injection on https://app.example",
+            "severity": "high",
+            "target": "https://app.example",
+        })];
+        let lib = default_technique_library();
+        let chain = plan_from_findings_with(&findings, "access:foothold", &lib)
+            .expect("web vuln grounds foothold");
+        assert!(chain.reached_goal);
+        assert!(technique_preconditions_met_in(
+            "exploit_rce_web",
+            &facts_from_findings(&findings),
+            &lib
+        ));
     }
 }

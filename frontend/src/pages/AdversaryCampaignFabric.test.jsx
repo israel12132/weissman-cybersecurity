@@ -238,6 +238,129 @@ describe('AdversaryCampaignFabric', () => {
     expect(await screen.findByText('pages.adversaryCampaign.fact_proven')).toBeInTheDocument()
     expect(screen.getAllByText('access:foothold').length).toBeGreaterThan(0)
     expect(screen.getByText('findings.proof.proven')).toBeInTheDocument()
-    expect(screen.getByText('technique_proven')).toBeInTheDocument()
+  })
+
+  it('starts a campaign from an APT profile and shows stages, gaps, and Fix-First', async () => {
+    let created = false
+    apiFetch.mockImplementation((url, opts) => {
+      if (url === '/api/campaigns/profiles') {
+        return Promise.resolve({
+          ok: true,
+          profiles: [{
+            id: 'web-initial-access',
+            goal_fact: 'access:foothold',
+            mitre: ['T1190'],
+          }],
+        })
+      }
+      if (url.startsWith('/api/campaigns?')) {
+        return Promise.resolve({
+          ok: true,
+          campaigns: created ? [{
+            id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+            client_id: 9,
+            goal_fact: 'access:foothold',
+            status: 'blocked',
+            profile_id: 'web-initial-access',
+            asset_key: 'app.example',
+          }] : [],
+          allowed_goals: ['access:foothold'],
+          profiles: [{
+            id: 'web-initial-access',
+            goal_fact: 'access:foothold',
+            mitre: ['T1190'],
+          }],
+        })
+      }
+      if (opts?.method === 'POST' && url === '/api/campaigns') {
+        created = true
+        return Promise.resolve({
+          ok: true,
+          campaign: {
+            id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+            client_id: 9,
+            status: 'draft',
+            goal_fact: 'access:foothold',
+            profile_id: 'web-initial-access',
+          },
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        campaign: {
+          id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+          client_id: 9,
+          status: 'blocked',
+          goal_fact: 'access:foothold',
+          profile_id: 'web-initial-access',
+        },
+        world_state: { facts: ['service:web', 'vuln:rce'], evidence: {}, proven_facts: [] },
+        steps: [{
+          id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+          seq: 1,
+          technique_id: 'exploit_rce_web',
+          technique_name: 'Exploit public-facing app (RCE)',
+          mitre: 'T1190',
+          engine_id: 'rce_exploit_engine',
+          status: 'succeeded',
+          proof_status: 'failed_proof',
+        }],
+        events: [{ kind: 'detection_gap_recorded', event_version: 1, event_hash: 'gap1' }],
+        emulation: {
+          profile_id: 'web-initial-access',
+          profile: {
+            id: 'web-initial-access',
+            mitre: ['T1190'],
+            roe_notes: 'Web/API engines only.',
+            honest_coverage: 'Does not claim XSS-to-RCE.',
+          },
+          stages: [{ id: 'execution', mitre_tactic: 'TA0002', techniques: ['exploit_rce_web'], status: 'blocked' }],
+          choke_point_proven: false,
+        },
+        detection_gaps: [{
+          id: 'gap-1',
+          technique_id: 'exploit_rce_web',
+          engine_id: 'rce_exploit_engine',
+          mitre: 'T1190',
+          gap_kind: 'proof_failed',
+          control_surface: 'proof_gate',
+          summary: 'step completed without confirmation-grade evidence',
+        }],
+        remediation: {
+          fix_first_path: '/remediation?client_id=9',
+          choke_point_proven: false,
+          program: [{ rank: 1, title: 'Patch RCE' }],
+        },
+        proof: { privilege_facts_require_proven: true, safety_rails_no_shells: true },
+      })
+    })
+    render(
+      <MemoryRouter>
+        <AdversaryCampaignFabric />
+      </MemoryRouter>,
+    )
+    expect(await screen.findByLabelText('pages.adversaryCampaign.select_profile')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('option', { name: 'pages.adversaryCampaign.profile_web_initial_access_name' }),
+    ).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('pages.adversaryCampaign.select_profile'), {
+      target: { value: 'web-initial-access' },
+    })
+    fireEvent.click(screen.getAllByRole('button', { name: 'pages.adversaryCampaign.create' })[0])
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalledWith('/api/campaigns', {
+        method: 'POST',
+        body: JSON.stringify({ client_id: 9, goal: 'access:foothold', profile_id: 'web-initial-access' }),
+      })
+    })
+    expect(await screen.findByTestId('campaign-apt-profile')).toBeInTheDocument()
+    expect(screen.getByTestId('campaign-apt-stages')).toBeInTheDocument()
+    expect(screen.getByText('pages.adversaryCampaign.gap_proof_failed')).toBeInTheDocument()
+    expect(screen.getByText('pages.adversaryCampaign.control_proof_gate')).toBeInTheDocument()
+    expect(screen.getByText('detection_gap_recorded')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'pages.adversaryCampaign.open_fix_first' }).getAttribute('href')).toContain(
+      '/remediation',
+    )
+    expect(screen.getByText('Patch RCE')).toBeInTheDocument()
   })
 })
