@@ -13,7 +13,6 @@ import { useTranslation } from 'react-i18next'
 import { Crosshair, Play, Pause, GitBranch } from 'lucide-react'
 import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
-import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
@@ -271,7 +270,6 @@ export default function AdversaryCampaignFabric() {
       }
     >
       <div className="space-y-6">
-        <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
         <p className="text-[11px] font-mono text-[var(--text-muted)]">{t(`${NS}.privacy_note`)}</p>
 
         <label className="block">
