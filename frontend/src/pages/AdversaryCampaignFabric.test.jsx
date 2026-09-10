@@ -235,8 +235,8 @@ describe('AdversaryCampaignFabric', () => {
         { method: 'POST' },
       )
     })
-    expect(await screen.findByText('access:foothold')).toBeInTheDocument()
-    expect(screen.getByText('pages.adversaryCampaign.fact_proven')).toBeInTheDocument()
+    expect(await screen.findByText('pages.adversaryCampaign.fact_proven')).toBeInTheDocument()
+    expect(screen.getAllByText('access:foothold').length).toBeGreaterThan(0)
     expect(screen.getByText('findings.proof.proven')).toBeInTheDocument()
     expect(screen.getByText('technique_proven')).toBeInTheDocument()
   })

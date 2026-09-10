@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, cleanup } from '@testing-library/react'
 import ProofStatusBadge, { proofStatusOf } from './ProofStatusBadge.jsx'
 
 vi.mock('react-i18next', () => ({
@@ -7,6 +7,8 @@ vi.mock('react-i18next', () => ({
 }))
 
 describe('ProofStatusBadge', () => {
+  afterEach(cleanup)
+
   it('renders proven with the i18n key', () => {
     render(<ProofStatusBadge status="proven" />)
     expect(screen.getByTestId('proof-status-badge')).toHaveAttribute('data-proof-status', 'proven')

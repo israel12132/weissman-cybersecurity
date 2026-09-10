@@ -1665,7 +1665,7 @@ mod tests {
     fn failed_proof_never_unlocks_privilege_facts() {
         let f = json!({
             "finding_id": "x",
-            "title": "Remote code execution",
+            "title": "Remote code execution on public web app",
             "type": "rce",
             "severity": "critical",
             "verified": true,
@@ -1761,7 +1761,7 @@ mod tests {
     fn privilege_facts_require_proven_status() {
         let observed = json!({
             "finding_id": "a",
-            "title": "Remote code execution",
+            "title": "Remote code execution on public web app",
             "type": "rce",
             "severity": "critical",
             "verified": true,
@@ -1770,7 +1770,7 @@ mod tests {
         });
         let proven = json!({
             "finding_id": "b",
-            "title": "Remote code execution",
+            "title": "Remote code execution on public web app",
             "type": "rce",
             "severity": "critical",
             "verified": true,
@@ -1847,6 +1847,7 @@ mod tests {
     #[test]
     fn adapters_do_not_embed_destructive_payloads() {
         let src = include_str!("proof_layer.rs");
+        let prod = src.split("#[cfg(test)]").next().unwrap_or(src);
         for needle in [
             "xp_cmdshell",
             "/bin/bash",
@@ -1856,12 +1857,13 @@ mod tests {
             "into outfile",
         ] {
             assert!(
-                !src.to_ascii_lowercase()
+                !prod
+                    .to_ascii_lowercase()
                     .contains(&needle.to_ascii_lowercase()),
                 "destructive token {needle} must not appear in proof adapters"
             );
         }
-        assert!(src.contains("safety_rails_no_shells"));
+        assert!(prod.contains("safety_rails_no_shells"));
     }
 
     #[test]
