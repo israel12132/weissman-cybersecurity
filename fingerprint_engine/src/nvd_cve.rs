@@ -208,6 +208,44 @@ pub fn format_context_block(briefs: &[NvdCveBrief]) -> String {
     s
 }
 
+/// True when NIST NVD 2.0 returns this CVE id. Empty catalog → false (pre-NVD / unpublished).
+pub async fn nvd_cve_listed(cve_id: &str) -> Result<bool, NvdFetchError> {
+    let api_key = nvd_api_key_required()?;
+    let id = cve_id.trim().to_ascii_uppercase();
+    if !id.starts_with("CVE-") || id.len() < 9 {
+        return Ok(false);
+    }
+    let cache_key = format!("cve|{id}");
+    let cache = intel_http_cache::nvd_keyword_cache();
+    if let Some(hit) = cache.get(&cache_key).await {
+        let briefs = parse_nvd_response_bytes(hit.as_ref())?;
+        return Ok(briefs.iter().any(|b| b.id.eq_ignore_ascii_case(&id)));
+    }
+    let client = external_json_client().map_err(|e| NvdFetchError::HttpClient(e.to_string()))?;
+    let url = format!("{NVD_CVE_V2}?cveId={id}");
+    let mut headers = HeaderMap::new();
+    let (Ok(name), Ok(val)) = (
+        HeaderName::from_bytes(b"apiKey"),
+        HeaderValue::from_str(&api_key),
+    ) else {
+        return Err(NvdFetchError::HttpClient(
+            "invalid NVD apiKey header".into(),
+        ));
+    };
+    headers.insert(name, val);
+    let bytes = match get_bytes_with_retry(&client, &url, headers, 3, Some("nvd")).await {
+        Ok(b) => b,
+        Err(OutboundHttpError::Status(404)) => return Ok(false),
+        Err(e) => return Err(e.into()),
+    };
+    let _ = cache.insert(cache_key, Arc::new(bytes.clone())).await;
+    match parse_nvd_response_bytes(&bytes) {
+        Ok(briefs) => Ok(briefs.iter().any(|b| b.id.eq_ignore_ascii_case(&id))),
+        Err(NvdFetchError::MissingVulnerabilitiesArray) => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -98,6 +98,9 @@ pub mod findings_correlator;
 pub mod findings_gate;
 pub mod findings_persist;
 pub mod fingerprint;
+pub mod first_mover_delta_fusion;
+pub mod first_mover_surface_delta;
+pub mod first_seen_osv_nvd_engine;
 pub mod fleet_shaping;
 pub mod fp_feedback;
 pub mod fuzz_http_pool;
@@ -334,6 +337,37 @@ pub mod ws_session;
 pub mod ws_state_machine;
 pub mod xxe_engine;
 pub mod zero_day_prediction_engine;
+
+// Crate-root modules that other files import as `crate::<name>` but were never declared.
+// Do NOT declare `*_supreme.rs` / `engine_dispatch_agent.rs` here — those are `#[path]`
+// children of their parent engine files.
+pub mod agent_kill;
+pub mod agent_min_version;
+pub mod audit_spool;
+pub mod cem_dago;
+pub mod certstream_watcher;
+pub mod discovery_ai;
+pub mod discovery_knowledge;
+pub mod discovery_pace;
+pub mod elite_hardening;
+pub mod finding_identity;
+pub mod job_envelope;
+pub mod live_knowledge_bus;
+pub mod nl_audit_chain;
+pub mod nl_audit_crypto;
+pub mod nlqa_syslog;
+pub mod ot_ics_hardening;
+pub mod overflow_log;
+pub mod path_templates;
+pub mod playbook_dsl;
+pub mod priv_esc_cred_access;
+pub mod secret_zeroize;
+pub mod sovereign_operator;
+pub mod suppression_cache_sync;
+pub mod supreme_path_fair_rag_engine;
+pub mod supreme_weights;
+pub mod ueba_onboarding;
+pub mod ueba_sovereign_sign;
 
 pub use fingerprint::{
     get_top_ports, scan_ip_range, scan_ip_ranges_concurrent,

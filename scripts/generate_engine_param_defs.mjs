@@ -23,9 +23,12 @@ const { EXPLICIT_PARAM_DEFS } = await import(pathToFileURL(path.join(root, 'fron
 const productionIds = extractArray('PRODUCTION_ENGINE_IDS', engineRs)
 const registryById = Object.fromEntries(ENGINES_REGISTRY.map((e) => [e.id, e]))
 
-const OAST_ENGINES = new Set(
-  [...scanRs.matchAll(/engines:\s*&\["([^"]+)"\][\s\S]*?inject_oast:\s*true/g)].map((m) => m[1]),
-)
+const OAST_ENGINES = new Set([
+  ...[...scanRs.matchAll(/engines:\s*&\["([^"]+)"\][\s\S]*?inject_oast:\s*true/g)].map((m) => m[1]),
+  'ssrf_advanced',
+  'xxe',
+  'oast_oob',
+])
 
 const AI_HEAVY = new Set([
   'semantic_ai_fuzz', 'ai_adversarial_redteam', 'llm_path_fuzz', 'ollama_fuzz',

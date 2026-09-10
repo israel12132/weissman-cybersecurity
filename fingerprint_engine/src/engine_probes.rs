@@ -482,6 +482,29 @@ pub async fn dns_mx(host: &str) -> Vec<String> {
     out
 }
 
+/// Live CNAME lookup. Empty when the name has no CNAME (or DNS fails).
+pub async fn dns_cname(host: &str) -> Vec<String> {
+    use hickory_resolver::proto::rr::RecordType;
+    use hickory_resolver::TokioResolver;
+    let resolver = match TokioResolver::builder_tokio().and_then(|b| b.build()) {
+        Ok(r) => r,
+        Err(_) => return vec![],
+    };
+    let mut out = Vec::new();
+    if let Ok(lookup) = resolver.lookup(host, RecordType::CNAME).await {
+        for record in lookup.answers() {
+            let hickory_resolver::proto::rr::RData::CNAME(cn) = &record.data else {
+                continue;
+            };
+            let s = cn.to_string().trim_end_matches('.').to_string();
+            if !s.is_empty() {
+                out.push(s);
+            }
+        }
+    }
+    out
+}
+
 pub async fn dns_a(host: &str) -> Vec<String> {
     use hickory_resolver::TokioResolver;
     let resolver = match TokioResolver::builder_tokio().and_then(|b| b.build()) {
@@ -832,6 +855,12 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     }
     if engine_id.contains("subdomain_takeover") {
         return "Remove the dangling DNS record (CNAME or A) pointing at the unclaimed third-party service, or re-register the resource on the upstream provider.";
+    }
+    if engine_id.contains("first_mover") {
+        return "Investigate new or changed internet-facing DNS/HTTP assets immediately: claim or remove dangling CNAMEs, confirm ownership of new hosts, and restrict accidental exposure. Re-run first_mover_surface_delta after DNS changes.";
+    }
+    if engine_id.contains("first_seen") {
+        return "Patch or isolate the affected SBOM component. The OSV advisory hit this inventory before (or without) an NVD CVE — do not wait for a weekly scanner or a CVE number.";
     }
     if engine_id.contains("s3") || engine_id.contains("cloud_data_exfil") {
         return "Block public ACLs at the AWS account level (`BlockPublicAccess`), set bucket policy to private, and enable S3 Object Ownership = BucketOwnerEnforced.";

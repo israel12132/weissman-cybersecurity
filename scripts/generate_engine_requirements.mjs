@@ -30,9 +30,12 @@ const AI_HEAVY = new Set([
   'llm_fuzzer', 'council_debate', 'feedback_fuzz', 'deep_fuzz',
 ])
 
-const OAST_ENGINES = new Set(
-  [...scanRs.matchAll(/engines:\s*&\["([^"]+)"\][\s\S]*?inject_oast:\s*true/g)].map((m) => m[1]),
-)
+const OAST_ENGINES = new Set([
+  ...[...scanRs.matchAll(/engines:\s*&\["([^"]+)"\][\s\S]*?inject_oast:\s*true/g)].map((m) => m[1]),
+  'ssrf_advanced',
+  'xxe',
+  'oast_oob',
+])
 
 const IAC_PATTERN = /^(iac_|pipeline$|terraform|terragrunt|helm_|k8s_container|container_registry|cicd_|sbom_|supply_chain)/
 

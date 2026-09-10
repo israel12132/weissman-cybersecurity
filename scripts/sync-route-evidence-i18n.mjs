@@ -51,8 +51,8 @@ const ENTRIES = [
   },
   {
     key: 'pages.attackSurfaceManagement.evidence_notice',
-    en: 'ASM inventory and exposure scoring from POST /api/command-center/scan (asm / attack_surface engines). Asset rows derive from live discovery against authorized client scope — no pre-populated attack graphs.',
-    he: 'מלאי ASM וציון חשיפה מ-POST /api/command-center/scan (מנועי asm / attack_surface). שורות נכסים נגזרות מגילוי חי על scope לקוח מורשה — ללא גרפי התקפה מוכנים מראש.',
+    en: 'ASM inventory from POST /api/command-center/scan (asm). First-mover drift from GET /api/clients/:id/surface-diff, CT squirt nerve from GET /api/first-mover/nerve, delta hunt POST first_mover_surface_delta, kill-chain POST first_mover_delta_fusion — live DNS/HTTP/CT vs last snapshot, no canned graphs.',
+    he: 'מלאי ASM מ-POST /api/command-center/scan (asm). סחיפת first-mover מ-GET /api/clients/:id/surface-diff, עצב CT מ-GET /api/first-mover/nerve, ציד דלתא POST first_mover_surface_delta, kill-chain POST first_mover_delta_fusion — DNS/HTTP/CT חי מול snapshot אחרון, בלי גרפים מוכנים.',
   },
   {
     key: 'pages.dnsDomainPosture.evidence_notice',
