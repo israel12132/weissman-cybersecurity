@@ -114,7 +114,19 @@ export const VISUAL_ONLY_KINDS = new Set(['condition', 'delay'])
 export const NODE_DRAG_MIME = 'application/weissman-node'
 export const NODE_DRAG_TEXT_PREFIX = 'weissman-node:'
 
-export const AUTO_LAYOUT = { x: 180, y: 24, stepY: 130 }
+export const AUTO_LAYOUT = { x: 180, y: 24, stepY: 140 }
+
+export function nextCanvasPosition(nodes) {
+  const list = nodes || []
+  if (!list.length) return { x: AUTO_LAYOUT.x, y: AUTO_LAYOUT.y }
+  const trigger = list.find(isTriggerNode)
+  const x = Number(trigger?.position?.x)
+  const maxY = Math.max(...list.map((n) => Number(n.position?.y) || 0))
+  return {
+    x: Number.isFinite(x) ? x : AUTO_LAYOUT.x,
+    y: maxY + AUTO_LAYOUT.stepY,
+  }
+}
 
 export function setNodeDragData(dataTransfer, type) {
   if (!dataTransfer || !type) return

@@ -653,7 +653,7 @@ export default function PlaybookBuilder() {
                     key={selected?.id ?? 'new'}
                     trigger={draft.trigger}
                     actions={draft.actions}
-                    height={560}
+                    height={640}
                     onDslChange={({ trigger: nextTrigger, actions: nextActions, issues }) => {
                       setGraphIssues(issues || [])
                       setDraft((d) => ({ ...d, trigger: nextTrigger, actions: nextActions }))

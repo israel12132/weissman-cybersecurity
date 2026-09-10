@@ -37,6 +37,7 @@ import {
   summarizeTrigger,
   summarizeAction,
   readNodeDragType,
+  nextCanvasPosition,
 } from '../../lib/playbookFlow.js'
 
 const NODE_ACCENT = {
@@ -253,6 +254,13 @@ function CanvasInner({
     if (!id) return
     pendingConnectId.current = null
     setEdges((eds) => autoConnectNewNode(nodes, eds, id))
+    requestAnimationFrame(() => {
+      try {
+        fitViewRef.current?.({ padding: 0.28, duration: 200 })
+      } catch {
+        /* canvas unmounted */
+      }
+    })
   }, [nodes, setEdges])
 
   const onDrop = useCallback(
@@ -319,7 +327,7 @@ function CanvasInner({
       {showPalette && (
         <NodePalette
           types={resolvedPalette}
-          onAdd={(typ) => addNodeOfType(typ, { x: 80, y: 48 + nodes.length * 24 })}
+          onAdd={(typ) => addNodeOfType(typ, nextCanvasPosition(nodes))}
           aria-label={t('playbooks.palette.group')}
         />
       )}
@@ -364,6 +372,9 @@ function CanvasInner({
             onSelectionChange={onSelectionChange}
             defaultEdgeOptions={defaultEdgeOptions}
             fitView
+            fitViewOptions={{ padding: 0.28 }}
+            minZoom={0.35}
+            maxZoom={1.35}
             colorMode="dark"
             deleteKeyCode={['Backspace', 'Delete']}
             proOptions={{ hideAttribution: true }}
@@ -377,6 +388,7 @@ function CanvasInner({
               pannable
               zoomable
               position={rtl ? 'bottom-left' : 'bottom-right'}
+              style={{ width: 108, height: 72 }}
             />
           </ReactFlow>
         </div>

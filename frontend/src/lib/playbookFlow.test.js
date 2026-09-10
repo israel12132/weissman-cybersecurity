@@ -22,6 +22,7 @@ import {
   summarizeTrigger,
   summarizeAction,
   kindMeta,
+  nextCanvasPosition,
   setNodeDragData,
   readNodeDragType,
   NODE_DRAG_MIME,
@@ -231,5 +232,12 @@ describe('playbookFlow', () => {
     edges = autoConnectNewNode(nodes, edges, 'n3')
     expect(edges.some((e) => e.source === 'n2' && e.target === 'n3')).toBe(true)
     expect(flowToDsl(nodes, edges).actions.map((a) => a.kind)).toEqual(['set_status', 'page_oncall'])
+  })
+
+  it('places a new node below the lowest existing node', () => {
+    const trigger = makeNode('trigger', 1, { x: 180, y: 24 })
+    const status = makeNode('set_status', 2, { x: 180, y: 164 })
+    expect(nextCanvasPosition([trigger, status])).toEqual({ x: 180, y: 164 + 140 })
+    expect(nextCanvasPosition([])).toEqual({ x: 180, y: 24 })
   })
 })
