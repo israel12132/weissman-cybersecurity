@@ -101,7 +101,20 @@ describe('AdversaryCampaignFabric', () => {
           status: 'dispatched',
         }],
         events: [{ kind: 'technique_dispatched', event_version: 1, event_hash: 'abc' }],
-        mesh: { enabled: true, scan_id: 'campaign:aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', world_state_on_blackboard: true },
+        mesh: {
+          enabled: true,
+          scan_id: 'campaign:aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+          world_state_on_blackboard: true,
+          waves: [['rce_exploit_engine'], ['sqli_advanced']],
+          probe_executor: 'engine_dispatch',
+          waves_are_preview: true,
+        },
+        spine: {
+          campaign_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+          probe_executor: 'engine_dispatch',
+          disclose_externally: false,
+        },
+        council: { hitl_required: true, auto_dispatch: false, queue_path: '/council-queue?campaign_id=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' },
       })
     })
     render(
@@ -120,6 +133,18 @@ describe('AdversaryCampaignFabric', () => {
     expect(await screen.findByText('vuln:rce')).toBeInTheDocument()
     expect(await screen.findByText('service:web')).toBeInTheDocument()
     expect(await screen.findByText('technique_dispatched')).toBeInTheDocument()
-    expect(screen.getByText('rce_exploit_engine')).toBeInTheDocument()
+    expect(screen.getAllByText('rce_exploit_engine').length).toBeGreaterThan(0)
+    expect(screen.getByText('pages.adversaryCampaign.mesh_executor')).toBeInTheDocument()
+    expect(screen.getByText('pages.adversaryCampaign.council_hitl_note')).toBeInTheDocument()
+    expect(screen.getByText('pages.adversaryCampaign.spine_no_disclose')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'pages.adversaryCampaign.open_jobs' }).getAttribute('href')).toContain(
+      'campaign_id=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    )
+    expect(screen.getByRole('link', { name: 'pages.adversaryCampaign.open_council' }).getAttribute('href')).toContain(
+      'campaign_id=',
+    )
+    expect(screen.getByRole('link', { name: 'pages.adversaryCampaign.open_mesh' }).getAttribute('href')).toContain(
+      'scan_id=campaign%3Aaaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    )
   })
 })

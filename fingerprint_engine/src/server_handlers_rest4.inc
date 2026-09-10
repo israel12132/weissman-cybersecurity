@@ -2715,6 +2715,8 @@ struct HitlProposeBody {
     council_job_id: Option<String>,
     #[serde(default)]
     client_id: Option<i64>,
+    #[serde(default)]
+    campaign_id: Option<String>,
 }
 
 /// POST /api/council/hitl/propose — record a Council proposal for operator review.
@@ -2731,6 +2733,25 @@ async fn api_council_hitl_propose(
         .council_job_id
         .as_deref()
         .and_then(|s| uuid::Uuid::parse_str(s).ok());
+    let campaign_id = body
+        .campaign_id
+        .as_deref()
+        .and_then(|s| uuid::Uuid::parse_str(s).ok());
+
+    if campaign_id.is_some() {
+        let rejected = crate::adversary_campaign::unauthorized_technique_shaped_steps(&body.chain_steps);
+        if !rejected.is_empty() {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "error": "campaign-scoped Council proposals may only include allow-listed STRIPS technique ids or narrative steps",
+                    "unauthorized_techniques": rejected,
+                    "safety_rails_no_shells": true,
+                })),
+            )
+                .into_response();
+        }
+    }
 
     let proposal = crate::council_hitl::HitlProposal {
         target_brief: brief,
@@ -2740,6 +2761,7 @@ async fn api_council_hitl_propose(
         estimated_severity: body.estimated_severity.unwrap_or_else(|| "medium".to_string()),
         council_job_id,
         client_id: body.client_id,
+        campaign_id,
     };
 
     match crate::council_hitl::propose(state.app_pool.as_ref(), auth.tenant_id, &proposal).await {
@@ -2764,6 +2786,7 @@ async fn api_council_hitl_propose(
 #[derive(Deserialize)]
 struct HitlQueueQuery {
     status: Option<String>,
+    campaign_id: Option<String>,
 }
 
 async fn api_council_hitl_queue(
@@ -2774,8 +2797,12 @@ async fn api_council_hitl_queue(
     let status_filter = q.status.as_deref().filter(|s| {
         matches!(*s, "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "FIRED" | "FAILED")
     });
+    let campaign_id = q
+        .campaign_id
+        .as_deref()
+        .and_then(|s| uuid::Uuid::parse_str(s).ok());
 
-    match crate::council_hitl::list_queue(state.app_pool.as_ref(), auth.tenant_id, status_filter).await {
+    match crate::council_hitl::list_queue(state.app_pool.as_ref(), auth.tenant_id, status_filter, campaign_id).await {
         Ok(items) => Json(json!({"items": items, "count": items.len(), "safety_rails_no_shells": true})).into_response(),
         Err(e) => {
             tracing::error!(target: "hitl", "list_queue failed: {}", e);

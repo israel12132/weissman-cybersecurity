@@ -407,6 +407,26 @@ async fn execute_job_unscoped(
                 &ctx,
             )
             .await?;
+            if outcome.closed {
+                if let Some(cid) = crate::adversary_campaign::parse_campaign_id(p) {
+                    let pool = app_pool.clone();
+                    let finding = finding_id.to_string();
+                    tokio::spawn(async move {
+                        let _ = crate::adversary_campaign::emit_kind(
+                            pool.as_ref(),
+                            tid,
+                            cid,
+                            "remediation_verified",
+                            json!({
+                                "finding_id": finding,
+                                "auto_disclosed": false,
+                                "in_product": true,
+                            }),
+                        )
+                        .await;
+                    });
+                }
+            }
             Ok(serde_json::json!({
                 "ok": true,
                 "kind": "remediation_verify",

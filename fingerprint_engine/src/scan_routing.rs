@@ -1174,6 +1174,34 @@ mod tests {
     }
 
     #[test]
+    fn campaign_safety_rails_survive_command_center_payload() {
+        let body = json!({
+            "engine": "rce_exploit_engine",
+            "target": "https://app.customer.test",
+            "client_id": 9,
+            "campaign_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "safety_rails_no_shells": true,
+        });
+        let ctx = extract_fields(&body);
+        let payload = build_payload(
+            PayloadKind::CommandCenterDefault,
+            &ctx,
+            "rce_exploit_engine",
+        )
+        .expect("payload");
+        assert_eq!(
+            payload
+                .get("safety_rails_no_shells")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            payload.get("campaign_id").and_then(Value::as_str),
+            Some("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+        );
+    }
+
+    #[test]
     fn enforce_scope_validation_exemptions() {
         assert!(!enforce_scope_validation_for_engine("pipeline"));
         assert!(!enforce_scope_validation_for_engine("zero_day_radar"));

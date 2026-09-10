@@ -8,6 +8,7 @@
  */
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router'
 import { createColumnHelper } from '@tanstack/react-table'
 import { GitBranch, RefreshCw } from 'lucide-react'
 import PageShell from './PageShell'
@@ -34,6 +35,9 @@ function evidenceCsv(rows) {
 export default function CemDagoMesh() {
   const { t } = useTranslation()
   const { clients, selectedClientId, setSelectedClientId } = useClient()
+  const [searchParams] = useSearchParams()
+  const scanIdFromUrl = searchParams.get('scan_id') || ''
+  const clientFromUrl = searchParams.get('client_id')
 
   const [status, setStatus] = useState(null)
   const [blackboard, setBlackboard] = useState(null)
@@ -42,6 +46,12 @@ export default function CemDagoMesh() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+
+  useEffect(() => {
+    if (!clientFromUrl) return
+    const n = Number(clientFromUrl)
+    if (Number.isFinite(n) && n > 0) setSelectedClientId(n)
+  }, [clientFromUrl, setSelectedClientId])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -56,7 +66,9 @@ export default function CemDagoMesh() {
       setManifests(Array.isArray(man?.manifests) ? man.manifests : [])
       setWaves(Array.isArray(wv?.waves) ? wv.waves : [])
       if (selectedClientId != null) {
-        const bb = await apiFetch(`/api/cem-dago/blackboard?client_id=${encodeURIComponent(selectedClientId)}`)
+        const qs = new URLSearchParams({ client_id: String(selectedClientId) })
+        if (scanIdFromUrl) qs.set('scan_id', scanIdFromUrl)
+        const bb = await apiFetch(`/api/cem-dago/blackboard?${qs.toString()}`)
         setBlackboard(bb)
       } else {
         setBlackboard(null)
@@ -66,7 +78,7 @@ export default function CemDagoMesh() {
     } finally {
       setLoading(false)
     }
-  }, [selectedClientId, t])
+  }, [selectedClientId, scanIdFromUrl, t])
 
   useEffect(() => {
     load()

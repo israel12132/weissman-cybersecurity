@@ -32,10 +32,33 @@ Event kinds (v1): `campaign_created`, `campaign_started`, `campaign_paused`,
 `world_state_snapshot`, `finding_observed`, `path_snapshot_taken`,
 `technique_planned`, `technique_dispatched`, `technique_proven`,
 `technique_failed`, `goal_reached`, `campaign_blocked`,
-`mesh_blackboard_seeded`.
+`mesh_blackboard_seeded`, `remediation_verified`.
+
+This is **not** a fourth bus. Jobs stay on weissman-job-bus (payload
+`campaign_id`). Redis/CEM-DAGO blackboard `campaign:{uuid}` is the live
+projection. Postgres `weissman_campaign_events` is the durable hash chain.
 
 `TechniqueProven` is **not** job success. Outcome facts are the intersection of
 planned STRIPS effects and facts rebuilt from live findings.
+
+`RemediationVerified` is emitted only when the existing `remediation_verify`
+job reports `outcome.closed` (HFV `VERIFIED_FIXED`). Analyst `FIXED` does not
+mint the event. P0 is a bus stub on the closed-loop path — not a full P1
+proof layer.
+
+GET `/api/campaigns/:id` includes `spine`, `council`, and `mesh.waves`.
+Waves are a **schedule preview**; they never enqueue. `engine_dispatch` is the
+only probe executor. `pick_dispatchable_step` still requires
+`technique_preconditions_met`.
+
+Campaign-scoped Council HITL (`POST /api/council/hitl/propose` with
+`campaign_id`) rejects technique-shaped ids that are not in
+`allowlisted_techniques`. Narrative `chain_steps` are kept. Approve still
+enqueues `council_debate` only (`safety_rails_no_shells: true`).
+
+Spine columns (correlation only, never widen scope):
+`attack_path_snapshots.campaign_id`, `council_hitl_queue.campaign_id`,
+`weissman_playbook_runs.campaign_id`.
 
 ## Hard rails
 
@@ -46,6 +69,8 @@ planned STRIPS effects and facts rebuilt from live findings.
 - Novel findings stay in-product; no auto external disclosure.
 - Supreme Council proposals are filtered through `allowlisted_techniques`
   (library id + production engine). HITL remains on `CouncilHitlQueue`.
+  Campaign-scoped propose rejects unauthorized technique-shaped ids; approve
+  never auto-fires mapped engines.
 
 ## API
 
@@ -53,7 +78,7 @@ planned STRIPS effects and facts rebuilt from live findings.
 |--------|------|------|
 | `GET /api/campaigns` | List (optional `?client_id=`) | authenticated |
 | `POST /api/campaigns` | Create draft | operator+ |
-| `GET /api/campaigns/:id` | Bundle: campaign, WorldState, steps, events, mesh | authenticated |
+| `GET /api/campaigns/:id` | Bundle: campaign, WorldState, steps, events, mesh waves, spine, council | authenticated |
 | `POST /api/campaigns/:id/start` | Plan + dispatch next evidenced step | operator+ |
 | `POST /api/campaigns/:id/pause` | Stop further dispatches | operator+ |
 | `GET /api/campaigns/:id/plan` | Plan + WorldState | authenticated |

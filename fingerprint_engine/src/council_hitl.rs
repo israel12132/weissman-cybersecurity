@@ -24,6 +24,9 @@ pub struct HitlProposal {
     pub estimated_severity: String,
     pub council_job_id: Option<Uuid>,
     pub client_id: Option<i64>,
+    /// Optional Campaign Fabric correlation. HITL still only fires `council_debate`.
+    #[serde(default)]
+    pub campaign_id: Option<Uuid>,
 }
 
 /// Clamp a `payload_preview` to a safe, fixed length and strip common shell markers.
@@ -71,8 +74,8 @@ pub async fn propose(pool: &PgPool, tenant_id: i64, p: &HitlProposal) -> Result<
     let id: i64 = sqlx::query_scalar(
         r#"INSERT INTO council_hitl_queue
                (tenant_id, client_id, target_brief, chain_steps, payload_preview,
-                rationale, estimated_severity, council_job_id, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PENDING_APPROVAL')
+                rationale, estimated_severity, council_job_id, status, campaign_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PENDING_APPROVAL', $9)
            RETURNING id"#,
     )
     .bind(tenant_id)
@@ -83,6 +86,7 @@ pub async fn propose(pool: &PgPool, tenant_id: i64, p: &HitlProposal) -> Result<
     .bind(p.rationale.trim())
     .bind(&sev)
     .bind(p.council_job_id)
+    .bind(p.campaign_id)
     .fetch_one(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -96,21 +100,24 @@ pub async fn list_queue(
     pool: &PgPool,
     tenant_id: i64,
     status_filter: Option<&str>,
+    campaign_id: Option<Uuid>,
 ) -> Result<Vec<Value>, sqlx::Error> {
     let mut tx = weissman_db::begin_tenant_tx(pool, tenant_id).await?;
     let rows = sqlx::query(
         r#"SELECT id, client_id, target_brief, chain_steps, payload_preview,
-                  rationale, estimated_severity, council_job_id,
+                  rationale, estimated_severity, council_job_id, campaign_id,
                   status, review_note, fired_job_id,
                   proposed_at, reviewed_at, fired_at
            FROM council_hitl_queue
            WHERE tenant_id = $1
              AND ($2::text IS NULL OR status = $2)
+             AND ($3::uuid IS NULL OR campaign_id = $3)
            ORDER BY proposed_at DESC
            LIMIT 200"#,
     )
     .bind(tenant_id)
     .bind(status_filter)
+    .bind(campaign_id)
     .fetch_all(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -126,6 +133,7 @@ pub async fn list_queue(
             "rationale":           r.try_get::<String,_>("rationale").ok(),
             "estimated_severity":  r.try_get::<String,_>("estimated_severity").ok(),
             "council_job_id":      r.try_get::<Option<Uuid>,_>("council_job_id").ok().flatten().map(|u| u.to_string()),
+            "campaign_id":         r.try_get::<Option<Uuid>,_>("campaign_id").ok().flatten().map(|u| u.to_string()),
             "status":              r.try_get::<String,_>("status").ok(),
             "review_note":         r.try_get::<Option<String>,_>("review_note").ok().flatten(),
             "fired_job_id":        r.try_get::<Option<Uuid>,_>("fired_job_id").ok().flatten().map(|u| u.to_string()),
@@ -175,7 +183,7 @@ pub async fn approve_and_fire(
 
     // Fetch + lock
     let row = sqlx::query(
-        r#"SELECT id, status, target_brief, chain_steps, client_id, council_job_id
+        r#"SELECT id, status, target_brief, chain_steps, client_id, council_job_id, campaign_id
            FROM council_hitl_queue
            WHERE id = $1 AND tenant_id = $2
            FOR UPDATE"#,
@@ -199,12 +207,16 @@ pub async fn approve_and_fire(
     let brief: String = row.try_get("target_brief").unwrap_or_default();
     let chain: Value = row.try_get("chain_steps").unwrap_or(json!([]));
     let client_id: Option<i64> = row.try_get("client_id").ok().flatten();
+    let campaign_id: Option<Uuid> = row.try_get("campaign_id").ok().flatten();
 
-    // Build async job payload — safety_rails_no_shells is ALWAYS true
+    // Build async job payload — safety_rails_no_shells is ALWAYS true.
+    // Campaign-scoped HITL still fires `council_debate` only — never mapped
+    // campaign engines (those enqueue solely via adversary_campaign + engine_dispatch).
     let job_payload = serde_json::to_value(serde_json::json!({
         "target_brief": brief,
         "chain_steps_hint": chain,
         "client_id": client_id,
+        "campaign_id": campaign_id.map(|u| u.to_string()),
         "safety_rails_no_shells": true,   // non-negotiable
         "hitl_approved": true,
         "reviewed_by": reviewed_by,

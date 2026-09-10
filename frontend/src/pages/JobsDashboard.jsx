@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Search, Briefcase } from 'lucide-react'
 import { createColumnHelper } from '@tanstack/react-table'
@@ -60,13 +60,15 @@ function exportJobsCsv(jobs, _t) {
 export default function JobsDashboard() {
   const { t, i18n } = useTranslation()
   const { isCeo, isLoading: authLoading } = useAuth()
+  const [searchParams] = useSearchParams()
+  const campaignIdFilter = searchParams.get('campaign_id') || ''
   const [jobs, setJobs] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(() => campaignIdFilter)
   const [selectedJob, setSelectedJob] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const hasLoadedRef = useRef(false)
@@ -122,6 +124,10 @@ export default function JobsDashboard() {
         j.id, j.job_id, j.kind, j.type, j.status, j.target, j.engine,
         j.client_id != null ? String(j.client_id) : '',
         j.last_error,
+        j.campaign_id,
+        j.trace_id,
+        j.trace,
+        j.payload && typeof j.payload === 'object' ? j.payload.campaign_id : '',
       ].filter(Boolean).join(' ').toLowerCase()
       return hay.includes(q)
     })

@@ -184,12 +184,13 @@ In-process background loops (`weissman-server`):
 | Clients / scope | `clients`, `client_asset_value_rules` |
 | Findings | `vulnerabilities`, `weissman_finding_clusters`, `report_runs` |
 | Intel | `kev_intel`, `epss_intel`, `engine_confidence_adjustments`, `finding_suppressions` |
-| Risk graph | `risk_graph_nodes`, `risk_graph_edges`, `attack_path_snapshots` |
+| Risk graph | `risk_graph_nodes`, `risk_graph_edges`, `attack_path_snapshots` (+ optional `campaign_id`) |
+| Campaigns | `weissman_campaigns`, `weissman_campaign_world_states`, `weissman_campaign_steps`, `weissman_campaign_audit`, `weissman_campaign_events` |
 | Financial | `client_financial_risk_snapshots`, `client_asset_value_rules` |
 | Jobs | `weissman_async_jobs` (partial idx `ix_async_jobs_pending`) |
 | Campaigns | `weissman_campaigns`, `weissman_campaign_world_states`, `weissman_campaign_steps`, `weissman_campaign_audit`, `weissman_campaign_events` |
 | Agent | `endpoint_agents`, `endpoint_agent_enrollment_tokens`, `endpoint_agent_tasks`, `agent_metric_samples`, `agent_metric_baselines`, `agent_anomalies` |
-| SOAR | `weissman_playbooks`, `weissman_playbook_runs` |
+| SOAR | `weissman_playbooks`, `weissman_playbook_runs` (+ optional `campaign_id`) |
 | Council RAG | `supreme_council_memory` (embedding_vec vector(1536) + HNSW `m=16,ef_construction=64`), `supreme_council_rag_hits` |
 | Pentest RL | `pentest_winning_paths` (embedding vector(1536) + HNSW `m=16,ef_construction=64`) |
 | NL→SQL | `nl_query_audit`, role `weissman_ro` |

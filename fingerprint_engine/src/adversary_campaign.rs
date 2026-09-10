@@ -44,6 +44,7 @@ pub const CAMPAIGN_EVENT_KINDS: &[&str] = &[
     "goal_reached",
     "campaign_blocked",
     "mesh_blackboard_seeded",
+    "remediation_verified",
 ];
 
 /// Goal facts the operator may request. All appear in the default STRIPS library.
@@ -102,9 +103,32 @@ pub fn allowlisted_techniques(proposed: &[String]) -> Vec<String> {
         .collect()
 }
 
+/// STRIPS-shaped ids (`lowercase_with_underscores`). Council narrative / MITRE
+/// prose is left alone — those steps are HITL debate material, not engine maps.
+#[must_use]
+pub fn looks_like_technique_id(s: &str) -> bool {
+    let s = s.trim();
+    (3..=64).contains(&s.len())
+        && s.contains('_')
+        && s.chars().all(|c| matches!(c, 'a'..='z' | '0'..='9' | '_'))
+}
+
+/// Technique-shaped steps that are **not** in the production library.
+/// Used when a HITL proposal is campaign-scoped: reject freestyle engine ids,
+/// keep narrative chain_steps.
+#[must_use]
+pub fn unauthorized_technique_shaped_steps(steps: &[String]) -> Vec<String> {
+    steps
+        .iter()
+        .filter(|s| looks_like_technique_id(s) && engine_for_technique(s).is_none())
+        .cloned()
+        .collect()
+}
+
 #[must_use]
 pub fn parse_campaign_id(v: &Value) -> Option<Uuid> {
     v.get("campaign_id")
+        .or_else(|| v.get("extras").and_then(|e| e.get("campaign_id")))
         .and_then(Value::as_str)
         .and_then(|s| Uuid::parse_str(s).ok())
 }
@@ -150,6 +174,53 @@ pub fn hash_campaign_event(
 #[must_use]
 pub fn campaign_blackboard_scan_id(campaign_id: Uuid) -> String {
     format!("campaign:{campaign_id}")
+}
+
+/// Scan → Path → Emulation → Remediate correlation for API/UI. In-product only.
+#[must_use]
+pub fn spine_json(campaign_id: Uuid) -> Value {
+    json!({
+        "campaign_id": campaign_id.to_string(),
+        "job_correlation": format!("campaign:{campaign_id}"),
+        "blackboard_scan_id": campaign_blackboard_scan_id(campaign_id),
+        "event_bus": "weissman_campaign_events",
+        "job_bus": "weissman-job-bus",
+        "probe_executor": "engine_dispatch",
+        "disclose_externally": false,
+        "scope": "tenant+client+execution_scope_pin",
+        "roe": "authorized-tenant+scope_pin+no_auto_disclosure",
+    })
+}
+
+/// Append a versioned campaign event. Looks up client_id from the campaign row.
+pub async fn emit_kind(
+    pool: &PgPool,
+    tenant_id: i64,
+    campaign_id: Uuid,
+    kind: &str,
+    payload: Value,
+) -> Result<(), String> {
+    if !CAMPAIGN_EVENT_KINDS.contains(&kind) {
+        return Err(format!("unknown campaign event kind '{kind}'"));
+    }
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("tx: {e}"))?;
+    let client_id: Option<i64> = sqlx::query_scalar(
+        "SELECT client_id FROM weissman_campaigns WHERE id = $1 AND tenant_id = $2",
+    )
+    .bind(campaign_id)
+    .bind(tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| format!("campaign lookup: {e}"))?;
+    let Some(client_id) = client_id else {
+        let _ = tx.rollback().await;
+        return Err("campaign not found".into());
+    };
+    insert_event(&mut tx, campaign_id, tenant_id, client_id, kind, payload).await?;
+    tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+    Ok(())
 }
 
 #[must_use]
@@ -475,6 +546,11 @@ pub async fn create_campaign(
         .profile
         .clone()
         .unwrap_or_else(|| json!({ "stub": true }));
+    if let Some(obj) = profile.as_object_mut() {
+        obj.entry("stub").or_insert(json!(true));
+        obj.insert("disclose_externally".into(), json!(false));
+        obj.insert("council_hitl_required".into(), json!(true));
+    }
     if let Some(arr) = profile
         .get("council_proposed_techniques")
         .and_then(Value::as_array)
@@ -487,7 +563,6 @@ pub async fn create_campaign(
         let allowed = allowlisted_techniques(&proposed);
         if let Some(obj) = profile.as_object_mut() {
             obj.insert("council_proposed_techniques".into(), json!(allowed));
-            obj.insert("council_hitl_required".into(), json!(true));
         }
     }
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
@@ -618,7 +693,15 @@ pub async fn get_campaign(pool: &PgPool, tenant_id: i64, id: Uuid) -> Result<Val
     let audit = load_audit(&mut tx, id).await?;
     let events = load_events(&mut tx, id).await?;
     let _ = tx.commit().await;
-    let mesh = mesh_status_json(campaign.tenant_id, campaign.client_id, campaign.id).await;
+    let mesh = mesh_status_json(
+        campaign.tenant_id,
+        campaign.client_id,
+        campaign.id,
+        &steps,
+        &world,
+    )
+    .await;
+    let council = council_status_json(&campaign);
     Ok(json!({
         "ok": true,
         "campaign": campaign.to_json(),
@@ -629,6 +712,8 @@ pub async fn get_campaign(pool: &PgPool, tenant_id: i64, id: Uuid) -> Result<Val
         "plan": plan_json_from_steps(&campaign, &steps, &world),
         "allowed_goals": ALLOWED_GOALS,
         "mesh": mesh,
+        "spine": spine_json(campaign.id),
+        "council": council,
     }))
 }
 
@@ -777,7 +862,13 @@ pub async fn list_events(pool: &PgPool, tenant_id: i64, id: Uuid) -> Result<Valu
     }))
 }
 
-async fn mesh_status_json(tenant_id: i64, client_id: i64, campaign_id: Uuid) -> Value {
+async fn mesh_status_json(
+    tenant_id: i64,
+    client_id: i64,
+    campaign_id: Uuid,
+    steps: &[Value],
+    world: &Value,
+) -> Value {
     let scan_id = campaign_blackboard_scan_id(campaign_id);
     let mut facts_on_board = false;
     if crate::cem_dago::is_enabled() {
@@ -788,11 +879,63 @@ async fn mesh_status_json(tenant_id: i64, client_id: i64, campaign_id: Uuid) -> 
             }
         }
     }
+    let mut engine_ids: Vec<String> = steps
+        .iter()
+        .filter_map(|s| {
+            s.get("engine_id")
+                .and_then(Value::as_str)
+                .map(|s| s.to_string())
+        })
+        .filter(|id| is_production_engine_id(id))
+        .collect();
+    if engine_ids.is_empty() {
+        engine_ids = attack_chain_planner::default_technique_library()
+            .iter()
+            .filter_map(|t| engine_for_technique(&t.id).map(|s| s.to_string()))
+            .collect();
+    }
+    engine_ids.sort();
+    engine_ids.dedup();
+    let mut present = HashSet::new();
+    present.insert("internet_exposed".to_string());
+    if let Some(facts) = world.get("facts").and_then(Value::as_array) {
+        for f in facts {
+            if let Some(fact) = f.as_str() {
+                if fact.contains("web") || fact.starts_with("vuln:") || fact.starts_with("service:")
+                {
+                    present.insert("web_port_active".to_string());
+                }
+            }
+        }
+    }
+    let waves = crate::cem_dago::schedule_waves(&engine_ids, &present);
     json!({
         "enabled": crate::cem_dago::is_enabled(),
         "scan_id": scan_id,
         "world_state_on_blackboard": facts_on_board,
-        "note": "CEM-DAGO blackboard is the live projection; Postgres campaign events are durable. engine_dispatch remains the only probe executor.",
+        "waves": waves,
+        "waves_are_preview": true,
+        "probe_executor": "engine_dispatch",
+        "note": "CEM-DAGO blackboard is the live projection; Postgres campaign events are durable. engine_dispatch remains the only probe executor. Waves are a schedule preview — they do not enqueue engines.",
+    })
+}
+
+fn council_status_json(campaign: &CampaignRecord) -> Value {
+    let proposed = campaign
+        .profile_stub
+        .get("council_proposed_techniques")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    json!({
+        "hitl_required": true,
+        "auto_dispatch": false,
+        "allowlisted_techniques": allowlisted_techniques(&proposed),
+        "queue_path": format!("/council-queue?campaign_id={}", campaign.id),
     })
 }
 
@@ -1319,6 +1462,7 @@ async fn enqueue_step_job(
         "client_id": campaign.client_id,
         "campaign_id": campaign.id.to_string(),
         "campaign_step_id": step_id.to_string(),
+        "safety_rails_no_shells": true,
     });
     let (kind, payload) = crate::scan_routing::route_scan_job(&body, campaign.tenant_id, pool)
         .await
@@ -1496,6 +1640,13 @@ fn spawn_fabric_projections(
         )
         .await;
         if let Ok(s) = snap {
+            let snapshot_id = tag_latest_attack_path_snapshot(
+                &pool,
+                campaign.tenant_id,
+                campaign.client_id,
+                campaign.id,
+            )
+            .await;
             if let Ok(mut tx) = crate::db::begin_tenant_tx(&pool, campaign.tenant_id).await {
                 let _ = insert_event(
                     &mut tx,
@@ -1509,6 +1660,8 @@ fn spawn_fabric_projections(
                         "entry_count": s.entry_count,
                         "jewel_count": s.jewel_count,
                         "finding_ids": finding_ids,
+                        "snapshot_id": snapshot_id,
+                        "campaign_id": campaign.id.to_string(),
                     }),
                 )
                 .await;
@@ -1516,6 +1669,35 @@ fn spawn_fabric_projections(
             }
         }
     });
+}
+
+/// Correlation only — does not change graph scope or Dijkstra inputs.
+async fn tag_latest_attack_path_snapshot(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    campaign_id: Uuid,
+) -> Option<i64> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await.ok()?;
+    let id = sqlx::query_scalar::<_, i64>(
+        r#"UPDATE attack_path_snapshots SET campaign_id = $3
+           WHERE id = (
+             SELECT id FROM attack_path_snapshots
+              WHERE tenant_id = $1 AND client_id = $2
+              ORDER BY computed_at DESC
+              LIMIT 1
+           )
+           RETURNING id"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(campaign_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+    id
 }
 
 async fn seed_campaign_blackboard(campaign: &CampaignRecord, facts: &[Fact]) {
@@ -1806,10 +1988,7 @@ pub fn spawn_after_engine_job(
     succeeded: bool,
     detail: String,
 ) {
-    let campaign_id = payload
-        .get("campaign_id")
-        .and_then(Value::as_str)
-        .and_then(|s| Uuid::parse_str(s).ok());
+    let campaign_id = parse_campaign_id(payload);
     let cid = client_id;
     tokio::spawn(async move {
         if let Some(cid) = campaign_id {
@@ -2030,7 +2209,53 @@ mod tests {
             parse_campaign_id(&json!({ "campaign_id": id.to_string() })),
             Some(id)
         );
+        assert_eq!(
+            parse_campaign_id(&json!({
+                "extras": { "campaign_id": id.to_string() }
+            })),
+            Some(id)
+        );
         assert!(parse_campaign_id(&json!({})).is_none());
+    }
+
+    #[test]
+    fn spine_and_event_kinds_include_remediation_verified() {
+        assert!(CAMPAIGN_EVENT_KINDS.contains(&"remediation_verified"));
+        let id = Uuid::nil();
+        let s = spine_json(id);
+        assert_eq!(s["disclose_externally"], false);
+        assert_eq!(s["probe_executor"], "engine_dispatch");
+        assert_eq!(s["event_bus"], "weissman_campaign_events");
+        assert_eq!(s["job_bus"], "weissman-job-bus");
+        assert_eq!(s["roe"], "authorized-tenant+scope_pin+no_auto_disclosure");
+    }
+
+    #[test]
+    fn mesh_wave_preview_does_not_enqueue() {
+        let engines = vec!["rce_exploit_engine".into(), "sqli_advanced".into()];
+        let mut present = HashSet::new();
+        present.insert("internet_exposed".into());
+        let waves = crate::cem_dago::schedule_waves(&engines, &present);
+        assert!(!waves.is_empty());
+        assert!(
+            json!({ "waves": waves, "waves_are_preview": true })["waves_are_preview"]
+                .as_bool()
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn campaign_scoped_council_rejects_only_technique_shaped_unauthorized_ids() {
+        let rejected = unauthorized_technique_shaped_steps(&[
+            "Phish CFO via spear-phish".into(),
+            "invented_zero_click".into(),
+            "exploit_rce_web".into(),
+            "T1190".into(),
+        ]);
+        assert_eq!(rejected, vec!["invented_zero_click".to_string()]);
+        assert!(looks_like_technique_id("invented_zero_click"));
+        assert!(!looks_like_technique_id("Phish CFO via spear-phish"));
+        assert!(!looks_like_technique_id("T1190"));
     }
 
     #[test]

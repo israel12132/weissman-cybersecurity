@@ -210,6 +210,9 @@ export default function AdversaryCampaignFabric() {
   const events = Array.isArray(active?.events) ? active.events : []
   const campaign = active?.campaign
   const mesh = active?.mesh
+  const spine = active?.spine
+  const council = active?.council
+  const campaignQuery = campaign?.id ? `campaign_id=${encodeURIComponent(campaign.id)}` : ''
 
   return (
     <PageShell
@@ -382,22 +385,55 @@ export default function AdversaryCampaignFabric() {
                       <GitBranch className="w-3.5 h-3.5" />
                       {t(`${NS}.open_kill_chain`)}
                     </Link>
-                    <Link to="/attack-paths" className="text-[11px] font-mono text-cyan-300 hover:underline">
+                    <Link
+                      to={`/attack-paths${campaignQuery ? `?${campaignQuery}` : ''}`}
+                      className="text-[11px] font-mono text-cyan-300 hover:underline"
+                    >
                       {t(`${NS}.open_attack_paths`)}
                     </Link>
-                    <Link to="/jobs" className="text-[11px] font-mono text-cyan-300 hover:underline">
+                    <Link
+                      to={`/jobs${campaignQuery ? `?${campaignQuery}` : ''}`}
+                      className="text-[11px] font-mono text-cyan-300 hover:underline"
+                    >
                       {t(`${NS}.open_jobs`)}
                     </Link>
-                    <Link to="/council-queue" className="text-[11px] font-mono text-cyan-300 hover:underline">
+                    <Link
+                      to={council?.queue_path || `/council-queue${campaignQuery ? `?${campaignQuery}` : ''}`}
+                      className="text-[11px] font-mono text-cyan-300 hover:underline"
+                    >
                       {t(`${NS}.open_council`)}
                     </Link>
-                    <Link to="/cem-dago" className="text-[11px] font-mono text-cyan-300 hover:underline">
+                    <Link
+                      to={`/cem-dago?${[
+                        campaign?.client_id != null ? `client_id=${encodeURIComponent(campaign.client_id)}` : '',
+                        mesh?.scan_id ? `scan_id=${encodeURIComponent(mesh.scan_id)}` : '',
+                      ].filter(Boolean).join('&')}`}
+                      className="text-[11px] font-mono text-cyan-300 hover:underline"
+                    >
                       {t(`${NS}.open_mesh`)}
                     </Link>
                   </div>
                   {campaign.last_error && (
                     <p className="text-[11px] font-mono text-rose-300">{campaign.last_error}</p>
                   )}
+
+                  <div>
+                    <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+                      {t(`${NS}.spine_heading`)}
+                    </h2>
+                    <p className="text-[12px] font-mono text-[var(--text-secondary)]">{t(`${NS}.spine_no_disclose`)}</p>
+                    <p className="text-[11px] text-[var(--text-muted)]">{t(`${NS}.rails_roe`)}</p>
+                    {spine?.campaign_id && (
+                      <p className="text-[11px] font-mono text-[var(--text-disabled)] mt-1">{spine.campaign_id}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+                      {t(`${NS}.council_heading`)}
+                    </h2>
+                    <p className="text-[12px] text-[var(--text-secondary)]">{t(`${NS}.council_hitl_note`)}</p>
+                  </div>
 
                   <div>
                     <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
@@ -411,6 +447,18 @@ export default function AdversaryCampaignFabric() {
                     <p className="text-[11px] text-[var(--text-muted)]">
                       {mesh?.world_state_on_blackboard ? t(`${NS}.mesh_seeded`) : t(`${NS}.mesh_unseeded`)}
                     </p>
+                    <p className="text-[11px] text-[var(--text-muted)]">{t(`${NS}.mesh_executor`)}</p>
+                    {Array.isArray(mesh?.waves) && mesh.waves.length > 0 && (
+                      <ol className="mt-2 space-y-1">
+                        {mesh.waves.map((wave, i) => (
+                          <li key={`wave-${i}`} className="text-[11px] font-mono text-[var(--text-secondary)]">
+                            {t(`${NS}.mesh_wave_n`, { n: i + 1 })}{' '}
+                            {Array.isArray(wave) ? wave.join(', ') : ''}
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                    <p className="sr-only">{t(`${NS}.mesh_waves`)}</p>
                   </div>
 
                   <div>

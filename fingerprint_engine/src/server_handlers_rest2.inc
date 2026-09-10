@@ -339,7 +339,8 @@ async fn api_findings_update_status(
     // can record the right (tenant, engine, signature) tuple. We also need them to
     // cascade the status change down into the finding cluster (if any).
     let pre = match sqlx::query(
-        "SELECT source, signature_hash, cluster_id, raw_data->>'target' AS target, finding_id, client_id
+        "SELECT source, signature_hash, cluster_id, raw_data->>'target' AS target, finding_id, client_id,
+                raw_data->>'campaign_id' AS campaign_id
            FROM vulnerabilities
           WHERE id = $1 AND tenant_id = $2",
     )
@@ -360,7 +361,7 @@ async fn api_findings_update_status(
         }
     };
 
-    let (engine, sig_hash, cluster_id, target_url, finding_id, client_id) = match pre {
+    let (engine, sig_hash, cluster_id, target_url, finding_id, client_id, campaign_id) = match pre {
         Some(r) => (
             r.try_get::<String, _>("source").unwrap_or_default(),
             r.try_get::<Option<String>, _>("signature_hash").ok().flatten().unwrap_or_default(),
@@ -368,6 +369,7 @@ async fn api_findings_update_status(
             r.try_get::<Option<String>, _>("target").ok().flatten().unwrap_or_default(),
             r.try_get::<String, _>("finding_id").unwrap_or_default(),
             r.try_get::<Option<i64>, _>("client_id").ok().flatten(),
+            r.try_get::<Option<String>, _>("campaign_id").ok().flatten(),
         ),
         None => {
             let _ = tx.rollback().await;
@@ -477,6 +479,7 @@ async fn api_findings_update_status(
             "target": target_url,
             "finding_id": finding_id,
             "client_id": client_id,
+            "campaign_id": campaign_id,
         });
         if let Err(e) = weissman_db::job_queue::enqueue(
             state.app_pool.as_ref(),
@@ -1064,6 +1067,7 @@ async fn api_openapi_spec() -> Response {
             "/api/campaigns/{id}": {
                 "get": {
                     "summary": "Get campaign, WorldState, plan, and steps",
+                    "description": "Bundle includes spine (campaign_id across jobs/findings/paths/SOAR), CEM-DAGO mesh wave preview (does not enqueue), and Council HITL status. Probe executor is always engine_dispatch.",
                     "tags": ["Campaign"],
                     "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
                     "responses": { "200": { "description": "Campaign bundle" }, "404": { "description": "Not found" } }
@@ -1105,7 +1109,7 @@ async fn api_openapi_spec() -> Response {
             "/api/campaigns/{id}/events": {
                 "get": {
                     "summary": "Versioned campaign event chain",
-                    "description": "Append-only FindingObserved / TechniqueDispatched / TechniqueProven / PathSnapshotTaken events. In-product only; no auto external disclosure. Live projection is the CEM-DAGO blackboard scan_id campaign:{uuid}.",
+                    "description": "Append-only FindingObserved / PathSnapshotTaken / TechniqueProven / RemediationVerified events (v1 hash chain). In-product only; no auto external disclosure. Durable bus is weissman_campaign_events; live projection is the CEM-DAGO blackboard scan_id campaign:{uuid}; jobs stay on weissman-job-bus.",
                     "tags": ["Campaign"],
                     "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
                     "responses": { "200": { "description": "Events + kinds" } }

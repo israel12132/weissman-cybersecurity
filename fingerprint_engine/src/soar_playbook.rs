@@ -575,6 +575,10 @@ async fn record_run(
     let failed = actions.iter().filter(|a| a.status == "failed").count() as i32;
     let event_json = serde_json::to_value(ev).unwrap_or(json!({}));
     let actions_json = serde_json::to_value(actions).unwrap_or(json!([]));
+    let campaign_uuid = ev
+        .campaign_id
+        .as_deref()
+        .and_then(|s| uuid::Uuid::parse_str(s).ok());
     let Ok(mut tx) = crate::db::begin_tenant_tx(pool, ev.tenant_id).await else {
         return;
     };
@@ -582,8 +586,8 @@ async fn record_run(
         r#"INSERT INTO weissman_playbook_runs
             (tenant_id, playbook_id, triggered_at, trigger_kind, trigger_event,
              run_dedup_key, actions_total, actions_succeeded, actions_failed,
-             action_results, status)
-           VALUES ($1, $2, now(), $3, $4, $5, $6, $7, $8, $9, $10)"#,
+             action_results, status, campaign_id)
+           VALUES ($1, $2, now(), $3, $4, $5, $6, $7, $8, $9, $10, $11)"#,
     )
     .bind(ev.tenant_id)
     .bind(pb.id)
@@ -595,6 +599,7 @@ async fn record_run(
     .bind(failed)
     .bind(&actions_json)
     .bind(status)
+    .bind(campaign_uuid)
     .execute(&mut *tx)
     .await;
     let _ = sqlx::query(
@@ -625,6 +630,9 @@ fn render_template(template: &str, ev: &PlaybookEvent) -> String {
         ("status", &ev.status),
     ] {
         s = s.replace(&format!("{{{{{}}}}}", k), v);
+    }
+    if let Some(cid) = &ev.campaign_id {
+        s = s.replace("{{campaign_id}}", cid);
     }
     if let Some(cve) = &ev.cve {
         s = s.replace("{{cve}}", cve);
@@ -702,6 +710,15 @@ mod tests {
         let mut ev = ev_kev_critical();
         ev.severity = "low".into();
         assert!(!t.matches(&ev));
+    }
+
+    #[test]
+    fn template_renders_campaign_id_placeholder() {
+        let mut ev = ev_kev_critical();
+        ev.campaign_id = Some("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa".into());
+        let s = render_template("campaign {{campaign_id}} :: {{title}}", &ev);
+        assert!(s.contains("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
+        assert!(s.contains("Log4Shell"));
     }
 
     #[test]

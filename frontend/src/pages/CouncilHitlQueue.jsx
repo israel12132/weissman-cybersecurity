@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router'
 import { motion, AnimatePresence } from 'framer-motion'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 import { Search, ShieldCheck } from 'lucide-react';
@@ -199,6 +200,8 @@ function HitlItem({ item, onApprove, onReject, loading }) {
 
 export default function CouncilHitlQueue() {
   const { t } = useTranslation()
+  const [searchParams] = useSearchParams()
+  const campaignId = searchParams.get('campaign_id') || ''
   const [items, setItems] = useState([])
   const [fetchLoading, setFetchLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
@@ -212,7 +215,10 @@ export default function CouncilHitlQueue() {
   }, [])
 
   const fetchQueue = useCallback(async () => {
-    const qs = activeTab === 'ALL' ? '' : `?status=${activeTab}`
+    const params = new URLSearchParams()
+    if (activeTab !== 'ALL') params.set('status', activeTab)
+    if (campaignId) params.set('campaign_id', campaignId)
+    const qs = params.toString() ? `?${params.toString()}` : ''
     setFetchLoading(true)
     try {
       const data = await api.get(`/api/council/hitl/queue${qs}`)
@@ -222,7 +228,7 @@ export default function CouncilHitlQueue() {
     } finally {
       setFetchLoading(false)
     }
-  }, [activeTab, showToast, t])
+  }, [activeTab, campaignId, showToast, t])
 
   useEffect(() => { fetchQueue() }, [fetchQueue])
 
