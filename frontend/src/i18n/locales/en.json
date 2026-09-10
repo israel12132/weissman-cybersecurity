@@ -4911,6 +4911,7 @@
       "first_mover_assets": "Live assets",
       "first_mover_baseline": "Baseline only — next hunt emits drift",
       "first_mover_empty": "No snapshot yet. Hunt to establish a live baseline.",
+      "first_mover_unavailable": "Surface-diff store is temporarily unavailable. Hunt still runs live; this panel fills when Postgres answers.",
       "first_mover_hunt": "Hunt what changed",
       "first_mover_hunting": "Hunting…",
       "first_mover_fusion": "Kill-chain this FQDN",

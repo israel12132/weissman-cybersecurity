@@ -4911,6 +4911,7 @@
       "first_mover_assets": "נכסים חיים",
       "first_mover_baseline": "Baseline בלבד — הציד הבא יפיק סחיפה",
       "first_mover_empty": "אין snapshot עדיין. צוד כדי לקבע baseline חי.",
+      "first_mover_unavailable": "מאגר ה-surface-diff זמנית לא זמין. הציד רץ חי; הפאנל יתמלא כש-Postgres יענה.",
       "first_mover_hunt": "צוד מה שהשתנה",
       "first_mover_hunting": "צוד…",
       "first_mover_fusion": "kill-chain על ה-FQDN",

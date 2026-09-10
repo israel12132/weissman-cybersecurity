@@ -376,10 +376,13 @@ export function FirstMoverDeltaPanel({
           {diff.baseline_only ? ` · ${t('pages.attackSurfaceManagement.first_mover_baseline')}` : ''}
         </p>
       )}
+      {diff?.unavailable && (
+        <p className="text-[12px] font-mono text-amber-200/80">{t('pages.attackSurfaceManagement.first_mover_unavailable')}</p>
+      )}
       {loading && !diff && (
         <p className="text-[12px] font-mono text-[var(--text-muted)]">{t('pages.attackSurfaceManagement.empty_running')}</p>
       )}
-      {!loading && !diff?.current_count && rows.length === 0 && (
+      {!loading && !diff?.unavailable && !diff?.current_count && rows.length === 0 && (
         <p className="text-[12px] font-mono text-[var(--text-tertiary)]">{t('pages.attackSurfaceManagement.first_mover_empty')}</p>
       )}
       {rows.length > 0 && (

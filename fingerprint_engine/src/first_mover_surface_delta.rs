@@ -12,6 +12,7 @@ use crate::engine_probes::{
     dns_a, dns_cname, empty_ok, extract_host, finding, http_client, http_get,
 };
 use crate::engine_result::EngineResult;
+use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::Row;
@@ -31,6 +32,7 @@ const MAX_DISCOVERY: usize = 40;
 const MAX_TOTAL_HOSTS: usize = 80;
 const MAX_NEW_HTTP: usize = 20;
 const MAX_WATCH_HTTP: usize = 10;
+const PROBE_CONCURRENCY: usize = 16;
 const SNAPSHOT_KEEP: i64 = 20;
 
 const TAKEOVER_SIGNATURES: &[(&str, &str)] = &[
@@ -317,6 +319,37 @@ fn merge_host_list(
     out
 }
 
+/// Decide which selected hosts get an HTTP GET. Budget is assigned in list order
+/// (new hosts first via `merge_host_list`) so concurrency cannot steal the cap.
+#[must_use]
+fn plan_host_probes(
+    selected: &[String],
+    include_http: bool,
+    prev_all: &BTreeSet<&str>,
+    prev_watch: &BTreeSet<&str>,
+) -> Vec<(String, bool)> {
+    let mut http_new = 0usize;
+    let mut http_watch = 0usize;
+    selected
+        .iter()
+        .map(|host| {
+            let known = prev_all.contains(host.as_str());
+            let want_http = if !include_http {
+                false
+            } else if !known && http_new < MAX_NEW_HTTP {
+                http_new += 1;
+                true
+            } else if known && prev_watch.contains(host.as_str()) && http_watch < MAX_WATCH_HTTP {
+                http_watch += 1;
+                true
+            } else {
+                false
+            };
+            (host.clone(), want_http)
+        })
+        .collect()
+}
+
 async fn enumerate_live(
     apex: &str,
     include_ct: bool,
@@ -337,24 +370,12 @@ async fn enumerate_live(
         .map(|a| a.fqdn.as_str())
         .collect();
     let prev_all: BTreeSet<&str> = prev_assets.iter().map(|a| a.fqdn.as_str()).collect();
-    let mut assets = Vec::new();
-    let mut http_new = 0usize;
-    let mut http_watch = 0usize;
-    for host in &selected {
-        let known = prev_all.contains(host.as_str());
-        let want_http = if !include_http {
-            false
-        } else if !known && http_new < MAX_NEW_HTTP {
-            http_new += 1;
-            true
-        } else if known && prev_watch.contains(host.as_str()) && http_watch < MAX_WATCH_HTTP {
-            http_watch += 1;
-            true
-        } else {
-            false
-        };
-        assets.push(probe_host(host, want_http).await);
-    }
+    let jobs = plan_host_probes(&selected, include_http, &prev_all, &prev_watch);
+    let assets: Vec<SurfaceAsset> = stream::iter(jobs)
+        .map(|(host, want_http)| async move { probe_host(&host, want_http).await })
+        .buffered(PROBE_CONCURRENCY)
+        .collect()
+        .await;
     SurfaceSnapshot {
         apex: apex.to_string(),
         assets,
@@ -624,6 +645,24 @@ async fn enqueue_delta_follow_ons(
 }
 
 /// Live JSON for GET /api/clients/:id/surface-diff (no new probes).
+/// Read failures use [`surface_diff_unavailable_json`] (HTTP 200) so `apiFetch` does not throw.
+#[must_use]
+pub fn surface_diff_unavailable_json(client_id: i64) -> Value {
+    json!({
+        "client_id": client_id,
+        "unavailable": true,
+        "message": "surface diff temporarily unavailable",
+        "added": [],
+        "removed": [],
+        "changed": [],
+        "current_count": 0,
+        "previous_count": 0,
+        "current_at": Value::Null,
+        "previous_at": Value::Null,
+        "baseline_only": false,
+    })
+}
+
 pub async fn api_surface_diff_json(
     pool: &sqlx::PgPool,
     tenant_id: i64,
@@ -649,6 +688,7 @@ pub async fn api_surface_diff_json(
     if rows.is_empty() {
         return Ok(json!({
             "client_id": client_id,
+            "unavailable": false,
             "message": "No first-mover snapshot yet — run first_mover_surface_delta against an authorized domain.",
             "added": [],
             "removed": [],
@@ -657,6 +697,7 @@ pub async fn api_surface_diff_json(
             "previous_count": 0,
             "current_at": Value::Null,
             "previous_at": Value::Null,
+            "baseline_only": false,
         }));
     }
 
@@ -709,6 +750,7 @@ pub async fn api_surface_diff_json(
 
     Ok(json!({
         "client_id": client_id,
+        "unavailable": false,
         "apex": current.apex,
         "message": if previous.is_none() {
             "Baseline only — next hunt will emit drift."
@@ -956,5 +998,27 @@ mod tests {
             .all(|(_, v)| v["target"] == "https://shop.acme.test"));
         assert!(p.iter().any(|(e, _)| e == "bola_idor"));
         assert!(p.iter().any(|(e, _)| e == "jwt_attack"));
+    }
+
+    #[test]
+    fn http_probe_plan_caps_new_and_watch() {
+        let selected: Vec<String> = (0..25).map(|i| format!("n{i}.example.com")).collect();
+        let prev_all = BTreeSet::new();
+        let prev_watch = BTreeSet::new();
+        let plan = plan_host_probes(&selected, true, &prev_all, &prev_watch);
+        assert_eq!(plan.iter().filter(|(_, http)| *http).count(), MAX_NEW_HTTP);
+        let off = plan_host_probes(&selected, false, &prev_all, &prev_watch);
+        assert!(off.iter().all(|(_, http)| !*http));
+    }
+
+    #[test]
+    fn unavailable_surface_diff_is_stable_schema() {
+        let v = surface_diff_unavailable_json(42);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["client_id"], 42);
+        assert_eq!(v["added"], json!([]));
+        assert_eq!(v["removed"], json!([]));
+        assert_eq!(v["changed"], json!([]));
+        assert_eq!(v["current_count"], 0);
     }
 }

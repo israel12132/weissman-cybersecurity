@@ -24,3 +24,10 @@ CREATE POLICY surface_snapshots_tenant ON surface_snapshots FOR ALL
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON surface_snapshots TO weissman_app;
 GRANT USAGE, SELECT ON SEQUENCE surface_snapshots_id_seq TO weissman_app;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'weissman_ro') THEN
+        GRANT SELECT ON surface_snapshots TO weissman_ro;
+    END IF;
+END $$;

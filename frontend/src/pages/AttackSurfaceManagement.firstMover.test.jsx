@@ -76,6 +76,27 @@ describe('FirstMoverDeltaPanel', () => {
     expect(screen.getByText(/pages.attackSurfaceManagement.nerve_certstream/)).toBeTruthy()
   })
 
+  it('shows unavailable copy when the store is down without treating it as empty', () => {
+    render(
+      <FirstMoverDeltaPanel
+        diff={{
+          unavailable: true,
+          current_count: 0,
+          added: [],
+          removed: [],
+          changed: [],
+          message: 'surface diff temporarily unavailable',
+        }}
+        loading={false}
+        hunting={false}
+        onHunt={() => {}}
+        huntDisabled
+      />,
+    )
+    expect(screen.getByText('pages.attackSurfaceManagement.first_mover_unavailable')).toBeTruthy()
+    expect(screen.queryByText('pages.attackSurfaceManagement.first_mover_empty')).toBeNull()
+  })
+
   it('shows empty baseline copy when no snapshot exists', () => {
     render(
       <FirstMoverDeltaPanel
