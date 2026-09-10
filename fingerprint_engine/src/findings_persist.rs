@@ -265,8 +265,13 @@ impl Sealed for FindingsPersistWriter {}
 impl VulnerabilitiesWriter for FindingsPersistWriter {}
 
 /// Build a stable finding identifier (delegates to evidence gate).
-pub(crate) fn build_finding_id(engine: &str, target: &str, finding: &Value) -> String {
-    findings_gate::build_legacy_finding_id(engine, target, finding)
+pub(crate) fn build_finding_id(
+    tenant_id: i64,
+    engine: &str,
+    target: &str,
+    finding: &Value,
+) -> String {
+    findings_gate::build_legacy_finding_id(tenant_id, engine, target, finding)
 }
 
 /// Create (or reuse) a report_runs row and insert one row per finding.
@@ -508,7 +513,7 @@ pub async fn persist_engine_findings(
         // exact same vulnerability. We also need it for record_fp()/record_tp().
         let vuln_signature = derive_vuln_signature_for_persist(f, &title);
         let signature_hash =
-            findings_correlator::build_cluster_key(&target_url, &vuln_signature, &cwe);
+            findings_correlator::build_cluster_key(tenant_id, &target_url, &vuln_signature, &cwe);
         // Prefer cryptographic dedup hash when correlator signature is empty.
         let signature_hash = if signature_hash.trim().is_empty() {
             dedup_hash.clone()
@@ -705,6 +710,8 @@ pub async fn persist_engine_findings(
                 epss_score,
                 kev_listed,
                 is_new_member: vuln_is_new,
+                vuln_signature: Some(vuln_signature.as_str()),
+                cluster_key: Some(signature_hash.as_str()),
             },
         )
         .await
@@ -974,8 +981,8 @@ mod tests {
             "evidence": "body snapshot Z (totally different)",
             "discovered_at": "2026-06-13T00:00:00Z"
         });
-        let id1 = build_finding_id("sqli_engine", "https://Example.com/login", &first);
-        let id2 = build_finding_id("sqli_engine", "https://example.com/login", &rescan);
+        let id1 = build_finding_id(1, "sqli_engine", "https://Example.com/login", &first);
+        let id2 = build_finding_id(1, "sqli_engine", "https://example.com/login", &rescan);
         assert_eq!(
             id1, id2,
             "finding_id must be stable across volatile fields + target case"
@@ -989,8 +996,8 @@ mod tests {
         let b = json!({"title": "Issue", "signature": "xss", "cve": "CVE-2021-1234"});
         let target = "https://example.com/login";
         assert_ne!(
-            build_finding_id("eng", target, &a),
-            build_finding_id("eng", target, &b),
+            build_finding_id(1, "eng", target, &a),
+            build_finding_id(1, "eng", target, &b),
             "different vulnerability signature must yield a different finding_id"
         );
     }

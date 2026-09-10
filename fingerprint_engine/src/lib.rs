@@ -336,39 +336,28 @@ pub mod ws_state_machine;
 pub mod xxe_engine;
 pub mod zero_day_prediction_engine;
 
-// Files that exist on disk and are imported as `crate::<name>` must be declared here.
-// Omitting them makes fingerprint_engine uncompilable (unresolved crate-root modules).
-pub mod advanced_enterprise_engines;
+// Crate-root modules that other files import as `crate::<name>` but were never declared.
+// Do NOT declare `*_supreme.rs` / `engine_dispatch_agent.rs` here — those are `#[path]`
+// children of their parent engine files.
 pub mod agent_kill;
 pub mod agent_min_version;
 pub mod audit_spool;
 pub mod cem_dago;
-pub mod cluster_ingest;
-pub mod demo_request;
 pub mod discovery_ai;
 pub mod discovery_knowledge;
 pub mod discovery_pace;
 pub mod elite_hardening;
-pub mod engine_dispatch_agent;
-pub mod engine_supreme_common;
 pub mod finding_identity;
-pub mod graphql_attack_supreme;
 pub mod job_envelope;
-pub mod jwt_attack_supreme;
-pub mod kerberoasting_supreme;
 pub mod live_knowledge_bus;
 pub mod nl_audit_chain;
 pub mod nl_audit_crypto;
 pub mod nlqa_syslog;
-pub mod oauth_oidc_supreme;
 pub mod ot_ics_hardening;
 pub mod overflow_log;
-pub mod password_spray_supreme;
 pub mod path_templates;
 pub mod playbook_dsl;
 pub mod priv_esc_cred_access;
-pub mod public_site;
-pub mod saml_attack_supreme;
 pub mod secret_zeroize;
 pub mod sovereign_operator;
 pub mod suppression_cache_sync;
