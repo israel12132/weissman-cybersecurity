@@ -670,6 +670,28 @@ pub async fn persist_engine_findings(
         .await
         .map_err(|e| format!("insert vulnerabilities: {e}"))?;
 
+        // P1: classify engine output / OAST-shaped evidence. Never invents proof.
+        {
+            let mut class_json = raw_data_enriched.clone();
+            if let Some(obj) = class_json.as_object_mut() {
+                obj.entry("title").or_insert(json!(title.clone()));
+                obj.entry("source").or_insert(json!(engine));
+                obj.entry("severity").or_insert(json!(severity.clone()));
+            }
+            let classified = crate::proof_layer::classify_for_persist(&class_json);
+            if classified != crate::proof_layer::ProofStatus::Observed {
+                let _ = sqlx::query(
+                    r#"UPDATE vulnerabilities SET proof_status = $2, updated_at = now()
+                        WHERE id = $1 AND tenant_id = $3 AND proof_status = 'observed'"#,
+                )
+                .bind(upserted_id)
+                .bind(classified.as_str())
+                .bind(tenant_id)
+                .execute(&mut *tx)
+                .await;
+            }
+        }
+
         // PoE exploit sealing (critical/high) — sole authorized post-insert mutation.
         if crate::exploit_crypto::should_seal_poc(poc.as_str(), severity.as_str()) {
             if let Some(key) = crate::exploit_crypto::master_key_bytes() {

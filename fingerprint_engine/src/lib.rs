@@ -138,6 +138,7 @@ pub mod pipeline_to_runtime_risk_engine;
 pub mod poc_sandbox;
 pub mod portfolio_posture;
 pub mod posture_score;
+pub mod proof_layer;
 pub mod recon;
 pub mod regex_util;
 pub mod remediation_priority;

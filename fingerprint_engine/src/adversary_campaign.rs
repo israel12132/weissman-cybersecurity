@@ -45,6 +45,7 @@ pub const CAMPAIGN_EVENT_KINDS: &[&str] = &[
     "campaign_blocked",
     "mesh_blackboard_seeded",
     "remediation_verified",
+    "proof_failed",
 ];
 
 /// Goal facts the operator may request. All appear in the default STRIPS library.
@@ -221,6 +222,18 @@ pub async fn emit_kind(
     insert_event(&mut tx, campaign_id, tenant_id, client_id, kind, payload).await?;
     tx.commit().await.map_err(|e| format!("commit: {e}"))?;
     Ok(())
+}
+
+/// Append a campaign event on an already-open tenant transaction (P1 proof gate).
+pub async fn emit_kind_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    campaign_id: Uuid,
+    client_id: i64,
+    kind: &str,
+    payload: Value,
+) -> Result<(), String> {
+    insert_event(tx, campaign_id, tenant_id, client_id, kind, payload).await
 }
 
 #[must_use]
@@ -714,6 +727,11 @@ pub async fn get_campaign(pool: &PgPool, tenant_id: i64, id: Uuid) -> Result<Val
         "mesh": mesh,
         "spine": spine_json(campaign.id),
         "council": council,
+        "proof": {
+            "privilege_facts_require_proven": true,
+            "statuses": crate::proof_layer::PROOF_STATUSES,
+            "safety_rails_no_shells": true,
+        },
     }))
 }
 
@@ -722,7 +740,7 @@ async fn load_latest_world(
     campaign_id: Uuid,
 ) -> Result<Value, String> {
     let row = sqlx::query(
-        r#"SELECT facts, evidence, asset_key, created_at
+        r#"SELECT facts, evidence, asset_key, created_at, proven_facts
              FROM weissman_campaign_world_states
             WHERE campaign_id = $1
             ORDER BY created_at DESC
@@ -737,11 +755,12 @@ async fn load_latest_world(
             "facts": r.try_get::<Value, _>("facts").unwrap_or_else(|_| json!([])),
             "evidence": r.try_get::<Value, _>("evidence").unwrap_or_else(|_| json!({})),
             "asset_key": r.try_get::<String, _>("asset_key").unwrap_or_default(),
+            "proven_facts": r.try_get::<Value, _>("proven_facts").unwrap_or_else(|_| json!([])),
             "created_at": r.try_get::<chrono::DateTime<chrono::Utc>, _>("created_at")
                 .map(|d| d.to_rfc3339())
                 .unwrap_or_default(),
         }),
-        None => json!({ "facts": [], "evidence": {}, "asset_key": "" }),
+        None => json!({ "facts": [], "evidence": {}, "asset_key": "", "proven_facts": [] }),
     })
 }
 
@@ -751,7 +770,8 @@ async fn load_steps(
 ) -> Result<Vec<Value>, String> {
     let rows = sqlx::query(
         r#"SELECT id, seq, technique_id, technique_name, mitre, engine_id, job_id, status,
-                  planned_gained, outcome_facts, target, last_error, created_at, updated_at
+                  planned_gained, outcome_facts, target, last_error, created_at, updated_at,
+                  proof_status, proof_evidence
              FROM weissman_campaign_steps
             WHERE campaign_id = $1
             ORDER BY seq ASC"#,
@@ -774,6 +794,8 @@ async fn load_steps(
                 "status": r.try_get::<String, _>("status").unwrap_or_default(),
                 "planned_gained": r.try_get::<Value, _>("planned_gained").unwrap_or_else(|_| json!([])),
                 "outcome_facts": r.try_get::<Value, _>("outcome_facts").unwrap_or_else(|_| json!([])),
+                "proof_status": r.try_get::<String, _>("proof_status").unwrap_or_else(|_| "observed".into()),
+                "proof_evidence": r.try_get::<Value, _>("proof_evidence").unwrap_or_else(|_| json!({})),
                 "target": r.try_get::<String, _>("target").unwrap_or_default(),
                 "last_error": r.try_get::<Option<String>, _>("last_error").ok().flatten(),
                 "created_at": r.try_get::<chrono::DateTime<chrono::Utc>, _>("created_at")
@@ -1039,7 +1061,7 @@ async fn load_live_findings(
 ) -> Result<Vec<Value>, String> {
     let rows = sqlx::query(
         r#"SELECT finding_id, signature_hash, source, status, title, severity,
-                  raw_data, effective_risk, kev_listed,
+                  raw_data, effective_risk, kev_listed, proof_status,
                   COALESCE(raw_data->>'target', '') AS target
              FROM vulnerabilities
             WHERE tenant_id = $1 AND client_id = $2
@@ -1083,6 +1105,9 @@ async fn load_live_findings(
                     obj.entry("target").or_insert(Value::String(tgt));
                 }
             }
+            if let Ok(ps) = r.try_get::<String, _>("proof_status") {
+                obj.insert("proof_status".into(), json!(ps));
+            }
             Some(v)
         })
         .collect())
@@ -1122,16 +1147,18 @@ async fn persist_world_snapshot(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     campaign: &CampaignRecord,
     evidence: &HashMap<Fact, Vec<String>>,
+    proven_facts: &[Fact],
     asset_key: &str,
 ) -> Result<Vec<Fact>, String> {
     let mut facts: Vec<Fact> = evidence.keys().cloned().collect();
     facts.sort();
     let facts_json = json!(facts);
     let evidence_json = json!(evidence);
+    let proven_json = json!(proven_facts);
     sqlx::query(
         r#"INSERT INTO weissman_campaign_world_states
-             (campaign_id, tenant_id, client_id, facts, evidence, asset_key)
-           VALUES ($1, $2, $3, $4, $5, $6)"#,
+             (campaign_id, tenant_id, client_id, facts, evidence, asset_key, proven_facts)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
     )
     .bind(campaign.id)
     .bind(campaign.tenant_id)
@@ -1139,6 +1166,7 @@ async fn persist_world_snapshot(
     .bind(&facts_json)
     .bind(&evidence_json)
     .bind(asset_key)
+    .bind(&proven_json)
     .execute(&mut **tx)
     .await
     .map_err(|e| format!("world snapshot: {e}"))?;
@@ -1156,7 +1184,12 @@ async fn persist_world_snapshot(
         campaign.tenant_id,
         campaign.client_id,
         "world_state_snapshot",
-        json!({ "asset_key": asset_key, "facts": facts, "evidence": evidence_json }),
+        json!({
+            "asset_key": asset_key,
+            "facts": facts,
+            "proven_facts": proven_facts,
+            "evidence": evidence_json
+        }),
     )
     .await?;
     Ok(facts)
@@ -1552,17 +1585,18 @@ async fn pick_dispatchable_step(
     Ok(None)
 }
 
-/// Job success does not invent capability. TechniqueProven only when planned_gained
-/// facts are present in the rebuilt WorldState (finding-grounded).
+/// Job success does not invent capability. TechniqueProven is emitted by the P1
+/// proof gate. This only mirrors planned∩world into outcome_facts when the step
+/// is already proven — never from observation alone.
 async fn prove_techniques_from_facts(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     campaign: &CampaignRecord,
     facts: &HashSet<Fact>,
 ) -> Result<(), String> {
     let rows = sqlx::query(
-        r#"SELECT id, technique_id, planned_gained, outcome_facts
+        r#"SELECT id, technique_id, planned_gained, outcome_facts, proof_status
              FROM weissman_campaign_steps
-            WHERE campaign_id = $1 AND status = 'succeeded'"#,
+            WHERE campaign_id = $1 AND status = 'succeeded' AND proof_status = 'proven'"#,
     )
     .bind(campaign.id)
     .fetch_all(&mut **tx)
@@ -1604,12 +1638,39 @@ async fn prove_techniques_from_facts(
                 campaign.tenant_id,
                 campaign.client_id,
                 "technique_proven",
-                json!({ "technique_id": technique_id, "facts": observed }),
+                json!({
+                    "technique_id": technique_id,
+                    "facts": observed,
+                    "proof_status": "proven",
+                    "invented": false,
+                }),
             )
             .await?;
         }
     }
     Ok(())
+}
+
+async fn load_proven_step_facts(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    campaign_id: Uuid,
+) -> HashSet<Fact> {
+    let rows: Vec<Value> = sqlx::query_scalar(
+        r#"SELECT COALESCE(outcome_facts, '[]'::jsonb)
+             FROM weissman_campaign_steps
+            WHERE campaign_id = $1 AND proof_status = 'proven'"#,
+    )
+    .bind(campaign_id)
+    .fetch_all(&mut **tx)
+    .await
+    .unwrap_or_default();
+    let mut out = HashSet::new();
+    for v in rows {
+        if let Ok(facts) = serde_json::from_value::<Vec<String>>(v) {
+            out.extend(facts);
+        }
+    }
+    out
 }
 
 fn spawn_fabric_projections(
@@ -1744,6 +1805,13 @@ async fn tick_one(
         let _ = bind_job_outcome(&mut tx, *job_id, *ok, detail).await?;
     }
     reconcile_jobs(&mut tx, campaign.id).await?;
+    let need_live = crate::proof_layer::gate_succeeded_steps(
+        &mut tx,
+        tenant_id,
+        campaign.id,
+        campaign.client_id,
+    )
+    .await?;
 
     if want_running
         && matches!(
@@ -1765,6 +1833,13 @@ async fn tick_one(
     }
     if campaign.status != "running" {
         tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+        crate::proof_layer::spawn_live_proofs(
+            pool.clone(),
+            tenant_id,
+            campaign.client_id,
+            campaign.id,
+            need_live,
+        );
         return Ok(());
     }
 
@@ -1790,15 +1865,26 @@ async fn tick_one(
     )
     .await?;
 
-    let planned = attack_chain_planner::plan_strongest_asset(&findings, &campaign.goal_fact);
+    let planner_findings = crate::proof_layer::findings_for_planner(&findings);
+    let planned =
+        attack_chain_planner::plan_strongest_asset(&planner_findings, &campaign.goal_fact);
+    let proven_from_steps = load_proven_step_facts(&mut tx, campaign.id).await;
     let (asset_key, chain, _facts) = match planned {
         Some(t) => t,
         None => {
-            let evidence = attack_chain_planner::facts_from_findings_with_evidence(&findings);
-            persist_world_snapshot(&mut tx, &campaign, &evidence, &campaign.asset_key).await?;
+            let (evidence, proven_facts) =
+                crate::proof_layer::campaign_world_from_findings(&findings, &proven_from_steps);
+            persist_world_snapshot(
+                &mut tx,
+                &campaign,
+                &evidence,
+                &proven_facts,
+                &campaign.asset_key,
+            )
+            .await?;
             let facts: HashSet<Fact> = evidence.keys().cloned().collect();
             prove_techniques_from_facts(&mut tx, &campaign, &facts).await?;
-            if facts.contains(&campaign.goal_fact) {
+            if crate::proof_layer::goal_is_reached(&campaign.goal_fact, &evidence, &proven_facts) {
                 set_status(
                     &mut tx,
                     &campaign,
@@ -1822,6 +1908,13 @@ async fn tick_one(
                 .await?;
             }
             tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+            crate::proof_layer::spawn_live_proofs(
+                pool.clone(),
+                tenant_id,
+                campaign.client_id,
+                campaign.id,
+                need_live,
+            );
             return Ok(());
         }
     };
@@ -1831,19 +1924,22 @@ async fn tick_one(
         .filter(|f| attack_chain_planner::finding_asset_key(f) == asset_key)
         .cloned()
         .collect();
-    let evidence = attack_chain_planner::facts_from_findings_with_evidence(&asset_findings);
-    persist_world_snapshot(&mut tx, &campaign, &evidence, &asset_key).await?;
+    let (evidence, proven_facts) =
+        crate::proof_layer::campaign_world_from_findings(&asset_findings, &proven_from_steps);
+    persist_world_snapshot(&mut tx, &campaign, &evidence, &proven_facts, &asset_key).await?;
     let facts: HashSet<Fact> = evidence.keys().cloned().collect();
     prove_techniques_from_facts(&mut tx, &campaign, &facts).await?;
 
-    if evidence.contains_key(&campaign.goal_fact) || chain.steps.is_empty() && chain.reached_goal {
+    if crate::proof_layer::goal_is_reached(&campaign.goal_fact, &evidence, &proven_facts)
+        || chain.steps.is_empty() && chain.reached_goal
+    {
         set_status(
             &mut tx,
             &campaign,
             "completed",
             actor_user_id,
             "goal_reached",
-            json!({ "goal": campaign.goal_fact, "asset_key": asset_key }),
+            json!({ "goal": campaign.goal_fact, "asset_key": asset_key, "proven_facts": proven_facts }),
             None,
         )
         .await?;
@@ -1853,6 +1949,13 @@ async fn tick_one(
             campaign.clone(),
             facts.into_iter().collect(),
             finding_ids,
+        );
+        crate::proof_layer::spawn_live_proofs(
+            pool.clone(),
+            tenant_id,
+            campaign.client_id,
+            campaign.id,
+            need_live,
         );
         return Ok(());
     }
@@ -1892,6 +1995,27 @@ async fn tick_one(
                 Some("required technique failed; refusing to invent a substitute"),
             )
             .await?;
+        } else {
+            let proof_failed: Vec<String> = sqlx::query_scalar(
+                r#"SELECT technique_id FROM weissman_campaign_steps
+                    WHERE campaign_id = $1 AND proof_status = 'failed_proof'"#,
+            )
+            .bind(campaign.id)
+            .fetch_all(&mut *tx)
+            .await
+            .unwrap_or_default();
+            if proof_failed.iter().any(|t| needed.contains(t.as_str())) {
+                set_status(
+                    &mut tx,
+                    &campaign,
+                    "blocked",
+                    actor_user_id,
+                    "proof_gate_blocked",
+                    json!({ "failed_proof": proof_failed }),
+                    Some("safe-proof gate failed; unproven steps do not unlock higher WorldState facts"),
+                )
+                .await?;
+            }
         }
     }
 
@@ -1901,6 +2025,13 @@ async fn tick_one(
         campaign.clone(),
         facts.iter().cloned().collect(),
         finding_ids,
+    );
+    crate::proof_layer::spawn_live_proofs(
+        pool.clone(),
+        tenant_id,
+        campaign.client_id,
+        campaign.id,
+        need_live,
     );
 
     if let Some((step_id, engine, technique_id)) = dispatch {
@@ -2280,6 +2411,7 @@ mod tests {
         let c = hash_campaign_event(id, "campaign_created", &p, Some(&a));
         assert_ne!(a, c);
         assert!(CAMPAIGN_EVENT_KINDS.contains(&"technique_proven"));
+        assert!(CAMPAIGN_EVENT_KINDS.contains(&"proof_failed"));
         assert!(CAMPAIGN_EVENT_KINDS.contains(&"finding_observed"));
         assert_eq!(CAMPAIGN_EVENT_VERSION, 1);
         assert_eq!(
@@ -2301,6 +2433,35 @@ mod tests {
         assert!(attack_chain_planner::technique_preconditions_met(
             "exploit_rce_web",
             &ready
+        ));
+    }
+
+    #[test]
+    fn unproven_privilege_facts_do_not_enter_campaign_world() {
+        let findings = vec![json!({
+            "finding_id": "keep",
+            "source": "rce_exploit_engine",
+            "title": "Remote code execution",
+            "type": "rce",
+            "severity": "critical",
+            "verified": true,
+            "proof_status": "observed",
+            "target": "https://app.example",
+        })];
+        let planner = crate::proof_layer::findings_for_planner(&findings);
+        assert!(
+            attack_chain_planner::plan_strongest_asset(&planner, "access:privileged").is_none()
+        );
+        let (ev, proven) =
+            crate::proof_layer::campaign_world_from_findings(&findings, &HashSet::new());
+        assert!(ev.contains_key("vuln:rce"));
+        assert!(!ev.contains_key("access:foothold"));
+        assert!(!ev.contains_key("access:privileged"));
+        assert!(proven.is_empty());
+        assert!(!crate::proof_layer::goal_is_reached(
+            "access:foothold",
+            &ev,
+            &proven
         ));
     }
 }

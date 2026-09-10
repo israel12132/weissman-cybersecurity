@@ -613,6 +613,98 @@ async fn api_findings_verify_live(
     }
 }
 
+#[derive(Deserialize, Default)]
+struct FindingProofQuery {
+    #[serde(default)]
+    live: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+struct FindingProofBody {
+    #[serde(default)]
+    live: Option<Value>,
+}
+
+/// GET /api/findings/:id/proof — list persisted safe-proof artifacts for a finding.
+async fn api_findings_proof_get(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<String>,
+) -> Response {
+    let Some(row_id) = crate::finding_live_verify::parse_finding_row_id(&id) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "finding id required"})),
+        )
+            .into_response();
+    };
+    match crate::proof_layer::list_artifacts_for_finding(&state.app_pool, auth.tenant_id, row_id)
+        .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) if e == "finding not found" => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": "proof artifacts query failed" })),
+        )
+            .into_response(),
+    }
+}
+
+/// POST /api/findings/:id/proof — classify existing evidence + optional in-scope live adapters.
+async fn api_findings_proof_run(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<String>,
+    Query(query): Query<FindingProofQuery>,
+    body: Option<Json<FindingProofBody>>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+    let live = live_verify_flag_from_value(body.as_ref().and_then(|b| b.0.live.as_ref()))
+        || live_verify_flag_from_query(query.live.as_deref())
+        || body.is_none();
+    let id_token = id.trim().to_string();
+    if id_token.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "finding id required"})),
+        )
+            .into_response();
+    }
+    let pin = auth.assigned_client_id;
+    let fut = crate::proof_layer::run_finding_proof(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        &id_token,
+        live,
+        pin,
+    );
+    match tokio::time::timeout(Duration::from_secs(45), fut).await {
+        Ok(Ok(v)) => (StatusCode::OK, Json(v)).into_response(),
+        Ok(Err(e)) if e == "finding not found" => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "detail": e})),
+        )
+            .into_response(),
+        Ok(Err(e)) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": e})),
+        )
+            .into_response(),
+        Err(_) => (
+            StatusCode::GATEWAY_TIMEOUT,
+            Json(json!({"ok": false, "detail": "safe-proof timed out"})),
+        )
+            .into_response(),
+    }
+}
+
 /// GET /api/findings/export/csv — export all findings for the current tenant as CSV.
 async fn api_findings_export_csv(
     State(state): State<Arc<AppState>>,
@@ -768,7 +860,8 @@ async fn api_openapi_spec() -> Response {
                         { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } },
                         { "name": "client_id", "in": "query", "schema": { "type": "integer" } },
                         { "name": "source", "in": "query", "schema": { "type": "string" }, "description": "Engine id (case-insensitive exact match on vulnerabilities.source)" },
-                        { "name": "severity", "in": "query", "schema": { "type": "string" } }
+                        { "name": "severity", "in": "query", "schema": { "type": "string" } },
+                        { "name": "proof_status", "in": "query", "schema": { "type": "string", "enum": ["observed", "validated_safe_proof", "proven", "failed_proof", "not_applicable"] }, "description": "P1 safe-proof status filter" }
                     ],
                     "responses": {
                         "200": {
@@ -839,6 +932,32 @@ async fn api_openapi_spec() -> Response {
                         "200": { "description": "Verification verdict and checks" },
                         "404": { "description": "Finding not found in this tenant" },
                         "504": { "description": "Verification timed out" }
+                    }
+                }
+            },
+            "/api/findings/{id}/proof": {
+                "get": {
+                    "summary": "List safe-proof artifacts for a finding",
+                    "tags": ["Findings"],
+                    "parameters": [
+                        { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+                    ],
+                    "responses": {
+                        "200": { "description": "proof_status + artifacts (diffs, OAST hit ids, screenshot refs)" },
+                        "404": { "description": "Finding not found" }
+                    }
+                },
+                "post": {
+                    "summary": "Run the P1 safe-proof gate (classify engine evidence + optional in-scope differentials)",
+                    "description": "Never invents proof. No shells. Live adapters stay inside authorized client scope.",
+                    "tags": ["Findings"],
+                    "parameters": [
+                        { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+                        { "name": "live", "in": "query", "required": false, "schema": { "type": "boolean" } }
+                    ],
+                    "responses": {
+                        "200": { "description": "Proof verdict, status, artifact ids" },
+                        "404": { "description": "Finding not found" }
                     }
                 }
             },
@@ -1113,6 +1232,21 @@ async fn api_openapi_spec() -> Response {
                     "tags": ["Campaign"],
                     "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
                     "responses": { "200": { "description": "Events + kinds" } }
+                }
+            },
+            "/api/campaigns/{id}/steps/{step_id}/proof": {
+                "post": {
+                    "summary": "Run the P1 proof gate for a campaign step",
+                    "description": "Classifies related findings (OAST, differentials, cloud confirmation) and may run in-scope web adapters. Unproven steps do not unlock privilege WorldState facts. RBAC: operator+.",
+                    "tags": ["Campaign"],
+                    "parameters": [
+                        { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+                        { "name": "step_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+                    ],
+                    "responses": {
+                        "200": { "description": "Updated campaign bundle including proof_status on steps" },
+                        "404": { "description": "Campaign or step not found" }
+                    }
                 }
             },
             "/api/risk-graph/nodes/{node_id}/flags": {

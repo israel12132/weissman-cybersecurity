@@ -22,6 +22,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             patch(api_findings_update_status),
         )
         .route("/api/findings/:id/verify", post(api_findings_verify_live))
+        .route(
+            "/api/findings/:id/proof",
+            get(api_findings_proof_get).post(api_findings_proof_run),
+        )
         .route("/api/intel/status", get(api_intel_status))
         .route("/api/attack-coverage", get(api_attack_coverage))
         .route("/api/intel/suppressions", get(api_intel_suppressions))
@@ -668,6 +672,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/campaigns/:id/plan", get(api_campaigns_plan))
         .route("/api/campaigns/:id/steps", get(api_campaigns_steps))
         .route("/api/campaigns/:id/events", get(api_campaigns_events))
+        .route(
+            "/api/campaigns/:id/steps/:step_id/proof",
+            post(api_campaigns_step_proof),
+        )
         .route("/api/soc/exploit-lab", get(api_soc_exploit_lab))
         .route("/api/soc/ai-patterns", get(api_soc_ai_patterns))
         .route(

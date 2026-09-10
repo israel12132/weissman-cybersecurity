@@ -880,6 +880,9 @@ async fn api_findings(
             None
         }
     });
+    let proof_filter: Option<String> = q.get("proof_status").and_then(|s| {
+        crate::proof_layer::ProofStatus::parse(s).map(|p| p.as_str().to_string())
+    });
 
     let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
@@ -900,11 +903,12 @@ async fn api_findings(
          remediation_brief, (COALESCE(generated_patch,'') <> '') AS has_patch, \
          epss_score, epss_percentile, kev_listed, kev_known_ransomware, kev_due_date, \
          intel_enriched_at, signature_hash, cluster_id, seen_count, \
-         confidence_multiplier, effective_risk \
+         confidence_multiplier, effective_risk, COALESCE(proof_status, 'observed') AS proof_status \
          FROM vulnerabilities \
          WHERE ($3::text[] IS NULL OR lower(severity) = ANY($3)) \
            AND ($4::bigint IS NULL OR client_id = $4) \
            AND ($5::text IS NULL OR lower(source) = lower($5)) \
+           AND ($6::text IS NULL OR proof_status = $6) \
          ORDER BY \
             CASE WHEN kev_listed THEN 0 ELSE 1 END, \
             COALESCE(epss_score, 0) DESC, \
@@ -916,6 +920,7 @@ async fn api_findings(
     .bind(severity_filter.as_ref().map(|v| v.as_slice()))
     .bind(client_filter)
     .bind(source_filter.as_deref())
+    .bind(proof_filter.as_deref())
     .fetch_all(&mut *tx)
     .await;
     // A read failure (statement timeout, RLS/GUC problem, missing column after a partial
@@ -936,11 +941,13 @@ async fn api_findings(
         "SELECT COUNT(*)::bigint FROM vulnerabilities \
          WHERE ($1::text[] IS NULL OR lower(severity) = ANY($1)) \
            AND ($2::bigint IS NULL OR client_id = $2) \
-           AND ($3::text IS NULL OR lower(source) = lower($3))",
+           AND ($3::text IS NULL OR lower(source) = lower($3)) \
+           AND ($4::text IS NULL OR proof_status = $4)",
     )
     .bind(severity_filter.as_ref().map(|v| v.as_slice()))
     .bind(client_filter)
     .bind(source_filter.as_deref())
+    .bind(proof_filter.as_deref())
     .fetch_one(&mut *tx)
     .await
     .unwrap_or(0);
@@ -1104,6 +1111,7 @@ async fn api_findings(
             "cluster_id": cluster_id,
             "signature_hash": signature_hash,
             "seen_count": seen_count,
+            "proof_status": r.try_get::<String, _>("proof_status").unwrap_or_else(|_| "observed".into()),
             "raw": raw_data,
         }));
     }

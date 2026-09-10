@@ -211,3 +211,41 @@ async fn api_campaigns_events(
         }
     }
 }
+
+#[derive(Deserialize)]
+struct CampaignStepPath {
+    id: uuid::Uuid,
+    step_id: uuid::Uuid,
+}
+
+async fn api_campaigns_step_proof(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(p): Path<CampaignStepPath>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    match crate::proof_layer::run_campaign_step_proof(
+        &state.app_pool,
+        auth.tenant_id,
+        p.id,
+        p.step_id,
+    )
+    .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => {
+            let status = campaign_err_status(&e);
+            let detail = if matches!(
+                status,
+                StatusCode::NOT_FOUND | StatusCode::BAD_REQUEST | StatusCode::CONFLICT
+            ) {
+                json!(e)
+            } else {
+                json!(scrub_internal_error(&e))
+            };
+            (status, Json(json!({ "ok": false, "detail": detail }))).into_response()
+        }
+    }
+}
