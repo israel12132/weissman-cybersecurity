@@ -1213,6 +1213,39 @@ async fn api_openapi_spec() -> Response {
                     ],
                     "responses": { "200": { "description": "Audit entries" } }
                 }
+            },
+            "/api/discovery-lab/runs": {
+                "get": {
+                    "summary": "List Discovery Lab runs for the tenant",
+                    "tags": ["Discovery Lab"],
+                    "responses": { "200": { "description": "Run list" } }
+                },
+                "post": {
+                    "summary": "Start a Discovery Lab run on an authorized client target",
+                    "tags": ["Discovery Lab"],
+                    "responses": {
+                        "202": { "description": "Run queued" },
+                        "403": { "description": "Target outside approved tenant scope" }
+                    }
+                }
+            },
+            "/api/discovery-lab/candidates": {
+                "get": {
+                    "summary": "List novel-vuln candidates (distinct from ordinary findings)",
+                    "tags": ["Discovery Lab"],
+                    "responses": { "200": { "description": "Candidate list" } }
+                }
+            },
+            "/api/discovery-lab/disclosures/{id}/export": {
+                "get": {
+                    "summary": "Download a responsible-disclosure draft (markdown, JSON, or PDF)",
+                    "tags": ["Discovery Lab"],
+                    "parameters": [
+                        { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+                        { "name": "format", "in": "query", "schema": { "type": "string", "enum": ["markdown","json","pdf"] } }
+                    ],
+                    "responses": { "200": { "description": "Disclosure draft attachment" } }
+                }
             }
         }
     });

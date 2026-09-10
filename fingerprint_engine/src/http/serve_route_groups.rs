@@ -483,6 +483,27 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/poe-scan/run", post(api_poe_scan_run))
         .route("/api/jobs", get(api_async_jobs_list))
         .route("/api/jobs/:job_id", get(api_async_job_status))
+        .route("/api/discovery-lab/runs", get(api_discovery_lab_runs_list).post(api_discovery_lab_run_create))
+        .route("/api/discovery-lab/runs/:id", get(api_discovery_lab_run_get))
+        .route("/api/discovery-lab/candidates", get(api_discovery_lab_candidates_list))
+        .route("/api/discovery-lab/candidates/:id", get(api_discovery_lab_candidate_get).patch(api_discovery_lab_candidate_action))
+        .route(
+            "/api/discovery-lab/candidates/:id/disclosure",
+            post(api_discovery_lab_disclosure_create),
+        )
+        .route("/api/discovery-lab/disclosures", get(api_discovery_lab_disclosures_list))
+        .route(
+            "/api/discovery-lab/disclosures/:id",
+            get(api_discovery_lab_disclosure_get).patch(api_discovery_lab_disclosure_update),
+        )
+        .route(
+            "/api/discovery-lab/disclosures/:id/events",
+            get(api_discovery_lab_disclosure_events),
+        )
+        .route(
+            "/api/discovery-lab/disclosures/:id/export",
+            get(api_discovery_lab_disclosure_export),
+        )
         .route("/api/poe-scan/status/:job_id", get(api_poe_scan_status))
         .route("/api/poe-scan/stream/:job_id", get(api_poe_scan_stream))
         .route(

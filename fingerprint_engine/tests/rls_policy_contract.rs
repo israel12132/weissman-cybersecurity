@@ -460,3 +460,40 @@ fn privilege_escalation_controls_migration_in_sync_both_dirs() {
         "privilege_escalation_controls migration must be identical in both dirs"
     );
 }
+
+#[test]
+fn discovery_lab_migration_has_forced_rls_and_lifecycle() {
+    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("migrations/20260910120000_discovery_lab.sql");
+    assert!(p.is_file(), "discovery lab migration missing: {}", p.display());
+    let text = std::fs::read_to_string(&p).unwrap();
+    assert!(text.contains("CREATE TABLE IF NOT EXISTS discovery_lab_runs"));
+    assert!(text.contains("CREATE TABLE IF NOT EXISTS discovery_lab_candidates"));
+    assert!(text.contains("CREATE TABLE IF NOT EXISTS discovery_disclosure_packs"));
+    assert!(text.contains("CREATE TABLE IF NOT EXISTS discovery_disclosure_events"));
+    assert!(text.contains("disclosure_ready"));
+    assert!(text.contains("national_cert"));
+    assert!(text.contains("discovery_disclosure_events is append-only"));
+    assert!(text.contains("public.weissman_client_row_visible(client_id)"));
+    assert_eq!(
+        text.matches("FORCE ROW LEVEL SECURITY").count(),
+        4,
+        "all four Discovery Lab tables must FORCE RLS"
+    );
+    assert!(text.contains("ON discovery_lab_runs TO weissman_app"));
+    assert!(text.contains("ON discovery_lab_candidates TO weissman_app"));
+    assert!(text.contains("ON discovery_disclosure_packs TO weissman_app"));
+    assert!(text.contains("REVOKE UPDATE, DELETE ON discovery_disclosure_events"));
+}
+
+#[test]
+fn discovery_lab_migration_in_sync_both_dirs() {
+    let fe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("migrations/20260910120000_discovery_lab.sql");
+    let db = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../crates/weissman-db/migrations/20260910120000_discovery_lab.sql");
+    let a = std::fs::read_to_string(&fe).unwrap_or_default();
+    let b = std::fs::read_to_string(&db).unwrap_or_default();
+    assert!(!a.is_empty(), "migration present");
+    assert_eq!(a, b, "discovery lab migration must be identical in both dirs");
+}

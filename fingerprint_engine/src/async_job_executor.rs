@@ -2352,6 +2352,7 @@ async fn execute_job_unscoped(
                 "message": "approved; PR creation handled out-of-process by the PR bot",
             }))
         }
+        "discovery_lab" => crate::discovery_lab::execute_lab_job(app_pool.as_ref(), tid, p).await,
         _ => Err(format!("unknown job kind: {}", job.kind)),
     }
 }
