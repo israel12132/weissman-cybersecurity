@@ -226,7 +226,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[test]
     fn extra_hosts_fill_kill_chain_when_baseline_findings() {
         let findings = vec![json!({"category": "baseline", "target": "acme.test"})];
         let mut added = added_fqdns(&findings);
