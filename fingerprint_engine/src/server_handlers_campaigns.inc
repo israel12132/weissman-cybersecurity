@@ -164,7 +164,12 @@ async fn api_campaigns_plan(
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
         Err(e) => {
             let status = campaign_err_status(&e);
-            (status, Json(json!({ "ok": false, "detail": e }))).into_response()
+            let detail = if matches!(status, StatusCode::NOT_FOUND | StatusCode::BAD_REQUEST | StatusCode::CONFLICT) {
+                json!(e)
+            } else {
+                json!(scrub_internal_error(&e))
+            };
+            (status, Json(json!({ "ok": false, "detail": detail }))).into_response()
         }
     }
 }
@@ -178,7 +183,12 @@ async fn api_campaigns_steps(
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
         Err(e) => {
             let status = campaign_err_status(&e);
-            (status, Json(json!({ "ok": false, "detail": e }))).into_response()
+            let detail = if matches!(status, StatusCode::NOT_FOUND | StatusCode::BAD_REQUEST | StatusCode::CONFLICT) {
+                json!(e)
+            } else {
+                json!(scrub_internal_error(&e))
+            };
+            (status, Json(json!({ "ok": false, "detail": detail }))).into_response()
         }
     }
 }
@@ -192,7 +202,12 @@ async fn api_campaigns_events(
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
         Err(e) => {
             let status = campaign_err_status(&e);
-            (status, Json(json!({ "ok": false, "detail": e }))).into_response()
+            let detail = if matches!(status, StatusCode::NOT_FOUND | StatusCode::BAD_REQUEST | StatusCode::CONFLICT) {
+                json!(e)
+            } else {
+                json!(scrub_internal_error(&e))
+            };
+            (status, Json(json!({ "ok": false, "detail": detail }))).into_response()
         }
     }
 }
