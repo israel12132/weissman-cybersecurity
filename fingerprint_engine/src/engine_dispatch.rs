@@ -872,6 +872,9 @@ async fn dispatch_engine_match(
         // ── Advanced Recon engines ─────────────────────────────────────────────
         "threat_intel_fusion" => crate::advanced_recon_engines::run_threat_intel_fusion_result(target).await,
         "attack_surface_quantify" => crate::advanced_recon_engines::run_attack_surface_quantify_result(target).await,
+        "first_mover_surface_delta" => {
+            crate::first_mover_surface_delta::run_first_mover_surface_delta_result(target, ctx).await
+        }
         "external_exposure_supreme" => {
             crate::external_exposure_supreme::run_external_exposure_supreme_result(target, ctx).await
         }

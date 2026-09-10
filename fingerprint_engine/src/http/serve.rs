@@ -1420,7 +1420,7 @@ struct DeceptionDeployCloudBody {
     destructive_confirm: String,
 }
 
-const DEFAULT_CLIENT_CONFIGS_JSON: &str = r#"{"enabled_engines":["osint","asm","supply_chain","bola_idor","llm_path_fuzz","semantic_ai_fuzz","microsecond_timing","ai_adversarial_redteam","nexus_sovereign_swarm"],"roe_mode":"safe_proofs","stealth_level":50,"industrial_ot_enabled":false}"#;
+const DEFAULT_CLIENT_CONFIGS_JSON: &str = r#"{"enabled_engines":["osint","asm","first_mover_surface_delta","leak_hunter","email_dns_posture","pki_tls","subdomain_takeover","supply_chain","bola_idor","jwt_attack","oauth_oidc","external_exposure_supreme","microsecond_timing"],"roe_mode":"safe_proofs","stealth_level":50,"industrial_ot_enabled":false}"#;
 
 // Logs an internal error server-side and returns a generic, non-leaking detail string
 // for the client. Used at `INTERNAL_SERVER_ERROR` sites so raw sqlx/internal error text

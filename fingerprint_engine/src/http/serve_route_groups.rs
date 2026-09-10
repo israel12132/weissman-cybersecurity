@@ -378,6 +378,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             get(api_client_attack_surface_graph),
         )
         .route(
+            "/api/clients/:id/surface-diff",
+            get(api_client_surface_diff),
+        )
+        .route(
             "/api/clients/:id/semantic-state-machine",
             get(api_client_semantic_state_machine),
         )

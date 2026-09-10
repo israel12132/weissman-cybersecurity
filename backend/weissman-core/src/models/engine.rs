@@ -77,6 +77,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     // ── Core engines ──────────────────────────────────────────────────────────
     "osint",
     "asm",
+    "first_mover_surface_delta",
     "leak_hunter",
     "discovery_engine",
     "recon",
@@ -678,7 +679,24 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
-pub const DEFAULT_ORCHESTRATOR_ENGINES: &[&str] = KNOWN_ENGINE_IDS;
+///
+/// External-first, no LLM required. LLM engines remain in the catalog and can be
+/// enabled per client; they must not be the default continuous loop.
+pub const DEFAULT_ORCHESTRATOR_ENGINES: &[&str] = &[
+    "osint",
+    "asm",
+    "first_mover_surface_delta",
+    "leak_hunter",
+    "email_dns_posture",
+    "pki_tls",
+    "subdomain_takeover",
+    "supply_chain",
+    "bola_idor",
+    "jwt_attack",
+    "oauth_oidc",
+    "external_exposure_supreme",
+    "microsecond_timing",
+];
 
 /// Full ordered registry of all production engines in proper execution order.
 /// Matches frontend/src/lib/enginesRegistry.js (same count as `PRODUCTION_ENGINE_IDS`).
@@ -686,6 +704,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     // Recon & OSINT (run first to discover attack surface)
     "osint",
     "asm",
+    "first_mover_surface_delta",
     "leak_hunter",
     "discovery_engine",
     "recon",
@@ -1390,9 +1409,7 @@ pub fn resolve_engine_id(id: &str) -> &str {
         }
         "azure_ad_attack" => "azure_attack",
         "terraform_state_steal" => "terraform_state_attack",
-        "cloud_cost_dos"
-        | "sdn_controller_exploit"
-        | "nfv_mano_attack" => "cloud_network_attack",
+        "cloud_cost_dos" | "sdn_controller_exploit" | "nfv_mano_attack" => "cloud_network_attack",
         "ecr_image_poison" => "ecr_registry_attack",
         // Legacy OT / embedded aliases.
         "firmware_exploit"
@@ -1544,7 +1561,10 @@ pub fn is_known_engine_id(s: &str) -> bool {
 
 #[must_use]
 pub fn default_enabled_engine_ids() -> Vec<String> {
-    KNOWN_ENGINE_IDS.iter().map(|s| (*s).to_string()).collect()
+    DEFAULT_ORCHESTRATOR_ENGINES
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect()
 }
 
 /// Order a list of engine IDs by their position in the registry.
@@ -1574,10 +1594,7 @@ mod production_registry_tests {
     fn production_engine_ids_are_unique() {
         let mut seen = HashSet::new();
         for id in PRODUCTION_ENGINE_IDS {
-            assert!(
-                seen.insert(*id),
-                "duplicate production engine id: {id}"
-            );
+            assert!(seen.insert(*id), "duplicate production engine id: {id}");
         }
         assert_eq!(
             PRODUCTION_ENGINE_IDS.len(),
@@ -1587,6 +1604,26 @@ mod production_registry_tests {
         assert!(
             PRODUCTION_ENGINE_IDS.len() >= 580,
             "do not shrink the registry to match an old container image"
+        );
+    }
+
+    #[test]
+    fn default_orchestrator_is_external_first_without_llm() {
+        for id in DEFAULT_ORCHESTRATOR_ENGINES {
+            assert!(
+                PRODUCTION_ENGINE_IDS.contains(id),
+                "default orchestrator engine {id} missing from PRODUCTION_ENGINE_IDS"
+            );
+        }
+        assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"asm"));
+        assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_mover_surface_delta"));
+        assert!(
+            !DEFAULT_ORCHESTRATOR_ENGINES
+                .iter()
+                .any(|id| id.contains("llm")
+                    || *id == "semantic_ai_fuzz"
+                    || *id == "ai_adversarial_redteam"),
+            "default continuous pack must not require an LLM endpoint"
         );
     }
 }

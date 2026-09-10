@@ -789,5 +789,10 @@ export const EXPLICIT_PARAM_DEFS = {
     { key: 'check_remote', label: 'Remote Windows privilege ports', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
     { key: 'max_findings', label: 'Max Findings', type: 'number', placeholder: '200', defaultVal: '200', min: 20, max: 500 },
   ],
+  first_mover_surface_delta: [
+    { key: 'include_ct', label: 'Certificate Transparency (crt.sh)', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'include_http', label: 'Live HTTP/TLS probe on hosts', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'intensity', label: 'Scan Intensity', type: 'select', options: ['light', 'normal', 'aggressive'], defaultVal: 'normal' },
+  ],
 }
 

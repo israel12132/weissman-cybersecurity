@@ -8,6 +8,7 @@
 //!
 //! | Engine ID | Domains fused |
 //! |-----------|---------------|
+//! | `first_mover_surface_delta` | Live DNS/HTTP/CT vs last snapshot — new/changed hosts before weekly scanners |
 //! | `external_exposure_supreme` | ASM + email/DNS + cloud posture |
 //! | `identity_attack_chain` | Kerberos + spray + ITDR auth events |
 //! | `pipeline_to_runtime_risk` | IaC + supply chain + CI/CD |
@@ -23,6 +24,7 @@
 
 /// Production fusion engine IDs — must remain a subset of `PRODUCTION_ENGINE_IDS`.
 pub const FUSION_ENGINE_IDS: &[&str] = &[
+    "first_mover_surface_delta",
     "external_exposure_supreme",
     "identity_attack_chain",
     "pipeline_to_runtime_risk",

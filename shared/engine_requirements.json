@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-09-07T22:34:26.405Z",
-  "production_engine_count": 580,
+  "generated_at": "2026-09-10T14:42:10.129Z",
+  "production_engine_count": 581,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 423
+      "engine_count": 424
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -314,6 +314,16 @@
       "group": "recon",
       "kind": "real_probe",
       "label": "Attack Surface Management",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "first_mover_surface_delta": {
+      "id": "first_mover_surface_delta",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "First-Mover Surface Delta",
       "requirements": [
         "contact_email",
         "scope_domains"

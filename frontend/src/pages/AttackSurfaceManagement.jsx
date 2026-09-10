@@ -13,6 +13,7 @@ import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
 
 const ENGINE = 'asm'
+const DELTA_ENGINE = 'first_mover_surface_delta'
 const ACCENT = '#22d3ee'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -45,6 +46,7 @@ const ASSET_META = {
   sensitive_path: { icon: '🚨', labelKey: 'pages.attackSurfaceManagement.asset_sensitive_path' },
   robots: { icon: '🤖', labelKey: 'pages.attackSurfaceManagement.asset_robots' },
   report: { icon: '📊', labelKey: 'pages.attackSurfaceManagement.asset_report' },
+  first_mover: { icon: '⚡', labelKey: 'pages.attackSurfaceManagement.asset_first_mover' },
 }
 
 // All knobs map 1:1 to EngineRunContext::job_params keys read by asm_engine::run_asm_result_ctx.
@@ -252,6 +254,109 @@ function SubdomainInventory({ hosts }) {
   )
 }
 
+export function FirstMoverDeltaPanel({
+  diff,
+  loading,
+  hunting,
+  onHunt,
+  huntDisabled,
+}) {
+  const { t } = useTranslation()
+  const added = Array.isArray(diff?.added) ? diff.added : []
+  const removed = Array.isArray(diff?.removed) ? diff.removed : []
+  const changed = Array.isArray(diff?.changed) ? diff.changed : []
+  const rows = [
+    ...added.map((r) => ({ ...r, kind: 'added' })),
+    ...changed.map((r) => ({ ...r, kind: 'changed' })),
+    ...removed.map((r) => ({ ...r, kind: 'removed' })),
+  ]
+  const kindColor = {
+    added: '#22d3ee',
+    changed: '#fbbf24',
+    removed: '#94a3b8',
+  }
+  const kindKey = {
+    added: 'pages.attackSurfaceManagement.first_mover_kind_added',
+    changed: 'pages.attackSurfaceManagement.first_mover_kind_changed',
+    removed: 'pages.attackSurfaceManagement.first_mover_kind_removed',
+  }
+
+  return (
+    <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-950/40 via-black/40 to-cyan-950/30 p-4 mb-5">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-amber-300/80">
+            {t('pages.attackSurfaceManagement.first_mover_title')}
+          </p>
+          <p className="text-[12px] text-[var(--text-tertiary)] font-mono mt-1 max-w-2xl">
+            {t('pages.attackSurfaceManagement.first_mover_subtitle')}
+          </p>
+        </div>
+        <Button
+          variant="unstyled"
+          type="button"
+          onClick={onHunt}
+          disabled={huntDisabled || hunting}
+          className="px-4 py-2 rounded-lg text-sm font-mono font-semibold bg-amber-500/20 border border-amber-400/40 text-amber-100 hover:bg-amber-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+        >
+          {hunting
+            ? `⟳ ${t('pages.attackSurfaceManagement.first_mover_hunting')}`
+            : `⚡ ${t('pages.attackSurfaceManagement.first_mover_hunt')}`}
+        </Button>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+        {[
+          [t('pages.attackSurfaceManagement.first_mover_added'), added.length, '#22d3ee'],
+          [t('pages.attackSurfaceManagement.first_mover_changed'), changed.length, '#fbbf24'],
+          [t('pages.attackSurfaceManagement.first_mover_removed'), removed.length, '#94a3b8'],
+          [t('pages.attackSurfaceManagement.first_mover_assets'), Number(diff?.current_count ?? 0), '#34d399'],
+        ].map(([label, value, color]) => (
+          <div key={label} className="rounded-lg border border-white/[0.07] bg-black/30 px-3 py-2">
+            <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)] truncate">{label}</p>
+            <p className="text-xl font-bold tabular-nums" style={{ color }}>{value}</p>
+          </div>
+        ))}
+      </div>
+      {diff?.current_at && (
+        <p className="text-[10px] font-mono text-[var(--text-muted)] mb-2">
+          {t('pages.attackSurfaceManagement.first_mover_last_snapshot')}: {diff.current_at}
+          {diff.baseline_only ? ` · ${t('pages.attackSurfaceManagement.first_mover_baseline')}` : ''}
+        </p>
+      )}
+      {loading && !diff && (
+        <p className="text-[12px] font-mono text-[var(--text-muted)]">{t('pages.attackSurfaceManagement.empty_running')}</p>
+      )}
+      {!loading && !diff?.current_count && rows.length === 0 && (
+        <p className="text-[12px] font-mono text-[var(--text-tertiary)]">{t('pages.attackSurfaceManagement.first_mover_empty')}</p>
+      )}
+      {rows.length > 0 && (
+        <div className="overflow-x-auto rounded-xl border border-white/[0.06]">
+          <table className="w-full text-start text-[12px] font-mono">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] border-b border-white/[0.06]">
+                <th className="px-3 py-2 font-medium">{t('pages.attackSurfaceManagement.first_mover_col_host')}</th>
+                <th className="px-3 py-2 font-medium">{t('pages.attackSurfaceManagement.first_mover_col_change')}</th>
+                <th className="px-3 py-2 font-medium">{t('pages.attackSurfaceManagement.first_mover_col_evidence')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, 24).map((r) => (
+                <tr key={`${r.kind}-${r.fqdn}`} className="border-t border-white/[0.04]">
+                  <td className="px-3 py-2 text-cyan-100">{r.fqdn}</td>
+                  <td className="px-3 py-2">
+                    <span style={{ color: kindColor[r.kind] }}>{t(kindKey[r.kind])}</span>
+                  </td>
+                  <td className="px-3 py-2 text-[var(--text-tertiary)] max-w-xl truncate">{r.evidence}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function FindingCard({ f }) {
   const { t } = useTranslation()
   const sev = (f.severity || 'info').toLowerCase()
@@ -316,6 +421,9 @@ export default function AttackSurfaceManagement() {
   const [toast, setToast] = useState(null)
   const [corpus, setCorpus] = useState(null)
   const [assetFilter, setAssetFilter] = useState('all')
+  const [surfaceDiff, setSurfaceDiff] = useState(null)
+  const [deltaLoading, setDeltaLoading] = useState(false)
+  const [deltaJobId, setDeltaJobId] = useState(null)
 
   const refreshCorpus = useCallback(() => {
     apiFetch('/api/discovery-knowledge/stats')
@@ -360,10 +468,38 @@ export default function AttackSurfaceManagement() {
     })
   }, [refreshFromHistory, setLastUpdated, setLastJobId])
 
+  const loadSurfaceDiff = useCallback(async (clientId) => {
+    if (!clientId) {
+      setSurfaceDiff(null)
+      return
+    }
+    setDeltaLoading(true)
+    try {
+      const d = await apiFetch(`/api/clients/${clientId}/surface-diff`)
+      if (d && typeof d === 'object') setSurfaceDiff(d)
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.debug('surface-diff skipped', err)
+      }
+      setSurfaceDiff(null)
+    } finally {
+      setDeltaLoading(false)
+    }
+  }, [])
+
   const handleRefresh = useCallback(async () => {
     const run = await refreshFromHistory()
     applyHistoryFindings(run, setFindings, { setLastUpdated, setJobId: setLastJobId })
-  }, [refreshFromHistory, setLastUpdated, setLastJobId])
+    await loadSurfaceDiff(selectedClientId)
+  }, [refreshFromHistory, setLastUpdated, setLastJobId, loadSurfaceDiff, selectedClientId])
+
+  useEffect(() => {
+    apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    loadSurfaceDiff(selectedClientId)
+  }, [selectedClientId, loadSurfaceDiff])
 
   useEffect(() => {
     refreshCorpus()
@@ -393,6 +529,15 @@ export default function AttackSurfaceManagement() {
       if (job?.id) setLastJobId(String(job.id))
       setJobId(null)
       refreshCorpus()
+      loadSurfaceDiff(selectedClientId)
+    },
+  })
+
+  useJobPoll(deltaJobId, {
+    enabled: Boolean(deltaJobId),
+    onComplete: async () => {
+      setDeltaJobId(null)
+      await loadSurfaceDiff(selectedClientId)
     },
   })
 
@@ -422,6 +567,29 @@ export default function AttackSurfaceManagement() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, target, params, showToast, t])
+
+  const handleFirstMoverHunt = useCallback(async () => {
+    if (!selectedClientId) { showToast('error', t('pages.attackSurfaceManagement.toast_select_client')); return }
+    if (!target.trim()) { showToast('error', t('pages.attackSurfaceManagement.toast_enter_target')); return }
+    try {
+      const { ok, data: d, status } = await postScan({
+        engine: DELTA_ENGINE,
+        client_id: Number(selectedClientId),
+        target: target.trim(),
+        include_ct: true,
+        include_http: true,
+      })
+      if (!ok) {
+        showToast('error', d.detail || d.error || t('pages.attackSurfaceManagement.toast_scan_failed', { status }))
+        return
+      }
+      const jid = d.job_id ?? ''
+      showToast('info', t('pages.attackSurfaceManagement.toast_scan_queued', { jid }))
+      if (jid) setDeltaJobId(jid)
+    } catch (e) {
+      showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
+    }
+  }, [selectedClientId, target, postScan, showToast, t])
 
   const assetTypes = useMemo(() => {
     const s = new Set(issues.map((f) => f.asset).filter(Boolean))
@@ -626,6 +794,14 @@ export default function AttackSurfaceManagement() {
           )}
         </AnimatePresence>
       </div>
+
+      <FirstMoverDeltaPanel
+        diff={surfaceDiff}
+        loading={deltaLoading}
+        hunting={Boolean(deltaJobId)}
+        onHunt={handleFirstMoverHunt}
+        huntDisabled={!selectedClientId || status === 'running'}
+      />
 
       {/* ── Results ─────────────────────────────────────────────────── */}
       {status === 'running' && findings.length === 0 && (

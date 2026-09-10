@@ -1,5 +1,5 @@
 /**
- * Master registry of all 580 production attack engines.
+ * Master registry of all 581 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 580 production engines in registry order */
+/** All 581 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -31,6 +31,14 @@ export const ENGINES_REGISTRY = [
     group: 'recon',
     mitre: 'T1595',
     description: 'External Attack Surface Management (EASM): asset discovery (CT + DNS brute), service/port exposure, TLS & HTTP posture, cloud footprint, subdomain takeover, and a 0–100 attack-surface score with an attack-surface graph',
+    requiresTarget: true,
+  },
+  {
+    id: 'first_mover_surface_delta',
+    label: 'First-Mover Surface Delta',
+    group: 'recon',
+    mitre: 'T1595',
+    description: 'Live DNS/HTTP/CT snapshot vs last run — emits only new, removed, or changed internet-facing hosts with takeover and A-record-flip evidence. Finds exposure hours before weekly scanners.',
     requiresTarget: true,
   },
   {

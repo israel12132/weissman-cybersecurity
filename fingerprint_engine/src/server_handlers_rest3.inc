@@ -87,6 +87,35 @@ async fn api_client_attack_surface_graph(
     (StatusCode::OK, Json(json!({ "nodes": nodes, "edges": edges, "run_id": run_id, "vuln_findings": vuln_findings }))).into_response()
 }
 
+async fn api_client_surface_diff(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+) -> Response {
+    match crate::first_mover_surface_delta::api_surface_diff_json(
+        &state.app_pool,
+        auth.tenant_id,
+        id,
+    )
+    .await
+    {
+        Ok(body) => (StatusCode::OK, Json(body)).into_response(),
+        Err(e) => {
+            tracing::warn!(target: "surface_diff", client_id = id, error = %e, "surface-diff read failed");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "error": "surface diff temporarily unavailable",
+                    "added": [],
+                    "removed": [],
+                    "changed": [],
+                })),
+            )
+                .into_response()
+        }
+    }
+}
+
 async fn api_client_semantic_state_machine(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,

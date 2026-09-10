@@ -12,13 +12,13 @@ Regenerate: `node scripts/engine_coverage_accuracy_report.mjs` · Gate: `--check
 
 | Class | Count | Share |
 |-------|------:|------:|
-| **Live probes** (real network / host / TLS / DNS I/O) | 318 | 54.8% |
-| Aliases (retag → a live probe, same detection logic) | 204 | 35.2% |
+| **Live probes** (real network / host / TLS / DNS I/O) | 319 | 54.9% |
+| Aliases (retag → a live probe, same detection logic) | 204 | 35.1% |
 | Agent-required (host-level; endpoint agent performs the detection) | 58 | 10.0% |
 | **No execution path** (catalog entries that do nothing) | 0 | 0.0% |
-| **Catalog total** | **580** | 100% |
+| **Catalog total** | **581** | 100% |
 
-- **310 distinct probe implementations** back the 318 live
+- **311 distinct probe implementations** back the 319 live
   probes (delegates that share one implementation are counted once).
 - **0 engines with no execution path** — the catalog headline is fully backed.
 - A companion gate, `engine_reality_audit.mjs`, independently proves the same *depth* invariant.
@@ -37,8 +37,8 @@ is pure-alias "coverage theater".
 | Network / Protocol | 59 | 25 | 23 | 11 | 32 |
 | Stealth / Evasion | 53 | 11 | 25 | 17 | 35 |
 | Cloud / Infra | 51 | 28 | 23 | 0 | 24 |
+| Recon & OSINT | 47 | 26 | 21 | 0 | 27 |
 | AI / LLM | 47 | 29 | 18 | 0 | 23 |
-| Recon & OSINT | 46 | 25 | 21 | 0 | 27 |
 | Crypto / Identity | 44 | 22 | 19 | 3 | 24 |
 | OT / ICS / IoT | 43 | 31 | 10 | 2 | 20 |
 | Supply Chain | 33 | 21 | 12 | 0 | 11 |
@@ -64,7 +64,7 @@ False positives are handled by a per-`(tenant, engine, signature_hash)` feedback
 
 ## 4. Why this matters against XSOAR / Splunk SOAR / Torq / Tines / Swimlane
 
-Those platforms orchestrate *other people's* detections. Weissman ships **318 in-house
+Those platforms orchestrate *other people's* detections. Weissman ships **319 in-house
 offensive probes across 15 domains and 198 ATT&CK
 techniques**, each wired to real I/O and each discounted by a live accuracy loop — offensive
 coverage plus in-house threat intelligence in one backend, not a workflow engine bolted onto

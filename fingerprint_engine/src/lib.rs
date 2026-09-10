@@ -98,6 +98,7 @@ pub mod findings_correlator;
 pub mod findings_gate;
 pub mod findings_persist;
 pub mod fingerprint;
+pub mod first_mover_surface_delta;
 pub mod fleet_shaping;
 pub mod fp_feedback;
 pub mod fuzz_http_pool;
