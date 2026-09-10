@@ -120,7 +120,7 @@ const PROFILES: &[AptProfile] = &[
             "cloud_data_exfil",
         ],
         extra_technique_ids: &["identity_spray"],
-        stages: &[STAGE_IA, STAGE_PRIV, STAGE_LAT, STAGE_IMPACT],
+        stages: &[STAGE_IA, STAGE_PRIV, STAGE_LAT, STAGE_EXFIL, STAGE_IMPACT],
         detection_surfaces: &["waf", "edr", "mfa"],
         requires_industrial_ot: false,
         roe_notes: "Authorized tenant/client scope only. Dual-approval and execution_scope_pin still apply. Council HITL may propose allow-listed techniques only. No auto external disclosure.",

@@ -26,10 +26,11 @@ vi.mock('../context/ClientContext', () => ({
 
 vi.mock('./PageShell', () => ({
   __esModule: true,
-  default: ({ title, badge, children }) => (
+  default: ({ title, badge, children, actions }) => (
     <div>
       <h1>{title}</h1>
       {badge && <span>{badge}</span>}
+      {actions}
       {children}
     </div>
   ),
@@ -358,9 +359,10 @@ describe('AdversaryCampaignFabric', () => {
     expect(screen.getByText('pages.adversaryCampaign.gap_proof_failed')).toBeInTheDocument()
     expect(screen.getByText('pages.adversaryCampaign.control_proof_gate')).toBeInTheDocument()
     expect(screen.getByText('detection_gap_recorded')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'pages.adversaryCampaign.open_fix_first' }).getAttribute('href')).toContain(
-      '/remediation',
-    )
-    expect(screen.getByText('Patch RCE')).toBeInTheDocument()
+    expect(
+      screen.getAllByRole('link', { name: 'pages.adversaryCampaign.open_fix_first' })[0].getAttribute('href'),
+    ).toContain('/remediation')
+    expect(screen.getByTestId('campaign-remediation')).toBeInTheDocument()
+    expect(screen.getByText(/Patch RCE/)).toBeInTheDocument()
   })
 })
