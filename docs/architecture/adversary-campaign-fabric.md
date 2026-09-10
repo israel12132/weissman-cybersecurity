@@ -1,8 +1,9 @@
 # Adversary Campaign Fabric (P0)
 
 Sync layer that turns isolated production engines into a coordinated,
-evidence-grounded adversary campaign. **This document is P0 only** — P1
-proof-layer and P2 APT profiles are out of scope.
+evidence-grounded adversary campaign. **This document is P0.** Safe
+exploitability validation that upgrades steps from observed → proven lives in
+**[proof-layer.md](./proof-layer.md) (P1)**. P2 APT profiles are out of scope.
 
 ## Why it exists
 
@@ -32,19 +33,21 @@ Event kinds (v1): `campaign_created`, `campaign_started`, `campaign_paused`,
 `world_state_snapshot`, `finding_observed`, `path_snapshot_taken`,
 `technique_planned`, `technique_dispatched`, `technique_proven`,
 `technique_failed`, `goal_reached`, `campaign_blocked`,
-`mesh_blackboard_seeded`, `remediation_verified`.
+`mesh_blackboard_seeded`, `remediation_verified`, `proof_failed` (P1).
 
 This is **not** a fourth bus. Jobs stay on weissman-job-bus (payload
 `campaign_id`). Redis/CEM-DAGO blackboard `campaign:{uuid}` is the live
 projection. Postgres `weissman_campaign_events` is the durable hash chain.
 
-`TechniqueProven` is **not** job success. Outcome facts are the intersection of
-planned STRIPS effects and facts rebuilt from live findings.
+`TechniqueProven` is **not** job success. P1 requires `proof_status = proven`
+and attached safe evidence before privilege / lateral / impact facts enter
+WorldState. Observation facts (`service:web`, `vuln:*`) still seed from live
+findings.
 
 `RemediationVerified` is emitted only when the existing `remediation_verify`
 job reports `outcome.closed` (HFV `VERIFIED_FIXED`). Analyst `FIXED` does not
-mint the event. P0 is a bus stub on the closed-loop path — not a full P1
-proof layer.
+mint the event. Closed-loop verify is still the P0 bus stub; exploitability
+proof is P1 (`docs/architecture/proof-layer.md`).
 
 GET `/api/campaigns/:id` includes `spine`, `council`, and `mesh.waves`.
 Waves are a **schedule preview**; they never enqueue. `engine_dispatch` is the
@@ -84,6 +87,7 @@ Spine columns (correlation only, never widen scope):
 | `GET /api/campaigns/:id/plan` | Plan + WorldState | authenticated |
 | `GET /api/campaigns/:id/steps` | Step ledger | authenticated |
 | `GET /api/campaigns/:id/events` | Event chain | authenticated |
+| `POST /api/campaigns/:id/steps/:step_id/proof` | P1 safe-proof retry for one step | operator+ |
 
 Portal sessions are pinned via `force_json_client_id` / `assigned_client_id`.
 
@@ -110,11 +114,13 @@ If the client has no findings that ground a path to the goal, the campaign
 ## Tests
 
 ```bash
-cargo test -p fingerprint_engine adversary_campaign attack_chain_planner scan_routing --lib
+cargo test -p fingerprint_engine adversary_campaign attack_chain_planner scan_routing proof_layer --lib
 cd frontend && npx vitest run src/pages/AdversaryCampaignFabric.test.jsx src/i18n/localeParity.test.js
 node scripts/weissman-ui-audit.mjs
 node scripts/verify_i18n_no_default_values.mjs
 ```
+
+P1 proof how-to: `docs/architecture/proof-layer.md`.
 
 ## Technique → engine map
 

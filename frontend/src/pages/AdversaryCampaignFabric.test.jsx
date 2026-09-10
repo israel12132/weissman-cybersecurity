@@ -90,7 +90,7 @@ describe('AdversaryCampaignFabric', () => {
           status: 'running',
           goal_fact: 'impact:objective',
         },
-        world_state: { facts: ['service:web', 'vuln:rce'], evidence: { 'vuln:rce': ['fid-1'] } },
+        world_state: { facts: ['service:web', 'vuln:rce'], evidence: { 'vuln:rce': ['fid-1'] }, proven_facts: [] },
         steps: [{
           id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
           seq: 1,
@@ -99,6 +99,7 @@ describe('AdversaryCampaignFabric', () => {
           mitre: 'T1190',
           engine_id: 'rce_exploit_engine',
           status: 'dispatched',
+          proof_status: 'observed',
         }],
         events: [{ kind: 'technique_dispatched', event_version: 1, event_hash: 'abc' }],
         mesh: {
@@ -146,5 +147,97 @@ describe('AdversaryCampaignFabric', () => {
     expect(screen.getByRole('link', { name: 'pages.adversaryCampaign.open_mesh' }).getAttribute('href')).toContain(
       'scan_id=campaign%3Aaaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
     )
+  })
+
+  it('shows Proven WorldState facts and posts a step proof without inventing capability', async () => {
+    apiFetch.mockImplementation((url, opts) => {
+      if (url.startsWith('/api/campaigns?')) {
+        return Promise.resolve({
+          ok: true,
+          campaigns: [{
+            id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+            client_id: 9,
+            goal_fact: 'access:foothold',
+            status: 'running',
+            asset_key: 'app.example',
+          }],
+          allowed_goals: ['access:foothold'],
+        })
+      }
+      if (opts?.method === 'POST' && String(url).includes('/proof')) {
+        return Promise.resolve({
+          ok: true,
+          campaign: {
+            id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+            client_id: 9,
+            status: 'running',
+            goal_fact: 'access:foothold',
+          },
+          world_state: {
+            facts: ['service:web', 'vuln:rce', 'access:foothold'],
+            evidence: { 'access:foothold': ['step-1'] },
+            proven_facts: ['access:foothold'],
+          },
+          steps: [{
+            id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+            seq: 1,
+            technique_id: 'exploit_rce_web',
+            technique_name: 'Exploit public-facing app (RCE)',
+            mitre: 'T1190',
+            engine_id: 'rce_exploit_engine',
+            status: 'succeeded',
+            proof_status: 'proven',
+            proof_evidence: { reason: 'OAST hit', artifact_ids: [3], invented: false },
+          }],
+          events: [{ kind: 'technique_proven', event_version: 1, event_hash: 'def' }],
+          proof: { privilege_facts_require_proven: true, safety_rails_no_shells: true },
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        campaign: {
+          id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+          client_id: 9,
+          status: 'running',
+          goal_fact: 'access:foothold',
+        },
+        world_state: {
+          facts: ['service:web', 'vuln:rce'],
+          evidence: { 'vuln:rce': ['fid-1'] },
+          proven_facts: [],
+        },
+        steps: [{
+          id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+          seq: 1,
+          technique_id: 'exploit_rce_web',
+          technique_name: 'Exploit public-facing app (RCE)',
+          mitre: 'T1190',
+          engine_id: 'rce_exploit_engine',
+          status: 'succeeded',
+          proof_status: 'observed',
+        }],
+        events: [{ kind: 'finding_observed', event_version: 1, event_hash: 'abc' }],
+        proof: { privilege_facts_require_proven: true, safety_rails_no_shells: true },
+      })
+    })
+    render(
+      <MemoryRouter>
+        <AdversaryCampaignFabric />
+      </MemoryRouter>,
+    )
+    expect(await screen.findByText('pages.adversaryCampaign.proof_heading')).toBeInTheDocument()
+    expect(screen.getByText('pages.adversaryCampaign.proof_note')).toBeInTheDocument()
+    expect(screen.getByText('findings.proof.observed')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'pages.adversaryCampaign.run_proof' }))
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/campaigns/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/steps/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/proof',
+        { method: 'POST' },
+      )
+    })
+    expect(await screen.findByText('access:foothold')).toBeInTheDocument()
+    expect(screen.getByText('pages.adversaryCampaign.fact_proven')).toBeInTheDocument()
+    expect(screen.getByText('findings.proof.proven')).toBeInTheDocument()
+    expect(screen.getByText('technique_proven')).toBeInTheDocument()
   })
 })

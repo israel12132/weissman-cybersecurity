@@ -2,7 +2,7 @@
  * Serialize / restore the findings filter state to URL query params so a filtered
  * view is shareable and bookmarkable. Pure functions — no React, fully testable.
  *
- * Params: q (search), sev (severity), status, engine, kev (1). Empty/default
+ * Params: q (search), sev (severity), status, engine, kev (1), proof (1). Empty/default
  * values are omitted so a clean view yields a clean URL.
  */
 
@@ -21,12 +21,13 @@ export function encodeFindingsFilters(state = {}) {
     if (v != null && String(v).trim() !== '') out[param] = String(v)
   }
   if (state.kevFilter) out.kev = '1'
+  if (state.proofFilter) out.proof = '1'
   return out
 }
 
 /**
  * @param {URLSearchParams | Record<string,string>} params
- * @returns {{globalFilter:string,severityFilter:string,statusFilter:string,engineFilter:string,kevFilter:boolean}}
+ * @returns {{globalFilter:string,severityFilter:string,statusFilter:string,engineFilter:string,kevFilter:boolean,proofFilter:boolean}}
  */
 export function decodeFindingsFilters(params) {
   const get = (k) => (
@@ -38,6 +39,7 @@ export function decodeFindingsFilters(params) {
     statusFilter: get('status'),
     engineFilter: get('engine'),
     kevFilter: get('kev') === '1',
+    proofFilter: get('proof') === '1',
   }
 }
 
@@ -45,6 +47,6 @@ export function decodeFindingsFilters(params) {
 export function hasAnyFilter(state = {}) {
   return Boolean(
     state.globalFilter || state.severityFilter || state.statusFilter
-    || state.engineFilter || state.kevFilter,
+    || state.engineFilter || state.kevFilter || state.proofFilter,
   )
 }

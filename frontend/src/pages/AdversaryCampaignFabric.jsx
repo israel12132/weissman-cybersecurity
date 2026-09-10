@@ -10,9 +10,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { Crosshair, Play, Pause, GitBranch } from 'lucide-react'
+import { Crosshair, Play, Pause, GitBranch, FlaskConical, Loader2 } from 'lucide-react'
 import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
@@ -20,6 +21,7 @@ import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../utils/apiFetch'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 import Button from '../components/ui/Button'
+import ProofStatusBadge, { proofStatusOf } from '../components/findings/ProofStatusBadge'
 
 const NS = 'pages.adversaryCampaign'
 
@@ -67,6 +69,8 @@ export default function AdversaryCampaignFabric() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [goal, setGoal] = useState('impact:objective')
+  const [provenOnly, setProvenOnly] = useState(false)
+  const [provingStep, setProvingStep] = useState(null)
 
   const loadList = useCallback(async () => {
     setLoading(true)
@@ -177,6 +181,24 @@ export default function AdversaryCampaignFabric() {
     }
   }, [loadList, t])
 
+  const proveStep = useCallback(async (campaignId, stepId) => {
+    if (!campaignId || !stepId) return
+    setProvingStep(stepId)
+    setError('')
+    try {
+      const data = await apiFetch(
+        `/api/campaigns/${encodeURIComponent(campaignId)}/steps/${encodeURIComponent(stepId)}/proof`,
+        { method: 'POST' },
+      )
+      setActive(data)
+      await loadList()
+    } catch (e) {
+      setError(e.message || t(`${NS}.proof_failed_btn`))
+    } finally {
+      setProvingStep(null)
+    }
+  }, [loadList, t])
+
   const campaignRows = useMemo(
     () =>
       campaigns.map((c) => ({
@@ -206,7 +228,15 @@ export default function AdversaryCampaignFabric() {
 
   const facts = active?.world_state?.facts
   const evidence = active?.world_state?.evidence || {}
+  const provenFacts = useMemo(() => {
+    const raw = active?.world_state?.proven_facts
+    return new Set(Array.isArray(raw) ? raw.map(String) : [])
+  }, [active?.world_state?.proven_facts])
   const steps = Array.isArray(active?.steps) ? active.steps : []
+  const visibleSteps = useMemo(
+    () => (provenOnly ? steps.filter((s) => proofStatusOf(s) === 'proven') : steps),
+    [steps, provenOnly],
+  )
   const events = Array.isArray(active?.events) ? active.events : []
   const campaign = active?.campaign
   const mesh = active?.mesh
@@ -273,6 +303,7 @@ export default function AdversaryCampaignFabric() {
       }
     >
       <div className="space-y-6">
+        <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
         <p className="text-[11px] font-mono text-[var(--text-muted)]">{t(`${NS}.privacy_note`)}</p>
 
         <label className="block">
@@ -472,10 +503,17 @@ export default function AdversaryCampaignFabric() {
                         {facts.map((fact) => (
                           <li
                             key={fact}
-                            className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[11px] font-mono text-cyan-100"
+                            className={`rounded-lg border px-2 py-1 text-[11px] font-mono ${
+                              provenFacts.has(String(fact))
+                                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
+                                : 'border-cyan-500/30 bg-cyan-500/10 text-cyan-100'
+                            }`}
                             title={(evidence[fact] || []).join(', ')}
                           >
                             <span>{fact}</span>
+                            {provenFacts.has(String(fact)) && (
+                              <span className="ms-1 text-[10px] text-emerald-300">{t(`${NS}.fact_proven`)}</span>
+                            )}
                             {Array.isArray(evidence[fact]) && evidence[fact].length > 0 && (
                               <span className="ms-1 text-[10px] text-cyan-300/70">×{evidence[fact].length}</span>
                             )}
@@ -485,15 +523,41 @@ export default function AdversaryCampaignFabric() {
                     )}
                   </div>
 
-                  <div>
+                  <div data-testid="campaign-proof-gate">
                     <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
-                      {t(`${NS}.planned_chain`)}
+                      {t(`${NS}.proof_heading`)}
                     </h2>
-                    {steps.length === 0 ? (
+                    <p className="text-[12px] text-[var(--text-secondary)]">{t(`${NS}.proof_note`)}</p>
+                    {active?.proof?.safety_rails_no_shells && (
+                      <p className="text-[11px] font-mono text-emerald-300/80 mt-1">
+                        {t(`${NS}.rails_roe`)}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                      <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)]">
+                        {t(`${NS}.planned_chain`)}
+                      </h2>
+                      <Button
+                        variant="unstyled"
+                        type="button"
+                        onClick={() => setProvenOnly((v) => !v)}
+                        className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded border ${
+                          provenOnly
+                            ? 'border-emerald-500/40 text-emerald-200 bg-emerald-500/10'
+                            : 'border-[var(--border-default)] text-[var(--text-muted)]'
+                        }`}
+                      >
+                        {t(`${NS}.filter_proven`)}
+                      </Button>
+                    </div>
+                    {visibleSteps.length === 0 ? (
                       <p className="text-[12px] text-[var(--text-muted)]">{t(`${NS}.no_steps`)}</p>
                     ) : (
                       <ol className="space-y-2">
-                        {steps.map((s) => (
+                        {visibleSteps.map((s) => (
                           <li
                             key={s.id || s.seq}
                             className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-3"
@@ -502,15 +566,40 @@ export default function AdversaryCampaignFabric() {
                               <span className="text-[11px] font-mono text-[var(--text-disabled)]">
                                 {t(`${NS}.step_n`, { n: s.seq })} · {s.mitre}
                               </span>
-                              <StatusBadge status={s.status} ns="step" />
+                              <span className="inline-flex items-center gap-1.5">
+                                <ProofStatusBadge status={proofStatusOf(s)} compact />
+                                <StatusBadge status={s.status} ns="step" />
+                              </span>
                             </div>
                             <div className="mt-1 text-sm text-[var(--text-primary)]">{s.technique_name}</div>
                             <div className="text-[11px] font-mono text-[var(--text-muted)]">
                               {s.engine_id}
                               {s.job_id ? ` · ${String(s.job_id).slice(0, 8)}` : ''}
                             </div>
+                            {s.proof_evidence?.reason && (
+                              <p className="mt-1 text-[11px] text-[var(--text-secondary)]">{s.proof_evidence.reason}</p>
+                            )}
+                            {Array.isArray(s.proof_evidence?.artifact_ids) && s.proof_evidence.artifact_ids.length > 0 && (
+                              <p className="text-[10px] font-mono text-emerald-300/80">
+                                {t(`${NS}.open_evidence`)} · {s.proof_evidence.artifact_ids.length}
+                              </p>
+                            )}
                             {s.last_error && (
                               <p className="mt-1 text-[11px] text-rose-300">{s.last_error}</p>
+                            )}
+                            {s.status === 'succeeded' && proofStatusOf(s) !== 'proven' && (
+                              <Button
+                                variant="unstyled"
+                                type="button"
+                                onClick={() => proveStep(campaign.id, s.id)}
+                                disabled={busy || provingStep === s.id}
+                                className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-500/40 text-emerald-200 text-[11px] font-mono hover:bg-emerald-500/10 disabled:opacity-40"
+                              >
+                                {provingStep === s.id
+                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  : <FlaskConical className="w-3.5 h-3.5" />}
+                                {provingStep === s.id ? t(`${NS}.proving`) : t(`${NS}.run_proof`)}
+                              </Button>
                             )}
                           </li>
                         ))}

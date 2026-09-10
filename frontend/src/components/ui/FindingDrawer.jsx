@@ -9,6 +9,8 @@ import KevEpssBadge from './KevEpssBadge'
 import CopyButton from './CopyButton'
 import SupplyChainGraph from './SupplyChainGraph'
 import FindingVerifyButton, { LiveVerdictBadge } from '../findings/FindingLiveVerify'
+import FindingSafeProof, { FindingSafeProofButton } from '../findings/FindingSafeProof'
+import ProofStatusBadge, { proofStatusOf } from '../findings/ProofStatusBadge'
 import Button from './Button'
 
 const REACH_META = {
@@ -113,6 +115,7 @@ export default function FindingDrawer({
   onClose,
   onStatusUpdate,
   onVerifyComplete,
+  onProofComplete,
   statusOptions,
   headerExtra,
   actions = [],
@@ -308,6 +311,7 @@ export default function FindingDrawer({
                       verification={finding.live_verification || finding.raw?.live_verification}
                       verdict={finding.live_verdict}
                     />
+                    <ProofStatusBadge status={proofStatusOf(finding)} compact />
                     {finding.attestation_valid && (
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-emerald-500/30 text-emerald-300/90">
                         {t('components.findingDrawer.attestationValid')}
@@ -402,6 +406,10 @@ export default function FindingDrawer({
                     onVerified={(rawId, verification) => onVerifyComplete?.(rawId, verification)}
                     variant="primary"
                   />
+                  <FindingSafeProofButton
+                    finding={finding}
+                    onProofComplete={onProofComplete}
+                  />
                   {actions.map((action) => (
                     <Button variant="unstyled"
                       key={action.label}
@@ -474,6 +482,10 @@ export default function FindingDrawer({
                   </p>
                 </Section>
               )}
+
+              <Section title={t('components.findingDrawer.safeProof')}>
+                <FindingSafeProof finding={finding} onProofComplete={onProofComplete} />
+              </Section>
 
               <Section title={t('components.findingDrawer.technicalDetails')}>
                 <dl>

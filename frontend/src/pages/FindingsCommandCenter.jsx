@@ -27,6 +27,7 @@ import EmptyState from '../components/ui/EmptyState'
 import DataTable from '../components/ui/DataTable'
 import FindingDrawer from '../components/ui/FindingDrawer'
 import FindingVerifyButton, { LiveVerdictBadge, findingVerifyId } from '../components/findings/FindingLiveVerify'
+import ProofStatusBadge, { proofStatusOf } from '../components/findings/ProofStatusBadge'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import SeverityBadge, {
   SEVERITY_META,
@@ -348,6 +349,15 @@ function buildColumns(t, onVerifyRow) {
         !filterValue || (row.original.status || '').toUpperCase() === filterValue,
     }),
     columnHelper.display({
+      id: 'proof',
+      header: t('findings.col_proof'),
+      size: 120,
+      enableSorting: false,
+      cell: ({ row }) => (
+        <ProofStatusBadge status={proofStatusOf(row.original)} compact />
+      ),
+    }),
+    columnHelper.display({
       id: 'live_verify',
       header: t('findings.col_live_verify'),
       size: 130,
@@ -428,13 +438,14 @@ export default function FindingsCommandCenter() {
   const [engineFilter, setEngineFilter] = useState(initialUrlFilters.engineFilter)
   const [statusFilter, setStatusFilter] = useState(initialUrlFilters.statusFilter)
   const [kevFilter, setKevFilter] = useState(initialUrlFilters.kevFilter)
+  const [proofFilter, setProofFilter] = useState(Boolean(initialUrlFilters.proofFilter))
   const [filtersExpanded, setFiltersExpanded] = useState(true)
 
   // Keep the URL in sync with the active filters (shareable / bookmarkable),
   // preserving any unrelated query params. Replace (no history spam).
   useEffect(() => {
-    const FILTER_KEYS = ['q', 'sev', 'status', 'engine', 'kev']
-    const encoded = encodeFindingsFilters({ globalFilter, severityFilter, statusFilter, engineFilter, kevFilter })
+    const FILTER_KEYS = ['q', 'sev', 'status', 'engine', 'kev', 'proof']
+    const encoded = encodeFindingsFilters({ globalFilter, severityFilter, statusFilter, engineFilter, kevFilter, proofFilter })
     // Compare only our own keys so unrelated params (and their order) never
     // trigger a redundant write — avoids a cosmetic replace() on mount.
     const changed = FILTER_KEYS.some((k) => (encoded[k] ?? '') !== (searchParams.get(k) ?? ''))
@@ -444,7 +455,7 @@ export default function FindingsCommandCenter() {
     for (const [k, v] of Object.entries(encoded)) next.set(k, v)
     setSearchParams(next, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [globalFilter, severityFilter, statusFilter, engineFilter, kevFilter])
+  }, [globalFilter, severityFilter, statusFilter, engineFilter, kevFilter, proofFilter])
 
   // Sorting
   const [sorting, setSorting] = useState([{ id: 'severity', desc: false }])
@@ -557,6 +568,21 @@ export default function FindingsCommandCenter() {
       .catch((e) => toast.error(t('findings.toast_export_failed', { detail: e?.message || t('findings.network_error') })))
   }, [toast, t])
 
+  const handleProofComplete = useCallback((rawId, payload) => {
+    const nextStatus = payload?.proof_status
+    const patch = (f) => (
+      findingVerifyId(f) === String(rawId)
+        ? { ...f, proof_status: nextStatus || f.proof_status }
+        : f
+    )
+    setRawFindings((prev) => prev.map(patch))
+    setSelectedFinding((prev) => {
+      if (!prev) return prev
+      if (findingVerifyId(prev) !== String(rawId)) return prev
+      return { ...prev, proof_status: nextStatus || prev.proof_status }
+    })
+  }, [])
+
   const handleVerifyComplete = useCallback((rawId, verification) => {
     const patch = (f) => (
       findingVerifyId(f) === String(rawId)
@@ -578,9 +604,11 @@ export default function FindingsCommandCenter() {
   const columns = useMemo(() => buildColumns(t, handleVerifyComplete), [t, handleVerifyComplete])
 
   const tableData = useMemo(() => {
-    if (!kevFilter) return rawFindings
-    return rawFindings.filter(isKevListed)
-  }, [rawFindings, kevFilter])
+    let rows = rawFindings
+    if (kevFilter) rows = rows.filter(isKevListed)
+    if (proofFilter) rows = rows.filter((f) => proofStatusOf(f) === 'proven')
+    return rows
+  }, [rawFindings, kevFilter, proofFilter])
 
   // Column filters built from controlled state
   const columnFilters = useMemo(() => {
@@ -595,10 +623,10 @@ export default function FindingsCommandCenter() {
   const saveCurrentView = useCallback(() => {
     const name = viewName.trim()
     if (!name) return
-    saveView(name, { globalFilter, severityFilter, engineFilter, statusFilter, kevFilter, sorting })
+    saveView(name, { globalFilter, severityFilter, engineFilter, statusFilter, kevFilter, proofFilter, sorting })
     setViewName('')
     toast.success(t('findings.view_saved', { name }))
-  }, [viewName, saveView, globalFilter, severityFilter, engineFilter, statusFilter, kevFilter, sorting, toast, t])
+  }, [viewName, saveView, globalFilter, severityFilter, engineFilter, statusFilter, kevFilter, proofFilter, sorting, toast, t])
 
   const applyView = useCallback((state) => {
     if (!state) return
@@ -607,6 +635,7 @@ export default function FindingsCommandCenter() {
     setEngineFilter(state.engineFilter ?? '')
     setStatusFilter(state.statusFilter ?? '')
     setKevFilter(Boolean(state.kevFilter))
+    setProofFilter(Boolean(state.proofFilter))
     if (Array.isArray(state.sorting)) setSorting(state.sorting)
     setPagination((p) => ({ ...p, pageIndex: 0 }))
   }, [])
@@ -647,6 +676,10 @@ export default function FindingsCommandCenter() {
   }, [tableData])
 
   const kevCount = useMemo(() => tableData.filter(isKevListed).length, [tableData])
+  const provenCount = useMemo(
+    () => rawFindings.filter((f) => proofStatusOf(f) === 'proven').length,
+    [rawFindings],
+  )
 
   const statusCounts = useMemo(() => {
     const c = {}
@@ -803,6 +836,17 @@ export default function FindingsCommandCenter() {
                     setPagination((p) => ({ ...p, pageIndex: 0 }))
                   },
                 },
+                {
+                  id: 'findings-filter-proven',
+                  label: t('findings.filter_proven'),
+                  count: provenCount,
+                  active: proofFilter,
+                  color: '#22c55e',
+                  onClick: () => {
+                    setProofFilter((v) => !v)
+                    setPagination((p) => ({ ...p, pageIndex: 0 }))
+                  },
+                },
               ]}
             />
 
@@ -847,7 +891,7 @@ export default function FindingsCommandCenter() {
                 ))}
               </select>
 
-              {(globalFilter || severityFilter || engineFilter || statusFilter || kevFilter) && (
+              {(globalFilter || severityFilter || engineFilter || statusFilter || kevFilter || proofFilter) && (
                 <Button variant="unstyled"
                   type="button"
                   onClick={() => {
@@ -856,6 +900,7 @@ export default function FindingsCommandCenter() {
                     setEngineFilter('')
                     setStatusFilter('')
                     setKevFilter(false)
+                    setProofFilter(false)
                     setPagination((p) => ({ ...p, pageIndex: 0 }))
                   }}
                   className="px-3 py-2.5 rounded-xl text-xs font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
@@ -991,6 +1036,7 @@ export default function FindingsCommandCenter() {
         onClose={handleCloseDrawer}
         onStatusUpdate={handleStatusUpdate}
         onVerifyComplete={handleVerifyComplete}
+        onProofComplete={handleProofComplete}
         statusOptions={FINDING_STATUSES.map(({ value, labelKey }) => ({ value, label: t(labelKey) }))}
         headerExtra={drawerEngineMeta.headerExtra}
         subtitle={drawerEngineMeta.subtitle}

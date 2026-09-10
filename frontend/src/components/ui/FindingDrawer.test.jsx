@@ -27,6 +27,11 @@ vi.mock('../findings/FindingLiveVerify', () => ({
   LiveVerdictBadge: () => null,
   liveVerdictFromFinding: () => null,
 }))
+vi.mock('../findings/FindingSafeProof', () => ({
+  __esModule: true,
+  default: () => <div data-testid="finding-safe-proof-stub" />,
+  FindingSafeProofButton: () => null,
+}))
 vi.mock('./SupplyChainGraph', () => ({ __esModule: true, default: () => null }))
 
 const FINDING = {
@@ -54,6 +59,13 @@ describe('FindingDrawer', () => {
     const dialog = screen.getByRole('dialog')
     expect(dialog).toHaveAttribute('aria-modal', 'true')
     expect(screen.getByText(/SQL Injection in \/login/)).toBeInTheDocument()
+    expect(screen.getByTestId('proof-status-badge')).toHaveAttribute('data-proof-status', 'observed')
+  })
+
+  it('shows a proven proof badge from live proof_status', () => {
+    render(<FindingDrawer finding={{ ...FINDING, proof_status: 'proven' }} onClose={() => {}} />)
+    expect(screen.getByTestId('proof-status-badge')).toHaveAttribute('data-proof-status', 'proven')
+    expect(screen.getByText('components.findingDrawer.safeProof')).toBeInTheDocument()
   })
 
   it('traps initial focus inside the drawer for keyboard users', () => {
