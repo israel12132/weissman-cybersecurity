@@ -17,6 +17,7 @@ vi.mock('@xyflow/react', async () => {
     addEdge: (edge, eds) => [...eds, edge],
     useReactFlow: () => ({
       screenToFlowPosition: ({ x, y }) => ({ x, y }),
+      fitView: () => {},
     }),
     useNodesState: (init) => {
       const [s, set] = React.useState(init)

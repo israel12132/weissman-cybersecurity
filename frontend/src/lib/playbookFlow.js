@@ -110,7 +110,29 @@ const PALETTE_ALIASES = {
 
 export const VISUAL_ONLY_KINDS = new Set(['condition', 'delay'])
 
+/** HTML5 drag payload for NodePalette → PlaybookCanvas. */
+export const NODE_DRAG_MIME = 'application/weissman-node'
+export const NODE_DRAG_TEXT_PREFIX = 'weissman-node:'
+
 export const AUTO_LAYOUT = { x: 180, y: 24, stepY: 130 }
+
+export function setNodeDragData(dataTransfer, type) {
+  if (!dataTransfer || !type) return
+  dataTransfer.setData(NODE_DRAG_MIME, type)
+  dataTransfer.setData('text/plain', `${NODE_DRAG_TEXT_PREFIX}${type}`)
+  dataTransfer.effectAllowed = 'copy'
+}
+
+export function readNodeDragType(dataTransfer) {
+  if (!dataTransfer?.getData) return ''
+  const custom = dataTransfer.getData(NODE_DRAG_MIME)
+  if (custom) return custom
+  const plain = dataTransfer.getData('text/plain') || ''
+  if (plain.startsWith(NODE_DRAG_TEXT_PREFIX)) {
+    return plain.slice(NODE_DRAG_TEXT_PREFIX.length)
+  }
+  return ''
+}
 
 export function kindMeta(type) {
   if (KIND_BY_ID[type]) return KIND_BY_ID[type]

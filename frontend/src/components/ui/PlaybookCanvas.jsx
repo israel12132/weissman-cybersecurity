@@ -35,6 +35,7 @@ import {
   nodeTitleKey,
   summarizeTrigger,
   summarizeAction,
+  readNodeDragType,
 } from '../../lib/playbookFlow.js'
 
 const NODE_ACCENT = {
@@ -139,7 +140,7 @@ function CanvasInner({
   const [selectedEdgeId, setSelectedEdgeId] = useState(null)
   const lastLogical = useRef(soarMode ? logicalPlaybookKey(trigger, actions) : '')
   const wrapperRef = useRef(null)
-  const { screenToFlowPosition } = useReactFlow()
+  const { screenToFlowPosition, fitView } = useReactFlow()
   const rtl = (i18n.dir?.() || i18n.language) === 'rtl' || i18n.language === 'he'
   const onChangeRef = useRef(onChange)
   const onDslChangeRef = useRef(onDslChange)
@@ -150,12 +151,23 @@ function CanvasInner({
     if (paletteTypes) return paletteTypes
     if (!soarMode) return undefined
     return [
-      { type: 'trigger', label: t('playbooks.nodes.trigger'), description: t('playbooks.nodes.trigger_desc') },
-      ...ACTION_KIND_CATALOG.map((k) => ({
-        type: k.kind,
-        label: t(`playbooks.action.${k.kind}`),
-        description: t(`playbooks.action.${k.kind}_desc`),
-      })),
+      {
+        type: 'trigger',
+        nodeType: 'trigger',
+        label: t('playbooks.nodes.trigger'),
+        description: t('playbooks.nodes.trigger_desc'),
+        ariaLabel: t('playbooks.palette.add', { type: t('playbooks.nodes.trigger') }),
+      },
+      ...ACTION_KIND_CATALOG.map((k) => {
+        const label = t(`playbooks.action.${k.kind}`)
+        return {
+          type: k.kind,
+          nodeType: k.nodeType,
+          label,
+          description: t(`playbooks.action.${k.kind}_desc`),
+          ariaLabel: t('playbooks.palette.add', { type: label }),
+        }
+      }),
     ]
   }, [paletteTypes, soarMode, t])
 
@@ -167,7 +179,14 @@ function CanvasInner({
     const next = dslToFlow(trigger, actions)
     setNodes(next.nodes)
     setEdges(next.edges)
-  }, [soarMode, trigger, actions, setNodes, setEdges])
+    requestAnimationFrame(() => {
+      try {
+        fitView({ padding: 0.2, duration: 180 })
+      } catch {
+        /* canvas unmounted */
+      }
+    })
+  }, [soarMode, trigger, actions, setNodes, setEdges, fitView])
 
   useEffect(() => {
     onChangeRef.current?.(serializeGraph(nodes, edges))
@@ -179,22 +198,37 @@ function CanvasInner({
 
   const onConnect = useCallback(
     (params) => {
-      if (!canConnect(nodes, edges, params.source, params.target)) return
-      setEdges((eds) => addEdge({ ...params, ...defaultEdgeOptions }, eds))
+      const source = params.source || params.from
+      const target = params.target || params.to
+      if (!canConnect(nodes, edges, source, target)) return
+      setEdges((eds) => addEdge({ ...params, source, target, ...defaultEdgeOptions }, eds))
     },
     [nodes, edges, setEdges],
   )
 
   const isValidConnection = useCallback(
-    (conn) => canConnect(nodes, edges, conn.source, conn.target),
+    (conn) => canConnect(nodes, edges, conn.source || conn.from, conn.target || conn.to),
     [nodes, edges],
   )
+
+  const onBeforeDelete = useCallback(({ nodes: doomed, edges: doomedEdges }) => {
+    if (!doomed?.some(isTriggerNode)) return true
+    const nodesToDelete = doomed.filter((n) => !isTriggerNode(n))
+    const deletedIds = new Set(nodesToDelete.map((n) => n.id))
+    const edgesToDelete = (doomedEdges || []).filter(
+      (e) => deletedIds.has(e.source) || deletedIds.has(e.target),
+    )
+    return { nodes: nodesToDelete, edges: edgesToDelete }
+  }, [])
 
   const addNodeOfType = useCallback(
     (type, position) => {
       setNodes((nds) => {
         if (type === 'trigger' && nds.some(isTriggerNode)) return nds
-        return [...nds, makeNode(type, nextNumericId(nds), position)]
+        const node = makeNode(type, nextNumericId(nds), position)
+        setSelectedNodeId(node.id)
+        setSelectedEdgeId(null)
+        return [...nds.map((n) => ({ ...n, selected: false })), { ...node, selected: true }]
       })
     },
     [setNodes],
@@ -203,7 +237,7 @@ function CanvasInner({
   const onDrop = useCallback(
     (e) => {
       e.preventDefault()
-      const type = e.dataTransfer?.getData('application/weissman-node')
+      const type = readNodeDragType(e.dataTransfer)
       if (!type) return
       let position = { x: e.clientX, y: e.clientY }
       try {
@@ -235,6 +269,8 @@ function CanvasInner({
   const handleDeleteNode = useCallback(
     (id) => {
       setNodes((nds) => {
+        const target = nds.find((n) => n.id === id)
+        if (isTriggerNode(target)) return nds
         const out = removeNode(nds, edges, id)
         setEdges(out.edges)
         return out.nodes
@@ -303,6 +339,7 @@ function CanvasInner({
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             isValidConnection={isValidConnection}
+            onBeforeDelete={onBeforeDelete}
             onSelectionChange={onSelectionChange}
             defaultEdgeOptions={defaultEdgeOptions}
             fitView

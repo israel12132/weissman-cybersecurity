@@ -6,6 +6,7 @@ vi.mock('react-i18next', () => ({
     t: (key, opts) => {
       if (key === 'playbooks.canvas.label') return 'Playbook canvas'
       if (key === 'playbooks.palette.group') return 'Playbook node palette'
+      if (key === 'playbooks.palette.add') return `Add ${opts?.type} node`
       if (key === 'playbooks.inspector.title') return 'Inspector'
       if (key === 'playbooks.inspector.no_selection') return 'Select a node'
       if (key === 'playbooks.nodes.trigger') return 'Trigger'
@@ -61,6 +62,7 @@ vi.mock('@xyflow/react', async () => {
     addEdge: (edge, eds) => [...eds, { ...edge, id: edge.id || `e-${edge.source}-${edge.target}` }],
     useReactFlow: () => ({
       screenToFlowPosition: ({ x, y }) => ({ x, y }),
+      fitView: () => {},
     }),
     useNodesState: (init) => {
       const [s, set] = React.useState(init)
@@ -109,6 +111,19 @@ describe('PlaybookCanvas', () => {
       clientY: 100,
     })
     expect(within(screen.getByTestId('reactflow')).getByText('Condition')).toBeInTheDocument()
+  })
+
+  it('adds a node on drop with the text/plain drag fallback', () => {
+    render(<PlaybookCanvas />)
+    const canvas = screen.getByLabelText('Playbook canvas')
+    fireEvent.drop(canvas, {
+      dataTransfer: {
+        getData: (mime) => (mime === 'text/plain' ? 'weissman-node:delay' : ''),
+      },
+      clientX: 80,
+      clientY: 80,
+    })
+    expect(within(screen.getByTestId('reactflow')).getByText('Delay')).toBeInTheDocument()
   })
 
   it('hydrates from playbook DSL and compiles added actions', () => {

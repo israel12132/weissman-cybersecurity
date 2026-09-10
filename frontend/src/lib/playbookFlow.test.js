@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   makeNode,
   connect,
@@ -21,6 +21,10 @@ import {
   summarizeTrigger,
   summarizeAction,
   kindMeta,
+  setNodeDragData,
+  readNodeDragType,
+  NODE_DRAG_MIME,
+  NODE_DRAG_TEXT_PREFIX,
 } from './playbookFlow.js'
 
 describe('playbookFlow', () => {
@@ -196,5 +200,23 @@ describe('playbookFlow', () => {
     expect(summarizeTrigger({ severity: ['critical'], kev: true })).toContain('KEV')
     expect(summarizeAction('set_status', { status: 'OPEN' })).toBe('OPEN')
     expect(summarizeAction('webhook', { url: 'https://hooks.example.com/x' })).toBe('hooks.example.com')
+  })
+
+  it('round-trips palette drag payload including a text/plain fallback', () => {
+    const setData = vi.fn()
+    const dt = { setData, effectAllowed: '' }
+    setNodeDragData(dt, 'isolate_host')
+    expect(setData).toHaveBeenCalledWith(NODE_DRAG_MIME, 'isolate_host')
+    expect(setData).toHaveBeenCalledWith('text/plain', `${NODE_DRAG_TEXT_PREFIX}isolate_host`)
+    expect(dt.effectAllowed).toBe('copy')
+    expect(readNodeDragType({
+      getData: (mime) => (mime === NODE_DRAG_MIME ? 'page_oncall' : ''),
+    })).toBe('page_oncall')
+    expect(readNodeDragType({
+      getData: (mime) => (mime === 'text/plain' ? `${NODE_DRAG_TEXT_PREFIX}webhook` : ''),
+    })).toBe('webhook')
+    expect(readNodeDragType({
+      getData: (mime) => (mime === 'text/plain' ? 'https://example.com' : ''),
+    })).toBe('')
   })
 })

@@ -25,5 +25,6 @@ describe('NodePalette', () => {
       dataTransfer: { setData, effectAllowed: '' },
     })
     expect(setData).toHaveBeenCalledWith('application/weissman-node', 'notify')
+    expect(setData).toHaveBeenCalledWith('text/plain', 'weissman-node:notify')
   })
 })

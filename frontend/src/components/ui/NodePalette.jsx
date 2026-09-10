@@ -1,5 +1,6 @@
-import { AlertTriangle, Bell, Clock, GitBranch, Play, Zap } from 'lucide-react'
+import { Bell, Clock, GitBranch, Play, Zap } from 'lucide-react'
 import { cn } from '../../lib/cn'
+import { setNodeDragData } from '../../lib/playbookFlow.js'
 
 const TYPE_ICON = {
   trigger: Zap,
@@ -10,11 +11,11 @@ const TYPE_ICON = {
 }
 
 const DEFAULT_TYPES = [
-  { type: 'trigger', label: 'Trigger', description: 'Start on an event' },
-  { type: 'action', label: 'Action', description: 'Run a task' },
-  { type: 'condition', label: 'Condition', description: 'Branch on a test' },
-  { type: 'delay', label: 'Delay', description: 'Wait' },
-  { type: 'notify', label: 'Notify', description: 'Alert a channel' },
+  { type: 'trigger', nodeType: 'trigger', label: 'Trigger', description: 'Start on an event' },
+  { type: 'action', nodeType: 'action', label: 'Action', description: 'Run a task' },
+  { type: 'condition', nodeType: 'condition', label: 'Condition', description: 'Branch on a test' },
+  { type: 'delay', nodeType: 'delay', label: 'Delay', description: 'Wait' },
+  { type: 'notify', nodeType: 'notify', label: 'Notify', description: 'Alert a channel' },
 ]
 
 /**
@@ -31,22 +32,19 @@ export default function NodePalette({ types = DEFAULT_TYPES, onAdd, draggable = 
     <div
       role="group"
       aria-label="Playbook node palette"
-      className={cn('flex flex-col gap-1.5', className)}
+      className={cn('flex max-h-[36rem] flex-col gap-1.5 overflow-y-auto pe-1 custom-scroll', className)}
       {...props}
     >
-      {types.map((t) => {
-        const Icon = TYPE_ICON[t.type] ?? AlertTriangle
+      {types.map((item) => {
+        const Icon = TYPE_ICON[item.nodeType || item.type] ?? Play
         return (
           <button
-            key={t.type}
+            key={item.type}
             type="button"
             draggable={draggable}
-            onDragStart={(e) => {
-              e.dataTransfer?.setData('application/weissman-node', t.type)
-              if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'
-            }}
-            onClick={() => onAdd?.(t.type)}
-            aria-label={`Add ${t.label} node`}
+            onDragStart={(e) => setNodeDragData(e.dataTransfer, item.type)}
+            onClick={() => onAdd?.(item.type)}
+            aria-label={item.ariaLabel || `Add ${item.label} node`}
             className={cn(
               'flex items-center gap-2.5 rounded-lg border border-border-default bg-bg-2 px-3 py-2 text-start',
               'cursor-grab transition-colors hover:border-border-strong hover:bg-bg-3',
@@ -57,8 +55,8 @@ export default function NodePalette({ types = DEFAULT_TYPES, onAdd, draggable = 
               <Icon aria-hidden="true" />
             </span>
             <span className="min-w-0">
-              <span className="block text-xs font-medium text-text-primary">{t.label}</span>
-              {t.description && <span className="block text-[10px] text-text-muted">{t.description}</span>}
+              <span className="block text-xs font-medium text-text-primary">{item.label}</span>
+              {item.description && <span className="block text-[10px] text-text-muted">{item.description}</span>}
             </span>
           </button>
         )
