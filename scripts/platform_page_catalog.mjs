@@ -643,6 +643,7 @@ export const ROUTE_TITLES = {
   'kill-chain': 'Kill Chain Orchestrator',
   'ai-analysis': 'AI Analysis Engine',
   'exploit-lab': 'Exploit Research Lab',
+  'discovery-lab': 'Discovery Lab',
   'nexus-swarm': 'Nexus Sovereign Swarm',
   'roe-approvals': 'RoE Approvals',
   'template-engine': 'Template Engine Workbench',

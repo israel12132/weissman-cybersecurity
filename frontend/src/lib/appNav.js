@@ -98,6 +98,7 @@ export const NAV_GROUPS = [
       { to: '/supreme-brain', labelKey: 'nav.supreme_brain', icon: '◈' },
       { to: '/ai-analysis', labelKey: 'nav.ai_analysis', icon: '🧠' },
       { to: '/exploit-lab', labelKey: 'nav.exploit_lab', icon: '🧪' },
+      { to: '/discovery-lab', labelKey: 'nav.discovery_lab', icon: '🔬' },
       { to: '/council-queue', labelKey: 'nav.council_queue', icon: '⚖' },
       { to: '/soar-hitl', labelKey: 'nav.soar_hitl', icon: '🛡' },
       { to: '/self-improve', labelKey: 'nav.self_improve', icon: '🧠' },

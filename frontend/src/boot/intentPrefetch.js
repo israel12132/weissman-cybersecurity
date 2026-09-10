@@ -12,6 +12,8 @@ const CHAIN_PREDICT = {
   '/operations': ['/engines', '/findings'],
   '/engines': ['/jwt-lab', '/waf-bypass', '/graphql-security', '/template-engine'],
   '/kill-chain': ['/threat-emulation', '/exploit-lab', '/roe-approvals'],
+  '/exploit-lab': ['/discovery-lab', '/kill-chain'],
+  '/discovery-lab': ['/exploit-lab', '/findings'],
   '/threat-emulation': ['/kill-chain', '/agents'],
   '/findings': ['/remediation', '/incident-response'],
   '/clients': ['/domain-discovery', '/jobs'],

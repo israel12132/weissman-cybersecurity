@@ -101,6 +101,7 @@ export const ROUTE_EVIDENCE = {
   '/containment-rules': 'pages.containmentRulesBuilder.evidence_notice',
   '/identity-context': 'pages.identityContextManager.evidence_notice',
   '/exploit-lab': 'pages.exploitResearchLab.evidence_notice',
+  '/discovery-lab': 'pages.discoveryLab.evidence_notice',
   '/agents': 'pages.agentManagement.evidence_notice',
   '/roe-approvals': 'pages.roeApprovals.evidence_notice',
   '/sso-config': 'pages.ssoDashboard.evidence_notice',
