@@ -299,6 +299,28 @@ pub async fn verify_oob_token_seen_with_client(client: &reqwest::Client, token: 
     txt.contains(&marker)
 }
 
+/// Poll the OAST listener until the token is seen, or rounds expire. Never fabricates a hit.
+pub async fn poll_oob_token_confirmed(
+    client: &reqwest::Client,
+    token: &str,
+    rounds: u32,
+    interval_ms: u64,
+) -> bool {
+    let token = token.trim();
+    if token.is_empty() || !oast_correlation_enabled() {
+        return false;
+    }
+    let rounds = rounds.clamp(1, 12);
+    let interval_ms = interval_ms.clamp(50, 5_000);
+    for _ in 0..rounds {
+        if verify_oob_token_seen_with_client(client, token).await {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(interval_ms)).await;
+    }
+    false
+}
+
 /// Bind each queued scan job to a unique `oast-{uuid}.<OAST_DOMAIN>` callback (path `/i`) for OOB correlation.
 pub fn enrich_job_payload_with_oast_scan_binding(payload: &mut serde_json::Value) {
     let Some(domain) = oast_hook_domain() else {
