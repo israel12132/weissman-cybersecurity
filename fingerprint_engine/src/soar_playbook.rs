@@ -67,6 +67,10 @@ pub struct PlaybookEvent {
     pub cve: Option<String>,
     pub signature_hash: Option<String>,
     pub internet_exposed: bool,
+    /// Tenant-scoped campaign this finding belongs to (job payload / WorldState spine).
+    /// Never used to widen SOAR scope or auto-disclose; in-product correlation only.
+    #[serde(default)]
+    pub campaign_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -673,6 +677,7 @@ mod tests {
             cve: Some("CVE-2021-44228".into()),
             signature_hash: Some("abc".into()),
             internet_exposed: true,
+            campaign_id: None,
         }
     }
 

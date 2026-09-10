@@ -85,6 +85,7 @@ import {
   VulnIntelDashboard,
   FinancialRisk,
   AttackPaths,
+  AdversaryCampaignFabric,
   SupremeBrain,
   CemDagoMesh,
   AttackCoverage,
@@ -283,6 +284,7 @@ export default function TacticalApp() {
           <Route path="vuln-intel" element={<VulnIntelDashboard />} />
           <Route path="financial-risk" element={<FinancialRisk />} />
           <Route path="attack-paths" element={<AttackPaths />} />
+          <Route path="campaigns" element={<AdversaryCampaignFabric />} />
           <Route path="supreme-brain" element={<SupremeBrain />} />
           <Route path="cem-dago" element={<CemDagoMesh />} />
           <Route path="attack-coverage" element={<AttackCoverage />} />

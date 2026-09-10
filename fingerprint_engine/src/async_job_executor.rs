@@ -600,15 +600,29 @@ async fn execute_job_unscoped(
             // Center / Vuln Intel / dashboard / CSV export / PDF report all see them. Without
             // this step results live only inside weissman_async_jobs.result_json (effectively
             // invisible to the customer).
+            let campaign_id = crate::adversary_campaign::parse_campaign_id(p);
+            let stamped = crate::adversary_campaign::stamp_campaign_id_on_findings(
+                &result.findings,
+                campaign_id,
+            );
             let persisted = persist_findings_best_effort(
                 app_pool.as_ref(),
                 tid,
                 client_id_opt,
                 engine,
                 target,
-                &result.findings,
+                &stamped,
             )
             .await;
+            crate::adversary_campaign::spawn_after_engine_job(
+                app_pool.clone(),
+                tid,
+                client_id_opt,
+                job.id,
+                p,
+                result.success,
+                result.message.clone(),
+            );
 
             if crate::engine_resilience::should_retry_status(&result.status) {
                 let failure_ctx = json!({
@@ -946,7 +960,8 @@ async fn execute_job_unscoped(
                 .get("failed")
                 .and_then(Value::as_u64)
                 .unwrap_or(0) as usize;
-            let remaining_engines = remaining_scan_all_engines(&ordered_engines, &completed_engines);
+            let remaining_engines =
+                remaining_scan_all_engines(&ordered_engines, &completed_engines);
             if !completed_engines.is_empty() {
                 let _ = telemetry.send(format!(
                     r#"{{"job_id":"{}","message":"Resuming scan-all-engines: {} already done, {} remaining","status":"running"}}"#,

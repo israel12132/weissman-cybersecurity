@@ -21,6 +21,7 @@ const EXACT = {
   '/findings': () => import(/* webpackChunkName: "page-findings" */ '../pages/FindingsCommandCenter'),
   '/finding-clusters': () => import(/* webpackChunkName: "page-finding-clusters" */ '../pages/FindingClusters'),
   '/kill-chain': () => import(/* webpackChunkName: "page-kill-chain" */ '../pages/KillChainOrchestrator'),
+  '/campaigns': () => import(/* webpackChunkName: "page-campaigns" */ '../pages/AdversaryCampaignFabric.jsx'),
   '/jwt-lab': () => import(/* webpackChunkName: "page-jwt-lab" */ '../pages/JwtAttackLab'),
   '/waf-bypass': () => import(/* webpackChunkName: "page-waf-bypass" */ '../pages/WafBypassLab'),
   '/graphql-security': () => import(/* webpackChunkName: "page-graphql" */ '../pages/GraphqlSecurityCommandCenter'),

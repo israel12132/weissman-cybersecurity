@@ -493,6 +493,19 @@ export default function KillChainOrchestrator() {
         })}
       </p>
 
+      <div className="mb-6 rounded-2xl border border-rose-500/30 bg-rose-500/5 p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-rose-200">{t('pages.killChainOrchestrator.campaign_strip_title')}</h2>
+          <p className="text-[12px] text-[var(--text-muted)] mt-1 max-w-2xl">{t('pages.killChainOrchestrator.campaign_strip_body')}</p>
+        </div>
+        <Link
+          to="/campaigns"
+          className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg border border-rose-500/40 text-rose-100 text-xs font-medium hover:bg-rose-500/10"
+        >
+          {t('pages.killChainOrchestrator.campaign_strip_cta')}
+        </Link>
+      </div>
+
       {error && (
         <div className="mb-6 p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm">
           {t('pages.killChainOrchestrator.load_error', { error })}

@@ -93,6 +93,7 @@ export const NAV_GROUPS = [
     items: [
       { to: '/threat-emulation', labelKey: 'nav.threat_emulation', icon: '◈' },
       { to: '/kill-chain', labelKey: 'nav.kill_chain', icon: '⛓' },
+      { to: '/campaigns', labelKey: 'nav.campaigns', icon: '🎯' },
       { to: '/cem-dago', labelKey: 'nav.cem_dago', icon: '🧠' },
       { to: '/attack-paths', labelKey: 'nav.attack_paths', icon: '🕸' },
       { to: '/supreme-brain', labelKey: 'nav.supreme_brain', icon: '◈' },

@@ -658,6 +658,16 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/soc/hunts", get(api_soc_hunts))
         .route("/api/soc/iocs", get(api_soc_iocs))
         .route("/api/soc/kill-chains", get(api_soc_kill_chains))
+        .route(
+            "/api/campaigns",
+            get(api_campaigns_list).post(api_campaigns_create),
+        )
+        .route("/api/campaigns/:id", get(api_campaigns_get))
+        .route("/api/campaigns/:id/start", post(api_campaigns_start))
+        .route("/api/campaigns/:id/pause", post(api_campaigns_pause))
+        .route("/api/campaigns/:id/plan", get(api_campaigns_plan))
+        .route("/api/campaigns/:id/steps", get(api_campaigns_steps))
+        .route("/api/campaigns/:id/events", get(api_campaigns_events))
         .route("/api/soc/exploit-lab", get(api_soc_exploit_lab))
         .route("/api/soc/ai-patterns", get(api_soc_ai_patterns))
         .route(

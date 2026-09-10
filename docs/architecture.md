@@ -107,11 +107,16 @@ In-process background loops (`weissman-server`):
    - spawns **`soar_playbook::dispatch_event`** off-tx so a slow webhook
      doesn't extend the DB lock — every enabled playbook is evaluated,
      matching ones execute their action chain, every dispatch lands in
-     `weissman_playbook_runs`.
-4. **`/api/findings`** read path: reweights `risk_score`:
+     `weissman_playbook_runs`. Campaign-tagged jobs stamp `campaign_id` onto
+     finding JSON (and SOAR `PlaybookEvent`) so Scan→Path→Remediate stay one story.
+4. **`adversary_campaign` tick** (if a campaign is `running` for that client):
+   rebuild WorldState (FP-filtered), replan, enqueue the next evidenced
+   technique via `scan_routing` (never widening scope). See
+   [`docs/architecture/adversary-campaign-fabric.md`](architecture/adversary-campaign-fabric.md).
+5. **`/api/findings`** read path: reweights `risk_score`:
    `base × (1 + 0.5×EPSS) × (KEV ? 1.4 : 1) × (ransomware ? 1.15 : 1) × confidence_multiplier`,
    default sort `KEV → EPSS → discovered_at`.
-5. **`/api/dashboard/exec-kpis`** consumes the same data, produces the cockpit
+6. **`/api/dashboard/exec-kpis`** consumes the same data, produces the cockpit
    hero band: severity counts (+24h deltas), MTTR, asset/agent/job totals,
    24-hour trend, top engines/clients/CVEs/MITRE.
 
@@ -182,6 +187,7 @@ In-process background loops (`weissman-server`):
 | Risk graph | `risk_graph_nodes`, `risk_graph_edges`, `attack_path_snapshots` |
 | Financial | `client_financial_risk_snapshots`, `client_asset_value_rules` |
 | Jobs | `weissman_async_jobs` (partial idx `ix_async_jobs_pending`) |
+| Campaigns | `weissman_campaigns`, `weissman_campaign_world_states`, `weissman_campaign_steps`, `weissman_campaign_audit`, `weissman_campaign_events` |
 | Agent | `endpoint_agents`, `endpoint_agent_enrollment_tokens`, `endpoint_agent_tasks`, `agent_metric_samples`, `agent_metric_baselines`, `agent_anomalies` |
 | SOAR | `weissman_playbooks`, `weissman_playbook_runs` |
 | Council RAG | `supreme_council_memory` (embedding_vec vector(1536) + HNSW `m=16,ef_construction=64`), `supreme_council_rag_hits` |

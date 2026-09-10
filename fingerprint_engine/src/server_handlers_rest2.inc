@@ -1028,6 +1028,89 @@ async fn api_openapi_spec() -> Response {
                     "responses": { "200": { "description": "Snapshot or null" } }
                 }
             },
+            "/api/campaigns": {
+                "get": {
+                    "summary": "List adversary campaigns for the tenant",
+                    "description": "Optional `?client_id=` filter. Portal sessions are pinned to assigned_client_id. Returns allowed STRIPS goal facts.",
+                    "tags": ["Campaign"],
+                    "parameters": [
+                        { "name": "client_id", "in": "query", "schema": { "type": "integer" } }
+                    ],
+                    "responses": { "200": { "description": "Campaign list + allowed_goals" } }
+                },
+                "post": {
+                    "summary": "Create a draft adversary campaign",
+                    "description": "Body: `{ client_id, goal?, profile? }`. Goal must be a grounded planner fact (default `impact:objective`). RBAC: operator+. Scope is the named client only.",
+                    "tags": ["Campaign"],
+                    "requestBody": {
+                        "required": true,
+                        "content": { "application/json": { "schema": {
+                            "type": "object",
+                            "required": ["client_id"],
+                            "properties": {
+                                "client_id": { "type": "integer" },
+                                "goal": { "type": "string", "example": "impact:objective" },
+                                "profile": { "type": "object" }
+                            }
+                        } } }
+                    },
+                    "responses": {
+                        "201": { "description": "Created draft" },
+                        "400": { "description": "Unsupported goal or missing client" },
+                        "403": { "description": "RBAC: operator role required" }
+                    }
+                }
+            },
+            "/api/campaigns/{id}": {
+                "get": {
+                    "summary": "Get campaign, WorldState, plan, and steps",
+                    "tags": ["Campaign"],
+                    "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+                    "responses": { "200": { "description": "Campaign bundle" }, "404": { "description": "Not found" } }
+                }
+            },
+            "/api/campaigns/{id}/start": {
+                "post": {
+                    "summary": "Start or resume a campaign",
+                    "description": "Seeds WorldState from live findings (FP-suppressed rows excluded), plans a STRIPS chain, and enqueues the next mapped engine job inside client scope.",
+                    "tags": ["Campaign"],
+                    "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+                    "responses": { "200": { "description": "Updated campaign" }, "403": { "description": "RBAC" } }
+                }
+            },
+            "/api/campaigns/{id}/pause": {
+                "post": {
+                    "summary": "Pause a running campaign (no further dispatches)",
+                    "tags": ["Campaign"],
+                    "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+                    "responses": { "200": { "description": "Paused" }, "409": { "description": "Illegal transition" } }
+                }
+            },
+            "/api/campaigns/{id}/plan": {
+                "get": {
+                    "summary": "Campaign plan + WorldState snapshot",
+                    "tags": ["Campaign"],
+                    "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+                    "responses": { "200": { "description": "Plan + facts" } }
+                }
+            },
+            "/api/campaigns/{id}/steps": {
+                "get": {
+                    "summary": "Campaign step ledger (technique → job → outcome)",
+                    "tags": ["Campaign"],
+                    "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+                    "responses": { "200": { "description": "Steps" } }
+                }
+            },
+            "/api/campaigns/{id}/events": {
+                "get": {
+                    "summary": "Versioned campaign event chain",
+                    "description": "Append-only FindingObserved / TechniqueDispatched / TechniqueProven / PathSnapshotTaken events. In-product only; no auto external disclosure. Live projection is the CEM-DAGO blackboard scan_id campaign:{uuid}.",
+                    "tags": ["Campaign"],
+                    "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+                    "responses": { "200": { "description": "Events + kinds" } }
+                }
+            },
             "/api/risk-graph/nodes/{node_id}/flags": {
                 "patch": {
                     "summary": "Toggle internet_exposed / crown_jewel / asset_value on a node",

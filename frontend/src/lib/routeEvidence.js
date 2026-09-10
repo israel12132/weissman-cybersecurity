@@ -84,6 +84,7 @@ export const ROUTE_EVIDENCE = {
   '/superposition-collapse': 'pages.superpositionCollapse.evidence_notice',
   '/sovereign-defense-matrix': 'pages.sovereignDefense.evidence_notice',
   '/digital-twin': 'pages.digitalTwinSimulator.evidence_notice',
+  '/campaigns': 'pages.adversaryCampaign.evidence_notice',
   '/ast-fuzzing': 'pages.astFuzzingStudio.evidence_notice',
   '/feedback-loop': 'pages.feedbackLoopVerification.evidence_notice',
   '/engine-catalog': 'pages.engineClientCatalog.evidence_notice',

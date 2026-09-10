@@ -372,6 +372,24 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             has_tenant: true,
         },
     );
+    m.insert(
+        "weissman_campaigns",
+        TableSpec {
+            table: "weissman_campaigns",
+            columns: &[
+                "id",
+                "client_id",
+                "goal_fact",
+                "status",
+                "asset_key",
+                "created_at",
+                "updated_at",
+            ],
+            order_by: &["updated_at", "created_at", "id"],
+            joins: &[],
+            has_tenant: true,
+        },
+    );
     m
 });
 
@@ -1196,7 +1214,7 @@ mod tests {
 
     #[test]
     fn allowlist_matches_ask_weissman_table_count() {
-        assert_eq!(allowed_table_count(), 17);
+        assert_eq!(allowed_table_count(), 18);
         assert_eq!(
             allowed_table_count(),
             crate::elite_hardening::nl_guard::ASK_WEISSMAN_TABLE_COUNT

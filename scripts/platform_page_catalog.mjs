@@ -641,6 +641,7 @@ export const ROUTE_TITLES = {
   sbom: 'SBOM Browser',
   remediation: 'Remediation Hub',
   'kill-chain': 'Kill Chain Orchestrator',
+  campaigns: 'Adversary Campaign Fabric',
   'ai-analysis': 'AI Analysis Engine',
   'exploit-lab': 'Exploit Research Lab',
   'nexus-swarm': 'Nexus Sovereign Swarm',

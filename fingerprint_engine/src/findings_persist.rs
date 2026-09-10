@@ -445,6 +445,11 @@ pub async fn persist_engine_findings(
             "dedup_hash": dedup_hash,
             "raw": f.clone(),
         });
+        if let Some(cid) = f.get("campaign_id").cloned().filter(|v| !v.is_null()) {
+            if let Value::Object(obj) = &mut raw_data_enriched {
+                obj.insert("campaign_id".to_string(), cid);
+            }
+        }
         if !cve.is_empty() {
             // Look up the pre-resolved batch maps (built once before the tx) — no per-finding
             // network fetch or pool round-trip. Key matches both modules' normalization
@@ -570,8 +575,7 @@ pub async fn persist_engine_findings(
             fp_feedback::is_suppressed_by(&active_suppressions, &signature_hash, &target_url);
         let waf_noise =
             crate::waf_signals::finding_is_waf_noise(engine, &title, &raw_data_enriched);
-        let stale_mail =
-            crate::live_truth::stale_www_mail_claim(&title, &target_url);
+        let stale_mail = crate::live_truth::stale_www_mail_claim(&title, &target_url);
         let stale_hsts = crate::live_truth::title_claims_missing_hsts(&title)
             && (waf_noise
                 || crate::waf_signals::finding_is_waf_noise("ssrf", &title, &raw_data_enriched));
@@ -853,6 +857,14 @@ pub async fn persist_engine_findings(
             },
             signature_hash: Some(signature_hash.clone()),
             internet_exposed,
+            campaign_id: f
+                .get("campaign_id")
+                .and_then(|v| {
+                    v.as_str()
+                        .map(|s| s.to_string())
+                        .or_else(|| v.as_i64().map(|n| n.to_string()))
+                })
+                .filter(|s| !s.is_empty()),
         };
         let pool_for_dispatch: PgPool = (*pool).clone();
         tokio::spawn(async move {
@@ -881,6 +893,11 @@ pub async fn persist_engine_findings(
             client_id,
             target.to_string(),
             engine.to_string(),
+        );
+        crate::adversary_campaign::spawn_after_persist(
+            std::sync::Arc::new((*pool).clone()),
+            tenant_id,
+            client_id,
         );
     }
 

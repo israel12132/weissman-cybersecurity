@@ -17,7 +17,7 @@
 
 use serde::Serialize;
 use std::cmp::Reverse;
-use std::collections::{BinaryHeap, HashSet};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 
 /// A grounded fact. Namespaced `domain:detail` strings keep the model open while staying readable
 /// (e.g. `service:web`, `vuln:sqli`, `access:privileged`, `impact:objective`).
@@ -53,7 +53,7 @@ impl Technique {
         }
     }
 
-    fn applicable(&self, state: &HashSet<Fact>) -> bool {
+    pub fn applicable(&self, state: &HashSet<Fact>) -> bool {
         self.preconditions.iter().all(|p| state.contains(p))
     }
 
@@ -305,6 +305,40 @@ pub fn default_technique_library() -> Vec<Technique> {
     ]
 }
 
+/// Finding identifier used to ground a fact. Empty when the record has no stable id.
+fn finding_id_of(f: &serde_json::Value) -> String {
+    for key in ["finding_id", "id"] {
+        if let Some(s) = f.get(key).and_then(serde_json::Value::as_str) {
+            let t = s.trim();
+            if !t.is_empty() {
+                return t.to_string();
+            }
+        }
+        if let Some(n) = f.get(key).and_then(serde_json::Value::as_i64) {
+            return n.to_string();
+        }
+    }
+    String::new()
+}
+
+/// Same grounding as [`facts_from_findings`], but each fact lists the finding ids that produced it.
+/// The planner still cannot invent capability; this only records provenance for campaign WorldState.
+pub fn facts_from_findings_with_evidence(
+    findings: &[serde_json::Value],
+) -> HashMap<Fact, Vec<String>> {
+    let mut map: HashMap<Fact, Vec<String>> = HashMap::new();
+    for f in findings {
+        let fid = finding_id_of(f);
+        for fact in facts_from_findings(std::slice::from_ref(f)) {
+            let ids = map.entry(fact).or_default();
+            if !fid.is_empty() && !ids.iter().any(|x| x == &fid) {
+                ids.push(fid.clone());
+            }
+        }
+    }
+    map
+}
+
 /// Bridge real findings to grounded planning facts. Only evidence-backed facts are produced; the
 /// planner downstream cannot invent capability beyond what is observed here.
 pub fn facts_from_findings(findings: &[serde_json::Value]) -> HashSet<Fact> {
@@ -414,9 +448,49 @@ pub fn plan_from_findings(findings: &[serde_json::Value], goal: &str) -> Option<
         .max_by_key(|chain| (chain.reached_goal, chain.steps.len()))
 }
 
+/// Strongest per-asset chain plus the facts and asset key that produced it.
+/// Campaign dispatch uses the asset key so the next engine stays on the same authorized host.
+pub fn plan_strongest_asset(
+    findings: &[serde_json::Value],
+    goal: &str,
+) -> Option<(String, AttackChain, HashSet<Fact>)> {
+    let mut by_asset: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+    for f in findings {
+        by_asset
+            .entry(finding_asset_key(f))
+            .or_default()
+            .push(f.clone());
+    }
+    let lib = default_technique_library();
+    by_asset
+        .into_iter()
+        .filter_map(|(asset, group)| {
+            let facts = facts_from_findings(&group);
+            plan(&facts, &lib, goal, 50_000).map(|chain| (asset, chain, facts))
+        })
+        .max_by_key(|(_, chain, _)| {
+            (
+                chain.reached_goal,
+                chain.steps.len(),
+                std::cmp::Reverse(chain.total_cost),
+            )
+        })
+}
+
 /// Normalized host a finding pertains to, so attack-chain planning stays within one asset.
 /// Empty string groups findings with no locatable host together (a conservative shared bucket).
-fn finding_asset_key(f: &serde_json::Value) -> String {
+/// True iff `technique_id` exists in the library and every precondition is in `facts`.
+/// Used by the campaign fabric so we never enqueue an engine whose STRIPS preconditions
+/// are not already evidenced.
+#[must_use]
+pub fn technique_preconditions_met(technique_id: &str, facts: &HashSet<Fact>) -> bool {
+    default_technique_library()
+        .iter()
+        .find(|t| t.id == technique_id)
+        .is_some_and(|t| t.applicable(facts))
+}
+
+pub fn finding_asset_key(f: &serde_json::Value) -> String {
     for key in ["target", "url", "host", "asset", "evidence_url"] {
         let v = field(f, key);
         let t = v.trim();
@@ -594,5 +668,67 @@ mod tests {
             chain.mitre_path.contains(&"T1068".to_string())
                 || chain.mitre_path.contains(&"T1567".to_string())
         );
+    }
+
+    #[test]
+    fn facts_with_evidence_link_finding_ids() {
+        let findings = vec![serde_json::json!({
+            "finding_id": "fid-rce-1",
+            "type": "http_feedback_fuzz",
+            "title": "RCE via command injection",
+            "severity": "critical",
+            "verified": true,
+        })];
+        let ev = facts_from_findings_with_evidence(&findings);
+        assert!(ev
+            .get("service:web")
+            .unwrap()
+            .contains(&"fid-rce-1".to_string()));
+        assert!(ev
+            .get("access:foothold")
+            .unwrap()
+            .contains(&"fid-rce-1".to_string()));
+        assert!(ev
+            .get("vuln:rce")
+            .unwrap()
+            .contains(&"fid-rce-1".to_string()));
+    }
+
+    #[test]
+    fn plan_strongest_asset_does_not_cross_hosts() {
+        let findings = vec![
+            serde_json::json!({
+                "finding_id": "a",
+                "target": "https://a.example",
+                "type": "web",
+                "title": "SSRF",
+                "severity": "high",
+            }),
+            serde_json::json!({
+                "finding_id": "b",
+                "target": "https://b.example",
+                "type": "http",
+                "title": "RCE via command injection",
+                "severity": "critical",
+                "verified": true,
+            }),
+        ];
+        let (asset, chain, facts) = plan_strongest_asset(&findings, "impact:objective")
+            .expect("b.example has a grounded chain");
+        assert!(asset.contains("b.example") || asset == "b.example");
+        assert!(chain.reached_goal);
+        assert!(facts.contains("vuln:rce"));
+        assert!(!facts.contains("vuln:ssrf"));
+    }
+
+    #[test]
+    fn technique_preconditions_met_requires_evidenced_facts() {
+        let ready = set(&["service:web", "vuln:rce"]);
+        assert!(technique_preconditions_met("exploit_rce_web", &ready));
+        assert!(!technique_preconditions_met(
+            "exploit_rce_web",
+            &set(&["service:web"])
+        ));
+        assert!(!technique_preconditions_met("not_a_real_technique", &ready));
     }
 }
