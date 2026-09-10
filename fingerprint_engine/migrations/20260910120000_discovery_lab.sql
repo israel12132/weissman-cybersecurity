@@ -88,7 +88,7 @@ CREATE INDEX IF NOT EXISTS ix_discovery_lab_candidates_client
     ON discovery_lab_candidates (tenant_id, client_id, created_at DESC);
 
 COMMENT ON TABLE discovery_lab_candidates IS
-    'Novel-vuln candidates with their own lifecycle, distinct from vulnerabilities inbox.';
+    'Tenant-private novel-vuln candidates with their own lifecycle, distinct from vulnerabilities inbox.';
 
 CREATE TABLE IF NOT EXISTS discovery_disclosure_packs (
     id                      TEXT PRIMARY KEY,
@@ -130,7 +130,7 @@ CREATE INDEX IF NOT EXISTS ix_discovery_disclosure_packs_candidate
     ON discovery_disclosure_packs (tenant_id, candidate_id);
 
 COMMENT ON TABLE discovery_disclosure_packs IS
-    'Responsible-disclosure drafts for previously-unknown findings (authorized scope only).';
+    'Internal responsible-disclosure drafts. Weissman never transmits these packs; a human may export and send privately later.';
 
 CREATE TABLE IF NOT EXISTS discovery_disclosure_events (
     id              TEXT PRIMARY KEY,

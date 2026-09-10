@@ -330,6 +330,7 @@ export const NAV_MIN_ROLE = {
   '/supreme-nerve-center': 'ceo',
   '/sovereign': 'ceo',
   '/system-config': 'admin',
+  '/discovery-lab': 'admin',
   '/clients/new': 'ceo',
 }
 

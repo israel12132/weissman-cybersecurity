@@ -72,6 +72,19 @@ pub fn require_admin(auth: &AuthContext) -> Result<(), Response> {
     require_role(auth, roles::ADMIN)
 }
 
+/// Novel-finding details and disclosure packs stay tenant-private inside Weissman.
+/// Admin / CEO / superadmin only. Customer-portal identities are denied even if
+/// their rank would otherwise match operator.
+pub fn require_discovery_lab_steward(auth: &AuthContext) -> Result<(), Response> {
+    if auth.role.eq_ignore_ascii_case(roles::CLIENT) {
+        return Err(forbidden(
+            auth,
+            "Discovery Lab novel findings stay inside Weissman (admin/ceo/superadmin only)",
+        ));
+    }
+    require_admin(auth)
+}
+
 /// Reject anything below operator (operator, admin, ceo, or superadmin).
 #[inline]
 pub fn require_operator(auth: &AuthContext) -> Result<(), Response> {
@@ -149,6 +162,11 @@ pub fn required_min_role(method: &Method, path: &str) -> Option<&'static str> {
         return Some(roles::CEO);
     }
     if path.starts_with("/api/admin") {
+        return Some(roles::ADMIN);
+    }
+    // Novel 0-day-class candidates and disclosure drafts never leave Weissman
+    // automatically. Mutations are admin+ (handler GETs use the same steward gate).
+    if path.starts_with("/api/discovery-lab") {
         return Some(roles::ADMIN);
     }
     if path.starts_with("/api/clients") {
@@ -316,6 +334,14 @@ mod tests {
             required_min_role(&Method::POST, "/api/admin/users"),
             Some(roles::ADMIN)
         );
+        assert_eq!(
+            required_min_role(&Method::POST, "/api/discovery-lab/runs"),
+            Some(roles::ADMIN)
+        );
+        assert_eq!(
+            required_min_role(&Method::PATCH, "/api/discovery-lab/disclosures/p1"),
+            Some(roles::ADMIN)
+        );
         // Client create = owner (ceo+); nested client mutations = operator+; delete = owner.
         assert_eq!(
             required_min_role(&Method::POST, "/api/clients"),
@@ -346,6 +372,16 @@ mod tests {
         let min = required_min_role(&Method::POST, "/api/playbooks").unwrap();
         assert!(require_role(&ctx("viewer", false), min).is_err());
         assert!(require_role(&ctx("analyst", false), min).is_ok());
+    }
+
+    #[test]
+    fn discovery_lab_steward_is_admin_not_operator_or_portal() {
+        assert!(require_discovery_lab_steward(&ctx("admin", false)).is_ok());
+        assert!(require_discovery_lab_steward(&ctx("ceo", false)).is_ok());
+        assert!(require_discovery_lab_steward(&ctx("viewer", true)).is_ok());
+        assert!(require_discovery_lab_steward(&ctx("operator", false)).is_err());
+        assert!(require_discovery_lab_steward(&ctx("analyst", false)).is_err());
+        assert!(require_discovery_lab_steward(&ctx("client", false)).is_err());
     }
 
     #[test]

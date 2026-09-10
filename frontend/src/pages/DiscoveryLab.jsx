@@ -1,10 +1,10 @@
 /**
  * Discovery Lab — AI-assisted novel vulnerability discovery on authorized tenant
- * assets, plus a responsible-disclosure pack workflow.
+ * assets, plus a private disclosure-draft workflow (no outbound CERT/gov send).
  *
  * Candidates are distinct from the ordinary findings inbox. Runs dispatch
  * POST /api/discovery-lab/runs (fuzz_core + optional LLM hypotheses) and never
- * scan hosts outside the client's approved scope.
+ * scan hosts outside the client's approved scope. Admin/CEO/superadmin only.
  *
  * Route: /discovery-lab
  */
@@ -493,6 +493,15 @@ export default function DiscoveryLab() {
       }
     >
       <div className="space-y-6" data-testid="discovery-lab-page">
+        <aside
+          data-testid="discovery-lab-private-banner"
+          className="rounded-xl border border-amber-500/35 bg-amber-950/20 px-4 py-3 text-xs text-amber-100/90 space-y-1"
+        >
+          <p className="font-semibold tracking-wide uppercase font-mono text-[10px] text-amber-200">
+            {t(`${NS}.private_banner_title`)}
+          </p>
+          <p>{t(`${NS}.private_banner_body`)}</p>
+        </aside>
         <p className="text-[11px] font-mono text-[var(--text-muted)] leading-relaxed">{t(`${NS}.scope_notice`)}</p>
 
         {error && (
@@ -818,6 +827,19 @@ export default function DiscoveryLab() {
 
         <section className="space-y-3">
           <h2 className="text-[10px] font-mono uppercase tracking-widest text-cyan-300/80">{t(`${NS}.disclosure_section`)}</h2>
+          <div
+            data-testid="discovery-lab-private-checklist"
+            className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-2"
+          >
+            <h3 className="text-[11px] font-mono uppercase tracking-widest text-cyan-300/80">
+              {t(`${NS}.checklist_title`)}
+            </h3>
+            <ul className="list-disc ps-5 space-y-1 text-xs text-[var(--text-secondary)]">
+              <li>{t(`${NS}.checklist_stay_private`)}</li>
+              <li>{t(`${NS}.checklist_export_only`)}</li>
+              <li>{t(`${NS}.checklist_human_send`)}</li>
+            </ul>
+          </div>
           {filteredPacks.length === 0 ? (
             <EmptyState icon="file" title={t(`${NS}.no_packs`)} description={t(`${NS}.no_packs_hint`)} compact />
           ) : (
@@ -851,13 +873,15 @@ export default function DiscoveryLab() {
                       {t(`${NS}.mark_ready`)}
                     </Button>
                   )}
-                  {pack.status === 'ready' && (
-                    <Button variant="unstyled" type="button" disabled={busyId === pack.id} onClick={() => patchPack(pack.id, 'submitted')} className="rounded-md px-2 py-1 text-[11px] font-bold border border-cyan-500/40 text-cyan-200">
-                      {t(`${NS}.mark_submitted`)}
-                    </Button>
-                  )}
-                  {pack.status === 'submitted' && (
-                    <Button variant="unstyled" type="button" disabled={busyId === pack.id} onClick={() => patchPack(pack.id, 'disclosed')} className="rounded-md px-2 py-1 text-[11px] font-bold border border-cyan-500/40 text-cyan-200">
+                  {(pack.status === 'ready' || pack.status === 'submitted') && (
+                    <Button
+                      variant="unstyled"
+                      type="button"
+                      data-testid={`discovery-mark-disclosed-${pack.id}`}
+                      disabled={busyId === pack.id}
+                      onClick={() => patchPack(pack.id, 'disclosed')}
+                      className="rounded-md px-2 py-1 text-[11px] font-bold border border-cyan-500/40 text-cyan-200"
+                    >
                       {t(`${NS}.mark_disclosed`)}
                     </Button>
                   )}

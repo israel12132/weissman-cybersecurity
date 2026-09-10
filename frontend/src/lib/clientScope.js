@@ -66,6 +66,7 @@ export const PORTAL_BLOCKED_PREFIXES = [
   '/billing',
   '/engine-management',
   '/audit-log',
+  '/discovery-lab',
 ]
 
 export function isPortalBlockedPath(to) {

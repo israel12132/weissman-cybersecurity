@@ -1216,35 +1216,35 @@ async fn api_openapi_spec() -> Response {
             },
             "/api/discovery-lab/runs": {
                 "get": {
-                    "summary": "List Discovery Lab runs for the tenant",
+                    "summary": "List Discovery Lab runs (admin/ceo/superadmin). Novel findings stay inside Weissman.",
                     "tags": ["Discovery Lab"],
-                    "responses": { "200": { "description": "Run list" } }
+                    "responses": { "200": { "description": "Run list" }, "403": { "description": "RBAC denied" } }
                 },
                 "post": {
-                    "summary": "Start a Discovery Lab run on an authorized client target",
+                    "summary": "Start a Discovery Lab run on an authorized client target (admin+). Never scans arbitrary internet.",
                     "tags": ["Discovery Lab"],
                     "responses": {
                         "202": { "description": "Run queued" },
-                        "403": { "description": "Target outside approved tenant scope" }
+                        "403": { "description": "Target outside approved tenant scope, or RBAC denied" }
                     }
                 }
             },
             "/api/discovery-lab/candidates": {
                 "get": {
-                    "summary": "List novel-vuln candidates (distinct from ordinary findings)",
+                    "summary": "List tenant-private novel-vuln candidates (distinct from ordinary findings)",
                     "tags": ["Discovery Lab"],
-                    "responses": { "200": { "description": "Candidate list" } }
+                    "responses": { "200": { "description": "Candidate list" }, "403": { "description": "RBAC denied" } }
                 }
             },
             "/api/discovery-lab/disclosures/{id}/export": {
                 "get": {
-                    "summary": "Download a responsible-disclosure draft (markdown, JSON, or PDF)",
+                    "summary": "Download a private disclosure draft (markdown, JSON, or PDF). Weissman never submits this pack outbound.",
                     "tags": ["Discovery Lab"],
                     "parameters": [
                         { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
                         { "name": "format", "in": "query", "schema": { "type": "string", "enum": ["markdown","json","pdf"] } }
                     ],
-                    "responses": { "200": { "description": "Disclosure draft attachment" } }
+                    "responses": { "200": { "description": "Disclosure draft attachment (local download only)" } }
                 }
             }
         }

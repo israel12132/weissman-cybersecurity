@@ -336,7 +336,7 @@ export default function TacticalApp() {
           <Route path="kill-chain" element={<KillChainOrchestrator />} />
           <Route path="ai-analysis" element={<AIAnalysisEngine />} />
           <Route path="exploit-lab" element={<ExploitResearchLab />} />
-          <Route path="discovery-lab" element={<DiscoveryLab />} />
+          <Route path="discovery-lab" element={<RequireRole min="admin"><DiscoveryLab /></RequireRole>} />
           <Route path="agents" element={<AgentManagement />} />
           <Route path="audit-log" element={<RequireStaff><AuditLog /></RequireStaff>} />
           <Route path="billing" element={<RequireStaff><Billing /></RequireStaff>} />

@@ -149,6 +149,8 @@ describe('DiscoveryLab', () => {
       expect(apiFetch).toHaveBeenCalledWith('/api/discovery-lab/disclosures?limit=80')
     })
     expect(await screen.findByText('Novel parser crash on authorized host')).toBeInTheDocument()
+    expect(screen.getByTestId('discovery-lab-private-banner')).toBeInTheDocument()
+    expect(screen.getByTestId('discovery-lab-private-checklist')).toBeInTheDocument()
   })
 
   it('starts a lab run against the authorized client target', async () => {
@@ -196,5 +198,52 @@ describe('DiscoveryLab', () => {
         expect.objectContaining({ method: 'POST' }),
       )
     })
+  })
+
+  it('marks a ready pack as privately disclosed without an outbound submit', async () => {
+    apiFetch.mockImplementation((url, opts) => {
+      const method = (opts?.method || 'GET').toUpperCase()
+      if (url.startsWith('/api/discovery-lab/disclosures/pack-1') && method === 'PATCH') {
+        return Promise.resolve({
+          id: 'pack-1',
+          candidate_id: 'cand-1',
+          status: 'disclosed',
+          title: CANDIDATE.title,
+          outbound_submit: false,
+          stays_inside_weissman: true,
+        })
+      }
+      if (url.startsWith('/api/discovery-lab/disclosures')) {
+        return Promise.resolve({
+          packs: [
+            {
+              id: 'pack-1',
+              candidate_id: 'cand-1',
+              status: 'ready',
+              title: CANDIDATE.title,
+              recipient_kind: 'national_cert',
+              recipient: '',
+            },
+          ],
+        })
+      }
+      return Promise.resolve(jsonFor(url, opts))
+    })
+    render(
+      <MemoryRouter>
+        <DiscoveryLab />
+      </MemoryRouter>,
+    )
+    expect(await screen.findByTestId('discovery-mark-disclosed-pack-1')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('discovery-mark-disclosed-pack-1'))
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/discovery-lab/disclosures/pack-1',
+        expect.objectContaining({ method: 'PATCH', body: { status: 'disclosed' } }),
+      )
+    })
+    expect(
+      apiFetch.mock.calls.some(([, opts]) => (opts?.body?.status || opts?.body?.action) === 'submitted'),
+    ).toBe(false)
   })
 })

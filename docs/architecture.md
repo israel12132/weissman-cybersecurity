@@ -187,7 +187,7 @@ In-process background loops (`weissman-server`):
 | Council RAG | `supreme_council_memory` (embedding_vec vector(1536) + HNSW `m=16,ef_construction=64`), `supreme_council_rag_hits` |
 | Pentest RL | `pentest_winning_paths` (embedding vector(1536) + HNSW `m=16,ef_construction=64`) |
 | NL→SQL | `nl_query_audit`, role `weissman_ro` |
-| Discovery Lab | `discovery_lab_runs`, `discovery_lab_candidates`, `discovery_disclosure_packs`, `discovery_disclosure_events` (append-only). See [`DISCOVERY_LAB.md`](./DISCOVERY_LAB.md). |
+| Discovery Lab | Tenant-private `discovery_lab_*` + `discovery_disclosure_*` (append-only events). No outbound CERT send. See [`DISCOVERY_LAB.md`](./DISCOVERY_LAB.md). |
 | Signup | `pending_signups` |
 | Heal | `heal_requests`, `auto_heal_job_specs` |
 | System | `system_configs`, `_sqlx_migrations` |

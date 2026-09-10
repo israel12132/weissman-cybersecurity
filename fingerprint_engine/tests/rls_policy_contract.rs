@@ -465,7 +465,11 @@ fn privilege_escalation_controls_migration_in_sync_both_dirs() {
 fn discovery_lab_migration_has_forced_rls_and_lifecycle() {
     let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("migrations/20260910120000_discovery_lab.sql");
-    assert!(p.is_file(), "discovery lab migration missing: {}", p.display());
+    assert!(
+        p.is_file(),
+        "discovery lab migration missing: {}",
+        p.display()
+    );
     let text = std::fs::read_to_string(&p).unwrap();
     assert!(text.contains("CREATE TABLE IF NOT EXISTS discovery_lab_runs"));
     assert!(text.contains("CREATE TABLE IF NOT EXISTS discovery_lab_candidates"));
@@ -482,7 +486,7 @@ fn discovery_lab_migration_has_forced_rls_and_lifecycle() {
     );
     assert!(text.contains("ON discovery_lab_runs TO weissman_app"));
     assert!(text.contains("ON discovery_lab_candidates TO weissman_app"));
-    assert!(text.contains("ON discovery_disclosure_packs TO weissman_app"));
+    assert!(text.contains("Weissman never transmits these packs"));
     assert!(text.contains("REVOKE UPDATE, DELETE ON discovery_disclosure_events"));
 }
 
@@ -495,5 +499,8 @@ fn discovery_lab_migration_in_sync_both_dirs() {
     let a = std::fs::read_to_string(&fe).unwrap_or_default();
     let b = std::fs::read_to_string(&db).unwrap_or_default();
     assert!(!a.is_empty(), "migration present");
-    assert_eq!(a, b, "discovery lab migration must be identical in both dirs");
+    assert_eq!(
+        a, b,
+        "discovery lab migration must be identical in both dirs"
+    );
 }

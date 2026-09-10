@@ -59,6 +59,19 @@ describe('canAccessNavItem (RBAC nav gating)', () => {
     expect(canAccessNavItem({ to: '/system-config' }, { role: 'ceo' })).toBe(true)
   })
 
+  it('gates /discovery-lab at admin so novel findings stay inside Weissman', () => {
+    expect(canAccessNavItem({ to: '/discovery-lab' }, { role: 'operator' })).toBe(false)
+    expect(canAccessNavItem({ to: '/discovery-lab' }, { role: 'analyst' })).toBe(false)
+    expect(canAccessNavItem({ to: '/discovery-lab' }, { role: 'admin' })).toBe(true)
+    expect(canAccessNavItem({ to: '/discovery-lab' }, { role: 'ceo' })).toBe(true)
+    expect(
+      canAccessNavItem(
+        { to: '/discovery-lab' },
+        { ok: true, role: 'client', assigned_client_id: 4, is_client_user: true },
+      ),
+    ).toBe(false)
+  })
+
   it('honors an explicit per-item minRole override', () => {
     expect(canAccessNavItem({ to: '/anything', minRole: 'operator' }, { role: 'analyst' })).toBe(false)
     expect(canAccessNavItem({ to: '/anything', minRole: 'operator' }, { role: 'operator' })).toBe(true)
@@ -80,5 +93,6 @@ describe('canAccessNavItem (RBAC nav gating)', () => {
     expect(canAccessNavItem({ to: '/billing' }, portal)).toBe(false)
     expect(canAccessNavItem({ to: '/clients/new' }, portal)).toBe(false)
     expect(canAccessNavItem({ to: '/system-config' }, portal)).toBe(false)
+    expect(canAccessNavItem({ to: '/discovery-lab' }, portal)).toBe(false)
   })
 })

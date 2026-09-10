@@ -25,7 +25,7 @@ async fn api_discovery_lab_runs_list(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<DiscoveryLabListQuery>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_operator(&auth) {
+    if let Err(r) = crate::rbac::require_discovery_lab_steward(&auth) {
         return r;
     }
     match crate::discovery_lab::list_runs(
@@ -53,7 +53,7 @@ async fn api_discovery_lab_run_get(
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<String>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_operator(&auth) {
+    if let Err(r) = crate::rbac::require_discovery_lab_steward(&auth) {
         return r;
     }
     match crate::discovery_lab::get_run(state.app_pool.as_ref(), auth.tenant_id, &id).await {
@@ -82,7 +82,7 @@ async fn api_discovery_lab_run_create(
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
     body: axum::extract::Json<Value>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_operator(&auth) {
+    if let Err(r) = crate::rbac::require_discovery_lab_steward(&auth) {
         return r;
     }
     if let Err(detail) =
@@ -261,7 +261,7 @@ async fn api_discovery_lab_candidates_list(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<DiscoveryLabListQuery>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_operator(&auth) {
+    if let Err(r) = crate::rbac::require_discovery_lab_steward(&auth) {
         return r;
     }
     match crate::discovery_lab::list_candidates(
@@ -293,7 +293,7 @@ async fn api_discovery_lab_candidate_get(
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<String>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_operator(&auth) {
+    if let Err(r) = crate::rbac::require_discovery_lab_steward(&auth) {
         return r;
     }
     match crate::discovery_lab::get_candidate(state.app_pool.as_ref(), auth.tenant_id, &id).await {
@@ -319,7 +319,7 @@ async fn api_discovery_lab_candidate_action(
     Path(id): Path<String>,
     body: axum::extract::Json<Value>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_operator(&auth) {
+    if let Err(r) = crate::rbac::require_discovery_lab_steward(&auth) {
         return r;
     }
     let action_raw = body.get("action").and_then(Value::as_str).unwrap_or("");
@@ -412,7 +412,7 @@ async fn api_discovery_lab_disclosure_create(
     Path(id): Path<String>,
     body: axum::extract::Json<Value>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_operator(&auth) {
+    if let Err(r) = crate::rbac::require_discovery_lab_steward(&auth) {
         return r;
     }
     let fields = disclosure_fields_from_json(&body.0, None);
@@ -455,7 +455,7 @@ async fn api_discovery_lab_disclosures_list(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<DiscoveryLabListQuery>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_operator(&auth) {
+    if let Err(r) = crate::rbac::require_discovery_lab_steward(&auth) {
         return r;
     }
     match crate::discovery_lab::list_disclosures(
@@ -480,7 +480,7 @@ async fn api_discovery_lab_disclosure_get(
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<String>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_operator(&auth) {
+    if let Err(r) = crate::rbac::require_discovery_lab_steward(&auth) {
         return r;
     }
     match crate::discovery_lab::get_disclosure(state.app_pool.as_ref(), auth.tenant_id, &id).await {
@@ -506,7 +506,7 @@ async fn api_discovery_lab_disclosure_update(
     Path(id): Path<String>,
     body: axum::extract::Json<Value>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_operator(&auth) {
+    if let Err(r) = crate::rbac::require_discovery_lab_steward(&auth) {
         return r;
     }
     let existing =
@@ -597,7 +597,7 @@ async fn api_discovery_lab_disclosure_events(
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<String>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_operator(&auth) {
+    if let Err(r) = crate::rbac::require_discovery_lab_steward(&auth) {
         return r;
     }
     match crate::discovery_lab::list_disclosure_events(state.app_pool.as_ref(), auth.tenant_id, &id)
@@ -618,7 +618,7 @@ async fn api_discovery_lab_disclosure_export(
     Path(id): Path<String>,
     Query(q): Query<DiscoveryExportQuery>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_operator(&auth) {
+    if let Err(r) = crate::rbac::require_discovery_lab_steward(&auth) {
         return r;
     }
     let format = q.format.as_deref().unwrap_or("markdown");
