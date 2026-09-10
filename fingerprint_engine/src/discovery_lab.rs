@@ -11,8 +11,8 @@ use crate::intel_kev;
 use crate::scan_http_client;
 use chrono::{DateTime, Utc};
 use fuzz_core::{
-    is_anomaly, looks_like_sqli_response, reflected_xss_indicated, Mutator, XSS_REFLECTION_TOKEN,
-    DANGEROUS_SUFFIXES, SQLI_PROBE_PAYLOADS,
+    is_anomaly, looks_like_sqli_response, reflected_xss_indicated, Mutator, DANGEROUS_SUFFIXES,
+    SQLI_PROBE_PAYLOADS, XSS_REFLECTION_TOKEN,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -95,7 +95,10 @@ impl CandidateAction {
 
 /// Strict analyst transitions. `validated` may skip straight to disclosure-ready
 /// so a 0-day can go to CERT in parallel with customer remediation.
-pub fn transition(from: CandidateStatus, action: CandidateAction) -> Result<CandidateStatus, String> {
+pub fn transition(
+    from: CandidateStatus,
+    action: CandidateAction,
+) -> Result<CandidateStatus, String> {
     use CandidateAction as A;
     use CandidateStatus as S;
     let next = match (from, action) {
@@ -177,11 +180,17 @@ pub fn classify_payload(payload: &str) -> PayloadClass {
     if lower.contains("169.254.169.254") || lower.contains("metadata.google.internal") {
         return PayloadClass::Ssrf;
     }
-    if lower.contains("; id") || lower.contains("| id") || lower.contains("$(id)") || lower.contains("`id`")
+    if lower.contains("; id")
+        || lower.contains("| id")
+        || lower.contains("$(id)")
+        || lower.contains("`id`")
     {
         return PayloadClass::Cmdi;
     }
-    if DANGEROUS_SUFFIXES.iter().any(|s| p.ends_with(s) || p.contains(s)) {
+    if DANGEROUS_SUFFIXES
+        .iter()
+        .any(|s| p.ends_with(s) || p.contains(s))
+    {
         return PayloadClass::KnownSuffix;
     }
     PayloadClass::Novel
@@ -237,7 +246,7 @@ pub struct NoveltyAssessment {
 #[must_use]
 pub fn score_finding(input: NoveltyInputs<'_>) -> NoveltyAssessment {
     let payload_class = classify_payload(input.payload);
-    let mut novelty = if input.kev_listed {
+    let mut novelty: f64 = if input.kev_listed {
         0.06
     } else if input.has_cve {
         match input.epss_score {
@@ -263,7 +272,7 @@ pub fn score_finding(input: NoveltyInputs<'_>) -> NoveltyAssessment {
     }
     novelty = novelty.clamp(0.0, 1.0);
 
-    let mut confidence = match input.anomaly_kind {
+    let mut confidence: f64 = match input.anomaly_kind {
         AnomalyKind::SqliBody | AnomalyKind::XssReflect => 0.78,
         AnomalyKind::Crash500 => 0.64,
         AnomalyKind::Timing | AnomalyKind::Length => 0.36,
@@ -303,7 +312,12 @@ pub fn apply_fp_multiplier(confidence: f64, multiplier: f64) -> f64 {
 }
 
 #[must_use]
-pub fn signature_hash(host: &str, anomaly_kind: AnomalyKind, payload_class: PayloadClass, payload: &str) -> String {
+pub fn signature_hash(
+    host: &str,
+    anomaly_kind: AnomalyKind,
+    payload_class: PayloadClass,
+    payload: &str,
+) -> String {
     let family = payload_family_key(payload);
     let material = format!(
         "{ENGINE_ID}|{}|{}|{}|{family}",
@@ -589,7 +603,10 @@ async fn send_probe(
         anomaly_kind: kind,
         baseline_vs_anomaly: format!(
             "status {status} vs {}; len {} vs {}; {latency:.0}ms vs {:.0}ms",
-            baseline.status, body.len(), baseline.content_length, baseline.avg_latency_ms
+            baseline.status,
+            body.len(),
+            baseline.content_length,
+            baseline.avg_latency_ms
         ),
         status,
         llm_hypothesis: llm,
@@ -616,7 +633,12 @@ struct HypothesisRow {
 }
 
 fn parse_hypotheses(raw: &str, target_host: &str) -> Vec<(String, bool, Option<String>)> {
-    let text = raw.trim().trim_start_matches("```json").trim_start_matches("```").trim_end_matches("```").trim();
+    let text = raw
+        .trim()
+        .trim_start_matches("```json")
+        .trim_start_matches("```")
+        .trim_end_matches("```")
+        .trim();
     let parsed = serde_json::from_str::<HypothesisFile>(text)
         .or_else(|_| {
             serde_json::from_str::<Value>(text).and_then(|v| {
@@ -628,11 +650,13 @@ fn parse_hypotheses(raw: &str, target_host: &str) -> Vec<(String, bool, Option<S
                 Ok(HypothesisFile {
                     hypotheses: arr
                         .into_iter()
-                        .filter_map(|x| x.as_str().map(|s| HypothesisRow {
-                            payload: s.to_string(),
-                            vector: String::new(),
-                            rationale: String::new(),
-                        }))
+                        .filter_map(|x| {
+                            x.as_str().map(|s| HypothesisRow {
+                                payload: s.to_string(),
+                                vector: String::new(),
+                                rationale: String::new(),
+                            })
+                        })
                         .collect(),
                 })
             })
@@ -650,8 +674,7 @@ fn parse_hypotheses(raw: &str, target_host: &str) -> Vec<(String, bool, Option<S
                 return None;
             }
             // Never follow LLM suggestions that point at a different host.
-            if (p.contains("://") || p.contains("http"))
-                && !p.to_ascii_lowercase().contains(&host)
+            if (p.contains("://") || p.contains("http")) && !p.to_ascii_lowercase().contains(&host)
             {
                 return None;
             }
@@ -799,7 +822,8 @@ pub async fn persist_candidates_from_probes(
     host: &str,
     probes: &[ProbeEvidence],
 ) -> Result<i32, sqlx::Error> {
-    let suppressions = fp_feedback::active_suppressions_for_engine(pool, tenant_id, ENGINE_ID).await;
+    let suppressions =
+        fp_feedback::active_suppressions_for_engine(pool, tenant_id, ENGINE_ID).await;
     let mut drafts = Vec::new();
     for ev in probes {
         let cve = crate::intel_findings_backfill::extract_cve_from_value(&json!({
@@ -917,11 +941,13 @@ pub async fn attach_job_id(
     job_id: Uuid,
 ) -> Result<(), sqlx::Error> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
-    sqlx::query("UPDATE discovery_lab_runs SET job_id = $2::uuid, updated_at = now() WHERE id = $1")
-        .bind(run_id)
-        .bind(job_id.to_string())
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query(
+        "UPDATE discovery_lab_runs SET job_id = $2::uuid, updated_at = now() WHERE id = $1",
+    )
+    .bind(run_id)
+    .bind(job_id.to_string())
+    .execute(&mut *tx)
+    .await?;
     tx.commit().await?;
     Ok(())
 }
@@ -947,7 +973,11 @@ pub async fn mark_run_failed(
 }
 
 /// Worker entry: probe authorized target, persist candidates, complete the run.
-pub async fn execute_lab_job(pool: &PgPool, tenant_id: i64, payload: &Value) -> Result<Value, String> {
+pub async fn execute_lab_job(
+    pool: &PgPool,
+    tenant_id: i64,
+    payload: &Value,
+) -> Result<Value, String> {
     let run_id = payload
         .get("run_id")
         .and_then(Value::as_str)
@@ -967,7 +997,10 @@ pub async fn execute_lab_job(pool: &PgPool, tenant_id: i64, payload: &Value) -> 
         .unwrap_or("normal");
     let client_id = payload
         .get("client_id")
-        .and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+        .and_then(|v| {
+            v.as_i64()
+                .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+        })
         .ok_or_else(|| "payload.client_id required".to_string())?;
 
     {
@@ -1128,7 +1161,11 @@ pub async fn list_runs(
     Ok(rows.iter().map(row_run).collect())
 }
 
-pub async fn get_run(pool: &PgPool, tenant_id: i64, run_id: &str) -> Result<Option<Value>, sqlx::Error> {
+pub async fn get_run(
+    pool: &PgPool,
+    tenant_id: i64,
+    run_id: &str,
+) -> Result<Option<Value>, sqlx::Error> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
     let row = sqlx::query(
         r#"SELECT id, client_id, job_id::text AS job_id, target_url, target_host, status, intensity, llm_used,
@@ -1230,8 +1267,15 @@ pub async fn apply_candidate_action(
 
     match action {
         CandidateAction::Suppress => {
-            let _ = fp_feedback::record_fp(&mut tx, tenant_id, ENGINE_ID, &sig, Some(&target), Some(user_id))
-                .await;
+            let _ = fp_feedback::record_fp(
+                &mut tx,
+                tenant_id,
+                ENGINE_ID,
+                &sig,
+                Some(&target),
+                Some(user_id),
+            )
+            .await;
         }
         CandidateAction::Validate
         | CandidateAction::Remediation
@@ -1278,14 +1322,22 @@ pub fn redact_text(input: &str, fields: &DisclosureFields, customer_tokens: &[&s
     let mut s = input.to_string();
     if fields.redact_payloads {
         for needle in ["payload", "weissman_lab=", XSS_REFLECTION_TOKEN] {
-            if s.to_ascii_lowercase().contains(&needle.to_ascii_lowercase()) {
+            if s.to_ascii_lowercase()
+                .contains(&needle.to_ascii_lowercase())
+            {
                 s = "[redacted: payload/reproduction detail]".to_string();
                 break;
             }
         }
     }
     if fields.redact_internal_hosts {
-        for host in ["127.0.0.1", "localhost", "10.", "192.168.", "169.254.169.254"] {
+        for host in [
+            "127.0.0.1",
+            "localhost",
+            "10.",
+            "192.168.",
+            "169.254.169.254",
+        ] {
             if s.contains(host) {
                 s = s.replace(host, "[redacted-internal]");
             }
@@ -1302,7 +1354,11 @@ pub fn redact_text(input: &str, fields: &DisclosureFields, customer_tokens: &[&s
 }
 
 #[must_use]
-pub fn render_disclosure_markdown(pack: &Value, fields: &DisclosureFields, customer_tokens: &[&str]) -> String {
+pub fn render_disclosure_markdown(
+    pack: &Value,
+    fields: &DisclosureFields,
+    customer_tokens: &[&str],
+) -> String {
     let t = |k: &str| {
         pack.get(k)
             .and_then(Value::as_str)
@@ -1336,7 +1392,9 @@ pub fn render_disclosure_markdown(pack: &Value, fields: &DisclosureFields, custo
 }
 
 fn pdf_escape(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('(', "\\(").replace(')', "\\)")
+    s.replace('\\', "\\\\")
+        .replace('(', "\\(")
+        .replace(')', "\\)")
 }
 
 fn wrap_lines(s: &str, width: usize) -> Vec<String> {
@@ -1389,7 +1447,10 @@ pub fn render_disclosure_pdf(markdown: &str) -> Vec<u8> {
         pdf.push_str(&format!("{} 0 obj\n{}\nendobj\n", i + 1, obj));
     }
     let xref_at = pdf.len();
-    pdf.push_str(&format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1));
+    pdf.push_str(&format!(
+        "xref\n0 {}\n0000000000 65535 f \n",
+        objects.len() + 1
+    ));
     for off in offsets.iter().skip(1) {
         pdf.push_str(&format!("{off:010} 00000 n \n"));
     }
@@ -1473,18 +1534,24 @@ pub async fn create_disclosure_pack(
     .map_err(|e| e.to_string())?
     .ok_or_else(|| "candidate not found".to_string())?;
     let st = cand.try_get::<String, _>("status").unwrap_or_default();
-    let parsed = CandidateStatus::parse(&st).ok_or_else(|| "invalid candidate status".to_string())?;
-    if matches!(parsed, CandidateStatus::Suppressed | CandidateStatus::Candidate) {
+    let parsed =
+        CandidateStatus::parse(&st).ok_or_else(|| "invalid candidate status".to_string())?;
+    if matches!(
+        parsed,
+        CandidateStatus::Suppressed | CandidateStatus::Candidate
+    ) {
         return Err("candidate must be validated before opening a disclosure pack".into());
     }
     let client_id: i64 = cand.try_get("client_id").unwrap_or(0);
     let title = if fields.title.trim().is_empty() {
-        cand.try_get::<String, _>("title").unwrap_or_else(|_| "Novel finding".into())
+        cand.try_get::<String, _>("title")
+            .unwrap_or_else(|_| "Novel finding".into())
     } else {
         fields.title.clone()
     };
     let summary = if fields.technical_summary.trim().is_empty() {
-        cand.try_get::<String, _>("technical_summary").unwrap_or_default()
+        cand.try_get::<String, _>("technical_summary")
+            .unwrap_or_default()
     } else {
         fields.technical_summary.clone()
     };
@@ -1494,7 +1561,8 @@ pub async fn create_disclosure_pack(
         fields.impact.clone()
     };
     let fix = if fields.recommended_fix.trim().is_empty() {
-        cand.try_get::<String, _>("recommended_fix").unwrap_or_default()
+        cand.try_get::<String, _>("recommended_fix")
+            .unwrap_or_default()
     } else {
         fields.recommended_fix.clone()
     };
@@ -1706,7 +1774,8 @@ pub async fn update_disclosure(
         .map_err(|e| e.to_string())?;
     }
     if let Some(ns) = new_status {
-        let to = parse_disclosure_status(ns).ok_or_else(|| "invalid disclosure status".to_string())?;
+        let to =
+            parse_disclosure_status(ns).ok_or_else(|| "invalid disclosure status".to_string())?;
         if !disclosure_transition_ok(&current, to) {
             return Err(format!("illegal disclosure transition: {current} → {to}"));
         }
@@ -1792,13 +1861,21 @@ pub async fn export_disclosure(
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "disclosure pack not found".to_string())?;
     let fields = DisclosureFields {
-        title: pack.get("title").and_then(Value::as_str).unwrap_or("").into(),
+        title: pack
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .into(),
         technical_summary: pack
             .get("technical_summary")
             .and_then(Value::as_str)
             .unwrap_or("")
             .into(),
-        impact: pack.get("impact").and_then(Value::as_str).unwrap_or("").into(),
+        impact: pack
+            .get("impact")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .into(),
         reproduction: pack
             .get("reproduction")
             .and_then(Value::as_str)
@@ -1809,8 +1886,16 @@ pub async fn export_disclosure(
             .and_then(Value::as_str)
             .unwrap_or("")
             .into(),
-        timeline: pack.get("timeline").and_then(Value::as_str).unwrap_or("").into(),
-        recipient: pack.get("recipient").and_then(Value::as_str).unwrap_or("").into(),
+        timeline: pack
+            .get("timeline")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .into(),
+        recipient: pack
+            .get("recipient")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .into(),
         recipient_kind: pack
             .get("recipient_kind")
             .and_then(Value::as_str)
@@ -1841,7 +1926,11 @@ pub async fn export_disclosure(
             if let Some(obj) = redacted.as_object_mut() {
                 obj.insert(
                     "technical_summary".into(),
-                    json!(redact_text(&fields.technical_summary, &fields, customer_tokens)),
+                    json!(redact_text(
+                        &fields.technical_summary,
+                        &fields,
+                        customer_tokens
+                    )),
                 );
                 obj.insert(
                     "reproduction".into(),
@@ -1938,7 +2027,10 @@ mod tests {
             PayloadClass::Xss
         );
         assert_eq!(classify_payload("{{7*7}}"), PayloadClass::Ssti);
-        assert_eq!(classify_payload("chunked-json-key-reorder-weissman-lab"), PayloadClass::Novel);
+        assert_eq!(
+            classify_payload("chunked-json-key-reorder-weissman-lab"),
+            PayloadClass::Novel
+        );
     }
 
     #[test]
@@ -1992,7 +2084,14 @@ mod tests {
 
     #[test]
     fn draft_requires_probe_evidence() {
-        let d = draft_from_probe(&probe("' OR 1=1--", AnomalyKind::SqliBody, false), "app.example.test", false, None, None, 1.0);
+        let d = draft_from_probe(
+            &probe("' OR 1=1--", AnomalyKind::SqliBody, false),
+            "app.example.test",
+            false,
+            None,
+            None,
+            1.0,
+        );
         assert!(d.signature_hash.len() == 64);
         assert_eq!(d.payload_class, "sqli");
         assert_eq!(d.evidence["authorized_scope_only"], true);
@@ -2054,9 +2153,14 @@ mod tests {
 
     #[test]
     fn recipient_kind_aliases() {
-        assert_eq!(DisclosureFields::normalize_kind("gov_cyber"), "government_cyber");
-        assert_eq!(DisclosureFields::normalize_kind("national_cert"), "national_cert");
+        assert_eq!(
+            DisclosureFields::normalize_kind("gov_cyber"),
+            "government_cyber"
+        );
+        assert_eq!(
+            DisclosureFields::normalize_kind("national_cert"),
+            "national_cert"
+        );
         assert_eq!(DisclosureFields::normalize_kind("vendor"), "vendor");
     }
 }
-

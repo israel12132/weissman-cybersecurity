@@ -155,8 +155,8 @@ export default function DiscoveryLab() {
   const { toast } = useToast()
   const { clients, selectedClientId, setSelectedClientId, selectedClient } = useClient()
 
-  const [clientId, setClientId] = useState(selectedClientId || '')
-  const [target, setTarget] = useState('')
+  const [clientId, setClientId] = useState(selectedClientId || selectedClient?.id || '')
+  const [target, setTarget] = useState(() => firstClientTarget(selectedClient) || '')
   const [intensity, setIntensity] = useState('normal')
   const [runs, setRuns] = useState([])
   const [candidates, setCandidates] = useState([])
@@ -181,12 +181,16 @@ export default function DiscoveryLab() {
   })
 
   useEffect(() => {
-    if (clientId) return
-    const first = selectedClient || clients[0]
-    if (!first) return
-    setClientId(first.id)
-    setTarget(firstClientTarget(first) || '')
-  }, [clients, selectedClient, clientId])
+    if (!clientId) {
+      const first = selectedClient || clients[0]
+      if (first?.id) setClientId(first.id)
+      return
+    }
+    if (target) return
+    const c = clients.find((x) => String(x.id) === String(clientId)) || selectedClient
+    const next = firstClientTarget(c)
+    if (next) setTarget(next)
+  }, [clients, selectedClient, clientId, target])
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -205,7 +209,7 @@ export default function DiscoveryLab() {
     } finally {
       setLoading(false)
     }
-  }, [t])
+  }, [])
 
   useEffect(() => {
     loadAll()

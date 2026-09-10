@@ -100,7 +100,10 @@ async fn api_discovery_lab_run_create(
     }
     let client_id = body
         .get("client_id")
-        .and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+        .and_then(|v| {
+            v.as_i64()
+                .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+        })
         .filter(|id| *id > 0);
     let Some(client_id) = client_id else {
         return (
@@ -158,18 +161,18 @@ async fn api_discovery_lab_run_create(
         intensity: intensity.to_string(),
         created_by_user_id: Some(auth.user_id),
     };
-    let run_id = match crate::discovery_lab::insert_queued_run(state.app_pool.as_ref(), &input).await
-    {
-        Ok(id) => id,
-        Err(e) => {
-            tracing::error!(target: "discovery_lab", error = %e, "insert run failed");
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"detail": "failed to create discovery lab run"})),
-            )
-                .into_response();
-        }
-    };
+    let run_id =
+        match crate::discovery_lab::insert_queued_run(state.app_pool.as_ref(), &input).await {
+            Ok(id) => id,
+            Err(e) => {
+                tracing::error!(target: "discovery_lab", error = %e, "insert run failed");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"detail": "failed to create discovery lab run"})),
+                )
+                    .into_response();
+            }
+        };
     let payload = json!({
         "run_id": run_id,
         "target": target,
@@ -191,7 +194,10 @@ async fn api_discovery_lab_run_create(
             Some(auth.user_id),
             &u,
             "discovery_lab_run",
-            &format!("run_id={run_id} target={}", target.chars().take(200).collect::<String>()),
+            &format!(
+                "run_id={run_id} target={}",
+                target.chars().take(200).collect::<String>()
+            ),
             &ip,
         )
         .await;
@@ -214,10 +220,11 @@ async fn api_discovery_lab_run_create(
                 job_id,
             )
             .await;
-            let run = crate::discovery_lab::get_run(state.app_pool.as_ref(), auth.tenant_id, &run_id)
-                .await
-                .ok()
-                .flatten();
+            let run =
+                crate::discovery_lab::get_run(state.app_pool.as_ref(), auth.tenant_id, &run_id)
+                    .await
+                    .ok()
+                    .flatten();
             (
                 StatusCode::ACCEPTED,
                 Json(json!({
@@ -267,7 +274,9 @@ async fn api_discovery_lab_candidates_list(
     )
     .await
     {
-        Ok(candidates) => (StatusCode::OK, Json(json!({ "candidates": candidates }))).into_response(),
+        Ok(candidates) => {
+            (StatusCode::OK, Json(json!({ "candidates": candidates }))).into_response()
+        }
         Err(e) => {
             tracing::error!(target: "discovery_lab", error = %e, "list candidates failed");
             (
@@ -313,10 +322,7 @@ async fn api_discovery_lab_candidate_action(
     if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
-    let action_raw = body
-        .get("action")
-        .and_then(Value::as_str)
-        .unwrap_or("");
+    let action_raw = body.get("action").and_then(Value::as_str).unwrap_or("");
     let Some(action) = crate::discovery_lab::CandidateAction::parse(action_raw) else {
         return (
             StatusCode::BAD_REQUEST,
@@ -361,7 +367,10 @@ async fn api_discovery_lab_candidate_action(
     }
 }
 
-fn disclosure_fields_from_json(body: &Value, fallback: Option<&Value>) -> crate::discovery_lab::DisclosureFields {
+fn disclosure_fields_from_json(
+    body: &Value,
+    fallback: Option<&Value>,
+) -> crate::discovery_lab::DisclosureFields {
     let g = |k: &str| {
         body.get(k)
             .and_then(Value::as_str)
@@ -500,29 +509,26 @@ async fn api_discovery_lab_disclosure_update(
     if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
-    let existing = match crate::discovery_lab::get_disclosure(
-        state.app_pool.as_ref(),
-        auth.tenant_id,
-        &id,
-    )
-    .await
-    {
-        Ok(Some(p)) => p,
-        Ok(None) => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({"detail": "disclosure pack not found"})),
-            )
-                .into_response();
-        }
-        Err(_) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"detail": "failed to load disclosure pack"})),
-            )
-                .into_response();
-        }
-    };
+    let existing =
+        match crate::discovery_lab::get_disclosure(state.app_pool.as_ref(), auth.tenant_id, &id)
+            .await
+        {
+            Ok(Some(p)) => p,
+            Ok(None) => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(json!({"detail": "disclosure pack not found"})),
+                )
+                    .into_response();
+            }
+            Err(_) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"detail": "failed to load disclosure pack"})),
+                )
+                    .into_response();
+            }
+        };
     let has_fields = body.0.as_object().is_some_and(|o| {
         o.keys().any(|k| {
             matches!(

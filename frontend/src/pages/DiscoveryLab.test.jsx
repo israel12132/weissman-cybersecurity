@@ -188,17 +188,6 @@ describe('DiscoveryLab', () => {
         expect.objectContaining({ method: 'PATCH', body: { action: 'validate' } }),
       )
     })
-
-    apiFetch.mockImplementation((url, opts) => {
-      if (url.startsWith('/api/discovery-lab/candidates') && (opts?.method || 'GET') === 'GET' && !url.includes('/disclosure')) {
-        if (url.includes('cand-1') && !url.includes('limit')) {
-          return Promise.resolve({ ...CANDIDATE, status: 'validated' })
-        }
-        return Promise.resolve({ candidates: [{ ...CANDIDATE, status: 'validated' }] })
-      }
-      return Promise.resolve(jsonFor(url, opts))
-    })
-    fireEvent.click(screen.getByText('refresh'))
     expect(await screen.findByTestId('discovery-open-disclosure-cand-1')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('discovery-open-disclosure-cand-1'))
     await waitFor(() => {
