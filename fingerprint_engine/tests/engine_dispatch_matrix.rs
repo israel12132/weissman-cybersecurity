@@ -47,6 +47,8 @@ fn synthesis_and_sovereign_engines_wired_in_dispatch() {
         "chronos",
         "liquid_matrix",
         "cognitive_starvation",
+        "ot_passive_active_safety",
+        "ot_crown_jewel_path",
     ];
     for engine_id in required {
         assert!(

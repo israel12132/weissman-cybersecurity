@@ -121,6 +121,8 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "building_automation_attack",
     "robotics_ros2_attack",
     "ot_sis_triton_attack",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
     "iot_firmware",
     "ble_rf",
     "edr_evasion",
@@ -753,6 +755,8 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "building_automation_attack",
     "robotics_ros2_attack",
     "ot_sis_triton_attack",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
     "iot_firmware",
     "ble_rf",
     // Stealth / Evasion
@@ -1609,6 +1613,14 @@ mod production_registry_tests {
         assert!(
             PRODUCTION_ENGINE_IDS.len() >= 580,
             "do not shrink the registry to match an old container image"
+        );
+        assert!(
+            PRODUCTION_ENGINE_IDS.contains(&"ot_passive_active_safety"),
+            "OT safety interlock must be in the production catalog"
+        );
+        assert!(
+            PRODUCTION_ENGINE_IDS.contains(&"ot_crown_jewel_path"),
+            "OT crown-jewel path must be in the production catalog"
         );
     }
 

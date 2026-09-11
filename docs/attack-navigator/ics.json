@@ -16,8 +16,8 @@
     },
     {
       "techniqueID": "T0843",
-      "score": 12,
-      "comment": "dnp3_attack, hmi_exploit, ics_historian_attack, iec61850_attack, industrial_protocol_fuzz, modbus_attack, modbus_exploit, opcua_attack, plc_logic_attack, plc_logic_bomb, profinet_attack, scada_ics",
+      "score": 13,
+      "comment": "dnp3_attack, hmi_exploit, ics_historian_attack, iec61850_attack, industrial_protocol_fuzz, modbus_attack, modbus_exploit, opcua_attack, ot_passive_active_safety, plc_logic_attack, plc_logic_bomb, profinet_attack, scada_ics",
       "enabled": true
     },
     {
@@ -40,8 +40,8 @@
     },
     {
       "techniqueID": "T0836",
-      "score": 10,
-      "comment": "coap_attack, hmi_attack, industrial_protocol_fuzz, modbus_attack, modbus_exploit, mqtt_attack, opcua_attack, plc_logic_attack, profinet_attack, satellite_comm_attack",
+      "score": 11,
+      "comment": "coap_attack, hmi_attack, industrial_protocol_fuzz, modbus_attack, modbus_exploit, mqtt_attack, opcua_attack, ot_crown_jewel_path, plc_logic_attack, profinet_attack, satellite_comm_attack",
       "enabled": true
     },
     {
@@ -136,7 +136,7 @@
       "#1e3a8a"
     ],
     "minValue": 0,
-    "maxValue": 12
+    "maxValue": 13
   },
   "legendItems": [
     {
