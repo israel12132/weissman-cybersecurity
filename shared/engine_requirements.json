@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-09-10T15:48:50.483Z",
-  "production_engine_count": 583,
+  "generated_at": "2026-09-11T23:58:49.652Z",
+  "production_engine_count": 584,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 426
+      "engine_count": 427
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -334,6 +334,16 @@
       "group": "recon",
       "kind": "real_probe",
       "label": "First-Mover Delta Fusion",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "exposure_schism_fusion": {
+      "id": "exposure_schism_fusion",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Exposure Schism Fusion",
       "requirements": [
         "contact_email",
         "scope_domains"

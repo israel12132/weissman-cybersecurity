@@ -398,6 +398,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/first-mover/nerve", get(api_first_mover_nerve))
         .route(
+            "/api/competitive/panw-displacement",
+            get(api_panw_displacement),
+        )
+        .route(
             "/api/clients/:id/semantic-state-machine",
             get(api_client_semantic_state_machine),
         )

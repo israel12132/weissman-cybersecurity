@@ -1194,6 +1194,23 @@
       "chrome": {
         "badge_color": "#22d3ee"
       }
+    },
+    {
+      "engine_id": "exposure_schism_fusion",
+      "route_paths": [
+        "/panw-displacement"
+      ],
+      "evidence_i18n_key": "pages.panwDisplacement.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": false,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#f43f5e"
+      }
     }
   ]
 }

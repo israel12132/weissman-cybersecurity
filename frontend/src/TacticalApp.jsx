@@ -87,6 +87,7 @@ import {
   AttackPaths,
   SupremeBrain,
   CemDagoMesh,
+  PanwDisplacement,
   AttackCoverage,
   SecurityPosture,
   IocFeed,
@@ -285,6 +286,7 @@ export default function TacticalApp() {
           <Route path="attack-paths" element={<AttackPaths />} />
           <Route path="supreme-brain" element={<SupremeBrain />} />
           <Route path="cem-dago" element={<CemDagoMesh />} />
+          <Route path="panw-displacement" element={<PanwDisplacement />} />
           <Route path="attack-coverage" element={<AttackCoverage />} />
           <Route path="security-posture" element={<SecurityPosture />} />
           <Route path="iocs" element={<IocFeed />} />

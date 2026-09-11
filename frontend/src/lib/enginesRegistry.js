@@ -1,5 +1,5 @@
 /**
- * Master registry of all 583 production attack engines.
+ * Master registry of all 584 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 583 production engines in registry order */
+/** All 584 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -47,6 +47,14 @@ export const ENGINES_REGISTRY = [
     group: 'recon',
     mitre: 'T1595',
     description: 'New host from live surface delta immediately gets subdomain takeover, leak hunter, BOLA, and JWT on that same FQDN — not a separate later hunt.',
+    requiresTarget: true,
+  },
+  {
+    id: 'exposure_schism_fusion',
+    label: 'Exposure Schism Fusion',
+    group: 'recon',
+    mitre: 'T1595',
+    description: 'New host from live surface delta is immediately probed for HTTP/1.1↔HTTP/2 / Vary / rewrite-header schisms on that same FQDN — first-seen exposure plus protocol-boundary proof in one job.',
     requiresTarget: true,
   },
   {
