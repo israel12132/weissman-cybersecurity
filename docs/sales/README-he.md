@@ -67,3 +67,4 @@ node scripts/generate_platform_encyclopedia.mjs
 | `docs/manuals/` | DevOps, התקנה, QA |
 | `docs/manuals/he/WEISSMAN-COMMAND-CENTER-BOOK.md` | מפעיל SOC — workflows |
 | `Weissman_Cybersecurity_מסמך_טכני_מנהלי_עברית.md` | תדריך מנהלים |
+| **[CISO-COMPETITOR-FUSION-SHIP-LIST.md](./CISO-COMPETITOR-FUSION-SHIP-LIST.md)** | השוואת CISO ל-Wiz/Falcon/XSIAM/Mandiant/Rapid7/Tenable/RF/Flare/EASM/Censys + 8 שיפּים ייחודיים |
