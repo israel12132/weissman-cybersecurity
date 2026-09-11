@@ -878,6 +878,62 @@ async fn persist_snapshot(
     Ok(())
 }
 
+/// Heuristic crown-jewel (and internet-exposed) seeds so Dijkstra is not silently empty
+/// when the operator has not flagged sinks. Returns rows newly tagged.
+pub async fn auto_tag_attack_path_seeds(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+) -> Result<u64, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("tenant tx: {e}"))?;
+    let mut tagged = 0u64;
+    match sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_INTERNET_EXPOSED_SQL)
+        .bind(tenant_id)
+        .bind(client_id)
+        .execute(&mut *tx)
+        .await
+    {
+        Ok(r) => tagged += r.rows_affected(),
+        Err(e) => tracing::warn!(
+            target: "attack_path",
+            error = %e,
+            "auto-tag internet_exposed failed"
+        ),
+    }
+    match sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_CROWN_JEWEL_SQL)
+        .bind(tenant_id)
+        .bind(client_id)
+        .execute(&mut *tx)
+        .await
+    {
+        Ok(r) => tagged += r.rows_affected(),
+        Err(e) => tracing::warn!(
+            target: "attack_path",
+            error = %e,
+            "auto-tag crown_jewel failed"
+        ),
+    }
+    match sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL)
+        .bind(tenant_id)
+        .bind(client_id)
+        .execute(&mut *tx)
+        .await
+    {
+        Ok(r) => tagged += r.rows_affected(),
+        Err(e) => tracing::warn!(
+            target: "attack_path",
+            error = %e,
+            "auto-tag crown_jewel fallback failed"
+        ),
+    }
+    tx.commit()
+        .await
+        .map_err(|e| format!("commit auto-tag: {e}"))?;
+    Ok(tagged)
+}
+
 /// Public entry point: compute (and persist) the top-K attack paths for a client.
 /// Coalesces concurrent rebuilds for the same `(tenant, client)` — one Dijkstra,
 /// waiters reuse the snapshot that just landed.
@@ -889,6 +945,12 @@ pub async fn compute_and_store(
 ) -> Result<AttackPathSnapshot, String> {
     let top_k = top_k.unwrap_or(DEFAULT_TOP_K).clamp(1, TENANT_PATH_QUOTA);
     let key = (tenant_id, client_id);
+    let tagged = auto_tag_attack_path_seeds(pool, tenant_id, client_id)
+        .await
+        .unwrap_or(0);
+    if tagged > 0 {
+        mark_graph_dirty(tenant_id, client_id);
+    }
     let gate = flight_gate(infer_flights(), key);
     let _guard = gate.lock().await;
     if !is_graph_dirty(tenant_id, client_id) {
@@ -1137,6 +1199,20 @@ mod tests {
         assert!(o.blocks_edge(4, "smb_connects"));
         assert!(!o.blocks_edge(4, "https"));
         assert!(std::mem::size_of::<GraphOverlay>() < 256);
+    }
+
+    #[test]
+    fn infer_paths_is_empty_without_crown_jewels() {
+        let mut nodes = HashMap::new();
+        nodes.insert(1, n(1, true, false, 0.0));
+        nodes.insert(2, n(2, false, false, 9.0));
+        let mut adj: HashMap<i64, Vec<(i64, String)>> = HashMap::new();
+        adj.insert(1, vec![(2, "connects".into())]);
+        let (paths, choke, entries, jewels) = infer_paths(&nodes, &adj, &HashMap::new(), 10, None);
+        assert_eq!(entries, 1);
+        assert_eq!(jewels, 0);
+        assert!(paths.is_empty());
+        assert!(choke.is_empty());
     }
 
     #[test]

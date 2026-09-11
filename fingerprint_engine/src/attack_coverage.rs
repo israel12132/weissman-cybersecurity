@@ -415,6 +415,23 @@ pub fn coverage_json() -> Value {
             "tactics_covered": tactic_rollup().len(),
             "engine_references": COVERAGE.iter().map(|t| t.engines.len()).sum::<usize>(),
         },
+        "attack_readiness": {
+            "default_roe": "safe_proofs",
+            "weaponized_requires_dual_control": true,
+            "threat_emulation_apt_scenarios": crate::threat_emulation_engine::APT_SCENARIO_COUNT,
+            "redteam_cron_engines": crate::redteam_background_worker::REDTEAM_CRON_ENGINES,
+            "crown_jewels_auto_tagged": true,
+            "attack_paths_require_internet_and_jewels": true,
+            "social_engineering_surface_only": true,
+            "agent_required_count": weissman_core::models::engine_agent::AGENT_REQUIRED_ENGINES.len(),
+            "gaps": [
+                "Persistence / privilege-escalation ATT&CK tactics are thinly mapped vs Initial Access",
+                "Mobile ATT&CK coverage is sparse (execution/persistence/C2/exfil still empty)",
+                "ICS ATT&CK Command-and-Control and Privilege Escalation tactics have 0 mapped techniques",
+                "Host-resident engines (ROP/heap/JIT/COM) are inventory + remote-surface, not exploit execution",
+                "Scheduled red-team requires WEISSMAN_REDTEAM_CRON=1 (off by default)"
+            ],
+        },
     })
 }
 
@@ -462,5 +479,14 @@ mod tests {
             "broad tactic coverage"
         );
         assert_eq!(j["framework"], "MITRE ATT&CK");
+        assert_eq!(j["attack_readiness"]["default_roe"], "safe_proofs");
+        assert_eq!(
+            j["attack_readiness"]["crown_jewels_auto_tagged"].as_bool(),
+            Some(true)
+        );
+        assert!(j["attack_readiness"]["gaps"]
+            .as_array()
+            .map(|a| !a.is_empty())
+            .unwrap_or(false));
     }
 }
