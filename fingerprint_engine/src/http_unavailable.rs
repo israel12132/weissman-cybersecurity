@@ -338,6 +338,64 @@ pub fn findings_unavailable_json(detail: &str) -> Value {
     list_envelope("findings", detail)
 }
 
+/// `GET /api/findings/clusters` when the cluster query cannot be read
+pub fn findings_clusters_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "clusters": [],
+        "total": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/intel/suppressions` when the suppression table cannot be read
+pub fn intel_suppressions_unavailable_json(detail: &str) -> Value {
+    list_envelope("suppressions", detail)
+}
+
+/// `GET /api/intel/status` when KEV/EPSS mirrors cannot be counted
+pub fn intel_status_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "kev": { "rows": Value::Null, "last_refresh": Value::Null },
+        "epss": { "rows": Value::Null, "last_refresh": Value::Null },
+        "detail": detail,
+    })
+}
+
+/// `GET /api/reports` when report_runs cannot be listed
+pub fn reports_unavailable_json(detail: &str) -> Value {
+    list_envelope("reports", detail)
+}
+
+/// `GET /api/onboarding/tenant-status` when tenant config cannot be confirmed
+pub fn onboarding_tenant_status_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "llm_configured": Value::Null,
+        "oast_configured": Value::Null,
+        "ai_heavy_entitled": Value::Null,
+        "oast_listener_url": Value::Null,
+        "oast_domain": Value::Null,
+        "oast_api_key_configured": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/readiness` when the client/agent/tenant facts cannot be read
+pub fn client_readiness_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "readiness": Value::Null,
+        "tenant": Value::Null,
+        "detail": detail,
+    })
+}
+
 /// `GET /api/clients/:id/vulnerabilities/:id/sealed-poc`
 pub fn sealed_poc_unavailable_json(detail: &str) -> Value {
     json!({
@@ -645,6 +703,60 @@ mod tests {
     #[test]
     fn findings_store_down_is_never_ok_empty_success() {
         never_ok_empty_success(&findings_unavailable_json("store down"), "findings");
+    }
+
+    #[test]
+    fn findings_clusters_store_down_is_never_ok_empty_success() {
+        let v = findings_clusters_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["clusters"], json!([]));
+        assert!(v["total"].is_null());
+        assert_ne!(v["total"], json!(0));
+    }
+
+    #[test]
+    fn intel_suppressions_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(
+            &intel_suppressions_unavailable_json("store down"),
+            "suppressions",
+        );
+    }
+
+    #[test]
+    fn intel_status_store_down_is_never_zero_mirror_success() {
+        let v = intel_status_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["kev"]["rows"].is_null());
+        assert!(v["epss"]["rows"].is_null());
+        assert_ne!(v["kev"]["rows"], json!(0));
+        assert_ne!(v["epss"]["rows"], json!(0));
+    }
+
+    #[test]
+    fn reports_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&reports_unavailable_json("store down"), "reports");
+    }
+
+    #[test]
+    fn onboarding_tenant_status_store_down_is_never_entitled_success() {
+        let v = onboarding_tenant_status_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["llm_configured"].is_null());
+        assert!(v["ai_heavy_entitled"].is_null());
+        assert_ne!(v["ai_heavy_entitled"], json!(true));
+        assert_ne!(v["llm_configured"], json!(false));
+    }
+
+    #[test]
+    fn client_readiness_store_down_is_never_zero_gap_success() {
+        let v = client_readiness_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["readiness"].is_null());
+        assert!(v["tenant"].is_null());
     }
 
     #[test]

@@ -827,7 +827,13 @@ async fn api_findings_clusters(
     let client_filter: Option<i64> = q.get("client_id").and_then(|s| s.parse().ok());
 
     let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false, "detail": "DB unavailable"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_clusters_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
 
     let rows = sqlx::query(
@@ -856,9 +862,23 @@ async fn api_findings_clusters(
     .bind(only_open)
     .bind(only_kev)
     .bind(client_filter)
-    .fetch_all(&mut *tx).await.unwrap_or_default();
+    .fetch_all(&mut *tx)
+    .await;
+    let rows = match rows {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "findings", tenant_id = auth.tenant_id, error = %e, "findings clusters query failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_clusters_unavailable_json(
+                    "findings clusters query failed",
+                )),
+            )
+                .into_response();
+        }
+    };
 
-    let total: i64 = sqlx::query_scalar(
+    let total: i64 = match sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM weissman_finding_clusters
             WHERE ($1::text IS NULL OR lower(max_severity) = $1)
               AND ($2::bool IS NULL OR ($2 AND status = 'OPEN') OR NOT $2)
@@ -869,8 +889,30 @@ async fn api_findings_clusters(
     .bind(only_open)
     .bind(only_kev)
     .bind(client_filter)
-    .fetch_one(&mut *tx).await.unwrap_or(0);
-    let _ = tx.commit().await;
+    .fetch_one(&mut *tx)
+    .await
+    {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::error!(target: "findings", tenant_id = auth.tenant_id, error = %e, "findings clusters count failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_clusters_unavailable_json(
+                    "findings clusters count failed",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_clusters_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     let clusters: Vec<Value> = rows.into_iter().map(|r| {
         let max_severity: String = r.try_get("max_severity").unwrap_or_else(|_| "info".to_string());
@@ -924,17 +966,45 @@ async fn api_intel_suppressions(
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::intel_suppressions_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, engine, signature_hash, target_glob, reason,
                   fp_count_at_create, created_by_user_id, created_at,
                   expires_at, hit_count, last_hit_at
              FROM finding_suppressions
             ORDER BY created_at DESC LIMIT 200"#,
     )
-    .fetch_all(&mut *tx).await.unwrap_or_default();
-    let _ = tx.commit().await;
+    .fetch_all(&mut *tx)
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "intel", tenant_id = auth.tenant_id, error = %e, "intel suppressions query failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::intel_suppressions_unavailable_json(
+                    "intel suppressions query failed",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::intel_suppressions_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let list: Vec<Value> = rows.into_iter().map(|r| json!({
         "id":             r.try_get::<i64, _>("id").unwrap_or(0),
         "engine":         r.try_get::<String, _>("engine").unwrap_or_default(),
@@ -958,39 +1028,124 @@ async fn api_intel_suppression_delete(
     Path(id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::intel_suppressions_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     let res = sqlx::query("DELETE FROM finding_suppressions WHERE id = $1 AND tenant_id = $2")
         .bind(id).bind(auth.tenant_id)
         .execute(&mut *tx).await;
-    let _ = tx.commit().await;
     match res {
         Ok(r) if r.rows_affected() > 0 => {
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::intel_suppressions_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
             crate::fp_feedback::invalidate_suppression_cache_tenant(auth.tenant_id);
             (StatusCode::OK, Json(json!({"ok": true, "deleted": id}))).into_response()
         }
-        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false}))).into_response(),
+        Ok(_) => {
+            let _ = tx.commit().await;
+            (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "suppression not found"}))).into_response()
+        }
+        Err(e) => {
+            tracing::error!(target: "intel", tenant_id = auth.tenant_id, error = %e, "intel suppression delete failed");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::intel_suppressions_unavailable_json(
+                    "intel suppression delete failed",
+                )),
+            )
+                .into_response()
+        }
     }
 }
 
 /// `GET /api/intel/status` — health view of the intel mirrors. Always public to the
 /// authed UI so the cockpit can show "Last KEV refresh: 4 minutes ago".
 async fn api_intel_status(State(state): State<Arc<AppState>>) -> Response {
-    let kev_total: Option<i64> = sqlx::query_scalar("SELECT COUNT(*)::bigint FROM kev_intel")
-        .fetch_optional(state.app_pool.as_ref()).await.ok().flatten();
-    let kev_last: Option<chrono::DateTime<Utc>> = sqlx::query_scalar(
+    let pool = state.app_pool.as_ref();
+    let kev_total: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM kev_intel")
+        .fetch_one(pool)
+        .await
+    {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::error!(target: "intel", error = %e, "kev_intel count failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::intel_status_unavailable_json(
+                    "kev intel unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let kev_last: Option<chrono::DateTime<Utc>> = match sqlx::query_scalar::<_, Option<chrono::DateTime<Utc>>>(
         "SELECT MAX(refreshed_at) FROM kev_intel",
-    ).fetch_optional(state.app_pool.as_ref()).await.ok().flatten();
-    let epss_total: Option<i64> = sqlx::query_scalar("SELECT COUNT(*)::bigint FROM epss_intel")
-        .fetch_optional(state.app_pool.as_ref()).await.ok().flatten();
-    let epss_last: Option<chrono::DateTime<Utc>> = sqlx::query_scalar(
+    )
+    .fetch_one(pool)
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(target: "intel", error = %e, "kev_intel refresh lookup failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::intel_status_unavailable_json(
+                    "kev intel unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let epss_total: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM epss_intel")
+        .fetch_one(pool)
+        .await
+    {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::error!(target: "intel", error = %e, "epss_intel count failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::intel_status_unavailable_json(
+                    "epss intel unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let epss_last: Option<chrono::DateTime<Utc>> = match sqlx::query_scalar::<_, Option<chrono::DateTime<Utc>>>(
         "SELECT MAX(refreshed_at) FROM epss_intel",
-    ).fetch_optional(state.app_pool.as_ref()).await.ok().flatten();
+    )
+    .fetch_one(pool)
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(target: "intel", error = %e, "epss_intel refresh lookup failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::intel_status_unavailable_json(
+                    "epss intel unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     (StatusCode::OK, Json(json!({
         "ok": true,
-        "kev":  { "rows": kev_total.unwrap_or(0),  "last_refresh": kev_last.map(|d| d.to_rfc3339())  },
-        "epss": { "rows": epss_total.unwrap_or(0), "last_refresh": epss_last.map(|d| d.to_rfc3339()) },
+        "kev":  { "rows": kev_total,  "last_refresh": kev_last.map(|d| d.to_rfc3339())  },
+        "epss": { "rows": epss_total, "last_refresh": epss_last.map(|d| d.to_rfc3339()) },
     }))).into_response()
 }
 
@@ -1513,8 +1668,14 @@ async fn api_onboarding_tenant_status(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
-    let facts = tenant_onboarding_facts(state.app_pool.as_ref(), auth.tenant_id).await;
-    (StatusCode::OK, Json(facts)).into_response()
+    match tenant_onboarding_facts(state.app_pool.as_ref(), auth.tenant_id).await {
+        Ok(facts) => (StatusCode::OK, Json(facts)).into_response(),
+        Err(detail) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::onboarding_tenant_status_unavailable_json(detail)),
+        )
+            .into_response(),
+    }
 }
 
 /// Client readiness vs selected engagement modules (live field checks, no fake scores).
@@ -1537,12 +1698,14 @@ async fn api_clients_readiness(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"ok": false, "detail": "Database unavailable"})),
+            Json(crate::http_unavailable::client_readiness_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
 
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT id, name, domains, ip_ranges, contact_email,
             COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
             COALESCE(aws_external_id,'') AS aws_external_id,
@@ -1554,10 +1717,21 @@ async fn api_clients_readiness(
     .bind(DEFAULT_CLIENT_CONFIGS_JSON)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "readiness", tenant_id = auth.tenant_id, error = %e, "client readiness query failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_readiness_unavailable_json(
+                    "client readiness query failed",
+                )),
+            )
+                .into_response();
+        }
+    };
 
-    let agents_online: i64 = sqlx::query_scalar(
+    let agents_online: i64 = match sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM endpoint_agents
            WHERE tenant_id = $1 AND client_id = $2
              AND last_seen_at > now() - interval '15 minutes'"#,
@@ -1566,9 +1740,29 @@ async fn api_clients_readiness(
     .bind(id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::error!(target: "readiness", tenant_id = auth.tenant_id, error = %e, "client readiness agent count failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_readiness_unavailable_json(
+                    "client readiness agent count failed",
+                )),
+            )
+                .into_response();
+        }
+    };
 
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_readiness_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     let Some(r) = row else {
         return (
@@ -1628,7 +1822,16 @@ async fn api_clients_readiness(
         modules
     };
 
-    let tenant = tenant_onboarding_facts(state.app_pool.as_ref(), auth.tenant_id).await;
+    let tenant = match tenant_onboarding_facts(state.app_pool.as_ref(), auth.tenant_id).await {
+        Ok(v) => v,
+        Err(detail) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_readiness_unavailable_json(detail)),
+            )
+                .into_response();
+        }
+    };
     let report = crate::engine_requirements::readiness_report(&client_snapshot, &tenant, &module_ids);
 
     (
@@ -1642,7 +1845,7 @@ async fn api_clients_readiness(
         .into_response()
 }
 
-async fn tenant_onboarding_facts(pool: &PgPool, tenant_id: i64) -> Value {
+async fn tenant_onboarding_facts(pool: &PgPool, tenant_id: i64) -> Result<Value, &'static str> {
     let llm_env = std::env::var("WEISSMAN_LLM_BASE_URL")
         .ok()
         .filter(|s| !s.trim().is_empty());
@@ -1662,60 +1865,76 @@ async fn tenant_onboarding_facts(pool: &PgPool, tenant_id: i64) -> Value {
         .filter(|s| !s.trim().is_empty())
         .is_some();
 
-    if let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await {
-        async fn cfg_val(
-            tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-            tenant_id: i64,
-            key: &str,
-        ) -> Option<String> {
-            sqlx::query_scalar::<_, String>(
-                "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
-            )
-            .bind(tenant_id)
-            .bind(key)
-            .fetch_optional(&mut **tx)
-            .await
-            .ok()
-            .flatten()
+    let mut tx = db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "database unavailable")?;
+
+    async fn cfg_val(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        tenant_id: i64,
+        key: &str,
+    ) -> Result<Option<String>, sqlx::Error> {
+        let value = sqlx::query_scalar::<_, String>(
+            "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
+        )
+        .bind(tenant_id)
+        .bind(key)
+        .fetch_optional(&mut **tx)
+        .await?;
+        Ok(value
             .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-        }
-
-        let llm_db = cfg_val(&mut tx, tenant_id, "llm_base_url").await;
-        if llm_db.is_some() {
-            llm_configured = true;
-        }
-
-        if let Some(u) = cfg_val(&mut tx, tenant_id, "oast_listener_url").await {
-            oast_configured = true;
-            oast_listener_url = u;
-        }
-        if let Some(d) = cfg_val(&mut tx, tenant_id, "oast_domain").await {
-            oast_configured = true;
-            oast_domain = d;
-        }
-        let oast_db_key = cfg_val(&mut tx, tenant_id, "oast_api_key").await;
-        if oast_db_key.is_some() {
-            oast_api_key_configured = true;
-        }
-
-        if let Some(raw) = cfg_val(&mut tx, tenant_id, "ai_heavy_entitled").await {
-            ai_heavy_entitled = !matches!(
-                raw.trim().to_ascii_lowercase().as_str(),
-                "false" | "0" | "no"
-            );
-        }
-        let _ = tx.commit().await;
+            .filter(|s| !s.is_empty()))
     }
 
-    json!({
+    let llm_db = cfg_val(&mut tx, tenant_id, "llm_base_url")
+        .await
+        .map_err(|_| "database unavailable")?;
+    if llm_db.is_some() {
+        llm_configured = true;
+    }
+
+    if let Some(u) = cfg_val(&mut tx, tenant_id, "oast_listener_url")
+        .await
+        .map_err(|_| "database unavailable")?
+    {
+        oast_configured = true;
+        oast_listener_url = u;
+    }
+    if let Some(d) = cfg_val(&mut tx, tenant_id, "oast_domain")
+        .await
+        .map_err(|_| "database unavailable")?
+    {
+        oast_configured = true;
+        oast_domain = d;
+    }
+    let oast_db_key = cfg_val(&mut tx, tenant_id, "oast_api_key")
+        .await
+        .map_err(|_| "database unavailable")?;
+    if oast_db_key.is_some() {
+        oast_api_key_configured = true;
+    }
+
+    if let Some(raw) = cfg_val(&mut tx, tenant_id, "ai_heavy_entitled")
+        .await
+        .map_err(|_| "database unavailable")?
+    {
+        ai_heavy_entitled = !matches!(
+            raw.trim().to_ascii_lowercase().as_str(),
+            "false" | "0" | "no"
+        );
+    }
+    if tx.commit().await.is_err() {
+        return Err("database unavailable");
+    }
+
+    Ok(json!({
         "llm_configured": llm_configured,
         "oast_configured": oast_configured,
         "ai_heavy_entitled": ai_heavy_entitled,
         "oast_listener_url": oast_listener_url,
         "oast_domain": oast_domain,
         "oast_api_key_configured": oast_api_key_configured,
-    })
+    }))
 }
 
 /// Full tunable-parameter schema for Nexus Sovereign Swarm (NSSI) — GUI contract.
@@ -2529,11 +2748,39 @@ async fn api_top_tier_engine_export(
 
 async fn api_reports(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(Value::Array(vec![]))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::reports_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query("SELECT id, created_at, pdf_path FROM report_runs ORDER BY created_at DESC LIMIT 100")
-        .fetch_all(&mut *tx).await.unwrap_or_default();
-    let _ = tx.commit().await;
+    let rows = match sqlx::query("SELECT id, created_at, pdf_path FROM report_runs ORDER BY created_at DESC LIMIT 100")
+        .fetch_all(&mut *tx)
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "reports", tenant_id = auth.tenant_id, error = %e, "report_runs query failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::reports_unavailable_json(
+                    "report runs query failed",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::reports_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let out: Vec<Value> = rows.into_iter().map(|r| json!({
         "id": r.try_get::<i64,_>("id").unwrap_or(0),
         "created_at": r.try_get::<chrono::DateTime<Utc>,_>("created_at").ok().map(|d| d.to_rfc3339()),

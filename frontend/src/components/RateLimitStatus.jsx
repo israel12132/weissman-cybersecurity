@@ -37,14 +37,16 @@ export default function RateLimitStatus({ compact = false }) {
   const abortRef = useRef(null);
   const inflightRef = useRef(false);
 
-  const fetchLimits = useCallback(async () => {
-    if (inflightRef.current) return;
-    abortRef.current?.abort();
+  const fetchLimits = useCallback(async ({ silent = false } = {}) => {
+    if (silent && inflightRef.current) return;
+    if (!silent) abortRef.current?.abort();
+    else if (inflightRef.current) return;
     const ac = new AbortController();
     abortRef.current = ac;
     inflightRef.current = true;
     try {
       const data = await apiFetch('/api/rate-limits/status', { signal: ac.signal });
+      if (ac.signal.aborted) return;
       if (data?.ok === false || data?.unavailable) {
         throw new Error(data.detail || 'unavailable');
       }
@@ -72,7 +74,7 @@ export default function RateLimitStatus({ compact = false }) {
     fetchLimits();
     return () => abortRef.current?.abort();
   }, [fetchLimits]);
-  useVisiblePolling(fetchLimits, compact ? 30000 : 15000);
+  useVisiblePolling(() => fetchLimits({ silent: true }), compact ? 30000 : 15000);
 
   const getStatus = (current, max) => {
     if (!max || max <= 0) return 'unknown';

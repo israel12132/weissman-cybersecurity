@@ -374,6 +374,7 @@ async fn api_cnapp_refresh(
     }
     let mut queued = Vec::new();
     let mut eligible = 0usize;
+    let mut items: Vec<(i64, String)> = Vec::new();
     for r in rows {
         let id: i64 = r.try_get("id").unwrap_or(0);
         if id <= 0 {
@@ -392,21 +393,37 @@ async fn api_cnapp_refresh(
             continue;
         }
         eligible += 1;
-        let payload = json!({
-            "engine": "cnapp_continuous",
-            "target": target,
-            "client_id": id,
-            "trigger": "cnapp_refresh",
-        });
-        match crate::async_jobs::enqueue(
-            &state.app_pool,
-            auth.tenant_id,
-            "command_center_engine",
-            payload,
-            None,
-        )
-        .await
-        {
+        items.push((id, target));
+    }
+    use futures::stream::{self, StreamExt};
+    let pool = state.app_pool.clone();
+    let tenant_id = auth.tenant_id;
+    let results: Vec<_> = stream::iter(items)
+        .map(|(id, target)| {
+            let pool = pool.clone();
+            async move {
+                let payload = json!({
+                    "engine": "cnapp_continuous",
+                    "target": target,
+                    "client_id": id,
+                    "trigger": "cnapp_refresh",
+                });
+                let result = crate::async_jobs::enqueue(
+                    pool.as_ref(),
+                    tenant_id,
+                    "command_center_engine",
+                    payload,
+                    None,
+                )
+                .await;
+                (id, target, result)
+            }
+        })
+        .buffer_unordered(8)
+        .collect()
+        .await;
+    for (id, target, result) in results {
+        match result {
             Ok(job_id) => queued.push(json!({
                 "client_id": id,
                 "target": target,
