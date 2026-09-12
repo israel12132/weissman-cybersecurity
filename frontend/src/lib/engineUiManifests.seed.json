@@ -1229,6 +1229,23 @@
       "chrome": {
         "badge_color": "#f43f5e"
       }
+    },
+    {
+      "engine_id": "dominion_fusion",
+      "route_paths": [
+        "/dominion"
+      ],
+      "evidence_i18n_key": "pages.dominionBoardPack.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": false,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#f59e0b"
+      }
     }
   ]
 }

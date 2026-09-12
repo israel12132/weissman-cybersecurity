@@ -2,12 +2,12 @@
  * Board-ready Report view for a client: Executive Summary + Cryptographic Proof of Integrity.
  * Fetches live from /api/clients/:id, /api/clients/:id/report/crypto-proof. No mock data.
  */
-import { useState, useEffect } from 'react'
-import { useParams } from 'react-router'
+import { useState, useEffect, useCallback } from 'react'
+import { Link, useParams } from 'react-router'
 import { useTranslation, Trans } from 'react-i18next'
 import { apiFetch } from '../utils/apiFetch'
+import { downloadAuthenticated } from '../lib/authenticatedDownload'
 import StandaloneLabShell from './ui/StandaloneLabShell'
-import ClientReportDownloadBar from './ClientReportDownloadBar'
 
 export default function ReportView() {
   const { t } = useTranslation()
@@ -17,28 +17,46 @@ export default function ReportView() {
   const [cryptoProof, setCryptoProof] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [downloading, setDownloading] = useState('')
 
   useEffect(() => {
     if (!clientId) return
     Promise.all([
       apiFetch('/api/clients').catch(() => []),
-      apiFetch(`/api/findings?client_id=${encodeURIComponent(clientId)}&limit=2000`).catch(() => ({ findings: [] })),
+      apiFetch('/api/findings').catch(() => []),
       apiFetch(`/api/clients/${clientId}/report/crypto-proof`).catch(() => null),
     ])
-      .then(([clients, findingsPayload, proof]) => {
+      .then(([clients, findingsList, proof]) => {
         const c = Array.isArray(clients) ? clients.find((x) => String(x?.id) === String(clientId)) : null
         setClient(c || null)
-        const findingsList = Array.isArray(findingsPayload)
-          ? findingsPayload
-          : Array.isArray(findingsPayload?.findings)
-            ? findingsPayload.findings
-            : []
-        setFindings(findingsList)
+        setFindings(Array.isArray(findingsList) ? findingsList.filter((f) => String(f.client) === String(clientId)) : [])
         setCryptoProof(proof?.audit_root_hash ? proof : null)
       })
       .catch((e) => setError(e?.message || t('components.reportView.load_failed')))
       .finally(() => setLoading(false))
   }, [clientId, t])
+
+  const download = useCallback(
+    async (kind) => {
+      if (!clientId) return
+      const path =
+        kind === 'xlsx'
+          ? `/api/clients/${clientId}/report/xlsx`
+          : `/api/clients/${clientId}/report/pdf`
+      const fallbackName =
+        kind === 'xlsx' ? `Weissman_Dominion_${clientId}.xlsx` : `Weissman_report_${clientId}.pdf`
+      setDownloading(kind)
+      try {
+        await downloadAuthenticated(path, { fallbackName })
+      } catch (e) {
+        if (e?.name === 'AbortError') return
+        setError(e?.message || t('components.reportView.download_failed'))
+      } finally {
+        setDownloading('')
+      }
+    },
+    [clientId, t],
+  )
 
   if (loading) {
     return (
@@ -62,7 +80,32 @@ export default function ReportView() {
     <StandaloneLabShell
       title={t('components.reportView.title', { name: clientName })}
       maxWidth="max-w-4xl"
-      actions={<ClientReportDownloadBar clientId={clientId} />}
+      actions={(
+        <div className="flex items-center gap-3 flex-wrap">
+          <Link
+            to={`/dominion?client=${encodeURIComponent(clientId)}`}
+            className="text-sm text-amber-300 hover:underline"
+          >
+            {t('components.reportView.open_dominion')}
+          </Link>
+          <button
+            type="button"
+            onClick={() => download('pdf')}
+            disabled={!!downloading}
+            className="text-sm text-cyan-400 hover:underline disabled:opacity-50"
+          >
+            {downloading === 'pdf' ? t('components.reportView.downloading') : t('components.reportView.download_pdf')}
+          </button>
+          <button
+            type="button"
+            onClick={() => download('xlsx')}
+            disabled={!!downloading}
+            className="text-sm text-emerald-300 hover:underline disabled:opacity-50"
+          >
+            {downloading === 'xlsx' ? t('components.reportView.downloading') : t('components.reportView.download_xlsx')}
+          </button>
+        </div>
+      )}
     >
       {error && (
         <div className="mb-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm">

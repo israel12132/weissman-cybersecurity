@@ -117,7 +117,7 @@ Run live (or show CI logs):
 ```bash
 node scripts/verify_engine_wiring.mjs      # 0 gaps
 node scripts/engine_reality_audit.mjs      # 0 no_path
-node scripts/weissman-ui-audit.mjs         # 130 routes, 111 pages
+node scripts/weissman-ui-audit.mjs         # 145 routes, 126 pages
 ```
 
 Explain taxonomy: **322 real_probe**, **204 alias**, **58 agent_required** — no fake findings.

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-09-12T00:11:42.379Z",
+  "generated_at": "2026-09-12T00:23:37.269Z",
   "production_engine_count": 584,
   "requirements": {
     "msa_acknowledged": {
@@ -191,6 +191,39 @@
       "required": true,
       "label_en": "AI-heavy entitlement enabled",
       "label_he": "Entitlement למנועי AI-heavy"
+    },
+    "intelx_key": {
+      "id": "intelx_key",
+      "scope": "tenant",
+      "env": "INTELX_API_KEY",
+      "type": "tenant_env",
+      "required": false,
+      "label_en": "Intelligence X API key (optional)",
+      "label_he": "מפתח Intelligence X (אופציונלי)",
+      "hint_en": "Enriches darkweb_intel / dominion_fusion leak index. Alias: WEISSMAN_INTELX_KEY. crt.sh and urlscan still run without it.",
+      "hint_he": "מעשיר אינדקס דליפות. כינוי: WEISSMAN_INTELX_KEY. crt.sh ו-urlscan רצים גם בלעדיו."
+    },
+    "abusech_key": {
+      "id": "abusech_key",
+      "scope": "tenant",
+      "env": "WEISSMAN_ABUSECH_AUTH_KEY",
+      "type": "tenant_env",
+      "required": false,
+      "label_en": "abuse.ch Auth-Key (optional)",
+      "label_he": "מפתח abuse.ch (אופציונלי)",
+      "hint_en": "URLHaus malware-URL host lookup and ThreatFox IOCs. Alias: ABUSECH_AUTH_KEY. Register at https://auth.abuse.ch/",
+      "hint_he": "URLHaus ו-ThreatFox. כינוי: ABUSECH_AUTH_KEY. רישום ב-https://auth.abuse.ch/"
+    },
+    "otx_key": {
+      "id": "otx_key",
+      "scope": "tenant",
+      "env": "OTX_API_KEY",
+      "type": "tenant_env",
+      "required": false,
+      "label_en": "AlienVault OTX API key (optional)",
+      "label_he": "מפתח AlienVault OTX (אופציונלי)",
+      "hint_en": "OTX domain pulses for darkweb_intel / dominion_fusion. Not a substitute for IntelX or abuse.ch.",
+      "hint_he": "פולסי דומיין ב-OTX. לא מחליף IntelX או abuse.ch."
     }
   },
   "modules": {
@@ -2825,7 +2858,10 @@
       "label": "Dark Web Brand Monitor",
       "requirements": [
         "contact_email",
-        "scope_domains"
+        "scope_domains",
+        "abusech_key",
+        "intelx_key",
+        "otx_key"
       ]
     },
     "passive_dns_forensics": {
@@ -3441,7 +3477,10 @@
       "label": "Dark Web Intelligence",
       "requirements": [
         "contact_email",
-        "scope_domains"
+        "scope_domains",
+        "abusech_key",
+        "intelx_key",
+        "otx_key"
       ]
     },
     "dll_hijacking_engine": {
@@ -6597,6 +6636,19 @@
       "label": "Credential-to-Ransomware Fusion",
       "requirements": [
         "contact_email",
+        "scope_domains"
+      ]
+    },
+    "dominion_fusion": {
+      "id": "dominion_fusion",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Dominion Public-Intel Fusion",
+      "requirements": [
+        "abusech_key",
+        "contact_email",
+        "intelx_key",
+        "otx_key",
         "scope_domains"
       ]
     }

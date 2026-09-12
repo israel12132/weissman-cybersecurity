@@ -12,7 +12,7 @@ should link here rather than copying figures.
 | — aliases | 204 | same |
 | — agent-required | 58 | same |
 | Rust test fns (`#[test]`/`#[tokio::test]`, incl. parameterized) | 3081 | grep over workspace |
-| HTTP route registrations (`.route(`) | 355 | grep over `fingerprint_engine/src` + `backend` |
+| HTTP route registrations (`.route(`) | 356 | grep over `fingerprint_engine/src` + `backend` |
 | Migrations — `crates/weissman-db/migrations` | 151 | `ls crates/weissman-db/migrations` |
 | Migrations — `fingerprint_engine/migrations` | 151 | `ls fingerprint_engine/migrations` |
 

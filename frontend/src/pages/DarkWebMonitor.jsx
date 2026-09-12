@@ -1,16 +1,17 @@
 /**
  * Dark Web Monitor — tenant-scoped intelligence from live `/api/findings` only.
- * Sources: leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor.
+ * Sources: leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor, dominion_fusion.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { Eye, Search, ShieldAlert, Radio, Filter } from 'lucide-react'
+import { Eye, Search, Radio, Filter } from 'lucide-react'
 import { createColumnHelper } from '@tanstack/react-table'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
 import DataTable from '../components/ui/DataTable'
 import FindingDrawer from '../components/ui/FindingDrawer'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
@@ -26,8 +27,7 @@ const DARK_WEB_SOURCES = new Set([
   'darkweb_intel',
   'dark_web_monitor',
   'typosquatting_monitor',
-  'credential_ransomware_fusion',
-  'threat_intel_fusion',
+  'dominion_fusion',
 ])
 const SEV_KEYS = ['critical', 'high', 'medium', 'low', 'info']
 
@@ -201,10 +201,7 @@ export default function DarkWebMonitor() {
       )}
     >
       <div className="space-y-6">
-        <div className="rounded-xl border border-rose-500/20 bg-rose-950/20 px-4 py-3 flex items-start gap-3">
-          <ShieldAlert className="w-4 h-4 text-rose-400 mt-0.5 shrink-0" />
-          <p className="text-xs text-rose-100/70 leading-relaxed">{t('pages.darkWebMonitor.evidence_notice')}</p>
-        </div>
+        <EvidenceNotice>{t('pages.darkWebMonitor.evidence_notice')}</EvidenceNotice>
 
         {lastRefresh && (
           <p className="text-[10px] font-mono text-[var(--text-disabled)]">
@@ -305,9 +302,14 @@ export default function DarkWebMonitor() {
               {t('pages.darkWebMonitor.findings_heading')}
               <span className="text-[var(--text-muted)] font-mono text-xs">({filtered.length})</span>
             </h3>
-            <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200">
-              {t('pages.darkWebMonitor.open_findings')}
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link to="/dominion" className="text-xs text-amber-300 hover:text-amber-200">
+                {t('pages.darkWebMonitor.open_dominion')}
+              </Link>
+              <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200">
+                {t('pages.darkWebMonitor.open_findings')}
+              </Link>
+            </div>
           </div>
 
           {loading && findings.length === 0 ? (

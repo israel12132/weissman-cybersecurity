@@ -1231,6 +1231,24 @@
       "score": 70,
       "comment": "ai_casb_saas, ai_cloud_escalation_chain, api_all_vectors_engine, api_fuzzing, api_gateway_attack, api_gateway_bypass, api_versioning_attack, apt29_techniques, apt41_techniques, asm, ble_rf, blockchain_bridge_exploit, carbon_spider_ttps, cl0p_techniques, deserialization_java, deserialization_net, dns_rebinding, earth_longzhi_ttps, external_exposure_supreme, file_upload, fin7_techniques, graphql_attack, graphql_deep_attack, graphql_injection, graphql_subscription_attack, grpc_reflection_attack, host_header_injection, http2_attack, http_feedback_fuzz, http_parameter_pollution, http_smuggling, kernel_exploit, kill_chain, lazarus_group_ttps, ldap_injection_engine, liminal_boundary, llm_path_fuzz, log4shell_scan, mainframe_zos_attack, mass_assignment, microsecond_timing, mobile_backend_chain, network_slice_isolation_bypass, nexus_sovereign_swarm, ngfw_posture, nosql_deep_injection, nosql_injection, odata_injection, ollama_fuzz, open_redirect, rce_chain, rce_deserialization, rce_exploit_engine, react_native_attack, salt_typhoon_ttps, sandworm_techniques, sap_erp_attack, service_mesh_attack, shodan_mass_scan, smart_contract_audit, soap_injection, sqli_advanced, ssti, swagger_abuse, tactic_chain_synthesizer, volt_typhoon_ttps, vuln_chaining, web3_dapp_attack, xxe, xxe_injection",
       "enabled": true
+    },
+    {
+      "techniqueID": "T1595",
+      "score": 39,
+      "comment": "ai_cloud_escalation_chain, asm, attack_graph_traversal, attack_surface_quantify, autonomous_pentest, can_bus_surface, compliance_gap_scan, control_plane_of_controls, digital_twin, external_exposure_supreme, fair_exposure_fusion, firmware_emulation, firmware_exploit, first_mover_delta_fusion, first_mover_surface_delta, full_breach_sim, hardware_implant, implantable_device_hack, iot_firmware, jtag_swd_exploitation, kill_chain, lora_attack, medical_device_exploit, mobile_backend_chain, network_topology_map, nexus_sovereign_swarm, ngfw_posture, ntlm_relay, post_exploitation, printer_mfp_attack, rce_chain, risk_superposition_collapse, smb_netbios, smb_relay, tactic_chain_synthesizer, threat_emulation, threat_model_automation, vuln_chaining, weissman_vngfw",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1597",
+      "score": 6,
+      "comment": "dark_web_monitor, darkweb_intel, deepweb_intel, dominion_fusion, threat_hunting_apt, threat_intel_fusion",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1555",
+      "score": 1,
+      "comment": "secrets_manager_attack",
+      "enabled": true
     }
   ],
   "gradient": {

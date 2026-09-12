@@ -62,7 +62,7 @@ export const ENGINES_REGISTRY = [
     label: 'Leak Hunter',
     group: 'recon',
     mitre: 'T1530',
-    description: 'HTTP path leak hunter: live GET of .env/.git/backup surfaces plus optional GitHub code search. Not a dark-web marketplace crawler.',
+    description: 'Dark web & paste-site credential and data leak detection',
     requiresTarget: true,
   },
   {
@@ -2244,7 +2244,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark Web Intelligence',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Clearnet leak-index lookup via Intelligence X when INTELX_API_KEY is set; otherwise an honest config advisory. Not Tor crawls, not ransomware leak-site victim lists.',
+    description: 'Public leak and malware-URL OSINT: crt.sh CT, urlscan.io, URLHaus/ThreatFox/IntelX/OTX when API keys are set. Does not crawl Tor. Evidence-only HTTP responses.',
     requiresTarget: true,
   },
   {
@@ -3956,7 +3956,7 @@ export const ENGINES_REGISTRY = [
     label: 'Threat Intelligence Fusion Engine',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Live Abuse.ch URLhaus hostinfo for the authorized host. Not MISP/OpenCTI/TAXII/VirusTotal — those remain unwired. For KEV×HIBP fusion use credential_ransomware_fusion.',
+    description: 'Multi-source threat intelligence fusion: MISP/OpenCTI/TAXII correlation, CVE-to-exploit correlation mapping, threat actor TTPs attribution engine, IOC enrichment via VirusTotal/Shodan/OTX/MISP, STIX2.1 intelligence sharing, threat landscape scoring',
     requiresTarget: true,
   },
   {
@@ -4043,7 +4043,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark Web Brand Monitor',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Brand-watch alias of darkweb_intel (Intelligence X clearnet index when keyed). Not a distinct Tor crawler.',
+    description: 'Brand leak monitoring via public OSINT: crt.sh, urlscan.io, URLHaus/ThreatFox/IntelX/OTX when keyed. No Tor hidden-service crawling. Evidence-only.',
     requiresTarget: true,
   },
   {
@@ -4769,11 +4769,11 @@ export const ENGINES_REGISTRY = [
     requiresTarget: true,
   },
   {
-    id: 'credential_ransomware_fusion',
-    label: 'Credential-to-Ransomware Fusion',
+    id: 'dominion_fusion',
+    label: 'Dominion Public-Intel Fusion',
     group: 'recon',
-    mitre: 'T1555',
-    description: 'Legal clearnet fusion: CISA KEV ransomware-use × live Server/HTML product match, HIBP public/Pro domain counts (no passwords), URLhaus host IOCs, optional IntelX record counts. Emits a grounded toxic-combo kill-chain when two or more feeds hit. Not Tor, not leak-site victim lists.',
+    mitre: 'T1597',
+    description: 'Board-pack fusion: live crt.sh + urlscan.io + URLHaus/ThreatFox/IntelX/OTX (when keyed) leak/malware-URL OSINT. No Tor. Feeds the Dominion PDF/XLSX pack.',
     requiresTarget: true,
   },
 ]

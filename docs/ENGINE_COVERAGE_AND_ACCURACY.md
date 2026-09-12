@@ -37,7 +37,7 @@ is pure-alias "coverage theater".
 | Network / Protocol | 59 | 25 | 23 | 11 | 32 |
 | Stealth / Evasion | 53 | 11 | 25 | 17 | 35 |
 | Cloud / Infra | 51 | 28 | 23 | 0 | 24 |
-| Recon & OSINT | 50 | 29 | 21 | 0 | 29 |
+| Recon & OSINT | 50 | 29 | 21 | 0 | 28 |
 | AI / LLM | 47 | 29 | 18 | 0 | 23 |
 | Crypto / Identity | 44 | 22 | 19 | 3 | 24 |
 | OT / ICS / IoT | 43 | 31 | 10 | 2 | 20 |

@@ -37,7 +37,6 @@ export const ROUTE_EVIDENCE_SKIP = new Set([
   '/ceo',
   '/sovereign',
   '/elite-hardening',
-  '/win-room',
 ])
 
 /** Prefixes where child pages render their own evidence banner. */
@@ -74,7 +73,6 @@ export const ROUTE_EVIDENCE = {
   '/serverless-security': 'pages.serverlessSecurityCommandCenter.evidence_notice',
   '/websocket-security': 'pages.websocketSecurity.evidence_notice',
   '/threat-intel': 'pages.threatIntelHub.evidence_notice',
-  '/adversary-dominance': 'pages.adversaryDominance.evidence_notice',
   '/threat-analysis': 'pages.threatAnalysisCenter.evidence_notice',
   '/engine-reliability': 'pages.engineReliability.evidence_notice',
   '/admin': 'pages.adminManagement.evidence_notice',
@@ -106,7 +104,6 @@ export const ROUTE_EVIDENCE = {
   '/agents': 'pages.agentManagement.evidence_notice',
   '/roe-approvals': 'pages.roeApprovals.evidence_notice',
   '/sso-config': 'pages.ssoDashboard.evidence_notice',
-  '/scim-provisioning': 'pages.scimProvisioning.evidence_notice',
   '/threat-emulation': 'pages.threatEmulation.evidence_notice',
   '/oast': 'pages.oastDashboard.evidence_notice',
   '/zero-day-radar': 'pages.zeroDayRadar.evidence_notice',
@@ -116,7 +113,7 @@ export const ROUTE_EVIDENCE = {
   '/intel-map': 'pages.intelMap.evidence_notice',
   '/ai-arena': 'components.tools.aiRedteamArena.evidence_notice',
   '/timing-profiler': 'components.tools.quantumTimingProfiler.evidence_notice',
-  '/panw-displacement': 'pages.panwDisplacement.evidence_notice',
+  '/dominion': 'pages.dominionBoardPack.evidence_notice',
 }
 
 /** Longest-prefix-first dynamic routes → i18n key. */

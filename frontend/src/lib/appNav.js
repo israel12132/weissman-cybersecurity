@@ -10,6 +10,7 @@ import { canCreateClients, isClientUser, isPortalBlockedPath } from './clientSco
 
 /** Production-ready surfaces — always visible at the top of the sidebar. */
 export const PRIMARY_NAV = [
+  { to: '/dominion', labelKey: 'nav.dominion', icon: '♛' },
   { to: '/clients', labelKey: 'nav.clients', icon: '🏢' },
   { to: '/vuln-intel', labelKey: 'nav.vuln_intel', icon: '🔬' },
   { to: '/engines', labelKey: 'nav.engines', icon: '⬡' },
@@ -50,12 +51,11 @@ export const INTEL_MAP_QUICKNAV = [
   { to: '/incident-response', labelKey: 'components.intelMap.ir_center', color: 'rgba(239,68,68,0.85)' },
   { to: '/vuln-intel', labelKey: 'components.intelMap.vuln_intel', color: 'rgba(249,115,22,0.85)' },
   { to: '/dark-web', labelKey: 'components.intelMap.dark_web', color: 'rgba(167,139,250,0.85)' },
-  { to: '/adversary-dominance', labelKey: 'nav.adversary_dominance', color: 'rgba(244,63,94,0.9)' },
+  { to: '/dominion', labelKey: 'nav.dominion', color: 'rgba(251,191,36,0.9)' },
   { to: '/threat-hunting', labelKey: 'components.intelMap.threat_hunt', color: 'rgba(139,92,246,0.85)' },
   { to: '/council-queue', labelKey: 'components.intelMap.council', color: 'rgba(251,191,36,0.7)', separatorBefore: true },
   { to: '/soar-hitl', labelKey: 'components.intelMap.soar_hitl', color: 'rgba(251,113,133,0.85)' },
   { to: '/sso-config', labelKey: 'components.intelMap.sso', color: 'rgba(168,85,247,0.7)' },
-  { to: '/scim-provisioning', labelKey: 'nav.scim_provisioning', color: 'rgba(167,139,250,0.85)' },
   { to: '/admin', labelKey: 'components.intelMap.admin', color: 'rgba(251,191,36,0.9)' },
   { to: '/system-core', labelKey: 'components.intelMap.system_core' },
 ]
@@ -85,7 +85,6 @@ export const NAV_GROUPS = [
       { to: '/ueba', labelKey: 'nav.ueba', icon: '📈' },
       { to: '/threat-analysis', labelKey: 'nav.threat_analysis', icon: '🧩' },
       { to: '/dark-web', labelKey: 'nav.dark_web', icon: '🕸' },
-      { to: '/adversary-dominance', labelKey: 'nav.adversary_dominance', icon: '⚔' },
       { to: '/intel-map', labelKey: 'nav.intel_map', icon: '🌐' },
       { to: '/incident-response', labelKey: 'nav.incident_response', icon: '🚨' },
     ],
@@ -140,7 +139,6 @@ export const NAV_GROUPS = [
       { to: '/itdr', labelKey: 'nav.itdr', icon: '🪪' },
       { to: '/casb-dlp', labelKey: 'nav.casb_dlp', icon: '☁' },
       { to: '/ngfw-gate', labelKey: 'nav.ngfw_gate', icon: '🧱' },
-      { to: '/win-room', labelKey: 'nav.win_room', icon: '⚔' },
       { to: '/identity-security', labelKey: 'nav.identity_security', icon: '🔐' },
       { to: '/privilege-escalation', labelKey: 'nav.privilege_escalation', icon: '⛨' },
       { to: '/kerberos-security', labelKey: 'nav.kerberos_security', icon: '🏰' },
@@ -171,7 +169,6 @@ export const NAV_GROUPS = [
       { to: '/security-posture', labelKey: 'nav.security_posture', icon: '🛡' },
       { to: '/crypto-posture', labelKey: 'nav.crypto_posture', icon: '🔑' },
       { to: '/financial-risk', labelKey: 'nav.financial_risk', icon: '💵' },
-      { to: '/panw-displacement', labelKey: 'nav.panw_displacement', icon: '⚔' },
       { to: '/attack-coverage', labelKey: 'nav.attack_coverage', icon: '▦' },
       { to: '/compliance', labelKey: 'nav.compliance', icon: '🛡' },
       { to: '/sbom', labelKey: 'nav.sbom', icon: '📦' },
@@ -197,7 +194,6 @@ export const NAV_GROUPS = [
       { to: '/white-label', labelKey: 'nav.white_label', icon: '🎨', minRole: 'admin' },
       { to: '/identity-context', labelKey: 'nav.identity_context', icon: '👤' },
       { to: '/sso-config', labelKey: 'nav.sso_config', icon: '🔑' },
-      { to: '/scim-provisioning', labelKey: 'nav.scim_provisioning', icon: '🪪', minRole: 'admin' },
       { to: '/engine-management', labelKey: 'nav.engine_management', icon: '⚙' },
       { to: '/system-config', labelKey: 'nav.system_config', icon: '⚙' },
       { to: '/metrics', labelKey: 'nav.metrics', icon: '📈' },

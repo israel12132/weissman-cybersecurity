@@ -9,15 +9,16 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Added
 
-- **Exposure Schism Fusion (`exposure_schism_fusion`).** First-mover surface
-  delta hosts are immediately fracture-tested with `liminal_boundary`
-  (HTTP/1.1↔HTTP/2, Vary, rewrite-header). Kill-chain stages are mapped from
-  those same live HTTP fractures (optional `deep_kill_chain` crawl). Empty
-  delta is idle — timeouts emit `probe_timeout` and are never a filler
-  Prisma-style score. Command Center ASM panel: "Prove protocol schism"
-  (fused evidence only; extra_hosts from the live surface-diff). Liminal
-  path/rewrite budget is forced to `/` and `/api`; origin is TCP/443 then
-  TCP/80; `kill_chain` GET storm stays opt-in via `deep_kill_chain`.
+- **Dominion Board Pack — real Excel + CISO theater + legal leak OSINT.**
+  Command Center route `/dominion` fuses the live findings ledger, FAIR snapshot,
+  attack-path snapshot, and cryptographic audit hash into one bilingual board pack.
+  `GET /api/clients/:id/dominion-pack` returns JSON; `GET /api/clients/:id/report/xlsx`
+  returns a true OOXML workbook (Executive, Findings, LeakIntel, AttackPaths,
+  Financial, Remediation, Evidence) — not CSV labeled as Excel. Empty ledgers grade
+  `NO LEDGER`, never a clean bill of health. New engine `dominion_fusion` (584
+  production IDs / 322 real probes) queries public CT (crt.sh), urlscan.io, and
+  keyed URLHaus / ThreatFox / IntelX / OTX. No Tor. Formula-injection neutralized
+  in XLSX cells.
 
 - **Supreme Brain Part 6 — attack-path inference × FAIR blast radius × pentest RAG.**
   Dijkstra (BinaryHeap milli-cost) over live `risk_graph_nodes` / `risk_graph_edges`

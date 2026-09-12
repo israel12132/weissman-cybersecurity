@@ -878,9 +878,6 @@ async fn dispatch_engine_match(
         "first_mover_delta_fusion" => {
             crate::first_mover_delta_fusion::run_first_mover_delta_fusion_result(target, ctx).await
         }
-        "exposure_schism_fusion" => {
-            crate::exposure_schism_fusion::run_exposure_schism_fusion_result(target, ctx).await
-        }
         "first_seen_osv_nvd" => {
             crate::first_seen_osv_nvd_engine::run_first_seen_osv_nvd_result(target, ctx).await
         }
@@ -991,10 +988,6 @@ async fn dispatch_engine_match(
         // ── Advanced Recon engines (new live probes) ───────────────────────────
         "satellite_recon" => crate::advanced_recon_engines::run_satellite_recon_result(target).await,
         "darkweb_intel" => crate::advanced_recon_engines::run_darkweb_intel_result(target).await,
-        "credential_ransomware_fusion" => {
-            crate::credential_ransomware_fusion::run_credential_ransomware_fusion_result(target)
-                .await
-        },
         "financial_osint" => crate::advanced_recon_engines::run_financial_osint_result(target).await,
         "blockchain_trace" => crate::advanced_recon_engines::run_blockchain_trace_result(target).await,
         "metadata_harvest" => crate::advanced_recon_engines::run_metadata_harvest_result(target).await,
@@ -1108,10 +1101,7 @@ async fn dispatch_engine_match(
         "ngfw_posture" => crate::supreme_layer_engines::run_ngfw_posture_result(target).await,
         "malware_detonation" => crate::supreme_layer_engines::run_malware_detonation_result(target).await,
         "weissman_vngfw" => crate::supreme_layer_engines::run_weissman_vngfw_result(target).await,
-        "prevention_fabric_breach_proof" => {
-            crate::supreme_layer_engines::run_prevention_fabric_breach_proof_result(target, ctx)
-                .await
-        }
+        "dominion_fusion" => crate::dominion_pack::run_dominion_fusion_result(target, &ctx.job_params).await,
 
         _ => EngineResult::error(
             format!(
