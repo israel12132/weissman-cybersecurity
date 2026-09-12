@@ -335,6 +335,11 @@ export default function EliteHardeningCommandCenter() {
                         <p className="mt-1 text-[10px] font-mono text-[var(--text-muted)]">
                           {(sku.ids || []).join(', ') || t(`${NS}.palo_no_ids`)}
                         </p>
+                        {Array.isArray(sku.agent_required_ids) && sku.agent_required_ids.length > 0 && (
+                          <p className="mt-1 text-[10px] font-mono text-amber-200/80">
+                            {t(`${NS}.palo_agent_required`)}: {sku.agent_required_ids.join(', ')}
+                          </p>
+                        )}
                       </article>
                     ))}
                   </div>

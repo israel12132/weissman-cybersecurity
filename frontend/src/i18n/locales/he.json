@@ -2710,6 +2710,7 @@
       "palo_blocks": "חסימה בנתיב",
       "palo_no_inline": "אין חסימת חבילות",
       "palo_no_ids": "אין מזהים חופפים",
+      "palo_agent_required": "דורש סוכן (ריק בלי מארח רשום)",
       "search_placeholder": "חיפוש בקרות…",
       "export_pdf": "ייצוא PDF",
       "no_match_title": "אין בקרות תואמות",

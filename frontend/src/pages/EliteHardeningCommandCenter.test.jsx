@@ -67,7 +67,20 @@ describe('EliteHardeningCommandCenter', () => {
           unique_closed_loops: [
             { id: 'ot_passive_active_safety', present: true, loop: 'ot_read_only_fsm_plus_fair' },
           ],
-          palo_sku_overlap: [{ sku: 'Prisma Cloud', maturity: 'partial', ids: ['cnapp_continuous'] }],
+          palo_sku_overlap: [
+            {
+              sku: 'Prisma Cloud',
+              maturity: 'partial',
+              ids: ['cnapp_continuous'],
+              agent_required_ids: [],
+            },
+            {
+              sku: 'Cortex XDR',
+              maturity: 'partial',
+              ids: ['host_isolation', 'chronos'],
+              agent_required_ids: ['host_isolation'],
+            },
+          ],
         },
       },
       hfv: {
@@ -87,6 +100,8 @@ describe('EliteHardeningCommandCenter', () => {
     expect(screen.getByTestId('palo-bakeoff')).toBeInTheDocument()
     expect(screen.getByTestId('palo-loop')).toBeInTheDocument()
     expect(screen.getByText('ot_passive_active_safety')).toBeInTheDocument()
+    expect(screen.getAllByTestId('palo-sku').length).toBe(2)
+    expect(screen.getAllByText(/host_isolation/).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('OT/ICS live protocol FSM')).toBeInTheDocument()
     expect(apiFetch).toHaveBeenCalledWith('/api/elite-hardening/status')
   })

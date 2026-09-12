@@ -3654,6 +3654,7 @@
       "palo_blocks": "Inline block",
       "palo_no_inline": "No packet-path block",
       "palo_no_ids": "No overlapping IDs",
+      "palo_agent_required": "Agent-required (empty without enrolled host)",
       "search_placeholder": "Search controls…",
       "export_pdf": "Export PDF",
       "no_match_title": "No matching controls",

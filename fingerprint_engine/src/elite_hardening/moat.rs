@@ -459,6 +459,21 @@ fn live_engine_ids(needles: &[&'static str]) -> Vec<&'static str> {
         .collect()
 }
 
+fn sku_overlap(sku: &str, needles: &[&'static str], maturity: &str) -> Value {
+    let ids = live_engine_ids(needles);
+    let agent_required_ids: Vec<&str> = ids
+        .iter()
+        .copied()
+        .filter(|id| weissman_core::models::engine_agent::is_agent_required_engine(id))
+        .collect();
+    json!({
+        "sku": sku,
+        "ids": ids,
+        "agent_required_ids": agent_required_ids,
+        "maturity": maturity,
+    })
+}
+
 fn palo_alto_bakeoff() -> Value {
     let vngfw_admin = std::env::var("WEISSMAN_VNGFW_ADMIN").unwrap_or_default();
     json!({
@@ -480,31 +495,37 @@ fn palo_alto_bakeoff() -> Value {
             "ngfw_posture_engine": production_has("ngfw_posture"),
         },
         "palo_sku_overlap": [
-            {
-                "sku": "Prisma Cloud",
-                "ids": live_engine_ids(&["cnapp_continuous", "toxic_combo_runtime_proof", "iac_misconfig", "k8s_container", "aws_attack"]),
-                "maturity": "partial",
-            },
-            {
-                "sku": "Cortex XDR",
-                "ids": live_engine_ids(&["host_isolation", "ebpf_sensor", "ioc_yara_hunt", "chronos"]),
-                "maturity": "partial",
-            },
-            {
-                "sku": "Cortex Xpanse",
-                "ids": live_engine_ids(&["asm", "first_mover_surface_delta", "osint"]),
-                "maturity": "partial",
-            },
-            {
-                "sku": "Prisma Access",
-                "ids": live_engine_ids(&["sase_security_bypass", "ai_casb_saas", "casb_saas_posture"]),
-                "maturity": "partial",
-            },
-            {
-                "sku": "PAN-OS / WildFire",
-                "ids": live_engine_ids(&["ngfw_posture", "weissman_vngfw", "malware_detonation"]),
-                "maturity": "theater_to_partial",
-            },
+            sku_overlap(
+                "Prisma Cloud",
+                &[
+                    "cnapp_continuous",
+                    "toxic_combo_runtime_proof",
+                    "iac_misconfig",
+                    "k8s_container",
+                    "aws_attack",
+                ],
+                "partial",
+            ),
+            sku_overlap(
+                "Cortex XDR",
+                &["host_isolation", "ebpf_sensor", "ioc_yara_hunt", "chronos"],
+                "partial",
+            ),
+            sku_overlap(
+                "Cortex Xpanse",
+                &["asm", "first_mover_surface_delta", "osint"],
+                "partial",
+            ),
+            sku_overlap(
+                "Prisma Access",
+                &["sase_security_bypass", "ai_casb_saas", "casb_saas_posture"],
+                "partial",
+            ),
+            sku_overlap(
+                "PAN-OS / WildFire",
+                &["ngfw_posture", "weissman_vngfw", "malware_detonation"],
+                "theater_to_partial",
+            ),
         ],
         "unique_closed_loops": [
             {"id": "chronos", "present": production_has("chronos"), "loop": "web_parent_to_shell_process_delta"},
@@ -582,6 +603,26 @@ mod tests {
             palo["catalog"]["alias_ids"].as_u64().unwrap() > 0,
             "catalog honesty must surface alias inflation"
         );
+        let xdr = palo["palo_sku_overlap"]
+            .as_array()
+            .expect("skus")
+            .iter()
+            .find(|s| s["sku"] == "Cortex XDR")
+            .expect("xdr sku");
+        let xdr_agent = xdr["agent_required_ids"].as_array().expect("xdr agent");
+        for id in ["host_isolation", "ebpf_sensor", "ioc_yara_hunt"] {
+            assert!(
+                xdr_agent.iter().any(|v| v.as_str() == Some(id)),
+                "Cortex XDR overlap must admit {id} is agent-required"
+            );
+        }
+        assert!(
+            !xdr_agent.iter().any(|v| v.as_str() == Some("chronos")),
+            "CHRONOS is a server hybrid, not agent-only"
+        );
+        if let Ok(path) = std::env::var("DUMP_PALO_JSON") {
+            std::fs::write(path, serde_json::to_string_pretty(palo).expect("palo json")).unwrap();
+        }
     }
 
     #[test]
