@@ -113,6 +113,113 @@ pub fn heal_requests_unavailable_json(detail: &str) -> Value {
     list_envelope("requests", detail)
 }
 
+/// `GET /api/clients/:id/risk-graph`
+pub fn risk_graph_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "nodes": [],
+        "edges": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/baseline/summary`
+pub fn baseline_summary_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "total_assets": Value::Null,
+        "drift_score": Value::Null,
+        "last_updated": Value::Null,
+        "sample_count": Value::Null,
+        "baseline_rows": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/baseline/drift`
+pub fn baseline_drift_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "data": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/baseline/anomalies`
+pub fn baseline_anomalies_unavailable_json(detail: &str) -> Value {
+    list_envelope("anomalies", detail)
+}
+
+/// `GET /api/roe/override-requests`
+pub fn roe_override_requests_unavailable_json(detail: &str) -> Value {
+    list_envelope("requests", detail)
+}
+
+/// `POST /api/cnapp/refresh` when the client fan-out query fails
+pub fn cnapp_refresh_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "jobs": [],
+        "jobs_queued": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/cnapp/status`
+pub fn cnapp_jobs_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "jobs": [],
+        "running": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/soar` execution index
+pub fn soar_executions_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "executions": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/agents/isolate` status list
+pub fn isolate_agents_unavailable_json(detail: &str) -> Value {
+    list_envelope("agents", detail)
+}
+
+/// `GET /api/heal/stats` tenant aggregates
+pub fn heal_stats_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "total": Value::Null,
+        "fixed": Value::Null,
+        "broke_app": Value::Null,
+        "still_vulnerable": Value::Null,
+        "delivered": Value::Null,
+        "attested": Value::Null,
+        "success_rate": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/evidence/:id/download` — never 404 a SQL error, never serve an empty blob as success
+pub fn evidence_download_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "detail": detail,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,5 +331,91 @@ mod tests {
     #[test]
     fn heal_requests_store_down_is_never_ok_empty_success() {
         never_ok_empty_success(&heal_requests_unavailable_json("store down"), "requests");
+    }
+
+    #[test]
+    fn risk_graph_store_down_is_never_ok_empty_success() {
+        let v = risk_graph_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["nodes"], json!([]));
+        assert_eq!(v["edges"], json!([]));
+    }
+
+    #[test]
+    fn baseline_summary_store_down_is_never_zeroed_success() {
+        let v = baseline_summary_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["total_assets"].is_null());
+        assert!(v["drift_score"].is_null());
+        assert_ne!(v["total_assets"], json!(0));
+    }
+
+    #[test]
+    fn baseline_drift_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&baseline_drift_unavailable_json("store down"), "data");
+    }
+
+    #[test]
+    fn baseline_anomalies_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(
+            &baseline_anomalies_unavailable_json("store down"),
+            "anomalies",
+        );
+    }
+
+    #[test]
+    fn roe_override_requests_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(
+            &roe_override_requests_unavailable_json("store down"),
+            "requests",
+        );
+    }
+
+    #[test]
+    fn cnapp_refresh_store_down_is_never_accepted_empty() {
+        let v = cnapp_refresh_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["jobs"], json!([]));
+        assert!(v["jobs_queued"].is_null());
+    }
+
+    #[test]
+    fn cnapp_jobs_store_down_is_never_idle_success() {
+        let v = cnapp_jobs_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["jobs"], json!([]));
+        assert!(v["running"].is_null());
+    }
+
+    #[test]
+    fn soar_executions_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&soar_executions_unavailable_json("store down"), "executions");
+    }
+
+    #[test]
+    fn isolate_agents_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&isolate_agents_unavailable_json("store down"), "agents");
+    }
+
+    #[test]
+    fn heal_stats_store_down_is_never_zero_success_rate() {
+        let v = heal_stats_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["total"].is_null());
+        assert!(v["success_rate"].is_null());
+        assert_ne!(v["success_rate"], json!(0.0));
+    }
+
+    #[test]
+    fn evidence_download_store_down_is_never_empty_blob_success() {
+        let v = evidence_download_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v.get("blob").is_none());
     }
 }

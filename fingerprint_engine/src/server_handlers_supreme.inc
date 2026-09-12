@@ -342,14 +342,27 @@ async fn api_cnapp_refresh(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"ok": false, "detail": "database unavailable"})),
+            Json(crate::http_unavailable::cnapp_refresh_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
-    let rows = sqlx::query("SELECT id, name, domains FROM clients ORDER BY id LIMIT 50")
+    let rows = match sqlx::query("SELECT id, name, domains FROM clients ORDER BY id LIMIT 50")
         .fetch_all(&mut *tx)
         .await
-        .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::cnapp_refresh_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let mut queued = Vec::new();
     for r in rows {
@@ -419,11 +432,13 @@ async fn api_cnapp_status(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"ok": false, "detail": "database unavailable"})),
+            Json(crate::http_unavailable::cnapp_jobs_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, kind, status, payload, last_error, created_at, updated_at
              FROM weissman_async_jobs
             WHERE kind IN ('command_center_engine', 'cnapp_continuous')
@@ -437,15 +452,37 @@ async fn api_cnapp_status(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let running: i64 = sqlx::query_scalar(
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::cnapp_jobs_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    let running: i64 = match sqlx::query_scalar(
         r#"SELECT count(*)::bigint FROM weissman_async_jobs
             WHERE status = 'running'
               AND (payload->>'engine' = 'cnapp_continuous' OR kind = 'cnapp_continuous')"#,
     )
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::cnapp_jobs_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let jobs: Vec<Value> = rows
         .into_iter()
@@ -481,9 +518,15 @@ async fn api_heal_stats_tenant(
         return r;
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_stats_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let agg = sqlx::query(
+    let agg = match sqlx::query(
         r#"SELECT
              count(*)::bigint AS total,
              count(*) FILTER (WHERE verdict = 'fixed')::bigint AS fixed,
@@ -495,17 +538,30 @@ async fn api_heal_stats_tenant(
     )
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_stats_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
-    let total = agg
-        .as_ref()
-        .and_then(|r| r.try_get::<i64, _>("total").ok())
-        .unwrap_or(0);
-    let fixed = agg
-        .as_ref()
-        .and_then(|r| r.try_get::<i64, _>("fixed").ok())
-        .unwrap_or(0);
+    let Some(agg) = agg else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_stats_unavailable_json(
+                "heal stats aggregate missing",
+            )),
+        )
+            .into_response();
+    };
+    let total = agg.try_get::<i64, _>("total").unwrap_or(0);
+    let fixed = agg.try_get::<i64, _>("fixed").unwrap_or(0);
     (
         StatusCode::OK,
         Json(json!({
@@ -513,10 +569,10 @@ async fn api_heal_stats_tenant(
             "scope": "tenant",
             "total": total,
             "fixed": fixed,
-            "broke_app": agg.as_ref().and_then(|r| r.try_get::<i64,_>("broke_app").ok()).unwrap_or(0),
-            "still_vulnerable": agg.as_ref().and_then(|r| r.try_get::<i64,_>("still_vulnerable").ok()).unwrap_or(0),
-            "delivered": agg.as_ref().and_then(|r| r.try_get::<i64,_>("delivered").ok()).unwrap_or(0),
-            "attested": agg.as_ref().and_then(|r| r.try_get::<i64,_>("attested").ok()).unwrap_or(0),
+            "broke_app": agg.try_get::<i64, _>("broke_app").unwrap_or(0),
+            "still_vulnerable": agg.try_get::<i64, _>("still_vulnerable").unwrap_or(0),
+            "delivered": agg.try_get::<i64, _>("delivered").unwrap_or(0),
+            "attested": agg.try_get::<i64, _>("attested").unwrap_or(0),
             "success_rate": if total > 0 { (fixed as f64 / total as f64 * 1000.0).round() / 1000.0 } else { 0.0 },
         })),
     )
@@ -531,9 +587,15 @@ async fn api_soar_index(
         return r;
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::soar_executions_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, action_kind, status, target_id, provider, created_at
              FROM soar_action_executions
             ORDER BY created_at DESC
@@ -541,7 +603,18 @@ async fn api_soar_index(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::soar_executions_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let executions: Vec<Value> = rows
         .into_iter()
@@ -576,9 +649,15 @@ async fn api_agents_isolate_status(
         return r;
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::isolate_agents_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT agent_uuid::text AS agent_uuid, client_id, hostname, status, last_seen_at
              FROM endpoint_agents
             ORDER BY last_seen_at DESC NULLS LAST
@@ -586,7 +665,18 @@ async fn api_agents_isolate_status(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::isolate_agents_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let agents: Vec<Value> = rows
         .into_iter()

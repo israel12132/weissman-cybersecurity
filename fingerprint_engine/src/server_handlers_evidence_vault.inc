@@ -301,9 +301,15 @@ async fn api_evidence_download(
     Path(evidence_id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_download_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT id, client_id, filename, content_type, blob
            FROM evidence_items
            WHERE id = $1"#,
@@ -311,8 +317,18 @@ async fn api_evidence_download(
     .bind(evidence_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_download_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
 
     let Some(r) = row else {
         let _ = tx.commit().await;
@@ -322,7 +338,18 @@ async fn api_evidence_download(
     let client_id = r.try_get::<i64, _>("client_id").unwrap_or(0);
     let filename = sanitize_filename(&r.try_get::<String, _>("filename").unwrap_or_else(|_| "evidence.bin".to_string()));
     let content_type = normalize_content_type(r.try_get::<String, _>("content_type").ok().as_deref());
-    let blob: Vec<u8> = r.try_get::<Vec<u8>, _>("blob").unwrap_or_default();
+    let blob: Vec<u8> = match r.try_get::<Vec<u8>, _>("blob") {
+        Ok(b) => b,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_download_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
 
     let ip = extract_client_ip(&headers, addr);
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;

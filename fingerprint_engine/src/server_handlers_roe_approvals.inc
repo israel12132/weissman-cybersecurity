@@ -26,7 +26,13 @@ async fn api_roe_override_requests_list(
         return r;
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"requests": []}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::roe_override_requests_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     // Expire old pending requests opportunistically.
     let _ = sqlx::query(
@@ -56,7 +62,18 @@ async fn api_roe_override_requests_list(
         qb.push(" AND r.client_id = ").push_bind(cid);
     }
     qb.push(" ORDER BY r.requested_at DESC LIMIT 200");
-    let rows = qb.build().fetch_all(&mut *tx).await.unwrap_or_default();
+    let rows = match qb.build().fetch_all(&mut *tx).await {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::roe_override_requests_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
 
     let requests: Vec<Value> = rows

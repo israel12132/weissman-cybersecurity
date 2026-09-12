@@ -53,14 +53,27 @@ async fn api_llm_fuzz_run(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
-    let exists: bool = sqlx::query_scalar(
+    let exists: bool = match sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1 AND tenant_id = $2)",
     )
     .bind(client_id)
     .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(false);
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "unavailable": true,
+                    "detail": scrub_internal_error(&e),
+                })),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     if !exists {
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "client not found"}))).into_response();

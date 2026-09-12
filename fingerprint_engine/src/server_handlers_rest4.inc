@@ -1261,11 +1261,13 @@ async fn api_risk_graph_get(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"nodes":[],"edges":[],"unavailable": true})),
+            Json(crate::http_unavailable::risk_graph_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
-    let nodes = sqlx::query(
+    let nodes = match sqlx::query(
         r#"SELECT id, graph_key, node_type, label, external_id, metadata, risk_score, is_choke_point,
                   internet_exposed, crown_jewel, asset_value
            FROM risk_graph_nodes WHERE client_id = $1 ORDER BY id"#,
@@ -1273,14 +1275,36 @@ async fn api_risk_graph_get(
     .bind(id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let edges = sqlx::query(
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::risk_graph_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    let edges = match sqlx::query(
         "SELECT id, from_node_id, to_node_id, edge_type, metadata FROM risk_graph_edges WHERE client_id = $1 ORDER BY id",
     )
     .bind(id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::risk_graph_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let nodes_j: Vec<Value> = nodes
         .into_iter()
