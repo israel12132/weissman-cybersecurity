@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 
 vi.mock('react-i18next', () => ({
@@ -106,6 +106,8 @@ describe('PanwDisplacement', () => {
     apiFetch.mockReset()
     apiFetch.mockResolvedValue(PAYLOAD)
   })
+
+  afterEach(() => cleanup())
 
   it('loads live SKU verdicts and does not invent a firewall win', async () => {
     render(
