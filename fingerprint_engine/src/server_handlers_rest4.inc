@@ -1212,6 +1212,9 @@ async fn api_risk_graph_get(
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<i64>,
 ) -> Response {
+    if let Err(r) = crate::client_isolation::bind_requested_client(&auth, Some(id)) {
+        return r;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"nodes":[],"edges":[]}))).into_response();
     };
@@ -1270,6 +1273,9 @@ async fn api_risk_graph_export(
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<i64>,
 ) -> Response {
+    if let Err(r) = crate::client_isolation::bind_requested_client(&auth, Some(id)) {
+        return r;
+    }
     match risk_graph::export_risk_graph_json(&state.app_pool, auth.tenant_id, id).await {
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
         Err(e) => (
@@ -1286,6 +1292,9 @@ async fn api_risk_graph_build(
     Path(id): Path<i64>,
 ) -> Response {
     if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if let Err(r) = crate::client_isolation::bind_requested_client(&auth, Some(id)) {
         return r;
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
