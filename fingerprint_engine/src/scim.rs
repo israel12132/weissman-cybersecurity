@@ -144,7 +144,13 @@ fn scim_role(raw: &str) -> Result<String, &'static str> {
     }
 }
 
-fn user_resource(id: i64, email: &str, role: &str, active: bool, external_id: Option<&str>) -> Value {
+fn user_resource(
+    id: i64,
+    email: &str,
+    role: &str,
+    active: bool,
+    external_id: Option<&str>,
+) -> Value {
     let mut schemas = vec![USER_SCHEMA.to_string()];
     if !role.is_empty() {
         schemas.push(WEISSMAN_EXT.to_string());
@@ -166,7 +172,12 @@ fn user_resource(id: i64, email: &str, role: &str, active: bool, external_id: Op
     body
 }
 
-fn group_resource(id: i64, display: &str, external_id: Option<&str>, members: Vec<(i64, String)>) -> Value {
+fn group_resource(
+    id: i64,
+    display: &str,
+    external_id: Option<&str>,
+    members: Vec<(i64, String)>,
+) -> Value {
     json!({
         "schemas": [GROUP_SCHEMA],
         "id": id.to_string(),
@@ -192,7 +203,10 @@ fn page_bounds(q: &ScimListQuery) -> (i64, i64) {
 
 async fn authenticate_scim(state: &AppState, headers: &HeaderMap) -> Result<ScimCtx, Response> {
     let Some(token) = bearer_from_headers(headers) else {
-        return Err(scim_error(StatusCode::UNAUTHORIZED, "Bearer token required"));
+        return Err(scim_error(
+            StatusCode::UNAUTHORIZED,
+            "Bearer token required",
+        ));
     };
     if !token.starts_with(TOKEN_PREFIX) {
         return Err(scim_error(StatusCode::UNAUTHORIZED, "invalid token"));
@@ -211,7 +225,10 @@ async fn authenticate_scim(state: &AppState, headers: &HeaderMap) -> Result<Scim
     if token_id <= 0 || tenant_id <= 0 {
         return Err(scim_error(StatusCode::UNAUTHORIZED, "invalid token"));
     }
-    Ok(ScimCtx { tenant_id, token_id })
+    Ok(ScimCtx {
+        tenant_id,
+        token_id,
+    })
 }
 
 async fn begin_scim<'a>(
@@ -252,8 +269,19 @@ async fn audit_scim(
     .await;
 }
 
-fn extract_user_fields(body: &Value) -> Result<(String, bool, String, Option<String>, Option<String>), &'static str> {
-    let user_name = body
+fn normalize_user_name(raw: &str) -> Result<String, &'static str> {
+    let user_name = raw.trim().to_ascii_lowercase();
+    if user_name.is_empty() || !user_name.contains('@') {
+        Err("userName must be an email")
+    } else {
+        Ok(user_name)
+    }
+}
+
+fn extract_user_fields(
+    body: &Value,
+) -> Result<(String, bool, String, Option<String>, Option<String>), &'static str> {
+    let raw = body
         .get("userName")
         .and_then(Value::as_str)
         .or_else(|| {
@@ -262,12 +290,8 @@ fn extract_user_fields(body: &Value) -> Result<(String, bool, String, Option<Str
                 .and_then(|a| a.first())
                 .and_then(|e| e.get("value").and_then(Value::as_str))
         })
-        .unwrap_or("")
-        .trim()
-        .to_ascii_lowercase();
-    if user_name.is_empty() || !user_name.contains('@') {
-        return Err("userName must be an email");
-    }
+        .unwrap_or("");
+    let user_name = normalize_user_name(raw)?;
     let active = body.get("active").and_then(Value::as_bool).unwrap_or(true);
     let ext_role = body
         .get(WEISSMAN_EXT)
@@ -331,7 +355,12 @@ fn last_patch_password(body: &ScimPatchBody) -> Option<String> {
     let mut found = None;
     for op in patch_ops(body) {
         let verb = op.op.trim().to_ascii_lowercase();
-        let path = op.path.as_deref().unwrap_or("").trim().trim_start_matches('/');
+        let path = op
+            .path
+            .as_deref()
+            .unwrap_or("")
+            .trim()
+            .trim_start_matches('/');
         if matches!(verb.as_str(), "replace" | "add") && path.eq_ignore_ascii_case("password") {
             found = op.value.as_str().map(str::to_string);
         }
@@ -339,12 +368,61 @@ fn last_patch_password(body: &ScimPatchBody) -> Option<String> {
     found
 }
 
+fn is_unique_violation(e: &sqlx::Error) -> bool {
+    matches!(
+        e,
+        sqlx::Error::Database(db) if db.code().as_deref() == Some("23505")
+    )
+}
+
+fn scim_update_err(e: sqlx::Error) -> Response {
+    if is_unique_violation(&e) {
+        return scim_error(StatusCode::CONFLICT, "user already exists");
+    }
+    tracing::error!(target: "scim", error = %e, "user update failed");
+    scim_error(StatusCode::INTERNAL_SERVER_ERROR, "update failed")
+}
+
+/// RFC 7644: replace on `members` (or a whole-resource replace that carries members) replaces the set.
+fn replace_clears_members(verb: &str, path: &str, value: &Value) -> bool {
+    verb == "replace"
+        && (path.contains("members")
+            || (path.is_empty() && (value.is_array() || value.get("members").is_some())))
+}
+
+fn member_value_list(value: &Value) -> Vec<Value> {
+    if let Some(arr) = value.as_array() {
+        return arr.clone();
+    }
+    if value.get("members").is_none() && value.get("value").is_some() {
+        return vec![value.clone()];
+    }
+    value
+        .get("members")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn patch_member_values(path: &str, value: &Value) -> Option<Vec<Value>> {
+    if path.contains("members") {
+        return Some(member_value_list(value));
+    }
+    if path.is_empty() && (value.is_array() || value.get("members").is_some()) {
+        return Some(member_value_list(value));
+    }
+    None
+}
+
 fn member_ids_from_values(values: &[Value]) -> Vec<i64> {
     values
         .iter()
         .filter_map(|m| {
-            m.get("value")
-                .and_then(|v| v.as_str().and_then(|s| s.parse::<i64>().ok()).or_else(|| v.as_i64()))
+            m.get("value").and_then(|v| {
+                v.as_str()
+                    .and_then(|s| s.parse::<i64>().ok())
+                    .or_else(|| v.as_i64())
+            })
         })
         .collect()
 }
@@ -430,7 +508,10 @@ pub async fn scim_users_list(
         .as_deref()
         .and_then(|f| parse_eq_filter(f, "userName"))
         .map(|s| s.to_ascii_lowercase());
-    let ext_eq = q.filter.as_deref().and_then(|f| parse_eq_filter(f, "externalId"));
+    let ext_eq = q
+        .filter
+        .as_deref()
+        .and_then(|f| parse_eq_filter(f, "externalId"));
     let (start, count) = page_bounds(&q);
     let offset = start - 1;
     let rows = sqlx::query(
@@ -483,7 +564,8 @@ pub async fn scim_users_list(
             user_resource(
                 r.try_get("id").unwrap_or(0),
                 &r.try_get::<String, _>("email").unwrap_or_default(),
-                &r.try_get::<String, _>("role").unwrap_or_else(|_| "viewer".into()),
+                &r.try_get::<String, _>("role")
+                    .unwrap_or_else(|_| "viewer".into()),
                 r.try_get("is_active").unwrap_or(true),
                 r.try_get::<Option<String>, _>("scim_external_id")
                     .ok()
@@ -521,7 +603,7 @@ pub async fn scim_users_get(
         Err(r) => return r,
     };
     stamp_token_used(&mut tx, ctx.token_id).await;
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT id, email, COALESCE(role,'viewer') AS role,
                   COALESCE(is_active, true) AS is_active, scim_external_id
              FROM users WHERE id = $1 AND tenant_id = $2"#,
@@ -530,20 +612,35 @@ pub async fn scim_users_get(
     .bind(ctx.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "scim", error = %e, "user get failed");
+            let _ = tx.rollback().await;
+            return scim_error(StatusCode::SERVICE_UNAVAILABLE, "lookup failed");
+        }
+    };
     let Some(r) = row else {
         let _ = tx.rollback().await;
         return scim_error(StatusCode::NOT_FOUND, "user not found");
     };
-    audit_scim(&mut tx, &ctx, "GET", &format!("/api/scim/v2/Users/{id}"), 200, "get").await;
+    audit_scim(
+        &mut tx,
+        &ctx,
+        "GET",
+        &format!("/api/scim/v2/Users/{id}"),
+        200,
+        "get",
+    )
+    .await;
     let _ = tx.commit().await;
     json_ok(
         StatusCode::OK,
         user_resource(
             r.try_get("id").unwrap_or(0),
             &r.try_get::<String, _>("email").unwrap_or_default(),
-            &r.try_get::<String, _>("role").unwrap_or_else(|_| "viewer".into()),
+            &r.try_get::<String, _>("role")
+                .unwrap_or_else(|_| "viewer".into()),
             r.try_get("is_active").unwrap_or(true),
             r.try_get::<Option<String>, _>("scim_external_id")
                 .ok()
@@ -576,15 +673,21 @@ pub async fn scim_users_create(
         Err(r) => return r,
     };
     stamp_token_used(&mut tx, ctx.token_id).await;
-    let exists = sqlx::query_scalar::<_, i64>(
+    let exists = match sqlx::query_scalar::<_, i64>(
         "SELECT id FROM users WHERE tenant_id = $1 AND lower(email) = $2 LIMIT 1",
     )
     .bind(ctx.tenant_id)
     .bind(&email)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "scim", error = %e, "user create lookup failed");
+            let _ = tx.rollback().await;
+            return scim_error(StatusCode::SERVICE_UNAVAILABLE, "lookup failed");
+        }
+    };
     if exists.is_some() {
         let _ = tx.rollback().await;
         return scim_error(StatusCode::CONFLICT, "user already exists");
@@ -631,8 +734,11 @@ pub async fn scim_users_create(
             )
         }
         Err(e) => {
-            tracing::error!(target: "scim", error = %e, "user create failed");
             let _ = tx.rollback().await;
+            if is_unique_violation(&e) {
+                return scim_error(StatusCode::CONFLICT, "user already exists");
+            }
+            tracing::error!(target: "scim", error = %e, "user create failed");
             scim_error(StatusCode::INTERNAL_SERVER_ERROR, "create failed")
         }
     }
@@ -654,7 +760,7 @@ async fn write_user_update(
             r#"UPDATE users SET email = $1, role = $2, is_active = $3, scim_external_id = $4,
                        password_hash = $5, updated_at = now()
                  WHERE id = $6 AND tenant_id = $7 AND COALESCE(is_superadmin,false) = false
-                   AND role NOT IN ('ceo')"#,
+                   AND lower(COALESCE(role, '')) <> 'ceo'"#,
         )
         .bind(email)
         .bind(role)
@@ -670,7 +776,7 @@ async fn write_user_update(
             r#"UPDATE users SET email = $1, role = $2, is_active = $3, scim_external_id = $4,
                        updated_at = now()
                  WHERE id = $5 AND tenant_id = $6 AND COALESCE(is_superadmin,false) = false
-                   AND role NOT IN ('ceo')"#,
+                   AND lower(COALESCE(role, '')) <> 'ceo'"#,
         )
         .bind(email)
         .bind(role)
@@ -708,7 +814,11 @@ pub async fn scim_users_put(
         Err(r) => return r,
     };
     stamp_token_used(&mut tx, ctx.token_id).await;
-    let pwd = if hash.is_empty() { None } else { Some(hash.as_str()) };
+    let pwd = if hash.is_empty() {
+        None
+    } else {
+        Some(hash.as_str())
+    };
     match write_user_update(
         &mut tx,
         ctx.tenant_id,
@@ -722,8 +832,15 @@ pub async fn scim_users_put(
     .await
     {
         Ok(n) if n > 0 => {
-            audit_scim(&mut tx, &ctx, "PUT", &format!("/api/scim/v2/Users/{id}"), 200, "replace")
-                .await;
+            audit_scim(
+                &mut tx,
+                &ctx,
+                "PUT",
+                &format!("/api/scim/v2/Users/{id}"),
+                200,
+                "replace",
+            )
+            .await;
             let _ = tx.commit().await;
             json_ok(
                 StatusCode::OK,
@@ -734,9 +851,9 @@ pub async fn scim_users_put(
             let _ = tx.rollback().await;
             scim_error(StatusCode::NOT_FOUND, "user not found or protected")
         }
-        Err(_) => {
+        Err(e) => {
             let _ = tx.rollback().await;
-            scim_error(StatusCode::INTERNAL_SERVER_ERROR, "update failed")
+            scim_update_err(e)
         }
     }
 }
@@ -761,7 +878,7 @@ pub async fn scim_users_patch(
         Err(r) => return r,
     };
     stamp_token_used(&mut tx, ctx.token_id).await;
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT email, COALESCE(role,'viewer') AS role, COALESCE(is_active,true) AS is_active,
                   scim_external_id, COALESCE(is_superadmin,false) AS is_superadmin
              FROM users WHERE id = $1 AND tenant_id = $2"#,
@@ -770,14 +887,22 @@ pub async fn scim_users_patch(
     .bind(ctx.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "scim", error = %e, "user patch lookup failed");
+            let _ = tx.rollback().await;
+            return scim_error(StatusCode::SERVICE_UNAVAILABLE, "lookup failed");
+        }
+    };
     let Some(r) = row else {
         let _ = tx.rollback().await;
         return scim_error(StatusCode::NOT_FOUND, "user not found");
     };
     if r.try_get::<bool, _>("is_superadmin").unwrap_or(false)
-        || r.try_get::<String, _>("role").unwrap_or_default() == "ceo"
+        || r.try_get::<String, _>("role")
+            .unwrap_or_default()
+            .eq_ignore_ascii_case("ceo")
     {
         let _ = tx.rollback().await;
         return scim_error(StatusCode::FORBIDDEN, "protected account");
@@ -788,35 +913,69 @@ pub async fn scim_users_patch(
     let mut external_id: Option<String> = r.try_get("scim_external_id").ok().flatten();
     for op in patch_ops(&body) {
         let verb = op.op.trim().to_ascii_lowercase();
-        let path = op.path.as_deref().unwrap_or("").trim().trim_start_matches('/');
-        match (verb.as_str(), path) {
-            ("replace" | "add", "active") => {
-                active = op.value.as_bool().or_else(|| {
-                    op.value.as_object().and_then(|m| m.get("active")).and_then(Value::as_bool)
-                }).unwrap_or(active);
-            }
-            ("replace" | "add", "username" | "userName") => {
-                if let Some(v) = op.value.as_str() {
-                    email = v.trim().to_ascii_lowercase();
+        let path = op
+            .path
+            .as_deref()
+            .unwrap_or("")
+            .trim()
+            .trim_start_matches('/')
+            .to_ascii_lowercase();
+        if !matches!(verb.as_str(), "replace" | "add") {
+            continue;
+        }
+        if path == "active" || (path.is_empty() && op.value.get("active").is_some()) {
+            active = op
+                .value
+                .as_bool()
+                .or_else(|| op.value.get("active").and_then(Value::as_bool))
+                .unwrap_or(active);
+        }
+        let user_name_raw = if path == "username" {
+            op.value.as_str()
+        } else if path.is_empty() {
+            op.value.get("userName").and_then(Value::as_str)
+        } else {
+            None
+        };
+        if let Some(v) = user_name_raw {
+            match normalize_user_name(v) {
+                Ok(e) => email = e,
+                Err(d) => {
+                    let _ = tx.rollback().await;
+                    return scim_error(StatusCode::BAD_REQUEST, d);
                 }
             }
-            ("replace" | "add", "externalid" | "externalId") => {
-                external_id = op.value.as_str().map(|s| s.to_string());
-            }
-            ("replace" | "add", "password") => {}
-            ("replace" | "add", p) if p.contains("role") => {
-                match scim_role(op.value.as_str().unwrap_or("viewer")) {
-                    Ok(rr) => role = rr,
-                    Err(d) => {
-                        let _ = tx.rollback().await;
-                        return scim_error(StatusCode::BAD_REQUEST, d);
-                    }
+        }
+        if path == "externalid" || (path.is_empty() && op.value.get("externalId").is_some()) {
+            external_id = if path.is_empty() {
+                op.value
+                    .get("externalId")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            } else {
+                op.value.as_str().map(str::to_string)
+            };
+        }
+        if path.contains("role") {
+            let raw = op
+                .value
+                .as_str()
+                .or_else(|| op.value.get("role").and_then(Value::as_str))
+                .unwrap_or("viewer");
+            match scim_role(raw) {
+                Ok(rr) => role = rr,
+                Err(d) => {
+                    let _ = tx.rollback().await;
+                    return scim_error(StatusCode::BAD_REQUEST, d);
                 }
             }
-            _ => {}
         }
     }
-    let pwd = if pre_hash.is_empty() { None } else { Some(pre_hash.as_str()) };
+    let pwd = if pre_hash.is_empty() {
+        None
+    } else {
+        Some(pre_hash.as_str())
+    };
     match write_user_update(
         &mut tx,
         ctx.tenant_id,
@@ -830,17 +989,28 @@ pub async fn scim_users_patch(
     .await
     {
         Ok(n) if n > 0 => {
-            audit_scim(&mut tx, &ctx, "PATCH", &format!("/api/scim/v2/Users/{id}"), 200, "patch")
-                .await;
+            audit_scim(
+                &mut tx,
+                &ctx,
+                "PATCH",
+                &format!("/api/scim/v2/Users/{id}"),
+                200,
+                "patch",
+            )
+            .await;
             let _ = tx.commit().await;
             json_ok(
                 StatusCode::OK,
                 user_resource(id, &email, &role, active, external_id.as_deref()),
             )
         }
-        _ => {
+        Ok(_) => {
             let _ = tx.rollback().await;
             scim_error(StatusCode::NOT_FOUND, "user not found or protected")
+        }
+        Err(e) => {
+            let _ = tx.rollback().await;
+            scim_update_err(e)
         }
     }
 }
@@ -860,23 +1030,36 @@ pub async fn scim_users_delete(
         Err(r) => return r,
     };
     stamp_token_used(&mut tx, ctx.token_id).await;
-    let n = sqlx::query(
+    let n = match sqlx::query(
         r#"UPDATE users SET is_active = false, updated_at = now()
             WHERE id = $1 AND tenant_id = $2
-              AND COALESCE(is_superadmin,false) = false AND role NOT IN ('ceo')"#,
+              AND COALESCE(is_superadmin,false) = false AND lower(COALESCE(role, '')) <> 'ceo'"#,
     )
     .bind(id)
     .bind(ctx.tenant_id)
     .execute(&mut *tx)
     .await
-    .map(|r| r.rows_affected())
-    .unwrap_or(0);
+    {
+        Ok(r) => r.rows_affected(),
+        Err(e) => {
+            tracing::error!(target: "scim", error = %e, "user deactivate failed");
+            let _ = tx.rollback().await;
+            return scim_error(StatusCode::INTERNAL_SERVER_ERROR, "update failed");
+        }
+    };
     if n == 0 {
         let _ = tx.rollback().await;
         return scim_error(StatusCode::NOT_FOUND, "user not found or protected");
     }
-    audit_scim(&mut tx, &ctx, "DELETE", &format!("/api/scim/v2/Users/{id}"), 204, "deactivate")
-        .await;
+    audit_scim(
+        &mut tx,
+        &ctx,
+        "DELETE",
+        &format!("/api/scim/v2/Users/{id}"),
+        204,
+        "deactivate",
+    )
+    .await;
     let _ = crate::audit_log::insert_audit(
         &mut tx,
         ctx.tenant_id,
@@ -1045,21 +1228,35 @@ pub async fn scim_groups_get(
         Err(r) => return r,
     };
     stamp_token_used(&mut tx, ctx.token_id).await;
-    let row = sqlx::query(
+    let row = match sqlx::query(
         "SELECT id, display_name, external_id FROM scim_groups WHERE id = $1 AND tenant_id = $2",
     )
     .bind(id)
     .bind(ctx.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "scim", error = %e, "group get failed");
+            let _ = tx.rollback().await;
+            return scim_error(StatusCode::SERVICE_UNAVAILABLE, "lookup failed");
+        }
+    };
     let Some(r) = row else {
         let _ = tx.rollback().await;
         return scim_error(StatusCode::NOT_FOUND, "group not found");
     };
     let members = load_group_members(&mut tx, ctx.tenant_id, id).await;
-    audit_scim(&mut tx, &ctx, "GET", &format!("/api/scim/v2/Groups/{id}"), 200, "get").await;
+    audit_scim(
+        &mut tx,
+        &ctx,
+        "GET",
+        &format!("/api/scim/v2/Groups/{id}"),
+        200,
+        "get",
+    )
+    .await;
     let _ = tx.commit().await;
     json_ok(
         StatusCode::OK,
@@ -1150,46 +1347,56 @@ pub async fn scim_groups_patch(
         Err(r) => return r,
     };
     stamp_token_used(&mut tx, ctx.token_id).await;
-    let exists = sqlx::query_scalar::<_, i64>(
+    let exists = match sqlx::query_scalar::<_, i64>(
         "SELECT id FROM scim_groups WHERE id = $1 AND tenant_id = $2",
     )
     .bind(id)
     .bind(ctx.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "scim", error = %e, "group patch lookup failed");
+            let _ = tx.rollback().await;
+            return scim_error(StatusCode::SERVICE_UNAVAILABLE, "lookup failed");
+        }
+    };
     if exists.is_none() {
         let _ = tx.rollback().await;
         return scim_error(StatusCode::NOT_FOUND, "group not found");
     }
     for op in patch_ops(&body) {
         let verb = op.op.trim().to_ascii_lowercase();
-        let path = op.path.as_deref().unwrap_or("").to_ascii_lowercase();
-        if path.contains("displayname") {
-            if let Some(name) = op.value.as_str() {
-                let _ = sqlx::query(
-                    "UPDATE scim_groups SET display_name = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3",
-                )
-                .bind(name)
-                .bind(id)
-                .bind(ctx.tenant_id)
-                .execute(&mut *tx)
-                .await;
-            }
+        let path = op
+            .path
+            .as_deref()
+            .unwrap_or("")
+            .trim()
+            .trim_start_matches('/')
+            .to_ascii_lowercase();
+        let display_name = if path.contains("displayname") {
+            op.value
+                .as_str()
+                .or_else(|| op.value.get("displayName").and_then(Value::as_str))
+        } else if path.is_empty() {
+            op.value.get("displayName").and_then(Value::as_str)
+        } else {
+            None
+        };
+        if let Some(name) = display_name.map(str::trim).filter(|s| !s.is_empty()) {
+            let _ = sqlx::query(
+                "UPDATE scim_groups SET display_name = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3",
+            )
+            .bind(name)
+            .bind(id)
+            .bind(ctx.tenant_id)
+            .execute(&mut *tx)
+            .await;
         }
-        if path.contains("members") || path.is_empty() {
-            let values: Vec<Value> = if op.value.is_array() {
-                op.value.as_array().cloned().unwrap_or_default()
-            } else {
-                op.value
-                    .get("members")
-                    .and_then(Value::as_array)
-                    .cloned()
-                    .unwrap_or_default()
-            };
+        if let Some(values) = patch_member_values(&path, &op.value) {
             let uids = member_ids_from_values(&values);
-            if verb == "replace" && path.contains("members") {
+            if replace_clears_members(&verb, &path, &op.value) {
                 let _ = sqlx::query(
                     "DELETE FROM scim_group_members WHERE group_id = $1 AND tenant_id = $2",
                 )
@@ -1226,7 +1433,15 @@ pub async fn scim_groups_patch(
         return scim_error(StatusCode::NOT_FOUND, "group not found");
     };
     let members = load_group_members(&mut tx, ctx.tenant_id, id).await;
-    audit_scim(&mut tx, &ctx, "PATCH", &format!("/api/scim/v2/Groups/{id}"), 200, "patch").await;
+    audit_scim(
+        &mut tx,
+        &ctx,
+        "PATCH",
+        &format!("/api/scim/v2/Groups/{id}"),
+        200,
+        "patch",
+    )
+    .await;
     let _ = tx.commit().await;
     json_ok(
         StatusCode::OK,
@@ -1268,7 +1483,15 @@ pub async fn scim_groups_delete(
         let _ = tx.rollback().await;
         return scim_error(StatusCode::NOT_FOUND, "group not found");
     }
-    audit_scim(&mut tx, &ctx, "DELETE", &format!("/api/scim/v2/Groups/{id}"), 204, "delete").await;
+    audit_scim(
+        &mut tx,
+        &ctx,
+        "DELETE",
+        &format!("/api/scim/v2/Groups/{id}"),
+        204,
+        "delete",
+    )
+    .await;
     let _ = tx.commit().await;
     StatusCode::NO_CONTENT.into_response()
 }
@@ -1288,11 +1511,7 @@ pub async fn api_admin_scim_tokens_list(
     let mut tx = match crate::db::begin_tenant_tx(state.app_pool.as_ref(), auth.tenant_id).await {
         Ok(t) => t,
         Err(_) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"ok": false})),
-            )
-                .into_response();
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
         }
     };
     let rows = match sqlx::query(
@@ -1307,11 +1526,7 @@ pub async fn api_admin_scim_tokens_list(
         Err(e) => {
             tracing::error!(target: "scim", error = %e, "token list failed");
             let _ = tx.rollback().await;
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"ok": false})),
-            )
-                .into_response();
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
         }
     };
     let _ = tx.commit().await;
@@ -1363,11 +1578,7 @@ pub async fn api_admin_scim_tokens_create(
     let mut tx = match crate::db::begin_tenant_tx(state.app_pool.as_ref(), auth.tenant_id).await {
         Ok(t) => t,
         Err(_) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"ok": false})),
-            )
-                .into_response();
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
         }
     };
     let inserted = sqlx::query(
@@ -1433,11 +1644,7 @@ pub async fn api_admin_scim_tokens_revoke(
     let mut tx = match crate::db::begin_tenant_tx(state.app_pool.as_ref(), auth.tenant_id).await {
         Ok(t) => t,
         Err(_) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"ok": false})),
-            )
-                .into_response();
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
         }
     };
     let n = sqlx::query(
@@ -1469,7 +1676,11 @@ pub async fn api_admin_scim_tokens_revoke(
     )
     .await;
     let _ = tx.commit().await;
-    (StatusCode::OK, Json(json!({"ok": true, "id": id, "revoked": true}))).into_response()
+    (
+        StatusCode::OK,
+        Json(json!({"ok": true, "id": id, "revoked": true})),
+    )
+        .into_response()
 }
 
 /// GET /api/admin/scim/audit
@@ -1483,11 +1694,7 @@ pub async fn api_admin_scim_audit(
     let mut tx = match crate::db::begin_tenant_tx(state.app_pool.as_ref(), auth.tenant_id).await {
         Ok(t) => t,
         Err(_) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"ok": false})),
-            )
-                .into_response();
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
         }
     };
     let rows = match sqlx::query(
@@ -1503,11 +1710,7 @@ pub async fn api_admin_scim_audit(
         Err(e) => {
             tracing::error!(target: "scim", error = %e, "audit list failed");
             let _ = tx.rollback().await;
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"ok": false})),
-            )
-                .into_response();
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
         }
     };
     let _ = tx.commit().await;
@@ -1615,5 +1818,69 @@ mod tests {
         assert_eq!(last_patch_password(&body).as_deref(), Some("correct-horse"));
         assert!(hash_optional_password(None).unwrap().is_empty());
         assert!(hash_optional_password(Some("short")).is_err());
+    }
+
+    #[test]
+    fn normalize_user_name_requires_email() {
+        assert!(normalize_user_name("").is_err());
+        assert!(normalize_user_name("   ").is_err());
+        assert!(normalize_user_name("not-an-email").is_err());
+        assert_eq!(
+            normalize_user_name("Ada@Weissman.io").unwrap(),
+            "ada@weissman.io"
+        );
+    }
+
+    #[test]
+    fn extract_user_fields_rejects_invalid_username() {
+        let body = json!({ "userName": "ops-only" });
+        assert!(extract_user_fields(&body).is_err());
+    }
+
+    #[test]
+    fn replace_clears_members_follows_rfc_whole_resource() {
+        assert!(replace_clears_members("replace", "members", &json!([])));
+        assert!(replace_clears_members(
+            "replace",
+            "",
+            &json!({"members": [{"value": "1"}]})
+        ));
+        assert!(replace_clears_members(
+            "replace",
+            "",
+            &json!([{"value": "1"}])
+        ));
+        assert!(!replace_clears_members(
+            "replace",
+            "",
+            &json!({"displayName": "ops"})
+        ));
+        assert!(!replace_clears_members(
+            "add",
+            "",
+            &json!({"members": [{"value": "1"}]})
+        ));
+        assert!(!replace_clears_members(
+            "add",
+            "members",
+            &json!([{"value": "1"}])
+        ));
+    }
+
+    #[test]
+    fn patch_member_values_ignores_display_only_replace() {
+        assert!(patch_member_values("", &json!({"displayName": "ops"})).is_none());
+        assert_eq!(
+            patch_member_values("", &json!({"members": [{"value": "9"}]}))
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            member_ids_from_values(
+                &patch_member_values("members", &json!({"value": "42"})).unwrap()
+            ),
+            vec![42]
+        );
     }
 }
