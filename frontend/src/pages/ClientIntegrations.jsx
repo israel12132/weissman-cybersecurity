@@ -369,7 +369,7 @@ export default function ClientIntegrations() {
                 <div className="font-mono uppercase text-[var(--text-muted)]">{t('pages.clientOnboarding.tenant_status')}</div>
                 <div className="flex justify-between"><span>LLM</span><span className={tenantStatus.llm_configured ? 'text-emerald-400' : 'text-amber-400'}>{tenantStatus.llm_configured ? '✓' : '—'}</span></div>
                 <div className="flex justify-between"><span>OAST</span><span className={tenantStatus.oast_configured ? 'text-emerald-400' : 'text-amber-400'}>{tenantStatus.oast_configured ? '✓' : '—'}</span></div>
-                <div className="flex justify-between"><span>AI entitlement</span><span className={tenantStatus.ai_heavy_entitled !== false ? 'text-emerald-400' : 'text-amber-400'}>{tenantStatus.ai_heavy_entitled !== false ? '✓' : '—'}</span></div>
+                <div className="flex justify-between"><span>AI entitlement</span><span className={tenantStatus.ai_heavy_entitled === true ? 'text-emerald-400' : 'text-amber-400'}>{tenantStatus.ai_heavy_entitled === true ? '✓' : '—'}</span></div>
                 <Link to="/system-core" className="block text-cyan-400 mt-2">{t('pages.clientIntegrations.tenant_settings')}</Link>
               </div>
             )}

@@ -55,6 +55,7 @@ async fn enqueue_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<usize, &'st
         items.push((id, target));
     }
     let eligible = items.len();
+    crate::async_jobs::warm_job_bus(app_pool).await;
     use futures::stream::{self, StreamExt};
     let results: Vec<_> = stream::iter(items)
         .map(|(id, target)| {

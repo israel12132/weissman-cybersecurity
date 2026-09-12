@@ -556,15 +556,13 @@ async fn api_clients_list(
     let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({
-                "ok": false,
-                "detail": "Database unavailable. Retry shortly.",
-                "code": "db_unavailable",
-            })),
+            Json(crate::http_unavailable::clients_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, name, domains, tech_stack, ip_ranges,
             COALESCE(contact_email,'') AS contact_email,
             COALESCE(auto_detect_tech_stack, true) AS auto_detect_tech_stack,
@@ -580,8 +578,27 @@ async fn api_clients_list(
         .bind(scoped)
         .fetch_all(&mut *tx)
         .await
-        .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::clients_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::clients_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let out: Vec<Value> = rows
         .into_iter()
         .map(|r| {

@@ -36,4 +36,14 @@ describe('useEngineRequirements helpers', () => {
     expect(r.ready).toBe(true) // onboarding not blocked by a global tenant setting
     expect(r.percent).toBe(100) // no hard reqs → 100%, not the old contradictory 0%
   })
+  it('null AI entitlement is not treated as entitled', () => {
+    const catalog = {
+      requirements: { tenant_ai_entitlement: { scope: 'tenant' } },
+      modules: { ai_redteam: { requirements: ['tenant_ai_entitlement'] } },
+    }
+    const missing = computeLocalReadiness(catalog, {}, {}, ['ai_redteam'])
+    expect(missing.items.find((i) => i.id === 'tenant_ai_entitlement')?.satisfied).toBe(false)
+    const entitled = computeLocalReadiness(catalog, { ai_heavy_entitled: true }, {}, ['ai_redteam'])
+    expect(entitled.items.find((i) => i.id === 'tenant_ai_entitlement')?.satisfied).toBe(true)
+  })
 })

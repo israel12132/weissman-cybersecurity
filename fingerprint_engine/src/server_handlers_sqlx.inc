@@ -1082,13 +1082,13 @@ async fn api_intel_suppression_delete(
 /// authed UI so the cockpit can show "Last KEV refresh: 4 minutes ago".
 async fn api_intel_status(State(state): State<Arc<AppState>>) -> Response {
     let pool = state.app_pool.as_ref();
-    let kev_total: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM kev_intel")
+    let kev = match sqlx::query("SELECT COUNT(*)::bigint AS n, MAX(refreshed_at) AS last FROM kev_intel")
         .fetch_one(pool)
         .await
     {
-        Ok(n) => n,
+        Ok(r) => r,
         Err(e) => {
-            tracing::error!(target: "intel", error = %e, "kev_intel count failed");
+            tracing::error!(target: "intel", error = %e, "kev_intel stats failed");
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(crate::http_unavailable::intel_status_unavailable_json(
@@ -1098,15 +1098,9 @@ async fn api_intel_status(State(state): State<Arc<AppState>>) -> Response {
                 .into_response();
         }
     };
-    let kev_last: Option<chrono::DateTime<Utc>> = match sqlx::query_scalar::<_, Option<chrono::DateTime<Utc>>>(
-        "SELECT MAX(refreshed_at) FROM kev_intel",
-    )
-    .fetch_one(pool)
-    .await
-    {
-        Ok(v) => v,
-        Err(e) => {
-            tracing::error!(target: "intel", error = %e, "kev_intel refresh lookup failed");
+    let kev_total: i64 = match kev.try_get::<i64, _>("n") {
+        Ok(n) => n,
+        Err(_) => {
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(crate::http_unavailable::intel_status_unavailable_json(
@@ -1116,13 +1110,29 @@ async fn api_intel_status(State(state): State<Arc<AppState>>) -> Response {
                 .into_response();
         }
     };
-    let epss_total: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM epss_intel")
+    let kev_last: Option<chrono::DateTime<Utc>> = kev
+        .try_get::<Option<chrono::DateTime<Utc>>, _>("last")
+        .ok()
+        .flatten();
+    let epss = match sqlx::query("SELECT COUNT(*)::bigint AS n, MAX(refreshed_at) AS last FROM epss_intel")
         .fetch_one(pool)
         .await
     {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "intel", error = %e, "epss_intel stats failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::intel_status_unavailable_json(
+                    "epss intel unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let epss_total: i64 = match epss.try_get("n") {
         Ok(n) => n,
-        Err(e) => {
-            tracing::error!(target: "intel", error = %e, "epss_intel count failed");
+        Err(_) => {
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(crate::http_unavailable::intel_status_unavailable_json(
@@ -1132,24 +1142,10 @@ async fn api_intel_status(State(state): State<Arc<AppState>>) -> Response {
                 .into_response();
         }
     };
-    let epss_last: Option<chrono::DateTime<Utc>> = match sqlx::query_scalar::<_, Option<chrono::DateTime<Utc>>>(
-        "SELECT MAX(refreshed_at) FROM epss_intel",
-    )
-    .fetch_one(pool)
-    .await
-    {
-        Ok(v) => v,
-        Err(e) => {
-            tracing::error!(target: "intel", error = %e, "epss_intel refresh lookup failed");
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(crate::http_unavailable::intel_status_unavailable_json(
-                    "epss intel unavailable",
-                )),
-            )
-                .into_response();
-        }
-    };
+    let epss_last: Option<chrono::DateTime<Utc>> = epss
+        .try_get::<Option<chrono::DateTime<Utc>>, _>("last")
+        .ok()
+        .flatten();
     (StatusCode::OK, Json(json!({
         "ok": true,
         "kev":  { "rows": kev_total,  "last_refresh": kev_last.map(|d| d.to_rfc3339())  },
@@ -1863,7 +1859,7 @@ async fn tenant_onboarding_facts(pool: &PgPool, tenant_id: i64) -> Result<Value,
 
     let mut llm_configured = llm_env.is_some();
     let mut oast_configured = oast_env.is_some();
-    let mut ai_heavy_entitled = true;
+    let mut ai_heavy_entitled = false;
     let mut oast_listener_url = oast_env.clone().unwrap_or_default();
     let mut oast_domain = std::env::var("WEISSMAN_OAST_DOMAIN")
         .or_else(|_| std::env::var("WEISSMAN_OAST_BASE_DOMAIN"))
@@ -1877,55 +1873,47 @@ async fn tenant_onboarding_facts(pool: &PgPool, tenant_id: i64) -> Result<Value,
         .await
         .map_err(|_| "database unavailable")?;
 
-    async fn cfg_val(
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-        tenant_id: i64,
-        key: &str,
-    ) -> Result<Option<String>, sqlx::Error> {
-        let value = sqlx::query_scalar::<_, String>(
-            "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
-        )
-        .bind(tenant_id)
-        .bind(key)
-        .fetch_optional(&mut **tx)
-        .await?;
-        Ok(value
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty()))
+    let cfg_keys: Vec<&str> = vec![
+        "llm_base_url",
+        "oast_listener_url",
+        "oast_domain",
+        "oast_api_key",
+        "ai_heavy_entitled",
+    ];
+    let cfg_rows = sqlx::query(
+        "SELECT key, value FROM system_configs WHERE tenant_id = $1 AND key = ANY($2)",
+    )
+    .bind(tenant_id)
+    .bind(&cfg_keys)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|_| "database unavailable")?;
+    let mut cfg: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for r in cfg_rows {
+        let key: String = r.try_get::<String, _>("key").unwrap_or_default();
+        let value: String = r.try_get::<String, _>("value").unwrap_or_default();
+        let value = value.trim().to_string();
+        if key.is_empty() || value.is_empty() {
+            continue;
+        }
+        cfg.insert(key, value);
     }
 
-    let llm_db = cfg_val(&mut tx, tenant_id, "llm_base_url")
-        .await
-        .map_err(|_| "database unavailable")?;
-    if llm_db.is_some() {
+    if cfg.contains_key("llm_base_url") {
         llm_configured = true;
     }
-
-    if let Some(u) = cfg_val(&mut tx, tenant_id, "oast_listener_url")
-        .await
-        .map_err(|_| "database unavailable")?
-    {
+    if let Some(u) = cfg.get("oast_listener_url") {
         oast_configured = true;
-        oast_listener_url = u;
+        oast_listener_url = u.clone();
     }
-    if let Some(d) = cfg_val(&mut tx, tenant_id, "oast_domain")
-        .await
-        .map_err(|_| "database unavailable")?
-    {
+    if let Some(d) = cfg.get("oast_domain") {
         oast_configured = true;
-        oast_domain = d;
+        oast_domain = d.clone();
     }
-    let oast_db_key = cfg_val(&mut tx, tenant_id, "oast_api_key")
-        .await
-        .map_err(|_| "database unavailable")?;
-    if oast_db_key.is_some() {
+    if cfg.contains_key("oast_api_key") {
         oast_api_key_configured = true;
     }
-
-    if let Some(raw) = cfg_val(&mut tx, tenant_id, "ai_heavy_entitled")
-        .await
-        .map_err(|_| "database unavailable")?
-    {
+    if let Some(raw) = cfg.get("ai_heavy_entitled") {
         ai_heavy_entitled = !matches!(
             raw.trim().to_ascii_lowercase().as_str(),
             "false" | "0" | "no"

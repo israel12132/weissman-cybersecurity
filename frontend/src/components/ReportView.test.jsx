@@ -37,4 +37,18 @@ describe('ReportView', () => {
     expect(screen.queryByText('components.reportView.total_findings')).toBeNull()
     expect(screen.queryByText('components.reportView.no_sealed_run')).toBeNull()
   })
+
+  it('renders live findings from the {ok, findings} envelope, not a raw array', async () => {
+    apiFetch
+      .mockResolvedValueOnce([{ id: 7, name: 'Acme' }])
+      .mockResolvedValueOnce({
+        ok: true,
+        findings: [{ client: '7', title: 'live finding', verified: true }],
+        total: 1,
+      })
+      .mockResolvedValueOnce({ audit_root_hash: 'abc123' })
+    render(<ReportView />)
+    expect(await screen.findByText('components.reportView.total_findings')).toBeTruthy()
+    expect(screen.queryByTestId('report-unavailable')).toBeNull()
+  })
 })

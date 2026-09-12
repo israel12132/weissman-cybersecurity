@@ -484,6 +484,7 @@ async fn api_cnapp_refresh(
     use futures::stream::{self, StreamExt};
     let pool = state.app_pool.clone();
     let tenant_id = auth.tenant_id;
+    crate::async_jobs::warm_job_bus(pool.as_ref()).await;
     let results: Vec<_> = stream::iter(items)
         .map(|(id, target)| {
             let pool = pool.clone();
@@ -508,6 +509,7 @@ async fn api_cnapp_refresh(
         .buffer_unordered(8)
         .collect()
         .await;
+    let mut failed = 0usize;
     for (id, target, result) in results {
         match result {
             Ok(job_id) => queued.push(json!({
@@ -515,7 +517,10 @@ async fn api_cnapp_refresh(
                 "target": target,
                 "job_id": job_id.to_string(),
             })),
-            Err(e) => tracing::error!(error = %e, client_id = id, "cnapp_continuous enqueue failed"),
+            Err(e) => {
+                failed += 1;
+                tracing::error!(error = %e, client_id = id, "cnapp_continuous enqueue failed");
+            }
         }
     }
     if eligible > 0 && queued.is_empty() {
@@ -527,12 +532,28 @@ async fn api_cnapp_refresh(
         )
             .into_response();
     }
+    if failed > 0 {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "ok": false,
+                "unavailable": true,
+                "engine": "cnapp_continuous",
+                "jobs": queued,
+                "jobs_queued": queued.len(),
+                "jobs_failed": failed,
+                "detail": "cnapp enqueue failed for one or more eligible clients",
+            })),
+        )
+            .into_response();
+    }
     (
         StatusCode::ACCEPTED,
         Json(json!({
             "ok": true,
             "engine": "cnapp_continuous",
             "jobs_queued": queued.len(),
+            "jobs_failed": 0,
             "jobs": queued,
             "detail": if queued.is_empty() {
                 "No clients with a domain/name to scan. Add a client, then retry."

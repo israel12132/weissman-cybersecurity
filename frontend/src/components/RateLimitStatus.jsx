@@ -40,7 +40,6 @@ export default function RateLimitStatus({ compact = false }) {
   const fetchLimits = useCallback(async ({ silent = false } = {}) => {
     if (silent && inflightRef.current) return;
     if (!silent) abortRef.current?.abort();
-    else if (inflightRef.current) return;
     const ac = new AbortController();
     abortRef.current = ac;
     inflightRef.current = true;

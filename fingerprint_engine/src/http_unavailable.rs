@@ -169,6 +169,16 @@ pub fn roe_override_requests_unavailable_json(detail: &str) -> Value {
     list_envelope("requests", detail)
 }
 
+/// `GET /api/clients` when the tenant client list cannot be read
+pub fn clients_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "clients": [],
+        "detail": detail,
+    })
+}
+
 /// `POST /api/cnapp/refresh` when the client fan-out query fails
 pub fn cnapp_refresh_unavailable_json(detail: &str) -> Value {
     json!({
@@ -692,6 +702,14 @@ mod tests {
         assert_eq!(v["unavailable"], true);
         assert_eq!(v["jobs"], json!([]));
         assert!(v["jobs_queued"].is_null());
+    }
+
+    #[test]
+    fn clients_store_down_is_never_ok_empty_success() {
+        let v = clients_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["clients"], json!([]));
     }
 
     #[test]

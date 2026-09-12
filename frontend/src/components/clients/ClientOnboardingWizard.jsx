@@ -444,7 +444,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                 <div className="text-[10px] font-mono uppercase text-white/40">{t('pages.clientOnboarding.tenant_status')}</div>
                 <StatusRow ok={tenantStatus.llm_configured} label={label(catalog?.requirements?.tenant_llm)} />
                 <StatusRow ok={tenantStatus.oast_configured} label={label(catalog?.requirements?.tenant_oast)} />
-                <StatusRow ok={tenantStatus.ai_heavy_entitled !== false} label={label(catalog?.requirements?.tenant_ai_entitlement)} />
+                <StatusRow ok={tenantStatus.ai_heavy_entitled === true} label={label(catalog?.requirements?.tenant_ai_entitlement)} />
                 <Link to="/system-core" className="text-xs text-cyan-400 hover:text-cyan-300 mt-2 inline-block">
                   {t('pages.clientOnboarding.configure_tenant')}
                 </Link>

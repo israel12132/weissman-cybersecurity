@@ -42,8 +42,14 @@ export default function ReportView() {
           throw new Error(proof.detail || t('components.reportView.unavailable'))
         }
         const c = Array.isArray(clients) ? clients.find((x) => String(x?.id) === String(clientId)) : null
+        const findingsArr = Array.isArray(findingsList)
+          ? findingsList
+          : (Array.isArray(findingsList?.findings) ? findingsList.findings : null)
+        if (!findingsArr) {
+          throw new Error(t('components.reportView.unavailable'))
+        }
         setClient(c || null)
-        setFindings(Array.isArray(findingsList) ? findingsList.filter((f) => String(f.client) === String(clientId)) : [])
+        setFindings(findingsArr.filter((f) => String(f.client) === String(clientId) || String(f.client_id) === String(clientId)))
         setCryptoProof(proof?.audit_root_hash ? proof : null)
       })
       .catch((e) => {
