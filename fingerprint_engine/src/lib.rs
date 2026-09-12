@@ -31,6 +31,7 @@
 )]
 
 pub mod agent_remote_surface;
+pub mod agent_swarm_attach;
 pub mod ai_redteam_engine;
 pub mod alias_engine_runner;
 pub mod alias_specialized_probes;

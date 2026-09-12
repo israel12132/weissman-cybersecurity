@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
@@ -109,5 +109,36 @@ describe('AgentManagement', () => {
     })
     renderPage()
     expect(await screen.findByText('agents.no_agents_title')).toBeInTheDocument()
+  })
+
+  it('posts leftover attack/scan/findings helpers to every live agent', async () => {
+    const calls = []
+    apiFetch.mockImplementation((url, opts) => {
+      calls.push([url, opts])
+      if (url === '/api/agents/status') {
+        return Promise.resolve(resp({ text: async () => JSON.stringify({ agents: [] }) }))
+      }
+      if (url === '/api/clients') return Promise.resolve(resp({ text: async () => '[]' }))
+      if (url === '/api/agents/swarm-attach') {
+        return Promise.resolve(resp({
+          text: async () => JSON.stringify({
+            ok: true,
+            swarm_attach: true,
+            agents_attached: 2,
+            agents_seen: 2,
+            tasks_enqueued: 18,
+            tasks_live: 18,
+            skipped_recent: 0,
+          }),
+        }))
+      }
+      return Promise.resolve(resp())
+    })
+    renderPage()
+    fireEvent.click(await screen.findByText('agents.swarm_attach'))
+    await waitFor(() => {
+      expect(calls.some(([u, o]) => u === '/api/agents/swarm-attach' && o?.method === 'POST')).toBe(true)
+    })
+    expect(await screen.findByText('agents.swarm_result')).toBeInTheDocument()
   })
 })

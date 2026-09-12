@@ -1569,6 +1569,10 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>, job_control_pool: Arc<
             app_pool.clone(),
             state.endpoint_agents.clone(),
         );
+        crate::agent_swarm_attach::spawn_swarm_attach_scheduler(
+            app_pool.clone(),
+            state.endpoint_agents.clone(),
+        );
     }
     crate::agent_registry_sync::spawn_agent_registry_redis_sync(state.endpoint_agents.clone());
     crate::suppression_cache_sync::spawn_suppression_cache_redis_sync(app_pool.clone());

@@ -159,6 +159,7 @@ async fn install_agent_binary_sha256(
 //   POST /api/agents/enroll                  → agent exchanges plaintext token for session JWT (unauth)
 //   GET  /api/agents/status                  → list of agents per tenant
 //   POST /api/agents/dispatch                → analyst queues detection task (fleet round-robin)
+//   POST /api/agents/swarm-attach           → attach leftover attack/scan/findings pack to every live agent
 //   GET  /ws/agent                           → WebSocket session (agent JWT only)
 //       Auth: prefer `Authorization: Bearer <session_jwt>`; `?token=<session_jwt>` is allowed for
 //       agents that cannot set WS headers. Human user access JWTs are rejected from query strings.
@@ -589,6 +590,43 @@ async fn api_agents_dispatch_task(
 }
 
 #[derive(serde::Deserialize)]
+struct SwarmAttachBody {
+    #[serde(default)]
+    client_id: Option<i64>,
+}
+
+async fn api_agents_swarm_attach(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    axum::extract::Json(body): axum::extract::Json<SwarmAttachBody>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+    let client_id = body.client_id.filter(|c| *c > 0);
+    if let Some(cid) = client_id {
+        if !crate::endpoint_agents::client_exists(state.app_pool.as_ref(), auth.tenant_id, cid)
+            .await
+            .unwrap_or(false)
+        {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"ok": false, "detail": "client_id not found for tenant"})),
+            )
+                .into_response();
+        }
+    }
+    let report = crate::agent_swarm_attach::attach_helpers_to_online_agents(
+        state.app_pool.as_ref(),
+        &state.endpoint_agents,
+        auth.tenant_id,
+        client_id,
+    )
+    .await;
+    (StatusCode::OK, Json(report.to_json())).into_response()
+}
+
+#[derive(serde::Deserialize)]
 struct AgentKillBody {
     #[serde(default)]
     reason: String,
@@ -782,6 +820,19 @@ async fn ws_agent(
                                             let _ = tx_to_agent.send(t).await;
                                         }
                                     }
+                                    let attach_pool = app_pool.clone();
+                                    let attach_registry = registry.clone();
+                                    let attach_uuid = aid.clone();
+                                    tokio::spawn(async move {
+                                        let _ = crate::agent_swarm_attach::attach_helpers_to_agent(
+                                            attach_pool.as_ref(),
+                                            &attach_registry,
+                                            tenant_id,
+                                            db_cid,
+                                            &attach_uuid,
+                                        )
+                                        .await;
+                                    });
                                 }
                                 "heartbeat" => {
                                     if let Some(aid) = agent_uuid.as_deref() {

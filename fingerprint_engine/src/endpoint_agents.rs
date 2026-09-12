@@ -1101,21 +1101,26 @@ pub async fn store_finding_for_task(
             error = %e,
             "findings_persist failed for agent finding"
         );
-    } else if let Some(jid) = scan_job_id {
-        let title = enriched
-            .get("title")
-            .and_then(Value::as_str)
-            .unwrap_or("agent finding");
-        let msg = serde_json::json!({
-            "job_id": jid,
-            "status": "running",
-            "message": format!("Agent finding: {title}"),
-            "engine": engine,
-            "source": "agent",
-            "agent_task_id": task_id,
-        });
-        let msg = crate::http::tenant_stream::stamp_value(tenant_id, msg);
-        crate::telemetry_bus::publish_bus("telemetry", &msg).await;
+    } else {
+        if crate::agent_swarm_attach::finding_dirties_attack_graph(&enriched) {
+            crate::attack_path::mark_graph_dirty(tenant_id, client_id);
+        }
+        if let Some(jid) = scan_job_id {
+            let title = enriched
+                .get("title")
+                .and_then(Value::as_str)
+                .unwrap_or("agent finding");
+            let msg = serde_json::json!({
+                "job_id": jid,
+                "status": "running",
+                "message": format!("Agent finding: {title}"),
+                "engine": engine,
+                "source": "agent",
+                "agent_task_id": task_id,
+            });
+            let msg = crate::http::tenant_stream::stamp_value(tenant_id, msg);
+            crate::telemetry_bus::publish_bus("telemetry", &msg).await;
+        }
     }
     Ok(())
 }

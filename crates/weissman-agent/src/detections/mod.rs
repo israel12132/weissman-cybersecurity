@@ -15,6 +15,8 @@ mod log_integrity;
 mod malware_local;
 mod mobile_local;
 mod network_local;
+mod ot_plc_decoy;
+mod priv_esc_cred;
 mod process_hollowing;
 mod process_modules;
 mod scheduled_tasks;
@@ -171,8 +173,12 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
             "chronos" => chronos::run(&engine, &params).await,
             "sandbox_evasion" => stealth_host::run_sandbox_evasion(&engine).await,
             "rop_chain_engine" => {
-                stealth_host::run_memory_technique(&engine, "T1055", "ROP/JOP host runtime inventory")
-                    .await
+                stealth_host::run_memory_technique(
+                    &engine,
+                    "T1055",
+                    "ROP/JOP host runtime inventory",
+                )
+                .await
             }
             "heap_exploitation" => {
                 stealth_host::run_memory_technique(
@@ -189,7 +195,12 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
             "com_hijacking" => stealth_host::run_com_hijack(&engine).await,
             "parent_pid_spoof" => stealth_host::run_ppid_spoof(&engine).await,
             "host_isolation" => host_isolation::run(&engine, &params).await,
-            "host_privilege_escalation" => stealth_host::run_privesc(&engine).await,
+            "host_privilege_escalation" => {
+                let mut findings = stealth_host::run_privesc(&engine).await?;
+                findings.extend(priv_esc_cred::run(&engine).await?);
+                Ok(findings)
+            }
+            "ot_plc_decoy" => ot_plc_decoy::run(&engine).await,
             "ebpf_sensor" => ebpf_sensor::run(&engine, &params).await,
             "ioc_yara_hunt" => yara_hunt::run(&engine, &params).await,
             other => Err(anyhow::anyhow!(
@@ -298,6 +309,27 @@ mod tests {
         for id in REQUIRED {
             assert!(caps.contains(id), "missing agent capability: {id}");
         }
+    }
+
+    #[test]
+    fn swarm_helper_detections_are_wired_not_stubbed() {
+        let src = include_str!("mod.rs");
+        assert!(
+            src.contains("mod priv_esc_cred"),
+            "privilege/credential auditor must be a real module"
+        );
+        assert!(
+            src.contains("priv_esc_cred::run"),
+            "host_privilege_escalation must run the live PAC auditor"
+        );
+        assert!(
+            src.contains("mod ot_plc_decoy"),
+            "OT PLC decoy must compile into the agent binary"
+        );
+        assert!(
+            src.contains("ot_plc_decoy::run"),
+            "OT decoy status must be taskable, not spawn-only"
+        );
     }
 }
 

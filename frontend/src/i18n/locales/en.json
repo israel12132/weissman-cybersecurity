@@ -975,6 +975,9 @@
     "caps": "{{count}} caps",
     "fleet_dispatch": "Dispatch fleet (30 engines)",
     "fleet_dispatching": "Dispatching fleet…",
+    "swarm_attach": "Attach helpers to every live agent",
+    "swarm_attaching": "Attaching helpers…",
+    "swarm_result": "Attached {{agents}}/{{seen}} live agents · {{tasks}} tasks ({{live}} live, {{skipped}} already running)",
     "select_client_first": "Select a client first",
     "load_failed": "Couldn't load agents (HTTP {{status}})",
     "refresh": "Refresh",
@@ -5671,7 +5674,7 @@
       "engine_queued": "Engine queued (Job: {{jobId}})"
     },
     "agentManagement": {
-      "evidence_notice": "Endpoint agent roster and heartbeat from GET /api/agents/status. Remote tasking uses authenticated agent channels — offline agents show honest last-seen timestamps."
+      "evidence_notice": "Endpoint agent roster and heartbeat from GET /api/agents/status. POST /api/agents/swarm-attach attaches leftover attack/scan/findings detections to every WebSocket-live agent — offline hosts keep honest last-seen timestamps."
     },
     "zeroDayRadar": {
       "evidence_notice": "Zero-day signal correlation from GET /api/threat-intel/feed cross-matched to GET /api/findings for your exposed stack — highlights emergent CVEs against live asset fingerprints."

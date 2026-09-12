@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { Server, Radio, Zap, Skull } from 'lucide-react'
+import { Server, Radio, Zap, Skull, Crosshair } from 'lucide-react'
 import { createColumnHelper } from '@tanstack/react-table'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
@@ -65,6 +65,8 @@ export default function AgentManagement() {
   const { t } = useTranslation()
   const [agents, setAgents] = useState([])
   const [fleetBusy, setFleetBusy] = useState(false)
+  const [swarmBusy, setSwarmBusy] = useState(false)
+  const [swarmResult, setSwarmResult] = useState(null)
   const [loading, setLoading] = useState(true)
   // Server-state via the shared TanStack Query hook (dedup + cache + retry) instead of a
   // hand-rolled useEffect fetch — reference for migrating the other dashboards.
@@ -184,6 +186,24 @@ export default function AgentManagement() {
       setFleetBusy(false)
     }
   }, [tokenClient, refresh, t])
+
+  const swarmAttach = useCallback(async () => {
+    setSwarmBusy(true)
+    setActionErr(null)
+    setSwarmResult(null)
+    try {
+      const cid = Number(tokenClient)
+      const body = {}
+      if (cid) body.client_id = cid
+      const d = await apiFetch('/api/agents/swarm-attach', { method: 'POST', body })
+      setSwarmResult(d)
+      await refresh()
+    } catch (e) {
+      setActionErr(e.message)
+    } finally {
+      setSwarmBusy(false)
+    }
+  }, [tokenClient, refresh])
 
   const installLinux = useMemo(() => {
     if (!generatedToken) return ''
@@ -323,7 +343,7 @@ export default function AgentManagement() {
         <section className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] backdrop-blur-md p-5 space-y-4">
           <h2 className="text-xs font-mono uppercase tracking-widest text-[var(--text-tertiary)]">{t('agents.issue_token')}</h2>
           {(actionErr || err) && <div className="text-[12px] font-mono text-rose-400">{actionErr || err}</div>}
-          <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px_140px_auto] gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_140px_auto_auto_auto] gap-3">
             <select
               value={tokenClient}
               onChange={(e) => setTokenClient(e.target.value)}
@@ -359,7 +379,28 @@ export default function AgentManagement() {
               <Zap className="w-3.5 h-3.5" />
               {fleetBusy ? t('agents.fleet_dispatching') : t('agents.fleet_dispatch')}
             </Button>
+            <Button variant="unstyled"
+              type="button"
+              disabled={swarmBusy}
+              onClick={swarmAttach}
+              className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-amber-500/40 text-amber-200 font-mono text-sm hover:bg-amber-500/10 disabled:opacity-40"
+            >
+              <Crosshair className="w-3.5 h-3.5" />
+              {swarmBusy ? t('agents.swarm_attaching') : t('agents.swarm_attach')}
+            </Button>
           </div>
+
+          {swarmResult && (
+            <div className="text-[11px] font-mono text-amber-200/90 border border-amber-500/30 bg-amber-500/5 rounded-lg px-3 py-2">
+              {t('agents.swarm_result', {
+                agents: swarmResult.agents_attached ?? 0,
+                seen: swarmResult.agents_seen ?? 0,
+                tasks: swarmResult.tasks_enqueued ?? 0,
+                live: swarmResult.tasks_live ?? 0,
+                skipped: swarmResult.skipped_recent ?? 0,
+              })}
+            </div>
+          )}
 
           {generatedToken && (
             <div className="space-y-3 border-t border-[var(--border-default)] pt-4">

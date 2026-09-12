@@ -905,6 +905,9 @@
     "caps": "{{count}} יכולות",
     "fleet_dispatch": "שגר צי (30 מנועים)",
     "fleet_dispatching": "שולח לצי…",
+    "swarm_attach": "הצמד עוזרים לכל סוכן מחובר",
+    "swarm_attaching": "מצמיד עוזרים…",
+    "swarm_result": "הוצמדו {{agents}}/{{seen}} סוכנים חיים · {{tasks}} משימות ({{live}} בשידור חי, {{skipped}} כבר רצות)",
     "select_client_first": "בחר לקוח תחילה",
     "load_failed": "טעינת סוכנים נכשלה (HTTP {{status}})",
     "refresh": "רענן",
@@ -5671,7 +5674,7 @@
       "engine_queued": "המנוע נכנס לתור (משימה: {{jobId}})"
     },
     "agentManagement": {
-      "evidence_notice": "roster agents ו-heartbeat מ-GET /api/agents/status. tasking מרחוק משתמש בערוצי agent מאומתים — agents offline מציגים timestamps last-seen כנים."
+      "evidence_notice": "roster agents ו-heartbeat מ-GET /api/agents/status. POST /api/agents/swarm-attach מצמיד משימות תקיפה/סריקה/ממצאים לכל סוכן חי ב-WebSocket — agents offline מציגים timestamps last-seen כנים."
     },
     "zeroDayRadar": {
       "evidence_notice": "correlation אות zero-day מ-GET /api/threat-intel/feed מול GET /api/findings ל-stack החשוף שלך — מדגיש CVEs מתפתחים מול fingerprints נכסים חיים."

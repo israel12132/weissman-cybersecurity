@@ -271,8 +271,8 @@ const ENTRIES = [
   },
   {
     key: 'pages.agentManagement.evidence_notice',
-    en: 'Endpoint agent roster and heartbeat from GET /api/agents/status. Remote tasking uses authenticated agent channels — offline agents show honest last-seen timestamps.',
-    he: 'roster agents ו-heartbeat מ-GET /api/agents/status. tasking מרחוק משתמש בערוצי agent מאומתים — agents offline מציגים timestamps last-seen כנים.',
+    en: 'Endpoint agent roster and heartbeat from GET /api/agents/status. POST /api/agents/swarm-attach attaches leftover attack/scan/findings detections to every WebSocket-live agent — offline hosts keep honest last-seen timestamps.',
+    he: 'roster agents ו-heartbeat מ-GET /api/agents/status. POST /api/agents/swarm-attach מצמיד משימות תקיפה/סריקה/ממצאים לכל סוכן חי ב-WebSocket — agents offline מציגים timestamps last-seen כנים.',
   },
   {
     key: 'pages.roeApprovals.evidence_notice',
