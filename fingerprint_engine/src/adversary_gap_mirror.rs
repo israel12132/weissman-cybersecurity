@@ -6,8 +6,8 @@
 //!
 //! Public sources (no paid IntelX required):
 //! - ransomware.live victim search (ransomware leak-site *names* published on clearnet)
-//! - abuse.ch ThreatFox IOC search
-//! - abuse.ch URLhaus host query
+//! - abuse.ch ThreatFox (`search_ioc` with free Auth-Key, else recent domain export)
+//! - abuse.ch URLhaus (host API with Auth-Key, else public hostfile)
 //! - Have I Been Pwned public breach *catalog* (`GET /breaches`, no key)
 //!
 //! Exposure fusion (authorized RoE only): TCP connect of common remote-access ports and
@@ -17,7 +17,7 @@
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
     empty_ok, extract_host, finding, http_client, http_get, http_get_with_headers,
-    http_post_bytes_with_headers, http_post_json, tcp_scan,
+    http_post_bytes_with_headers, http_post_json_with_headers, tcp_scan,
 };
 use crate::engine_result::EngineResult;
 use serde_json::{json, Value};
@@ -85,6 +85,23 @@ pub struct IabQuote {
     pub usd_high: u32,
     pub citation: &'static str,
     pub next_engines: &'static [&'static str],
+}
+
+fn abusech_auth_key() -> String {
+    for k in [
+        "ABUSECH_AUTH_KEY",
+        "ABUSECH_API_KEY",
+        "THREATFOX_AUTH_KEY",
+        "URLHAUS_AUTH_KEY",
+    ] {
+        if let Ok(v) = std::env::var(k) {
+            let t = v.trim().to_string();
+            if !t.is_empty() {
+                return t;
+            }
+        }
+    }
+    String::new()
 }
 
 fn pbool(params: &Value, key: &str, default: bool) -> bool {
@@ -306,6 +323,79 @@ pub fn parse_urlhaus_host(body: &str) -> usize {
         .unwrap_or(0)
 }
 
+/// Parse ThreatFox *export* JSON (`{ "id": [ { ioc_value, ... } ] }`) filtered to host.
+#[must_use]
+pub fn parse_threatfox_export(body: &str, host: &str) -> Vec<IocHit> {
+    let Ok(v) = serde_json::from_str::<Value>(body) else {
+        return Vec::new();
+    };
+    let Some(map) = v.as_object() else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for arr in map.values() {
+        let Some(rows) = arr.as_array() else {
+            continue;
+        };
+        for row in rows {
+            let ioc = row
+                .get("ioc_value")
+                .or_else(|| row.get("ioc"))
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            if ioc.is_empty() || !host_matches_needle(host, &ioc) {
+                continue;
+            }
+            out.push(IocHit {
+                ioc,
+                threat_type: row
+                    .get("threat_type")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+                malware: row
+                    .get("malware_printable")
+                    .or_else(|| row.get("malware"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+                confidence: row
+                    .get("confidence_level")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(50),
+            });
+            if out.len() >= 20 {
+                return out;
+            }
+        }
+    }
+    out
+}
+
+/// Count hosts in the public URLhaus hostfile that match the target.
+#[must_use]
+pub fn parse_urlhaus_hostfile(body: &str, host: &str) -> usize {
+    let mut n = 0usize;
+    for line in body.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let name = line.split_whitespace().nth(1).unwrap_or("");
+        if name.is_empty() {
+            continue;
+        }
+        if host_matches_needle(host, name) {
+            n += 1;
+            if n >= 20 {
+                break;
+            }
+        }
+    }
+    n
+}
+
 #[must_use]
 pub fn parse_hibp_breaches(body: &str, host: &str) -> Vec<BreachCatalogHit> {
     let Ok(v) = serde_json::from_str::<Value>(body) else {
@@ -490,61 +580,125 @@ pub async fn collect_clearnet_intel(engine_id: &str, target: &str) -> Vec<Value>
         ));
     }
 
-    // ThreatFox
-    let tf_url = "https://threatfox-api.abuse.ch/api/v1/";
-    let tf_body = json!({"query": "search_ioc", "search_term": apex});
-    if let Some(p) = http_post_json(&client, tf_url, &tf_body).await {
-        let hits = parse_threatfox(&p.body);
-        if p.status == 200 && !hits.is_empty() {
-            for hit in &hits {
-                let sev = if hit.confidence >= 75 {
-                    "high"
-                } else {
-                    "medium"
-                };
+    // ThreatFox — Auth-Key search when configured; otherwise recent public domain export.
+    let key = abusech_auth_key();
+    let tf_api = "https://threatfox-api.abuse.ch/api/v1/";
+    let tf_export = "https://threatfox.abuse.ch/export/json/domains/recent/";
+    if !key.is_empty() {
+        let tf_body = json!({"query": "search_ioc", "search_term": apex, "exact_match": true});
+        if let Some(p) =
+            http_post_json_with_headers(&client, tf_api, &tf_body, &[("Auth-Key", key.as_str())])
+                .await
+        {
+            let hits = parse_threatfox(&p.body);
+            if p.status == 200 && !hits.is_empty() {
+                for hit in &hits {
+                    let sev = if hit.confidence >= 75 {
+                        "high"
+                    } else {
+                        "medium"
+                    };
+                    findings.push(finding_ev(
+                        engine_id,
+                        &format!("ThreatFox IOC {} ({})", hit.ioc, hit.malware),
+                        sev,
+                        &format!(
+                            "abuse.ch ThreatFox search_ioc returned ioc='{}' type='{}' malware='{}' confidence={}. Next authorized engines: threat_intel_fusion, leak_hunter.",
+                            hit.ioc, hit.threat_type, hit.malware, hit.confidence
+                        ),
+                        target,
+                        json!({
+                            "source": "threatfox",
+                            "url": tf_api,
+                            "http_status": p.status,
+                            "ioc": hit.ioc,
+                            "threat_type": hit.threat_type,
+                            "malware": hit.malware,
+                            "confidence": hit.confidence,
+                            "auth": "auth_key",
+                        }),
+                    ));
+                }
+            } else if p.status == 200 {
                 findings.push(finding_ev(
                     engine_id,
-                    &format!("ThreatFox IOC {} ({})", hit.ioc, hit.malware),
-                    sev,
-                    &format!(
-                        "abuse.ch ThreatFox returned ioc='{}' type='{}' malware='{}' confidence={}. Next authorized engines: threat_intel_fusion, leak_hunter.",
-                        hit.ioc, hit.threat_type, hit.malware, hit.confidence
-                    ),
+                    &format!("ThreatFox queried — no IOC for {apex}"),
+                    "info",
+                    &format!("Live POST {tf_api} search_ioc for '{apex}' returned HTTP {} with zero IOCs.", p.status),
                     target,
-                    json!({
-                        "source": "threatfox",
-                        "url": tf_url,
-                        "http_status": p.status,
-                        "ioc": hit.ioc,
-                        "threat_type": hit.threat_type,
-                        "malware": hit.malware,
-                        "confidence": hit.confidence,
-                    }),
+                    json!({"source":"threatfox","url":tf_api,"http_status":p.status,"matches":0,"auth":"auth_key"}),
+                ));
+            } else {
+                findings.push(finding_ev(
+                    engine_id,
+                    "ThreatFox Auth-Key search returned a non-success status",
+                    "info",
+                    &format!("Live POST {tf_api} search_ioc for '{apex}' returned HTTP {}. Check ABUSECH_AUTH_KEY (free at auth.abuse.ch).", p.status),
+                    target,
+                    json!({"source":"threatfox","url":tf_api,"http_status":p.status,"auth":"auth_key"}),
                 ));
             }
-        } else if p.status == 200 {
-            findings.push(finding_ev(
-                engine_id,
-                &format!("ThreatFox queried — no IOC for {apex}"),
-                "info",
-                &format!(
-                    "Live POST {tf_url} search_ioc for '{apex}' returned HTTP {} with zero IOCs.",
-                    p.status
-                ),
-                target,
-                json!({"source":"threatfox","url":tf_url,"http_status":p.status,"matches":0}),
-            ));
         } else {
             findings.push(finding_ev(
                 engine_id,
-                "ThreatFox returned a non-success status",
+                "ThreatFox unreachable this run",
                 "info",
-                &format!(
-                    "Live POST {tf_url} search_ioc for '{apex}' returned HTTP {}.",
-                    p.status
-                ),
+                "No HTTP response from threatfox-api.abuse.ch. Finding is a live probe failure, not a hidden IOC.",
                 target,
-                json!({"source":"threatfox","url":tf_url,"http_status":p.status}),
+                json!({"source":"threatfox","url":tf_api,"reachable":false}),
+            ));
+        }
+    } else if let Some(p) = http_get_with_headers(&client, tf_export, &headers).await {
+        if p.status == 200 {
+            let hits = parse_threatfox_export(&p.body, &host);
+            if hits.is_empty() {
+                findings.push(finding_ev(
+                    engine_id,
+                    &format!("ThreatFox recent-domain export — no IOC for {apex}"),
+                    "info",
+                    &format!(
+                        "Live GET {tf_export} (no Auth-Key) listed recent domains; none matched '{apex}'. Set ABUSECH_AUTH_KEY for targeted search_ioc."
+                    ),
+                    target,
+                    json!({"source":"threatfox","url":tf_export,"http_status":p.status,"matches":0,"auth":"export"}),
+                ));
+            } else {
+                for hit in &hits {
+                    let sev = if hit.confidence >= 75 {
+                        "high"
+                    } else {
+                        "medium"
+                    };
+                    findings.push(finding_ev(
+                        engine_id,
+                        &format!("ThreatFox recent export IOC {} ({})", hit.ioc, hit.malware),
+                        sev,
+                        &format!(
+                            "abuse.ch ThreatFox recent domain export listed ioc='{}' type='{}' malware='{}'. Next authorized engines: threat_intel_fusion, leak_hunter.",
+                            hit.ioc, hit.threat_type, hit.malware
+                        ),
+                        target,
+                        json!({
+                            "source": "threatfox",
+                            "url": tf_export,
+                            "http_status": p.status,
+                            "ioc": hit.ioc,
+                            "threat_type": hit.threat_type,
+                            "malware": hit.malware,
+                            "confidence": hit.confidence,
+                            "auth": "export",
+                        }),
+                    ));
+                }
+            }
+        } else {
+            findings.push(finding_ev(
+                engine_id,
+                "ThreatFox recent-domain export returned a non-success status",
+                "info",
+                &format!("Live GET {tf_export} returned HTTP {}.", p.status),
+                target,
+                json!({"source":"threatfox","url":tf_export,"http_status":p.status}),
             ));
         }
     } else {
@@ -552,59 +706,102 @@ pub async fn collect_clearnet_intel(engine_id: &str, target: &str) -> Vec<Value>
             engine_id,
             "ThreatFox unreachable this run",
             "info",
-            "No HTTP response from threatfox-api.abuse.ch. Finding is a live probe failure, not a hidden IOC.",
+            "No HTTP response from threatfox.abuse.ch export. Finding is a live probe failure, not a hidden IOC.",
             target,
-            json!({"source":"threatfox","url":tf_url,"reachable":false}),
+            json!({"source":"threatfox","url":tf_export,"reachable":false}),
         ));
     }
 
-    // URLhaus host
-    let uh_url = "https://urlhaus-api.abuse.ch/v1/host/";
-    let form = format!("host={}", urlencoding::encode(&apex));
-    if let Some(p) = http_post_bytes_with_headers(
-        &client,
-        uh_url,
-        form.as_bytes(),
-        &[("Content-Type", "application/x-www-form-urlencoded")],
-    )
-    .await
-    {
-        let n = parse_urlhaus_host(&p.body);
-        if p.status == 200 && n > 0 {
-            findings.push(finding_ev(
-                engine_id,
-                &format!("URLhaus lists {n} malicious URL(s) on {apex}"),
-                "high",
-                &format!(
-                    "abuse.ch URLhaus host query for '{apex}' returned {n} URL rows (HTTP {}). Next authorized engines: threat_intel_fusion, asm.",
-                    p.status
-                ),
-                target,
-                json!({"source":"urlhaus","url":uh_url,"http_status":p.status,"url_count":n}),
-            ));
-        } else if p.status == 200 {
-            findings.push(finding_ev(
-                engine_id,
-                &format!("URLhaus queried — no host rows for {apex}"),
-                "info",
-                &format!(
-                    "Live URLhaus host query for '{apex}' returned HTTP {} with zero URLs.",
-                    p.status
-                ),
-                target,
-                json!({"source":"urlhaus","url":uh_url,"http_status":p.status,"url_count":0}),
-            ));
+    // URLhaus — Auth-Key host API when configured; otherwise public hostfile (~10KB).
+    let uh_api = "https://urlhaus-api.abuse.ch/v1/host/";
+    let uh_export = "https://urlhaus.abuse.ch/downloads/hostfile/";
+    if !key.is_empty() {
+        let form = format!("host={}", urlencoding::encode(&apex));
+        if let Some(p) = http_post_bytes_with_headers(
+            &client,
+            uh_api,
+            form.as_bytes(),
+            &[
+                ("Content-Type", "application/x-www-form-urlencoded"),
+                ("Auth-Key", key.as_str()),
+            ],
+        )
+        .await
+        {
+            let n = parse_urlhaus_host(&p.body);
+            if p.status == 200 && n > 0 {
+                findings.push(finding_ev(
+                    engine_id,
+                    &format!("URLhaus lists {n} malicious URL(s) on {apex}"),
+                    "high",
+                    &format!(
+                        "abuse.ch URLhaus host query for '{apex}' returned {n} URL rows (HTTP {}). Next authorized engines: threat_intel_fusion, asm.",
+                        p.status
+                    ),
+                    target,
+                    json!({"source":"urlhaus","url":uh_api,"http_status":p.status,"url_count":n,"auth":"auth_key"}),
+                ));
+            } else if p.status == 200 {
+                findings.push(finding_ev(
+                    engine_id,
+                    &format!("URLhaus queried — no host rows for {apex}"),
+                    "info",
+                    &format!("Live URLhaus host query for '{apex}' returned HTTP {} with zero URLs.", p.status),
+                    target,
+                    json!({"source":"urlhaus","url":uh_api,"http_status":p.status,"url_count":0,"auth":"auth_key"}),
+                ));
+            } else {
+                findings.push(finding_ev(
+                    engine_id,
+                    "URLhaus Auth-Key host query returned a non-success status",
+                    "info",
+                    &format!("Live URLhaus host query for '{apex}' returned HTTP {}. Check ABUSECH_AUTH_KEY.", p.status),
+                    target,
+                    json!({"source":"urlhaus","url":uh_api,"http_status":p.status,"auth":"auth_key"}),
+                ));
+            }
         } else {
             findings.push(finding_ev(
                 engine_id,
-                "URLhaus returned a non-success status",
+                "URLhaus unreachable this run",
                 "info",
-                &format!(
-                    "Live URLhaus host query for '{apex}' returned HTTP {}.",
-                    p.status
-                ),
+                "No HTTP response from urlhaus-api.abuse.ch. Finding is a live probe failure, not a hidden listing.",
                 target,
-                json!({"source":"urlhaus","url":uh_url,"http_status":p.status}),
+                json!({"source":"urlhaus","url":uh_api,"reachable":false}),
+            ));
+        }
+    } else if let Some(p) = http_get_with_headers(&client, uh_export, &headers).await {
+        if p.status == 200 {
+            let n = parse_urlhaus_hostfile(&p.body, &host);
+            if n > 0 {
+                findings.push(finding_ev(
+                    engine_id,
+                    &format!("URLhaus hostfile lists {n} malicious host(s) for {apex}"),
+                    "high",
+                    &format!(
+                        "Live GET {uh_export} (no Auth-Key) matched {n} hostfile row(s) for '{apex}'. Set ABUSECH_AUTH_KEY for full URL rows."
+                    ),
+                    target,
+                    json!({"source":"urlhaus","url":uh_export,"http_status":p.status,"url_count":n,"auth":"hostfile"}),
+                ));
+            } else {
+                findings.push(finding_ev(
+                    engine_id,
+                    &format!("URLhaus hostfile queried — no host rows for {apex}"),
+                    "info",
+                    &format!("Live GET {uh_export} listed current malware hosts; none matched '{apex}'."),
+                    target,
+                    json!({"source":"urlhaus","url":uh_export,"http_status":p.status,"url_count":0,"auth":"hostfile"}),
+                ));
+            }
+        } else {
+            findings.push(finding_ev(
+                engine_id,
+                "URLhaus hostfile returned a non-success status",
+                "info",
+                &format!("Live GET {uh_export} returned HTTP {}.", p.status),
+                target,
+                json!({"source":"urlhaus","url":uh_export,"http_status":p.status}),
             ));
         }
     } else {
@@ -612,9 +809,9 @@ pub async fn collect_clearnet_intel(engine_id: &str, target: &str) -> Vec<Value>
             engine_id,
             "URLhaus unreachable this run",
             "info",
-            "No HTTP response from urlhaus-api.abuse.ch. Finding is a live probe failure, not a hidden listing.",
+            "No HTTP response from urlhaus.abuse.ch hostfile. Finding is a live probe failure, not a hidden listing.",
             target,
-            json!({"source":"urlhaus","url":uh_url,"reachable":false}),
+            json!({"source":"urlhaus","url":uh_export,"reachable":false}),
         ));
     }
 
@@ -871,6 +1068,21 @@ mod tests {
             parse_urlhaus_host(r#"{"query_status":"ok","urls":[{},{}]}"#),
             2
         );
+    }
+
+    #[test]
+    fn threatfox_export_filters_host() {
+        let body = r#"{"1":[{"ioc_value":"www.acme.com","ioc_type":"domain","threat_type":"botnet_cc","malware_printable":"Cobalt Strike","confidence_level":80}],"2":[{"ioc_value":"evil.example","ioc_type":"domain","threat_type":"payload_delivery","malware":"x"}]}"#;
+        let hits = parse_threatfox_export(body, "mail.acme.com");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].ioc, "www.acme.com");
+    }
+
+    #[test]
+    fn urlhaus_hostfile_matches_and_ignores_unrelated() {
+        let body = "# comment\n127.0.0.1\twww.acme.com\n127.0.0.1\tnotacme.com\n";
+        assert_eq!(parse_urlhaus_hostfile(body, "acme.com"), 1);
+        assert_eq!(parse_urlhaus_hostfile(body, "other.org"), 0);
     }
 
     #[test]
