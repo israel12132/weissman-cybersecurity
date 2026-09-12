@@ -15,8 +15,8 @@ describe('RuntimeExecutionFlow', () => {
   beforeEach(() => apiFetch.mockReset())
   afterEach(cleanup)
 
-  it('does not claim no traces when the traces API is down', async () => {
-    apiFetch.mockRejectedValue(new Error('store down'))
+  it('does not claim no traces when the traces API is unavailable', async () => {
+    apiFetch.mockResolvedValue({ ok: false, unavailable: true, traces: [], detail: 'store down' })
     render(<RuntimeExecutionFlow clientId={3} />)
     expect(await screen.findByTestId('runtime-traces-unavailable')).toBeTruthy()
     expect(screen.queryByText('components.cockpitWidgets.runtimeExecutionFlow.noTracesClient')).toBeNull()

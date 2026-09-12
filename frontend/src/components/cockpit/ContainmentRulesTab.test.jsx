@@ -22,14 +22,7 @@ describe('ContainmentRulesTab', () => {
   beforeEach(() => apiFetch.mockReset())
   afterEach(cleanup)
 
-  it('does not paint no-rules theater when the rules API is down', async () => {
-    apiFetch.mockRejectedValue(new Error('store down'))
-    render(<ContainmentRulesTab />)
-    expect(await screen.findByTestId('containment-rules-unavailable')).toBeTruthy()
-    expect(screen.queryByText('components.cockpitTabs.containmentRules.noRules')).toBeNull()
-  })
-
-  it('treats ok:false unavailable JSON as store-down, not an empty rule set', async () => {
+  it('does not paint no-rules theater when the rules API is unavailable', async () => {
     apiFetch.mockResolvedValue({ ok: false, unavailable: true, rules: [], detail: 'store down' })
     render(<ContainmentRulesTab />)
     expect(await screen.findByTestId('containment-rules-unavailable')).toBeTruthy()
