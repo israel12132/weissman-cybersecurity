@@ -127,7 +127,7 @@ mod engine_dispatch_agent;
 
 pub(crate) use engine_dispatch_agent::merge_agent_hybrid;
 pub use engine_dispatch_agent::{
-    is_agent_required_engine, run_agent_required_engine, AGENT_REQUIRED_ENGINES,
+    AGENT_REQUIRED_ENGINES, is_agent_required_engine, run_agent_required_engine,
 };
 
 /// Apply owner/tuner aggression knobs from free-form `job_params` onto stealth.
@@ -1101,6 +1101,9 @@ async fn dispatch_engine_match(
         "ngfw_posture" => crate::supreme_layer_engines::run_ngfw_posture_result(target).await,
         "malware_detonation" => crate::supreme_layer_engines::run_malware_detonation_result(target).await,
         "weissman_vngfw" => crate::supreme_layer_engines::run_weissman_vngfw_result(target).await,
+        "cortex_proven_finding_bridge" => {
+            crate::scan_finding_bridge::run_cortex_proven_finding_bridge_result(target, ctx).await
+        }
 
         _ => EngineResult::error(
             format!(

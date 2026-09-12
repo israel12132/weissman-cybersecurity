@@ -678,6 +678,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "ngfw_posture",
     "malware_detonation",
     "weissman_vngfw",
+    "cortex_proven_finding_bridge",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -1298,6 +1299,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "ngfw_posture",
     "malware_detonation",
     "weissman_vngfw",
+    "cortex_proven_finding_bridge",
 ];
 
 /// Map catalog-only registry IDs to a production engine implementation.

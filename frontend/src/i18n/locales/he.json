@@ -272,7 +272,8 @@
     "itdr": "ITDR",
     "casb_dlp": "CASB / DLP / CNAPP",
     "ngfw_gate": "שער וייסמן",
-    "endpoint_edr": "EDR בקצה"
+    "endpoint_edr": "EDR בקצה",
+    "cortex_bridge": "גשר Cortex לממצאים מוכחים"
   },
   "ask_weissman": {
     "title": "שאל את Weissman",
@@ -5841,6 +5842,37 @@
       "search_placeholder": "סינון ממצאים…",
       "empty_title": "עדיין אין ממצאי מרחב בקרה",
       "empty_body": "תור את control_plane_of_controls (ואת מנועי האחים) מול יעד מורשה. העמוד לא ממציא כיסוי של פאלו או פלקון."
+    },
+    "cortexProvenBridge": {
+      "title": "גשר ממצאים מוכחים ל-Cortex",
+      "subtitle": "מיפוי סריקה→ממצא חי, ואז פערי כיסוי XSIAM — בלי פגיעות מזויפות",
+      "evidence_notice": "GET /api/findings/scan-cortex-bridge ממפה משימות סריקה שנשמרו לממצאים עם הוכחה. השוואת XSIAM קוראת get_alerts חי. Flush משתמש ב-POST /api/findings/scan-cortex-bridge/flush. חוסר קונפיג של Cortex נכשל בגלוי.",
+      "load_failed": "טעינת מפת הסריקה→Cortex נכשלה.",
+      "kpi_mapped": "ממופים",
+      "kpi_mapped_hint": "ממצאי סריקה שנחתמו ב-persist",
+      "kpi_proven": "מוכחים",
+      "kpi_proven_hint": "כשירים ל-Cortex (הוכחה או CONFIRMED)",
+      "kpi_pushed": "נשלחו",
+      "kpi_pushed_hint": "כבר נקלטו ב-Cortex",
+      "kpi_blind": "XDR עיוור",
+      "kpi_blind_hint": "מוכח אצלנו, חסר ב-get_alerts",
+      "kpi_covered": "XDR כבר ראה",
+      "kpi_covered_hint": "התראת XSIAM תואמת כבר קיימת",
+      "kpi_cortex": "Cortex",
+      "configured": "חי",
+      "missing": "לא מוגדר",
+      "open_integrations": "פתח אינטגרציות",
+      "compare_xdr": "השוואת XSIAM",
+      "flush": "שליחת מוכחים ל-Cortex",
+      "flush_ok": "נשלחו {{n}} ממצאים מוכחים ל-Cortex",
+      "flush_failed": "שליחה ל-Cortex נכשלה",
+      "search_placeholder": "סינון לפי כותרת, מנוע, CVE, הוכחה…",
+      "empty_title": "אין ממצאי סריקה ממופים",
+      "empty_body": "הרץ סריקת מנוע חיה מול לקוח מורשה. הלוח מציג רק שורות שנשמרו — הוא לא ממציא כיסוי Cortex.",
+      "eligible": "מוכח",
+      "ineligible": "אין הוכחה",
+      "blind_spot": "נקודה עיוורת ב-XSIAM",
+      "xdr_had": "XDR כבר ראה"
     },
     "itdrCommandCenter": {
       "title": "ITDR",

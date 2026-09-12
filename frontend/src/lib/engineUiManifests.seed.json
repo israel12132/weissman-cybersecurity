@@ -1194,6 +1194,23 @@
       "chrome": {
         "badge_color": "#22d3ee"
       }
+    },
+    {
+      "engine_id": "cortex_proven_finding_bridge",
+      "route_paths": [
+        "/cortex-bridge"
+      ],
+      "evidence_i18n_key": "pages.cortexProvenBridge.evidence_notice",
+      "capabilities": {
+        "requires_target_input": false,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": false,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#f97316"
+      }
     }
   ]
 }

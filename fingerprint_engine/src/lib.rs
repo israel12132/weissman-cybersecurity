@@ -98,6 +98,7 @@ pub mod finding_live_verify;
 pub mod findings_correlator;
 pub mod findings_gate;
 pub mod findings_persist;
+pub mod scan_finding_bridge;
 pub mod fingerprint;
 pub mod first_mover_delta_fusion;
 pub mod first_mover_surface_delta;

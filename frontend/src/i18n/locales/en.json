@@ -282,7 +282,8 @@
     "itdr": "ITDR",
     "casb_dlp": "CASB / DLP / CNAPP",
     "ngfw_gate": "Weissman Gate",
-    "endpoint_edr": "Endpoint EDR"
+    "endpoint_edr": "Endpoint EDR",
+    "cortex_bridge": "Cortex Proven Bridge"
   },
   "ask_weissman": {
     "title": "Ask Weissman",
@@ -5841,6 +5842,37 @@
       "search_placeholder": "Filter findings…",
       "empty_title": "No control-plane findings yet",
       "empty_body": "Queue control_plane_of_controls (and sibling fusion engines) against an authorized target. This page never invents Palo Alto or Falcon coverage."
+    },
+    "cortexProvenBridge": {
+      "title": "Cortex proven-finding bridge",
+      "subtitle": "Live scan→finding map, then XSIAM coverage gaps — no fake XDR hits",
+      "evidence_notice": "GET /api/findings/scan-cortex-bridge maps persisted scan jobs to proof-backed findings. Compare XSIAM calls live get_alerts. Flush uses POST /api/findings/scan-cortex-bridge/flush → proven ingest. Missing Cortex config fails visibly.",
+      "load_failed": "Failed to load the scan→finding Cortex map.",
+      "kpi_mapped": "Mapped",
+      "kpi_mapped_hint": "Scan findings stamped at persist",
+      "kpi_proven": "Proven",
+      "kpi_proven_hint": "Eligible for Cortex (proof or CONFIRMED)",
+      "kpi_pushed": "Pushed",
+      "kpi_pushed_hint": "Already ingested to Cortex",
+      "kpi_blind": "XDR blind",
+      "kpi_blind_hint": "Proven locally, missing in get_alerts",
+      "kpi_covered": "XDR had it",
+      "kpi_covered_hint": "Matching XSIAM alert already exists",
+      "kpi_cortex": "Cortex",
+      "configured": "Live",
+      "missing": "Not configured",
+      "open_integrations": "Open Integrations",
+      "compare_xdr": "Compare XSIAM",
+      "flush": "Flush proven to Cortex",
+      "flush_ok": "Pushed {{n}} proven findings to Cortex",
+      "flush_failed": "Cortex flush failed",
+      "search_placeholder": "Filter by title, engine, CVE, proof…",
+      "empty_title": "No mapped scan findings",
+      "empty_body": "Run a live engine scan against an authorized client. This board only shows persisted scan rows — it never invents Cortex coverage.",
+      "eligible": "Proven",
+      "ineligible": "No proof",
+      "blind_spot": "XSIAM blind spot",
+      "xdr_had": "XDR already had"
     },
     "itdrCommandCenter": {
       "title": "ITDR",

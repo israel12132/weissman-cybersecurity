@@ -907,6 +907,48 @@ async fn api_openapi_spec() -> Response {
                     }
                 }
             },
+            "/api/findings/scan-cortex-bridge": {
+                "get": {
+                    "summary": "Scan→finding map plus live Cortex XSIAM coverage",
+                    "description": "Maps persisted scan findings to proof artifacts. Optional compare_xdr=true calls live XSIAM get_alerts. Missing Cortex config is reported, never faked.",
+                    "tags": ["Findings", "SOAR"],
+                    "parameters": [
+                        { "name": "client_id", "in": "query", "required": false, "schema": { "type": "integer" } },
+                        { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } },
+                        { "name": "compare_xdr", "in": "query", "required": false, "schema": { "type": "boolean" } }
+                    ],
+                    "responses": {
+                        "200": { "description": "Mapped findings and Cortex coverage counts" },
+                        "502": { "description": "Cortex get_alerts failed" }
+                    }
+                }
+            },
+            "/api/findings/scan-cortex-bridge/flush": {
+                "post": {
+                    "summary": "Batch-push proven mapped findings into Cortex",
+                    "description": "Calls the live proven-finding Cortex ingest for eligible rows only. Cap 25. Missing config 409.",
+                    "tags": ["Findings", "SOAR"],
+                    "requestBody": {
+                        "required": false,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "dry_run": { "type": "boolean" },
+                                        "client_id": { "type": "integer" },
+                                        "ids": { "type": "array", "items": { "type": "string" } }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": { "description": "Flush results" },
+                        "409": { "description": "Not configured or ineligible" }
+                    }
+                }
+            },
             "/api/clients": {
                 "get": {
                     "summary": "List all clients for the current tenant",

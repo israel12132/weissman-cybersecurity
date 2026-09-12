@@ -4768,6 +4768,14 @@ export const ENGINES_REGISTRY = [
     description: 'Software NGFW control plane. Errors if WEISSMAN_VNGFW_ADMIN dataplane is down — never pretends the firewall is live',
     requiresTarget: true,
   },
+  {
+    id: 'cortex_proven_finding_bridge',
+    label: 'Cortex Proven Finding Bridge',
+    group: 'defense',
+    mitre: 'T1562.001',
+    description: 'Maps live scan jobs to persisted findings, then compares proven evidence against Cortex XSIAM get_alerts. Emits coverage-gap findings only when XDR actually missed a proof-backed row — never a fake alert',
+    requiresTarget: false,
+  },
 ]
 
 /** Engines that do not need a URL target to run (tenant/global scope) */
