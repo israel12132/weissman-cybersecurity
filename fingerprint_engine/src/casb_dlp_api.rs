@@ -237,16 +237,17 @@ pub async fn graph_casb_findings(target: &str, token: &str) -> Vec<Value> {
                         .filter_map(|x| x.get("displayName").and_then(Value::as_str))
                         .map(|s| s.to_string())
                         .collect();
+                    let evidence = if names.is_empty() {
+                        "Graph servicePrincipals returned an empty value array.".to_string()
+                    } else {
+                        format!("Graph servicePrincipals: {}", names.join(", "))
+                    };
                     out.push(finding(
                         "casb_saas_posture",
                         &format!("Entra service principals inventoried ({})", names.len()),
                         "info",
                         "T1078",
-                        if names.is_empty() {
-                            "Graph servicePrincipals returned an empty value array.".to_string()
-                        } else {
-                            format!("Graph servicePrincipals: {}", names.join(", "))
-                        },
+                        &evidence,
                         target,
                     ));
                 }

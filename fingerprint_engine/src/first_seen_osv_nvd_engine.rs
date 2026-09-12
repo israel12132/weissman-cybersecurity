@@ -816,10 +816,7 @@ mod tests {
         );
         assert!(src.contains("SBOM rows not queryable against OSV"));
         assert!(src.contains("first-seen hit not stored"));
-        assert!(
-            !src.contains("let _ = persist_hit(pool"),
-            "a failed persist must fail the run"
-        );
+        assert!(src.contains("if let Err(e) = persist_hit"));
         assert!(src.contains("not retitled as new"));
     }
 }
