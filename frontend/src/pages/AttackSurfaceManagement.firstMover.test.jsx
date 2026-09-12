@@ -95,9 +95,31 @@ describe('FirstMoverDeltaPanel', () => {
         }}
       />,
     )
-    expect(screen.getAllByText(/pages.attackSurfaceManagement.nerve_oast_last/).length).toBeGreaterThan(0)
+    expect(screen.getByText(/pages.attackSurfaceManagement.nerve_oast_last/)).toBeTruthy()
     expect(screen.getAllByText(/pages.attackSurfaceManagement.nerve_oast_none/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/pages.attackSurfaceManagement.nerve_off/).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/pages.attackSurfaceManagement.nerve_live/)).toBeNull()
+  })
+
+  it('does not label OAST live when the domain is set but no callback exists', () => {
+    render(
+      <FirstMoverDeltaPanel
+        diff={{ current_count: 0, added: [], removed: [], changed: [] }}
+        loading={false}
+        hunting={false}
+        fusionHunting={false}
+        onHunt={() => {}}
+        onFusion={() => {}}
+        huntDisabled
+        nerve={{
+          certstream: { connected: false, enabled: false },
+          oast: { configured: true, last_callback_at: null },
+          nvd: { api_key_configured: false },
+        }}
+      />,
+    )
+    expect(screen.getByText(/pages.attackSurfaceManagement.nerve_oast_idle/)).toBeTruthy()
+    expect(screen.queryByText(/pages.attackSurfaceManagement.nerve_live/)).toBeNull()
   })
 
   it('shows unavailable copy when the store is down without treating it as empty', () => {

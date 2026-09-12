@@ -1213,7 +1213,11 @@ async fn api_risk_graph_get(
     Path(id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"nodes":[],"edges":[]}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"nodes":[],"edges":[],"unavailable": true})),
+        )
+            .into_response();
     };
     let nodes = sqlx::query(
         r#"SELECT id, graph_key, node_type, label, external_id, metadata, risk_score, is_choke_point,

@@ -170,6 +170,13 @@ async fn api_risk_node_flags_patch(
     if let Err(resp) = crate::rbac::require_operator(&auth) {
         return resp;
     }
+    if body.internet_exposed.is_none() && body.crown_jewel.is_none() && body.asset_value.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "no flags"})),
+        )
+            .into_response();
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };

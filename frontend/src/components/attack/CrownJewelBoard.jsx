@@ -12,7 +12,7 @@ const NS = 'pages.attackPaths'
  * Operator control to PATCH crown_jewel / internet_exposed on live risk-graph nodes.
  * Dijkstra seeds = internet_exposed, sinks = crown_jewel — without this panel paths stay empty.
  */
-export default function CrownJewelBoard({ clientId, onChanged }) {
+export default function CrownJewelBoard({ clientId, onChanged, onInventory }) {
   const { t } = useTranslation()
   const { toast } = useToast()
   const [nodes, setNodes] = useState([])
@@ -29,6 +29,7 @@ export default function CrownJewelBoard({ clientId, onChanged }) {
     setError('')
     try {
       const data = await apiFetch(`/api/clients/${encodeURIComponent(clientId)}/risk-graph`)
+      if (data?.unavailable) throw new Error(t(`${NS}.jewel_load_failed`))
       const list = Array.isArray(data?.nodes) ? data.nodes : []
       setNodes(list)
     } catch (e) {
@@ -48,6 +49,14 @@ export default function CrownJewelBoard({ clientId, onChanged }) {
     [nodes],
   )
 
+  useEffect(() => {
+    onInventory?.({
+      total: nodes.length,
+      jewels: jewelCount,
+      loading,
+    })
+  }, [nodes.length, jewelCount, loading, onInventory])
+
   const toggle = useCallback(
     async (nodeId, field, next) => {
       setBusyId(nodeId)
@@ -57,7 +66,7 @@ export default function CrownJewelBoard({ clientId, onChanged }) {
           method: 'PATCH',
           body: { [field]: Boolean(next) },
         })
-        if (data?.ok === false) throw new Error(data.detail || 'patch failed')
+        if (data?.ok === false) throw new Error(data.detail || t(`${NS}.jewel_save_failed`))
         setNodes((prev) =>
           prev.map((n) => (Number(n.id) === Number(nodeId) ? { ...n, [field]: Boolean(next) } : n)),
         )
@@ -104,7 +113,7 @@ export default function CrownJewelBoard({ clientId, onChanged }) {
         <p className="text-[11px] font-mono text-[var(--text-muted)]">{t(`${NS}.jewel_loading`)}</p>
       )}
 
-      {!loading && nodes.length === 0 && (
+      {!loading && !error && nodes.length === 0 && (
         <EmptyState
           icon="network"
           title={t(`${NS}.jewel_empty_title`)}
@@ -125,11 +134,15 @@ export default function CrownJewelBoard({ clientId, onChanged }) {
                   {n.label || n.graph_key || `#${n.id}`}
                 </p>
                 <p className="text-[10px] font-mono text-[var(--text-muted)]">
-                  {n.node_type || 'node'} · risk {Number(n.risk_score) || 0}
+                  {t(`${NS}.jewel_node_meta`, {
+                    type: n.node_type || t(`${NS}.jewel_node_fallback`),
+                    score: Number(n.risk_score) || 0,
+                  })}
                 </p>
               </div>
               <Switch
                 size="sm"
+                data-testid={`jewel-toggle-exposed-${n.id}`}
                 checked={Boolean(n.internet_exposed)}
                 disabled={busyId != null && Number(busyId) === Number(n.id)}
                 onChange={(e) => toggle(n.id, 'internet_exposed', e.target.checked)}
@@ -137,6 +150,7 @@ export default function CrownJewelBoard({ clientId, onChanged }) {
               />
               <Switch
                 size="sm"
+                data-testid={`jewel-toggle-crown-${n.id}`}
                 checked={Boolean(n.crown_jewel)}
                 disabled={busyId != null && Number(busyId) === Number(n.id)}
                 onChange={(e) => toggle(n.id, 'crown_jewel', e.target.checked)}

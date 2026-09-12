@@ -336,10 +336,12 @@ export function FirstMoverDeltaPanel({
           ],
           [
             t('pages.attackSurfaceManagement.nerve_oast'),
-            oast.configured
+            oast.configured && oast.last_callback_at
               ? t('pages.attackSurfaceManagement.nerve_live')
-              : t('pages.attackSurfaceManagement.nerve_off'),
-            oast.configured ? '#34d399' : '#f97316',
+              : oast.configured
+                ? t('pages.attackSurfaceManagement.nerve_oast_idle')
+                : t('pages.attackSurfaceManagement.nerve_off'),
+            oast.configured && oast.last_callback_at ? '#34d399' : '#f97316',
           ],
           [
             t('pages.attackSurfaceManagement.nerve_nvd'),
@@ -767,7 +769,7 @@ export default function AttackSurfaceManagement() {
           <motion.div
             key={toast.id}
             initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl backdrop-blur-md ${
+            className={`fixed top-16 end-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl backdrop-blur-md ${
               toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'
             }`}
           >

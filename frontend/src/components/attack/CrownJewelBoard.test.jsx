@@ -78,6 +78,22 @@ describe('CrownJewelBoard', () => {
     await waitFor(() => expect(onChanged).toHaveBeenCalled())
   })
 
+  it('reports live jewel inventory without inventing jewels', async () => {
+    const onInventory = vi.fn()
+    apiFetch.mockResolvedValue({
+      nodes: [
+        { id: 1, label: 'edge', crown_jewel: false, internet_exposed: true },
+      ],
+    })
+    render(<CrownJewelBoard clientId={7} onInventory={onInventory} />)
+    expect(await screen.findByText('edge')).toBeTruthy()
+    await waitFor(() =>
+      expect(onInventory).toHaveBeenCalledWith(
+        expect.objectContaining({ total: 1, jewels: 0 }),
+      ),
+    )
+  })
+
   it('shows an empty graph without inventing jewels', async () => {
     apiFetch.mockResolvedValue({ nodes: [], edges: [] })
     render(<CrownJewelBoard clientId={7} />)

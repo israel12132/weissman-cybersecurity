@@ -122,6 +122,7 @@ export default function AttackPaths() {
   const [blockSmb, setBlockSmb] = useState(false)
   const [whatIfBusy, setWhatIfBusy] = useState(false)
   const [whatIfSnapshot, setWhatIfSnapshot] = useState(null)
+  const [jewelInventory, setJewelInventory] = useState(null)
 
   const load = useCallback(
     async (recompute = false) => {
@@ -172,6 +173,7 @@ export default function AttackPaths() {
   useEffect(() => {
     setSnapshot(null)
     setWhatIfSnapshot(null)
+    setJewelInventory(null)
     if (selectedClientId != null) load(false)
   }, [selectedClientId, load])
 
@@ -293,10 +295,14 @@ export default function AttackPaths() {
         <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
 
         {selectedClientId != null && (
-          <CrownJewelBoard clientId={selectedClientId} onChanged={() => load(true)} />
+          <CrownJewelBoard clientId={selectedClientId} onInventory={setJewelInventory} />
         )}
 
-        {selectedClientId != null && !loading && hasSnapshot && Number(display?.jewel_count || 0) === 0 && (
+        {selectedClientId != null
+          && jewelInventory
+          && !jewelInventory.loading
+          && jewelInventory.total > 0
+          && jewelInventory.jewels === 0 && (
           <div
             role="status"
             data-testid="no-jewels-banner"
@@ -341,7 +347,7 @@ export default function AttackPaths() {
           <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <ExecutiveWidget label={t(`${NS}.kpi_entries`)} value={display?.entry_count ?? 0} hint={t(`${NS}.kpi_entries_hint`)} accent="#22d3ee" />
-              <ExecutiveWidget label={t(`${NS}.kpi_jewels`)} value={display?.jewel_count ?? 0} hint={t(`${NS}.kpi_jewels_hint`)} accent="#a78bfa" />
+              <ExecutiveWidget label={t(`${NS}.kpi_jewels`)} value={jewelInventory?.jewels ?? display?.jewel_count ?? 0} hint={t(`${NS}.kpi_jewels_hint`)} accent="#a78bfa" />
               <ExecutiveWidget label={t(`${NS}.kpi_paths`)} value={paths.length} hint={t(`${NS}.kpi_paths_hint`)} accent="#f97316" />
               <ExecutiveWidget label={t(`${NS}.kpi_top_score`)} value={topScore} hint={t(`${NS}.kpi_top_score_hint`)} accent={riskColor(topRisk)} />
             </div>

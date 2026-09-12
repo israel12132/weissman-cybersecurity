@@ -5,6 +5,15 @@ import EmptyState from '../ui/EmptyState'
 
 const NS = 'pages.attackSurfaceManagement'
 
+function nvdBadge(t, hit) {
+  if (hit.claimed_first_seen) return t(`${NS}.first_seen_badge_pre`)
+  if (hit.nvd_status === 'listed') return t(`${NS}.first_seen_status_listed`)
+  if (hit.nvd_status === 'skipped_no_key') return t(`${NS}.first_seen_status_skipped`)
+  if (hit.nvd_status === 'unpublished') return t(`${NS}.first_seen_status_unpublished`)
+  if (hit.nvd_status === 'absent_cve') return t(`${NS}.first_seen_badge_pre`)
+  return t(`${NS}.first_seen_status_unknown`)
+}
+
 /**
  * Live SBOM × OSV hits. `listed` is shown but never titled first-seen.
  */
@@ -23,7 +32,10 @@ export default function FirstSeenHitsPanel({ clientId }) {
     setError('')
     try {
       const data = await apiFetch(`/api/clients/${encodeURIComponent(clientId)}/first-seen-hits`)
-      setPayload(data && typeof data === 'object' ? data : null)
+      if (!data || data.ok === false || data.unavailable) {
+        throw new Error(data?.detail || t(`${NS}.first_seen_load_failed`))
+      }
+      setPayload(data)
     } catch (e) {
       setError(e.message || t(`${NS}.first_seen_load_failed`))
       setPayload(null)
@@ -71,7 +83,7 @@ export default function FirstSeenHitsPanel({ clientId }) {
         <p className="text-[11px] font-mono text-[var(--text-muted)]">{t(`${NS}.first_seen_loading`)}</p>
       )}
 
-      {!loading && (
+      {!loading && !error && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
           <div className="rounded-lg border border-white/[0.07] bg-black/30 px-3 py-2">
             <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
@@ -100,7 +112,7 @@ export default function FirstSeenHitsPanel({ clientId }) {
         </div>
       )}
 
-      {!loading && hits.length === 0 && (
+      {!loading && !error && hits.length === 0 && (
         <EmptyState
           icon="shield"
           title={t(`${NS}.first_seen_empty_title`)}
@@ -108,7 +120,7 @@ export default function FirstSeenHitsPanel({ clientId }) {
         />
       )}
 
-      {!loading && hits.length > 0 && (
+      {!loading && !error && hits.length > 0 && (
         <ul className="space-y-2 max-h-64 overflow-y-auto">
           {hits.map((h) => (
             <li
@@ -129,15 +141,7 @@ export default function FirstSeenHitsPanel({ clientId }) {
                         : 'border-cyan-500/40 text-cyan-200 bg-cyan-500/10'
                   }`}
                 >
-                  {h.claimed_first_seen
-                    ? t(`${NS}.first_seen_badge_pre`)
-                    : h.nvd_status === 'listed'
-                      ? t(`${NS}.first_seen_status_listed`)
-                      : h.nvd_status === 'skipped_no_key'
-                        ? t(`${NS}.first_seen_status_skipped`)
-                        : h.nvd_status === 'unpublished'
-                          ? t(`${NS}.first_seen_status_unpublished`)
-                          : (h.nvd_status || t(`${NS}.first_seen_status_unknown`))}
+                  {nvdBadge(t, h)}
                 </span>
               </div>
               <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1">

@@ -196,7 +196,10 @@ async fn persist_hit(
         r#"INSERT INTO osv_first_seen_hits
             (tenant_id, client_id, package_name, version_spec, ecosystem, osv_id, cve_id, nvd_status, evidence_json)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-           ON CONFLICT (tenant_id, client_id, osv_id, package_name, version_spec) DO NOTHING"#,
+           ON CONFLICT (tenant_id, client_id, osv_id, package_name, version_spec)
+           DO UPDATE SET nvd_status = EXCLUDED.nvd_status,
+                         evidence_json = EXCLUDED.evidence_json,
+                         cve_id = EXCLUDED.cve_id"#,
     )
     .bind(tenant_id)
     .bind(client_id)
@@ -433,6 +436,7 @@ pub async fn run_first_seen_osv_nvd_result(target: &str, ctx: &EngineRunContext)
 
     let mut findings = Vec::new();
     let mut first_seen_n = 0usize;
+    let mut listed_n = 0usize;
     for pkg in &sbom {
         let ver = pkg.version_spec.trim();
         if ver.is_empty() || ver == "*" || ver == "latest" {
@@ -448,10 +452,11 @@ pub async fn run_first_seen_osv_nvd_result(target: &str, ctx: &EngineRunContext)
                 continue;
             }
             let nvd = classify_nvd(hit.cve.as_deref()).await;
+            let _ = persist_hit(pool.as_ref(), tid, cid, pkg, &hit, &nvd).await;
             if nvd == NvdStatus::Listed {
+                listed_n += 1;
                 continue;
             }
-            let _ = persist_hit(pool.as_ref(), tid, cid, pkg, &hit, &nvd).await;
             let (sev, title) = if nvd.is_first_seen() {
                 first_seen_n += 1;
                 (
@@ -512,11 +517,23 @@ pub async fn run_first_seen_osv_nvd_result(target: &str, ctx: &EngineRunContext)
     }
 
     if findings.is_empty() {
-        return empty_ok(ENGINE_ID, target);
+        if listed_n > 0 {
+            findings.push(live_finding(
+                "SBOM × OSV hits already listed in NVD",
+                "info",
+                &format!(
+                    "{listed_n} OSV match(es) on this SBOM are already in NIST NVD — not claimed as first-seen."
+                ),
+                target,
+                json!({ "nvd_status": "listed", "listed_count": listed_n }),
+            ));
+        } else {
+            return empty_ok(ENGINE_ID, target);
+        }
     }
     EngineResult::ok(
         findings,
-        format!("{ENGINE_ID}: first_seen={first_seen_n} (OSV live, NVD honest)"),
+        format!("{ENGINE_ID}: first_seen={first_seen_n} listed={listed_n} (OSV live, NVD honest)"),
     )
 }
 

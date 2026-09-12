@@ -57,4 +57,19 @@ describe('FirstSeenHitsPanel', () => {
     expect(listedRow.textContent).not.toMatch(/first_seen_badge_pre/)
     expect(apiFetch).toHaveBeenCalledWith('/api/clients/3/first-seen-hits')
   })
+
+  it('does not paint an empty-success inventory when the store is down', async () => {
+    apiFetch.mockResolvedValue({
+      ok: false,
+      unavailable: true,
+      hits: [],
+      first_seen_count: 0,
+      listed_count: 0,
+      detail: 'service unavailable',
+    })
+    render(<FirstSeenHitsPanel clientId={3} />)
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(screen.queryByText('pages.attackSurfaceManagement.first_seen_empty_title')).toBeNull()
+    expect(screen.queryByText('pages.attackSurfaceManagement.first_seen_pre_nvd')).toBeNull()
+  })
 })

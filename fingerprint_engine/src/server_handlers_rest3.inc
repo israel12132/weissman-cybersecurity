@@ -181,7 +181,8 @@ async fn api_client_first_seen_hits(
                 "hits": [],
                 "first_seen_count": 0,
                 "listed_count": 0,
-                "detail": e,
+                "unavailable": true,
+                "detail": scrub_internal_error(&e),
             })),
         )
             .into_response(),
