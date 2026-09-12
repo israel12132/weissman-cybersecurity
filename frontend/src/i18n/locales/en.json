@@ -1396,8 +1396,8 @@
     "attackPaths": {
       "title": "Attack Paths",
       "subtitle": "Choke-points and ranked internet → crown-jewel paths",
-      "badge": "BFS",
-      "evidence_notice": "Paths and choke-points come from GET /api/attack-paths/:client_id — a BFS over the live risk graph weighted by CVSS+EPSS+KEV. Recompute regenerates from the current graph; not a static diagram.",
+      "badge": "Dijkstra",
+      "evidence_notice": "Paths and choke-points come from GET /api/attack-paths/:client_id — Dijkstra over the live risk graph weighted by CVSS+EPSS+KEV. Recompute regenerates from the current graph; mark crown jewels with PATCH /api/risk-graph/nodes/:id/flags.",
       "select_client": "Select client",
       "recompute": "Recompute",
       "recompute_done": "Attack-path snapshot recomputed",
@@ -1430,7 +1430,17 @@
       "no_choke_title": "No choke-points",
       "no_choke_body": "No shared choke-points across the computed paths.",
       "no_paths_title": "No attack paths",
-      "no_paths_body": "No internet → crown-jewel path was found in the current graph."
+      "no_paths_body": "No internet → crown-jewel path was found in the current graph.",
+      "no_jewels_banner": "Zero crown jewels — Dijkstra has no sinks. Recompute auto-tags identity/cloud/OT/valued assets (then top-5 fallback). Or mark jewels below.",
+      "no_jewels_recompute": "Auto-tag jewels and recompute",
+      "jewel_panel_title": "Crown jewels & internet entry",
+      "jewel_panel_hint": "Toggle live flags on risk-graph nodes. PATCH /api/risk-graph/nodes/:id/flags invalidates the Dijkstra cache.",
+      "mark_jewel": "Mark jewel",
+      "jewel_on": "Jewel",
+      "mark_entry": "Mark entry",
+      "entry_on": "Exposed",
+      "flag_saved": "Node flags saved — paths recomputed",
+      "flag_failed": "Failed to update node flags."
     },
     "attackCoverage": {
       "title": "ATT&CK Coverage Matrix",
@@ -1446,7 +1456,16 @@
       "search_placeholder": "Filter by technique, ID, or engine…",
       "showing": "{{techniques}} techniques across {{tactics}} tactics",
       "no_match_title": "No matches",
-      "no_match_body": "No technique or engine matches your filter."
+      "no_match_body": "No technique or engine matches your filter.",
+      "readiness_title": "Attack / breach readiness",
+      "readiness_hint": "Honest operational gates — not a MITRE checklist. Live from GET /api/attack-coverage.",
+      "roe": "Default RoE",
+      "apt_scenarios": "APT emulation scenarios",
+      "cron_engines": "Scheduled red-team engines",
+      "agent_required": "Agent-required engines",
+      "gaps_heading": "Where offense is still not ready",
+      "jewel_auto": "Crown jewels auto-tagged",
+      "weaponized": "Weaponized mode is dual-control"
     },
     "securityPosture": {
       "title": "Platform Security Posture",
@@ -3691,7 +3710,13 @@
       "severity_critical": "Critical",
       "severity_high": "High",
       "severity_medium": "Medium",
-      "severity_low": "Low"
+      "severity_low": "Low",
+      "mark_jewel": "Mark crown jewel",
+      "jewel_on": "Crown jewel",
+      "mark_entry": "Mark internet-exposed",
+      "entry_on": "Internet-exposed",
+      "flag_saved": "Node flags saved",
+      "flag_failed": "Failed to update node flags."
     },
     "baselineAndDrift": {
       "title": "Baseline & Drift Detection",

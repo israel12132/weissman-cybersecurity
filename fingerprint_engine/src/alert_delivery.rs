@@ -442,6 +442,53 @@ pub async fn notify_soar_dispatch_failure(
     }
 }
 
+/// Fire tenant alert channels when a new multi-stage correlation incident is persisted.
+pub async fn notify_correlation_incident(pool: &PgPool, tenant_id: i64, payload: &Value) {
+    let config = load_delivery_config(pool, tenant_id).await;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(15))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap_or_else(|_| Client::new());
+
+    let mut delivered = false;
+    if let Some(url) = config.alert_webhook_url.as_deref() {
+        delivered |= post_json_signed(&client, url, payload).await;
+    }
+    if let Some(url) = config.slack_webhook_url.as_deref() {
+        delivered |= post_json(&client, url, payload).await;
+    }
+    if let Some(key) = resolve_pagerduty_key(&config) {
+        let summary = payload
+            .get("text")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Weissman correlation incident");
+        let severity = payload
+            .get("severity")
+            .and_then(|v| v.as_str())
+            .unwrap_or("error");
+        let pd = json!({
+            "routing_key": key,
+            "event_action": "trigger",
+            "payload": {
+                "summary": summary,
+                "severity": if severity.eq_ignore_ascii_case("critical") { "critical" } else { "error" },
+                "source": "weissman-correlation",
+                "custom_details": payload,
+            }
+        });
+        delivered |= post_json(&client, "https://events.pagerduty.com/v2/enqueue", &pd).await;
+    }
+
+    if !delivered {
+        tracing::debug!(
+            target: "alert_delivery",
+            tenant_id,
+            "correlation incident alert not delivered (no channels configured)"
+        );
+    }
+}
+
 /// Fire tenant alert channels when an auto-heal run reaches a terminal outcome. Best-effort:
 /// posts to webhook/Slack always, and pages on-call only for failures / `broke_app`.
 #[allow(clippy::too_many_arguments)]

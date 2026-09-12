@@ -167,9 +167,21 @@ async fn api_risk_node_flags_patch(
     Path(node_id): Path<i64>,
     Json(body): Json<RiskNodeFlagsBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
+    let client_id: Option<i64> = sqlx::query_scalar(
+        "SELECT client_id FROM risk_graph_nodes WHERE id = $1 AND tenant_id = $2",
+    )
+    .bind(node_id)
+    .bind(auth.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
     let res = sqlx::query(
         r#"UPDATE risk_graph_nodes
               SET internet_exposed = COALESCE($1, internet_exposed),
@@ -186,9 +198,22 @@ async fn api_risk_node_flags_patch(
     .await;
     let _ = tx.commit().await;
     match res {
-        Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"ok": true, "id": node_id}))).into_response(),
-        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "node not found"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": scrub_internal_error(&e)}))).into_response(),
+        Ok(r) if r.rows_affected() > 0 => {
+            if let Some(cid) = client_id {
+                crate::attack_path::mark_graph_dirty(auth.tenant_id, cid);
+            }
+            (StatusCode::OK, Json(json!({"ok": true, "id": node_id}))).into_response()
+        }
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "detail": "node not found"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
+        )
+            .into_response(),
     }
 }
 
@@ -726,7 +751,7 @@ async fn api_threat_analysis_for_client(
             &crate::correlation_rules::default_rules(),
             &events,
         );
-        persisted_incidents = crate::correlation_rules::persist_incidents(
+        persisted_incidents = crate::correlation_rules::persist_and_alert(
             &state.app_pool,
             auth.tenant_id,
             Some(client_id),

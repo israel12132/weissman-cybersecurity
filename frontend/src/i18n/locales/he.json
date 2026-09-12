@@ -1396,8 +1396,8 @@
     "attackPaths": {
       "title": "נתיבי תקיפה",
       "subtitle": "צווארי בקבוק ונתיבי אינטרנט → נכסי כתר מדורגים",
-      "badge": "BFS",
-      "evidence_notice": "הנתיבים וצווארי הבקבוק מגיעים מ-GET /api/attack-paths/:client_id — סריקת BFS על גרף הסיכון החי משוקללת ב-CVSS+EPSS+KEV. חישוב מחדש מפיק מהגרף הנוכחי; לא דיאגרמה סטטית.",
+      "badge": "דייקסטרה",
+      "evidence_notice": "הנתיבים וצווארי הבקבוק מגיעים מ-GET /api/attack-paths/:client_id — דייקסטרה על גרף הסיכון החי משוקללת ב-CVSS+EPSS+KEV. חישוב מחדש מפיק מהגרף הנוכחי; סמן נכסי כתר ב-PATCH /api/risk-graph/nodes/:id/flags.",
       "select_client": "בחר לקוח",
       "recompute": "חשב מחדש",
       "recompute_done": "תמונת נתיבי התקיפה חושבה מחדש",
@@ -1430,7 +1430,17 @@
       "no_choke_title": "אין צווארי בקבוק",
       "no_choke_body": "אין צווארי בקבוק משותפים בין הנתיבים שחושבו.",
       "no_paths_title": "אין נתיבי תקיפה",
-      "no_paths_body": "לא נמצא נתיב אינטרנט → נכס כתר בגרף הנוכחי."
+      "no_paths_body": "לא נמצא נתיב אינטרנט → נכס כתר בגרף הנוכחי.",
+      "no_jewels_banner": "אין נכסי כתר — לדייקסטרה אין יעדים. חישוב מחדש מתייג זהות/ענן/OT/נכסים בעלי ערך (ואז 5 המובילים). או סמן נכסי כתר למטה.",
+      "no_jewels_recompute": "תייג נכסי כתר וחשב מחדש",
+      "jewel_panel_title": "נכסי כתר וכניסת אינטרנט",
+      "jewel_panel_hint": "החלף דגלים חיים על צמתי גרף הסיכון. PATCH /api/risk-graph/nodes/:id/flags מבטל את מטמון דייקסטרה.",
+      "mark_jewel": "סמן כתר",
+      "jewel_on": "כתר",
+      "mark_entry": "סמן כניסה",
+      "entry_on": "חשוף",
+      "flag_saved": "דגלי הצומת נשמרו — הנתיבים חושבו מחדש",
+      "flag_failed": "עדכון דגלי הצומת נכשל."
     },
     "attackCoverage": {
       "title": "מטריצת כיסוי ATT&CK",
@@ -1446,7 +1456,16 @@
       "search_placeholder": "סינון לפי טכניקה, מזהה או מנוע…",
       "showing": "{{techniques}} טכניקות ב-{{tactics}} טקטיקות",
       "no_match_title": "אין התאמות",
-      "no_match_body": "אף טכניקה או מנוע לא תואמים לסינון."
+      "no_match_body": "אף טכניקה או מנוע לא תואמים לסינון.",
+      "readiness_title": "מוכנות פריצה / תקיפה",
+      "readiness_hint": "שערי תפעול כנים — לא צ׳קליסט MITRE. חי מ-GET /api/attack-coverage.",
+      "roe": "RoE ברירת מחדל",
+      "apt_scenarios": "תרחישי אמולציית APT",
+      "cron_engines": "מנועי רד-טים מתוזמנים",
+      "agent_required": "מנועים שדורשים סוכן",
+      "gaps_heading": "איפה התקיפה עדיין לא מוכנה",
+      "jewel_auto": "נכסי כתר מתויגים אוטומטית",
+      "weaponized": "מצב מחומש דורש בקרה כפולה"
     },
     "securityPosture": {
       "title": "מצב אבטחת הפלטפורמה",
@@ -3691,7 +3710,13 @@
       "severity_critical": "קריטי",
       "severity_high": "גבוה",
       "severity_medium": "בינוני",
-      "severity_low": "נמוך"
+      "severity_low": "נמוך",
+      "mark_jewel": "סמן נכס כתר",
+      "jewel_on": "נכס כתר",
+      "mark_entry": "סמן חשוף לאינטרנט",
+      "entry_on": "חשוף לאינטרנט",
+      "flag_saved": "דגלי הצומת נשמרו",
+      "flag_failed": "עדכון דגלי הצומת נכשל."
     },
     "baselineAndDrift": {
       "title": "Baseline וזיהוי Drift",

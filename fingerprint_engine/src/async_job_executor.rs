@@ -250,7 +250,7 @@ async fn persist_findings_best_effort(
     if findings.is_empty() || client_id.is_none() {
         return 0;
     }
-    crate::findings_persist::persist_engine_findings(
+    let persisted = crate::findings_persist::persist_engine_findings(
         app_pool, tenant_id, client_id, engine, target, findings,
     )
     .await
@@ -263,7 +263,34 @@ async fn persist_findings_best_effort(
             "failed to persist findings"
         );
         0
-    })
+    });
+    if persisted > 0 {
+        if let Some(cid) = client_id {
+            let pool = app_pool.clone();
+            crate::findings_persist::spawn_bounded_db_task(async move {
+                match crate::correlation_rules::correlate_recent_and_alert(&pool, tenant_id, cid)
+                    .await
+                {
+                    Ok(n) if n > 0 => tracing::info!(
+                        target: "correlation",
+                        tenant_id,
+                        client_id = cid,
+                        new_incidents = n,
+                        "correlation incidents persisted after scan"
+                    ),
+                    Err(e) => tracing::warn!(
+                        target: "correlation",
+                        tenant_id,
+                        client_id = cid,
+                        error = %e,
+                        "correlation after persist failed"
+                    ),
+                    _ => {}
+                }
+            });
+        }
+    }
+    persisted
 }
 
 async fn persist_findings_grouped_by_client_field(
@@ -946,7 +973,8 @@ async fn execute_job_unscoped(
                 .get("failed")
                 .and_then(Value::as_u64)
                 .unwrap_or(0) as usize;
-            let remaining_engines = remaining_scan_all_engines(&ordered_engines, &completed_engines);
+            let remaining_engines =
+                remaining_scan_all_engines(&ordered_engines, &completed_engines);
             if !completed_engines.is_empty() {
                 let _ = telemetry.send(format!(
                     r#"{{"job_id":"{}","message":"Resuming scan-all-engines: {} already done, {} remaining","status":"running"}}"#,

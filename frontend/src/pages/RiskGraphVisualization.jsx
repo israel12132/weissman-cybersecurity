@@ -12,6 +12,7 @@ import { api } from '../utils/apiFetch';
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 import Button from '../components/ui/Button'
 import { downloadCsv } from '../lib/exportFindingsCsv'
+import { useToast } from '../components/ui/Toaster'
 
 const NS = 'pages.riskGraphVisualization';
 
@@ -32,7 +33,7 @@ function severityLabel(severity, t) {
 }
 
 function exportNodesCsv(nodes) {
-  const header = ['id', 'name', 'severity', 'risk_score', 'node_type', 'is_choke_point'];
+  const header = ['id', 'name', 'severity', 'risk_score', 'node_type', 'is_choke_point', 'crown_jewel', 'internet_exposed'];
   const rows = nodes.map((n) => [
     n.id ?? '',
     n.name || n.label || '',
@@ -40,8 +41,35 @@ function exportNodesCsv(nodes) {
     n.risk_score ?? '',
     n.node_type ?? '',
     n.is_choke_point ? 'yes' : 'no',
+    n.crown_jewel ? 'yes' : 'no',
+    n.internet_exposed ? 'yes' : 'no',
   ]);
   downloadCsv(rows, header, 'risk-graph-nodes');
+}
+
+export function severityFromRisk(score) {
+  const n = Number(score) || 0
+  if (n >= 80) return 'critical'
+  if (n >= 60) return 'high'
+  if (n >= 30) return 'medium'
+  return 'low'
+}
+
+export function normalizeRiskGraph(payload) {
+  const nodes = (payload?.nodes || []).map((n) => ({
+    ...n,
+    name: n.name || n.label,
+    crown_jewel: Boolean(n.crown_jewel),
+    internet_exposed: Boolean(n.internet_exposed),
+    honey_node: Boolean(n.honey_node),
+    severity: n.severity || severityFromRisk(n.risk_score),
+  }))
+  const edges = (payload?.edges || []).map((e) => ({
+    ...e,
+    source: e.source ?? e.from_node_id,
+    target: e.target ?? e.to_node_id,
+  }))
+  return { nodes, edges }
 }
 
 /** Simple force-directed layout (no external deps). */
@@ -157,6 +185,7 @@ const FILTER_KEYS = {
  */
 export default function RiskGraphVisualization() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const { clientId, loading: clientLoading } = useFirstTenantClientId();
   const [graphData, setGraphData] = useState({ nodes: [], edges: [] });
   const [attackPaths, setAttackPaths] = useState(null);
@@ -236,7 +265,7 @@ export default function RiskGraphVisualization() {
         api.get(withClientId('/api/risk/graph', cid)),
         api.get(`/api/attack-paths/${cid}`).catch(() => null),
       ]);
-      setGraphData(graphRes);
+      setGraphData(normalizeRiskGraph(graphRes));
       setSelectedNode(null);
       if (pathsRes?.snapshot) {
         setAttackPaths(pathsRes.snapshot);
@@ -315,8 +344,8 @@ export default function RiskGraphVisualization() {
       ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI);
       ctx.fillStyle = color;
       ctx.fill();
-      ctx.strokeStyle = isSelected ? '#ffffff' : '#ffffff40';
-      ctx.lineWidth = isSelected ? 3 : 2;
+      ctx.strokeStyle = isSelected ? '#ffffff' : node.crown_jewel ? '#fbbf24' : node.internet_exposed ? '#22d3ee' : '#ffffff40';
+      ctx.lineWidth = isSelected || node.crown_jewel ? 3 : 2;
       ctx.stroke();
 
       ctx.fillStyle = '#fff';
@@ -382,6 +411,27 @@ export default function RiskGraphVisualization() {
   const meta = selectedNode?.metadata && typeof selectedNode.metadata === 'object'
     ? selectedNode.metadata
     : {};
+
+  const patchNodeFlags = async (flags) => {
+    if (!selectedNode?.id) return;
+    try {
+      const data = await api.patch(`/api/risk-graph/nodes/${selectedNode.id}/flags`, flags);
+      if (data?.ok === false) throw new Error(data.detail || 'flag update failed');
+      setSelectedNode((prev) => (prev ? { ...prev, ...flags } : prev));
+      setGraphData((prev) => ({
+        ...prev,
+        nodes: prev.nodes.map((n) => (String(n.id) === String(selectedNode.id) ? { ...n, ...flags } : n)),
+      }));
+      toast.success(t(`${NS}.flag_saved`));
+      if (clientId != null) {
+        const res = await api.get(`/api/attack-paths/${clientId}?recompute=1`);
+        setAttackPaths(res?.snapshot ?? null);
+      }
+    } catch (e) {
+      console.error('Flag patch failed:', e);
+      toast.error(t(`${NS}.flag_failed`));
+    }
+  };
 
   const reloadGraph = () => {
     if (clientId) fetchGraphData(clientId)
@@ -662,6 +712,34 @@ export default function RiskGraphVisualization() {
                     <span className="text-xs text-[var(--text-tertiary)] block">{t('pages.riskGraphVisualization.choke_point')}</span>
                     <span className="text-white">{selectedNode.is_choke_point ? t('common.yes') : t('common.no')}</span>
                   </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="unstyled"
+                    type="button"
+                    data-testid="risk-graph-toggle-entry"
+                    onClick={() => patchNodeFlags({ internet_exposed: !selectedNode.internet_exposed })}
+                    className={`text-[11px] font-mono px-2.5 py-1.5 rounded-lg border ${
+                      selectedNode.internet_exposed
+                        ? 'border-cyan-500/40 bg-cyan-500/15 text-cyan-100'
+                        : 'border-[var(--border-default)] text-[var(--text-muted)]'
+                    }`}
+                  >
+                    {selectedNode.internet_exposed ? t(`${NS}.entry_on`) : t(`${NS}.mark_entry`)}
+                  </Button>
+                  <Button
+                    variant="unstyled"
+                    type="button"
+                    data-testid="risk-graph-toggle-jewel"
+                    onClick={() => patchNodeFlags({ crown_jewel: !selectedNode.crown_jewel })}
+                    className={`text-[11px] font-mono px-2.5 py-1.5 rounded-lg border ${
+                      selectedNode.crown_jewel
+                        ? 'border-amber-500/40 bg-amber-500/15 text-amber-100'
+                        : 'border-[var(--border-default)] text-[var(--text-muted)]'
+                    }`}
+                  >
+                    {selectedNode.crown_jewel ? t(`${NS}.jewel_on`) : t(`${NS}.mark_jewel`)}
+                  </Button>
                 </div>
                 {(selectedNode.finding_id || meta.finding_id || meta.vulnerability_id) && (
                   <div className="rounded-lg bg-cyan-500/5 border border-cyan-500/20 p-3">
