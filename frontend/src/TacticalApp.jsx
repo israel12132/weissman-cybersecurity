@@ -84,6 +84,7 @@ import {
   IncidentResponseCenter,
   VulnIntelDashboard,
   FinancialRisk,
+  DominionBoardPack,
   AttackPaths,
   SupremeBrain,
   CemDagoMesh,
@@ -282,6 +283,7 @@ export default function TacticalApp() {
           <Route path="incident-response" element={<IncidentResponseCenter />} />
           <Route path="vuln-intel" element={<VulnIntelDashboard />} />
           <Route path="financial-risk" element={<FinancialRisk />} />
+          <Route path="dominion" element={<DominionBoardPack />} />
           <Route path="attack-paths" element={<AttackPaths />} />
           <Route path="supreme-brain" element={<SupremeBrain />} />
           <Route path="cem-dago" element={<CemDagoMesh />} />

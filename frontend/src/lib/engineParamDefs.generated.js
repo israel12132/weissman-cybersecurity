@@ -24957,5 +24957,53 @@ export const GENERATED_PARAM_DEFS = {
       "min": 1,
       "max": 5000
     }
+  ],
+  "dominion_fusion": [
+    {
+      "key": "depth",
+      "label": "Probe Depth",
+      "type": "select",
+      "defaultVal": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "github_token",
+      "label": "GitHub Token (optional)",
+      "type": "password",
+      "defaultVal": "",
+      "placeholder": "ghp_..."
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
   ]
 }

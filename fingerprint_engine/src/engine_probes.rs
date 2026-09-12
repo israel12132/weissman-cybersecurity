@@ -886,6 +886,13 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     if engine_id.contains("mfa") {
         return "Enforce MFA for all privileged accounts. Block fallback to SMS one-time codes; prefer phishing-resistant factors (WebAuthn / FIDO2).";
     }
+    if engine_id.contains("darkweb")
+        || engine_id.contains("dark_web")
+        || engine_id.contains("dominion")
+        || engine_id.contains("leak_hunter")
+    {
+        return "Rotate exposed credentials, force resets for affected identities, take down malware URLs, and re-query authorized public intel (URLHaus / ThreatFox / IntelX / CT). Do not pay extortion. Confirm with a second live scan.";
+    }
     if engine_id.contains("password") {
         return "Disable password reuse, enforce zxcvbn ≥ 3 strength, require MFA, monitor for credential-stuffing patterns and rotate any leaked secrets.";
     }

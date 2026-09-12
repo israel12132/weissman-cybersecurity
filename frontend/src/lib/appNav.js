@@ -10,6 +10,7 @@ import { canCreateClients, isClientUser, isPortalBlockedPath } from './clientSco
 
 /** Production-ready surfaces — always visible at the top of the sidebar. */
 export const PRIMARY_NAV = [
+  { to: '/dominion', labelKey: 'nav.dominion', icon: '♛' },
   { to: '/clients', labelKey: 'nav.clients', icon: '🏢' },
   { to: '/vuln-intel', labelKey: 'nav.vuln_intel', icon: '🔬' },
   { to: '/engines', labelKey: 'nav.engines', icon: '⬡' },
@@ -50,6 +51,7 @@ export const INTEL_MAP_QUICKNAV = [
   { to: '/incident-response', labelKey: 'components.intelMap.ir_center', color: 'rgba(239,68,68,0.85)' },
   { to: '/vuln-intel', labelKey: 'components.intelMap.vuln_intel', color: 'rgba(249,115,22,0.85)' },
   { to: '/dark-web', labelKey: 'components.intelMap.dark_web', color: 'rgba(167,139,250,0.85)' },
+  { to: '/dominion', labelKey: 'nav.dominion', color: 'rgba(251,191,36,0.9)' },
   { to: '/threat-hunting', labelKey: 'components.intelMap.threat_hunt', color: 'rgba(139,92,246,0.85)' },
   { to: '/council-queue', labelKey: 'components.intelMap.council', color: 'rgba(251,191,36,0.7)', separatorBefore: true },
   { to: '/soar-hitl', labelKey: 'components.intelMap.soar_hitl', color: 'rgba(251,113,133,0.85)' },
@@ -167,6 +169,7 @@ export const NAV_GROUPS = [
       { to: '/security-posture', labelKey: 'nav.security_posture', icon: '🛡' },
       { to: '/crypto-posture', labelKey: 'nav.crypto_posture', icon: '🔑' },
       { to: '/financial-risk', labelKey: 'nav.financial_risk', icon: '💵' },
+      { to: '/dominion', labelKey: 'nav.dominion', icon: '♛' },
       { to: '/attack-coverage', labelKey: 'nav.attack_coverage', icon: '▦' },
       { to: '/compliance', labelKey: 'nav.compliance', icon: '🛡' },
       { to: '/sbom', labelKey: 'nav.sbom', icon: '📦' },

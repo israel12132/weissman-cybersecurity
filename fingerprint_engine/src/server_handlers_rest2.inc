@@ -211,6 +211,184 @@ async fn api_client_report_pdf(
     res
 }
 
+async fn load_dominion_pack_for_client(
+    state: &Arc<AppState>,
+    tenant_id: i64,
+    client_id: i64,
+) -> Result<crate::dominion_pack::DominionPack, (StatusCode, String)> {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, tenant_id).await else {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, "DB unavailable".into()));
+    };
+    let client_name: String = match sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
+        .bind(client_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
+    {
+        Some(n) => n,
+        None => {
+            let _ = tx.rollback().await;
+            return Err((StatusCode::NOT_FOUND, "client not found".into()));
+        }
+    };
+    let rows = match sqlx::query(
+        r#"SELECT id, title, severity, source,
+                  COALESCE(description,'') AS description,
+                  COALESCE(poc_exploit,'') AS poc_exploit,
+                  COALESCE(status,'') AS status,
+                  discovered_at,
+                  COALESCE(proof,'') AS proof,
+                  COALESCE(kev_listed, false) AS kev_listed,
+                  COALESCE(epss_score, 0)::real AS epss_score
+             FROM vulnerabilities
+            WHERE client_id = $1
+            ORDER BY discovered_at DESC
+            LIMIT 2000"#,
+    )
+    .bind(client_id)
+    .fetch_all(&mut *tx)
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(error = %e, client_id, "dominion pack findings query failed");
+            let _ = tx.rollback().await;
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "findings query failed".into(),
+            ));
+        }
+    };
+    let proof = match get_crypto_proof_for_client_tx(&mut tx, tenant_id, client_id).await {
+        Ok(p) => p,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, e));
+        }
+    };
+    let _ = tx.commit().await;
+    let inputs: Vec<crate::dominion_pack::DominionFindingInput> = rows
+        .into_iter()
+        .map(|r| crate::dominion_pack::DominionFindingInput {
+            id: r.try_get::<i64, _>("id").unwrap_or(0),
+            title: r.try_get::<String, _>("title").unwrap_or_default(),
+            severity: r.try_get::<String, _>("severity").unwrap_or_default(),
+            source: r.try_get::<String, _>("source").unwrap_or_default(),
+            status: r.try_get::<String, _>("status").unwrap_or_default(),
+            discovered_at: r
+                .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
+                .map(|d| d.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+                .unwrap_or_default(),
+            description: r.try_get::<String, _>("description").unwrap_or_default(),
+            poc_exploit: r.try_get::<String, _>("poc_exploit").unwrap_or_default(),
+            proof: r.try_get::<String, _>("proof").unwrap_or_default(),
+            kev_listed: r.try_get::<bool, _>("kev_listed").unwrap_or(false),
+            epss_score: r.try_get::<f32, _>("epss_score").unwrap_or(0.0),
+        })
+        .collect();
+    let financial = crate::financial_risk::latest_snapshot(&state.app_pool, tenant_id, client_id)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|s| serde_json::to_value(s).ok());
+    let attack_paths = crate::attack_path::latest_snapshot(&state.app_pool, tenant_id, client_id)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|s| {
+            serde_json::to_value(json!({
+                "entry_count": s.entry_count,
+                "jewel_count": s.jewel_count,
+                "path_count": s.paths.len(),
+                "max_path_score": s.max_path_score,
+                "total_path_ale_usd": s.total_path_ale_usd,
+                "paths": s.paths.into_iter().take(40).collect::<Vec<_>>(),
+                "choke_points": s.choke_points.into_iter().take(25).collect::<Vec<_>>(),
+            }))
+            .ok()
+        });
+    let crypto = proof.map(|(audit_root_hash, qr_data_url, verification_url)| {
+        json!({
+            "audit_root_hash": audit_root_hash,
+            "qr_data_url": qr_data_url,
+            "verification_url": verification_url,
+        })
+    });
+    Ok(crate::dominion_pack::build_pack(
+        client_id,
+        &client_name,
+        inputs,
+        financial,
+        attack_paths,
+        crypto,
+    ))
+}
+
+async fn api_client_dominion_pack(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+) -> Response {
+    match load_dominion_pack_for_client(&state, auth.tenant_id, id).await {
+        Ok(pack) => match serde_json::to_value(&pack) {
+            Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "pack serialize failed", "detail": scrub_internal_error(&e.to_string())})),
+            )
+                .into_response(),
+        },
+        Err((code, msg)) => (code, Json(json!({"error": msg}))).into_response(),
+    }
+}
+
+async fn api_client_report_xlsx(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+) -> Response {
+    let pack = match load_dominion_pack_for_client(&state, auth.tenant_id, id).await {
+        Ok(p) => p,
+        Err((code, msg)) => {
+            return (code, Json(json!({"error": msg}))).into_response();
+        }
+    };
+    let bytes = match crate::dominion_pack::pack_to_xlsx(&pack) {
+        Ok(b) => b,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "XLSX generation failed", "detail": scrub_internal_error(&e)})),
+            )
+                .into_response();
+        }
+    };
+    let safe_name = pack
+        .client_name
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect::<String>();
+    let filename = format!("Weissman_Dominion_{}.xlsx", safe_name);
+    let mut res = Response::new(Body::from(bytes));
+    res.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ),
+    );
+    res.headers_mut().insert(
+        CONTENT_DISPOSITION,
+        HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename))
+            .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
+    );
+    res.headers_mut().insert(
+        axum::http::HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
+    res
+}
+
 async fn api_client_report_crypto_proof(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -889,6 +1067,37 @@ async fn api_openapi_spec() -> Response {
                     ],
                     "responses": {
                         "200": { "description": "PDF file", "content": { "application/pdf": {} } }
+                    }
+                }
+            },
+            "/api/clients/{id}/report/xlsx": {
+                "get": {
+                    "summary": "Download Dominion Board Pack as real Excel (.xlsx)",
+                    "description": "OOXML workbook (not CSV). Sheets: Executive, Findings, LeakIntel, AttackPaths, Financial, Remediation, Evidence. Built from the live tenant ledger.",
+                    "tags": ["Clients","Reports"],
+                    "parameters": [
+                        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "XLSX workbook",
+                            "content": {
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/clients/{id}/dominion-pack": {
+                "get": {
+                    "summary": "Live Dominion Board Pack JSON",
+                    "description": "Fuses findings, FAIR snapshot, attack-path snapshot, and crypto proof. Empty ledger grades NO LEDGER — never a clean bill of health.",
+                    "tags": ["Clients","Reports"],
+                    "parameters": [
+                        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+                    ],
+                    "responses": {
+                        "200": { "description": "Dominion pack JSON" }
                     }
                 }
             },

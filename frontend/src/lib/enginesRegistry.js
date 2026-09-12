@@ -1,5 +1,5 @@
 /**
- * Master registry of all 583 production attack engines.
+ * Master registry of all 584 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 583 production engines in registry order */
+/** All 584 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -2244,7 +2244,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark Web Intelligence',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Comprehensive dark web monitoring: Tor hidden service enumeration, paste site scraping, underground forum credential leak correlation, ransomware leak site monitoring, threat actor attribution',
+    description: 'Public leak and malware-URL OSINT: crt.sh CT, urlscan.io, URLHaus/ThreatFox/IntelX/OTX when API keys are set. Does not crawl Tor. Evidence-only HTTP responses.',
     requiresTarget: true,
   },
   {
@@ -4043,7 +4043,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark Web Brand Monitor',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Comprehensive dark web brand monitoring: Tor marketplace credential listing detection, ransomware leak site monitoring, corporate data paste detection, threat actor chatter monitoring, underground forum API key listing alerts, dark web search engine integration',
+    description: 'Brand leak monitoring via public OSINT: crt.sh, urlscan.io, URLHaus/ThreatFox/IntelX/OTX when keyed. No Tor hidden-service crawling. Evidence-only.',
     requiresTarget: true,
   },
   {
@@ -4766,6 +4766,14 @@ export const ENGINES_REGISTRY = [
     group: 'network',
     mitre: 'T1686',
     description: 'Software NGFW control plane. Errors if WEISSMAN_VNGFW_ADMIN dataplane is down — never pretends the firewall is live',
+    requiresTarget: true,
+  },
+  {
+    id: 'dominion_fusion',
+    label: 'Dominion Public-Intel Fusion',
+    group: 'recon',
+    mitre: 'T1597',
+    description: 'Board-pack fusion: live crt.sh + urlscan.io + URLHaus/ThreatFox/IntelX/OTX (when keyed) leak/malware-URL OSINT. No Tor. Feeds the Dominion PDF/XLSX pack.',
     requiresTarget: true,
   },
 ]

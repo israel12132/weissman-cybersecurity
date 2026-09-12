@@ -678,6 +678,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "ngfw_posture",
     "malware_detonation",
     "weissman_vngfw",
+    "dominion_fusion",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -1298,6 +1299,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "ngfw_posture",
     "malware_detonation",
     "weissman_vngfw",
+    "dominion_fusion",
 ];
 
 /// Map catalog-only registry IDs to a production engine implementation.
@@ -1604,10 +1606,10 @@ mod production_registry_tests {
         assert_eq!(
             PRODUCTION_ENGINE_IDS.len(),
             seen.len(),
-            "PRODUCTION_ENGINE_IDS must be the canonical live registry (workspace is 580; a 563 count is a stale binary, not extra IDs to delete)"
+            "PRODUCTION_ENGINE_IDS must be the canonical live registry (workspace is 584; a 563 count is a stale binary, not extra IDs to delete)"
         );
         assert!(
-            PRODUCTION_ENGINE_IDS.len() >= 580,
+            PRODUCTION_ENGINE_IDS.len() >= 584,
             "do not shrink the registry to match an old container image"
         );
     }

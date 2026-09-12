@@ -622,8 +622,8 @@
     },
     {
       "techniqueID": "T1597",
-      "score": 5,
-      "comment": "dark_web_monitor, darkweb_intel, deepweb_intel, threat_hunting_apt, threat_intel_fusion",
+      "score": 6,
+      "comment": "dark_web_monitor, darkweb_intel, deepweb_intel, dominion_fusion, threat_hunting_apt, threat_intel_fusion",
       "enabled": true
     },
     {

@@ -58,13 +58,28 @@ export default function ReportView() {
       title={t('components.reportView.title', { name: clientName })}
       maxWidth="max-w-4xl"
       actions={(
-        <a
-          href={apiUrl(`/api/clients/${clientId}/report/pdf`)}
-          download
-          className="text-sm text-cyan-400 hover:underline"
-        >
-          {t('components.reportView.download_pdf')}
-        </a>
+        <div className="flex items-center gap-3 flex-wrap">
+          <a
+            href={`/command-center/dominion`}
+            className="text-sm text-amber-300 hover:underline"
+          >
+            {t('components.reportView.open_dominion')}
+          </a>
+          <a
+            href={apiUrl(`/api/clients/${clientId}/report/pdf`)}
+            download
+            className="text-sm text-cyan-400 hover:underline"
+          >
+            {t('components.reportView.download_pdf')}
+          </a>
+          <a
+            href={apiUrl(`/api/clients/${clientId}/report/xlsx`)}
+            download
+            className="text-sm text-emerald-300 hover:underline"
+          >
+            {t('components.reportView.download_xlsx')}
+          </a>
+        </div>
       )}
     >
       {error && (
