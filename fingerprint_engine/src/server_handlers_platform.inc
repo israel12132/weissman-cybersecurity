@@ -2745,16 +2745,20 @@ fn default_sbom_export_format() -> String {
     "cyclonedx".to_string()
 }
 
-/// Resolve `client_id` from query param, else first tenant client (ORDER BY id).
+/// Resolve `client_id` from query param, else the portal binding, else first tenant client.
 async fn resolve_alias_client_id(
     pool: &PgPool,
-    tenant_id: i64,
+    auth: &AuthContext,
     client_id: Option<i64>,
 ) -> Result<i64, Response> {
-    if let Some(cid) = client_id.filter(|&id| id > 0) {
+    let requested = crate::client_isolation::bind_requested_client(
+        auth,
+        client_id.filter(|&id| id > 0),
+    )?;
+    if let Some(cid) = requested {
         return Ok(cid);
     }
-    let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(pool, auth.tenant_id).await else {
         return Err((
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({"ok": false, "detail": "Database unavailable"})),
@@ -2824,6 +2828,9 @@ fn reshape_risk_graph_for_ui(v: Value) -> Value {
                 "risk_score": risk_score,
                 "severity": risk_score_to_severity(risk_score),
                 "is_choke_point": n.get("is_choke_point").cloned().unwrap_or(Value::Bool(false)),
+                "internet_exposed": n.get("internet_exposed").cloned().unwrap_or(Value::Bool(false)),
+                "crown_jewel": n.get("crown_jewel").cloned().unwrap_or(Value::Bool(false)),
+                "asset_value": n.get("asset_value").cloned().unwrap_or(json!(1.0)),
                 "metadata": meta_parsed,
                 "description": meta_parsed.get("description").cloned()
                     .or_else(|| meta_parsed.get("summary").cloned())
@@ -2863,7 +2870,7 @@ async fn api_risk_graph_alias(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<ClientIdAliasQuery>,
 ) -> Response {
-    let client_id = match resolve_alias_client_id(&state.app_pool, auth.tenant_id, q.client_id).await {
+    let client_id = match resolve_alias_client_id(&state.app_pool, &auth, q.client_id).await {
         Ok(id) => id,
         Err(resp) => return resp,
     };
@@ -3050,7 +3057,7 @@ async fn api_sbom_components_alias(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<ClientIdAliasQuery>,
 ) -> Response {
-    let client_id = match resolve_alias_client_id(&state.app_pool, auth.tenant_id, q.client_id).await {
+    let client_id = match resolve_alias_client_id(&state.app_pool, &auth, q.client_id).await {
         Ok(id) => id,
         Err(resp) => return resp,
     };
@@ -3197,7 +3204,7 @@ async fn api_sbom_export_alias(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<SbomExportAliasQuery>,
 ) -> Response {
-    let client_id = match resolve_alias_client_id(&state.app_pool, auth.tenant_id, q.client_id).await {
+    let client_id = match resolve_alias_client_id(&state.app_pool, &auth, q.client_id).await {
         Ok(id) => id,
         Err(resp) => return resp,
     };
@@ -3517,7 +3524,7 @@ async fn api_containment_rules_alias(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<ClientIdAliasQuery>,
 ) -> Response {
-    let client_id = match resolve_alias_client_id(&state.app_pool, auth.tenant_id, q.client_id).await {
+    let client_id = match resolve_alias_client_id(&state.app_pool, &auth, q.client_id).await {
         Ok(id) => id,
         Err(resp) => return resp,
     };
@@ -3551,7 +3558,7 @@ async fn api_identity_contexts_alias(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<ClientIdAliasQuery>,
 ) -> Response {
-    let client_id = match resolve_alias_client_id(&state.app_pool, auth.tenant_id, q.client_id).await {
+    let client_id = match resolve_alias_client_id(&state.app_pool, &auth, q.client_id).await {
         Ok(id) => id,
         Err(resp) => return resp,
     };
@@ -3724,7 +3731,7 @@ async fn api_containment_rules_post_alias(
     Query(q): Query<ClientIdAliasQuery>,
     Json(body): Json<UiContainmentRuleBody>,
 ) -> Response {
-    let client_id = match resolve_alias_client_id(&state.app_pool, auth.tenant_id, q.client_id).await {
+    let client_id = match resolve_alias_client_id(&state.app_pool, &auth, q.client_id).await {
         Ok(id) => id,
         Err(resp) => return resp,
     };

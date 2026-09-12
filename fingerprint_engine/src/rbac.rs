@@ -181,6 +181,10 @@ pub async fn mutation_rbac_middleware(req: Request, next: Next) -> Response {
     if matches!(method, Method::GET | Method::HEAD | Method::OPTIONS) {
         return next.run(req).await;
     }
+    let path = req.uri().path();
+    if path.starts_with("/api/scim/v2/") || path == "/api/scim/v2" {
+        return next.run(req).await;
+    }
     let Some(auth) = req.extensions().get::<AuthContext>().cloned() else {
         // A mutating /api request reached the RBAC layer with no AuthContext. For the
         // declared public POSTs (signup/webhooks/refresh/…) this is expected; but any

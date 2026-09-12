@@ -184,6 +184,7 @@ pub mod live_truth;
 pub mod validator;
 
 pub mod admin_users;
+pub mod scim;
 pub mod advanced_ai_engines;
 // ── Next-Gen Arsenal (20 world-class additions) ──
 pub mod advanced_apt_engines;

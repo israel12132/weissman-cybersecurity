@@ -105,6 +105,7 @@ export const ROUTE_EVIDENCE = {
   '/agents': 'pages.agentManagement.evidence_notice',
   '/roe-approvals': 'pages.roeApprovals.evidence_notice',
   '/sso-config': 'pages.ssoDashboard.evidence_notice',
+  '/scim-provisioning': 'pages.scimProvisioning.evidence_notice',
   '/threat-emulation': 'pages.threatEmulation.evidence_notice',
   '/oast': 'pages.oastDashboard.evidence_notice',
   '/zero-day-radar': 'pages.zeroDayRadar.evidence_notice',

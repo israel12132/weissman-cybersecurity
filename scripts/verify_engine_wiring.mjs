@@ -95,6 +95,11 @@ const dispatchIds = extractDispatchIds(dispatchRs)
 const criticalInfraIds = extractCriticalInfraIds(criticalInfraRs)
 const aliasRunnerIds = extractAliasRunnerIds(aliasRs)
 const agentRequiredIds = new Set(extractArray('AGENT_REQUIRED_ENGINES', agentAgentRs))
+const frontendAgentRequired = new Set(
+  frontendModule.ENGINES_REGISTRY.filter((engine) => engine.requiresAgent).map((engine) => engine.id),
+)
+const frontendAgentMissing = [...agentRequiredIds].filter((id) => !frontendAgentRequired.has(id))
+const frontendAgentExtra = [...frontendAgentRequired].filter((id) => !agentRequiredIds.has(id))
 
 const missingFromProduction = frontendIds.filter((id) => !productionIds.has(id))
 
@@ -135,6 +140,9 @@ const summary = {
   aliasTotal: resolveMap.size,
   aliasRunnerArms: aliasRunnerIds.size,
   agentRequiredTotal: agentRequiredIds.size,
+  frontendAgentRequiredTotal: frontendAgentRequired.size,
+  frontendAgentMissingCount: frontendAgentMissing.length,
+  frontendAgentExtraCount: frontendAgentExtra.length,
   specialRunnableTotal: SPECIAL_RUNNABLE_IDS.size,
   missingFromProductionCount: missingFromProduction.length,
   unresolvedFrontendCount: unresolvedFrontend.length,
@@ -144,7 +152,7 @@ const summary = {
 
 console.log(
   JSON.stringify(
-    { summary, missingFromProduction, unresolvedFrontend, aliasWithoutRunner, productionWithoutExecutionPath },
+    { summary, missingFromProduction, unresolvedFrontend, aliasWithoutRunner, productionWithoutExecutionPath, frontendAgentMissing, frontendAgentExtra },
     null,
     2,
   ),
@@ -154,7 +162,9 @@ if (
   missingFromProduction.length > 0 ||
   unresolvedFrontend.length > 0 ||
   aliasWithoutRunner.length > 0 ||
-  productionWithoutExecutionPath.length > 0
+  productionWithoutExecutionPath.length > 0 ||
+  frontendAgentMissing.length > 0 ||
+  frontendAgentExtra.length > 0
 ) {
   process.exit(1)
 }

@@ -291,6 +291,11 @@ fn is_public_route(method: &Method, path: &str) -> bool {
     })
 }
 
+#[must_use]
+fn is_scim_v2_path(path: &str) -> bool {
+    path == "/api/scim/v2" || path.starts_with("/api/scim/v2/")
+}
+
 /// Auth middleware: allow only the declared public routes; all other /api/* require valid JWT.
 async fn auth_guard(
     State(state): State<Arc<AppState>>,
@@ -301,6 +306,11 @@ async fn auth_guard(
     let method = request.method();
     // Unauthenticated login + MFA verify (per-IP rate limit + per-email lockout in handlers).
     if crate::http::is_account_lockout_post(method, path) {
+        return next.run(request).await;
+    }
+    // SCIM 2.0 authenticates with a hashed bearer looked up by SECURITY DEFINER,
+    // not a user JWT. Handlers fail closed (401) when the token is missing/revoked.
+    if is_scim_v2_path(path) {
         return next.run(request).await;
     }
     // Everything else reachable without a JWT is declared once in PUBLIC_ROUTES.
@@ -2073,6 +2083,10 @@ mod public_route_guard_tests {
         // Correct public path but wrong method is not public.
         assert!(!is_public_route(&Method::GET, "/api/logout"));
         assert!(!is_public_route(&Method::POST, "/api/health"));
+        assert!(!is_public_route(&Method::GET, "/api/scim/v2/Users"));
+        assert!(super::is_scim_v2_path("/api/scim/v2/Users"));
+        assert!(super::is_scim_v2_path("/api/scim/v2/Groups/1"));
+        assert!(!super::is_scim_v2_path("/api/admin/scim/tokens"));
     }
 
     /// Axum runs the *last* `.layer()` first. Login rate-limit must be layered

@@ -111,6 +111,45 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/risk-graph/nodes/:node_id/flags",
             patch(api_risk_node_flags_patch),
         )
+        .route(
+            "/api/scim/v2/ServiceProviderConfig",
+            get(crate::scim::scim_service_provider_config),
+        )
+        .route(
+            "/api/scim/v2/Users",
+            get(crate::scim::scim_users_list).post(crate::scim::scim_users_create),
+        )
+        .route(
+            "/api/scim/v2/Users/:id",
+            get(crate::scim::scim_users_get)
+                .put(crate::scim::scim_users_put)
+                .patch(crate::scim::scim_users_patch)
+                .delete(crate::scim::scim_users_delete),
+        )
+        .route(
+            "/api/scim/v2/Groups",
+            get(crate::scim::scim_groups_list).post(crate::scim::scim_groups_create),
+        )
+        .route(
+            "/api/scim/v2/Groups/:id",
+            get(crate::scim::scim_groups_get)
+                .put(crate::scim::scim_groups_put)
+                .patch(crate::scim::scim_groups_patch)
+                .delete(crate::scim::scim_groups_delete),
+        )
+        .route(
+            "/api/admin/scim/tokens",
+            get(crate::scim::api_admin_scim_tokens_list)
+                .post(crate::scim::api_admin_scim_tokens_create),
+        )
+        .route(
+            "/api/admin/scim/tokens/:id",
+            delete(crate::scim::api_admin_scim_tokens_revoke),
+        )
+        .route(
+            "/api/admin/scim/audit",
+            get(crate::scim::api_admin_scim_audit),
+        )
         // SOAR playbooks (DSL-driven automation; on-event dispatch + run history).
         .route(
             "/api/playbooks",

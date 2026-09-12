@@ -21,7 +21,7 @@ import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../utils/apiFetch'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
-import { needsCrownJewelSeed, rankJewelCandidates, nodeFlagsPatch } from '../lib/attackPathSeeds'
+import CrownJewelFlagPanel from '../components/CrownJewelFlagPanel'
 
 const NS = 'pages.attackPaths'
 const columnHelper = createColumnHelper()
@@ -122,18 +122,6 @@ export default function AttackPaths() {
   const [blockSmb, setBlockSmb] = useState(false)
   const [whatIfBusy, setWhatIfBusy] = useState(false)
   const [whatIfSnapshot, setWhatIfSnapshot] = useState(null)
-  const [graphNodes, setGraphNodes] = useState([])
-  const [flagBusy, setFlagBusy] = useState(null)
-
-  const loadGraph = useCallback(async () => {
-    if (selectedClientId == null) return
-    try {
-      const data = await apiFetch(`/api/clients/${encodeURIComponent(selectedClientId)}/risk-graph`)
-      setGraphNodes(Array.isArray(data?.nodes) ? data.nodes : [])
-    } catch {
-      setGraphNodes([])
-    }
-  }, [selectedClientId])
 
   const load = useCallback(
     async (recompute = false) => {
@@ -148,6 +136,7 @@ export default function AttackPaths() {
         setSnapshot(data.snapshot || null)
         setHasSnapshot(Boolean(data.snapshot))
         if (recompute && data.snapshot) toast.success(t(`${NS}.recompute_done`))
+        setWhatIfSnapshot(null)
       } catch (e) {
         setError(e.message || t(`${NS}.load_failed`))
       } finally {
@@ -156,29 +145,6 @@ export default function AttackPaths() {
       }
     },
     [selectedClientId, t, toast],
-  )
-
-  const patchNodeFlags = useCallback(
-    async (nodeId, flags) => {
-      if (selectedClientId == null || nodeId == null) return
-      setFlagBusy(nodeId)
-      try {
-        const { url, opts } = nodeFlagsPatch(nodeId, flags)
-        const data = await apiFetch(url, opts)
-        if (data?.ok === false) throw new Error(data.detail || 'flag update failed')
-        setGraphNodes((prev) =>
-          prev.map((n) => (String(n.id) === String(nodeId) ? { ...n, ...flags } : n)),
-        )
-        toast.success(t(`${NS}.flag_saved`))
-        await load(true)
-        await loadGraph()
-      } catch (e) {
-        setError(e.message || t(`${NS}.flag_failed`))
-      } finally {
-        setFlagBusy(null)
-      }
-    },
-    [selectedClientId, t, toast, load, loadGraph],
   )
 
   const runWhatIf = useCallback(async () => {
@@ -207,12 +173,8 @@ export default function AttackPaths() {
   useEffect(() => {
     setSnapshot(null)
     setWhatIfSnapshot(null)
-    setGraphNodes([])
-    if (selectedClientId != null) {
-      load(false)
-      loadGraph()
-    }
-  }, [selectedClientId, load, loadGraph])
+    if (selectedClientId != null) load(false)
+  }, [selectedClientId, load])
 
   const display = whatIfSnapshot || snapshot
   const chokePoints = useMemo(
@@ -284,8 +246,6 @@ export default function AttackPaths() {
     [t],
   )
 
-  const jewelCandidates = useMemo(() => rankJewelCandidates(graphNodes), [graphNodes])
-
   const computedAt = display?.computed_at_unix
     ? new Date(display.computed_at_unix * 1000).toLocaleString()
     : null
@@ -345,65 +305,6 @@ export default function AttackPaths() {
           </div>
         )}
 
-        {selectedClientId != null && !loading && jewelCandidates.length > 0 && (
-          <section
-            data-testid="jewel-seed-panel"
-            className="rounded-xl border border-violet-500/25 bg-[var(--table-surface)] p-4"
-          >
-            <h2 className="text-[11px] font-mono uppercase tracking-widest text-violet-200 mb-1">
-              {t(`${NS}.jewel_panel_title`)}
-            </h2>
-            <p className="text-[11px] text-[var(--text-muted)] mb-3">{t(`${NS}.jewel_panel_hint`)}</p>
-            <ul className="space-y-2 max-h-80 overflow-y-auto">
-              {jewelCandidates.map((n) => (
-                <li
-                  key={n.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--border-subtle)] px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <div className="text-[12px] text-[var(--text-primary)] truncate" title={n.label || n.graph_key}>
-                      {n.label || n.graph_key || `#${n.id}`}
-                    </div>
-                    <div className="text-[10px] font-mono text-[var(--text-muted)]">
-                      {n.node_type || 'node'} · risk {Number(n.risk_score) || 0}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      variant="unstyled"
-                      type="button"
-                      data-testid={`toggle-entry-${n.id}`}
-                      disabled={flagBusy === n.id}
-                      onClick={() => patchNodeFlags(n.id, { internet_exposed: !n.internet_exposed })}
-                      className={`text-[10px] font-mono px-2 py-1 rounded border ${
-                        n.internet_exposed
-                          ? 'border-cyan-500/40 bg-cyan-500/15 text-cyan-100'
-                          : 'border-[var(--border-default)] text-[var(--text-muted)]'
-                      }`}
-                    >
-                      {n.internet_exposed ? t(`${NS}.entry_on`) : t(`${NS}.mark_entry`)}
-                    </Button>
-                    <Button
-                      variant="unstyled"
-                      type="button"
-                      data-testid={`toggle-jewel-${n.id}`}
-                      disabled={flagBusy === n.id}
-                      onClick={() => patchNodeFlags(n.id, { crown_jewel: !n.crown_jewel })}
-                      className={`text-[10px] font-mono px-2 py-1 rounded border ${
-                        n.crown_jewel
-                          ? 'border-violet-500/40 bg-violet-500/15 text-violet-100'
-                          : 'border-[var(--border-default)] text-[var(--text-muted)]'
-                      }`}
-                    >
-                      {n.crown_jewel ? t(`${NS}.jewel_on`) : t(`${NS}.mark_jewel`)}
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
         {selectedClientId != null && !loading && !error && !hasSnapshot && (
           <EmptyState
             icon="network"
@@ -423,6 +324,26 @@ export default function AttackPaths() {
           />
         )}
 
+        {selectedClientId != null && !loading && !error && (
+          <CrownJewelFlagPanel
+            clientId={selectedClientId}
+            onFlagsChanged={async () => {
+              setWhatIfSnapshot(null)
+              await load(true)
+            }}
+          />
+        )}
+
+        {selectedClientId != null && !loading && !error && hasSnapshot && snapshot && Number(display?.jewel_count || 0) === 0 && (
+          <div
+            role="status"
+            className="rounded-xl border border-amber-500/40 bg-amber-950/20 px-4 py-3 text-sm text-amber-100"
+            data-testid="zero-jewel-banner"
+          >
+            {t(`${NS}.zero_jewel_banner`)}
+          </div>
+        )}
+
         {selectedClientId != null && !loading && !error && hasSnapshot && snapshot && (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -431,24 +352,6 @@ export default function AttackPaths() {
               <ExecutiveWidget label={t(`${NS}.kpi_paths`)} value={paths.length} hint={t(`${NS}.kpi_paths_hint`)} accent="#f97316" />
               <ExecutiveWidget label={t(`${NS}.kpi_top_score`)} value={topScore} hint={t(`${NS}.kpi_top_score_hint`)} accent={riskColor(topRisk)} />
             </div>
-            {needsCrownJewelSeed(display) && (
-              <div
-                role="status"
-                data-testid="no-jewels-banner"
-                className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 flex flex-wrap items-center justify-between gap-3"
-              >
-                <p className="text-sm text-amber-100">{t(`${NS}.no_jewels_banner`)}</p>
-                <Button
-                  variant="unstyled"
-                  type="button"
-                  onClick={() => load(true)}
-                  disabled={recomputing}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 text-amber-100 text-xs font-medium hover:bg-amber-500/25 disabled:opacity-40"
-                >
-                  {t(`${NS}.no_jewels_recompute`)}
-                </Button>
-              </div>
-            )}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <ExecutiveWidget label={t(`${NS}.kpi_path_ale`)} value={`$${(Number(display?.total_path_ale_usd) || 0).toLocaleString()}`} hint={t(`${NS}.kpi_path_ale_hint`)} accent="#f59e0b" />
               <ExecutiveWidget label={t(`${NS}.kpi_top_risk`)} value={topRisk.toFixed(1)} hint={t(`${NS}.kpi_top_risk_hint`)} accent={riskColor(topRisk)} />

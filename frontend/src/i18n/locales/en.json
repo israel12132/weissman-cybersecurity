@@ -286,7 +286,8 @@
     "endpoint_edr": "Endpoint EDR",
     "win_room": "Competitive Win Room",
     "elite_hardening": "Elite Hardening",
-    "cem_dago": "CEM-DAGO"
+    "cem_dago": "CEM-DAGO",
+    "scim_provisioning": "SCIM Provisioning"
   },
   "ask_weissman": {
     "title": "Ask Weissman",
@@ -1493,8 +1494,8 @@
     "attackPaths": {
       "title": "Attack Paths",
       "subtitle": "Choke-points and ranked internet → crown-jewel paths",
-      "badge": "Dijkstra",
-      "evidence_notice": "Paths and choke-points come from GET /api/attack-paths/:client_id — Dijkstra over the live risk graph weighted by CVSS+EPSS+KEV. Recompute regenerates from the current graph; mark crown jewels with PATCH /api/risk-graph/nodes/:id/flags.",
+      "badge": "BFS",
+      "evidence_notice": "Paths and choke-points come from GET /api/attack-paths/:client_id — a BFS over the live risk graph weighted by CVSS+EPSS+KEV. Recompute regenerates from the current graph; not a static diagram.",
       "select_client": "Select client",
       "recompute": "Recompute",
       "recompute_done": "Attack-path snapshot recomputed",
@@ -1532,12 +1533,12 @@
       "no_jewels_recompute": "Auto-tag jewels and recompute",
       "score": "Score",
       "root_cause": "Root cause",
-      "path_ale": "Path ALE {{value}}",
-      "kpi_top_score": "Top path score",
-      "kpi_top_score_hint": "Highest Dijkstra path score in the live snapshot",
+      "path_ale": "ALE {{value}}",
+      "kpi_top_score": "Top Score",
+      "kpi_top_score_hint": "Highest path score (0–100)",
       "kpi_path_ale": "Path ALE",
-      "kpi_path_ale_hint": "Sum of FAIR ALE on ranked paths — live graph, not a model library",
-      "what_if_smb": "Block SMB/445",
+      "kpi_path_ale_hint": "Sum of FAIR ALE on ranked paths",
+      "what_if_smb": "What-if: block SMB 445",
       "what_if_run": "Run what-if",
       "what_if_clear": "Clear what-if",
       "what_if_done": "What-if snapshot computed",
@@ -1557,7 +1558,20 @@
       "mark_entry": "Mark entry",
       "entry_on": "Exposed",
       "flag_saved": "Node flags saved — paths recomputed",
-      "flag_failed": "Failed to update node flags."
+      "flag_failed": "Failed to update node flags.",
+      "flags_heading": "Mark crown jewels",
+      "flags_body": "Dijkstra needs live internet-exposed entries and crown-jewel targets. Toggle flags here — PATCH /api/risk-graph/nodes/:id/flags, then the graph cache is marked dirty and paths recompute.",
+      "flags_entries_chip": "{{count}} exposed",
+      "flags_jewels_chip": "{{count}} jewels",
+      "flags_search": "Search graph nodes…",
+      "flags_loading": "Loading risk-graph nodes…",
+      "flags_empty_title": "No graph nodes",
+      "flags_empty_body": "Build a risk graph for this client first, then mark entries and jewels.",
+      "flags_load_failed": "Failed to load risk-graph nodes.",
+      "flags_save_failed": "Failed to update node flags.",
+      "flag_exposed": "Exposed",
+      "flag_jewel": "Jewel",
+      "zero_jewel_banner": "Zero crown jewels on this client. Mark at least one jewel above, then recompute so attack paths can form."
     },
     "attackCoverage": {
       "title": "ATT&CK Coverage Matrix",
@@ -3868,7 +3882,9 @@
       "mark_entry": "Mark internet-exposed",
       "entry_on": "Internet-exposed",
       "flag_saved": "Node flags saved",
-      "flag_failed": "Failed to update node flags."
+      "flag_failed": "Failed to update node flags.",
+      "toggle_exposed": "Toggle internet-exposed",
+      "toggle_jewel": "Toggle crown jewel"
     },
     "baselineAndDrift": {
       "title": "Baseline & Drift Detection",
@@ -6295,6 +6311,29 @@
       "paths_title": "Ranked paths",
       "empty_paths_title": "No paths",
       "empty_paths_body": "No internet → crown-jewel path in the current graph."
+    },
+    "scimProvisioning": {
+      "title": "SCIM Provisioning",
+      "subtitle": "Okta / Entra / Google Workspace push users and groups into this tenant",
+      "badge": "SCIM 2.0",
+      "evidence_notice": "Tokens are minted via POST /api/admin/scim/tokens and stored as SHA-256 only. IdPs call /api/scim/v2/Users and /Groups with that bearer. Audit rows come from scim_audit_events — not demo data.",
+      "load_failed": "Failed to load SCIM tokens.",
+      "mint_failed": "Failed to mint a SCIM token.",
+      "revoke_failed": "Failed to revoke the SCIM token.",
+      "mint_heading": "Mint tenant bearer",
+      "mint_hint": "The plaintext token is shown once. Paste it into the IdP SCIM connector. Weissman never stores it.",
+      "token_name": "Token name",
+      "mint": "Mint token",
+      "shown_once": "Shown once — copy now",
+      "base_path": "IdP base URL: /api/scim/v2",
+      "loading": "Loading SCIM tokens…",
+      "empty_title": "No SCIM tokens",
+      "empty_body": "Mint a bearer to connect Okta, Entra ID, or Google Workspace.",
+      "revoked": "revoked",
+      "active": "active",
+      "revoke": "Revoke",
+      "audit_heading": "Provisioning audit",
+      "audit_empty": "No SCIM calls recorded yet."
     }
   },
   "components": {
