@@ -13,9 +13,9 @@
 //! - Timeouts and follow-on errors are logged, not faked as success.
 
 use crate::engine_dispatch::EngineRunContext;
-use crate::engine_probes::{empty_ok, finding};
+use crate::engine_probes::{empty_ok, extract_host, finding};
 use crate::engine_result::EngineResult;
-use crate::first_mover_surface_delta;
+use crate::first_mover_surface_delta::{self, in_authorized_scope};
 use futures::stream::{self, StreamExt};
 use serde_json::{json, Value};
 use std::time::Duration;
@@ -272,10 +272,14 @@ pub async fn run_exposure_schism_fusion_result(
         return delta;
     }
 
-    let mut added = added_fqdns(&delta.findings);
+    let apex = extract_host(target);
+    let mut added: Vec<String> = added_fqdns(&delta.findings)
+        .into_iter()
+        .filter(|h| in_authorized_scope(&apex, h))
+        .collect();
     for h in first_mover_surface_delta::extra_hosts_from_params(&ctx.job_params) {
         if let Some(h) = normalize_fqdn(&h) {
-            if !added.iter().any(|x| x == &h) {
+            if in_authorized_scope(&apex, &h) && !added.iter().any(|x| x == &h) {
                 added.push(h);
             }
         }
@@ -421,11 +425,24 @@ mod tests {
             "extra_hosts": ["shop.acme.test"]
         })) {
             if let Some(h) = normalize_fqdn(&h) {
-                if !added.iter().any(|x| x == &h) {
+                if in_authorized_scope("acme.test", &h) && !added.iter().any(|x| x == &h) {
                     added.push(h);
                 }
             }
         }
         assert_eq!(added, vec!["shop.acme.test"]);
+    }
+
+    #[test]
+    fn extra_hosts_cannot_escape_authorized_apex() {
+        let extras = first_mover_surface_delta::extra_hosts_from_params(&json!({
+            "extra_hosts": ["evil.example", "169.254.169.254", "shop.acme.test"]
+        }));
+        let scoped: Vec<String> = extras
+            .into_iter()
+            .filter_map(|h| normalize_fqdn(&h))
+            .filter(|h| in_authorized_scope("acme.test", h))
+            .collect();
+        assert_eq!(scoped, vec!["shop.acme.test"]);
     }
 }
