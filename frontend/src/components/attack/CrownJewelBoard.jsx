@@ -18,7 +18,6 @@ export default function CrownJewelBoard({ clientId, onChanged, onInventory }) {
   const [nodes, setNodes] = useState([])
   const [loading, setLoading] = useState(() => clientId != null)
   const [busyId, setBusyId] = useState(null)
-  const [busyId, setBusyId] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
