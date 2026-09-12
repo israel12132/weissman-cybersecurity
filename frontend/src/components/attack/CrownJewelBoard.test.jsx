@@ -103,7 +103,28 @@ describe('CrownJewelBoard', () => {
   it('does not paint empty-graph success when the risk-graph API is unavailable', async () => {
     apiFetch.mockResolvedValue({ ok: false, unavailable: true, nodes: [], edges: [] })
     render(<CrownJewelBoard clientId={7} />)
-    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(await screen.findByTestId('crown-jewel-unavailable')).toBeTruthy()
     expect(screen.queryByText('pages.attackPaths.jewel_empty_title')).toBeNull()
+    expect(screen.queryByText('pages.attackPaths.jewel_marked')).toBeNull()
+  })
+
+  it('does not report a zero jewel inventory when the graph API is unavailable', async () => {
+    const onInventory = vi.fn()
+    apiFetch.mockResolvedValue({ ok: false, unavailable: true, nodes: [], edges: [] })
+    render(<CrownJewelBoard clientId={7} onInventory={onInventory} />)
+    expect(await screen.findByTestId('crown-jewel-unavailable')).toBeTruthy()
+    await waitFor(() =>
+      expect(onInventory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          unavailable: true,
+          total: null,
+          jewels: null,
+          exposed: null,
+        }),
+      ),
+    )
+    expect(onInventory).not.toHaveBeenCalledWith(
+      expect.objectContaining({ total: 0, jewels: 0, exposed: 0, unavailable: false }),
+    )
   })
 })

@@ -16,7 +16,8 @@ export default function CrownJewelBoard({ clientId, onChanged, onInventory }) {
   const { t } = useTranslation()
   const { toast } = useToast()
   const [nodes, setNodes] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(() => clientId != null)
+  const [busyId, setBusyId] = useState(null)
   const [busyId, setBusyId] = useState(null)
   const [error, setError] = useState('')
 
@@ -24,10 +25,12 @@ export default function CrownJewelBoard({ clientId, onChanged, onInventory }) {
     let cancelled = false
     if (clientId == null) {
       setNodes([])
+      setError('')
       return undefined
     }
     setLoading(true)
     setError('')
+    setNodes([])
     apiFetch(`/api/clients/${encodeURIComponent(clientId)}/risk-graph`)
       .then((data) => {
         if (cancelled) return
@@ -37,13 +40,12 @@ export default function CrownJewelBoard({ clientId, onChanged, onInventory }) {
       .catch((e) => {
         if (cancelled) return
         setError(e.message || t(`${NS}.jewel_load_failed`))
-        setNodes([])
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [clientId, t])
+  }, [clientId])
 
   const jewelCount = useMemo(
     () => nodes.filter((n) => n.crown_jewel).length,
@@ -55,13 +57,15 @@ export default function CrownJewelBoard({ clientId, onChanged, onInventory }) {
   )
 
   useEffect(() => {
+    const unknown = Boolean(error) || loading
     onInventory?.({
-      total: nodes.length,
-      jewels: jewelCount,
-      exposed: exposedCount,
+      total: unknown ? null : nodes.length,
+      jewels: unknown ? null : jewelCount,
+      exposed: unknown ? null : exposedCount,
       loading,
+      unavailable: Boolean(error),
     })
-  }, [nodes.length, jewelCount, exposedCount, loading, onInventory])
+  }, [nodes.length, jewelCount, exposedCount, loading, error, onInventory])
 
   const toggle = useCallback(
     async (nodeId, field, next) => {
@@ -104,13 +108,19 @@ export default function CrownJewelBoard({ clientId, onChanged, onInventory }) {
             {t(`${NS}.jewel_panel_hint`)}
           </p>
         </div>
-        <span className="text-[10px] font-mono text-amber-200/80">
-          {t(`${NS}.jewel_marked`, { count: jewelCount, total: nodes.length })}
-        </span>
+        {!error && (
+          <span className="text-[10px] font-mono text-amber-200/80">
+            {t(`${NS}.jewel_marked`, { count: jewelCount, total: nodes.length })}
+          </span>
+        )}
       </div>
 
       {error && (
-        <div role="alert" className="text-[11px] font-mono text-rose-300">
+        <div
+          role="alert"
+          data-testid="crown-jewel-unavailable"
+          className="text-[11px] font-mono text-rose-300"
+        >
           {error}
         </div>
       )}
