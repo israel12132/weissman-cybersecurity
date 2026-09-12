@@ -296,13 +296,15 @@ async fn load_compliance_evidence(
     let Ok(mut tx) = crate::db::begin_tenant_tx(&state.app_pool, tenant_id).await else {
         return Err(());
     };
-    let tenant_name: String = sqlx::query_scalar("SELECT name FROM tenants WHERE id = $1")
+    let tenant_name: String = match sqlx::query_scalar("SELECT name FROM tenants WHERE id = $1")
         .bind(tenant_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "Tenant".to_string());
+    {
+        Ok(Some(n)) => n,
+        Ok(None) => "Tenant".to_string(),
+        Err(_) => return Err(()),
+    };
     let mappings = crate::compliance_engine::load_mappings(&mut *tx)
         .await
         .map_err(|_| ())?;
@@ -311,7 +313,7 @@ async fn load_compliance_evidence(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    .map_err(|_| ())?;
     let vuln_rows = sqlx::query(
         "SELECT COALESCE(source,'') AS source, COALESCE(title,'') AS title, COALESCE(severity,'') AS severity \
          FROM vulnerabilities \
@@ -320,8 +322,10 @@ async fn load_compliance_evidence(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    .map_err(|_| ())?;
+    if tx.commit().await.is_err() {
+        return Err(());
+    };
     let vulns: Vec<(String, String, String)> = vuln_rows
         .into_iter()
         .filter_map(|r| {
@@ -644,7 +648,9 @@ async fn api_compliance_frameworks_controls(
     else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({ "ok": false, "detail": "Database unavailable" })),
+            Json(crate::http_unavailable::compliance_posture_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
@@ -692,7 +698,9 @@ async fn api_compliance_frameworks_report(
     else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({ "ok": false, "detail": "Database unavailable" })),
+            Json(crate::http_unavailable::compliance_posture_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };

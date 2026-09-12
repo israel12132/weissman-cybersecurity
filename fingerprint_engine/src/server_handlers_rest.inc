@@ -401,12 +401,22 @@ async fn api_audit_export(
     };
 
     let export = crate::audit_log::export_for_tenant(&mut tx, auth.tenant_id, limit, offset).await;
-    let _ = tx.commit().await;
-
     let Ok((entries, total, chain_intact)) = export else {
+        let _ = tx.rollback().await;
         return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": "Audit export failed"})),
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::audit_logs_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::audit_logs_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
@@ -906,7 +916,7 @@ async fn api_clients_get(
         )
             .into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT id, name, domains, tech_stack, ip_ranges,
             COALESCE(contact_email,'') AS contact_email,
             COALESCE(auto_detect_tech_stack, true) AS auto_detect_tech_stack,
@@ -918,9 +928,27 @@ async fn api_clients_get(
     .bind(id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_lookup_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_lookup_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     let Some(r) = row else {
         return (

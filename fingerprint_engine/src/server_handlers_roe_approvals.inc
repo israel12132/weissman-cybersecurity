@@ -125,7 +125,7 @@ async fn api_roe_override_request_approve(
         return r;
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return roe_store_down();
     };
 
     let row = match sqlx::query(
@@ -140,15 +140,7 @@ async fn api_roe_override_request_approve(
     .await
     {
         Ok(v) => v,
-        Err(_) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(crate::http_unavailable::roe_override_requests_unavailable_json(
-                    "database unavailable",
-                )),
-            )
-                .into_response();
-        }
+        Err(_) => return roe_store_down(),
     };
     let Some(r) = row else {
         let _ = tx.rollback().await;
@@ -162,11 +154,17 @@ async fn api_roe_override_request_approve(
         return (StatusCode::CONFLICT, Json(json!({"ok": false, "detail": "request is not pending", "status": status}))).into_response();
     }
     if expires_at <= chrono::Utc::now() {
-        let _ = sqlx::query("UPDATE roe_override_requests SET status = 'expired', updated_at = now() WHERE id = $1")
+        if sqlx::query("UPDATE roe_override_requests SET status = 'expired', updated_at = now() WHERE id = $1")
             .bind(id)
             .execute(&mut *tx)
-            .await;
-        let _ = tx.commit().await;
+            .await
+            .is_err()
+        {
+            return roe_store_down();
+        }
+        if tx.commit().await.is_err() {
+            return roe_store_down();
+        }
         return (StatusCode::CONFLICT, Json(json!({"ok": false, "detail": "request expired"}))).into_response();
     }
 
@@ -174,8 +172,12 @@ async fn api_roe_override_request_approve(
     let desired: String = r
         .try_get("desired_roe_mode")
         .unwrap_or_else(|_| "weaponized_god_mode".to_string());
-    let first: Option<i64> = r.try_get("first_approved_by_user_id").ok().flatten();
-    let second: Option<i64> = r.try_get("second_approved_by_user_id").ok().flatten();
+    let first: Option<i64> = r
+        .try_get::<Option<i64>, _>("first_approved_by_user_id")
+        .unwrap_or(None);
+    let second: Option<i64> = r
+        .try_get::<Option<i64>, _>("second_approved_by_user_id")
+        .unwrap_or(None);
 
     if first == Some(auth.user_id) || second == Some(auth.user_id) {
         let _ = tx.rollback().await;
@@ -183,59 +185,79 @@ async fn api_roe_override_request_approve(
     }
 
     if first.is_none() {
-        let _ = sqlx::query(
+        if sqlx::query(
             "UPDATE roe_override_requests SET first_approved_by_user_id = $1, first_approved_at = now(), updated_at = now() WHERE id = $2",
         )
         .bind(auth.user_id)
         .bind(id)
         .execute(&mut *tx)
-        .await;
+        .await
+        .is_err()
+        {
+            return roe_store_down();
+        }
     } else if second.is_none() {
-        let _ = sqlx::query(
+        if sqlx::query(
             "UPDATE roe_override_requests SET second_approved_by_user_id = $1, second_approved_at = now(), updated_at = now() WHERE id = $2",
         )
         .bind(auth.user_id)
         .bind(id)
         .execute(&mut *tx)
-        .await;
+        .await
+        .is_err()
+        {
+            return roe_store_down();
+        }
     } else {
         let _ = tx.rollback().await;
         return (StatusCode::CONFLICT, Json(json!({"ok": false, "detail": "already fully approved"}))).into_response();
     }
 
     // Re-check approval completeness and auto-apply when we have two distinct approvals.
-    let fresh = sqlx::query(
+    let fresh = match sqlx::query(
         r#"SELECT first_approved_by_user_id, second_approved_by_user_id
            FROM roe_override_requests WHERE id = $1"#,
     )
     .bind(id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let (mut first_now, mut second_now) = (None::<i64>, None::<i64>);
-    if let Some(fr) = fresh {
-        first_now = fr.try_get("first_approved_by_user_id").ok().flatten();
-        second_now = fr.try_get("second_approved_by_user_id").ok().flatten();
-    }
+    {
+        Ok(v) => v,
+        Err(_) => return roe_store_down(),
+    };
+    let Some(fr) = fresh else {
+        return roe_store_down();
+    };
+    let first_now: Option<i64> = fr
+        .try_get::<Option<i64>, _>("first_approved_by_user_id")
+        .unwrap_or(None);
+    let second_now: Option<i64> = fr
+        .try_get::<Option<i64>, _>("second_approved_by_user_id")
+        .unwrap_or(None);
 
     let fully_approved = first_now.is_some() && second_now.is_some();
     if fully_approved {
-        let _ = sqlx::query("UPDATE roe_override_requests SET status = 'approved', updated_at = now() WHERE id = $1")
+        if sqlx::query("UPDATE roe_override_requests SET status = 'approved', updated_at = now() WHERE id = $1")
             .bind(id)
             .execute(&mut *tx)
-            .await;
+            .await
+            .is_err()
+        {
+            return roe_store_down();
+        }
 
         // Apply ROE change immediately (end-to-end).
-        let current: Option<String> = sqlx::query_scalar(
+        let current: Option<String> = match sqlx::query_scalar(
             "SELECT COALESCE(NULLIF(trim(client_configs), ''), $1) FROM clients WHERE id = $2",
         )
         .bind(DEFAULT_CLIENT_CONFIGS_JSON)
         .bind(client_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
+        {
+            Ok(v) => v,
+            Err(_) => return roe_store_down(),
+        };
         let current = current.unwrap_or_else(|| DEFAULT_CLIENT_CONFIGS_JSON.to_string());
         let mut config: serde_json::Map<String, Value> = match serde_json::from_str(&current) {
             Ok(Value::Object(m)) => m,
@@ -244,24 +266,32 @@ async fn api_roe_override_request_approve(
         config.insert("roe_mode".to_string(), Value::String(desired.clone()));
         let new_json = Value::Object(config);
         let new_str = serde_json::to_string(&new_json).unwrap_or_else(|_| current.clone());
-        let _ = sqlx::query("UPDATE clients SET client_configs = $1, updated_at = now() WHERE id = $2")
+        if sqlx::query("UPDATE clients SET client_configs = $1, updated_at = now() WHERE id = $2")
             .bind(&new_str)
             .bind(client_id)
             .execute(&mut *tx)
-            .await;
+            .await
+            .is_err()
+        {
+            return roe_store_down();
+        }
 
-        let _ = sqlx::query(
+        if sqlx::query(
             "UPDATE roe_override_requests SET status = 'applied', applied_by_user_id = $1, applied_at = now(), updated_at = now() WHERE id = $2",
         )
         .bind(auth.user_id)
         .bind(id)
         .execute(&mut *tx)
-        .await;
+        .await
+        .is_err()
+        {
+            return roe_store_down();
+        }
     }
 
     let ip = extract_client_ip(&headers, addr);
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-    let _ = audit_log::insert_audit(
+    if audit_log::insert_audit(
         &mut tx,
         auth.tenant_id,
         Some(auth.user_id),
@@ -270,8 +300,14 @@ async fn api_roe_override_request_approve(
         &format!("client_id={} request_id={} desired_roe_mode={} fully_approved={}", client_id, id, desired, fully_approved),
         &ip,
     )
-    .await;
-    let _ = tx.commit().await;
+    .await
+    .is_err()
+    {
+        return roe_store_down();
+    }
+    if tx.commit().await.is_err() {
+        return roe_store_down();
+    }
     (StatusCode::OK, Json(json!({"ok": true, "request_id": id, "fully_approved": fully_approved}))).into_response()
 }
 
@@ -293,14 +329,16 @@ async fn api_roe_override_request_reject(
         return r;
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return roe_store_down();
     };
-    let row = sqlx::query("SELECT client_id, status FROM roe_override_requests WHERE id = $1 FOR UPDATE")
+    let row = match sqlx::query("SELECT client_id, status FROM roe_override_requests WHERE id = $1 FOR UPDATE")
         .bind(id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
+    {
+        Ok(v) => v,
+        Err(_) => return roe_store_down(),
+    };
     let Some(r) = row else {
         let _ = tx.rollback().await;
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "request not found"}))).into_response();
@@ -312,18 +350,22 @@ async fn api_roe_override_request_reject(
     }
     let client_id: i64 = r.try_get("client_id").unwrap_or(0);
     let reason = body.reason.clone().unwrap_or_default();
-    let _ = sqlx::query(
+    if sqlx::query(
         "UPDATE roe_override_requests SET status = 'rejected', justification = COALESCE(NULLIF($1, ''), justification), rejected_by_user_id = $2, rejected_at = now(), updated_at = now() WHERE id = $3",
     )
     .bind(&reason)
     .bind(auth.user_id)
     .bind(id)
     .execute(&mut *tx)
-    .await;
+    .await
+    .is_err()
+    {
+        return roe_store_down();
+    }
 
     let ip = extract_client_ip(&headers, addr);
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-    let _ = audit_log::insert_audit(
+    if audit_log::insert_audit(
         &mut tx,
         auth.tenant_id,
         Some(auth.user_id),
@@ -332,8 +374,24 @@ async fn api_roe_override_request_reject(
         &format!("client_id={} request_id={} reason={}", client_id, id, reason),
         &ip,
     )
-    .await;
-    let _ = tx.commit().await;
+    .await
+    .is_err()
+    {
+        return roe_store_down();
+    }
+    if tx.commit().await.is_err() {
+        return roe_store_down();
+    }
     (StatusCode::OK, Json(json!({"ok": true, "request_id": id}))).into_response()
+}
+
+fn roe_store_down() -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(crate::http_unavailable::roe_override_requests_unavailable_json(
+            "database unavailable",
+        )),
+    )
+        .into_response()
 }
 

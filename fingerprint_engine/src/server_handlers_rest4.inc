@@ -2027,7 +2027,7 @@ async fn api_finding_brief(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT id, title, COALESCE(description,'') AS description, severity,
                   COALESCE(generated_patch,'') AS generated_patch,
                   COALESCE(poc_exploit,'') AS poc_exploit,
@@ -2038,9 +2038,27 @@ async fn api_finding_brief(
     .bind(&finding_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
 
     let Some(r) = row else {
         return (StatusCode::NOT_FOUND, Json(json!({"error": "finding not found"}))).into_response();
@@ -2050,7 +2068,7 @@ async fn api_finding_brief(
     let severity: String = r.try_get("severity").unwrap_or_default();
     let generated_patch: String = r.try_get("generated_patch").unwrap_or_default();
     let poc_exploit: String = r.try_get("poc_exploit").unwrap_or_default();
-    let cached: Option<Value> = r.try_get::<Option<Value>, _>("remediation_brief").ok().flatten();
+    let cached: Option<Value> = r.try_get::<Option<Value>, _>("remediation_brief").unwrap_or(None);
 
     // Serve the cache unless a refresh was requested.
     if !force {
@@ -2288,7 +2306,7 @@ async fn api_heal_revert(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT pr_number, COALESCE(branch_name,'') AS branch_name, COALESCE(channel,'github_pr') AS channel
            FROM heal_requests
            WHERE client_id = $1 AND finding_id = $2
@@ -2300,9 +2318,27 @@ async fn api_heal_revert(
     .bind(&body.finding_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_requests_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_requests_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
 
     let Some(r) = row else {
         return (StatusCode::NOT_FOUND, Json(json!({"error": "no open heal PR/MR to revert"}))).into_response();

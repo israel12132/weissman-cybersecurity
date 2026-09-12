@@ -52,11 +52,13 @@ async fn api_heal_verify_steps(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"error": "DB", "steps": []})),
+            Json(crate::http_unavailable::heal_verify_steps_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT step_label, detail, step_ts FROM heal_verification_steps
            WHERE tenant_id = $1 AND job_id = $2 ORDER BY step_index ASC"#,
     )
@@ -64,8 +66,27 @@ async fn api_heal_verify_steps(
     .bind(job_uuid)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_verify_steps_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_verify_steps_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
     let steps: Vec<crate::verification_sandbox::VerificationStep> = rows
         .into_iter()
         .filter_map(|r| {
@@ -612,9 +633,15 @@ async fn api_heal_trends(
         .unwrap_or(30)
         .clamp(1, 365);
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_trends_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT to_char(created_at, 'YYYY-MM-DD') AS day,
                   COALESCE(verdict,'') AS verdict,
                   COALESCE(attempts,1)::bigint AS attempts
@@ -628,8 +655,27 @@ async fn api_heal_trends(
     .bind(days)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_trends_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_trends_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
 
     let parsed: Vec<(String, String, i64)> = rows
         .iter()
@@ -664,9 +710,15 @@ async fn api_heal_priorities(
         .unwrap_or(50)
         .clamp(1, 500);
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_priorities_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT finding_id, COALESCE(title,'') AS title, COALESCE(severity,'') AS severity,
                   COALESCE(description,'') AS description, COALESCE(source,'') AS source,
                   (COALESCE(poc_exploit,'') <> '') AS has_poc,
@@ -683,8 +735,27 @@ async fn api_heal_priorities(
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_priorities_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_priorities_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
 
     let mut scored: Vec<Value> = rows
         .iter()

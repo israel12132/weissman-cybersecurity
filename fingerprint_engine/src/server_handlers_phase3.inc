@@ -584,13 +584,25 @@ async fn api_compliance_posture(
     Query(q): Query<CompliancePostureQuery>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"frameworks": []}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::compliance_posture_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     let mappings = match crate::compliance_engine::load_mappings(&mut *tx).await {
         Ok(m) => m,
         Err(_) => {
             let _ = tx.rollback().await;
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"frameworks": []}))).into_response();
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::compliance_posture_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
         }
     };
     let cloud_rows = if let Some(cid) = q.client_id {
@@ -598,12 +610,22 @@ async fn api_compliance_posture(
             .bind(cid)
             .fetch_all(&mut *tx)
             .await
-            .unwrap_or_default()
     } else {
         sqlx::query("SELECT rule_id FROM cloud_scan_findings")
             .fetch_all(&mut *tx)
             .await
-            .unwrap_or_default()
+    };
+    let cloud_rows = match cloud_rows {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::compliance_posture_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
     };
     let cloud_rules: Vec<String> = cloud_rows
         .into_iter()
@@ -615,12 +637,22 @@ async fn api_compliance_posture(
             .bind(cid)
             .fetch_all(&mut *tx)
             .await
-            .unwrap_or_default()
     } else {
         sqlx::query("SELECT COALESCE(source,'') AS source, COALESCE(title,'') AS title, COALESCE(severity,'') AS severity FROM vulnerabilities")
             .fetch_all(&mut *tx)
             .await
-            .unwrap_or_default()
+    };
+    let vuln_rows = match vuln_rows {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::compliance_posture_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
     };
     let vulns: Vec<(String, String, String)> = vuln_rows
         .into_iter()
@@ -632,7 +664,15 @@ async fn api_compliance_posture(
             ))
         })
         .collect();
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::compliance_posture_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     let frameworks = crate::compliance_engine::compute_posture(&mappings, &cloud_rules, &vulns);
     let body = crate::compliance_engine::CompliancePostureResponse {
@@ -648,23 +688,57 @@ async fn api_reports_executive(
     Query(q): Query<ExecutiveReportQuery>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::report_pdf_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let tenant_name: String = sqlx::query_scalar("SELECT name FROM tenants WHERE id = $1")
+    let tenant_name: String = match sqlx::query_scalar("SELECT name FROM tenants WHERE id = $1")
         .bind(auth.tenant_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "Tenant".to_string());
+    {
+        Ok(Some(n)) => n,
+        Ok(None) => "Tenant".to_string(),
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
 
     let client_name: Option<String> = if let Some(cid) = q.client_id {
-        sqlx::query_scalar("SELECT name FROM clients WHERE id = $1")
+        match sqlx::query_scalar("SELECT name FROM clients WHERE id = $1")
             .bind(cid)
             .fetch_optional(&mut *tx)
             .await
-            .ok()
-            .flatten()
+        {
+            Ok(Some(n)) => Some(n),
+            Ok(None) => {
+                let _ = tx.rollback().await;
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(json!({"ok": false, "detail": "Client not found"})),
+                )
+                    .into_response();
+            }
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::client_lookup_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+        }
     } else {
         None
     };
@@ -688,52 +762,101 @@ async fn api_reports_executive(
             .fetch_one(&mut *tx)
             .await
     };
-    let (mut critical, mut high, mut medium, mut low) = (0u32, 0u32, 0u32, 0u32);
-    if let Ok(r) = sev_row {
-        critical = r.try_get::<i64, _>("critical").unwrap_or(0).max(0) as u32;
-        high = r.try_get::<i64, _>("high").unwrap_or(0).max(0) as u32;
-        medium = r.try_get::<i64, _>("medium").unwrap_or(0).max(0) as u32;
-        low = r.try_get::<i64, _>("low").unwrap_or(0).max(0) as u32;
-    }
+    let r = match sev_row {
+        Ok(r) => r,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let critical = r.try_get::<i64, _>("critical").unwrap_or(0).max(0) as u32;
+    let high = r.try_get::<i64, _>("high").unwrap_or(0).max(0) as u32;
+    let medium = r.try_get::<i64, _>("medium").unwrap_or(0).max(0) as u32;
+    let low = r.try_get::<i64, _>("low").unwrap_or(0).max(0) as u32;
 
-    let cloud_n: i64 = if let Some(cid) = q.client_id {
+    let cloud_n: i64 = match if let Some(cid) = q.client_id {
         sqlx::query_scalar("SELECT COUNT(*)::bigint FROM cloud_scan_findings WHERE client_id = $1")
             .bind(cid)
             .fetch_one(&mut *tx)
             .await
-            .unwrap_or(0)
     } else {
         sqlx::query_scalar("SELECT COUNT(*)::bigint FROM cloud_scan_findings")
             .fetch_one(&mut *tx)
             .await
-            .unwrap_or(0)
+    } {
+        Ok(n) => n,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
     };
 
     let mappings = match crate::compliance_engine::load_mappings(&mut *tx).await {
         Ok(m) => m,
         Err(_) => {
             let _ = tx.rollback().await;
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "compliance catalog"}))).into_response();
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
         }
     };
-    let cloud_rules: Vec<String> = if let Some(cid) = q.client_id {
+    let cloud_rules: Vec<String> = match if let Some(cid) = q.client_id {
         sqlx::query_scalar::<_, String>("SELECT rule_id FROM cloud_scan_findings WHERE client_id = $1")
             .bind(cid)
             .fetch_all(&mut *tx)
             .await
-            .unwrap_or_default()
     } else {
         sqlx::query_scalar::<_, String>("SELECT rule_id FROM cloud_scan_findings")
             .fetch_all(&mut *tx)
             .await
-            .unwrap_or_default()
+    } {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::report_pdf_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
     };
-    let vuln_tuples: Vec<(String, String, String)> = if let Some(cid) = q.client_id {
-        let rows = sqlx::query("SELECT COALESCE(source,'') AS source, COALESCE(title,'') AS title, COALESCE(severity,'') AS severity FROM vulnerabilities WHERE client_id = $1")
-            .bind(cid)
-            .fetch_all(&mut *tx)
-            .await
-            .unwrap_or_default();
+    let vuln_tuples: Vec<(String, String, String)> = {
+        let rows = match if let Some(cid) = q.client_id {
+            sqlx::query("SELECT COALESCE(source,'') AS source, COALESCE(title,'') AS title, COALESCE(severity,'') AS severity FROM vulnerabilities WHERE client_id = $1")
+                .bind(cid)
+                .fetch_all(&mut *tx)
+                .await
+        } else {
+            sqlx::query("SELECT COALESCE(source,'') AS source, COALESCE(title,'') AS title, COALESCE(severity,'') AS severity FROM vulnerabilities")
+                .fetch_all(&mut *tx)
+                .await
+        } {
+            Ok(v) => v,
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::report_pdf_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+        };
         rows.into_iter()
             .filter_map(|r| {
                 Some((
@@ -743,22 +866,16 @@ async fn api_reports_executive(
                 ))
             })
             .collect()
-    } else {
-        let rows = sqlx::query("SELECT COALESCE(source,'') AS source, COALESCE(title,'') AS title, COALESCE(severity,'') AS severity FROM vulnerabilities")
-            .fetch_all(&mut *tx)
-            .await
-            .unwrap_or_default();
-        rows.into_iter()
-            .filter_map(|r| {
-                Some((
-                    r.try_get::<String, _>("source").ok()?,
-                    r.try_get::<String, _>("title").ok()?,
-                    r.try_get::<String, _>("severity").ok()?,
-                ))
-            })
-            .collect()
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::report_pdf_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
 
     let posture = crate::compliance_engine::compute_posture(&mappings, &cloud_rules, &vuln_tuples);
     let soc2 = posture.iter().find(|p| p.framework == "SOC2").map(|p| p.compliance_percent).unwrap_or(100);

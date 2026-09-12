@@ -89,17 +89,42 @@ async fn api_swarm_run(
         return r;
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::swarm_run_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let ok: bool = sqlx::query_scalar(
+    let ok: bool = match sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1 AND tenant_id = $2)",
     )
     .bind(client_id)
     .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(false);
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::swarm_run_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::swarm_run_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
     if !ok {
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "client not found"}))).into_response();
     }
@@ -500,7 +525,7 @@ async fn api_containment_rules_patch(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
-    let existing = sqlx::query(
+    let existing = match sqlx::query(
         r#"SELECT name, enabled, pre_approved, aws_region, forensic_source_cidr, forensic_ports_csv,
                   k8s_api_server, k8s_token_env_var, k8s_namespace, k8s_pod_label_key, k8s_pod_label_value, allow_dns_egress
            FROM containment_rules WHERE id = $1 AND tenant_id = $2"#,
@@ -508,8 +533,20 @@ async fn api_containment_rules_patch(
     .bind(rule_id)
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
-    .await;
-    let Ok(Some(row)) = existing else {
+    .await
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::containment_rules_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let Some(row) = existing else {
         let _ = tx.rollback().await;
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response();
     };
@@ -588,9 +625,11 @@ async fn api_containment_rules_patch(
             (StatusCode::OK, Json(json!({"ok": true, "id": rule_id}))).into_response()
         }
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "error": e.to_string()})),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::containment_rules_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }
@@ -626,9 +665,11 @@ async fn api_containment_rules_delete(
             (StatusCode::OK, Json(json!({"ok": true, "id": rule_id}))).into_response()
         }
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "error": e.to_string()})),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::containment_rules_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }
@@ -688,9 +729,15 @@ async fn api_containment_execute(
             .into_response();
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::containment_rules_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT id, enabled, pre_approved, aws_region, forensic_source_cidr, forensic_ports_csv, allow_dns_egress,
                   k8s_api_server, k8s_token_env_var, k8s_namespace, k8s_pod_label_key, k8s_pod_label_value
            FROM containment_rules WHERE id = $1 AND client_id = $2 AND tenant_id = $3"#,
@@ -700,8 +747,18 @@ async fn api_containment_execute(
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::containment_rules_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     let Some(r) = row else {
         let _ = tx.rollback().await;
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response();
@@ -725,21 +782,45 @@ async fn api_containment_execute(
     let k8s_ns: String = r.try_get("k8s_namespace").unwrap_or_default();
     let k8s_lk: String = r.try_get("k8s_pod_label_key").unwrap_or_default();
     let k8s_lv: String = r.try_get("k8s_pod_label_value").unwrap_or_default();
-    let role_row = sqlx::query(
+    let role_row = match sqlx::query(
         "SELECT COALESCE(trim(aws_cross_account_role_arn),'') AS arn, COALESCE(trim(aws_external_id),'') AS ext FROM clients WHERE id = $1",
     )
     .bind(client_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_lookup_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::containment_rules_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
     let (role_arn, ext) = match role_row {
         Some(x) => (
             x.try_get::<String, _>("arn").unwrap_or_default(),
             x.try_get::<String, _>("ext").unwrap_or_default(),
         ),
-        None => (String::new(), String::new()),
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"ok": false, "detail": "client not found"})),
+            )
+                .into_response();
+        }
     };
 
     let mode = body.mode.to_lowercase();

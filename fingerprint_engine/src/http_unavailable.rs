@@ -592,6 +592,81 @@ pub fn poe_job_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// `GET /api/clients/:id` when the client row cannot be read — never 404 a SQL error
+pub fn client_lookup_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "detail": detail,
+        "code": "db_unavailable",
+    })
+}
+
+/// Client PDF / executive board pack when findings cannot be read — never a 200 empty/zero pack
+pub fn report_pdf_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "findings": [],
+        "critical": Value::Null,
+        "high": Value::Null,
+        "medium": Value::Null,
+        "low": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/compliance/posture` when mapped findings cannot be read
+pub fn compliance_posture_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "frameworks": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/heal-verify/:job_id/steps` when verification steps cannot be read
+pub fn heal_verify_steps_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "steps": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/heal-trends` when heal_requests cannot be aggregated
+pub fn heal_trends_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "trend": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/heal-priorities` when open findings cannot be ranked
+pub fn heal_priorities_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "priorities": [],
+        "count": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `POST /api/clients/:id/swarm/run` when client EXISTS cannot be confirmed
+pub fn swarm_run_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "detail": detail,
+        "code": "db_unavailable",
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1172,5 +1247,251 @@ mod tests {
         assert_eq!(v["unavailable"], true);
         assert_eq!(v["job"], Value::Null);
         assert_ne!(v["detail"], json!("job not found"));
+    }
+
+    fn named_fn_src<'a>(src: &'a str, sig: &str) -> &'a str {
+        let start = src.find(sig).unwrap_or_else(|| panic!("missing {sig}"));
+        let rest = &src[start..];
+        let after = &rest[sig.len()..];
+        let end_async = after.find("\nasync fn ").unwrap_or(usize::MAX);
+        let end_fn = after.find("\nfn ").unwrap_or(usize::MAX);
+        let rel = end_async.min(end_fn);
+        if rel == usize::MAX {
+            rest
+        } else {
+            &rest[..sig.len() + rel]
+        }
+    }
+
+    #[test]
+    fn client_lookup_store_down_is_never_not_found() {
+        let v = client_lookup_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["code"], "db_unavailable");
+        assert_ne!(v["detail"], json!("Client not found"));
+    }
+
+    #[test]
+    fn report_pdf_store_down_is_never_zero_board_pack() {
+        let v = report_pdf_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["critical"].is_null());
+        assert!(v["high"].is_null());
+        assert_ne!(v["critical"], json!(0));
+        assert_ne!(v["high"], json!(0));
+    }
+
+    #[test]
+    fn compliance_posture_store_down_is_never_empty_frameworks_success() {
+        let v = compliance_posture_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["frameworks"].is_null());
+        assert_ne!(v["frameworks"], json!([]));
+    }
+
+    #[test]
+    fn heal_verify_steps_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&heal_verify_steps_unavailable_json("store down"), "steps");
+    }
+
+    #[test]
+    fn heal_trends_store_down_is_never_empty_trend_success() {
+        let v = heal_trends_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["trend"].is_null());
+        assert_ne!(v["trend"], json!([]));
+    }
+
+    #[test]
+    fn heal_priorities_store_down_is_never_ok_empty_queue() {
+        let v = heal_priorities_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["priorities"], json!([]));
+        assert!(v["count"].is_null());
+        assert_ne!(v["count"], json!(0));
+    }
+
+    #[test]
+    fn swarm_run_store_down_is_never_client_not_found() {
+        let v = swarm_run_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["code"], "db_unavailable");
+        assert_ne!(v["detail"], json!("client not found"));
+    }
+
+    #[test]
+    fn clients_get_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_rest.inc");
+        let fn_src = named_fn_src(src, "async fn api_clients_get");
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(fn_src.contains("Client not found"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn audit_export_is_store_down_503_not_500() {
+        let src = include_str!("server_handlers_rest.inc");
+        let fn_src = named_fn_src(src, "async fn api_audit_export");
+        assert!(fn_src.contains("audit_logs_unavailable_json"));
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(!fn_src.contains("INTERNAL_SERVER_ERROR"));
+        assert!(!fn_src.contains("let _ = tx.commit()"));
+    }
+
+    #[test]
+    fn roe_override_reject_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_roe_approvals.inc");
+        let fn_src = named_fn_src(src, "async fn api_roe_override_request_reject");
+        assert!(fn_src.contains("roe_override_requests_unavailable_json"));
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(fn_src.contains("request not found"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        assert!(!fn_src.contains("let _ = tx.commit()"));
+    }
+
+    #[test]
+    fn roe_override_approve_writes_are_commit_checked() {
+        let src = include_str!("server_handlers_roe_approvals.inc");
+        let fn_src = named_fn_src(src, "async fn api_roe_override_request_approve");
+        assert!(fn_src.contains("roe_override_requests_unavailable_json"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        assert!(!fn_src.contains("let _ = tx.commit()"));
+    }
+
+    #[test]
+    fn containment_rules_patch_select_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase5.inc");
+        let fn_src = named_fn_src(src, "async fn api_containment_rules_patch");
+        assert!(fn_src.contains("containment_rules_unavailable_json"));
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(!fn_src.contains("let Ok(Some(row)) = existing"));
+        assert!(!fn_src.contains("error\": e.to_string()"));
+    }
+
+    #[test]
+    fn containment_execute_lookups_are_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase5.inc");
+        let fn_src = named_fn_src(src, "async fn api_containment_execute");
+        assert!(fn_src.contains("containment_rules_unavailable_json"));
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn swarm_run_exists_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase5.inc");
+        let fn_src = named_fn_src(src, "async fn api_swarm_run");
+        assert!(fn_src.contains("swarm_run_unavailable_json"));
+        assert!(!fn_src.contains("unwrap_or(false)"));
+    }
+
+    #[test]
+    fn client_report_pdf_lookups_are_store_down_503_not_empty_pdf() {
+        let src = include_str!("server_handlers_rest2.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_report_pdf");
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(fn_src.contains("report_pdf_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        assert!(!fn_src.contains(".fetch_all(&mut *tx)\n    .await\n    .unwrap_or_default()"));
+    }
+
+    #[test]
+    fn crypto_proof_config_is_fail_closed_on_store_down() {
+        let src = include_str!("server_handlers_rest2.inc");
+        let fn_src = named_fn_src(src, "async fn get_crypto_proof_for_client_tx");
+        assert!(fn_src.contains("store_down"));
+        assert!(fn_src.contains("map_err"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn reports_executive_is_store_down_503_not_zero_or_perfect() {
+        let src = include_str!("server_handlers_phase3.inc");
+        let fn_src = named_fn_src(src, "async fn api_reports_executive");
+        assert!(fn_src.contains("report_pdf_unavailable_json"));
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        assert!(!fn_src.contains(".fetch_all(&mut *tx)\n            .await\n            .unwrap_or_default()"));
+        assert!(!fn_src.contains(".fetch_one(&mut *tx)\n            .await\n            .unwrap_or(0)"));
+    }
+
+    #[test]
+    fn compliance_posture_fetch_is_store_down_503_not_empty_200() {
+        let src = include_str!("server_handlers_phase3.inc");
+        let fn_src = named_fn_src(src, "async fn api_compliance_posture");
+        assert!(fn_src.contains("compliance_posture_unavailable_json"));
+        assert!(!fn_src.contains(".unwrap_or_default()"));
+        assert!(!fn_src.contains("{\"frameworks\": []}"));
+    }
+
+    #[test]
+    fn load_compliance_evidence_is_err_on_store_down_not_empty_ok() {
+        let src = include_str!("server_handlers_ui_aliases.inc");
+        let fn_src = named_fn_src(src, "async fn load_compliance_evidence");
+        assert!(!fn_src.contains("unwrap_or_default()"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn heal_verify_steps_is_store_down_503_not_empty_steps() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_verify_steps");
+        assert!(fn_src.contains("heal_verify_steps_unavailable_json"));
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(!fn_src.contains(".fetch_all(&mut *tx)\n        .await\n        .unwrap_or_default()"));
+    }
+
+    #[test]
+    fn heal_trends_is_store_down_503_not_empty_trend() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_trends");
+        assert!(fn_src.contains("heal_trends_unavailable_json"));
+        assert!(!fn_src.contains(".fetch_all(&mut *tx)\n        .await\n        .unwrap_or_default()"));
+    }
+
+    #[test]
+    fn heal_priorities_is_store_down_503_not_empty_queue() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_priorities");
+        assert!(fn_src.contains("heal_priorities_unavailable_json"));
+        assert!(!fn_src.contains(".fetch_all(&mut *tx)\n        .await\n        .unwrap_or_default()"));
+    }
+
+    #[test]
+    fn finding_brief_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_finding_brief");
+        let lookup = fn_src
+            .find("FROM vulnerabilities WHERE client_id")
+            .expect("finding lookup");
+        let after = &fn_src[lookup..];
+        let serve_cache = after.find("Serve the cache").unwrap_or(after.len());
+        let lookup_src = &after[..serve_cache];
+        assert!(lookup_src.contains("findings_unavailable_json"));
+        assert!(!lookup_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn heal_revert_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_revert");
+        let lookup = fn_src
+            .find("FROM heal_requests")
+            .expect("heal lookup");
+        let after = &fn_src[lookup..];
+        let github = after
+            .find("no open heal PR/MR to revert")
+            .unwrap_or(after.len());
+        let lookup_src = &after[..github];
+        assert!(lookup_src.contains("heal_requests_unavailable_json"));
+        assert!(!lookup_src.contains(".ok().flatten()"));
     }
 }

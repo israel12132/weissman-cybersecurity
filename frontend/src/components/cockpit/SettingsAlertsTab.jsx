@@ -78,7 +78,6 @@ function SettingsAlertsTabInner() {
       })
       .catch(() => {
         setSettingsUnavailable(true)
-        setMsg({ type: 'err', text: t(`${NS}.loadFailed`) })
       })
       .finally(() => setLoading(false))
   }
@@ -132,12 +131,14 @@ function SettingsAlertsTabInner() {
       </p>
       {loading && <p className="text-sm text-white/40">{t(`${NS}.loading`)}</p>}
       {!loading && settingsUnavailable && (
-        <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400" role="alert">
+        <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400" role="alert" data-testid="settings-alerts-unavailable">
           {t(`${NS}.settings_unavailable`)}
         </div>
       )}
       {!loading && (
         <div className="space-y-6 rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md p-6">
+          {!settingsUnavailable && (
+            <>
           <label className="block">
             <span className="text-xs uppercase tracking-widest text-white/50 block mb-2">
               {t(`${NS}.webhookLabel`)}
@@ -156,14 +157,14 @@ function SettingsAlertsTabInner() {
           <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
-              checked={settingsUnavailable ? false : safeMode}
-              disabled={settingsUnavailable}
-              aria-invalid={settingsUnavailable || undefined}
+              checked={safeMode}
               onChange={(e) => setSafeMode(e.target.checked)}
-              className="rounded border-white/20 bg-black/50 w-4 h-4 accent-[#22d3ee] disabled:opacity-40"
+              className="rounded border-white/20 bg-black/50 w-4 h-4 accent-[#22d3ee]"
             />
             <span className="text-sm text-white/80">{t(`${NS}.safeModeLabel`)}</span>
           </label>
+            </>
+          )}
           <label className="block">
             <span className="text-xs uppercase tracking-widest text-amber-200/80 block mb-2">
               {t(`${NS}.destructiveLabel`)}
@@ -187,15 +188,16 @@ function SettingsAlertsTabInner() {
             <p id="settings-message" className={msg.type === 'ok' ? 'text-emerald-400 text-sm' : 'text-red-400 text-sm'}>{msg.text}</p>
           )}
           <div className="flex flex-wrap gap-3">
+            {!settingsUnavailable && (
             <Button variant="unstyled"
               id="settings-save-btn"
               type="button"
               onClick={save}
-              disabled={settingsUnavailable}
               className="px-4 py-2 rounded-xl text-sm font-medium border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20 disabled:opacity-40"
             >
               {t(`${NS}.saveSettings`)}
             </Button>
+            )}
             <Button variant="unstyled"
               id="settings-backup-btn"
               type="button"
