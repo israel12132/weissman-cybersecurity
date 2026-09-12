@@ -14,9 +14,12 @@
 //!   crawl (`kill_chain`) runs only when `deep_kill_chain=true`.
 //! - Timeouts and follow-on errors emit `probe_timeout` / `probe_error` findings.
 //!   They are never scored as “0 fractures”.
+//! - Liminal path + rewrite budget is forced to `/` and `/api` (parent `paths` cannot
+//!   leak the 6-path default). Origin is TCP/443 then TCP/80; closed ports are
+//!   `probe_error`, not an empty fracture set.
 
 use crate::engine_dispatch::EngineRunContext;
-use crate::engine_probes::{empty_ok, extract_host, finding};
+use crate::engine_probes::{empty_ok, extract_host, finding, tcp_open};
 use crate::engine_result::EngineResult;
 use crate::first_mover_surface_delta::{self, in_authorized_scope};
 use futures::stream::{self, StreamExt};
@@ -30,6 +33,9 @@ const MAX_HOSTS: usize = 4;
 const LIMINAL_TIMEOUT: Duration = Duration::from_secs(50);
 const KILL_CHAIN_TIMEOUT: Duration = Duration::from_secs(25);
 const HOST_CONCURRENCY: usize = 2;
+const LIMINAL_PATH_CONCURRENCY: usize = 2;
+const LIMINAL_PATHS: [&str; 2] = ["/", "/api"];
+const LIMINAL_SENSITIVE_PATHS: [&str; 1] = ["/api"];
 
 /// Categories actually emitted by `liminal_boundary_engine` (not the marketing names).
 const SCHISM_CATEGORIES: &[&str] = &[
@@ -47,7 +53,6 @@ const BLOCKED_SUFFIXES: &[&str] = &["metadata.google.internal", "localhost", "in
 #[derive(Clone)]
 struct ProbeTarget {
     fqdn: String,
-    prefer_http: bool,
     rank: u8,
 }
 
@@ -121,16 +126,6 @@ fn normalize_probe_host(raw: &str) -> Option<String> {
     Some(h)
 }
 
-fn evidence_prefers_http(f: &Value) -> bool {
-    let blob = format!(
-        "{} {}",
-        f.get("proof").and_then(Value::as_str).unwrap_or(""),
-        f.get("description").and_then(Value::as_str).unwrap_or("")
-    )
-    .to_ascii_lowercase();
-    blob.contains("http://") && !blob.contains("https://")
-}
-
 fn rank_for_delta(category: &str, severity: &str) -> u8 {
     match (category, severity) {
         ("added", "critical") => 0,
@@ -168,7 +163,6 @@ fn delta_candidates(findings: &[Value], apex: &str) -> Vec<ProbeTarget> {
             .unwrap_or("info")
             .to_ascii_lowercase();
         out.push(ProbeTarget {
-            prefer_http: evidence_prefers_http(f),
             rank: rank_for_delta(cat, &sev),
             fqdn,
         });
@@ -191,11 +185,7 @@ fn select_probe_hosts(findings: &[Value], params: &Value, apex: &str) -> Vec<Pro
             }
             continue;
         }
-        hosts.push(ProbeTarget {
-            fqdn,
-            prefer_http: false,
-            rank: 1,
-        });
+        hosts.push(ProbeTarget { fqdn, rank: 1 });
     }
     hosts.sort_by_key(|h| h.rank);
     hosts.truncate(MAX_HOSTS);
@@ -257,6 +247,24 @@ fn tagged_status(
         }
     }
     tag_parent(f, host, engine)
+}
+
+fn schism_summary_title(
+    host_n: usize,
+    schism_n: usize,
+    chain_n: usize,
+    timeout_n: usize,
+    error_n: usize,
+) -> String {
+    if schism_n == 0 && (timeout_n > 0 || error_n > 0) {
+        format!(
+            "Exposure schism incomplete on {host_n} host(s) — {timeout_n} timed out, {error_n} probe error(s); not a clean bill"
+        )
+    } else {
+        format!(
+            "Exposure schism on {host_n} host(s) — {schism_n} boundary fracture(s), {chain_n} kill-chain stage(s)"
+        )
+    }
 }
 
 fn worst_severity(findings: &[Value]) -> &'static str {
@@ -368,6 +376,25 @@ fn map_kill_chain_stages(host: &str, schisms: &[Value]) -> Vec<Value> {
     out
 }
 
+/// HTTPS first (ALPN schism needs TLS). HTTP only when 443 is closed and 80 is open.
+fn pick_origin_url(fqdn: &str, https_open: bool, http_open: bool) -> Option<String> {
+    if https_open {
+        Some(format!("https://{fqdn}"))
+    } else if http_open {
+        Some(format!("http://{fqdn}"))
+    } else {
+        None
+    }
+}
+
+fn http_fallback_url(fqdn: &str, primary: &str, http_open: bool) -> Option<String> {
+    if primary.starts_with("https://") && http_open {
+        Some(format!("http://{fqdn}"))
+    } else {
+        None
+    }
+}
+
 fn liminal_inner_ctx(host: &str, ctx: &EngineRunContext) -> EngineRunContext {
     let mut inner = ctx.clone();
     let mut jp = inner.job_params.clone();
@@ -378,12 +405,16 @@ fn liminal_inner_ctx(host: &str, ctx: &EngineRunContext) -> EngineRunContext {
         o.insert("chain_web_engines".into(), json!(false));
         o.insert("trigger".into(), json!(ENGINE_ID));
         o.insert("parent_fqdn".into(), json!(host));
-        o.insert("concurrency".into(), json!(2));
+        o.insert("concurrency".into(), json!(LIMINAL_PATH_CONCURRENCY));
         o.insert("timeout_ms".into(), json!(6_000));
+        o.insert("intensity".into(), json!("normal"));
         o.insert("check_attack_paths".into(), json!(false));
         o.insert("check_posture_score".into(), json!(false));
         o.insert("check_fingerprint".into(), json!(false));
-        o.entry("paths").or_insert_with(|| json!(["/", "/api"]));
+        o.insert("check_ip_trust_headers".into(), json!(false));
+        o.insert("include_info_findings".into(), json!(false));
+        o.insert("paths".into(), json!(LIMINAL_PATHS));
+        o.insert("sensitive_paths".into(), json!(LIMINAL_SENSITIVE_PATHS));
         if let Some(cid) = inner.client_id {
             o.insert("client_id".into(), json!(cid));
         }
@@ -420,69 +451,62 @@ async fn run_liminal(url: &str, inner: &EngineRunContext) -> Result<EngineResult
     }
 }
 
+fn origin_unreachable(host: &str) -> HostOutcome {
+    HostOutcome {
+        findings: vec![tagged_status(
+            host,
+            "probe_error",
+            &format!("Neither TCP/443 nor TCP/80 open on {host}"),
+            "Origin did not accept TCP on 443 or 80. This is not a verified empty fracture set.",
+            "liminal_boundary",
+        )],
+        timed_out: false,
+        errored: true,
+    }
+}
+
+fn origin_probe_failed(host: &str, timed_out: bool) -> HostOutcome {
+    let cat = if timed_out {
+        "probe_timeout"
+    } else {
+        "probe_error"
+    };
+    HostOutcome {
+        findings: vec![tagged_status(
+            host,
+            cat,
+            &format!("Liminal boundary failed on {host}"),
+            "HTTPS then HTTP probes failed or timed out. Not scored as zero fractures.",
+            "liminal_boundary",
+        )],
+        timed_out,
+        errored: !timed_out,
+    }
+}
+
 async fn probe_host(
     host: ProbeTarget,
     ctx: EngineRunContext,
     deep_kill_chain: bool,
 ) -> HostOutcome {
     let inner = liminal_inner_ctx(&host.fqdn, &ctx);
-    let primary = if host.prefer_http {
-        format!("http://{}", host.fqdn)
-    } else {
-        format!("https://{}", host.fqdn)
+    let (https_open, http_open) = tokio::join!(tcp_open(&host.fqdn, 443), tcp_open(&host.fqdn, 80));
+    let Some(primary) = pick_origin_url(&host.fqdn, https_open, http_open) else {
+        return origin_unreachable(&host.fqdn);
     };
 
-    let liminal = match run_liminal(&primary, &inner).await {
-        Ok(r) => r,
-        Err(timed_out) if timed_out => {
-            return HostOutcome {
-                findings: vec![tagged_status(
-                    &host.fqdn,
-                    "probe_timeout",
-                    &format!("Liminal boundary timed out on {}", host.fqdn),
-                    "Live HTTP/1.1↔HTTP/2 probe did not finish. This is not a verified empty fracture set.",
-                    "liminal_boundary",
-                )],
-                timed_out: true,
-                errored: false,
+    let (used_url, liminal) = match run_liminal(&primary, &inner).await {
+        Ok(r) => (primary, r),
+        Err(timed_out) => {
+            let Some(http_url) = http_fallback_url(&host.fqdn, &primary, http_open) else {
+                return origin_probe_failed(&host.fqdn, timed_out);
             };
-        }
-        Err(_) if !host.prefer_http => {
-            let http_url = format!("http://{}", host.fqdn);
             match run_liminal(&http_url, &inner).await {
-                Ok(r) => r,
-                Err(timed_out) => {
-                    let cat = if timed_out {
-                        "probe_timeout"
-                    } else {
-                        "probe_error"
-                    };
-                    return HostOutcome {
-                        findings: vec![tagged_status(
-                            &host.fqdn,
-                            cat,
-                            &format!("Liminal boundary failed on {}", host.fqdn),
-                            "HTTPS then HTTP probes failed or timed out. Not scored as zero fractures.",
-                            "liminal_boundary",
-                        )],
-                        timed_out,
-                        errored: !timed_out,
-                    };
+                Ok(r) => (http_url, r),
+                Err(fb_timeout) => {
+                    return origin_probe_failed(&host.fqdn, timed_out || fb_timeout);
                 }
             }
-        }
-        Err(_) => {
-            return HostOutcome {
-                findings: vec![tagged_status(
-                    &host.fqdn,
-                    "probe_error",
-                    &format!("Liminal boundary error on {}", host.fqdn),
-                    "Live probe returned an error. This is not a verified empty fracture set.",
-                    "liminal_boundary",
-                )],
-                timed_out: false,
-                errored: true,
-            };
         }
     };
 
@@ -505,10 +529,9 @@ async fn probe_host(
     out.extend(map_kill_chain_stages(&host.fqdn, &schisms));
 
     if deep_kill_chain {
-        let url = primary;
         match tokio::time::timeout(
             KILL_CHAIN_TIMEOUT,
-            crate::kill_chain_engine::run_kill_chain_result(&url),
+            crate::kill_chain_engine::run_kill_chain_result(&used_url),
         )
         .await
         {
@@ -652,28 +675,14 @@ pub async fn run_exposure_schism_fusion_result(
         .map(|h| h.fqdn.as_str())
         .collect::<Vec<_>>()
         .join(", ");
-    let title = if timeout_n > 0 && schism_n == 0 {
-        format!(
-            "Exposure schism incomplete on {} host(s) — {} timed out, {} probe error(s); not a clean bill",
-            selected.len(),
-            timeout_n,
-            error_n
-        )
-    } else {
-        format!(
-            "Exposure schism on {} host(s) — {} boundary fracture(s), {} kill-chain stage(s)",
-            selected.len(),
-            schism_n,
-            chain_n
-        )
-    };
+    let title = schism_summary_title(selected.len(), schism_n, chain_n, timeout_n, error_n);
     let mut headline = finding(
         ENGINE_ID,
         &title,
         headline_sev,
         MITRE,
         &format!(
-            "Live first-mover hosts [{}]. Immediate liminal_boundary (HTTP/1.1↔HTTP/2, Vary, rewrite-header) ran against those FQDNs in this job. Kill-chain stages mapped from observed fractures{}. {} schism finding(s), {} kill-chain stage(s), {} timeout(s), {} error(s). Empty fracture set is empty_ok — a timeout is never a synthetic Prisma-style posture grade.",
+            "Live first-mover hosts [{}]. Immediate liminal_boundary (HTTP/1.1↔HTTP/2, Vary, rewrite-header) ran against those FQDNs in this job. Kill-chain stages mapped from observed fractures{}. {} schism finding(s), {} kill-chain stage(s), {} timeout(s), {} error(s). Empty fracture set is empty_ok — a timeout or probe error is never a synthetic Prisma-style posture grade.",
             added_list,
             if deep_kill_chain {
                 "; deep_kill_chain also crawled the origin"
@@ -691,6 +700,7 @@ pub async fn run_exposure_schism_fusion_result(
         obj.insert("category".into(), json!("schism_summary"));
         obj.insert("fusion".into(), json!(ENGINE_ID));
         obj.insert("timed_out".into(), json!(timeout_n > 0));
+        obj.insert("probe_failed".into(), json!(timeout_n > 0 || error_n > 0));
     }
     delta.findings.insert(0, headline);
     delta.findings.extend(fused);
@@ -846,5 +856,136 @@ mod tests {
         assert_eq!(hosts.len(), 4);
         assert_eq!(hosts[0].fqdn, "shop.acme.test");
         assert!(hosts.iter().any(|h| h.fqdn == "api.acme.test"));
+    }
+
+    #[test]
+    fn probe_errors_are_not_a_clean_zero_fracture_bill() {
+        let incomplete = schism_summary_title(2, 0, 0, 0, 2);
+        assert!(incomplete.contains("not a clean bill"));
+        assert!(incomplete.contains("2 probe error(s)"));
+        assert!(!incomplete.contains("0 boundary fracture(s)"));
+        let timeout_only = schism_summary_title(1, 0, 0, 1, 0);
+        assert!(timeout_only.contains("not a clean bill"));
+        let live_schism = schism_summary_title(1, 3, 1, 0, 0);
+        assert!(live_schism.contains("3 boundary fracture(s)"));
+        assert!(!live_schism.contains("not a clean bill"));
+    }
+
+    #[test]
+    fn host_and_liminal_concurrency_are_two() {
+        assert_eq!(HOST_CONCURRENCY, 2);
+        assert_eq!(LIMINAL_PATH_CONCURRENCY, 2);
+        assert_eq!(MAX_HOSTS, 4);
+        assert_eq!(LIMINAL_PATHS, ["/", "/api"]);
+        assert_eq!(LIMINAL_SENSITIVE_PATHS, ["/api"]);
+    }
+
+    #[test]
+    fn liminal_budget_is_forced_not_inherited_from_parent_job() {
+        let ctx = EngineRunContext {
+            job_params: json!({
+                "paths": ["/", "/admin", "/api", "/api/v1", "/internal", "/dashboard"],
+                "sensitive_paths": ["/admin", "/console", "/actuator"],
+                "concurrency": 16,
+                "intensity": "aggressive",
+                "check_ip_trust_headers": true,
+                "check_fingerprint": true,
+                "check_posture_score": true,
+                "check_attack_paths": true,
+            }),
+            ..EngineRunContext::default()
+        };
+        let inner = liminal_inner_ctx("shop.acme.test", &ctx);
+        assert_eq!(
+            inner.job_params["concurrency"],
+            json!(LIMINAL_PATH_CONCURRENCY)
+        );
+        assert_eq!(inner.job_params["paths"], json!(["/", "/api"]));
+        assert_eq!(inner.job_params["sensitive_paths"], json!(["/api"]));
+        assert_eq!(inner.job_params["intensity"], "normal");
+        assert_eq!(inner.job_params["check_ip_trust_headers"], false);
+        assert_eq!(inner.job_params["check_attack_paths"], false);
+        assert_eq!(inner.job_params["check_posture_score"], false);
+        assert_eq!(inner.job_params["check_fingerprint"], false);
+    }
+
+    #[test]
+    fn origin_is_https_then_http_never_http_first() {
+        assert_eq!(
+            pick_origin_url("shop.acme.test", true, true).as_deref(),
+            Some("https://shop.acme.test")
+        );
+        assert_eq!(
+            pick_origin_url("shop.acme.test", true, false).as_deref(),
+            Some("https://shop.acme.test")
+        );
+        assert_eq!(
+            pick_origin_url("shop.acme.test", false, true).as_deref(),
+            Some("http://shop.acme.test")
+        );
+        assert_eq!(pick_origin_url("shop.acme.test", false, false), None);
+        assert_eq!(
+            http_fallback_url("shop.acme.test", "https://shop.acme.test", true).as_deref(),
+            Some("http://shop.acme.test")
+        );
+        assert_eq!(
+            http_fallback_url("shop.acme.test", "https://shop.acme.test", false),
+            None
+        );
+        assert_eq!(
+            http_fallback_url("shop.acme.test", "http://shop.acme.test", true),
+            None
+        );
+    }
+
+    #[test]
+    fn headline_severity_from_schism_findings_only() {
+        let schism = json!({
+            "category": "boundary_protocol_bypass",
+            "severity": "high"
+        });
+        let mapped = json!({
+            "category": "kill_chain_mapped",
+            "severity": "critical",
+            "fusion_engine": "kill_chain"
+        });
+        let timeout = json!({
+            "category": "probe_timeout",
+            "severity": "info"
+        });
+        let added = json!({
+            "category": "added",
+            "severity": "critical"
+        });
+        assert!(is_schism_finding(&schism));
+        assert!(!is_schism_finding(&mapped));
+        assert!(!is_schism_finding(&timeout));
+        assert!(!is_schism_finding(&added));
+        let schism_only: Vec<Value> = [schism, mapped, timeout, added]
+            .into_iter()
+            .filter(is_schism_finding)
+            .collect();
+        assert_eq!(worst_severity(&schism_only), "high");
+        assert_eq!(worst_severity(&[]), "info");
+    }
+
+    #[test]
+    fn deep_kill_chain_defaults_off() {
+        assert!(!pbool(&json!({}), "deep_kill_chain", false));
+        assert!(!pbool(
+            &json!({"deep_kill_chain": false}),
+            "deep_kill_chain",
+            false
+        ));
+        assert!(pbool(
+            &json!({"deep_kill_chain": true}),
+            "deep_kill_chain",
+            false
+        ));
+        assert!(pbool(
+            &json!({"deep_kill_chain": "true"}),
+            "deep_kill_chain",
+            false
+        ));
     }
 }
