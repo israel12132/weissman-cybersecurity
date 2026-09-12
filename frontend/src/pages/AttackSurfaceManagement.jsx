@@ -18,6 +18,30 @@ const FUSION_ENGINE = 'first_mover_delta_fusion'
 const SCHISM_ENGINE = 'exposure_schism_fusion'
 const ACCENT = '#22d3ee'
 
+/** Live schism evidence only — first-mover inventory rows must never render as fracture proof. */
+export function isSchismPanelFinding(f) {
+  if (!f || typeof f !== 'object') return false
+  if (f.fusion === SCHISM_ENGINE || f.type === SCHISM_ENGINE) return true
+  const fe = f.fusion_engine
+  return fe === 'liminal_boundary' || fe === 'kill_chain'
+}
+
+export function extraHostsFromSurfaceDiff(diff) {
+  if (!diff || diff.unavailable) return []
+  const rows = [
+    ...(Array.isArray(diff.added) ? diff.added : []),
+    ...(Array.isArray(diff.changed) ? diff.changed : []),
+  ]
+  const out = []
+  for (const r of rows) {
+    const h = String(r?.fqdn || '').trim().toLowerCase()
+    if (!h.includes('.') || out.includes(h)) continue
+    out.push(h)
+    if (out.length >= 8) break
+  }
+  return out
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SEVERITY_META = {
@@ -291,6 +315,8 @@ export function FirstMoverDeltaPanel({
   const cs = nerve?.certstream || {}
   const oast = nerve?.oast || {}
   const nvd = nerve?.nvd || {}
+  const liveSchism = Array.isArray(schismFindings) ? schismFindings.filter(isSchismPanelFinding) : []
+  const firstMoverBusy = Boolean(hunting || fusionHunting || schismHunting)
 
   return (
     <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-950/40 via-black/40 to-cyan-950/30 p-4 mb-5">
@@ -308,7 +334,7 @@ export function FirstMoverDeltaPanel({
             variant="unstyled"
             type="button"
             onClick={onHunt}
-            disabled={huntDisabled || hunting}
+            disabled={huntDisabled || firstMoverBusy}
             className="px-4 py-2 rounded-lg text-sm font-mono font-semibold bg-amber-500/20 border border-amber-400/40 text-amber-100 hover:bg-amber-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             {hunting
@@ -319,7 +345,7 @@ export function FirstMoverDeltaPanel({
             variant="unstyled"
             type="button"
             onClick={onFusion}
-            disabled={huntDisabled || fusionHunting}
+            disabled={huntDisabled || firstMoverBusy}
             className="px-4 py-2 rounded-lg text-sm font-mono font-semibold bg-fuchsia-500/20 border border-fuchsia-400/40 text-fuchsia-100 hover:bg-fuchsia-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             {fusionHunting
@@ -330,7 +356,7 @@ export function FirstMoverDeltaPanel({
             variant="unstyled"
             type="button"
             onClick={onSchism}
-            disabled={huntDisabled || schismHunting}
+            disabled={huntDisabled || firstMoverBusy}
             className="px-4 py-2 rounded-lg text-sm font-mono font-semibold bg-rose-500/20 border border-rose-400/40 text-rose-100 hover:bg-rose-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             {schismHunting
@@ -424,12 +450,12 @@ export function FirstMoverDeltaPanel({
           </table>
         </div>
       )}
-      {Array.isArray(schismFindings) && schismFindings.length > 0 && (
+      {liveSchism.length > 0 && (
         <div className="mt-3 rounded-xl border border-rose-500/25 bg-rose-950/20 p-3 space-y-2">
           <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-rose-200/80">
             {t('pages.attackSurfaceManagement.first_mover_schism_live')}
           </p>
-          {schismFindings.slice(0, 8).map((f, i) => (
+          {liveSchism.slice(0, 8).map((f, i) => (
             <div key={`${f.title || f.type || 'schism'}-${i}`} className="flex items-start justify-between gap-3">
               <p className="text-[12px] text-rose-50/90 min-w-0 truncate">{f.title || f.value}</p>
               <span className="text-[10px] font-mono uppercase text-rose-300/80 shrink-0">
@@ -663,7 +689,7 @@ export default function AttackSurfaceManagement() {
     onComplete: async (job) => {
       setSchismJobId(null)
       const f = await resolveJobFindings(job, SCHISM_ENGINE, selectedClientId)
-      setSchismFindings(Array.isArray(f) ? f : [])
+      setSchismFindings(Array.isArray(f) ? f.filter(isSchismPanelFinding) : [])
       await loadSurfaceDiff(selectedClientId)
       loadNerve()
     },
@@ -748,14 +774,17 @@ export default function AttackSurfaceManagement() {
     if (!target.trim()) { showToast('error', t('pages.attackSurfaceManagement.toast_enter_target')); return }
     setSchismFindings([])
     try {
-      const { ok, data: d, status } = await postScan({
+      const extras = extraHostsFromSurfaceDiff(surfaceDiff)
+      const body = {
         engine: SCHISM_ENGINE,
         client_id: Number(selectedClientId),
         target: target.trim(),
         include_ct: true,
         include_http: true,
         chain_web_engines: false,
-      })
+      }
+      if (extras.length) body.extra_hosts = extras.join(',')
+      const { ok, data: d, status } = await postScan(body)
       if (!ok) {
         showToast('error', d.detail || d.error || t('pages.attackSurfaceManagement.toast_scan_failed', { status }))
         return
@@ -766,7 +795,7 @@ export default function AttackSurfaceManagement() {
     } catch (e) {
       showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
     }
-  }, [selectedClientId, target, postScan, showToast, t])
+  }, [selectedClientId, target, postScan, showToast, t, surfaceDiff])
 
   const assetTypes = useMemo(() => {
     const s = new Set(issues.map((f) => f.asset).filter(Boolean))

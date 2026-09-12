@@ -54,7 +54,7 @@ export const ENGINES_REGISTRY = [
     label: 'Exposure Schism Fusion',
     group: 'recon',
     mitre: 'T1190',
-    description: 'New internet host from live surface delta is immediately fracture-tested: HTTP/1.1↔HTTP/2 auth bypass, cache Vary oracle, rewrite-header trust, then kill-chain mapped from the same live HTTP evidence. Empty delta is idle — never a filler score.',
+    description: 'New or changed internet host from live surface delta is immediately fracture-tested: HTTP/1.1↔HTTP/2 auth bypass, cache Vary oracle, rewrite-header trust. Kill-chain stages are mapped from those same live HTTP fractures (optional deep crawl). Empty delta is idle — timeouts are never a filler score.',
     requiresTarget: true,
   },
   {

@@ -805,6 +805,7 @@ export const EXPLICIT_PARAM_DEFS = {
     { key: 'include_ct', label: 'Certificate Transparency (crt.sh)', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
     { key: 'include_http', label: 'Live HTTP/TLS probe on hosts', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
     { key: 'extra_hosts', label: 'Extra in-scope hosts (Certstream / operator)', type: 'text', placeholder: 'api.example.com', defaultVal: '' },
+    { key: 'deep_kill_chain', label: 'Deep kill-chain crawl (second origin GET storm)', type: 'select', options: ['false', 'true'], defaultVal: 'false' },
     { key: 'intensity', label: 'Scan Intensity', type: 'select', options: ['light', 'normal', 'aggressive'], defaultVal: 'normal' },
   ],
   first_seen_osv_nvd: [

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { FirstMoverDeltaPanel } from './AttackSurfaceManagement.jsx'
+import { FirstMoverDeltaPanel, extraHostsFromSurfaceDiff, isSchismPanelFinding } from './AttackSurfaceManagement.jsx'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k) => k, i18n: { language: 'en' } }),
@@ -111,5 +111,45 @@ describe('FirstMoverDeltaPanel', () => {
       />,
     )
     expect(screen.getByText('pages.attackSurfaceManagement.first_mover_empty')).toBeTruthy()
+  })
+
+  it('renders fused schism findings and hides first-mover inventory rows', () => {
+    render(
+      <FirstMoverDeltaPanel
+        diff={{ current_count: 1, added: [{ fqdn: 'shop.example.com', evidence: 'new host' }], changed: [], removed: [] }}
+        loading={false}
+        hunting={false}
+        fusionHunting={false}
+        schismHunting={false}
+        onHunt={() => {}}
+        onFusion={() => {}}
+        onSchism={() => {}}
+        huntDisabled={false}
+        schismFindings={[
+          { title: 'New internet-facing host shop.example.com', severity: 'medium', category: 'added', type: 'first_mover_surface_delta' },
+          {
+            title: 'HTTP/1.1↔HTTP/2 schism auth bypass',
+            severity: 'critical',
+            fusion: 'exposure_schism_fusion',
+            fusion_engine: 'liminal_boundary',
+            category: 'boundary_protocol_bypass',
+            type: 'exposure_schism_fusion',
+          },
+        ]}
+      />,
+    )
+    expect(screen.getByText('HTTP/1.1↔HTTP/2 schism auth bypass')).toBeTruthy()
+    expect(screen.queryByText('New internet-facing host shop.example.com')).toBeNull()
+  })
+
+  it('extracts extra_hosts from live surface-diff added+changed only', () => {
+    expect(extraHostsFromSurfaceDiff({
+      added: [{ fqdn: 'shop.example.com' }],
+      changed: [{ fqdn: 'www.example.com' }],
+      removed: [{ fqdn: 'old.example.com' }],
+    })).toEqual(['shop.example.com', 'www.example.com'])
+    expect(extraHostsFromSurfaceDiff({ unavailable: true, added: [{ fqdn: 'shop.example.com' }] })).toEqual([])
+    expect(isSchismPanelFinding({ type: 'first_mover_surface_delta', category: 'added' })).toBe(false)
+    expect(isSchismPanelFinding({ fusion: 'exposure_schism_fusion', title: 'idle' })).toBe(true)
   })
 })
