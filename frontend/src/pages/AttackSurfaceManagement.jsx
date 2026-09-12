@@ -11,6 +11,7 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
+import FirstSeenHitsPanel from '../components/intel/FirstSeenHitsPanel'
 
 const ENGINE = 'asm'
 const DELTA_ENGINE = 'first_mover_surface_delta'
@@ -346,6 +347,13 @@ export function FirstMoverDeltaPanel({
               ? t('pages.attackSurfaceManagement.nerve_live')
               : t('pages.attackSurfaceManagement.nerve_nvd_osv_only'),
             nvd.api_key_configured ? '#34d399' : '#22d3ee',
+          ],
+          [
+            t('pages.attackSurfaceManagement.nerve_oast_last'),
+            oast.last_callback_at
+              ? oast.last_callback_at
+              : t('pages.attackSurfaceManagement.nerve_oast_none'),
+            oast.last_callback_at ? '#34d399' : '#f97316',
           ],
         ].map(([label, value, color]) => (
           <span
@@ -914,6 +922,7 @@ export default function AttackSurfaceManagement() {
         huntDisabled={!selectedClientId || status === 'running'}
         nerve={nerve}
       />
+      <FirstSeenHitsPanel clientId={selectedClientId} />
 
       {/* ── Results ─────────────────────────────────────────────────── */}
       {status === 'running' && findings.length === 0 && (

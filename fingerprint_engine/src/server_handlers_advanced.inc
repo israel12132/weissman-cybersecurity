@@ -167,6 +167,9 @@ async fn api_risk_node_flags_patch(
     Path(node_id): Path<i64>,
     Json(body): Json<RiskNodeFlagsBody>,
 ) -> Response {
+    if let Err(resp) = crate::rbac::require_operator(&auth) {
+        return resp;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
@@ -175,20 +178,37 @@ async fn api_risk_node_flags_patch(
               SET internet_exposed = COALESCE($1, internet_exposed),
                   crown_jewel      = COALESCE($2, crown_jewel),
                   asset_value      = COALESCE($3, asset_value)
-            WHERE id = $4 AND tenant_id = $5"#,
+            WHERE id = $4 AND tenant_id = $5
+            RETURNING client_id"#,
     )
     .bind(body.internet_exposed)
     .bind(body.crown_jewel)
     .bind(body.asset_value)
     .bind(node_id)
     .bind(auth.tenant_id)
-    .execute(&mut *tx)
+    .fetch_optional(&mut *tx)
     .await;
     let _ = tx.commit().await;
     match res {
-        Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"ok": true, "id": node_id}))).into_response(),
-        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "node not found"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": scrub_internal_error(&e)}))).into_response(),
+        Ok(Some(r)) => {
+            let client_id: i64 = r.try_get("client_id").unwrap_or(0);
+            crate::attack_path::mark_graph_dirty(auth.tenant_id, client_id);
+            (
+                StatusCode::OK,
+                Json(json!({"ok": true, "id": node_id, "client_id": client_id})),
+            )
+                .into_response()
+        }
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "detail": "node not found"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
+        )
+            .into_response(),
     }
 }
 

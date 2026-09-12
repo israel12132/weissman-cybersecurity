@@ -50,6 +50,16 @@ impl NvdStatus {
     pub fn is_first_seen(&self) -> bool {
         matches!(self, Self::AbsentCve | Self::Unpublished)
     }
+
+    #[must_use]
+    pub fn from_db(s: &str) -> Self {
+        match s.trim() {
+            "absent_cve" => Self::AbsentCve,
+            "unpublished" => Self::Unpublished,
+            "listed" => Self::Listed,
+            _ => Self::SkippedNoKey,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -206,6 +216,71 @@ async fn persist_hit(
     .map_err(|e| e.to_string())?;
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Live SBOM×OSV hits for a client — `listed` is returned honestly, never titled first-seen.
+pub async fn list_hits_json(
+    pool: &sqlx::PgPool,
+    tenant_id: i64,
+    client_id: i64,
+) -> Result<Value, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let rows = sqlx::query(
+        r#"SELECT id, package_name, version_spec, ecosystem, osv_id, cve_id, nvd_status,
+                  evidence_json, first_seen_at
+           FROM osv_first_seen_hits
+           WHERE client_id = $1
+           ORDER BY first_seen_at DESC
+           LIMIT 200"#,
+    )
+    .bind(client_id)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    let mut first_seen_n = 0usize;
+    let mut listed_n = 0usize;
+    let mut skipped_n = 0usize;
+    let mut hits: Vec<Value> = Vec::with_capacity(rows.len());
+    for r in rows {
+        let status = NvdStatus::from_db(&r.try_get::<String, _>("nvd_status").unwrap_or_default());
+        if status.is_first_seen() {
+            first_seen_n += 1;
+        } else if matches!(status, NvdStatus::Listed) {
+            listed_n += 1;
+        } else {
+            skipped_n += 1;
+        }
+        hits.push(json!({
+            "id": r.try_get::<i64, _>("id").unwrap_or(0),
+            "package_name": r.try_get::<String, _>("package_name").unwrap_or_default(),
+            "version_spec": r.try_get::<String, _>("version_spec").unwrap_or_default(),
+            "ecosystem": r.try_get::<String, _>("ecosystem").unwrap_or_default(),
+            "osv_id": r.try_get::<String, _>("osv_id").unwrap_or_default(),
+            "cve_id": r.try_get::<Option<String>, _>("cve_id").ok().flatten(),
+            "evidence": r.try_get::<Value, _>("evidence_json").unwrap_or(json!({})),
+            "nvd_status": status.as_str(),
+            "claimed_first_seen": status.is_first_seen(),
+            "first_seen_at": r
+                .try_get::<chrono::DateTime<chrono::Utc>, _>("first_seen_at")
+                .map(|d| d.to_rfc3339())
+                .unwrap_or_default(),
+        }));
+    }
+
+    Ok(json!({
+        "ok": true,
+        "client_id": client_id,
+        "engine": ENGINE_ID,
+        "nvd_api_key_configured": crate::nvd_cve::nvd_api_key_present(),
+        "first_seen_count": first_seen_n,
+        "listed_count": listed_n,
+        "skipped_count": skipped_n,
+        "hits": hits,
+    }))
 }
 
 async fn query_osv(client: &reqwest::Client, eco: &str, name: &str, version: &str) -> Vec<OsvHit> {
@@ -552,6 +627,9 @@ mod tests {
         assert!(!NvdStatus::Listed.is_first_seen());
         assert!(!NvdStatus::SkippedNoKey.is_first_seen());
         assert_eq!(NvdStatus::SkippedNoKey.as_str(), "skipped_no_key");
+        assert!(NvdStatus::from_db("absent_cve").is_first_seen());
+        assert!(!NvdStatus::from_db("listed").is_first_seen());
+        assert!(!NvdStatus::from_db("skipped_no_key").is_first_seen());
     }
 
     #[test]

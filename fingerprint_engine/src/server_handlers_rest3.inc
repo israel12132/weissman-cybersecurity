@@ -113,13 +113,40 @@ async fn api_client_surface_diff(
     }
 }
 
-async fn api_first_mover_nerve(Extension(_auth): Extension<AuthContext>) -> Response {
+async fn api_first_mover_nerve(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
     let oast_domain = crate::fuzz_oob::oast_hook_domain().unwrap_or_default();
+    let mut last_callback_at: Option<String> = None;
+    let mut recent_callback_count: i64 = 0;
+    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        if let Ok(row) = sqlx::query(
+            r#"SELECT MAX(h.created_at) AS last_at, COUNT(*)::bigint AS n
+               FROM oast_interaction_hits h
+               INNER JOIN oast_probe_tokens p
+                       ON p.token = h.interaction_token AND p.tenant_id = $1"#,
+        )
+        .bind(auth.tenant_id)
+        .fetch_one(&mut *tx)
+        .await
+        {
+            recent_callback_count = row.try_get("n").unwrap_or(0);
+            last_callback_at = row
+                .try_get::<Option<chrono::DateTime<chrono::Utc>>, _>("last_at")
+                .ok()
+                .flatten()
+                .map(|d| d.to_rfc3339());
+        }
+        let _ = tx.commit().await;
+    }
     let body = json!({
         "certstream": crate::certstream_watcher::watcher_status_json(),
         "oast": {
             "configured": crate::fuzz_oob::oast_correlation_enabled(),
             "domain": oast_domain,
+            "last_callback_at": last_callback_at,
+            "recent_callback_count": recent_callback_count,
         },
         "nvd": {
             "api_key_configured": crate::nvd_cve::nvd_api_key_present(),
@@ -132,8 +159,33 @@ async fn api_first_mover_nerve(Extension(_auth): Extension<AuthContext>) -> Resp
             "inline_engine": "first_mover_delta_fusion",
         },
         "first_seen_engine": "first_seen_osv_nvd",
+        "first_seen_hits_path": "/api/clients/:id/first-seen-hits",
     });
     (StatusCode::OK, Json(body)).into_response()
+}
+
+/// GET /api/clients/:id/first-seen-hits — live SBOM×OSV rows; listed is never titled first-seen.
+async fn api_client_first_seen_hits(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+) -> Response {
+    match crate::first_seen_osv_nvd_engine::list_hits_json(&state.app_pool, auth.tenant_id, id).await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "ok": false,
+                "client_id": id,
+                "hits": [],
+                "first_seen_count": 0,
+                "listed_count": 0,
+                "detail": e,
+            })),
+        )
+            .into_response(),
+    }
 }
 
 async fn api_client_semantic_state_machine(

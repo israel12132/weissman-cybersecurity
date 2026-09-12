@@ -1216,7 +1216,8 @@ async fn api_risk_graph_get(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"nodes":[],"edges":[]}))).into_response();
     };
     let nodes = sqlx::query(
-        r#"SELECT id, graph_key, node_type, label, external_id, metadata, risk_score, is_choke_point
+        r#"SELECT id, graph_key, node_type, label, external_id, metadata, risk_score, is_choke_point,
+                  internet_exposed, crown_jewel, asset_value
            FROM risk_graph_nodes WHERE client_id = $1 ORDER BY id"#,
     )
     .bind(id)
@@ -1243,6 +1244,9 @@ async fn api_risk_graph_get(
                 "metadata": r.try_get::<String,_>("metadata").unwrap_or_else(|_| "{}".into()),
                 "risk_score": r.try_get::<i32,_>("risk_score").unwrap_or(0),
                 "is_choke_point": r.try_get::<bool,_>("is_choke_point").unwrap_or(false),
+                "internet_exposed": r.try_get::<bool,_>("internet_exposed").unwrap_or(false),
+                "crown_jewel": r.try_get::<bool,_>("crown_jewel").unwrap_or(false),
+                "asset_value": r.try_get::<f32,_>("asset_value").unwrap_or(0.0),
             })
         })
         .collect();
@@ -3177,43 +3181,59 @@ async fn api_oast_callbacks(
     .unwrap_or_default();
     let _ = tx.commit().await;
 
-    let callbacks: Vec<Value> = rows
-        .into_iter()
-        .map(|r| {
-            let payload = r
-                .try_get::<Option<String>, _>("http_path")
-                .ok()
-                .flatten()
-                .filter(|s| !s.is_empty())
-                .or_else(|| {
-                    r.try_get::<Option<String>, _>("dns_qname")
-                        .ok()
-                        .flatten()
-                        .filter(|s| !s.is_empty())
-                })
-                .or_else(|| {
-                    r.try_get::<Option<String>, _>("host_header")
-                        .ok()
-                        .flatten()
-                        .filter(|s| !s.is_empty())
-                })
-                .unwrap_or_default();
-            json!({
-                "id": r.try_get::<i64, _>("id").unwrap_or(0),
-                "interaction_token": r.try_get::<uuid::Uuid, _>("interaction_token").map(|u| u.to_string()).unwrap_or_default(),
-                "channel": r.try_get::<String, _>("channel").unwrap_or_default(),
-                "source_ip": r.try_get::<Option<String>, _>("source_ip").ok().flatten(),
-                "probe_type": r.try_get::<String, _>("probe_type").unwrap_or_default(),
-                "payload": payload,
-                "http_method": r.try_get::<Option<String>, _>("http_method").ok().flatten(),
-                "user_agent": r.try_get::<Option<String>, _>("user_agent").ok().flatten(),
-                "timestamp": r.try_get::<chrono::DateTime<chrono::Utc>, _>("created_at")
-                    .map(|d| d.to_rfc3339())
-                    .unwrap_or_default(),
+    let mut last_callback_at: Option<String> = None;
+    let mut callbacks: Vec<Value> = Vec::with_capacity(rows.len());
+    for r in rows {
+        let payload = r
+            .try_get::<Option<String>, _>("http_path")
+            .ok()
+            .flatten()
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                r.try_get::<Option<String>, _>("dns_qname")
+                    .ok()
+                    .flatten()
+                    .filter(|s| !s.is_empty())
             })
-        })
-        .collect();
-    (StatusCode::OK, Json(json!({ "callbacks": callbacks }))).into_response()
+            .or_else(|| {
+                r.try_get::<Option<String>, _>("host_header")
+                    .ok()
+                    .flatten()
+                    .filter(|s| !s.is_empty())
+            })
+            .unwrap_or_default();
+        let timestamp = r
+            .try_get::<chrono::DateTime<chrono::Utc>, _>("created_at")
+            .map(|d| d.to_rfc3339())
+            .unwrap_or_default();
+        if last_callback_at.is_none() && !timestamp.is_empty() {
+            last_callback_at = Some(timestamp.clone());
+        }
+        callbacks.push(json!({
+            "id": r.try_get::<i64, _>("id").unwrap_or(0),
+            "interaction_token": r.try_get::<uuid::Uuid, _>("interaction_token").map(|u| u.to_string()).unwrap_or_default(),
+            "channel": r.try_get::<String, _>("channel").unwrap_or_default(),
+            "source_ip": r.try_get::<Option<String>, _>("source_ip").ok().flatten(),
+            "probe_type": r.try_get::<String, _>("probe_type").unwrap_or_default(),
+            "payload": payload,
+            "http_method": r.try_get::<Option<String>, _>("http_method").ok().flatten(),
+            "user_agent": r.try_get::<Option<String>, _>("user_agent").ok().flatten(),
+            "timestamp": timestamp,
+        }));
+    }
+    (
+        StatusCode::OK,
+        Json(json!({
+            "callbacks": callbacks,
+            "health": {
+                "configured": crate::fuzz_oob::oast_correlation_enabled(),
+                "domain": crate::fuzz_oob::oast_hook_domain().unwrap_or_default(),
+                "last_callback_at": last_callback_at,
+                "callback_count": callbacks.len(),
+            }
+        })),
+    )
+        .into_response()
 }
 
 /// GET /api/oast/verify/:token — poll OOB callback status for a structured probe token.

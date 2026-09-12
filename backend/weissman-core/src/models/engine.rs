@@ -112,6 +112,8 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "iac_misconfig",
     "serverless_attack",
     "scada_ics",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
     // Critical infrastructure (RoE-gated; `high_risk_engines` compile feature)
     "avionics_adsb_attack",
     "maritime_ais_attack",
@@ -745,6 +747,8 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "serverless_attack",
     // OT / ICS / IoT
     "scada_ics",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
     "avionics_adsb_attack",
     "maritime_ais_attack",
     "ev_charging_ocpp_attack",
@@ -1610,6 +1614,14 @@ mod production_registry_tests {
             PRODUCTION_ENGINE_IDS.len() >= 580,
             "do not shrink the registry to match an old container image"
         );
+    }
+
+    #[test]
+    fn ot_safety_engines_are_in_production_catalog() {
+        assert!(PRODUCTION_ENGINE_IDS.contains(&"ot_passive_active_safety"));
+        assert!(PRODUCTION_ENGINE_IDS.contains(&"ot_crown_jewel_path"));
+        assert!(FULL_ENGINE_REGISTRY_ORDER.contains(&"ot_passive_active_safety"));
+        assert!(FULL_ENGINE_REGISTRY_ORDER.contains(&"ot_crown_jewel_path"));
     }
 
     #[test]

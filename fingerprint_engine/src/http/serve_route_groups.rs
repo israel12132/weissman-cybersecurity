@@ -396,6 +396,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/clients/:id/surface-diff",
             get(api_client_surface_diff),
         )
+        .route(
+            "/api/clients/:id/first-seen-hits",
+            get(api_client_first_seen_hits),
+        )
         .route("/api/first-mover/nerve", get(api_first_mover_nerve))
         .route(
             "/api/clients/:id/semantic-state-machine",
@@ -649,6 +653,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/integrations/:id/test", post(api_integrations_test))
         .route("/api/integrations/:id", delete(api_integrations_delete))
         .route("/api/ot-ics/devices", get(api_ot_ics_devices))
+        .route("/api/ot-ics/safety", get(api_ot_ics_safety))
         .route("/api/mobile-security/apps", get(api_mobile_security_apps))
         .route("/api/soc/incidents", get(api_soc_incidents))
         .route(
@@ -757,6 +762,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route(
             "/api/clients/:id/ot-ics/fingerprints",
             get(api_client_ot_ics_fingerprints),
+        )
+        .route(
+            "/api/clients/:id/ot-ics/safety",
+            get(api_client_ot_ics_safety),
         )
         .route(
             "/api/ceo/council/sessions/:job_id/stream",

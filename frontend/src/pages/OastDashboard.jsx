@@ -64,6 +64,7 @@ export default function OastDashboard() {
   const [selectedClientId, setSelectedClientId] = useState(null)
   const { postScan } = useCommandCenterScan(selectedClientId)
   const [callbacks, setCallbacks] = useState([])
+  const [oastHealth, setOastHealth] = useState(null)
   const [activeProbes, setActiveProbes] = useState(new Set())
   const [toast, setToast] = useState(null)
   const [callbacksInitialLoading, setCallbacksInitialLoading] = useState(true)
@@ -92,6 +93,7 @@ export default function OastDashboard() {
         ? d.callbacks
         : (Array.isArray(d) ? d : [])
       setCallbacks(list.slice(0, 50))
+      if (d?.health && typeof d.health === 'object') setOastHealth(d.health)
     } catch { /* best-effort; non-fatal */ }
     finally {
       if (!silent) setRefreshLoading(false)
@@ -219,6 +221,33 @@ export default function OastDashboard() {
       <div className="mb-6 rounded-xl border border-cyan-500/20 bg-cyan-950/20 px-4 py-3 text-[11px] font-mono text-cyan-200/80 leading-relaxed">
         {t('pages.oastDashboard.verification_banner')}
       </div>
+
+      {oastHealth && (
+        <div
+          data-testid="oast-health-strip"
+          className={`mb-6 rounded-xl border px-4 py-3 text-[11px] font-mono flex flex-wrap gap-3 ${
+            oastHealth.configured
+              ? 'border-emerald-500/30 bg-emerald-950/20 text-emerald-200'
+              : 'border-amber-500/30 bg-amber-950/20 text-amber-100'
+          }`}
+        >
+          <span>
+            {t('pages.oastDashboard.health_listener')}: {oastHealth.configured
+              ? t('pages.oastDashboard.health_configured')
+              : t('pages.oastDashboard.health_missing')}
+          </span>
+          <span>
+            {t('pages.oastDashboard.health_domain')}: {oastHealth.domain || '—'}
+          </span>
+          <span>
+            {t('pages.oastDashboard.health_last')}: {oastHealth.last_callback_at
+              || t('pages.oastDashboard.health_none')}
+          </span>
+          <span>
+            {t('pages.oastDashboard.health_count', { count: oastHealth.callback_count ?? callbacks.length })}
+          </span>
+        </div>
+      )}
 
       <div className="flex items-center gap-2 mb-8">
         <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.oastDashboard.client')}</span>

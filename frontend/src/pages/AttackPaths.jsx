@@ -21,6 +21,7 @@ import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../utils/apiFetch'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
+import CrownJewelBoard from '../components/attack/CrownJewelBoard'
 
 const NS = 'pages.attackPaths'
 const columnHelper = createColumnHelper()
@@ -290,6 +291,20 @@ export default function AttackPaths() {
     >
       <div className="space-y-6">
         <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
+
+        {selectedClientId != null && (
+          <CrownJewelBoard clientId={selectedClientId} onChanged={() => load(true)} />
+        )}
+
+        {selectedClientId != null && !loading && hasSnapshot && Number(display?.jewel_count || 0) === 0 && (
+          <div
+            role="status"
+            data-testid="no-jewels-banner"
+            className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100"
+          >
+            {t(`${NS}.no_jewels_banner`)}
+          </div>
+        )}
 
         {selectedClientId == null && (
           <EmptyState icon="building" title={t(`${NS}.pick_client_title`)} body={t(`${NS}.pick_client_body`)} />
