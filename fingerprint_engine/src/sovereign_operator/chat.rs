@@ -49,28 +49,40 @@ pub async fn load_llm_config(pool: &PgPool, tenant_id: i64) -> Result<LlmConfig,
         .filter(|s| !s.is_empty());
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|e| e.to_string())?;
-    let db_url = sqlx::query_scalar::<_, String>(
+        .map_err(|_| "store_down".to_string())?;
+    let db_url = match sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_base_url'",
     )
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten()
-    .map(|s| s.trim().to_string())
-    .filter(|s| !s.is_empty());
-    let db_model = sqlx::query_scalar::<_, String>(
+    {
+        Ok(v) => v
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        Err(_) => {
+            let _ = tx.rollback().await;
+            return Err("store_down".into());
+        }
+    };
+    let db_model = match sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_model'",
     )
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten()
-    .map(|s| s.trim().to_string())
-    .filter(|s| !s.is_empty());
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        Err(_) => {
+            let _ = tx.rollback().await;
+            return Err("store_down".into());
+        }
+    };
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
+    }
     let base_url = env_url.or(db_url).ok_or_else(|| {
         "Sovereign Operator requires a live LLM. Set WEISSMAN_LLM_BASE_URL or tenant llm_base_url."
             .to_string()

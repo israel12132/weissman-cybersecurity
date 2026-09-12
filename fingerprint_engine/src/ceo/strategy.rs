@@ -222,7 +222,7 @@ pub async fn patch_ceo_strategy(pool: &PgPool, tenant_id: i64, body: &Value) -> 
         .ok_or_else(|| "body.configs object required".to_string())?;
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "store_down".to_string())?;
     for (k, v) in obj {
         if !STRATEGY_KEYS.contains(&k.as_str()) {
             return Err(format!("unknown or forbidden strategy key: {k}"));
@@ -244,8 +244,8 @@ pub async fn patch_ceo_strategy(pool: &PgPool, tenant_id: i64, body: &Value) -> 
         .bind(&val)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "store_down".to_string())?;
     }
-    tx.commit().await.map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|_| "store_down".to_string())?;
     Ok(())
 }

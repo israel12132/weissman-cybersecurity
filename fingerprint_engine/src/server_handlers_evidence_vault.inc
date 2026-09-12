@@ -512,7 +512,15 @@ async fn api_evidence_delete(
         &ip,
     )
     .await;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     (StatusCode::OK, Json(json!({"ok": true}))).into_response()
 }

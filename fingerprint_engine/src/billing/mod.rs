@@ -111,14 +111,14 @@ pub async fn enforce_client_create(
 async fn count_tenant_clients(app_pool: &PgPool, tenant_id: i64) -> Result<i64, String> {
     let mut tx = weissman_db::begin_tenant_tx(app_pool, tenant_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "store_down".to_string())?;
     let count: i64 =
         sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients WHERE tenant_id = $1")
             .bind(tenant_id)
             .fetch_one(&mut *tx)
             .await
-            .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+            .map_err(|_| "store_down".to_string())?;
+    tx.commit().await.map_err(|_| "store_down".to_string())?;
     Ok(count)
 }
 
@@ -249,7 +249,7 @@ pub async fn usage_dashboard_json(
     .bind(tenant_id)
     .fetch_optional(auth_pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     let Some(r) = row else {
         return Ok(json!({
             "billing_strict": billing_strict_enabled(),
@@ -274,7 +274,7 @@ pub async fn usage_dashboard_json(
     .bind(&period)
     .fetch_optional(app_pool)
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|_| "store_down".to_string())?
     {
         Some(n) => n,
         None => sqlx::query_scalar::<_, i64>(
@@ -284,7 +284,7 @@ pub async fn usage_dashboard_json(
         .bind(&period)
         .fetch_optional(app_pool)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|_| "store_down".to_string())?
         .unwrap_or(0),
     };
 
@@ -550,7 +550,7 @@ pub async fn create_checkout_session_url(
     .bind(tenant_id)
     .fetch_optional(pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     let email: String = row
         .and_then(|r| r.try_get::<String, _>("email").ok())
         .filter(|e| !e.is_empty())
@@ -572,7 +572,7 @@ pub async fn create_checkout_session_url(
 
     upsert_paddle_customer(pool, tenant_id, &customer_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "store_down".to_string())?;
 
     paddle_create_transaction_checkout(&customer_id, &price_id, tenant_id).await
 }
@@ -733,7 +733,7 @@ pub async fn refresh_subscription_from_paddle_api(
             .bind(tenant_id)
             .fetch_optional(pool)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|_| "store_down".to_string())?;
     let Some(r) = row else {
         return Err("No subscription row for tenant.".to_string());
     };

@@ -404,6 +404,93 @@ pub fn phantom_trap_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// `GET /api/command-center/ticker` — never a live-empty event wall on store-down
+pub fn command_center_ticker_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "events": [],
+        "detail": detail,
+    })
+}
+
+/// ITDR connector save/pull persist when the store cannot be confirmed
+pub fn itdr_connectors_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "connectors": {},
+        "detail": detail,
+    })
+}
+
+/// CEO strategy/HPC/vault/god-mode writes — never 400 + SQL on store-down
+pub fn ceo_write_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "detail": detail,
+        "code": "db_unavailable",
+    })
+}
+
+/// Billing usage/checkout/sync when the subscription store cannot be read
+pub fn billing_store_down_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "code": "db_unavailable",
+        "subscription": Value::Null,
+        "usage": Value::Null,
+        "checkout_url": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// God Mode snapshot when policy configs cannot be confirmed
+pub fn god_mode_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "scan_interval_secs": Value::Null,
+        "engine_matrix": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// Sovereign Operator knowledge bus — never ok:true live:true empty theater
+pub fn sovereign_operator_knowledge_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "knowledge": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// Sovereign Operator chat when tenant LLM config cannot be confirmed
+pub fn sovereign_operator_chat_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "session_id": Value::Null,
+        "reply": Value::Null,
+        "tools": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/oast/verify/:token` when hit counts cannot be confirmed
+pub fn oast_verify_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "oob_confirmed": Value::Null,
+        "hit_count": Value::Null,
+        "detail": detail,
+    })
+}
+
 /// `GET /api/clients/:id/first-seen-hits` — never advertise zero pre-NVD counts on store-down
 pub fn first_seen_hits_unavailable_json(client_id: i64, detail: &str) -> Value {
     json!({
@@ -2191,5 +2278,309 @@ mod tests {
         let fn_src = named_fn_src(src, "async fn api_identity_contexts_delete");
         assert!(fn_src.contains("identity_contexts_unavailable_json"));
         assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn ticker_store_down_is_never_empty_ok() {
+        let v = command_center_ticker_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["events"], json!([]));
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn itdr_connectors_store_down_is_never_empty_ok() {
+        let v = itdr_connectors_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["connectors"], json!({}));
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn ceo_write_store_down_is_never_400() {
+        let v = ceo_write_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["code"], "db_unavailable");
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn billing_store_down_is_never_live_subscription() {
+        let v = billing_store_down_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["subscription"].is_null());
+        assert!(v["usage"].is_null());
+        assert!(v["checkout_url"].is_null());
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn god_mode_store_down_is_never_default_interval() {
+        let v = god_mode_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["scan_interval_secs"].is_null());
+        assert!(v["engine_matrix"].is_null());
+        assert_ne!(v["scan_interval_secs"], json!(60));
+    }
+
+    #[test]
+    fn knowledge_store_down_is_never_live_true() {
+        let v = sovereign_operator_knowledge_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["knowledge"].is_null());
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn chat_store_down_is_never_ok_session() {
+        let v = sovereign_operator_chat_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["session_id"].is_null());
+        assert!(v["reply"].is_null());
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn oast_verify_store_down_is_never_zero_hits() {
+        let v = oast_verify_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["oob_confirmed"].is_null());
+        assert!(v["hit_count"].is_null());
+        assert_ne!(v["hit_count"], json!(0));
+        assert_ne!(v["oob_confirmed"], json!(false));
+    }
+
+    #[test]
+    fn ticker_handler_begin_fail_is_503_not_empty_events() {
+        let src = include_str!("http/serve.rs");
+        let start = src
+            .find("async fn api_command_center_ticker")
+            .expect("ticker");
+        let rest = &src[start..];
+        let next = rest
+            .find("\nstruct EnterpriseSettingsPatch")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("command_center_ticker_unavailable_json"));
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(!fn_src.contains("json!({ \"events\": [] })"));
+        let begin = fn_src.find("begin_tenant_tx").expect("begin");
+        let begin_src = &fn_src[begin..fn_src.find("let rows").expect("rows")];
+        assert!(begin_src.contains("command_center_ticker_unavailable_json"));
+    }
+
+    #[test]
+    fn dashboard_page_count_err_is_503_not_zero() {
+        let src = include_str!("http/serve.rs");
+        assert!(src.contains("Dashboard store unavailable"));
+        let helper = named_fn_src(src, "fn dashboard_store_down_html");
+        assert!(helper.contains("SERVICE_UNAVAILABLE"));
+        assert!(helper.contains("Dashboard store unavailable"));
+        let fn_src = named_fn_src(src, "async fn dashboard_page");
+        assert!(fn_src.contains("dashboard_store_down_html"));
+        let vuln = fn_src.find("FROM vulnerabilities").expect("vuln count");
+        let clients = fn_src.find("FROM clients").expect("client count");
+        let vuln_src = &fn_src[vuln..clients];
+        assert!(vuln_src.contains("dashboard_store_down_html"));
+        assert!(!vuln_src.contains("unwrap_or(0)"));
+        let client_src = &fn_src[clients..fn_src.find("FROM report_runs").unwrap_or(fn_src.len())];
+        assert!(client_src.contains("dashboard_store_down_html"));
+        assert!(!client_src.contains("unwrap_or(0)"));
+    }
+
+    #[test]
+    fn engagements_create_commit_err_is_503_not_ok_true() {
+        let src = include_str!("server_handlers_engagements.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_engagements_create");
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        let commit = fn_src.find("tx.commit().await.is_err()").expect("commit");
+        let after = &fn_src[commit..];
+        assert!(after.contains("engagements_unavailable_json"));
+        assert!(after.contains("\"ok\": true"));
+        let unavail = after.find("engagements_unavailable_json").expect("503");
+        let ok_true = after.find("\"ok\": true").expect("ok true");
+        assert!(unavail < ok_true);
+    }
+
+    #[test]
+    fn evidence_delete_commit_err_is_503_not_ok_true() {
+        let src = include_str!("server_handlers_evidence_vault.inc");
+        let fn_src = named_fn_src(src, "async fn api_evidence_delete");
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        let commit = fn_src.find("tx.commit().await.is_err()").expect("commit");
+        let after = &fn_src[commit..];
+        assert!(after.contains("evidence_unavailable_json"));
+        let unavail = after.find("evidence_unavailable_json").expect("503");
+        let ok_true = after.find("\"ok\": true").expect("ok true");
+        assert!(unavail < ok_true);
+    }
+
+    #[test]
+    fn decrypt_sealed_poc_commit_err_is_503_not_ok_true() {
+        let src = include_str!("server_handlers_phase6.inc");
+        let fn_src = named_fn_src(src, "async fn api_decrypt_sealed_poc");
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        let commit = fn_src.find("tx.commit().await.is_err()").expect("commit");
+        let after = &fn_src[commit..];
+        assert!(after.contains("sealed_poc_unavailable_json"));
+        let unavail = after.find("sealed_poc_unavailable_json").expect("503");
+        let ok_true = after.find("\"ok\": true").expect("ok true");
+        assert!(unavail < ok_true);
+    }
+
+    #[test]
+    fn itdr_put_pull_store_down_is_503_constructor() {
+        let src = include_str!("server_handlers_supreme.inc");
+        let put = named_fn_src(src, "async fn api_itdr_connectors_put");
+        assert!(put.contains("itdr_connectors_unavailable_json"));
+        let pull = named_fn_src(src, "async fn api_itdr_connectors_pull");
+        assert!(pull.contains("itdr_connectors_unavailable_json"));
+        let persist = named_fn_src(include_str!("itdr_connectors.rs"), "async fn persist_events");
+        assert!(persist.contains("return Err(\"database unavailable\""));
+        assert!(persist.contains("rollback"));
+        assert!(!persist.contains("let _ = res"));
+    }
+
+    #[test]
+    fn slack_heal_repo_select_err_is_store_down_not_env_default() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn enqueue_heal_from_slack");
+        let repo = fn_src.find("auto_heal_repo_slug").expect("repo key");
+        let repo_src = &fn_src[repo..fn_src.find("WEISSMAN_AUTOHEAL_REPO").expect("env")];
+        assert!(repo_src.contains("store_down"));
+        assert!(!repo_src.contains(".ok().flatten()"));
+        assert!(fn_src.contains("map_err(|_| \"store_down\""));
+        assert!(!fn_src.contains("map_err(|e| e.to_string())"));
+    }
+
+    #[test]
+    fn ceo_write_err_maps_store_down_to_503() {
+        let src = include_str!("server_handlers_ceo.inc");
+        let helper = named_fn_src(src, "fn ceo_write_err");
+        assert!(helper.contains("ceo_write_unavailable_json"));
+        assert!(helper.contains("store_down"));
+        for sig in [
+            "async fn api_ceo_strategy_patch",
+            "async fn api_ceo_hpc_policy_put",
+            "async fn api_ceo_vault_match",
+            "async fn api_ceo_sovereign_trigger_post",
+            "async fn api_ceo_suspended_resume",
+            "async fn api_ceo_god_mode_scan_interval_patch",
+            "async fn api_ceo_tenant_engines_put",
+        ] {
+            let fn_src = named_fn_src(src, sig);
+            assert!(fn_src.contains("ceo_write_err"), "{sig}");
+        }
+    }
+
+    #[test]
+    fn god_mode_config_reads_are_result_not_ok_flatten() {
+        let src = include_str!("ceo/god_mode.rs");
+        let start = src.find("async fn get_config_tx_str").expect("get_config");
+        let rest = &src[start..];
+        let next = rest
+            .find("\nfn tenant_active_engine_set")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("Result<Option<String>, sqlx::Error>"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        let interval = src
+            .find("pub async fn default_scan_interval_secs_get")
+            .expect("interval get");
+        let rest = &src[interval..];
+        let next = rest
+            .find("\npub async fn default_scan_interval_secs_set")
+            .unwrap_or(rest.len());
+        let get_src = &rest[..next];
+        assert!(get_src.contains("Result<u64, sqlx::Error>"));
+        assert!(get_src.contains(".await?"));
+    }
+
+    #[test]
+    fn knowledge_snapshot_store_down_is_503_not_live_empty() {
+        let src = include_str!("sovereign_operator/knowledge.rs");
+        let start = src.find("pub async fn build_snapshot").expect("snapshot");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub fn snapshot_prompt_text")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(!fn_src.contains("unwrap_or_default()"));
+        assert!(fn_src.contains("store_down"));
+        let clusters = named_fn_src(src, "async fn recent_clusters");
+        assert!(!clusters.contains("return Ok(vec![])"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_sovereign_operator.inc"),
+            "async fn api_sovereign_operator_knowledge_get",
+        );
+        assert!(handler.contains("sovereign_operator_knowledge_unavailable_json"));
+        assert!(!handler.contains("\"detail\": e"));
+    }
+
+    #[test]
+    fn chat_llm_config_store_down_is_503_not_env_default() {
+        let src = include_str!("sovereign_operator/chat.rs");
+        let start = src.find("pub async fn load_llm_config").expect("load_llm");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn ensure_session")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(!fn_src.contains(".ok()\n        .flatten()"));
+        assert!(fn_src.contains("store_down"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_sovereign_operator.inc"),
+            "async fn api_sovereign_operator_chat",
+        );
+        assert!(handler.contains("sovereign_operator_chat_unavailable_json"));
+        assert!(handler.contains("e == \"store_down\""));
+    }
+
+    #[test]
+    fn oast_verify_count_err_is_503_not_zero_hits() {
+        let src = include_str!("council_hitl.rs");
+        let start = src.find("pub async fn poll_oast_token").expect("poll");
+        let rest = &src[start..];
+        let next = rest.find("\n#[cfg(test)]").unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        let count = fn_src.find("SELECT COUNT(*)").expect("count");
+        let min = fn_src.find("SELECT MIN(").expect("min");
+        let count_src = &fn_src[count..min];
+        assert!(!count_src.contains("unwrap_or(0)"));
+        assert!(count_src.contains(".await?"));
+        let min_src = &fn_src[min..fn_src.find("prev_hit_count").expect("prev")];
+        assert!(!min_src.contains(".ok()"));
+        assert!(min_src.contains(".await?"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "async fn api_oast_probe_verify",
+        );
+        assert!(handler.contains("oast_verify_unavailable_json"));
+        assert!(!handler.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn billing_usage_checkout_sync_store_down_is_503() {
+        let src = include_str!("server_handlers_onboarding_billing.inc");
+        let helper = named_fn_src(src, "fn billing_store_down");
+        assert!(helper.contains("billing_store_down_unavailable_json"));
+        for sig in [
+            "async fn api_billing_usage",
+            "async fn api_billing_checkout_session",
+            "async fn api_billing_sync_paddle",
+        ] {
+            let fn_src = named_fn_src(src, sig);
+            assert!(fn_src.contains("store_down"), "{sig}");
+            assert!(fn_src.contains("billing_store_down"), "{sig}");
+        }
     }
 }

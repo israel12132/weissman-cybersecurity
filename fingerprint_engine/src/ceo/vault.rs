@@ -405,7 +405,7 @@ pub async fn match_vault_row(
 ) -> Result<Value, String> {
     let row = get_vault_row(pool, tenant_id, vault_id)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|_| "store_down".to_string())?
         .ok_or_else(|| "vault row not found".to_string())?;
     let fp = row.tech_fingerprint.trim();
     if fp.is_empty() {
@@ -413,7 +413,7 @@ pub async fn match_vault_row(
     }
     crate::council_synthesis::genesis_knowledge_match(pool, tenant_id, fp)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|_| "store_down".to_string())
 }
 
 pub async fn export_vault_criticals_csv(
@@ -561,7 +561,7 @@ pub async fn post_resume_suspended_job(
         crate::job_envelope::seal_job_payload(&body, tenant_id).map_err(|e| e.to_string())?;
     weissman_db::job_queue::enqueue(pool, tenant_id, "genesis_eternal_fuzz", body, trace)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|_| "store_down".to_string())
 }
 
 #[cfg(test)]

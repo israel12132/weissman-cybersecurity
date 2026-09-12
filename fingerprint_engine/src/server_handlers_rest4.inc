@@ -3869,7 +3869,13 @@ async fn api_oast_probe_verify(
         Ok(result) => Json(result).into_response(),
         Err(e) => {
             tracing::error!(target: "oast_probe", "poll failed: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::oast_verify_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response()
         }
     }
 }

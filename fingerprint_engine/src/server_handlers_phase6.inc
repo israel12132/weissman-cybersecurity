@@ -313,7 +313,15 @@ async fn api_decrypt_sealed_poc(
         )
             .into_response();
     }
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::sealed_poc_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     (
         StatusCode::OK,
         Json(json!({

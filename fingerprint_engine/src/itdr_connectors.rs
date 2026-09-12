@@ -23,8 +23,8 @@ pub async fn load_connector_config(pool: &PgPool, tenant_id: i64) -> Result<Valu
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    tx.commit().await.map_err(|e| e.to_string())?;
+    .map_err(|_| "database unavailable".to_string())?;
+    tx.commit().await.map_err(|_| "database unavailable".to_string())?;
     parse_connector_config_raw(raw.as_deref())
 }
 
@@ -55,8 +55,8 @@ pub async fn save_connector_config(
     .bind(value.to_string())
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    tx.commit().await.map_err(|e| e.to_string())?;
+    .map_err(|_| "database unavailable".to_string())?;
+    tx.commit().await.map_err(|_| "database unavailable".to_string())?;
     Ok(())
 }
 
@@ -89,11 +89,15 @@ async fn persist_events(
         .bind(e.mfa_prompted)
         .execute(&mut *tx)
         .await;
-        if res.is_ok() {
-            n += 1;
+        match res {
+            Ok(_) => n += 1,
+            Err(_) => {
+                let _ = tx.rollback().await;
+                return Err("database unavailable".into());
+            }
         }
     }
-    tx.commit().await.map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|_| "database unavailable".to_string())?;
     Ok(n)
 }
 

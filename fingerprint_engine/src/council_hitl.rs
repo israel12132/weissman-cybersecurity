@@ -369,17 +369,14 @@ pub async fn poll_oast_token(
     )
     .bind(token)
     .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
+    .await?;
 
     let first_hit: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
         "SELECT MIN(created_at) FROM oast_interaction_hits WHERE interaction_token = $1",
     )
     .bind(token)
     .fetch_one(&mut *tx)
-    .await
-    .ok()
-    .flatten();
+    .await?;
 
     // Update the cache columns in oast_probe_tokens
     let prev_hit_count: i64 = probe.try_get::<i32, _>("hit_count").unwrap_or(0) as i64;

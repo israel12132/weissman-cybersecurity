@@ -44,6 +44,14 @@ fn billing_unavailable(detail: &str) -> Response {
         .into_response()
 }
 
+fn billing_store_down(detail: &str) -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(crate::http_unavailable::billing_store_down_unavailable_json(detail)),
+    )
+        .into_response()
+}
+
 fn paddle_webhook_error_response(err: crate::billing::PaddleWebhookError) -> Response {
     use crate::billing::PaddleWebhookError;
     match err {
@@ -105,6 +113,7 @@ async fn api_billing_usage(
             }
             (StatusCode::OK, Json(body)).into_response()
         }
+        Err(e) if e == "store_down" => billing_store_down("database unavailable"),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "ok": false, "detail": e })),
@@ -153,6 +162,7 @@ async fn api_billing_checkout_session(
         )
             .into_response(),
         Err(e) if e.contains("PADDLE_API_KEY not configured") => billing_unavailable(&e),
+        Err(e) if e == "store_down" => billing_store_down("database unavailable"),
         Err(e) => (
             StatusCode::BAD_REQUEST,
             Json(json!({ "ok": false, "detail": e })),
@@ -183,6 +193,7 @@ async fn api_billing_sync_paddle(
         )
             .into_response(),
         Err(e) if e.contains("PADDLE_API_KEY not configured") => billing_unavailable(&e),
+        Err(e) if e == "store_down" => billing_store_down("database unavailable"),
         Err(e) => (
             StatusCode::BAD_REQUEST,
             Json(json!({ "ok": false, "detail": e })),

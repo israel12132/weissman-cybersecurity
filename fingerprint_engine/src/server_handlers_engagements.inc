@@ -240,7 +240,15 @@ async fn api_client_engagements_create(
         &ip,
     )
     .await;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::engagements_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     (
         StatusCode::CREATED,

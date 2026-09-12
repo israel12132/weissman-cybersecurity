@@ -540,6 +540,14 @@ async fn command_center_spa_index(Extension(html): Extension<String>) -> Html<St
     Html(html)
 }
 
+fn dashboard_store_down_html() -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Html("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"/><title>Weissman</title></head><body>Dashboard store unavailable.</body></html>".to_string()),
+    )
+        .into_response()
+}
+
 /// Dashboard page at / : stats + findings table + clients table (default tenant, legacy HTML view).
 async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
     let (vulns, client_count, score, findings_rows, clients_rows) = match default_tenant_id(
@@ -549,39 +557,50 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
     {
         Some(tid) => match db::begin_tenant_tx(state.read_pool(), tid).await {
             Ok(mut tx) => {
-                let v: i64 =
-                    sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
-                        .fetch_one(&mut *tx)
-                        .await
-                        .unwrap_or(0);
-                let c: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients")
+                let v: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
                     .fetch_one(&mut *tx)
                     .await
-                    .unwrap_or(0);
-                let s: i64 = sqlx::query_scalar::<_, String>(
+                {
+                    Ok(n) => n,
+                    Err(_) => return dashboard_store_down_html(),
+                };
+                let c: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients")
+                    .fetch_one(&mut *tx)
+                    .await
+                {
+                    Ok(n) => n,
+                    Err(_) => return dashboard_store_down_html(),
+                };
+                let summary: Option<String> = match sqlx::query_scalar::<_, String>(
                     "SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1",
                 )
                 .fetch_optional(&mut *tx)
                 .await
-                .ok()
-                .flatten()
-                .and_then(|x| serde_json::from_str::<Value>(&x).ok())
-                .and_then(|j| {
-                    j.get("by_severity").and_then(|b| b.as_object()).map(|by| {
-                        (100i64
-                            - by.get("critical").and_then(Value::as_i64).unwrap_or(0) * 25
-                            - by.get("high").and_then(Value::as_i64).unwrap_or(0) * 15
-                            - by.get("medium").and_then(Value::as_i64).unwrap_or(0) * 5)
-                            .max(0)
+                {
+                    Ok(v) => v,
+                    Err(_) => return dashboard_store_down_html(),
+                };
+                let s: i64 = summary
+                    .and_then(|x| serde_json::from_str::<Value>(&x).ok())
+                    .and_then(|j| {
+                        j.get("by_severity").and_then(|b| b.as_object()).map(|by| {
+                            (100i64
+                                - by.get("critical").and_then(Value::as_i64).unwrap_or(0) * 25
+                                - by.get("high").and_then(Value::as_i64).unwrap_or(0) * 15
+                                - by.get("medium").and_then(Value::as_i64).unwrap_or(0) * 5)
+                                .max(0)
+                        })
                     })
-                })
-                .unwrap_or(0);
-                let findings_data = sqlx::query(
+                    .unwrap_or(0);
+                let findings_data = match sqlx::query(
                     "SELECT id, title, severity, source, client_id::text, discovered_at FROM vulnerabilities ORDER BY discovered_at DESC LIMIT 50",
                 )
                 .fetch_all(&mut *tx)
                 .await
-                .unwrap_or_default();
+                {
+                    Ok(r) => r,
+                    Err(_) => return dashboard_store_down_html(),
+                };
                 let mut findings_rows = String::new();
                 for r in &findings_data {
                     let id: i64 = r.try_get("id").unwrap_or(0);
@@ -610,10 +629,13 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
                         "<tr><td colspan=\"6\">No findings. Data is live from DB.</td></tr>"
                             .to_string();
                 }
-                let last_rows = sqlx::query("SELECT client_id, MAX(discovered_at) AS mx FROM vulnerabilities GROUP BY client_id")
+                let last_rows = match sqlx::query("SELECT client_id, MAX(discovered_at) AS mx FROM vulnerabilities GROUP BY client_id")
                     .fetch_all(&mut *tx)
                     .await
-                    .unwrap_or_default();
+                {
+                    Ok(r) => r,
+                    Err(_) => return dashboard_store_down_html(),
+                };
                 let mut last_scan: HashMap<i64, String> = HashMap::new();
                 for r in last_rows {
                     if let (Ok(cid), Ok(dt)) = (
@@ -623,10 +645,13 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
                         last_scan.insert(cid, dt.format("%Y-%m-%d %H:%M:%S").to_string());
                     }
                 }
-                let clients = sqlx::query("SELECT id, name, domains FROM clients ORDER BY id")
+                let clients = match sqlx::query("SELECT id, name, domains FROM clients ORDER BY id")
                     .fetch_all(&mut *tx)
                     .await
-                    .unwrap_or_default();
+                {
+                    Ok(r) => r,
+                    Err(_) => return dashboard_store_down_html(),
+                };
                 let mut clients_rows = String::new();
                 for r in clients {
                     let id: i64 = r.try_get("id").unwrap_or(0);
@@ -664,16 +689,14 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
                         r#"<tr><td colspan="5">No clients yet. Add one below.</td></tr>"#
                             .to_string();
                 }
-                let _ = tx.commit().await;
+                if tx.commit().await.is_err() {
+                    return dashboard_store_down_html();
+                }
                 (v, c, s, findings_rows, clients_rows)
             }
-            Err(_) => (
-                0,
-                0,
-                0,
-                "<tr><td colspan=\"6\">DB unavailable.</td></tr>".to_string(),
-                r#"<tr><td colspan="5">DB unavailable.</td></tr>"#.to_string(),
-            ),
+            Err(_) => {
+                return dashboard_store_down_html();
+            }
         },
         None => (
             0,
@@ -1175,15 +1198,40 @@ async fn api_command_center_ticker(
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
-        return (StatusCode::OK, Json(json!({ "events": [] }))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::command_center_ticker_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         "SELECT id, title, severity, source, client_id::text, discovered_at FROM vulnerabilities ORDER BY discovered_at DESC LIMIT 100",
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::command_center_ticker_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::command_center_ticker_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let mut events = vec![];
     for r in rows {
         let discovered: chrono::DateTime<Utc> =

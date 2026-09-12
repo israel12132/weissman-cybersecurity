@@ -1013,15 +1013,20 @@ async fn enqueue_heal_from_slack(
     }
     let mut tx = db::begin_tenant_tx(&state.app_pool, tenant_id)
         .await
-        .map_err(|e| e.to_string())?;
-    let repo_cfg: Option<String> = sqlx::query_scalar(
+        .map_err(|_| "store_down".to_string())?;
+    let repo_cfg: Option<String> = match sqlx::query_scalar(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'auto_heal_repo_slug'",
     )
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(_) => {
+            let _ = tx.rollback().await;
+            return Err("store_down".into());
+        }
+    };
     let repo = repo_cfg
         .filter(|s| !s.trim().is_empty())
         .or_else(|| std::env::var("WEISSMAN_AUTOHEAL_REPO").ok())
@@ -1037,7 +1042,7 @@ async fn enqueue_heal_from_slack(
     .bind(finding_id)
     .fetch_optional(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     let Some(r) = row else {
         let _ = tx.rollback().await;
         return Err("finding not found".into());
@@ -1088,7 +1093,7 @@ async fn enqueue_heal_from_slack(
         let _ = tx.rollback().await;
         return Err("failed to record heal approval".into());
     }
-    tx.commit().await.map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|_| "store_down".to_string())?;
     db::job_queue::enqueue_with_max_attempts(
         state.app_pool.as_ref(),
         tenant_id,
@@ -1098,7 +1103,7 @@ async fn enqueue_heal_from_slack(
         5,
     )
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "failed to enqueue heal".to_string())?;
     Ok(spec_id.to_string())
 }
 

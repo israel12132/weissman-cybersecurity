@@ -113,14 +113,11 @@ async fn api_itdr_connectors_get(
 ) -> Response {
     match crate::itdr_connectors::load_connector_config(&state.app_pool, auth.tenant_id).await {
         Ok(cfg) => (StatusCode::OK, Json(json!({"ok": true, "connectors": cfg}))).into_response(),
-        Err(e) => (
+        Err(_) => (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({
-                "ok": false,
-                "unavailable": true,
-                "connectors": {},
-                "detail": scrub_internal_error(&e),
-            })),
+            Json(crate::http_unavailable::itdr_connectors_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }
@@ -137,6 +134,13 @@ async fn api_itdr_connectors_put(
     match crate::itdr_connectors::save_connector_config(&state.app_pool, auth.tenant_id, &body).await
     {
         Ok(()) => (StatusCode::OK, Json(json!({"ok": true}))).into_response(),
+        Err(e) if e == "database unavailable" => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::itdr_connectors_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response(),
         Err(e) => (
             StatusCode::BAD_REQUEST,
             Json(json!({"ok": false, "detail": e})),
@@ -164,10 +168,12 @@ async fn api_itdr_connectors_pull(
     let cfg = match crate::itdr_connectors::load_connector_config(&state.app_pool, auth.tenant_id).await
     {
         Ok(c) => c,
-        Err(e) => {
+        Err(_) => {
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"ok": false, "unavailable": true, "detail": scrub_internal_error(&e)})),
+                Json(crate::http_unavailable::itdr_connectors_unavailable_json(
+                    "database unavailable",
+                )),
             )
                 .into_response();
         }
@@ -190,6 +196,13 @@ async fn api_itdr_connectors_pull(
         Ok(p) => (
             StatusCode::OK,
             Json(json!({"ok": true, "provider": p.provider, "ingested": p.ingested, "detail": p.detail})),
+        )
+            .into_response(),
+        Err(e) if e == "database unavailable" => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::itdr_connectors_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
         Err(e) => (

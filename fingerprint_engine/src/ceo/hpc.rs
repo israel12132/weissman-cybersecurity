@@ -129,7 +129,7 @@ pub async fn put_hpc_policy(
     let p = body.research_core_share_percent.clamp(0, 100);
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "store_down".to_string())?;
     sqlx::query(
         r#"INSERT INTO ceo_hpc_policy (
             tenant_id, research_core_share_percent, research_cpu_affinity,
@@ -149,7 +149,7 @@ pub async fn put_hpc_policy(
     .bind(body.routing_note.trim())
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     let row = sqlx::query(
         r#"SELECT tenant_id, research_core_share_percent, research_cpu_affinity,
                   client_scan_cpu_affinity, routing_note, updated_at
@@ -158,20 +158,20 @@ pub async fn put_hpc_policy(
     .bind(tenant_id)
     .fetch_one(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await.map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
+    tx.commit().await.map_err(|_| "store_down".to_string())?;
     Ok(HpcPolicyRow {
-        tenant_id: row.try_get("tenant_id").map_err(|e| e.to_string())?,
+        tenant_id: row.try_get("tenant_id").map_err(|_| "store_down".to_string())?,
         research_core_share_percent: row
             .try_get("research_core_share_percent")
-            .map_err(|e| e.to_string())?,
+            .map_err(|_| "store_down".to_string())?,
         research_cpu_affinity: row
             .try_get("research_cpu_affinity")
-            .map_err(|e| e.to_string())?,
+            .map_err(|_| "store_down".to_string())?,
         client_scan_cpu_affinity: row
             .try_get("client_scan_cpu_affinity")
-            .map_err(|e| e.to_string())?,
-        routing_note: row.try_get("routing_note").map_err(|e| e.to_string())?,
-        updated_at: row.try_get("updated_at").map_err(|e| e.to_string())?,
+            .map_err(|_| "store_down".to_string())?,
+        routing_note: row.try_get("routing_note").map_err(|_| "store_down".to_string())?,
+        updated_at: row.try_get("updated_at").map_err(|_| "store_down".to_string())?,
     })
 }

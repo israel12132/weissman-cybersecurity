@@ -141,6 +141,17 @@ async fn api_sovereign_operator_chat(
                 .into_response()
         }
         Err(e) => {
+            if e == "store_down" {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(
+                        crate::http_unavailable::sovereign_operator_chat_unavailable_json(
+                            "database unavailable",
+                        ),
+                    ),
+                )
+                    .into_response();
+            }
             let unavailable = e.contains("requires a live LLM") || e.contains("LLM unreachable");
             let code = if unavailable {
                 StatusCode::SERVICE_UNAVAILABLE
@@ -212,9 +223,13 @@ async fn api_sovereign_operator_knowledge_get(
 ) -> Response {
     match sov_knowledge::build_snapshot(state.app_pool.as_ref(), auth.tenant_id).await {
         Ok(snap) => (StatusCode::OK, Json(json!({ "ok": true, "knowledge": snap }))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(
+                crate::http_unavailable::sovereign_operator_knowledge_unavailable_json(
+                    "database unavailable",
+                ),
+            ),
         )
             .into_response(),
     }
