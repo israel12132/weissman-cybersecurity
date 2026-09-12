@@ -1,10 +1,11 @@
 /**
  * Board Evidence Pack — /board-pack
  *
- * Live tenant findings only (GET /api/board-pack). Downloads a true OOXML
- * workbook (not CSV labeled Excel) plus the existing PDF/CSV artifacts.
+ * Live tenant findings only (GET /api/board-pack). KPIs and the table share
+ * that response: totals cover the export set (≤50k); `grid` is the same
+ * ordered preview (≤5k). Downloads a true OOXML workbook plus PDF/CSV.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
@@ -51,46 +52,49 @@ export default function BoardEvidencePack() {
   const [search, setSearch] = useState('')
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [busy, setBusy] = useState('')
+  const loadGen = useRef(0)
 
   const qs = selectedClientId ? `?client_id=${encodeURIComponent(selectedClientId)}` : ''
 
   const load = useCallback(async () => {
+    const gen = ++loadGen.current
     setError('')
     try {
-      const findingsPath = selectedClientId
-        ? `/api/findings?limit=2000&client_id=${encodeURIComponent(selectedClientId)}`
-        : '/api/findings?limit=2000'
-      const [summary, raw] = await Promise.all([
-        apiFetch(`/api/board-pack${qs}`),
-        apiFetch(findingsPath),
-      ])
+      const summary = await apiFetch(`/api/board-pack${qs}`)
+      if (gen !== loadGen.current) return
       setPack(summary && typeof summary === 'object' ? summary : null)
-      const arr = Array.isArray(raw) ? raw : Array.isArray(raw?.findings) ? raw.findings : []
+      const arr = Array.isArray(summary?.grid) ? summary.grid : []
       setFindings(arr)
     } catch (e) {
+      if (gen !== loadGen.current) return
       setError(e.message || t(`${NS}.load_error`))
       setPack(null)
       setFindings([])
     } finally {
-      setLoading(false)
+      if (gen === loadGen.current) setLoading(false)
     }
-  }, [qs, selectedClientId, t])
+  }, [qs, t])
 
   useEffect(() => {
+    setPack(null)
+    setFindings([])
     setLoading(true)
     load()
-  }, [load])
+  }, [load, selectedClientId])
 
   useVisiblePolling(load, 60000, { paused: !autoRefresh })
 
   const totals = pack?.totals || {}
+  const scope = pack?.scope || {}
   const critical = Number(totals.critical) || 0
+  const exportTotal = Number(totals.findings) || findings.length
+  const truncated = Boolean(scope.truncated) || exportTotal > findings.length
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return findings
     return findings.filter((f) =>
-      `${f.title || ''} ${f.source || f.engine || ''} ${f.severity || ''}`.toLowerCase().includes(q),
+      `${f.title || ''} ${f.source || f.engine || ''} ${f.severity || ''} ${f.mitre || ''}`.toLowerCase().includes(q),
     )
   }, [findings, search])
 
@@ -151,6 +155,13 @@ export default function BoardEvidencePack() {
             </span>
           )
         },
+      }),
+      columnHelper.accessor((f) => f.mitre || '', {
+        id: 'mitre',
+        header: t(`${NS}.col_mitre`),
+        cell: (ctx) => (
+          <span className="text-[var(--text-tertiary)] font-mono text-[11px]">{ctx.getValue() || '—'}</span>
+        ),
       }),
     ],
     [t],
@@ -241,6 +252,16 @@ export default function BoardEvidencePack() {
         <p className="text-[11px] font-mono text-[var(--text-muted)] leading-relaxed">
           {t(`${NS}.legal_note`)}
         </p>
+
+        {truncated && !loading && (
+          <p className="text-[11px] font-mono text-amber-200/90 leading-relaxed rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2">
+            {t(`${NS}.grid_capped`, {
+              shown: findings.length,
+              total: exportTotal,
+              exportCap: scope.export_limit ?? 50000,
+            })}
+          </p>
+        )}
 
         <div className="flex flex-wrap gap-3 text-[11px] font-mono">
           <Link to="/dark-web" className="text-violet-300 hover:underline">{t(`${NS}.link_dark_web`)}</Link>

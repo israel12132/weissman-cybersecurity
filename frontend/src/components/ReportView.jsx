@@ -62,7 +62,11 @@ export default function ReportView() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => downloadApiFile(`/api/clients/${clientId}/export/xlsx`, `Weissman_Board.xlsx`)}
+            onClick={() => {
+              downloadApiFile(`/api/clients/${clientId}/export/xlsx`, 'Weissman_Board.xlsx').catch((e) => {
+                setError(e?.message || t('components.reportView.download_failed'))
+              })
+            }}
             className="text-sm text-emerald-400 hover:underline"
           >
             {t('components.reportView.download_xlsx')}

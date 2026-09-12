@@ -1,6 +1,7 @@
 /**
  * Dark Web Monitor — tenant-scoped intelligence from live `/api/findings` only.
- * Sources: leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor.
+ * Sources: leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor,
+ * adversary_exposure_delta, threat_intel_fusion.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
@@ -70,7 +71,7 @@ export default function DarkWebMonitor() {
   const load = useCallback(async () => {
     setError(null)
     try {
-      const d = await apiFetch('/api/findings?limit=2000')
+      const d = await apiFetch('/api/findings?limit=5000')
       setFindings(parseFindings(d))
       setLastRefresh(new Date())
     } catch (e) {
@@ -123,6 +124,18 @@ export default function DarkWebMonitor() {
   const exportCsv = () => {
     if (filtered.length) exportWorkbenchCsv()
   }
+
+  const xlsxPath = useMemo(() => {
+    const sources = sourceFilter !== 'all' ? sourceFilter : [...DARK_WEB_SOURCES].join(',')
+    return `/api/findings/export/xlsx?source=${encodeURIComponent(sources)}`
+  }, [sourceFilter])
+
+  const exportXlsx = useCallback(() => {
+    if (!filtered.length) return
+    downloadApiFile(xlsxPath, 'Weissman_DarkWeb.xlsx').catch((e) => {
+      setError(e.message || t('pages.darkWebMonitor.download_failed'))
+    })
+  }, [filtered.length, xlsxPath, t])
 
   const columns = useMemo(
     () => [
@@ -195,9 +208,10 @@ export default function DarkWebMonitor() {
           <ShellScanActions
             onRefresh={load}
             onExport={exportCsv}
-            onExportXlsx={() => downloadApiFile('/api/findings/export/xlsx', 'Weissman_Board.xlsx')}
+            onExportXlsx={exportXlsx}
             refreshLoading={loading}
             exportDisabled={filtered.length === 0}
+            exportXlsxDisabled={filtered.length === 0}
           />
         </div>
       )}

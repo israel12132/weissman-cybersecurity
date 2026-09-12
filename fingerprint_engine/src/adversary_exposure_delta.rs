@@ -393,11 +393,30 @@ pub async fn collect_public_adversary_intel(engine_id: &str, target: &str) -> Ve
     out
 }
 
-pub async fn run_adversary_exposure_delta_result(target: &str) -> EngineResult {
+pub fn max_findings_from_params(params: &Value) -> usize {
+    let n = params
+        .get("max_findings")
+        .and_then(|v| {
+            v.as_u64()
+                .or_else(|| v.as_i64().and_then(|i| u64::try_from(i).ok()))
+                .or_else(|| v.as_str().and_then(|s| s.parse::<u64>().ok()))
+        })
+        .unwrap_or(50);
+    (n as usize).clamp(1, 50)
+}
+
+pub async fn run_adversary_exposure_delta_result(
+    target: &str,
+    ctx: &crate::engine_dispatch::EngineRunContext,
+) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
-    let findings = collect_public_adversary_intel("adversary_exposure_delta", target).await;
+    let cap = max_findings_from_params(&ctx.job_params);
+    let mut findings = collect_public_adversary_intel("adversary_exposure_delta", target).await;
+    if findings.len() > cap {
+        findings.truncate(cap);
+    }
     if findings.is_empty() {
         let abusech = if abusech_auth_key().is_empty() {
             "urlhaus+threatfox skipped (no ABUSECH_AUTH_KEY)"
@@ -414,13 +433,22 @@ pub async fn run_adversary_exposure_delta_result(target: &str) -> EngineResult {
     } else {
         EngineResult::ok(
             findings.clone(),
-            format!("adversary_exposure_delta: {}", findings.len()),
+            format!(
+                "adversary_exposure_delta: {} (max_findings={cap})",
+                findings.len()
+            ),
         )
     }
 }
 
 pub async fn run_adversary_exposure_delta(target: &str) {
-    print_result(run_adversary_exposure_delta_result(target).await);
+    print_result(
+        run_adversary_exposure_delta_result(
+            target,
+            &crate::engine_dispatch::EngineRunContext::default(),
+        )
+        .await,
+    );
 }
 
 #[cfg(test)]
@@ -524,5 +552,14 @@ mod tests {
             r#"{"pulse_info":{"count":1,"pulses":[{"id":"abc","name":"malicious campaign"}]}}"#;
         let out = findings_from_otx("x", "evil.test", "evil.test", body);
         assert_eq!(out.len(), 1);
+    }
+
+    #[test]
+    fn max_findings_clamps_to_engine_range() {
+        assert_eq!(max_findings_from_params(&json!({})), 50);
+        assert_eq!(max_findings_from_params(&json!({"max_findings": 3})), 3);
+        assert_eq!(max_findings_from_params(&json!({"max_findings": "8"})), 8);
+        assert_eq!(max_findings_from_params(&json!({"max_findings": 0})), 1);
+        assert_eq!(max_findings_from_params(&json!({"max_findings": 999})), 50);
     }
 }

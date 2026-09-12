@@ -127,6 +127,7 @@ fn row_to_board_finding(r: &sqlx::postgres::PgRow) -> crate::xlsx_pack::BoardFin
         client_id: r.try_get::<String, _>("client_id").unwrap_or_default(),
         client_name: r.try_get::<String, _>("client_name").unwrap_or_default(),
         description: r.try_get::<String, _>("description").unwrap_or_default(),
+        raw_data: r.try_get::<String, _>("raw_data").unwrap_or_default(),
         poc_exploit: r.try_get::<String, _>("poc_exploit").unwrap_or_default(),
         generated_patch: r.try_get::<String, _>("generated_patch").unwrap_or_default(),
         poc_sealed: r.try_get::<bool, _>("poc_sealed").unwrap_or(false),
@@ -139,10 +140,54 @@ fn row_to_board_finding(r: &sqlx::postgres::PgRow) -> crate::xlsx_pack::BoardFin
 
 const BOARD_FINDINGS_SQL: &str = "SELECT v.id, v.finding_id, v.title, v.severity, v.source, v.status, \
      v.client_id::text AS client_id, COALESCE(c.name,'') AS client_name, \
-     COALESCE(v.description,'') AS description, COALESCE(v.poc_exploit,'') AS poc_exploit, \
+     COALESCE(v.description,'') AS description, \
+     COALESCE(v.raw_data, '{}'::jsonb)::text AS raw_data, \
+     COALESCE(v.poc_exploit,'') AS poc_exploit, \
      COALESCE(v.generated_patch,'') AS generated_patch, \
      COALESCE(v.poc_sealed, false) AS poc_sealed, v.discovered_at \
      FROM vulnerabilities v LEFT JOIN clients c ON c.id = v.client_id";
+
+fn board_db_unavailable(e: &sqlx::Error) -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(json!({"error": "DB unavailable", "detail": scrub_internal_error(e)})),
+    )
+        .into_response()
+}
+
+async fn fetch_client_name(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    id: i64,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&mut **tx)
+        .await
+}
+
+async fn board_client_label(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    client_id: Option<i64>,
+) -> Result<String, Response> {
+    let Some(id) = client_id else {
+        return Ok("All clients".to_string());
+    };
+    match fetch_client_name(tx, id).await {
+        Ok(Some(n)) => Ok(n),
+        Ok(None) => Err((
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "client not found"})),
+        )
+            .into_response()),
+        Err(e) => Err(board_db_unavailable(&e)),
+    }
+}
+
+fn board_source_filter(raw: Option<&str>) -> Result<Option<Vec<String>>, Response> {
+    crate::xlsx_pack::parse_source_allowlist(raw).map_err(|msg| {
+        (StatusCode::BAD_REQUEST, Json(json!({"error": msg}))).into_response()
+    })
+}
 
 fn xlsx_attachment(bytes: Vec<u8>, filename: &str) -> Response {
     let mut res = Response::new(Body::from(bytes));
@@ -168,37 +213,34 @@ async fn api_client_export_xlsx(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<i64>,
+    Query(q): Query<BoardPackQuery>,
 ) -> Response {
+    let client_id = match crate::client_isolation::bind_requested_client(&auth, Some(id)) {
+        Ok(Some(cid)) => cid,
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
+        }
+        Err(r) => return r,
+    };
+    let sources = match board_source_filter(q.source.as_deref()) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
     };
-    let client_name: String = match sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
-        .bind(id)
-        .fetch_optional(&mut *tx)
-        .await
-        .ok()
-        .flatten()
-    {
-        Some(n) => n,
-        None => {
-            let _ = tx.rollback().await;
-            return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
-        }
+    let client_name = match board_client_label(&mut tx, Some(client_id)).await {
+        Ok(n) => n,
+        Err(r) => return r,
     };
-    let sql = format!("{BOARD_FINDINGS_SQL} WHERE v.client_id = $1 ORDER BY v.discovered_at DESC LIMIT 50000");
-    let rows = match sqlx::query(&sql).bind(id).fetch_all(&mut *tx).await {
-        Ok(r) => r,
+    let findings = match load_board_findings_for_scope(&mut tx, Some(client_id), sources.as_deref()).await {
+        Ok(f) => f,
         Err(e) => {
             let _ = tx.rollback().await;
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"error": "DB unavailable", "detail": scrub_internal_error(&e)})),
-            )
-                .into_response();
+            return board_db_unavailable(&e);
         }
     };
     let _ = tx.commit().await;
-    let findings: Vec<crate::xlsx_pack::BoardFinding> = rows.iter().map(row_to_board_finding).collect();
     match crate::xlsx_pack::build_board_xlsx("Weissman", &client_name, &findings) {
         Ok(b) => {
             let safe_name = client_name
@@ -218,22 +260,26 @@ async fn api_client_export_xlsx(
 #[derive(Deserialize, Default)]
 struct BoardPackQuery {
     client_id: Option<i64>,
+    source: Option<String>,
 }
 
 async fn load_board_findings_for_scope(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     client_id: Option<i64>,
+    sources: Option<&[String]>,
 ) -> Result<Vec<crate::xlsx_pack::BoardFinding>, sqlx::Error> {
-    let rows = if let Some(id) = client_id {
-        let sql = format!("{BOARD_FINDINGS_SQL} WHERE v.client_id = $1 ORDER BY v.discovered_at DESC LIMIT 50000");
-        sqlx::query(&sql)
-            .bind(id)
-            .fetch_all(&mut **tx)
-            .await?
-    } else {
-        let sql = format!("{BOARD_FINDINGS_SQL} ORDER BY v.discovered_at DESC LIMIT 50000");
-        sqlx::query(&sql).fetch_all(&mut **tx).await?
-    };
+    let sql = format!(
+        "{BOARD_FINDINGS_SQL} \
+         WHERE ($1::bigint IS NULL OR v.client_id = $1) \
+           AND ($2::text[] IS NULL OR lower(v.source) = ANY($2)) \
+         ORDER BY v.discovered_at DESC LIMIT {}",
+        crate::xlsx_pack::BOARD_EXPORT_LIMIT
+    );
+    let rows = sqlx::query(&sql)
+        .bind(client_id)
+        .bind(sources)
+        .fetch_all(&mut **tx)
+        .await?;
     Ok(rows.iter().map(row_to_board_finding).collect())
 }
 
@@ -242,35 +288,26 @@ async fn api_findings_export_xlsx(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<BoardPackQuery>,
 ) -> Response {
+    let client_id = match crate::client_isolation::bind_requested_client(&auth, q.client_id) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let sources = match board_source_filter(q.source.as_deref()) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
     };
-    let client_label = if let Some(id) = q.client_id {
-        match sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
-            .bind(id)
-            .fetch_optional(&mut *tx)
-            .await
-            .ok()
-            .flatten()
-        {
-            Some(n) => n,
-            None => {
-                let _ = tx.rollback().await;
-                return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
-            }
-        }
-    } else {
-        "All clients".to_string()
+    let client_label = match board_client_label(&mut tx, client_id).await {
+        Ok(n) => n,
+        Err(r) => return r,
     };
-    let findings = match load_board_findings_for_scope(&mut tx, q.client_id).await {
+    let findings = match load_board_findings_for_scope(&mut tx, client_id, sources.as_deref()).await {
         Ok(f) => f,
         Err(e) => {
             let _ = tx.rollback().await;
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"error": "DB unavailable", "detail": scrub_internal_error(&e)})),
-            )
-                .into_response();
+            return board_db_unavailable(&e);
         }
     };
     let _ = tx.commit().await;
@@ -292,43 +329,35 @@ async fn api_board_pack(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<BoardPackQuery>,
 ) -> Response {
+    let client_id = match crate::client_isolation::bind_requested_client(&auth, q.client_id) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let sources = match board_source_filter(q.source.as_deref()) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
     };
-    let client_label = if let Some(id) = q.client_id {
-        match sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
-            .bind(id)
-            .fetch_optional(&mut *tx)
-            .await
-            .ok()
-            .flatten()
-        {
-            Some(n) => n,
-            None => {
-                let _ = tx.rollback().await;
-                return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
-            }
-        }
-    } else {
-        "All clients".to_string()
+    let client_label = match board_client_label(&mut tx, client_id).await {
+        Ok(n) => n,
+        Err(r) => return r,
     };
-    let findings = match load_board_findings_for_scope(&mut tx, q.client_id).await {
+    let findings = match load_board_findings_for_scope(&mut tx, client_id, sources.as_deref()).await {
         Ok(f) => f,
         Err(e) => {
             let _ = tx.rollback().await;
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"error": "DB unavailable", "detail": scrub_internal_error(&e)})),
-            )
-                .into_response();
+            return board_db_unavailable(&e);
         }
     };
     let _ = tx.commit().await;
     Json(crate::xlsx_pack::board_pack_json(
         "Weissman",
-        q.client_id,
+        client_id,
         &client_label,
         &findings,
+        q.source.as_deref(),
     ))
     .into_response()
 }
@@ -1045,7 +1074,8 @@ async fn api_openapi_spec() -> Response {
                     "summary": "Export a true OOXML board workbook (Executive, Findings, Remediation, AdversaryIntel, MITRE)",
                     "tags": ["Findings", "Reports"],
                     "parameters": [
-                        { "name": "client_id", "in": "query", "required": false, "schema": { "type": "integer" } }
+                        { "name": "client_id", "in": "query", "required": false, "schema": { "type": "integer" } },
+                        { "name": "source", "in": "query", "required": false, "schema": { "type": "string" }, "description": "Comma-separated engine source allowlist (alnum, underscore, hyphen)" }
                     ],
                     "responses": {
                         "200": {
@@ -1057,13 +1087,14 @@ async fn api_openapi_spec() -> Response {
             },
             "/api/board-pack": {
                 "get": {
-                    "summary": "Live board-pack KPIs from tenant findings (no fabricated rows)",
+                    "summary": "Live board-pack KPIs and grid preview from tenant findings (no fabricated rows)",
                     "tags": ["Reports"],
                     "parameters": [
-                        { "name": "client_id", "in": "query", "required": false, "schema": { "type": "integer" } }
+                        { "name": "client_id", "in": "query", "required": false, "schema": { "type": "integer" } },
+                        { "name": "source", "in": "query", "required": false, "schema": { "type": "string" }, "description": "Comma-separated engine source allowlist (alnum, underscore, hyphen)" }
                     ],
                     "responses": {
-                        "200": { "description": "Board pack JSON" }
+                        "200": { "description": "Board pack JSON with totals, scope, and grid preview" }
                     }
                 }
             },
@@ -1160,7 +1191,8 @@ async fn api_openapi_spec() -> Response {
                     "summary": "Export a true OOXML board workbook for a client",
                     "tags": ["Clients","Reports"],
                     "parameters": [
-                        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+                        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } },
+                        { "name": "source", "in": "query", "required": false, "schema": { "type": "string" }, "description": "Comma-separated engine source allowlist (alnum, underscore, hyphen)" }
                     ],
                     "responses": {
                         "200": {

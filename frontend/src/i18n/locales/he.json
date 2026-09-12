@@ -1903,7 +1903,7 @@
       "auto_on": "רענון חי פעיל",
       "auto_off": "רענון חי כבוי",
       "last_updated": "סונכרן לאחרונה {{time}}",
-      "evidence_notice": "כל שורה היא ממצא אמיתי מ-GET /api/findings המסונן ל-leak_hunter, darkweb_intel, dark_web_monitor ו-typosquatting_monitor — לעולם לא נתוני פריצה מדומים.",
+      "evidence_notice": "כל שורה היא ממצא אמיתי מ-GET /api/findings המסונן ל-leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor, adversary_exposure_delta ו-threat_intel_fusion — לעולם לא נתוני פריצה מדומים.",
       "source_breakdown": "פגיעות לפי מנוע מקור",
       "search_placeholder": "חפש כותרת, יעד או תיאור…",
       "filter_all": "הכל",
@@ -1923,7 +1923,8 @@
       "empty_step_keys": "לפידים עשירים יותר, הגדר HIBP_API_KEY / OTX_API_KEY בהגדרות המערכת; המנוע מחובר אך מתדרדר בחן ללא מפתחות.",
       "empty_step_engine_before": "הפעל את מנוע darkweb_intel מ",
       "empty_step_engine_link": "מטריצת המנועים",
-      "empty_step_engine_after": "(דורש דומיין מורשה)."
+      "empty_step_engine_after": "(דורש דומיין מורשה).",
+      "download_failed": "הורדת Excel נכשלה."
     },
     "boardEvidencePack": {
       "title": "חבילת ראיות לדירקטוריון",
@@ -1933,7 +1934,7 @@
       "download_failed": "ההורדה נכשלה.",
       "auto_on": "רענון חי פעיל",
       "auto_off": "רענון חי כבוי",
-      "evidence_notice": "מדדי ה-KPI מגיעים מ-GET /api/board-pack (ממצאים לפי tenant). כפתור Excel מוריד חוברת OOXML אמיתית מ-GET /api/findings/export/xlsx — חמישה גיליונות: Executive, Findings, Remediation, AdversaryIntel, MITRE. שורות יריב הן אינדקסים חוקיים בלבד (urlscan, abuse.ch, IntelX/HIBP/OTX עם מפתח). אין סריקת שווקי Tor.",
+      "evidence_notice": "מדדי ה-KPI והטבלה מגיעים מאותה תשובת GET /api/board-pack חיה. הסה״כ מכסה את סט הייצוא (עד 50,000). הטבלה היא אותה תצוגה מקדימה לפי סדר (עד 5,000). Excel היא חוברת OOXML אמיתית. שורות יריב הן אינדקסים חוקיים בלבד. אין סריקת שווקי Tor.",
       "kpi_total": "ממצאים",
       "kpi_critical": "קריטי",
       "kpi_high": "גבוה",
@@ -1948,11 +1949,13 @@
       "col_severity": "חומרה",
       "col_title": "כותרת",
       "col_source": "מקור",
+      "col_mitre": "MITRE",
       "empty_title": "אין ממצאים חיים להיקף זה עדיין.",
       "empty_body": "הפעל Leak Hunter או Adversary Exposure Delta על דומיין מורשה. החבילה מציגה רק שורות שמורות במסד הנתונים.",
       "empty_scan": "פתח מטריצת מנועים",
       "all_clients": "כל הלקוחות",
-      "scoped_to": "מסונן ל-{{name}}"
+      "scoped_to": "מסונן ל-{{name}}",
+      "grid_capped": "הטבלה מציגה את {{shown}} הממצאים האחרונים בהיקף זה. מדדי ה-KPI וחוברת Excel כוללים את כל {{total}} (עד {{exportCap}}). החיפוש חל על התצוגה המקדימה בלבד — השתמשו במרכז הממצאים או בחוברת לשאר."
     },
     "healReadiness": {
       "title": "מוכנות ריפוי אוטומטי",
@@ -6836,6 +6839,7 @@
       "title": "דוח — {{name}}",
       "download_pdf": "הורד PDF",
       "download_xlsx": "הורד Excel",
+      "download_failed": "הורדת Excel נכשלה.",
       "back_war_room": "← חדר מלחמה",
       "load_failed": "טעינה נכשלה",
       "executive_summary": "סיכום מנהלים",

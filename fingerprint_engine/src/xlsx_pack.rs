@@ -17,6 +17,11 @@ const ADVERSARY_SOURCES: &[&str] = &[
     "threat_intel_fusion",
 ];
 
+/// Workbook / KPI query cap (newest first).
+pub const BOARD_EXPORT_LIMIT: i64 = 50_000;
+/// JSON grid preview shipped with `/api/board-pack` (same ordered set as export).
+pub const BOARD_GRID_LIMIT: usize = 5_000;
+
 /// One live finding row for the board workbook / JSON summary.
 #[derive(Debug, Clone, Default)]
 pub struct BoardFinding {
@@ -29,6 +34,8 @@ pub struct BoardFinding {
     pub client_id: String,
     pub client_name: String,
     pub description: String,
+    /// Persist stores MITRE / remediation in jsonb `raw_data`, not in `description`.
+    pub raw_data: String,
     pub poc_exploit: String,
     pub generated_patch: String,
     pub poc_sealed: bool,
@@ -37,16 +44,48 @@ pub struct BoardFinding {
 
 impl BoardFinding {
     pub fn mitre(&self) -> String {
-        json_str_field(&self.description, &["mitre_attack", "mitre", "technique"])
+        let from_raw = json_str_field(
+            &self.raw_data,
+            &[
+                "mitre_attack",
+                "mitre",
+                "technique",
+                "attack_id",
+                "mitre_attack_id",
+            ],
+        );
+        if !from_raw.is_empty() {
+            return from_raw;
+        }
+        json_str_field(
+            &self.description,
+            &[
+                "mitre_attack",
+                "mitre",
+                "technique",
+                "attack_id",
+                "mitre_attack_id",
+            ],
+        )
     }
 
     pub fn remediation(&self) -> String {
-        let from_json = json_str_field(
-            &self.description,
-            &["remediation", "remediation_snippet", "fix"],
-        );
-        if !from_json.is_empty() {
-            return from_json;
+        for blob in [&self.raw_data, &self.description] {
+            let from_json = json_str_field(
+                blob,
+                &[
+                    "remediation",
+                    "remediation_snippet",
+                    "fix",
+                    "fix_recommendation",
+                    "recommendation",
+                    "how_to_fix",
+                    "solution",
+                ],
+            );
+            if !from_json.is_empty() {
+                return from_json;
+            }
         }
         if !self.generated_patch.trim().is_empty() {
             return self.generated_patch.clone();
@@ -77,22 +116,77 @@ pub fn neutralize_formula(s: &str) -> String {
     }
 }
 
-fn json_str_field(desc: &str, keys: &[&str]) -> String {
-    let trimmed = desc.trim();
-    if trimmed.is_empty() {
+/// Parse `?source=a,b,c` into a sanitized engine-id allowlist.
+/// Empty / missing → `Ok(None)` (no filter). Invalid tokens → `Err`.
+pub fn parse_source_allowlist(raw: Option<&str>) -> Result<Option<Vec<String>>, &'static str> {
+    let Some(s) = raw.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Ok(None);
+    };
+    if s.len() > 512 {
+        return Err("source too long");
+    }
+    let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for part in s.split(',') {
+        let t = part.trim().to_ascii_lowercase();
+        if t.is_empty() {
+            continue;
+        }
+        if t.len() > 64
+            || !t
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            return Err("invalid source");
+        }
+        if seen.insert(t.clone()) {
+            out.push(t);
+        }
+    }
+    if out.is_empty() {
+        return Err("invalid source");
+    }
+    Ok(Some(out))
+}
+
+fn json_str_field(blob: &str, keys: &[&str]) -> String {
+    let trimmed = blob.trim();
+    if trimmed.is_empty() || trimmed == "{}" {
         return String::new();
     }
     let Ok(v) = serde_json::from_str::<Value>(trimmed) else {
         return String::new();
     };
-    for k in keys {
-        if let Some(s) = v.get(*k).and_then(Value::as_str) {
-            if !s.is_empty() {
-                return s.to_string();
-            }
+    if let Some(s) = pick_str_keys(&v, keys) {
+        return s;
+    }
+    if let Some(raw) = v.get("raw") {
+        if let Some(s) = pick_str_keys(raw, keys) {
+            return s;
         }
     }
     String::new()
+}
+
+fn pick_str_keys(v: &Value, keys: &[&str]) -> Option<String> {
+    for k in keys {
+        match v.get(*k) {
+            Some(Value::String(s)) if !s.is_empty() => return Some(s.clone()),
+            Some(Value::Array(arr)) => {
+                let parts: Vec<String> = arr
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .collect();
+                if !parts.is_empty() {
+                    return Some(parts.join(", "));
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 fn xml_escape(s: &str) -> String {
@@ -282,12 +376,24 @@ fn severity_counts(findings: &[BoardFinding]) -> (u32, u32, u32, u32, u32) {
     c
 }
 
+fn export_query_suffix(source_filter: Option<&str>) -> String {
+    source_filter
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| format!("?source={s}"))
+        .unwrap_or_default()
+}
+
 /// Build a live-only board JSON summary (no fabricated findings).
+///
+/// KPIs cover the full export set (≤ [`BOARD_EXPORT_LIMIT`]). `grid` is the same
+/// ordered slice the Command Center table should render (≤ [`BOARD_GRID_LIMIT`]).
 pub fn board_pack_json(
     org_label: &str,
     client_id: Option<i64>,
     client_label: &str,
     findings: &[BoardFinding],
+    source_filter: Option<&str>,
 ) -> Value {
     let (critical, high, medium, low, info) = severity_counts(findings);
     let verified = findings.iter().filter(|f| f.poc_sealed).count();
@@ -306,15 +412,33 @@ pub fn board_pack_json(
         let n = sources.get(&key).and_then(Value::as_u64).unwrap_or(0);
         sources.insert(key, json!(n + 1));
     }
+    let qs = export_query_suffix(source_filter);
     let xlsx_path = match client_id {
-        Some(id) => format!("/api/clients/{id}/export/xlsx"),
-        None => "/api/findings/export/xlsx".to_string(),
+        Some(id) => format!("/api/clients/{id}/export/xlsx{qs}"),
+        None => format!("/api/findings/export/xlsx{qs}"),
     };
     let csv_path = match client_id {
         Some(id) => format!("/api/clients/{id}/export/csv"),
         None => "/api/findings/export/csv".to_string(),
     };
     let pdf_path = client_id.map(|id| format!("/api/clients/{id}/report/pdf"));
+    let grid: Vec<Value> = findings
+        .iter()
+        .take(BOARD_GRID_LIMIT)
+        .map(|f| {
+            json!({
+                "id": f.id,
+                "finding_id": f.finding_id,
+                "title": f.title,
+                "severity": f.severity,
+                "source": f.source,
+                "status": f.status,
+                "mitre": f.mitre(),
+                "discovered_at": f.discovered_at,
+            })
+        })
+        .collect();
+    let in_grid = grid.len();
     json!({
         "live": true,
         "generated_at": chrono::Utc::now().to_rfc3339(),
@@ -332,6 +456,15 @@ pub fn board_pack_json(
             "adversary_indexed": adversary,
             "remediation_ready": remediations,
         },
+        "scope": {
+            "export_limit": BOARD_EXPORT_LIMIT,
+            "grid_limit": BOARD_GRID_LIMIT,
+            "in_export": findings.len(),
+            "in_grid": in_grid,
+            "truncated": findings.len() > BOARD_GRID_LIMIT,
+            "source": source_filter,
+        },
+        "grid": grid,
         "sources": sources,
         "exports": {
             "xlsx": xlsx_path,
@@ -619,6 +752,7 @@ mod tests {
             client_id: "1".into(),
             client_name: "Acme".into(),
             description: r#"{"mitre_attack":"T1597","remediation":"Rotate creds"}"#.into(),
+            raw_data: String::new(),
             poc_exploit: String::new(),
             generated_patch: String::new(),
             poc_sealed: true,
@@ -648,16 +782,76 @@ mod tests {
                 client_id: "1".into(),
                 client_name: "Acme".into(),
                 description: String::new(),
+                raw_data: String::new(),
                 poc_exploit: String::new(),
                 generated_patch: String::new(),
                 poc_sealed: true,
                 discovered_at: String::new(),
             }],
+            None,
         );
         assert_eq!(summary["live"], true);
         assert_eq!(summary["totals"]["critical"], 1);
         assert_eq!(summary["totals"]["adversary_indexed"], 1);
         assert_eq!(summary["exports"]["xlsx"], "/api/clients/1/export/xlsx");
+        assert_eq!(summary["scope"]["grid_limit"], BOARD_GRID_LIMIT as u64);
+        assert_eq!(summary["scope"]["truncated"], false);
+        assert_eq!(summary["grid"].as_array().map(|a| a.len()), Some(1));
+        let sourced = board_pack_json("Weissman", None, "All", &[], Some("darkweb_intel"));
+        assert_eq!(
+            sourced["exports"]["xlsx"],
+            "/api/findings/export/xlsx?source=darkweb_intel"
+        );
+    }
+
+    #[test]
+    fn mitre_and_remediation_prefer_raw_data_over_plain_description() {
+        let f = BoardFinding {
+            description: "plain-text evidence, not JSON".into(),
+            raw_data: r#"{"mitre_attack":"T1597","remediation":"Rotate keys"}"#.into(),
+            generated_patch: String::new(),
+            ..Default::default()
+        };
+        assert_eq!(f.mitre(), "T1597");
+        assert_eq!(f.remediation(), "Rotate keys");
+    }
+
+    #[test]
+    fn mitre_reads_nested_raw_object() {
+        let f = BoardFinding {
+            description: "host listed on urlscan".into(),
+            raw_data: r#"{"engine":"adversary_exposure_delta","raw":{"mitre_attack":"T1597"}}"#
+                .into(),
+            ..Default::default()
+        };
+        assert_eq!(f.mitre(), "T1597");
+    }
+
+    #[test]
+    fn source_allowlist_sanitizes_and_rejects_junk() {
+        assert_eq!(parse_source_allowlist(None).unwrap(), None);
+        assert_eq!(
+            parse_source_allowlist(Some("leak_hunter, darkweb_intel")).unwrap(),
+            Some(vec!["leak_hunter".into(), "darkweb_intel".into()])
+        );
+        assert!(parse_source_allowlist(Some("asm;drop")).is_err());
+        assert!(parse_source_allowlist(Some("   ")).unwrap().is_none());
+    }
+
+    #[test]
+    fn workbook_mitre_sheet_uses_raw_data() {
+        let f = BoardFinding {
+            id: 9,
+            title: "urlscan hit".into(),
+            severity: "high".into(),
+            source: "adversary_exposure_delta".into(),
+            description: "not json".into(),
+            raw_data: r#"{"mitre_attack":"T1597","remediation":"Monitor registrar lock"}"#.into(),
+            ..Default::default()
+        };
+        let bytes = build_board_xlsx("Weissman", "Acme", &[f]).expect("xlsx");
+        assert!(inflate_contains(&bytes, "T1597"));
+        assert!(inflate_contains(&bytes, "Monitor registrar lock"));
     }
 
     fn inflate_contains(zip: &[u8], needle: &str) -> bool {
