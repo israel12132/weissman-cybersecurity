@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-09-11T23:45:41.483Z",
-  "production_engine_count": 585,
+  "generated_at": "2026-09-11T23:58:49.652Z",
+  "production_engine_count": 584,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 428
+      "engine_count": 427
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -275,7 +275,7 @@
         "industrial_ot",
         "scope_ips"
       ],
-      "engine_count": 45
+      "engine_count": 43
     },
     "ai_redteam": {
       "id": "ai_redteam",
@@ -6568,6 +6568,16 @@
         "contact_email",
         "scope_domains",
         "scope_ips"
+      ]
+    },
+    "exposure_schism_fusion": {
+      "id": "exposure_schism_fusion",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Exposure Schism Fusion",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
       ]
     }
   }

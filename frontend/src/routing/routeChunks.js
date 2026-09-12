@@ -81,6 +81,7 @@ export const FinancialRisk = React$lazy(() => import('../pages/FinancialRisk.jsx
 export const AttackPaths = React$lazy(() => import('../pages/AttackPaths.jsx'))
 export const SupremeBrain = React$lazy(() => import('../pages/SupremeBrain.jsx'))
 export const CemDagoMesh = React$lazy(() => import('../pages/CemDagoMesh.jsx'))
+export const PanwDisplacement = React$lazy(() => import('../pages/PanwDisplacement.jsx'))
 export const AttackCoverage = React$lazy(() => import('../pages/AttackCoverage.jsx'))
 export const SecurityPosture = React$lazy(() => import('../pages/SecurityPosture.jsx'))
 export const IocFeed = React$lazy(() => import('../pages/IocFeed.jsx'))

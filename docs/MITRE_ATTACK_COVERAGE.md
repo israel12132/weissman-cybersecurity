@@ -14,8 +14,8 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 ## Headline
 
 - **231 distinct ATT&CK techniques** covered by
-  **585 mapped engines** (102 of them sub-techniques).
-- That is **200 primary** engine mappings plus **31
+  **584 mapped engines** (102 of them sub-techniques).
+- That is **199 primary** engine mappings plus **32
   code-grounded secondary** techniques — the extra ATT&CK T-codes each engine's own implementation
   tags on the findings it emits (`mitre: "Txxxx"` / kill-chain `mitre_path`). Secondary techniques
   are extracted from source, not asserted: if the code doesn't perform it, it isn't counted.
@@ -32,7 +32,7 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 
 | Tactic | Techniques covered | % of tactic | Engines |
 |--------|-------------------:|------------:|--------:|
-| Reconnaissance | 21 / 46 | 46% | 75 |
+| Reconnaissance | 21 / 46 | 46% | 76 |
 | Resource Development | 15 / 50 | 30% | 33 |
 | Initial Access | 19 / 22 | 86% | 169 |
 | Execution | 15 / 64 | 23% | 61 |
@@ -75,11 +75,11 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 | Privilege Escalation | 0 / 2 | 0% | 0 |
 | Evasion | 2 / 9 | 22% | 13 |
 | Discovery | 2 / 8 | 25% | 2 |
-| Lateral Movement | 3 / 11 | 27% | 15 |
+| Lateral Movement | 3 / 11 | 27% | 14 |
 | Collection | 2 / 11 | 18% | 2 |
 | Command and Control | 0 / 3 | 0% | 0 |
 | Inhibit Response Function | 2 / 20 | 10% | 4 |
-| Impair Process Control | 3 / 8 | 38% | 24 |
+| Impair Process Control | 3 / 8 | 38% | 23 |
 | Impact | 2 / 12 | 17% | 4 |
 
 ## Why this is the bar
