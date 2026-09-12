@@ -175,7 +175,7 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
             "rop_chain_engine" => {
                 stealth_host::run_memory_technique(
                     &engine,
-                    "T1055",
+                    "T1620",
                     "ROP/JOP host runtime inventory",
                 )
                 .await
@@ -183,13 +183,13 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
             "heap_exploitation" => {
                 stealth_host::run_memory_technique(
                     &engine,
-                    "T1055",
+                    "T1620",
                     "Heap-spray / high-memory interpreter inventory",
                 )
                 .await
             }
             "jit_spray" => {
-                stealth_host::run_memory_technique(&engine, "T1055", "JIT/RWX process inventory")
+                stealth_host::run_memory_technique(&engine, "T1620", "JIT/RWX process inventory")
                     .await
             }
             "com_hijacking" => stealth_host::run_com_hijack(&engine).await,

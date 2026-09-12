@@ -1212,15 +1212,13 @@ async fn api_risk_graph_get(
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<i64>,
 ) -> Response {
-    if let Err(r) = crate::client_isolation::bind_requested_client(&auth, Some(id)) {
-        return r;
-    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"nodes":[],"edges":[]}))).into_response();
     };
     let nodes = sqlx::query(
         r#"SELECT id, graph_key, node_type, label, external_id, metadata, risk_score, is_choke_point,
-                  internet_exposed, crown_jewel, asset_value
+                  internet_exposed, crown_jewel, COALESCE(business_value_usd, 0) AS business_value_usd,
+                  COALESCE(honey_node, FALSE) AS honey_node
            FROM risk_graph_nodes WHERE client_id = $1 ORDER BY id"#,
     )
     .bind(id)
@@ -1249,7 +1247,8 @@ async fn api_risk_graph_get(
                 "is_choke_point": r.try_get::<bool,_>("is_choke_point").unwrap_or(false),
                 "internet_exposed": r.try_get::<bool,_>("internet_exposed").unwrap_or(false),
                 "crown_jewel": r.try_get::<bool,_>("crown_jewel").unwrap_or(false),
-                "asset_value": r.try_get::<f32,_>("asset_value").unwrap_or(1.0),
+                "business_value_usd": r.try_get::<i64,_>("business_value_usd").unwrap_or(0),
+                "honey_node": r.try_get::<bool,_>("honey_node").unwrap_or(false),
             })
         })
         .collect();
@@ -1273,9 +1272,6 @@ async fn api_risk_graph_export(
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<i64>,
 ) -> Response {
-    if let Err(r) = crate::client_isolation::bind_requested_client(&auth, Some(id)) {
-        return r;
-    }
     match risk_graph::export_risk_graph_json(&state.app_pool, auth.tenant_id, id).await {
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
         Err(e) => (
@@ -1292,9 +1288,6 @@ async fn api_risk_graph_build(
     Path(id): Path<i64>,
 ) -> Response {
     if let Err(r) = crate::rbac::require_operator(&auth) {
-        return r;
-    }
-    if let Err(r) = crate::client_isolation::bind_requested_client(&auth, Some(id)) {
         return r;
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {

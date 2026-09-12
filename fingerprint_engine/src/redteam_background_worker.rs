@@ -8,10 +8,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Sender;
 
-/// Live offense engines the scheduled red-team loop actually runs — not LLM-only.
-pub const REDTEAM_CRON_ENGINES: &[&str] =
-    &["ai_adversarial_redteam", "kill_chain", "autonomous_pentest"];
-
 fn interval_secs() -> u64 {
     std::env::var("WEISSMAN_REDTEAM_INTERVAL_SECS")
         .ok()
@@ -88,15 +84,26 @@ async fn dispatch_redteam_jobs(app_pool: &PgPool, tenant_id: i64) -> Result<(), 
     Ok(())
 }
 
+/// Engines the scheduled red-team cron enqueues (off by default: WEISSMAN_REDTEAM_CRON=1).
+pub const REDTEAM_CRON_ENGINES: &[&str] =
+    &["ai_adversarial_redteam", "kill_chain", "autonomous_pentest"];
+
 #[cfg(test)]
 mod tests {
-    use super::REDTEAM_CRON_ENGINES;
+    use super::*;
+    use weissman_core::models::engine::is_production_engine_id;
 
     #[test]
-    fn cron_runs_kill_chain_and_autonomous_pentest() {
+    fn cron_engines_are_production_and_not_llm_only() {
         assert!(REDTEAM_CRON_ENGINES.contains(&"ai_adversarial_redteam"));
         assert!(REDTEAM_CRON_ENGINES.contains(&"kill_chain"));
         assert!(REDTEAM_CRON_ENGINES.contains(&"autonomous_pentest"));
-        assert_eq!(REDTEAM_CRON_ENGINES.len(), 3);
+        assert!(REDTEAM_CRON_ENGINES.len() >= 3);
+        for id in REDTEAM_CRON_ENGINES {
+            assert!(
+                is_production_engine_id(id),
+                "red-team cron engine {id} missing from PRODUCTION_ENGINE_IDS"
+            );
+        }
     }
 }

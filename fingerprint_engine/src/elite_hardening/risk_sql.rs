@@ -1,4 +1,5 @@
-//! SQL helpers for attack-path inference (recursive CTE) and internet-exposed auto-tag.
+//! SQL helpers for attack-path inference (recursive CTE), internet-exposed
+//! auto-tag, and crown-jewel auto-tag (never honey, never overwrite operator flags).
 
 /// Bounded recursive walk from internet-exposed entry nodes toward crown jewels.
 /// Used as a DB-side accelerator; in-memory Dijkstra remains the primary scorer.
@@ -33,67 +34,73 @@ SELECT w.entry_id, w.node_id, w.hops, w.path
 "#;
 
 /// Mark ASM/OSINT/public-HTTP assets as internet-exposed so Dijkstra has seeds.
+///
+/// `risk_graph_nodes.metadata` is TEXT (not JSONB). Never use `->>` here.
+/// Operator `internet_exposed_locked` nodes are left untouched.
 pub const AUTO_TAG_INTERNET_EXPOSED_SQL: &str = r#"
 UPDATE risk_graph_nodes
    SET internet_exposed = TRUE
  WHERE tenant_id = $1
    AND client_id = $2
    AND internet_exposed IS NOT TRUE
+   AND COALESCE(internet_exposed_locked, FALSE) IS NOT TRUE
    AND (
         graph_key LIKE 'asm:%'
      OR graph_key LIKE 'osint:%'
      OR graph_key LIKE 'http:%'
      OR graph_key LIKE 'https:%'
-     OR node_type IN ('asset', 'network')
-     AND (
-          COALESCE(metadata->>'public', '') IN ('true', '1')
-       OR COALESCE(metadata->>'internet_exposed', '') IN ('true', '1')
+     OR (
+          node_type IN ('asset', 'network')
+      AND replace(lower(COALESCE(metadata::text, '')), ' ', '')
+          ~ '"(public|internet_exposed)":(true|1|"true"|"1")'
      )
    )
 "#;
 
-/// Heuristic crown-jewel seeds when the operator has not flagged any.
-/// Identity / cloud / k8s / OT nodes, valued assets, and high-risk nodes become
-/// Dijkstra sinks. Operator-set `crown_jewel = TRUE` rows are never overwritten.
+/// Heuristic crown-jewel tag so Dijkstra is not silently empty.
+/// Never overwrites an operator-locked flag; never tags honey nodes.
+/// `asset_value` is the 0..3 multiplier (see financial blast-radius migration).
 pub const AUTO_TAG_CROWN_JEWEL_SQL: &str = r#"
 UPDATE risk_graph_nodes
    SET crown_jewel = TRUE
  WHERE tenant_id = $1
    AND client_id = $2
    AND crown_jewel IS NOT TRUE
+   AND COALESCE(crown_jewel_locked, FALSE) IS NOT TRUE
    AND COALESCE(honey_node, FALSE) IS NOT TRUE
    AND (
-        node_type IN ('identity', 'cloud_resource', 'k8s_cluster', 'physical_asset')
-     OR COALESCE(business_value_usd, 0) > 0
-     OR COALESCE(risk_score, 0) >= 70
+        node_type IN ('identity', 'ot', 'ics', 'k8s_cluster', 'k8s', 'llm')
+     OR COALESCE(business_value_usd, 0) >= 100000
+     OR COALESCE(asset_value, 0) >= 2.5
+     OR lower(label) ~ '(vault|hsm|domain.?control|adfs|okta|payroll|historian|scada|sap|kube-apiserver|postgres-primary|payment|pci)'
+     OR lower(graph_key) ~ '(vault|identity:|ot:|k8s:|crown)'
    )
 "#;
 
-/// If the primary heuristic still left zero jewels, tag the top-5 highest-risk
-/// non-honeypot nodes so internet → jewel inference is not silently empty.
+/// If the heuristic tagged nothing usable, pick the single highest-value non-honey node.
+/// A honey node with crown_jewel=TRUE does not count as a usable jewel.
 pub const AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL: &str = r#"
-UPDATE risk_graph_nodes n
+UPDATE risk_graph_nodes
    SET crown_jewel = TRUE
- WHERE n.tenant_id = $1
-   AND n.client_id = $2
-   AND n.crown_jewel IS NOT TRUE
-   AND COALESCE(n.honey_node, FALSE) IS NOT TRUE
-   AND NOT EXISTS (
-         SELECT 1 FROM risk_graph_nodes j
-          WHERE j.tenant_id = $1
-            AND j.client_id = $2
-            AND j.crown_jewel = TRUE
-       )
-   AND n.id IN (
-         SELECT id FROM risk_graph_nodes
-          WHERE tenant_id = $1
-            AND client_id = $2
-            AND COALESCE(honey_node, FALSE) IS NOT TRUE
-          ORDER BY risk_score DESC NULLS LAST,
-                   COALESCE(business_value_usd, 0) DESC NULLS LAST,
-                   id
-          LIMIT 5
-       )
+ WHERE id = (
+   SELECT id FROM risk_graph_nodes
+    WHERE tenant_id = $1 AND client_id = $2
+      AND COALESCE(honey_node, FALSE) IS NOT TRUE
+      AND COALESCE(crown_jewel_locked, FALSE) IS NOT TRUE
+    ORDER BY COALESCE(business_value_usd, 0) DESC,
+             COALESCE(asset_value, 0) DESC,
+             COALESCE(risk_score, 0) DESC
+    LIMIT 1
+ )
+ AND tenant_id = $1
+ AND client_id = $2
+ AND COALESCE(crown_jewel_locked, FALSE) IS NOT TRUE
+ AND NOT EXISTS (
+   SELECT 1 FROM risk_graph_nodes
+    WHERE tenant_id = $1 AND client_id = $2
+      AND crown_jewel = TRUE
+      AND COALESCE(honey_node, FALSE) IS NOT TRUE
+ )
 "#;
 
 pub fn max_hops() -> i32 {
@@ -117,18 +124,32 @@ mod tests {
                     .trim_start()
                     .starts_with("UPDATE")
         );
+        for sql in [AUTO_TAG_CROWN_JEWEL_SQL, AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL] {
+            let u = sql.to_ascii_uppercase();
+            assert!(u.contains("UPDATE"));
+            assert!(u.contains("CROWN_JEWEL"));
+            assert!(!u.contains("DROP "));
+            assert!(!u.contains("TRUNCATE"));
+        }
     }
 
     #[test]
-    fn crown_jewel_auto_tag_is_update_only_and_skips_honeypots() {
-        for sql in [AUTO_TAG_CROWN_JEWEL_SQL, AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL] {
-            let u = sql.to_ascii_uppercase();
-            assert!(u.contains("UPDATE RISK_GRAPH_NODES"));
-            assert!(u.contains("CROWN_JEWEL"));
-            assert!(u.contains("HONEY_NODE"));
-            assert!(!u.contains("DROP "));
-            assert!(!u.contains("DELETE "));
-        }
-        assert!(AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL.contains("LIMIT 5"));
+    fn crown_jewel_sql_never_tags_honey() {
+        assert!(AUTO_TAG_CROWN_JEWEL_SQL.contains("honey_node"));
+        assert!(AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL.contains("honey_node"));
+    }
+
+    #[test]
+    fn auto_tag_sql_is_text_metadata_safe_and_respects_locks() {
+        assert!(
+            !AUTO_TAG_INTERNET_EXPOSED_SQL.contains("->>"),
+            "metadata is TEXT; jsonb ->> would abort the seed transaction"
+        );
+        assert!(AUTO_TAG_INTERNET_EXPOSED_SQL.contains("internet_exposed_locked"));
+        assert!(AUTO_TAG_CROWN_JEWEL_SQL.contains("crown_jewel_locked"));
+        assert!(AUTO_TAG_CROWN_JEWEL_SQL.contains(">= 2.5"));
+        assert!(!AUTO_TAG_CROWN_JEWEL_SQL.contains(">= 80"));
+        assert!(AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL.contains("honey_node"));
+        assert!(AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL.contains("crown_jewel_locked"));
     }
 }

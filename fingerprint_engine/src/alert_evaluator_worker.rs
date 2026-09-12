@@ -61,142 +61,7 @@ fn engine_matches(condition: &Value, source: &str) -> bool {
     })
 }
 
-fn cond_flag(condition: &Value, key: &str) -> bool {
-    condition
-        .get(key)
-        .and_then(|v| {
-            v.as_bool()
-                .or_else(|| v.as_str().map(|s| s == "true" || s == "1"))
-        })
-        .unwrap_or(false)
-}
-
-fn finding_is_oast_confirmed(raw: &Value, proof: &str, desc: &str) -> bool {
-    if raw.get("oast_confirmed").and_then(Value::as_bool) == Some(true) {
-        return true;
-    }
-    if raw.get("verified").and_then(Value::as_bool) == Some(true)
-        && raw
-            .get("verification_method")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            == "oob_oast_callback"
-    {
-        return true;
-    }
-    let hay = format!("{proof} {desc}").to_ascii_lowercase();
-    hay.contains("oob_oast_callback") || hay.contains("confirmed oob")
-}
-
-fn finding_has_live_proof(proof: &str, raw: &Value) -> bool {
-    if !proof.trim().is_empty() {
-        return true;
-    }
-    raw.pointer("/evidence/proof")
-        .and_then(Value::as_str)
-        .map(|s| !s.trim().is_empty())
-        .unwrap_or(false)
-}
-
-fn evidence_matches(condition: &Value, raw: &Value, proof: &str, desc: &str) -> bool {
-    if cond_flag(condition, "require_oast_confirmed")
-        && !finding_is_oast_confirmed(raw, proof, desc)
-    {
-        return false;
-    }
-    if cond_flag(condition, "require_live_proof") && !finding_has_live_proof(proof, raw) {
-        return false;
-    }
-    true
-}
-
-fn epss_matches(condition: &Value, epss: f64) -> bool {
-    let Some(min) = condition.get("min_epss").and_then(|v| {
-        v.as_f64()
-            .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
-    }) else {
-        return true;
-    };
-    epss + f64::EPSILON >= min
-}
-
-fn kev_matches(condition: &Value, kev: bool) -> bool {
-    match condition.get("kev_only").or_else(|| condition.get("kev")) {
-        Some(Value::Bool(true)) => kev,
-        Some(Value::String(s)) if s.eq_ignore_ascii_case("true") || s == "1" => kev,
-        _ => true,
-    }
-}
-
-fn cvss_matches(condition: &Value, cvss: f64) -> bool {
-    let Some(min) = condition.get("min_cvss").and_then(|v| {
-        v.as_f64()
-            .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
-    }) else {
-        return true;
-    };
-    cvss + f64::EPSILON >= min
-}
-
-fn crown_jewel_matches(condition: &Value, touches: bool) -> bool {
-    match condition
-        .get("crown_jewel")
-        .or_else(|| condition.get("crown_jewel_on_path"))
-    {
-        Some(Value::Bool(true)) => touches,
-        Some(Value::String(s)) if s.eq_ignore_ascii_case("true") || s == "1" => touches,
-        _ => true,
-    }
-}
-
-fn cvss_from_raw(raw: &Value) -> f64 {
-    for key in ["cvss_score", "cvss", "cvssScore", "score"] {
-        if let Some(n) = raw.get(key).and_then(Value::as_f64) {
-            return n;
-        }
-        if let Some(s) = raw.get(key).and_then(Value::as_str) {
-            if let Ok(n) = s.parse::<f64>() {
-                return n;
-            }
-        }
-    }
-    0.0
-}
-
-fn cve_from_raw(raw: &Value, title: &str, desc: &str) -> String {
-    for key in ["cve", "cve_id", "cveId"] {
-        if let Some(s) = raw.get(key).and_then(Value::as_str) {
-            let t = s.trim();
-            if t.to_ascii_uppercase().starts_with("CVE-") {
-                return t.to_string();
-            }
-        }
-    }
-    let hay = format!("{title} {desc}");
-    if let Some(idx) = hay.to_ascii_uppercase().find("CVE-") {
-        let slice = &hay[idx..];
-        let cve: String = slice
-            .chars()
-            .take_while(|c| c.is_ascii_alphanumeric() || *c == '-')
-            .collect();
-        if cve.len() >= 8 {
-            return cve;
-        }
-    }
-    String::new()
-}
-
-fn target_from_raw(raw: &Value) -> String {
-    raw.get("target")
-        .or_else(|| raw.get("host"))
-        .or_else(|| raw.get("url"))
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .trim()
-        .to_string()
-}
-
-fn cve_matches(condition: &Value, title: &str, desc: &str, cve: &str) -> bool {
+fn cve_matches(condition: &Value, title: &str, desc: &str) -> bool {
     let pattern = condition
         .get("cve_pattern")
         .or_else(|| condition.get("cve"))
@@ -205,12 +70,8 @@ fn cve_matches(condition: &Value, title: &str, desc: &str, cve: &str) -> bool {
     if pattern.is_empty() {
         return true;
     }
-    let needle = pattern.replace('*', "").to_ascii_lowercase();
-    if needle.is_empty() {
-        return true;
-    }
-    let hay = format!("{title} {desc} {cve}").to_ascii_lowercase();
-    hay.contains(&needle)
+    let hay = format!("{title} {desc}").to_ascii_lowercase();
+    hay.contains(&pattern.to_ascii_lowercase())
 }
 
 async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, String> {
@@ -229,73 +90,56 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
     }
 
     let findings = sqlx::query(
-        r#"SELECT v.id, v.severity, v.title, v.description, v.source, v.client_id,
-                  COALESCE(v.epss_score, 0)::float8 AS epss_score,
-                  COALESCE(v.kev_listed, false) AS kev_listed,
-                  COALESCE(v.proof, '') AS proof,
-                  COALESCE(v.raw_data, '{}'::jsonb) AS raw_data,
-                  EXISTS (
-                    SELECT 1 FROM risk_graph_nodes n
-                     WHERE n.tenant_id = v.tenant_id
-                       AND n.client_id = v.client_id
-                       AND n.crown_jewel = TRUE
-                       AND COALESCE(n.honey_node, FALSE) IS NOT TRUE
-                       AND NULLIF(n.label, '') IS NOT NULL
-                       AND (
-                            COALESCE(v.raw_data->>'target','') ILIKE '%' || n.label || '%'
-                         OR COALESCE(v.raw_data->>'host','') ILIKE '%' || n.label || '%'
-                         OR v.title ILIKE '%' || n.label || '%'
-                       )
-                  ) AS crown_jewel_touch
-           FROM vulnerabilities v
-           WHERE v.created_at >= now() - interval '15 minutes'
-             AND COALESCE(v.status, 'OPEN') NOT IN ('FALSE_POSITIVE', 'FP')
-           ORDER BY v.id DESC
-           LIMIT 500"#,
+        r#"SELECT id, finding_id, severity, title, description, source, client_id
+           FROM vulnerabilities
+           WHERE created_at >= now() - interval '5 minutes'
+           ORDER BY id DESC
+           LIMIT 200"#,
     )
     .fetch_all(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
 
-    let mut path_cache: HashMap<i64, Value> = HashMap::new();
+    let mut path_cache: HashMap<i64, Option<Value>> = HashMap::new();
     let mut fired = 0u32;
     for finding in findings {
         let fid: i64 = finding.try_get("id").unwrap_or(0);
+        let graph_finding_id: String = finding.try_get("finding_id").unwrap_or_default();
         let severity: String = finding.try_get("severity").unwrap_or_default();
         let title: String = finding.try_get("title").unwrap_or_default();
         let description: String = finding.try_get("description").unwrap_or_default();
         let source: String = finding.try_get("source").unwrap_or_default();
         let client_id: i64 = finding.try_get("client_id").unwrap_or(0);
-        let epss: f64 = finding.try_get("epss_score").unwrap_or(0.0);
-        let kev: bool = finding.try_get("kev_listed").unwrap_or(false);
-        let proof: String = finding.try_get("proof").unwrap_or_default();
-        let raw: Value = finding.try_get("raw_data").unwrap_or(json!({}));
-        let crown_jewel: bool = finding.try_get("crown_jewel_touch").unwrap_or(false);
-        let cvss = cvss_from_raw(&raw);
-        let cve = cve_from_raw(&raw, &title, &description);
-        let target = target_from_raw(&raw);
-        let oast = finding_is_oast_confirmed(&raw, &proof, &description);
 
-        if client_id > 0 && !path_cache.contains_key(&client_id) {
-            let paths: Value = sqlx::query_scalar(
-                r#"SELECT COALESCE(paths_json, '[]'::jsonb)
-                     FROM attack_path_snapshots
-                    WHERE tenant_id = $1 AND client_id = $2
-                    ORDER BY computed_at DESC
-                    LIMIT 1"#,
-            )
-            .bind(tenant_id)
-            .bind(client_id)
-            .fetch_optional(&mut *tx)
-            .await
-            .ok()
-            .flatten()
-            .unwrap_or(json!([]));
-            path_cache.insert(client_id, paths);
-        }
-        let path_hit = path_cache.get(&client_id).and_then(|paths| {
-            crate::engine_fusion::correlate_finding_to_paths(&title, &source, &target, paths)
-        });
+        let path_hit = if client_id > 0 {
+            let paths_json = if let Some(cached) = path_cache.get(&client_id) {
+                cached.clone()
+            } else {
+                let loaded: Option<Value> = sqlx::query_scalar(
+                    r#"SELECT paths_json FROM attack_path_snapshots
+                        WHERE tenant_id = $1 AND client_id = $2
+                        ORDER BY computed_at DESC LIMIT 1"#,
+                )
+                .bind(tenant_id)
+                .bind(client_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .ok()
+                .flatten();
+                path_cache.insert(client_id, loaded.clone());
+                loaded
+            };
+            paths_json.and_then(|pj| {
+                crate::engine_fusion::correlate_finding_to_paths_keyed(
+                    &title,
+                    &source,
+                    &graph_finding_id,
+                    &pj,
+                )
+            })
+        } else {
+            None
+        };
 
         for rule in &rules {
             let rule_id: i64 = rule.try_get("id").unwrap_or(0);
@@ -308,22 +152,7 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
             if !engine_matches(&condition, &source) {
                 continue;
             }
-            if !cve_matches(&condition, &title, &description, &cve) {
-                continue;
-            }
-            if !epss_matches(&condition, epss) {
-                continue;
-            }
-            if !kev_matches(&condition, kev) {
-                continue;
-            }
-            if !cvss_matches(&condition, cvss) {
-                continue;
-            }
-            if !crown_jewel_matches(&condition, crown_jewel) {
-                continue;
-            }
-            if !evidence_matches(&condition, &raw, &proof, &description) {
+            if !cve_matches(&condition, &title, &description) {
                 continue;
             }
 
@@ -348,18 +177,8 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
                 title: title.clone(),
                 description: description.clone(),
                 source: source.clone(),
-                cve: cve.clone(),
-                epss,
-                kev,
-                cvss,
-                client_id,
-                proof: proof.clone(),
-                target: target.clone(),
-                crown_jewel,
-                oast_confirmed: oast,
-                path_hops: path_hit.as_ref().map(|h| h.0),
-                path_jewel: path_hit.as_ref().map(|h| h.1.clone()).unwrap_or_default(),
-                deep_link: crate::alert_delivery::finding_deep_link(fid),
+                attack_path_hops: path_hit.as_ref().map(|h| h.0),
+                attack_path_jewel: path_hit.as_ref().map(|h| h.1.clone()),
             };
 
             // The INSERT itself is the dedup gate: the (rule_id, finding_id) unique index makes a
@@ -491,108 +310,26 @@ mod tests {
 
     #[test]
     fn cve_matches_empty_pattern_is_true() {
-        assert!(cve_matches(&json!({}), "any title", "any desc", ""));
-        assert!(cve_matches(&json!({ "cve_pattern": "" }), "t", "d", ""));
+        assert!(cve_matches(&json!({}), "any title", "any desc"));
+        assert!(cve_matches(&json!({ "cve_pattern": "" }), "t", "d"));
     }
 
     #[test]
     fn cve_matches_searches_title_and_description() {
         let cond = json!({ "cve_pattern": "CVE-2021-44228" });
-        assert!(cve_matches(
-            &cond,
-            "Log4Shell cve-2021-44228",
-            "unrelated",
-            ""
-        ));
+        assert!(cve_matches(&cond, "Log4Shell cve-2021-44228", "unrelated"));
         assert!(cve_matches(
             &cond,
             "unrelated",
-            "affected by CVE-2021-44228 here",
-            ""
+            "affected by CVE-2021-44228 here"
         ));
-        assert!(cve_matches(&cond, "nothing", "here", "CVE-2021-44228"));
-        assert!(!cve_matches(&cond, "nothing", "here", ""));
+        assert!(!cve_matches(&cond, "nothing", "here"));
     }
 
     #[test]
     fn cve_matches_falls_back_to_singular_cve_key() {
         let cond = json!({ "cve": "log4j" });
-        assert!(cve_matches(&cond, "Apache Log4J RCE", "d", ""));
-        assert!(!cve_matches(&cond, "nginx", "d", ""));
-    }
-
-    #[test]
-    fn evidence_gate_requires_oast_callback() {
-        let cond = json!({ "require_oast_confirmed": true });
-        assert!(!evidence_matches(
-            &cond,
-            &json!({}),
-            "",
-            "info finding planted"
-        ));
-        assert!(evidence_matches(
-            &cond,
-            &json!({
-                "oast_confirmed": true,
-            }),
-            "oob_oast_callback token=x",
-            "callback received"
-        ));
-        assert!(evidence_matches(
-            &cond,
-            &json!({
-                "verified": true,
-                "verification_method": "oob_oast_callback",
-            }),
-            "",
-            ""
-        ));
-        assert!(!evidence_matches(
-            &cond,
-            &json!({
-                "verified": true,
-                "verification_method": "oob_probe_planted",
-            }),
-            "planted",
-            ""
-        ));
-    }
-
-    #[test]
-    fn evidence_gate_requires_live_proof() {
-        let cond = json!({ "require_live_proof": true });
-        assert!(!evidence_matches(
-            &cond,
-            &json!({}),
-            "",
-            "desc without proof"
-        ));
-        assert!(evidence_matches(
-            &cond,
-            &json!({}),
-            "HTTP 200 on /admin",
-            ""
-        ));
-        assert!(evidence_matches(
-            &cond,
-            &json!({ "evidence": { "proof": "tcp 445 open" } }),
-            "",
-            ""
-        ));
-    }
-
-    #[test]
-    fn epss_kev_cvss_and_crown_jewel_gates() {
-        assert!(epss_matches(&json!({}), 0.0));
-        assert!(epss_matches(&json!({ "min_epss": 0.7 }), 0.71));
-        assert!(!epss_matches(&json!({ "min_epss": 0.7 }), 0.2));
-        assert!(kev_matches(&json!({}), false));
-        assert!(kev_matches(&json!({ "kev_only": true }), true));
-        assert!(!kev_matches(&json!({ "kev_only": true }), false));
-        assert!(cvss_matches(&json!({ "min_cvss": 9.0 }), 9.8));
-        assert!(!cvss_matches(&json!({ "min_cvss": 9.0 }), 4.0));
-        assert!(crown_jewel_matches(&json!({}), false));
-        assert!(crown_jewel_matches(&json!({ "crown_jewel": true }), true));
-        assert!(!crown_jewel_matches(&json!({ "crown_jewel": true }), false));
+        assert!(cve_matches(&cond, "Apache Log4J RCE", "d"));
+        assert!(!cve_matches(&cond, "nginx", "d"));
     }
 }

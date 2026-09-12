@@ -28,17 +28,6 @@ pub const EDGE_LEADS_TO: &str = "leads_to";
 /// Cloud IAM / trust boundary (identity or role → resource).
 pub const EDGE_HAS_PERMISSION: &str = "has_permission";
 
-/// Map a 0–100 graph risk_score onto the cockpit severity vocabulary.
-#[must_use]
-pub fn severity_from_risk_score(score: i32) -> &'static str {
-    match score {
-        80.. => "critical",
-        60.. => "high",
-        30.. => "medium",
-        _ => "low",
-    }
-}
-
 fn physical_asset_class(protocol: &str) -> &'static str {
     match protocol {
         "modbus_tcp" => "PLC / field device (Modbus)",
@@ -466,21 +455,21 @@ pub async fn build_risk_graph_for_client(
     }
 
     recompute_risk_scores_and_chokes(tx, tenant_id, client_id).await?;
-    let _ = sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_INTERNET_EXPOSED_SQL)
+    sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_INTERNET_EXPOSED_SQL)
         .bind(tenant_id)
         .bind(client_id)
         .execute(&mut **tx)
-        .await;
-    let _ = sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_CROWN_JEWEL_SQL)
+        .await?;
+    sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_CROWN_JEWEL_SQL)
         .bind(tenant_id)
         .bind(client_id)
         .execute(&mut **tx)
-        .await;
-    let _ = sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL)
+        .await?;
+    sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL)
         .bind(tenant_id)
         .bind(client_id)
         .execute(&mut **tx)
-        .await;
+        .await?;
 
     let node_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM risk_graph_nodes WHERE tenant_id = $1 AND client_id = $2",
@@ -929,17 +918,5 @@ mod tests {
         // Defensive: a malformed/out-of-range effective_risk can never blow past the node scale.
         assert_eq!(finding_base_score(Some(50.0)), 100);
         assert_eq!(finding_base_score(Some(-3.0)), 0);
-    }
-
-    #[test]
-    fn severity_from_risk_score_bands() {
-        assert_eq!(severity_from_risk_score(0), "low");
-        assert_eq!(severity_from_risk_score(29), "low");
-        assert_eq!(severity_from_risk_score(30), "medium");
-        assert_eq!(severity_from_risk_score(59), "medium");
-        assert_eq!(severity_from_risk_score(60), "high");
-        assert_eq!(severity_from_risk_score(79), "high");
-        assert_eq!(severity_from_risk_score(80), "critical");
-        assert_eq!(severity_from_risk_score(100), "critical");
     }
 }

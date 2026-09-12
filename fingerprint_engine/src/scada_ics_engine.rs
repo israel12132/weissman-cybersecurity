@@ -99,8 +99,6 @@ pub async fn run_scada_ics_result(target: &str) -> EngineResult {
         "/TIAPortal",
         "/plc",
         "/hmi",
-        "/admin",
-        "/login",
     ];
     let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
     for p in probes {
@@ -108,26 +106,32 @@ pub async fn run_scada_ics_result(target: &str) -> EngineResult {
             continue;
         }
         let body = p.body.to_ascii_lowercase();
-        if body.contains("password")
-            || body.contains("login")
-            || body.contains("codesys")
+        let path_l = p.final_url.to_ascii_lowercase();
+        let ics_path = ["/webvisu", "/codesys", "/tiaportal", "/plc", "/hmi"]
+            .iter()
+            .any(|frag| path_l.contains(frag));
+        let ics_body = body.contains("codesys")
             || body.contains("siemens")
+            || body.contains("tia portal")
             || body.contains("plc")
             || body.contains("hmi")
-        {
+            || body.contains("scada")
+            || body.contains("modbus");
+        if ics_path || ics_body {
             findings.push(json!({
                 "type": "scada_ics",
                 "title": format!("Engineering/PLC admin panel at {}", p.final_url),
                 "severity": if p.status == 200 { "critical" } else { "high" },
-                "mitre_attack": "T0890",
+                "mitre_attack": "T0883",
                 "description": format!(
-                    "{} returned HTTP {} — engineering workstation / PLC web admin is the ICS privilege-escalation surface. Auditor only; no write to process I/O.",
+                    "{} returned HTTP {} — internet-accessible ICS engineering/HMI surface. Auditor only; no write to process I/O and no privilege-escalation exploit.",
                     p.final_url, p.status
                 )
             }));
             break;
         }
     }
+
     EngineResult::ok(
         findings.clone(),
         format!("SCADA/ICS: {} findings", findings.len()),
@@ -165,15 +169,5 @@ mod tests {
     #[test]
     fn extract_host_drops_port_only() {
         assert_eq!(extract_host("10.0.0.1:502"), "10.0.0.1");
-    }
-
-    #[test]
-    fn ics_c2_and_priv_esc_are_live_surface_not_writes() {
-        let src = include_str!("scada_ics_engine.rs");
-        assert!(src.contains("T0869"));
-        assert!(src.contains("T0885"));
-        assert!(src.contains("T0890"));
-        assert!(src.contains("no industrial write"));
-        assert!(src.contains("tcp_scan"));
     }
 }

@@ -110,6 +110,12 @@ pub const COVERAGE: &[Technique] = &[
             "sbom_analyzer",
         ],
     },
+    Technique {
+        id: "T0883",
+        name: "Internet Accessible Device",
+        tactic: "Initial Access",
+        engines: &["scada_ics"],
+    },
     // ── Execution ───────────────────────────────────────────────────────────
     Technique {
         id: "T1059.008",
@@ -120,6 +126,12 @@ pub const COVERAGE: &[Technique] = &[
             "prompt_injection_chain",
             "autonomous_ai_escape",
         ],
+    },
+    Technique {
+        id: "T1623",
+        name: "Command and Scripting Interpreter (Mobile)",
+        tactic: "Execution",
+        engines: &["mdm_bypass_engine"],
     },
     // ── Persistence ─────────────────────────────────────────────────────────
     Technique {
@@ -136,7 +148,7 @@ pub const COVERAGE: &[Technique] = &[
     },
     Technique {
         id: "T1603",
-        name: "Scheduled Task/Job (Mobile MDM profiles)",
+        name: "Scheduled Task/Job (Mobile)",
         tactic: "Persistence",
         engines: &["mdm_bypass_engine"],
     },
@@ -165,16 +177,16 @@ pub const COVERAGE: &[Technique] = &[
     },
     Technique {
         id: "T0890",
-        name: "Exploitation of Engineering Workstation / PLC admin",
+        name: "Exploitation for Privilege Escalation (ICS)",
         tactic: "Privilege Escalation",
-        engines: &["scada_ics", "ot_cloud_identity_killpath"],
+        engines: &["ot_cloud_identity_killpath"],
     },
     // ── Defense Evasion ─────────────────────────────────────────────────────
     Technique {
         id: "T1562",
         name: "Impair Defenses",
         tactic: "Defense Evasion",
-        engines: &["edr_evasion", "waf_bypass"],
+        engines: &["edr_evasion", "waf_bypass", "host_isolation"],
     },
     Technique {
         id: "T1556",
@@ -191,6 +203,12 @@ pub const COVERAGE: &[Technique] = &[
         name: "Forge Web Credentials: Web Cookies/JWT",
         tactic: "Defense Evasion",
         engines: &["identity_session_oauth", "jwt_attack"],
+    },
+    Technique {
+        id: "T1620",
+        name: "Reflective Code Loading",
+        tactic: "Defense Evasion",
+        engines: &["rop_chain_engine", "heap_exploitation", "jit_spray"],
     },
     // ── Credential Access ───────────────────────────────────────────────────
     Technique {
@@ -248,6 +266,18 @@ pub const COVERAGE: &[Technique] = &[
         tactic: "Discovery",
         engines: &["kerberoasting", "ldap_injection_engine"],
     },
+    Technique {
+        id: "T1082",
+        name: "System Information Discovery",
+        tactic: "Discovery",
+        engines: &["rop_chain_engine", "heap_exploitation", "jit_spray"],
+    },
+    Technique {
+        id: "T1518.001",
+        name: "Software Discovery: Security Software Discovery",
+        tactic: "Discovery",
+        engines: &["ebpf_sensor", "ioc_yara_hunt"],
+    },
     // ── Lateral Movement ────────────────────────────────────────────────────
     Technique {
         id: "T1021.001",
@@ -266,6 +296,12 @@ pub const COVERAGE: &[Technique] = &[
         name: "Exploitation of Remote Services",
         tactic: "Lateral Movement",
         engines: &["equation_group_ttps", "worm_propagation"],
+    },
+    Technique {
+        id: "T1428",
+        name: "Exploitation of Remote Services (Mobile)",
+        tactic: "Lateral Movement",
+        engines: &["mdm_bypass_engine"],
     },
     // ── Collection ──────────────────────────────────────────────────────────
     Technique {
@@ -295,21 +331,15 @@ pub const COVERAGE: &[Technique] = &[
     },
     Technique {
         id: "T0869",
-        name: "Standard Application Layer Protocol (ICS)",
+        name: "Standard Application Layer Protocol (ICS C2)",
         tactic: "Command and Control",
-        engines: &["scada_ics", "mqtt_attack", "ot_cloud_identity_killpath"],
+        engines: &["scada_ics", "ot_cloud_identity_killpath"],
     },
     Technique {
         id: "T0885",
-        name: "Commonly Used Port (ICS)",
+        name: "Commonly Used Port (ICS C2)",
         tactic: "Command and Control",
         engines: &["scada_ics"],
-    },
-    Technique {
-        id: "T1623",
-        name: "Command and Scripting Interpreter (Mobile MDM)",
-        tactic: "Execution",
-        engines: &["mdm_bypass_engine"],
     },
     // ── Exfiltration ────────────────────────────────────────────────────────
     Technique {
@@ -319,16 +349,16 @@ pub const COVERAGE: &[Technique] = &[
         engines: &["http_covert_exfil", "cloud_exfil_engine"],
     },
     Technique {
-        id: "T1639",
-        name: "Exfiltration Over Other Network Medium (Mobile backup/sync)",
-        tactic: "Exfiltration",
-        engines: &["mdm_bypass_engine"],
-    },
-    Technique {
         id: "T1567",
         name: "Exfiltration Over Web Service",
         tactic: "Exfiltration",
         engines: &["cloud_data_exfil", "database_exfil"],
+    },
+    Technique {
+        id: "T1639",
+        name: "Exfiltration Over Alternative Protocol (Mobile)",
+        tactic: "Exfiltration",
+        engines: &["mdm_bypass_engine"],
     },
     // ── Impact ──────────────────────────────────────────────────────────────
     Technique {
@@ -353,6 +383,12 @@ pub const COVERAGE: &[Technique] = &[
         name: "Endpoint Denial of Service",
         tactic: "Impact",
         engines: &["api_rate_limit_bypass"],
+    },
+    Technique {
+        id: "T1640",
+        name: "Account Access Removal (Mobile)",
+        tactic: "Impact",
+        engines: &["mdm_bypass_engine"],
     },
     // ── Mobile (ATT&CK Mobile) ──────────────────────────────────────────────
     Technique {
@@ -451,26 +487,40 @@ pub fn coverage_json() -> Value {
             "tactics_covered": tactic_rollup().len(),
             "engine_references": COVERAGE.iter().map(|t| t.engines.len()).sum::<usize>(),
         },
-        "attack_readiness": {
-            "default_roe": "safe_proofs",
-            "weaponized_requires_dual_control": true,
-            "threat_emulation_apt_scenarios": crate::threat_emulation_engine::APT_SCENARIO_COUNT,
-            "redteam_cron_engines": crate::redteam_background_worker::REDTEAM_CRON_ENGINES,
-            "crown_jewels_auto_tagged": true,
-            "attack_paths_require_internet_and_jewels": true,
-            "social_engineering_surface_only": true,
-            "agent_required_count": weissman_core::models::engine_agent::AGENT_REQUIRED_ENGINES.len(),
-            "ct_squirt_engine": "first_mover_delta_fusion",
-            "delta_follow_on_engines": crate::first_mover_surface_delta::DELTA_FOLLOW_ON_ENGINES,
-            "oast_follow_on_engines": crate::first_mover_surface_delta::DELTA_OAST_FOLLOW_ON_ENGINES,
-            "oast_gated_alerts": true,
-            "gaps": [
-                "Host-resident engines (ROP/heap/JIT/COM) are inventory + remote-surface, not exploit execution",
-                "Scheduled red-team requires WEISSMAN_REDTEAM_CRON=1 (off by default)",
-                "Alert rules fire on severity unless require_oast_confirmed / require_live_proof / kev_only is set",
-                "ICS C2/priv-esc mapping is live TCP/HTTP surface, not process-I/O writes"
-            ],
-        },
+        "readiness": readiness_json(),
+    })
+}
+
+fn readiness_json() -> Value {
+    json!({
+        "roe_default": "safe_proofs",
+        "weaponized_exploits": false,
+        "scheduled_redteam": "off_by_default",
+        "scheduled_redteam_env": "WEISSMAN_REDTEAM_CRON=1",
+        "scheduled_redteam_engines": ["ai_adversarial_redteam", "kill_chain", "autonomous_pentest"],
+        "host_resident": "ROP/heap/JIT/COM/PPID are inventory + remote surface, not exploit execution",
+        "gaps": [
+            {
+                "id": "enterprise_persistence",
+                "label": "Enterprise Persistence",
+                "note": "Still sparse vs ATT&CK v19.1; agent hybrid, not implant execution"
+            },
+            {
+                "id": "enterprise_privesc",
+                "label": "Enterprise Privilege Escalation",
+                "note": "W^X/sudo/UAC auditor + remote admin ports; never dumps LSASS or runs a UAC bypass"
+            },
+            {
+                "id": "mobile_mdm",
+                "label": "Mobile Execution / Persistence / Exfil / Impact",
+                "note": "MDM command/profile/backup/wipe APIs — live HTTP only, no implant"
+            },
+            {
+                "id": "ics_c2_privesc",
+                "label": "ICS C2 / Privilege Escalation",
+                "note": "MQTT/IEC-104/OPC UA + engineering panels; never SIS/Triton weaponization"
+            }
+        ]
     })
 }
 
@@ -502,6 +552,15 @@ mod tests {
                 t.tactic
             );
         }
+        let mut ids: Vec<_> = COVERAGE.iter().map(|t| t.id).collect();
+        ids.sort();
+        let before = ids.len();
+        ids.dedup();
+        assert_eq!(
+            before,
+            ids.len(),
+            "duplicate ATT&CK ids in coverage catalog"
+        );
     }
 
     #[test]
@@ -518,22 +577,24 @@ mod tests {
             "broad tactic coverage"
         );
         assert_eq!(j["framework"], "MITRE ATT&CK");
-        assert_eq!(j["attack_readiness"]["default_roe"], "safe_proofs");
-        assert_eq!(
-            j["attack_readiness"]["crown_jewels_auto_tagged"].as_bool(),
-            Some(true)
+        assert_eq!(j["readiness"]["weaponized_exploits"], false);
+        assert_eq!(j["readiness"]["roe_default"], "safe_proofs");
+        assert!(j["readiness"]["gaps"].as_array().unwrap().len() >= 4);
+    }
+
+    #[test]
+    fn ics_panel_presence_is_t0883_not_exploitation() {
+        let t0883 = COVERAGE
+            .iter()
+            .find(|t| t.id == "T0883")
+            .expect("T0883 Internet Accessible Device");
+        assert_eq!(t0883.tactic, "Initial Access");
+        assert!(t0883.engines.contains(&"scada_ics"));
+        let t0890 = COVERAGE.iter().find(|t| t.id == "T0890").expect("T0890");
+        assert!(
+            !t0890.engines.contains(&"scada_ics"),
+            "HTTP engineering-panel presence is not ICS privilege-escalation exploitation"
         );
-        assert_eq!(
-            j["attack_readiness"]["ct_squirt_engine"],
-            "first_mover_delta_fusion"
-        );
-        assert_eq!(j["attack_readiness"]["oast_gated_alerts"], true);
-        assert!(j["attack_readiness"]["gaps"]
-            .as_array()
-            .map(|a| !a.is_empty())
-            .unwrap_or(false));
-        assert!(COVERAGE.iter().any(|t| t.id == "T0869"));
-        assert!(COVERAGE.iter().any(|t| t.id == "T0890"));
-        assert!(COVERAGE.iter().any(|t| t.id == "T1603"));
+        assert!(t0890.engines.contains(&"ot_cloud_identity_killpath"));
     }
 }

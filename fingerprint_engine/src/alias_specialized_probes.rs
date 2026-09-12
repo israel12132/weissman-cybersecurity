@@ -212,6 +212,110 @@ pub async fn run_specialized_probe(
     }
 }
 
+async fn probe_full_breach_sim(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
+    let host = extract_host(target);
+    let mut findings = Vec::new();
+    let perimeter = tcp_scan(&host, &[80, 443, 22, 445, 3389, 8080, 8443], 8).await;
+    if perimeter.len() >= 2 {
+        findings.push(alias_finding(
+            engine_id,
+            &format!("Breach-sim perimeter: {:?}", perimeter),
+            "medium",
+            "T1190",
+            &format!(
+                "Host {} exposes {:?} — full_breach_sim plans STRIPS over live facts (HTTP+SMB/RDP/SSH), not a 7-GET retag of threat_emulation.",
+                host, perimeter
+            ),
+            target,
+            canonical,
+        ));
+    }
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let paths = &[
+        "/",
+        "/login",
+        "/admin",
+        "/api",
+        "/.git/HEAD",
+        "/server-status",
+    ];
+    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
+    let live: Vec<_> = probes
+        .into_iter()
+        .filter(|p| status_indicates_presence(p.status))
+        .collect();
+    if live.len() >= 2 {
+        findings.push(alias_finding(
+            engine_id,
+            "Multi-path HTTP foothold facts for breach simulation",
+            "medium",
+            "T1190",
+            &format!(
+                "{} live HTTP paths on {} — breach-sim planner consumes these as initial-access facts only; no exploit payload is executed.",
+                live.len(),
+                host
+            ),
+            target,
+            canonical,
+        ));
+    }
+    collect(engine_id, target, canonical, findings)
+}
+
+async fn probe_post_exploitation(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
+    let host = extract_host(target);
+    let mut findings = Vec::new();
+    let lateral = tcp_scan(
+        &host,
+        &[445, 139, 3389, 5985, 5986, 22, 1433, 3306, 5432],
+        8,
+    )
+    .await;
+    if !lateral.is_empty() {
+        findings.push(alias_finding(
+            engine_id,
+            &format!("Post-exploitation lateral ports: {:?}", lateral),
+            "high",
+            "T1021",
+            &format!(
+                "Host {} accepts {:?} — post_exploitation records lateral/admin evidence only; it does not dump LSASS or move laterally.",
+                host, lateral
+            ),
+            target,
+            canonical,
+        ));
+    }
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let paths = &[
+        "/debug",
+        "/actuator/env",
+        "/server-status",
+        "/phpinfo.php",
+        "/adminer",
+    ];
+    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if status_indicates_presence(p.status) {
+            findings.push(alias_finding(
+                engine_id,
+                "Admin/debug endpoint after hypothetical foothold",
+                "high",
+                "T1082",
+                &format!(
+                    "{} returned {} — post-exploitation discovery surface (env/debug), evidence only.",
+                    p.final_url, p.status
+                ),
+                target,
+                canonical,
+            ));
+            break;
+        }
+    }
+    collect(engine_id, target, canonical, findings)
+}
+
 // ── OSINT specialized probes ──────────────────────────────────────────────────
 
 async fn probe_social_media_recon(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
@@ -1870,5 +1974,25 @@ mod tests {
             r.message,
             "no_such_engine_zzz: no live signal observed on example.com"
         );
+    }
+
+    #[test]
+    fn breach_aliases_have_specialized_match_arms() {
+        let src = include_str!("alias_specialized_probes.rs");
+        let start = src
+            .find("match engine_id {")
+            .expect("run_specialized_probe match");
+        let rest = &src[start..];
+        let end = rest.find("_ => empty_ok").expect("wildcard arm");
+        let chunk = &rest[..end];
+        for id in ["full_breach_sim", "post_exploitation"] {
+            assert!(
+                chunk.contains(&format!("\"{id}\"")),
+                "alias {id} must have a specialized probe arm, not only threat_emulation retag"
+            );
+        }
+        assert!(src.contains("fn probe_full_breach_sim"));
+        assert!(src.contains("fn probe_post_exploitation"));
+        assert!(src.contains("tcp_scan"));
     }
 }

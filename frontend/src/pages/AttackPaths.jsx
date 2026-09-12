@@ -9,7 +9,7 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
 import { downloadCsv } from '../lib/exportFindingsCsv'
-import { GitBranch, RefreshCw, ChevronRight } from 'lucide-react'
+import { GitBranch, RefreshCw, ChevronRight, Crown } from 'lucide-react'
 import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
@@ -21,7 +21,7 @@ import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../utils/apiFetch'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
-import CrownJewelFlagPanel from '../components/CrownJewelFlagPanel'
+import { crownJewelFlagsBody, crownJewelFlagsPath, parseAttackPathsPayload } from './attackPathsModel'
 
 const NS = 'pages.attackPaths'
 const columnHelper = createColumnHelper()
@@ -40,11 +40,6 @@ function chokeCsv(rows) {
     r.label, r.node_type, r.coverage, r.coverage_pct, r.max_finding_cvss, r.max_finding_epss, r.kev_present,
   ])
   downloadCsv(data, header, 'weissman-attack-paths')
-}
-
-export function needsCrownJewelSeed(snapshot) {
-  if (!snapshot) return false
-  return Number(snapshot.jewel_count) === 0
 }
 
 function PathCard({ path, t }) {
@@ -127,6 +122,9 @@ export default function AttackPaths() {
   const [blockSmb, setBlockSmb] = useState(false)
   const [whatIfBusy, setWhatIfBusy] = useState(false)
   const [whatIfSnapshot, setWhatIfSnapshot] = useState(null)
+  const [zeroJewel, setZeroJewel] = useState(false)
+  const [candidateJewels, setCandidateJewels] = useState([])
+  const [markingId, setMarkingId] = useState(null)
 
   const load = useCallback(
     async (recompute = false) => {
@@ -138,10 +136,12 @@ export default function AttackPaths() {
         const qs = recompute ? '?recompute=1&top_k=15' : ''
         const data = await apiFetch(`/api/attack-paths/${encodeURIComponent(selectedClientId)}${qs}`)
         if (data?.ok === false) throw new Error(data.detail || 'load failed')
-        setSnapshot(data.snapshot || null)
-        setHasSnapshot(Boolean(data.snapshot))
+        const parsed = parseAttackPathsPayload(data)
+        setSnapshot(parsed.snapshot)
+        setHasSnapshot(parsed.hasSnapshot)
+        setZeroJewel(parsed.zeroJewel)
+        setCandidateJewels(parsed.candidateJewels)
         if (recompute && data.snapshot) toast.success(t(`${NS}.recompute_done`))
-        setWhatIfSnapshot(null)
       } catch (e) {
         setError(e.message || t(`${NS}.load_failed`))
       } finally {
@@ -150,6 +150,28 @@ export default function AttackPaths() {
       }
     },
     [selectedClientId, t, toast],
+  )
+
+  const markCrownJewel = useCallback(
+    async (nodeId) => {
+      if (nodeId == null) return
+      setMarkingId(nodeId)
+      setError('')
+      try {
+        const data = await apiFetch(crownJewelFlagsPath(nodeId), {
+          method: 'PATCH',
+          body: crownJewelFlagsBody(),
+        })
+        if (data?.ok === false) throw new Error(data.detail || t(`${NS}.mark_jewel_failed`))
+        toast.success(t(`${NS}.mark_jewel_done`))
+        await load(true)
+      } catch (e) {
+        setError(e.message || t(`${NS}.mark_jewel_failed`))
+      } finally {
+        setMarkingId(null)
+      }
+    },
+    [load, t, toast],
   )
 
   const runWhatIf = useCallback(async () => {
@@ -178,6 +200,8 @@ export default function AttackPaths() {
   useEffect(() => {
     setSnapshot(null)
     setWhatIfSnapshot(null)
+    setZeroJewel(false)
+    setCandidateJewels([])
     if (selectedClientId != null) load(false)
   }, [selectedClientId, load])
 
@@ -197,6 +221,9 @@ export default function AttackPaths() {
   const topScore = useMemo(
     () => (paths.length ? Math.max(...paths.map((p) => Number(p.path_score) || 0)) : 0),
     [paths],
+  )
+  const showZeroJewel = selectedClientId != null && !loading && !error && (
+    zeroJewel || Number(display?.jewel_count) === 0
   )
 
   const columns = useMemo(
@@ -310,6 +337,55 @@ export default function AttackPaths() {
           </div>
         )}
 
+        {showZeroJewel && (
+          <div
+            role="status"
+            data-testid="zero-jewel-banner"
+            className="rounded-xl border border-amber-500/40 bg-amber-950/25 p-4 space-y-3"
+          >
+            <div className="flex items-start gap-3">
+              <Crown className="w-5 h-5 text-amber-300 shrink-0 mt-0.5" aria-hidden />
+              <div>
+                <h2 className="text-sm font-semibold text-amber-100">{t(`${NS}.zero_jewel_title`)}</h2>
+                <p className="text-[12px] text-[var(--text-muted)] mt-1">{t(`${NS}.zero_jewel_body`)}</p>
+              </div>
+            </div>
+            {candidateJewels.length === 0 ? (
+              <p className="text-[12px] font-mono text-[var(--text-muted)]">{t(`${NS}.zero_jewel_no_candidates`)}</p>
+            ) : (
+              <ul className="space-y-2">
+                {candidateJewels.map((node) => (
+                  <li
+                    key={node.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--table-surface)] px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[13px] text-[var(--text-primary)] truncate">
+                        {node.label || node.graph_key || `#${node.id}`}
+                      </div>
+                      <div className="text-[10px] font-mono text-[var(--text-muted)]">
+                        {node.node_type || 'node'} · {t(`${NS}.candidate_value`, {
+                          value: `$${(Number(node.business_value_usd) || 0).toLocaleString()}`,
+                        })}
+                      </div>
+                    </div>
+                    <Button
+                      variant="unstyled"
+                      type="button"
+                      disabled={markingId != null}
+                      onClick={() => markCrownJewel(node.id)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 text-amber-100 text-xs font-medium hover:bg-amber-500/25 disabled:opacity-40"
+                    >
+                      <Crown className="w-3.5 h-3.5" aria-hidden />
+                      {markingId === node.id ? t(`${NS}.mark_jewel_busy`) : t(`${NS}.mark_jewel`)}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
         {selectedClientId != null && !loading && !error && !hasSnapshot && (
           <EmptyState
             icon="network"
@@ -329,26 +405,6 @@ export default function AttackPaths() {
           />
         )}
 
-        {selectedClientId != null && !loading && !error && (
-          <CrownJewelFlagPanel
-            clientId={selectedClientId}
-            onFlagsChanged={async () => {
-              setWhatIfSnapshot(null)
-              await load(true)
-            }}
-          />
-        )}
-
-        {selectedClientId != null && !loading && !error && hasSnapshot && snapshot && Number(display?.jewel_count || 0) === 0 && (
-          <div
-            role="status"
-            className="rounded-xl border border-amber-500/40 bg-amber-950/20 px-4 py-3 text-sm text-amber-100"
-            data-testid="zero-jewel-banner"
-          >
-            {t(`${NS}.zero_jewel_banner`)}
-          </div>
-        )}
-
         {selectedClientId != null && !loading && !error && hasSnapshot && snapshot && (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -357,24 +413,6 @@ export default function AttackPaths() {
               <ExecutiveWidget label={t(`${NS}.kpi_paths`)} value={paths.length} hint={t(`${NS}.kpi_paths_hint`)} accent="#f97316" />
               <ExecutiveWidget label={t(`${NS}.kpi_top_score`)} value={topScore} hint={t(`${NS}.kpi_top_score_hint`)} accent={riskColor(topRisk)} />
             </div>
-            {needsCrownJewelSeed(display) && (
-              <div
-                role="status"
-                data-testid="no-jewels-banner"
-                className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 flex flex-wrap items-center justify-between gap-3"
-              >
-                <p className="text-sm text-amber-100">{t(`${NS}.no_jewels_banner`)}</p>
-                <Button
-                  variant="unstyled"
-                  type="button"
-                  onClick={() => load(true)}
-                  disabled={recomputing}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 text-amber-100 text-xs font-medium hover:bg-amber-500/25 disabled:opacity-40"
-                >
-                  {t(`${NS}.no_jewels_recompute`)}
-                </Button>
-              </div>
-            )}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <ExecutiveWidget label={t(`${NS}.kpi_path_ale`)} value={`$${(Number(display?.total_path_ale_usd) || 0).toLocaleString()}`} hint={t(`${NS}.kpi_path_ale_hint`)} accent="#f59e0b" />
               <ExecutiveWidget label={t(`${NS}.kpi_top_risk`)} value={topRisk.toFixed(1)} hint={t(`${NS}.kpi_top_risk_hint`)} accent={riskColor(topRisk)} />
