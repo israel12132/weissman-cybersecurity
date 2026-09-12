@@ -1179,9 +1179,11 @@ async fn api_identity_contexts_add(
             )
                 .into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "error": e.to_string()})),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::identity_contexts_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }
@@ -1220,7 +1222,13 @@ async fn api_identity_contexts_delete(
             (StatusCode::OK, Json(json!({"ok": true}))).into_response()
         }
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::identity_contexts_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response(),
     }
 }
 
@@ -1795,9 +1803,20 @@ async fn api_auto_heal(
     let resolved_git_token = {
         let bt = body.git_token.as_deref().unwrap_or("").trim().to_string();
         if bt.is_empty() {
-            crate::auto_heal::github_token_for_tenant(state.app_pool.as_ref(), auth.tenant_id)
+            match crate::auto_heal::github_token_for_tenant(state.app_pool.as_ref(), auth.tenant_id)
                 .await
-                .unwrap_or_default()
+            {
+                Ok(v) => v.unwrap_or_default(),
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::github_token_unavailable_json(
+                            "database unavailable",
+                        )),
+                    )
+                        .into_response();
+                }
+            }
         } else {
             bt
         }
@@ -2287,9 +2306,20 @@ async fn api_heal_revert(
     let token = {
         let bt = body.git_token.as_deref().unwrap_or("").trim().to_string();
         if bt.is_empty() {
-            crate::auto_heal::github_token_for_tenant(state.app_pool.as_ref(), auth.tenant_id)
+            match crate::auto_heal::github_token_for_tenant(state.app_pool.as_ref(), auth.tenant_id)
                 .await
-                .unwrap_or_default()
+            {
+                Ok(v) => v.unwrap_or_default(),
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::github_token_unavailable_json(
+                            "database unavailable",
+                        )),
+                    )
+                        .into_response();
+                }
+            }
         } else {
             bt
         }
@@ -2437,9 +2467,20 @@ async fn api_heal_batch(
     let resolved_git_token = {
         let bt = body.git_token.as_deref().unwrap_or("").trim().to_string();
         if bt.is_empty() {
-            crate::auto_heal::github_token_for_tenant(state.app_pool.as_ref(), auth.tenant_id)
+            match crate::auto_heal::github_token_for_tenant(state.app_pool.as_ref(), auth.tenant_id)
                 .await
-                .unwrap_or_default()
+            {
+                Ok(v) => v.unwrap_or_default(),
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::github_token_unavailable_json(
+                            "database unavailable",
+                        )),
+                    )
+                        .into_response();
+                }
+            }
         } else {
             bt
         }
@@ -2479,9 +2520,13 @@ async fn api_heal_batch(
             continue;
         }
         let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-            results.push(json!({"finding_id": fid, "status": "db_error"}));
-            skipped += 1;
-            continue;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_batch_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
         };
         let row = match sqlx::query(
             "SELECT id, COALESCE(generated_patch,'') AS generated_patch, COALESCE(poc_exploit,'') AS poc_exploit FROM vulnerabilities WHERE client_id = $1 AND finding_id = $2 LIMIT 1",
@@ -2494,9 +2539,13 @@ async fn api_heal_batch(
             Ok(v) => v,
             Err(_) => {
                 let _ = tx.rollback().await;
-                results.push(json!({"finding_id": fid, "status": "persist_failed"}));
-                skipped += 1;
-                continue;
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::heal_batch_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
             }
         };
         let Some(r) = row else {
@@ -2538,14 +2587,22 @@ async fn api_heal_batch(
         .await;
         if ins.is_err() {
             let _ = tx.rollback().await;
-            results.push(json!({"finding_id": fid, "status": "insert_failed"}));
-            skipped += 1;
-            continue;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_batch_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
         }
         if tx.commit().await.is_err() {
-            results.push(json!({"finding_id": fid, "status": "persist_failed"}));
-            skipped += 1;
-            continue;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_batch_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
         }
         match db::job_queue::enqueue_with_max_attempts(
             state.app_pool.as_ref(),
@@ -2562,7 +2619,11 @@ async fn api_heal_batch(
                 enqueued += 1;
             }
             Err(e) => {
-                results.push(json!({"finding_id": fid, "status": "enqueue_failed", "detail": e.to_string()}));
+                results.push(json!({
+                    "finding_id": fid,
+                    "status": "enqueue_failed",
+                    "detail": scrub_internal_error(&e)
+                }));
                 skipped += 1;
             }
         }
@@ -2753,24 +2814,42 @@ async fn api_deception_generate(
         )
             .into_response();
     };
-    let llm_base: String = sqlx::query_scalar::<_, String>(
+    let llm_base: String = match sqlx::query_scalar::<_, String>(
         "SELECT COALESCE(trim(value),'') FROM system_configs WHERE tenant_id = $1 AND key = 'llm_base_url'",
     )
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten()
-    .unwrap_or_default();
-    let llm_model: String = sqlx::query_scalar::<_, String>(
+    {
+        Ok(v) => v.unwrap_or_default(),
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::deception_generate_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let llm_model: String = match sqlx::query_scalar::<_, String>(
         "SELECT COALESCE(trim(value),'') FROM system_configs WHERE tenant_id = $1 AND key = 'llm_model'",
     )
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten()
-    .unwrap_or_default();
+    {
+        Ok(v) => v.unwrap_or_default(),
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::deception_generate_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     if tx.commit().await.is_err() {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -2999,32 +3078,54 @@ async fn api_sovereign_phantom_trap(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"error": "DB unavailable"})),
+            Json(crate::http_unavailable::phantom_trap_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
-    let llm_base: String = sqlx::query_scalar(
+    let llm_base: String = match sqlx::query_scalar::<_, String>(
         "SELECT COALESCE(trim(value),'') FROM system_configs WHERE tenant_id = $1 AND key = 'llm_base_url'",
     )
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten()
-    .unwrap_or_default();
-    let llm_model: String = sqlx::query_scalar(
+    {
+        Ok(v) => v.unwrap_or_default(),
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::phantom_trap_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let llm_model: String = match sqlx::query_scalar::<_, String>(
         "SELECT COALESCE(trim(value),'') FROM system_configs WHERE tenant_id = $1 AND key = 'llm_model'",
     )
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten()
-    .unwrap_or_default();
+    {
+        Ok(v) => v.unwrap_or_default(),
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::phantom_trap_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     if tx.commit().await.is_err() {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"error": "DB commit"})),
+            Json(crate::http_unavailable::phantom_trap_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     }

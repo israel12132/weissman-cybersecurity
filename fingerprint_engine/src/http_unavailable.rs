@@ -371,6 +371,39 @@ pub fn deception_generate_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// GitHub token registry cannot be read — never 400 "git_token required" on store-down
+pub fn github_token_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "error": "git_token_unavailable",
+        "detail": detail,
+        "code": "db_unavailable",
+    })
+}
+
+/// `POST /api/clients/:id/heal-batch` when findings or specs cannot be confirmed
+pub fn heal_batch_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "enqueued": Value::Null,
+        "skipped": Value::Null,
+        "results": [],
+        "detail": detail,
+    })
+}
+
+/// `POST /api/sovereign/phantom-trap` when LLM config cannot be confirmed
+pub fn phantom_trap_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "error": "DB unavailable",
+        "detail": detail,
+    })
+}
+
 /// `GET /api/clients/:id/first-seen-hits` — never advertise zero pre-NVD counts on store-down
 pub fn first_seen_hits_unavailable_json(client_id: i64, detail: &str) -> Value {
     json!({
@@ -1988,6 +2021,175 @@ mod tests {
         let src = include_str!("server_handlers_sovereign_operator.inc");
         let fn_src = named_fn_src(src, "async fn api_sovereign_operator_logs_get");
         assert!(fn_src.contains("sovereign_operator_logs_unavailable_json"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn github_token_store_down_is_never_git_token_required() {
+        let v = github_token_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["error"], "git_token_unavailable");
+        assert_eq!(v["code"], "db_unavailable");
+        assert_ne!(v["error"], json!("git_token and repo_slug required"));
+    }
+
+    #[test]
+    fn heal_batch_store_down_is_never_ok_true_accepted() {
+        let v = heal_batch_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["enqueued"].is_null());
+        assert!(v["skipped"].is_null());
+        assert_eq!(v["results"], json!([]));
+        assert_ne!(v["ok"], true);
+        assert_ne!(v["enqueued"], json!(0));
+    }
+
+    #[test]
+    fn phantom_trap_store_down_is_never_ok_bundle() {
+        let v = phantom_trap_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["error"], "DB unavailable");
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn github_token_for_tenant_registry_is_store_down_not_env_fallback() {
+        let src = include_str!("auto_heal.rs");
+        let start = src
+            .find("pub async fn github_token_for_tenant")
+            .expect("github_token_for_tenant");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn create_branch_and_pr")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("Result<Option<String>, &'static str>"));
+        assert!(fn_src.contains("store_down"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        assert!(!fn_src.contains("if let Ok(mut tx)"));
+    }
+
+    #[test]
+    fn auto_heal_git_token_is_store_down_503_not_400() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_auto_heal");
+        let tok = fn_src
+            .find("github_token_for_tenant")
+            .expect("token resolve");
+        let after = &fn_src[tok..];
+        let req = after
+            .find("git_token and repo_slug required")
+            .unwrap_or(after.len());
+        let resolve = &after[..req];
+        assert!(resolve.contains("github_token_unavailable_json"));
+        assert!(resolve.contains("Err(_)"));
+        assert!(!resolve.contains(".await\n                .unwrap_or_default()"));
+    }
+
+    #[test]
+    fn heal_revert_git_token_is_store_down_503_not_400() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_revert");
+        let tok = fn_src
+            .find("github_token_for_tenant")
+            .expect("token resolve");
+        let after = &fn_src[tok..];
+        let req = after
+            .find("git_token and repo_slug required")
+            .unwrap_or(after.len());
+        let resolve = &after[..req];
+        assert!(resolve.contains("github_token_unavailable_json"));
+        assert!(resolve.contains("Err(_)"));
+        assert!(!resolve.contains(".await\n                .unwrap_or_default()"));
+    }
+
+    #[test]
+    fn heal_batch_git_token_is_store_down_503_not_400() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_batch");
+        let tok = fn_src
+            .find("github_token_for_tenant")
+            .expect("token resolve");
+        let after = &fn_src[tok..];
+        let req = after
+            .find("git_token and repo_slug required")
+            .unwrap_or(after.len());
+        let resolve = &after[..req];
+        assert!(resolve.contains("github_token_unavailable_json"));
+        assert!(resolve.contains("Err(_)"));
+        assert!(!resolve.contains(".await\n                .unwrap_or_default()"));
+    }
+
+    #[test]
+    fn heal_batch_finding_store_down_is_503_not_ok_true() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_batch");
+        assert!(fn_src.contains("heal_batch_unavailable_json"));
+        assert!(!fn_src.contains("\"status\": \"db_error\""));
+        assert!(!fn_src.contains("\"status\": \"insert_failed\""));
+        assert!(!fn_src.contains("\"status\": \"persist_failed\""));
+        assert!(fn_src.contains("enqueue_failed"));
+        let enq = fn_src.find("enqueue_failed").expect("enqueue skip");
+        let enq_src = &fn_src[enq..];
+        assert!(!enq_src.contains("e.to_string()"));
+        assert!(enq_src.contains("scrub_internal_error"));
+    }
+
+    #[test]
+    fn heal_readiness_github_token_is_store_down_503_not_not_configured() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_readiness");
+        let tok = fn_src
+            .find("github_token_for_tenant")
+            .expect("token resolve");
+        let after = &fn_src[tok..];
+        assert!(after.contains("heal_readiness_unavailable_json"));
+        assert!(!after.contains(".await\n        .is_some()"));
+    }
+
+    #[test]
+    fn deception_generate_llm_is_store_down_503_not_empty_config() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_deception_generate");
+        let llm = fn_src.find("llm_base_url").expect("llm key");
+        let after = &fn_src[llm..];
+        let records = after
+            .find("generate_deception_assets")
+            .unwrap_or(after.len());
+        let llm_src = &after[..records];
+        assert!(llm_src.contains("deception_generate_unavailable_json"));
+        assert!(!llm_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn phantom_trap_llm_is_store_down_503_not_empty_config() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_sovereign_phantom_trap");
+        assert!(fn_src.contains("phantom_trap_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        let llm = fn_src.find("llm_base_url").expect("llm key");
+        let after = &fn_src[llm..];
+        let factory = after.find("build_phantom_bundle").unwrap_or(after.len());
+        assert!(!after[..factory].contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn identity_contexts_add_insert_err_is_503_not_sql_leak() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_identity_contexts_add");
+        assert!(fn_src.contains("identity_contexts_unavailable_json"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn identity_contexts_delete_err_is_503_not_sql_leak() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let fn_src = named_fn_src(src, "async fn api_identity_contexts_delete");
+        assert!(fn_src.contains("identity_contexts_unavailable_json"));
         assert!(!fn_src.contains("e.to_string()"));
     }
 }

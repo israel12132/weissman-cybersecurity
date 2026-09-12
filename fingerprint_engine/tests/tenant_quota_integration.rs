@@ -169,7 +169,9 @@ async fn github_token_resolves_from_saved_integration_then_env() {
     drop(conn);
 
     // Resolves the decrypted token from the saved integration.
-    let resolved = fingerprint_engine::auto_heal::github_token_for_tenant(&pool, TENANT).await;
+    let resolved = fingerprint_engine::auto_heal::github_token_for_tenant(&pool, TENANT)
+        .await
+        .expect("store up");
     assert_eq!(
         resolved.as_deref(),
         Some(token),
@@ -196,7 +198,9 @@ async fn github_token_resolves_from_saved_integration_then_env() {
         "WEISSMAN_GITHUB_TOKEN",
         "ghp_ENV_fallback_not_a_secret_00_zzzz",
     );
-    let env_resolved = fingerprint_engine::auto_heal::github_token_for_tenant(&pool, TENANT).await;
+    let env_resolved = fingerprint_engine::auto_heal::github_token_for_tenant(&pool, TENANT)
+        .await
+        .expect("store up");
     assert_eq!(
         env_resolved.as_deref(),
         Some("ghp_ENV_fallback_not_a_secret_00_zzzz"),
