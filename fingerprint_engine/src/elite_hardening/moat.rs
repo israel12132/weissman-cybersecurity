@@ -410,6 +410,7 @@ pub fn snapshot() -> Value {
     json!({
         "live": true,
         "engines_total": engines_total,
+        "palo_alto": palo_alto_bakeoff(),
         "lanes_total": LANES.len(),
         "lanes_covered": covered,
         "unmatched_stack": fusion,
@@ -441,6 +442,81 @@ pub fn snapshot() -> Value {
     })
 }
 
+/// Palo Alto bake-off inventory from **this binary**, not PAN telemetry.
+///
+/// Positioning (labelled `live: false`) is a category statement: Weissman finds and
+/// orchestrates; Palo sells inline prevention. Engine overlap and unique loops are
+/// live because they are derived from `PRODUCTION_ENGINE_IDS`.
+fn production_has(id: &str) -> bool {
+    PRODUCTION_ENGINE_IDS.contains(&id)
+}
+
+fn live_engine_ids(needles: &[&'static str]) -> Vec<&'static str> {
+    needles
+        .iter()
+        .copied()
+        .filter(|id| production_has(id))
+        .collect()
+}
+
+fn palo_alto_bakeoff() -> Value {
+    let vngfw_admin = std::env::var("WEISSMAN_VNGFW_ADMIN").unwrap_or_default();
+    json!({
+        "live": true,
+        "source": "this_binary_inventory",
+        "not_palo_telemetry": true,
+        "positioning": {
+            "live": false,
+            "weissman": "assessment_plus_orchestrated_containment",
+            "palo_alto": "inline_prevention_plus_xsiam_cnapp_sase",
+            "honest": "companion_not_ngfw_replacement",
+        },
+        "catalog": crate::engine_accounting::to_json(),
+        "find_vs_block": {
+            "find": true,
+            "inline_packet_path": false,
+            "vngfw_engine_registered": production_has("weissman_vngfw"),
+            "vngfw_admin_configured": !vngfw_admin.trim().is_empty(),
+            "ngfw_posture_engine": production_has("ngfw_posture"),
+        },
+        "palo_sku_overlap": [
+            {
+                "sku": "Prisma Cloud",
+                "ids": live_engine_ids(&["cnapp_continuous", "toxic_combo_runtime_proof", "iac_misconfig", "k8s_container", "aws_attack"]),
+                "maturity": "partial",
+            },
+            {
+                "sku": "Cortex XDR",
+                "ids": live_engine_ids(&["host_isolation", "ebpf_sensor", "ioc_yara_hunt", "chronos"]),
+                "maturity": "partial",
+            },
+            {
+                "sku": "Cortex Xpanse",
+                "ids": live_engine_ids(&["asm", "first_mover_surface_delta", "osint"]),
+                "maturity": "partial",
+            },
+            {
+                "sku": "Prisma Access",
+                "ids": live_engine_ids(&["sase_security_bypass", "ai_casb_saas", "casb_saas_posture"]),
+                "maturity": "partial",
+            },
+            {
+                "sku": "PAN-OS / WildFire",
+                "ids": live_engine_ids(&["ngfw_posture", "weissman_vngfw", "malware_detonation"]),
+                "maturity": "theater_to_partial",
+            },
+        ],
+        "unique_closed_loops": [
+            {"id": "chronos", "present": production_has("chronos"), "loop": "web_parent_to_shell_process_delta"},
+            {"id": "ot_passive_active_safety", "present": production_has("ot_passive_active_safety"), "loop": "ot_read_only_fsm_plus_fair"},
+            {"id": "ot_crown_jewel_path", "present": production_has("ot_crown_jewel_path"), "loop": "ot_to_process_crown_jewel"},
+            {"id": "ot_cloud_identity_killpath", "present": production_has("ot_cloud_identity_killpath"), "loop": "ot_x_cloud_x_identity"},
+            {"id": "control_plane_of_controls", "present": production_has("control_plane_of_controls"), "loop": "prove_installed_preventers"},
+            {"id": "toxic_combo_runtime_proof", "present": production_has("toxic_combo_runtime_proof"), "loop": "cnapp_plus_safe_exposure"},
+        ],
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -467,6 +543,45 @@ mod tests {
         let snap = snapshot();
         assert_eq!(snap["market_research"]["live"], false);
         assert_eq!(snap["live"], true);
+    }
+
+    #[test]
+    fn palo_alto_bakeoff_is_companion_not_ngfw_and_ot_loops_are_live() {
+        let snap = snapshot();
+        let palo = &snap["palo_alto"];
+        assert_eq!(palo["live"], true);
+        assert_eq!(palo["not_palo_telemetry"], true);
+        assert_eq!(palo["positioning"]["live"], false);
+        assert_eq!(
+            palo["positioning"]["honest"],
+            "companion_not_ngfw_replacement"
+        );
+        assert_eq!(palo["find_vs_block"]["find"], true);
+        assert_eq!(palo["find_vs_block"]["inline_packet_path"], false);
+        let loops = palo["unique_closed_loops"].as_array().expect("loops");
+        for id in [
+            "ot_passive_active_safety",
+            "ot_crown_jewel_path",
+            "ot_cloud_identity_killpath",
+            "chronos",
+            "control_plane_of_controls",
+            "toxic_combo_runtime_proof",
+        ] {
+            let loop_row = loops
+                .iter()
+                .find(|l| l["id"] == id)
+                .unwrap_or_else(|| panic!("missing palo loop {id}"));
+            assert_eq!(
+                loop_row["present"],
+                production_has(id),
+                "{id} present flag must match PRODUCTION_ENGINE_IDS"
+            );
+        }
+        assert!(palo["catalog"]["total_ids"].as_u64().unwrap() >= 580);
+        assert!(
+            palo["catalog"]["alias_ids"].as_u64().unwrap() > 0,
+            "catalog honesty must surface alias inflation"
+        );
     }
 
     #[test]

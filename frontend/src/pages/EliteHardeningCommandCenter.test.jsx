@@ -59,6 +59,16 @@ describe('EliteHardeningCommandCenter', () => {
         lanes: [
           { id: 'ot_ics', title: 'OT/ICS live protocol FSM', live_engine_count: 32, beats: 'Claroty passive' },
         ],
+        palo_alto: {
+          live: true,
+          positioning: { honest: 'companion_not_ngfw_replacement' },
+          catalog: { total_ids: 585, distinct_canonical: 315, alias_ids: 204, agent_required: 58 },
+          find_vs_block: { find: true, inline_packet_path: false },
+          unique_closed_loops: [
+            { id: 'ot_passive_active_safety', present: true, loop: 'ot_read_only_fsm_plus_fair' },
+          ],
+          palo_sku_overlap: [{ sku: 'Prisma Cloud', maturity: 'partial', ids: ['cnapp_continuous'] }],
+        },
       },
       hfv: {
         live: true,
@@ -74,6 +84,9 @@ describe('EliteHardeningCommandCenter', () => {
     expect(screen.getByText('Evidence doubt')).toBeInTheDocument()
     expect(screen.getByTestId('moat-lane')).toBeInTheDocument()
     expect(screen.getByTestId('hfv-loop')).toBeInTheDocument()
+    expect(screen.getByTestId('palo-bakeoff')).toBeInTheDocument()
+    expect(screen.getByTestId('palo-loop')).toBeInTheDocument()
+    expect(screen.getByText('ot_passive_active_safety')).toBeInTheDocument()
     expect(screen.getByText('OT/ICS live protocol FSM')).toBeInTheDocument()
     expect(apiFetch).toHaveBeenCalledWith('/api/elite-hardening/status')
   })

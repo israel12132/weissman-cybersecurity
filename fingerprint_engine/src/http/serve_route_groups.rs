@@ -649,6 +649,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/integrations/:id/test", post(api_integrations_test))
         .route("/api/integrations/:id", delete(api_integrations_delete))
         .route("/api/ot-ics/devices", get(api_ot_ics_devices))
+        .route(
+            "/api/elite-hardening/status",
+            get(api_elite_hardening_status),
+        )
         .route("/api/mobile-security/apps", get(api_mobile_security_apps))
         .route("/api/soc/incidents", get(api_soc_incidents))
         .route(
