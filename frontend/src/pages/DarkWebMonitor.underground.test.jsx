@@ -67,7 +67,8 @@ describe('underground war room', () => {
     expect(sourceChipState('hibp', parsed)).toBe('hit')
     expect(sourceChipState('urlscan', parsed)).toBe('quiet')
     expect(sourceChipState('threatfox', parsed)).toBe('failed')
-    expect(sourceChipState('urlhaus', parsed)).toBe('quiet')
+    expect(sourceChipState('urlhaus', parsed)).toBe('unknown')
+    expect(sourceChipState('hibp', parseUndergroundPayload({}))).toBe('unknown')
   })
 
   it('renders delta KPIs and hunt control from live payload', () => {
@@ -99,5 +100,6 @@ describe('underground war room', () => {
     expect(screen.getByText('pages.darkWebMonitor.play_proven')).toBeTruthy()
     expect(screen.getByText('pages.darkWebMonitor.hunt')).toBeTruthy()
     expect(screen.getByText('pages.darkWebMonitor.source_failed')).toBeTruthy()
+    expect(document.querySelector('li')?.textContent).toMatch(/HIBP/)
   })
 })

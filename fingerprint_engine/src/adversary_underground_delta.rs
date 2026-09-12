@@ -233,7 +233,7 @@ pub fn parse_hibp_breaches(body: &str, apex: &str) -> Vec<SourceHit> {
             .unwrap_or("")
             .trim()
             .to_ascii_lowercase();
-        if !domain.is_empty() && !domain_hit_in_scope(&apex, &domain) {
+        if domain.is_empty() || !domain_hit_in_scope(&apex, &domain) {
             continue;
         }
         let name = b.get("Name").and_then(Value::as_str).unwrap_or("breach");
@@ -421,7 +421,7 @@ pub fn parse_urlscan_malicious(body: &str, apex: &str) -> Vec<SourceHit> {
             .or_else(|| row.pointer("/task/domain"))
             .and_then(Value::as_str)
             .unwrap_or("");
-        if !page.is_empty() && !domain_hit_in_scope(&apex, page) {
+        if page.is_empty() || !domain_hit_in_scope(&apex, page) {
             continue;
         }
         n += 1;
@@ -447,6 +447,80 @@ pub fn parse_urlscan_malicious(body: &str, apex: &str) -> Vec<SourceHit> {
     }]
 }
 
+/// Hudson Rock Cavalier OSINT — **counts only**. Never copy emails, cookies, or passwords.
+#[must_use]
+pub fn parse_hudson_rock_osint(body: &str, apex: &str) -> Vec<SourceHit> {
+    let Ok(v) = serde_json::from_str::<Value>(body) else {
+        return Vec::new();
+    };
+    let employees = json_count(
+        &v,
+        &[
+            "total_corporate_services",
+            "compromised_employees",
+            "employees",
+        ],
+    );
+    let users = json_count(
+        &v,
+        &[
+            "total_user_services",
+            "compromised_users",
+            "users",
+            "clients",
+        ],
+    );
+    let stealer_n = json_count(&v, &["stealers", "total"]);
+    let total = employees.max(users).max(stealer_n);
+    if total <= 0 {
+        return Vec::new();
+    }
+    let apex = registrable_apex(apex);
+    let title = format!("Hudson Rock OSINT: infostealer-index counts for {apex}");
+    let evidence = format!(
+        "hudsonrock cavalier counts-only employees_or_corp={employees} users_or_clients={users} stealers_or_total={stealer_n} (identities not stored)"
+    );
+    vec![SourceHit {
+        source: "hudson_rock".into(),
+        fingerprint: hit_fingerprint("hudson_rock", &title, ""),
+        title,
+        severity: "high".into(),
+        evidence,
+        url: format!("https://cavalier.hudsonrock.com/api/json/v2/osint-tools/search-by-domain?domain={apex}"),
+    }]
+}
+
+fn json_count(v: &Value, keys: &[&str]) -> i64 {
+    for k in keys {
+        if let Some(n) = v.get(*k).and_then(Value::as_i64) {
+            if n > 0 {
+                return n;
+            }
+        }
+        if let Some(n) = v.get(*k).and_then(Value::as_u64) {
+            if n > 0 {
+                return n as i64;
+            }
+        }
+        if let Some(a) = v.get(*k).and_then(Value::as_array) {
+            if !a.is_empty() {
+                return a.len() as i64;
+            }
+        }
+        if let Some(n) = v.pointer(&format!("/data/{k}")).and_then(Value::as_i64) {
+            if n > 0 {
+                return n;
+            }
+        }
+        if let Some(a) = v.pointer(&format!("/data/{k}")).and_then(Value::as_array) {
+            if !a.is_empty() {
+                return a.len() as i64;
+            }
+        }
+    }
+    0
+}
+
 fn ioc_or_empty(row: &Value) -> &str {
     row.get("ioc").and_then(Value::as_str).unwrap_or("")
 }
@@ -464,6 +538,13 @@ fn pbool(params: &Value, key: &str, default: bool) -> bool {
 struct ProbeOutcome {
     health: SourceHealth,
     hits: Vec<SourceHit>,
+}
+
+fn abusech_auth_key() -> String {
+    std::env::var("ABUSECH_AUTH_KEY")
+        .or_else(|_| std::env::var("THREATFOX_API_KEY"))
+        .or_else(|_| std::env::var("URLHAUS_AUTH_KEY"))
+        .unwrap_or_default()
 }
 
 fn outcome(id: &str, status: u16, ok: bool, message: &str, hits: Vec<SourceHit>) -> ProbeOutcome {
@@ -556,7 +637,13 @@ async fn probe_ransomware_live(client: &reqwest::Client, apex: &str) -> ProbeOut
 async fn probe_threatfox(client: &reqwest::Client, apex: &str) -> ProbeOutcome {
     let url = "https://threatfox-api.abuse.ch/api/v1/";
     let payload = json!({ "query": "search_ioc", "search_term": apex });
-    match http_post_json_with_headers(client, url, &payload, &[]).await {
+    let key = abusech_auth_key();
+    let headers: Vec<(&str, &str)> = if key.is_empty() {
+        vec![]
+    } else {
+        vec![("auth-key", key.as_str())]
+    };
+    match http_post_json_with_headers(client, url, &payload, &headers).await {
         Some(p) if p.status == 200 => {
             let hits = parse_threatfox(&p.body, apex);
             outcome("threatfox", p.status, true, "ok", hits)
@@ -577,14 +664,13 @@ async fn probe_urlhaus(client: &reqwest::Client, apex: &str) -> ProbeOutcome {
     // path is not a JSON contract and must not be treated as a live source.
     let url = "https://urlhaus-api.abuse.ch/v1/host/";
     let form = format!("host={}", urlencoding::encode(apex));
-    match http_post_bytes_with_headers(
-        client,
-        url,
-        form.as_bytes(),
-        &[("content-type", "application/x-www-form-urlencoded")],
-    )
-    .await
-    {
+    let key = abusech_auth_key();
+    let mut headers: Vec<(&str, &str)> =
+        vec![("content-type", "application/x-www-form-urlencoded")];
+    if !key.is_empty() {
+        headers.push(("auth-key", key.as_str()));
+    }
+    match http_post_bytes_with_headers(client, url, form.as_bytes(), &headers).await {
         Some(p) if p.status == 200 => {
             let hits = parse_urlhaus_hostinfo(&p.body, apex);
             outcome("urlhaus", p.status, true, "ok", hits)
@@ -601,11 +687,18 @@ async fn probe_urlhaus(client: &reqwest::Client, apex: &str) -> ProbeOutcome {
 }
 
 async fn probe_urlscan(client: &reqwest::Client, apex: &str) -> ProbeOutcome {
+    let q = format!("page.domain:\"{apex}\"");
     let url = format!(
-        "https://urlscan.io/api/v1/search/?q=domain:{}",
-        urlencoding::encode(apex)
+        "https://urlscan.io/api/v1/search/?q={}",
+        urlencoding::encode(&q)
     );
-    match http_get(client, &url).await {
+    let key = std::env::var("URLSCAN_API_KEY").unwrap_or_default();
+    let headers: Vec<(&str, &str)> = if key.is_empty() {
+        vec![]
+    } else {
+        vec![("api-key", key.as_str())]
+    };
+    match http_get_with_headers(client, &url, &headers).await {
         Some(p) if p.status == 200 => {
             let hits = parse_urlscan_malicious(&p.body, apex);
             outcome("urlscan", p.status, true, "ok", hits)
@@ -621,6 +714,36 @@ async fn probe_urlscan(client: &reqwest::Client, apex: &str) -> ProbeOutcome {
     }
 }
 
+async fn probe_hudson_rock(client: &reqwest::Client, apex: &str) -> ProbeOutcome {
+    let url = format!(
+        "https://cavalier.hudsonrock.com/api/json/v2/osint-tools/search-by-domain?domain={}",
+        urlencoding::encode(apex)
+    );
+    match http_get_with_headers(
+        client,
+        &url,
+        &[(
+            "user-agent",
+            "Weissman-Cybersecurity/adversary-underground-delta (authorized-assessment)",
+        )],
+    )
+    .await
+    {
+        Some(p) if p.status == 200 => {
+            let hits = parse_hudson_rock_osint(&p.body, apex);
+            outcome("hudson_rock", p.status, true, "ok", hits)
+        }
+        Some(p) => outcome(
+            "hudson_rock",
+            p.status,
+            false,
+            &format!("Hudson Rock HTTP {}", p.status),
+            vec![],
+        ),
+        None => outcome("hudson_rock", 0, false, "Hudson Rock unreachable", vec![]),
+    }
+}
+
 /// Shared public OSINT collection (cached ~90s per apex).
 pub async fn collect_public_osint(apex: &str) -> (Vec<SourceHit>, Vec<SourceHealth>) {
     let apex = registrable_apex(apex);
@@ -633,28 +756,32 @@ pub async fn collect_public_osint(apex: &str) -> (Vec<SourceHit>, Vec<SourceHeal
         }
     }
     let client = http_client().await;
-    let (hibp, ransom, fox, haus, scan) = tokio::join!(
+    let (hibp, ransom, fox, haus, scan, hudson) = tokio::join!(
         probe_hibp(&client, &apex),
         probe_ransomware_live(&client, &apex),
         probe_threatfox(&client, &apex),
         probe_urlhaus(&client, &apex),
         probe_urlscan(&client, &apex),
+        probe_hudson_rock(&client, &apex),
     );
     let mut hits = Vec::new();
     let mut health = Vec::new();
-    for p in [hibp, ransom, fox, haus, scan] {
+    for p in [hibp, ransom, fox, haus, scan, hudson] {
         hits.extend(p.hits);
         health.push(p.health);
     }
     hits.truncate(MAX_HITS);
-    cache().insert(
-        apex.clone(),
-        CachedOsint {
-            at: Instant::now(),
-            hits: hits.clone(),
-            health: health.clone(),
-        },
-    );
+    let reachable = health.iter().filter(|h| h.ok).count();
+    if reachable > 0 {
+        cache().insert(
+            apex.clone(),
+            CachedOsint {
+                at: Instant::now(),
+                hits: hits.clone(),
+                health: health.clone(),
+            },
+        );
+    }
     (hits, health)
 }
 
@@ -723,6 +850,7 @@ async fn load_previous_snapshot(
     pool: &sqlx::PgPool,
     tenant_id: i64,
     client_id: i64,
+    apex: &str,
 ) -> Result<Option<UndergroundSnapshot>, String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
@@ -730,10 +858,12 @@ async fn load_previous_snapshot(
     let row = sqlx::query(
         r#"SELECT snapshot_json FROM underground_snapshots
            WHERE tenant_id = $1 AND client_id = $2
+             AND snapshot_json->>'apex' = $3
            ORDER BY created_at DESC LIMIT 1"#,
     )
     .bind(tenant_id)
     .bind(client_id)
+    .bind(apex)
     .fetch_optional(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
@@ -770,14 +900,17 @@ async fn persist_snapshot(
              SELECT id, row_number() OVER (ORDER BY created_at DESC) AS rn
                FROM underground_snapshots
               WHERE tenant_id = $1 AND client_id = $2
+                AND snapshot_json->>'apex' = $4
            )
            DELETE FROM underground_snapshots
             WHERE tenant_id = $1 AND client_id = $2
+              AND snapshot_json->>'apex' = $4
               AND id IN (SELECT id FROM ranked WHERE rn > $3)"#,
     )
     .bind(tenant_id)
     .bind(client_id)
     .bind(SNAPSHOT_KEEP)
+    .bind(&snap.apex)
     .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
@@ -829,12 +962,14 @@ pub async fn run_adversary_underground_delta_result(
     }
 
     let previous = match (ctx.app_pool.as_ref(), ctx.tenant_id, ctx.client_id) {
-        (Some(pool), Some(tid), Some(cid)) => match load_previous_snapshot(pool, tid, cid).await {
-            Ok(p) => p,
-            Err(e) => {
-                return EngineResult::error(format!("underground snapshot read failed: {e}"));
+        (Some(pool), Some(tid), Some(cid)) => {
+            match load_previous_snapshot(pool, tid, cid, &apex).await {
+                Ok(p) => p,
+                Err(e) => {
+                    return EngineResult::error(format!("underground snapshot read failed: {e}"));
+                }
             }
-        },
+        }
         _ => None,
     };
 
@@ -867,7 +1002,9 @@ pub async fn run_adversary_underground_delta_result(
     let baseline = previous.is_none();
 
     let emit = if baseline { &hits } else { &added };
-    enqueue_leak_hunter(ctx, &apex, emit).await;
+    if !baseline {
+        enqueue_leak_hunter(ctx, &apex, &added).await;
+    }
 
     let mut findings = findings_from_hits(ENGINE_ID, target, emit);
     findings.insert(0, health_info_finding(ENGINE_ID, target, &health));
@@ -940,22 +1077,43 @@ pub async fn api_underground_exposure_json(
     pool: &sqlx::PgPool,
     tenant_id: i64,
     client_id: i64,
+    apex: Option<&str>,
 ) -> Result<Value, String> {
+    let apex_filter = apex
+        .map(registrable_apex)
+        .filter(|a| !a.is_empty() && a.contains('.'));
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| e.to_string())?;
-    let rows = sqlx::query(
-        r#"SELECT snapshot_json, hit_count, created_at
-           FROM underground_snapshots
-           WHERE tenant_id = $1 AND client_id = $2
-           ORDER BY created_at DESC
-           LIMIT 2"#,
-    )
-    .bind(tenant_id)
-    .bind(client_id)
-    .fetch_all(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
+    let rows = if let Some(ref apex) = apex_filter {
+        sqlx::query(
+            r#"SELECT snapshot_json, hit_count, created_at
+               FROM underground_snapshots
+               WHERE tenant_id = $1 AND client_id = $2
+                 AND snapshot_json->>'apex' = $3
+               ORDER BY created_at DESC
+               LIMIT 2"#,
+        )
+        .bind(tenant_id)
+        .bind(client_id)
+        .bind(apex)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?
+    } else {
+        sqlx::query(
+            r#"SELECT snapshot_json, hit_count, created_at
+               FROM underground_snapshots
+               WHERE tenant_id = $1 AND client_id = $2
+               ORDER BY created_at DESC
+               LIMIT 2"#,
+        )
+        .bind(tenant_id)
+        .bind(client_id)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?
+    };
 
     let sources: Vec<String> = UNDERGROUND_SOURCES
         .iter()
@@ -1170,6 +1328,24 @@ mod tests {
     }
 
     #[test]
+    fn hibp_skips_empty_domain_field() {
+        let body = r#"[{"Name":"X","Title":"X","Domain":"","IsVerified":true,"PwnCount":1}]"#;
+        assert!(parse_hibp_breaches(body, "adobe.com").is_empty());
+    }
+
+    #[test]
+    fn hudson_rock_counts_only_no_identity_copy() {
+        let body = r#"{"total_corporate_services":4,"total_user_services":12,"employees":[{"email":"secret@adobe.com"}]}"#;
+        let hits = parse_hudson_rock_osint(body, "adobe.com");
+        assert_eq!(hits.len(), 1);
+        assert!(!hits[0].evidence.contains("secret@"));
+        assert!(hits[0].evidence.contains("counts-only"));
+        assert!(
+            parse_hudson_rock_osint(r#"{"total_corporate_services":0}"#, "adobe.com").is_empty()
+        );
+    }
+
+    #[test]
     fn threatfox_no_result_is_empty() {
         let body = r#"{"query_status":"no_result"}"#;
         assert!(parse_threatfox(body, "example.com").is_empty());
@@ -1189,6 +1365,9 @@ mod tests {
         assert!(parse_urlscan_malicious(body, "example.com").is_empty());
         let mal = r#"{"results":[{"verdicts":{"overall":{"malicious":true}},"page":{"domain":"example.com"},"task":{"url":"https://example.com/phish"}}]}"#;
         assert_eq!(parse_urlscan_malicious(mal, "example.com").len(), 1);
+        let empty_page =
+            r#"{"results":[{"verdicts":{"overall":{"malicious":true}},"page":{"domain":""}}]}"#;
+        assert!(parse_urlscan_malicious(empty_page, "example.com").is_empty());
     }
 
     #[test]

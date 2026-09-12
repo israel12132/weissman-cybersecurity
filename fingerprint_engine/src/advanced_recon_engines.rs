@@ -140,6 +140,8 @@ pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
         "media": 0,
         "terminate": []
     });
+    let public_ok = public.status == "ok";
+    let public_msg = public.message.clone();
     let mut findings = public.findings;
     if let Some(p) =
         http_post_json_with_headers(&client, &search_url, &payload, &[("x-key", key.as_str())])
@@ -165,46 +167,120 @@ pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
                         http_get_with_headers(&client, &result_url, &[("x-key", key.as_str())])
                             .await
                     {
-                        let record_count = rp
-                            .body
-                            .matches("\"record\"")
-                            .count()
-                            .max(rp.body.matches("\"name\"").count());
-                        let status =
-                            rp.body.contains("\"status\":0") || rp.body.contains("\"status\": 0");
-                        if status && record_count > 0 {
-                            findings.push(finding(
-                                "darkweb_intel",
-                                &format!("IntelX returned {} candidate record(s) for {}", record_count, host),
-                                "medium",
-                                "T1597",
-                                &format!(
-                                    "Intelligence X search id {} returned {} hits referencing '{}'. Review for leaked credentials and breach exposure.",
-                                    search_id, record_count, host
-                                ),
-                                target,
-                            ));
-                        } else if status {
-                            findings.push(finding(
-                                "darkweb_intel",
-                                "IntelX search completed — no indexed records",
-                                "info",
-                                "T1597",
-                                &format!(
-                                    "Intelligence X query for '{}' completed with zero indexed records in configured buckets.",
-                                    host
-                                ),
-                                target,
-                            ));
+                        match serde_json::from_str::<Value>(&rp.body) {
+                            Ok(rv) => {
+                                let status_ok = rv.get("status").and_then(Value::as_i64) == Some(0);
+                                let record_count = rv
+                                    .get("records")
+                                    .and_then(Value::as_array)
+                                    .map(|a| a.len())
+                                    .or_else(|| {
+                                        rv.get("selectors")
+                                            .and_then(Value::as_array)
+                                            .map(|a| a.len())
+                                    })
+                                    .unwrap_or(0);
+                                if status_ok && record_count > 0 {
+                                    findings.push(finding(
+                                        "darkweb_intel",
+                                        &format!("IntelX returned {record_count} typed record(s) for {host}"),
+                                        "medium",
+                                        "T1597",
+                                        &format!(
+                                            "Intelligence X search id {search_id} returned {record_count} JSON records for '{host}'. Review in IntelX UI — identities are not copied here."
+                                        ),
+                                        target,
+                                    ));
+                                } else if status_ok {
+                                    findings.push(finding(
+                                        "darkweb_intel",
+                                        "IntelX search completed — no typed records",
+                                        "info",
+                                        "T1597",
+                                        &format!(
+                                            "Intelligence X query for '{host}' completed with zero records array."
+                                        ),
+                                        target,
+                                    ));
+                                } else {
+                                    findings.push(finding(
+                                        "darkweb_intel",
+                                        "IntelX search result not yet complete",
+                                        "info",
+                                        "T1597",
+                                        &format!(
+                                            "Intelligence X search id {search_id} HTTP {} status field is not 0 (pending or rejected).",
+                                            rp.status
+                                        ),
+                                        target,
+                                    ));
+                                }
+                            }
+                            Err(_) => {
+                                findings.push(finding(
+                                    "darkweb_intel",
+                                    "IntelX result was not JSON",
+                                    "info",
+                                    "T1597",
+                                    &format!(
+                                        "Intelligence X search id {search_id} returned HTTP {} without a typed JSON body.",
+                                        rp.status
+                                    ),
+                                    target,
+                                ));
+                            }
                         }
+                    } else {
+                        findings.push(finding(
+                            "darkweb_intel",
+                            "IntelX result fetch unreachable",
+                            "low",
+                            "T1597",
+                            "GET /intelligent/search/result did not complete. Public OSINT findings above still stand.",
+                            target,
+                        ));
                     }
                 }
             }
+        } else {
+            findings.push(finding(
+                "darkweb_intel",
+                &format!("IntelX search HTTP {}", p.status),
+                "info",
+                "T1597",
+                &format!(
+                    "IntelX POST /intelligent/search returned HTTP {}.",
+                    p.status
+                ),
+                target,
+            ));
         }
+    } else {
+        findings.push(finding(
+            "darkweb_intel",
+            "IntelX search unreachable",
+            "low",
+            "T1597",
+            "POST /intelligent/search did not complete. Public OSINT findings above still stand.",
+            target,
+        ));
     }
 
     if findings.is_empty() {
-        empty_ok("darkweb_intel", target)
+        if !public_ok {
+            return EngineResult::error(public_msg);
+        }
+        EngineResult::ok(
+            vec![finding(
+                "darkweb_intel",
+                "Public OSINT and IntelX overlay produced no typed findings",
+                "info",
+                "T1597",
+                "This is not an invented all-clear: source health is attached when collectors answered.",
+                target,
+            )],
+            "darkweb_intel: no typed findings",
+        )
     } else {
         EngineResult::ok(
             findings.clone(),

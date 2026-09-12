@@ -1346,7 +1346,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark / Deep Web Intelligence',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Alias of dark_web_monitor: public criminal-index OSINT against the authorized apex (HIBP, ransomware.live, ThreatFox, URLhaus, urlscan; IntelX optional). No Tor hidden-service crawl.',
+    description: 'Live DNS check of paste./leak./dump./breach. subdomains of the authorized apex. Not a Tor crawl and not a substitute for adversary_underground_delta.',
     requiresTarget: false,
   },
   {

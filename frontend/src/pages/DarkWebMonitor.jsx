@@ -43,11 +43,26 @@ const DARK_WEB_SOURCES = new Set([
 export const ADVERSARY_PLAYBOOK = [
   { mitre: 'T1597', labelKey: 'pages.darkWebMonitor.play_t1597', engines: ['adversary_underground_delta', 'darkweb_intel'] },
   { mitre: 'T1552', labelKey: 'pages.darkWebMonitor.play_t1552', engines: ['leak_hunter'] },
-  { mitre: 'T1583.001', labelKey: 'pages.darkWebMonitor.play_t1583', engines: ['typosquatting_monitor', 'brand_impersonation'] },
+  { mitre: 'T1583.001', labelKey: 'pages.darkWebMonitor.play_t1583', engines: ['business_email_compromise'] },
   { mitre: 'T1078', labelKey: 'pages.darkWebMonitor.play_t1078', engines: ['credential_stuffing', 'password_spray'] },
   { mitre: 'T1190', labelKey: 'pages.darkWebMonitor.play_t1190', engines: ['bola_idor', 'jwt_attack'] },
   { mitre: 'T1486', labelKey: 'pages.darkWebMonitor.play_t1486', engines: ['threat_emulation'] },
 ]
+
+export function clientApex(client) {
+  const t = firstClientTarget(client)
+  if (!t) return ''
+  try {
+    const host = (t.includes('://') ? new URL(t) : new URL(`https://${t}`)).hostname
+    return host.replace(/^www\./i, '').replace(/\.$/, '').toLowerCase()
+  } catch {
+    return String(t)
+      .replace(/^https?:\/\//i, '')
+      .split('/')[0]
+      .replace(/^www\./i, '')
+      .toLowerCase()
+  }
+}
 
 export function parseUndergroundPayload(data) {
   if (!data || typeof data !== 'object') {
@@ -82,17 +97,15 @@ export function parseUndergroundPayload(data) {
   }
 }
 
-/** hit | quiet | failed — failed only when last hunt recorded an unreachable source. */
+/** hit | quiet | failed | unknown — unknown means this hunt never recorded source health. */
 export function sourceChipState(id, parsed) {
-  const health = (parsed.health || []).find((h) => String(h.id || '').toLowerCase() === id)
-  if (health) {
-    if (!health.ok) return 'failed'
-    if (Number(health.hit_count) > 0) return 'hit'
-    return 'quiet'
-  }
-  const fromHits = (parsed.hits || []).some((h) => String(h.source || '').toLowerCase() === id)
-  const fromSources = (parsed.sources || []).map((s) => String(s).toLowerCase()).includes(id)
-  return fromHits || fromSources ? 'hit' : 'quiet'
+  const rows = parsed.health || []
+  if (!rows.length) return 'unknown'
+  const health = rows.find((h) => String(h.id || '').toLowerCase() === id)
+  if (!health) return 'unknown'
+  if (!health.ok) return 'failed'
+  if (Number(health.hit_count) > 0) return 'hit'
+  return 'quiet'
 }
 
 export function UndergroundWarRoom({
@@ -105,7 +118,7 @@ export function UndergroundWarRoom({
 }) {
   const { t } = useTranslation()
   const parsed = parseUndergroundPayload(exposure)
-  const SOURCE_IDS = ['hibp', 'ransomware_live', 'threatfox', 'urlhaus', 'urlscan']
+  const SOURCE_IDS = ['hibp', 'ransomware_live', 'threatfox', 'urlhaus', 'urlscan', 'hudson_rock']
   return (
     <div className="rounded-2xl border border-rose-500/25 bg-gradient-to-br from-rose-950/40 via-black/40 to-violet-950/30 p-4 mb-5">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
@@ -119,6 +132,12 @@ export function UndergroundWarRoom({
           {parsed.message ? (
             <p className="text-[11px] text-rose-100/70 mt-2 font-mono">{parsed.message}</p>
           ) : null}
+          {huntDisabled ? (
+            <p className="text-[11px] text-amber-200/80 mt-2 font-mono">{t('pages.darkWebMonitor.select_client')}</p>
+          ) : null}
+          {parsed.unavailable ? (
+            <p className="text-[11px] text-rose-300 mt-2 font-mono">{t('pages.darkWebMonitor.unavailable')}</p>
+          ) : null}
         </div>
         <Button
           variant="unstyled"
@@ -131,18 +150,27 @@ export function UndergroundWarRoom({
           {hunting ? t('pages.darkWebMonitor.hunting') : t('pages.darkWebMonitor.hunt')}
         </Button>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
         {SOURCE_IDS.map((id) => {
           const state = sourceChipState(id, parsed)
           const health = (parsed.health || []).find((h) => String(h.id || '').toLowerCase() === id)
           const color =
-            state === 'hit' ? 'text-emerald-300' : state === 'failed' ? 'text-rose-300' : 'text-[var(--text-tertiary)]'
+            state === 'hit'
+              ? 'text-emerald-300'
+              : state === 'failed'
+                ? 'text-rose-300'
+                : state === 'unknown'
+                  ? 'text-[var(--text-muted)]'
+                  : 'text-[var(--text-tertiary)]'
           const label =
             state === 'hit'
               ? t('pages.darkWebMonitor.source_hit')
               : state === 'failed'
                 ? t('pages.darkWebMonitor.source_failed')
-                : t('pages.darkWebMonitor.source_quiet')
+                : state === 'unknown'
+                  ? t('pages.darkWebMonitor.source_unknown')
+                  : t('pages.darkWebMonitor.source_quiet')
+          const extra = state === 'hit' && health?.hit_count != null ? ` ${health.hit_count}` : ''
           return (
             <div
               key={id}
@@ -151,7 +179,7 @@ export function UndergroundWarRoom({
             >
               <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{id}</div>
               <div className={`text-sm font-semibold ${color}`}>
-                {loading ? '…' : label}
+                {loading ? '…' : `${label}${extra}`}
               </div>
             </div>
           )
@@ -161,6 +189,20 @@ export function UndergroundWarRoom({
         <p className="text-[10px] font-mono text-[var(--text-muted)] mb-3">
           {t('pages.darkWebMonitor.last_hunt', { time: new Date(parsed.current_at).toLocaleString() })}
         </p>
+      ) : null}
+      {parsed.added.length > 0 ? (
+        <div className="mb-4">
+          <h3 className="text-[10px] font-mono uppercase tracking-widest text-rose-300/80 mb-2">
+            {t('pages.darkWebMonitor.delta_list_title')}
+          </h3>
+          <ul className="space-y-1">
+            {parsed.added.slice(0, 8).map((h) => (
+              <li key={h.fingerprint || h.title} className="text-xs text-rose-100/80 font-mono truncate">
+                {(h.source || '').toUpperCase()} — {h.title}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <KpiCard label={t('pages.darkWebMonitor.current_index')} value={parsed.current_count} />
@@ -223,6 +265,7 @@ export default function DarkWebMonitor() {
   const [findings, setFindings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [actionError, setActionError] = useState(null)
   const [search, setSearch] = useState('')
   const [severityFilter, setSeverityFilter] = useState('all')
   const [sourceFilter, setSourceFilter] = useState('all')
@@ -249,22 +292,34 @@ export default function DarkWebMonitor() {
     }
   }, [t])
 
-  const loadExposure = useCallback(async (clientId) => {
+  const loadExposure = useCallback(async (clientId, client) => {
     if (!clientId) {
       setExposure(null)
       return
     }
     setExposureLoading(true)
     try {
-      const d = await apiFetch(`/api/clients/${clientId}/underground-exposure`)
+      const apex = clientApex(client)
+      const q = apex ? `?apex=${encodeURIComponent(apex)}` : ''
+      const d = await apiFetch(`/api/clients/${clientId}/underground-exposure${q}`)
       if (d && typeof d === 'object') setExposure(d)
     } catch (err) {
       if (import.meta.env.DEV) console.debug('underground-exposure skipped', err)
-      setExposure(null)
+      setExposure({
+        unavailable: true,
+        message: err.message || t('pages.darkWebMonitor.unavailable'),
+        health: [],
+        added: [],
+        removed: [],
+        hits: [],
+        sources: [],
+        current_count: 0,
+        previous_count: 0,
+      })
     } finally {
       setExposureLoading(false)
     }
-  }, [])
+  }, [t])
 
   const loadPlaybook = useCallback(async (clientId) => {
     if (!clientId) {
@@ -292,15 +347,15 @@ export default function DarkWebMonitor() {
   }, [load])
 
   useEffect(() => {
-    loadExposure(selectedClientId)
+    loadExposure(selectedClientId, selectedClient)
     loadPlaybook(selectedClientId)
-  }, [selectedClientId, loadExposure, loadPlaybook])
+  }, [selectedClientId, selectedClient, loadExposure, loadPlaybook])
 
   // Auto-refresh every 60s, skipping ticks while the tab is hidden.
   const pollAll = useCallback(() => {
     load()
-    loadExposure(selectedClientId)
-  }, [load, loadExposure, selectedClientId])
+    loadExposure(selectedClientId, selectedClient)
+  }, [load, loadExposure, selectedClientId, selectedClient])
   useVisiblePolling(pollAll, 60000, { paused: !autoRefresh })
 
   useJobPoll(huntJobId, {
@@ -310,9 +365,9 @@ export default function DarkWebMonitor() {
       setHunting(false)
       const status = String(job?.status || '').toLowerCase()
       if (status === 'failed' || status === 'dead' || status === 'cancelled') {
-        setError(job?.error || job?.message || t('pages.darkWebMonitor.hunt_failed'))
+        setActionError(job?.error || job?.message || t('pages.darkWebMonitor.hunt_failed'))
       }
-      await Promise.all([load(), loadExposure(selectedClientId), loadPlaybook(selectedClientId)])
+      await Promise.all([load(), loadExposure(selectedClientId, selectedClient), loadPlaybook(selectedClientId)])
     },
   })
 
@@ -354,21 +409,31 @@ export default function DarkWebMonitor() {
 
   const exportExcel = async () => {
     if (!selectedClientId) return
-    const r = await apiFetch(`/api/clients/${selectedClientId}/underground-exposure.xls`, { raw: true })
-    const blob = await r.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `Weissman_underground_exposure_client_${selectedClientId}.xls`
-    a.click()
-    URL.revokeObjectURL(url)
+    try {
+      const apex = clientApex(selectedClient)
+      const q = apex ? `?apex=${encodeURIComponent(apex)}` : ''
+      const r = await apiFetch(`/api/clients/${selectedClientId}/underground-exposure.xls${q}`, { raw: true })
+      if (!r.ok) {
+        setActionError(t('pages.darkWebMonitor.export_failed', { status: r.status }))
+        return
+      }
+      const blob = await r.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Weissman_underground_exposure_client_${selectedClientId}.xls`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setActionError(err.message || t('pages.darkWebMonitor.export_failed', { status: '' }))
+    }
   }
 
   const handleHunt = async () => {
     const target = firstClientTarget(selectedClient)
     if (!selectedClientId || !target) return
     setHunting(true)
-    setError(null)
+    setActionError(null)
     try {
       const { ok, data, status } = await launchEngineScan({
         engineId: ENGINE,
@@ -376,7 +441,7 @@ export default function DarkWebMonitor() {
         target,
       })
       if (!ok) {
-        setError(data?.detail || data?.error || t('pages.darkWebMonitor.hunt_failed_http', { status }))
+        setActionError(data?.detail || data?.error || t('pages.darkWebMonitor.hunt_failed_http', { status }))
         setHunting(false)
         return
       }
@@ -385,16 +450,16 @@ export default function DarkWebMonitor() {
         setHuntJobId(String(jid))
         return
       }
-      await Promise.all([load(), loadExposure(selectedClientId), loadPlaybook(selectedClientId)])
+      await Promise.all([load(), loadExposure(selectedClientId, selectedClient), loadPlaybook(selectedClientId)])
       setHunting(false)
     } catch (err) {
-      setError(err.message || t('pages.darkWebMonitor.load_error', { error: '' }))
+      setActionError(err.message || t('pages.darkWebMonitor.hunt_failed'))
       setHunting(false)
     }
   }
 
   const handleRefresh = async () => {
-    await Promise.all([load(), loadExposure(selectedClientId), loadPlaybook(selectedClientId)])
+    await Promise.all([load(), loadExposure(selectedClientId, selectedClient), loadPlaybook(selectedClientId)])
   }
 
   const columns = useMemo(
@@ -543,6 +608,11 @@ export default function DarkWebMonitor() {
         {error && (
           <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm">
             {t('pages.darkWebMonitor.load_error', { error })}
+          </div>
+        )}
+        {actionError && (
+          <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-900/20 text-amber-200 text-sm font-mono">
+            {actionError}
           </div>
         )}
 

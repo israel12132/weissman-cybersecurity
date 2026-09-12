@@ -113,15 +113,24 @@ async fn api_client_surface_diff(
     }
 }
 
+#[derive(Deserialize, Default)]
+struct UndergroundExposureQuery {
+    #[serde(default)]
+    apex: Option<String>,
+}
+
 async fn api_client_underground_exposure(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<i64>,
+    Query(q): Query<UndergroundExposureQuery>,
 ) -> Response {
+    let apex_q = q.apex.as_deref().map(str::trim).filter(|s| !s.is_empty());
     match crate::adversary_underground_delta::api_underground_exposure_json(
         &state.app_pool,
         auth.tenant_id,
         id,
+        apex_q,
     )
     .await
     {
@@ -141,11 +150,14 @@ async fn api_client_underground_exposure_xls(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<i64>,
+    Query(q): Query<UndergroundExposureQuery>,
 ) -> Response {
+    let apex_q = q.apex.as_deref().map(str::trim).filter(|s| !s.is_empty());
     let payload = match crate::adversary_underground_delta::api_underground_exposure_json(
         &state.app_pool,
         auth.tenant_id,
         id,
+        apex_q,
     )
     .await
     {
