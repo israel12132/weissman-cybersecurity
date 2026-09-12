@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-09-10T15:48:50.483Z",
-  "production_engine_count": 583,
+  "generated_at": "2026-09-11T23:58:50.703Z",
+  "production_engine_count": 586,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 426
+      "engine_count": 429
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -275,7 +275,7 @@
         "industrial_ot",
         "scope_ips"
       ],
-      "engine_count": 43
+      "engine_count": 45
     },
     "ai_redteam": {
       "id": "ai_redteam",
@@ -6544,6 +6544,40 @@
         "contact_email",
         "scope_domains",
         "scope_ips"
+      ]
+    },
+    "ot_passive_active_safety": {
+      "id": "ot_passive_active_safety",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "OT Passive/Active Safety Interlock",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "ot_crown_jewel_path": {
+      "id": "ot_crown_jewel_path",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "OT Crown-Jewel Path",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "prevention_fabric_breach_proof": {
+      "id": "prevention_fabric_breach_proof",
+      "group": "defense",
+      "kind": "real_probe",
+      "label": "Prevention Fabric Breach Proof",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
       ]
     }
   }

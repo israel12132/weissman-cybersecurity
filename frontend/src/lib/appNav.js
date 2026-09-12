@@ -137,6 +137,7 @@ export const NAV_GROUPS = [
       { to: '/itdr', labelKey: 'nav.itdr', icon: '🪪' },
       { to: '/casb-dlp', labelKey: 'nav.casb_dlp', icon: '☁' },
       { to: '/ngfw-gate', labelKey: 'nav.ngfw_gate', icon: '🧱' },
+      { to: '/win-room', labelKey: 'nav.win_room', icon: '⚔' },
       { to: '/identity-security', labelKey: 'nav.identity_security', icon: '🔐' },
       { to: '/privilege-escalation', labelKey: 'nav.privilege_escalation', icon: '⛨' },
       { to: '/kerberos-security', labelKey: 'nav.kerberos_security', icon: '🏰' },

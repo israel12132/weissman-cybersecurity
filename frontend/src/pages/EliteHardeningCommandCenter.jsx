@@ -182,7 +182,7 @@ export default function EliteHardeningCommandCenter() {
               <ExecutiveWidget label={t(`${NS}.kpi_enforced`)} value={`${enforced}/${total || 100}`} accent="#22d3ee" />
               <ExecutiveWidget label={t(`${NS}.kpi_gaps`)} value={gaps} accent={gaps ? '#f43f5e' : '#34d399'} />
               <ExecutiveWidget label={t(`${NS}.kpi_mitre`)} value={data?.mitre_attack || 'v19.1'} accent="#a78bfa" />
-              <ExecutiveWidget label={t(`${NS}.kpi_probes`)} value={data?.live_probes_target || 303} accent="#f97316" />
+              <ExecutiveWidget label={t(`${NS}.kpi_probes`)} value={data?.live_probes_target ?? '—'} accent="#f97316" />
               <ExecutiveWidget
                 label={t(`${NS}.kpi_engines`)}
                 value={data?.moat?.engines_total ?? '—'}

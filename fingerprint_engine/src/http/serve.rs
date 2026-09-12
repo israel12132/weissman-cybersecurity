@@ -258,6 +258,9 @@ static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
     (Method::POST, "/api/auth/signup", RouteGate::Always),
     (Method::GET, "/api/auth/verify", RouteGate::Always),
     (Method::POST, "/api/public/demo-request", RouteGate::Always),
+    (Method::GET, "/api/public/platform-pulse", RouteGate::Always),
+    (Method::GET, "/api/public/engine-catalog", RouteGate::Always),
+    (Method::POST, "/api/public/contact", RouteGate::Always),
     (Method::POST, "/api/v1/alerts/aws-canary", RouteGate::Always),
     // Public service status (SLA_AND_STATUS.md §4) — must be readable during an incident.
     (Method::GET, "/status", RouteGate::Always),
@@ -2027,6 +2030,9 @@ mod public_route_guard_tests {
             (Method::POST, "/api/auth/signup"),
             (Method::GET, "/api/auth/verify"),
             (Method::POST, "/api/public/demo-request"),
+            (Method::GET, "/api/public/platform-pulse"),
+            (Method::GET, "/api/public/engine-catalog"),
+            (Method::POST, "/api/public/contact"),
             (Method::POST, "/api/v1/alerts/aws-canary"),
             (Method::GET, "/status"),
             (Method::POST, "/api/agents/enroll"),
@@ -2044,6 +2050,17 @@ mod public_route_guard_tests {
         assert!(!is_public_route(&Method::GET, "/api/findings"));
         assert!(!is_public_route(&Method::POST, "/api/command-center/scan"));
         assert!(!is_public_route(&Method::DELETE, "/api/clients/1"));
+        assert!(!is_public_route(&Method::GET, "/api/market-readiness"));
+        assert!(!is_public_route(&Method::GET, "/api/ot-ics/safety"));
+        assert!(!is_public_route(
+            &Method::GET,
+            "/api/elite-hardening/status"
+        ));
+        assert!(!is_public_route(&Method::GET, "/api/cem-dago/status"));
+        assert!(!is_public_route(
+            &Method::GET,
+            "/api/sovereign/operator/session"
+        ));
         // Correct public path but wrong method is not public.
         assert!(!is_public_route(&Method::GET, "/api/logout"));
         assert!(!is_public_route(&Method::POST, "/api/health"));

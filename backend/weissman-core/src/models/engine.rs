@@ -678,6 +678,9 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "ngfw_posture",
     "malware_detonation",
     "weissman_vngfw",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
+    "prevention_fabric_breach_proof",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -1298,6 +1301,9 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "ngfw_posture",
     "malware_detonation",
     "weissman_vngfw",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
+    "prevention_fabric_breach_proof",
 ];
 
 /// Map catalog-only registry IDs to a production engine implementation.

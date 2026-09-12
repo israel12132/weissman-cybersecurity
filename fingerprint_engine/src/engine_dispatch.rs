@@ -1101,6 +1101,10 @@ async fn dispatch_engine_match(
         "ngfw_posture" => crate::supreme_layer_engines::run_ngfw_posture_result(target).await,
         "malware_detonation" => crate::supreme_layer_engines::run_malware_detonation_result(target).await,
         "weissman_vngfw" => crate::supreme_layer_engines::run_weissman_vngfw_result(target).await,
+        "prevention_fabric_breach_proof" => {
+            crate::supreme_layer_engines::run_prevention_fabric_breach_proof_result(target, ctx)
+                .await
+        }
 
         _ => EngineResult::error(
             format!(
