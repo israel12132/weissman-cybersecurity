@@ -21,6 +21,7 @@ import { useClient } from '../context/ClientContext'
 import { firstClientTarget } from '../lib/clientTarget'
 import { launchEngineScan } from '../lib/launchEngineScan'
 import { useToast } from '../components/ui/Toaster'
+import { useJobPoll } from '../lib/useJobPoll'
 
 const columnHelper = createColumnHelper()
 const ENGINE = 'adversary_gap_mirror'
@@ -92,6 +93,7 @@ export default function AdversaryMirror() {
   const [selectedFinding, setSelected] = useState(null)
   const [lastRefresh, setLastRefresh] = useState(null)
   const [autoRefresh, setAutoRefresh] = useState(false)
+  const [pendingJobId, setPendingJobId] = useState(null)
 
   const load = useCallback(async () => {
     setError(null)
@@ -112,6 +114,15 @@ export default function AdversaryMirror() {
 
   useEffect(() => { load() }, [load])
   useVisiblePolling(load, 60000, { paused: !autoRefresh })
+  useJobPoll(pendingJobId, {
+    enabled: Boolean(pendingJobId),
+    onComplete: () => {
+      setPendingJobId(null)
+      setScanning(false)
+      load()
+      toast.success(t(`${NS}.scan_complete`))
+    },
+  })
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -129,42 +140,52 @@ export default function AdversaryMirror() {
     for (const f of findings) {
       const s = (f.severity || 'info').toLowerCase()
       if (by[s] !== undefined) by[s] += 1
+      if (s === 'info' || s === 'advisory') continue
       const blob = `${f.title || ''} ${f.description || ''}`.toLowerCase()
-      if (blob.includes('ransomware')) ransom += 1
-      if (blob.includes('iab') || blob.includes('rdp') || blob.includes('vpn')) iab += 1
+      if (blob.includes('ransomware') || blob.includes('leak-site')) ransom += 1
+      if (blob.includes('iab') || blob.includes('rdp') || blob.includes('vpn') || blob.includes('product token')) iab += 1
     }
     return { ...by, total: findings.length, ransom, iab }
   }, [findings])
 
   const { exportCsv } = useFindingsWorkbench(filtered, { csvPrefix: 'adversary-gap-mirror' })
 
-  const runMirror = async () => {
+  const runEngine = async (engineId) => {
     if (!selectedClientId || !target) {
       toast.error(t(`${NS}.need_client`))
       return
     }
     setScanning(true)
     try {
-      await launchEngineScan({
-        engineId: ENGINE,
+      const { ok, data } = await launchEngineScan({
+        engineId,
         clientId: selectedClientId,
         target,
-        extraParams: { include_ports: 'true', include_http: 'true' },
+        extraParams: engineId === ENGINE ? { include_ports: 'true', include_http: 'true' } : {},
       })
+      if (!ok) {
+        throw new Error(data?.error || data?.detail || data?.message || t(`${NS}.scan_failed`))
+      }
       toast.success(t(`${NS}.scan_queued`))
-      setTimeout(load, 2500)
+      const jobId = data?.job_id ?? data?.jobId ?? data?.id
+      if (jobId) setPendingJobId(String(jobId))
+      else {
+        setScanning(false)
+        setTimeout(load, 2500)
+      }
     } catch (e) {
       toast.error(e.message || t(`${NS}.scan_failed`))
-    } finally {
       setScanning(false)
     }
   }
+
+  const runMirror = () => runEngine(ENGINE)
 
   const exportXlsx = async () => {
     if (!selectedClientId) return
     try {
       await downloadRaw(
-        `/api/clients/${selectedClientId}/export/xlsx`,
+        `/api/clients/${selectedClientId}/adversary-mirror/xlsx`,
         `weissman-adversary-mirror-${selectedClientId}.xlsx`,
       )
     } catch (e) {
@@ -216,6 +237,7 @@ export default function AdversaryMirror() {
     <PageShell
       title={t(`${NS}.title`)}
       subtitle={t(`${NS}.subtitle`)}
+      hideEvidence
       badge={t(`${NS}.badge`)}
       badgeColor="#e11d48"
       icon={<Crosshair />}
@@ -316,6 +338,26 @@ export default function AdversaryMirror() {
               <NextCard title={t(`${NS}.next_leak`)} to="/dark-web" />
               <NextCard title={t(`${NS}.next_paths`)} to="/attack-paths" />
               <NextCard title={t(`${NS}.next_heal`)} to="/remediation" />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="unstyled"
+                type="button"
+                onClick={() => runEngine('leak_hunter')}
+                disabled={scanning || !target}
+                className="px-3 py-1.5 rounded-lg border border-[var(--border-default)] text-xs font-mono"
+              >
+                {t(`${NS}.run_leak`)}
+              </Button>
+              <Button
+                variant="unstyled"
+                type="button"
+                onClick={() => runEngine('password_spray')}
+                disabled={scanning || !target}
+                className="px-3 py-1.5 rounded-lg border border-[var(--border-default)] text-xs font-mono"
+              >
+                {t(`${NS}.run_spray`)}
+              </Button>
             </div>
 
             <div className="relative">

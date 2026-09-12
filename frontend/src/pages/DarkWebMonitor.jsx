@@ -1,6 +1,6 @@
 /**
  * Dark Web Monitor — tenant-scoped intelligence from live `/api/findings` only.
- * Sources: leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor.
+ * Sources: leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor, adversary_gap_mirror.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'

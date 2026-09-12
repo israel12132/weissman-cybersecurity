@@ -390,6 +390,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             get(api_client_adversary_mirror_pdf),
         )
         .route(
+            "/api/clients/:id/adversary-mirror/xlsx",
+            get(api_client_adversary_mirror_xlsx),
+        )
+        .route(
             "/api/clients/:id/report/crypto-proof",
             get(api_client_report_crypto_proof),
         )

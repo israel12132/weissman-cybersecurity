@@ -2252,7 +2252,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark Web Intelligence',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Comprehensive dark web monitoring: Tor hidden service enumeration, paste site scraping, underground forum credential leak correlation, ransomware leak site monitoring, threat actor attribution',
+    description: 'Legal clearnet defender intel: ransomware.live victim search, abuse.ch ThreatFox/URLhaus, HIBP public catalog, optional IntelX paid index. Never Tor, never dumps, never invented victims',
     requiresTarget: true,
   },
   {
@@ -4051,7 +4051,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark Web Brand Monitor',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Comprehensive dark web brand monitoring: Tor marketplace credential listing detection, ransomware leak site monitoring, corporate data paste detection, threat actor chatter monitoring, underground forum API key listing alerts, dark web search engine integration',
+    description: 'Clearnet brand/intel monitor wrapping darkweb_intel: ransomware.live, ThreatFox/URLhaus, HIBP catalog, optional IntelX. Never Tor marketplaces or credential dumps',
     requiresTarget: true,
   },
   {

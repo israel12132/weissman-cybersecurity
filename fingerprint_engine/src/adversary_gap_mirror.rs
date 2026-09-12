@@ -27,7 +27,9 @@ const MITRE: &str = "T1597";
 const UA: &str = "WeissmanCybersecurity/1.0 (adversary-gap-mirror; authorized-assessment)";
 
 /// Remote-access ports initial-access brokers historically list (public reporting).
-pub const IAB_PORTS: &[u16] = &[22, 3389, 445, 5985, 5986, 443, 8443, 10443, 4443, 9443];
+pub const IAB_PORTS: &[u16] = &[
+    22, 3389, 445, 5985, 5986, 443, 8443, 10443, 4443, 9443, 5900,
+];
 
 const VPN_TOKENS: &[&str] = &[
     "citrix",
@@ -122,6 +124,11 @@ pub fn registrable_apex(host: &str) -> String {
     }
 }
 
+fn strip_authority(s: &str) -> &str {
+    let s = s.rsplit('@').next().unwrap_or(s);
+    s.split(':').next().unwrap_or(s)
+}
+
 fn host_matches_needle(host: &str, needle: &str) -> bool {
     let host = host.trim().trim_end_matches('.').to_ascii_lowercase();
     let needle = needle
@@ -136,22 +143,34 @@ fn host_matches_needle(host: &str, needle: &str) -> bool {
     if host.is_empty() || needle.is_empty() {
         return false;
     }
-    let apex = registrable_apex(&host);
+    let host = strip_authority(&host);
+    let needle = strip_authority(&needle);
+    let apex = registrable_apex(host);
+    let needle_apex = registrable_apex(needle);
     needle == host
         || needle == apex
+        || needle_apex == apex
         || needle.ends_with(&format!(".{apex}"))
         || host.ends_with(&format!(".{needle}"))
-        || needle.contains(&apex)
 }
 
+const GENERIC_VICTIM_STEMS: &[&str] = &[
+    "bank", "shop", "mail", "news", "corp", "test", "info", "cloud", "host", "data", "home", "www",
+    "online", "group", "inc", "ltd", "the",
+];
+
 fn victim_mentions_org(victim: &str, host: &str) -> bool {
+    if host_matches_needle(host, victim) {
+        return true;
+    }
     let v = victim.to_ascii_lowercase();
     let apex = registrable_apex(host);
     let stem = apex.split('.').next().unwrap_or(&apex);
-    if stem.len() < 3 {
+    if stem.len() < 4 || GENERIC_VICTIM_STEMS.contains(&stem) {
         return false;
     }
-    v.contains(stem) || host_matches_needle(host, victim)
+    v.split(|c: char| !c.is_ascii_alphanumeric())
+        .any(|tok| tok == stem)
 }
 
 fn enrich(engine: &str, mut f: Value, evidence: Value) -> Value {
@@ -399,11 +418,13 @@ pub async fn collect_clearnet_intel(engine_id: &str, target: &str) -> Vec<Value>
     ];
     let mut rl_queried = false;
     let mut rl_status = 0u16;
+    let mut rl_ok = false;
     for url in &rl_urls {
         if let Some(p) = http_get_with_headers(&client, url, &headers).await {
             rl_queried = true;
             rl_status = p.status;
             if p.status == 200 {
+                rl_ok = true;
                 let hits = parse_ransomware_live(&p.body, &host);
                 for hit in &hits {
                     findings.push(finding_ev(
@@ -455,6 +476,17 @@ pub async fn collect_clearnet_intel(engine_id: &str, target: &str) -> Vec<Value>
             "No HTTP response from api.ransomware.live. Finding is a live probe failure, not a hidden listing.",
             target,
             json!({"source":"ransomware.live","http_status": rl_status, "reachable": false}),
+        ));
+    } else if !rl_ok {
+        findings.push(finding_ev(
+            engine_id,
+            "ransomware.live returned a non-success status",
+            "info",
+            &format!(
+                "Live ransomware.live search for '{apex}' returned HTTP {rl_status} (no 200 body to parse)."
+            ),
+            target,
+            json!({"source":"ransomware.live","http_status": rl_status}),
         ));
     }
 
@@ -669,6 +701,10 @@ async fn probe_iab_surface(
             format!("https://{host}/"),
             format!("https://{host}/vpn/index.html"),
             format!("https://{host}/remote/login"),
+            format!("https://{host}/owa/"),
+            format!("https://{host}/RDWeb/"),
+            format!("https://{host}/global-protect/login.esp"),
+            format!("https://{host}/dana-na/"),
         ] {
             if let Some(p) = http_get(&client, &url).await {
                 let blob = format!("{} {}", p.headers_blob(), p.body).to_ascii_lowercase();
@@ -747,7 +783,7 @@ pub async fn run_adversary_gap_mirror_result(target: &str, ctx: &EngineRunContex
         findings.push(finding_ev(
             ENGINE_ID,
             &format!(
-                "Adversary-economics signal: {} (USD {}–{})",
+                "Published IAB economics (not a live market quote): {} (public band USD {}–{})",
                 q.label, q.usd_low, q.usd_high
             ),
             "high",
@@ -806,6 +842,10 @@ mod tests {
             "https://www.acme.com/login"
         ));
         assert!(!host_matches_needle("acme.com", "notacme.com"));
+        assert!(!host_matches_needle("bank.co.il", "mybank.co.il"));
+        assert!(!victim_mentions_org("Notacme Corp", "acme.com"));
+        assert!(victim_mentions_org("Acme Ltd", "www.acme.com"));
+        assert!(!victim_mentions_org("National Bank", "bank.co.il"));
     }
 
     #[test]

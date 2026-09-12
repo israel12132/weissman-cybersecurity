@@ -18,6 +18,8 @@ const CHAIN_PREDICT = {
   '/template-engine': ['/ast-fuzzing', '/file-upload-lab'],
   '/ast-fuzzing': ['/template-engine', '/feedback-loop'],
   '/intel-map': ['/threat-intel', '/risk-graph', '/dark-web', '/adversary-mirror'],
+  '/dark-web': ['/adversary-mirror', '/threat-intel'],
+  '/adversary-mirror': ['/dark-web', '/attack-paths', '/remediation'],
 }
 
 /**
