@@ -524,6 +524,18 @@ mod tests {
         assert_eq!(doc["live"], json!(true));
     }
 
+    #[test]
+    fn ot_engines_are_in_production_registry() {
+        assert!(
+            weissman_core::models::engine::PRODUCTION_ENGINE_IDS.contains(&ENGINE_SAFETY),
+            "{ENGINE_SAFETY} must be in PRODUCTION_ENGINE_IDS"
+        );
+        assert!(
+            weissman_core::models::engine::PRODUCTION_ENGINE_IDS.contains(&ENGINE_CROWN),
+            "{ENGINE_CROWN} must be in PRODUCTION_ENGINE_IDS"
+        );
+    }
+
     #[tokio::test]
     async fn empty_target_errors() {
         let r = run_ot_passive_active_safety_result("", &EngineRunContext::default()).await;

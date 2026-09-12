@@ -575,6 +575,9 @@ jobs:
       - name: Verify engine wiring coverage
         run: node scripts/verify_engine_wiring.mjs
 
+      - name: Elite hardening live API gate
+        run: node scripts/elite_hardening_gate.mjs
+
       - name: Generate engine catalog snapshot
         run: node scripts/generate_engine_catalog_snapshot.mjs
 
