@@ -4770,6 +4770,73 @@ export const ENGINES_REGISTRY = [
   },
 ]
 
+/** Canonical agent-required IDs — must match backend AGENT_REQUIRED_ENGINES. */
+export const AGENT_REQUIRED_ENGINE_IDS = [
+  'process_hollowing',
+  'dll_hijacking_engine',
+  'process_inventory',
+  'av_bypass_engine',
+  'log_tampering_engine',
+  'timestomping',
+  'anti_debug_evasion',
+  'rootkit_surface_probe',
+  'memory_forensics_evasion',
+  'usb_enumeration',
+  'dns_tunneling_c2',
+  'icmp_covert',
+  'bootkit_uefi',
+  'persistence_mechanism',
+  'polymorphic_engine',
+  'ransomware_emulation',
+  'acoustic_exfil',
+  'em_exfil_engine',
+  'optical_exfil',
+  'keyboard_acoustic',
+  'screen_capture_exfil',
+  'clipboard_hijack',
+  'insider_exfil',
+  'storage_covert_channel',
+  'arp_spoofing_engine',
+  'vlan_hopping_attack',
+  'dhcp_attack_engine',
+  'wifi_attack_engine',
+  'bluetooth_attack_engine',
+  'lte_5g_attack',
+  'wpa3_attack_engine',
+  'packet_injection_engine',
+  'network_tap_advanced',
+  'multicast_attack',
+  'nat_traversal_attack',
+  'sim_swap_engine',
+  'bluetooth_mobile_attack',
+  'nfc_relay_attack',
+  'deepfake_voice_engine',
+  'pretexting_engine',
+  'insider_threat_engine',
+  'physical_social_eng',
+  'lorawan_attack',
+  'lora_attack',
+  'voltage_glitch_attack',
+  'tpm_firmware_attack',
+  'cold_boot_attack',
+  'infostealer_emulation',
+  'sandbox_evasion',
+  'rop_chain_engine',
+  'heap_exploitation',
+  'jit_spray',
+  'com_hijacking',
+  'parent_pid_spoof',
+  'host_isolation',
+  'host_privilege_escalation',
+  'ebpf_sensor',
+  'ioc_yara_hunt',
+]
+
+const AGENT_REQUIRED_SET = new Set(AGENT_REQUIRED_ENGINE_IDS)
+for (const engine of ENGINES_REGISTRY) {
+  engine.requiresAgent = AGENT_REQUIRED_SET.has(engine.id)
+}
+
 /** Engines that do not need a URL target to run (tenant/global scope) */
 export const TARGETLESS_ENGINE_IDS = new Set(
   ENGINES_REGISTRY.filter((e) => !e.requiresTarget).map((e) => e.id),
