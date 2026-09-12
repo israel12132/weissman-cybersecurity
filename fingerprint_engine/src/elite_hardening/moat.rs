@@ -101,7 +101,7 @@ const LANES: &[LaneDef] = &[
     LaneDef {
         id: "cloud_cnapp",
         title: "Cloud / CNAPP / IaC",
-        beats: "Wiz, Orca, Prisma, CrowdStrike Falcon Cloud — posture/graph, not offensive 563-engine fabric + Ask",
+        beats: "Wiz, Orca, Prisma, CrowdStrike Falcon Cloud — posture/graph, not offensive live-engine fabric + Ask",
         needles: &[
             "aws",
             "azure",
@@ -338,7 +338,10 @@ fn market_research() -> Value {
             "cluster": "agentic_web",
             "vendors": ["XBOW", "Strix", "Escape", "FireCompass"],
             "owns": "web/API PoC validators; Strix fix-PR loop; Escape GraphQL/BOLA",
-            "lacks": "AD/network chaining (XBOW), OT/ICS, tenant RLS SQL, 563 production engines, FAIR that refuses to drop ALE on a patch-PR without a later live absence scan"
+            "lacks": format!(
+                "AD/network chaining (XBOW), OT/ICS, tenant RLS SQL, {} production engines, FAIR that refuses to drop ALE on a patch-PR without a later live absence scan",
+                PRODUCTION_ENGINE_IDS.len()
+            )
         },
         {
             "cluster": "bas_ctem",
@@ -368,7 +371,10 @@ fn market_research() -> Value {
             "cluster": "ot_fair",
             "vendors": ["DeNexus DeRISK"],
             "owns": "OT process-disruption finance",
-            "lacks": "563-engine offensive fabric + dual-probe + Ask RLS"
+            "lacks": format!(
+                "{}-engine offensive fabric + dual-probe + Ask RLS",
+                PRODUCTION_ENGINE_IDS.len()
+            )
         },
         {
             "cluster": "llm_redteam",
@@ -379,14 +385,14 @@ fn market_research() -> Value {
         {
             "cluster": "oss_tool_wrappers",
             "vendors": [
-                "HexStrike AI (11k★)",
-                "Strix (58k★)",
-                "CAI (9k★)",
-                "Nuclei (30k★)",
-                "Caldera (7k★)",
-                "PentestGPT (15k★)",
-                "Infection Monkey (7k★)",
-                "Faraday (6k★)"
+                "HexStrike AI",
+                "Strix",
+                "CAI",
+                "Nuclei",
+                "Caldera",
+                "PentestGPT",
+                "Infection Monkey",
+                "Faraday"
             ],
             "owns": "CLI/MCP/template scanners and CTF agents",
             "lacks": "multi-tenant RLS product, Command Center, FAIR snapshots, WSS double encryption",
@@ -444,7 +450,9 @@ pub fn snapshot() -> Value {
             "as_of": "2026-08-27",
             "method": "public_web_github_forums",
             "clusters": market_research(),
-            "verdict": "No public product combines 563 live engines + OT protocol FSM + dual-probe evidence-doubt + FAIR-from-graph (ALE priced until Hack-Fix-Verify absence scan) + Ask 13-table RLS + WSS inner crypto + Hebrew Command Center."
+            "verdict": format!(
+                "No public product combines {engines_total} live engines + OT protocol FSM + dual-probe evidence-doubt + FAIR-from-graph (ALE priced until Hack-Fix-Verify absence scan) + Ask 13-table RLS + WSS inner crypto + Hebrew Command Center."
+            )
         },
         "kernel_sanity": {
             "wss_nonce_bits": 96,

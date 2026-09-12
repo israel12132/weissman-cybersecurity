@@ -531,6 +531,7 @@
     "brand_tagline": "אבטחה התקפית מאוחדת לצוותי ארגון",
     "brand_story": "קשר ממצאים מ-{{engines}} מנועי תקיפה, תזמר מדריכי SOAR והוכח עמידה ברגולציה — ממרכז פיקוד אחד.",
     "trust_engines": "{{engines}} מנועים",
+    "brand_release": "{{name}} · {{release}}",
     "trust_soc2": "מוכן ל-SOC2",
     "trust_region": "EU-West",
     "trust_label": "אינדיקטורי אמון בפלטפורמה",

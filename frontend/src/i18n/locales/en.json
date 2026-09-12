@@ -541,6 +541,7 @@
     "brand_tagline": "Unified offensive security for enterprise teams",
     "brand_story": "Correlate findings across {{engines}} attack engines, orchestrate SOAR playbooks, and prove compliance — from a single command center.",
     "trust_engines": "{{engines}} engines",
+    "brand_release": "{{name}} · {{release}}",
     "trust_soc2": "SOC2-ready",
     "trust_region": "EU-West",
     "trust_label": "Platform trust indicators",

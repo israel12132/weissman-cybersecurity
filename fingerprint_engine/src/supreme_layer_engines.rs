@@ -14,9 +14,10 @@ use crate::itdr::{analyze, AuthEvent, ItdrConfig};
 use serde_json::{json, Value};
 use sqlx::Row;
 
-fn ingest(merged: &mut Vec<Value>, label: &str, fusion: &str, result: &EngineResult) {
+/// Returns whether the child probe completed successfully (findings may still be empty).
+fn ingest(merged: &mut Vec<Value>, label: &str, fusion: &str, result: &EngineResult) -> bool {
     if !result.success {
-        return;
+        return false;
     }
     for mut f in result.findings.clone() {
         if let Some(obj) = f.as_object_mut() {
@@ -27,6 +28,7 @@ fn ingest(merged: &mut Vec<Value>, label: &str, fusion: &str, result: &EngineRes
         }
         merged.push(f);
     }
+    true
 }
 
 fn haystack(f: &Value) -> String {
@@ -909,6 +911,8 @@ pub async fn run_prevention_fabric_breach_proof_result(
         return EngineResult::error("target required");
     }
     let mut merged = Vec::new();
+    let mut child_ok = 0u32;
+    let mut child_fail: Vec<String> = Vec::new();
     let (ngfw, sase, waf, plane, ztna) = tokio::join!(
         run_ngfw_posture_result(target),
         crate::dedicated_web_ztna_engines::run_sase_security_bypass_result(target),
@@ -916,36 +920,25 @@ pub async fn run_prevention_fabric_breach_proof_result(
         run_control_plane_of_controls_result(target, ctx),
         crate::dedicated_web_ztna_engines::run_zero_trust_bypass_result(target),
     );
-    ingest(
-        &mut merged,
-        "ngfw_posture",
-        "prevention_fabric_breach_proof",
-        &ngfw,
-    );
-    ingest(
-        &mut merged,
-        "sase_security_bypass",
-        "prevention_fabric_breach_proof",
-        &sase,
-    );
-    ingest(
-        &mut merged,
-        "waf_bypass",
-        "prevention_fabric_breach_proof",
-        &waf,
-    );
-    ingest(
-        &mut merged,
-        "control_plane_of_controls",
-        "prevention_fabric_breach_proof",
-        &plane,
-    );
-    ingest(
-        &mut merged,
-        "zero_trust_bypass",
-        "prevention_fabric_breach_proof",
-        &ztna,
-    );
+    let children = [
+        ("ngfw_posture", &ngfw),
+        ("sase_security_bypass", &sase),
+        ("waf_bypass", &waf),
+        ("control_plane_of_controls", &plane),
+        ("zero_trust_bypass", &ztna),
+    ];
+    for (label, result) in children {
+        if ingest(
+            &mut merged,
+            label,
+            "prevention_fabric_breach_proof",
+            result,
+        ) {
+            child_ok += 1;
+        } else {
+            child_fail.push(format!("{label}: {}", result.message));
+        }
+    }
 
     let leak = merged.iter().any(|f| {
         matches!(
@@ -970,6 +963,11 @@ pub async fn run_prevention_fabric_breach_proof_result(
                 target,
             ),
         );
+    } else if merged.is_empty() && child_ok == 0 {
+        return EngineResult::error(format!(
+            "prevention_fabric_breach_proof: all child probes failed: {}",
+            child_fail.join("; ")
+        ));
     } else if merged.is_empty() {
         return empty_ok("prevention_fabric_breach_proof", target);
     } else {

@@ -179,9 +179,9 @@ export default function EliteHardeningCommandCenter() {
         {!loading && !error && (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
-              <ExecutiveWidget label={t(`${NS}.kpi_enforced`)} value={`${enforced}/${total || 100}`} accent="#22d3ee" />
+              <ExecutiveWidget label={t(`${NS}.kpi_enforced`)} value={`${enforced}/${data?.controls_total ?? '—'}`} accent="#22d3ee" />
               <ExecutiveWidget label={t(`${NS}.kpi_gaps`)} value={gaps} accent={gaps ? '#f43f5e' : '#34d399'} />
-              <ExecutiveWidget label={t(`${NS}.kpi_mitre`)} value={data?.mitre_attack || 'v19.1'} accent="#a78bfa" />
+              <ExecutiveWidget label={t(`${NS}.kpi_mitre`)} value={data?.mitre_attack ?? '—'} accent="#a78bfa" />
               <ExecutiveWidget label={t(`${NS}.kpi_probes`)} value={data?.live_probes_target ?? '—'} accent="#f97316" />
               <ExecutiveWidget
                 label={t(`${NS}.kpi_engines`)}

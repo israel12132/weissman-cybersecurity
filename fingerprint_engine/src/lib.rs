@@ -361,6 +361,8 @@ pub mod overflow_log;
 pub mod path_templates;
 pub mod playbook_dsl;
 pub mod priv_esc_cred_access;
+pub mod public_site;
+pub mod demo_request;
 pub mod secret_zeroize;
 pub mod sovereign_operator;
 pub mod suppression_cache_sync;
