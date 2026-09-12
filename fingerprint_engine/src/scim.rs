@@ -240,6 +240,13 @@ async fn begin_scim<'a>(
         .map_err(|_| scim_error(StatusCode::SERVICE_UNAVAILABLE, "database unavailable"))
 }
 
+async fn commit_scim(tx: Transaction<'_, Postgres>) -> Result<(), Response> {
+    tx.commit().await.map_err(|e| {
+        tracing::error!(target: "scim", error = %e, "commit failed");
+        scim_error(StatusCode::SERVICE_UNAVAILABLE, "commit failed")
+    })
+}
+
 async fn stamp_token_used(tx: &mut Transaction<'_, Postgres>, token_id: i64) {
     let _ = sqlx::query("UPDATE scim_tokens SET last_used_at = now() WHERE id = $1")
         .bind(token_id)
@@ -404,6 +411,48 @@ fn member_value_list(value: &Value) -> Vec<Value> {
         .unwrap_or_default()
 }
 
+/// RFC 7644: `members[value eq "42"]` with an empty operation value.
+fn member_ids_from_filter_path(path: &str) -> Vec<i64> {
+    let p = path.to_ascii_lowercase();
+    let needle = "members[value eq";
+    let Some(idx) = p.find(needle) else {
+        return Vec::new();
+    };
+    let rest = p[idx + needle.len()..].trim();
+    let rest = rest.trim_start_matches(['"', '\'']);
+    let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+    digits
+        .parse::<i64>()
+        .ok()
+        .filter(|&n| n > 0)
+        .into_iter()
+        .collect()
+}
+
+/// Pathless PATCH may wrap attributes as `{ "value": { "active": false } }`.
+fn patch_attr_object(value: &Value) -> &Value {
+    let Some(map) = value.as_object() else {
+        return value;
+    };
+    let has_attrs = [
+        "userName",
+        "active",
+        "displayName",
+        "members",
+        "externalId",
+        "emails",
+        "password",
+        WEISSMAN_EXT,
+        "userType",
+    ]
+    .iter()
+    .any(|k| map.contains_key(*k));
+    if has_attrs {
+        return value;
+    }
+    map.get("value").filter(|v| v.is_object()).unwrap_or(value)
+}
+
 fn patch_member_values(path: &str, value: &Value) -> Option<Vec<Value>> {
     if path.contains("members") {
         return Some(member_value_list(value));
@@ -440,6 +489,8 @@ async fn insert_group_members(
         r#"INSERT INTO scim_group_members (tenant_id, group_id, user_id)
            SELECT $1, $2, u.id FROM users u
             WHERE u.tenant_id = $1 AND u.id = ANY($3)
+              AND COALESCE(u.is_superadmin,false) = false
+              AND lower(COALESCE(u.role, '')) <> 'ceo'
            ON CONFLICT DO NOTHING"#,
     )
     .bind(tenant_id)
@@ -519,6 +570,8 @@ pub async fn scim_users_list(
                   COALESCE(is_active, true) AS is_active, scim_external_id
              FROM users
             WHERE tenant_id = $1
+              AND COALESCE(is_superadmin,false) = false
+              AND lower(COALESCE(role, '')) <> 'ceo'
               AND ($2::text IS NULL OR lower(email) = $2)
               AND ($3::text IS NULL OR scim_external_id = $3)
             ORDER BY id
@@ -542,6 +595,8 @@ pub async fn scim_users_list(
     let total: i64 = match sqlx::query_scalar(
         r#"SELECT count(*) FROM users
             WHERE tenant_id = $1
+              AND COALESCE(is_superadmin,false) = false
+              AND lower(COALESCE(role, '')) <> 'ceo'
               AND ($2::text IS NULL OR lower(email) = $2)
               AND ($3::text IS NULL OR scim_external_id = $3)"#,
     )
@@ -575,7 +630,9 @@ pub async fn scim_users_list(
         })
         .collect();
     audit_scim(&mut tx, &ctx, "GET", "/api/scim/v2/Users", 200, "list").await;
-    let _ = tx.commit().await;
+    if let Err(r) = commit_scim(tx).await {
+        return r;
+    }
     json_ok(
         StatusCode::OK,
         json!({
@@ -606,7 +663,10 @@ pub async fn scim_users_get(
     let row = match sqlx::query(
         r#"SELECT id, email, COALESCE(role,'viewer') AS role,
                   COALESCE(is_active, true) AS is_active, scim_external_id
-             FROM users WHERE id = $1 AND tenant_id = $2"#,
+             FROM users
+            WHERE id = $1 AND tenant_id = $2
+              AND COALESCE(is_superadmin,false) = false
+              AND lower(COALESCE(role, '')) <> 'ceo'"#,
     )
     .bind(id)
     .bind(ctx.tenant_id)
@@ -633,7 +693,9 @@ pub async fn scim_users_get(
         "get",
     )
     .await;
-    let _ = tx.commit().await;
+    if let Err(r) = commit_scim(tx).await {
+        return r;
+    }
     json_ok(
         StatusCode::OK,
         user_resource(
@@ -727,7 +789,9 @@ pub async fn scim_users_create(
                 "",
             )
             .await;
-            let _ = tx.commit().await;
+            if let Err(r) = commit_scim(tx).await {
+                return r;
+            }
             json_ok(
                 StatusCode::CREATED,
                 user_resource(id, &email, &role, active, external_id.as_deref()),
@@ -841,7 +905,9 @@ pub async fn scim_users_put(
                 "replace",
             )
             .await;
-            let _ = tx.commit().await;
+            if let Err(r) = commit_scim(tx).await {
+                return r;
+            }
             json_ok(
                 StatusCode::OK,
                 user_resource(id, &email, &role, active, external_id.as_deref()),
@@ -923,17 +989,21 @@ pub async fn scim_users_patch(
         if !matches!(verb.as_str(), "replace" | "add") {
             continue;
         }
-        if path == "active" || (path.is_empty() && op.value.get("active").is_some()) {
-            active = op
-                .value
+        let attrs = if path.is_empty() {
+            patch_attr_object(&op.value)
+        } else {
+            &op.value
+        };
+        if path == "active" || (path.is_empty() && attrs.get("active").is_some()) {
+            active = attrs
                 .as_bool()
-                .or_else(|| op.value.get("active").and_then(Value::as_bool))
+                .or_else(|| attrs.get("active").and_then(Value::as_bool))
                 .unwrap_or(active);
         }
         let user_name_raw = if path == "username" {
             op.value.as_str()
         } else if path.is_empty() {
-            op.value.get("userName").and_then(Value::as_str)
+            attrs.get("userName").and_then(Value::as_str)
         } else {
             None
         };
@@ -946,9 +1016,9 @@ pub async fn scim_users_patch(
                 }
             }
         }
-        if path == "externalid" || (path.is_empty() && op.value.get("externalId").is_some()) {
+        if path == "externalid" || (path.is_empty() && attrs.get("externalId").is_some()) {
             external_id = if path.is_empty() {
-                op.value
+                attrs
                     .get("externalId")
                     .and_then(Value::as_str)
                     .map(str::to_string)
@@ -956,12 +1026,27 @@ pub async fn scim_users_patch(
                 op.value.as_str().map(str::to_string)
             };
         }
-        if path.contains("role") {
-            let raw = op
-                .value
-                .as_str()
-                .or_else(|| op.value.get("role").and_then(Value::as_str))
-                .unwrap_or("viewer");
+        if path.contains("role")
+            || (path.is_empty()
+                && (attrs.get("userType").is_some()
+                    || attrs
+                        .get(WEISSMAN_EXT)
+                        .and_then(|v| v.get("role"))
+                        .is_some()))
+        {
+            let raw = if path.is_empty() {
+                attrs
+                    .get(WEISSMAN_EXT)
+                    .and_then(|v| v.get("role"))
+                    .and_then(Value::as_str)
+                    .or_else(|| attrs.get("userType").and_then(Value::as_str))
+                    .unwrap_or("viewer")
+            } else {
+                op.value
+                    .as_str()
+                    .or_else(|| op.value.get("role").and_then(Value::as_str))
+                    .unwrap_or("viewer")
+            };
             match scim_role(raw) {
                 Ok(rr) => role = rr,
                 Err(d) => {
@@ -998,7 +1083,9 @@ pub async fn scim_users_patch(
                 "patch",
             )
             .await;
-            let _ = tx.commit().await;
+            if let Err(r) = commit_scim(tx).await {
+                return r;
+            }
             json_ok(
                 StatusCode::OK,
                 user_resource(id, &email, &role, active, external_id.as_deref()),
@@ -1070,7 +1157,9 @@ pub async fn scim_users_delete(
         "",
     )
     .await;
-    let _ = tx.commit().await;
+    if let Err(r) = commit_scim(tx).await {
+        return r;
+    }
     StatusCode::NO_CONTENT.into_response()
 }
 
@@ -1200,7 +1289,9 @@ pub async fn scim_groups_list(
         ));
     }
     audit_scim(&mut tx, &ctx, "GET", "/api/scim/v2/Groups", 200, "list").await;
-    let _ = tx.commit().await;
+    if let Err(r) = commit_scim(tx).await {
+        return r;
+    }
     json_ok(
         StatusCode::OK,
         json!({
@@ -1257,7 +1348,9 @@ pub async fn scim_groups_get(
         "get",
     )
     .await;
-    let _ = tx.commit().await;
+    if let Err(r) = commit_scim(tx).await {
+        return r;
+    }
     json_ok(
         StatusCode::OK,
         group_resource(
@@ -1318,7 +1411,9 @@ pub async fn scim_groups_create(
             }
             let loaded = load_group_members(&mut tx, ctx.tenant_id, id).await;
             audit_scim(&mut tx, &ctx, "POST", "/api/scim/v2/Groups", 201, "created").await;
-            let _ = tx.commit().await;
+            if let Err(r) = commit_scim(tx).await {
+                return r;
+            }
             json_ok(
                 StatusCode::CREATED,
                 group_resource(id, &display, external_id.as_deref(), loaded),
@@ -1329,6 +1424,97 @@ pub async fn scim_groups_create(
             scim_error(StatusCode::CONFLICT, "group already exists")
         }
     }
+}
+
+/// PUT /api/scim/v2/Groups/:id — RFC 7644 full replace.
+pub async fn scim_groups_put(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+    Json(body): Json<Value>,
+) -> Response {
+    let ctx = match authenticate_scim(&state, &headers).await {
+        Ok(c) => c,
+        Err(r) => return r,
+    };
+    let display = body
+        .get("displayName")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if display.is_empty() {
+        return scim_error(StatusCode::BAD_REQUEST, "displayName required");
+    }
+    let external_id = body
+        .get("externalId")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    let mut tx = match begin_scim(state.app_pool.as_ref(), &ctx).await {
+        Ok(t) => t,
+        Err(r) => return r,
+    };
+    stamp_token_used(&mut tx, ctx.token_id).await;
+    let n = match sqlx::query(
+        r#"UPDATE scim_groups SET display_name = $1, external_id = $2, updated_at = now()
+            WHERE id = $3 AND tenant_id = $4"#,
+    )
+    .bind(&display)
+    .bind(external_id.as_deref())
+    .bind(id)
+    .bind(ctx.tenant_id)
+    .execute(&mut *tx)
+    .await
+    {
+        Ok(r) => r.rows_affected(),
+        Err(e) => {
+            tracing::error!(target: "scim", error = %e, "group replace failed");
+            let _ = tx.rollback().await;
+            return scim_error(StatusCode::INTERNAL_SERVER_ERROR, "update failed");
+        }
+    };
+    if n == 0 {
+        let _ = tx.rollback().await;
+        return scim_error(StatusCode::NOT_FOUND, "group not found");
+    }
+    if let Err(e) =
+        sqlx::query("DELETE FROM scim_group_members WHERE group_id = $1 AND tenant_id = $2")
+            .bind(id)
+            .bind(ctx.tenant_id)
+            .execute(&mut *tx)
+            .await
+    {
+        tracing::error!(target: "scim", error = %e, "group member replace wipe failed");
+        let _ = tx.rollback().await;
+        return scim_error(StatusCode::INTERNAL_SERVER_ERROR, "update failed");
+    }
+    if let Some(members) = body.get("members").and_then(Value::as_array) {
+        let uids = member_ids_from_values(members);
+        if let Err(e) = insert_group_members(&mut tx, ctx.tenant_id, id, &uids).await {
+            tracing::error!(target: "scim", error = %e, "group member replace insert failed");
+            let _ = tx.rollback().await;
+            return scim_error(StatusCode::INTERNAL_SERVER_ERROR, "update failed");
+        }
+    }
+    let loaded = load_group_members(&mut tx, ctx.tenant_id, id).await;
+    audit_scim(
+        &mut tx,
+        &ctx,
+        "PUT",
+        &format!("/api/scim/v2/Groups/{id}"),
+        200,
+        "replace",
+    )
+    .await;
+    if let Err(r) = commit_scim(tx).await {
+        return r;
+    }
+    json_ok(
+        StatusCode::OK,
+        group_resource(id, &display, external_id.as_deref(), loaded),
+    )
 }
 
 /// PATCH /api/scim/v2/Groups/:id
@@ -1375,12 +1561,17 @@ pub async fn scim_groups_patch(
             .trim()
             .trim_start_matches('/')
             .to_ascii_lowercase();
+        let attrs = if path.is_empty() {
+            patch_attr_object(&op.value)
+        } else {
+            &op.value
+        };
         let display_name = if path.contains("displayname") {
             op.value
                 .as_str()
-                .or_else(|| op.value.get("displayName").and_then(Value::as_str))
+                .or_else(|| attrs.get("displayName").and_then(Value::as_str))
         } else if path.is_empty() {
-            op.value.get("displayName").and_then(Value::as_str)
+            attrs.get("displayName").and_then(Value::as_str)
         } else {
             None
         };
@@ -1394,9 +1585,19 @@ pub async fn scim_groups_patch(
             .execute(&mut *tx)
             .await;
         }
-        if let Some(values) = patch_member_values(&path, &op.value) {
-            let uids = member_ids_from_values(&values);
-            if replace_clears_members(&verb, &path, &op.value) {
+        let member_values = patch_member_values(&path, attrs).or_else(|| {
+            if verb == "remove" && path.contains("members") {
+                Some(Vec::new())
+            } else {
+                None
+            }
+        });
+        if let Some(values) = member_values {
+            let mut uids = member_ids_from_values(&values);
+            if uids.is_empty() {
+                uids = member_ids_from_filter_path(&path);
+            }
+            if replace_clears_members(&verb, &path, attrs) {
                 let _ = sqlx::query(
                     "DELETE FROM scim_group_members WHERE group_id = $1 AND tenant_id = $2",
                 )
@@ -1442,7 +1643,9 @@ pub async fn scim_groups_patch(
         "patch",
     )
     .await;
-    let _ = tx.commit().await;
+    if let Err(r) = commit_scim(tx).await {
+        return r;
+    }
     json_ok(
         StatusCode::OK,
         group_resource(
@@ -1492,7 +1695,9 @@ pub async fn scim_groups_delete(
         "delete",
     )
     .await;
-    let _ = tx.commit().await;
+    if let Err(r) = commit_scim(tx).await {
+        return r;
+    }
     StatusCode::NO_CONTENT.into_response()
 }
 
@@ -1529,7 +1734,9 @@ pub async fn api_admin_scim_tokens_list(
             return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
         }
     };
-    let _ = tx.commit().await;
+    if let Err(r) = commit_scim(tx).await {
+        return r;
+    }
     let tokens: Vec<Value> = rows
         .into_iter()
         .map(|r| {
@@ -1605,7 +1812,9 @@ pub async fn api_admin_scim_tokens_create(
                 "",
             )
             .await;
-            let _ = tx.commit().await;
+            if let Err(r) = commit_scim(tx).await {
+                return r;
+            }
             (
                 StatusCode::CREATED,
                 Json(json!({
@@ -1675,7 +1884,9 @@ pub async fn api_admin_scim_tokens_revoke(
         "",
     )
     .await;
-    let _ = tx.commit().await;
+    if let Err(r) = commit_scim(tx).await {
+        return r;
+    }
     (
         StatusCode::OK,
         Json(json!({"ok": true, "id": id, "revoked": true})),
@@ -1713,7 +1924,9 @@ pub async fn api_admin_scim_audit(
             return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
         }
     };
-    let _ = tx.commit().await;
+    if let Err(r) = commit_scim(tx).await {
+        return r;
+    }
     let events: Vec<Value> = rows
         .into_iter()
         .map(|r| {
@@ -1882,5 +2095,24 @@ mod tests {
             ),
             vec![42]
         );
+    }
+
+    #[test]
+    fn member_ids_from_filter_path_reads_rfc_eq() {
+        assert_eq!(
+            member_ids_from_filter_path(r#"members[value eq "42"]"#),
+            vec![42]
+        );
+        assert_eq!(member_ids_from_filter_path("members[value eq 7]"), vec![7]);
+        assert!(member_ids_from_filter_path("displayName").is_empty());
+    }
+
+    #[test]
+    fn patch_attr_object_unwraps_nested_value() {
+        let wrapped = json!({"value": {"active": false, "userName": "ops@weissman.io"}});
+        let inner = patch_attr_object(&wrapped);
+        assert_eq!(inner["active"], false);
+        let direct = json!({"active": true});
+        assert_eq!(patch_attr_object(&direct)["active"], true);
     }
 }

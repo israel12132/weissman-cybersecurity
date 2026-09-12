@@ -133,6 +133,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route(
             "/api/scim/v2/Groups/:id",
             get(crate::scim::scim_groups_get)
+                .put(crate::scim::scim_groups_put)
                 .patch(crate::scim::scim_groups_patch)
                 .delete(crate::scim::scim_groups_delete),
         )
