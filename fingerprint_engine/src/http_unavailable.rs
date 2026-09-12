@@ -3006,4 +3006,48 @@ mod tests {
         let strat = ceo_strategy_unavailable_json("store down");
         assert!(strat["effective"].is_null());
     }
+
+    #[test]
+    fn sovereign_rotate_store_down_is_503_not_sql_or_ok_true() {
+        let src = include_str!("sovereign_defense_store.rs");
+        for sig in [
+            "pub async fn ensure_routing_token",
+            "pub async fn rotate_liquid_matrix",
+        ] {
+            let start = src.find(sig).unwrap_or_else(|| panic!("missing {sig}"));
+            let rest = &src[start..];
+            let next = rest.find("\npub async fn ").unwrap_or(rest.len());
+            let fn_src = if next == 0 { rest } else { &rest[..next] };
+            assert!(!fn_src.contains("e.to_string()"), "{sig}");
+            assert!(!fn_src.contains("tenant tx:"));
+            assert!(fn_src.contains("tx.commit().await.is_err()"), "{sig}");
+            assert!(!fn_src.contains("let _ = tx.commit()"), "{sig}");
+        }
+        let handler = named_fn_src(
+            include_str!("server_handlers_sovereign_defense.inc"),
+            "async fn api_sovereign_defense_rotate",
+        );
+        assert!(handler.contains("sovereign_rotate_unavailable_json"));
+        assert!(!handler.contains("\"error\": e"));
+        assert!(!handler.contains("INTERNAL_SERVER_ERROR"));
+    }
+
+    #[test]
+    fn risk_graph_build_optional_sources_are_not_empty_success() {
+        let src = include_str!("risk_graph.rs");
+        let start = src
+            .find("pub async fn build_risk_graph_for_client")
+            .expect("build");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn fusion_ot_it_graph_edges_llm")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(!fn_src.contains("fetch_all(&mut **tx)\n        .await\n        .unwrap_or_default()"));
+        assert!(!fn_src.contains("fetch_all(&mut **tx)\n    .await\n    .unwrap_or_default()"));
+        let nodes = fn_src.find("FROM risk_graph_nodes").expect("nodes count");
+        let count_src = &fn_src[nodes..];
+        assert!(!count_src.contains("unwrap_or(0)"));
+        assert!(count_src.contains(".await?"));
+    }
 }

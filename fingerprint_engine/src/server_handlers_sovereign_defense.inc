@@ -123,9 +123,11 @@ async fn api_sovereign_defense_rotate(
             })),
         )
             .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "error": e })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::sovereign_rotate_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }

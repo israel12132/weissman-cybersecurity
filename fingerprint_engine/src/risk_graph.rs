@@ -342,8 +342,7 @@ pub async fn build_risk_graph_for_client(
     )
     .bind(client_id)
     .fetch_all(&mut **tx)
-    .await
-    .unwrap_or_default();
+    .await?;
 
     for (ot_id, host, port, protocol, vendor_hint) in &ot_rows {
         let physical_class = physical_asset_class(protocol);
@@ -379,8 +378,7 @@ pub async fn build_risk_graph_for_client(
         .bind(tenant_id)
         .bind(client_id)
         .fetch_all(&mut **tx)
-        .await
-        .unwrap_or_default();
+        .await?;
 
     for (_aws_id, arn, region, service, rtype) in &aws_rows {
         let r = region.clone().unwrap_or_default();
@@ -410,8 +408,7 @@ pub async fn build_risk_graph_for_client(
     .bind(tenant_id)
     .bind(client_id)
     .fetch_all(&mut **tx)
-    .await
-    .unwrap_or_default();
+    .await?;
 
     for (_kid, uid, cname, ns, kind, name) in &k8s_rows {
         let cn = cname.clone().unwrap_or_else(|| "cluster".into());
@@ -467,16 +464,14 @@ pub async fn build_risk_graph_for_client(
     .bind(tenant_id)
     .bind(client_id)
     .fetch_one(&mut **tx)
-    .await
-    .unwrap_or(0);
+    .await?;
     let edge_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM risk_graph_edges WHERE tenant_id = $1 AND client_id = $2",
     )
     .bind(tenant_id)
     .bind(client_id)
     .fetch_one(&mut **tx)
-    .await
-    .unwrap_or(0);
+    .await?;
     Ok((node_count as usize, edge_count as usize))
 }
 
