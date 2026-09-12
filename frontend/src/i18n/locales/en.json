@@ -7012,6 +7012,7 @@
         "defender_title": "Target LLM (Defender)",
         "attacker_empty": "Generated adversarial payloads will stream here…",
         "defender_empty": "Target responses will stream here…",
+        "unavailable": "Clients API unavailable — missing client is not confirmed.",
         "footer": "Findings are saved with source ai_adversarial_redteam and appear in the Executive PDF Report."
       },
       "quantumTimingProfiler": {
@@ -7039,6 +7040,8 @@
         "payload_legend": "— Payload (μs)",
         "chart_baseline": "Baseline (μs)",
         "chart_payload": "Payload (μs)",
+        "no_samples": "No live samples yet — start a scan. Idle is not a zero waveform.",
+        "unavailable": "Clients API unavailable — missing client is not confirmed.",
         "footer": "This report is cryptographically sealed. Response times measured with real network latency; Z-Score > 3 indicates critical blind injection timing deviation."
       },
       "zeroDayRadar": {

@@ -7012,6 +7012,7 @@
         "defender_title": "LLM יעד (מגן)",
         "attacker_empty": "payloads אדוורסריים שנוצרו יזרמו כאן…",
         "defender_empty": "תגובות יעד יזרמו כאן…",
+        "unavailable": "API הלקוחות אינו זמין — לקוח חסר אינו מאושר.",
         "footer": "ממצאים נשמרים עם source ai_adversarial_redteam ומופיעים בדוח Executive PDF."
       },
       "quantumTimingProfiler": {
@@ -7039,6 +7040,8 @@
         "payload_legend": "— Payload (μs)",
         "chart_baseline": "Baseline (μs)",
         "chart_payload": "Payload (μs)",
+        "no_samples": "אין דגימות חיות עדיין — הפעל סריקה. סרק אינו גל אפס.",
+        "unavailable": "API הלקוחות אינו זמין — לקוח חסר אינו מאושר.",
         "footer": "דוח זה חתום קריפטוגרפית. זמני תגובה נמדדים עם latency רשת אמיתי; Z-Score > 3 מצביע על חריגת timing injection קריטית."
       },
       "zeroDayRadar": {
