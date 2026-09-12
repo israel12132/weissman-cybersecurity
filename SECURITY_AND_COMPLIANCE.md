@@ -13,7 +13,7 @@ Detailed Q&A is in [`SIG_CAIQ_PREP_QA.md`](SIG_CAIQ_PREP_QA.md); SLA in
 
 | Metric | Value | Audit script |
 |--------|-------|--------------|
-| Production engine IDs | **583** | `scripts/verify_engine_wiring.mjs` |
+| Production engine IDs | **584** | `scripts/verify_engine_wiring.mjs` |
 | Command Center routes | **130** | `scripts/weissman-ui-audit.mjs` |
 | UI pages audited | **111/111** | same |
 | Engine kinds | 321 real_probe (313 distinct impls), 204 alias, 58 agent_required, 0 no_path | `scripts/engine_reality_audit.mjs` |

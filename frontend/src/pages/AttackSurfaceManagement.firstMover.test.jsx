@@ -62,8 +62,10 @@ describe('FirstMoverDeltaPanel', () => {
         loading={false}
         hunting={false}
         fusionHunting={false}
+        schismHunting={false}
         onHunt={() => {}}
         onFusion={() => {}}
+        onSchism={() => {}}
         huntDisabled={false}
         nerve={{ certstream: { connected: true, enabled: true }, oast: { configured: true }, nvd: { api_key_configured: false } }}
       />,
@@ -73,6 +75,7 @@ describe('FirstMoverDeltaPanel', () => {
     expect(screen.getByText('old.example.com')).toBeTruthy()
     expect(screen.getByText('pages.attackSurfaceManagement.first_mover_title')).toBeTruthy()
     expect(screen.getByText(/pages.attackSurfaceManagement.first_mover_fusion/)).toBeTruthy()
+    expect(screen.getByText(/pages.attackSurfaceManagement.first_mover_schism/)).toBeTruthy()
     expect(screen.getByText(/pages.attackSurfaceManagement.nerve_certstream/)).toBeTruthy()
   })
 

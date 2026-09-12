@@ -15,6 +15,7 @@ import Button from '../components/ui/Button'
 const ENGINE = 'asm'
 const DELTA_ENGINE = 'first_mover_surface_delta'
 const FUSION_ENGINE = 'first_mover_delta_fusion'
+const SCHISM_ENGINE = 'exposure_schism_fusion'
 const ACCENT = '#22d3ee'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -260,10 +261,13 @@ export function FirstMoverDeltaPanel({
   loading,
   hunting,
   fusionHunting,
+  schismHunting,
   onHunt,
   onFusion,
+  onSchism,
   huntDisabled,
   nerve,
+  schismFindings,
 }) {
   const { t } = useTranslation()
   const added = Array.isArray(diff?.added) ? diff.added : []
@@ -321,6 +325,17 @@ export function FirstMoverDeltaPanel({
             {fusionHunting
               ? `⟳ ${t('pages.attackSurfaceManagement.first_mover_fusing')}`
               : `⛓ ${t('pages.attackSurfaceManagement.first_mover_fusion')}`}
+          </Button>
+          <Button
+            variant="unstyled"
+            type="button"
+            onClick={onSchism}
+            disabled={huntDisabled || schismHunting}
+            className="px-4 py-2 rounded-lg text-sm font-mono font-semibold bg-rose-500/20 border border-rose-400/40 text-rose-100 hover:bg-rose-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            {schismHunting
+              ? `⟳ ${t('pages.attackSurfaceManagement.first_mover_schism_running')}`
+              : `⚡ ${t('pages.attackSurfaceManagement.first_mover_schism')}`}
           </Button>
         </div>
       </div>
@@ -409,6 +424,21 @@ export function FirstMoverDeltaPanel({
           </table>
         </div>
       )}
+      {Array.isArray(schismFindings) && schismFindings.length > 0 && (
+        <div className="mt-3 rounded-xl border border-rose-500/25 bg-rose-950/20 p-3 space-y-2">
+          <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-rose-200/80">
+            {t('pages.attackSurfaceManagement.first_mover_schism_live')}
+          </p>
+          {schismFindings.slice(0, 8).map((f, i) => (
+            <div key={`${f.title || f.type || 'schism'}-${i}`} className="flex items-start justify-between gap-3">
+              <p className="text-[12px] text-rose-50/90 min-w-0 truncate">{f.title || f.value}</p>
+              <span className="text-[10px] font-mono uppercase text-rose-300/80 shrink-0">
+                {f.severity || 'info'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -481,6 +511,8 @@ export default function AttackSurfaceManagement() {
   const [deltaLoading, setDeltaLoading] = useState(false)
   const [deltaJobId, setDeltaJobId] = useState(null)
   const [fusionJobId, setFusionJobId] = useState(null)
+  const [schismJobId, setSchismJobId] = useState(null)
+  const [schismFindings, setSchismFindings] = useState([])
   const [nerve, setNerve] = useState(null)
 
   const refreshCorpus = useCallback(() => {
@@ -626,6 +658,17 @@ export default function AttackSurfaceManagement() {
     },
   })
 
+  useJobPoll(schismJobId, {
+    enabled: Boolean(schismJobId),
+    onComplete: async (job) => {
+      setSchismJobId(null)
+      const f = await resolveJobFindings(job, SCHISM_ENGINE, selectedClientId)
+      setSchismFindings(Array.isArray(f) ? f : [])
+      await loadSurfaceDiff(selectedClientId)
+      loadNerve()
+    },
+  })
+
   const handleRun = useCallback(async () => {
     if (!selectedClientId) { showToast('error', t('pages.attackSurfaceManagement.toast_select_client')); return }
     if (!target.trim()) { showToast('error', t('pages.attackSurfaceManagement.toast_enter_target')); return }
@@ -695,6 +738,31 @@ export default function AttackSurfaceManagement() {
       const jid = d.job_id ?? ''
       showToast('info', t('pages.attackSurfaceManagement.toast_scan_queued', { jid }))
       if (jid) setFusionJobId(jid)
+    } catch (e) {
+      showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
+    }
+  }, [selectedClientId, target, postScan, showToast, t])
+
+  const handleExposureSchism = useCallback(async () => {
+    if (!selectedClientId) { showToast('error', t('pages.attackSurfaceManagement.toast_select_client')); return }
+    if (!target.trim()) { showToast('error', t('pages.attackSurfaceManagement.toast_enter_target')); return }
+    setSchismFindings([])
+    try {
+      const { ok, data: d, status } = await postScan({
+        engine: SCHISM_ENGINE,
+        client_id: Number(selectedClientId),
+        target: target.trim(),
+        include_ct: true,
+        include_http: true,
+        chain_web_engines: false,
+      })
+      if (!ok) {
+        showToast('error', d.detail || d.error || t('pages.attackSurfaceManagement.toast_scan_failed', { status }))
+        return
+      }
+      const jid = d.job_id ?? ''
+      showToast('info', t('pages.attackSurfaceManagement.toast_scan_queued', { jid }))
+      if (jid) setSchismJobId(jid)
     } catch (e) {
       showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
     }
@@ -909,8 +977,11 @@ export default function AttackSurfaceManagement() {
         loading={deltaLoading}
         hunting={Boolean(deltaJobId)}
         fusionHunting={Boolean(fusionJobId)}
+        schismHunting={Boolean(schismJobId)}
         onHunt={handleFirstMoverHunt}
         onFusion={handleDeltaFusion}
+        onSchism={handleExposureSchism}
+        schismFindings={schismFindings}
         huntDisabled={!selectedClientId || status === 'running'}
         nerve={nerve}
       />

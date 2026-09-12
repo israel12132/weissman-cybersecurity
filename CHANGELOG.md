@@ -9,6 +9,12 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Added
 
+- **Exposure Schism Fusion (`exposure_schism_fusion`).** First-mover surface
+  delta hosts are immediately fracture-tested with `liminal_boundary`
+  (HTTP/1.1↔HTTP/2, Vary, rewrite-header) and kill-chain mapped only after
+  observed fractures. Empty delta is idle — never a filler Prisma-style score.
+  Command Center ASM panel: "Prove protocol schism".
+
 - **Supreme Brain Part 6 — attack-path inference × FAIR blast radius × pentest RAG.**
   Dijkstra (BinaryHeap milli-cost) over live `risk_graph_nodes` / `risk_graph_edges`
   with CISA KEV / EPSS / CVSS / agent weights, what-if (block SMB/445), choke-points,

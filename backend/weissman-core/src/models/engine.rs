@@ -79,6 +79,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "asm",
     "first_mover_surface_delta",
     "first_mover_delta_fusion",
+    "exposure_schism_fusion",
     "first_seen_osv_nvd",
     "leak_hunter",
     "discovery_engine",
@@ -709,6 +710,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "asm",
     "first_mover_surface_delta",
     "first_mover_delta_fusion",
+    "exposure_schism_fusion",
     "first_seen_osv_nvd",
     "leak_hunter",
     "discovery_engine",
@@ -1624,6 +1626,7 @@ mod production_registry_tests {
         assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_mover_surface_delta"));
         assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_seen_osv_nvd"));
         assert!(!DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_mover_delta_fusion"));
+        assert!(!DEFAULT_ORCHESTRATOR_ENGINES.contains(&"exposure_schism_fusion"));
         assert!(
             !DEFAULT_ORCHESTRATOR_ENGINES
                 .iter()

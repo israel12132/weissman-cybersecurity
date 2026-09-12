@@ -841,6 +841,9 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     if engine_id.contains("cors") {
         return "Replace `Access-Control-Allow-Origin: *` with an allow-list of trusted origins. Never combine `*` or `null` with `Access-Control-Allow-Credentials: true`.";
     }
+    if engine_id.contains("exposure_schism") {
+        return "Close protocol-stack gaps on the new host immediately: unify WAF/auth across HTTP/1.1 and HTTP/2, emit correct Vary for Cookie/Language/Encoding, strip X-Original-URL / X-Rewrite-URL at the edge, and claim or remove the first-seen DNS record. Re-run exposure_schism_fusion after the change.";
+    }
     if engine_id.contains("liminal_boundary") {
         return "Unify WAF/auth rules across HTTP/1.1 and HTTP/2 (ALPN) paths; add correct Vary headers for every cache-key dimension (Cookie, Accept-Language); strip or validate X-Original-URL / X-Rewrite-URL at the edge; disable trusted-header routing unless explicitly required.";
     }

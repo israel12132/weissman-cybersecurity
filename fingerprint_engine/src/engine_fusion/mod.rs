@@ -10,6 +10,7 @@
 //! |-----------|---------------|
 //! | `first_mover_surface_delta` | Live DNS/HTTP/CT vs last snapshot — new/changed hosts before weekly scanners |
 //! | `first_mover_delta_fusion` | New host → immediate takeover/leak/BOLA/JWT on that same FQDN |
+//! | `exposure_schism_fusion` | New host → liminal HTTP/1.1↔HTTP/2 / Vary / rewrite schism + kill-chain |
 //! | `first_seen_osv_nvd` | Live SBOM × OSV, proven before NVD when nvd_status is absent_cve/unpublished |
 //! | `external_exposure_supreme` | ASM + email/DNS + cloud posture |
 //! | `identity_attack_chain` | Kerberos + spray + ITDR auth events |
@@ -28,6 +29,7 @@
 pub const FUSION_ENGINE_IDS: &[&str] = &[
     "first_mover_surface_delta",
     "first_mover_delta_fusion",
+    "exposure_schism_fusion",
     "first_seen_osv_nvd",
     "external_exposure_supreme",
     "identity_attack_chain",

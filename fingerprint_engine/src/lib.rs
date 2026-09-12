@@ -88,6 +88,7 @@ pub mod eternal_fuzz;
 pub mod executive_pdf;
 pub mod executive_summary;
 pub mod exploit_synthesis_engine;
+pub mod exposure_schism_fusion;
 pub mod external_exposure_supreme;
 pub mod fair_exposure_fusion_engine;
 pub mod financial_risk;
