@@ -757,7 +757,7 @@ pub async fn run_cortex_proven_finding_bridge_result(
                             ENGINE_ID,
                             &format!("XSIAM blind spot: {}", b.title),
                             &b.severity,
-                            "T1562.001",
+                            "T1685",
                             &format!(
                                 "Weissman proven finding is not present in live Cortex XSIAM alerts. {proof}"
                             ),

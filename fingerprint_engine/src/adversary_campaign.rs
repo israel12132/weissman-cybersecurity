@@ -82,6 +82,8 @@ pub fn engine_for_technique(technique_id: &str) -> Option<&'static str> {
         "abuse_authz" => "bola_idor",
         "privilege_escalation" => "host_privilege_escalation",
         "lateral_movement" => "lateral_movement",
+        "smb_lateral" => "smb_netbios",
+        "rdp_lateral" => "rdp_attack_engine",
         "reach_crown_jewel" => "kill_chain",
         "exfiltrate_db" => "database_exfil",
         "exfiltrate_crown_jewel" => "cloud_data_exfil",
