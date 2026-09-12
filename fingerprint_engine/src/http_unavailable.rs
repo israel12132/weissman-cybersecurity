@@ -406,6 +406,27 @@ pub fn tenant_brand_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// `GET /api/vngfw/status` and apply/put when policy cannot be confirmed
+pub fn vngfw_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "applied": Value::Null,
+        "policy": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// Login / MFA policy when the identity store cannot be read
+pub fn auth_degraded_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "code": "auth_degraded",
+        "detail": detail,
+    })
+}
+
 /// `GET /api/clients/:id/vulnerabilities/:id/sealed-poc`
 pub fn sealed_poc_unavailable_json(detail: &str) -> Value {
     json!({
@@ -776,6 +797,24 @@ mod tests {
         assert_eq!(v["unavailable"], true);
         assert!(v["brand"].is_null());
         assert_ne!(v["brand"], json!({}));
+    }
+
+    #[test]
+    fn vngfw_store_down_is_never_allow_all_success() {
+        let v = vngfw_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["policy"].is_null());
+        assert!(v["applied"].is_null());
+        assert_ne!(v["policy"]["default_action"], json!("allow"));
+    }
+
+    #[test]
+    fn auth_degraded_store_down_is_never_deny_success() {
+        let v = auth_degraded_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["code"], "auth_degraded");
     }
 
     #[test]

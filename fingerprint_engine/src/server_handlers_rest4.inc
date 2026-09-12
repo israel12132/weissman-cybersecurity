@@ -845,7 +845,13 @@ async fn api_poe_scan_run(
     }
     let job_id = uuid::Uuid::new_v4().to_string();
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::poe_job_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     let exists: bool = match sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)")
         .bind(client_id)
@@ -856,11 +862,9 @@ async fn api_poe_scan_run(
         Err(e) => {
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({
-                    "ok": false,
-                    "unavailable": true,
-                    "detail": scrub_internal_error(&e),
-                })),
+                Json(crate::http_unavailable::poe_job_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
             )
                 .into_response();
         }
@@ -881,9 +885,23 @@ async fn api_poe_scan_run(
     .is_err()
     {
         let _ = tx.rollback().await;
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "insert job failed"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::poe_job_unavailable_json(
+                "poe job insert failed",
+            )),
+        )
+            .into_response();
     }
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::poe_job_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     poe_spawn_job(state, auth, client_id, target, job_id.clone());
     (StatusCode::ACCEPTED, Json(json!({ "job_id": job_id }))).into_response()
 }

@@ -386,6 +386,42 @@ pub async fn graph_dlp_findings(target: &str, token: &str) -> Vec<Value> {
     out
 }
 
+fn google_tokeninfo_scope_finding(target: &str, body: &Value) -> Value {
+    let Some(scope_val) = body.get("scope") else {
+        return finding(
+            "casb_saas_posture",
+            "Google tokeninfo scope missing",
+            "medium",
+            "T1528",
+            "tokeninfo JSON omitted scope; scopes are not confirmed empty.",
+            target,
+        );
+    };
+    let Some(scope) = scope_val.as_str() else {
+        return finding(
+            "casb_saas_posture",
+            "Google tokeninfo scope unreadable",
+            "medium",
+            "T1528",
+            "tokeninfo scope was present but not a string. Scopes are not confirmed empty.",
+            target,
+        );
+    };
+    let aud = body.get("aud").and_then(Value::as_str).unwrap_or("");
+    finding(
+        "casb_saas_posture",
+        "Google OAuth token scopes inventoried",
+        if scope.contains("gmail") || scope.contains("drive") {
+            "medium"
+        } else {
+            "info"
+        },
+        "T1528",
+        &format!("tokeninfo aud={aud} scope={scope}"),
+        target,
+    )
+}
+
 pub async fn google_casb_findings(target: &str, token: &str) -> Vec<Value> {
     let client = match casb_http_client("casb_saas_posture", target) {
         Ok(c) => c,
@@ -400,20 +436,7 @@ pub async fn google_casb_findings(target: &str, token: &str) -> Vec<Value> {
     match resp {
         Ok(r) if r.status().is_success() => {
             if let Ok(body) = r.json::<Value>().await {
-                let scope = body.get("scope").and_then(Value::as_str).unwrap_or("");
-                let aud = body.get("aud").and_then(Value::as_str).unwrap_or("");
-                out.push(finding(
-                    "casb_saas_posture",
-                    "Google OAuth token scopes inventoried",
-                    if scope.contains("gmail") || scope.contains("drive") {
-                        "medium"
-                    } else {
-                        "info"
-                    },
-                    "T1528",
-                    &format!("tokeninfo aud={aud} scope={scope}"),
-                    target,
-                ));
+                out.push(google_tokeninfo_scope_finding(target, &body));
             } else {
                 out.push(finding(
                     "casb_saas_posture",
@@ -727,6 +750,16 @@ mod tests {
             .expect("store-down");
         assert!(f["title"].as_str().unwrap().contains("DLP"));
         assert!(!f["title"].as_str().unwrap().contains("CASB"));
+    }
+
+    #[test]
+    fn google_missing_scope_is_not_inventoried_empty() {
+        let f = google_tokeninfo_scope_finding("example.com", &json!({"aud": "app"}));
+        assert_eq!(f["severity"], "medium");
+        assert!(f["title"].as_str().unwrap().contains("scope missing"));
+        assert!(!f["title"].as_str().unwrap().contains("inventoried"));
+        let empty_ok = google_tokeninfo_scope_finding("example.com", &json!({"scope": ""}));
+        assert!(empty_ok["title"].as_str().unwrap().contains("inventoried"));
     }
 
     #[test]

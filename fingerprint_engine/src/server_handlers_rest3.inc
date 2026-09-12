@@ -32,7 +32,15 @@ async fn api_client_attack_surface_graph(
         }
     };
     let Some(run_id) = run_id else {
-        let _ = tx.commit().await;
+        if tx.commit().await.is_err() {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::asm_graph_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
         return (StatusCode::OK, Json(json!({ "nodes": [], "edges": [], "run_id": null, "truncated": false, "message": "No ASM graph yet." }))).into_response();
     };
     // A read failure here (RLS mismatch, lock/statement timeout) must not masquerade as an empty
@@ -89,7 +97,15 @@ async fn api_client_attack_surface_graph(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::asm_graph_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let mut nodes: Vec<Value> = Vec::new();
     for r in nodes_rows {
         let raw_finding: Option<String> = r.try_get("raw_finding").ok();
@@ -198,7 +214,15 @@ async fn api_first_mover_nerve(
         .ok()
         .flatten()
         .map(|d| d.to_rfc3339());
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::first_mover_nerve_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let body = json!({
         "certstream": crate::certstream_watcher::watcher_status_json(),
         "oast": {
@@ -273,7 +297,15 @@ async fn api_client_semantic_state_machine(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::semantic_logs_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let logs: Vec<Value> = rows
         .into_iter()
         .map(|r| {
@@ -339,7 +371,15 @@ async fn api_client_semantic_reasoning(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::semantic_reasoning_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let joined: String = rows
         .into_iter()
         .filter_map(|r| r.try_get::<String, _>("log_text").ok())
@@ -398,7 +438,15 @@ async fn api_system_configs_get(State(state): State<Arc<AppState>>, Extension(au
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::system_configs_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let out: Vec<Value> = rows
         .into_iter()
         .map(|r| {

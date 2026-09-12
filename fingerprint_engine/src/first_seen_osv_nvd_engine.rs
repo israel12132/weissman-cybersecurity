@@ -134,7 +134,9 @@ async fn load_sbom(
     .fetch_all(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+    tx.commit()
+        .await
+        .map_err(|_| "database unavailable".to_string())?;
     Ok(rows
         .into_iter()
         .filter_map(|r| {

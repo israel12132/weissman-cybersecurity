@@ -35,7 +35,13 @@ export default function ReportHistory() {
     setError('')
     try {
       const d = await apiFetch('/api/reports')
-      setRows(Array.isArray(d) ? d : Array.isArray(d?.reports) ? d.reports : [])
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || t(`${NS}.load_failed`))
+      }
+      if (!Array.isArray(d)) {
+        throw new Error(t(`${NS}.load_failed`))
+      }
+      setRows(d)
     } catch (e) {
       setError(e.message || t(`${NS}.load_failed`))
     } finally {

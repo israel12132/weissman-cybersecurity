@@ -7,21 +7,24 @@
 use serde_json::{json, Value};
 use sqlx::PgPool;
 
-pub async fn load_policy(pool: &PgPool, tenant_id: i64) -> Value {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return json!({ "rules": [] });
-    };
+pub async fn load_policy(pool: &PgPool, tenant_id: i64) -> Result<Value, &'static str> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "database unavailable")?;
     let raw: Option<String> = sqlx::query_scalar(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'vngfw_policy'",
     )
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    raw.and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| json!({ "rules": [], "default_action": "allow" }))
+    .map_err(|_| "database unavailable")?;
+    if tx.commit().await.is_err() {
+        return Err("database unavailable");
+    }
+    match raw {
+        None => Ok(json!({ "rules": [], "default_action": "allow" })),
+        Some(s) => serde_json::from_str(&s).map_err(|_| "vngfw policy JSON corrupt"),
+    }
 }
 
 pub async fn save_policy(pool: &PgPool, tenant_id: i64, policy: &Value) -> Result<(), String> {

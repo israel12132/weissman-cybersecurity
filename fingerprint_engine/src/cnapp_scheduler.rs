@@ -23,16 +23,18 @@ fn cron_enabled() -> bool {
     weissman_core::tls_policy::is_production_environment()
 }
 
-async fn enqueue_tenant(app_pool: &PgPool, tenant_id: i64) -> usize {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(app_pool, tenant_id).await else {
-        return 0;
-    };
+async fn enqueue_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<usize, &'static str> {
+    let mut tx = crate::db::begin_tenant_tx(app_pool, tenant_id)
+        .await
+        .map_err(|_| "database unavailable")?;
     let rows = sqlx::query("SELECT id, name, domains FROM clients ORDER BY id LIMIT 50")
         .fetch_all(&mut *tx)
         .await
-        .unwrap_or_default();
-    let _ = tx.commit().await;
-    let mut queued = 0usize;
+        .map_err(|_| "database unavailable")?;
+    if tx.commit().await.is_err() {
+        return Err("database unavailable");
+    }
+    let mut items: Vec<(i64, String)> = Vec::new();
     for r in rows {
         let id: i64 = r.try_get("id").unwrap_or(0);
         if id <= 0 {
@@ -50,48 +52,83 @@ async fn enqueue_tenant(app_pool: &PgPool, tenant_id: i64) -> usize {
         if target.trim().is_empty() {
             continue;
         }
-        let payload = json!({
-            "engine": "cnapp_continuous",
-            "target": target,
-            "client_id": id,
-            "trigger": "cnapp_scheduler",
-        });
-        match crate::async_jobs::enqueue(
-            app_pool,
-            tenant_id,
-            "command_center_engine",
-            payload,
-            None,
-        )
-        .await
-        {
+        items.push((id, target));
+    }
+    let eligible = items.len();
+    use futures::stream::{self, StreamExt};
+    let results: Vec<_> = stream::iter(items)
+        .map(|(id, target)| {
+            let pool = app_pool.clone();
+            async move {
+                let payload = json!({
+                    "engine": "cnapp_continuous",
+                    "target": target,
+                    "client_id": id,
+                    "trigger": "cnapp_scheduler",
+                });
+                let result = crate::async_jobs::enqueue(
+                    &pool,
+                    tenant_id,
+                    "command_center_engine",
+                    payload,
+                    None,
+                )
+                .await;
+                (id, result)
+            }
+        })
+        .buffer_unordered(8)
+        .collect()
+        .await;
+    let mut queued = 0usize;
+    let mut failed = 0usize;
+    for (id, result) in results {
+        match result {
             Ok(_) => queued += 1,
-            Err(e) => tracing::warn!(
-                target: "cnapp_scheduler",
-                tenant_id,
-                client_id = id,
-                error = %e,
-                "cnapp_continuous enqueue failed"
-            ),
+            Err(e) => {
+                failed += 1;
+                tracing::warn!(
+                    target: "cnapp_scheduler",
+                    tenant_id,
+                    client_id = id,
+                    error = %e,
+                    "cnapp_continuous enqueue failed"
+                );
+            }
         }
     }
-    queued
+    if eligible > 0 && queued == 0 && failed > 0 {
+        return Err("cnapp enqueue failed for every eligible client");
+    }
+    Ok(queued)
 }
 
 async fn tick(app_pool: &PgPool, auth_pool: &PgPool) {
-    let tenants: Vec<i64> = sqlx::query_scalar("SELECT id FROM tenants WHERE active = true")
+    let tenants: Vec<i64> = match sqlx::query_scalar("SELECT id FROM tenants WHERE active = true")
         .fetch_all(auth_pool)
         .await
-        .unwrap_or_default();
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(target: "cnapp_scheduler", error = %e, "active tenant list unavailable");
+            return;
+        }
+    };
     for tenant_id in tenants {
-        let n = enqueue_tenant(app_pool, tenant_id).await;
-        if n > 0 {
-            tracing::info!(
+        match enqueue_tenant(app_pool, tenant_id).await {
+            Ok(n) if n > 0 => tracing::info!(
                 target: "cnapp_scheduler",
                 tenant_id,
                 jobs = n,
                 "queued cnapp_continuous refresh"
-            );
+            ),
+            Ok(_) => {}
+            Err(detail) => tracing::error!(
+                target: "cnapp_scheduler",
+                tenant_id,
+                detail,
+                "cnapp refresh skipped"
+            ),
         }
     }
 }

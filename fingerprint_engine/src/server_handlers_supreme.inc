@@ -204,9 +204,19 @@ async fn api_vngfw_status(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
-    let policy = crate::vngfw_control::load_policy(&state.app_pool, auth.tenant_id).await;
+    let policy = match crate::vngfw_control::load_policy(&state.app_pool, auth.tenant_id).await {
+        Ok(p) => p,
+        Err(detail) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::vngfw_unavailable_json(detail)),
+            )
+                .into_response();
+        }
+    };
     let mut status = crate::vngfw_control::dataplane_status().await;
     if let Some(obj) = status.as_object_mut() {
+        obj.insert("ok".into(), json!(true));
         obj.insert("policy".into(), policy.clone());
         obj.insert(
             "nft_preview".into(),
@@ -230,6 +240,11 @@ async fn api_vngfw_policy_put(
             Json(json!({"ok": true, "nft_preview": crate::vngfw_control::policy_to_nft(&body)})),
         )
             .into_response(),
+        Err(e) if e == "database unavailable" => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::vngfw_unavailable_json(e.as_str())),
+        )
+            .into_response(),
         Err(e) => (
             StatusCode::BAD_REQUEST,
             Json(json!({"ok": false, "detail": e})),
@@ -245,7 +260,16 @@ async fn api_vngfw_apply(
     if let Err(r) = crate::rbac::require_admin(&auth) {
         return r;
     }
-    let policy = crate::vngfw_control::load_policy(&state.app_pool, auth.tenant_id).await;
+    let policy = match crate::vngfw_control::load_policy(&state.app_pool, auth.tenant_id).await {
+        Ok(p) => p,
+        Err(detail) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::vngfw_unavailable_json(detail)),
+            )
+                .into_response();
+        }
+    };
     match crate::vngfw_control::apply_nft(&policy).await {
         Ok(detail) => (
             StatusCode::OK,
@@ -336,7 +360,7 @@ async fn api_itdr_auth_events_list(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"ok": false, "unavailable": true, "events": []})),
+            Json(json!({"ok": false, "unavailable": true, "events": [], "detail": "database unavailable"})),
         )
             .into_response();
     };
@@ -352,10 +376,7 @@ async fn api_itdr_auth_events_list(
     .fetch_all(&mut *tx)
     .await
     {
-        Ok(r) => {
-            let _ = tx.commit().await;
-            r
-        }
+        Ok(r) => r,
         Err(e) => {
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
@@ -368,6 +389,18 @@ async fn api_itdr_auth_events_list(
             )
                 .into_response();
         }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "ok": false,
+                "unavailable": true,
+                "events": [],
+                "detail": "database unavailable",
+            })),
+        )
+            .into_response();
     };
     let events: Vec<Value> = rows
         .iter()
@@ -647,7 +680,15 @@ async fn api_heal_stats_tenant(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_stats_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let Some(agg) = agg else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -712,7 +753,15 @@ async fn api_soar_index(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::soar_executions_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let executions: Vec<Value> = rows
         .into_iter()
         .map(|r| {
@@ -774,7 +823,15 @@ async fn api_agents_isolate_status(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::isolate_agents_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let agents: Vec<Value> = rows
         .into_iter()
         .map(|r| {

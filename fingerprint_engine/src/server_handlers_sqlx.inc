@@ -1054,7 +1054,15 @@ async fn api_intel_suppression_delete(
             (StatusCode::OK, Json(json!({"ok": true, "deleted": id}))).into_response()
         }
         Ok(_) => {
-            let _ = tx.commit().await;
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::intel_suppressions_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
             (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "suppression not found"}))).into_response()
         }
         Err(e) => {
@@ -2071,10 +2079,10 @@ async fn resolve_probe_target_from_client(
     pool: &PgPool,
     tenant_id: i64,
     client_id: i64,
-) -> Option<String> {
-    let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await else {
-        return None;
-    };
+) -> Result<Option<String>, &'static str> {
+    let mut tx = db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "database unavailable")?;
     let domains: Option<String> = sqlx::query_scalar(
         "SELECT domains FROM clients WHERE tenant_id = $1 AND id = $2",
     )
@@ -2082,16 +2090,21 @@ async fn resolve_probe_target_from_client(
     .bind(client_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    let raw = domains?;
-    let parsed = serde_json::from_str::<Vec<String>>(&raw).ok()?;
-    let first = parsed.into_iter().find(|s| !s.trim().is_empty())?;
+    .map_err(|_| "database unavailable")?;
+    if tx.commit().await.is_err() {
+        return Err("database unavailable");
+    }
+    let Some(raw) = domains else {
+        return Ok(None);
+    };
+    let parsed = serde_json::from_str::<Vec<String>>(&raw).unwrap_or_default();
+    let Some(first) = parsed.into_iter().find(|s| !s.trim().is_empty()) else {
+        return Ok(None);
+    };
     if first.starts_with("http://") || first.starts_with("https://") {
-        Some(first)
+        Ok(Some(first))
     } else {
-        Some(format!("https://{}", first))
+        Ok(Some(format!("https://{}", first)))
     }
 }
 
@@ -2122,11 +2135,18 @@ async fn api_top_tier_health_probe_start(
         t
     } else if let Some(cid) = body.client_id {
         match resolve_probe_target_from_client(state.app_pool.as_ref(), auth.tenant_id, cid).await {
-            Some(t) => t,
-            None => {
+            Ok(Some(t)) => t,
+            Ok(None) => {
                 return (
                     StatusCode::BAD_REQUEST,
                     Json(json!({"detail": "target required (or provide client_id with at least one domain)"})),
+                )
+                    .into_response();
+            }
+            Err(detail) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(json!({"ok": false, "unavailable": true, "detail": detail})),
                 )
                     .into_response();
             }
@@ -2298,7 +2318,7 @@ async fn collect_top_tier_history_json(
     .await
     .map_err(|e| format!("findings query: {}", e))?;
 
-    let _ = tx.commit().await;
+    tx.commit().await.map_err(|e| format!("commit: {}", e))?;
 
     let findings: Vec<Value> = finding_rows
         .into_iter()
@@ -2467,7 +2487,7 @@ async fn collect_engine_history_json(
     .await
     .map_err(|e| format!("findings query: {}", e))?;
 
-    let _ = tx.commit().await;
+    tx.commit().await.map_err(|e| format!("commit: {}", e))?;
 
     let findings: Vec<Value> = finding_rows
         .into_iter()
@@ -2500,8 +2520,8 @@ async fn api_engine_history_summary(
     match collect_engine_history_summary_json(&state, auth.tenant_id).await {
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
         Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": e})),
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "unavailable": true, "detail": e})),
         )
             .into_response(),
     }
@@ -2545,7 +2565,7 @@ async fn collect_engine_history_summary_json(
     .await
     .map_err(|e| format!("history summary query: {}", e))?;
 
-    let _ = tx.commit().await;
+    tx.commit().await.map_err(|e| format!("commit: {}", e))?;
 
     let mut engines = serde_json::Map::new();
     for r in rows {
@@ -2607,8 +2627,8 @@ async fn api_engine_history(
     match collect_engine_history_json(&state, auth.tenant_id, engine_id.as_str(), limit).await {
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
         Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"detail": e})),
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "unavailable": true, "detail": e})),
         )
             .into_response(),
     }
@@ -2633,8 +2653,8 @@ async fn api_engine_export(
         Ok(v) => v,
         Err(e) => {
             return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"detail": e})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false, "unavailable": true, "detail": e})),
             )
                 .into_response();
         }
@@ -2685,8 +2705,8 @@ async fn api_top_tier_engine_history(
     match collect_top_tier_history_json(&state, auth.tenant_id, engine_id.as_str(), limit).await {
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
         Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"detail": e})),
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "unavailable": true, "detail": e})),
         )
             .into_response(),
     }
@@ -2711,8 +2731,8 @@ async fn api_top_tier_engine_export(
         Ok(v) => v,
         Err(e) => {
             return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"detail": e})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false, "unavailable": true, "detail": e})),
             )
                 .into_response();
         }
@@ -2795,10 +2815,16 @@ async fn api_reports(State(state): State<Arc<AppState>>, Extension(auth): Extens
 /// presence/absence of the expensive verify is a user-enumeration oracle — the
 /// exact timing side-channel this platform's own engine is built to detect.
 /// Computed once on first use.
-fn login_timing_equalizer_hash() -> &'static str {
+fn login_timing_equalizer_hash() -> Option<&'static str> {
     use std::sync::OnceLock;
     static H: OnceLock<String> = OnceLock::new();
-    H.get_or_init(|| bcrypt::hash("weissman-login-timing-equalizer", 12).unwrap_or_default())
+    if let Some(existing) = H.get() {
+        return Some(existing.as_str());
+    }
+    let hashed = bcrypt::hash("weissman-login-timing-equalizer", 12)
+        .ok()
+        .filter(|s| !s.is_empty())?;
+    Some(H.get_or_init(|| hashed).as_str())
 }
 
 /// Resolve which tenant a login belongs to.
@@ -2811,28 +2837,27 @@ async fn resolve_login_tenant_id(
     app_pool: &PgPool,
     slug: &str,
     email: &str,
-) -> Option<i64> {
-    let lookup_by_slug = |pool: &PgPool, slug: &str| {
-        let slug = slug.to_string();
-        let pool = pool.clone();
-        async move {
-            sqlx::query_scalar::<_, i64>(
-                "SELECT id FROM tenants WHERE slug = $1 AND active = true LIMIT 1",
-            )
-            .bind(slug)
-            .fetch_optional(&pool)
-            .await
-            .ok()
-            .flatten()
-        }
-    };
-    if !slug.is_empty() {
-        if let Some(id) = lookup_by_slug(auth_pool, slug).await {
-            return Some(id);
-        }
-        return lookup_by_slug(app_pool, slug).await;
+) -> Result<Option<i64>, &'static str> {
+    async fn lookup_by_slug(pool: &PgPool, slug: &str) -> Result<Option<i64>, &'static str> {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT id FROM tenants WHERE slug = $1 AND active = true LIMIT 1",
+        )
+        .bind(slug)
+        .fetch_optional(pool)
+        .await
+        .map_err(|_| "database unavailable")
     }
-    let rows = sqlx::query(
+    if !slug.is_empty() {
+        return match lookup_by_slug(auth_pool, slug).await {
+            Ok(Some(id)) => Ok(Some(id)),
+            Ok(None) => lookup_by_slug(app_pool, slug).await,
+            Err(_) => match lookup_by_slug(app_pool, slug).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+        };
+    }
+    let auth_rows = sqlx::query(
         r#"SELECT u.tenant_id, t.slug
            FROM auth.v_user_lookup u
            JOIN tenants t ON t.id = u.tenant_id AND t.active = true
@@ -2843,35 +2868,35 @@ async fn resolve_login_tenant_id(
     .bind(email)
     .fetch_all(auth_pool)
     .await;
-    let rows = match rows {
+    let app_lookup = sqlx::query(
+        r#"SELECT u.tenant_id, t.slug
+           FROM users u
+           JOIN tenants t ON t.id = u.tenant_id AND t.active = true
+           WHERE lower(trim(u.email)) = lower(trim($1)) AND u.is_active = true
+           ORDER BY CASE WHEN t.slug = 'default' THEN 0 ELSE 1 END, u.tenant_id
+           LIMIT 8"#,
+    )
+    .bind(email)
+    .fetch_all(app_pool);
+    let rows = match auth_rows {
         Ok(r) if !r.is_empty() => r,
-        _ => sqlx::query(
-            r#"SELECT u.tenant_id, t.slug
-               FROM users u
-               JOIN tenants t ON t.id = u.tenant_id AND t.active = true
-               WHERE lower(trim(u.email)) = lower(trim($1)) AND u.is_active = true
-               ORDER BY CASE WHEN t.slug = 'default' THEN 0 ELSE 1 END, u.tenant_id
-               LIMIT 8"#,
-        )
-        .bind(email)
-        .fetch_all(app_pool)
-        .await
-        .unwrap_or_default(),
+        Ok(_) => app_lookup.await.map_err(|_| "database unavailable")?,
+        Err(_) => app_lookup.await.map_err(|_| "database unavailable")?,
     };
     if rows.is_empty() {
-        return None;
+        return Ok(None);
     }
     if rows.len() == 1 {
-        return rows[0].try_get::<i64, _>("tenant_id").ok();
+        return Ok(rows[0].try_get::<i64, _>("tenant_id").ok());
     }
-    rows.iter().find_map(|r| {
+    Ok(rows.iter().find_map(|r| {
         let slug = r.try_get::<String, _>("slug").ok()?;
         if slug == "default" {
             r.try_get::<i64, _>("tenant_id").ok()
         } else {
             None
         }
-    })
+    }))
 }
 
 async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): ConnectInfo<SocketAddr>, headers: HeaderMap, body: axum::extract::Json<LoginBody>) -> Response {
@@ -2879,21 +2904,39 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
     let email = body.email.trim();
     let password = body.password.as_str();
     let slug = body.tenant_slug.trim();
-    let Some(tenant_key) = resolve_login_tenant_id(
+    let tenant_key = match resolve_login_tenant_id(
         state.auth_pool.as_ref(),
         state.app_pool.as_ref(),
         slug,
         email,
     )
     .await
-    else {
-        // Same generic 401 as a bad password — do not leak whether the email exists.
-        let _ = bcrypt::verify(password, login_timing_equalizer_hash());
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"ok": false, "detail": "Invalid email or password"})),
-        )
-            .into_response();
+    {
+        Ok(Some(id)) => id,
+        Ok(None) => {
+            let Some(eq) = login_timing_equalizer_hash() else {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "Authentication service temporarily unavailable",
+                    )),
+                )
+                    .into_response();
+            };
+            let _ = bcrypt::verify(password, eq);
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({"ok": false, "detail": "Invalid email or password"})),
+            )
+                .into_response();
+        }
+        Err(detail) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::auth_degraded_unavailable_json(detail)),
+            )
+                .into_response();
+        }
     };
     if let Some(retry_after) = match crate::http::check_lockout_status(tenant_key, email).await {
         crate::http::LockoutStatus::Locked(secs) => Some(secs),
@@ -2937,15 +2980,13 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, tenant_key).await else {
                 return (
                     StatusCode::SERVICE_UNAVAILABLE,
-                    Json(json!({
-                        "ok": false,
-                        "detail": "Authentication service temporarily unavailable",
-                        "code": "auth_degraded"
-                    })),
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "Authentication service temporarily unavailable",
+                    )),
                 )
                     .into_response();
             };
-            let fallback = sqlx::query(
+            let fallback = match sqlx::query(
                 r#"SELECT u.id, COALESCE(u.password_hash,'') AS password_hash, u.tenant_id,
                           COALESCE(NULLIF(trim(u.role), ''), 'viewer') AS role,
                           COALESCE(u.is_superadmin, false) AS is_superadmin,
@@ -2958,9 +2999,27 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             .bind(email)
             .fetch_optional(&mut *tx)
             .await
-            .ok()
-            .flatten();
-            let _ = tx.commit().await;
+            {
+                Ok(v) => v,
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                            "Authentication service temporarily unavailable",
+                        )),
+                    )
+                        .into_response();
+                }
+            };
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "Authentication service temporarily unavailable",
+                    )),
+                )
+                    .into_response();
+            }
             (fallback, true)
         }
     };
@@ -2979,7 +3038,16 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
         None => {
             // Constant-time: burn one bcrypt verify so a non-existent email costs
             // the same as a real one (no user-enumeration by response timing).
-            let _ = bcrypt::verify(password, login_timing_equalizer_hash());
+            let Some(eq) = login_timing_equalizer_hash() else {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "Authentication service temporarily unavailable",
+                    )),
+                )
+                    .into_response();
+            };
+            let _ = bcrypt::verify(password, eq);
             crate::audit_log::record_login_failure_audit(
                 state.app_pool.as_ref(),
                 tenant_key,
@@ -2995,7 +3063,16 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
     if hash.is_empty() {
         // Constant-time equalizer (see above): an account with no stored hash must
         // not be distinguishable from a real one by timing either.
-        let _ = bcrypt::verify(password, login_timing_equalizer_hash());
+        let Some(eq) = login_timing_equalizer_hash() else {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                    "Authentication service temporarily unavailable",
+                )),
+            )
+                .into_response();
+        };
+        let _ = bcrypt::verify(password, eq);
         crate::audit_log::record_login_failure_audit(
             state.app_pool.as_ref(),
             tenant_key,
@@ -3030,11 +3107,9 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
                 );
                 return (
                     StatusCode::SERVICE_UNAVAILABLE,
-                    Json(json!({
-                        "ok": false,
-                        "detail": "Authentication service temporarily unavailable; cannot verify MFA status",
-                        "code": "auth_degraded"
-                    })),
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "Authentication service temporarily unavailable; cannot verify MFA status",
+                    )),
                 )
                     .into_response();
             }
@@ -3044,18 +3119,44 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             // /api/auth/mfa/verify (no shortcut even if mfa_required=false).
             let tenant_requires_mfa = match db::begin_tenant_tx(&state.app_pool, tenant_id).await {
                 Ok(mut tx) => {
-                    let v: Option<String> = sqlx::query_scalar(
+                    let v = match sqlx::query_scalar::<_, String>(
                         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'mfa_required'",
                     )
                     .bind(tenant_id)
                     .fetch_optional(&mut *tx)
                     .await
-                    .ok()
-                    .flatten();
-                    let _ = tx.commit().await;
+                    {
+                        Ok(v) => v,
+                        Err(_) => {
+                            return (
+                                StatusCode::SERVICE_UNAVAILABLE,
+                                Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                                    "Authentication service temporarily unavailable; cannot verify MFA policy",
+                                )),
+                            )
+                                .into_response();
+                        }
+                    };
+                    if tx.commit().await.is_err() {
+                        return (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                                "Authentication service temporarily unavailable; cannot verify MFA policy",
+                            )),
+                        )
+                            .into_response();
+                    }
                     matches!(v.as_deref().map(str::trim), Some("true") | Some("1") | Some("yes"))
                 }
-                Err(_) => false,
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                            "Authentication service temporarily unavailable; cannot verify MFA policy",
+                        )),
+                    )
+                        .into_response();
+                }
             };
             if crate::client_isolation::is_client_role(&role) && assigned_client_id.is_none() {
                 tracing::error!(
