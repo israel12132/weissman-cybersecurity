@@ -113,6 +113,7 @@ export const ROUTE_EVIDENCE = {
   '/intel-map': 'pages.intelMap.evidence_notice',
   '/ai-arena': 'components.tools.aiRedteamArena.evidence_notice',
   '/timing-profiler': 'components.tools.quantumTimingProfiler.evidence_notice',
+  '/dominion': 'pages.dominionBoardPack.evidence_notice',
 }
 
 /** Longest-prefix-first dynamic routes → i18n key. */

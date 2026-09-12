@@ -804,5 +804,9 @@ export const EXPLICIT_PARAM_DEFS = {
   first_seen_osv_nvd: [
     { key: 'intensity', label: 'Scan Intensity', type: 'select', options: ['light', 'normal', 'aggressive'], defaultVal: 'normal' },
   ],
+  dominion_fusion: [
+    { key: 'stealth_mode', label: 'Stealth Mode', type: 'select', options: ['off', 'low', 'high'], defaultVal: 'off' },
+    { key: 'max_findings', label: 'Max Findings', type: 'number', placeholder: '50', defaultVal: '50', min: 1, max: 500 },
+  ],
 }
 

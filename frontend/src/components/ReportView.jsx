@@ -2,11 +2,11 @@
  * Board-ready Report view for a client: Executive Summary + Cryptographic Proof of Integrity.
  * Fetches live from /api/clients/:id, /api/clients/:id/report/crypto-proof. No mock data.
  */
-import { useState, useEffect } from 'react'
-import { useParams } from 'react-router'
+import { useState, useEffect, useCallback } from 'react'
+import { Link, useParams } from 'react-router'
 import { useTranslation, Trans } from 'react-i18next'
 import { apiFetch } from '../utils/apiFetch'
-import { apiUrl } from '../lib/apiBase'
+import { downloadAuthenticated } from '../lib/authenticatedDownload'
 import StandaloneLabShell from './ui/StandaloneLabShell'
 
 export default function ReportView() {
@@ -17,6 +17,7 @@ export default function ReportView() {
   const [cryptoProof, setCryptoProof] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [downloading, setDownloading] = useState('')
 
   useEffect(() => {
     if (!clientId) return
@@ -34,6 +35,28 @@ export default function ReportView() {
       .catch((e) => setError(e?.message || t('components.reportView.load_failed')))
       .finally(() => setLoading(false))
   }, [clientId, t])
+
+  const download = useCallback(
+    async (kind) => {
+      if (!clientId) return
+      const path =
+        kind === 'xlsx'
+          ? `/api/clients/${clientId}/report/xlsx`
+          : `/api/clients/${clientId}/report/pdf`
+      const fallbackName =
+        kind === 'xlsx' ? `Weissman_Dominion_${clientId}.xlsx` : `Weissman_report_${clientId}.pdf`
+      setDownloading(kind)
+      try {
+        await downloadAuthenticated(path, { fallbackName })
+      } catch (e) {
+        if (e?.name === 'AbortError') return
+        setError(e?.message || t('components.reportView.download_failed'))
+      } finally {
+        setDownloading('')
+      }
+    },
+    [clientId, t],
+  )
 
   if (loading) {
     return (
@@ -59,26 +82,28 @@ export default function ReportView() {
       maxWidth="max-w-4xl"
       actions={(
         <div className="flex items-center gap-3 flex-wrap">
-          <a
-            href={`/command-center/dominion`}
+          <Link
+            to={`/dominion?client=${encodeURIComponent(clientId)}`}
             className="text-sm text-amber-300 hover:underline"
           >
             {t('components.reportView.open_dominion')}
-          </a>
-          <a
-            href={apiUrl(`/api/clients/${clientId}/report/pdf`)}
-            download
-            className="text-sm text-cyan-400 hover:underline"
+          </Link>
+          <button
+            type="button"
+            onClick={() => download('pdf')}
+            disabled={!!downloading}
+            className="text-sm text-cyan-400 hover:underline disabled:opacity-50"
           >
-            {t('components.reportView.download_pdf')}
-          </a>
-          <a
-            href={apiUrl(`/api/clients/${clientId}/report/xlsx`)}
-            download
-            className="text-sm text-emerald-300 hover:underline"
+            {downloading === 'pdf' ? t('components.reportView.downloading') : t('components.reportView.download_pdf')}
+          </button>
+          <button
+            type="button"
+            onClick={() => download('xlsx')}
+            disabled={!!downloading}
+            className="text-sm text-emerald-300 hover:underline disabled:opacity-50"
           >
-            {t('components.reportView.download_xlsx')}
-          </a>
+            {downloading === 'xlsx' ? t('components.reportView.downloading') : t('components.reportView.download_xlsx')}
+          </button>
         </div>
       )}
     >

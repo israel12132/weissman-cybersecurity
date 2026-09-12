@@ -6,6 +6,7 @@ describe('DominionBoardPack helpers', () => {
     expect(isLeakFinding({ source: 'darkweb_intel' })).toBe(true)
     expect(isLeakFinding({ source: 'jwt_attack' })).toBe(false)
     expect(isLeakFinding({ type: 'leak_hunter' })).toBe(true)
+    expect(isLeakFinding({ osint_source: 'urlhaus' })).toBe(true)
   })
 
   it('filters by title/source/severity without fabricating rows', () => {
