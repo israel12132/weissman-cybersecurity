@@ -32,6 +32,16 @@ describe('AutoHealTab', () => {
     expect(screen.queryByText('components.cockpitTabs.autoHeal.noRequests')).toBeNull()
   })
 
+  it('surfaces truncated heal history instead of a complete inventory', async () => {
+    apiFetch.mockResolvedValue({
+      requests: [{ id: 1, finding_id: 'CVE-1', verification_status: 'verified' }],
+      truncated: true,
+    })
+    render(<AutoHealTab />)
+    expect(await screen.findByTestId('auto-heal-truncated')).toBeTruthy()
+    expect(screen.queryByTestId('auto-heal-unavailable')).toBeNull()
+  })
+
   it('does not look idle when auto-heal trigger is refused', async () => {
     apiFetch.mockImplementation((url, opts) => {
       if (opts?.method === 'POST') {

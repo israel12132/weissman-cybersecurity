@@ -25,21 +25,25 @@ export default function IdentityMatrixTab() {
   const [submitting, setSubmitting] = useState(false)
   const [polling, setPolling] = useState(false)
   const [harvestAlert, setHarvestAlert] = useState(false)
+  const [listTruncated, setListTruncated] = useState(false)
   const clientIdRef = useRef(selectedClientId)
   clientIdRef.current = selectedClientId
 
-  const fetchContexts = useCallback(async () => {
+  const fetchContexts = useCallback(async (requestInit = {}) => {
     if (!selectedClientId) return []
-    const d = await apiFetch(`/api/clients/${selectedClientId}/identity-contexts`)
+    const d = await apiFetch(`/api/clients/${selectedClientId}/identity-contexts`, requestInit)
     if (d?.ok === false || d?.unavailable) {
       throw new Error(d.detail || t(`${IM}.unavailable`))
+    }
+    if (!requestInit?.signal?.aborted) {
+      setListTruncated(Boolean(d.truncated))
     }
     return d.contexts || []
   }, [selectedClientId])
 
-  const fetchEvents = useCallback(async () => {
+  const fetchEvents = useCallback(async (requestInit = {}) => {
     if (!selectedClientId) return []
-    const d = await apiFetch(`/api/clients/${selectedClientId}/privilege-escalation`)
+    const d = await apiFetch(`/api/clients/${selectedClientId}/privilege-escalation`, requestInit)
     if (d?.ok === false || d?.unavailable) {
       throw new Error(d.detail || t(`${IM}.unavailable`))
     }
@@ -51,27 +55,33 @@ export default function IdentityMatrixTab() {
       setContexts([])
       setEvents([])
       setLoadError(null)
+      setListTruncated(false)
       setLoading(false)
       return
     }
-    let cancelled = false
+    const ac = new AbortController()
     setContexts([])
     setEvents([])
+    setListTruncated(false)
     setLoading(true)
     setLoadError(null)
-    Promise.all([fetchContexts(), fetchEvents()])
+    Promise.all([
+      fetchContexts({ signal: ac.signal }),
+      fetchEvents({ signal: ac.signal }),
+    ])
       .then(([c, e]) => {
-        if (cancelled) return
+        if (ac.signal.aborted) return
         setContexts(c)
         setEvents(e)
       })
       .catch((e) => {
-        if (!cancelled) setLoadError(e?.message || t(`${IM}.unavailable`))
+        if (ac.signal.aborted || e?.name === 'AbortError') return
+        setLoadError(e?.message || t(`${IM}.unavailable`))
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!ac.signal.aborted) setLoading(false)
       })
-    return () => { cancelled = true }
+    return () => ac.abort()
   }, [selectedClientId, fetchContexts, fetchEvents])
 
   useVisiblePolling(
@@ -182,7 +192,9 @@ export default function IdentityMatrixTab() {
         ),
       }),
     ],
-    [t, handleDelete],
+    // i18n `t` identity churn remounts DataTable column defs (vitest OOM family).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [handleDelete],
   )
 
   if (!selectedClientId) {
@@ -226,6 +238,15 @@ export default function IdentityMatrixTab() {
           className="text-sm text-amber-200/90"
         >
           {t(`${IM}.unavailable`)}
+        </p>
+      )}
+      {!loadError && listTruncated && (
+        <p
+          data-testid="identity-matrix-truncated"
+          role="status"
+          className="text-sm text-amber-200/80"
+        >
+          {t(`${IM}.truncated`)}
         </p>
       )}
       <div className="flex flex-wrap items-center gap-4">

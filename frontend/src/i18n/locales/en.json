@@ -6309,6 +6309,7 @@
         "error": "Failed to load assets",
         "empty": "No assets discovered",
         "unavailable": "Client or asset-graph API unavailable — empty is not confirmed.",
+        "truncated": "Showing a subset of the live asset graph — the full surface is larger.",
         "title": "Asset Grid"
       },
       "killChainVisualizer": {
@@ -6516,6 +6517,7 @@
         },
         "empty_contexts": "Add at least two contexts (e.g. Admin, User) to run Shadow Replay. Run ENGAGE TARGET to trigger BOLA + identity tests.",
         "unavailable": "Identity surface API unavailable — empty is not confirmed.",
+        "truncated": "Showing 200 identity contexts — additional live contexts exist.",
         "delete": "Delete",
         "escalation": {
           "title": "Privilege Escalation (Kill Chain)",
@@ -6535,7 +6537,8 @@
         "loading_graph": "Loading graph…",
         "no_graph_data": "No graph data. Run scans (ASM, findings, identity contexts) then click Build.",
         "build_graph": "Build graph",
-        "unavailable": "Risk graph API unavailable — empty is not confirmed."
+        "unavailable": "Risk graph API unavailable — empty is not confirmed.",
+        "truncated": "Showing the first 500 nodes/edges — the live risk graph is larger."
       },
       "autoHeal": {
         "selectClient": "Select a client to use Auto-Heal.",
@@ -6560,6 +6563,7 @@
         "loading": "Loading…",
         "noRequests": "No heal requests yet. Trigger one above.",
         "unavailable": "Heal-requests API unavailable — empty is not confirmed.",
+        "truncated": "Showing the 200 newest heal requests — additional history exists.",
         "triggerFailed": "Auto-heal trigger failed — the request was not accepted.",
         "verifyPollFailed": "Sandbox verification polling failed — last status is not confirmed.",
         "verifyJobPrefix": "verify job: {{id}}",
@@ -7076,6 +7080,7 @@
         "run_id": "Run ID: {{id}}",
         "back_war_room": "← War Room",
         "load_failed": "Failed to load graph",
+        "truncated": "Showing the first 500 nodes/edges — the live attack-surface graph is larger.",
         "node_details": "Node details",
         "label_id": "ID:",
         "label_type": "Type:",

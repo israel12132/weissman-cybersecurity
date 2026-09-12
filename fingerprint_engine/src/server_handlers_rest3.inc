@@ -33,11 +33,11 @@ async fn api_client_attack_surface_graph(
     };
     let Some(run_id) = run_id else {
         let _ = tx.commit().await;
-        return (StatusCode::OK, Json(json!({ "nodes": [], "edges": [], "run_id": null, "message": "No ASM graph yet." }))).into_response();
+        return (StatusCode::OK, Json(json!({ "nodes": [], "edges": [], "run_id": null, "truncated": false, "message": "No ASM graph yet." }))).into_response();
     };
     // A read failure here (RLS mismatch, lock/statement timeout) must not masquerade as an empty
     // attack surface — the genuinely-empty case already returned above with an explicit message.
-    let nodes_rows = match sqlx::query("SELECT node_id, label, node_type, status, cname_target, raw_finding FROM asm_graph_nodes WHERE run_id = $1 AND client_id = $2 ORDER BY id")
+    let nodes_rows = match sqlx::query("SELECT node_id, label, node_type, status, cname_target, raw_finding FROM asm_graph_nodes WHERE run_id = $1 AND client_id = $2 ORDER BY id LIMIT 500")
         .bind(run_id)
         .bind(id)
         .fetch_all(&mut *tx)
@@ -55,7 +55,7 @@ async fn api_client_attack_surface_graph(
                 .into_response();
         }
     };
-    let edges_rows = match sqlx::query("SELECT from_id, to_id, edge_type FROM asm_graph_edges WHERE run_id = $1 AND client_id = $2 ORDER BY id")
+    let edges_rows = match sqlx::query("SELECT from_id, to_id, edge_type FROM asm_graph_edges WHERE run_id = $1 AND client_id = $2 ORDER BY id LIMIT 500")
         .bind(run_id)
         .bind(id)
         .fetch_all(&mut *tx)
@@ -123,7 +123,14 @@ async fn api_client_attack_surface_graph(
             })
         })
         .collect();
-    (StatusCode::OK, Json(json!({ "nodes": nodes, "edges": edges, "run_id": run_id, "vuln_findings": vuln_findings }))).into_response()
+    let truncated = nodes.len() >= 500 || edges.len() >= 500;
+    (StatusCode::OK, Json(json!({
+        "nodes": nodes,
+        "edges": edges,
+        "run_id": run_id,
+        "vuln_findings": vuln_findings,
+        "truncated": truncated,
+    }))).into_response()
 }
 
 async fn api_client_surface_diff(
@@ -354,7 +361,7 @@ async fn api_system_configs_get(State(state): State<Arc<AppState>>, Extension(au
         )
             .into_response();
     };
-    let rows = match sqlx::query("SELECT key, value, description FROM system_configs ORDER BY key")
+    let rows = match sqlx::query("SELECT key, value, description FROM system_configs ORDER BY key LIMIT 500")
         .fetch_all(&mut *tx)
         .await
     {
@@ -428,7 +435,7 @@ async fn api_system_configs_post(
         if value.trim() == "••••••••" {
             continue;
         }
-        if sqlx::query(
+        match sqlx::query(
             "INSERT INTO system_configs (tenant_id, key, value, description) VALUES ($1, $2, $3, '') ON CONFLICT (tenant_id, key) DO UPDATE SET value = EXCLUDED.value",
         )
         .bind(auth.tenant_id)
@@ -436,12 +443,28 @@ async fn api_system_configs_post(
         .bind(&value)
         .execute(&mut *tx)
         .await
-        .is_ok()
         {
-            updated += 1;
+            Ok(_) => updated += 1,
+            Err(e) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::system_configs_write_unavailable_json(
+                        scrub_internal_error(&e),
+                    )),
+                )
+                    .into_response();
+            }
         }
     }
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::system_configs_write_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     (StatusCode::OK, Json(json!({ "updated": updated }))).into_response()
 }
 

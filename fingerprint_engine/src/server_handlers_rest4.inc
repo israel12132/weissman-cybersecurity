@@ -1057,7 +1057,7 @@ async fn api_identity_contexts_list(
             .into_response();
     };
     let rows = match sqlx::query(
-        "SELECT id, role_name, privilege_order, token_type, created_at FROM identity_contexts WHERE client_id = $1 ORDER BY privilege_order, id",
+        "SELECT id, role_name, privilege_order, token_type, created_at FROM identity_contexts WHERE client_id = $1 ORDER BY privilege_order, id LIMIT 200",
     )
     .bind(id)
     .fetch_all(&mut *tx)
@@ -1088,7 +1088,8 @@ async fn api_identity_contexts_list(
         })
         .collect();
     // IdentityMatrixTab reads `d.contexts`; a bare array left the tab permanently empty.
-    (StatusCode::OK, Json(json!({"contexts": out}))).into_response()
+    let truncated = out.len() >= 200;
+    (StatusCode::OK, Json(json!({"contexts": out, "truncated": truncated}))).into_response()
 }
 
 async fn api_identity_contexts_add(
@@ -1344,7 +1345,7 @@ async fn api_risk_graph_get(
     let nodes = match sqlx::query(
         r#"SELECT id, graph_key, node_type, label, external_id, metadata, risk_score, is_choke_point,
                   internet_exposed, crown_jewel, asset_value
-           FROM risk_graph_nodes WHERE client_id = $1 ORDER BY id"#,
+           FROM risk_graph_nodes WHERE client_id = $1 ORDER BY id LIMIT 500"#,
     )
     .bind(id)
     .fetch_all(&mut *tx)
@@ -1362,7 +1363,7 @@ async fn api_risk_graph_get(
         }
     };
     let edges = match sqlx::query(
-        "SELECT id, from_node_id, to_node_id, edge_type, metadata FROM risk_graph_edges WHERE client_id = $1 ORDER BY id",
+        "SELECT id, from_node_id, to_node_id, edge_type, metadata FROM risk_graph_edges WHERE client_id = $1 ORDER BY id LIMIT 500",
     )
     .bind(id)
     .fetch_all(&mut *tx)
@@ -1410,7 +1411,8 @@ async fn api_risk_graph_get(
             })
         })
         .collect();
-    (StatusCode::OK, Json(json!({ "nodes": nodes_j, "edges": edges_j }))).into_response()
+    let truncated = nodes_j.len() >= 500 || edges_j.len() >= 500;
+    (StatusCode::OK, Json(json!({ "nodes": nodes_j, "edges": edges_j, "truncated": truncated }))).into_response()
 }
 
 async fn api_risk_graph_export(
@@ -2402,7 +2404,7 @@ async fn api_heal_requests_list(
         r#"SELECT id, finding_id, branch_name, pr_url, pr_number, diff_summary, verification_status, verification_job_id, created_at,
                   COALESCE(verdict,'') AS verdict, COALESCE(channel,'') AS channel, COALESCE(attempts,1) AS attempts,
                   (COALESCE(verification_receipt,'') <> '') AS attested
-           FROM heal_requests WHERE client_id = $1 ORDER BY id DESC"#,
+           FROM heal_requests WHERE client_id = $1 ORDER BY id DESC LIMIT 200"#,
     )
     .bind(id)
     .fetch_all(&mut *tx)
@@ -2440,7 +2442,8 @@ async fn api_heal_requests_list(
             })
         })
         .collect();
-    (StatusCode::OK, Json(json!({ "requests": out }))).into_response()
+    let truncated = out.len() >= 200;
+    (StatusCode::OK, Json(json!({ "requests": out, "truncated": truncated }))).into_response()
 }
 
 async fn api_deception_list(

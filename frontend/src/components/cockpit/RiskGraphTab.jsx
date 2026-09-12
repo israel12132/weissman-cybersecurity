@@ -77,12 +77,14 @@ export default function RiskGraphTab() {
   const [loading, setLoading] = useState(false)
   const [building, setBuilding] = useState(false)
   const [error, setError] = useState(null)
+  const [truncated, setTruncated] = useState(false)
 
-  const fetchGraph = useCallback(async ({ clear = false } = {}) => {
+  const fetchGraph = useCallback(async ({ clear = false, signal } = {}) => {
     if (!selectedClientId) {
       setNodes([])
       setEdges([])
       setError(null)
+      setTruncated(false)
       return
     }
     setLoading(true)
@@ -90,57 +92,36 @@ export default function RiskGraphTab() {
     if (clear) {
       setNodes([])
       setEdges([])
+      setTruncated(false)
     }
     try {
-      const d = await apiFetch(`/api/clients/${selectedClientId}/risk-graph`)
+      const d = await apiFetch(
+        `/api/clients/${selectedClientId}/risk-graph`,
+        signal ? { signal } : {},
+      )
+      if (signal?.aborted) return
       if (d?.ok === false || d?.unavailable) {
         throw new Error(d.detail || t('components.cockpitTabs.riskGraph.unavailable'))
       }
       const { nodes: n, edges: e } = layoutFromApi(d.nodes || [], d.edges || [])
       setNodes(n)
       setEdges(e)
+      setTruncated(Boolean(d.truncated))
     } catch (err) {
+      if (err?.name === 'AbortError' || signal?.aborted) return
       setError(err?.message || t('components.cockpitTabs.riskGraph.unavailable'))
+      setTruncated(false)
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, setNodes, setEdges])
 
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      if (!selectedClientId) {
-        setNodes([])
-        setEdges([])
-        setError(null)
-        return
-      }
-      setLoading(true)
-      setError(null)
-      setNodes([])
-      setEdges([])
-      try {
-        const d = await apiFetch(`/api/clients/${selectedClientId}/risk-graph`)
-        if (cancelled) return
-        if (d?.ok === false || d?.unavailable) {
-          throw new Error(d.detail || t('components.cockpitTabs.riskGraph.unavailable'))
-        }
-        const { nodes: n, edges: e } = layoutFromApi(d.nodes || [], d.edges || [])
-        if (cancelled) return
-        setNodes(n)
-        setEdges(e)
-      } catch (err) {
-        if (!cancelled) {
-          setError(err?.message || t('components.cockpitTabs.riskGraph.unavailable'))
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [selectedClientId, setNodes, setEdges])
+    const ac = new AbortController()
+    fetchGraph({ clear: true, signal: ac.signal })
+    return () => ac.abort()
+  }, [fetchGraph])
 
   const buildGraph = async () => {
     if (!selectedClientId) return
@@ -199,6 +180,15 @@ export default function RiskGraphTab() {
         >
           <AlertCircle className="w-4 h-4 shrink-0" />
           {t('components.cockpitTabs.riskGraph.unavailable')}
+        </div>
+      )}
+      {!error && truncated && (
+        <div
+          className="mb-4 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-sm"
+          data-testid="risk-graph-truncated"
+          role="status"
+        >
+          {t('components.cockpitTabs.riskGraph.truncated')}
         </div>
       )}
       <div className="flex-1 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 overflow-hidden min-h-[400px]">

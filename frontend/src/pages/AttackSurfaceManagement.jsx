@@ -681,7 +681,7 @@ export default function AttackSurfaceManagement() {
       showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedClientId, target, params, showToast, t])
+  }, [selectedClientId, target, params, showToast])
 
   const handleFirstMoverHunt = useCallback(async () => {
     if (!selectedClientId) { showToast('error', t('pages.attackSurfaceManagement.toast_select_client')); return }
@@ -704,7 +704,8 @@ export default function AttackSurfaceManagement() {
     } catch (e) {
       showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
     }
-  }, [selectedClientId, target, postScan, showToast, t])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClientId, target, postScan, showToast])
 
   const handleDeltaFusion = useCallback(async () => {
     if (!selectedClientId) { showToast('error', t('pages.attackSurfaceManagement.toast_select_client')); return }
@@ -728,7 +729,8 @@ export default function AttackSurfaceManagement() {
     } catch (e) {
       showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
     }
-  }, [selectedClientId, target, postScan, showToast, t])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClientId, target, postScan, showToast])
 
   const assetTypes = useMemo(() => {
     const s = new Set(issues.map((f) => f.asset).filter(Boolean))
@@ -758,7 +760,8 @@ export default function AttackSurfaceManagement() {
     a.click()
     URL.revokeObjectURL(url)
     showToast('info', t('pages.attackSurfaceManagement.toast_exported'))
-  }, [report, issues, target, showToast, t])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [report, issues, target, showToast])
 
   const statusBadge = {
     idle: { c: '#6b7280', t: t('pages.attackSurfaceManagement.status_idle') },

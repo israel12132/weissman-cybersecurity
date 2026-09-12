@@ -84,14 +84,14 @@ export default function ZeroDayRadar() {
               const line = e.probe
                 ? `Probe: ${e.item?.external_id ?? e.item?.title} → path=${e.probe?.path ?? '—'}`
                 : `Synthesizing AI Probe... (${e.item?.external_id ?? e.item?.title})`
-              setSynthesisLog((prev) => [...prev, line])
+              setSynthesisLog((prev) => [...prev, line].slice(-100))
             }
             if (e.type === 'scan_progress') {
               setScanProgress({ current: e.current ?? 0, total: e.total ?? 0 })
             }
             if (e.type === 'exposure' && e.finding) {
               setExposure(e.finding)
-              setSynthesisLog((prev) => [...prev, `ZERO-DAY EXPOSURE: ${e.finding?.title ?? e.finding?.cve_id}`])
+              setSynthesisLog((prev) => [...prev, `ZERO-DAY EXPOSURE: ${e.finding?.title ?? e.finding?.cve_id}`].slice(-100))
             }
           } catch (_) { /* best-effort; non-fatal */ }
         }
@@ -99,7 +99,7 @@ export default function ZeroDayRadar() {
         ws.onerror = () => setRunning(false)
       })
       .catch((err) => {
-        setSynthesisLog((prev) => [...prev, `Error: ${err?.message ?? 'Failed to start'}`])
+        setSynthesisLog((prev) => [...prev, `Error: ${err?.message ?? 'Failed to start'}`].slice(-100))
         setRunning(false)
       })
   }, [])

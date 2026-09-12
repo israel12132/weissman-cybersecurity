@@ -60,4 +60,23 @@ describe('IdentityMatrixTab → DataTable', () => {
     expect(screen.queryByText('components.cockpitTabs.identityMatrix.empty_contexts')).toBeNull()
     expect(screen.queryByText('components.cockpitTabs.identityMatrix.escalation.empty')).toBeNull()
   })
+
+  it('passes an AbortSignal on the initial identity load', async () => {
+    render(<IdentityMatrixTab />)
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled())
+    const ctxCall = apiFetch.mock.calls.find(([u]) => String(u).includes('/identity-contexts'))
+    expect(ctxCall?.[1]?.signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('surfaces truncated identity lists instead of a complete inventory', async () => {
+    apiFetch.mockImplementation((url) => {
+      if (String(url).includes('/identity-contexts')) {
+        return Promise.resolve({ contexts: CONTEXTS, truncated: true })
+      }
+      return Promise.resolve({ events: [] })
+    })
+    render(<IdentityMatrixTab />)
+    expect(await screen.findByTestId('identity-matrix-truncated')).toBeTruthy()
+    expect(screen.queryByTestId('identity-matrix-unavailable')).toBeNull()
+  })
 })

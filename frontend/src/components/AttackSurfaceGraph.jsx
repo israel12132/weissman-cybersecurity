@@ -75,10 +75,13 @@ function layoutNodes(apiNodes, apiEdges) {
   })
 
   ;(apiEdges || []).forEach(e => {
+    const source = e.source ?? e.from_id
+    const target = e.target ?? e.to_id
+    if (source == null || target == null || source === '' || target === '') return
     edges.push({
-      id: e.id || `e-${e.from_id}-${e.to_id}`,
-      source: e.from_id,
-      target: e.to_id,
+      id: e.id || `e-${source}-${target}`,
+      source: String(source),
+      target: String(target),
       type: 'smoothstep',
       markerEnd: { type: MarkerType.ArrowClosed },
       label: e.edge_type || 'CNAME',
@@ -123,17 +126,29 @@ export default function AttackSurfaceGraph() {
 
   useEffect(() => {
     if (!clientId) return
+    const ac = new AbortController()
     setLoading(true)
-    apiFetch(`/api/clients/${clientId}/attack-surface-graph`)
-      .then(data => {
+    setError('')
+    apiFetch(`/api/clients/${clientId}/attack-surface-graph`, { signal: ac.signal })
+      .then((data) => {
+        if (data?.ok === false || data?.unavailable) {
+          throw new Error(data.detail || t(`${NS}.load_failed`))
+        }
         setGraph(data)
         const { nodes: layoutN, edges: layoutE } = layoutNodes(data.nodes || [], data.edges || [])
         setNodes(layoutN)
         setEdges(layoutE)
       })
-      .catch(e => setError(e?.message || t(`${NS}.load_failed`)))
-      .finally(() => setLoading(false))
-  }, [clientId, setNodes, setEdges, t])
+      .catch((e) => {
+        if (e?.name === 'AbortError') return
+        setError(e?.message || t(`${NS}.load_failed`))
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setLoading(false)
+      })
+    return () => ac.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, setNodes, setEdges])
 
   const onNodeClick = useCallback((_, node) => {
     setSelectedNode(node?.data ? { ...node.data, id: node.id } : null)
@@ -156,6 +171,15 @@ export default function AttackSurfaceGraph() {
       {error && (
         <div className="mx-6 mt-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm">
           {error}
+        </div>
+      )}
+      {!error && graph.truncated && (
+        <div
+          className="mx-6 mt-4 p-3 rounded bg-amber-500/15 border border-amber-400/40 text-amber-200 text-sm"
+          data-testid="asm-graph-truncated"
+          role="status"
+        >
+          {t(`${NS}.truncated`)}
         </div>
       )}
       {graph.message && !graph.nodes?.length && (

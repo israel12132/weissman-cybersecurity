@@ -63,4 +63,15 @@ describe('RiskGraphTab', () => {
     expect(flow.getAttribute('data-edges')).toBe('1')
     expect(screen.queryByTestId('risk-graph-unavailable')).toBeNull()
   })
+
+  it('surfaces a truncated graph instead of a complete inventory', async () => {
+    apiFetch.mockResolvedValue({
+      nodes: [{ id: 1, label: 'a', node_type: 'asset' }],
+      edges: [],
+      truncated: true,
+    })
+    render(<RiskGraphTab />)
+    expect(await screen.findByTestId('risk-graph-truncated')).toBeTruthy()
+    expect(screen.queryByTestId('risk-graph-unavailable')).toBeNull()
+  })
 })

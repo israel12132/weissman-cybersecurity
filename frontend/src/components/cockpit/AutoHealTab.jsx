@@ -24,6 +24,7 @@ export default function AutoHealTab() {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState(null)
+  const [listTruncated, setListTruncated] = useState(false)
   const [actionError, setActionError] = useState(null)
   const [healing, setHealing] = useState(null)
   const [verifyJobId, setVerifyJobId] = useState(null)
@@ -43,6 +44,7 @@ export default function AutoHealTab() {
     if (!selectedClientId) {
       setRequests([])
       setLoadError(null)
+      setListTruncated(false)
       return
     }
     setLoading(true)
@@ -54,11 +56,14 @@ export default function AutoHealTab() {
       }
       const list = Array.isArray(d) ? d : (d.requests ?? [])
       setRequests(list)
+      setListTruncated(Boolean(d?.truncated))
     } catch (e) {
       setLoadError(e?.message || t(`${NS}.unavailable`))
+      setListTruncated(false)
     } finally {
       setLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId])
 
   useEffect(() => {
@@ -299,6 +304,16 @@ export default function AutoHealTab() {
         ) : requests.length === 0 ? (
           <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.noRequests`)}</div>
         ) : (
+          <>
+          {listTruncated && (
+            <p
+              className="px-4 py-2 text-xs text-amber-200/80 border-b border-white/10"
+              data-testid="auto-heal-truncated"
+              role="status"
+            >
+              {t(`${NS}.truncated`)}
+            </p>
+          )}
           <ul className="divide-y divide-white/10">
             {requests.map(req => (
               <li key={req.id} className="p-4 hover:bg-white/5">
@@ -341,6 +356,7 @@ export default function AutoHealTab() {
               </li>
             ))}
           </ul>
+          </>
         )}
       </div>
     </div>

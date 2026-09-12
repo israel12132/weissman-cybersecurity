@@ -24,6 +24,7 @@ export default function AssetHexGrid({ clientId: clientIdProp = null }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [clientsUnavailable, setClientsUnavailable] = useState(false)
+  const [truncated, setTruncated] = useState(false)
 
   useEffect(() => {
     if (clientIdProp) {
@@ -31,10 +32,9 @@ export default function AssetHexGrid({ clientId: clientIdProp = null }) {
       setClientsUnavailable(false)
       return
     }
-    let cancelled = false
-    apiFetch('/api/clients')
+    const ac = new AbortController()
+    apiFetch('/api/clients', { signal: ac.signal })
       .then((data) => {
-        if (cancelled) return
         if (data?.ok === false || data?.unavailable) {
           setClientsUnavailable(true)
           setClientId(null)
@@ -45,41 +45,43 @@ export default function AssetHexGrid({ clientId: clientIdProp = null }) {
         setClientsUnavailable(false)
         setClientId(first?.id ?? null)
       })
-      .catch(() => {
-        if (!cancelled) {
-          setClientsUnavailable(true)
-          setClientId(null)
-        }
+      .catch((e) => {
+        if (e?.name === 'AbortError') return
+        setClientsUnavailable(true)
+        setClientId(null)
       })
-    return () => { cancelled = true }
+    return () => ac.abort()
   }, [clientIdProp])
 
   useEffect(() => {
     if (!clientId) {
       setNodes([])
+      setTruncated(false)
       return
     }
-    let cancelled = false
+    const ac = new AbortController()
     setLoading(true)
     setError(null)
-    apiFetch(`/api/clients/${clientId}/attack-surface-graph`)
+    setTruncated(false)
+    apiFetch(`/api/clients/${clientId}/attack-surface-graph`, { signal: ac.signal })
       .then((data) => {
-        if (cancelled) return
         if (data?.ok === false || data?.unavailable) {
           throw new Error(data.detail || t(`${NS}.error`))
         }
         setNodes(Array.isArray(data?.nodes) ? data.nodes : [])
+        setTruncated(Boolean(data?.truncated) || (Array.isArray(data?.nodes) && data.nodes.length > 24))
       })
       .catch((e) => {
-        if (!cancelled) {
-          setNodes([])
-          setError(e.message || t(`${NS}.error`))
-        }
+        if (e?.name === 'AbortError') return
+        setNodes([])
+        setTruncated(false)
+        setError(e.message || t(`${NS}.error`))
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!ac.signal.aborted) setLoading(false)
       })
-    return () => { cancelled = true }
+    return () => ac.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId])
 
   return (
@@ -108,6 +110,16 @@ export default function AssetHexGrid({ clientId: clientIdProp = null }) {
 
       {clientId && !loading && error && (
         <p className="text-[10px] text-rose-400/80 font-mono">{t(`${NS}.error`)}</p>
+      )}
+
+      {clientId && !loading && !error && truncated && (
+        <p
+          className="text-[10px] text-amber-300/80 font-mono"
+          data-testid="asset-hex-truncated"
+          role="status"
+        >
+          {t(`${NS}.truncated`)}
+        </p>
       )}
 
       {clientId && !loading && !error && nodes.length === 0 && (

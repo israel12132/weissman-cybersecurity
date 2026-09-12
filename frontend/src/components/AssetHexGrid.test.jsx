@@ -24,4 +24,18 @@ describe('AssetHexGrid', () => {
     expect(await screen.findByTestId('asset-hex-clients-unavailable')).toBeTruthy()
     expect(screen.queryByText('components.intelWidgets.assetHexGrid.select_client')).toBeNull()
   })
+
+  it('surfaces a truncated asset graph instead of a complete inventory', async () => {
+    apiFetch.mockImplementation((url) => {
+      if (String(url) === '/api/clients') {
+        return Promise.resolve([{ id: 9 }])
+      }
+      return Promise.resolve({
+        nodes: [{ id: 'n1', label: 'www', status: 'exposed' }],
+        truncated: true,
+      })
+    })
+    render(<AssetHexGrid />)
+    expect(await screen.findByTestId('asset-hex-truncated')).toBeTruthy()
+  })
 })

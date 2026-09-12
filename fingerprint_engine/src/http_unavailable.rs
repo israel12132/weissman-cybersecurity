@@ -455,6 +455,7 @@ mod tests {
         assert_eq!(v["unavailable"], true);
         assert_eq!(v["nodes"], json!([]));
         assert_eq!(v["edges"], json!([]));
+        assert_ne!(v["truncated"], json!(true));
     }
 
     #[test]
@@ -551,6 +552,7 @@ mod tests {
         assert_eq!(v["unavailable"], true);
         assert_eq!(v["nodes"], json!([]));
         assert_ne!(v["message"], json!("No ASM graph yet."));
+        assert_ne!(v["truncated"], json!(true));
     }
 
     #[test]
