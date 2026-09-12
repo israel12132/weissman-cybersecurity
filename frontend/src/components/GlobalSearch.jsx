@@ -155,7 +155,7 @@ export default function GlobalSearch() {
   useEffect(() => { setActiveIndex(0); }, [query, results.length, isOpen]);
 
   useEffect(() => {
-    if (!query.trim() || query.trim().length < 2) {
+    if (!isOpen || !query.trim() || query.trim().length < 2) {
       setResults([]);
       setSearchError(false);
       return undefined;
@@ -185,7 +185,7 @@ export default function GlobalSearch() {
       clearTimeout(tmr);
       ctrl.abort();
     };
-  }, [query]);
+  }, [query, isOpen]);
 
   const goTo = useCallback((result) => {
     if (!result) return;

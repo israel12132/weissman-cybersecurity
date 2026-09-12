@@ -2,7 +2,7 @@
  * Module 4: Semantic Logic Engine — State Machine visualizer + LLM Reasoning terminal.
  * Fetches state machine from OpenAPI and last reasoning log from backend.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, MarkerType } from '@xyflow/react'
@@ -11,6 +11,7 @@ import { apiFetch } from '../utils/apiFetch'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import StandaloneLabShell from './ui/StandaloneLabShell'
 import Button from './ui/Button'
+import { emptyGraphCopy, reasoningFromPayload } from './semanticLogicHelpers'
 
 const CENTER_X = 400
 const CENTER_Y = 280
@@ -68,15 +69,21 @@ export default function SemanticLogicEngine() {
   const [error, setError] = useState('')
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const abortRef = useRef(null)
 
-  const load = useCallback(() => {
+  const load = useCallback((opts = {}) => {
     if (!clientId) return
-    setLoading(true)
+    const silent = opts.silent === true
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
+    if (!silent) setLoading(true)
     Promise.all([
-      apiFetch(`/api/clients/${clientId}/semantic-state-machine`),
-      apiFetch(`/api/clients/${clientId}/semantic-logic/reasoning`),
+      apiFetch(`/api/clients/${clientId}/semantic-state-machine`, { signal: ac.signal }),
+      apiFetch(`/api/clients/${clientId}/semantic-logic/reasoning`, { signal: ac.signal }),
     ])
       .then(([sm, log]) => {
+        if (ac.signal.aborted) return
         if (sm?.ok === false || sm?.unavailable) {
           throw new Error(sm.detail || 'semantic state machine unavailable')
         }
@@ -85,7 +92,7 @@ export default function SemanticLogicEngine() {
         }
         setError('')
         setStateMachine(sm)
-        setReasoning(log?.log ?? '')
+        setReasoning(reasoningFromPayload(log))
         const { nodes: n, edges: e } = layoutStateMachine(sm.nodes || [], sm.edges || [])
         // Preserve any position the operator dragged an existing node to; only new
         // nodes get the freshly-computed ring layout. Otherwise the 15s poll resets
@@ -97,18 +104,21 @@ export default function SemanticLogicEngine() {
         setEdges(e)
       })
       .catch((e) => {
-        if (e?.name === 'AbortError') return
+        if (e?.name === 'AbortError' || ac.signal.aborted) return
         setError(e?.message || 'unavailable')
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (!ac.signal.aborted) setLoading(false)
+      })
   }, [clientId, setNodes, setEdges])
 
   useEffect(() => {
-    load()
+    load({ silent: false })
+    return () => abortRef.current?.abort()
   }, [load])
-  useVisiblePolling(load, 15000, { paused: !clientId })
+  useVisiblePolling(() => load({ silent: true }), 15000, { paused: !clientId })
 
-  if (loading && !stateMachine.nodes?.length) {
+  if (loading && !stateMachine.nodes?.length && !stateMachine.logs?.length && !error) {
     return (
       <div className="min-h-screen bg-[var(--bg-0)] text-[var(--text-secondary)] flex items-center justify-center">
         <p className="text-cyan-400">{t(`${NS}.loading`)}</p>
@@ -153,7 +163,7 @@ export default function SemanticLogicEngine() {
               </ReactFlow>
             ) : (
               <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-sm">
-                {error ? t(`${NS}.unavailable`) : (stateMachine.message || t(`${NS}.no_openapi`))}
+                {error ? t(`${NS}.unavailable`) : emptyGraphCopy(stateMachine, t, NS)}
               </div>
             )}
           </div>

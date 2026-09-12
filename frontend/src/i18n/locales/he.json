@@ -116,6 +116,7 @@
     "forensic_provenance": "מקור פורנזי",
     "linked_findings": "ממצאים מקושרים",
     "evidence_unavailable": "API הממצאים אינו זמין — ראיות ריקות אינן מאושרות.",
+    "evidence_truncated": "חלון הממצאים הפתוחים חתוך — לצומת זה עשויות להיות ראיות מחוץ לעמוד שנטען.",
     "shadow_node": "צומת shadow — מצב STRIPS עתידי. טרם נצפה ב-recon חי.",
     "nodes": "צמתים",
     "edges": "קשתות"
@@ -3641,6 +3642,7 @@
       "clients_unavailable": "API הלקוחות אינו זמין — יעד חסר אינו מאושר.",
       "payloads_unavailable": "API של payload intel אינו זמין — ספרייה ריקה אינה מאושרת.",
       "lab_unavailable": "API של מעבדת הניצול אינו זמין — fallback לממצאים אינו PoE חתום.",
+      "findings_truncated": "מוצגים 500 הממצאים הקריטיים/גבוהים הראשונים — המלאי החי גדול יותר.",
       "payloads_intro": "Payloads חיים מ-GET /api/payload-sync/payloads (intel DB)",
       "payloads_60d": "{{count}} payloads סונכרנו (60 יום)",
       "no_payloads_title": "אין payloads מסונכרנים",
@@ -7115,6 +7117,7 @@
         "load_failed": "טעינה נכשלה",
         "state_machine_title": "State Machine (זרימת API)",
         "no_openapi": "אין OpenAPI/Swagger ביעד. הוסף לקוח והפעל סריקה.",
+        "graph_not_persisted": "קיים לוג fuzz חי; גרף OpenAPI לא נשמר בהרצה זו.",
         "reasoning_title": "היגיון LLM",
         "no_reasoning": "אין לוג היגיון עדיין. הפעל סריקה עם Semantic Logic Engine.",
         "unavailable": "API של semantic logic אינו זמין — גרף ריק אינו OpenAPI חסר מאושר."

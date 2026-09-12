@@ -286,7 +286,29 @@ async fn api_client_semantic_state_machine(
             })
         })
         .collect();
-    (StatusCode::OK, Json(json!({ "client_id": id, "logs": logs }))).into_response()
+    let (nodes, edges) = crate::semantic_log::graph_from_logs(&logs);
+    let graph_persisted = !nodes.is_empty();
+    let message = if graph_persisted {
+        Value::Null
+    } else if logs.is_empty() {
+        Value::Null
+    } else {
+        Value::String(
+            "Live fuzz log present; OpenAPI graph not persisted on this run.".into(),
+        )
+    };
+    (
+        StatusCode::OK,
+        Json(json!({
+            "client_id": id,
+            "logs": logs,
+            "nodes": nodes,
+            "edges": edges,
+            "graph_persisted": graph_persisted,
+            "message": message,
+        })),
+    )
+        .into_response()
 }
 
 async fn api_client_semantic_reasoning(
@@ -322,7 +344,9 @@ async fn api_client_semantic_reasoning(
     let _ = tx.commit().await;
     let joined: String = rows
         .into_iter()
-        .filter_map(|r| r.try_get::<String,_>("log_text").ok())
+        .filter_map(|r| r.try_get::<String, _>("log_text").ok())
+        .map(|text| crate::semantic_log::parse_semantic_fuzz_log(&text).reasoning)
+        .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join("\n---\n");
     // char-safe truncation — byte slicing at 8000 panics if a multibyte UTF-8 char straddles the boundary

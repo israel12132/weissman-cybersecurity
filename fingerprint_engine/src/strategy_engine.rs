@@ -438,21 +438,23 @@ pub async fn execute_general_mission(
     };
 
     if let Some(cid) = client_id {
-        if let Ok(mut tx) = db::begin_tenant_tx(app_pool.as_ref(), tenant_id).await {
-            let log = fuzzy
-                .reasoning_log
-                .chars()
-                .take(120_000)
-                .collect::<String>();
-            let _ = sqlx::query(
-                "INSERT INTO semantic_fuzz_log (tenant_id, client_id, run_id, log_text) VALUES ($1, $2, NULL, $3)",
-            )
-            .bind(tenant_id)
-            .bind(cid)
-            .bind(&log)
-            .execute(&mut *tx)
-            .await;
-            let _ = tx.commit().await;
+        let log = crate::semantic_log::encode_semantic_fuzz_log(
+            &fuzzy.reasoning_log,
+            &fuzzy.state_nodes,
+            &fuzzy.state_edges,
+        );
+        if !log.is_empty() {
+            if let Ok(mut tx) = db::begin_tenant_tx(app_pool.as_ref(), tenant_id).await {
+                let _ = sqlx::query(
+                    "INSERT INTO semantic_fuzz_log (tenant_id, client_id, run_id, log_text) VALUES ($1, $2, NULL, $3)",
+                )
+                .bind(tenant_id)
+                .bind(cid)
+                .bind(&log)
+                .execute(&mut *tx)
+                .await;
+                let _ = tx.commit().await;
+            }
         }
     }
 

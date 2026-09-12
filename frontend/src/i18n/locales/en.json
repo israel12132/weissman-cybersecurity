@@ -126,6 +126,7 @@
     "forensic_provenance": "Forensic provenance",
     "linked_findings": "Linked findings",
     "evidence_unavailable": "Findings API unavailable — empty evidence is not confirmed.",
+    "evidence_truncated": "Open findings page is truncated — this node may have evidence outside the loaded window.",
     "shadow_node": "Shadow node — projected STRIPS future state. Not yet observed in live recon.",
     "nodes": "NODES",
     "edges": "EDGES"
@@ -3544,6 +3545,7 @@
       "clients_unavailable": "Clients API unavailable — missing target is not confirmed.",
       "payloads_unavailable": "Payload intel API unavailable — empty library is not confirmed.",
       "lab_unavailable": "Exploit-lab API unavailable — findings fallback is not sealed PoE.",
+      "findings_truncated": "Showing the first 500 critical/high findings — the live inventory is larger.",
       "payloads_intro": "Live payloads from GET /api/payload-sync/payloads (intel DB)",
       "payloads_60d": "{{count}} payloads synced (60d)",
       "no_payloads_title": "No payloads synced",
@@ -7115,6 +7117,7 @@
         "load_failed": "Load failed",
         "state_machine_title": "State Machine (API flow)",
         "no_openapi": "No OpenAPI/Swagger at target. Add a client and run a scan.",
+        "graph_not_persisted": "Live fuzz log present; OpenAPI graph was not persisted on this run.",
         "reasoning_title": "LLM Reasoning",
         "no_reasoning": "No reasoning log yet. Run a scan with Semantic Logic Engine enabled.",
         "unavailable": "Semantic logic API unavailable — empty graph is not a missing OpenAPI."

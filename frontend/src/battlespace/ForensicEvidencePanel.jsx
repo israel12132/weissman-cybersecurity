@@ -3,7 +3,13 @@ import { Fingerprint, FileCode, X } from 'lucide-react'
 import CopyButton from '../components/ui/CopyButton'
 import Button from '../components/ui/Button'
 
-export default function ForensicEvidencePanel({ node, evidence = [], evidenceError = false, onClose }) {
+export default function ForensicEvidencePanel({
+  node,
+  evidence = [],
+  evidenceError = false,
+  evidenceTruncated = false,
+  onClose,
+}) {
   const { t } = useTranslation()
   if (!node) return null
 
@@ -59,6 +65,12 @@ export default function ForensicEvidencePanel({ node, evidence = [], evidenceErr
           {evidenceError && (
             <p className="text-[10px] font-mono text-amber-200/90 border border-amber-500/25 rounded-lg px-3 py-2 bg-amber-950/20" data-testid="battlespace-evidence-unavailable" role="alert">
               {t('battlespace.evidence_unavailable')}
+            </p>
+          )}
+
+          {!evidenceError && evidenceTruncated && (
+            <p className="text-[10px] font-mono text-amber-200/80 border border-amber-500/20 rounded-lg px-3 py-2 bg-amber-950/10" data-testid="battlespace-evidence-truncated" role="status">
+              {t('battlespace.evidence_truncated')}
             </p>
           )}
 

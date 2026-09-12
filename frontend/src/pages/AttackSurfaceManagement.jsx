@@ -556,22 +556,24 @@ export default function AttackSurfaceManagement() {
     })
   }, [refreshFromHistory, setLastUpdated, setLastJobId])
 
-  const loadSurfaceDiff = useCallback(async (clientId) => {
+  const loadSurfaceDiff = useCallback(async (clientId, { signal } = {}) => {
     if (!clientId) {
       setSurfaceDiff(null)
       return
     }
     setDeltaLoading(true)
     try {
-      const d = await apiFetch(`/api/clients/${clientId}/surface-diff`)
+      const d = await apiFetch(`/api/clients/${clientId}/surface-diff`, { signal })
+      if (signal?.aborted) return
       if (d && typeof d === 'object') setSurfaceDiff(d)
     } catch (err) {
+      if (err?.name === 'AbortError' || signal?.aborted) return
       if (import.meta.env.DEV) {
         console.debug('surface-diff skipped', err)
       }
       setSurfaceDiff({ unavailable: true })
     } finally {
-      setDeltaLoading(false)
+      if (!signal?.aborted) setDeltaLoading(false)
     }
   }, [])
 
@@ -598,27 +600,31 @@ export default function AttackSurfaceManagement() {
   }, [refreshFromHistory, setLastUpdated, setLastJobId, loadSurfaceDiff, selectedClientId])
 
   useEffect(() => {
-    let cancelled = false
-    apiFetch('/api/clients')
+    const ac = new AbortController()
+    apiFetch('/api/clients', { signal: ac.signal })
       .then((d) => {
         if (d?.ok === false || d?.unavailable) {
           throw new Error(d.detail || 'clients unavailable')
         }
-        if (!cancelled) {
-          setClients(Array.isArray(d) ? d : [])
-          setClientsError('')
-        }
+        setClients(Array.isArray(d) ? d : [])
+        setClientsError('')
       })
       .catch((e) => {
-        if (e?.name === 'AbortError' || cancelled) return
+        if (e?.name === 'AbortError' || ac.signal.aborted) return
         setClients([])
         setClientsError(e?.message || 'clients unavailable')
       })
-    return () => { cancelled = true }
+    return () => ac.abort()
   }, [])
 
   useEffect(() => {
-    loadSurfaceDiff(selectedClientId)
+    if (!selectedClientId) {
+      setSurfaceDiff(null)
+      return undefined
+    }
+    const ac = new AbortController()
+    loadSurfaceDiff(selectedClientId, { signal: ac.signal })
+    return () => ac.abort()
   }, [selectedClientId, loadSurfaceDiff])
 
   useEffect(() => {

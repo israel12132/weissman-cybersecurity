@@ -26,9 +26,13 @@ export default function BattlespaceTopology({ connectionStatus = 'online' }) {
   const [forensicNode, setForensicNode] = useState(null)
   const [evidence, setEvidence] = useState([])
   const [evidenceError, setEvidenceError] = useState(false)
+  const [evidenceTruncated, setEvidenceTruncated] = useState(false)
   const [shadowNodes, setShadowNodes] = useState([])
   const [shadowEdges, setShadowEdges] = useState([])
   const [wargaming, setWargaming] = useState(false)
+  const evidenceAbortRef = useRef(null)
+
+  useEffect(() => () => evidenceAbortRef.current?.abort(), [])
 
   const nodes = useMemo(() => topology?.graph?.nodes || [], [topology])
   const edges = useMemo(() => topology?.graph?.edges || [], [topology])
@@ -69,8 +73,9 @@ export default function BattlespaceTopology({ connectionStatus = 'online' }) {
   useEffect(() => {
     if (!clientId) return
     let cancelled = false
+    const ac = new AbortController()
     setLoading(true)
-    fetchBattlespaceTopology(clientId)
+    fetchBattlespaceTopology(clientId, { signal: ac.signal })
       .then((data) => {
         if (!cancelled) {
           setTopology(data)
@@ -78,12 +83,16 @@ export default function BattlespaceTopology({ connectionStatus = 'online' }) {
         }
       })
       .catch((e) => {
-        if (!cancelled) setError(e.message)
+        if (e?.name === 'AbortError' || cancelled) return
+        setError(e.message)
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      ac.abort()
+    }
   }, [clientId])
 
   useEffect(() => {
@@ -106,9 +115,11 @@ export default function BattlespaceTopology({ connectionStatus = 'online' }) {
 
   const handleNodePick = useCallback(async (node) => {
     if (node.is_shadow) {
+      evidenceAbortRef.current?.abort()
       setForensicNode(node)
       setEvidence([])
       setEvidenceError(false)
+      setEvidenceTruncated(false)
       return
     }
     setFocusNode(node)
@@ -116,18 +127,28 @@ export default function BattlespaceTopology({ connectionStatus = 'online' }) {
     setShadowNodes([])
     setShadowEdges([])
     setEvidenceError(false)
+    setEvidenceTruncated(false)
     if (clientId && node.id != null) {
+      evidenceAbortRef.current?.abort()
+      const ac = new AbortController()
+      evidenceAbortRef.current = ac
+      const cached = Array.isArray(topology?.open_findings) ? topology.open_findings : undefined
       try {
-        const ev = await fetchNodeEvidence(clientId, node.id)
+        const ev = await fetchNodeEvidence(clientId, node.id, {
+          signal: ac.signal,
+          cachedFindings: cached,
+        })
+        if (ac.signal.aborted) return
         setEvidence(ev)
         setEvidenceError(false)
+        setEvidenceTruncated(Boolean(topology?.open_findings_truncated) && ev.length === 0)
       } catch (e) {
-        if (e?.name === 'AbortError') return
+        if (e?.name === 'AbortError' || ac.signal.aborted) return
         setEvidence([])
         setEvidenceError(true)
       }
     }
-  }, [clientId])
+  }, [clientId, topology])
 
   const handleWargame = useCallback(async () => {
     if (!clientId) return
@@ -192,6 +213,7 @@ export default function BattlespaceTopology({ connectionStatus = 'online' }) {
             node={forensicNode}
             evidence={evidence}
             evidenceError={evidenceError}
+            evidenceTruncated={evidenceTruncated}
             onClose={() => setForensicNode(null)}
           />
         </>

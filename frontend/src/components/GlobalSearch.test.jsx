@@ -127,12 +127,20 @@ describe('GlobalSearch command palette', () => {
     expect(within(options[0]).getByText('components.globalSearch.recent')).toBeTruthy()
   })
 
-  it('Escape closes the palette', () => {
-    render(<GlobalSearch />)
-    open()
-    expect(screen.getByRole('dialog')).toBeTruthy()
-    fireEvent.keyDown(document, { key: 'Escape' })
-    expect(screen.queryByRole('dialog')).toBeNull()
+  it('Escape closes the palette without searching a leftover query', async () => {
+    vi.useFakeTimers()
+    try {
+      render(<GlobalSearch />)
+      open()
+      expect(screen.getByRole('dialog')).toBeTruthy()
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'zzzz' } })
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(screen.queryByRole('dialog')).toBeNull()
+      await vi.advanceTimersByTimeAsync(400)
+      expect(apiFetch).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not treat a search API failure as a confirmed miss', async () => {

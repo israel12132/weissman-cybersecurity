@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../../utils/apiFetch'
 import { useVisiblePolling } from '../../hooks/useVisiblePolling'
 
 const NS = 'components.cockpitWidgets.severityTrendChart'
+const EMPTY_SERIES = []
 
 function buildArea(values, width, height, padding) {
   if (!values || values.length === 0) {
@@ -34,38 +35,44 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [unavailable, setUnavailable] = useState(false)
+  const abortRef = useRef(null)
+  const inflightRef = useRef(false)
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    if (inflightRef.current) return
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
+    inflightRef.current = true
     try {
-      const d = await apiFetch('/api/dashboard/exec-kpis')
+      const d = await apiFetch('/api/dashboard/exec-kpis', { signal: ac.signal })
       if (d?.ok === false || d?.unavailable) {
-        throw new Error(d.detail || t(`${NS}.unavailable`))
+        throw new Error(d.detail || 'unavailable')
       }
       setData(d)
       setUnavailable(false)
     } catch (e) {
-      if (e?.name === 'AbortError') return
+      if (e?.name === 'AbortError' || ac.signal.aborted) return
       setUnavailable(true)
     } finally {
-      setLoading(false)
+      inflightRef.current = abortRef.current !== ac
+      if (abortRef.current === ac && !ac.signal.aborted) setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    return () => abortRef.current?.abort()
+  }, [load])
   useVisiblePolling(load, 30_000)
 
   const w = 720
   const h = height
   const padding = 16
   const trend = data?.trend || {}
-  const labels = trend.labels || []
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const discovered = trend.discovered || []
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const resolved = trend.resolved || []
+  const labels = Array.isArray(trend.labels) ? trend.labels : EMPTY_SERIES
+  const discovered = Array.isArray(trend.discovered) ? trend.discovered : EMPTY_SERIES
+  const resolved = Array.isArray(trend.resolved) ? trend.resolved : EMPTY_SERIES
 
   const dArea = useMemo(() => buildArea(discovered, w, h, padding), [discovered, h])
   const rArea = useMemo(() => buildArea(resolved, w, h, padding), [resolved, h])

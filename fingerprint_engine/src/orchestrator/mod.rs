@@ -1865,11 +1865,12 @@ async fn run_cycle_for_tenant_inner(
                     )
                     .await;
                     tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
-                    let log = if sem.reasoning_log.is_empty() {
-                        None
-                    } else {
-                        Some(sem.reasoning_log)
-                    };
+                    let encoded = crate::semantic_log::encode_semantic_fuzz_log(
+                        &sem.reasoning_log,
+                        &sem.state_nodes,
+                        &sem.state_edges,
+                    );
+                    let log = if encoded.is_empty() { None } else { Some(encoded) };
                     (sem.result, log)
                 }
                 "microsecond_timing" => {

@@ -153,6 +153,7 @@ pub mod self_heal_recovery;
 pub mod self_heal_shared;
 pub mod self_healing;
 pub mod semantic_fuzzer;
+pub mod semantic_log;
 pub mod server_db;
 pub mod signatures;
 pub mod signup;
