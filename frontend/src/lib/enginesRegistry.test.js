@@ -4,4 +4,8 @@ describe('enginesRegistry', () => {
   it('non-empty', () => expect(ENGINES_REGISTRY.length).toBeGreaterThan(100))
   it('getEngine', () => expect(getEngine('osint')?.id).toBe('osint'))
   it('by group', () => expect(getEnginesByGroup('recon').length).toBeGreaterThan(0))
+  it('registers OT safety interlock engines as live catalog ids', () => {
+    expect(getEngine('ot_passive_active_safety')?.group).toBe('ot')
+    expect(getEngine('ot_crown_jewel_path')?.group).toBe('ot')
+  })
 })

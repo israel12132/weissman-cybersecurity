@@ -524,6 +524,23 @@ mod tests {
         assert_eq!(doc["live"], json!(true));
     }
 
+    #[test]
+    fn safety_http_routes_are_mounted() {
+        let routes = include_str!("../http/serve_route_groups.rs");
+        assert!(
+            routes.contains("/api/ot-ics/safety"),
+            "GET /api/ot-ics/safety must be mounted"
+        );
+        assert!(
+            routes.contains("api_ot_ics_safety"),
+            "api_ot_ics_safety handler must be wired"
+        );
+        assert!(
+            routes.contains("/api/clients/:id/ot-ics/safety"),
+            "GET /api/clients/:id/ot-ics/safety must be mounted"
+        );
+    }
+
     #[tokio::test]
     async fn empty_target_errors() {
         let r = run_ot_passive_active_safety_result("", &EngineRunContext::default()).await;
