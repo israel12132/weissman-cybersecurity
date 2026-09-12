@@ -102,7 +102,7 @@ export default function AdversaryDominance() {
     onComplete: (job) => {
       setRunning(false)
       setJobStatus(job?.status || 'completed')
-      const extra = extractFindingsFromJob(job)
+      const extra = parseFindings(extractFindingsFromJob(job))
       if (extra.length) {
         setFindings((prev) => {
           const seen = new Set(prev.map((f) => f.id || f.title))

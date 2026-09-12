@@ -411,7 +411,10 @@ pub async fn persist_engine_findings(
             &f,
             &["compliance", "compliance_tags", "frameworks", "controls"],
         );
-        let poc = extract_string(&f, &["poc", "poc_text", "proof_of_concept", "evidence"]);
+        let poc = extract_string(
+            &f,
+            &["poc", "poc_text", "proof_of_concept", "proof", "evidence"],
+        );
         let poc_commitment = if !poc.is_empty() {
             let mut h = Sha256::new();
             h.update(poc.as_bytes());

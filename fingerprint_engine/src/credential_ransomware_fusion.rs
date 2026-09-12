@@ -6,7 +6,7 @@
 //! URLhaus hostinfo. No Tor, no .onion, no leak-site victim lists.
 
 use crate::engine_probes::{
-    empty_ok, extract_host, finding, header_value, http_client, http_get, http_get_with_headers,
+    empty_ok, extract_host, finding, header_value, http_client, http_get,
     http_post_bytes_with_headers, normalize_url,
 };
 use crate::engine_result::{print_result, EngineResult};
@@ -57,17 +57,17 @@ pub async fn run_credential_ransomware_fusion_result(target: &str) -> EngineResu
             "https://haveibeenpwned.com/api/v3/breacheddomain/{}",
             urlencoding::encode(&apex_domain(&host))
         );
-        if let Some(p) = http_get_with_headers(
-            &probe_client,
+        if let Some((status, body)) = fetch_json_with_headers(
+            &client,
             &url,
             &[("hibp-api-key", key.as_str()), ("user-agent", UA)],
         )
         .await
         {
-            if p.status == 200 {
+            if status == 200 {
                 feeds_ok += 1;
-                findings.extend(hibp_domain_count_finding(&host, target, &p.body));
-            } else if p.status == 404 {
+                findings.extend(hibp_domain_count_finding(&host, target, &body));
+            } else if status == 404 {
                 feeds_ok += 1; // verified empty
             }
         }
@@ -139,7 +139,19 @@ fn intel_client() -> reqwest::Client {
 }
 
 async fn fetch_json(client: &reqwest::Client, url: &str) -> Option<(u16, String)> {
-    let resp = client.get(url).send().await.ok()?;
+    fetch_json_with_headers(client, url, &[]).await
+}
+
+async fn fetch_json_with_headers(
+    client: &reqwest::Client,
+    url: &str,
+    extra: &[(&str, &str)],
+) -> Option<(u16, String)> {
+    let mut req = client.get(url);
+    for (k, v) in extra {
+        req = req.header(*k, *v);
+    }
+    let resp = req.send().await.ok()?;
     let status = resp.status().as_u16();
     let body = resp.text().await.ok()?;
     Some((status, body))
@@ -186,6 +198,7 @@ fn live_finding(
             }),
         );
         obj.insert("proof".into(), json!(proof));
+        obj.insert("poc".into(), json!(proof));
         obj.insert("remediation".into(), json!(fusion_remediation(severity)));
     }
     f
@@ -248,7 +261,7 @@ pub fn kev_findings_for_host(host: &str, target: &str, server_hdr: &str, body: &
                 row.cve_id,
                 row.known_ransomware_use
             );
-            out.push(live_finding(
+            let mut f = live_finding(
                 &format!(
                     "CISA KEV product match on live Server header: {} ({})",
                     row.product, row.cve_id
@@ -268,7 +281,12 @@ pub fn kev_findings_for_host(host: &str, target: &str, server_hdr: &str, body: &
                 ),
                 target,
                 &proof,
-            ));
+            );
+            if let Some(obj) = f.as_object_mut() {
+                obj.insert("cve".into(), json!(row.cve_id));
+                obj.insert("kev".into(), json!(true));
+            }
+            out.push(f);
             if out.len() >= 8 {
                 break;
             }
@@ -366,13 +384,21 @@ pub fn host_matches_breach_domain(host: &str, breach_domain: &str) -> bool {
     h == d || h.ends_with(&format!(".{d}"))
 }
 
+const LEFT_HOST_LABELS: &[&str] = &[
+    "www", "mail", "vpn", "app", "api", "staging", "dev", "portal", "remote", "autodiscover",
+];
+
 pub fn apex_domain(host: &str) -> String {
-    let h = host
+    let stripped = host
         .trim()
-        .trim_start_matches("www.")
         .trim_end_matches('.')
         .to_ascii_lowercase();
-    h.split(':').next().unwrap_or(&h).to_string()
+    let no_port = stripped.split(':').next().unwrap_or("").to_string();
+    let mut labels: Vec<&str> = no_port.split('.').filter(|s| !s.is_empty()).collect();
+    while labels.len() >= 3 && LEFT_HOST_LABELS.contains(&labels[0]) {
+        labels.remove(0);
+    }
+    labels.join(".")
 }
 
 fn hibp_domain_count_finding(host: &str, target: &str, body: &str) -> Vec<Value> {
@@ -447,6 +473,7 @@ mod tests {
     fn host_match_is_apex_aware() {
         assert!(host_matches_breach_domain("www.adobe.com", "adobe.com"));
         assert!(host_matches_breach_domain("mail.adobe.com", "adobe.com"));
+        assert_eq!(apex_domain("vpn.example.com"), "example.com");
         assert!(!host_matches_breach_domain("example.com", "adobe.com"));
         assert!(!host_matches_breach_domain("notadobe.com", "adobe.com"));
     }

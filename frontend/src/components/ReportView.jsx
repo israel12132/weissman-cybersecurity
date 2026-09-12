@@ -22,13 +22,18 @@ export default function ReportView() {
     if (!clientId) return
     Promise.all([
       apiFetch('/api/clients').catch(() => []),
-      apiFetch('/api/findings').catch(() => []),
+      apiFetch(`/api/findings?client_id=${encodeURIComponent(clientId)}&limit=2000`).catch(() => ({ findings: [] })),
       apiFetch(`/api/clients/${clientId}/report/crypto-proof`).catch(() => null),
     ])
-      .then(([clients, findingsList, proof]) => {
+      .then(([clients, findingsPayload, proof]) => {
         const c = Array.isArray(clients) ? clients.find((x) => String(x?.id) === String(clientId)) : null
         setClient(c || null)
-        setFindings(Array.isArray(findingsList) ? findingsList.filter((f) => String(f.client) === String(clientId)) : [])
+        const findingsList = Array.isArray(findingsPayload)
+          ? findingsPayload
+          : Array.isArray(findingsPayload?.findings)
+            ? findingsPayload.findings
+            : []
+        setFindings(findingsList)
         setCryptoProof(proof?.audit_root_hash ? proof : null)
       })
       .catch((e) => setError(e?.message || t('components.reportView.load_failed')))

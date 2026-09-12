@@ -38,11 +38,11 @@ pub struct BoardWorkbook {
     pub findings: Vec<BoardFinding>,
 }
 
-/// Neutralize Excel/Sheets formula injection (`=`, `+`, `-`, `@`, tab, CR).
+/// Neutralize Excel/Sheets formula injection (`=`, `+`, `-`, `@`, tab, CR, LF).
 #[must_use]
 pub fn formula_guard(s: &str) -> String {
-    let t = s.trim_start_matches('\u{feff}');
-    if t.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+    let t = s.trim_start_matches(['\u{feff}', ' ', '\t', '\r', '\n', '\u{00a0}']);
+    if t.starts_with(['=', '+', '-', '@', '\t', '\r', '\n']) {
         format!("'{t}")
     } else {
         t.to_string()
@@ -703,6 +703,7 @@ mod tests {
     fn formula_guard_prefixes_formula_cells() {
         assert_eq!(formula_guard("=1+1"), "'=1+1");
         assert_eq!(formula_guard("+cmd"), "'+cmd");
+        assert_eq!(formula_guard(" =HYPERLINK(x)"), "'=HYPERLINK(x)");
         assert_eq!(formula_guard("safe"), "safe");
         assert_eq!(formula_guard("CVE-2024-1234"), "CVE-2024-1234");
     }
@@ -733,6 +734,9 @@ mod tests {
             }],
         })
         .expect("xlsx");
+        if let Ok(p) = std::env::var("WEISSMAN_XLSX_DUMP") {
+            std::fs::write(&p, &bytes).expect("dump xlsx");
+        }
         assert!(bytes.starts_with(b"PK"), "must be ZIP");
         let as_str = String::from_utf8_lossy(&bytes);
         assert!(as_str.contains("Overview"));

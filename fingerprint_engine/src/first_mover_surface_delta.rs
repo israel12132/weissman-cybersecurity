@@ -26,6 +26,7 @@ pub const DELTA_FOLLOW_ON_ENGINES: &[&str] = &[
     "leak_hunter",
     "bola_idor",
     "jwt_attack",
+    "credential_ransomware_fusion",
 ];
 const MAX_CHAIN_HOSTS: usize = 6;
 const MAX_DISCOVERY: usize = 40;

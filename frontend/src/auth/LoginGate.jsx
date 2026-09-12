@@ -10,6 +10,7 @@ import {
   readStoredWorkspaceSlug,
   writeStoredWorkspaceSlug,
 } from './loginNext.js'
+import { PRODUCTION_ENGINE_COUNT } from '../lib/platformScale'
 
 const formVariants = {
   initial: { opacity: 0, x: 16 },
@@ -202,7 +203,9 @@ function BrandPanel({ t, pulse }) {
           {t('auth.brand_tagline')}
         </h1>
         <p className="mt-5 max-w-lg text-base leading-relaxed text-white/55">
-          {t('auth.brand_story')}
+          {t('auth.brand_story', {
+            engines: pulse?.production_engines || PRODUCTION_ENGINE_COUNT,
+          })}
         </p>
         <ul className="mt-10 flex flex-wrap gap-3" aria-label={t('auth.trust_label')}>
           {trustItems.map(({ icon: Icon, label }) => (

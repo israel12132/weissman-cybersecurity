@@ -3956,7 +3956,7 @@ export const ENGINES_REGISTRY = [
     label: 'Threat Intelligence Fusion Engine',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Live URLhaus hostinfo plus (via credential_ransomware_fusion) CISA KEV and HIBP. Not MISP/OpenCTI/TAXII/VirusTotal — those remain catalog claims until wired.',
+    description: 'Live Abuse.ch URLhaus hostinfo for the authorized host. Not MISP/OpenCTI/TAXII/VirusTotal — those remain unwired. For KEV×HIBP fusion use credential_ransomware_fusion.',
     requiresTarget: true,
   },
   {
