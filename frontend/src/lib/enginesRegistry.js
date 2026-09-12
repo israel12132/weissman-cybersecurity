@@ -657,6 +657,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'ransomware_emulation',
+    requiresAgent: true,
     label: 'Ransomware Emulation',
     group: 'apt',
     mitre: 'T1486',
@@ -1093,6 +1094,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'heap_exploitation',
+    requiresAgent: true,
     label: 'Heap Exploitation',
     group: 'apt',
     mitre: 'T1203',
@@ -1819,6 +1821,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'lorawan_attack',
+    requiresAgent: true,
     label: 'LoRaWAN IoT Network Attack',
     group: 'ot',
     mitre: 'T0860',
@@ -1869,6 +1872,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'timestomping',
+    requiresAgent: true,
     label: 'Timestomping & Metadata Falsification',
     group: 'stealth',
     mitre: 'T1070.006',
@@ -1893,6 +1897,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'process_hollowing',
+    requiresAgent: true,
     label: 'Process Hollowing / Ghosting',
     group: 'stealth',
     mitre: 'T1055.012',
@@ -2841,6 +2846,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'dll_hijacking_engine',
+    requiresAgent: true,
     label: 'DLL Hijacking Attack Engine',
     group: 'stealth',
     mitre: 'T1574.001',
@@ -2849,6 +2855,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'sandbox_evasion',
+    requiresAgent: true,
     label: 'Sandbox Evasion Engine',
     group: 'stealth',
     mitre: 'T1497',
@@ -2857,6 +2864,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'rootkit_surface_probe',
+    requiresAgent: true,
     label: 'Kernel Rootkit Surface Probe',
     group: 'stealth',
     mitre: 'T1014',
@@ -2865,6 +2873,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'memory_forensics_evasion',
+    requiresAgent: true,
     label: 'Memory Forensics Evasion',
     group: 'stealth',
     mitre: 'T1055',
@@ -2873,6 +2882,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'av_bypass_engine',
+    requiresAgent: true,
     label: 'AV/EDR Bypass Engine',
     group: 'stealth',
     mitre: 'T1685',
@@ -2881,6 +2891,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'dns_tunneling_c2',
+    requiresAgent: true,
     label: 'DNS Tunneling C2 Channel',
     group: 'stealth',
     mitre: 'T1071.004',
@@ -2905,6 +2916,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'icmp_covert',
+    requiresAgent: true,
     label: 'ICMP Covert Channel',
     group: 'stealth',
     mitre: 'T1095',
@@ -2913,6 +2925,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'rop_chain_engine',
+    requiresAgent: true,
     label: 'ROP Chain Construction Engine',
     group: 'stealth',
     mitre: 'T1203',
@@ -2929,6 +2942,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'log_tampering_engine',
+    requiresAgent: true,
     label: 'Log Tampering & Destruction',
     group: 'stealth',
     mitre: 'T1685.005',
@@ -2937,6 +2951,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'jit_spray',
+    requiresAgent: true,
     label: 'JIT Spray Attack Engine',
     group: 'stealth',
     mitre: 'T1203',
@@ -2945,6 +2960,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'com_hijacking',
+    requiresAgent: true,
     label: 'COM Object Hijacking',
     group: 'stealth',
     mitre: 'T1546.015',
@@ -2961,6 +2977,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'anti_debug_evasion',
+    requiresAgent: true,
     label: 'Anti-Debug & Anti-Analysis Engine',
     group: 'stealth',
     mitre: 'T1497.001',
@@ -2969,6 +2986,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'parent_pid_spoof',
+    requiresAgent: true,
     label: 'Parent PID Spoofing Engine',
     group: 'stealth',
     mitre: 'T1134.004',
@@ -3081,6 +3099,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'arp_spoofing_engine',
+    requiresAgent: true,
     label: 'ARP Spoofing / Cache Poisoning',
     group: 'network',
     mitre: 'T1557.002',
@@ -3089,6 +3108,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'vlan_hopping_attack',
+    requiresAgent: true,
     label: 'VLAN Hopping Attack Engine',
     group: 'network',
     mitre: 'T1016',
@@ -3097,6 +3117,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'dhcp_attack_engine',
+    requiresAgent: true,
     label: 'DHCP Starvation & Rogue Server',
     group: 'network',
     mitre: 'T1557',
@@ -3145,6 +3166,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'wifi_attack_engine',
+    requiresAgent: true,
     label: 'WiFi Attack Suite',
     group: 'network',
     mitre: 'T1557.003',
@@ -3153,6 +3175,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'bluetooth_attack_engine',
+    requiresAgent: true,
     label: 'Bluetooth Attack Engine',
     group: 'network',
     mitre: 'T1011.001',
@@ -3177,6 +3200,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'lte_5g_attack',
+    requiresAgent: true,
     label: 'LTE/5G Network Attack Engine',
     group: 'network',
     mitre: 'T1557',
@@ -3201,6 +3225,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'wpa3_attack_engine',
+    requiresAgent: true,
     label: 'WPA3/WiFi 6E Attack Engine',
     group: 'network',
     mitre: 'T1557.003',
@@ -3497,6 +3522,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'bootkit_uefi',
+    requiresAgent: true,
     label: 'UEFI/Bootkit Implant Detector',
     group: 'malware',
     mitre: 'T1542.001',
@@ -3513,6 +3539,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'polymorphic_engine',
+    requiresAgent: true,
     label: 'Polymorphic Code Engine',
     group: 'malware',
     mitre: 'T1027.001',
@@ -3561,6 +3588,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'persistence_mechanism',
+    requiresAgent: true,
     label: 'Persistence Mechanism Engine',
     group: 'malware',
     mitre: 'T1547',
@@ -3641,6 +3669,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'deepfake_voice_engine',
+    requiresAgent: true,
     label: 'Deepfake Voice Social Engineering',
     group: 'social',
     mitre: 'T1534',
@@ -3665,6 +3694,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'pretexting_engine',
+    requiresAgent: true,
     label: 'Pretexting Scenario Engine',
     group: 'social',
     mitre: 'T1534',
@@ -3673,6 +3703,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'insider_threat_engine',
+    requiresAgent: true,
     label: 'Insider Threat Simulation Engine',
     group: 'social',
     mitre: 'T1078.001',
@@ -3713,6 +3744,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'physical_social_eng',
+    requiresAgent: true,
     label: 'Physical Social Engineering Engine',
     group: 'social',
     mitre: 'T1534',
@@ -3785,6 +3817,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'sim_swap_engine',
+    requiresAgent: true,
     label: 'SIM Swap Attack Engine',
     group: 'mobile',
     mitre: 'T1621',
@@ -3817,6 +3850,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'bluetooth_mobile_attack',
+    requiresAgent: true,
     label: 'Mobile Bluetooth Attack Engine',
     group: 'mobile',
     mitre: 'T1011.001',
@@ -3825,6 +3859,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'nfc_relay_attack',
+    requiresAgent: true,
     label: 'NFC Relay Attack Engine',
     group: 'mobile',
     mitre: 'T1606',
@@ -3881,6 +3916,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'acoustic_exfil',
+    requiresAgent: true,
     label: 'Acoustic Side-Channel Exfiltration',
     group: 'data',
     mitre: 'T1048',
@@ -3889,6 +3925,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'em_exfil_engine',
+    requiresAgent: true,
     label: 'Electromagnetic Emanation Exfiltration',
     group: 'data',
     mitre: 'T1048',
@@ -3897,6 +3934,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'optical_exfil',
+    requiresAgent: true,
     label: 'Optical Covert Channel Exfiltration',
     group: 'data',
     mitre: 'T1048',
@@ -3913,6 +3951,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'keyboard_acoustic',
+    requiresAgent: true,
     label: 'Keyboard Acoustic Eavesdropping',
     group: 'data',
     mitre: 'T1056.001',
@@ -3921,6 +3960,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'screen_capture_exfil',
+    requiresAgent: true,
     label: 'Screen Capture Exfiltration Engine',
     group: 'data',
     mitre: 'T1113',
@@ -3929,6 +3969,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'clipboard_hijack',
+    requiresAgent: true,
     label: 'Clipboard Hijacking Engine',
     group: 'data',
     mitre: 'T1115',
@@ -3953,6 +3994,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'insider_exfil',
+    requiresAgent: true,
     label: 'Insider Threat Exfiltration Engine',
     group: 'data',
     mitre: 'T1048',
@@ -3961,6 +4003,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'storage_covert_channel',
+    requiresAgent: true,
     label: 'Storage Covert Channel Engine',
     group: 'data',
     mitre: 'T1048',
@@ -4017,7 +4060,7 @@ export const ENGINES_REGISTRY = [
     description:
       '5ms process-delta ring buffer on the endpoint agent (sysinfo polling). Autonomous SIGSTOP on web-server→shell spawn with live rollback evidence. Linux eBPF syscall ingest is a separate engine (ebpf_sensor) when CAP_BPF/bpftrace are present',
     requiresTarget: true,
-    requiresAgent: true,
+    requiresAgent: false,
   },
   {
     id: 'cognitive_starvation',
@@ -4080,6 +4123,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'packet_injection_engine',
+    requiresAgent: true,
     label: 'Packet Injection Engine',
     group: 'network',
     mitre: 'T1557',
@@ -4088,6 +4132,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'network_tap_advanced',
+    requiresAgent: true,
     label: 'Advanced Network TAP/SPAN Engine',
     group: 'network',
     mitre: 'T1557',
@@ -4096,6 +4141,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'multicast_attack',
+    requiresAgent: true,
     label: 'Multicast Protocol Attack Engine',
     group: 'network',
     mitre: 'T1557',
@@ -4104,6 +4150,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'nat_traversal_attack',
+    requiresAgent: true,
     label: 'NAT Traversal Attack Engine',
     group: 'network',
     mitre: 'T1090',
@@ -4146,6 +4193,7 @@ export const ENGINES_REGISTRY = [
   // ── PHYSICAL & HARDWARE SECURITY ─────────────────────────────────────────────
   {
     id: 'tpm_firmware_attack',
+    requiresAgent: true,
     label: 'TPM Firmware Attack Engine',
     group: 'crypto',
     mitre: 'T1600',
@@ -4154,6 +4202,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'cold_boot_attack',
+    requiresAgent: true,
     label: 'Cold Boot / DRAM Remanence Attack',
     group: 'crypto',
     mitre: 'T1552.004',
@@ -4178,6 +4227,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'voltage_glitch_attack',
+    requiresAgent: true,
     label: 'Voltage / Clock Glitch Fault Injection',
     group: 'crypto',
     mitre: 'T1600',
@@ -4574,6 +4624,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'lora_attack',
+    requiresAgent: true,
     label: 'LoRa Attack',
     group: 'ot',
     mitre: 'T1595',
@@ -4606,6 +4657,7 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'infostealer_emulation',
+    requiresAgent: true,
     label: 'Infostealer Emulation',
     group: 'malware',
     mitre: 'T1005',

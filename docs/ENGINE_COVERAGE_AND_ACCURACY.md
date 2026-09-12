@@ -16,7 +16,7 @@ Regenerate: `node scripts/engine_coverage_accuracy_report.mjs` · Gate: `--check
 | Aliases (retag → a live probe, same detection logic) | 204 | 34.9% |
 | Agent-required (host-level; endpoint agent performs the detection) | 58 | 9.9% |
 | **No execution path** (catalog entries that do nothing) | 0 | 0.0% |
-| **Catalog total** | **585** | 100% |
+| **Catalog total** | **586** | 100% |
 
 - **315 distinct probe implementations** back the 323 live
   probes (delegates that share one implementation are counted once).

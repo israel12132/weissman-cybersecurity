@@ -315,6 +315,9 @@ mod tests {
             raw_data: raw,
             discovered_at: "2026-09-11T00:00:00Z".into(),
             signature_hash: "deadbeef".into(),
+            status: "OPEN".into(),
+            proof: String::new(),
+            poc_exploit: String::new(),
         }
     }
 
