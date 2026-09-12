@@ -16,6 +16,10 @@ vi.mock('react-i18next', () => ({
       if (k === 'pages.otIcsSecurity.safety_ber_iterative') return 'Iterative BER'
       if (k === 'pages.otIcsSecurity.safety_s7plus') return 'S7-Plus structural'
       if (k === 'pages.otIcsSecurity.safety_decoy') return 'PLC decoy'
+      if (k === 'pages.otIcsSecurity.safety_unavailable') return 'UNAVAILABLE'
+      if (k === 'pages.otIcsSecurity.safety_unavailable_body') {
+        return 'GET /api/ot-ics/safety could not load live events'
+      }
       if (typeof d === 'string') return d
       return k
     },
@@ -152,5 +156,56 @@ describe('OtIcsSecurity', () => {
     expect(screen.getByText('dnp3_attack')).toBeTruthy()
     expect(screen.getByText('iec61850_attack')).toBeTruthy()
     expect(screen.getByText('modbus_attack')).toBeTruthy()
+  })
+
+  it('shows UNAVAILABLE instead of ARMED when GET /api/ot-ics/safety fails', async () => {
+    apiFetch.mockImplementation(async (url) => {
+      const u = String(url)
+      if (u.includes('/api/ot-ics/safety')) {
+        const err = new Error('database unavailable')
+        err.status = 503
+        throw err
+      }
+      if (u.includes('/api/ot-ics/devices')) return { devices: [], protocols: [], findings: [] }
+      if (u.includes('fingerprints')) return { fingerprints: [] }
+      if (u.includes('/api/engines/history')) return { runs: [] }
+      if (u === '/api/clients' || u.startsWith('/api/clients?')) {
+        return [{ id: 1, name: 'Plant A', primary_domain: '10.0.0.8' }]
+      }
+      return {}
+    })
+    render(
+      <MemoryRouter>
+        <OtIcsSecurity />
+      </MemoryRouter>,
+    )
+    const panel = await screen.findByTestId('ot-safety-unavailable')
+    expect(panel).toBeTruthy()
+    expect(panel.textContent).toMatch(/UNAVAILABLE/)
+    expect(screen.queryByTestId('ot-safety-interlock')).toBeNull()
+  })
+
+  it('does not arm the interlock when live is false', async () => {
+    apiFetch.mockImplementation(async (url) => {
+      const u = String(url)
+      if (u.includes('/api/ot-ics/safety')) {
+        return { live: false, error: 'database_unavailable', events: null, policy: SAFETY.policy }
+      }
+      if (u.includes('/api/ot-ics/devices')) return { devices: [], protocols: [], findings: [] }
+      if (u.includes('fingerprints')) return { fingerprints: [] }
+      if (u.includes('/api/engines/history')) return { runs: [] }
+      if (u === '/api/clients' || u.startsWith('/api/clients?')) {
+        return [{ id: 1, name: 'Plant A', primary_domain: '10.0.0.8' }]
+      }
+      return {}
+    })
+    render(
+      <MemoryRouter>
+        <OtIcsSecurity />
+      </MemoryRouter>,
+    )
+    const panel = await screen.findByTestId('ot-safety-unavailable')
+    expect(panel).toBeTruthy()
+    expect(screen.queryByTestId('ot-safety-interlock')).toBeNull()
   })
 })

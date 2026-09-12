@@ -60,3 +60,23 @@ fn synthesis_and_sovereign_engines_wired_in_dispatch() {
         );
     }
 }
+
+#[test]
+fn ot_safety_engines_have_dedicated_dispatch_arms() {
+    let dispatch = include_str!("../src/engine_dispatch.rs");
+    for engine_id in ["ot_passive_active_safety", "ot_crown_jewel_path"] {
+        assert!(
+            dispatch.contains(&format!("\"{engine_id}\" =>")),
+            "missing dedicated dispatch arm for {engine_id}"
+        );
+    }
+    let routes = include_str!("../src/http/serve_route_groups.rs");
+    assert!(
+        routes.contains("/api/ot-ics/safety"),
+        "GET /api/ot-ics/safety must be mounted"
+    );
+    assert!(
+        routes.contains("/api/clients/:id/ot-ics/safety"),
+        "GET /api/clients/:id/ot-ics/safety must be mounted"
+    );
+}

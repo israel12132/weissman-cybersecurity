@@ -254,6 +254,7 @@ export default function OtIcsSecurity() {
   const [fingerprints, setFingerprints] = useState([]);
   const [fpLoading, setFpLoading] = useState(false);
   const [safety, setSafety] = useState(null);
+  const [safetyStatus, setSafetyStatus] = useState('idle');
 
   const fetchOtDevices = useCallback(async () => {
     try {
@@ -269,14 +270,22 @@ export default function OtIcsSecurity() {
   }, []);
 
   const fetchSafety = useCallback(async (cid) => {
+    setSafetyStatus('loading');
     try {
       const path = cid
         ? `/api/ot-ics/safety?client_id=${encodeURIComponent(cid)}`
         : '/api/ot-ics/safety';
       const data = await apiFetch(path);
-      setSafety(data && typeof data === 'object' ? data : null);
+      if (data && typeof data === 'object' && data.live === true && data.policy) {
+        setSafety(data);
+        setSafetyStatus('live');
+      } else {
+        setSafety(data && typeof data === 'object' ? data : null);
+        setSafetyStatus('unavailable');
+      }
     } catch {
       setSafety(null);
+      setSafetyStatus('unavailable');
     }
   }, []);
 
@@ -467,7 +476,25 @@ export default function OtIcsSecurity() {
           </div>
         )}
 
-        {safety?.policy && (
+        {safetyStatus === 'unavailable' && (
+          <div
+            data-testid="ot-safety-unavailable"
+            className="rounded-2xl border border-rose-500/30 bg-gradient-to-br from-rose-950/40 via-[var(--bg-2)] to-amber-950/20 p-5 space-y-2"
+          >
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-rose-400" />
+              <h3 className="text-sm font-semibold text-white">{t('pages.otIcsSecurity.safety_heading')}</h3>
+              <span className="text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border border-rose-500/40 text-rose-300 bg-rose-500/10">
+                {t('pages.otIcsSecurity.safety_unavailable')}
+              </span>
+            </div>
+            <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+              {t('pages.otIcsSecurity.safety_unavailable_body')}
+            </p>
+          </div>
+        )}
+
+        {safetyStatus === 'live' && safety?.policy && (
           <div
             data-testid="ot-safety-interlock"
             className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 via-[var(--bg-2)] to-cyan-950/30 p-5 space-y-4"

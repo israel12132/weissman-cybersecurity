@@ -118,51 +118,36 @@ impl OtSafetyPolicy {
             .get("protocol_strict")
             .and_then(json_truthy)
             .unwrap_or(true);
-        if let Some(n) = params.get("timeout_ms").and_then(serde_json::Value::as_u64) {
+        if let Some(n) = params.get("timeout_ms").and_then(json_u64) {
             p.io_timeout_ms = n.clamp(200, 8_000);
         }
-        if let Some(n) = params
-            .get("ot_watchdog_ms")
-            .and_then(serde_json::Value::as_u64)
-        {
+        if let Some(n) = params.get("ot_watchdog_ms").and_then(json_u64) {
             p.watchdog_ms = n.clamp(50, 10_000);
         }
-        if let Some(n) = params
-            .get("max_read_quantity")
-            .and_then(serde_json::Value::as_u64)
-        {
+        if let Some(n) = params.get("max_read_quantity").and_then(json_u64) {
             p.max_read_quantity = u16::try_from(n).unwrap_or(16).clamp(1, 125);
         }
-        if let Some(n) = params
-            .get("max_gateway_connections")
-            .and_then(serde_json::Value::as_u64)
-        {
+        if let Some(n) = params.get("max_gateway_connections").and_then(json_u64) {
             p.max_gateway_connections = u32::try_from(n).unwrap_or(2).clamp(1, 2);
         }
-        if let Some(n) = params
-            .get("modbus_unit_id")
-            .and_then(serde_json::Value::as_u64)
-        {
+        if let Some(n) = params.get("modbus_unit_id").and_then(json_u64) {
             p.modbus_unit_id = u8::try_from(n).unwrap_or(1);
         }
         if let Some(arr) = params.get("modbus_unit_ids").and_then(|v| v.as_array()) {
             p.extra_modbus_units = arr
                 .iter()
-                .filter_map(|v| v.as_u64())
+                .filter_map(json_u64)
                 .map(|n| n as u8)
                 .filter(|&u| u != p.modbus_unit_id)
                 .take(16)
                 .collect();
         }
-        if let Some(n) = params
-            .get("dnp3_link_dest")
-            .and_then(serde_json::Value::as_u64)
-        {
+        if let Some(n) = params.get("dnp3_link_dest").and_then(json_u64) {
             p.dnp3_link_dest = u16::try_from(n.min(u64::from(u16::MAX))).unwrap_or(1);
         }
         p.stealth_jitter_ms = params
             .get("stealth_jitter_ms")
-            .and_then(serde_json::Value::as_u64)
+            .and_then(json_u64)
             .unwrap_or(0)
             .min(250);
         p.soar_auto_isolate = std::env::var("WEISSMAN_OT_SOAR_AUTO_ISOLATE")
@@ -203,9 +188,27 @@ impl OtSafetyPolicy {
     pub fn effective_mode(&self) -> ProbeMode {
         self.probe_mode
     }
+
+    /// Mode the operator asked for, before HMAC/env downgrade.
+    #[must_use]
+    pub fn requested_probe_mode(params: &serde_json::Value) -> ProbeMode {
+        params
+            .get("probe_mode")
+            .and_then(|v| v.as_str())
+            .or_else(|| params.get("ot_probe_mode").and_then(|v| v.as_str()))
+            .map(ProbeMode::parse)
+            .unwrap_or(ProbeMode::SafeRead)
+    }
+
+    #[must_use]
+    pub fn active_validation_env_override() -> bool {
+        std::env::var("WEISSMAN_OT_ACTIVE_VALIDATION")
+            .map(|s| s == "1" || s.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+    }
 }
 
-fn json_truthy(v: &serde_json::Value) -> Option<bool> {
+pub(crate) fn json_truthy(v: &serde_json::Value) -> Option<bool> {
     match v {
         serde_json::Value::Bool(b) => Some(*b),
         serde_json::Value::String(s) => match s.trim().to_ascii_lowercase().as_str() {
@@ -213,8 +216,30 @@ fn json_truthy(v: &serde_json::Value) -> Option<bool> {
             "false" | "0" | "no" => Some(false),
             _ => None,
         },
-        _ => v.as_u64().map(|n| n != 0),
+        _ => json_u64(v).map(|n| n != 0),
     }
+}
+
+/// Accept numbers or numeric strings so Command Center fields (`defaultVal: '900'`)
+/// match the Rust clamp (200–8000 ms) instead of being ignored.
+fn json_u64(v: &serde_json::Value) -> Option<u64> {
+    v.as_u64()
+        .or_else(|| v.as_i64().and_then(|n| u64::try_from(n).ok()))
+        .or_else(|| {
+            v.as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .and_then(|s| s.parse().ok())
+        })
+        .or_else(|| {
+            v.as_f64().and_then(|f| {
+                if f.is_finite() && f >= 0.0 {
+                    Some(f as u64)
+                } else {
+                    None
+                }
+            })
+        })
 }
 
 /// Modbus function codes permitted as SafeRead probes (IEC 61131 / Modbus Application Protocol).
@@ -1094,5 +1119,19 @@ mod tests {
     fn constant_time_eq_rejects_length_mismatch() {
         assert!(!constant_time_eq(b"ab", b"abc"));
         assert!(constant_time_eq(b"ab", b"ab"));
+    }
+
+    #[test]
+    fn timeout_ms_accepts_numeric_strings_and_clamps() {
+        let p = OtSafetyPolicy::from_job_params(&serde_json::json!({"timeout_ms": "900"}));
+        assert_eq!(p.io_timeout_ms, 900);
+        let clamped = OtSafetyPolicy::from_job_params(&serde_json::json!({"timeout_ms": "60000"}));
+        assert_eq!(clamped.io_timeout_ms, 8_000);
+        assert_eq!(
+            OtSafetyPolicy::requested_probe_mode(
+                &serde_json::json!({"probe_mode": "active_validation"})
+            ),
+            ProbeMode::ActiveValidation
+        );
     }
 }
