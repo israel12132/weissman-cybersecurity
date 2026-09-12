@@ -3158,10 +3158,21 @@ async fn api_oast_callbacks(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
+    let oast_health = |last_callback_at: Option<String>, callback_count: usize| {
+        json!({
+            "configured": crate::fuzz_oob::oast_correlation_enabled(),
+            "domain": crate::fuzz_oob::oast_hook_domain().unwrap_or_default(),
+            "last_callback_at": last_callback_at,
+            "callback_count": callback_count,
+        })
+    };
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"callbacks": []})),
+            Json(json!({
+                "callbacks": [],
+                "health": oast_health(None, 0),
+            })),
         )
             .into_response();
     };
@@ -3225,12 +3236,7 @@ async fn api_oast_callbacks(
         StatusCode::OK,
         Json(json!({
             "callbacks": callbacks,
-            "health": {
-                "configured": crate::fuzz_oob::oast_correlation_enabled(),
-                "domain": crate::fuzz_oob::oast_hook_domain().unwrap_or_default(),
-                "last_callback_at": last_callback_at,
-                "callback_count": callbacks.len(),
-            }
+            "health": oast_health(last_callback_at, callbacks.len()),
         })),
     )
         .into_response()

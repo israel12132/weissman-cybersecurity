@@ -131,7 +131,13 @@ export default function FirstSeenHitsPanel({ clientId }) {
                 >
                   {h.claimed_first_seen
                     ? t(`${NS}.first_seen_badge_pre`)
-                    : h.nvd_status}
+                    : h.nvd_status === 'listed'
+                      ? t(`${NS}.first_seen_status_listed`)
+                      : h.nvd_status === 'skipped_no_key'
+                        ? t(`${NS}.first_seen_status_skipped`)
+                        : h.nvd_status === 'unpublished'
+                          ? t(`${NS}.first_seen_status_unpublished`)
+                          : (h.nvd_status || t(`${NS}.first_seen_status_unknown`))}
                 </span>
               </div>
               <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1">

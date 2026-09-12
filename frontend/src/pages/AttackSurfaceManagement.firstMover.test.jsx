@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, cleanup } from '@testing-library/react'
 import { FirstMoverDeltaPanel } from './AttackSurfaceManagement.jsx'
 
 vi.mock('react-i18next', () => ({
@@ -47,6 +47,8 @@ vi.mock('../lib/useJobPoll', () => ({
 vi.mock('../lib/clientTarget', () => ({ firstClientTarget: () => '' }))
 
 describe('FirstMoverDeltaPanel', () => {
+  afterEach(cleanup)
+
   it('renders added/changed/removed hosts from live surface-diff payload', () => {
     const diff = {
       current_count: 3,
@@ -74,6 +76,28 @@ describe('FirstMoverDeltaPanel', () => {
     expect(screen.getByText('pages.attackSurfaceManagement.first_mover_title')).toBeTruthy()
     expect(screen.getByText(/pages.attackSurfaceManagement.first_mover_fusion/)).toBeTruthy()
     expect(screen.getByText(/pages.attackSurfaceManagement.nerve_certstream/)).toBeTruthy()
+  })
+
+  it('fail-visibly reports last OAST callback instead of looking live when none exist', () => {
+    render(
+      <FirstMoverDeltaPanel
+        diff={{ current_count: 0, added: [], removed: [], changed: [] }}
+        loading={false}
+        hunting={false}
+        fusionHunting={false}
+        onHunt={() => {}}
+        onFusion={() => {}}
+        huntDisabled
+        nerve={{
+          certstream: { connected: false, enabled: false },
+          oast: { configured: false, last_callback_at: null },
+          nvd: { api_key_configured: false },
+        }}
+      />,
+    )
+    expect(screen.getAllByText(/pages.attackSurfaceManagement.nerve_oast_last/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/pages.attackSurfaceManagement.nerve_oast_none/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/pages.attackSurfaceManagement.nerve_off/).length).toBeGreaterThan(0)
   })
 
   it('shows unavailable copy when the store is down without treating it as empty', () => {

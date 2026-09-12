@@ -131,14 +131,14 @@ export default function CrownJewelBoard({ clientId, onChanged }) {
               <Switch
                 size="sm"
                 checked={Boolean(n.internet_exposed)}
-                disabled={busyId === n.id}
+                disabled={busyId != null && Number(busyId) === Number(n.id)}
                 onChange={(e) => toggle(n.id, 'internet_exposed', e.target.checked)}
                 label={t(`${NS}.toggle_internet_exposed`)}
               />
               <Switch
                 size="sm"
                 checked={Boolean(n.crown_jewel)}
-                disabled={busyId === n.id}
+                disabled={busyId != null && Number(busyId) === Number(n.id)}
                 onChange={(e) => toggle(n.id, 'crown_jewel', e.target.checked)}
                 label={t(`${NS}.toggle_crown_jewel`)}
               />

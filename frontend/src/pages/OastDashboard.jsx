@@ -10,6 +10,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch } from '../utils/apiFetch'
 import Button from '../components/ui/Button'
+import OastHealthStrip from '../components/oast/OastHealthStrip'
 
 const PROBE_IDS = ['log4shell', 'blind_ssrf', 'blind_xss', 'xxe_oob', 'cmd_dns', 'host_ssrf']
 
@@ -58,6 +59,11 @@ function ProbeCard({ probeId, active, onRun, disabled }) {
   )
 }
 
+function probeLabel(id, t) {
+  if (id === 'generic') return t('pages.oastDashboard.probe_generic')
+  return t(`pages.oastDashboard.probes.${id}.label`, { defaultValue: id })
+}
+
 export default function OastDashboard() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
@@ -93,8 +99,29 @@ export default function OastDashboard() {
         ? d.callbacks
         : (Array.isArray(d) ? d : [])
       setCallbacks(list.slice(0, 50))
-      if (d?.health && typeof d.health === 'object') setOastHealth(d.health)
-    } catch { /* best-effort; non-fatal */ }
+      if (d?.health && typeof d.health === 'object') {
+        setOastHealth({
+          configured: Boolean(d.health.configured),
+          domain: d.health.domain || '',
+          last_callback_at: d.health.last_callback_at || null,
+          callback_count: Number(d.health.callback_count ?? list.length) || 0,
+        })
+      } else {
+        setOastHealth({
+          configured: false,
+          domain: '',
+          last_callback_at: null,
+          callback_count: list.length,
+        })
+      }
+    } catch {
+      setOastHealth({
+        configured: false,
+        domain: '',
+        last_callback_at: null,
+        callback_count: 0,
+      })
+    }
     finally {
       if (!silent) setRefreshLoading(false)
       setCallbacksInitialLoading(false)
@@ -198,10 +225,7 @@ export default function OastDashboard() {
     }
   }, [showToast, t])
 
-  const probeLabel = (id) => {
-    if (id === 'generic') return t('pages.oastDashboard.probe_generic')
-    return t(`pages.oastDashboard.probes.${id}.label`, { defaultValue: id })
-  }
+  const labelForProbe = (id) => probeLabel(id, t)
 
   return (
     <PageShell
@@ -222,32 +246,7 @@ export default function OastDashboard() {
         {t('pages.oastDashboard.verification_banner')}
       </div>
 
-      {oastHealth && (
-        <div
-          data-testid="oast-health-strip"
-          className={`mb-6 rounded-xl border px-4 py-3 text-[11px] font-mono flex flex-wrap gap-3 ${
-            oastHealth.configured
-              ? 'border-emerald-500/30 bg-emerald-950/20 text-emerald-200'
-              : 'border-amber-500/30 bg-amber-950/20 text-amber-100'
-          }`}
-        >
-          <span>
-            {t('pages.oastDashboard.health_listener')}: {oastHealth.configured
-              ? t('pages.oastDashboard.health_configured')
-              : t('pages.oastDashboard.health_missing')}
-          </span>
-          <span>
-            {t('pages.oastDashboard.health_domain')}: {oastHealth.domain || '—'}
-          </span>
-          <span>
-            {t('pages.oastDashboard.health_last')}: {oastHealth.last_callback_at
-              || t('pages.oastDashboard.health_none')}
-          </span>
-          <span>
-            {t('pages.oastDashboard.health_count', { count: oastHealth.callback_count ?? callbacks.length })}
-          </span>
-        </div>
-      )}
+      <OastHealthStrip health={oastHealth} fallbackCount={callbacks.length} />
 
       <div className="flex items-center gap-2 mb-8">
         <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.oastDashboard.client')}</span>
@@ -320,7 +319,7 @@ export default function OastDashboard() {
               onChange={(e) => setMintProbeType(e.target.value)}
               className="rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40"
             >
-              {PROBE_IDS.map((id) => <option key={id} value={id}>{probeLabel(id)}</option>)}
+              {PROBE_IDS.map((id) => <option key={id} value={id}>{labelForProbe(id)}</option>)}
               <option value="generic">{t('pages.oastDashboard.probe_generic')}</option>
             </select>
             <input
@@ -353,7 +352,7 @@ export default function OastDashboard() {
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="space-y-0.5 min-w-0">
                     <p className="text-[11px] font-mono text-cyan-400/80 break-all">{tok.token}</p>
-                    <p className="text-[10px] text-[var(--text-disabled)]">{probeLabel(tok.probe_type)} · {tok.target_url}</p>
+                    <p className="text-[10px] text-[var(--text-disabled)]">{labelForProbe(tok.probe_type)} · {tok.target_url}</p>
                     {tok.label && <p className="text-[10px] text-[var(--text-disabled)] italic">{tok.label}</p>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">

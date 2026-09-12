@@ -231,10 +231,11 @@ pub async fn list_hits_json(
         r#"SELECT id, package_name, version_spec, ecosystem, osv_id, cve_id, nvd_status,
                   evidence_json, first_seen_at
            FROM osv_first_seen_hits
-           WHERE client_id = $1
+           WHERE tenant_id = $1 AND client_id = $2
            ORDER BY first_seen_at DESC
            LIMIT 200"#,
     )
+    .bind(tenant_id)
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
@@ -628,8 +629,11 @@ mod tests {
         assert!(!NvdStatus::SkippedNoKey.is_first_seen());
         assert_eq!(NvdStatus::SkippedNoKey.as_str(), "skipped_no_key");
         assert!(NvdStatus::from_db("absent_cve").is_first_seen());
+        assert!(NvdStatus::from_db("unpublished").is_first_seen());
         assert!(!NvdStatus::from_db("listed").is_first_seen());
         assert!(!NvdStatus::from_db("skipped_no_key").is_first_seen());
+        assert_eq!(NvdStatus::from_db("listed").as_str(), "listed");
+        assert!(!NvdStatus::from_db("garbage").is_first_seen());
     }
 
     #[test]

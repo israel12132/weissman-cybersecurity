@@ -1,0 +1,32 @@
+import { useTranslation } from 'react-i18next'
+
+export default function OastHealthStrip({ health, fallbackCount = 0 }) {
+  const { t } = useTranslation()
+  if (!health) return null
+  return (
+    <div
+      data-testid="oast-health-strip"
+      className={`mb-6 rounded-xl border px-4 py-3 text-[11px] font-mono flex flex-wrap gap-3 ${
+        health.configured
+          ? 'border-emerald-500/30 bg-emerald-950/20 text-emerald-200'
+          : 'border-amber-500/30 bg-amber-950/20 text-amber-100'
+      }`}
+    >
+      <span>
+        {t('pages.oastDashboard.health_listener')}: {health.configured
+          ? t('pages.oastDashboard.health_configured')
+          : t('pages.oastDashboard.health_missing')}
+      </span>
+      <span>
+        {t('pages.oastDashboard.health_domain')}: {health.domain || '—'}
+      </span>
+      <span>
+        {t('pages.oastDashboard.health_last')}: {health.last_callback_at
+          || t('pages.oastDashboard.health_none')}
+      </span>
+      <span>
+        {t('pages.oastDashboard.health_count', { count: health.callback_count ?? fallbackCount })}
+      </span>
+    </div>
+  )
+}
