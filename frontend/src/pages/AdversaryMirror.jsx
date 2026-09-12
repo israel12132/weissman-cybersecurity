@@ -19,9 +19,10 @@ import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import Button from '../components/ui/Button'
 import { useClient } from '../context/ClientContext'
 import { firstClientTarget } from '../lib/clientTarget'
-import { launchEngineScan } from '../lib/launchEngineScan'
+import { useLaunchEngineScan } from '../hooks/useLaunchEngineScan'
 import { useToast } from '../components/ui/Toaster'
 import { useJobPoll } from '../lib/useJobPoll'
+import { useInsideEngineC2, useC2AbortSignal } from '../engineC2/EngineC2Boundary'
 
 const columnHelper = createColumnHelper()
 const ENGINE = 'adversary_gap_mirror'
@@ -81,7 +82,25 @@ async function downloadRaw(path, filename) {
 
 export default function AdversaryMirror() {
   const { t } = useTranslation()
+  return (
+    <PageShell
+      title={t(`${NS}.title`)}
+      subtitle={t(`${NS}.subtitle`)}
+      hideEvidence
+      badge={t(`${NS}.badge`)}
+      badgeColor="#e11d48"
+      icon={<Crosshair />}
+    >
+      <AdversaryMirrorBody />
+    </PageShell>
+  )
+}
+
+function AdversaryMirrorBody() {
+  const { t } = useTranslation()
   const { toast } = useToast()
+  useInsideEngineC2()
+  const { signal, killed } = useC2AbortSignal()
   const { clients, selectedClientId, setSelectedClientId } = useClient()
   const selected = clients.find((c) => String(c.id) === String(selectedClientId)) || null
   const target = firstClientTarget(selected)
@@ -116,11 +135,13 @@ export default function AdversaryMirror() {
   useVisiblePolling(load, 60000, { paused: !autoRefresh })
   useJobPoll(pendingJobId, {
     enabled: Boolean(pendingJobId),
-    onComplete: () => {
+    onComplete: (job) => {
       setPendingJobId(null)
       setScanning(false)
       load()
-      toast.success(t(`${NS}.scan_complete`))
+      const st = String(job?.status || '').toLowerCase()
+      if (st === 'completed') toast.success(t(`${NS}.scan_complete`))
+      else toast.error(t(`${NS}.scan_job_failed`, { status: st || 'failed' }))
     },
   })
 
@@ -145,23 +166,28 @@ export default function AdversaryMirror() {
       if (blob.includes('ransomware') || blob.includes('leak-site')) ransom += 1
       if (blob.includes('iab') || blob.includes('rdp') || blob.includes('vpn') || blob.includes('product token')) iab += 1
     }
-    return { ...by, total: findings.length, ransom, iab }
+    return { ...by, total: by.critical + by.high + by.medium + by.low, ransom, iab }
   }, [findings])
 
   const { exportCsv } = useFindingsWorkbench(filtered, { csvPrefix: 'adversary-gap-mirror' })
+  const launchScan = useLaunchEngineScan(selectedClientId)
 
   const runEngine = async (engineId) => {
+    if (killed) {
+      toast.error(t(`${NS}.killed`))
+      return
+    }
     if (!selectedClientId || !target) {
       toast.error(t(`${NS}.need_client`))
       return
     }
     setScanning(true)
     try {
-      const { ok, data } = await launchEngineScan({
+      const { ok, data } = await launchScan({
         engineId,
         clientId: selectedClientId,
         target,
-        extraParams: engineId === ENGINE ? { include_ports: 'true', include_http: 'true' } : {},
+        signal,
       })
       if (!ok) {
         throw new Error(data?.error || data?.detail || data?.message || t(`${NS}.scan_failed`))
@@ -234,15 +260,8 @@ export default function AdversaryMirror() {
   )
 
   return (
-    <PageShell
-      title={t(`${NS}.title`)}
-      subtitle={t(`${NS}.subtitle`)}
-      hideEvidence
-      badge={t(`${NS}.badge`)}
-      badgeColor="#e11d48"
-      icon={<Crosshair />}
-      actions={(
-        <div className="flex items-center gap-2 flex-wrap">
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="unstyled"
             type="button"
@@ -260,7 +279,7 @@ export default function AdversaryMirror() {
             variant="unstyled"
             type="button"
             onClick={runMirror}
-            disabled={scanning || !target}
+            disabled={scanning || !target || killed}
             className="px-3 py-1.5 rounded-lg border border-rose-500/40 text-xs font-mono text-rose-200 hover:bg-rose-500/10 disabled:opacity-40"
           >
             <Swords className="w-3.5 h-3.5 inline mr-1" />
@@ -290,11 +309,8 @@ export default function AdversaryMirror() {
             refreshLoading={loading}
             exportDisabled={filtered.length === 0}
           />
-        </div>
-      )}
-    >
-      <div className="space-y-6">
-        <div className="rounded-xl border border-rose-500/25 bg-gradient-to-r from-rose-950/40 to-violet-950/30 px-4 py-3 flex items-start gap-3">
+      </div>
+      <div className="rounded-xl border border-rose-500/25 bg-gradient-to-r from-rose-950/40 to-violet-950/30 px-4 py-3 flex items-start gap-3">
           <ShieldAlert className="w-4 h-4 text-rose-400 mt-0.5 shrink-0" />
           <p className="text-xs text-rose-100/80 leading-relaxed">{t(`${NS}.evidence_notice`)}</p>
         </div>
@@ -344,7 +360,7 @@ export default function AdversaryMirror() {
                 variant="unstyled"
                 type="button"
                 onClick={() => runEngine('leak_hunter')}
-                disabled={scanning || !target}
+                disabled={scanning || !target || killed}
                 className="px-3 py-1.5 rounded-lg border border-[var(--border-default)] text-xs font-mono"
               >
                 {t(`${NS}.run_leak`)}
@@ -353,7 +369,7 @@ export default function AdversaryMirror() {
                 variant="unstyled"
                 type="button"
                 onClick={() => runEngine('password_spray')}
-                disabled={scanning || !target}
+                disabled={scanning || !target || killed}
                 className="px-3 py-1.5 rounded-lg border border-[var(--border-default)] text-xs font-mono"
               >
                 {t(`${NS}.run_spray`)}
@@ -393,7 +409,7 @@ export default function AdversaryMirror() {
         </p>
       </div>
       <FindingDrawer finding={selectedFinding} onClose={() => setSelected(null)} />
-    </PageShell>
+    </div>
   )
 }
 

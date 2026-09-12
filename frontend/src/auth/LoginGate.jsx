@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import Logo from '../components/Logo'
 import Button from '../components/ui/Button'
 import { apiUrl } from '../lib/apiBase'
+import { PRODUCTION_ENGINE_COUNT } from '../lib/platformScale'
 import {
   normalizeMfaCode,
   readStoredWorkspaceSlug,
@@ -202,7 +203,7 @@ function BrandPanel({ t, pulse }) {
           {t('auth.brand_tagline')}
         </h1>
         <p className="mt-5 max-w-lg text-base leading-relaxed text-white/55">
-          {t('auth.brand_story')}
+          {t('auth.brand_story', { engines: PRODUCTION_ENGINE_COUNT })}
         </p>
         <ul className="mt-10 flex flex-wrap gap-3" aria-label={t('auth.trust_label')}>
           {trustItems.map(({ icon: Icon, label }) => (

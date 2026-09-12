@@ -1054,6 +1054,7 @@ pub fn build_adversary_mirror_pdf(
     iab_signals: u32,
     total_findings: u32,
     headline: &str,
+    signal_titles: &[String],
 ) -> Result<Vec<u8>, String> {
     let date = israel_now();
     let mut b = PdfBuilder::new();
@@ -1092,6 +1093,25 @@ pub fn build_adversary_mirror_pdf(
     b.text(14, "Headline");
     b.set_fill_rgb(0.9, 0.92, 0.95);
     b.text(11, &truncate_ascii(headline, 220));
+
+    if !signal_titles.is_empty() {
+        b.y -= 8.0;
+        b.set_fill_rgb(0.2, 0.75, 0.95);
+        b.text(14, "Signal findings (info/zero-hit omitted)");
+        b.set_fill_rgb(0.9, 0.92, 0.95);
+        for (i, title) in signal_titles.iter().take(16).enumerate() {
+            b.text(9, &format!("{}. {}", i + 1, truncate_ascii(title, 110)));
+        }
+        if signal_titles.len() > 16 {
+            b.text(
+                9,
+                &format!(
+                    "… {} more signal rows in the live findings table / Excel pack",
+                    signal_titles.len() - 16
+                ),
+            );
+        }
+    }
 
     b.y -= 10.0;
     b.set_fill_rgb(0.45, 0.5, 0.58);
@@ -1637,6 +1657,7 @@ mod adversary_mirror_pdf_tests {
             1,
             4,
             "Ransomware leak-site listing",
+            &["Ransomware leak-site listing".into()],
         )
         .expect("pdf");
         assert!(bytes.starts_with(b"%PDF-1.4"));

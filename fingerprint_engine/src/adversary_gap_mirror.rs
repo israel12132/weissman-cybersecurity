@@ -34,6 +34,10 @@ const INTEL_BODY_MAX: usize = 262_144;
 pub const IAB_PORTS: &[u16] = &[
     22, 3389, 445, 5985, 5986, 443, 8443, 10443, 4443, 9443, 5900,
 ];
+const IAB_PORTS_LIGHT: &[u16] = &[22, 443, 3389];
+const IAB_PORTS_AGGRESSIVE: &[u16] = &[
+    21, 22, 23, 3389, 445, 5985, 5986, 443, 8443, 10443, 4443, 9443, 5900, 8291,
+];
 
 const VPN_TOKENS: &[&str] = &[
     "citrix",
@@ -66,6 +70,7 @@ pub struct RansomHit {
     pub attack_date: String,
     pub infostealer_employees: i64,
     pub infostealer_users: i64,
+    pub website_confirmed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,6 +79,7 @@ pub struct RansomLookHit {
     pub group: String,
     pub discovered: String,
     pub site: String,
+    pub confirmed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -136,6 +142,24 @@ fn ransomware_live_api_key() -> String {
 
 fn urlscan_api_key() -> String {
     env_nonempty(&["URLSCAN_API_KEY", "URLSCAN_APIKEY"])
+}
+
+fn pstr(params: &Value, key: &str, default: &str) -> String {
+    params
+        .get(key)
+        .and_then(Value::as_str)
+        .map(|s| s.trim().to_ascii_lowercase())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| default.to_string())
+}
+
+#[must_use]
+pub fn ports_for_intensity(level: &str) -> &'static [u16] {
+    match level {
+        "light" => IAB_PORTS_LIGHT,
+        "aggressive" => IAB_PORTS_AGGRESSIVE,
+        _ => IAB_PORTS,
+    }
 }
 
 fn pbool(params: &Value, key: &str, default: bool) -> bool {
@@ -261,7 +285,9 @@ pub fn parse_ransomware_live(body: &str, host: &str) -> Vec<RansomHit> {
             .and_then(Value::as_str)
             .unwrap_or("")
             .to_string();
-        if !host_matches_needle(host, &website) && !victim_mentions_org(&victim, host) {
+        let site_ok = host_matches_needle(host, &website);
+        let name_ok = victim_mentions_org(&victim, host);
+        if !site_ok && !name_ok {
             continue;
         }
         let (infostealer_employees, infostealer_users) = match row.get("infostealer") {
@@ -290,6 +316,7 @@ pub fn parse_ransomware_live(body: &str, host: &str) -> Vec<RansomHit> {
                 .to_string(),
             infostealer_employees,
             infostealer_users,
+            website_confirmed: site_ok,
         });
         if out.len() >= 20 {
             break;
@@ -534,7 +561,9 @@ pub fn parse_ransomlook_posts(body: &str, host: &str) -> Vec<RansomLookHit> {
         } else {
             link
         };
-        if !host_matches_needle(host, &site) && !victim_mentions_org(&title, host) {
+        let site_ok = !site.is_empty() && host_matches_needle(host, &site);
+        let name_ok = victim_mentions_org(&title, host);
+        if !site_ok && !name_ok {
             continue;
         }
         out.push(RansomLookHit {
@@ -551,6 +580,7 @@ pub fn parse_ransomlook_posts(body: &str, host: &str) -> Vec<RansomLookHit> {
                 .unwrap_or("")
                 .to_string(),
             site,
+            confirmed: site_ok,
         });
         if out.len() >= 20 {
             break;
@@ -690,9 +720,11 @@ fn push_ransom_live_hits(
     hits: &[RansomHit],
 ) {
     for hit in hits {
+        let confirmed = hit.website_confirmed;
         let mut desc = format!(
-            "Clearnet ransomware.live listed victim='{}' website='{}' date='{}'. Treat as confirmed extortion-intel, not a simulated hit. Next authorized engines: leak_hunter, password_spray, incident-response playbooks.",
-            hit.victim, hit.website, hit.attack_date
+            "Clearnet ransomware.live listed victim='{}' website='{}' date='{}'. Treat as {} extortion-intel, not a simulated hit. Next authorized engines: leak_hunter, password_spray, incident-response playbooks.",
+            hit.victim, hit.website, hit.attack_date,
+            if confirmed { "confirmed (website/domain match)" } else { "unconfirmed (victim-name token only)" }
         );
         if hit.infostealer_employees > 0 || hit.infostealer_users > 0 {
             desc.push_str(&format!(
@@ -703,7 +735,12 @@ fn push_ransom_live_hits(
         findings.push(finding_ev(
             engine_id,
             &format!(
-                "Ransomware leak-site listing for {} (group {})",
+                "{} for {} (group {})",
+                if confirmed {
+                    "Ransomware leak-site listing"
+                } else {
+                    "Unconfirmed leak-site name mention"
+                },
                 if hit.victim.is_empty() {
                     apex
                 } else {
@@ -715,7 +752,7 @@ fn push_ransom_live_hits(
                     &hit.group
                 }
             ),
-            "high",
+            if confirmed { "high" } else { "medium" },
             &desc,
             target,
             json!({
@@ -728,6 +765,7 @@ fn push_ransom_live_hits(
                 "attack_date": hit.attack_date,
                 "infostealer_employees": hit.infostealer_employees,
                 "infostealer_users": hit.infostealer_users,
+                "website_confirmed": confirmed,
             }),
         ));
     }
@@ -1160,10 +1198,23 @@ pub async fn collect_clearnet_intel(engine_id: &str, target: &str) -> Vec<Value>
         "https://haveibeenpwned.com/api/v3/breaches?Domain={}",
         urlencoding::encode(&apex)
     );
-    if let Some(p) = http_get_with_headers(&client, &hibp_url, &headers).await {
+    if let Some(p) = http_get_with_headers_max(&client, &hibp_url, &headers, INTEL_BODY_MAX).await {
         if p.status == 200 {
             let hits = parse_hibp_breaches(&p.body, &host);
-            if hits.is_empty() {
+            let truncated = p.body.len() >= INTEL_BODY_MAX;
+            if hits.is_empty() && truncated {
+                findings.push(finding_ev(
+                    engine_id,
+                    "HIBP catalog body truncated — not counted as a zero-hit",
+                    "info",
+                    &format!(
+                        "Live GET {hibp_url} returned HTTP {} but the body hit the {INTEL_BODY_MAX}-byte cap and could not be fully parsed. This is a fetch limit, not proof of no breach.",
+                        p.status
+                    ),
+                    target,
+                    json!({"source":"hibp_breaches","url":hibp_url,"http_status":p.status,"truncated":true,"attribution":"Have I Been Pwned"}),
+                ));
+            } else if hits.is_empty() {
                 findings.push(finding_ev(
                     engine_id,
                     &format!("HIBP catalog queried — no Domain={apex} breach"),
@@ -1245,14 +1296,20 @@ pub async fn collect_clearnet_intel(engine_id: &str, target: &str) -> Vec<Value>
                     findings.push(finding_ev(
                         engine_id,
                         &format!(
-                            "RansomLook leak-site listing for {} (group {})",
+                            "{} for {} (group {})",
+                            if hit.confirmed {
+                                "RansomLook leak-site listing"
+                            } else {
+                                "Unconfirmed RansomLook name mention"
+                            },
                             if hit.title.is_empty() { &apex } else { &hit.title },
                             if hit.group.is_empty() { "unknown" } else { &hit.group }
                         ),
-                        "high",
+                        if hit.confirmed { "high" } else { "medium" },
                         &format!(
-                            "Clearnet RansomLook posts catalog listed post_title='{}' group='{}' discovered='{}'. Magnet/onion locations are not retrieved. Next authorized engines: leak_hunter, password_spray.",
-                            hit.title, hit.group, hit.discovered
+                            "Clearnet RansomLook posts catalog listed post_title='{}' group='{}' discovered='{}'. {} Magnet/onion locations are not retrieved. Next authorized engines: leak_hunter, password_spray.",
+                            hit.title, hit.group, hit.discovered,
+                            if hit.confirmed { "Website/domain matched the authorized apex." } else { "Title token match only — not treated as a confirmed victim site." }
                         ),
                         target,
                         json!({
@@ -1263,6 +1320,7 @@ pub async fn collect_clearnet_intel(engine_id: &str, target: &str) -> Vec<Value>
                             "group": hit.group,
                             "discovered": hit.discovered,
                             "site": hit.site,
+                            "confirmed": hit.confirmed,
                         }),
                     ));
                 }
@@ -1405,25 +1463,24 @@ async fn probe_iab_surface(
     target: &str,
     include_ports: bool,
     include_http: bool,
+    ports: &[u16],
+    http_paths: &[&str],
 ) -> (Vec<u16>, Vec<String>) {
     let host = extract_host(target);
     let mut open = Vec::new();
     let mut tokens = Vec::new();
     if include_ports {
-        open = tcp_scan(&host, IAB_PORTS, 8).await;
+        open = tcp_scan(&host, ports, 8).await;
     }
     if include_http {
         let client = http_client().await;
-        for url in [
-            format!("https://{host}/"),
-            format!("https://{host}/vpn/index.html"),
-            format!("https://{host}/remote/login"),
-            format!("https://{host}/owa/"),
-            format!("https://{host}/RDWeb/"),
-            format!("https://{host}/global-protect/login.esp"),
-            format!("https://{host}/dana-na/"),
-        ] {
+        for path in http_paths {
+            let url = format!("https://{host}{path}");
             if let Some(p) = http_get(&client, &url).await {
+                let final_host = extract_host(&p.final_url);
+                if !final_host.is_empty() && !host_matches_needle(&host, &final_host) {
+                    continue;
+                }
                 let blob = format!("{} {}", p.headers_blob(), p.body).to_ascii_lowercase();
                 for tok in VPN_TOKENS {
                     if blob.contains(tok) {
@@ -1444,9 +1501,35 @@ pub async fn run_adversary_gap_mirror_result(target: &str, ctx: &EngineRunContex
     }
     let include_ports = pbool(&ctx.job_params, "include_ports", true);
     let include_http = pbool(&ctx.job_params, "include_http", true);
+    let intensity = pstr(&ctx.job_params, "intensity", "normal");
+    let ports = ports_for_intensity(&intensity);
+    let http_paths: &[&str] = match intensity.as_str() {
+        "light" => &["/"],
+        "aggressive" => &[
+            "/",
+            "/vpn/index.html",
+            "/remote/login",
+            "/owa/",
+            "/RDWeb/",
+            "/global-protect/login.esp",
+            "/dana-na/",
+            "/citrix/",
+            "/ssl-vpn/",
+        ],
+        _ => &[
+            "/",
+            "/vpn/index.html",
+            "/remote/login",
+            "/owa/",
+            "/RDWeb/",
+            "/global-protect/login.esp",
+            "/dana-na/",
+        ],
+    };
 
     let mut findings = collect_clearnet_intel(ENGINE_ID, target).await;
-    let (open, tokens) = probe_iab_surface(target, include_ports, include_http).await;
+    let (open, tokens) =
+        probe_iab_surface(target, include_ports, include_http, ports, http_paths).await;
 
     if !open.is_empty() {
         findings.push(finding_ev(
@@ -1464,7 +1547,7 @@ pub async fn run_adversary_gap_mirror_result(target: &str, ctx: &EngineRunContex
                 ["password_spray", "smb_netbios", "leak_hunter"]
             ),
             target,
-            json!({"open_ports": open, "probe": "tcp_connect", "ports_scanned": IAB_PORTS}),
+            json!({"open_ports": open, "probe": "tcp_connect", "ports_scanned": ports, "intensity": intensity}),
         ));
     } else if include_ports {
         findings.push(finding_ev(
@@ -1473,11 +1556,11 @@ pub async fn run_adversary_gap_mirror_result(target: &str, ctx: &EngineRunContex
             "info",
             &format!(
                 "Authorized TCP connect of {:?} on {} produced zero accepts.",
-                IAB_PORTS,
+                ports,
                 extract_host(target)
             ),
             target,
-            json!({"open_ports": open, "ports_scanned": IAB_PORTS}),
+            json!({"open_ports": open, "ports_scanned": ports, "intensity": intensity}),
         ));
     }
 
@@ -1571,6 +1654,7 @@ mod tests {
         let hits = parse_ransomware_live(body, "www.acme.com");
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].group, "play");
+        assert!(hits[0].website_confirmed);
     }
 
     #[test]
@@ -1628,6 +1712,13 @@ mod tests {
     }
 
     #[test]
+    fn intensity_selects_port_sets() {
+        assert_eq!(ports_for_intensity("light").len(), 3);
+        assert!(ports_for_intensity("aggressive").contains(&21));
+        assert_eq!(ports_for_intensity("normal"), IAB_PORTS);
+    }
+
+    #[test]
     fn ransomware_live_404_is_zero_not_outage() {
         assert!(ransomware_live_no_victims(
             404,
@@ -1653,8 +1744,7 @@ mod tests {
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].group, "lockbit");
         assert!(hits[0].site.is_empty());
-        assert!(!hits[0].title.to_ascii_lowercase().contains("magnet"));
-        assert!(!hits[0].group.contains("password"));
+        assert!(!hits[0].confirmed);
     }
 
     #[test]

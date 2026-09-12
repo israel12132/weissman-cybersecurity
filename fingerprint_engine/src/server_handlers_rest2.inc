@@ -115,6 +115,14 @@ fn is_adversary_source(src: &str) -> bool {
     ADVERSARY_MIRROR_SOURCES.iter().any(|x| s == *x)
 }
 
+fn db_query_fail(e: impl std::fmt::Display) -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(json!({"error": "query failed", "detail": e.to_string()})),
+    )
+        .into_response()
+}
+
 async fn api_client_export_xlsx(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -136,13 +144,19 @@ async fn api_client_export_xlsx(
             return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
         }
     };
-    let rows = sqlx::query(
-        "SELECT id, title, severity, source, COALESCE(status,''), discovered_at, COALESCE(description,'') FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
+    let rows = match sqlx::query(
+        "SELECT id, title, severity, source, COALESCE(status,'') AS status, discovered_at, COALESCE(description,'') AS description FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
     )
     .bind(id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return db_query_fail(e);
+        }
+    };
     let _ = tx.commit().await;
     let tuples: Vec<(i64, String, String, String, String, String, String)> = rows
         .into_iter()
@@ -217,13 +231,19 @@ async fn api_client_adversary_mirror_xlsx(
             return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
         }
     };
-    let rows = sqlx::query(
-        "SELECT id, title, severity, source, COALESCE(status,''), discovered_at, COALESCE(description,'') FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
+    let rows = match sqlx::query(
+        "SELECT id, title, severity, source, COALESCE(status,'') AS status, discovered_at, COALESCE(description,'') AS description FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
     )
     .bind(id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return db_query_fail(e);
+        }
+    };
     let _ = tx.commit().await;
     let tuples: Vec<(i64, String, String, String, String, String, String)> = rows
         .into_iter()
@@ -302,13 +322,19 @@ async fn api_client_adversary_mirror_pdf(
             return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
         }
     };
-    let rows = sqlx::query(
-        "SELECT title, severity, source, COALESCE(description,'') FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
+    let rows = match sqlx::query(
+        "SELECT title, severity, source, COALESCE(description,'') AS description FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
     )
     .bind(id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return db_query_fail(e);
+        }
+    };
     let _ = tx.commit().await;
     let mut ransom = 0u32;
     let mut ioc = 0u32;
@@ -316,6 +342,7 @@ async fn api_client_adversary_mirror_pdf(
     let mut iab = 0u32;
     let mut total = 0u32;
     let mut headline = String::from("No adversary-intel signal findings yet. Info rows (zero-hit / unreachable feeds) are omitted from these counts.");
+    let mut signal_titles: Vec<String> = Vec::new();
     for r in &rows {
         let src = r.try_get::<String, _>("source").unwrap_or_default();
         if !is_adversary_source(&src) {
@@ -344,7 +371,10 @@ async fn api_client_adversary_mirror_pdf(
             iab += 1;
         }
         if headline.starts_with("No adversary") {
-            headline = title;
+            headline = title.clone();
+        }
+        if signal_titles.len() < 20 {
+            signal_titles.push(title);
         }
     }
     let pdf_bytes = match crate::pdf_report::build_adversary_mirror_pdf(
@@ -356,6 +386,7 @@ async fn api_client_adversary_mirror_pdf(
         iab,
         total,
         &headline,
+        &signal_titles,
     ) {
         Ok(b) => b,
         Err(e) => {
@@ -1159,6 +1190,42 @@ async fn api_openapi_spec() -> Response {
                     ],
                     "responses": {
                         "200": { "description": "CSV file download", "content": { "text/csv": {} } }
+                    }
+                }
+            },
+            "/api/clients/{id}/export/xlsx": {
+                "get": {
+                    "summary": "Export findings for a specific client as an OOXML workbook",
+                    "tags": ["Clients","Findings"],
+                    "parameters": [
+                        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+                    ],
+                    "responses": {
+                        "200": { "description": "XLSX file download", "content": { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {} } }
+                    }
+                }
+            },
+            "/api/clients/{id}/adversary-mirror/xlsx": {
+                "get": {
+                    "summary": "Adversary Gap Mirror Excel pack for a client (leak-intel sources only)",
+                    "tags": ["Clients","Reports"],
+                    "parameters": [
+                        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+                    ],
+                    "responses": {
+                        "200": { "description": "XLSX file download", "content": { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {} } }
+                    }
+                }
+            },
+            "/api/clients/{id}/adversary-mirror/pdf": {
+                "get": {
+                    "summary": "Adversary Gap Mirror board PDF (signal findings only)",
+                    "tags": ["Clients","Reports"],
+                    "parameters": [
+                        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+                    ],
+                    "responses": {
+                        "200": { "description": "PDF file", "content": { "application/pdf": {} } }
                     }
                 }
             },

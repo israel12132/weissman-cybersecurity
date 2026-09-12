@@ -13,10 +13,23 @@ pub struct XlsxSheet {
 }
 
 fn xml_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        // XML 1.0 Char ::= #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
+        let ok = matches!(c, '\t' | '\n' | '\r')
+            || (c >= '\u{20}' && c != '\u{FFFE}' && c != '\u{FFFF}');
+        if !ok {
+            continue;
+        }
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 /// Neutralize spreadsheet formula injection (CSV/XLSX).
@@ -374,6 +387,12 @@ mod tests {
     fn formula_prefix_quoted() {
         assert_eq!(neutralize_formula("=cmd"), "'=cmd");
         assert_eq!(neutralize_formula("normal"), "normal");
+    }
+
+    #[test]
+    fn xml_escape_drops_nul_and_escapes_markup() {
+        assert_eq!(xml_escape("a&b<c"), "a&amp;b&lt;c");
+        assert_eq!(xml_escape("ok\u{0000}x\u{0007}y"), "okxy");
     }
 
     #[test]

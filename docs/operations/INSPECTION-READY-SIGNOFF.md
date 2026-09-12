@@ -11,8 +11,8 @@
 | Metric | Value | Verify |
 |--------|-------|--------|
 | Production engines | **584** | `node scripts/verify_engine_wiring.mjs` |
-| Command Center routes | **130** | `node scripts/weissman-ui-audit.mjs` |
-| UI pages audited | **111/111** | same |
+| Command Center routes | **145** | `node scripts/weissman-ui-audit.mjs` |
+| UI pages audited | **126/126** | same |
 | Engine `no_path` | **0** | `node scripts/engine_reality_audit.mjs` |
 | Fusion engines | **6** | `fingerprint_engine/src/engine_fusion/mod.rs` |
 | JWT minimum (production) | **48 chars** | `security_startup.rs` |
