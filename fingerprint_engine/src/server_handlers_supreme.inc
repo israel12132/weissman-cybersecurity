@@ -363,8 +363,17 @@ async fn api_cnapp_refresh(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::cnapp_refresh_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let mut queued = Vec::new();
+    let mut eligible = 0usize;
     for r in rows {
         let id: i64 = r.try_get("id").unwrap_or(0);
         if id <= 0 {
@@ -382,6 +391,7 @@ async fn api_cnapp_refresh(
         if target.trim().is_empty() {
             continue;
         }
+        eligible += 1;
         let payload = json!({
             "engine": "cnapp_continuous",
             "target": target,
@@ -404,6 +414,15 @@ async fn api_cnapp_refresh(
             })),
             Err(e) => tracing::error!(error = %e, client_id = id, "cnapp_continuous enqueue failed"),
         }
+    }
+    if eligible > 0 && queued.is_empty() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::cnapp_refresh_unavailable_json(
+                "cnapp enqueue failed for every eligible client",
+            )),
+        )
+            .into_response();
     }
     (
         StatusCode::ACCEPTED,

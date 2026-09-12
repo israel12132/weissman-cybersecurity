@@ -1,7 +1,7 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { useClientTargetPrefill } from '../hooks/useHubLocalScanParams'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import PageShell from './PageShell'
@@ -76,6 +76,8 @@ export default function OastDashboard() {
   const [toast, setToast] = useState(null)
   const [callbacksInitialLoading, setCallbacksInitialLoading] = useState(true)
   const [refreshLoading, setRefreshLoading] = useState(false)
+  const callbacksAbortRef = useRef(null)
+  const callbacksInflightRef = useRef(false)
 
   const [mintTarget, setMintTarget] = useState('')
   const [mintProbeType, setMintProbeType] = useState('log4shell')
@@ -103,9 +105,16 @@ export default function OastDashboard() {
   useClientTargetPrefill(selectedClientId, clients, setMintTarget)
 
   const reloadCallbacks = useCallback(async ({ silent = false } = {}) => {
+    if (silent && callbacksInflightRef.current) return
+    if (!silent) callbacksAbortRef.current?.abort()
+    else if (callbacksInflightRef.current) return
+    const ac = new AbortController()
+    callbacksAbortRef.current = ac
+    callbacksInflightRef.current = true
     if (!silent) setRefreshLoading(true)
     try {
-      const d = await apiFetch('/api/oast/callbacks')
+      const d = await apiFetch('/api/oast/callbacks', { signal: ac.signal })
+      if (ac.signal.aborted) return
       if (d?.ok === false || d?.unavailable) {
         throw new Error(d.detail || 'unavailable')
       }
@@ -136,7 +145,7 @@ export default function OastDashboard() {
         })
       }
     } catch (e) {
-      if (e?.name === 'AbortError') return
+      if (e?.name === 'AbortError' || ac.signal.aborted) return
       setCallbacks([])
       setOastHealth({
         configured: false,
@@ -145,15 +154,16 @@ export default function OastDashboard() {
         last_callback_at: null,
         callback_count: null,
       })
-    }
-    finally {
-      if (!silent) setRefreshLoading(false)
-      setCallbacksInitialLoading(false)
+    } finally {
+      if (callbacksAbortRef.current === ac) callbacksInflightRef.current = false
+      if (!silent && callbacksAbortRef.current === ac && !ac.signal.aborted) setRefreshLoading(false)
+      if (callbacksAbortRef.current === ac && !ac.signal.aborted) setCallbacksInitialLoading(false)
     }
   }, [])
 
   useEffect(() => {
     reloadCallbacks({ silent: true })
+    return () => callbacksAbortRef.current?.abort()
   }, [reloadCallbacks])
   // Hidden-tab-aware: pause the 5s OAST callback poll while the tab is backgrounded.
   useVisiblePolling(() => reloadCallbacks({ silent: true }), 5000)

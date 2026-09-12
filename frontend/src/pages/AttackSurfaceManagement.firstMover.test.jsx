@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { FirstMoverDeltaPanel } from './AttackSurfaceManagement.jsx'
 
 vi.mock('react-i18next', () => ({
@@ -186,5 +189,15 @@ describe('FirstMoverDeltaPanel', () => {
     )
     expect(screen.getByTestId('first-mover-asset-count').textContent).toBe('—')
     expect(screen.getByText('shop.example.com')).toBeTruthy()
+  })
+
+  it('treats unavailable surface-diff as store-down and always clears delta loading', () => {
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), 'AttackSurfaceManagement.jsx'),
+      'utf8',
+    )
+    expect(src).toMatch(/deltaAbortRef/)
+    expect(src).toMatch(/d\.ok === false \|\| d\.unavailable/)
+    expect(src).toMatch(/deltaAbortRef\.current === ac/)
   })
 })

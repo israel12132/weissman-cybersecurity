@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k) => k, i18n: { language: 'en' } }),
@@ -69,5 +72,10 @@ describe('CasbDlpCenter honesty', () => {
     expect(await screen.findByText('pages.casbDlpCenter.kpi_engines:—')).toBeTruthy()
     expect(screen.queryByText('pages.casbDlpCenter.kpi_engines:0')).toBeNull()
     expect(screen.queryByText('pages.casbDlpCenter.kpi_engines:4')).toBeNull()
+  })
+
+  it('does not apply findings after the in-flight load is aborted', () => {
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'CasbDlpCenter.jsx'), 'utf8')
+    expect(src).toMatch(/if \(ac\.signal\.aborted\) return/)
   })
 })

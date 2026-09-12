@@ -38,14 +38,16 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
   const abortRef = useRef(null)
   const inflightRef = useRef(false)
 
-  const load = useCallback(async () => {
-    if (inflightRef.current) return
-    abortRef.current?.abort()
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (silent && inflightRef.current) return
+    if (!silent) abortRef.current?.abort()
+    else if (inflightRef.current) return
     const ac = new AbortController()
     abortRef.current = ac
     inflightRef.current = true
     try {
       const d = await apiFetch('/api/dashboard/exec-kpis', { signal: ac.signal })
+      if (ac.signal.aborted) return
       if (d?.ok === false || d?.unavailable) {
         throw new Error(d.detail || 'unavailable')
       }
@@ -56,7 +58,7 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
       setData(null)
       setUnavailable(true)
     } finally {
-      inflightRef.current = abortRef.current !== ac
+      if (abortRef.current === ac) inflightRef.current = false
       if (abortRef.current === ac && !ac.signal.aborted) setLoading(false)
     }
   }, [])
@@ -65,7 +67,7 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
     load()
     return () => abortRef.current?.abort()
   }, [load])
-  useVisiblePolling(load, 30_000)
+  useVisiblePolling(() => load({ silent: true }), 30_000)
 
   const w = 720
   const h = height

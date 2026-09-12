@@ -41,6 +41,7 @@ export default function CasbDlpCenter() {
         throw new Error(d.detail || 'findings unavailable')
       }
       const all = Array.isArray(d) ? d : (Array.isArray(d.findings) ? d.findings : [])
+      if (ac.signal.aborted) return
       setFindings(all.filter((f) => ENGINES.includes(f.source || f.type || f.engine)))
     } catch (e) {
       if (e?.name === 'AbortError' || ac.signal.aborted) return

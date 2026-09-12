@@ -6,6 +6,22 @@ use crate::engine_probes::finding;
 use crate::soar::integrations::config_str;
 use serde_json::Value;
 
+fn graph_value_array(body: &Value) -> Option<&Vec<Value>> {
+    body.get("value").and_then(Value::as_array)
+}
+
+/// Gmail omits `messages` for a confirmed empty mailbox. A present non-array is unreadable.
+fn gmail_message_ids(body: &Value) -> Option<Vec<String>> {
+    match body.get("messages") {
+        None => Some(Vec::new()),
+        Some(v) => v.as_array().map(|a| {
+            a.iter()
+                .filter_map(|m| m.get("id").and_then(Value::as_str).map(str::to_string))
+                .collect()
+        }),
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct CasbTokens {
     pub graph: Option<String>,
@@ -139,28 +155,20 @@ pub async fn graph_casb_findings(target: &str, token: &str) -> Vec<Value> {
         .send()
         .await;
     match grants {
-        Ok(r) if r.status().is_success() => {
-            if let Ok(body) = r.json::<Value>().await {
-                let n = body
-                    .get("value")
-                    .and_then(Value::as_array)
-                    .map(|a| a.len())
-                    .unwrap_or(0);
-                let high_priv = body
-                    .get("value")
-                    .and_then(Value::as_array)
-                    .map(|arr| {
-                        arr.iter()
-                            .filter(|g| {
-                                let scope = g.get("scope").and_then(Value::as_str).unwrap_or("");
-                                scope.contains("Mail.Read")
-                                    || scope.contains("Files.ReadWrite.All")
-                                    || scope.contains("Directory.ReadWrite")
-                            })
-                            .count()
-                    })
-                    .unwrap_or(0);
-                out.push(finding(
+        Ok(r) if r.status().is_success() => match r.json::<Value>().await {
+            Ok(body) => match graph_value_array(&body) {
+                Some(arr) => {
+                    let n = arr.len();
+                    let high_priv = arr
+                        .iter()
+                        .filter(|g| {
+                            let scope = g.get("scope").and_then(Value::as_str).unwrap_or("");
+                            scope.contains("Mail.Read")
+                                || scope.contains("Files.ReadWrite.All")
+                                || scope.contains("Directory.ReadWrite")
+                        })
+                        .count();
+                    out.push(finding(
                 "casb_saas_posture",
                 &format!("Entra OAuth grants inventoried ({n})"),
                 if high_priv > 0 { "high" } else { "info" },
@@ -170,17 +178,29 @@ pub async fn graph_casb_findings(target: &str, token: &str) -> Vec<Value> {
                 ),
                 target,
             ));
-                } else {
+                }
+                None => {
                     out.push(finding(
                         "casb_saas_posture",
                         "Microsoft Graph OAuth-grant body unreadable",
                         "medium",
                         "T1528",
-                        "GET oauth2PermissionGrants returned HTTP 200 but JSON could not be parsed. Inventory is not a clean empty grant list.",
+                        "GET oauth2PermissionGrants returned HTTP 200 but `value` was missing or not an array. Inventory is not a clean empty grant list.",
                         target,
                     ));
                 }
+            },
+            Err(_) => {
+                out.push(finding(
+                    "casb_saas_posture",
+                    "Microsoft Graph OAuth-grant body unreadable",
+                    "medium",
+                    "T1528",
+                    "GET oauth2PermissionGrants returned HTTP 200 but JSON could not be parsed. Inventory is not a clean empty grant list.",
+                    target,
+                ));
             }
+        },
         Ok(r) => {
             out.push(finding(
                 "casb_saas_posture",
@@ -209,30 +229,49 @@ pub async fn graph_casb_findings(target: &str, token: &str) -> Vec<Value> {
         .send()
         .await;
     match sps {
-        Ok(r) if r.status().is_success() => {
-            if let Ok(body) = r.json::<Value>().await {
-                let names: Vec<String> = body
-                    .get("value")
-                    .and_then(Value::as_array)
-                    .map(|a| {
-                        a.iter()
-                            .filter_map(|x| x.get("displayName").and_then(Value::as_str))
-                            .map(|s| s.to_string())
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                if !names.is_empty() {
+        Ok(r) if r.status().is_success() => match r.json::<Value>().await {
+            Ok(body) => match graph_value_array(&body) {
+                Some(arr) => {
+                    let names: Vec<String> = arr
+                        .iter()
+                        .filter_map(|x| x.get("displayName").and_then(Value::as_str))
+                        .map(|s| s.to_string())
+                        .collect();
                     out.push(finding(
                         "casb_saas_posture",
-                        "Entra service principals discovered (shadow-SaaS inventory)",
+                        &format!("Entra service principals inventoried ({})", names.len()),
                         "info",
                         "T1078",
-                        &format!("Graph servicePrincipals: {}", names.join(", ")),
+                        if names.is_empty() {
+                            "Graph servicePrincipals returned an empty value array.".to_string()
+                        } else {
+                            format!("Graph servicePrincipals: {}", names.join(", "))
+                        },
                         target,
                     ));
                 }
+                None => {
+                    out.push(finding(
+                        "casb_saas_posture",
+                        "Microsoft Graph service-principal body unreadable",
+                        "medium",
+                        "T1078",
+                        "GET servicePrincipals returned HTTP 200 but `value` was missing or not an array. Inventory is not a clean empty SP list.",
+                        target,
+                    ));
+                }
+            },
+            Err(_) => {
+                out.push(finding(
+                    "casb_saas_posture",
+                    "Microsoft Graph service-principal body unreadable",
+                    "medium",
+                    "T1078",
+                    "GET servicePrincipals returned HTTP 200 but JSON could not be parsed. Inventory is not a clean empty SP list.",
+                    target,
+                ));
             }
-        }
+        },
         Ok(r) => {
             out.push(finding(
                 "casb_saas_posture",
@@ -269,9 +308,9 @@ pub async fn graph_dlp_findings(target: &str, token: &str) -> Vec<Value> {
         .send()
         .await;
     match resp {
-        Ok(r) if r.status().is_success() => {
-            if let Ok(body) = r.json::<Value>().await {
-                let msgs = body.get("value").and_then(Value::as_array).cloned().unwrap_or_default();
+        Ok(r) if r.status().is_success() => match r.json::<Value>().await {
+            Ok(body) => match graph_value_array(&body) {
+                Some(msgs) => {
                 let hay: String = msgs
                     .iter()
                     .filter_map(|m| m.get("bodyPreview").and_then(Value::as_str))
@@ -299,7 +338,19 @@ pub async fn graph_dlp_findings(target: &str, token: &str) -> Vec<Value> {
                         ));
                     }
                 }
-            } else {
+                }
+                None => {
+                    out.push(finding(
+                        "dlp_content_scan",
+                        "Graph mail DLP body unreadable",
+                        "medium",
+                        "T1114",
+                        "GET /me/messages returned HTTP 200 but `value` was missing or not an array. Mailbox DLP is not a clean empty scan.",
+                        target,
+                    ));
+                }
+            },
+            Err(_) => {
                 out.push(finding(
                     "dlp_content_scan",
                     "Graph mail DLP body unreadable",
@@ -309,7 +360,7 @@ pub async fn graph_dlp_findings(target: &str, token: &str) -> Vec<Value> {
                     target,
                 ));
             }
-        }
+        },
         Ok(r) => {
             out.push(finding(
                 "dlp_content_scan",
@@ -411,16 +462,8 @@ pub async fn google_dlp_findings(target: &str, token: &str) -> Vec<Value> {
     match list {
         Ok(r) if r.status().is_success() => {
             match r.json::<Value>().await {
-                Ok(body) => {
-                    let ids: Vec<String> = body
-                        .get("messages")
-                        .and_then(Value::as_array)
-                        .map(|a| {
-                            a.iter()
-                                .filter_map(|m| m.get("id").and_then(Value::as_str).map(str::to_string))
-                                .collect()
-                        })
-                        .unwrap_or_default();
+                Ok(body) => match gmail_message_ids(&body) {
+                    Some(ids) => {
                     let mut hay = String::new();
                     let mut scanned = 0usize;
                     let mut unread = 0usize;
@@ -513,6 +556,17 @@ pub async fn google_dlp_findings(target: &str, token: &str) -> Vec<Value> {
                                 target,
                             ));
                         }
+                    }
+                    }
+                    None => {
+                        out.push(finding(
+                            "dlp_content_scan",
+                            "Gmail DLP list messages field unreadable",
+                            "medium",
+                            "T1114",
+                            "GET users/me/messages returned HTTP 200 but `messages` was not an array. Mailbox DLP is not a clean empty scan.",
+                            target,
+                        ));
                     }
                 }
                 Err(_) => {
@@ -680,6 +734,15 @@ mod tests {
         assert!(src.contains("Gmail DLP list body unreadable"));
         assert!(src.contains("Gmail DLP message body unreadable"));
         assert!(src.contains("Gmail DLP message had no snippet"));
+        assert!(src.contains("Gmail DLP list messages field unreadable"));
         assert!(src.contains("unread == 0 && hits.is_empty()"));
+    }
+
+    #[test]
+    fn graph_missing_value_is_not_clean_empty_inventory() {
+        let src = include_str!("casb_dlp_api.rs");
+        assert!(src.contains("`value` was missing or not an array"));
+        assert!(src.contains("Microsoft Graph service-principal body unreadable"));
+        assert!(src.contains("fn graph_value_array"));
     }
 }

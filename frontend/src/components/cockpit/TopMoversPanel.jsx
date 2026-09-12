@@ -71,14 +71,16 @@ export default function TopMoversPanel({ className = '' }) {
   const abortRef = useRef(null)
   const inflightRef = useRef(false)
 
-  const load = useCallback(async () => {
-    if (inflightRef.current) return
-    abortRef.current?.abort()
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (silent && inflightRef.current) return
+    if (!silent) abortRef.current?.abort()
+    else if (inflightRef.current) return
     const ac = new AbortController()
     abortRef.current = ac
     inflightRef.current = true
     try {
       const d = await apiFetch('/api/dashboard/exec-kpis', { signal: ac.signal })
+      if (ac.signal.aborted) return
       if (d?.ok === false || d?.unavailable) {
         throw new Error(d.detail || 'unavailable')
       }
@@ -98,7 +100,7 @@ export default function TopMoversPanel({ className = '' }) {
     load()
     return () => abortRef.current?.abort()
   }, [load])
-  useVisiblePolling(load, 30_000)
+  useVisiblePolling(() => load({ silent: true }), 30_000)
 
   if (loading && !data) {
     return (

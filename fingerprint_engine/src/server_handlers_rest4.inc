@@ -896,11 +896,9 @@ async fn api_poe_scan_status(
     match poe_job_from_db(state.app_pool.as_ref(), auth.tenant_id, &job_id).await {
         Ok(Some(s)) => (StatusCode::OK, Json(json!(s))).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "job not found"}))).into_response(),
-        Err(()) => (
+        Err(detail) => (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(crate::http_unavailable::poe_job_unavailable_json(
-                "database unavailable",
-            )),
+            Json(crate::http_unavailable::poe_job_unavailable_json(detail)),
         )
             .into_response(),
     }
@@ -920,12 +918,10 @@ async fn api_poe_scan_stream(
         Ok(None) => {
             return (StatusCode::NOT_FOUND, Json(json!({"error": "job not found"}))).into_response();
         }
-        Err(()) => {
+        Err(detail) => {
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(crate::http_unavailable::poe_job_unavailable_json(
-                    "database unavailable",
-                )),
+                Json(crate::http_unavailable::poe_job_unavailable_json(detail)),
             )
                 .into_response();
         }

@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k) => k, i18n: { language: 'en' } }),
@@ -54,5 +57,13 @@ describe('ControlPlaneOfControls honesty', () => {
     render(<ControlPlaneOfControls />)
     expect(await screen.findByText('pages.controlPlaneOfControls.kpi_engines:1')).toBeTruthy()
     expect(screen.queryByText('pages.controlPlaneOfControls.kpi_engines:6')).toBeNull()
+  })
+
+  it('does not apply findings after the in-flight load is aborted', () => {
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), 'ControlPlaneOfControls.jsx'),
+      'utf8',
+    )
+    expect(src).toMatch(/if \(ac\.signal\.aborted\) return/)
   })
 })

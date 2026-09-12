@@ -414,10 +414,19 @@ pub fn exec_kpis_unavailable_json(detail: &str) -> Value {
         "trend": Value::Null,
         "security_score": Value::Null,
         "severity": Value::Null,
+        "severity_delta_24h": Value::Null,
+        "open_vs_resolved": Value::Null,
         "assets": Value::Null,
         "agents": Value::Null,
         "jobs": Value::Null,
+        "scan_velocity": Value::Null,
         "mttr_hours": Value::Null,
+        "scoring": Value::Null,
+        "mitre_top": Value::Null,
+        "engines_top": Value::Null,
+        "clients_top": Value::Null,
+        "cves_top": Value::Null,
+        "last_updated_unix": Value::Null,
         "detail": detail,
     })
 }
@@ -759,8 +768,19 @@ mod tests {
         assert!(v["agents"].is_null());
         assert!(v["jobs"].is_null());
         assert!(v["mttr_hours"].is_null());
+        assert!(v["severity_delta_24h"].is_null());
+        assert!(v["open_vs_resolved"].is_null());
+        assert!(v["scan_velocity"].is_null());
+        assert!(v["mitre_top"].is_null());
+        assert!(v["engines_top"].is_null());
+        assert!(v["clients_top"].is_null());
+        assert!(v["cves_top"].is_null());
+        assert!(v["scoring"].is_null());
+        assert!(v["last_updated_unix"].is_null());
         assert_ne!(v["security_score"], json!(100));
         assert_ne!(v["trend"], json!([]));
+        assert_ne!(v["mitre_top"], json!([]));
+        assert_ne!(v["engines_top"], json!([]));
         assert_ne!(v["assets"], json!({"total_clients": 0, "with_findings": 0}));
         assert_ne!(v["jobs"], json!({"pending": 0, "running": 0}));
     }

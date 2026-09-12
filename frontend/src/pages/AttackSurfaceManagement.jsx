@@ -519,6 +519,7 @@ export default function AttackSurfaceManagement() {
   const [fusionJobId, setFusionJobId] = useState(null)
   const [nerve, setNerve] = useState(null)
   const nerveAbortRef = useRef(null)
+  const deltaAbortRef = useRef(null)
 
   const refreshCorpus = useCallback(() => {
     apiFetch('/api/discovery-knowledge/stats')
@@ -573,24 +574,32 @@ export default function AttackSurfaceManagement() {
     })
   }, [refreshFromHistory, setLastUpdated, setLastJobId])
 
-  const loadSurfaceDiff = useCallback(async (clientId, { signal } = {}) => {
+  const loadSurfaceDiff = useCallback(async (clientId) => {
+    deltaAbortRef.current?.abort()
     if (!clientId) {
       setSurfaceDiff(null)
+      setDeltaLoading(false)
       return
     }
+    const ac = new AbortController()
+    deltaAbortRef.current = ac
     setDeltaLoading(true)
     try {
-      const d = await apiFetch(`/api/clients/${clientId}/surface-diff`, { signal })
-      if (signal?.aborted) return
-      if (d && typeof d === 'object') setSurfaceDiff(d)
+      const d = await apiFetch(`/api/clients/${clientId}/surface-diff`, { signal: ac.signal })
+      if (ac.signal.aborted) return
+      if (!d || typeof d !== 'object' || d.ok === false || d.unavailable) {
+        setSurfaceDiff({ unavailable: true })
+        return
+      }
+      setSurfaceDiff(d)
     } catch (err) {
-      if (err?.name === 'AbortError' || signal?.aborted) return
+      if (err?.name === 'AbortError' || ac.signal.aborted) return
       if (import.meta.env.DEV) {
         console.debug('surface-diff skipped', err)
       }
       setSurfaceDiff({ unavailable: true })
     } finally {
-      if (!signal?.aborted) setDeltaLoading(false)
+      if (deltaAbortRef.current === ac) setDeltaLoading(false)
     }
   }, [])
 
@@ -618,8 +627,7 @@ export default function AttackSurfaceManagement() {
   const handleRefresh = useCallback(async () => {
     const run = await refreshFromHistory()
     applyHistoryFindings(run, setFindings, { setLastUpdated, setJobId: setLastJobId })
-    const ac = new AbortController()
-    await loadSurfaceDiff(selectedClientId, { signal: ac.signal })
+    await loadSurfaceDiff(selectedClientId)
   }, [refreshFromHistory, setLastUpdated, setLastJobId, loadSurfaceDiff, selectedClientId])
 
   useEffect(() => {
@@ -641,13 +649,8 @@ export default function AttackSurfaceManagement() {
   }, [])
 
   useEffect(() => {
-    if (!selectedClientId) {
-      setSurfaceDiff(null)
-      return undefined
-    }
-    const ac = new AbortController()
-    loadSurfaceDiff(selectedClientId, { signal: ac.signal })
-    return () => ac.abort()
+    loadSurfaceDiff(selectedClientId)
+    return () => deltaAbortRef.current?.abort()
   }, [selectedClientId, loadSurfaceDiff])
 
   useEffect(() => {

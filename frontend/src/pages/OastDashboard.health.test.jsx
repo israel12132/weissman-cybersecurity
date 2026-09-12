@@ -110,5 +110,7 @@ describe('OastHealthStrip', () => {
     const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'OastDashboard.jsx'), 'utf8')
     expect(src).not.toMatch(/callback_count \?\? list\.length/)
     expect(src).not.toMatch(/fallbackCount/)
+    expect(src).toMatch(/callbacksAbortRef/)
+    expect(src).toMatch(/silent && callbacksInflightRef/)
   })
 })

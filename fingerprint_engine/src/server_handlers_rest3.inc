@@ -148,10 +148,8 @@ async fn api_client_surface_diff(
         Ok(body) => (StatusCode::OK, Json(body)).into_response(),
         Err(e) => {
             tracing::warn!(target: "surface_diff", client_id = id, error = %e, "surface-diff read failed");
-            // 200 + schema: apiFetch() throws on non-2xx and the ASM panel would
-            // otherwise collapse to a null diff (transport error, no empty state).
             (
-                StatusCode::OK,
+                StatusCode::SERVICE_UNAVAILABLE,
                 Json(crate::first_mover_surface_delta::surface_diff_unavailable_json(id)),
             )
                 .into_response()

@@ -16,6 +16,7 @@ use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{empty_ok, finding};
 use crate::engine_result::EngineResult;
 use crate::nvd_cve;
+use futures::stream::{self, StreamExt};
 use serde_json::{json, Value};
 use sqlx::Row;
 use std::sync::Arc;
@@ -158,10 +159,10 @@ async fn already_recorded(
     osv_id: &str,
     package: &str,
     version: &str,
-) -> bool {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return false;
-    };
+) -> Result<bool, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| e.to_string())?;
     let found: Option<i64> = sqlx::query_scalar(
         r#"SELECT id FROM osv_first_seen_hits
            WHERE tenant_id = $1 AND client_id = $2 AND osv_id = $3
@@ -175,10 +176,11 @@ async fn already_recorded(
     .bind(version)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    found.is_some()
+    .map_err(|e| e.to_string())?;
+    tx.commit()
+        .await
+        .map_err(|_| "database unavailable".to_string())?;
+    Ok(found.is_some())
 }
 
 async fn persist_hit(
@@ -287,7 +289,12 @@ pub async fn list_hits_json(
     }))
 }
 
-async fn query_osv(client: &reqwest::Client, eco: &str, name: &str, version: &str) -> Vec<OsvHit> {
+async fn query_osv(
+    client: &reqwest::Client,
+    eco: &str,
+    name: &str,
+    version: &str,
+) -> Result<Vec<OsvHit>, String> {
     let mut body = json!({ "package": { "name": name } });
     if !eco.is_empty() {
         body["package"]["ecosystem"] = json!(eco);
@@ -295,23 +302,22 @@ async fn query_osv(client: &reqwest::Client, eco: &str, name: &str, version: &st
     if !version.trim().is_empty() {
         body["version"] = json!(version.trim());
     }
-    let Ok(resp) = client
+    let resp = client
         .post("https://api.osv.dev/v1/query")
         .json(&body)
         .timeout(Duration::from_secs(12))
         .send()
         .await
-    else {
-        return vec![];
-    };
+        .map_err(|e| format!("OSV transport: {e}"))?;
     if !resp.status().is_success() {
-        return vec![];
+        return Err(format!("OSV HTTP {}", resp.status()));
     }
-    let Ok(data) = resp.json::<Value>().await else {
-        return vec![];
-    };
+    let data = resp
+        .json::<Value>()
+        .await
+        .map_err(|_| "OSV body unreadable".to_string())?;
     let Some(vulns) = data.get("vulns").and_then(Value::as_array) else {
-        return vec![];
+        return Ok(vec![]);
     };
     let mut out = Vec::new();
     for v in vulns.iter().take(MAX_OSV_PER_PKG) {
@@ -351,7 +357,7 @@ async fn query_osv(client: &reqwest::Client, eco: &str, name: &str, version: &st
             severity: "high".into(),
         });
     }
-    out
+    Ok(out)
 }
 
 async fn classify_nvd(cve: Option<&str>) -> NvdStatus {
@@ -437,6 +443,9 @@ pub async fn run_first_seen_osv_nvd_result(target: &str, ctx: &EngineRunContext)
     let mut findings = Vec::new();
     let mut first_seen_n = 0usize;
     let mut listed_n = 0usize;
+    let mut queried = 0usize;
+    let mut osv_fail = 0usize;
+    let mut recorded_lookup_fail = 0usize;
     for pkg in &sbom {
         let ver = pkg.version_spec.trim();
         if ver.is_empty() || ver == "*" || ver == "latest" {
@@ -446,13 +455,43 @@ pub async fn run_first_seen_osv_nvd_result(target: &str, ctx: &EngineRunContext)
         if eco.is_empty() {
             continue;
         }
-        let hits = query_osv(&client, eco, &pkg.package_name, ver).await;
-        for hit in hits {
-            if already_recorded(pool.as_ref(), tid, cid, &hit.id, &pkg.package_name, ver).await {
+        let hits = match query_osv(&client, eco, &pkg.package_name, ver).await {
+            Ok(h) => {
+                queried += 1;
+                h
+            }
+            Err(e) => {
+                osv_fail += 1;
+                tracing::warn!(
+                    target: "first_seen",
+                    package = %pkg.package_name,
+                    version = ver,
+                    error = %e,
+                    "OSV query failed — not a clean empty hunt"
+                );
                 continue;
             }
+        };
+        for hit in hits {
+            match already_recorded(pool.as_ref(), tid, cid, &hit.id, &pkg.package_name, ver).await
+            {
+                Ok(true) => continue,
+                Ok(false) => {}
+                Err(e) => {
+                    recorded_lookup_fail += 1;
+                    tracing::error!(
+                        target: "first_seen",
+                        error = %e,
+                        osv_id = %hit.id,
+                        "first-seen hit lookup failed — not retitled as new"
+                    );
+                    continue;
+                }
+            }
             let nvd = classify_nvd(hit.cve.as_deref()).await;
-            let _ = persist_hit(pool.as_ref(), tid, cid, pkg, &hit, &nvd).await;
+            if let Err(e) = persist_hit(pool.as_ref(), tid, cid, pkg, &hit, &nvd).await {
+                return EngineResult::error(format!("first-seen hit not stored: {e}"));
+            }
             if nvd == NvdStatus::Listed {
                 listed_n += 1;
                 continue;
@@ -517,6 +556,16 @@ pub async fn run_first_seen_osv_nvd_result(target: &str, ctx: &EngineRunContext)
     }
 
     if findings.is_empty() {
+        if osv_fail > 0 {
+            return EngineResult::error(format!(
+                "OSV unreachable or unreadable ({osv_fail} package query failure(s)); not a clean first-seen pass"
+            ));
+        }
+        if recorded_lookup_fail > 0 {
+            return EngineResult::error(
+                "first-seen hit lookup failed; not a clean first-seen pass",
+            );
+        }
         if listed_n > 0 {
             findings.push(live_finding(
                 "SBOM × OSV hits already listed in NVD",
@@ -526,6 +575,14 @@ pub async fn run_first_seen_osv_nvd_result(target: &str, ctx: &EngineRunContext)
                 ),
                 target,
                 json!({ "nvd_status": "listed", "listed_count": listed_n }),
+            ));
+        } else if queried == 0 {
+            findings.push(live_finding(
+                "SBOM rows not queryable against OSV",
+                "medium",
+                "Every inventory row used a wildcard/latest version or an unknown ecosystem. That is not a clean empty first-seen hunt.",
+                if target.trim().is_empty() { "sbom" } else { target },
+                json!({ "nvd_status": "skipped_unqueryable", "sbom_rows": sbom.len() }),
             ));
         } else {
             return empty_ok(ENGINE_ID, target);
@@ -567,30 +624,51 @@ async fn enqueue_clients_with_sbom(
     tx.commit()
         .await
         .map_err(|_| "database unavailable".to_string())?;
+    let items: Vec<(i64, String)> = rows
+        .into_iter()
+        .filter_map(|r| {
+            let id: i64 = r.try_get("id").unwrap_or(0);
+            if id <= 0 {
+                return None;
+            }
+            let raw: String = r.try_get("domains").unwrap_or_else(|_| "[]".into());
+            let domains: Vec<String> = serde_json::from_str(&raw).unwrap_or_default();
+            let target = domains
+                .iter()
+                .map(|s| s.trim())
+                .find(|s| !s.is_empty())
+                .unwrap_or("sbom")
+                .to_string();
+            Some((id, target))
+        })
+        .collect();
+    let results: Vec<_> = stream::iter(items)
+        .map(|(id, target)| async move {
+            let payload = json!({
+                "engine": ENGINE_ID,
+                "target": target,
+                "client_id": id,
+                "trigger": "first_seen_worker",
+            });
+            (
+                id,
+                crate::async_jobs::enqueue(
+                    app_pool,
+                    tenant_id,
+                    "command_center_engine",
+                    payload,
+                    None,
+                )
+                .await,
+            )
+        })
+        .buffer_unordered(8)
+        .collect()
+        .await;
     let mut n = 0usize;
     let mut failed = 0usize;
-    for r in rows {
-        let id: i64 = r.try_get("id").unwrap_or(0);
-        if id <= 0 {
-            continue;
-        }
-        let raw: String = r.try_get("domains").unwrap_or_else(|_| "[]".into());
-        let domains: Vec<String> = serde_json::from_str(&raw).unwrap_or_default();
-        let target = domains
-            .iter()
-            .map(|s| s.trim())
-            .find(|s| !s.is_empty())
-            .unwrap_or("sbom")
-            .to_string();
-        let payload = json!({
-            "engine": ENGINE_ID,
-            "target": target,
-            "client_id": id,
-            "trigger": "first_seen_worker",
-        });
-        match crate::async_jobs::enqueue(app_pool, tenant_id, "command_center_engine", payload, None)
-            .await
-        {
+    for (id, result) in results {
+        match result {
             Ok(_) => n += 1,
             Err(e) => {
                 failed += 1;
@@ -723,5 +801,25 @@ mod tests {
             ),
             "commit failure must fail the worker tick, not enqueue from a rolled-back read"
         );
+        assert!(
+            src.contains("buffer_unordered(8)"),
+            "SBOM fan-out must not enqueue serially one-by-one"
+        );
+    }
+
+    #[test]
+    fn osv_failures_are_not_empty_ok() {
+        let src = include_str!("first_seen_osv_nvd_engine.rs");
+        assert!(
+            src.contains("not a clean first-seen pass"),
+            "OSV transport/parse fail must not look like a clean hunt"
+        );
+        assert!(src.contains("SBOM rows not queryable against OSV"));
+        assert!(src.contains("first-seen hit not stored"));
+        assert!(
+            !src.contains("let _ = persist_hit(pool"),
+            "a failed persist must fail the run"
+        );
+        assert!(src.contains("not retitled as new"));
     }
 }

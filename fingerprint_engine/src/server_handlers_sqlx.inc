@@ -1055,7 +1055,9 @@ async fn api_findings(
     let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"ok": false, "detail": "Database unavailable", "findings": []})),
+            Json(crate::http_unavailable::findings_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
@@ -1096,14 +1098,16 @@ async fn api_findings(
         Err(e) => {
             tracing::error!(target: "findings", tenant_id = auth.tenant_id, error = %e, "findings query failed");
             return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": "findings query failed"})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_unavailable_json(
+                    "findings query failed",
+                )),
             )
                 .into_response();
         }
     };
 
-    let total: i64 = sqlx::query_scalar::<_, i64>(
+    let total: i64 = match sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*)::bigint FROM vulnerabilities \
          WHERE ($1::text[] IS NULL OR lower(severity) = ANY($1)) \
            AND ($2::bigint IS NULL OR client_id = $2) \
@@ -1114,8 +1118,28 @@ async fn api_findings(
     .bind(source_filter.as_deref())
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
-    let _ = tx.commit().await;
+    {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::error!(target: "findings", tenant_id = auth.tenant_id, error = %e, "findings count failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_unavailable_json(
+                    "findings count failed",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     // Batch-load FP/TP confidence multipliers in ONE query (fixes the N+1 where
     // every row opened its own tenant transaction + query).

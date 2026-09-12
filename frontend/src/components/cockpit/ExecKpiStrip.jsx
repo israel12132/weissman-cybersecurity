@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { RefreshCw, TrendingDown, TrendingUp, Minus } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
+import { useVisiblePolling } from '../../hooks/useVisiblePolling'
 import { EngineRealitySummary } from '../EngineRealityBadge'
 import Button from '../ui/Button'
 
@@ -133,13 +134,18 @@ export default function ExecKpiStrip() {
   const [err, setErr] = useState(null)
   const cancelRef = useRef(false)
   const abortRef = useRef(null)
+  const inflightRef = useRef(false)
 
-  const refresh = async () => {
-    abortRef.current?.abort()
+  const refresh = async ({ silent = false } = {}) => {
+    if (silent && inflightRef.current) return
+    if (!silent) abortRef.current?.abort()
+    else if (inflightRef.current) return
     const ac = new AbortController()
     abortRef.current = ac
+    inflightRef.current = true
     try {
       const d = await apiFetch('/api/dashboard/exec-kpis', { signal: ac.signal })
+      if (ac.signal.aborted) return
       if (d?.ok === false || d?.unavailable) {
         throw new Error(d.detail || t('components.cockpitTabs.execKpiStrip.fetch_failed'))
       }
@@ -154,6 +160,7 @@ export default function ExecKpiStrip() {
         setKpis(null)
       }
     } finally {
+      if (abortRef.current === ac) inflightRef.current = false
       if (!cancelRef.current && abortRef.current === ac && !ac.signal.aborted) setLoading(false)
     }
   }
@@ -161,17 +168,16 @@ export default function ExecKpiStrip() {
   useEffect(() => {
     cancelRef.current = false
     refresh()
-    const timer = setInterval(refresh, REFRESH_MS)
-    const onFocus = () => refresh()
+    const onFocus = () => refresh({ silent: true })
     window.addEventListener('focus', onFocus)
     return () => {
       cancelRef.current = true
       abortRef.current?.abort()
-      clearInterval(timer)
       window.removeEventListener('focus', onFocus)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  useVisiblePolling(() => refresh({ silent: true }), REFRESH_MS)
 
   if (loading && !kpis) {
     return (

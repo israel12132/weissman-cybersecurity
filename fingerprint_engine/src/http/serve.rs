@@ -436,45 +436,66 @@ async fn default_tenant_id(auth_pool: &PgPool) -> Option<i64> {
 }
 
 /// Read PoE job from DB (RLS-scoped).
-/// `Ok(None)` is a confirmed miss. `Err` is store-down — never collapse to 404.
+/// `Ok(None)` is a confirmed miss. `Err` is store-down or corrupt findings JSON — never 404.
 async fn poe_job_from_db(
     pool: &PgPool,
     tenant_id: i64,
     job_id: &str,
-) -> Result<Option<PoEJobState>, ()> {
-    let mut tx = db::begin_tenant_tx(pool, tenant_id).await.map_err(|_| ())?;
+) -> Result<Option<PoEJobState>, &'static str> {
+    let mut tx = db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "database unavailable")?;
     let row = match sqlx::query(
-        "SELECT job_id, status, run_id, message, error, COALESCE(findings_json,'[]') AS findings_json FROM poe_jobs WHERE job_id = $1",
+        "SELECT job_id, status, run_id, message, error, findings_json FROM poe_jobs WHERE job_id = $1",
     )
     .bind(job_id)
     .fetch_optional(&mut *tx)
     .await
     {
         Ok(row) => row,
-        Err(_) => return Err(()),
+        Err(_) => return Err("database unavailable"),
     };
     let Some(row) = row else {
         return Ok(None);
     };
     if tx.commit().await.is_err() {
-        return Err(());
+        return Err("database unavailable");
     }
-    let findings_json: String = row.try_get("findings_json").map_err(|_| ())?;
-    let findings_count = parse_poe_findings_count(&findings_json)?;
+    let status: String = row.try_get("status").map_err(|_| "database unavailable")?;
+    let findings_json: Option<String> = row.try_get("findings_json").ok();
+    let findings_count = parse_poe_findings_count(&status, findings_json.as_deref())
+        .map_err(|_| "findings JSON corrupt")?;
     Ok(Some(PoEJobState {
-        job_id: row.try_get("job_id").map_err(|_| ())?,
-        status: row.try_get("status").map_err(|_| ())?,
+        job_id: row.try_get("job_id").map_err(|_| "database unavailable")?,
+        status,
         run_id: row.try_get::<Option<i64>, _>("run_id").unwrap_or(None),
-        findings_count: Some(findings_count),
+        findings_count,
         message: row.try_get::<Option<String>, _>("message").unwrap_or(None),
         error: row.try_get::<Option<String>, _>("error").unwrap_or(None),
     }))
 }
 
-/// Confirmed empty array is 0. Corrupt JSON is store-down — never `Some(0)`.
-fn parse_poe_findings_count(findings_json: &str) -> Result<usize, ()> {
-    serde_json::from_str::<Vec<Value>>(findings_json)
-        .map(|v| v.len())
+fn poe_status_is_terminal(status: &str) -> bool {
+    matches!(
+        status.trim().to_ascii_lowercase().as_str(),
+        "completed" | "failed" | "error" | "cancelled" | "canceled"
+    )
+}
+
+/// In-flight jobs and missing payloads are `Ok(None)` (not a confirmed 0).
+/// Confirmed empty array is `Ok(Some(0))` only on a terminal status. Corrupt JSON is `Err`.
+fn parse_poe_findings_count(
+    status: &str,
+    findings_json: Option<&str>,
+) -> Result<Option<usize>, ()> {
+    if !poe_status_is_terminal(status) {
+        return Ok(None);
+    }
+    let Some(raw) = findings_json else {
+        return Ok(None);
+    };
+    serde_json::from_str::<Vec<Value>>(raw)
+        .map(|v| Some(v.len()))
         .map_err(|_| ())
 }
 
@@ -2024,22 +2045,33 @@ mod poe_job_honesty_tests {
 
     #[test]
     fn empty_array_is_confirmed_zero() {
-        assert_eq!(parse_poe_findings_count("[]"), Ok(0));
+        assert_eq!(parse_poe_findings_count("completed", Some("[]")), Ok(Some(0)));
+        assert_eq!(parse_poe_findings_count("failed", Some("[]")), Ok(Some(0)));
     }
 
     #[test]
     fn two_findings_are_counted() {
-        assert_eq!(parse_poe_findings_count("[{\"a\":1},{}]"), Ok(2));
+        assert_eq!(
+            parse_poe_findings_count("completed", Some("[{\"a\":1},{}]")),
+            Ok(Some(2))
+        );
+    }
+
+    #[test]
+    fn in_flight_jobs_are_not_confirmed_zero() {
+        assert_eq!(parse_poe_findings_count("running", Some("[]")), Ok(None));
+        assert_eq!(parse_poe_findings_count("pending", Some("[]")), Ok(None));
+        assert_eq!(parse_poe_findings_count("completed", None), Ok(None));
     }
 
     #[test]
     fn object_json_is_corrupt_not_zero() {
-        assert_eq!(parse_poe_findings_count("{}"), Err(()));
+        assert_eq!(parse_poe_findings_count("completed", Some("{}")), Err(()));
     }
 
     #[test]
     fn garbage_json_is_corrupt_not_zero() {
-        assert_eq!(parse_poe_findings_count("not-json"), Err(()));
+        assert_eq!(parse_poe_findings_count("completed", Some("not-json")), Err(()));
     }
 }
 
