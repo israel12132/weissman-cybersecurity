@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k) => k, i18n: { language: 'en' } }),
@@ -74,5 +77,15 @@ describe('AttackSurfaceManagement clients honesty', () => {
     render(<AttackSurfaceManagement />)
     expect(await screen.findByTestId('asm-clients-unavailable')).toBeTruthy()
     expect(screen.getByText('pages.attackSurfaceManagement.clients_unavailable')).toBeTruthy()
+  })
+
+  it('skips clients setState when the mount fetch is aborted', () => {
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), 'AttackSurfaceManagement.jsx'),
+      'utf8',
+    )
+    expect(src).toMatch(
+      /apiFetch\('\/api\/clients', \{ signal: ac\.signal \}\)[\s\S]*?\.then\(\(d\) => \{[\s\S]*?if \(ac\.signal\.aborted\) return/,
+    )
   })
 })

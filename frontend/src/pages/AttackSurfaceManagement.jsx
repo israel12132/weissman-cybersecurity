@@ -639,6 +639,7 @@ export default function AttackSurfaceManagement() {
     const ac = new AbortController()
     apiFetch('/api/clients', { signal: ac.signal })
       .then((d) => {
+        if (ac.signal.aborted) return
         if (d?.ok === false || d?.unavailable) {
           throw new Error(d.detail || 'clients unavailable')
         }
