@@ -784,15 +784,25 @@ mod tests {
             client_name: "וויסמן".into(),
             generated_at: "2026-09-12 00:00:00".into(),
             integrity_hash: "abc".into(),
-            findings: vec![BoardFinding {
-                id: 7,
-                title: "=HYPERLINK(http://evil)".into(),
-                severity: "critical".into(),
-                source: "credential_ransomware_fusion".into(),
-                description: "CISA KEV ransomware product match T1190 CVE-2024-21762".into(),
-                proof: "GET https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json HTTP 200".into(),
-                ..Default::default()
-            }],
+            findings: vec![
+                BoardFinding {
+                    id: 7,
+                    title: "=HYPERLINK(http://evil)".into(),
+                    severity: "critical".into(),
+                    source: "credential_ransomware_fusion".into(),
+                    description: "CISA KEV ransomware product match T1190 CVE-2024-21762".into(),
+                    proof: "GET https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json HTTP 200".into(),
+                    ..Default::default()
+                },
+                BoardFinding {
+                    id: 8,
+                    title: "HIBP public catalog lists example.com".into(),
+                    severity: "high".into(),
+                    source: "credential_ransomware_fusion".into(),
+                    proof: "GET https://haveibeenpwned.com/api/v3/breaches HTTP 200".into(),
+                    ..Default::default()
+                },
+            ],
         })
         .expect("xlsx");
         if let Ok(p) = std::env::var("WEISSMAN_XLSX_DUMP") {
@@ -821,6 +831,10 @@ mod tests {
         );
         assert!(!as_str.contains("APT28"));
         assert!(!as_str.contains("Industry Avg"));
+        assert!(
+            as_str.contains("CHAIN") || as_str.contains("HIBP credential"),
+            "two live legs must write a grounded kill-chain hop"
+        );
     }
 
     #[test]
