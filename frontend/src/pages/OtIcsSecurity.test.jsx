@@ -76,7 +76,8 @@ vi.mock('../lib/clientTarget', () => ({
 import OtIcsSecurity from './OtIcsSecurity.jsx'
 
 const SAFETY = {
-  live: true,
+  live: false,
+  observed_event_count: 0,
   policy: {
     write_blocked: true,
     direct_operate_blocked: true,
@@ -126,6 +127,9 @@ describe('OtIcsSecurity', () => {
     )
     const panel = await screen.findByTestId('ot-safety-interlock')
     expect(panel).toBeTruthy()
+    expect(panel.getAttribute('data-live')).toBe('false')
+    expect(panel.textContent).toMatch(/safety_compiled/)
+    expect(panel.textContent).not.toMatch(/safety_armed/)
     expect(panel.textContent).toMatch(/100 \/ 100/)
     expect(panel.textContent).toMatch(/modbus/i)
     expect(panel.textContent).toMatch(/dnp3/i)
@@ -152,5 +156,30 @@ describe('OtIcsSecurity', () => {
     expect(screen.getByText('dnp3_attack')).toBeTruthy()
     expect(screen.getByText('iec61850_attack')).toBeTruthy()
     expect(screen.getByText('modbus_attack')).toBeTruthy()
+  })
+
+  it('shows ARMED only when the safety API has observed events', async () => {
+    apiFetch.mockImplementation(async (url) => {
+      const u = String(url)
+      if (u.includes('/api/ot-ics/safety')) {
+        return { ...SAFETY, live: true, observed_event_count: 1, events: [{ id: 1 }] }
+      }
+      if (u.includes('/api/ot-ics/devices')) return { devices: [], protocols: [], findings: [] }
+      if (u.includes('fingerprints')) return { fingerprints: [] }
+      if (u.includes('/api/engines/history')) return { runs: [] }
+      if (u === '/api/clients' || u.startsWith('/api/clients?')) {
+        return [{ id: 1, name: 'Plant A', primary_domain: '10.0.0.8' }]
+      }
+      return {}
+    })
+    render(
+      <MemoryRouter>
+        <OtIcsSecurity />
+      </MemoryRouter>,
+    )
+    const panel = await screen.findByTestId('ot-safety-interlock')
+    expect(panel.getAttribute('data-live')).toBe('true')
+    expect(panel.textContent).toMatch(/safety_armed/)
+    expect(panel.textContent).not.toMatch(/safety_compiled/)
   })
 })

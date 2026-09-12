@@ -89,7 +89,7 @@ describe('CrownJewelBoard', () => {
     expect(await screen.findByText('edge')).toBeTruthy()
     await waitFor(() =>
       expect(onInventory).toHaveBeenCalledWith(
-        expect.objectContaining({ total: 1, jewels: 0 }),
+        expect.objectContaining({ total: 1, jewels: 0, exposed: 1 }),
       ),
     )
   })

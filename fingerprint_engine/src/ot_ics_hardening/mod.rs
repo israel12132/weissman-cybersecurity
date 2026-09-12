@@ -486,7 +486,8 @@ pub fn safety_api_document(events: Vec<Value>, fair: Option<Value>) -> Value {
         "control_count": CONTROL_CATALOG.len(),
         "events": events,
         "fair": fair,
-        "live": true,
+        "observed_event_count": events.len(),
+        "live": !events.is_empty(),
     })
 }
 
@@ -521,7 +522,11 @@ mod tests {
         assert_eq!(doc["policy"]["plc_decoy"], json!(true));
         assert_eq!(doc["policy"]["s7plus_structural"], json!(true));
         assert_eq!(doc["control_count"], json!(100));
-        assert_eq!(doc["live"], json!(true));
+        assert_eq!(doc["live"], json!(false));
+        assert_eq!(doc["observed_event_count"], json!(0));
+        let live_doc = safety_api_document(vec![json!({"id": 1})], None);
+        assert_eq!(live_doc["live"], json!(true));
+        assert_eq!(live_doc["observed_event_count"], json!(1));
     }
 
     #[tokio::test]

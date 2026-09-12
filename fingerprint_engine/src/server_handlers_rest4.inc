@@ -3117,6 +3117,28 @@ async fn api_oast_probe_mint(
     if target.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"error":"target_url required"}))).into_response();
     }
+    if !crate::fuzz_oob::oast_correlation_enabled() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "error": "oast_not_configured",
+                "health": {
+                    "configured": false,
+                    "domain": "",
+                    "last_callback_at": null,
+                    "callback_count": 0,
+                },
+            })),
+        )
+            .into_response();
+    }
+    let Some(oast_base) = crate::fuzz_oob::oast_hook_domain() else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"error": "oast_not_configured"})),
+        )
+            .into_response();
+    };
 
     match crate::council_hitl::mint_oast_probe(
         state.app_pool.as_ref(),
@@ -3131,9 +3153,6 @@ async fn api_oast_probe_mint(
     .await
     {
         Ok(token) => {
-            let oast_base = std::env::var("WEISSMAN_OAST_DOMAIN")
-                .or_else(|_| std::env::var("WEISSMAN_OAST_BASE_DOMAIN"))
-                .unwrap_or_else(|_| "weissmancyber.com".to_string());
             let callback_domain = format!("{}.{}", token, oast_base.trim());
             (
                 StatusCode::CREATED,

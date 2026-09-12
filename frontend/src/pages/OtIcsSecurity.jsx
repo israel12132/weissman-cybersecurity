@@ -458,7 +458,7 @@ export default function OtIcsSecurity() {
         </div>
 
         {toast && (
-          <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${
+          <div className={`fixed top-16 end-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${
             toast.sev === 'error'
               ? 'bg-rose-950/90 border-rose-500/40 text-rose-200'
               : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-300'
@@ -470,17 +470,28 @@ export default function OtIcsSecurity() {
         {safety?.policy && (
           <div
             data-testid="ot-safety-interlock"
-            className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 via-[var(--bg-2)] to-cyan-950/30 p-5 space-y-4"
+            data-live={safety.live ? 'true' : 'false'}
+            className={`rounded-2xl border p-5 space-y-4 ${
+              safety.live
+                ? 'border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 via-[var(--bg-2)] to-cyan-950/30'
+                : 'border-amber-500/30 bg-gradient-to-br from-amber-950/30 via-[var(--bg-2)] to-cyan-950/20'
+            }`}
           >
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2">
-                <Lock className="w-4 h-4 text-emerald-400" />
+                <Lock className={`w-4 h-4 ${safety.live ? 'text-emerald-400' : 'text-amber-300'}`} />
                 <h3 className="text-sm font-semibold text-white">{t('pages.otIcsSecurity.safety_heading')}</h3>
-                <span className="text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border border-emerald-500/40 text-emerald-300 bg-emerald-500/10">
-                  {t('pages.otIcsSecurity.safety_armed')}
+                <span className={`text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border ${
+                  safety.live
+                    ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10'
+                    : 'border-amber-500/40 text-amber-200 bg-amber-500/10'
+                }`}>
+                  {safety.live
+                    ? t('pages.otIcsSecurity.safety_armed')
+                    : t('pages.otIcsSecurity.safety_compiled')}
                 </span>
               </div>
-              <div className="text-[10px] font-mono text-emerald-300/80">
+              <div className={`text-[10px] font-mono ${safety.live ? 'text-emerald-300/80' : 'text-amber-200/80'}`}>
                 {t('pages.otIcsSecurity.safety_controls', {
                   implemented: safety.control_count ?? 0,
                   total: 100,

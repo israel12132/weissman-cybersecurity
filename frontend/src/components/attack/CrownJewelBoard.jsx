@@ -48,14 +48,19 @@ export default function CrownJewelBoard({ clientId, onChanged, onInventory }) {
     () => nodes.filter((n) => n.crown_jewel).length,
     [nodes],
   )
+  const exposedCount = useMemo(
+    () => nodes.filter((n) => n.internet_exposed).length,
+    [nodes],
+  )
 
   useEffect(() => {
     onInventory?.({
       total: nodes.length,
       jewels: jewelCount,
+      exposed: exposedCount,
       loading,
     })
-  }, [nodes.length, jewelCount, loading, onInventory])
+  }, [nodes.length, jewelCount, exposedCount, loading, onInventory])
 
   const toggle = useCallback(
     async (nodeId, field, next) => {

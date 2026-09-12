@@ -312,6 +312,20 @@ export default function AttackPaths() {
           </div>
         )}
 
+        {selectedClientId != null
+          && jewelInventory
+          && !jewelInventory.loading
+          && jewelInventory.jewels > 0
+          && jewelInventory.exposed === 0 && (
+          <div
+            role="status"
+            data-testid="no-seeds-banner"
+            className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100"
+          >
+            {t(`${NS}.no_seeds_banner`)}
+          </div>
+        )}
+
         {selectedClientId == null && (
           <EmptyState icon="building" title={t(`${NS}.pick_client_title`)} body={t(`${NS}.pick_client_body`)} />
         )}
