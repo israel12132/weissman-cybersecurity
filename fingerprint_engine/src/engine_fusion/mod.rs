@@ -154,10 +154,7 @@ mod tests {
         ]);
         let hit = correlate_finding_to_paths("SQLi on vault.internal", "sqli_advanced", &paths);
         assert_eq!(hit.as_ref().map(|h| h.0), Some(2));
-        assert_eq!(
-            hit.as_ref().map(|h| h.1.as_str()),
-            Some("vault.internal")
-        );
+        assert_eq!(hit.as_ref().map(|h| h.1.as_str()), Some("vault.internal"));
         assert!(correlate_finding_to_paths("unrelated", "osint", &paths).is_none());
         assert!(correlate_finding_to_paths("x", "y", &serde_json::json!([])).is_none());
     }

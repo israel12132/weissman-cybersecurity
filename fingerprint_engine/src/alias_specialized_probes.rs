@@ -232,7 +232,14 @@ async fn probe_full_breach_sim(engine_id: &str, canonical: &str, target: &str) -
     }
     let client = http_client().await;
     let base = normalize_url(target);
-    let paths = &["/", "/login", "/admin", "/api", "/.git/HEAD", "/server-status"];
+    let paths = &[
+        "/",
+        "/login",
+        "/admin",
+        "/api",
+        "/.git/HEAD",
+        "/server-status",
+    ];
     let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
     let live: Vec<_> = probes
         .into_iter()
@@ -259,7 +266,12 @@ async fn probe_full_breach_sim(engine_id: &str, canonical: &str, target: &str) -
 async fn probe_post_exploitation(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     let host = extract_host(target);
     let mut findings = Vec::new();
-    let lateral = tcp_scan(&host, &[445, 139, 3389, 5985, 5986, 22, 1433, 3306, 5432], 8).await;
+    let lateral = tcp_scan(
+        &host,
+        &[445, 139, 3389, 5985, 5986, 22, 1433, 3306, 5432],
+        8,
+    )
+    .await;
     if !lateral.is_empty() {
         findings.push(alias_finding(
             engine_id,
@@ -276,7 +288,13 @@ async fn probe_post_exploitation(engine_id: &str, canonical: &str, target: &str)
     }
     let client = http_client().await;
     let base = normalize_url(target);
-    let paths = &["/debug", "/actuator/env", "/server-status", "/phpinfo.php", "/adminer"];
+    let paths = &[
+        "/debug",
+        "/actuator/env",
+        "/server-status",
+        "/phpinfo.php",
+        "/adminer",
+    ];
     let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
     for p in probes {
         if status_indicates_presence(p.status) {

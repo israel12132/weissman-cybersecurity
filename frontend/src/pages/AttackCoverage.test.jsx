@@ -23,6 +23,31 @@ vi.mock('./PageShell', () => ({
   ),
 }))
 vi.mock('../components/engine/ShellScanActions', () => ({ __esModule: true, default: () => null }))
+vi.mock('../components/ui/EmptyState', () => ({
+  __esModule: true,
+  default: ({ title, body }) => (
+    <div>
+      <h2>{title}</h2>
+      <p>{body}</p>
+    </div>
+  ),
+}))
+vi.mock('../components/ui/EvidenceNotice', () => ({
+  __esModule: true,
+  default: ({ children }) => <div>{children}</div>,
+}))
+vi.mock('../components/ui/ExecutiveWidget', () => ({
+  __esModule: true,
+  default: ({ label, value }) => (
+    <div>
+      {label}: {value}
+    </div>
+  ),
+}))
+vi.mock('../components/ui/Skeleton', () => ({
+  SkeletonWidgetGrid: () => null,
+  SkeletonCard: () => null,
+}))
 
 import AttackCoverage from './AttackCoverage.jsx'
 
@@ -62,7 +87,9 @@ describe('AttackCoverage', () => {
     expect(await screen.findByTestId('attack-coverage-readiness')).toBeInTheDocument()
     expect(screen.getByText('pages.attackCoverage.readiness_title')).toBeInTheDocument()
     expect(screen.getByText(/safe_proofs/)).toBeInTheDocument()
-    expect(screen.getByText('pages.attackCoverage.weaponized_no')).toBeInTheDocument()
+    expect(screen.getByTestId('attack-coverage-weaponized')).toHaveTextContent(
+      'pages.attackCoverage.weaponized_no',
+    )
     expect(screen.getByText('ICS C2 / Privilege Escalation')).toBeInTheDocument()
     expect(screen.getByText('T1190')).toBeInTheDocument()
     expect(apiFetch).toHaveBeenCalledWith('/api/attack-coverage')

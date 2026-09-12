@@ -899,13 +899,12 @@ pub async fn auto_tag_path_seeds(
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
-    let fallback =
-        sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL)
-            .bind(tenant_id)
-            .bind(client_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
+    let fallback = sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL)
+        .bind(tenant_id)
+        .bind(client_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(internet.rows_affected() + jewels.rows_affected() + fallback.rows_affected())
 }
@@ -976,9 +975,20 @@ pub fn looks_like_crown_jewel(n: &GraphNode) -> bool {
         return true;
     }
     let blob = format!("{} {}", n.label, n.graph_key).to_ascii_lowercase();
-    ["vault", "hsm", "domain control", "adfs", "okta", "payroll", "historian", "scada", "sap", "payment"]
-        .iter()
-        .any(|k| blob.contains(k))
+    [
+        "vault",
+        "hsm",
+        "domain control",
+        "adfs",
+        "okta",
+        "payroll",
+        "historian",
+        "scada",
+        "sap",
+        "payment",
+    ]
+    .iter()
+    .any(|k| blob.contains(k))
 }
 
 /// Public entry point: compute (and persist) the top-K attack paths for a client.

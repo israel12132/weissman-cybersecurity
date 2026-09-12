@@ -85,11 +85,8 @@ async fn dispatch_redteam_jobs(app_pool: &PgPool, tenant_id: i64) -> Result<(), 
 }
 
 /// Engines the scheduled red-team cron enqueues (off by default: WEISSMAN_REDTEAM_CRON=1).
-pub const REDTEAM_CRON_ENGINES: &[&str] = &[
-    "ai_adversarial_redteam",
-    "kill_chain",
-    "autonomous_pentest",
-];
+pub const REDTEAM_CRON_ENGINES: &[&str] =
+    &["ai_adversarial_redteam", "kill_chain", "autonomous_pentest"];
 
 #[cfg(test)]
 mod tests {

@@ -21,6 +21,7 @@ import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../utils/apiFetch'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
+import { crownJewelFlagsBody, crownJewelFlagsPath, parseAttackPathsPayload } from './attackPathsModel'
 
 const NS = 'pages.attackPaths'
 const columnHelper = createColumnHelper()
@@ -135,10 +136,11 @@ export default function AttackPaths() {
         const qs = recompute ? '?recompute=1&top_k=15' : ''
         const data = await apiFetch(`/api/attack-paths/${encodeURIComponent(selectedClientId)}${qs}`)
         if (data?.ok === false) throw new Error(data.detail || 'load failed')
-        setSnapshot(data.snapshot || null)
-        setHasSnapshot(Boolean(data.snapshot))
-        setZeroJewel(Boolean(data.zero_jewel) || Number(data.snapshot?.jewel_count) === 0)
-        setCandidateJewels(Array.isArray(data.candidate_jewels) ? data.candidate_jewels : [])
+        const parsed = parseAttackPathsPayload(data)
+        setSnapshot(parsed.snapshot)
+        setHasSnapshot(parsed.hasSnapshot)
+        setZeroJewel(parsed.zeroJewel)
+        setCandidateJewels(parsed.candidateJewels)
         if (recompute && data.snapshot) toast.success(t(`${NS}.recompute_done`))
       } catch (e) {
         setError(e.message || t(`${NS}.load_failed`))
@@ -156,9 +158,9 @@ export default function AttackPaths() {
       setMarkingId(nodeId)
       setError('')
       try {
-        const data = await apiFetch(`/api/risk-graph/nodes/${encodeURIComponent(nodeId)}/flags`, {
+        const data = await apiFetch(crownJewelFlagsPath(nodeId), {
           method: 'PATCH',
-          body: { crown_jewel: true },
+          body: crownJewelFlagsBody(),
         })
         if (data?.ok === false) throw new Error(data.detail || t(`${NS}.mark_jewel_failed`))
         toast.success(t(`${NS}.mark_jewel_done`))

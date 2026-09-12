@@ -15,6 +15,8 @@ mod log_integrity;
 mod malware_local;
 mod mobile_local;
 mod network_local;
+pub mod ot_plc_decoy;
+pub mod priv_esc_cred;
 mod process_hollowing;
 mod process_modules;
 mod scheduled_tasks;
@@ -24,8 +26,6 @@ mod timestomp;
 mod usb_devices;
 mod util;
 mod yara_hunt;
-pub mod ot_plc_decoy;
-pub mod priv_esc_cred;
 
 use serde_json::Value;
 
@@ -173,8 +173,12 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
             "chronos" => chronos::run(&engine, &params).await,
             "sandbox_evasion" => stealth_host::run_sandbox_evasion(&engine).await,
             "rop_chain_engine" => {
-                stealth_host::run_memory_technique(&engine, "T1055", "ROP/JOP host runtime inventory")
-                    .await
+                stealth_host::run_memory_technique(
+                    &engine,
+                    "T1055",
+                    "ROP/JOP host runtime inventory",
+                )
+                .await
             }
             "heap_exploitation" => {
                 stealth_host::run_memory_technique(

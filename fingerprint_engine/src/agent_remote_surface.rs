@@ -8,9 +8,9 @@
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
     dns_a, dns_txt, empty_ok, extract_host, finding_with_probe_depth, fingerprint_stack,
-    has_header, header_value, http_client, http_get, http_get_with_headers, join_url,
-    normalize_url, probe_matched_token, probe_paths_concurrent, status_indicates_presence,
-    tcp_banner, tcp_open, tcp_scan, udp_probe_response, DEFAULT_PROBE_CONCURRENCY,
+    header_value, http_client, http_get, join_url, normalize_url, probe_matched_token,
+    probe_paths_concurrent, status_indicates_presence, tcp_banner, tcp_open, tcp_scan,
+    udp_probe_response, DEFAULT_PROBE_CONCURRENCY,
 };
 use crate::engine_result::EngineResult;
 use serde_json::{json, Value};
@@ -1559,7 +1559,13 @@ async fn probe_sandbox_evasion_surface(engine_id: &str, target: &str) -> EngineR
 async fn probe_rop_chain_surface(engine_id: &str, target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
-    let paths = &["/core", "/coredump", "/debug/pprof/heap", "/crash", "/exception"];
+    let paths = &[
+        "/core",
+        "/coredump",
+        "/debug/pprof/heap",
+        "/crash",
+        "/exception",
+    ];
     let mut findings = Vec::new();
     let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
     for p in probes {
@@ -1592,7 +1598,12 @@ async fn probe_rop_chain_surface(engine_id: &str, target: &str) -> EngineResult 
 async fn probe_heap_exploitation_surface(engine_id: &str, target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
-    let paths = &["/debug/pprof/heap", "/metrics", "/heapdump", "/actuator/heapdump"];
+    let paths = &[
+        "/debug/pprof/heap",
+        "/metrics",
+        "/heapdump",
+        "/actuator/heapdump",
+    ];
     let mut findings = Vec::new();
     let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
     for p in probes {
@@ -1791,7 +1802,13 @@ async fn probe_host_privesc_surface(engine_id: &str, target: &str) -> EngineResu
     }
     let client = http_client().await;
     let base = normalize_url(target);
-    let paths = &["/admin", "/administrator", "/sudo", "/wp-admin", "/phpmyadmin"];
+    let paths = &[
+        "/admin",
+        "/administrator",
+        "/sudo",
+        "/wp-admin",
+        "/phpmyadmin",
+    ];
     let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
     for p in probes {
         if status_indicates_presence(p.status) {
@@ -1855,7 +1872,13 @@ async fn probe_ebpf_sensor_surface(engine_id: &str, target: &str) -> EngineResul
 async fn probe_yara_hunt_surface(engine_id: &str, target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
-    let paths = &["/yara", "/api/yara", "/api/iocs", "/api/malware/scan", "/ioc/feed"];
+    let paths = &[
+        "/yara",
+        "/api/yara",
+        "/api/iocs",
+        "/api/malware/scan",
+        "/ioc/feed",
+    ];
     let mut findings = Vec::new();
     let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
     for p in probes {

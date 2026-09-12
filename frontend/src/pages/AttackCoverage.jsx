@@ -142,7 +142,10 @@ export default function AttackCoverage() {
                   <span className="text-[10px] font-mono px-2 py-1 rounded border border-emerald-500/35 bg-emerald-500/10 text-emerald-200">
                     {t(`${NS}.roe_default`)} {readiness.roe_default || '—'}
                   </span>
-                  <span className="text-[10px] font-mono px-2 py-1 rounded border border-cyan-500/35 bg-cyan-500/10 text-cyan-200">
+                  <span
+                    data-testid="attack-coverage-weaponized"
+                    className="text-[10px] font-mono px-2 py-1 rounded border border-cyan-500/35 bg-cyan-500/10 text-cyan-200"
+                  >
                     {t(`${NS}.weaponized`)}{' '}
                     {readiness.weaponized_exploits ? t(`${NS}.weaponized_yes`) : t(`${NS}.weaponized_no`)}
                   </span>

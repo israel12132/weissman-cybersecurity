@@ -443,18 +443,38 @@ pub async fn run_mdm_bypass_engine_result(t: &str) -> EngineResult {
     }
 
     let lifecycle: &[(&str, &str, &str)] = &[
-        ("/mdm/commands", "T1623", "MDM remote-command / scripting API"),
+        (
+            "/mdm/commands",
+            "T1623",
+            "MDM remote-command / scripting API",
+        ),
         ("/api/mdm/commands", "T1623", "MDM command channel"),
         ("/api/v1/mdm/commands", "T1623", "MDM command channel v1"),
         ("/mdm/profiles", "T1603", "MDM persistence profiles"),
-        ("/api/v1/mdm/profiles", "T1603", "MDM configuration profiles"),
+        (
+            "/api/v1/mdm/profiles",
+            "T1603",
+            "MDM configuration profiles",
+        ),
         ("/api/backup", "T1639", "MDM backup/sync exfil surface"),
         ("/api/v1/sync", "T1639", "Device sync API"),
         ("/mdm/backup", "T1639", "MDM backup endpoint"),
-        ("/api/mdm/wipe", "T1640", "MDM wipe / account-access removal"),
-        ("/api/mdm/lock", "T1640", "MDM lock / account-access removal"),
+        (
+            "/api/mdm/wipe",
+            "T1640",
+            "MDM wipe / account-access removal",
+        ),
+        (
+            "/api/mdm/lock",
+            "T1640",
+            "MDM lock / account-access removal",
+        ),
         ("/api/mdm/unenroll", "T1640", "MDM unenroll"),
-        ("/api/v1/devices", "T1428", "MDM fleet device API (lateral push)"),
+        (
+            "/api/v1/devices",
+            "T1428",
+            "MDM fleet device API (lateral push)",
+        ),
     ];
     for (path, mitre, label) in lifecycle {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
