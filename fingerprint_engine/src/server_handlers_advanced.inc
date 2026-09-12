@@ -191,6 +191,9 @@ async fn api_risk_node_flags_patch(
     Path(node_id): Path<i64>,
     Json(body): Json<RiskNodeFlagsBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
@@ -198,7 +201,9 @@ async fn api_risk_node_flags_patch(
         r#"UPDATE risk_graph_nodes
               SET internet_exposed = COALESCE($1, internet_exposed),
                   crown_jewel      = COALESCE($2, crown_jewel),
-                  asset_value      = COALESCE($3, asset_value)
+                  asset_value      = COALESCE($3, asset_value),
+                  internet_exposed_locked = CASE WHEN $1 IS NULL THEN internet_exposed_locked ELSE TRUE END,
+                  crown_jewel_locked     = CASE WHEN $2 IS NULL THEN crown_jewel_locked ELSE TRUE END
             WHERE id = $4 AND tenant_id = $5
         RETURNING client_id"#,
     )

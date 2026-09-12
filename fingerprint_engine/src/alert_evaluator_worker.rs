@@ -4,6 +4,7 @@
 use crate::alert_delivery::{deliver_alert, AlertFindingInfo, AlertRuleInfo};
 use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -89,7 +90,7 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
     }
 
     let findings = sqlx::query(
-        r#"SELECT id, severity, title, description, source, client_id
+        r#"SELECT id, finding_id, severity, title, description, source, client_id
            FROM vulnerabilities
            WHERE created_at >= now() - interval '5 minutes'
            ORDER BY id DESC
@@ -99,9 +100,11 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
     .await
     .map_err(|e| e.to_string())?;
 
+    let mut path_cache: HashMap<i64, Option<Value>> = HashMap::new();
     let mut fired = 0u32;
     for finding in findings {
         let fid: i64 = finding.try_get("id").unwrap_or(0);
+        let graph_finding_id: String = finding.try_get("finding_id").unwrap_or_default();
         let severity: String = finding.try_get("severity").unwrap_or_default();
         let title: String = finding.try_get("title").unwrap_or_default();
         let description: String = finding.try_get("description").unwrap_or_default();
@@ -109,19 +112,30 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
         let client_id: i64 = finding.try_get("client_id").unwrap_or(0);
 
         let path_hit = if client_id > 0 {
-            let paths_json: Option<Value> = sqlx::query_scalar(
-                r#"SELECT paths_json FROM attack_path_snapshots
-                    WHERE tenant_id = $1 AND client_id = $2
-                    ORDER BY computed_at DESC LIMIT 1"#,
-            )
-            .bind(tenant_id)
-            .bind(client_id)
-            .fetch_optional(&mut *tx)
-            .await
-            .ok()
-            .flatten();
+            let paths_json = if let Some(cached) = path_cache.get(&client_id) {
+                cached.clone()
+            } else {
+                let loaded: Option<Value> = sqlx::query_scalar(
+                    r#"SELECT paths_json FROM attack_path_snapshots
+                        WHERE tenant_id = $1 AND client_id = $2
+                        ORDER BY computed_at DESC LIMIT 1"#,
+                )
+                .bind(tenant_id)
+                .bind(client_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .ok()
+                .flatten();
+                path_cache.insert(client_id, loaded.clone());
+                loaded
+            };
             paths_json.and_then(|pj| {
-                crate::engine_fusion::correlate_finding_to_paths(&title, &source, &pj)
+                crate::engine_fusion::correlate_finding_to_paths_keyed(
+                    &title,
+                    &source,
+                    &graph_finding_id,
+                    &pj,
+                )
             })
         } else {
             None

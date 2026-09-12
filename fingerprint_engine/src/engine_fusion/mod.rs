@@ -47,16 +47,34 @@ pub const FUSION_ENGINE_IDS: &[&str] = &[
 ];
 
 /// Correlate a live finding to Dijkstra attack-path snapshots (alert fusion).
-/// Matches finding title/source against path step labels. Honest miss → None.
+/// Matches finding title/source against path step labels, and `finding:{id}`
+/// graph keys. Bracket tags in labels (`title [source]`) are stripped first.
+/// Honest miss → None.
 pub fn correlate_finding_to_paths(
     title: &str,
     source: &str,
     paths_json: &serde_json::Value,
 ) -> Option<(u32, String)> {
-    let hay = format!("{title} {source}").to_ascii_lowercase();
-    if hay.trim().is_empty() {
+    correlate_finding_to_paths_keyed(title, source, "", paths_json)
+}
+
+pub fn correlate_finding_to_paths_keyed(
+    title: &str,
+    source: &str,
+    finding_key: &str,
+    paths_json: &serde_json::Value,
+) -> Option<(u32, String)> {
+    let title_l = title.to_ascii_lowercase();
+    let source_l = source.to_ascii_lowercase();
+    let hay = format!("{title_l} {source_l}");
+    if hay.trim().is_empty() && finding_key.trim().is_empty() {
         return None;
     }
+    let finding_gkey = if finding_key.trim().is_empty() {
+        String::new()
+    } else {
+        format!("finding:{}", finding_key.to_ascii_lowercase())
+    };
     let paths = paths_json.as_array()?;
     let mut best: Option<(u32, String)> = None;
     for p in paths {
@@ -84,8 +102,13 @@ pub fn correlate_finding_to_paths(
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_ascii_lowercase();
-                (!label.is_empty() && hay.contains(&label))
-                    || (!key.is_empty() && hay.contains(&key))
+                let label_n = strip_bracket_tags(&label);
+                (!label_n.is_empty()
+                    && ((!hay.trim().is_empty() && hay.contains(&label_n))
+                        || (!title_l.is_empty() && label_n.contains(&title_l))))
+                    || (!key.is_empty()
+                        && ((!hay.trim().is_empty() && hay.contains(&key))
+                            || (!finding_gkey.is_empty() && key == finding_gkey)))
             });
         if hit {
             match &best {
@@ -96,6 +119,20 @@ pub fn correlate_finding_to_paths(
         }
     }
     best
+}
+
+fn strip_bracket_tags(s: &str) -> String {
+    let mut out = String::new();
+    let mut in_br = false;
+    for c in s.chars() {
+        match c {
+            '[' => in_br = true,
+            ']' => in_br = false,
+            _ if !in_br => out.push(c),
+            _ => {}
+        }
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 pub use crate::external_exposure_supreme::{
@@ -157,5 +194,17 @@ mod tests {
         assert_eq!(hit.as_ref().map(|h| h.1.as_str()), Some("vault.internal"));
         assert!(correlate_finding_to_paths("unrelated", "osint", &paths).is_none());
         assert!(correlate_finding_to_paths("x", "y", &serde_json::json!([])).is_none());
+        let tagged = serde_json::json!([{
+            "hops": 3,
+            "steps": [
+                {"label": "SQLi on vault.internal [sqli_advanced]", "graph_key": "finding:fid-9"},
+                {"label": "prod-vault", "graph_key": "identity:vault"}
+            ]
+        }]);
+        let hit = correlate_finding_to_paths("SQLi on vault.internal", "sqli_advanced", &tagged);
+        assert_eq!(hit.as_ref().map(|h| h.0), Some(3));
+        let keyed =
+            correlate_finding_to_paths_keyed("other title", "sqli_advanced", "fid-9", &tagged);
+        assert_eq!(keyed.as_ref().map(|h| h.0), Some(3));
     }
 }

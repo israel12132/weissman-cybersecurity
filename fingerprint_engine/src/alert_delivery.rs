@@ -112,6 +112,20 @@ fn resolve_pagerduty_key(config: &DeliveryConfig) -> Option<String> {
 }
 
 fn alert_payload(channel: &str, rule: &AlertRuleInfo, finding: &AlertFindingInfo) -> Value {
+    let mut text = format!(
+        "[Weissman][{}] rule \"{}\" fired on {} finding: {}",
+        channel, rule.name, finding.severity, finding.title
+    );
+    if let Some(hops) = finding.attack_path_hops {
+        text.push_str(&format!(" | path hops {hops}"));
+        if let Some(jewel) = finding
+            .attack_path_jewel
+            .as_deref()
+            .filter(|s| !s.is_empty())
+        {
+            text.push_str(&format!(" → {jewel}"));
+        }
+    }
     json!({
         "channel": channel,
         "event": "alert_rule_fired",
@@ -128,10 +142,7 @@ fn alert_payload(channel: &str, rule: &AlertRuleInfo, finding: &AlertFindingInfo
             "attack_path_hops": finding.attack_path_hops,
             "attack_path_jewel": finding.attack_path_jewel,
         },
-        "text": format!(
-            "[Weissman][{}] rule \"{}\" fired on {} finding: {}",
-            channel, rule.name, finding.severity, finding.title
-        ),
+        "text": text,
     })
 }
 
@@ -235,8 +246,18 @@ async fn deliver_email(rule: &AlertRuleInfo, finding: &AlertFindingInfo) -> bool
         finding.severity,
         finding.title.chars().take(80).collect::<String>()
     );
+    let path_line = match (
+        finding.attack_path_hops,
+        finding.attack_path_jewel.as_deref(),
+    ) {
+        (Some(h), Some(j)) if !j.is_empty() => {
+            format!("\nAttack path: {hops} hops → {j}", hops = h)
+        }
+        (Some(h), _) => format!("\nAttack path: {h} hops"),
+        _ => String::new(),
+    };
     let body = format!(
-        "Alert rule \"{}\" fired.\n\nFinding #{}\nSeverity: {}\nSource: {}\nTitle: {}\n\n{}",
+        "Alert rule \"{}\" fired.\n\nFinding #{}\nSeverity: {}\nSource: {}\nTitle: {}{path_line}\n\n{}",
         rule.name, finding.id, finding.severity, finding.source, finding.title, finding.description
     );
     tokio::task::spawn_blocking(move || send_smtp_sync(subject, body))
@@ -338,6 +359,8 @@ async fn deliver_channel(
                         "rule_id": rule.id,
                         "rule_name": rule.name,
                         "finding_id": finding.id,
+                        "attack_path_hops": finding.attack_path_hops,
+                        "attack_path_jewel": finding.attack_path_jewel,
                     }
                 }
             });

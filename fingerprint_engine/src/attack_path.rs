@@ -971,7 +971,7 @@ pub fn looks_like_crown_jewel(n: &GraphNode) -> bool {
     ) {
         return true;
     }
-    if n.business_value_usd >= 100_000 || n.asset_value >= 80.0 {
+    if n.business_value_usd >= 100_000 || n.asset_value >= 2.5 {
         return true;
     }
     let blob = format!("{} {}", n.label, n.graph_key).to_ascii_lowercase();
@@ -1012,7 +1012,7 @@ pub async fn compute_and_store(
             }
         }
     }
-    let _ = auto_tag_path_seeds(pool, tenant_id, client_id).await;
+    auto_tag_path_seeds(pool, tenant_id, client_id).await?;
     mark_graph_dirty(tenant_id, client_id);
     let graph = cached_graph(pool, tenant_id, client_id).await?;
     let infer = tokio::task::spawn_blocking(move || {
@@ -1297,6 +1297,12 @@ mod tests {
         let mut rich = n(5, false, false, 0.0);
         rich.business_value_usd = 250_000;
         assert!(looks_like_crown_jewel(&rich));
+        let mut valued = n(4, false, false, 0.0);
+        valued.asset_value = 2.5;
+        assert!(looks_like_crown_jewel(&valued));
+        let mut low = n(3, false, false, 0.0);
+        low.asset_value = 1.0;
+        assert!(!looks_like_crown_jewel(&low));
     }
 
     #[test]

@@ -1396,7 +1396,7 @@
     "attackPaths": {
       "title": "Attack Paths",
       "subtitle": "Choke-points and ranked internet → crown-jewel paths",
-      "badge": "BFS",
+      "badge": "Dijkstra",
       "evidence_notice": "Paths and choke-points come from GET /api/attack-paths/:client_id — Dijkstra over the live risk graph weighted by CVSS+EPSS+KEV+agent. Recompute auto-tags internet-exposed and crown-jewel seeds, then regenerates from the current graph; not a static diagram.",
       "select_client": "Select client",
       "recompute": "Recompute",
@@ -1430,7 +1430,7 @@
       "no_choke_title": "No choke-points",
       "no_choke_body": "No shared choke-points across the computed paths.",
       "no_paths_title": "No attack paths",
-      "no_paths_body": "No internet → crown-jewel path was found in the current graph. Tag a crown jewel, then recompute.",
+      "no_paths_body": "No internet → crown-jewel path exists in this snapshot. Entry and jewel flags may already be set; the live graph has no connecting route.",
       "score": "Score",
       "path_ale": "ALE {{value}}",
       "root_cause": "Root cause",

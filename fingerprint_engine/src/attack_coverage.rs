@@ -110,6 +110,12 @@ pub const COVERAGE: &[Technique] = &[
             "sbom_analyzer",
         ],
     },
+    Technique {
+        id: "T0883",
+        name: "Internet Accessible Device",
+        tactic: "Initial Access",
+        engines: &["scada_ics"],
+    },
     // ── Execution ───────────────────────────────────────────────────────────
     Technique {
         id: "T1059.008",
@@ -173,14 +179,14 @@ pub const COVERAGE: &[Technique] = &[
         id: "T0890",
         name: "Exploitation for Privilege Escalation (ICS)",
         tactic: "Privilege Escalation",
-        engines: &["scada_ics", "ot_cloud_identity_killpath"],
+        engines: &["ot_cloud_identity_killpath"],
     },
     // ── Defense Evasion ─────────────────────────────────────────────────────
     Technique {
         id: "T1562",
         name: "Impair Defenses",
         tactic: "Defense Evasion",
-        engines: &["edr_evasion", "waf_bypass"],
+        engines: &["edr_evasion", "waf_bypass", "host_isolation"],
     },
     Technique {
         id: "T1556",
@@ -197,6 +203,12 @@ pub const COVERAGE: &[Technique] = &[
         name: "Forge Web Credentials: Web Cookies/JWT",
         tactic: "Defense Evasion",
         engines: &["identity_session_oauth", "jwt_attack"],
+    },
+    Technique {
+        id: "T1620",
+        name: "Reflective Code Loading",
+        tactic: "Defense Evasion",
+        engines: &["rop_chain_engine", "heap_exploitation", "jit_spray"],
     },
     // ── Credential Access ───────────────────────────────────────────────────
     Technique {
@@ -253,6 +265,18 @@ pub const COVERAGE: &[Technique] = &[
         name: "Account Discovery: Domain Account",
         tactic: "Discovery",
         engines: &["kerberoasting", "ldap_injection_engine"],
+    },
+    Technique {
+        id: "T1082",
+        name: "System Information Discovery",
+        tactic: "Discovery",
+        engines: &["rop_chain_engine", "heap_exploitation", "jit_spray"],
+    },
+    Technique {
+        id: "T1518.001",
+        name: "Software Discovery: Security Software Discovery",
+        tactic: "Discovery",
+        engines: &["ebpf_sensor", "ioc_yara_hunt"],
     },
     // ── Lateral Movement ────────────────────────────────────────────────────
     Technique {
@@ -528,6 +552,15 @@ mod tests {
                 t.tactic
             );
         }
+        let mut ids: Vec<_> = COVERAGE.iter().map(|t| t.id).collect();
+        ids.sort();
+        let before = ids.len();
+        ids.dedup();
+        assert_eq!(
+            before,
+            ids.len(),
+            "duplicate ATT&CK ids in coverage catalog"
+        );
     }
 
     #[test]
@@ -547,5 +580,21 @@ mod tests {
         assert_eq!(j["readiness"]["weaponized_exploits"], false);
         assert_eq!(j["readiness"]["roe_default"], "safe_proofs");
         assert!(j["readiness"]["gaps"].as_array().unwrap().len() >= 4);
+    }
+
+    #[test]
+    fn ics_panel_presence_is_t0883_not_exploitation() {
+        let t0883 = COVERAGE
+            .iter()
+            .find(|t| t.id == "T0883")
+            .expect("T0883 Internet Accessible Device");
+        assert_eq!(t0883.tactic, "Initial Access");
+        assert!(t0883.engines.contains(&"scada_ics"));
+        let t0890 = COVERAGE.iter().find(|t| t.id == "T0890").expect("T0890");
+        assert!(
+            !t0890.engines.contains(&"scada_ics"),
+            "HTTP engineering-panel presence is not ICS privilege-escalation exploitation"
+        );
+        assert!(t0890.engines.contains(&"ot_cloud_identity_killpath"));
     }
 }

@@ -34,44 +34,51 @@ SELECT w.entry_id, w.node_id, w.hops, w.path
 "#;
 
 /// Mark ASM/OSINT/public-HTTP assets as internet-exposed so Dijkstra has seeds.
+///
+/// `risk_graph_nodes.metadata` is TEXT (not JSONB). Never use `->>` here.
+/// Operator `internet_exposed_locked` nodes are left untouched.
 pub const AUTO_TAG_INTERNET_EXPOSED_SQL: &str = r#"
 UPDATE risk_graph_nodes
    SET internet_exposed = TRUE
  WHERE tenant_id = $1
    AND client_id = $2
    AND internet_exposed IS NOT TRUE
+   AND COALESCE(internet_exposed_locked, FALSE) IS NOT TRUE
    AND (
         graph_key LIKE 'asm:%'
      OR graph_key LIKE 'osint:%'
      OR graph_key LIKE 'http:%'
      OR graph_key LIKE 'https:%'
-     OR node_type IN ('asset', 'network')
-     AND (
-          COALESCE(metadata->>'public', '') IN ('true', '1')
-       OR COALESCE(metadata->>'internet_exposed', '') IN ('true', '1')
+     OR (
+          node_type IN ('asset', 'network')
+      AND replace(lower(COALESCE(metadata::text, '')), ' ', '')
+          ~ '"(public|internet_exposed)":(true|1|"true"|"1")'
      )
    )
 "#;
 
 /// Heuristic crown-jewel tag so Dijkstra is not silently empty.
-/// Never overwrites an operator-set flag; never tags honey nodes.
+/// Never overwrites an operator-locked flag; never tags honey nodes.
+/// `asset_value` is the 0..3 multiplier (see financial blast-radius migration).
 pub const AUTO_TAG_CROWN_JEWEL_SQL: &str = r#"
 UPDATE risk_graph_nodes
    SET crown_jewel = TRUE
  WHERE tenant_id = $1
    AND client_id = $2
    AND crown_jewel IS NOT TRUE
+   AND COALESCE(crown_jewel_locked, FALSE) IS NOT TRUE
    AND COALESCE(honey_node, FALSE) IS NOT TRUE
    AND (
         node_type IN ('identity', 'ot', 'ics', 'k8s_cluster', 'k8s', 'llm')
      OR COALESCE(business_value_usd, 0) >= 100000
-     OR COALESCE(asset_value, 0) >= 80
+     OR COALESCE(asset_value, 0) >= 2.5
      OR lower(label) ~ '(vault|hsm|domain.?control|adfs|okta|payroll|historian|scada|sap|kube-apiserver|postgres-primary|payment|pci)'
      OR lower(graph_key) ~ '(vault|identity:|ot:|k8s:|crown)'
    )
 "#;
 
-/// If the heuristic tagged nothing, pick the single highest-value non-honey node.
+/// If the heuristic tagged nothing usable, pick the single highest-value non-honey node.
+/// A honey node with crown_jewel=TRUE does not count as a usable jewel.
 pub const AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL: &str = r#"
 UPDATE risk_graph_nodes
    SET crown_jewel = TRUE
@@ -79,6 +86,7 @@ UPDATE risk_graph_nodes
    SELECT id FROM risk_graph_nodes
     WHERE tenant_id = $1 AND client_id = $2
       AND COALESCE(honey_node, FALSE) IS NOT TRUE
+      AND COALESCE(crown_jewel_locked, FALSE) IS NOT TRUE
     ORDER BY COALESCE(business_value_usd, 0) DESC,
              COALESCE(asset_value, 0) DESC,
              COALESCE(risk_score, 0) DESC
@@ -86,9 +94,12 @@ UPDATE risk_graph_nodes
  )
  AND tenant_id = $1
  AND client_id = $2
+ AND COALESCE(crown_jewel_locked, FALSE) IS NOT TRUE
  AND NOT EXISTS (
    SELECT 1 FROM risk_graph_nodes
-    WHERE tenant_id = $1 AND client_id = $2 AND crown_jewel = TRUE
+    WHERE tenant_id = $1 AND client_id = $2
+      AND crown_jewel = TRUE
+      AND COALESCE(honey_node, FALSE) IS NOT TRUE
  )
 "#;
 
@@ -126,5 +137,19 @@ mod tests {
     fn crown_jewel_sql_never_tags_honey() {
         assert!(AUTO_TAG_CROWN_JEWEL_SQL.contains("honey_node"));
         assert!(AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL.contains("honey_node"));
+    }
+
+    #[test]
+    fn auto_tag_sql_is_text_metadata_safe_and_respects_locks() {
+        assert!(
+            !AUTO_TAG_INTERNET_EXPOSED_SQL.contains("->>"),
+            "metadata is TEXT; jsonb ->> would abort the seed transaction"
+        );
+        assert!(AUTO_TAG_INTERNET_EXPOSED_SQL.contains("internet_exposed_locked"));
+        assert!(AUTO_TAG_CROWN_JEWEL_SQL.contains("crown_jewel_locked"));
+        assert!(AUTO_TAG_CROWN_JEWEL_SQL.contains(">= 2.5"));
+        assert!(!AUTO_TAG_CROWN_JEWEL_SQL.contains(">= 80"));
+        assert!(AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL.contains("honey_node"));
+        assert!(AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL.contains("crown_jewel_locked"));
     }
 }

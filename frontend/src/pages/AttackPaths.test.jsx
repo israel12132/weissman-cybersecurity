@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import en from '../i18n/locales/en.json'
+import he from '../i18n/locales/he.json'
 import {
   crownJewelFlagsBody,
   crownJewelFlagsPath,
@@ -41,5 +43,16 @@ describe('parseAttackPathsPayload', () => {
     expect(parsed.hasSnapshot).toBe(false)
     expect(parsed.zeroJewel).toBe(true)
     expect(parsed.candidateJewels[0].label).toBe('ad-dc01')
+  })
+})
+
+describe('attack-path algorithm copy', () => {
+  it('labels Dijkstra in the badge and evidence, not BFS', () => {
+    expect(en.pages.attackPaths.badge).toBe('Dijkstra')
+    expect(he.pages.attackPaths.badge).toBe('דייקסטרה')
+    expect(en.pages.attackPaths.evidence_notice).toMatch(/Dijkstra/)
+    expect(he.pages.attackPaths.evidence_notice).toMatch(/דייקסטרה/)
+    expect(en.pages.attackPaths.no_paths_body).not.toMatch(/Tag a crown jewel/)
+    expect(he.pages.attackPaths.no_paths_body).not.toMatch(/סמן נכס כתר/)
   })
 })

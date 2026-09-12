@@ -1582,7 +1582,7 @@ async fn probe_rop_chain_surface(engine_id: &str, target: &str) -> EngineResult 
                 engine_id,
                 "Crash/debug surface that ROP tradecraft fingerprints",
                 "medium",
-                "T1055",
+                "T1082",
                 &format!(
                     "{} returned {} — crash dumps and pprof heaps are the remote tell for memory-corruption / ROP inventory; agent validates W^X.",
                     p.final_url, p.status
@@ -1607,17 +1607,18 @@ async fn probe_heap_exploitation_surface(engine_id: &str, target: &str) -> Engin
     let mut findings = Vec::new();
     let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
     for p in probes {
+        let body = p.body.to_ascii_lowercase();
         if p.status == 200
-            && (p.body.contains("heap")
-                || p.body.contains("jvm_memory")
-                || p.body.contains("jemalloc")
-                || p.body.contains("asan"))
+            && (body.contains("heap")
+                || body.contains("jvm_memory")
+                || body.contains("jemalloc")
+                || body.contains("asan"))
         {
             findings.push(remote_finding(
                 engine_id,
                 "Heap/allocator telemetry exposed",
                 "medium",
-                "T1055",
+                "T1082",
                 &format!(
                     "{} exposes heap/allocator metrics — heap-spray tradecraft inventories this remotely; agent confirms interpreter/RWX pages.",
                     p.final_url
@@ -1657,7 +1658,7 @@ async fn probe_jit_spray_surface(engine_id: &str, target: &str) -> EngineResult 
                 engine_id,
                 "JS/JIT inspector endpoint exposed",
                 "high",
-                "T1055",
+                "T1082",
                 &format!(
                     "{} returned {} with a debugger/inspector signal — JIT-spray tradecraft needs an RWX compiler; agent inventories JIT processes.",
                     p.final_url, p.status
@@ -1770,7 +1771,7 @@ async fn probe_host_isolation_surface(engine_id: &str, target: &str) -> EngineRe
                 engine_id,
                 "EDR isolation/containment API reachable from this target",
                 "high",
-                "T1482",
+                "T1562",
                 &format!(
                     "{} returned {} — host isolation is agent-enforced; a public containment API is itself a control-plane finding.",
                     p.final_url, p.status
@@ -1856,7 +1857,7 @@ async fn probe_ebpf_sensor_surface(engine_id: &str, target: &str) -> EngineResul
                 engine_id,
                 "eBPF/Falco/Cilium control plane reachable",
                 "medium",
-                "T1014",
+                "T1518.001",
                 &format!(
                     "{} returned {} with eBPF/Falco/Cilium signals — the sensor is host-resident; this is the remote tell.",
                     p.final_url, p.status
@@ -1882,11 +1883,12 @@ async fn probe_yara_hunt_surface(engine_id: &str, target: &str) -> EngineResult 
     let mut findings = Vec::new();
     let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
     for p in probes {
+        let body = p.body.to_ascii_lowercase();
         if status_indicates_presence(p.status)
-            && (p.body.contains("yara")
-                || p.body.contains("ioc")
-                || p.body.contains("rule")
-                || p.body.contains("indicator"))
+            && (body.contains("yara")
+                || body.contains("ioc")
+                || body.contains("rule")
+                || body.contains("indicator"))
         {
             findings.push(remote_finding(
                 engine_id,
