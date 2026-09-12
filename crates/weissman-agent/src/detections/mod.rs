@@ -15,7 +15,7 @@ mod log_integrity;
 mod malware_local;
 mod mobile_local;
 mod network_local;
-mod ot_plc_decoy;
+pub(crate) mod ot_plc_decoy;
 mod priv_esc_cred;
 mod process_hollowing;
 mod process_modules;
