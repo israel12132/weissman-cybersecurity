@@ -1,5 +1,5 @@
 /**
- * Master registry of all 583 production attack engines.
+ * Master registry of all production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 583 production engines in registry order */
+/** All production engines in registry order (count is CI-verified, not hardcoded). */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -63,6 +63,14 @@ export const ENGINES_REGISTRY = [
     group: 'recon',
     mitre: 'T1530',
     description: 'Dark web & paste-site credential and data leak detection',
+    requiresTarget: true,
+  },
+  {
+    id: 'adversary_exposure_delta',
+    label: 'Adversary Exposure Delta',
+    group: 'recon',
+    mitre: 'T1597',
+    description: 'Legal clearnet adversary-index fusion: urlscan, URLhaus/ThreatFox (when keyed), HIBP breach-source catalog, OTX pulses — never Tor marketplace crawls',
     requiresTarget: true,
   },
   {

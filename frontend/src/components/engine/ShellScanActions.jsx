@@ -8,12 +8,15 @@ import Button from '../ui/Button'
 export default function ShellScanActions({
   onRefresh,
   onExport,
+  onExportXlsx,
   refreshLoading = false,
   refreshDisabled = false,
   exportDisabled = false,
+  exportXlsxDisabled = false,
   // Defaults to the CSV label; pass an explicit label (e.g. "Export JSON") on
   // pages whose onExport produces a non-CSV file so the toolbar isn't mislabeled.
   exportLabel,
+  xlsxLabel,
 }) {
   const { t } = useTranslation()
   return (
@@ -27,6 +30,17 @@ export default function ShellScanActions({
         <RefreshCw className={`w-3.5 h-3.5 ${refreshLoading ? 'animate-spin' : ''}`} />
         {t('weissmanFindings.refresh')}
       </Button>
+      {onExportXlsx && (
+        <Button variant="unstyled"
+          type="button"
+          onClick={onExportXlsx}
+          disabled={exportXlsxDisabled}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/35 text-[11px] font-mono text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-40"
+        >
+          <Download className="w-3.5 h-3.5" />
+          {xlsxLabel || t('common.export_xlsx')}
+        </Button>
+      )}
       <Button variant="unstyled"
         type="button"
         onClick={onExport}

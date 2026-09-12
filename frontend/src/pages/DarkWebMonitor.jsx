@@ -15,6 +15,7 @@ import DataTable from '../components/ui/DataTable'
 import FindingDrawer from '../components/ui/FindingDrawer'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../utils/apiFetch'
+import { downloadApiFile } from '../lib/downloadApiFile'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import Button from '../components/ui/Button'
 
@@ -26,6 +27,8 @@ const DARK_WEB_SOURCES = new Set([
   'darkweb_intel',
   'dark_web_monitor',
   'typosquatting_monitor',
+  'adversary_exposure_delta',
+  'threat_intel_fusion',
 ])
 const SEV_KEYS = ['critical', 'high', 'medium', 'low', 'info']
 
@@ -192,6 +195,7 @@ export default function DarkWebMonitor() {
           <ShellScanActions
             onRefresh={load}
             onExport={exportCsv}
+            onExportXlsx={() => downloadApiFile('/api/findings/export/xlsx', 'Weissman_Board.xlsx')}
             refreshLoading={loading}
             exportDisabled={filtered.length === 0}
           />

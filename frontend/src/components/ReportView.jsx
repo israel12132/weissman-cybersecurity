@@ -7,6 +7,7 @@ import { useParams } from 'react-router'
 import { useTranslation, Trans } from 'react-i18next'
 import { apiFetch } from '../utils/apiFetch'
 import { apiUrl } from '../lib/apiBase'
+import { downloadApiFile } from '../lib/downloadApiFile'
 import StandaloneLabShell from './ui/StandaloneLabShell'
 
 export default function ReportView() {
@@ -58,13 +59,22 @@ export default function ReportView() {
       title={t('components.reportView.title', { name: clientName })}
       maxWidth="max-w-4xl"
       actions={(
-        <a
-          href={apiUrl(`/api/clients/${clientId}/report/pdf`)}
-          download
-          className="text-sm text-cyan-400 hover:underline"
-        >
-          {t('components.reportView.download_pdf')}
-        </a>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => downloadApiFile(`/api/clients/${clientId}/export/xlsx`, `Weissman_Board.xlsx`)}
+            className="text-sm text-emerald-400 hover:underline"
+          >
+            {t('components.reportView.download_xlsx')}
+          </button>
+          <a
+            href={apiUrl(`/api/clients/${clientId}/report/pdf`)}
+            download
+            className="text-sm text-cyan-400 hover:underline"
+          >
+            {t('components.reportView.download_pdf')}
+          </a>
+        </div>
       )}
     >
       {error && (

@@ -678,6 +678,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "ngfw_posture",
     "malware_detonation",
     "weissman_vngfw",
+    "adversary_exposure_delta",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -689,6 +690,7 @@ pub const DEFAULT_ORCHESTRATOR_ENGINES: &[&str] = &[
     "asm",
     "first_mover_surface_delta",
     "leak_hunter",
+    "adversary_exposure_delta",
     "email_dns_posture",
     "pki_tls",
     "subdomain_takeover",
@@ -1298,6 +1300,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "ngfw_posture",
     "malware_detonation",
     "weissman_vngfw",
+    "adversary_exposure_delta",
 ];
 
 /// Map catalog-only registry IDs to a production engine implementation.

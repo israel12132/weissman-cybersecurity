@@ -275,6 +275,7 @@ fn engine_display_label(source: &str) -> &'static str {
         "asm" => "ASM",
         "supply_chain" => "Supply Chain",
         "leak_hunter" => "Leak Hunter",
+        "adversary_exposure_delta" => "Adversary Exposure Delta",
         "bola_idor" => "BOLA/IDOR",
         "llm_path_fuzz" => "LLM Path Fuzz",
         "semantic_ai_fuzz" => "Semantic AI Fuzz",

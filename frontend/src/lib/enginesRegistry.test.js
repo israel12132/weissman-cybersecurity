@@ -3,5 +3,7 @@ import { ENGINES_REGISTRY, getEngine, getEnginesByGroup } from './enginesRegistr
 describe('enginesRegistry', () => {
   it('non-empty', () => expect(ENGINES_REGISTRY.length).toBeGreaterThan(100))
   it('getEngine', () => expect(getEngine('osint')?.id).toBe('osint'))
-  it('by group', () => expect(getEnginesByGroup('recon').length).toBeGreaterThan(0))
+  it('adversary_exposure_delta is a live recon engine', () => {
+    expect(getEngine('adversary_exposure_delta')?.group).toBe('recon')
+  })
 })

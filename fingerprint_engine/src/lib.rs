@@ -198,6 +198,7 @@ pub mod advanced_stealth_engines;
 pub mod advanced_supply_chain_engines;
 pub mod advanced_web_engines;
 pub mod adversarial_ml_engine;
+pub mod adversary_exposure_delta;
 pub mod agent_registry_sync;
 pub mod alert_delivery;
 pub mod alert_evaluator_worker;
@@ -335,6 +336,7 @@ pub mod ws_intelligence_bus;
 pub mod ws_race_executor;
 pub mod ws_session;
 pub mod ws_state_machine;
+pub mod xlsx_pack;
 pub mod xxe_engine;
 pub mod zero_day_prediction_engine;
 
@@ -376,6 +378,8 @@ pub use fingerprint::{
 pub use fuzzer::{
     run_fuzzer, run_fuzzer_collect, run_fuzzer_collect_tenant, Baseline, Mutator, ValidatedAnomaly,
 };
-pub use recon::{enum_subdomains, enum_subdomains_default, DEFAULT_SUBDOMAINS};
+pub use recon::{
+    default_subdomain_wordlist, enum_subdomains, enum_subdomains_default, DEFAULT_SUBDOMAINS,
+};
 pub use risk_graph::export_risk_graph_json;
 pub use safe_probe::{safe_probe, SafeProbeResult};

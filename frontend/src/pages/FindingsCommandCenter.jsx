@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
 import { ENGINES_BY_ID, ENGINE_GROUP_DEFS, ENGINE_GROUPS } from '../lib/enginesRegistry'
 import { apiFetch } from '../utils/apiFetch'
+import { downloadApiFile } from '../lib/downloadApiFile'
 // bulkUpdateFindingStatus expects a raw-Response apiFetch (reads r.ok / r.json()),
 // so keep the legacy lib/apiBase client for that helper only.
 import { apiFetch as rawApiFetch } from '../lib/apiBase'
@@ -537,6 +538,12 @@ export default function FindingsCommandCenter() {
     }
   }, [bulkStatus, selectedRows, toast, t])
 
+  const handleExportXlsx = useCallback(() => {
+    downloadApiFile('/api/findings/export/xlsx', `Weissman_Board_${new Date().toISOString().slice(0, 10)}.xlsx`)
+      .then((filename) => toast.success(t('findings.toast_export_ok', { filename })))
+      .catch((e) => toast.error(t('findings.toast_xlsx_failed', { detail: e?.message || t('findings.network_error') })))
+  }, [toast, t])
+
   const handleExportCsv = useCallback(() => {
     apiFetch('/api/findings/export/csv', { raw: true })
       .then((r) => {
@@ -741,6 +748,13 @@ export default function FindingsCommandCenter() {
           exportLabel={t('common.export_csv')}
           refreshLabel={t('common.refresh')}
         >
+          <Button variant="unstyled"
+            type="button"
+            onClick={handleExportXlsx}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 transition-all"
+          >
+            {t('common.export_xlsx')}
+          </Button>
           <Button variant="unstyled"
             type="button"
             onClick={() => setFiltersExpanded((v) => !v)}
