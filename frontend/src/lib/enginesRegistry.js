@@ -1,5 +1,5 @@
 /**
- * Master registry of all 583 production attack engines.
+ * Master registry of all 585 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 583 production engines in registry order */
+/** All 585 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -393,6 +393,22 @@ export const ENGINES_REGISTRY = [
     group: 'ot',
     mitre: 'T0853',
     description: 'Triconex TriStation safety-instrumented-system reachability — TRITON-class life-safety exposure mapping under RoE',
+    requiresTarget: true,
+  },
+  {
+    id: 'ot_passive_active_safety',
+    label: 'OT Passive / Active Safety Interlock',
+    group: 'ot',
+    mitre: 'T0843',
+    description: 'RoE-gated safe-read OT probes with compiled protocol FSM abort — coil writes, Direct Operate, CPU stop, and GOOSE inject never leave the parser',
+    requiresTarget: true,
+  },
+  {
+    id: 'ot_crown_jewel_path',
+    label: 'OT Crown-Jewel Path',
+    group: 'ot',
+    mitre: 'T0836',
+    description: 'Safety-interlock findings fused with crown-jewel FAIR blast radius on the live OT graph — prices process disruption, not a packet-path NGFW',
     requiresTarget: true,
   },
 

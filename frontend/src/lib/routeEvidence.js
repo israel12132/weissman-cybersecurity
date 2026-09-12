@@ -37,6 +37,7 @@ export const ROUTE_EVIDENCE_SKIP = new Set([
   '/ceo',
   '/sovereign',
   '/elite-hardening',
+  '/competitive-delta',
 ])
 
 /** Prefixes where child pages render their own evidence banner. */
