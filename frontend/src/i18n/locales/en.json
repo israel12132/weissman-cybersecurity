@@ -1214,7 +1214,8 @@
     "unavailable_title": "Agent fleet status unknown",
     "unavailable_body": "The Command Center could not reach the endpoint-agent API. This is not proof that no agents are enrolled — agent-required engines stay paused until status is confirmed.",
     "unavailable_cta": "Retry fleet status",
-    "unavailable_hint": "If this persists, check weissman-server and GET /api/agents/status."
+    "unavailable_hint": "If this persists, check weissman-server and GET /api/agents/status.",
+    "open_management": "Open Agent Management"
   },
   "weissmanFindings": {
     "title": "Findings",
@@ -4445,6 +4446,7 @@
       "health_domain": "Domain",
       "health_last": "Last callback",
       "health_idle": "configured, none observed",
+      "health_unavailable": "callback API unreachable — not proof the listener is off",
       "health_none": "none observed",
       "health_count": "{{count}} recent hits",
       "probes": {

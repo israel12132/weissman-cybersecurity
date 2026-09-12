@@ -13,6 +13,7 @@ import CopyButton from '../components/ui/CopyButton'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../utils/apiFetch'
 import { apiUrl } from '../lib/apiBase'
+import { invalidateAgentFleetCache } from '../hooks/useAgentFleetStatus'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import Button from '../components/ui/Button'
 import { useApiQuery } from '../hooks/useApiQuery'
@@ -91,8 +92,14 @@ export default function AgentManagement() {
   const refresh = useCallback(async () => {
     try {
       const d = await apiFetch('/api/agents/status')
+      if (d?.ok === false || d?.unavailable) {
+        const err = new Error(d?.detail || t('agents.status_unavailable_title'))
+        err.unavailable = true
+        throw err
+      }
       setAgents(Array.isArray(d.agents) ? d.agents : [])
       setErr(null)
+      invalidateAgentFleetCache()
     } catch (e) {
       if (e?.status != null) {
         const b = e?.response ? await e.response.json().catch(() => ({})) : {}

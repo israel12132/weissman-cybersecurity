@@ -61,6 +61,26 @@ describe('OastHealthStrip', () => {
     expect(screen.getByText(/health_count:3/)).toBeTruthy()
   })
 
+  it('does not look live when the callback API is unreachable', () => {
+    render(
+      <OastHealthStrip
+        health={{
+          configured: false,
+          unavailable: true,
+          domain: '',
+          last_callback_at: null,
+          callback_count: 0,
+        }}
+      />,
+    )
+    const strip = screen.getByTestId('oast-health-strip')
+    expect(strip.getAttribute('data-live')).toBe('false')
+    expect(strip.getAttribute('data-unavailable')).toBe('true')
+    expect(strip.textContent).toMatch(/health_unavailable/)
+    expect(strip.textContent).not.toMatch(/health_missing/)
+    expect(strip.textContent).not.toMatch(/health_configured/)
+  })
+
   it('renders nothing until health has been fetched', () => {
     const { container } = render(<OastHealthStrip health={null} />)
     expect(container.firstChild).toBeNull()

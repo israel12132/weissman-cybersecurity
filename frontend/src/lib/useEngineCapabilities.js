@@ -18,24 +18,40 @@ function buildMaps(payload) {
   return { byId, kindById }
 }
 
+function markUnavailable(err, fallbackMessage) {
+  const wrapped = err instanceof Error ? err : new Error(fallbackMessage)
+  wrapped.unavailable = true
+  return wrapped
+}
+
 async function fetchCapabilities(force = false) {
   if (!force && cachedPayload) return cachedPayload
   if (!fetchPromise || force) {
     fetchPromise = apiFetch('/api/engines/capabilities')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data && typeof data === 'object') {
-          cachedPayload = data
-          return cachedPayload
+      .then(async (r) => {
+        if (!r || typeof r.ok !== 'boolean') {
+          // utils-style clients may already return parsed JSON.
+          if (r && typeof r === 'object' && Array.isArray(r.engines)) {
+            cachedPayload = r
+            return cachedPayload
+          }
+          throw markUnavailable(new Error('capabilities manifest missing'), 'capabilities manifest missing')
         }
-        // A non-OK/empty response must NOT be cached as data: doing so pinned an
-        // empty manifest for the whole session (and tripped the forensic badge's
-        // false "capabilities manifest empty — cannot verify" tamper alarm).
-        // Return a transient empty payload for this call only and leave the cache
-        // untouched so the next mount retries.
-        return cachedPayload || { engines: [], summary: {}, total: 0, legend: {} }
+        if (!r.ok) {
+          const err = new Error(`capabilities HTTP ${r.status}`)
+          err.status = r.status
+          throw markUnavailable(err, 'capabilities unavailable')
+        }
+        const data = await r.json()
+        if (!data || typeof data !== 'object' || !Array.isArray(data.engines)) {
+          throw markUnavailable(new Error('capabilities manifest missing'), 'capabilities manifest missing')
+        }
+        cachedPayload = data
+        return cachedPayload
       })
-      .catch(() => cachedPayload || { engines: [], summary: {}, total: 0, legend: {} })
+      .catch((err) => {
+        throw markUnavailable(err, 'Failed to load engine capabilities')
+      })
       .finally(() => {
         fetchPromise = null
       })
@@ -57,21 +73,26 @@ export function useEngineCapabilities() {
   const [payload, setPayload] = useState(cachedPayload)
   const [loading, setLoading] = useState(!cachedPayload)
   const [error, setError] = useState(null)
+  const [unavailable, setUnavailable] = useState(false)
 
   const load = useCallback(async (force = false) => {
     if (!force && cachedPayload) {
       setPayload(cachedPayload)
       setLoading(false)
+      setUnavailable(false)
+      setError(null)
       return cachedPayload
     }
     setLoading(true)
     setError(null)
     try {
       const data = await fetchCapabilities(force)
+      setUnavailable(false)
       setPayload(data)
       return data
     } catch (e) {
       setError(e?.message || 'Failed to load engine capabilities')
+      setUnavailable(true)
       return cachedPayload
     } finally {
       setLoading(false)
@@ -108,6 +129,7 @@ export function useEngineCapabilities() {
     getEngine,
     loading,
     error,
+    unavailable,
     refresh: () => load(true),
   }
 }

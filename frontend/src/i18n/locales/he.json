@@ -1214,7 +1214,8 @@
     "unavailable_title": "סטטוס צי הסוכנים אינו ידוע",
     "unavailable_body": "מרכז הפיקוד לא הצליח להגיע ל-API של סוכני הקצה. זה אינו הוכחה שאין סוכנים רשומים — מנועים שדורשים סוכן נשארים מושהים עד שהסטטוס מאושר.",
     "unavailable_cta": "נסה שוב את סטטוס הצי",
-    "unavailable_hint": "אם זה נמשך, בדוק את weissman-server ואת GET /api/agents/status."
+    "unavailable_hint": "אם זה נמשך, בדוק את weissman-server ואת GET /api/agents/status.",
+    "open_management": "פתח ניהול סוכנים"
   },
   "weissmanFindings": {
     "title": "ממצאים",
@@ -4445,6 +4446,7 @@
       "health_domain": "דומיין",
       "health_last": "קריאה אחרונה",
       "health_idle": "מוגדר, אין קריאה",
+      "health_unavailable": "API הקריאות אינו זמין — אין זו הוכחה שהמאזין כבוי",
       "health_none": "לא נצפה",
       "health_count": "{{count}} קריאות אחרונות",
       "probes": {

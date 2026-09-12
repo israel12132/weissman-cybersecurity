@@ -49,13 +49,15 @@ export default function AgentRequiredEmptyState({
         title={t(unavailable ? 'agentRequired.unavailable_title' : 'agentRequired.empty_title')}
         body={body}
         cta={
-          unavailable && typeof onRetry === 'function'
-            ? { label: t('agentRequired.unavailable_cta'), onClick: onRetry }
+          unavailable
+            ? typeof onRetry === 'function'
+              ? { label: t('agentRequired.unavailable_cta'), onClick: onRetry }
+              : { label: t('agentRequired.open_management'), to: '/agents' }
             : { label: t('agentRequired.install_cta'), to: '/agents' }
         }
         secondary={
           unavailable && typeof onRetry === 'function'
-            ? { label: t('agentRequired.install_cta'), to: '/agents' }
+            ? { label: t('agentRequired.open_management'), to: '/agents' }
             : undefined
         }
       />

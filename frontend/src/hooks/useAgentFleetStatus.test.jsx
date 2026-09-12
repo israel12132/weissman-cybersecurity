@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, cleanup } from '@testing-library/react'
+import { render, screen, waitFor, cleanup, fireEvent } from '@testing-library/react'
 
 const apiFetch = vi.hoisted(() => vi.fn())
 vi.mock('../utils/apiFetch', () => ({
@@ -12,15 +12,20 @@ import { invalidateAgentFleetCache, useAgentFleetStatus } from './useAgentFleetS
 function Probe() {
   const s = useAgentFleetStatus()
   return (
-    <div
-      data-testid="fleet"
-      data-loading={s.loading ? 'true' : 'false'}
-      data-unavailable={s.unavailable ? 'true' : 'false'}
-      data-online={String(s.onlineCount)}
-      data-has-online={s.hasOnlineAgent ? 'true' : 'false'}
-    >
-      {s.error || 'ok'}
-    </div>
+    <>
+      <div
+        data-testid="fleet"
+        data-loading={s.loading ? 'true' : 'false'}
+        data-unavailable={s.unavailable ? 'true' : 'false'}
+        data-online={String(s.onlineCount)}
+        data-has-online={s.hasOnlineAgent ? 'true' : 'false'}
+      >
+        {s.error || 'ok'}
+      </div>
+      <button type="button" onClick={() => s.refresh()}>
+        retry
+      </button>
+    </>
   )
 }
 
@@ -62,11 +67,24 @@ describe('useAgentFleetStatus', () => {
       agents: [{ agent_id: 'a1', online: true }],
       online_count: 1,
     })
-    invalidateAgentFleetCache()
     cleanup()
     render(<Probe />)
     await waitFor(() => expect(screen.getByTestId('fleet').getAttribute('data-has-online')).toBe('true'))
     expect(screen.getByTestId('fleet').getAttribute('data-unavailable')).toBe('false')
+    expect(apiFetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a stale online snapshot when a later refresh fails', async () => {
+    apiFetch.mockResolvedValueOnce({
+      agents: [{ agent_id: 'a1', online: true }],
+      online_count: 1,
+    })
+    render(<Probe />)
+    await waitFor(() => expect(screen.getByTestId('fleet').getAttribute('data-has-online')).toBe('true'))
+    apiFetch.mockRejectedValueOnce(Object.assign(new Error('store down'), { status: 503 }))
+    fireEvent.click(screen.getByRole('button', { name: 'retry' }))
+    await waitFor(() => expect(screen.getByTestId('fleet').getAttribute('data-unavailable')).toBe('true'))
+    expect(screen.getByTestId('fleet').getAttribute('data-has-online')).toBe('true')
   })
 
   it('treats an ok:false JSON body as unavailable, not zero agents', async () => {

@@ -102,6 +102,7 @@ export default function OastDashboard() {
       if (d?.health && typeof d.health === 'object') {
         setOastHealth({
           configured: Boolean(d.health.configured),
+          unavailable: false,
           domain: d.health.domain || '',
           last_callback_at: d.health.last_callback_at || null,
           callback_count: Number(d.health.callback_count ?? list.length) || 0,
@@ -109,6 +110,7 @@ export default function OastDashboard() {
       } else {
         setOastHealth({
           configured: false,
+          unavailable: true,
           domain: '',
           last_callback_at: null,
           callback_count: list.length,
@@ -117,6 +119,7 @@ export default function OastDashboard() {
     } catch {
       setOastHealth({
         configured: false,
+        unavailable: true,
         domain: '',
         last_callback_at: null,
         callback_count: 0,

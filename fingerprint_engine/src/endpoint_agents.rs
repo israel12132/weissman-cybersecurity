@@ -31,6 +31,27 @@ pub const PENDING_TASK_REPLAY_LIMIT: i32 = 500;
 /// Agent status listing cap (dashboard).
 pub const AGENT_STATUS_LIMIT: i32 = 10_000;
 
+/// Store-down body for `GET /api/agents/status`.
+/// Never `ok: true` with an empty roster — that looks like “no agents enrolled”.
+pub fn agent_fleet_unavailable_json(detail: &'static str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "agents": [],
+        "online_count": 0,
+        "detail": detail,
+    })
+}
+
+/// Online count for a tenant roster. Do not use the process-global WS set size —
+/// that leaks other tenants' connected agents into this tenant's KPI.
+pub fn tenant_online_count(agents: &[Value]) -> usize {
+    agents
+        .iter()
+        .filter(|a| a.get("online").and_then(|v| v.as_bool()) == Some(true))
+        .count()
+}
+
 static GLOBAL_REGISTRY: OnceLock<Arc<AgentRegistry>> = OnceLock::new();
 static NEXT_LOCAL_SESSION: AtomicU64 = AtomicU64::new(1);
 
@@ -1346,6 +1367,27 @@ mod tests {
             assert_eq!(t.len(), 32);
             assert!(t.chars().all(|c| alphabet.contains(&c)));
         }
+    }
+
+    #[test]
+    fn tenant_online_count_ignores_global_and_offline_rows() {
+        let agents = vec![
+            json!({"agent_id": "a", "online": true}),
+            json!({"agent_id": "b", "online": false}),
+            json!({"agent_id": "c"}),
+        ];
+        assert_eq!(tenant_online_count(&agents), 1);
+        assert_eq!(tenant_online_count(&[]), 0);
+    }
+
+    #[test]
+    fn store_down_fleet_status_is_never_ok_empty_success() {
+        let v = agent_fleet_unavailable_json("internal error");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["agents"], json!([]));
+        assert_eq!(v["online_count"], 0);
+        assert_eq!(v["detail"], "internal error");
     }
 
     #[test]

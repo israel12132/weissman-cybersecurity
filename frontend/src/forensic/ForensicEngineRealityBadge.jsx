@@ -39,7 +39,7 @@ export default function ForensicEngineRealityBadge({
   className = '',
 }) {
   const hostRef = useRef(null)
-  const { byId, legend, loading, payload } = useEngineCapabilities()
+  const { byId, legend, loading, payload, unavailable } = useEngineCapabilities()
   const [forensic, setForensic] = useState(/** @type {{ state: ForensicState, detail: string }} */({
     state: 'pending',
     detail: 'awaiting WASM provenance verification',
@@ -58,7 +58,12 @@ export default function ForensicEngineRealityBadge({
     async function verify() {
       if (!payload?.engines?.length) {
         if (!loading) {
-          setForensic({ state: 'error', detail: 'capabilities manifest empty — cannot verify' })
+          setForensic({
+            state: 'error',
+            detail: unavailable
+              ? 'capabilities API unavailable — cannot verify'
+              : 'capabilities manifest empty — cannot verify',
+          })
         }
         return
       }
@@ -103,7 +108,7 @@ export default function ForensicEngineRealityBadge({
     return () => {
       cancelled = true
     }
-  }, [payload, loading])
+  }, [payload, loading, unavailable])
 
   const shadowHtml = useMemo(() => {
     if (forensic.state === 'tamper') {

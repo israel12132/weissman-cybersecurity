@@ -449,7 +449,7 @@ async fn api_agents_status(
         .collect();
     let rows = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(mut tx) => {
-            let r = sqlx::query(
+            match sqlx::query(
                 r#"SELECT agent_uuid::text AS agent_uuid, client_id, hostname, device_name, os, arch,
                           agent_version, capabilities, enrolled_at, last_seen_at, status
                      FROM endpoint_agents
@@ -459,11 +459,31 @@ async fn api_agents_status(
             .bind(crate::endpoint_agents::AGENT_STATUS_LIMIT)
             .fetch_all(&mut *tx)
             .await
-            .unwrap_or_default();
-            let _ = tx.commit().await;
-            r
+            {
+                Ok(r) => {
+                    let _ = tx.commit().await;
+                    r
+                }
+                Err(e) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::endpoint_agents::agent_fleet_unavailable_json(
+                            scrub_internal_error(&e),
+                        )),
+                    )
+                        .into_response();
+                }
+            }
         }
-        Err(_) => Vec::new(),
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::endpoint_agents::agent_fleet_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
     };
     let out: Vec<Value> = rows
         .into_iter()
@@ -491,7 +511,7 @@ async fn api_agents_status(
         Json(json!({
             "ok": true,
             "agents": out,
-            "online_count": online.len(),
+            "online_count": crate::endpoint_agents::tenant_online_count(&out),
             "fleet_max": crate::endpoint_agents::FLEET_MAX_AGENTS,
         })),
     )

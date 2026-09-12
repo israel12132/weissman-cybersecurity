@@ -38,5 +38,19 @@ describe('AgentRequiredEmptyState', () => {
     expect(node.textContent).toMatch(/agentRequired.unavailable_title/)
     expect(node.textContent).not.toMatch(/agentRequired.empty_title/)
     expect(node.textContent).not.toMatch(/agentRequired.install_hint/)
+    expect(node.textContent).not.toMatch(/agentRequired.install_cta/)
+  })
+
+  it('does not fall through to install copy when retry is missing', () => {
+    render(
+      <MemoryRouter>
+        <AgentRequiredEmptyState engineId="ebpf_sensor" unavailable />
+      </MemoryRouter>,
+    )
+    const node = screen.getByTestId('agent-required-empty')
+    expect(node.getAttribute('data-unavailable')).toBe('true')
+    expect(node.textContent).toMatch(/agentRequired.open_management/)
+    expect(node.textContent).not.toMatch(/agentRequired.empty_title/)
+    expect(node.textContent).not.toMatch(/agentRequired.install_hint/)
   })
 })
