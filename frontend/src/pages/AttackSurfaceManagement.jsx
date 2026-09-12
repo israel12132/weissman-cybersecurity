@@ -391,6 +391,7 @@ export function FirstMoverDeltaPanel({
           })}
         </p>
       )}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
         {[
           [t('pages.attackSurfaceManagement.first_mover_added'), added.length, '#22d3ee'],
           [t('pages.attackSurfaceManagement.first_mover_changed'), changed.length, '#fbbf24'],
