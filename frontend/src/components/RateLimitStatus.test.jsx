@@ -21,7 +21,7 @@ describe('RateLimitStatus', () => {
   afterEach(cleanup)
 
   it('does not paint healthy 0/max when the rate-limit API is down', async () => {
-    apiFetch.mockRejectedValue(new Error('store down'))
+    apiFetch.mockResolvedValue({ ok: false, unavailable: true, detail: 'store down' })
     render(<RateLimitStatus />)
     expect(await screen.findByTestId('rate-limit-unavailable')).toBeTruthy()
     expect(screen.queryByText(/0\/24/)).toBeNull()

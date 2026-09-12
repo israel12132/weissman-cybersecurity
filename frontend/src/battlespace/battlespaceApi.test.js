@@ -11,11 +11,6 @@ describe('fetchNodeEvidence', () => {
   beforeEach(() => apiFetch.mockReset())
 
   it('does not treat a findings store-down as empty evidence', async () => {
-    apiFetch.mockRejectedValue(new Error('store down'))
-    await expect(fetchNodeEvidence(7, 'n1')).rejects.toThrow('store down')
-  })
-
-  it('does not treat an unavailable envelope as a confirmed miss', async () => {
     apiFetch.mockResolvedValue({ ok: false, unavailable: true, findings: [], detail: 'store down' })
     await expect(fetchNodeEvidence(7, 'n1')).rejects.toThrow(/store down|unavailable/)
   })

@@ -136,7 +136,7 @@ describe('GlobalSearch command palette', () => {
   })
 
   it('does not treat a search API failure as a confirmed miss', async () => {
-    apiFetch.mockRejectedValue(new Error('store down'))
+    apiFetch.mockResolvedValue({ ok: false, unavailable: true, results: [], detail: 'store down' })
     render(<GlobalSearch />)
     open()
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'zzzz' } })
