@@ -202,6 +202,24 @@ fn cve_of(raw: &Value) -> Option<String> {
 }
 
 fn to_finding_row(b: &BridgeRow) -> FindingRow {
+    let proof = proof_artifact(&b.raw_data)
+        .map(|_kind| {
+            b.raw_data
+                .get("proof")
+                .or_else(|| b.raw_data.get("poc"))
+                .or_else(|| b.raw_data.get("poc_exploit"))
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string()
+        })
+        .unwrap_or_default();
+    let poc_exploit = b
+        .raw_data
+        .get("poc_exploit")
+        .or_else(|| b.raw_data.get("poc"))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
     FindingRow {
         id: b.id,
         finding_id: b.finding_id.clone(),
@@ -213,6 +231,13 @@ fn to_finding_row(b: &BridgeRow) -> FindingRow {
         raw_data: b.raw_data.clone(),
         discovered_at: b.discovered_at.clone(),
         signature_hash: b.signature_hash.clone(),
+        status: if b.status.is_empty() {
+            "OPEN".into()
+        } else {
+            b.status.clone()
+        },
+        proof,
+        poc_exploit,
     }
 }
 

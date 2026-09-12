@@ -9,11 +9,15 @@ use std::time::Duration;
 use tokio::sync::broadcast::Sender;
 
 /// Production engines the scheduled red-team actually enqueues. LLM-only was a
-/// coverage hole — kill_chain and autonomous_pentest run live probes under RoE.
+/// coverage hole — kill_chain, autonomous_pentest, path prover, and threat
+/// emulation run live probes under RoE.
+/// Enable with `WEISSMAN_REDTEAM_CRON=1`.
 pub const REDTEAM_CRON_ENGINES: &[&str] = &[
     "ai_adversarial_redteam",
     "kill_chain",
     "autonomous_pentest",
+    "adversary_path_prover",
+    "threat_emulation",
 ];
 
 fn interval_secs() -> u64 {
@@ -23,15 +27,6 @@ fn interval_secs() -> u64 {
         .filter(|&n| n >= 60)
         .unwrap_or(86_400)
 }
-
-/// Enable with `WEISSMAN_REDTEAM_CRON=1`.
-pub const REDTEAM_CRON_ENGINES: &[&str] = &[
-    "ai_adversarial_redteam",
-    "kill_chain",
-    "autonomous_pentest",
-    "adversary_path_prover",
-    "threat_emulation",
-];
 
 pub fn spawn_cron_worker(
     app_pool: Arc<PgPool>,
@@ -109,6 +104,8 @@ mod tests {
         assert!(REDTEAM_CRON_ENGINES.contains(&"ai_adversarial_redteam"));
         assert!(REDTEAM_CRON_ENGINES.contains(&"kill_chain"));
         assert!(REDTEAM_CRON_ENGINES.contains(&"autonomous_pentest"));
-        assert_eq!(REDTEAM_CRON_ENGINES.len(), 3);
+        assert!(REDTEAM_CRON_ENGINES.contains(&"adversary_path_prover"));
+        assert!(REDTEAM_CRON_ENGINES.contains(&"threat_emulation"));
+        assert_eq!(REDTEAM_CRON_ENGINES.len(), 5);
     }
 }

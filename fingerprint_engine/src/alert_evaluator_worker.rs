@@ -280,6 +280,9 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
                 proof: proof.clone(),
                 target: target.clone(),
                 crown_jewel,
+                oast_confirmed: false,
+                path_hops: None,
+                path_jewel: String::new(),
                 deep_link: crate::alert_delivery::finding_deep_link(fid),
             };
 

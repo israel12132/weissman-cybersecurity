@@ -90,8 +90,6 @@ struct AptScenario {
     description: &'static str,
 }
 
-pub const APT_SCENARIO_COUNT: usize = 7;
-
 const APT_SCENARIOS: &[AptScenario] = &[
     AptScenario {
         group: "Lazarus Group (HIDDEN COBRA)",
