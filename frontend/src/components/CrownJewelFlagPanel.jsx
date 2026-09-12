@@ -152,6 +152,7 @@ export default function CrownJewelFlagPanel({
                   variant="unstyled"
                   type="button"
                   disabled={savingId === n.id}
+                  aria-pressed={flagOf(n, 'internet_exposed')}
                   onClick={() => patchFlag(n, 'internet_exposed', !flagOf(n, 'internet_exposed'))}
                   className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-mono border ${
                     flagOf(n, 'internet_exposed')
@@ -166,6 +167,7 @@ export default function CrownJewelFlagPanel({
                   variant="unstyled"
                   type="button"
                   disabled={savingId === n.id}
+                  aria-pressed={flagOf(n, 'crown_jewel')}
                   onClick={() => patchFlag(n, 'crown_jewel', !flagOf(n, 'crown_jewel'))}
                   className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-mono border ${
                     flagOf(n, 'crown_jewel')

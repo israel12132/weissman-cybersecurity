@@ -86,6 +86,14 @@ describe('CrownJewelFlagPanel', () => {
       </MemoryRouter>,
     )
     expect(await screen.findByText('edge-vpn')).toBeInTheDocument()
+    expect(screen.getByText('pages.attackPaths.flag_exposed').closest('button')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByText('pages.attackPaths.flag_jewel').closest('button')).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
     fireEvent.click(screen.getByText('pages.attackPaths.flag_exposed'))
     await waitFor(() => {
       expect(api.patch).toHaveBeenCalledWith('/api/risk-graph/nodes/9/flags', {

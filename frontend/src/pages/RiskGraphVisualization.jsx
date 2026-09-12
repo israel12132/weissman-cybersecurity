@@ -686,6 +686,7 @@ export default function RiskGraphVisualization() {
                   <Button
                     variant="unstyled"
                     type="button"
+                    aria-pressed={Boolean(selectedNode.internet_exposed)}
                     onClick={async () => {
                       const next = !selectedNode.internet_exposed
                       try {
@@ -715,6 +716,7 @@ export default function RiskGraphVisualization() {
                   <Button
                     variant="unstyled"
                     type="button"
+                    aria-pressed={Boolean(selectedNode.crown_jewel)}
                     onClick={async () => {
                       const next = !selectedNode.crown_jewel
                       try {
