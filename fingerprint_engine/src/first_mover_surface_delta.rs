@@ -9,7 +9,7 @@
 
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
-    dns_a, dns_cname, empty_ok, extract_host, finding, http_client, http_get,
+    dns_a, dns_aaaa, dns_cname, empty_ok, extract_host, finding, http_client, http_get,
 };
 use crate::engine_result::EngineResult;
 use futures::stream::{self, StreamExt};
@@ -26,24 +26,9 @@ pub const DELTA_FOLLOW_ON_ENGINES: &[&str] = &[
     "leak_hunter",
     "bola_idor",
     "jwt_attack",
-    "credential_ransomware_fusion",
+    "oauth_oidc",
+    "graphql_attack",
 ];
-/// OAST-gated exploitability proof. Included only when the live listener is configured.
-pub const DELTA_OAST_FOLLOW_ON_ENGINES: &[&str] = &["oast_oob", "ssrf_advanced"];
-
-/// Core kill-chain plus OAST proof engines when the collector is live.
-#[must_use]
-pub fn live_delta_follow_on_engines() -> Vec<&'static str> {
-    let mut v: Vec<&'static str> = DELTA_FOLLOW_ON_ENGINES.to_vec();
-    if crate::fuzz_oob::oast_correlation_enabled() {
-        for e in DELTA_OAST_FOLLOW_ON_ENGINES {
-            if !v.contains(e) {
-                v.push(*e);
-            }
-        }
-    }
-    v
-}
 const MAX_CHAIN_HOSTS: usize = 6;
 const MAX_DISCOVERY: usize = 40;
 const MAX_TOTAL_HOSTS: usize = 80;
@@ -68,6 +53,8 @@ pub struct SurfaceAsset {
     pub fqdn: String,
     #[serde(default)]
     pub a: Vec<String>,
+    #[serde(default)]
+    pub aaaa: Vec<String>,
     #[serde(default)]
     pub cname: Option<String>,
     #[serde(default)]
@@ -139,8 +126,8 @@ pub fn diff_assets(previous: &[SurfaceAsset], current: &[SurfaceAsset]) -> Vec<A
                 previous: None,
                 current: Some((*cur).clone()),
                 evidence: format!(
-                    "new host {k} A={:?} CNAME={:?} HTTP={:?}",
-                    cur.a, cur.cname, cur.http_status
+                    "new host {k} A={:?} AAAA={:?} CNAME={:?} HTTP={:?}",
+                    cur.a, cur.aaaa, cur.cname, cur.http_status
                 ),
             }),
             (Some(prev), None) => out.push(AssetDelta {
@@ -149,12 +136,15 @@ pub fn diff_assets(previous: &[SurfaceAsset], current: &[SurfaceAsset]) -> Vec<A
                 previous: Some((*prev).clone()),
                 current: None,
                 evidence: format!(
-                    "host {k} disappeared (was A={:?} CNAME={:?})",
-                    prev.a, prev.cname
+                    "host {k} disappeared (was A={:?} AAAA={:?} CNAME={:?})",
+                    prev.a, prev.aaaa, prev.cname
                 ),
             }),
             (Some(prev), Some(cur)) => {
-                if prev.a != cur.a || prev.cname != cur.cname || prev.http_status != cur.http_status
+                if prev.a != cur.a
+                    || prev.aaaa != cur.aaaa
+                    || prev.cname != cur.cname
+                    || prev.http_status != cur.http_status
                 {
                     out.push(AssetDelta {
                         kind: AssetDeltaKind::Changed,
@@ -162,8 +152,8 @@ pub fn diff_assets(previous: &[SurfaceAsset], current: &[SurfaceAsset]) -> Vec<A
                         previous: Some((*prev).clone()),
                         current: Some((*cur).clone()),
                         evidence: format!(
-                            "host {k} changed A {:?}→{:?} CNAME {:?}→{:?} HTTP {:?}→{:?}",
-                            prev.a, cur.a, prev.cname, cur.cname, prev.http_status, cur.http_status
+                            "host {k} changed A {:?}→{:?} AAAA {:?}→{:?} CNAME {:?}→{:?} HTTP {:?}→{:?}",
+                            prev.a, cur.a, prev.aaaa, cur.aaaa, prev.cname, cur.cname, prev.http_status, cur.http_status
                         ),
                     });
                 }
@@ -218,6 +208,10 @@ async fn probe_host(fqdn: &str, include_http: bool) -> SurfaceAsset {
     a.sort();
     a.dedup();
     asset.a = a;
+    let mut aaaa = dns_aaaa(&asset.fqdn).await;
+    aaaa.sort();
+    aaaa.dedup();
+    asset.aaaa = aaaa;
     let cnames = dns_cname(&asset.fqdn).await;
     asset.cname = cnames.into_iter().next();
 
@@ -616,11 +610,11 @@ pub fn follow_on_payloads(client_id: i64, added_fqdns: &[String]) -> Vec<(String
         if h.is_empty() || !h.contains('.') {
             continue;
         }
-        for eng in live_delta_follow_on_engines() {
+        for eng in DELTA_FOLLOW_ON_ENGINES {
             out.push((
-                eng.to_string(),
+                (*eng).to_string(),
                 json!({
-                    "engine": eng,
+                    "engine": *eng,
                     "target": format!("https://{h}"),
                     "client_id": client_id,
                     "trigger": "first_mover_delta",
@@ -872,6 +866,27 @@ mod tests {
     }
 
     #[test]
+    fn diff_detects_aaaa_flip_without_ipv4_change() {
+        let prev = vec![SurfaceAsset {
+            fqdn: "www.example.com".into(),
+            a: vec!["1.1.1.1".into()],
+            aaaa: vec!["2001:db8::1".into()],
+            ..SurfaceAsset::default()
+        }];
+        let cur = vec![SurfaceAsset {
+            fqdn: "www.example.com".into(),
+            a: vec!["1.1.1.1".into()],
+            aaaa: vec!["2001:db8::2".into()],
+            ..SurfaceAsset::default()
+        }];
+        let d = diff_assets(&prev, &cur);
+        assert_eq!(d.len(), 1);
+        assert_eq!(d[0].kind, AssetDeltaKind::Changed);
+        assert!(d[0].evidence.contains("2001:db8::1"));
+        assert!(d[0].evidence.contains("2001:db8::2"));
+    }
+
+    #[test]
     fn diff_detects_added_removed_and_ip_flip() {
         let prev = vec![
             SurfaceAsset {
@@ -1008,30 +1023,15 @@ mod tests {
     #[test]
     fn follow_on_payloads_cover_kill_chain_per_host() {
         let p = follow_on_payloads(7, &["shop.acme.test".into()]);
-        assert_eq!(p.len(), live_delta_follow_on_engines().len());
-        assert!(p.len() >= DELTA_FOLLOW_ON_ENGINES.len());
+        assert_eq!(p.len(), DELTA_FOLLOW_ON_ENGINES.len());
         assert!(p.iter().all(|(_, v)| v["client_id"] == 7));
         assert!(p
             .iter()
             .all(|(_, v)| v["target"] == "https://shop.acme.test"));
         assert!(p.iter().any(|(e, _)| e == "bola_idor"));
         assert!(p.iter().any(|(e, _)| e == "jwt_attack"));
-    }
-
-    #[test]
-    fn live_follow_on_always_includes_core_and_oast_ids_are_real() {
-        let live = live_delta_follow_on_engines();
-        for e in DELTA_FOLLOW_ON_ENGINES {
-            assert!(live.contains(e), "missing core follow-on {e}");
-        }
-        for e in DELTA_OAST_FOLLOW_ON_ENGINES {
-            assert!(!e.is_empty());
-        }
-        if crate::fuzz_oob::oast_correlation_enabled() {
-            for e in DELTA_OAST_FOLLOW_ON_ENGINES {
-                assert!(live.contains(e), "OAST live but {e} not chained");
-            }
-        }
+        assert!(p.iter().any(|(e, _)| e == "oauth_oidc"));
+        assert!(p.iter().any(|(e, _)| e == "graphql_attack"));
     }
 
     #[test]

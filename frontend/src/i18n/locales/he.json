@@ -1488,7 +1488,27 @@
       "no_choke_title": "אין צווארי בקבוק",
       "no_choke_body": "אין צווארי בקבוק משותפים בין הנתיבים שחושבו.",
       "no_paths_title": "אין נתיבי תקיפה",
-      "no_paths_body": "לא נמצא נתיב אינטרנט → נכס כתר בגרף הנוכחי."
+      "no_paths_body": "לא נמצא נתיב אינטרנט → נכס כתר בגרף הנוכחי.",
+      "jewel_panel": "נכסי כתר וחשיפה",
+      "jewel_panel_hint": "סמן נקודות כניסה חשופות לאינטרנט ונכסי כתר בגרף הסיכון החי. PATCH מסמן את הגרף כמלוכלך ומחשב נתיבים מחדש.",
+      "node_search": "חיפוש צמתים…",
+      "flag_exposed": "חשוף לאינטרנט",
+      "flag_jewel": "נכס כתר",
+      "flag_saved": "הדגלים נשמרו — הנתיבים חושבו מחדש מהגרף החי",
+      "zero_jewel_banner": "אין נכס כתר מסומן — נתיבי אינטרנט → כתר יישארו ריקים עד שתסמן אחד.",
+      "no_nodes_title": "אין צמתי גרף",
+      "no_nodes_body": "גרף הסיכון ריק. הרץ סריקה או חשב נתיבים כדי לייצר צמתים, ואז סמן נכסי כתר.",
+      "what_if_smb": "חסום SMB/445",
+      "what_if_run": "הרץ what-if",
+      "what_if_done": "תמונת what-if חושבה",
+      "what_if_clear": "חזור לחי",
+      "kpi_path_ale": "ALE נתיבים",
+      "kpi_path_ale_hint": "סכום ההפסד השנתי על הנתיבים המדורגים",
+      "kpi_top_score": "ציון נתיב עליון",
+      "kpi_top_score_hint": "ציון הנתיב המשוקלל הגבוה ביותר (0–100)",
+      "score": "ציון",
+      "path_ale": "ALE {{value}}",
+      "root_cause": "שורש"
     },
     "attackCoverage": {
       "title": "מטריצת כיסוי ATT&CK",
@@ -1959,7 +1979,7 @@
       "auto_on": "רענון חי פעיל",
       "auto_off": "רענון חי כבוי",
       "last_updated": "סונכרן לאחרונה {{time}}",
-      "evidence_notice": "כל שורה היא ממצא אמיתי מ-GET /api/findings המסונן ל-leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor ו-adversary_gap_mirror — לעולם לא נתוני פריצה מדומים.",
+      "evidence_notice": "כל שורה היא ממצא אמיתי מ-GET /api/findings המסונן ל-leak_hunter, darkweb_intel, dark_web_monitor ו-typosquatting_monitor — לעולם לא נתוני פריצה מדומים.",
       "source_breakdown": "פגיעות לפי מנוע מקור",
       "search_placeholder": "חפש כותרת, יעד או תיאור…",
       "filter_all": "הכל",
@@ -2180,7 +2200,8 @@
       "save_updated": "הכלל עודכן",
       "save_failed": "שמירת הכלל נכשלה",
       "test_error": "בדיקת הכלל נכשלה",
-      "toggle_failed": "שינוי מצב הכלל נכשל"
+      "toggle_failed": "שינוי מצב הכלל נכשל",
+      "teams_honesty": "Microsoft Teams שולח Adaptive Card דרך teams_webhook_url או WEISSMAN_TEAMS_WEBHOOK_URL. כתובת Slack incoming-webhook אינה Teams ולא תישלח."
     },
     "adminManagement": {
       "search_users": "חיפוש משתמשים…",
@@ -5116,7 +5137,7 @@
       }
     },
     "attackSurfaceManagement": {
-      "evidence_notice": "מלאי ASM מ-POST /api/command-center/scan (asm). סחיפת first-mover מ-GET /api/clients/:id/surface-diff, עצב CT מ-GET /api/first-mover/nerve, ציד דלתא POST first_mover_surface_delta, kill-chain POST first_mover_delta_fusion — DNS/HTTP/CT חי מול snapshot אחרון, בלי גרפים מוכנים.",
+      "evidence_notice": "מלאי ASM מ-POST /api/command-center/scan (asm). סחיפת first-mover מ-GET /api/clients/:id/surface-diff, עצב CT מ-GET /api/first-mover/nerve, ציד דלתא POST first_mover_surface_delta, kill-chain POST first_mover_delta_fusion, דלתא IdP POST identity_surface_delta, skip דו-מערום POST dualstack_edge_skip_fusion, הכנת כופרה POST ransomware_preposition_surface — DNS/HTTP/CT/TCP חי מול snapshot אחרון, בלי גרפים מוכנים.",
       "severity_critical": "קריטי",
       "severity_high": "גבוה",
       "severity_medium": "בינוני",
@@ -5259,7 +5280,13 @@
       "toast_scan_failed": "הסריקה נכשלה ({{status}})",
       "toast_scan_queued": "סריקת משטח התקפה נוספה לתור (משימה {{jid}})",
       "toast_network_error": "שגיאת רשת",
-      "toast_exported": "דוח משטח התקפה יוצא כ-JSON"
+      "toast_exported": "דוח משטח התקפה יוצא כ-JSON",
+      "idp_hunt": "צוד IdP על הדלתא",
+      "idp_hunting": "צוד IdP…",
+      "skip_hunt": "הוכח skip דו-מערום",
+      "skip_hunting": "בודק skip…",
+      "prep_hunt": "משטח הכנה לכופרה",
+      "prep_hunting": "סורק הכנה…"
     },
     "dnsDomainPosture": {
       "evidence_notice": "DNS, SPF, DMARC ו-posture תת-דומיינים מ-POST /api/command-center/scan (מנועי email_dns_posture / dns). רשומות נפתרות חי מול resolvers ציבוריים לדומיינים מורשים.",

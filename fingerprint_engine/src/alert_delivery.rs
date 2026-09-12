@@ -11,22 +11,13 @@ pub struct AlertRuleInfo {
     pub name: String,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct AlertFindingInfo {
     pub id: i64,
     pub severity: String,
     pub title: String,
     pub description: String,
     pub source: String,
-    pub cve: String,
-    pub epss: f64,
-    pub kev: bool,
-    pub cvss: f64,
-    pub client_id: i64,
-    pub proof: String,
-    pub target: String,
-    pub crown_jewel: bool,
-    pub deep_link: String,
 }
 
 struct DeliveryConfig {
@@ -34,7 +25,6 @@ struct DeliveryConfig {
     slack_webhook_url: Option<String>,
     teams_webhook_url: Option<String>,
     pagerduty_routing_key: Option<String>,
-    alert_email_to: Option<String>,
     integrations: Vec<Value>,
 }
 
@@ -66,14 +56,10 @@ async fn load_delivery_config(pool: &PgPool, tenant_id: i64) -> DeliveryConfig {
         .or_else(|| non_empty(std::env::var("SLACK_WEBHOOK_URL").ok()));
     let teams_webhook_url = config_value(pool, tenant_id, "teams_webhook_url")
         .await
-        .or_else(|| non_empty(std::env::var("TEAMS_WEBHOOK_URL").ok()))
         .or_else(|| non_empty(std::env::var("WEISSMAN_TEAMS_WEBHOOK_URL").ok()));
     let pagerduty_routing_key = config_value(pool, tenant_id, "pagerduty_routing_key")
         .await
         .or_else(|| non_empty(std::env::var("PAGERDUTY_ROUTING_KEY").ok()));
-    let alert_email_to = config_value(pool, tenant_id, "alert_email_to")
-        .await
-        .or_else(|| non_empty(std::env::var("WEISSMAN_SMTP_TO").ok()));
 
     let integrations = config_value(pool, tenant_id, "integrations_registry")
         .await
@@ -85,7 +71,6 @@ async fn load_delivery_config(pool: &PgPool, tenant_id: i64) -> DeliveryConfig {
         slack_webhook_url,
         teams_webhook_url,
         pagerduty_routing_key,
-        alert_email_to,
         integrations,
     }
 }
@@ -131,48 +116,7 @@ fn resolve_pagerduty_key(config: &DeliveryConfig) -> Option<String> {
         .or_else(|| config.pagerduty_routing_key.clone())
 }
 
-pub fn finding_deep_link(finding_id: i64) -> String {
-    let base = std::env::var("WEISSMAN_PUBLIC_BASE_URL")
-        .ok()
-        .or_else(|| std::env::var("WEISSMAN_PUBLIC_URL").ok())
-        .unwrap_or_else(|| "http://localhost:5173".into());
-    format!(
-        "{}/command-center/findings?id={}",
-        base.trim_end_matches('/'),
-        finding_id
-    )
-}
-
-fn finding_evidence(finding: &AlertFindingInfo) -> Value {
-    json!({
-        "id": finding.id,
-        "severity": finding.severity,
-        "title": finding.title,
-        "description": finding.description,
-        "source": finding.source,
-        "cve": finding.cve,
-        "epss": finding.epss,
-        "kev": finding.kev,
-        "cvss": finding.cvss,
-        "client_id": finding.client_id,
-        "proof": finding.proof,
-        "target": finding.target,
-        "crown_jewel": finding.crown_jewel,
-        "deep_link": finding.deep_link,
-    })
-}
-
 fn alert_payload(channel: &str, rule: &AlertRuleInfo, finding: &AlertFindingInfo) -> Value {
-    let mut flags = Vec::new();
-    if finding.kev {
-        flags.push("KEV");
-    }
-    if finding.crown_jewel {
-        flags.push("CROWN_JEWEL");
-    }
-    if finding.epss >= 0.7 {
-        flags.push("HIGH_EPSS");
-    }
     json!({
         "channel": channel,
         "event": "alert_rule_fired",
@@ -180,58 +124,17 @@ fn alert_payload(channel: &str, rule: &AlertRuleInfo, finding: &AlertFindingInfo
             "id": rule.id,
             "name": rule.name,
         },
-        "finding": finding_evidence(finding),
-        "flags": flags,
+        "finding": {
+            "id": finding.id,
+            "severity": finding.severity,
+            "title": finding.title,
+            "description": finding.description,
+            "source": finding.source,
+        },
         "text": format!(
-            "[Weissman][{}] rule \"{}\" fired on {} finding{}: {}{}",
-            channel,
-            rule.name,
-            finding.severity,
-            if finding.kev { " (KEV)" } else { "" },
-            finding.title,
-            if finding.deep_link.is_empty() {
-                String::new()
-            } else {
-                format!(" — {}", finding.deep_link)
-            }
+            "[Weissman][{}] rule \"{}\" fired on {} finding: {}",
+            channel, rule.name, finding.severity, finding.title
         ),
-    })
-}
-
-fn teams_adaptive_card(rule: &AlertRuleInfo, finding: &AlertFindingInfo) -> Value {
-    let payload = alert_payload("teams", rule, finding);
-    let text = payload
-        .get("text")
-        .and_then(Value::as_str)
-        .unwrap_or("[Weissman] alert")
-        .to_string();
-    json!({
-        "type": "message",
-        "attachments": [{
-            "contentType": "application/vnd.microsoft.card.adaptive",
-            "content": {
-                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                "type": "AdaptiveCard",
-                "version": "1.4",
-                "body": [
-                    {"type": "TextBlock", "weight": "Bolder", "size": "Medium", "text": format!("Weissman · {}", rule.name)},
-                    {"type": "TextBlock", "wrap": true, "text": text},
-                    {"type": "FactSet", "facts": [
-                        {"title": "Severity", "value": finding.severity},
-                        {"title": "Engine", "value": finding.source},
-                        {"title": "CVE", "value": if finding.cve.is_empty() { "—".into() } else { finding.cve.clone() }},
-                        {"title": "EPSS", "value": format!("{:.3}", finding.epss)},
-                        {"title": "KEV", "value": if finding.kev { "yes" } else { "no" }},
-                        {"title": "Crown jewel", "value": if finding.crown_jewel { "yes" } else { "no" }},
-                    ]}
-                ],
-                "actions": if finding.deep_link.is_empty() {
-                    vec![]
-                } else {
-                    vec![json!({"type": "Action.OpenUrl", "title": "Open finding", "url": finding.deep_link})]
-                }
-            }
-        }]
     })
 }
 
@@ -314,11 +217,7 @@ fn smtp_enabled() -> bool {
     )
 }
 
-async fn deliver_email(
-    rule: &AlertRuleInfo,
-    finding: &AlertFindingInfo,
-    tenant_to: Option<&str>,
-) -> bool {
+async fn deliver_email(rule: &AlertRuleInfo, finding: &AlertFindingInfo) -> bool {
     tracing::info!(
         target: "alert_delivery",
         rule_id = rule.id,
@@ -334,49 +233,23 @@ async fn deliver_email(
         );
         return false;
     }
-    let to = tenant_to
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .or_else(|| non_empty(std::env::var("WEISSMAN_SMTP_TO").ok()));
-    let Some(to) = to else {
-        tracing::warn!(
-            target: "alert_delivery",
-            rule_id = rule.id,
-            "email delivery skipped: no tenant or env recipient"
-        );
-        return false;
-    };
     let subject = format!(
-        "[Weissman] {}{} — {}",
+        "[Weissman] {} — {}",
         finding.severity,
-        if finding.kev { " KEV" } else { "" },
         finding.title.chars().take(80).collect::<String>()
     );
     let body = format!(
-        "Alert rule \"{}\" fired.\n\nFinding #{}\nSeverity: {}\nSource: {}\nCVE: {}\nEPSS: {:.3}\nKEV: {}\nCVSS: {:.1}\nCrown jewel: {}\nTarget: {}\nProof: {}\nLink: {}\nTitle: {}\n\n{}",
-        rule.name,
-        finding.id,
-        finding.severity,
-        finding.source,
-        if finding.cve.is_empty() { "—" } else { finding.cve.as_str() },
-        finding.epss,
-        finding.kev,
-        finding.cvss,
-        finding.crown_jewel,
-        finding.target,
-        finding.proof,
-        finding.deep_link,
-        finding.title,
-        finding.description
+        "Alert rule \"{}\" fired.\n\nFinding #{}\nSeverity: {}\nSource: {}\nTitle: {}\n\n{}",
+        rule.name, finding.id, finding.severity, finding.source, finding.title, finding.description
     );
-    tokio::task::spawn_blocking(move || send_smtp_sync(subject, body, to))
+    tokio::task::spawn_blocking(move || send_smtp_sync(subject, body))
         .await
         .ok()
         .and_then(|r| r.ok())
         .is_some()
 }
 
-fn send_smtp_sync(subject: String, body: String, to: String) -> Result<(), String> {
+fn send_smtp_sync(subject: String, body: String) -> Result<(), String> {
     use lettre::message::{header::ContentType, Mailbox, Message};
     use lettre::transport::smtp::authentication::Credentials;
     use lettre::{SmtpTransport, Transport};
@@ -389,6 +262,7 @@ fn send_smtp_sync(subject: String, body: String, to: String) -> Result<(), Strin
     let user = std::env::var("WEISSMAN_SMTP_USER").unwrap_or_default();
     let pass = std::env::var("WEISSMAN_SMTP_PASSWORD").unwrap_or_default();
     let from = std::env::var("WEISSMAN_SMTP_FROM").map_err(|_| "missing from".to_string())?;
+    let to = std::env::var("WEISSMAN_SMTP_TO").map_err(|_| "missing to".to_string())?;
 
     let from_m: Mailbox = from
         .parse()
@@ -416,6 +290,59 @@ fn send_smtp_sync(subject: String, body: String, to: String) -> Result<(), Strin
     Ok(())
 }
 
+#[must_use]
+pub fn url_looks_like_slack(url: &str) -> bool {
+    let u = url.trim().to_ascii_lowercase();
+    u.contains("hooks.slack.com") || u.contains("slack.com/api/")
+}
+
+#[must_use]
+pub fn teams_adaptive_card(rule: &AlertRuleInfo, finding: &AlertFindingInfo) -> Value {
+    let text = format!(
+        "[Weissman][{}] rule \"{}\" fired on {} finding: {}",
+        finding.severity, rule.name, finding.severity, finding.title
+    );
+    json!({
+        "type": "message",
+        "attachments": [{
+            "contentType": "application/vnd.microsoft.card.adaptive",
+            "contentUrl": null,
+            "content": {
+                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                "type": "AdaptiveCard",
+                "version": "1.4",
+                "body": [
+                    {
+                        "type": "TextBlock",
+                        "weight": "Bolder",
+                        "size": "Medium",
+                        "text": format!("Weissman · {}", finding.severity)
+                    },
+                    {
+                        "type": "TextBlock",
+                        "wrap": true,
+                        "text": format!("Rule: {}", rule.name)
+                    },
+                    {
+                        "type": "TextBlock",
+                        "wrap": true,
+                        "text": format!("{} — {}", finding.title, finding.description)
+                    },
+                    {
+                        "type": "FactSet",
+                        "facts": [
+                            { "title": "Finding", "value": finding.id.to_string() },
+                            { "title": "Source", "value": finding.source },
+                            { "title": "Rule id", "value": rule.id.to_string() }
+                        ]
+                    }
+                ]
+            }
+        }],
+        "text": text,
+    })
+}
+
 async fn deliver_channel(
     client: &Client,
     config: &DeliveryConfig,
@@ -440,7 +367,7 @@ async fn deliver_channel(
                 return false;
             };
             let payload = json!({
-                "text": alert_payload(channel, rule, finding)
+                "text": alert_payload("slack", rule, finding)
                     .get("text")
                     .and_then(Value::as_str)
                     .unwrap_or("[Weissman] alert"),
@@ -449,9 +376,13 @@ async fn deliver_channel(
         }
         "teams" => {
             let Some(url) = resolve_webhook_url(config, "teams") else {
-                tracing::warn!(target: "alert_delivery", channel, "no Teams webhook URL configured");
+                tracing::warn!(target: "alert_delivery", "teams channel: no Teams webhook URL (refusing Slack fallback)");
                 return false;
             };
+            if url_looks_like_slack(&url) {
+                tracing::warn!(target: "alert_delivery", "teams channel: URL is Slack — not delivered");
+                return false;
+            }
             post_json(client, &url, &teams_adaptive_card(rule, finding)).await
         }
         "pagerduty" => {
@@ -465,19 +396,21 @@ async fn deliver_channel(
                 "dedup_key": format!("weissman:rule:{}:finding:{}", rule.id, finding.id),
                 "payload": {
                     "summary": format!(
-                        "[pagerduty] {}{} — {}",
-                        finding.severity,
-                        if finding.kev { " KEV" } else { "" },
-                        finding.title
+                        "[pagerduty] {} — {}",
+                        finding.severity, finding.title
                     ).chars().take(1024).collect::<String>(),
                     "severity": pagerduty_severity(&finding.severity),
                     "source": finding.source.chars().take(255).collect::<String>(),
-                    "custom_details": finding_evidence(finding)
+                    "custom_details": {
+                        "rule_id": rule.id,
+                        "rule_name": rule.name,
+                        "finding_id": finding.id,
+                    }
                 }
             });
             post_json(client, "https://events.pagerduty.com/v2/enqueue", &payload).await
         }
-        "email" => deliver_email(rule, finding, config.alert_email_to.as_deref()).await,
+        "email" => deliver_email(rule, finding).await,
         other => {
             tracing::warn!(target: "alert_delivery", channel = other, "unknown alert channel");
             false
@@ -629,7 +562,7 @@ pub async fn notify_heal_completed(
             delivered |= post_json_signed(&client, url, &payload).await;
         }
     }
-    if (!ok || verdict == "broke_app") {
+    if !ok || verdict == "broke_app" {
         if let Some(key) = resolve_pagerduty_key(&config) {
             let pd = json!({
                 "routing_key": key,
@@ -905,67 +838,43 @@ mod signing_tests {
 }
 
 #[cfg(test)]
-mod evidence_tests {
+mod teams_honesty_tests {
     use super::*;
 
-    fn sample_finding() -> AlertFindingInfo {
-        AlertFindingInfo {
-            id: 42,
-            severity: "critical".into(),
-            title: "Exposed admin".into(),
-            description: "debug endpoint".into(),
-            source: "rce_exploit_engine".into(),
-            cve: "CVE-2024-1234".into(),
-            epss: 0.91,
-            kev: true,
-            cvss: 9.8,
-            client_id: 7,
-            proof: "HTTP 200 /actuator/env".into(),
-            target: "https://app.example".into(),
-            crown_jewel: true,
-            deep_link: "https://weissman.example/command-center/findings?id=42".into(),
-        }
-    }
-
     #[test]
-    fn payload_includes_epss_kev_proof_and_deep_link() {
-        let rule = AlertRuleInfo {
-            id: 1,
-            name: "KEV critical".into(),
-        };
-        let p = alert_payload("webhook", &rule, &sample_finding());
-        assert_eq!(p["finding"]["cve"], "CVE-2024-1234");
-        assert_eq!(p["finding"]["kev"], true);
-        assert_eq!(p["finding"]["epss"], 0.91);
-        assert_eq!(p["finding"]["crown_jewel"], true);
-        assert!(p["text"].as_str().unwrap().contains("KEV"));
-        assert!(p["text"].as_str().unwrap().contains("findings?id=42"));
-        assert!(p["flags"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|f| f.as_str() == Some("KEV")));
+    fn slack_hooks_are_not_teams() {
+        assert!(url_looks_like_slack(
+            "https://hooks.slack.com/services/T000/B000/xxx"
+        ));
+        assert!(!url_looks_like_slack(
+            "https://prod-00.westus.logic.azure.com/workflows/abc/triggers/manual/paths/invoke"
+        ));
     }
 
     #[test]
     fn teams_card_is_adaptive_not_slack_text() {
         let rule = AlertRuleInfo {
-            id: 1,
-            name: "KEV critical".into(),
+            id: 9,
+            name: "crit".into(),
         };
-        let card = teams_adaptive_card(&rule, &sample_finding());
+        let finding = AlertFindingInfo {
+            id: 3,
+            severity: "critical".into(),
+            title: "SMB open".into(),
+            description: "445 from origin".into(),
+            source: "ransomware_preposition_surface".into(),
+        };
+        let card = teams_adaptive_card(&rule, &finding);
         assert_eq!(card["type"], "message");
-        let content = &card["attachments"][0]["content"];
-        assert_eq!(content["type"], "AdaptiveCard");
-        assert!(content["actions"][0]["url"]
-            .as_str()
+        assert_eq!(
+            card["attachments"][0]["contentType"],
+            "application/vnd.microsoft.card.adaptive"
+        );
+        assert_eq!(card["attachments"][0]["content"]["type"], "AdaptiveCard");
+        assert!(card
+            .get("text")
+            .and_then(Value::as_str)
             .unwrap()
-            .contains("findings?id=42"));
-    }
-
-    #[test]
-    fn deep_link_uses_public_base() {
-        let link = finding_deep_link(9);
-        assert!(link.contains("/command-center/findings?id=9"));
+            .contains("SMB open"));
     }
 }

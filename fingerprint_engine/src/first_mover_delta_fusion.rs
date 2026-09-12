@@ -1,7 +1,7 @@
 //! **Fusion on the delta** — a new host is not a separate hunt later.
 //!
 //! Runs live `first_mover_surface_delta` (without async chain enqueue), then immediately
-//! executes takeover / leak / BOLA / JWT / credential-ransomware fusion against each *added* FQDN in this same job.
+//! executes takeover / leak / BOLA / JWT against each *added* FQDN in this same job.
 //! Findings keep `parent_fqdn` so the Command Center kill-chain is one evidence graph.
 //!
 //! Not in the default orchestrator pack (that pack already chains via enqueue). This engine
@@ -197,7 +197,7 @@ pub async fn run_first_mover_delta_fusion_result(
         finding(
             ENGINE_ID,
             &format!(
-                "Delta fusion kill-chain on {} new host(s) — takeover/leak/BOLA/JWT same FQDN",
+                "Delta fusion kill-chain on {} new host(s) — takeover/leak/BOLA/JWT/OIDC/GraphQL same FQDN",
                 added.len()
             ),
             if fused > 0 { "high" } else { "info" },
@@ -257,8 +257,8 @@ mod tests {
         assert!(DELTA_FOLLOW_ON_ENGINES.contains(&"subdomain_takeover"));
         assert!(DELTA_FOLLOW_ON_ENGINES.contains(&"leak_hunter"));
         assert!(DELTA_FOLLOW_ON_ENGINES.contains(&"bola_idor"));
-        assert!(DELTA_FOLLOW_ON_ENGINES.contains(&"jwt_attack"));
-        assert!(DELTA_FOLLOW_ON_ENGINES.contains(&"credential_ransomware_fusion"));
+        assert!(DELTA_FOLLOW_ON_ENGINES.contains(&"oauth_oidc"));
+        assert!(DELTA_FOLLOW_ON_ENGINES.contains(&"graphql_attack"));
         assert!(!DELTA_FOLLOW_ON_ENGINES.contains(&ENGINE_ID));
     }
 }

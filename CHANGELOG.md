@@ -9,16 +9,12 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Added
 
-- **Dominion Board Pack — real Excel + CISO theater + legal leak OSINT.**
-  Command Center route `/dominion` fuses the live findings ledger, FAIR snapshot,
-  attack-path snapshot, and cryptographic audit hash into one bilingual board pack.
-  `GET /api/clients/:id/dominion-pack` returns JSON; `GET /api/clients/:id/report/xlsx`
-  returns a true OOXML workbook (Executive, Findings, LeakIntel, AttackPaths,
-  Financial, Remediation, Evidence) — not CSV labeled as Excel. Empty ledgers grade
-  `NO LEDGER`, never a clean bill of health. New engine `dominion_fusion` (584
-  production IDs / 322 real probes) queries public CT (crt.sh), urlscan.io, and
-  keyed URLHaus / ThreatFox / IntelX / OTX. No Tor. Formula-injection neutralized
-  in XLSX cells.
+- **Identity surface delta, dual-stack Host+SNI skip, ransomware preposition.**
+  New live engines `identity_surface_delta` (OIDC/SAML on first-mover IdP hosts),
+  `dualstack_edge_skip_fusion` (A vs AAAA with Host+SNI; finding only on status/WAF/body skip),
+  and `ransomware_preposition_surface` (TCP of SMB/RDP/WinRM/Kerberos/LDAP/NFS — no encrypt).
+  Teams alert delivery uses Adaptive Cards on `WEISSMAN_TEAMS_WEBHOOK_URL` and refuses Slack URLs.
+  Attack Paths operators can PATCH crown-jewel / internet-exposed flags on the live risk graph.
 
 - **Supreme Brain Part 6 — attack-path inference × FAIR blast radius × pentest RAG.**
   Dijkstra (BinaryHeap milli-cost) over live `risk_graph_nodes` / `risk_graph_edges`

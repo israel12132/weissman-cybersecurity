@@ -17,7 +17,7 @@ import Button from '../components/ui/Button'
  *
  * Features:
  * - Condition-based alerting (severity, CVE, engine, asset)
- * - Multiple notification channels (email, Slack, PagerDuty, webhook)
+ * - Multiple notification channels (email, Slack, Teams Adaptive Card, PagerDuty, webhook)
  * - Threshold configuration
  * - Alert deduplication
  * - Alert suppression windows
@@ -717,6 +717,11 @@ function RuleModal({ rule, template, onClose, onSave }) {
                 </label>
               ))}
             </div>
+            {formData.channels.includes('teams') && (
+              <p role="note" className="mt-2 text-[11px] font-mono text-amber-200/90">
+                {t('pages.alertRulesEngine.teams_honesty')}
+              </p>
+            )}
           </div>
 
           <div>

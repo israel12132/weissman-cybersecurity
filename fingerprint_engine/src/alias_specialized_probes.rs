@@ -204,116 +204,22 @@ pub async fn run_specialized_probe(
         "zero_click_exploit" | "zero_day_chain" => {
             probe_zero_click_alias(engine_id, canonical, target).await
         }
-        "full_breach_sim" => probe_full_breach_sim(engine_id, canonical, target).await,
-        "post_exploitation" => probe_post_exploitation(engine_id, canonical, target).await,
+
+        // ── Thin aliases that previously fell through to empty_ok ──────────
+        "azure_ad_attack" => probe_azure_ad_attack(engine_id, canonical, target).await,
+        "gitops_attack" => probe_gitops_attack(engine_id, canonical, target).await,
+        "api_gateway_attack" => probe_api_gateway_attack(engine_id, canonical, target).await,
+        "data_exfiltration" => probe_data_exfiltration(engine_id, canonical, target).await,
+        "dns_tunneling" => probe_dns_tunneling(engine_id, canonical, target).await,
+        "apt_lateral_movement" => probe_apt_lateral(engine_id, canonical, target).await,
+        "supply_chain_apt" => probe_supply_chain_apt(engine_id, canonical, target).await,
+        "cloud_lateral" | "multi_cloud_pivot" | "cross_account_pivot" => {
+            probe_cloud_lateral(engine_id, canonical, target).await
+        }
 
         // ── Default: no specialized remote signal for this alias id ──────────
         _ => empty_ok(engine_id, target),
     }
-}
-
-async fn probe_full_breach_sim(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
-    let host = extract_host(target);
-    let mut findings = Vec::new();
-    let perimeter = tcp_scan(&host, &[80, 443, 22, 445, 3389, 8080, 8443], 8).await;
-    if perimeter.len() >= 2 {
-        findings.push(alias_finding(
-            engine_id,
-            &format!("Breach-sim perimeter: {:?}", perimeter),
-            "medium",
-            "T1190",
-            &format!(
-                "Host {} exposes {:?} — full_breach_sim plans STRIPS over live facts (HTTP+SMB/RDP/SSH), not a 7-GET retag of threat_emulation.",
-                host, perimeter
-            ),
-            target,
-            canonical,
-        ));
-    }
-    let client = http_client().await;
-    let base = normalize_url(target);
-    let paths = &[
-        "/",
-        "/login",
-        "/admin",
-        "/api",
-        "/.git/HEAD",
-        "/server-status",
-    ];
-    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
-    let live: Vec<_> = probes
-        .into_iter()
-        .filter(|p| status_indicates_presence(p.status))
-        .collect();
-    if live.len() >= 2 {
-        findings.push(alias_finding(
-            engine_id,
-            "Multi-path HTTP foothold facts for breach simulation",
-            "medium",
-            "T1190",
-            &format!(
-                "{} live HTTP paths on {} — breach-sim planner consumes these as initial-access facts only; no exploit payload is executed.",
-                live.len(),
-                host
-            ),
-            target,
-            canonical,
-        ));
-    }
-    collect(engine_id, target, canonical, findings)
-}
-
-async fn probe_post_exploitation(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
-    let host = extract_host(target);
-    let mut findings = Vec::new();
-    let lateral = tcp_scan(
-        &host,
-        &[445, 139, 3389, 5985, 5986, 22, 1433, 3306, 5432],
-        8,
-    )
-    .await;
-    if !lateral.is_empty() {
-        findings.push(alias_finding(
-            engine_id,
-            &format!("Post-exploitation lateral ports: {:?}", lateral),
-            "high",
-            "T1021",
-            &format!(
-                "Host {} accepts {:?} — post_exploitation records lateral/admin evidence only; it does not dump LSASS or move laterally.",
-                host, lateral
-            ),
-            target,
-            canonical,
-        ));
-    }
-    let client = http_client().await;
-    let base = normalize_url(target);
-    let paths = &[
-        "/debug",
-        "/actuator/env",
-        "/server-status",
-        "/phpinfo.php",
-        "/adminer",
-    ];
-    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
-    for p in probes {
-        if status_indicates_presence(p.status) {
-            findings.push(alias_finding(
-                engine_id,
-                "Admin/debug endpoint after hypothetical foothold",
-                "high",
-                "T1082",
-                &format!(
-                    "{} returned {} — post-exploitation discovery surface (env/debug), evidence only.",
-                    p.final_url, p.status
-                ),
-                target,
-                canonical,
-            ));
-            break;
-        }
-    }
-    collect(engine_id, target, canonical, findings)
 }
 
 // ── OSINT specialized probes ──────────────────────────────────────────────────
@@ -1684,130 +1590,96 @@ async fn probe_zero_click_alias(engine_id: &str, canonical: &str, target: &str) 
     collect(engine_id, target, canonical, findings)
 }
 
-async fn probe_full_breach_sim(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
+async fn probe_azure_ad_attack(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     let host = extract_host(target);
     let client = http_client().await;
-    let base = normalize_url(target);
     let mut findings = Vec::new();
-
-    let perimeter = tcp_scan(&host, &[22, 80, 443, 445, 3389, 5985, 8080], 8).await;
-    if !perimeter.is_empty() {
-        findings.push(alias_finding(
-            engine_id,
-            &format!("Breach-sim web/lateral perimeter: {perimeter:?}"),
-            if perimeter.len() >= 3 { "high" } else { "medium" },
-            "T1190",
-            &format!(
-                "Host {host} exposes {perimeter:?} — live kill-chain surface for breach-path synthesis (no shells)."
-            ),
-            target,
-            canonical,
-        ));
-    }
-
-    let paths = [
-        "/login",
-        "/admin",
-        "/upload",
-        "/.git/config",
-        "/actuator/health",
-        "/graphql",
-        "/api",
-        "/wp-login.php",
+    let urls = [
+        format!("https://{host}/.well-known/openid-configuration"),
+        format!("https://{host}/v2.0/.well-known/openid-configuration"),
+        "https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration".into(),
+        format!("https://{host}/FederationMetadata/2007-06/FederationMetadata.xml"),
     ];
-    let probes = probe_paths_concurrent(&client, &base, &paths, DEFAULT_PROBE_CONCURRENCY).await;
-    for p in probes {
-        if status_indicates_presence(p.status) {
+    for url in urls {
+        let Some(p) = http_get(&client, &url).await else {
+            continue;
+        };
+        if p.status >= 400 {
+            continue;
+        }
+        let low = p.body.to_ascii_lowercase();
+        if low.contains("\"issuer\"") && (low.contains("microsoftonline") || low.contains("login."))
+        {
             findings.push(alias_finding(
                 engine_id,
-                &format!("Breach delivery vector: {}", p.final_url),
-                if p.status == 200 { "medium" } else { "info" },
-                "T1190",
+                "Entra ID / Azure AD OpenID metadata is live",
+                "medium",
+                "T1078.004",
                 &format!(
-                    "{} responded HTTP {} — evidence-backed initial-access vector for STRIPS breach planning.",
+                    "{} HTTP {} — Entra/OIDC issuer metadata observed. Check guest invites, app registrations, and Conditional Access — this is not a password spray.",
                     p.final_url, p.status
                 ),
                 target,
                 canonical,
             ));
+            break;
+        }
+        if low.contains("entitydescriptor") {
+            findings.push(alias_finding(
+                engine_id,
+                "Azure AD federation metadata exposed",
+                "medium",
+                "T1550.001",
+                &format!(
+                    "{} HTTP {} returned SAML EntityDescriptor.",
+                    p.final_url, p.status
+                ),
+                target,
+                canonical,
+            ));
+            break;
         }
     }
-
-    if let Some(chain) =
-        crate::attack_chain_planner::plan_from_findings(&findings, "impact:objective")
-    {
-        let mut f = alias_finding(
-            engine_id,
-            if chain.reached_goal {
-                "Evidence-backed breach path reached objective"
-            } else {
-                "Partial breach path (objective not reached from live facts)"
-            },
-            if chain.reached_goal { "high" } else { "info" },
-            "T1650",
-            &format!(
-                "STRIPS planner over live observations: goal={} cost={} steps={} mitre={:?}. No fabricated hops.",
-                chain.goal,
-                chain.total_cost,
-                chain.steps.len(),
-                chain.mitre_path
-            ),
-            target,
-            canonical,
-        );
-        if let Some(obj) = f.as_object_mut() {
-            obj.insert("category".into(), json!("attack_path"));
-            obj.insert("attack_chain".into(), chain.to_json());
-            obj.insert("reached_goal".into(), json!(chain.reached_goal));
-        }
-        findings.push(f);
-    } else {
-        findings.push(alias_finding(
-            engine_id,
-            "Breach objective unreachable from observed facts",
-            "info",
-            "T1650",
-            "STRIPS planner found no realizable path to impact:objective from this target's live evidence — nothing was invented.",
-            target,
-            canonical,
-        ));
-    }
-
     collect(engine_id, target, canonical, findings)
 }
 
-async fn probe_post_exploitation(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
-    let host = extract_host(target);
-    let mut findings = Vec::new();
+async fn probe_gitops_attack(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
+    let mut findings = Vec::new();
     let paths = [
-        "/admin",
-        "/administrator",
-        "/actuator",
-        "/actuator/env",
-        "/debug",
         "/.git/HEAD",
-        "/metrics",
-        "/graphql",
-        "/server-status",
-        "/phpinfo.php",
-        "/server-info",
+        "/.git/config",
+        "/argocd/",
+        "/api/v1/session",
+        "/flux/v1/",
+        "/.github/workflows/",
     ];
     let probes = probe_paths_concurrent(&client, &base, &paths, DEFAULT_PROBE_CONCURRENCY).await;
     for p in probes {
-        if status_indicates_presence(p.status) {
+        let low = p.body.to_ascii_lowercase();
+        if p.final_url.contains(".git/HEAD") && (low.contains("ref: refs/") || p.status == 200) {
             findings.push(alias_finding(
                 engine_id,
-                &format!("Post-exploitation admin/debug surface: {}", p.final_url),
-                if matches!(p.status, 200 | 401) {
-                    "high"
-                } else {
-                    "medium"
-                },
-                "T1003",
+                "Git directory exposed (GitOps source leak)",
+                "high",
+                "T1195.001",
                 &format!(
-                    "{} returned HTTP {} — post-auth/debug surface for credential/config harvest (no LSASS dump; evidence only).",
+                    "{} HTTP {} — working tree metadata is public.",
+                    p.final_url, p.status
+                ),
+                target,
+                canonical,
+            ));
+        }
+        if low.contains("argocd") || low.contains("\"applications\"") {
+            findings.push(alias_finding(
+                engine_id,
+                "GitOps control plane HTTP surface",
+                "high",
+                "T1609",
+                &format!(
+                    "{} HTTP {} — Argo/Flux-style API or UI responded.",
                     p.final_url, p.status
                 ),
                 target,
@@ -1815,19 +1687,218 @@ async fn probe_post_exploitation(engine_id: &str, canonical: &str, target: &str)
             ));
         }
     }
-    let lateral = tcp_scan(&host, &[22, 445, 3389, 5985], 8).await;
-    if !lateral.is_empty() {
+    collect(engine_id, target, canonical, findings)
+}
+
+async fn probe_api_gateway_attack(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let mut findings = Vec::new();
+    let host = extract_host(target);
+    let origin = http_get(&client, &base).await;
+    let alt = http_get_with_headers(
+        &client,
+        &base,
+        &[("X-Forwarded-For", "127.0.0.1"), ("X-Original-Host", &host)],
+    )
+    .await;
+    if let (Some(a), Some(b)) = (origin.as_ref(), alt.as_ref()) {
+        if a.status != b.status || a.is_waf_block() != b.is_waf_block() {
+            findings.push(alias_finding(
+                engine_id,
+                "API gateway skip via forwarded-host headers",
+                "high",
+                "T1090",
+                &format!(
+                    "Baseline HTTP {} waf={} vs X-Forwarded-For/X-Original-Host HTTP {} waf={}.",
+                    a.status,
+                    a.is_waf_block(),
+                    b.status,
+                    b.is_waf_block()
+                ),
+                target,
+                canonical,
+            ));
+        }
+    }
+    let paths = [
+        "/swagger.json",
+        "/openapi.json",
+        "/graphql",
+        "/actuator/health",
+    ];
+    let probes = probe_paths_concurrent(&client, &base, &paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if status_indicates_presence(p.status)
+            && (p.body.contains("openapi")
+                || p.body.contains("swagger")
+                || p.body.contains("graphql")
+                || p.body.contains("UP"))
+        {
+            findings.push(alias_finding(
+                engine_id,
+                "API gateway schema/health surface",
+                "medium",
+                "T1190",
+                &format!(
+                    "{} HTTP {} — schema or actuator is public.",
+                    p.final_url, p.status
+                ),
+                target,
+                canonical,
+            ));
+        }
+    }
+    collect(engine_id, target, canonical, findings)
+}
+
+async fn probe_data_exfiltration(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
+    let host = extract_host(target);
+    let mut findings = Vec::new();
+    let txt = dns_txt(&host).await;
+    let long_txt = txt.iter().any(|t| t.len() > 400);
+    if long_txt {
         findings.push(alias_finding(
             engine_id,
-            &format!("Post-exploitation lateral ports: {lateral:?}"),
-            "high",
-            "T1021",
+            "Oversized DNS TXT — possible covert channel",
+            "medium",
+            "T1048.003",
+            &format!("TXT on {host} exceeds 400 bytes ({:?}).", txt),
+            target,
+            canonical,
+        ));
+    }
+    let open = tcp_scan(&host, &[53, 123, 853], 4).await;
+    if open.contains(&53) || open.contains(&853) {
+        findings.push(alias_finding(
+            engine_id,
+            "DNS resolver reachable from scan origin",
+            "medium",
+            "T1071.004",
             &format!(
-                "Host {host} accepts {lateral:?} — SSH/SMB/RDP/WinRM are post-foothold lateral channels; agent required for host credential collection."
+                "Open {:?} on {host} — DoH/DoT/DNS can be an exfil path.",
+                open
             ),
             target,
             canonical,
         ));
+    }
+    collect(engine_id, target, canonical, findings)
+}
+
+async fn probe_dns_tunneling(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
+    let host = extract_host(target);
+    let mut findings = Vec::new();
+    let txt = dns_txt(&host).await;
+    if txt.iter().any(|t| t.len() > 255) {
+        findings.push(alias_finding(
+            engine_id,
+            "Long TXT RDATA (DNS tunneling indicator)",
+            "medium",
+            "T1071.004",
+            &format!("TXT answers on {host}: {:?}", txt),
+            target,
+            canonical,
+        ));
+    }
+    let labels: Vec<&str> = host.split('.').collect();
+    if labels.iter().any(|l| l.len() > 40) {
+        findings.push(alias_finding(
+            engine_id,
+            "Unusually long DNS label",
+            "low",
+            "T1071.004",
+            &format!("{host} has a label >40 chars — common in encoding tunnels."),
+            target,
+            canonical,
+        ));
+    }
+    collect(engine_id, target, canonical, findings)
+}
+
+async fn probe_apt_lateral(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
+    let host = extract_host(target);
+    let open = tcp_scan(&host, &[445, 3389, 5985, 5986, 22, 88], 6).await;
+    let mut findings = Vec::new();
+    for port in &open {
+        findings.push(alias_finding(
+            engine_id,
+            &format!("Lateral protocol {port} open from scan origin"),
+            if matches!(port, 445 | 3389 | 5985 | 88) {
+                "high"
+            } else {
+                "medium"
+            },
+            "T1021",
+            &format!("TCP connect to {host}:{port} succeeded — APT lateral preposition, not a simulated hop."),
+            target,
+            canonical,
+        ));
+    }
+    collect(engine_id, target, canonical, findings)
+}
+
+async fn probe_supply_chain_apt(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let mut findings = Vec::new();
+    let paths = [
+        "/package.json",
+        "/package-lock.json",
+        "/.npmrc",
+        "/.github/workflows/ci.yml",
+        "/Dockerfile",
+    ];
+    let probes = probe_paths_concurrent(&client, &base, &paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if status_indicates_presence(p.status) {
+            findings.push(alias_finding(
+                engine_id,
+                "Build/supply-chain artifact publicly readable",
+                "high",
+                "T1195",
+                &format!(
+                    "{} HTTP {} — CI/package metadata is on the internet.",
+                    p.final_url, p.status
+                ),
+                target,
+                canonical,
+            ));
+        }
+    }
+    collect(engine_id, target, canonical, findings)
+}
+
+async fn probe_cloud_lateral(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
+    let client = http_client().await;
+    let host = extract_host(target);
+    let mut findings = Vec::new();
+    let urls = [
+        format!("https://{host}/.well-known/openid-configuration"),
+        format!("https://{host}/.well-known/oauth-authorization-server"),
+    ];
+    for url in urls {
+        let Some(p) = http_get(&client, &url).await else {
+            continue;
+        };
+        if p.status >= 400 {
+            continue;
+        }
+        if p.body.contains("\"issuer\"") {
+            findings.push(alias_finding(
+                engine_id,
+                "OIDC issuer on target — federated cloud trust surface",
+                "medium",
+                "T1078.004",
+                &format!(
+                    "{} HTTP {} — cross-account/WIF/federated roles bind to this issuer. This is a live metadata GET, not a simulated assume-role.",
+                    p.final_url, p.status
+                ),
+                target,
+                canonical,
+            ));
+            break;
+        }
     }
     collect(engine_id, target, canonical, findings)
 }
@@ -1936,26 +2007,6 @@ mod tests {
     }
 
     #[test]
-    fn breach_aliases_have_specialized_match_arms() {
-        let src = include_str!("alias_specialized_probes.rs");
-        let start = src
-            .find("match engine_id {")
-            .expect("match engine_id in run_specialized_probe");
-        let other = src[start..]
-            .find("_ => empty_ok")
-            .expect("default empty_ok arm");
-        let chunk = &src[start..start + other];
-        assert!(
-            chunk.contains("\"full_breach_sim\""),
-            "full_breach_sim must not fall through to empty_ok"
-        );
-        assert!(
-            chunk.contains("\"post_exploitation\""),
-            "post_exploitation must not fall through to empty_ok"
-        );
-    }
-
-    #[test]
     fn run_specialized_probe_unknown_engine_is_empty_ok() {
         let rt = tokio::runtime::Builder::new_current_thread()
             .build()
@@ -1974,25 +2025,5 @@ mod tests {
             r.message,
             "no_such_engine_zzz: no live signal observed on example.com"
         );
-    }
-
-    #[test]
-    fn breach_aliases_have_specialized_match_arms() {
-        let src = include_str!("alias_specialized_probes.rs");
-        let start = src
-            .find("match engine_id {")
-            .expect("run_specialized_probe match");
-        let rest = &src[start..];
-        let end = rest.find("_ => empty_ok").expect("wildcard arm");
-        let chunk = &rest[..end];
-        for id in ["full_breach_sim", "post_exploitation"] {
-            assert!(
-                chunk.contains(&format!("\"{id}\"")),
-                "alias {id} must have a specialized probe arm, not only threat_emulation retag"
-            );
-        }
-        assert!(src.contains("fn probe_full_breach_sim"));
-        assert!(src.contains("fn probe_post_exploitation"));
-        assert!(src.contains("tcp_scan"));
     }
 }

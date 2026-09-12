@@ -388,23 +388,13 @@ async fn api_integrations_post(
     }
     // Load the UNREDACTED registry so other integrations' encrypted credentials survive this write.
     let mut list: Vec<Value> = load_integrations_raw(&state, auth.tenant_id).await;
-    let stored_cfg = list
-        .iter()
-        .find(|i| i.get("id").and_then(Value::as_str) == Some(body.id.as_str()))
-        .and_then(|i| i.get("config"))
-        .cloned()
-        .unwrap_or(json!({}));
-    let merged = crate::soar::integrations_vault::merge_config_preserving_secrets(
-        &body.config,
-        &stored_cfg,
-    );
     let entry = json!({
         "id": body.id,
         "name": body.name,
         "category": body.category,
         "type": body.id,
         "status": "configured",
-        "config": crate::soar::integrations_vault::encrypt_config(&merged),
+        "config": crate::soar::integrations_vault::encrypt_config(&body.config),
         "last_test": null,
     });
     list.retain(|i| i.get("id").and_then(Value::as_str) != Some(body.id.as_str()));
@@ -524,7 +514,7 @@ async fn integration_live_test(
             "opsgenie" | "pagerduty" => "page_oncall",
             "teams" | "splunk" | "sentinel" => "slack_notify",
             "jira" => "create_incident",
-            "cortex_xsiam" | "cortex_xsoar" | "cortex" => "siem_ingest",
+            _ => "page_oncall",
             _ => "page_oncall",
         },
         tenant_id,
@@ -535,42 +525,6 @@ async fn integration_live_test(
         evidence,
         dry_run,
     );
-
-    if matches!(
-        provider.as_str(),
-        "cortex_xsiam" | "cortex_xsoar" | "cortex"
-    ) {
-        match crate::soar::adapters::cortex_xsiam::probe_connection(&record.config, false).await
-        {
-            Ok(detail) => {
-                return (
-                    StatusCode::OK,
-                    Json(json!({
-                        "ok": true,
-                        "success": true,
-                        "status": "connected",
-                        "provider": provider,
-                        "detail": detail,
-                        "dry_run": false,
-                    })),
-                )
-                    .into_response();
-            }
-            Err(e) => {
-                return (
-                    StatusCode::OK,
-                    Json(json!({
-                        "ok": true,
-                        "success": false,
-                        "status": "error",
-                        "provider": provider,
-                        "detail": e.to_string(),
-                    })),
-                )
-                    .into_response();
-            }
-        }
-    }
 
     if provider == "alert_webhook" || item.get("category").and_then(Value::as_str) == Some("Communication") {
         if let Some(url) = record.config.get("url").and_then(Value::as_str) {
@@ -2745,20 +2699,16 @@ fn default_sbom_export_format() -> String {
     "cyclonedx".to_string()
 }
 
-/// Resolve `client_id` from query param, else the portal binding, else first tenant client.
+/// Resolve `client_id` from query param, else first tenant client (ORDER BY id).
 async fn resolve_alias_client_id(
     pool: &PgPool,
-    auth: &AuthContext,
+    tenant_id: i64,
     client_id: Option<i64>,
 ) -> Result<i64, Response> {
-    let requested = crate::client_isolation::bind_requested_client(
-        auth,
-        client_id.filter(|&id| id > 0),
-    )?;
-    if let Some(cid) = requested {
+    if let Some(cid) = client_id.filter(|&id| id > 0) {
         return Ok(cid);
     }
-    let Ok(mut tx) = db::begin_tenant_tx(pool, auth.tenant_id).await else {
+    let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await else {
         return Err((
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({"ok": false, "detail": "Database unavailable"})),
@@ -2828,9 +2778,9 @@ fn reshape_risk_graph_for_ui(v: Value) -> Value {
                 "risk_score": risk_score,
                 "severity": risk_score_to_severity(risk_score),
                 "is_choke_point": n.get("is_choke_point").cloned().unwrap_or(Value::Bool(false)),
-                "internet_exposed": n.get("internet_exposed").cloned().unwrap_or(Value::Bool(false)),
                 "crown_jewel": n.get("crown_jewel").cloned().unwrap_or(Value::Bool(false)),
-                "asset_value": n.get("asset_value").cloned().unwrap_or(json!(1.0)),
+                "internet_exposed": n.get("internet_exposed").cloned().unwrap_or(Value::Bool(false)),
+                "asset_value": n.get("asset_value").cloned().unwrap_or(Value::Null),
                 "metadata": meta_parsed,
                 "description": meta_parsed.get("description").cloned()
                     .or_else(|| meta_parsed.get("summary").cloned())
@@ -2870,7 +2820,7 @@ async fn api_risk_graph_alias(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<ClientIdAliasQuery>,
 ) -> Response {
-    let client_id = match resolve_alias_client_id(&state.app_pool, &auth, q.client_id).await {
+    let client_id = match resolve_alias_client_id(&state.app_pool, auth.tenant_id, q.client_id).await {
         Ok(id) => id,
         Err(resp) => return resp,
     };
@@ -3057,7 +3007,7 @@ async fn api_sbom_components_alias(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<ClientIdAliasQuery>,
 ) -> Response {
-    let client_id = match resolve_alias_client_id(&state.app_pool, &auth, q.client_id).await {
+    let client_id = match resolve_alias_client_id(&state.app_pool, auth.tenant_id, q.client_id).await {
         Ok(id) => id,
         Err(resp) => return resp,
     };
@@ -3204,7 +3154,7 @@ async fn api_sbom_export_alias(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<SbomExportAliasQuery>,
 ) -> Response {
-    let client_id = match resolve_alias_client_id(&state.app_pool, &auth, q.client_id).await {
+    let client_id = match resolve_alias_client_id(&state.app_pool, auth.tenant_id, q.client_id).await {
         Ok(id) => id,
         Err(resp) => return resp,
     };
@@ -3524,7 +3474,7 @@ async fn api_containment_rules_alias(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<ClientIdAliasQuery>,
 ) -> Response {
-    let client_id = match resolve_alias_client_id(&state.app_pool, &auth, q.client_id).await {
+    let client_id = match resolve_alias_client_id(&state.app_pool, auth.tenant_id, q.client_id).await {
         Ok(id) => id,
         Err(resp) => return resp,
     };
@@ -3558,7 +3508,7 @@ async fn api_identity_contexts_alias(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<ClientIdAliasQuery>,
 ) -> Response {
-    let client_id = match resolve_alias_client_id(&state.app_pool, &auth, q.client_id).await {
+    let client_id = match resolve_alias_client_id(&state.app_pool, auth.tenant_id, q.client_id).await {
         Ok(id) => id,
         Err(resp) => return resp,
     };
@@ -3731,7 +3681,7 @@ async fn api_containment_rules_post_alias(
     Query(q): Query<ClientIdAliasQuery>,
     Json(body): Json<UiContainmentRuleBody>,
 ) -> Response {
-    let client_id = match resolve_alias_client_id(&state.app_pool, &auth, q.client_id).await {
+    let client_id = match resolve_alias_client_id(&state.app_pool, auth.tenant_id, q.client_id).await {
         Ok(id) => id,
         Err(resp) => return resp,
     };

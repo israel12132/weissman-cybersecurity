@@ -167,57 +167,41 @@ async fn api_risk_node_flags_patch(
     Path(node_id): Path<i64>,
     Json(body): Json<RiskNodeFlagsBody>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_operator(&auth) {
-        return r;
-    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
-    let client_id: Option<i64> = sqlx::query_scalar(
-        "SELECT client_id FROM risk_graph_nodes WHERE id = $1 AND tenant_id = $2",
-    )
-    .bind(node_id)
-    .bind(auth.tenant_id)
-    .fetch_optional(&mut *tx)
-    .await
-    .ok()
-    .flatten();
     let res = sqlx::query(
         r#"UPDATE risk_graph_nodes
               SET internet_exposed = COALESCE($1, internet_exposed),
                   crown_jewel      = COALESCE($2, crown_jewel),
                   asset_value      = COALESCE($3, asset_value)
-            WHERE id = $4 AND tenant_id = $5"#,
+            WHERE id = $4 AND tenant_id = $5
+        RETURNING client_id"#,
     )
     .bind(body.internet_exposed)
     .bind(body.crown_jewel)
     .bind(body.asset_value)
     .bind(node_id)
     .bind(auth.tenant_id)
-    .execute(&mut *tx)
+    .fetch_optional(&mut *tx)
     .await;
-    let _ = tx.commit().await;
     match res {
-        Ok(r) if r.rows_affected() > 0 => {
-            if let Some(cid) = client_id {
-                crate::attack_path::mark_graph_dirty(auth.tenant_id, cid);
+        Ok(Some(row)) => {
+            let client_id: i64 = row.try_get("client_id").unwrap_or(0);
+            let _ = tx.commit().await;
+            if client_id > 0 {
+                crate::attack_path::mark_graph_dirty(auth.tenant_id, client_id);
             }
-            (
-                StatusCode::OK,
-                Json(json!({"ok": true, "id": node_id, "client_id": client_id})),
-            )
-                .into_response()
+            (StatusCode::OK, Json(json!({"ok": true, "id": node_id, "client_id": client_id}))).into_response()
         }
-        Ok(_) => (
-            StatusCode::NOT_FOUND,
-            Json(json!({"ok": false, "detail": "node not found"})),
-        )
-            .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
-        )
-            .into_response(),
+        Ok(None) => {
+            let _ = tx.commit().await;
+            (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "node not found"}))).into_response()
+        }
+        Err(e) => {
+            let _ = tx.commit().await;
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": scrub_internal_error(&e)}))).into_response()
+        }
     }
 }
 

@@ -534,6 +534,25 @@ pub async fn dns_a(host: &str) -> Vec<String> {
     out
 }
 
+/// Live AAAA lookup. Empty when the name has no IPv6 (or DNS fails).
+pub async fn dns_aaaa(host: &str) -> Vec<String> {
+    use hickory_resolver::TokioResolver;
+    let resolver = match TokioResolver::builder_tokio().and_then(|b| b.build()) {
+        Ok(r) => r,
+        Err(_) => return vec![],
+    };
+    let mut out = Vec::new();
+    if let Ok(aaaa) = resolver.ipv6_lookup(host).await {
+        for record in aaaa.answers() {
+            let hickory_resolver::proto::rr::RData::AAAA(aaaa) = &record.data else {
+                continue;
+            };
+            out.push(aaaa.0.to_string());
+        }
+    }
+    out
+}
+
 /// Minimum TTL (seconds) among A records for `host`, if any.
 pub async fn dns_a_min_ttl(host: &str) -> Option<u32> {
     use hickory_resolver::TokioResolver;

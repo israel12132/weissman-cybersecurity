@@ -10,10 +10,10 @@
 
 | Metric | Value | Verification command |
 |--------|-------|----------------------|
-| Production engines | **584** | `node scripts/verify_engine_wiring.mjs` |
-| Command Center routes | **145** | `node scripts/weissman-ui-audit.mjs` |
-| UI pages audited | **126/126** | `node scripts/weissman-ui-audit.mjs` |
-| Real probes | **322** | `node scripts/engine_reality_audit.mjs` |
+| Production engines | **586** | `node scripts/verify_engine_wiring.mjs` |
+| Command Center routes | **130** | `node scripts/weissman-ui-audit.mjs` |
+| UI pages audited | **111/111** | `node scripts/weissman-ui-audit.mjs` |
+| Real probes | **324** | `node scripts/engine_reality_audit.mjs` |
 | Agent-required surfaces | **58** | same |
 | JWT secret minimum (production) | **48 characters** | `fingerprint_engine/src/security_startup.rs` |
 | Destructive / metrics / job-bus secrets | **≥32 characters** | `PRODUCTION.env.template` |
@@ -110,17 +110,17 @@ flowchart LR
 
 Show **`scripts/generate_audit_evidence_pack.sh`** output and verify hashes.
 
-### Minutes 14–20 — Engine integrity (584 engines)
+### Minutes 14–20 — Engine integrity (580 engines)
 
 Run live (or show CI logs):
 
 ```bash
 node scripts/verify_engine_wiring.mjs      # 0 gaps
 node scripts/engine_reality_audit.mjs      # 0 no_path
-node scripts/weissman-ui-audit.mjs         # 145 routes, 126 pages
+node scripts/weissman-ui-audit.mjs         # 130 routes, 111 pages
 ```
 
-Explain taxonomy: **322 real_probe**, **204 alias**, **58 agent_required** — no fake findings.
+Explain taxonomy: **324 real_probe**, **204 alias**, **58 agent_required** — no fake findings.
 
 ### Minutes 20–26 — SDLC, CI, and audit gates
 

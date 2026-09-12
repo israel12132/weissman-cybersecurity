@@ -30,7 +30,6 @@
     clippy::useless_format
 )]
 
-pub mod adversary_gap_mirror;
 pub mod agent_remote_surface;
 pub mod ai_redteam_engine;
 pub mod alias_engine_runner;
@@ -72,6 +71,7 @@ pub mod db;
 pub mod db_backup;
 pub mod dedicated_web_ztna_engines;
 pub mod discovery_engine;
+pub mod dualstack_edge_skip;
 pub mod embeddings;
 pub mod engine_accounting;
 pub mod engine_capabilities;
@@ -112,6 +112,7 @@ pub mod genesis_vault_cache;
 pub mod hpc_runtime;
 pub mod http;
 pub mod identity_attack_chain_engine;
+pub mod identity_surface_delta;
 pub mod intel_epss;
 pub mod intel_findings_backfill;
 pub mod intel_http_cache;
@@ -138,6 +139,7 @@ pub mod pipeline_to_runtime_risk_engine;
 pub mod poc_sandbox;
 pub mod portfolio_posture;
 pub mod posture_score;
+pub mod ransomware_preposition;
 pub mod recon;
 pub mod regex_util;
 pub mod remediation_priority;
@@ -181,7 +183,6 @@ pub mod timing_engine;
 pub mod ueba_detector;
 pub mod validator;
 pub mod waf_signals;
-pub mod xlsx_export;
 
 pub mod admin_users;
 pub mod advanced_ai_engines;

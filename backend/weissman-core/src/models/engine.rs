@@ -79,6 +79,9 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "asm",
     "first_mover_surface_delta",
     "first_mover_delta_fusion",
+    "identity_surface_delta",
+    "dualstack_edge_skip_fusion",
+    "ransomware_preposition_surface",
     "first_seen_osv_nvd",
     "leak_hunter",
     "adversary_gap_mirror",
@@ -704,6 +707,8 @@ pub const DEFAULT_ORCHESTRATOR_ENGINES: &[&str] = &[
     "oauth_oidc",
     "external_exposure_supreme",
     "microsecond_timing",
+    "ransomware_preposition_surface",
+    "dualstack_edge_skip_fusion",
 ];
 
 /// Full ordered registry of all production engines in proper execution order.
@@ -714,6 +719,9 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "asm",
     "first_mover_surface_delta",
     "first_mover_delta_fusion",
+    "identity_surface_delta",
+    "dualstack_edge_skip_fusion",
+    "ransomware_preposition_surface",
     "first_seen_osv_nvd",
     "leak_hunter",
     "adversary_gap_mirror",
@@ -1633,6 +1641,9 @@ mod production_registry_tests {
         assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_mover_surface_delta"));
         assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_seen_osv_nvd"));
         assert!(!DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_mover_delta_fusion"));
+        assert!(!DEFAULT_ORCHESTRATOR_ENGINES.contains(&"identity_surface_delta"));
+        assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"ransomware_preposition_surface"));
+        assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"dualstack_edge_skip_fusion"));
         assert!(
             !DEFAULT_ORCHESTRATOR_ENGINES
                 .iter()

@@ -1,5 +1,5 @@
 /**
- * Master registry of all 584 production attack engines.
+ * Master registry of all 586 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 584 production engines in registry order */
+/** All 586 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -46,7 +46,31 @@ export const ENGINES_REGISTRY = [
     label: 'First-Mover Delta Fusion',
     group: 'recon',
     mitre: 'T1595',
-    description: 'New host from live surface delta immediately gets subdomain takeover, leak hunter, BOLA, and JWT on that same FQDN — not a separate later hunt.',
+    description: 'New host from live surface delta immediately gets subdomain takeover, leak hunter, BOLA, JWT, OAuth/OIDC, and GraphQL on that same FQDN — not a separate later hunt.',
+    requiresTarget: true,
+  },
+  {
+    id: 'identity_surface_delta',
+    label: 'Identity Surface Delta',
+    group: 'recon',
+    mitre: 'T1078',
+    description: 'New login/SSO/IdP host from live first-mover immediately gets OIDC discovery and SAML metadata on that FQDN — identity protocol proof, not a later hunt.',
+    requiresTarget: true,
+  },
+  {
+    id: 'dualstack_edge_skip_fusion',
+    label: 'Dual-Stack Edge Skip',
+    group: 'network',
+    mitre: 'T1590.005',
+    description: 'Pins Host+SNI to A and AAAA. Emits a finding only when status, WAF, or body diverge — dual-stack DNS alone is not a skip.',
+    requiresTarget: true,
+  },
+  {
+    id: 'ransomware_preposition_surface',
+    label: 'Ransomware Preposition Surface',
+    group: 'malware',
+    mitre: 'T1021',
+    description: 'Live TCP of SMB/RDP/WinRM/Kerberos/LDAP/NFS/NDMP from the scan origin. Evidence is open ports and banners — no encrypt, no wiper.',
     requiresTarget: true,
   },
   {
@@ -63,14 +87,6 @@ export const ENGINES_REGISTRY = [
     group: 'recon',
     mitre: 'T1530',
     description: 'Dark web & paste-site credential and data leak detection',
-    requiresTarget: true,
-  },
-  {
-    id: 'adversary_gap_mirror',
-    label: 'Adversary Gap Mirror',
-    group: 'recon',
-    mitre: 'T1597',
-    description: 'Legal clearnet intel (ransomware.live, RansomLook posts, ThreatFox, URLhaus, HIBP catalog, urlscan.io) fused with authorized remote-access port/banner probes and published IAB economics — never Tor, never invented victims',
     requiresTarget: true,
   },
   {
@@ -2252,7 +2268,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark Web Intelligence',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Legal clearnet defender intel: ransomware.live victim search, RansomLook posts catalog, abuse.ch ThreatFox/URLhaus, HIBP public catalog, urlscan.io, optional IntelX paid index. Never Tor, never dumps, never invented victims',
+    description: 'Comprehensive dark web monitoring: Tor hidden service enumeration, paste site scraping, underground forum credential leak correlation, ransomware leak site monitoring, threat actor attribution',
     requiresTarget: true,
   },
   {
@@ -4051,7 +4067,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark Web Brand Monitor',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Clearnet brand/intel monitor wrapping darkweb_intel: ransomware.live, RansomLook, ThreatFox/URLhaus, HIBP catalog, urlscan.io, optional IntelX. Never Tor marketplaces or credential dumps',
+    description: 'Comprehensive dark web brand monitoring: Tor marketplace credential listing detection, ransomware leak site monitoring, corporate data paste detection, threat actor chatter monitoring, underground forum API key listing alerts, dark web search engine integration',
     requiresTarget: true,
   },
   {

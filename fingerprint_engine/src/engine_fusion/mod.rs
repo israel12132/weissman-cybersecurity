@@ -10,6 +10,9 @@
 //! |-----------|---------------|
 //! | `first_mover_surface_delta` | Live DNS/HTTP/CT vs last snapshot — new/changed hosts before weekly scanners |
 //! | `first_mover_delta_fusion` | New host → immediate takeover/leak/BOLA/JWT on that same FQDN |
+//! | `identity_surface_delta` | New host that is login/SSO/IdP → live OIDC/SAML on that FQDN |
+//! | `dualstack_edge_skip_fusion` | A vs AAAA with Host+SNI — finding only on WAF/status/body skip |
+//! | `ransomware_preposition_surface` | Live SMB/RDP/WinRM/Kerberos/backup TCP preposition |
 //! | `first_seen_osv_nvd` | Live SBOM × OSV, proven before NVD when nvd_status is absent_cve/unpublished |
 //! | `adversary_gap_mirror` | Clearnet ransomware/RansomLook/IOC/HIBP/urlscan + authorized IAB-port/HTTP tokens |
 //! | `external_exposure_supreme` | ASM + email/DNS + cloud posture |
@@ -30,6 +33,9 @@
 pub const FUSION_ENGINE_IDS: &[&str] = &[
     "first_mover_surface_delta",
     "first_mover_delta_fusion",
+    "identity_surface_delta",
+    "dualstack_edge_skip_fusion",
+    "ransomware_preposition_surface",
     "first_seen_osv_nvd",
     "adversary_gap_mirror",
     "external_exposure_supreme",

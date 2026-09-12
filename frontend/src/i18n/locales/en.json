@@ -1488,7 +1488,27 @@
       "no_choke_title": "No choke-points",
       "no_choke_body": "No shared choke-points across the computed paths.",
       "no_paths_title": "No attack paths",
-      "no_paths_body": "No internet → crown-jewel path was found in the current graph."
+      "no_paths_body": "No internet → crown-jewel path was found in the current graph.",
+      "jewel_panel": "Crown jewels & exposure",
+      "jewel_panel_hint": "Flag internet-exposed entries and crown jewels on the live risk graph. PATCH marks the graph dirty and recomputes paths.",
+      "node_search": "Search nodes…",
+      "flag_exposed": "Internet-exposed",
+      "flag_jewel": "Crown jewel",
+      "flag_saved": "Flags saved — paths recomputed from the live graph",
+      "zero_jewel_banner": "No crown jewel is flagged — internet → jewel paths stay empty until you mark one.",
+      "no_nodes_title": "No graph nodes",
+      "no_nodes_body": "The risk graph is empty. Run a scan or recompute paths to create nodes, then flag crown jewels.",
+      "what_if_smb": "Block SMB/445",
+      "what_if_run": "Run what-if",
+      "what_if_done": "What-if snapshot computed",
+      "what_if_clear": "Back to live",
+      "kpi_path_ale": "Path ALE",
+      "kpi_path_ale_hint": "Sum of annualized loss on ranked paths",
+      "kpi_top_score": "Top path score",
+      "kpi_top_score_hint": "Highest weighted path score (0–100)",
+      "score": "Score",
+      "path_ale": "ALE {{value}}",
+      "root_cause": "Root cause"
     },
     "attackCoverage": {
       "title": "ATT&CK Coverage Matrix",
@@ -1959,7 +1979,7 @@
       "auto_on": "Live refresh ON",
       "auto_off": "Live refresh OFF",
       "last_updated": "Last synced {{time}}",
-      "evidence_notice": "Every row is a real finding from GET /api/findings filtered to leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor, and adversary_gap_mirror — never simulated breach data.",
+      "evidence_notice": "Every row is a real finding from GET /api/findings filtered to leak_hunter, darkweb_intel, dark_web_monitor, and typosquatting_monitor — never simulated breach data.",
       "source_breakdown": "Hits by source engine",
       "search_placeholder": "Search title, target, or description…",
       "filter_all": "All",
@@ -2180,7 +2200,8 @@
       "save_updated": "Rule updated",
       "save_failed": "Failed to save rule",
       "test_error": "Failed to test rule",
-      "toggle_failed": "Failed to toggle rule"
+      "toggle_failed": "Failed to toggle rule",
+      "teams_honesty": "Microsoft Teams delivers Adaptive Cards via teams_webhook_url or WEISSMAN_TEAMS_WEBHOOK_URL. Slack incoming-webhook URLs are refused — they are not Teams."
     },
     "adminManagement": {
       "search_users": "Search users…",
@@ -5116,7 +5137,7 @@
       }
     },
     "attackSurfaceManagement": {
-      "evidence_notice": "ASM inventory from POST /api/command-center/scan (asm). First-mover drift from GET /api/clients/:id/surface-diff, CT squirt nerve from GET /api/first-mover/nerve, delta hunt POST first_mover_surface_delta, kill-chain POST first_mover_delta_fusion — live DNS/HTTP/CT vs last snapshot, no canned graphs.",
+      "evidence_notice": "ASM inventory from POST /api/command-center/scan (asm). First-mover drift from GET /api/clients/:id/surface-diff, CT squirt nerve from GET /api/first-mover/nerve, delta hunt POST first_mover_surface_delta, kill-chain POST first_mover_delta_fusion, IdP delta POST identity_surface_delta, dual-stack skip POST dualstack_edge_skip_fusion, ransomware preposition POST ransomware_preposition_surface — live DNS/HTTP/CT/TCP vs last snapshot, no canned graphs.",
       "severity_critical": "Critical",
       "severity_high": "High",
       "severity_medium": "Medium",
@@ -5259,7 +5280,13 @@
       "toast_scan_failed": "Scan failed ({{status}})",
       "toast_scan_queued": "Attack-surface scan queued (job {{jid}})",
       "toast_network_error": "Network error",
-      "toast_exported": "Exported attack-surface report JSON"
+      "toast_exported": "Exported attack-surface report JSON",
+      "idp_hunt": "Hunt IdP on delta",
+      "idp_hunting": "Hunting IdP…",
+      "skip_hunt": "Prove dual-stack skip",
+      "skip_hunting": "Proving skip…",
+      "prep_hunt": "Ransomware preposition",
+      "prep_hunting": "Probing preposition…"
     },
     "dnsDomainPosture": {
       "evidence_notice": "DNS, SPF, DMARC, and subdomain posture from POST /api/command-center/scan (email_dns_posture / dns engines). Records are resolved live against public resolvers for authorized domains.",
