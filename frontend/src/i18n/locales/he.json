@@ -1465,7 +1465,10 @@
       "agent_required": "מנועים שדורשים סוכן",
       "gaps_heading": "איפה התקיפה עדיין לא מוכנה",
       "jewel_auto": "נכסי כתר מתויגים אוטומטית",
-      "weaponized": "מצב מחומש דורש בקרה כפולה"
+      "weaponized": "מצב מחומש דורש בקרה כפולה",
+      "alert_gates": "שערי KEV / EPSS / CVSS / כתר",
+      "scan_https": "סריקות cron ב-HTTPS",
+      "ct_fusion": "CT squirt → fusion מובנה"
     },
     "securityPosture": {
       "title": "מצב אבטחת הפלטפורמה",
@@ -2140,7 +2143,13 @@
       "save_updated": "הכלל עודכן",
       "save_failed": "שמירת הכלל נכשלה",
       "test_error": "בדיקת הכלל נכשלה",
-      "toggle_failed": "שינוי מצב הכלל נכשל"
+      "toggle_failed": "שינוי מצב הכלל נכשל",
+      "cond_kev": "CISA KEV בלבד",
+      "cond_epss": "EPSS מינימלי",
+      "cond_cvss": "CVSS מינימלי",
+      "cond_jewel": "נוגע בנכס כתר",
+      "template_kev": "KEV על כתר",
+      "template_kev_body": "התראה כשממצא KEV נוגע בנכס כתר"
     },
     "adminManagement": {
       "search_users": "חיפוש משתמשים…",

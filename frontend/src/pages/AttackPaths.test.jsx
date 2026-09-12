@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { needsCrownJewelSeed, rankJewelCandidates } from './AttackPaths.jsx'
+import { needsCrownJewelSeed, rankJewelCandidates } from '../lib/attackPathSeeds'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k) => k, i18n: { language: 'en' } }),

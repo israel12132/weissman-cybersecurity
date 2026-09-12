@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeRiskGraph, severityFromRisk } from './RiskGraphVisualization.jsx'
+import { normalizeRiskGraph, severityFromRisk } from './riskGraphNormalize'
 
 describe('severityFromRisk', () => {
   it('bands 0–100 into cockpit severities', () => {
@@ -23,5 +23,15 @@ describe('normalizeRiskGraph', () => {
     expect(g.nodes[0].internet_exposed).toBe(false)
     expect(g.edges[0].source).toBe(1)
     expect(g.edges[0].target).toBe(2)
+  })
+
+  it('keeps explicit severity and source/target when already present', () => {
+    const g = normalizeRiskGraph({
+      nodes: [{ id: 2, name: 'edge', severity: 'high', risk_score: 99 }],
+      edges: [{ id: 3, source: 'a', target: 'b', from_node_id: 9, to_node_id: 8 }],
+    })
+    expect(g.nodes[0].severity).toBe('high')
+    expect(g.edges[0].source).toBe('a')
+    expect(g.edges[0].target).toBe('b')
   })
 })

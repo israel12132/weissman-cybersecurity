@@ -1465,7 +1465,10 @@
       "agent_required": "Agent-required engines",
       "gaps_heading": "Where offense is still not ready",
       "jewel_auto": "Crown jewels auto-tagged",
-      "weaponized": "Weaponized mode is dual-control"
+      "weaponized": "Weaponized mode is dual-control",
+      "alert_gates": "KEV / EPSS / CVSS / jewel gates",
+      "scan_https": "Scan cron defaults to HTTPS",
+      "ct_fusion": "CT squirt → inline fusion"
     },
     "securityPosture": {
       "title": "Platform Security Posture",
@@ -2140,7 +2143,13 @@
       "save_updated": "Rule updated",
       "save_failed": "Failed to save rule",
       "test_error": "Failed to test rule",
-      "toggle_failed": "Failed to toggle rule"
+      "toggle_failed": "Failed to toggle rule",
+      "cond_kev": "CISA KEV only",
+      "cond_epss": "Min EPSS",
+      "cond_cvss": "Min CVSS",
+      "cond_jewel": "Touches crown jewel",
+      "template_kev": "KEV on crown jewel",
+      "template_kev_body": "Page when a KEV finding touches a crown-jewel asset"
     },
     "adminManagement": {
       "search_users": "Search users…",

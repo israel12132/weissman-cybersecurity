@@ -21,6 +21,7 @@ import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../utils/apiFetch'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
+import { needsCrownJewelSeed, rankJewelCandidates } from '../lib/attackPathSeeds'
 
 const NS = 'pages.attackPaths'
 const columnHelper = createColumnHelper()
@@ -39,25 +40,6 @@ function chokeCsv(rows) {
     r.label, r.node_type, r.coverage, r.coverage_pct, r.max_finding_cvss, r.max_finding_epss, r.kev_present,
   ])
   downloadCsv(data, header, 'weissman-attack-paths')
-}
-
-export function needsCrownJewelSeed(snapshot) {
-  if (!snapshot) return false
-  return Number(snapshot.jewel_count) === 0
-}
-
-/** Rank graph nodes for the operator jewel/entry toggle — jewels first, then risk. */
-export function rankJewelCandidates(nodes, limit = 25) {
-  return [...(nodes || [])]
-    .filter((n) => !n.honey_node)
-    .sort((a, b) => {
-      const jewelDelta = Number(Boolean(b.crown_jewel)) - Number(Boolean(a.crown_jewel))
-      if (jewelDelta) return jewelDelta
-      const entryDelta = Number(Boolean(b.internet_exposed)) - Number(Boolean(a.internet_exposed))
-      if (entryDelta) return entryDelta
-      return (Number(b.risk_score) || 0) - (Number(a.risk_score) || 0)
-    })
-    .slice(0, limit)
 }
 
 function PathCard({ path, t }) {
