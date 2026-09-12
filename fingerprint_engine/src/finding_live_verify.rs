@@ -19,6 +19,9 @@ use weissman_core::models::engine::{dispatch_engine_id, is_production_engine_id}
 
 const DEEP_RESCAN_SECS: u64 = 75;
 
+/// Store cannot be confirmed — never map this to "finding not found" or empty client scope.
+pub(crate) const STORE_DOWN: &str = "store_down";
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct VerifyCheck {
     pub id: String,
@@ -410,23 +413,29 @@ async fn load_finding(pool: &PgPool, tenant_id: i64, id_token: &str) -> Result<F
     let parsed = parse_finding_row_id(token);
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|e| format!("db: {e}"))?;
+        .map_err(|_| STORE_DOWN.to_string())?;
     let row = sqlx::query(LOAD_FINDING_SQL)
         .bind(tenant_id)
         .bind(parsed)
         .bind(token)
         .fetch_optional(&mut *tx)
         .await
-        .map_err(|e| format!("db: {e}"))?;
-    let _ = tx.commit().await;
+        .map_err(|_| STORE_DOWN.to_string())?;
+    if tx.commit().await.is_err() {
+        return Err(STORE_DOWN.to_string());
+    }
     let row = row.ok_or_else(|| "finding not found".to_string())?;
     Ok(map_finding_row(row))
 }
 
-async fn load_client_domains(pool: &PgPool, tenant_id: i64, client_id: i64) -> Vec<String> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Vec::new();
-    };
+async fn load_client_domains(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+) -> Result<Vec<String>, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| STORE_DOWN.to_string())?;
     let raw: Option<String> = sqlx::query_scalar(
         "SELECT COALESCE(domains::text, '[]') FROM clients WHERE id = $1 AND tenant_id = $2",
     )
@@ -434,10 +443,11 @@ async fn load_client_domains(pool: &PgPool, tenant_id: i64, client_id: i64) -> V
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    raw.map(|s| parse_client_domains(&s)).unwrap_or_default()
+    .map_err(|_| STORE_DOWN.to_string())?;
+    if tx.commit().await.is_err() {
+        return Err(STORE_DOWN.to_string());
+    }
+    Ok(raw.map(|s| parse_client_domains(&s)).unwrap_or_default())
 }
 
 async fn persist_verification(
@@ -584,7 +594,7 @@ pub async fn verify_finding_live(
     let mut scope_ok = true;
     let mut scope_detail = "no client scope configured".to_string();
     if let Some(cid) = row.client_id {
-        let domains = load_client_domains(pool, tenant_id, cid).await;
+        let domains = load_client_domains(pool, tenant_id, cid).await?;
         scope_ok = target_in_client_scope(&row.target, &domains);
         scope_detail = if scope_ok {
             format!(

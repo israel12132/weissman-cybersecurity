@@ -741,6 +741,13 @@ async fn api_findings_verify_live(
             Json(json!({"ok": false, "detail": e})),
         )
             .into_response(),
+        Ok(Err(e)) if e == crate::finding_live_verify::STORE_DOWN => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_verify_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response(),
         Ok(Err(e)) => (
             StatusCode::BAD_REQUEST,
             Json(json!({"ok": false, "detail": e})),

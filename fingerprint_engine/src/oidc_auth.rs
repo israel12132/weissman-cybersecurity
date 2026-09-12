@@ -20,6 +20,15 @@ use crate::audit_log;
 use crate::db;
 use crate::http::AppState;
 
+fn auth_store_down() -> (StatusCode, Json<serde_json::Value>) {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(crate::http_unavailable::auth_degraded_unavailable_json(
+            "database unavailable",
+        )),
+    )
+}
+
 fn oidc_http_client() -> reqwest::Client {
     reqwest::Client::builder()
         .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
@@ -192,12 +201,7 @@ pub async fn oidc_begin(
     .bind(name)
     .fetch_optional(auth)
     .await
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": format!("db: {}", e)})),
-        )
-    })?;
+    .map_err(|_| auth_store_down())?;
     let Some(r) = row else {
         return Err((
             StatusCode::NOT_FOUND,
@@ -227,10 +231,10 @@ pub async fn oidc_begin(
     let http_client = oidc_http_client();
     let metadata = CoreProviderMetadata::discover_async(issuer_url, &http_client)
         .await
-        .map_err(|e| {
+        .map_err(|_| {
             (
                 StatusCode::BAD_GATEWAY,
-                Json(json!({"ok": false, "detail": format!("OIDC discovery failed: {}", e)})),
+                Json(json!({"ok": false, "detail": "OIDC discovery failed"})),
             )
         })?;
     let base = public_base_url().trim_end_matches('/').to_string();
@@ -321,12 +325,7 @@ pub async fn oidc_callback(
     .bind(state_data.tenant_id)
     .fetch_optional(auth)
     .await
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": format!("{}", e)})),
-        )
-    })?;
+    .map_err(|_| auth_store_down())?;
     let Some(IdpCbRow {
         issuer_url: issuer,
         client_id,
@@ -348,10 +347,10 @@ pub async fn oidc_callback(
     let http_client = oidc_http_client();
     let metadata = CoreProviderMetadata::discover_async(issuer_url, &http_client)
         .await
-        .map_err(|e| {
+        .map_err(|_| {
             (
                 StatusCode::BAD_GATEWAY,
-                Json(json!({"ok": false, "detail": format!("{}", e)})),
+                Json(json!({"ok": false, "detail": "OIDC discovery failed"})),
             )
         })?;
     let base = public_base_url().trim_end_matches('/').to_string();
@@ -370,20 +369,20 @@ pub async fn oidc_callback(
     .set_redirect_uri(redirect_url);
     let token_req = client
         .exchange_code(AuthorizationCode::new(q.code.clone()))
-        .map_err(|e| {
+        .map_err(|_| {
             (
                 StatusCode::BAD_REQUEST,
-                Json(json!({"ok": false, "detail": format!("token request: {}", e)})),
+                Json(json!({"ok": false, "detail": "token request failed"})),
             )
         })?;
     let token_res = token_req
         .set_pkce_verifier(oauth2::PkceCodeVerifier::new(state_data.pkce_verifier))
         .request_async(&http_client)
         .await
-        .map_err(|e| {
+        .map_err(|_| {
             (
                 StatusCode::BAD_GATEWAY,
-                Json(json!({"ok": false, "detail": format!("token: {}", e)})),
+                Json(json!({"ok": false, "detail": "token exchange failed"})),
             )
         })?;
     let nonce = Nonce::new(state_data.nonce.clone());
@@ -398,10 +397,10 @@ pub async fn oidc_callback(
             )
         })?
         .claims(&id_token_verifier, &nonce)
-        .map_err(|e| {
+        .map_err(|_| {
             (
                 StatusCode::UNAUTHORIZED,
-                Json(json!({"ok": false, "detail": format!("id_token: {}", e)})),
+                Json(json!({"ok": false, "detail": "id_token verification failed"})),
             )
         })?;
     let email = match id_token_claims.email() {
@@ -422,12 +421,7 @@ pub async fn oidc_callback(
     }
     weissman_db::auth_access::record_auth_access(auth, state_data.tenant_id, "oidc_callback")
         .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": format!("auth audit: {}", e)})),
-            )
-        })?;
+        .map_err(|_| auth_store_down())?;
     let user_id: i64 = if let Some(uid) = sqlx::query_scalar::<_, i64>(
         "SELECT id FROM auth.v_user_lookup WHERE tenant_id = $1 AND lower(trim(email)) = lower(trim($2)) AND is_active = true",
     )
@@ -435,22 +429,12 @@ pub async fn oidc_callback(
     .bind(&email)
     .fetch_optional(auth)
     .await
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": format!("{}", e)})),
-        )
-    })? {
+    .map_err(|_| auth_store_down())? {
         uid
     } else {
         weissman_db::auth_access::insert_user_auth(auth, state_data.tenant_id, &email, None, "viewer")
             .await
-            .map_err(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"ok": false, "detail": format!("provision: {}", e)})),
-                )
-            })?
+            .map_err(|_| auth_store_down())?
     };
     let ip = crate::http::extract_client_ip(&headers, addr);
     if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, state_data.tenant_id).await {
@@ -475,12 +459,7 @@ pub async fn oidc_callback(
             &binding,
         )
         .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": format!("session: {}", e)})),
-            )
-        })?;
+        .map_err(|_| auth_store_down())?;
     let mut res = Redirect::to("/command-center/").into_response();
     if let Ok(v) = HeaderValue::from_str(&access_line) {
         res.headers_mut().append(SET_COOKIE, v);

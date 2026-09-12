@@ -447,9 +447,11 @@ async fn api_ceo_global_safe_patch(
             })),
         )
             .into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "ok": false, "detail": e })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::enterprise_settings_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }

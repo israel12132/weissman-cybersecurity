@@ -40,7 +40,7 @@ async fn api_client_cloud_integration_patch(
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
     let ext = body.aws_external_id.clone().unwrap_or_default();
     let gcp = body.gcp_project_id.clone().unwrap_or_default();
-    let n = sqlx::query(
+    let n = match sqlx::query(
         "UPDATE clients SET aws_cross_account_role_arn = $1, aws_external_id = $2, gcp_project_id = $3, updated_at = now() WHERE id = $4",
     )
     .bind(arn)
@@ -49,13 +49,23 @@ async fn api_client_cloud_integration_patch(
     .bind(id)
     .execute(&mut *tx)
     .await
-    .map(|r| r.rows_affected())
-    .unwrap_or(0);
+    {
+        Ok(r) => r.rows_affected(),
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_lookup_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     if n == 0 {
         let _ = tx.rollback().await;
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "client not found"}))).into_response();
     }
-    let _ = audit_log::insert_audit(
+    if audit_log::insert_audit(
         &mut tx,
         auth.tenant_id,
         Some(auth.user_id),
@@ -64,8 +74,26 @@ async fn api_client_cloud_integration_patch(
         &format!("client_id={} role_configured={}", id, !arn.is_empty()),
         &ip,
     )
-    .await;
-    let _ = tx.commit().await;
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_lookup_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_lookup_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     (StatusCode::OK, Json(json!({"ok": true}))).into_response()
 }
 

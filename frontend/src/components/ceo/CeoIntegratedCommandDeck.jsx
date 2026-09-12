@@ -114,7 +114,8 @@ export default function CeoIntegratedCommandDeck() {
     }
   }, [loadTelemetry, loadGodSnapshot])
 
-  const globalSafe = !!tel?.global_safe_mode
+  const safeModeKnown = typeof tel?.global_safe_mode === 'boolean'
+  const globalSafe = tel?.global_safe_mode === true
   const eff = tel?.strategy?.effective || {}
   const genesisKill = !!eff.genesis_kill_switch
 
@@ -251,16 +252,20 @@ export default function CeoIntegratedCommandDeck() {
           />
           <MetricCard
             label={t('components.ceo.integratedCommandDeck.workerIds')}
-            value={tel != null ? String(tel.distinct_worker_ids_on_tenant_jobs ?? 0) : '—'}
+            value={
+              tel != null && tel.distinct_worker_ids_on_tenant_jobs != null
+                ? String(tel.distinct_worker_ids_on_tenant_jobs)
+                : '—'
+            }
             accent="border-emerald-500/25"
           />
           <MetricCard
             label={t('components.ceo.integratedCommandDeck.jobsTenant')}
             value={
-              tel != null
+              tel != null && tel.tenant_jobs_running != null && tel.tenant_jobs_pending != null
                 ? t('components.ceo.integratedCommandDeck.jobsRunningPending', {
-                    running: tel.tenant_jobs_running ?? 0,
-                    pending: tel.tenant_jobs_pending ?? 0,
+                    running: tel.tenant_jobs_running,
+                    pending: tel.tenant_jobs_pending,
                   })
                 : '—'
             }
@@ -269,10 +274,10 @@ export default function CeoIntegratedCommandDeck() {
           <MetricCard
             label={t('components.ceo.integratedCommandDeck.queueGlobal')}
             value={
-              tel != null
+              tel != null && tel.queue_global_running != null && tel.queue_global_pending != null
                 ? t('components.ceo.integratedCommandDeck.jobsRunningPending', {
-                    running: tel.queue_global_running ?? 0,
-                    pending: tel.queue_global_pending ?? 0,
+                    running: tel.queue_global_running,
+                    pending: tel.queue_global_pending,
                   })
                 : '—'
             }
@@ -304,17 +309,21 @@ export default function CeoIntegratedCommandDeck() {
             </p>
             <Button variant="unstyled"
               type="button"
-              disabled={safeSaving || !tel}
+              disabled={safeSaving || !tel || !safeModeKnown}
               onClick={toggleGlobalSafe}
               className={`w-full py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest border ${
-                globalSafe
+                !safeModeKnown
+                  ? 'border-white/20 bg-black/40 text-white/60'
+                  : globalSafe
                   ? 'border-emerald-500/60 bg-emerald-950/50 text-emerald-200'
                   : 'border-red-500/50 bg-red-950/50 text-red-100 hover:bg-red-900/40'
               } disabled:opacity-40`}
             >
               {safeSaving
                 ? '…'
-                : globalSafe
+                : !safeModeKnown
+                  ? t('components.ceo.integratedCommandDeck.safeModeUnknown')
+                  : globalSafe
                   ? t('components.ceo.integratedCommandDeck.safeOnRelease')
                   : t('components.ceo.integratedCommandDeck.engageSafeMode')}
             </Button>

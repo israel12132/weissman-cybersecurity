@@ -17,6 +17,7 @@ async fn api_logout(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> Response {
+    let mut revoke_failed = false;
     if let Some(access_raw) = extract_access_cookie(&headers) {
         if let Some((jti, exp)) = crate::auth_jwt::access_token_revocation_info(&access_raw) {
             let expires_at = chrono::DateTime::<chrono::Utc>::from_timestamp(exp, 0)
@@ -29,6 +30,7 @@ async fn api_logout(
             .await
             {
                 tracing::warn!(target: "auth", error = %e, "access jti revocation failed on logout");
+                revoke_failed = true;
             }
             // The refresh cookie is scoped Path=/api/auth and is never attached to /api/logout, so
             // the branch below cannot fire for a browser and the opaque refresh token would survive
@@ -41,6 +43,7 @@ async fn api_logout(
             .await
             {
                 tracing::warn!(target: "auth", error = %e, "refresh revoke-by-access-jti failed on logout");
+                revoke_failed = true;
             }
         }
     }
@@ -52,13 +55,24 @@ async fn api_logout(
         .await
         {
             tracing::warn!(target: "auth", error = %e, "refresh token revocation failed on logout");
+            revoke_failed = true;
         }
     }
-    let mut res = (
-        StatusCode::OK,
-        Json(json!({"ok": true, "detail": "session cleared"})),
-    )
-        .into_response();
+    let mut res = if revoke_failed {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                "session revocation unavailable",
+            )),
+        )
+            .into_response()
+    } else {
+        (
+            StatusCode::OK,
+            Json(json!({"ok": true, "detail": "session cleared"})),
+        )
+            .into_response()
+    };
     append_set_cookie(res.headers_mut(), &crate::auth_jwt::session_cookie_clear_value());
     append_set_cookie(
         res.headers_mut(),
@@ -96,8 +110,10 @@ async fn api_auth_refresh(
                     Err(e) => {
                         tracing::error!(target: "auth", error = %e, "rbac snapshot failed on refresh");
                         return (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            Json(json!({"ok": false, "detail": "rbac lookup failed"})),
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                                "rbac lookup unavailable",
+                            )),
                         )
                             .into_response();
                     }
@@ -128,7 +144,19 @@ async fn api_auth_refresh(
             )
             .await
             {
-                tracing::warn!(target: "auth", error = %e, "failed to link refresh row to access jti");
+                tracing::error!(target: "auth", error = %e, "failed to link refresh row to access jti");
+                let mut res = (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "session link unavailable",
+                    )),
+                )
+                    .into_response();
+                append_set_cookie(
+                    res.headers_mut(),
+                    &crate::auth_refresh::refresh_cookie_value(&new_refresh),
+                );
+                return res;
             }
             let mut res = (
                 StatusCode::OK,
@@ -167,7 +195,9 @@ async fn api_auth_refresh(
             tracing::error!(target: "auth", error = %e, "refresh rotation database error");
             (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"ok": false, "detail": "database error"})),
+                Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                    "database unavailable",
+                )),
             )
                 .into_response()
         }

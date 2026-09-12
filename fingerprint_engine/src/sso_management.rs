@@ -165,13 +165,7 @@ pub async fn api_sso_idps_list(
     }
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,
-        Err(e) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"error": e.to_string()})),
-            )
-                .into_response()
-        }
+        Err(_) => return sso_store_down(),
     };
     let rows = sqlx::query(
         r#"SELECT id, name, provider, vendor_hint, issuer_url, client_id,
@@ -186,18 +180,14 @@ pub async fn api_sso_idps_list(
     .bind(auth.tenant_id)
     .fetch_all(&mut *tx)
     .await;
-    let _ = tx.commit().await;
 
     match rows {
         Ok(rows) => {
+            let _ = tx.commit().await;
             let items: Vec<Value> = rows.iter().map(row_to_json).collect();
             Json(json!({"idps": items, "count": items.len()})).into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": e.to_string()})),
-        )
-            .into_response(),
+        Err(_) => sso_store_down(),
     }
 }
 
@@ -244,13 +234,7 @@ pub async fn api_sso_idps_create(
 
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,
-        Err(e) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"error": e.to_string()})),
-            )
-                .into_response()
-        }
+        Err(_) => return sso_store_down(),
     };
 
     let row = sqlx::query(
@@ -285,20 +269,22 @@ pub async fn api_sso_idps_create(
     .fetch_one(&mut *tx)
     .await;
 
-    let _ = tx.commit().await;
-
     match row {
-        Ok(r) => (StatusCode::CREATED, Json(row_to_json(&r))).into_response(),
-        Err(e) if e.to_string().contains("unique") || e.to_string().contains("duplicate") => (
-            StatusCode::CONFLICT,
-            Json(json!({"error": "name already exists for this tenant"})),
-        )
-            .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": e.to_string()})),
-        )
-            .into_response(),
+        Ok(r) => {
+            if tx.commit().await.is_err() {
+                return sso_store_down();
+            }
+            (StatusCode::CREATED, Json(row_to_json(&r))).into_response()
+        }
+        Err(e) if is_unique_violation(&e) => {
+            let _ = tx.rollback().await;
+            (
+                StatusCode::CONFLICT,
+                Json(json!({"error": "name already exists for this tenant"})),
+            )
+                .into_response()
+        }
+        Err(_) => sso_store_down(),
     }
 }
 
@@ -311,13 +297,7 @@ pub async fn api_sso_idp_get(
 ) -> Response {
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,
-        Err(e) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"error": e.to_string()})),
-            )
-                .into_response()
-        }
+        Err(_) => return sso_store_down(),
     };
     let row = sqlx::query(
         r#"SELECT id, name, provider, vendor_hint, issuer_url, client_id,
@@ -332,16 +312,17 @@ pub async fn api_sso_idp_get(
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await;
-    let _ = tx.commit().await;
 
     match row {
-        Ok(Some(r)) => Json(row_to_json(&r)).into_response(),
-        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": e.to_string()})),
-        )
-            .into_response(),
+        Ok(Some(r)) => {
+            let _ = tx.commit().await;
+            Json(row_to_json(&r)).into_response()
+        }
+        Ok(None) => {
+            let _ = tx.rollback().await;
+            (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response()
+        }
+        Err(_) => sso_store_down(),
     }
 }
 
@@ -358,13 +339,7 @@ pub async fn api_sso_idp_patch(
     }
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,
-        Err(e) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"error": e.to_string()})),
-            )
-                .into_response()
-        }
+        Err(_) => return sso_store_down(),
     };
 
     // Build dynamic SET clause only for provided fields
@@ -461,16 +436,19 @@ pub async fn api_sso_idp_patch(
     }
 
     let row = q.fetch_optional(&mut *tx).await;
-    let _ = tx.commit().await;
 
     match row {
-        Ok(Some(r)) => Json(row_to_json(&r)).into_response(),
-        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": e.to_string()})),
-        )
-            .into_response(),
+        Ok(Some(r)) => {
+            if tx.commit().await.is_err() {
+                return sso_store_down();
+            }
+            Json(row_to_json(&r)).into_response()
+        }
+        Ok(None) => {
+            let _ = tx.rollback().await;
+            (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response()
+        }
+        Err(_) => sso_store_down(),
     }
 }
 
@@ -486,29 +464,27 @@ pub async fn api_sso_idp_delete(
     }
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,
-        Err(e) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"error": e.to_string()})),
-            )
-                .into_response()
-        }
+        Err(_) => return sso_store_down(),
     };
-    let deleted: Option<i64> =
-        sqlx::query_scalar("DELETE FROM tenant_idps WHERE id = $1 AND tenant_id = $2 RETURNING id")
-            .bind(idp_id)
-            .bind(auth.tenant_id)
-            .fetch_optional(&mut *tx)
-            .await
-            .ok()
-            .flatten();
-    let _ = tx.commit().await;
-
-    if deleted.is_some() {
-        Json(json!({"ok": true, "deleted_id": idp_id})).into_response()
-    } else {
-        (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response()
+    let deleted: Option<i64> = match sqlx::query_scalar(
+        "DELETE FROM tenant_idps WHERE id = $1 AND tenant_id = $2 RETURNING id",
+    )
+    .bind(idp_id)
+    .bind(auth.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    {
+        Ok(v) => v,
+        Err(_) => return sso_store_down(),
+    };
+    if deleted.is_none() {
+        let _ = tx.rollback().await;
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response();
     }
+    if tx.commit().await.is_err() {
+        return sso_store_down();
+    }
+    Json(json!({"ok": true, "deleted_id": idp_id})).into_response()
 }
 
 // ─── POST /api/sso/idps/:id/toggle ───────────────────────────────────────────
@@ -520,29 +496,27 @@ pub async fn api_sso_idp_toggle(
 ) -> Response {
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,
-        Err(e) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"error": e.to_string()})),
-            )
-                .into_response()
-        }
+        Err(_) => return sso_store_down(),
     };
-    let new_active: Option<bool> = sqlx::query_scalar(
+    let new_active: Option<bool> = match sqlx::query_scalar(
         "UPDATE tenant_idps SET active = NOT active WHERE id = $1 AND tenant_id = $2 RETURNING active",
     )
     .bind(idp_id)
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-
-    match new_active {
-        Some(a) => Json(json!({"ok": true, "id": idp_id, "active": a})).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response(),
+    {
+        Ok(v) => v,
+        Err(_) => return sso_store_down(),
+    };
+    let Some(a) = new_active else {
+        let _ = tx.rollback().await;
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response();
+    };
+    if tx.commit().await.is_err() {
+        return sso_store_down();
     }
+    Json(json!({"ok": true, "id": idp_id, "active": a})).into_response()
 }
 
 // ─── POST /api/sso/idps/:id/test — Test Connection ───────────────────────────
@@ -563,24 +537,22 @@ pub async fn api_sso_idp_test(
     // Fetch IdP config
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,
-        Err(e) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"error": e.to_string()})),
-            )
-                .into_response()
-        }
+        Err(_) => return sso_store_down(),
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         "SELECT provider, issuer_url, saml_idp_sso_url FROM tenant_idps WHERE id = $1 AND tenant_id = $2",
     )
     .bind(idp_id)
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
-    .await;
+    .await
+    {
+        Ok(v) => v,
+        Err(_) => return sso_store_down(),
+    };
     let _ = tx.commit().await;
 
-    let Ok(Some(row)) = row else {
+    let Some(row) = row else {
         return (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response();
     };
     let provider: String = row.try_get("provider").unwrap_or_default();
@@ -792,6 +764,23 @@ async fn perform_test_connection(
             ),
             Err(e) => (false, Some(e.to_string()), json!({"url": url})),
         }
+    }
+}
+
+fn sso_store_down() -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(crate::http_unavailable::sso_idps_unavailable_json(
+            "database unavailable",
+        )),
+    )
+        .into_response()
+}
+
+fn is_unique_violation(e: &sqlx::Error) -> bool {
+    match e {
+        sqlx::Error::Database(d) => d.code().as_deref() == Some("23505"),
+        _ => false,
     }
 }
 

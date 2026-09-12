@@ -82,37 +82,39 @@ pub async fn build_ceo_telemetry_json(
 
     let strategy = crate::ceo::strategy::get_ceo_strategy_json(app_pool, tenant_id).await;
 
-    let mut global_safe = false;
+    let mut global_safe: Option<bool> = None;
     if let Ok(mut tx) = crate::db::begin_tenant_tx(app_pool, tenant_id).await {
-        if let Ok(Some(s)) = sqlx::query_scalar::<_, String>(
+        match sqlx::query_scalar::<_, String>(
             "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'global_safe_mode'",
         )
         .bind(tenant_id)
         .fetch_optional(&mut *tx)
         .await
         {
-            global_safe = s == "true" || s == "1";
+            Ok(Some(s)) => global_safe = Some(s == "true" || s == "1"),
+            Ok(None) => global_safe = Some(false),
+            Err(_) => {}
         }
         let _ = tx.commit().await;
     }
 
-    let pending: i64 = sqlx::query_scalar(
+    let pending: Option<i64> = sqlx::query_scalar(
         "SELECT count(*)::bigint FROM weissman_async_jobs WHERE tenant_id = $1 AND status = 'pending'",
     )
     .bind(tenant_id)
     .fetch_one(app_pool)
     .await
-    .unwrap_or(0);
+    .ok();
 
-    let running: i64 = sqlx::query_scalar(
+    let running: Option<i64> = sqlx::query_scalar(
         "SELECT count(*)::bigint FROM weissman_async_jobs WHERE tenant_id = $1 AND status = 'running'",
     )
     .bind(tenant_id)
     .fetch_one(app_pool)
     .await
-    .unwrap_or(0);
+    .ok();
 
-    let distinct_workers: i64 = sqlx::query_scalar(
+    let distinct_workers: Option<i64> = sqlx::query_scalar(
         r#"SELECT count(DISTINCT worker_id)::bigint FROM weissman_async_jobs
            WHERE tenant_id = $1 AND status = 'running'
              AND worker_id IS NOT NULL AND trim(worker_id) <> ''"#,
@@ -120,21 +122,21 @@ pub async fn build_ceo_telemetry_json(
     .bind(tenant_id)
     .fetch_one(app_pool)
     .await
-    .unwrap_or(0);
+    .ok();
 
-    let global_pending: i64 = sqlx::query_scalar(
+    let global_pending: Option<i64> = sqlx::query_scalar(
         "SELECT count(*)::bigint FROM weissman_async_jobs WHERE status = 'pending'",
     )
     .fetch_one(app_pool)
     .await
-    .unwrap_or(0);
+    .ok();
 
-    let global_running: i64 = sqlx::query_scalar(
+    let global_running: Option<i64> = sqlx::query_scalar(
         "SELECT count(*)::bigint FROM weissman_async_jobs WHERE status = 'running'",
     )
     .fetch_one(app_pool)
     .await
-    .unwrap_or(0);
+    .ok();
 
     json!({
         "uptime_secs": uptime_secs,

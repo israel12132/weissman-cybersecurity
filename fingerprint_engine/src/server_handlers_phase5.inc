@@ -178,30 +178,55 @@ async fn api_threat_ingest_run(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
-    let llm_base = sqlx::query_scalar::<_, String>(
+    let llm_base = match sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_base_url'",
     )
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten()
-    .filter(|s| !s.trim().is_empty())
-    .unwrap_or_else(|| {
-        std::env::var("WEISSMAN_LLM_BASE_URL")
-            .or_else(|_| std::env::var("LLM_BASE_URL"))
-            .unwrap_or_else(|_| "http://127.0.0.1:8000/v1".into())
-    });
-    let llm_model = sqlx::query_scalar::<_, String>(
+    {
+        Ok(v) => v.filter(|s| !s.trim().is_empty()).unwrap_or_else(|| {
+            std::env::var("WEISSMAN_LLM_BASE_URL")
+                .or_else(|_| std::env::var("LLM_BASE_URL"))
+                .unwrap_or_else(|_| "http://127.0.0.1:8000/v1".into())
+        }),
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::threat_ingest_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let llm_model = match sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_model'",
     )
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten()
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v.unwrap_or_default(),
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::threat_ingest_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::threat_ingest_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let payload = json!({
         "llm_base": llm_base,
         "llm_model": llm_model,
@@ -348,9 +373,11 @@ async fn api_client_sbom_post(
             }
             (StatusCode::OK, Json(json!({"ok": true}))).into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "error": e.to_string()})),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::sbom_components_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }
@@ -489,9 +516,11 @@ async fn api_containment_rules_post(
             }
             (StatusCode::OK, Json(json!({"ok": true}))).into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "error": e.to_string()})),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::containment_rules_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }

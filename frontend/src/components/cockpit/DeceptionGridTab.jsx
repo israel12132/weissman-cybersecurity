@@ -26,6 +26,7 @@ export default function DeceptionGridTab() {
   const { selectedClientId } = useClient()
   const { lastTelemetry } = useWarRoom?.() || {}
   const [assets, setAssets] = useState([])
+  const [assetsUnavailable, setAssetsUnavailable] = useState(false)
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [deploying, setDeploying] = useState(false)
@@ -47,15 +48,20 @@ export default function DeceptionGridTab() {
   const fetchAssets = useCallback(async () => {
     if (!selectedClientId) {
       setAssets([])
+      setAssetsUnavailable(false)
       return
     }
     setLoading(true)
     try {
       const d = await apiFetch(`/api/clients/${selectedClientId}/deception`)
+      if (d == null || (typeof d === 'object' && (d.ok === false || d.unavailable))) {
+        throw new Error(d?.detail || 'unavailable')
+      }
       const list = Array.isArray(d) ? d : (d.assets ?? [])
-      setAssets(list)
+      setAssets(Array.isArray(list) ? list : [])
+      setAssetsUnavailable(false)
     } catch (_) {
-      setAssets([])
+      setAssetsUnavailable(true)
     } finally {
       setLoading(false)
     }
@@ -274,6 +280,13 @@ export default function DeceptionGridTab() {
         </div>
         {loading ? (
           <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.loading`)}</div>
+        ) : assetsUnavailable ? (
+          <div
+            data-testid="deception-grid-unavailable"
+            className="p-6 text-center text-amber-300/90 text-sm"
+          >
+            {t(`${NS}.assetsUnavailable`)}
+          </div>
         ) : assets.length === 0 ? (
           <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.noAssets`)}</div>
         ) : (

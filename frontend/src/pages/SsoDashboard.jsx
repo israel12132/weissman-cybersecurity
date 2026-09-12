@@ -288,6 +288,7 @@ function IdpRow({ idp, onEdit, onDelete, onToggle, onTest, testing }) {
 export default function SsoDashboard() {
   const { t } = useTranslation()
   const [idps, setIdps] = useState([])
+  const [idpsUnavailable, setIdpsUnavailable] = useState(false)
   const [loading, setLoading] = useState(false)
   const [selectedProv, setSelectedProv] = useState(null)
   const [editingIdp, setEditingIdp] = useState(null)
@@ -304,8 +305,13 @@ export default function SsoDashboard() {
     setLoading(true)
     try {
       const data = await api.get('/api/sso/idps')
-      setIdps(data.idps ?? [])
+      if (data == null || data.ok === false || data.unavailable) {
+        throw new Error(data?.detail || t('pages.ssoDashboard.load_failed', { message: 'unavailable' }))
+      }
+      setIdps(Array.isArray(data.idps) ? data.idps : [])
+      setIdpsUnavailable(false)
     } catch (e) {
+      setIdpsUnavailable(true)
       showToast(t('pages.ssoDashboard.load_failed', { message: e.message }), false)
     } finally {
       setLoading(false)
@@ -494,7 +500,17 @@ export default function SsoDashboard() {
           )}
 
           <AnimatePresence>
-            {!loading && idps.length === 0 && (
+            {!loading && idpsUnavailable && (
+              <motion.div
+                data-testid="sso-idps-unavailable"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="rounded-2xl border border-dashed border-amber-500/40 p-10 text-center"
+              >
+                <p className="text-amber-300/90 text-[12px]">{t('pages.ssoDashboard.idps_unavailable')}</p>
+              </motion.div>
+            )}
+            {!loading && !idpsUnavailable && idps.length === 0 && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}

@@ -698,6 +698,72 @@ pub fn heal_channel_suggestion_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// `GET/POST /api/sso/idps` when `tenant_idps` cannot be read or committed
+pub fn sso_idps_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "idps": [],
+        "count": Value::Null,
+        "detail": detail,
+        "code": "db_unavailable",
+    })
+}
+
+/// `GET/POST /api/admin/users` when the identity store cannot be confirmed
+pub fn admin_users_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "users": [],
+        "detail": detail,
+        "code": "db_unavailable",
+    })
+}
+
+/// `POST /api/findings/:id/verify` when the finding or client scope cannot be read
+pub fn findings_verify_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "verdict": Value::Null,
+        "checks": [],
+        "detail": detail,
+        "code": "db_unavailable",
+    })
+}
+
+/// `POST /api/threat-ingest/run` when LLM config cannot be confirmed
+pub fn threat_ingest_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "job_id": Value::Null,
+        "detail": detail,
+        "code": "db_unavailable",
+    })
+}
+
+/// `GET /api/sovereign-defense/.../operator/logs` when the log store cannot be read
+pub fn sovereign_operator_logs_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "events": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/sovereign-defense/.../operator/windows` when live windows cannot be read
+pub fn sovereign_operator_windows_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "windows": Value::Null,
+        "detail": detail,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1695,5 +1761,227 @@ mod tests {
         assert!(fn_src.contains("alert_rules_unavailable_json"));
         assert!(fn_src.contains("tx.commit().await.is_err()"));
         assert!(!fn_src.contains("let _ = tx.commit()"));
+    }
+
+    #[test]
+    fn sso_idps_store_down_is_never_ok_empty_success() {
+        let v = sso_idps_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["idps"], json!([]));
+        assert!(v["count"].is_null());
+        assert_ne!(v["count"], json!(0));
+    }
+
+    #[test]
+    fn admin_users_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&admin_users_unavailable_json("store down"), "users");
+    }
+
+    #[test]
+    fn findings_verify_store_down_is_never_400_db_leak() {
+        let v = findings_verify_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["verdict"].is_null());
+        assert_ne!(v["detail"].as_str().unwrap_or(""), "finding not found");
+    }
+
+    #[test]
+    fn threat_ingest_store_down_is_never_accepted_job() {
+        let v = threat_ingest_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["job_id"].is_null());
+    }
+
+    #[test]
+    fn cloud_integration_patch_update_err_is_503_not_404() {
+        let src = include_str!("server_handlers_phase3.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_cloud_integration_patch");
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(!fn_src.contains("unwrap_or(0)"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+    }
+
+    #[test]
+    fn sso_idp_delete_lookup_is_store_down_503_not_404() {
+        let src = include_str!("sso_management.rs");
+        let fn_src = named_fn_src(src, "pub async fn api_sso_idp_delete");
+        assert!(fn_src.contains("sso_store_down"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        assert!(fn_src.contains("not_found"));
+    }
+
+    #[test]
+    fn sso_idp_test_lookup_is_store_down_503_not_404() {
+        let src = include_str!("sso_management.rs");
+        let fn_src = named_fn_src(src, "pub async fn api_sso_idp_test");
+        assert!(fn_src.contains("sso_store_down"));
+        assert!(!fn_src.contains("let Ok(Some(row)) = row else"));
+    }
+
+    #[test]
+    fn sso_idps_create_commit_before_ok_not_leak() {
+        let src = include_str!("sso_management.rs");
+        let fn_src = named_fn_src(src, "pub async fn api_sso_idps_create");
+        assert!(fn_src.contains("sso_store_down"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn admin_users_create_exists_is_store_down_503_not_400() {
+        let src = include_str!("admin_users.rs");
+        let fn_src = named_fn_src(src, "pub async fn api_admin_users_create");
+        assert!(fn_src.contains("admin_store_down"));
+        let client = fn_src
+            .find("assigned_client_id does not exist")
+            .expect("client miss");
+        let before = &fn_src[..client];
+        assert!(!before.contains(".ok().flatten()"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+    }
+
+    #[test]
+    fn admin_users_deactivate_lookup_is_store_down_503_not_404() {
+        let src = include_str!("admin_users.rs");
+        let fn_src = named_fn_src(src, "pub async fn api_admin_users_deactivate");
+        assert!(fn_src.contains("admin_store_down"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+    }
+
+    #[test]
+    fn load_finding_store_down_is_never_db_prefix_leak() {
+        let src = include_str!("finding_live_verify.rs");
+        let fn_src = named_fn_src(src, "async fn load_finding");
+        assert!(fn_src.contains("STORE_DOWN"));
+        assert!(!fn_src.contains("format!(\"db: {e}\")"));
+        assert!(fn_src.contains("finding not found"));
+    }
+
+    #[test]
+    fn load_client_domains_store_down_is_never_empty_scope() {
+        let src = include_str!("finding_live_verify.rs");
+        let fn_src = named_fn_src(src, "async fn load_client_domains");
+        assert!(fn_src.contains("Result<Vec<String>, String>"));
+        assert!(fn_src.contains("STORE_DOWN"));
+        assert!(!fn_src.contains("return Vec::new()"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn findings_verify_live_maps_store_down_to_503() {
+        let src = include_str!("server_handlers_rest2.inc");
+        let fn_src = named_fn_src(src, "async fn api_findings_verify_live");
+        assert!(fn_src.contains("findings_verify_unavailable_json"));
+        assert!(fn_src.contains("STORE_DOWN"));
+        assert!(fn_src.contains("finding not found"));
+    }
+
+    #[test]
+    fn threat_ingest_config_err_is_503_not_env_default() {
+        let src = include_str!("server_handlers_phase5.inc");
+        let fn_src = named_fn_src(src, "async fn api_threat_ingest_run");
+        assert!(fn_src.contains("threat_ingest_unavailable_json"));
+        let llm = fn_src.find("llm_base_url").expect("llm key");
+        let after = &fn_src[llm..];
+        let env = after
+            .find("WEISSMAN_LLM_BASE_URL")
+            .expect("env fallback after successful miss");
+        assert!(!after[..env].contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn evidence_upload_insert_err_is_503_not_500() {
+        let src = include_str!("server_handlers_evidence_vault.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_evidence_upload");
+        assert!(fn_src.contains("evidence_unavailable_json"));
+        let insert = fn_src.find("INSERT INTO evidence_items").expect("insert");
+        assert!(!fn_src[insert..].contains(".ok().flatten()"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+    }
+
+    #[test]
+    fn sbom_post_insert_err_is_503_not_error_leak() {
+        let src = include_str!("server_handlers_phase5.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_sbom_post");
+        assert!(fn_src.contains("sbom_components_unavailable_json"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn containment_rules_post_insert_err_is_503_not_error_leak() {
+        let src = include_str!("server_handlers_phase5.inc");
+        let fn_src = named_fn_src(src, "async fn api_containment_rules_post");
+        assert!(fn_src.contains("containment_rules_unavailable_json"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn oidc_begin_db_err_is_auth_degraded_not_leak() {
+        let src = include_str!("oidc_auth.rs");
+        let fn_src = named_fn_src(src, "pub async fn oidc_begin");
+        assert!(fn_src.contains("auth_store_down"));
+        assert!(!fn_src.contains("format!(\"db: {}\""));
+    }
+
+    #[test]
+    fn saml_begin_db_err_is_auth_degraded_not_leak() {
+        let src = include_str!("saml_auth.rs");
+        let fn_src = named_fn_src(src, "pub async fn saml_begin");
+        assert!(fn_src.contains("auth_store_down"));
+        assert!(!fn_src.contains("format!(\"{}\""));
+    }
+
+    #[test]
+    fn logout_revoke_fail_is_503_not_ok_true() {
+        let src = include_str!("server_handlers_auth.inc");
+        let fn_src = named_fn_src(src, "async fn api_logout");
+        assert!(fn_src.contains("auth_degraded_unavailable_json"));
+        assert!(fn_src.contains("revoke_failed"));
+    }
+
+    #[test]
+    fn auth_refresh_jti_link_fail_is_503_not_ok_true() {
+        let src = include_str!("server_handlers_auth.inc");
+        let fn_src = named_fn_src(src, "async fn api_auth_refresh");
+        assert!(fn_src.contains("auth_degraded_unavailable_json"));
+        assert!(fn_src.contains("store_refresh_access_jti"));
+        assert!(fn_src.contains("session link unavailable"));
+    }
+
+    #[test]
+    fn ceo_telemetry_safe_mode_query_err_is_null_not_off() {
+        let src = include_str!("ceo/ops_status.rs");
+        let fn_src = named_fn_src(src, "pub async fn build_ceo_telemetry_json");
+        assert!(fn_src.contains("Option<bool>"));
+        assert!(!fn_src.contains("let mut global_safe = false"));
+        assert!(!fn_src.contains("unwrap_or(0)"));
+    }
+
+    #[test]
+    fn ceo_global_safe_patch_store_down_is_503_not_400_leak() {
+        let src = include_str!("server_handlers_ceo.inc");
+        let fn_src = named_fn_src(src, "async fn api_ceo_global_safe_patch");
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(!fn_src.contains("detail\": e"));
+    }
+
+    #[test]
+    fn vngfw_save_policy_execute_is_database_unavailable_not_sql_leak() {
+        let src = include_str!("vngfw_control.rs");
+        let fn_src = named_fn_src(src, "pub async fn save_policy");
+        assert!(fn_src.contains("database unavailable"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn sovereign_operator_logs_err_is_503_not_error_leak() {
+        let src = include_str!("server_handlers_sovereign_operator.inc");
+        let fn_src = named_fn_src(src, "async fn api_sovereign_operator_logs_get");
+        assert!(fn_src.contains("sovereign_operator_logs_unavailable_json"));
+        assert!(!fn_src.contains("e.to_string()"));
     }
 }

@@ -233,9 +233,11 @@ async fn api_sovereign_operator_logs_get(
     };
     match listed {
         Ok(events) => (StatusCode::OK, Json(json!({ "ok": true, "events": events }))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e.to_string() })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::sovereign_operator_logs_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }
@@ -247,9 +249,11 @@ async fn api_sovereign_operator_windows_get(
 ) -> Response {
     match sov_logs::live_windows(state.app_pool.as_ref(), auth.tenant_id).await {
         Ok(windows) => (StatusCode::OK, Json(json!({ "ok": true, "windows": windows }))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e.to_string() })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::sovereign_operator_windows_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }

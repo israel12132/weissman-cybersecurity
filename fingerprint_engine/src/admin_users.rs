@@ -60,11 +60,7 @@ async fn allow_ceo_role_assignment(
         .map(|_| ())
         .map_err(|e| {
             tracing::error!(target: "admin", error = %e, "set ceo_role_assignment guc failed");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": "Failed to authorize CEO role assignment"})),
-            )
-                .into_response()
+            admin_store_down()
         })
 }
 
@@ -155,11 +151,7 @@ pub async fn api_admin_users_list(
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(target: "admin", error = %e, "begin_tenant_tx failed");
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"ok": false, "detail": "Database unavailable"})),
-            )
-                .into_response();
+            return admin_store_down();
         }
     };
 
@@ -207,11 +199,7 @@ pub async fn api_admin_users_list(
         }
         Err(e) => {
             tracing::error!(target: "admin", error = %e, "Failed to list users");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": "Database error"})),
-            )
-                .into_response()
+            admin_store_down()
         }
     }
 }
@@ -347,24 +335,26 @@ pub async fn api_admin_users_create(
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(target: "admin", error = %e, "begin_tenant_tx failed");
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"ok": false, "detail": "Database unavailable"})),
-            )
-                .into_response();
+            return admin_store_down();
         }
     };
 
     if crate::client_isolation::is_client_role(&role) {
         let cid = assigned_client_id.unwrap();
-        let exists_client: Option<i64> =
-            sqlx::query_scalar("SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1")
-                .bind(cid)
-                .bind(auth.tenant_id)
-                .fetch_optional(&mut *tx)
-                .await
-                .ok()
-                .flatten();
+        let exists_client: Option<i64> = match sqlx::query_scalar(
+            "SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1",
+        )
+        .bind(cid)
+        .bind(auth.tenant_id)
+        .fetch_optional(&mut *tx)
+        .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::error!(target: "admin", error = %e, "client existence lookup failed");
+                return admin_store_down();
+            }
+        };
         if exists_client.is_none() {
             let _ = tx.rollback().await;
             return (
@@ -375,15 +365,20 @@ pub async fn api_admin_users_create(
         }
     }
 
-    let exists: Option<i64> = sqlx::query_scalar(
+    let exists: Option<i64> = match sqlx::query_scalar(
         "SELECT id FROM users WHERE tenant_id = $1 AND lower(trim(email)) = $2 LIMIT 1",
     )
     .bind(auth.tenant_id)
     .bind(&email)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(target: "admin", error = %e, "email existence lookup failed");
+            return admin_store_down();
+        }
+    };
 
     if exists.is_some() {
         let _ = tx.rollback().await;
@@ -417,7 +412,10 @@ pub async fn api_admin_users_create(
         .await
     {
         Ok(user_id) => {
-            let _ = tx.commit().await;
+            if tx.commit().await.is_err() {
+                tracing::error!(target: "admin", email = %email, "Failed to commit user create");
+                return admin_store_down();
+            }
             tracing::info!(target: "admin", user_id = user_id, email = %email, "User created by admin");
             (
                 StatusCode::CREATED,
@@ -435,8 +433,10 @@ pub async fn api_admin_users_create(
         Err(e) => {
             tracing::error!(target: "admin", error = %e, "Failed to create user");
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": "Failed to create user"})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::admin_users_unavailable_json(
+                    "database unavailable",
+                )),
             )
                 .into_response()
         }
@@ -459,23 +459,24 @@ pub async fn api_admin_users_update(
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(target: "admin", error = %e, "begin_tenant_tx failed");
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"ok": false, "detail": "Database unavailable"})),
-            )
-                .into_response();
+            return admin_store_down();
         }
     };
 
-    let target: Option<(String, bool, Option<i64>)> = sqlx::query_as(
+    let target: Option<(String, bool, Option<i64>)> = match sqlx::query_as(
         "SELECT role, is_superadmin, assigned_client_id FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1",
     )
     .bind(user_id)
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(target: "admin", error = %e, "user lookup failed");
+            return admin_store_down();
+        }
+    };
 
     let (target_role, target_is_superadmin, target_assigned_client) = match target {
         Some(t) => t,
@@ -606,14 +607,20 @@ pub async fn api_admin_users_update(
             )
                 .into_response();
         };
-        let exists_client: Option<i64> =
-            sqlx::query_scalar("SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1")
-                .bind(cid)
-                .bind(auth.tenant_id)
-                .fetch_optional(&mut *tx)
-                .await
-                .ok()
-                .flatten();
+        let exists_client: Option<i64> = match sqlx::query_scalar(
+            "SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1",
+        )
+        .bind(cid)
+        .bind(auth.tenant_id)
+        .fetch_optional(&mut *tx)
+        .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::error!(target: "admin", error = %e, "client existence lookup failed");
+                return admin_store_down();
+            }
+        };
         if exists_client.is_none() {
             let _ = tx.rollback().await;
             return (
@@ -641,11 +648,7 @@ pub async fn api_admin_users_update(
         Ok(_) => {
             if let Err(e) = tx.commit().await {
                 tracing::error!(target: "admin", error = %e, "Failed to commit user update");
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"ok": false, "detail": "Failed to update user"})),
-                )
-                    .into_response();
+                return admin_store_down();
             }
             tracing::info!(target: "admin", user_id = user_id, "User updated by admin");
             (StatusCode::OK, Json(json!({"ok": true}))).into_response()
@@ -653,11 +656,7 @@ pub async fn api_admin_users_update(
         Err(e) => {
             tracing::error!(target: "admin", error = %e, "Failed to update user");
             let _ = tx.rollback().await;
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": "Failed to update user"})),
-            )
-                .into_response()
+            admin_store_down()
         }
     }
 }
@@ -686,23 +685,24 @@ pub async fn api_admin_users_deactivate(
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(target: "admin", error = %e, "begin_tenant_tx failed");
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"ok": false, "detail": "Database unavailable"})),
-            )
-                .into_response();
+            return admin_store_down();
         }
     };
 
-    let target: Option<(String, bool)> = sqlx::query_as(
+    let target: Option<(String, bool)> = match sqlx::query_as(
         "SELECT role, is_superadmin FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1",
     )
     .bind(user_id)
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(target: "admin", error = %e, "user lookup failed");
+            return admin_store_down();
+        }
+    };
 
     let (target_role, target_is_superadmin) = match target {
         Some(t) => t,
@@ -730,7 +730,10 @@ pub async fn api_admin_users_deactivate(
 
     match result {
         Ok(result) => {
-            let _ = tx.commit().await;
+            if tx.commit().await.is_err() {
+                tracing::error!(target: "admin", user_id = user_id, "Failed to commit user deactivate");
+                return admin_store_down();
+            }
             if result.rows_affected() > 0 {
                 tracing::info!(target: "admin", user_id = user_id, "User deactivated by admin");
                 (StatusCode::OK, Json(json!({"ok": true}))).into_response()
@@ -745,13 +748,19 @@ pub async fn api_admin_users_deactivate(
         Err(e) => {
             let _ = tx.rollback().await;
             tracing::error!(target: "admin", error = %e, "Failed to deactivate user");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": "Failed to deactivate user"})),
-            )
-                .into_response()
+            admin_store_down()
         }
     }
+}
+
+fn admin_store_down() -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(crate::http_unavailable::admin_users_unavailable_json(
+            "database unavailable",
+        )),
+    )
+        .into_response()
 }
 
 #[cfg(test)]

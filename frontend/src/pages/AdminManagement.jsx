@@ -29,6 +29,7 @@ export default function AdminManagement() {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [usersUnavailable, setUsersUnavailable] = useState(false)
   const [successMsg, setSuccessMsg] = useState(null)
 
   // New user form state
@@ -53,9 +54,15 @@ export default function AdminManagement() {
     setError(null)
     try {
       const data = await apiFetch('/api/admin/users')
-      setUsers(Array.isArray(data) ? data : data.users || [])
+      if (data == null || data.ok === false || data.unavailable) {
+        throw new Error(data?.detail || t('pages.adminManagement.load_failed'))
+      }
+      setUsers(Array.isArray(data) ? data : (Array.isArray(data.users) ? data.users : []))
       setLastUpdated(new Date())
+      setUsersUnavailable(false)
+      setError(null)
     } catch (err) {
+      setUsersUnavailable(true)
       setError(err.message || t('pages.adminManagement.load_failed'))
     } finally {
       setLoading(false)
@@ -499,6 +506,13 @@ export default function AdminManagement() {
 
           {loading && users.length === 0 ? (
             <div className="text-center py-8 text-[var(--text-muted)]">{t('pages.adminManagement.loading')}</div>
+          ) : usersUnavailable && users.length === 0 ? (
+            <div
+              data-testid="admin-users-unavailable"
+              className="text-center py-8 text-amber-300/90"
+            >
+              {t('pages.adminManagement.users_unavailable')}
+            </div>
           ) : users.length === 0 ? (
             <div className="text-center py-8 text-[var(--text-muted)]">{t('pages.adminManagement.no_users')}</div>
           ) : visibleUsers.length === 0 ? (

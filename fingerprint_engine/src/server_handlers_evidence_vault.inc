@@ -270,7 +270,7 @@ async fn api_client_evidence_upload(
         }
     }
 
-    let created: Option<(i64,)> = sqlx::query_as(
+    let created: Option<(i64,)> = match sqlx::query_as(
         r#"INSERT INTO evidence_items
               (tenant_id, client_id, engagement_id, vulnerability_id, filename, content_type,
                size_bytes, sha256_hex, label, notes, blob, created_by_user_id)
@@ -291,17 +291,33 @@ async fn api_client_evidence_upload(
     .bind(auth.user_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
 
     let Some((evidence_id,)) = created else {
         let _ = tx.rollback().await;
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
 
     let ip = extract_client_ip(&headers, addr);
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-    let _ = audit_log::insert_audit(
+    if audit_log::insert_audit(
         &mut tx,
         auth.tenant_id,
         Some(auth.user_id),
@@ -313,8 +329,26 @@ async fn api_client_evidence_upload(
         ),
         &ip,
     )
-    .await;
-    let _ = tx.commit().await;
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     (
         StatusCode::CREATED,

@@ -40,8 +40,8 @@ pub async fn save_policy(pool: &PgPool, tenant_id: i64, policy: &Value) -> Resul
     .bind(policy.to_string())
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    tx.commit().await.map_err(|e| e.to_string())?;
+    .map_err(|_| "database unavailable".to_string())?;
+    tx.commit().await.map_err(|_| "database unavailable".to_string())?;
     Ok(())
 }
 
@@ -84,11 +84,11 @@ pub async fn dataplane_status() -> Value {
                         "ok": r.status().is_success(),
                     });
                 }
-                Err(e) => {
+                Err(_) => {
                     admin_http = json!({
                         "url": admin.trim(),
                         "ok": false,
-                        "error": e.to_string(),
+                        "error": "unreachable",
                     });
                 }
             }
@@ -110,12 +110,12 @@ pub async fn dataplane_status() -> Value {
                         "status": r.status().as_u16(),
                     });
                 }
-                Err(e) => {
+                Err(_) => {
                     ztna = json!({
                         "ok": false,
                         "configured": true,
                         "url": ztna_url.trim(),
-                        "error": e.to_string(),
+                        "error": "unreachable",
                     });
                 }
             }
@@ -137,11 +137,11 @@ pub async fn dataplane_status() -> Value {
                         "status": r.status().as_u16(),
                     });
                 }
-                Err(e) => {
+                Err(_) => {
                     detonation = json!({
                         "ok": false,
                         "configured": true,
-                        "error": e.to_string(),
+                        "error": "unreachable",
                     });
                 }
             }
