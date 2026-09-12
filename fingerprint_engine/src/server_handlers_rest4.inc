@@ -830,11 +830,24 @@ async fn api_poe_scan_run(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
     };
-    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)")
+    let exists: bool = match sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)")
         .bind(client_id)
         .fetch_one(&mut *tx)
         .await
-        .unwrap_or(false);
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "unavailable": true,
+                    "detail": scrub_internal_error(&e),
+                })),
+            )
+                .into_response();
+        }
+    };
     if !exists {
         let _ = tx.rollback().await;
         return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();

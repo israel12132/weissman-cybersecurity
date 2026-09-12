@@ -53,15 +53,19 @@ function layoutFromApi(nodes, edges) {
     })
     if (list.length) y += Math.ceil(list.length / 4) * (NODE_HEIGHT + 40) + 60
   })
-  const flowEdges = (edges || []).map(e => ({
-    id: `e-${e.source}-${e.target}`,
-    source: String(e.source),
-    target: String(e.target),
-    type: 'smoothstep',
-    label: e.edge_type,
-    labelBgStyle: { fill: 'rgba(10,10,10,0.95)' },
-    labelStyle: { fill: '#22d3ee', fontSize: 10 },
-  }))
+  const flowEdges = (edges || []).map(e => {
+    const source = e.source ?? e.from_node_id
+    const target = e.target ?? e.to_node_id
+    return {
+      id: `e-${source}-${target}`,
+      source: String(source),
+      target: String(target),
+      type: 'smoothstep',
+      label: e.edge_type,
+      labelBgStyle: { fill: 'rgba(10,10,10,0.95)' },
+      labelStyle: { fill: '#22d3ee', fontSize: 10 },
+    }
+  })
   return { nodes: flowNodes, edges: flowEdges }
 }
 
@@ -74,7 +78,7 @@ export default function RiskGraphTab() {
   const [building, setBuilding] = useState(false)
   const [error, setError] = useState(null)
 
-  const fetchGraph = useCallback(async () => {
+  const fetchGraph = useCallback(async ({ clear = false } = {}) => {
     if (!selectedClientId) {
       setNodes([])
       setEdges([])
@@ -83,6 +87,10 @@ export default function RiskGraphTab() {
     }
     setLoading(true)
     setError(null)
+    if (clear) {
+      setNodes([])
+      setEdges([])
+    }
     try {
       const d = await apiFetch(`/api/clients/${selectedClientId}/risk-graph`)
       if (d?.ok === false || d?.unavailable) {
@@ -99,8 +107,40 @@ export default function RiskGraphTab() {
   }, [selectedClientId, setNodes, setEdges])
 
   useEffect(() => {
-    fetchGraph()
-  }, [fetchGraph])
+    let cancelled = false
+    ;(async () => {
+      if (!selectedClientId) {
+        setNodes([])
+        setEdges([])
+        setError(null)
+        return
+      }
+      setLoading(true)
+      setError(null)
+      setNodes([])
+      setEdges([])
+      try {
+        const d = await apiFetch(`/api/clients/${selectedClientId}/risk-graph`)
+        if (cancelled) return
+        if (d?.ok === false || d?.unavailable) {
+          throw new Error(d.detail || t('components.cockpitTabs.riskGraph.unavailable'))
+        }
+        const { nodes: n, edges: e } = layoutFromApi(d.nodes || [], d.edges || [])
+        if (cancelled) return
+        setNodes(n)
+        setEdges(e)
+      } catch (err) {
+        if (!cancelled) {
+          setError(err?.message || t('components.cockpitTabs.riskGraph.unavailable'))
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedClientId, setNodes, setEdges])
 
   const buildGraph = async () => {
     if (!selectedClientId) return

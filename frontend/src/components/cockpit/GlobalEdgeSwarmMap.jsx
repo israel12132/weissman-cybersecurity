@@ -44,11 +44,10 @@ export default function GlobalEdgeSwarmMap() {
       setManifest(manifestData != null ? manifestData : null)
     } catch (e) {
       setError(e?.message || t(`${NS}.unavailable`))
-      setNodes([])
     } finally {
       setLoading(false)
     }
-  }, [t])
+  }, [])
 
   useEffect(() => {
     load()
