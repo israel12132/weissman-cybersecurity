@@ -475,7 +475,7 @@ mod tests {
         ));
         assert!(alert_matches_finding(
             &alert,
-            "CVE-2024-12345 apache path traversal",
+            "CVE-2024-12345 apache",
             None
         ));
         assert!(!alert_matches_finding(&alert, "short", None));

@@ -21,19 +21,16 @@ import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../utils/apiFetch'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
+import CrownJewelBoard, {
+  snapshotHasNoJewels,
+  graphNodesFromPayload,
+  patchCrownJewelFlag,
+} from '../components/attack-paths/CrownJewelBoard'
 
 const NS = 'pages.attackPaths'
 const columnHelper = createColumnHelper()
 
-export function snapshotHasNoJewels(snapshot) {
-  return Number(snapshot?.jewel_count) === 0
-}
-
-export function graphNodesFromPayload(payload) {
-  if (Array.isArray(payload?.nodes)) return payload.nodes
-  if (Array.isArray(payload)) return payload
-  return []
-}
+export { snapshotHasNoJewels, graphNodesFromPayload }
 
 function riskColor(risk) {
   const r = Number(risk) || 0
@@ -49,53 +46,6 @@ function chokeCsv(rows) {
     r.label, r.node_type, r.coverage, r.coverage_pct, r.max_finding_cvss, r.max_finding_epss, r.kev_present,
   ])
   downloadCsv(data, header, 'weissman-attack-paths')
-}
-
-function CrownJewelBoard({ nodes, busyId, onToggle, t }) {
-  return (
-    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--table-surface)] p-4">
-      <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">
-        {t(`${NS}.jewel_board`)}
-      </h2>
-      <p className="text-[11px] text-[var(--text-muted)] mb-3">{t(`${NS}.jewel_board_hint`)}</p>
-      {nodes.length === 0 ? (
-        <EmptyState icon="shield" title={t(`${NS}.no_graph_title`)} body={t(`${NS}.no_graph_body`)} />
-      ) : (
-        <ul className="space-y-2 max-h-72 overflow-y-auto">
-          {nodes.map((n) => (
-            <li
-              key={n.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border-default)] px-3 py-2"
-            >
-              <div className="min-w-0">
-                <div className="text-[12px] text-[var(--text-primary)] truncate">
-                  {n.label || n.graph_key || `#${n.id}`}
-                </div>
-                <div className="text-[10px] font-mono text-[var(--text-muted)]">
-                  {n.node_type || 'node'}
-                  {n.internet_exposed ? ` · ${t(`${NS}.entry_flag`)}` : ''}
-                </div>
-              </div>
-              <Button
-                variant="unstyled"
-                type="button"
-                data-testid={`crown-jewel-${n.id}`}
-                disabled={busyId === n.id}
-                onClick={() => onToggle(n)}
-                className={`shrink-0 text-[10px] font-mono px-2.5 py-1 rounded-lg border ${
-                  n.crown_jewel
-                    ? 'border-violet-400/50 bg-violet-500/20 text-violet-100'
-                    : 'border-[var(--border-default)] text-[var(--text-muted)] hover:border-violet-400/40'
-                }`}
-              >
-                {n.crown_jewel ? t(`${NS}.jewel_on`) : t(`${NS}.jewel_off`)}
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
 }
 
 function PathCard({ path, t }) {
@@ -220,11 +170,7 @@ export default function AttackPaths() {
       setJewelBusyId(node.id)
       setError('')
       try {
-        const data = await apiFetch(`/api/risk-graph/nodes/${encodeURIComponent(node.id)}/flags`, {
-          method: 'PATCH',
-          body: { crown_jewel: !node.crown_jewel },
-        })
-        if (data?.ok === false) throw new Error(data.detail || 'flag failed')
+        await patchCrownJewelFlag(apiFetch, node)
         setGraphNodes((prev) =>
           prev.map((n) => (n.id === node.id ? { ...n, crown_jewel: !node.crown_jewel } : n)),
         )
@@ -237,6 +183,8 @@ export default function AttackPaths() {
     },
     [t, toast],
   )
+
+  const runWhatIf = useCallback(async () => {
     if (selectedClientId == null) return
     setWhatIfBusy(true)
     setError('')
