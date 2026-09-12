@@ -511,15 +511,10 @@ pub async fn run_casb_saas_posture_result(target: &str, ctx: &EngineRunContext) 
     if let Some(ref t) = tokens.google {
         findings.extend(crate::casb_dlp_api::google_casb_findings(target, t).await);
     }
-    if tokens.graph.is_none() && tokens.google.is_none() {
-        findings.push(finding(
-            "casb_saas_posture",
-            "No Graph/Google CASB token — HTTP SaaS discovery only",
-            "info",
-            "T1078",
-            "Set WEISSMAN_GRAPH_TOKEN / WEISSMAN_GOOGLE_TOKEN or persist IdP tokens via PUT /api/itdr/connectors for OAuth-grant inventory. Not faked.",
-            target,
-        ));
+    if let Some(f) = tokens.store_unavailable_finding("casb_saas_posture", target) {
+        findings.push(f);
+    } else if let Some(f) = tokens.confirmed_tokenless_finding("casb_saas_posture", target) {
+        findings.push(f);
     }
     if findings.is_empty() {
         empty_ok("casb_saas_posture", target)
@@ -589,6 +584,9 @@ pub async fn run_dlp_content_scan_result(target: &str, ctx: &EngineRunContext) -
     }
     if let Some(ref t) = tokens.google {
         findings.extend(crate::casb_dlp_api::google_dlp_findings(target, t).await);
+    }
+    if let Some(f) = tokens.store_unavailable_finding("dlp_content_scan", target) {
+        findings.push(f);
     }
     if findings.is_empty() {
         empty_ok("dlp_content_scan", target)

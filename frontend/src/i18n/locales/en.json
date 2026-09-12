@@ -125,6 +125,7 @@
     "offline": "Telemetry link lost",
     "forensic_provenance": "Forensic provenance",
     "linked_findings": "Linked findings",
+    "evidence_unavailable": "Findings API unavailable — empty evidence is not confirmed.",
     "shadow_node": "Shadow node — projected STRIPS future state. Not yet observed in live recon.",
     "nodes": "NODES",
     "edges": "EDGES"
@@ -3540,6 +3541,9 @@
       "run_poe": "Run PoE scan",
       "poe_running": "PoE running…",
       "poe_failed": "PoE scan failed",
+      "clients_unavailable": "Clients API unavailable — missing target is not confirmed.",
+      "payloads_unavailable": "Payload intel API unavailable — empty library is not confirmed.",
+      "lab_unavailable": "Exploit-lab API unavailable — findings fallback is not sealed PoE.",
       "payloads_intro": "Live payloads from GET /api/payload-sync/payloads (intel DB)",
       "payloads_60d": "{{count}} payloads synced (60d)",
       "no_payloads_title": "No payloads synced",
@@ -5142,6 +5146,7 @@
       "finding_default_label": "Finding",
       "score_ring_tooltip": "Attack Surface Score {{score}}/100",
       "toast_select_client": "Select a client first",
+      "clients_unavailable": "Clients API unavailable — missing client is not confirmed.",
       "toast_enter_target": "Enter a target domain or IP",
       "toast_scan_failed": "Scan failed ({{status}})",
       "toast_scan_queued": "Attack-surface scan queued (job {{jid}})",
@@ -6244,7 +6249,8 @@
         "subtitle": "findings discovered vs. resolved per hour",
         "discovered": "{{count}} discovered",
         "resolved": "{{count}} resolved",
-        "chartAria": "Findings discovered vs resolved over the last 24 hours"
+        "chartAria": "Findings discovered vs resolved over the last 24 hours",
+        "unavailable": "Executive KPI API unavailable — empty velocity is not confirmed."
       },
       "digitalEvidenceHud": {
         "awaitingPoe": "Awaiting PoE Synthesis…",
@@ -6374,7 +6380,8 @@
         },
         "reset": "Reset: {{time}}",
         "resetNow": "Now",
-        "warning": "Rate limit approaching. Requests will be throttled."
+        "warning": "Rate limit approaching. Requests will be throttled.",
+        "unavailable": "Rate-limit API unavailable — healthy 0/max is not confirmed."
       },
       "redTeamSkullSwitch": {
         "commandRefused": "COMMAND REFUSED",
@@ -7108,7 +7115,8 @@
         "state_machine_title": "State Machine (API flow)",
         "no_openapi": "No OpenAPI/Swagger at target. Add a client and run a scan.",
         "reasoning_title": "LLM Reasoning",
-        "no_reasoning": "No reasoning log yet. Run a scan with Semantic Logic Engine enabled."
+        "no_reasoning": "No reasoning log yet. Run a scan with Semantic Logic Engine enabled.",
+        "unavailable": "Semantic logic API unavailable — empty graph is not a missing OpenAPI."
       },
       "cicdThreatMatrix": {
         "evidence_notice": "Pipeline findings from POST /api/command-center/scan (cicd_pipeline) against a live GitHub repo URL — PoC snippets stored as findings, never auto-deployed.",

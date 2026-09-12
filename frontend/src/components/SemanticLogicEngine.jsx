@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, MarkerType } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { apiFetch } from '../utils/apiFetch'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import StandaloneLabShell from './ui/StandaloneLabShell'
 import Button from './ui/Button'
 
@@ -76,6 +77,13 @@ export default function SemanticLogicEngine() {
       apiFetch(`/api/clients/${clientId}/semantic-logic/reasoning`),
     ])
       .then(([sm, log]) => {
+        if (sm?.ok === false || sm?.unavailable) {
+          throw new Error(sm.detail || 'semantic state machine unavailable')
+        }
+        if (log?.ok === false || log?.unavailable) {
+          throw new Error(log.detail || 'semantic reasoning unavailable')
+        }
+        setError('')
         setStateMachine(sm)
         setReasoning(log?.log ?? '')
         const { nodes: n, edges: e } = layoutStateMachine(sm.nodes || [], sm.edges || [])
@@ -88,15 +96,17 @@ export default function SemanticLogicEngine() {
         })
         setEdges(e)
       })
-      .catch(e => setError(e?.message || t(`${NS}.load_failed`)))
+      .catch((e) => {
+        if (e?.name === 'AbortError') return
+        setError(e?.message || 'unavailable')
+      })
       .finally(() => setLoading(false))
-  }, [clientId, setNodes, setEdges, t])
+  }, [clientId, setNodes, setEdges])
 
   useEffect(() => {
     load()
-    const t = setInterval(load, 15000)
-    return () => clearInterval(t)
   }, [load])
+  useVisiblePolling(load, 15000, { paused: !clientId })
 
   if (loading && !stateMachine.nodes?.length) {
     return (
@@ -118,8 +128,8 @@ export default function SemanticLogicEngine() {
       contentClassName="p-0"
     >
       {error && (
-        <div className="mx-6 mt-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm">
-          {error}
+        <div className="mx-6 mt-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm" data-testid="semantic-logic-unavailable" role="alert">
+          {t(`${NS}.unavailable`)}
         </div>
       )}
       <div className="flex-1 flex gap-4 p-4" style={{ minHeight: 'calc(100vh - 120px)' }}>
@@ -143,7 +153,7 @@ export default function SemanticLogicEngine() {
               </ReactFlow>
             ) : (
               <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-sm">
-                {stateMachine.message || t(`${NS}.no_openapi`)}
+                {error ? t(`${NS}.unavailable`) : (stateMachine.message || t(`${NS}.no_openapi`))}
               </div>
             )}
           </div>
@@ -151,7 +161,7 @@ export default function SemanticLogicEngine() {
         <div className="w-[420px] flex flex-col rounded-xl border border-[var(--border-strong)]/80 bg-[var(--bg-1)]/40 overflow-hidden">
           <div className="px-4 py-2 border-b border-[var(--border-strong)] text-sm font-medium text-[var(--text-secondary)]">{t(`${NS}.reasoning_title`)}</div>
           <pre className="flex-1 p-4 overflow-auto text-xs text-[var(--text-tertiary)] font-mono whitespace-pre-wrap bg-[var(--bg-0)]/80 min-h-[200px]">
-            {reasoning || t(`${NS}.no_reasoning`)}
+            {error && !reasoning ? t(`${NS}.unavailable`) : (reasoning || t(`${NS}.no_reasoning`))}
           </pre>
         </div>
       </div>

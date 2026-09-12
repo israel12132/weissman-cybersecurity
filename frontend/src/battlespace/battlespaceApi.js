@@ -16,11 +16,9 @@ export async function fetchShadowPreview({ clientId, techniqueId, goal }) {
 }
 
 export async function fetchNodeEvidence(clientId, nodeId) {
-  let data
-  try {
-    data = await apiFetch(`/api/findings?client_id=${clientId}&limit=100`)
-  } catch {
-    return []
+  const data = await apiFetch(`/api/findings?client_id=${clientId}&limit=100`)
+  if (data?.ok === false || data?.unavailable) {
+    throw new Error(data.detail || 'findings unavailable')
   }
   const list = Array.isArray(data) ? data : data?.findings || []
   return list.filter((f) => {

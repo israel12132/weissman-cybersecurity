@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../../utils/apiFetch'
+import { useVisiblePolling } from '../../hooks/useVisiblePolling'
 
 const NS = 'components.cockpitWidgets.severityTrendChart'
 
@@ -32,20 +33,29 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
   const { t } = useTranslation()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [unavailable, setUnavailable] = useState(false)
+
+  const load = async () => {
+    try {
+      const d = await apiFetch('/api/dashboard/exec-kpis')
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || t(`${NS}.unavailable`))
+      }
+      setData(d)
+      setUnavailable(false)
+    } catch (e) {
+      if (e?.name === 'AbortError') return
+      setUnavailable(true)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        const d = await apiFetch('/api/dashboard/exec-kpis')
-        if (!cancelled) setData(d)
-      } catch (_) { /* best-effort; non-fatal */ }
-      finally { if (!cancelled) setLoading(false) }
-    }
     load()
-    const timer = setInterval(load, 30_000)
-    return () => { cancelled = true; clearInterval(timer) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  useVisiblePolling(load, 30_000)
 
   const w = 720
   const h = height
@@ -72,6 +82,18 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
     )
   }
 
+  if (unavailable && !data) {
+    return (
+      <p
+        className={`text-sm text-amber-200/90 ${className}`}
+        data-testid="severity-trend-unavailable"
+        role="alert"
+      >
+        {t(`${NS}.unavailable`)}
+      </p>
+    )
+  }
+
   return (
     <section
       className={`rounded-2xl border border-white/10 bg-black/35 backdrop-blur-md ${className}`}
@@ -95,6 +117,12 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
           </span>
         </div>
       </header>
+
+      {unavailable && (
+        <p className="px-3 pt-2 text-[10px] font-mono text-amber-200/90" data-testid="severity-trend-unavailable" role="alert">
+          {t(`${NS}.unavailable`)}
+        </p>
+      )}
 
       <div className="p-2">
         <svg

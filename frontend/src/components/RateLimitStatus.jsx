@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Activity, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { apiFetch } from '../utils/apiFetch';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 
 const NS = 'components.intelWidgets.rateLimitStatus';
 
@@ -14,31 +15,36 @@ const NS = 'components.intelWidgets.rateLimitStatus';
  * - API calls (per second)
  *
  * Features:
- * - Color-coded status (green/yellow/red)
+ * - Color-coded status (green/yellow/red/unavailable)
  * - Live countdown timer
  * - Usage percentage bars
- * - Auto-refresh every 5 seconds
+ * - Visible-tab refresh every 15s (full) / 30s (compact)
  */
 export default function RateLimitStatus({ compact = false }) {
   const { t } = useTranslation();
-  const [limits, setLimits] = useState({
-    scans: { current: 0, max: 24, resetIn: 0 },
-    logins: { current: 0, max: 8, resetIn: 0 },
-    api: { current: 0, max: 30, resetIn: 0 },
-  });
+  const [limits, setLimits] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [unavailable, setUnavailable] = useState(false);
 
   const fetchLimits = useCallback(async () => {
     try {
       const data = await apiFetch('/api/rate-limits/status');
+      if (data?.ok === false || data?.unavailable) {
+        throw new Error(data.detail || 'unavailable');
+      }
       const next = data.limits || {};
-      setLimits((prev) => ({
-        scans: next.scans || prev.scans,
-        logins: next.logins || prev.logins,
-        api: next.api || prev.api,
-      }));
+      if (!next.scans && !next.logins && !next.api) {
+        throw new Error('unavailable');
+      }
+      setLimits({
+        scans: next.scans || { current: 0, max: 0, resetIn: 0 },
+        logins: next.logins || { current: 0, max: 0, resetIn: 0 },
+        api: next.api || { current: 0, max: 0, resetIn: 0 },
+      });
+      setUnavailable(false);
     } catch (error) {
-      console.warn('Failed to fetch rate limits:', error);
+      if (error?.name === 'AbortError') return;
+      setUnavailable(true);
     } finally {
       setLoading(false);
     }
@@ -46,11 +52,11 @@ export default function RateLimitStatus({ compact = false }) {
 
   useEffect(() => {
     fetchLimits();
-    const interval = setInterval(fetchLimits, compact ? 30000 : 15000);
-    return () => clearInterval(interval);
-  }, [compact, fetchLimits]);
+  }, [fetchLimits]);
+  useVisiblePolling(fetchLimits, compact ? 30000 : 15000);
 
   const getStatus = (current, max) => {
+    if (!max || max <= 0) return 'unknown';
     const percentage = (current / max) * 100;
     if (percentage >= 90) return 'critical';
     if (percentage >= 70) return 'warning';
@@ -62,7 +68,7 @@ export default function RateLimitStatus({ compact = false }) {
       case 'critical': return 'text-red-400 bg-red-500/10 border-red-500/30';
       case 'warning': return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
       case 'healthy': return 'text-green-400 bg-green-500/10 border-green-500/30';
-      default: return 'text-[var(--text-tertiary)] bg-[var(--border-strong)]/10 border-[var(--border-strong)]/30';
+      default: return 'text-amber-200 bg-amber-500/10 border-amber-500/30';
     }
   };
 
@@ -71,7 +77,7 @@ export default function RateLimitStatus({ compact = false }) {
       case 'critical': return <AlertTriangle className="w-4 h-4" />;
       case 'warning': return <Clock className="w-4 h-4" />;
       case 'healthy': return <CheckCircle className="w-4 h-4" />;
-      default: return <Activity className="w-4 h-4" />;
+      default: return <AlertTriangle className="w-4 h-4" />;
     }
   };
 
@@ -81,17 +87,39 @@ export default function RateLimitStatus({ compact = false }) {
     return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
   };
 
-  if (loading && compact) {
-    return (
+  if (loading && !limits) {
+    return compact ? (
       <div className="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
         <Activity className="w-3 h-3 animate-pulse" />
         <span>{t(`${NS}.loading`)}</span>
       </div>
+    ) : (
+      <div className="h-32 rounded-xl border border-white/10 bg-black/40 animate-pulse" />
+    );
+  }
+
+  if (unavailable && !limits) {
+    return (
+      <p
+        className={compact
+          ? 'flex items-center gap-2 px-3 py-1.5 rounded-lg border text-amber-200 bg-amber-500/10 border-amber-500/30 text-xs'
+          : 'text-sm text-amber-200/90'}
+        data-testid="rate-limit-unavailable"
+        role="alert"
+      >
+        {t(`${NS}.unavailable`)}
+      </p>
     );
   }
 
   if (compact) {
-    // Compact mode for header/toolbar
+    if (unavailable) {
+      return (
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${getStatusColor('unknown')}`}>
+          <span data-testid="rate-limit-unavailable" role="alert">{t(`${NS}.unavailable`)}</span>
+        </div>
+      )
+    }
     const scanStatus = getStatus(limits.scans.current, limits.scans.max);
     const StatusIcon = getStatusIcon(scanStatus);
 
@@ -105,7 +133,6 @@ export default function RateLimitStatus({ compact = false }) {
     );
   }
 
-  // Full mode for dedicated display
   return (
     <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
       <div className="flex items-center justify-between mb-4">
@@ -118,10 +145,16 @@ export default function RateLimitStatus({ compact = false }) {
         </span>
       </div>
 
+      {unavailable && (
+        <p className="text-xs text-amber-200/90 mb-3" data-testid="rate-limit-unavailable" role="alert">
+          {t(`${NS}.unavailable`)}
+        </p>
+      )}
+
       <div className="space-y-3">
         {Object.entries(limits).map(([key, { current, max, resetIn }]) => {
-          const status = getStatus(current, max);
-          const percentage = (current / max) * 100;
+          const status = unavailable ? 'unknown' : getStatus(current, max);
+          const percentage = max > 0 ? (current / max) * 100 : 0;
           const label = t(`${NS}.labels.${key}`, { defaultValue: key });
 
           return (
@@ -135,7 +168,8 @@ export default function RateLimitStatus({ compact = false }) {
                   <span className={`font-mono ${
                     status === 'critical' ? 'text-red-400' :
                     status === 'warning' ? 'text-yellow-400' :
-                    'text-green-400'
+                    status === 'healthy' ? 'text-green-400' :
+                    'text-amber-200'
                   }`}>
                     {current}/{max}
                   </span>
@@ -145,13 +179,13 @@ export default function RateLimitStatus({ compact = false }) {
                 </div>
               </div>
 
-              {/* Progress bar */}
               <div className="h-1.5 bg-[var(--bg-3)]/50 rounded-full overflow-hidden">
                 <div
                   className={`h-full transition-all duration-300 ${
                     status === 'critical' ? 'bg-red-500' :
                     status === 'warning' ? 'bg-yellow-500' :
-                    'bg-green-500'
+                    status === 'healthy' ? 'bg-green-500' :
+                    'bg-amber-400/40'
                   }`}
                   style={{ width: `${Math.min(percentage, 100)}%` }}
                 />
@@ -161,8 +195,7 @@ export default function RateLimitStatus({ compact = false }) {
         })}
       </div>
 
-      {/* Warning message if any limit is near */}
-      {Object.values(limits).some(({ current, max }) => (current / max) >= 0.9) && (
+      {!unavailable && Object.values(limits).some(({ current, max }) => max > 0 && (current / max) >= 0.9) && (
         <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
           <p className="text-xs text-red-400">
             <AlertTriangle className="w-3 h-3 inline mr-1" />

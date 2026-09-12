@@ -23,6 +23,10 @@ vi.mock('../context/ThemeContext', () => ({
 vi.mock('../lib/apiBase', () => ({
   apiFetch: vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ results: [] }) })),
 }))
+const apiFetch = vi.fn()
+vi.mock('../utils/apiFetch', () => ({
+  apiFetch: (...args) => apiFetch(...args),
+}))
 // Deterministic nav registry so assertions don't depend on the real appNav.
 vi.mock('../lib/appNav', () => ({
   PRIMARY_NAV: [
@@ -46,6 +50,8 @@ function open() {
 
 beforeEach(() => {
   navigateSpy.mockClear(); logoutSpy.mockClear(); toggleThemeSpy.mockClear()
+  apiFetch.mockReset()
+  apiFetch.mockResolvedValue({ results: [] })
   mockPathname = '/findings'
   try { localStorage.clear() } catch { /* ignore */ }
 })
@@ -127,5 +133,15 @@ describe('GlobalSearch command palette', () => {
     expect(screen.getByRole('dialog')).toBeTruthy()
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('does not treat a search API failure as a confirmed miss', async () => {
+    apiFetch.mockRejectedValue(new Error('store down'))
+    render(<GlobalSearch />)
+    open()
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'zzzz' } })
+    expect(await screen.findByTestId('global-search-unavailable')).toBeTruthy()
+    expect(screen.getByText('components.globalSearch.search_failed')).toBeTruthy()
+    expect(screen.queryByText(/noResults/)).toBeNull()
   })
 })

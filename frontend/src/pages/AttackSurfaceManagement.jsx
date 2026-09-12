@@ -494,6 +494,7 @@ function FindingCard({ f }) {
 export default function AttackSurfaceManagement() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
+  const [clientsError, setClientsError] = useState('')
   const [selectedClientId, setSelectedClientId] = useState(null)
   const { postScan } = useCommandCenterScan(selectedClientId)
   const [target, setTarget] = useState('')
@@ -597,7 +598,23 @@ export default function AttackSurfaceManagement() {
   }, [refreshFromHistory, setLastUpdated, setLastJobId, loadSurfaceDiff, selectedClientId])
 
   useEffect(() => {
-    apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+    let cancelled = false
+    apiFetch('/api/clients')
+      .then((d) => {
+        if (d?.ok === false || d?.unavailable) {
+          throw new Error(d.detail || 'clients unavailable')
+        }
+        if (!cancelled) {
+          setClients(Array.isArray(d) ? d : [])
+          setClientsError('')
+        }
+      })
+      .catch((e) => {
+        if (e?.name === 'AbortError' || cancelled) return
+        setClients([])
+        setClientsError(e?.message || 'clients unavailable')
+      })
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
@@ -805,6 +822,11 @@ export default function AttackSurfaceManagement() {
       </AnimatePresence>
 
       {/* ── Control bar ─────────────────────────────────────────────── */}
+      {clientsError && (
+        <p className="text-sm text-amber-200/90 mb-4" data-testid="asm-clients-unavailable" role="alert">
+          {t('pages.attackSurfaceManagement.clients_unavailable')}
+        </p>
+      )}
       <div className="rounded-2xl border border-white/[0.08] bg-[var(--bg-2)] p-4 mb-5">
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
@@ -812,6 +834,7 @@ export default function AttackSurfaceManagement() {
             <select
               value={selectedClientId ?? ''}
               onChange={(e) => setSelectedClientId(e.target.value || null)}
+              disabled={Boolean(clientsError)}
               className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40 min-w-[180px]"
             >
               <option value="">{t('pages.attackSurfaceManagement.select_client_placeholder')}</option>

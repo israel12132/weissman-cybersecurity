@@ -115,6 +115,7 @@
     "offline": "קישור טלמטריה אבד",
     "forensic_provenance": "מקור פורנזי",
     "linked_findings": "ממצאים מקושרים",
+    "evidence_unavailable": "API הממצאים אינו זמין — ראיות ריקות אינן מאושרות.",
     "shadow_node": "צומת shadow — מצב STRIPS עתידי. טרם נצפה ב-recon חי.",
     "nodes": "צמתים",
     "edges": "קשתות"
@@ -3637,6 +3638,9 @@
       "run_poe": "הרץ PoE scan",
       "poe_running": "PoE רץ…",
       "poe_failed": "PoE scan נכשל",
+      "clients_unavailable": "API הלקוחות אינו זמין — יעד חסר אינו מאושר.",
+      "payloads_unavailable": "API של payload intel אינו זמין — ספרייה ריקה אינה מאושרת.",
+      "lab_unavailable": "API של מעבדת הניצול אינו זמין — fallback לממצאים אינו PoE חתום.",
       "payloads_intro": "Payloads חיים מ-GET /api/payload-sync/payloads (intel DB)",
       "payloads_60d": "{{count}} payloads סונכרנו (60 יום)",
       "no_payloads_title": "אין payloads מסונכרנים",
@@ -5142,6 +5146,7 @@
       "finding_default_label": "ממצא",
       "score_ring_tooltip": "ציון משטח התקפה {{score}}/100",
       "toast_select_client": "בחר לקוח תחילה",
+      "clients_unavailable": "API הלקוחות אינו זמין — לקוח חסר אינו מאושר.",
       "toast_enter_target": "הזן דומיין או IP יעד",
       "toast_scan_failed": "הסריקה נכשלה ({{status}})",
       "toast_scan_queued": "סריקת משטח התקפה נוספה לתור (משימה {{jid}})",
@@ -6244,7 +6249,8 @@
         "subtitle": "ממצאים שהתגלו לעומת נפתרו לשעה",
         "discovered": "{{count}} התגלו",
         "resolved": "{{count}} נפתרו",
-        "chartAria": "ממצאים שהתגלו לעומת נפתרו ב-24 השעות האחרונות"
+        "chartAria": "ממצאים שהתגלו לעומת נפתרו ב-24 השעות האחרונות",
+        "unavailable": "API של KPI מנהלים אינו זמין — מהירות ריקה אינה מאושרת."
       },
       "digitalEvidenceHud": {
         "awaitingPoe": "ממתין ל-PoE Synthesis…",
@@ -6374,7 +6380,8 @@
         },
         "reset": "איפוס: {{time}}",
         "resetNow": "עכשיו",
-        "warning": "מגבלת קצב מתקרבת. בקשות יוגבלו."
+        "warning": "מגבלת קצב מתקרבת. בקשות יוגבלו.",
+        "unavailable": "API של מגבלות קצב אינו זמין — 0/max בריא אינו מאושר."
       },
       "redTeamSkullSwitch": {
         "commandRefused": "פקודה נדחתה",
@@ -7108,7 +7115,8 @@
         "state_machine_title": "State Machine (זרימת API)",
         "no_openapi": "אין OpenAPI/Swagger ביעד. הוסף לקוח והפעל סריקה.",
         "reasoning_title": "היגיון LLM",
-        "no_reasoning": "אין לוג היגיון עדיין. הפעל סריקה עם Semantic Logic Engine."
+        "no_reasoning": "אין לוג היגיון עדיין. הפעל סריקה עם Semantic Logic Engine.",
+        "unavailable": "API של semantic logic אינו זמין — גרף ריק אינו OpenAPI חסר מאושר."
       },
       "cicdThreatMatrix": {
         "evidence_notice": "ממצאי pipeline מ-POST /api/command-center/scan (cicd_pipeline) מול URL של repo GitHub חי — קטעי PoC נשמרים כממצאים, לעולם לא נפרסים אוטומטית.",

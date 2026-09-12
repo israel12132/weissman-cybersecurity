@@ -25,6 +25,7 @@ export default function BattlespaceTopology({ connectionStatus = 'online' }) {
   const [focusNode, setFocusNode] = useState(null)
   const [forensicNode, setForensicNode] = useState(null)
   const [evidence, setEvidence] = useState([])
+  const [evidenceError, setEvidenceError] = useState(false)
   const [shadowNodes, setShadowNodes] = useState([])
   const [shadowEdges, setShadowEdges] = useState([])
   const [wargaming, setWargaming] = useState(false)
@@ -107,15 +108,24 @@ export default function BattlespaceTopology({ connectionStatus = 'online' }) {
     if (node.is_shadow) {
       setForensicNode(node)
       setEvidence([])
+      setEvidenceError(false)
       return
     }
     setFocusNode(node)
     setForensicNode(node)
     setShadowNodes([])
     setShadowEdges([])
+    setEvidenceError(false)
     if (clientId && node.id != null) {
-      const ev = await fetchNodeEvidence(clientId, node.id).catch(() => [])
-      setEvidence(ev)
+      try {
+        const ev = await fetchNodeEvidence(clientId, node.id)
+        setEvidence(ev)
+        setEvidenceError(false)
+      } catch (e) {
+        if (e?.name === 'AbortError') return
+        setEvidence([])
+        setEvidenceError(true)
+      }
     }
   }, [clientId])
 
@@ -181,6 +191,7 @@ export default function BattlespaceTopology({ connectionStatus = 'online' }) {
           <ForensicEvidencePanel
             node={forensicNode}
             evidence={evidence}
+            evidenceError={evidenceError}
             onClose={() => setForensicNode(null)}
           />
         </>

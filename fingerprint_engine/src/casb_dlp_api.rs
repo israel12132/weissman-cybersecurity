@@ -4,34 +4,84 @@
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::finding;
 use crate::soar::integrations::config_str;
-use serde_json::{json, Value};
+use serde_json::Value;
 
+#[derive(Debug, Clone, Default)]
 pub struct CasbTokens {
     pub graph: Option<String>,
     pub google: Option<String>,
+    /// True when ITDR connector config could not be read. Missing tokens are
+    /// then unconfirmed — never advertise "no connectors configured".
+    pub connector_store_unavailable: bool,
+}
+
+impl CasbTokens {
+    /// Store-down must never look like a confirmed missing-token posture.
+    pub fn store_unavailable_finding(&self, engine_id: &str, target: &str) -> Option<Value> {
+        if !self.connector_store_unavailable {
+            return None;
+        }
+        Some(finding(
+            engine_id,
+            "CASB connector store unavailable — token inventory not confirmed",
+            "medium",
+            "T1078",
+            "ITDR connector config could not be read. Missing Graph/Google tokens are not confirmed. Set WEISSMAN_GRAPH_TOKEN / WEISSMAN_GOOGLE_TOKEN or restore the store. Not faked.",
+            target,
+        ))
+    }
+
+    /// Confirmed tokenless (store readable, env + connectors empty).
+    pub fn confirmed_tokenless_finding(&self, engine_id: &str, target: &str) -> Option<Value> {
+        if self.connector_store_unavailable || self.graph.is_some() || self.google.is_some() {
+            return None;
+        }
+        Some(finding(
+            engine_id,
+            "No Graph/Google CASB token — HTTP SaaS discovery only",
+            "info",
+            "T1078",
+            "Set WEISSMAN_GRAPH_TOKEN / WEISSMAN_GOOGLE_TOKEN or persist IdP tokens via PUT /api/itdr/connectors for OAuth-grant inventory. Not faked.",
+            target,
+        ))
+    }
+}
+
+/// Merge ITDR connector config into env-sourced tokens. A store error sets
+/// `connector_store_unavailable` instead of pretending the tenant has no connectors.
+pub(crate) fn apply_connector_config(tokens: &mut CasbTokens, cfg: Result<Value, String>) {
+    match cfg {
+        Ok(cfg) => {
+            if tokens.graph.is_none() {
+                tokens.graph = token_from_cfg(&cfg, &["entra", "azuread", "microsoft", "graph"]);
+            }
+            if tokens.google.is_none() {
+                tokens.google = token_from_cfg(&cfg, &["google", "workspace"]);
+            }
+        }
+        Err(_) => tokens.connector_store_unavailable = true,
+    }
 }
 
 pub async fn load_tokens(ctx: &EngineRunContext) -> CasbTokens {
-    let mut graph = std::env::var("WEISSMAN_GRAPH_TOKEN")
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty());
-    let mut google = std::env::var("WEISSMAN_GOOGLE_TOKEN")
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty());
+    let mut tokens = CasbTokens {
+        graph: std::env::var("WEISSMAN_GRAPH_TOKEN")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        google: std::env::var("WEISSMAN_GOOGLE_TOKEN")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        connector_store_unavailable: false,
+    };
     if let (Some(pool), Some(tenant_id)) = (ctx.app_pool.as_ref(), ctx.tenant_id) {
-        let cfg = crate::itdr_connectors::load_connector_config(pool.as_ref(), tenant_id)
-            .await
-            .unwrap_or_else(|_| json!({}));
-        if graph.is_none() {
-            graph = token_from_cfg(&cfg, &["entra", "azuread", "microsoft", "graph"]);
-        }
-        if google.is_none() {
-            google = token_from_cfg(&cfg, &["google", "workspace"]);
-        }
+        apply_connector_config(
+            &mut tokens,
+            crate::itdr_connectors::load_connector_config(pool.as_ref(), tenant_id).await,
+        );
     }
-    CasbTokens { graph, google }
+    tokens
 }
 
 fn token_from_cfg(cfg: &Value, providers: &[&str]) -> Option<String> {
@@ -394,4 +444,75 @@ fn dlp_hits(hay: &str) -> Vec<&'static str> {
         hits.push("secret");
     }
     hits
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn store_down_is_never_confirmed_tokenless() {
+        let mut tokens = CasbTokens::default();
+        apply_connector_config(&mut tokens, Err("database unavailable".into()));
+        assert!(tokens.connector_store_unavailable);
+        let f = tokens
+            .store_unavailable_finding("casb_saas_posture", "example.com")
+            .expect("store-down must emit a finding");
+        assert_eq!(f["severity"], "medium");
+        assert!(f["title"].as_str().unwrap().contains("unavailable"));
+        assert!(tokens
+            .confirmed_tokenless_finding("casb_saas_posture", "example.com")
+            .is_none());
+    }
+
+    #[test]
+    fn readable_empty_connectors_are_confirmed_tokenless() {
+        let mut tokens = CasbTokens::default();
+        apply_connector_config(&mut tokens, Ok(json!({})));
+        assert!(!tokens.connector_store_unavailable);
+        let f = tokens
+            .confirmed_tokenless_finding("casb_saas_posture", "example.com")
+            .expect("empty connectors are a confirmed gap");
+        assert_eq!(f["severity"], "info");
+        assert!(tokens
+            .store_unavailable_finding("casb_saas_posture", "example.com")
+            .is_none());
+    }
+
+    #[test]
+    fn env_token_survives_store_down_and_skips_tokenless_info() {
+        let mut tokens = CasbTokens {
+            graph: Some("env-graph".into()),
+            google: None,
+            connector_store_unavailable: false,
+        };
+        apply_connector_config(&mut tokens, Err("database unavailable".into()));
+        assert_eq!(tokens.graph.as_deref(), Some("env-graph"));
+        assert!(tokens.connector_store_unavailable);
+        assert!(tokens
+            .confirmed_tokenless_finding("casb_saas_posture", "example.com")
+            .is_none());
+        assert!(tokens
+            .store_unavailable_finding("casb_saas_posture", "example.com")
+            .is_some());
+    }
+
+    #[test]
+    fn connector_config_fills_missing_env_tokens() {
+        let mut tokens = CasbTokens::default();
+        apply_connector_config(
+            &mut tokens,
+            Ok(json!({
+                "entra": { "access_token": "graph-from-cfg" },
+                "google": { "token": "google-from-cfg" }
+            })),
+        );
+        assert_eq!(tokens.graph.as_deref(), Some("graph-from-cfg"));
+        assert_eq!(tokens.google.as_deref(), Some("google-from-cfg"));
+        assert!(!tokens.connector_store_unavailable);
+        assert!(tokens
+            .confirmed_tokenless_finding("casb_saas_posture", "example.com")
+            .is_none());
+    }
 }
