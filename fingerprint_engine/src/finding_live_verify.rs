@@ -251,7 +251,9 @@ fn evidence_markers(raw: &Value) -> Vec<String> {
     }
     if let Some(ev) = raw.get("evidence") {
         if let Some(s) = ev.get("proof").and_then(Value::as_str) {
-            for token in ["HTTP/", "status=", "status:", "200", "301", "302", "404", "500"] {
+            for token in [
+                "HTTP/", "status=", "status:", "200", "301", "302", "404", "500",
+            ] {
                 if s.contains(token) {
                     markers.push(token.to_string());
                 }
@@ -306,11 +308,7 @@ async fn http_probe(url: &str) -> (bool, String, u16) {
     } else {
         "hsts=present"
     };
-    (
-        reachable,
-        format!("HTTP {status} {hsts_tag}"),
-        status,
-    )
+    (reachable, format!("HTTP {status} {hsts_tag}"), status)
 }
 
 async fn replay_curl_proof(proof: &str) -> (bool, String) {
@@ -366,6 +364,7 @@ async fn replay_curl_proof(proof: &str) -> (bool, String) {
 const LOAD_FINDING_SQL: &str = r#"SELECT id, finding_id, title, severity, source,
                   COALESCE(raw_data->>'target', '') AS target,
                   client_id, COALESCE(raw_data, '{}'::jsonb) AS raw_data,
+                  COALESCE(proof, '') AS sql_proof,
                   COALESCE(to_char(discovered_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), '') AS discovered_at,
                   COALESCE(signature_hash, '') AS signature_hash,
                   COALESCE(status, 'OPEN') AS status,
@@ -381,9 +380,23 @@ const LOAD_FINDING_SQL: &str = r#"SELECT id, finding_id, title, severity, source
             LIMIT 1"#;
 
 fn map_finding_row(row: sqlx::postgres::PgRow) -> FindingRow {
-    let raw_data = row
+    let mut raw_data = row
         .try_get::<Value, _>("raw_data")
         .unwrap_or_else(|_| json!({}));
+    if let Ok(p) = row.try_get::<String, _>("sql_proof") {
+        if !p.trim().is_empty() {
+            let missing_poc = raw_data
+                .get("poc")
+                .and_then(Value::as_str)
+                .map(|s| s.trim().is_empty())
+                .unwrap_or(true);
+            if missing_poc {
+                if let Value::Object(o) = &mut raw_data {
+                    o.insert("poc".into(), json!(p));
+                }
+            }
+        }
+    }
     let mut target: String = row.try_get("target").unwrap_or_default();
     if target.trim().is_empty() {
         if let Some(u) = extract_probe_url("", &raw_data) {
@@ -411,7 +424,11 @@ fn map_finding_row(row: sqlx::postgres::PgRow) -> FindingRow {
     }
 }
 
-pub(crate) async fn load_finding(pool: &PgPool, tenant_id: i64, id_token: &str) -> Result<FindingRow, String> {
+pub(crate) async fn load_finding(
+    pool: &PgPool,
+    tenant_id: i64,
+    id_token: &str,
+) -> Result<FindingRow, String> {
     let token = id_token.trim();
     if token.is_empty() {
         return Err("finding not found".to_string());
@@ -845,14 +862,7 @@ pub async fn verify_finding_live(
         "waf_blocked": waf_blocked,
     });
 
-    persist_verification(
-        pool,
-        tenant_id,
-        &row,
-        &payload,
-        waf_blocked,
-    )
-    .await?;
+    persist_verification(pool, tenant_id, &row, &payload, waf_blocked).await?;
 
     Ok(result)
 }

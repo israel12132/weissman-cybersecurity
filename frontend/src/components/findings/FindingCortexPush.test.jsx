@@ -28,6 +28,11 @@ describe('canPushFindingToCortex', () => {
 
   it('allows proof artifacts without a verdict', () => {
     expect(canPushFindingToCortex({ raw: { oast_callback: 'https://oast.example/x' } })).toBe(true)
+    expect(canPushFindingToCortex({ raw: { raw: { oast_callback: 'https://oast.example/x' } } })).toBe(true)
+  })
+
+  it('rejects attestation-only rows', () => {
+    expect(canPushFindingToCortex({ raw: { attestation: { receipt: 'abc' } } })).toBe(false)
   })
 
   it('blocks workflow false-positives even with proof', () => {

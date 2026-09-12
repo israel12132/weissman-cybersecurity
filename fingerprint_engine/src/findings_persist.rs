@@ -14,7 +14,7 @@
 //! We map common alias keys defensively so any engine that emits `cvss`/`risk`/`description`
 //! still produces a useful row.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use std::sync::LazyLock;
@@ -22,7 +22,7 @@ use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::db;
 use crate::findings_correlator::{self, ClusterAttrs};
-use crate::findings_gate::{self, gate_finding, Sealed, VulnerabilitiesWriter};
+use crate::findings_gate::{self, Sealed, VulnerabilitiesWriter, gate_finding};
 use crate::fp_feedback;
 use crate::intel_epss;
 use crate::intel_kev;
@@ -510,6 +510,20 @@ pub async fn persist_engine_findings(
             }
         }
 
+        let proof_kind = crate::scan_finding_bridge::proof_kind_from_raw(&raw_data_enriched);
+        if let Value::Object(obj) = &mut raw_data_enriched {
+            obj.insert(
+                "scan_bridge".to_string(),
+                crate::scan_finding_bridge::metadata_json(
+                    run_id,
+                    engine,
+                    finding_index,
+                    target,
+                    proof_kind.as_deref(),
+                ),
+            );
+        }
+
         // ── False-positive feedback / auto-suppression check ────────────────
         // The signature_hash is the same triple used by the correlator so
         // suppression rules transfer naturally across engines hitting the
@@ -573,8 +587,7 @@ pub async fn persist_engine_findings(
             fp_feedback::is_suppressed_by(&active_suppressions, &signature_hash, &target_url);
         let waf_noise =
             crate::waf_signals::finding_is_waf_noise(engine, &title, &raw_data_enriched);
-        let stale_mail =
-            crate::live_truth::stale_www_mail_claim(&title, &target_url);
+        let stale_mail = crate::live_truth::stale_www_mail_claim(&title, &target_url);
         let stale_hsts = crate::live_truth::title_claims_missing_hsts(&title)
             && (waf_noise
                 || crate::waf_signals::finding_is_waf_noise("ssrf", &title, &raw_data_enriched));
@@ -668,6 +681,28 @@ pub async fn persist_engine_findings(
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| format!("insert vulnerabilities: {e}"))?;
+
+        if let Err(e) = crate::scan_finding_bridge::upsert_mapped_row(
+            &mut tx,
+            tenant_id,
+            upserted_id,
+            &finding_id,
+            run_id,
+            engine,
+            &target_url,
+            proof_kind.as_deref(),
+            &poc_commitment,
+        )
+        .await
+        {
+            tracing::warn!(
+                target: "findings_persist",
+                tenant_id,
+                finding_pk = upserted_id,
+                error = %e,
+                "scan_finding_bridge upsert skipped"
+            );
+        }
 
         // PoE exploit sealing (critical/high) — sole authorized post-insert mutation.
         if crate::exploit_crypto::should_seal_poc(poc.as_str(), severity.as_str()) {
@@ -858,6 +893,7 @@ pub async fn persist_engine_findings(
             internet_exposed,
         };
         let pool_for_dispatch: PgPool = (*pool).clone();
+        let severity_for_auto = severity.clone();
         tokio::spawn(async move {
             let _permit = post_persist_db_permit().await;
             crate::soar::dispatch_record::record_post_persist_dispatch(
@@ -865,6 +901,13 @@ pub async fn persist_engine_findings(
                 tenant_id,
                 upserted_id,
                 event,
+            )
+            .await;
+            crate::scan_finding_bridge::maybe_auto_push(
+                &pool_for_dispatch,
+                tenant_id,
+                upserted_id,
+                &severity_for_auto,
             )
             .await;
         });

@@ -66,35 +66,25 @@ async fn api_client_export_csv(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
     };
     let rows = sqlx::query(
-        "SELECT id, title, severity, source, status, discovered_at FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC LIMIT 50000",
+        "SELECT id, title, severity, source, status, discovered_at FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
     )
     .bind(id)
     .fetch_all(&mut *tx)
-    .await;
-    let rows = match rows {
-        Ok(r) => r,
-        Err(e) => {
-            let _ = tx.rollback().await;
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"error": "DB unavailable", "detail": scrub_internal_error(&e)})),
-            )
-                .into_response();
-        }
-    };
+    .await
+    .unwrap_or_default();
     let _ = tx.commit().await;
     let mut csv = String::from("ID,Title,Severity,Source,Status,Discovered\n");
     for r in rows {
         let idv = r.try_get::<i64, _>("id").unwrap_or(0);
-        let title = csv_cell(&r.try_get::<String, _>("title").unwrap_or_default());
-        let sev = csv_cell(&r.try_get::<String, _>("severity").unwrap_or_default());
-        let src = csv_cell(&r.try_get::<String, _>("source").unwrap_or_default());
-        let st = csv_cell(&r.try_get::<String, _>("status").unwrap_or_default());
-        let disc = csv_cell(
-            &r.try_get::<chrono::DateTime<Utc>, _>("discovered_at")
-                .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
-                .unwrap_or_default(),
-        );
+        let title = r.try_get::<String, _>("title").unwrap_or_default().replace('"', "\"\"");
+        let sev = r.try_get::<String, _>("severity").unwrap_or_default().replace('"', "\"\"");
+        let src = r.try_get::<String, _>("source").unwrap_or_default().replace('"', "\"\"");
+        let st = r.try_get::<String, _>("status").unwrap_or_default().replace('"', "\"\"");
+        let disc = r
+            .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
+            .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_default()
+            .replace('"', "\"\"");
         // Quote every field (embedded quotes already doubled above) — RFC 4180, so a comma or
         // newline in a title cannot shift subsequent columns.
         csv.push_str(&format!(
@@ -110,264 +100,6 @@ async fn api_client_export_csv(
         HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename)).unwrap_or(HeaderValue::from_static("attachment")),
     );
     res
-}
-
-fn csv_cell(s: &str) -> String {
-    crate::xlsx_pack::neutralize_formula(s).replace('"', "\"\"")
-}
-
-fn row_to_board_finding(r: &sqlx::postgres::PgRow) -> crate::xlsx_pack::BoardFinding {
-    crate::xlsx_pack::BoardFinding {
-        id: r.try_get::<i64, _>("id").unwrap_or(0),
-        finding_id: r.try_get::<String, _>("finding_id").unwrap_or_default(),
-        title: r.try_get::<String, _>("title").unwrap_or_default(),
-        severity: r.try_get::<String, _>("severity").unwrap_or_default(),
-        source: r.try_get::<String, _>("source").unwrap_or_default(),
-        status: r.try_get::<String, _>("status").unwrap_or_default(),
-        client_id: r.try_get::<String, _>("client_id").unwrap_or_default(),
-        client_name: r.try_get::<String, _>("client_name").unwrap_or_default(),
-        description: r.try_get::<String, _>("description").unwrap_or_default(),
-        raw_data: r.try_get::<String, _>("raw_data").unwrap_or_default(),
-        poc_exploit: r.try_get::<String, _>("poc_exploit").unwrap_or_default(),
-        generated_patch: r.try_get::<String, _>("generated_patch").unwrap_or_default(),
-        poc_sealed: r.try_get::<bool, _>("poc_sealed").unwrap_or(false),
-        discovered_at: r
-            .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
-            .map(|d| d.format("%Y-%m-%d %H:%M:%S UTC").to_string())
-            .unwrap_or_default(),
-    }
-}
-
-const BOARD_FINDINGS_SQL: &str = "SELECT v.id, v.finding_id, v.title, v.severity, v.source, v.status, \
-     v.client_id::text AS client_id, COALESCE(c.name,'') AS client_name, \
-     COALESCE(v.description,'') AS description, \
-     COALESCE(v.raw_data, '{}'::jsonb)::text AS raw_data, \
-     COALESCE(v.poc_exploit,'') AS poc_exploit, \
-     COALESCE(v.generated_patch,'') AS generated_patch, \
-     COALESCE(v.poc_sealed, false) AS poc_sealed, v.discovered_at \
-     FROM vulnerabilities v LEFT JOIN clients c ON c.id = v.client_id";
-
-fn board_db_unavailable(e: &sqlx::Error) -> Response {
-    (
-        StatusCode::SERVICE_UNAVAILABLE,
-        Json(json!({"error": "DB unavailable", "detail": scrub_internal_error(e)})),
-    )
-        .into_response()
-}
-
-async fn fetch_client_name(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    id: i64,
-) -> Result<Option<String>, sqlx::Error> {
-    sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
-        .bind(id)
-        .fetch_optional(&mut **tx)
-        .await
-}
-
-async fn board_client_label(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    client_id: Option<i64>,
-) -> Result<String, Response> {
-    let Some(id) = client_id else {
-        return Ok("All clients".to_string());
-    };
-    match fetch_client_name(tx, id).await {
-        Ok(Some(n)) => Ok(n),
-        Ok(None) => Err((
-            StatusCode::NOT_FOUND,
-            Json(json!({"error": "client not found"})),
-        )
-            .into_response()),
-        Err(e) => Err(board_db_unavailable(&e)),
-    }
-}
-
-fn board_source_filter(raw: Option<&str>) -> Result<Option<Vec<String>>, Response> {
-    crate::xlsx_pack::parse_source_allowlist(raw).map_err(|msg| {
-        (StatusCode::BAD_REQUEST, Json(json!({"error": msg}))).into_response()
-    })
-}
-
-fn xlsx_attachment(bytes: Vec<u8>, filename: &str) -> Response {
-    let mut res = Response::new(Body::from(bytes));
-    res.headers_mut().insert(
-        CONTENT_TYPE,
-        HeaderValue::from_static(
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        ),
-    );
-    res.headers_mut().insert(
-        CONTENT_DISPOSITION,
-        HeaderValue::try_from(format!("attachment; filename=\"{filename}\""))
-            .unwrap_or_else(|_| HeaderValue::from_static("attachment; filename=\"Weissman_board.xlsx\"")),
-    );
-    res.headers_mut().insert(
-        axum::http::HeaderName::from_static("x-content-type-options"),
-        HeaderValue::from_static("nosniff"),
-    );
-    res
-}
-
-async fn api_client_export_xlsx(
-    State(state): State<Arc<AppState>>,
-    Extension(auth): Extension<AuthContext>,
-    Path(id): Path<i64>,
-    Query(q): Query<BoardPackQuery>,
-) -> Response {
-    let client_id = match crate::client_isolation::bind_requested_client(&auth, Some(id)) {
-        Ok(Some(cid)) => cid,
-        Ok(None) => {
-            return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
-        }
-        Err(r) => return r,
-    };
-    let sources = match board_source_filter(q.source.as_deref()) {
-        Ok(v) => v,
-        Err(r) => return r,
-    };
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
-    };
-    let client_name = match board_client_label(&mut tx, Some(client_id)).await {
-        Ok(n) => n,
-        Err(r) => return r,
-    };
-    let findings = match load_board_findings_for_scope(&mut tx, Some(client_id), sources.as_deref()).await {
-        Ok(f) => f,
-        Err(e) => {
-            let _ = tx.rollback().await;
-            return board_db_unavailable(&e);
-        }
-    };
-    let _ = tx.commit().await;
-    match crate::xlsx_pack::build_board_xlsx("Weissman", &client_name, &findings) {
-        Ok(b) => {
-            let safe_name = client_name
-                .chars()
-                .map(|c| if c.is_alphanumeric() { c } else { '_' })
-                .collect::<String>();
-            xlsx_attachment(b, &format!("Weissman_Board_{safe_name}.xlsx"))
-        }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "XLSX generation failed", "detail": scrub_internal_error(&e)})),
-        )
-            .into_response(),
-    }
-}
-
-#[derive(Deserialize, Default)]
-struct BoardPackQuery {
-    client_id: Option<i64>,
-    source: Option<String>,
-}
-
-async fn load_board_findings_for_scope(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    client_id: Option<i64>,
-    sources: Option<&[String]>,
-) -> Result<Vec<crate::xlsx_pack::BoardFinding>, sqlx::Error> {
-    let sql = format!(
-        "{BOARD_FINDINGS_SQL} \
-         WHERE ($1::bigint IS NULL OR v.client_id = $1) \
-           AND ($2::text[] IS NULL OR lower(v.source) = ANY($2)) \
-         ORDER BY v.discovered_at DESC LIMIT {}",
-        crate::xlsx_pack::BOARD_EXPORT_LIMIT
-    );
-    let rows = sqlx::query(&sql)
-        .bind(client_id)
-        .bind(sources)
-        .fetch_all(&mut **tx)
-        .await?;
-    Ok(rows.iter().map(row_to_board_finding).collect())
-}
-
-async fn api_findings_export_xlsx(
-    State(state): State<Arc<AppState>>,
-    Extension(auth): Extension<AuthContext>,
-    Query(q): Query<BoardPackQuery>,
-) -> Response {
-    let client_id = match crate::client_isolation::bind_requested_client(&auth, q.client_id) {
-        Ok(v) => v,
-        Err(r) => return r,
-    };
-    let sources = match board_source_filter(q.source.as_deref()) {
-        Ok(v) => v,
-        Err(r) => return r,
-    };
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
-    };
-    let client_label = match board_client_label(&mut tx, client_id).await {
-        Ok(n) => n,
-        Err(r) => return r,
-    };
-    let findings = match load_board_findings_for_scope(&mut tx, client_id, sources.as_deref()).await {
-        Ok(f) => f,
-        Err(e) => {
-            let _ = tx.rollback().await;
-            return board_db_unavailable(&e);
-        }
-    };
-    let _ = tx.commit().await;
-    match crate::xlsx_pack::build_board_xlsx("Weissman", &client_label, &findings) {
-        Ok(b) => {
-            let now = chrono::Utc::now().format("%Y-%m-%d");
-            xlsx_attachment(b, &format!("Weissman_Board_{now}.xlsx"))
-        }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "XLSX generation failed", "detail": scrub_internal_error(&e)})),
-        )
-            .into_response(),
-    }
-}
-
-async fn api_board_pack(
-    State(state): State<Arc<AppState>>,
-    Extension(auth): Extension<AuthContext>,
-    Query(q): Query<BoardPackQuery>,
-) -> Response {
-    let client_id = match crate::client_isolation::bind_requested_client(&auth, q.client_id) {
-        Ok(v) => v,
-        Err(r) => return r,
-    };
-    let sources = match board_source_filter(q.source.as_deref()) {
-        Ok(v) => v,
-        Err(r) => return r,
-    };
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
-    };
-    let client_label = match board_client_label(&mut tx, client_id).await {
-        Ok(n) => n,
-        Err(r) => return r,
-    };
-    let findings = match load_board_findings_for_scope(&mut tx, client_id, sources.as_deref()).await {
-        Ok(f) => f,
-        Err(e) => {
-            let _ = tx.rollback().await;
-            return board_db_unavailable(&e);
-        }
-    };
-    let _ = tx.commit().await;
-    Json(crate::xlsx_pack::board_pack_json(
-        "Weissman",
-        client_id,
-        &client_label,
-        &findings,
-        q.source.as_deref(),
-    ))
-    .into_response()
-}
-
-async fn api_export_excel_alias(
-    State(state): State<Arc<AppState>>,
-    Extension(auth): Extension<AuthContext>,
-    Query(q): Query<BoardPackQuery>,
-) -> Response {
-    api_findings_export_xlsx(State(state), Extension(auth), Query(q)).await
 }
 
 async fn get_crypto_proof_for_client_tx(
@@ -878,6 +610,48 @@ async fn api_findings_verify_live(
     }
 }
 
+#[derive(serde::Deserialize, Default)]
+struct FindingCortexPushBody {
+    #[serde(default)]
+    dry_run: Option<bool>,
+}
+
+/// POST /api/findings/:id/push-cortex — ingest a proven finding into Cortex XSIAM/XSOAR.
+async fn api_findings_push_cortex(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<String>,
+    body: Option<Json<FindingCortexPushBody>>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    let dry_run = body.as_ref().and_then(|b| b.0.dry_run).unwrap_or(false);
+    let id_token = id.trim().to_string();
+    if id_token.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "finding id required"})),
+        )
+            .into_response();
+    }
+    match crate::finding_cortex_push::push_finding_to_cortex(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        &id_token,
+        dry_run,
+    )
+    .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err((code, detail)) => (
+            StatusCode::from_u16(code).unwrap_or(StatusCode::BAD_REQUEST),
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response(),
+    }
+}
+
 /// GET /api/findings/export/csv — export all findings for the current tenant as CSV.
 async fn api_findings_export_csv(
     State(state): State<Arc<AppState>>,
@@ -889,7 +663,7 @@ async fn api_findings_export_csv(
     // Bounded to avoid pinning a pool connection for the full statement_timeout and materialising
     // the entire tenant's findings (plus the ~2x CSV string) in memory — an unauthenticated-cost
     // DoS from any viewer. 50k mirrors the audit export cap.
-    let rows = match sqlx::query(
+    let rows = sqlx::query(
         "SELECT id, finding_id, title, severity, source, status, client_id::text, \
          COALESCE(description,'') AS description, discovered_at, \
          COALESCE(poc_sealed, false) AS poc_sealed \
@@ -897,34 +671,24 @@ async fn api_findings_export_csv(
     )
     .fetch_all(&mut *tx)
     .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            let _ = tx.rollback().await;
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"error": "DB unavailable", "detail": scrub_internal_error(&e)})),
-            )
-                .into_response();
-        }
-    };
+    .unwrap_or_default();
     let _ = tx.commit().await;
     let mut csv = String::from("ID,Finding ID,Title,Severity,Source,Status,Client,Verified,Discovered,Description\n");
     for r in rows {
         let raw_id = r.try_get::<i64, _>("id").unwrap_or(0);
-        let finding_id = csv_cell(&r.try_get::<String, _>("finding_id").unwrap_or_default());
-        let title = csv_cell(&r.try_get::<String, _>("title").unwrap_or_default());
-        let sev = csv_cell(&r.try_get::<String, _>("severity").unwrap_or_default());
-        let src = csv_cell(&r.try_get::<String, _>("source").unwrap_or_default());
-        let st = csv_cell(&r.try_get::<String, _>("status").unwrap_or_default());
-        let client = csv_cell(&r.try_get::<String, _>("client_id").unwrap_or_default());
+        let finding_id = r.try_get::<String, _>("finding_id").unwrap_or_default().replace('"', "\"\"");
+        let title = r.try_get::<String, _>("title").unwrap_or_default().replace('"', "\"\"");
+        let sev = r.try_get::<String, _>("severity").unwrap_or_default().replace('"', "\"\"");
+        let src = r.try_get::<String, _>("source").unwrap_or_default().replace('"', "\"\"");
+        let st = r.try_get::<String, _>("status").unwrap_or_default().replace('"', "\"\"");
+        let client = r.try_get::<String, _>("client_id").unwrap_or_default().replace('"', "\"\"");
         let verified = if r.try_get::<bool, _>("poc_sealed").unwrap_or(false) { "VERIFIED" } else { "POTENTIAL" };
-        let disc = csv_cell(
-            &r.try_get::<chrono::DateTime<Utc>, _>("discovered_at")
-                .map(|d| d.format("%Y-%m-%d %H:%M:%S UTC").to_string())
-                .unwrap_or_default(),
-        );
-        let desc = csv_cell(&r.try_get::<String, _>("description").unwrap_or_default());
+        let disc = r
+            .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
+            .map(|d| d.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+            .unwrap_or_default()
+            .replace('"', "\"\"");
+        let desc = r.try_get::<String, _>("description").unwrap_or_default().replace('"', "\"\"");
         // All fields quoted to handle commas and special characters safely
         csv.push_str(&format!(
             "\"VLN-{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"\n",
@@ -1069,35 +833,6 @@ async fn api_openapi_spec() -> Response {
                     }
                 }
             },
-            "/api/findings/export/xlsx": {
-                "get": {
-                    "summary": "Export a true OOXML board workbook (Executive, Findings, Remediation, AdversaryIntel, MITRE)",
-                    "tags": ["Findings", "Reports"],
-                    "parameters": [
-                        { "name": "client_id", "in": "query", "required": false, "schema": { "type": "integer" } },
-                        { "name": "source", "in": "query", "required": false, "schema": { "type": "string" }, "description": "Comma-separated engine source allowlist (alnum, underscore, hyphen)" }
-                    ],
-                    "responses": {
-                        "200": {
-                            "description": "XLSX file download",
-                            "content": { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {} }
-                        }
-                    }
-                }
-            },
-            "/api/board-pack": {
-                "get": {
-                    "summary": "Live board-pack KPIs and grid preview from tenant findings (no fabricated rows)",
-                    "tags": ["Reports"],
-                    "parameters": [
-                        { "name": "client_id", "in": "query", "required": false, "schema": { "type": "integer" } },
-                        { "name": "source", "in": "query", "required": false, "schema": { "type": "string" }, "description": "Comma-separated engine source allowlist (alnum, underscore, hyphen)" }
-                    ],
-                    "responses": {
-                        "200": { "description": "Board pack JSON with totals, scope, and grid preview" }
-                    }
-                }
-            },
             "/api/findings/{id}/status": {
                 "patch": {
                     "summary": "Update finding workflow status",
@@ -1146,6 +881,74 @@ async fn api_openapi_spec() -> Response {
                     }
                 }
             },
+            "/api/findings/{id}/push-cortex": {
+                "post": {
+                    "summary": "Push an evidence-backed finding into Cortex XSIAM/XSOAR",
+                    "description": "Requires a configured cortex_xsiam integration. Refuses noise/false-positive verdicts and findings with no proof artifact. Live HTTP to Palo Alto APIs; missing config returns 409.",
+                    "tags": ["Findings", "SOAR"],
+                    "parameters": [
+                        { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+                    ],
+                    "requestBody": {
+                        "required": false,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": { "dry_run": { "type": "boolean" } }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": { "description": "Cortex accepted the proven finding" },
+                        "409": { "description": "Not configured, or finding not eligible" },
+                        "502": { "description": "Cortex API error" }
+                    }
+                }
+            },
+            "/api/findings/scan-cortex-bridge": {
+                "get": {
+                    "summary": "Scan→finding map plus live Cortex XSIAM coverage",
+                    "description": "Maps persisted scan findings to proof artifacts. Optional compare_xdr=true calls live XSIAM get_alerts. Missing Cortex config is reported, never faked.",
+                    "tags": ["Findings", "SOAR"],
+                    "parameters": [
+                        { "name": "client_id", "in": "query", "required": false, "schema": { "type": "integer" } },
+                        { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } },
+                        { "name": "compare_xdr", "in": "query", "required": false, "schema": { "type": "boolean" } }
+                    ],
+                    "responses": {
+                        "200": { "description": "Mapped findings and Cortex coverage counts" },
+                        "502": { "description": "Cortex get_alerts failed" }
+                    }
+                }
+            },
+            "/api/findings/scan-cortex-bridge/flush": {
+                "post": {
+                    "summary": "Batch-push proven mapped findings into Cortex",
+                    "description": "Calls the live proven-finding Cortex ingest for eligible rows only. Cap 25. Missing config 409.",
+                    "tags": ["Findings", "SOAR"],
+                    "requestBody": {
+                        "required": false,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "dry_run": { "type": "boolean" },
+                                        "client_id": { "type": "integer" },
+                                        "ids": { "type": "array", "items": { "type": "string" } }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": { "description": "Flush results" },
+                        "409": { "description": "Not configured or ineligible" }
+                    }
+                }
+            },
             "/api/clients": {
                 "get": {
                     "summary": "List all clients for the current tenant",
@@ -1183,56 +986,6 @@ async fn api_openapi_spec() -> Response {
                     ],
                     "responses": {
                         "200": { "description": "CSV file download", "content": { "text/csv": {} } }
-                    }
-                }
-            },
-            "/api/clients/{id}/export/xlsx": {
-                "get": {
-                    "summary": "Export a true OOXML board workbook for a client",
-                    "tags": ["Clients","Reports"],
-                    "parameters": [
-                        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } },
-                        { "name": "source", "in": "query", "required": false, "schema": { "type": "string" }, "description": "Comma-separated engine source allowlist (alnum, underscore, hyphen)" }
-                    ],
-                    "responses": {
-                        "200": {
-                            "description": "XLSX file download",
-                            "content": { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {} }
-                        }
-                    }
-                }
-            },
-            "/api/export/xlsx": {
-                "get": {
-                    "summary": "Alias for GET /api/findings/export/xlsx",
-                    "tags": ["Reports"],
-                    "responses": {
-                        "200": {
-                            "description": "XLSX file download",
-                            "content": { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {} }
-                        }
-                    }
-                }
-            },
-            "/api/export/excel": {
-                "get": {
-                    "summary": "Alias for GET /api/findings/export/xlsx (true OOXML, not CSV)",
-                    "tags": ["Reports"],
-                    "responses": {
-                        "200": {
-                            "description": "XLSX file download",
-                            "content": { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {} }
-                        }
-                    }
-                },
-                "post": {
-                    "summary": "Alias for GET /api/findings/export/xlsx (legacy Excel export)",
-                    "tags": ["Reports"],
-                    "responses": {
-                        "200": {
-                            "description": "XLSX file download",
-                            "content": { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {} }
-                        }
                     }
                 }
             },

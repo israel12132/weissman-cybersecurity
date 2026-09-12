@@ -8,23 +8,30 @@ import { findingVerifyId, liveVerdictFromFinding } from './FindingLiveVerify'
 export function canPushFindingToCortex(finding) {
   const verdict = String(liveVerdictFromFinding(finding) || '').toUpperCase()
   if (verdict === 'NOISE' || verdict === 'FALSE_POSITIVE') return false
-  const status = String(finding?.status || finding?.raw?.status || '').toUpperCase()
-  if (['FALSE_POSITIVE', 'REJECTED', 'SUPPRESSED', 'NOISE'].includes(status)) return false
   if (verdict === 'CONFIRMED' || verdict === 'LIKELY_VALID') return true
   const raw = finding?.raw && typeof finding.raw === 'object' ? finding.raw : finding || {}
-  const keys = ['proof', 'poc', 'poc_exploit', 'oast', 'oast_callback', 'http_status', 'evidence', 'http_evidence']
-  const isProof = (v) => {
+  return hasLiveProof(raw)
+}
+
+function hasLiveProof(raw, depth = 0) {
+  if (!raw || typeof raw !== 'object' || depth > 2) return false
+  const keys = ['proof', 'poc', 'poc_exploit', 'oast', 'oast_callback', 'http_status', 'http_evidence']
+  if (keys.some((k) => {
+    const v = raw[k]
     if (v === true) return true
-    if (typeof v === 'number') return v !== 0
-    if (typeof v === 'string') {
-      const t = v.trim()
-      return Boolean(t) && !t.includes('[SEALED') && t !== '••••••••'
-    }
+    if (typeof v === 'number') return true
+    if (typeof v === 'string' && v.trim()) return true
     if (v && typeof v === 'object' && Object.keys(v).length) return true
     return false
+  })) return true
+  const ev = raw.evidence
+  if (typeof ev === 'string' && ev.trim()) return true
+  if (ev && typeof ev === 'object') {
+    if (typeof ev.proof === 'string' && ev.proof.trim()) return true
+    if (Object.keys(ev).length) return true
   }
-  const scan = (obj) => Boolean(obj && typeof obj === 'object' && keys.some((k) => isProof(obj[k])))
-  return scan(raw) || scan(raw.raw) || scan(raw.evidence)
+  if (raw.raw && raw.raw !== raw) return hasLiveProof(raw.raw, depth + 1)
+  return false
 }
 
 export default function FindingCortexPush({ finding }) {
@@ -41,7 +48,6 @@ export default function FindingCortexPush({ finding }) {
     if (!rawId || loading || !eligible) return
     setLoading(true)
     setError('')
-    setResult(null)
     try {
       const data = await apiFetch(`/api/findings/${encodeURIComponent(rawId)}/push-cortex`, {
         method: 'POST',

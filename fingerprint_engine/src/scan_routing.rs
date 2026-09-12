@@ -764,7 +764,12 @@ fn entitlement_for_fallback_engine(engine: &str) -> EntitlementTier {
 }
 
 fn enforce_scope_validation_for_engine(engine: &str) -> bool {
-    !matches!(engine, "pipeline" | "zero_day_radar")
+    // `pipeline` operates on repo URLs, `zero_day_radar` is intel-only,
+    // `cortex_proven_finding_bridge` maps tenant findings + live Cortex APIs.
+    !matches!(
+        engine,
+        "pipeline" | "zero_day_radar" | "cortex_proven_finding_bridge"
+    )
 }
 
 /// Read `system_configs.enforce_scope_strict` for the tenant. Default = `true`.
@@ -999,7 +1004,8 @@ pub async fn route_scan_job(
     //
     // Every scan with a target MUST be inside the client's approved scope
     // unless the engine is explicitly exempt (`pipeline` operates on repo
-    // URLs, `zero_day_radar` is intel-only). In all other cases:
+    // URLs, `zero_day_radar` is intel-only, `cortex_proven_finding_bridge`
+    // maps tenant findings against live Cortex APIs). In all other cases:
     //   - target must be non-empty AND
     //   - client_id must be supplied AND
     //   - target must resolve to / match an approved domain or IP range
@@ -1150,6 +1156,9 @@ mod tests {
     fn enforce_scope_validation_exemptions() {
         assert!(!enforce_scope_validation_for_engine("pipeline"));
         assert!(!enforce_scope_validation_for_engine("zero_day_radar"));
+        assert!(!enforce_scope_validation_for_engine(
+            "cortex_proven_finding_bridge"
+        ));
         assert!(enforce_scope_validation_for_engine("osint"));
     }
 

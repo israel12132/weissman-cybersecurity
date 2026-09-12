@@ -9,5 +9,6 @@ describe('clientTarget', () => {
   })
   it('targetless engines', () => {
     expect(engineRunsWithoutTarget('zero_day_radar')).toBe(true)
+    expect(engineRunsWithoutTarget('cortex_proven_finding_bridge')).toBe(true)
   })
 })

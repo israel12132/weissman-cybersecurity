@@ -127,7 +127,7 @@ mod engine_dispatch_agent;
 
 pub(crate) use engine_dispatch_agent::merge_agent_hybrid;
 pub use engine_dispatch_agent::{
-    is_agent_required_engine, run_agent_required_engine, AGENT_REQUIRED_ENGINES,
+    AGENT_REQUIRED_ENGINES, is_agent_required_engine, run_agent_required_engine,
 };
 
 /// Apply owner/tuner aggression knobs from free-form `job_params` onto stealth.
@@ -600,9 +600,6 @@ async fn dispatch_engine_match(
             crate::typosquatting_monitor_engine::run_typosquatting_monitor_result_ctx(target, ctx).await
         }
         "kill_chain" => crate::kill_chain_engine::run_kill_chain_result(target).await,
-        "adversary_path_prover" => {
-            crate::adversary_path_prover::run_adversary_path_prover_result(target, ctx).await
-        }
         "oast_oob" => crate::oast_oob_engine::run_oast_oob_result(target).await,
         "deception_honeypot" => {
             crate::deception_honeypot_engine::run_deception_honeypot_result(target).await
@@ -878,27 +875,11 @@ async fn dispatch_engine_match(
         "first_mover_surface_delta" => {
             crate::first_mover_surface_delta::run_first_mover_surface_delta_result(target, ctx).await
         }
-        "adversary_underground_delta" => {
-            crate::adversary_underground_delta::run_adversary_underground_delta_result(target, ctx)
-                .await
-        }
         "first_mover_delta_fusion" => {
             crate::first_mover_delta_fusion::run_first_mover_delta_fusion_result(target, ctx).await
         }
-        "identity_surface_delta" => {
-            crate::identity_surface_delta::run_identity_surface_delta_result(target, ctx).await
-        }
-        "dualstack_edge_skip_fusion" => {
-            crate::dualstack_edge_skip::run_dualstack_edge_skip_fusion_result(target).await
-        }
-        "ransomware_preposition_surface" => {
-            crate::ransomware_preposition::run_ransomware_preposition_surface_result(target).await
-        }
         "first_seen_osv_nvd" => {
             crate::first_seen_osv_nvd_engine::run_first_seen_osv_nvd_result(target, ctx).await
-        }
-        "adversary_gap_mirror" => {
-            crate::adversary_gap_mirror::run_adversary_gap_mirror_result(target, ctx).await
         }
         "external_exposure_supreme" => {
             crate::external_exposure_supreme::run_external_exposure_supreme_result(target, ctx).await
@@ -1007,9 +988,6 @@ async fn dispatch_engine_match(
         // ── Advanced Recon engines (new live probes) ───────────────────────────
         "satellite_recon" => crate::advanced_recon_engines::run_satellite_recon_result(target).await,
         "darkweb_intel" => crate::advanced_recon_engines::run_darkweb_intel_result(target).await,
-        "adversary_exposure_delta" => {
-            crate::adversary_exposure_delta::run_adversary_exposure_delta_result(target, ctx).await
-        },
         "financial_osint" => crate::advanced_recon_engines::run_financial_osint_result(target).await,
         "blockchain_trace" => crate::advanced_recon_engines::run_blockchain_trace_result(target).await,
         "metadata_harvest" => crate::advanced_recon_engines::run_metadata_harvest_result(target).await,
@@ -1123,7 +1101,9 @@ async fn dispatch_engine_match(
         "ngfw_posture" => crate::supreme_layer_engines::run_ngfw_posture_result(target).await,
         "malware_detonation" => crate::supreme_layer_engines::run_malware_detonation_result(target).await,
         "weissman_vngfw" => crate::supreme_layer_engines::run_weissman_vngfw_result(target).await,
-        "dominion_fusion" => crate::dominion_pack::run_dominion_fusion_result(target, &ctx.job_params).await,
+        "cortex_proven_finding_bridge" => {
+            crate::scan_finding_bridge::run_cortex_proven_finding_bridge_result(target, ctx).await
+        }
 
         _ => EngineResult::error(
             format!(

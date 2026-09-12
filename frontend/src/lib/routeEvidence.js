@@ -98,6 +98,7 @@ export const ROUTE_EVIDENCE = {
   '/sbom': 'pages.sbomBrowser.evidence_notice',
   '/integrations': 'pages.integrationManager.evidence_notice',
   '/settings/integrations': 'pages.integrationManager.evidence_notice',
+  '/cortex-bridge': 'pages.cortexProvenBridge.evidence_notice',
   '/alert-rules': 'pages.alertRulesEngine.evidence_notice',
   '/scan-scheduler': 'pages.scanScheduler.evidence_notice',
   '/containment-rules': 'pages.containmentRulesBuilder.evidence_notice',

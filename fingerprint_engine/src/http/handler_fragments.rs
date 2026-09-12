@@ -16,10 +16,6 @@ include!(concat!(
 ));
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/src/server_handlers_elite_hardening.inc"
-));
-include!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
     "/src/server_handlers_ui_aliases.inc"
 ));
 include!(concat!(
@@ -108,21 +104,9 @@ include!(concat!(
 ));
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/src/server_handlers_elite_hardening.inc"
-));
-include!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
     "/src/server_handlers_supreme.inc"
 ));
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/src/server_handlers_elite_hardening.inc"
-));
-include!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/src/server_handlers_cem_dago.inc"
-));
-include!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/src/server_handlers_sovereign_operator.inc"
+    "/src/server_handlers_scan_finding_bridge.inc"
 ));
