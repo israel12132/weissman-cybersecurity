@@ -2140,7 +2140,15 @@
       "require_proof": "דרוש טקסט הוכחה חי",
       "require_proof_hint": "דלג על ממצאים בלי proof / evidence.",
       "template_oast": "קריטי מוכח-OAST",
-      "template_oast_hint": "קריטי/גבוה רק אחרי callback OAST חי."
+      "template_oast_hint": "קריטי/גבוה רק אחרי callback OAST חי.",
+      "template_kev": "KEV על crown jewel",
+      "template_kev_hint": "CISA KEV + EPSS ≥ 0.7 על נכס crown-jewel.",
+      "kev_only": "CISA KEV בלבד",
+      "kev_only_hint": "התראה רק כש-kev_listed אמת בממצא.",
+      "crown_jewel": "נוגע ב-crown jewel",
+      "crown_jewel_hint": "המארח/כותרת חייבים להתאים לצומת crown-jewel.",
+      "min_epss": "EPSS מינימלי",
+      "min_epss_hint": "דלג אלא אם ציון FIRST.org EPSS הוא לפחות הערך (0–1)."
     },
     "adminManagement": {
       "search_users": "חיפוש משתמשים…",
@@ -3710,7 +3718,13 @@
       "severity_critical": "קריטי",
       "severity_high": "גבוה",
       "severity_medium": "בינוני",
-      "severity_low": "נמוך"
+      "severity_low": "נמוך",
+      "flag_saved": "דגלי הצומת נשמרו",
+      "flag_failed": "עדכון דגלי הצומת נכשל",
+      "mark_entry": "סמן ככניסה מהאינטרנט",
+      "entry_on": "כניסה מהאינטרנט",
+      "mark_jewel": "סמן כ-crown jewel",
+      "jewel_on": "Crown jewel"
     },
     "baselineAndDrift": {
       "title": "Baseline וזיהוי Drift",

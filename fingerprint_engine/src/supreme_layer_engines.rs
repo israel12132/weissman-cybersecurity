@@ -60,7 +60,9 @@ pub async fn run_control_plane_of_controls_result(
 
     let named = http_get(&client, &url).await;
     if let Some(ref p) = named {
-        let server = header_value(&p.headers, "server").unwrap_or("").to_ascii_lowercase();
+        let server = header_value(&p.headers, "server")
+            .unwrap_or("")
+            .to_ascii_lowercase();
         let hay = format!(
             "{} {}",
             server,
@@ -127,10 +129,20 @@ pub async fn run_control_plane_of_controls_result(
     }
 
     let email = crate::email_dns_posture_engine::run_email_dns_posture_result(target, ctx).await;
-    ingest(&mut findings, "email_dns_posture", "control_plane_of_controls", &email);
+    ingest(
+        &mut findings,
+        "email_dns_posture",
+        "control_plane_of_controls",
+        &email,
+    );
 
     let waf = crate::waf_bypass_engine::run_waf_bypass_result(target).await;
-    ingest(&mut findings, "waf_bypass", "control_plane_of_controls", &waf);
+    ingest(
+        &mut findings,
+        "waf_bypass",
+        "control_plane_of_controls",
+        &waf,
+    );
 
     if tcp_open(&host, 445).await {
         findings.push(finding(
@@ -168,7 +180,12 @@ pub async fn run_ot_cloud_identity_killpath_result(
         crate::identity_attack_chain_engine::run_identity_attack_chain_result(target, ctx),
     );
     ingest(&mut merged, "scada_ics", "ot_cloud_identity_killpath", &ot);
-    ingest(&mut merged, "azure_attack", "ot_cloud_identity_killpath", &cloud);
+    ingest(
+        &mut merged,
+        "azure_attack",
+        "ot_cloud_identity_killpath",
+        &cloud,
+    );
     ingest(
         &mut merged,
         "identity_attack_chain",
@@ -186,6 +203,35 @@ pub async fn run_ot_cloud_identity_killpath_result(
             "critical",
             "T0866",
             "Live OT protocol or ICS findings correlate with cloud or identity evidence on the same target — Purdue-model IT/OT boundary is not holding.",
+            target,
+        ));
+    }
+    if has_kw(&merged, &["mqtt", "iec", "opc ua", "dnp3", "ethernet/ip"]) {
+        merged.push(finding(
+            "ot_cloud_identity_killpath",
+            "ICS C2 channel fused onto the OT/cloud kill path",
+            "high",
+            "T0869",
+            "MQTT/IEC-104/OPC UA/DNP3 evidence on this target is a standard-application-layer C2 path. No industrial write is issued.",
+            target,
+        ));
+    }
+    if has_kw(
+        &merged,
+        &[
+            "engineering",
+            "plc admin",
+            "codesys",
+            "tiaportal",
+            "webvisu",
+        ],
+    ) {
+        merged.push(finding(
+            "ot_cloud_identity_killpath",
+            "ICS privilege-escalation surface on engineering panel",
+            "critical",
+            "T0890",
+            "Engineering/PLC admin HTTP is the ICS privilege-escalation surface. Auditor only — no process-I/O write.",
             target,
         ));
     }
@@ -212,7 +258,12 @@ pub async fn run_bec_ato_chain_result(target: &str, ctx: &EngineRunContext) -> E
         crate::oauth_oidc_engine::run_oauth_oidc_result(target, ctx),
     );
     ingest(&mut merged, "email_dns_posture", "bec_ato_chain", &dns);
-    ingest(&mut merged, "business_email_compromise", "bec_ato_chain", &bec);
+    ingest(
+        &mut merged,
+        "business_email_compromise",
+        "bec_ato_chain",
+        &bec,
+    );
     ingest(&mut merged, "oauth_oidc", "bec_ato_chain", &oauth);
 
     if has_kw(&merged, &["dmarc", "spf", "dkim", "spoof"])
@@ -296,12 +347,21 @@ pub async fn run_dns_security_posture_fusion_result(
         crate::email_dns_posture_engine::run_email_dns_posture_result(target, ctx),
         crate::asm_engine::run_asm_result(target),
     );
-    ingest(&mut merged, "dns_exfil_engine", "dns_security_posture_fusion", &exfil);
-    ingest(&mut merged, "email_dns_posture", "dns_security_posture_fusion", &email);
+    ingest(
+        &mut merged,
+        "dns_exfil_engine",
+        "dns_security_posture_fusion",
+        &exfil,
+    );
+    ingest(
+        &mut merged,
+        "email_dns_posture",
+        "dns_security_posture_fusion",
+        &email,
+    );
     ingest(&mut merged, "asm", "dns_security_posture_fusion", &asm);
 
-    if has_kw(&merged, &["txt", "tunnel", "exfil"]) && has_kw(&merged, &["spf", "dmarc", "mx"])
-    {
+    if has_kw(&merged, &["txt", "tunnel", "exfil"]) && has_kw(&merged, &["spf", "dmarc", "mx"]) {
         merged.push(finding(
             "dns_security_posture_fusion",
             "DNS exfil surface plus email-DNS weakness",
@@ -335,8 +395,18 @@ pub async fn run_toxic_combo_runtime_proof_result(
         crate::cloud_posture_engine::run_cloud_posture_result_ctx(target, ctx),
         crate::k8s_container_engine::run_k8s_container_result(target, ctx),
     );
-    ingest(&mut merged, "cloud_posture", "toxic_combo_runtime_proof", &cnapp);
-    ingest(&mut merged, "k8s_container", "toxic_combo_runtime_proof", &k8s);
+    ingest(
+        &mut merged,
+        "cloud_posture",
+        "toxic_combo_runtime_proof",
+        &cnapp,
+    );
+    ingest(
+        &mut merged,
+        "k8s_container",
+        "toxic_combo_runtime_proof",
+        &k8s,
+    );
 
     let client = http_client().await;
     let imds = http_get_with_headers(
@@ -366,7 +436,10 @@ pub async fn run_toxic_combo_runtime_proof_result(
                 "IMDS-like metadata proxied on the target origin",
                 "critical",
                 "T1552.005",
-                &format!("{} returned AMI metadata — SSRF-to-IMDS proof.", p.final_url),
+                &format!(
+                    "{} returned AMI metadata — SSRF-to-IMDS proof.",
+                    p.final_url
+                ),
                 target,
             ));
         }
@@ -553,7 +626,10 @@ pub async fn run_dlp_content_scan_result(target: &str, ctx: &EngineRunContext) -
                 "Possible payment-card pattern in HTTP body",
                 "high",
                 "T1530",
-                &format!("{} body matched a PAN-like digit run — DLP should quarantine this URL.", p.final_url),
+                &format!(
+                    "{} body matched a PAN-like digit run — DLP should quarantine this URL.",
+                    p.final_url
+                ),
                 target,
             ));
         }
@@ -722,7 +798,10 @@ pub async fn run_ngfw_posture_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("ngfw_posture", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("ngfw_posture: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("ngfw_posture: {}", findings.len()),
+        )
     }
 }
 
@@ -741,7 +820,9 @@ pub async fn run_malware_detonation_result(target: &str) -> EngineResult {
     let mut findings = Vec::new();
     let magic_mz = p.body.as_bytes().starts_with(b"MZ");
     let magic_elf = p.body.as_bytes().starts_with(b"\x7fELF");
-    let ct = header_value(&p.headers, "content-type").unwrap_or("").to_ascii_lowercase();
+    let ct = header_value(&p.headers, "content-type")
+        .unwrap_or("")
+        .to_ascii_lowercase();
     if magic_mz || magic_elf || ct.contains("octet-stream") || ct.contains("executable") {
         findings.push(finding(
             "malware_detonation",

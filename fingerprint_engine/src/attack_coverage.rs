@@ -134,6 +134,12 @@ pub const COVERAGE: &[Technique] = &[
         tactic: "Persistence",
         engines: &["identity_auto_harvest"],
     },
+    Technique {
+        id: "T1603",
+        name: "Scheduled Task/Job (Mobile MDM profiles)",
+        tactic: "Persistence",
+        engines: &["mdm_bypass_engine"],
+    },
     // ── Privilege Escalation ────────────────────────────────────────────────
     Technique {
         id: "T1068",
@@ -156,6 +162,12 @@ pub const COVERAGE: &[Technique] = &[
         name: "Abuse Elevation Control Mechanism: Bypass User Account Control",
         tactic: "Privilege Escalation",
         engines: &["privilege_escalation_credential_access"],
+    },
+    Technique {
+        id: "T0890",
+        name: "Exploitation of Engineering Workstation / PLC admin",
+        tactic: "Privilege Escalation",
+        engines: &["scada_ics", "ot_cloud_identity_killpath"],
     },
     // ── Defense Evasion ─────────────────────────────────────────────────────
     Technique {
@@ -281,12 +293,36 @@ pub const COVERAGE: &[Technique] = &[
         tactic: "Command and Control",
         engines: &["tor_exit_attack"],
     },
+    Technique {
+        id: "T0869",
+        name: "Standard Application Layer Protocol (ICS)",
+        tactic: "Command and Control",
+        engines: &["scada_ics", "mqtt_attack", "ot_cloud_identity_killpath"],
+    },
+    Technique {
+        id: "T0885",
+        name: "Commonly Used Port (ICS)",
+        tactic: "Command and Control",
+        engines: &["scada_ics"],
+    },
+    Technique {
+        id: "T1623",
+        name: "Command and Scripting Interpreter (Mobile MDM)",
+        tactic: "Execution",
+        engines: &["mdm_bypass_engine"],
+    },
     // ── Exfiltration ────────────────────────────────────────────────────────
     Technique {
         id: "T1041",
         name: "Exfiltration Over C2 Channel",
         tactic: "Exfiltration",
         engines: &["http_covert_exfil", "cloud_exfil_engine"],
+    },
+    Technique {
+        id: "T1639",
+        name: "Exfiltration Over Other Network Medium (Mobile backup/sync)",
+        tactic: "Exfiltration",
+        engines: &["mdm_bypass_engine"],
     },
     Technique {
         id: "T1567",
@@ -429,12 +465,10 @@ pub fn coverage_json() -> Value {
             "oast_follow_on_engines": crate::first_mover_surface_delta::DELTA_OAST_FOLLOW_ON_ENGINES,
             "oast_gated_alerts": true,
             "gaps": [
-                "Persistence / privilege-escalation ATT&CK tactics are thinly mapped vs Initial Access",
-                "Mobile ATT&CK coverage is sparse (execution/persistence/C2/exfil still empty)",
-                "ICS ATT&CK Command-and-Control and Privilege Escalation tactics have 0 mapped techniques",
                 "Host-resident engines (ROP/heap/JIT/COM) are inventory + remote-surface, not exploit execution",
                 "Scheduled red-team requires WEISSMAN_REDTEAM_CRON=1 (off by default)",
-                "Alert rules fire on severity unless require_oast_confirmed / require_live_proof is set"
+                "Alert rules fire on severity unless require_oast_confirmed / require_live_proof / kev_only is set",
+                "ICS C2/priv-esc mapping is live TCP/HTTP surface, not process-I/O writes"
             ],
         },
     })
@@ -498,5 +532,8 @@ mod tests {
             .as_array()
             .map(|a| !a.is_empty())
             .unwrap_or(false));
+        assert!(COVERAGE.iter().any(|t| t.id == "T0869"));
+        assert!(COVERAGE.iter().any(|t| t.id == "T0890"));
+        assert!(COVERAGE.iter().any(|t| t.id == "T1603"));
     }
 }

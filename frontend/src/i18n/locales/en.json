@@ -2140,7 +2140,15 @@
       "require_proof": "Require live proof text",
       "require_proof_hint": "Skip findings with empty proof / evidence.",
       "template_oast": "OAST-proven critical",
-      "template_oast_hint": "Critical/high only after a live OAST callback."
+      "template_oast_hint": "Critical/high only after a live OAST callback.",
+      "template_kev": "KEV on crown jewel",
+      "template_kev_hint": "CISA KEV + EPSS ≥ 0.7 on a tagged crown-jewel asset.",
+      "kev_only": "CISA KEV only",
+      "kev_only_hint": "Fire only when kev_listed is true on the finding.",
+      "crown_jewel": "Touches a crown jewel",
+      "crown_jewel_hint": "Finding host/title must match a tagged crown-jewel node.",
+      "min_epss": "Minimum EPSS",
+      "min_epss_hint": "Skip unless FIRST.org EPSS is at least this score (0–1)."
     },
     "adminManagement": {
       "search_users": "Search users…",
@@ -3710,7 +3718,13 @@
       "severity_critical": "Critical",
       "severity_high": "High",
       "severity_medium": "Medium",
-      "severity_low": "Low"
+      "severity_low": "Low",
+      "flag_saved": "Node flags saved",
+      "flag_failed": "Failed to update node flags",
+      "mark_entry": "Mark internet entry",
+      "entry_on": "Internet entry",
+      "mark_jewel": "Mark crown jewel",
+      "jewel_on": "Crown jewel"
     },
     "baselineAndDrift": {
       "title": "Baseline & Drift Detection",

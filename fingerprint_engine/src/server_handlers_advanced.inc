@@ -751,7 +751,7 @@ async fn api_threat_analysis_for_client(
             &crate::correlation_rules::default_rules(),
             &events,
         );
-        persisted_incidents = crate::correlation_rules::persist_incidents(
+        persisted_incidents = crate::correlation_rules::persist_and_alert(
             &state.app_pool,
             auth.tenant_id,
             Some(client_id),

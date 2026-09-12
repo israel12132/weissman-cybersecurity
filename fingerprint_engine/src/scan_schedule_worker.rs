@@ -59,7 +59,7 @@ async fn run_due_schedule(
     let client_id: i64 = row
         .try_get("client_id")
         .map_err(|_| "no client_id".to_string())?;
-    let schedule_type: String = row
+    let _schedule_type: String = row
         .try_get("schedule_type")
         .unwrap_or_else(|_| "daily".into());
     let engines: Vec<String> = row
@@ -69,6 +69,13 @@ async fn run_due_schedule(
         .unwrap_or_default();
     if engines.is_empty() {
         let _ = tx.rollback().await;
+        defer_empty_schedule(app_pool, tenant_id, schedule_id).await;
+        tracing::warn!(
+            target: "scan_schedule_worker",
+            tenant_id,
+            schedule_id,
+            "cron skipped: no engines configured — next_run_at deferred 15m"
+        );
         return Ok(());
     }
     let domains_raw: Option<String> =
@@ -87,6 +94,14 @@ async fn run_due_schedule(
         .collect();
     if domains.is_empty() {
         let _ = tx.rollback().await;
+        defer_empty_schedule(app_pool, tenant_id, schedule_id).await;
+        tracing::warn!(
+            target: "scan_schedule_worker",
+            tenant_id,
+            schedule_id,
+            client_id,
+            "cron skipped: client has no approved domains — next_run_at deferred 15m"
+        );
         return Ok(());
     }
 
@@ -113,7 +128,7 @@ async fn run_due_schedule(
         let target = if domain.starts_with("http://") || domain.starts_with("https://") {
             domain.clone()
         } else {
-            format!("http://{domain}")
+            format!("https://{domain}")
         };
         for engine in &engines {
             let payload = json!({
@@ -143,6 +158,23 @@ async fn run_due_schedule(
         }
     }
     Ok(())
+}
+
+/// Claim already advanced `next_run_at`. If the cycle cannot run (empty engines
+/// or domains), pull it forward so we retry soon instead of burning a day.
+async fn defer_empty_schedule(app_pool: &PgPool, tenant_id: i64, schedule_id: i64) {
+    let Ok(mut tx) = crate::db::begin_tenant_tx(app_pool, tenant_id).await else {
+        return;
+    };
+    let _ = sqlx::query(
+        r#"UPDATE weissman_scan_schedules
+              SET next_run_at = now() + interval '15 minutes', updated_at = now()
+            WHERE id = $1"#,
+    )
+    .bind(schedule_id)
+    .execute(&mut *tx)
+    .await;
+    let _ = tx.commit().await;
 }
 
 /// Claim due schedules with `FOR UPDATE SKIP LOCKED` and advance `next_run_at`
@@ -297,5 +329,13 @@ mod tests {
             src.contains("FOR UPDATE SKIP LOCKED"),
             "cron claim must lock due rows with SKIP LOCKED so two replicas cannot enqueue the same occurrence"
         );
+    }
+
+    #[test]
+    fn bare_domains_default_to_https_and_empty_cycles_defer() {
+        let src = include_str!("scan_schedule_worker.rs");
+        assert!(src.contains("https://{domain}"));
+        assert!(src.contains("interval '15 minutes'"));
+        assert!(src.contains("defer_empty_schedule"));
     }
 }
