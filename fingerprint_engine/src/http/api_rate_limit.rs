@@ -164,8 +164,13 @@ mod tests {
         assert!(counts_toward_api_bucket(&Method::GET, "/api/clients"));
         assert!(counts_toward_api_bucket(&Method::GET, "/api/billing/usage"));
         assert!(!counts_toward_api_bucket(&Method::GET, "/api/health"));
+    }
+
+    #[test]
+    fn scim_paths_count_toward_the_api_bucket() {
         assert!(counts_toward_api_bucket(&Method::GET, "/scim/v2/Users"));
         assert!(counts_toward_api_bucket(&Method::POST, "/scim/v2/Users"));
+        assert!(is_api_path("/scim/v2/Groups"));
     }
 
     #[test]

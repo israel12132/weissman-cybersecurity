@@ -2024,4 +2024,19 @@ mod tests {
         let ids = scim_member_ids_from_op(&op);
         assert_eq!(ids[0].to_string(), "22222222-2222-2222-2222-222222222222");
     }
+
+    #[test]
+    fn scim_migration_forces_rls_and_syncs() {
+        let fe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("migrations/20260911235900_scim_identity_killswitch.sql");
+        let db = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../crates/weissman-db/migrations/20260911235900_scim_identity_killswitch.sql");
+        let a = std::fs::read_to_string(&fe).unwrap();
+        let b = std::fs::read_to_string(&db).unwrap();
+        assert_eq!(a, b);
+        assert!(a.contains("FORCE ROW LEVEL SECURITY"));
+        assert!(a.contains("public.lookup_scim_token"));
+        assert!(a.contains("SET search_path = public, pg_temp"));
+        assert!(!a.contains("GRANT INSERT ON weissman_revoked_tokens TO weissman_app"));
+    }
 }
