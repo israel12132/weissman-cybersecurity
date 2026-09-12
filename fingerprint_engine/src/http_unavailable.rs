@@ -1349,21 +1349,25 @@ mod tests {
     fn roe_override_reject_lookup_is_store_down_503_not_404() {
         let src = include_str!("server_handlers_roe_approvals.inc");
         let fn_src = named_fn_src(src, "async fn api_roe_override_request_reject");
-        assert!(fn_src.contains("roe_override_requests_unavailable_json"));
-        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(fn_src.contains("roe_store_down()"));
         assert!(fn_src.contains("request not found"));
         assert!(!fn_src.contains(".ok().flatten()"));
         assert!(!fn_src.contains("let _ = tx.commit()"));
+        let helper = named_fn_src(src, "fn roe_store_down");
+        assert!(helper.contains("SERVICE_UNAVAILABLE"));
+        assert!(helper.contains("roe_override_requests_unavailable_json"));
     }
 
     #[test]
     fn roe_override_approve_writes_are_commit_checked() {
         let src = include_str!("server_handlers_roe_approvals.inc");
         let fn_src = named_fn_src(src, "async fn api_roe_override_request_approve");
-        assert!(fn_src.contains("roe_override_requests_unavailable_json"));
+        assert!(fn_src.contains("roe_store_down()"));
         assert!(fn_src.contains("tx.commit().await.is_err()"));
         assert!(!fn_src.contains(".ok().flatten()"));
         assert!(!fn_src.contains("let _ = tx.commit()"));
+        let helper = named_fn_src(src, "fn roe_store_down");
+        assert!(helper.contains("roe_override_requests_unavailable_json"));
     }
 
     #[test]
