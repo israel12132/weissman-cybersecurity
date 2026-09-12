@@ -1,6 +1,9 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { FirstMoverDeltaPanel, extraHostsFromSurfaceDiff, isSchismPanelFinding } from './AttackSurfaceManagement.jsx'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import { render, screen, cleanup, within } from '@testing-library/react'
+import { FirstMoverDeltaPanel, extraHostsFromSurfaceDiff, isSchismPanelFinding, schismScanBody } from './AttackSurfaceManagement.jsx'
+
+// vitest runs with globals:false, so RTL's automatic afterEach cleanup isn't registered.
+afterEach(cleanup)
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k) => k, i18n: { language: 'en' } }),
@@ -151,5 +154,106 @@ describe('FirstMoverDeltaPanel', () => {
     expect(extraHostsFromSurfaceDiff({ unavailable: true, added: [{ fqdn: 'shop.example.com' }] })).toEqual([])
     expect(isSchismPanelFinding({ type: 'first_mover_surface_delta', category: 'added' })).toBe(false)
     expect(isSchismPanelFinding({ fusion: 'exposure_schism_fusion', title: 'idle' })).toBe(true)
+  })
+
+  it('disables sibling first-mover buttons while hunt, fusion, schism, or pending is in flight', () => {
+    const view = (extra) => (
+      <FirstMoverDeltaPanel
+        diff={{ current_count: 0, added: [], changed: [], removed: [] }}
+        loading={false}
+        hunting={false}
+        fusionHunting={false}
+        schismHunting={false}
+        pending={false}
+        onHunt={() => {}}
+        onFusion={() => {}}
+        onSchism={() => {}}
+        huntDisabled={false}
+        {...extra}
+      />
+    )
+    const { rerender, container } = render(view({ hunting: true }))
+    const named = () => {
+      const root = within(container)
+      return {
+        hunt: root.getByRole('button', { name: /first_mover_hunting|first_mover_hunt/ }),
+        fusion: root.getByRole('button', { name: /first_mover_fusion|first_mover_fusing/ }),
+        schism: root.getByRole('button', { name: /first_mover_schism/ }),
+      }
+    }
+    let btns = named()
+    expect(btns.hunt).toBeDisabled()
+    expect(btns.fusion).toBeDisabled()
+    expect(btns.schism).toBeDisabled()
+
+    rerender(view({ fusionHunting: true }))
+    btns = named()
+    expect(btns.hunt).toBeDisabled()
+    expect(btns.fusion).toBeDisabled()
+    expect(btns.schism).toBeDisabled()
+
+    rerender(view({ schismHunting: true }))
+    btns = named()
+    expect(btns.hunt).toBeDisabled()
+    expect(btns.fusion).toBeDisabled()
+    expect(btns.schism).toBeDisabled()
+
+    rerender(view({ pending: true }))
+    btns = named()
+    expect(btns.hunt).toBeDisabled()
+    expect(btns.fusion).toBeDisabled()
+    expect(btns.schism).toBeDisabled()
+  })
+
+  it('posts extra_hosts from surface-diff added+changed on the schism scan body', () => {
+    expect(schismScanBody({
+      clientId: 7,
+      target: 'acme.test',
+      surfaceDiff: {
+        added: [{ fqdn: 'shop.example.com' }],
+        changed: [{ fqdn: 'www.example.com' }],
+        removed: [{ fqdn: 'old.example.com' }],
+      },
+    })).toEqual({
+      engine: 'exposure_schism_fusion',
+      client_id: 7,
+      target: 'acme.test',
+      include_ct: true,
+      include_http: true,
+      chain_web_engines: false,
+      extra_hosts: 'shop.example.com,www.example.com',
+    })
+    expect(schismScanBody({
+      clientId: 7,
+      target: 'acme.test',
+      surfaceDiff: { unavailable: true, added: [{ fqdn: 'shop.example.com' }] },
+    }).extra_hosts).toBeUndefined()
+  })
+
+  it('shows schism evidence and an overflow cue beyond eight live fractures', () => {
+    const schismFindings = Array.from({ length: 9 }, (_, i) => ({
+      title: `HTTP/2 schism ${i}`,
+      severity: 'high',
+      fusion: 'exposure_schism_fusion',
+      evidence: i === 0 ? 'ALPN h2 vs HTTP/1.1 WWW-Authenticate mismatch' : '',
+    }))
+    render(
+      <FirstMoverDeltaPanel
+        diff={{ current_count: 0, added: [], changed: [], removed: [] }}
+        loading={false}
+        hunting={false}
+        fusionHunting={false}
+        schismHunting={false}
+        onHunt={() => {}}
+        onFusion={() => {}}
+        onSchism={() => {}}
+        huntDisabled={false}
+        schismFindings={schismFindings}
+      />,
+    )
+    expect(screen.getByText('HTTP/2 schism 0')).toBeTruthy()
+    expect(screen.getByText('ALPN h2 vs HTTP/1.1 WWW-Authenticate mismatch')).toBeTruthy()
+    expect(screen.queryByText('HTTP/2 schism 8')).toBeNull()
+    expect(screen.getByText('pages.attackSurfaceManagement.first_mover_schism_more')).toBeTruthy()
   })
 })

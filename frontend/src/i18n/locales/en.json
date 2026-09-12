@@ -4986,6 +4986,7 @@
       "first_mover_schism": "Prove protocol schism",
       "first_mover_schism_running": "Fracture-testing…",
       "first_mover_schism_live": "Live schism + kill-chain evidence",
+      "first_mover_schism_more": "+{{count}} more live fractures in the job",
       "nerve_certstream": "CT squirt",
       "nerve_oast": "Live OAST",
       "nerve_nvd": "NVD key",

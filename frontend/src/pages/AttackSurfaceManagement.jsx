@@ -1,7 +1,7 @@
 import { firstClientTarget } from '../lib/clientTarget'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
@@ -40,6 +40,21 @@ export function extraHostsFromSurfaceDiff(diff) {
     if (out.length >= 8) break
   }
   return out
+}
+
+/** POST body for Prove protocol schism — extra_hosts from live surface-diff only. */
+export function schismScanBody({ clientId, target, surfaceDiff }) {
+  const extras = extraHostsFromSurfaceDiff(surfaceDiff)
+  const body = {
+    engine: SCHISM_ENGINE,
+    client_id: Number(clientId),
+    target: String(target || '').trim(),
+    include_ct: true,
+    include_http: true,
+    chain_web_engines: false,
+  }
+  if (extras.length) body.extra_hosts = extras.join(',')
+  return body
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -286,6 +301,7 @@ export function FirstMoverDeltaPanel({
   hunting,
   fusionHunting,
   schismHunting,
+  pending,
   onHunt,
   onFusion,
   onSchism,
@@ -316,7 +332,7 @@ export function FirstMoverDeltaPanel({
   const oast = nerve?.oast || {}
   const nvd = nerve?.nvd || {}
   const liveSchism = Array.isArray(schismFindings) ? schismFindings.filter(isSchismPanelFinding) : []
-  const firstMoverBusy = Boolean(hunting || fusionHunting || schismHunting)
+  const firstMoverBusy = Boolean(hunting || fusionHunting || schismHunting || pending)
 
   return (
     <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-950/40 via-black/40 to-cyan-950/30 p-4 mb-5">
@@ -455,14 +471,27 @@ export function FirstMoverDeltaPanel({
           <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-rose-200/80">
             {t('pages.attackSurfaceManagement.first_mover_schism_live')}
           </p>
-          {liveSchism.slice(0, 8).map((f, i) => (
-            <div key={`${f.title || f.type || 'schism'}-${i}`} className="flex items-start justify-between gap-3">
-              <p className="text-[12px] text-rose-50/90 min-w-0 truncate">{f.title || f.value}</p>
-              <span className="text-[10px] font-mono uppercase text-rose-300/80 shrink-0">
-                {f.severity || 'info'}
-              </span>
-            </div>
-          ))}
+          {liveSchism.slice(0, 8).map((f, i) => {
+            const proof = String(f.evidence || f.description || f.proof || '').trim()
+            return (
+              <div key={`${f.title || f.type || 'schism'}-${i}`} className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[12px] text-rose-50/90 truncate">{f.title || f.value}</p>
+                  {proof ? (
+                    <p className="text-[10px] font-mono text-rose-200/55 truncate">{proof}</p>
+                  ) : null}
+                </div>
+                <span className="text-[10px] font-mono uppercase text-rose-300/80 shrink-0">
+                  {f.severity || 'info'}
+                </span>
+              </div>
+            )
+          })}
+          {liveSchism.length > 8 ? (
+            <p className="text-[10px] font-mono text-rose-300/70">
+              {t('pages.attackSurfaceManagement.first_mover_schism_more', { count: liveSchism.length - 8 })}
+            </p>
+          ) : null}
         </div>
       )}
     </div>
@@ -539,7 +568,23 @@ export default function AttackSurfaceManagement() {
   const [fusionJobId, setFusionJobId] = useState(null)
   const [schismJobId, setSchismJobId] = useState(null)
   const [schismFindings, setSchismFindings] = useState([])
+  const [firstMoverPending, setFirstMoverPending] = useState(false)
+  const firstMoverLockRef = useRef(false)
+  const firstMoverGenRef = useRef(0)
+  const firstMoverJobGenRef = useRef(0)
   const [nerve, setNerve] = useState(null)
+
+  const releaseFirstMover = useCallback(() => {
+    firstMoverLockRef.current = false
+    setFirstMoverPending(false)
+  }, [])
+
+  const acquireFirstMover = useCallback(() => {
+    if (firstMoverLockRef.current) return false
+    firstMoverLockRef.current = true
+    setFirstMoverPending(true)
+    return true
+  }, [])
 
   const refreshCorpus = useCallback(() => {
     apiFetch('/api/discovery-knowledge/stats')
@@ -629,6 +674,16 @@ export default function AttackSurfaceManagement() {
   }, [selectedClientId, loadSurfaceDiff])
 
   useEffect(() => {
+    firstMoverGenRef.current += 1
+    setSchismFindings([])
+    setSchismJobId(null)
+    setDeltaJobId(null)
+    setFusionJobId(null)
+    firstMoverLockRef.current = false
+    setFirstMoverPending(false)
+  }, [selectedClientId])
+
+  useEffect(() => {
     loadNerve()
     const id = setInterval(loadNerve, 20000)
     return () => clearInterval(id)
@@ -670,6 +725,8 @@ export default function AttackSurfaceManagement() {
     enabled: Boolean(deltaJobId),
     onComplete: async () => {
       setDeltaJobId(null)
+      if (firstMoverGenRef.current !== firstMoverJobGenRef.current) return
+      releaseFirstMover()
       await loadSurfaceDiff(selectedClientId)
       loadNerve()
     },
@@ -679,6 +736,8 @@ export default function AttackSurfaceManagement() {
     enabled: Boolean(fusionJobId),
     onComplete: async () => {
       setFusionJobId(null)
+      if (firstMoverGenRef.current !== firstMoverJobGenRef.current) return
+      releaseFirstMover()
       await loadSurfaceDiff(selectedClientId)
       loadNerve()
     },
@@ -688,7 +747,10 @@ export default function AttackSurfaceManagement() {
     enabled: Boolean(schismJobId),
     onComplete: async (job) => {
       setSchismJobId(null)
+      if (firstMoverGenRef.current !== firstMoverJobGenRef.current) return
+      releaseFirstMover()
       const f = await resolveJobFindings(job, SCHISM_ENGINE, selectedClientId)
+      if (firstMoverGenRef.current !== firstMoverJobGenRef.current) return
       setSchismFindings(Array.isArray(f) ? f.filter(isSchismPanelFinding) : [])
       await loadSurfaceDiff(selectedClientId)
       loadNerve()
@@ -725,6 +787,8 @@ export default function AttackSurfaceManagement() {
   const handleFirstMoverHunt = useCallback(async () => {
     if (!selectedClientId) { showToast('error', t('pages.attackSurfaceManagement.toast_select_client')); return }
     if (!target.trim()) { showToast('error', t('pages.attackSurfaceManagement.toast_enter_target')); return }
+    if (!acquireFirstMover()) return
+    const gen = firstMoverGenRef.current
     try {
       const { ok, data: d, status } = await postScan({
         engine: DELTA_ENGINE,
@@ -733,21 +797,30 @@ export default function AttackSurfaceManagement() {
         include_ct: true,
         include_http: true,
       })
+      if (firstMoverGenRef.current !== gen) return
       if (!ok) {
         showToast('error', d.detail || d.error || t('pages.attackSurfaceManagement.toast_scan_failed', { status }))
+        releaseFirstMover()
         return
       }
       const jid = d.job_id ?? ''
       showToast('info', t('pages.attackSurfaceManagement.toast_scan_queued', { jid }))
-      if (jid) setDeltaJobId(jid)
+      if (jid) {
+        firstMoverJobGenRef.current = gen
+        setDeltaJobId(jid)
+      } else releaseFirstMover()
     } catch (e) {
+      if (firstMoverGenRef.current !== gen) return
       showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
+      releaseFirstMover()
     }
-  }, [selectedClientId, target, postScan, showToast, t])
+  }, [selectedClientId, target, postScan, showToast, t, acquireFirstMover, releaseFirstMover])
 
   const handleDeltaFusion = useCallback(async () => {
     if (!selectedClientId) { showToast('error', t('pages.attackSurfaceManagement.toast_select_client')); return }
     if (!target.trim()) { showToast('error', t('pages.attackSurfaceManagement.toast_enter_target')); return }
+    if (!acquireFirstMover()) return
+    const gen = firstMoverGenRef.current
     try {
       const { ok, data: d, status } = await postScan({
         engine: FUSION_ENGINE,
@@ -757,45 +830,56 @@ export default function AttackSurfaceManagement() {
         include_http: true,
         chain_web_engines: false,
       })
+      if (firstMoverGenRef.current !== gen) return
       if (!ok) {
         showToast('error', d.detail || d.error || t('pages.attackSurfaceManagement.toast_scan_failed', { status }))
+        releaseFirstMover()
         return
       }
       const jid = d.job_id ?? ''
       showToast('info', t('pages.attackSurfaceManagement.toast_scan_queued', { jid }))
-      if (jid) setFusionJobId(jid)
+      if (jid) {
+        firstMoverJobGenRef.current = gen
+        setFusionJobId(jid)
+      } else releaseFirstMover()
     } catch (e) {
+      if (firstMoverGenRef.current !== gen) return
       showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
+      releaseFirstMover()
     }
-  }, [selectedClientId, target, postScan, showToast, t])
+  }, [selectedClientId, target, postScan, showToast, t, acquireFirstMover, releaseFirstMover])
 
   const handleExposureSchism = useCallback(async () => {
     if (!selectedClientId) { showToast('error', t('pages.attackSurfaceManagement.toast_select_client')); return }
     if (!target.trim()) { showToast('error', t('pages.attackSurfaceManagement.toast_enter_target')); return }
+    if (!acquireFirstMover()) return
+    const gen = firstMoverGenRef.current
     setSchismFindings([])
     try {
-      const extras = extraHostsFromSurfaceDiff(surfaceDiff)
-      const body = {
-        engine: SCHISM_ENGINE,
-        client_id: Number(selectedClientId),
-        target: target.trim(),
-        include_ct: true,
-        include_http: true,
-        chain_web_engines: false,
-      }
-      if (extras.length) body.extra_hosts = extras.join(',')
+      const body = schismScanBody({
+        clientId: selectedClientId,
+        target,
+        surfaceDiff,
+      })
       const { ok, data: d, status } = await postScan(body)
+      if (firstMoverGenRef.current !== gen) return
       if (!ok) {
         showToast('error', d.detail || d.error || t('pages.attackSurfaceManagement.toast_scan_failed', { status }))
+        releaseFirstMover()
         return
       }
       const jid = d.job_id ?? ''
       showToast('info', t('pages.attackSurfaceManagement.toast_scan_queued', { jid }))
-      if (jid) setSchismJobId(jid)
+      if (jid) {
+        firstMoverJobGenRef.current = gen
+        setSchismJobId(jid)
+      } else releaseFirstMover()
     } catch (e) {
+      if (firstMoverGenRef.current !== gen) return
       showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
+      releaseFirstMover()
     }
-  }, [selectedClientId, target, postScan, showToast, t, surfaceDiff])
+  }, [selectedClientId, target, postScan, showToast, t, surfaceDiff, acquireFirstMover, releaseFirstMover])
 
   const assetTypes = useMemo(() => {
     const s = new Set(issues.map((f) => f.asset).filter(Boolean))
@@ -1007,6 +1091,7 @@ export default function AttackSurfaceManagement() {
         hunting={Boolean(deltaJobId)}
         fusionHunting={Boolean(fusionJobId)}
         schismHunting={Boolean(schismJobId)}
+        pending={firstMoverPending}
         onHunt={handleFirstMoverHunt}
         onFusion={handleDeltaFusion}
         onSchism={handleExposureSchism}
