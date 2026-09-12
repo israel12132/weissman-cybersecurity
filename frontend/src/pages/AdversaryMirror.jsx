@@ -402,12 +402,11 @@ function AdversaryMirrorBody() {
           </>
         )}
 
-        <p className="text-[10px] font-mono text-[var(--text-muted)]">
-          <Link to="/dark-web" className="text-cyan-400 hover:underline">{t(`${NS}.open_dark_web`)}</Link>
-          {' · '}
-          <Link to="/engines" className="text-cyan-400 hover:underline">{t(`${NS}.open_engines`)}</Link>
-        </p>
-      </div>
+      <p className="text-[10px] font-mono text-[var(--text-muted)]">
+        <Link to="/dark-web" className="text-cyan-400 hover:underline">{t(`${NS}.open_dark_web`)}</Link>
+        {' · '}
+        <Link to="/engines" className="text-cyan-400 hover:underline">{t(`${NS}.open_engines`)}</Link>
+      </p>
       <FindingDrawer finding={selectedFinding} onClose={() => setSelected(null)} />
     </div>
   )
