@@ -1570,7 +1570,12 @@ async fn execute_job_unscoped(
         "genesis_eternal_fuzz" => {
             crate::hpc_runtime::bind_current_thread_genesis_research();
             let genesis_params =
-                crate::ceo::strategy::load_genesis_runtime_params(app_pool.as_ref(), tid).await;
+                match crate::ceo::strategy::load_genesis_runtime_params(app_pool.as_ref(), tid)
+                    .await
+                {
+                    Ok(p) => p,
+                    Err(_) => crate::ceo::strategy::load_env_fallback(),
+                };
             if genesis_params.kill_switch {
                 return Ok(json!({
                     "ok": true,

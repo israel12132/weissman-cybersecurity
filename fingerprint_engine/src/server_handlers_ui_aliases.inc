@@ -410,6 +410,7 @@ fn merge_control_statuses(
 /// NIST / HIPAA / FedRAMP are intentionally absent: they carry a canonical control set in
 /// `static_framework_controls` but no live evidence mapping, so listing them as in-scope would
 /// (correctly) void every official artifact through the listed-but-unmapped signal.
+#[allow(dead_code)]
 const FALLBACK_FRAMEWORKS: &[(&str, &str, &str)] = &[
     (
         "iso27001",
@@ -442,9 +443,8 @@ struct ListedFramework {
 }
 
 /// Load the enabled compliance frameworks from the dynamic catalog, ordered for display.
-/// Returns `Err` only on a genuine DB failure (e.g. before the migration lands) so callers can
-/// fall back to `FALLBACK_FRAMEWORKS`; `Ok(vec![])` is a legitimately empty catalog (every
-/// framework taken out of scope) and MUST NOT resurrect the hardcoded list.
+/// Returns `Err` only on a genuine DB failure. `Ok(vec![])` is a legitimately empty catalog
+/// (every framework taken out of scope) and MUST NOT resurrect the hardcoded list.
 async fn load_listed_frameworks(
     state: &Arc<AppState>,
 ) -> Result<Vec<ListedFramework>, sqlx::Error> {
@@ -465,28 +465,29 @@ async fn load_listed_frameworks(
             })
             .collect()),
         Err(e) => {
-            tracing::warn!(target: "compliance", error = %e, "compliance_frameworks catalog load failed; using fallback list");
+            tracing::warn!(target: "compliance", error = %e, "compliance_frameworks catalog load failed");
             Err(e)
         }
     }
 }
 
-/// Enabled framework slugs from the dynamic catalog. Falls back to `FALLBACK_FRAMEWORKS` only on a
-/// DB error — an empty-but-successful catalog means "no frameworks in scope".
-async fn listed_framework_slugs(state: &Arc<AppState>) -> Vec<String> {
+/// Enabled framework slugs from the dynamic catalog. Store-down fails closed (503) rather than
+/// resurrecting `FALLBACK_FRAMEWORKS` as a live catalog.
+async fn listed_framework_slugs(state: &Arc<AppState>) -> Result<Vec<String>, Response> {
     match load_listed_frameworks(state).await {
-        Ok(listed) => listed.into_iter().map(|f| f.slug).collect(),
-        Err(_) => FALLBACK_FRAMEWORKS
-            .iter()
-            .map(|(s, _, _)| s.to_string())
-            .collect(),
+        Ok(listed) => Ok(listed.into_iter().map(|f| f.slug).collect()),
+        Err(_) => Err(catalog_unavailable()),
     }
 }
 
 fn catalog_unavailable() -> Response {
     (
         StatusCode::SERVICE_UNAVAILABLE,
-        Json(json!({ "ok": false, "detail": "Control-mapping catalog unavailable" })),
+        Json(json!({
+            "ok": false,
+            "unavailable": true,
+            "detail": "Control-mapping catalog unavailable",
+        })),
     )
         .into_response()
 }
@@ -572,7 +573,7 @@ async fn compliance_framework_orphans(
 async fn compliance_orphaned_controls_across_listed(
     state: &Arc<AppState>,
 ) -> Result<Vec<Value>, Response> {
-    let slugs = listed_framework_slugs(state).await;
+    let slugs = listed_framework_slugs(state).await?;
     let mut out: Vec<Value> = Vec::new();
     for slug in &slugs {
         for o in compliance_framework_orphans(state, slug, true).await? {
@@ -587,45 +588,31 @@ async fn compliance_orphaned_controls_across_listed(
 }
 
 /// GET /api/compliance/frameworks — the supported frameworks, from the dynamic
-/// `compliance_frameworks` catalog (falls back to the historical list only if the table is
-/// unavailable). `dynamic` reports which source served the list.
+/// `compliance_frameworks` catalog. Store-down is 503, never a hardcoded success list.
 async fn api_compliance_frameworks_list(
     State(state): State<Arc<AppState>>,
     Extension(_auth): Extension<AuthContext>,
 ) -> Response {
-    // Only a DB error falls back to the hardcoded list; an empty catalog is served as-is so an
+    // Only a DB error is 503; an empty catalog is served as-is so an
     // operator who has taken every framework out of scope sees exactly that.
-    let (rows, dynamic): (Vec<(String, String, String)>, bool) =
-        match load_listed_frameworks(&state).await {
-            Ok(listed) => (
-                listed
-                    .into_iter()
-                    .map(|f| (f.slug, f.name, f.scope))
-                    .collect(),
-                true,
-            ),
-            Err(_) => (
-                FALLBACK_FRAMEWORKS
-                    .iter()
-                    .map(|(id, name, scope)| (id.to_string(), name.to_string(), scope.to_string()))
-                    .collect(),
-                false,
-            ),
-        };
-    let out: Vec<Value> = rows
+    let listed = match load_listed_frameworks(&state).await {
+        Ok(listed) => listed,
+        Err(_) => return catalog_unavailable(),
+    };
+    let out: Vec<Value> = listed
         .into_iter()
-        .map(|(id, name, scope)| {
+        .map(|f| {
             json!({
-                "id": id,
-                "name": name,
-                "scope": scope,
-                "controls_url": format!("/api/compliance/frameworks/{}/controls", id),
+                "id": f.slug,
+                "name": f.name,
+                "scope": f.scope,
+                "controls_url": format!("/api/compliance/frameworks/{}/controls", f.slug),
             })
         })
         .collect();
     (
         StatusCode::OK,
-        Json(json!({ "ok": true, "dynamic": dynamic, "frameworks": out })),
+        Json(json!({ "ok": true, "dynamic": true, "frameworks": out })),
     )
         .into_response()
 }
@@ -715,10 +702,10 @@ async fn api_compliance_frameworks_report(
 
     // --- Unified control-mapping enforcement gate ---
     // Coverage gap + listed-but-unmapped + dead-predicate rot, all through one gate/watermark.
-    let is_listed = listed_framework_slugs(&state)
-        .await
-        .iter()
-        .any(|s| s == &framework_id);
+    let is_listed = match listed_framework_slugs(&state).await {
+        Ok(slugs) => slugs.iter().any(|s| s == &framework_id),
+        Err(resp) => return resp,
+    };
     let orphaned = match compliance_framework_orphans(&state, &framework_id, is_listed).await {
         Ok(o) => o,
         Err(resp) => return resp,

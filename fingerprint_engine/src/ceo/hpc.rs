@@ -70,8 +70,7 @@ pub async fn get_hpc_policy(pool: &PgPool, tenant_id: i64) -> Result<HpcPolicyVi
     )
     .bind(tenant_id)
     .fetch_all(pool)
-    .await
-    .unwrap_or_default();
+    .await?;
 
     let mut by_kind: Vec<Value> = Vec::new();
     let mut research_running: i64 = 0;

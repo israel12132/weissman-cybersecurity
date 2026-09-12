@@ -262,7 +262,7 @@ pub async fn build_snapshot(
         }));
     }
 
-    let modules = build_system_modules(pool, tenant_id, uptime_secs).await;
+    let modules = build_system_modules(pool, tenant_id, uptime_secs).await?;
 
     let ceo_telem =
         crate::ceo::ops_status::build_ceo_telemetry_json(pool, tenant_id, uptime_secs).await;
@@ -303,11 +303,15 @@ fn build_control_parameters() -> Value {
     })
 }
 
-async fn build_system_modules(pool: &PgPool, tenant_id: i64, uptime_secs: u64) -> Vec<Value> {
-    let pg_ok = sqlx::query_scalar::<_, i64>("SELECT 1::bigint")
+async fn build_system_modules(
+    pool: &PgPool,
+    tenant_id: i64,
+    uptime_secs: u64,
+) -> Result<Vec<Value>, sqlx::Error> {
+    sqlx::query_scalar::<_, i64>("SELECT 1::bigint")
         .fetch_one(pool)
-        .await
-        .is_ok();
+        .await?;
+    let pg_ok = true;
 
     let redis_enabled = crate::http::rate_limit_redis::is_enabled();
 
@@ -316,16 +320,14 @@ async fn build_system_modules(pool: &PgPool, tenant_id: i64, uptime_secs: u64) -
     )
     .bind(tenant_id)
     .fetch_one(pool)
-    .await
-    .unwrap_or(0);
+    .await?;
 
     let running: i64 = sqlx::query_scalar(
         "SELECT count(*)::bigint FROM weissman_async_jobs WHERE tenant_id = $1 AND status = 'running'",
     )
     .bind(tenant_id)
     .fetch_one(pool)
-    .await
-    .unwrap_or(0);
+    .await?;
 
     let agents_online: i64 = sqlx::query_scalar(
         r#"SELECT count(*)::bigint FROM endpoint_agents
@@ -333,12 +335,10 @@ async fn build_system_modules(pool: &PgPool, tenant_id: i64, uptime_secs: u64) -
     )
     .bind(tenant_id)
     .fetch_optional(pool)
-    .await
-    .ok()
-    .flatten()
+    .await?
     .unwrap_or(0);
 
-    vec![
+    Ok(vec![
         module_row(
             "weissman_server",
             "Weissman HTTP Server",
@@ -498,7 +498,7 @@ async fn build_system_modules(pool: &PgPool, tenant_id: i64, uptime_secs: u64) -
             "ready",
             json!({}),
         ),
-    ]
+    ])
 }
 
 fn module_row(

@@ -64,9 +64,18 @@ async fn api_ceo_strategy_get(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
-    let j =
-        crate::ceo::strategy::get_ceo_strategy_json(state.app_pool.as_ref(), auth.tenant_id).await;
-    (StatusCode::OK, Json(j)).into_response()
+    match crate::ceo::strategy::get_ceo_strategy_json(state.app_pool.as_ref(), auth.tenant_id)
+        .await
+    {
+        Ok(j) => (StatusCode::OK, Json(j)).into_response(),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::ceo_strategy_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response(),
+    }
 }
 
 async fn api_ceo_strategy_patch(
@@ -82,12 +91,21 @@ async fn api_ceo_strategy_patch(
     .await
     {
         Ok(()) => {
-            let j = crate::ceo::strategy::get_ceo_strategy_json(
+            match crate::ceo::strategy::get_ceo_strategy_json(
                 state.app_pool.as_ref(),
                 auth.tenant_id,
             )
-            .await;
-            (StatusCode::OK, Json(json!({ "ok": true, "strategy": j }))).into_response()
+            .await
+            {
+                Ok(j) => (StatusCode::OK, Json(json!({ "ok": true, "strategy": j }))).into_response(),
+                Err(_) => (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::ceo_strategy_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response(),
+            }
         }
         Err(e) => ceo_write_err(e),
     }
@@ -116,9 +134,11 @@ async fn api_ceo_hpc_policy_get(
 ) -> Response {
     match crate::ceo::hpc::get_hpc_policy(state.app_pool.as_ref(), auth.tenant_id).await {
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::hpc_policy_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }
@@ -656,12 +676,11 @@ async fn api_ceo_supreme_nerve_center_get(
     .await
     {
         Ok(j) => (StatusCode::OK, Json(j)).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({
-                "ok": false,
-                "detail": scrub_internal_error(&e),
-            })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::nerve_center_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }

@@ -1787,9 +1787,20 @@ async fn api_scan_stop(
 async fn api_scan_status(State(state): State<Arc<AppState>>) -> Response {
     let scanning_active = crate::orchestrator::is_scanning_active();
     let mut scan_in_progress = crate::orchestrator::scan_in_progress();
-    let running_async_jobs = weissman_db::job_queue::count_running_jobs(state.app_pool.as_ref())
+    let running_async_jobs = match weissman_db::job_queue::count_running_jobs(state.app_pool.as_ref())
         .await
-        .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::scan_status_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     if running_async_jobs > 0 {
         scan_in_progress = true;
     }

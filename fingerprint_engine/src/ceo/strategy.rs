@@ -176,22 +176,21 @@ pub fn load_env_fallback() -> GenesisRuntimeParams {
 }
 
 /// Load merged strategy for `tenant_id` (RLS tenant transaction).
-pub async fn load_genesis_runtime_params(pool: &PgPool, tenant_id: i64) -> GenesisRuntimeParams {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return load_env_fallback();
-    };
-    let inner = match load_inner_tx(&mut tx).await {
-        Ok(p) => p,
-        Err(_) => load_env_fallback(),
-    };
-    let _ = tx.commit().await;
-    inner
+/// Store-down is `Err` — HTTP GET/PATCH must 503. Job execution may use [`load_env_fallback`].
+pub async fn load_genesis_runtime_params(
+    pool: &PgPool,
+    tenant_id: i64,
+) -> Result<GenesisRuntimeParams, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let inner = load_inner_tx(&mut tx).await?;
+    tx.commit().await?;
+    Ok(inner)
 }
 
 /// JSON view for `GET /api/ceo/strategy` (includes env snapshot for transparency).
-pub async fn get_ceo_strategy_json(pool: &PgPool, tenant_id: i64) -> Value {
-    let p = load_genesis_runtime_params(pool, tenant_id).await;
-    json!({
+pub async fn get_ceo_strategy_json(pool: &PgPool, tenant_id: i64) -> Result<Value, sqlx::Error> {
+    let p = load_genesis_runtime_params(pool, tenant_id).await?;
+    Ok(json!({
         "effective": {
             "genesis_protocol_enabled": p.protocol_enabled,
             "genesis_kill_switch": p.kill_switch,
@@ -211,7 +210,7 @@ pub async fn get_ceo_strategy_json(pool: &PgPool, tenant_id: i64) -> Value {
             "WEISSMAN_GENESIS_DFS_MAX_STEPS": std::env::var("WEISSMAN_GENESIS_DFS_MAX_STEPS").unwrap_or_default(),
             "WEISSMAN_WORKER_POOL": std::env::var("WEISSMAN_WORKER_POOL").unwrap_or_default(),
         },
-    })
+    }))
 }
 
 /// Merge `{ "configs": { key: value } }` into `system_configs` (whitelist only).

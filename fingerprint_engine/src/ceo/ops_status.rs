@@ -80,7 +80,14 @@ pub async fn build_ceo_telemetry_json(
     let rss = resident_set_kb();
     let scanning = crate::orchestrator::is_scanning_active();
 
-    let strategy = crate::ceo::strategy::get_ceo_strategy_json(app_pool, tenant_id).await;
+    let strategy = match crate::ceo::strategy::get_ceo_strategy_json(app_pool, tenant_id).await {
+        Ok(j) => j,
+        Err(_) => json!({
+            "unavailable": true,
+            "effective": Value::Null,
+            "env_fallback_snapshot": Value::Null,
+        }),
+    };
 
     let mut global_safe: Option<bool> = None;
     if let Ok(mut tx) = crate::db::begin_tenant_tx(app_pool, tenant_id).await {

@@ -297,7 +297,7 @@ pub async fn dashboard_snapshot(
 ) -> Result<Value, String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|e| format!("tenant tx: {e}"))?;
+        .map_err(|_| "store_down".to_string())?;
 
     let chronos_count: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM chronos_events
@@ -306,7 +306,7 @@ pub async fn dashboard_snapshot(
     .bind(client_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    .map_err(|_| "store_down".to_string())?;
 
     let freeze_count: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM chronos_events
@@ -315,7 +315,7 @@ pub async fn dashboard_snapshot(
     .bind(client_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    .map_err(|_| "store_down".to_string())?;
 
     let trace_count: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM runtime_traces
@@ -324,7 +324,7 @@ pub async fn dashboard_snapshot(
     .bind(client_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    .map_err(|_| "store_down".to_string())?;
 
     let cognitive_count: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM cognitive_starvation_sessions
@@ -333,7 +333,7 @@ pub async fn dashboard_snapshot(
     .bind(client_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    .map_err(|_| "store_down".to_string())?;
 
     let agent_online: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM endpoint_agents
@@ -342,9 +342,11 @@ pub async fn dashboard_snapshot(
     .bind(client_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    .map_err(|_| "store_down".to_string())?;
 
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
+    }
 
     let liquid = rotate_liquid_matrix(pool, tenant_id, client_id, 3)
         .await

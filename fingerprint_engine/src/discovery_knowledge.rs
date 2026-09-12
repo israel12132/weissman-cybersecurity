@@ -440,7 +440,7 @@ pub async fn load_learned_paths(pool: &PgPool) -> Vec<String> {
     load_learned(pool, KIND_PATH).await
 }
 
-pub async fn stats(pool: &PgPool) -> CorpusStats {
+pub async fn stats(pool: &PgPool) -> Result<CorpusStats, sqlx::Error> {
     let row = sqlx::query(
         r#"SELECT
                COUNT(*) FILTER (WHERE kind = 'path')::bigint AS path_count,
@@ -451,17 +451,14 @@ pub async fn stats(pool: &PgPool) -> CorpusStats {
            FROM intel.discovery_knowledge"#,
     )
     .fetch_one(pool)
-    .await;
-    match row {
-        Ok(r) => CorpusStats {
-            path_count: r.try_get("path_count").unwrap_or(0),
-            subdomain_count: r.try_get("subdomain_count").unwrap_or(0),
-            llm_count: r.try_get("llm_count").unwrap_or(0),
-            confirmed_count: r.try_get("confirmed_count").unwrap_or(0),
-            seed_count: r.try_get("seed_count").unwrap_or(0),
-        },
-        Err(_) => CorpusStats::default(),
-    }
+    .await?;
+    Ok(CorpusStats {
+        path_count: row.try_get("path_count")?,
+        subdomain_count: row.try_get("subdomain_count")?,
+        llm_count: row.try_get("llm_count")?,
+        confirmed_count: row.try_get("confirmed_count")?,
+        seed_count: row.try_get("seed_count")?,
+    })
 }
 
 /// Idempotent seed insert. Skips when the public seed is already loaded.

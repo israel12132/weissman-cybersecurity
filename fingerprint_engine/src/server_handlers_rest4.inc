@@ -1423,7 +1423,13 @@ async fn api_pipeline_state_patch(
             (StatusCode::OK, Json(json!({"ok": true}))).into_response()
         }
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::pipeline_state_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response(),
     }
 }
 
@@ -1538,7 +1544,13 @@ async fn api_risk_graph_build(
         return r;
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::risk_graph_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     let llm_base: String = match sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_base_url'",
@@ -1589,7 +1601,7 @@ async fn api_risk_graph_build(
                 )
                     .into_response();
             }
-            let fusion = risk_graph::fusion_ot_it_graph_edges_llm(
+            let fusion = match risk_graph::fusion_ot_it_graph_edges_llm(
                 state.app_pool.as_ref(),
                 auth.tenant_id,
                 id,
@@ -1597,18 +1609,31 @@ async fn api_risk_graph_build(
                 llm_model.as_str(),
             )
             .await
-            .unwrap_or(0);
+            {
+                Ok(n) => n,
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::risk_graph_unavailable_json(
+                            "database unavailable",
+                        )),
+                    )
+                        .into_response();
+                }
+            };
             (
                 StatusCode::OK,
                 Json(json!({"nodes": n, "edges": e, "fusion_ot_it_edges": fusion})),
             )
                 .into_response()
         }
-        Err(err) => {
+        Err(_) => {
             let _ = tx.rollback().await;
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": err.to_string()})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::risk_graph_unavailable_json(
+                    "database unavailable",
+                )),
             )
                 .into_response()
         }
@@ -1722,7 +1747,13 @@ async fn api_runtime_traces_ingest(
             }
             (StatusCode::OK, Json(json!({"ok": true}))).into_response()
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "error": e.to_string()}))).into_response(),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::runtime_traces_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response(),
     }
 }
 
@@ -3063,7 +3094,13 @@ async fn api_deception_triggered(
             });
             (StatusCode::OK, Json(json!({"ok": true}))).into_response()
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::deception_assets_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response(),
     }
 }
 
@@ -3156,7 +3193,20 @@ async fn api_sovereign_phantom_trap(
 async fn api_discovery_knowledge_stats(State(state): State<Arc<AppState>>) -> Response {
     let seed_paths = weissman_engines::discovery_corpus::all_http_paths().len();
     let seed_subs = weissman_engines::discovery_corpus::all_subdomain_prefixes().len();
-    let stored = crate::discovery_knowledge::stats(state.intel_pool.as_ref()).await;
+    let stored = match crate::discovery_knowledge::stats(state.intel_pool.as_ref()).await {
+        Ok(s) => s,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(
+                    crate::http_unavailable::discovery_knowledge_stats_unavailable_json(
+                        "database unavailable",
+                    ),
+                ),
+            )
+                .into_response();
+        }
+    };
     (
         StatusCode::OK,
         Json(json!({
@@ -3340,7 +3390,13 @@ async fn api_council_hitl_propose(
             .into_response(),
         Err(e) => {
             tracing::error!(target: "hitl", "propose failed: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::council_hitl_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response()
         }
     }
 }
@@ -3426,7 +3482,13 @@ async fn api_council_hitl_approve(
             .into_response(),
         Err(e) => {
             tracing::error!(target: "hitl", "approve_and_fire failed: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::council_hitl_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response()
         }
     }
 }
@@ -3463,7 +3525,13 @@ async fn api_council_hitl_reject(
             .into_response(),
         Err(e) => {
             tracing::error!(target: "hitl", "reject failed: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::council_hitl_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response()
         }
     }
 }
@@ -3494,7 +3562,20 @@ async fn api_self_improve_status(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
-    let summary = crate::self_improve::status_summary(state.app_pool.as_ref(), auth.tenant_id).await;
+    let summary = match crate::self_improve::status_summary(state.app_pool.as_ref(), auth.tenant_id)
+        .await
+    {
+        Ok(s) => s,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::self_improve_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     Json(summary).into_response()
 }
 
@@ -3538,8 +3619,10 @@ async fn api_self_improve_toggle(
         Err(e) => {
             tracing::error!(target: "self_improve", "toggle failed: {}", e);
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": e.to_string()})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::self_improve_unavailable_json(
+                    "database unavailable",
+                )),
             )
                 .into_response()
         }
@@ -3618,8 +3701,10 @@ async fn api_self_improve_approve(
         Err(e) => {
             tracing::error!(target: "self_improve", "approve failed: {}", e);
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": e.to_string()})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::self_improve_unavailable_json(
+                    "database unavailable",
+                )),
             )
                 .into_response()
         }
@@ -3657,8 +3742,10 @@ async fn api_self_improve_reject(
         Err(e) => {
             tracing::error!(target: "self_improve", "reject failed: {}", e);
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": e.to_string()})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::self_improve_unavailable_json(
+                    "database unavailable",
+                )),
             )
                 .into_response()
         }
@@ -3748,7 +3835,13 @@ async fn api_oast_probe_mint(
         }
         Err(e) => {
             tracing::error!(target: "oast_probe", "mint failed: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::oast_mint_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response()
         }
     }
 }

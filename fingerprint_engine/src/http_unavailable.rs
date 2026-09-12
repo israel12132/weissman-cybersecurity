@@ -513,6 +513,114 @@ pub fn oast_verify_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// `POST /api/oast/probe` mint when the probe row cannot be persisted
+pub fn oast_mint_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "token": Value::Null,
+        "callback_domain": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/scan/status` when running job counts cannot be confirmed
+pub fn scan_status_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "scanning_active": Value::Null,
+        "scanning_enabled": Value::Null,
+        "scan_in_progress": Value::Null,
+        "running_async_jobs": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/discovery/knowledge/stats` when the intel corpus cannot be read
+pub fn discovery_knowledge_stats_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "stored_paths": Value::Null,
+        "stored_subdomain_prefixes": Value::Null,
+        "llm_learned": Value::Null,
+        "confirmed_hits": Value::Null,
+        "seed_rows": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/self-improve/status` and self-improve writes when the queue cannot be confirmed
+pub fn self_improve_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "enabled": Value::Null,
+        "counts": Value::Null,
+        "item_id": Value::Null,
+        "apply_job_id": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// Council HITL propose/approve/reject when the queue cannot be confirmed
+pub fn council_hitl_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "id": Value::Null,
+        "job_id": Value::Null,
+        "item_id": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/ceo/strategy` when tenant strategy configs cannot be confirmed
+pub fn ceo_strategy_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "effective": Value::Null,
+        "env_fallback_snapshot": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/ceo/hpc-policy` when running job splits cannot be confirmed
+pub fn hpc_policy_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "desired": Value::Null,
+        "effective_routing": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/sovereign-defense/:id/dashboard` when 24h counts cannot be confirmed
+pub fn sovereign_defense_dashboard_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "chronos": Value::Null,
+        "liquid_matrix": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/ceo/supreme-nerve-center` when module counts cannot be confirmed
+pub fn nerve_center_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "system_modules": [],
+        "engines": [],
+        "live_jobs": [],
+        "detail": detail,
+    })
+}
+
 /// `GET /api/clients/:id/first-seen-hits` — never advertise zero pre-NVD counts on store-down
 pub fn first_seen_hits_unavailable_json(client_id: i64, detail: &str) -> Value {
     json!({
@@ -2688,5 +2796,214 @@ mod tests {
         let fn_src = &rest[..next];
         assert!(fn_src.contains("database unavailable"));
         assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn ws_command_center_count_err_is_unavailable_not_init_zero() {
+        let fn_src = named_fn_src(
+            include_str!("http/serve.rs"),
+            "async fn handle_ws_command_center",
+        );
+        assert!(fn_src.contains("ws_command_center_store_down"));
+        let vuln = fn_src.find("FROM vulnerabilities").expect("vuln");
+        let clients = fn_src.find("FROM clients").expect("clients");
+        assert!(!&fn_src[vuln..clients].contains("unwrap_or(0)"));
+        let reports = fn_src.find("FROM report_runs").expect("reports");
+        let commit = fn_src.find("tx.commit().await.is_err()").expect("commit");
+        let report_src = &fn_src[reports..commit];
+        assert!(!report_src.contains(".flatten()"));
+        assert!(report_src.contains("ws_command_center_store_down"));
+        let init = fn_src.find("\"type\": \"init\"").expect("init");
+        assert!(commit < init);
+    }
+
+    #[test]
+    fn hpc_running_jobs_fetch_is_not_live_zero() {
+        let src = include_str!("ceo/hpc.rs");
+        let start = src.find("pub async fn get_hpc_policy").expect("hpc");
+        let rest = &src[start..];
+        let next = rest.find("\n#[derive(Deserialize)]").unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains(".fetch_all(pool)\n    .await?"));
+        assert!(!fn_src.contains(".await\n    .unwrap_or_default()"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_ceo.inc"),
+            "async fn api_ceo_hpc_policy_get",
+        );
+        assert!(handler.contains("hpc_policy_unavailable_json"));
+        assert!(!handler.contains("INTERNAL_SERVER_ERROR"));
+    }
+
+    #[test]
+    fn strategy_get_is_503_not_env_fallback() {
+        let src = include_str!("ceo/strategy.rs");
+        let start = src
+            .find("pub async fn load_genesis_runtime_params")
+            .expect("load");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn get_ceo_strategy_json")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("Result<GenesisRuntimeParams"));
+        assert!(!fn_src.contains("load_env_fallback()"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_ceo.inc"),
+            "async fn api_ceo_strategy_get",
+        );
+        assert!(handler.contains("ceo_strategy_unavailable_json"));
+        let exec = include_str!("async_job_executor.rs");
+        assert!(exec.contains("Err(_) => crate::ceo::strategy::load_env_fallback()"));
+        let telem = include_str!("ceo/ops_status.rs");
+        assert!(telem.contains("\"unavailable\": true"));
+        assert!(telem.contains("Value::Null"));
+    }
+
+    #[test]
+    fn sovereign_defense_dashboard_counts_are_not_live_zeros() {
+        let src = include_str!("sovereign_defense_store.rs");
+        let start = src.find("pub async fn dashboard_snapshot").expect("dash");
+        let rest = &src[start..];
+        let next = rest.find("\n#[cfg(test)]").unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(!fn_src.contains("unwrap_or(0)"));
+        assert!(!fn_src.contains("tenant tx:"));
+        assert!(fn_src.contains("store_down"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_sovereign_defense.inc"),
+            "async fn api_sovereign_defense_dashboard",
+        );
+        assert!(handler.contains("sovereign_defense_dashboard_unavailable_json"));
+        assert!(!handler.contains("\"error\": e"));
+    }
+
+    #[test]
+    fn scan_status_job_count_err_is_503_not_zero() {
+        let fn_src = named_fn_src(
+            include_str!("server_handlers_rest.inc"),
+            "async fn api_scan_status",
+        );
+        assert!(fn_src.contains("scan_status_unavailable_json"));
+        assert!(!fn_src.contains("unwrap_or(0)"));
+        let v = scan_status_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert!(v["running_async_jobs"].is_null());
+        assert_ne!(v["running_async_jobs"], json!(0));
+    }
+
+    #[test]
+    fn discovery_knowledge_stats_err_is_not_default_zero() {
+        let src = include_str!("discovery_knowledge.rs");
+        let start = src.find("pub async fn stats").expect("stats");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn seed_public_knowledge")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("Result<CorpusStats"));
+        assert!(!fn_src.contains("CorpusStats::default()"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "async fn api_discovery_knowledge_stats",
+        );
+        assert!(handler.contains("discovery_knowledge_stats_unavailable_json"));
+        let v = discovery_knowledge_stats_unavailable_json("store down");
+        assert!(v["confirmed_hits"].is_null());
+        assert_ne!(v["confirmed_hits"], json!(0));
+    }
+
+    #[test]
+    fn self_improve_status_is_503_not_zero_counts() {
+        let src = include_str!("self_improve.rs");
+        let start = src.find("pub async fn status_summary").expect("status");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn insert_proposals")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("Result<Value"));
+        assert!(!fn_src.contains("unwrap_or(0)"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "async fn api_self_improve_status",
+        );
+        assert!(handler.contains("self_improve_unavailable_json"));
+        let v = self_improve_unavailable_json("store down");
+        assert!(v["counts"].is_null());
+        assert!(v["enabled"].is_null());
+    }
+
+    #[test]
+    fn compliance_frameworks_list_err_is_503_not_fallback() {
+        let fn_src = named_fn_src(
+            include_str!("server_handlers_ui_aliases.inc"),
+            "async fn api_compliance_frameworks_list",
+        );
+        assert!(fn_src.contains("catalog_unavailable"));
+        assert!(!fn_src.contains("FALLBACK_FRAMEWORKS"));
+        let slugs = named_fn_src(
+            include_str!("server_handlers_ui_aliases.inc"),
+            "async fn listed_framework_slugs",
+        );
+        assert!(!slugs.contains("FALLBACK_FRAMEWORKS"));
+        assert!(slugs.contains("catalog_unavailable"));
+    }
+
+    #[test]
+    fn nerve_module_counts_are_not_healthy_on_store_down() {
+        let fn_src = named_fn_src(
+            include_str!("supreme_nerve_center.rs"),
+            "async fn build_system_modules",
+        );
+        let pending = fn_src.find("status = 'pending'").expect("pending");
+        let running = fn_src.find("status = 'running'").expect("running");
+        assert!(!&fn_src[pending..running].contains("unwrap_or(0)"));
+        assert!(fn_src.contains("Result<Vec<Value>"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_ceo.inc"),
+            "async fn api_ceo_supreme_nerve_center_get",
+        );
+        assert!(handler.contains("nerve_center_unavailable_json"));
+        assert!(!handler.contains("INTERNAL_SERVER_ERROR"));
+    }
+
+    #[test]
+    fn rest4_writes_are_503_not_sql_leak() {
+        let src = include_str!("server_handlers_rest4.inc");
+        for sig in [
+            "async fn api_pipeline_state_patch",
+            "async fn api_risk_graph_build",
+            "async fn api_runtime_traces_ingest",
+            "async fn api_deception_triggered",
+            "async fn api_council_hitl_propose",
+            "async fn api_council_hitl_approve",
+            "async fn api_council_hitl_reject",
+            "async fn api_self_improve_toggle",
+            "async fn api_self_improve_approve",
+            "async fn api_self_improve_reject",
+            "async fn api_oast_probe_mint",
+        ] {
+            let fn_src = named_fn_src(src, sig);
+            assert!(
+                !fn_src.contains("e.to_string()") && !fn_src.contains("err.to_string()"),
+                "{sig} still leaks Display"
+            );
+            assert!(
+                fn_src.contains("SERVICE_UNAVAILABLE") || fn_src.contains("_unavailable_json"),
+                "{sig} missing 503"
+            );
+        }
+        let build = named_fn_src(src, "async fn api_risk_graph_build");
+        assert!(!build.contains("unwrap_or(0)"));
+        assert!(build.contains("risk_graph_unavailable_json"));
+        let v = oast_mint_unavailable_json("store down");
+        assert!(v["token"].is_null());
+        assert_eq!(v["ok"], false);
+        let hitl = council_hitl_unavailable_json("store down");
+        assert!(hitl["job_id"].is_null());
+        let hpc = hpc_policy_unavailable_json("store down");
+        assert!(hpc["effective_routing"].is_null());
+        let strat = ceo_strategy_unavailable_json("store down");
+        assert!(strat["effective"].is_null());
     }
 }

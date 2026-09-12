@@ -993,6 +993,17 @@ async fn ws_command_center(
     })
 }
 
+async fn ws_command_center_store_down(socket: &mut WebSocket) {
+    let err = json!({
+        "type": "error",
+        "unavailable": true,
+        "message": "database unavailable",
+    });
+    if let Ok(s) = serde_json::to_string(&err) {
+        let _ = socket.send(Message::Text(s)).await;
+    }
+}
+
 async fn handle_ws_command_center(
     mut socket: WebSocket,
     pool: Arc<PgPool>,
@@ -1008,43 +1019,67 @@ async fn handle_ws_command_center(
     let Ok(mut tx) =
         weissman_db::begin_tenant_tx_scoped(pool.as_ref(), tenant_id, assigned_client_id).await
     else {
+        ws_command_center_store_down(&mut socket).await;
         return;
     };
     let vuln_count: i64 =
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
+        match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
             .fetch_one(&mut *tx)
             .await
-            .unwrap_or(0);
-    let client_count: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients")
+        {
+            Ok(n) => n,
+            Err(_) => {
+                ws_command_center_store_down(&mut socket).await;
+                return;
+            }
+        };
+    let client_count: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients")
         .fetch_one(&mut *tx)
         .await
-        .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(_) => {
+            ws_command_center_store_down(&mut socket).await;
+            return;
+        }
+    };
     let score: i64 = if assigned_client_id.is_some() {
         match live_security_score_from_vulns(&mut tx).await {
             Ok(s) => s,
-            Err(_) => return,
+            Err(_) => {
+                ws_command_center_store_down(&mut socket).await;
+                return;
+            }
         }
     } else {
-        sqlx::query_scalar::<_, String>(
+        match sqlx::query_scalar::<_, String>(
             "SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1",
         )
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten()
-        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-        .and_then(|j| {
-            j.get("by_severity").and_then(|b| b.as_object()).map(|by| {
-                (100i64
-                    - by.get("critical").and_then(Value::as_i64).unwrap_or(0) * 25
-                    - by.get("high").and_then(Value::as_i64).unwrap_or(0) * 15
-                    - by.get("medium").and_then(Value::as_i64).unwrap_or(0) * 5)
-                    .max(0)
-            })
-        })
-        .unwrap_or(0)
+        {
+            Ok(opt) => opt
+                .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                .and_then(|j| {
+                    j.get("by_severity").and_then(|b| b.as_object()).map(|by| {
+                        (100i64
+                            - by.get("critical").and_then(Value::as_i64).unwrap_or(0) * 25
+                            - by.get("high").and_then(Value::as_i64).unwrap_or(0) * 15
+                            - by.get("medium").and_then(Value::as_i64).unwrap_or(0) * 5)
+                            .max(0)
+                    })
+                })
+                .unwrap_or(0),
+            Err(_) => {
+                ws_command_center_store_down(&mut socket).await;
+                return;
+            }
+        }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        ws_command_center_store_down(&mut socket).await;
+        return;
+    }
     let globe = json!({
         "scanPulses": [],
         "criticalVulns": [],

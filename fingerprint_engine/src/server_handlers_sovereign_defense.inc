@@ -21,9 +21,13 @@ async fn api_sovereign_defense_dashboard(
     .await
     {
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": e })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(
+                crate::http_unavailable::sovereign_defense_dashboard_unavailable_json(
+                    "database unavailable",
+                ),
+            ),
         )
             .into_response(),
     }

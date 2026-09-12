@@ -130,41 +130,47 @@ pub fn configured_interval_secs() -> u64 {
 
 /// Status summary for the Command Center console: toggle state, interval, queue counts,
 /// and the last cycle time.
-pub async fn status_summary(pool: &PgPool, tenant_id: i64) -> Value {
-    let enabled = is_enabled(pool, tenant_id).await;
+pub async fn status_summary(pool: &PgPool, tenant_id: i64) -> Result<Value, sqlx::Error> {
     let interval = configured_interval_secs();
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let val: Option<String> = sqlx::query_scalar(
+        "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'self_improve_enabled'",
+    )
+    .bind(tenant_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let enabled = matches!(
+        val.as_deref()
+            .map(|s| s.trim().to_ascii_lowercase())
+            .as_deref(),
+        Some("1") | Some("true") | Some("yes") | Some("on")
+    );
     let mut pending = 0i64;
     let mut approved = 0i64;
     let mut rejected = 0i64;
     let mut applied = 0i64;
-    let mut last_cycle_at: Option<chrono::DateTime<chrono::Utc>> = None;
-    if let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await {
-        for (status, slot) in [
-            ("PENDING_APPROVAL", &mut pending),
-            ("APPROVED", &mut approved),
-            ("REJECTED", &mut rejected),
-            ("APPLIED", &mut applied),
-        ] {
-            *slot = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*)::bigint FROM system_improvement_queue WHERE tenant_id = $1 AND status = $2",
-            )
-            .bind(tenant_id)
-            .bind(status)
-            .fetch_one(&mut *tx)
-            .await
-            .unwrap_or(0);
-        }
-        last_cycle_at = sqlx::query_scalar::<_, Option<chrono::DateTime<chrono::Utc>>>(
-            "SELECT MAX(proposed_at) FROM system_improvement_queue WHERE tenant_id = $1",
+    for (status, slot) in [
+        ("PENDING_APPROVAL", &mut pending),
+        ("APPROVED", &mut approved),
+        ("REJECTED", &mut rejected),
+        ("APPLIED", &mut applied),
+    ] {
+        *slot = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*)::bigint FROM system_improvement_queue WHERE tenant_id = $1 AND status = $2",
         )
         .bind(tenant_id)
+        .bind(status)
         .fetch_one(&mut *tx)
-        .await
-        .ok()
-        .flatten();
-        let _ = tx.commit().await;
+        .await?;
     }
-    json!({
+    let last_cycle_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+        "SELECT MAX(proposed_at) FROM system_improvement_queue WHERE tenant_id = $1",
+    )
+    .bind(tenant_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(json!({
         "enabled": enabled,
         "interval_secs": interval,
         "counts": {
@@ -174,7 +180,7 @@ pub async fn status_summary(pool: &PgPool, tenant_id: i64) -> Value {
             "applied": applied,
         },
         "last_cycle_at": last_cycle_at,
-    })
+    }))
 }
 
 // ─── Queue operations (mirror council_hitl) ─────────────────────────────────────
