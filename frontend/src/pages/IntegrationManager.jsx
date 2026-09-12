@@ -41,6 +41,7 @@ export default function IntegrationManager() {
     { id: 'splunk', name: 'Splunk HEC', category: 'SIEM', icon: '📊', color: 'green', fields: ['hec_url', 'hec_token'] },
     { id: 'sentinel', name: 'Microsoft Sentinel', category: 'SIEM', icon: '🛡️', color: 'cyan', fields: ['ingest_url', 'access_token'] },
     { id: 'jira', name: 'Jira Cloud', category: 'Ticketing', icon: '📝', color: 'blue', fields: ['base_url', 'email', 'api_token', 'project_key'] },
+    { id: 'cortex_xsiam', name: 'Cortex XSIAM / XSOAR', category: 'SIEM', icon: '🔥', color: 'orange', fields: ['api_url', 'api_key', 'api_key_id', 'mode'] },
     { id: 'teams', name: 'Microsoft Teams', category: 'Communication', icon: '💬', color: 'indigo', fields: ['webhook_url'] },
     { id: 'weissman_agent', name: 'Weissman Agent Isolate', category: 'SOAR', icon: '🛡', color: 'cyan', fields: ['client_id'] },
   ];
@@ -90,7 +91,11 @@ export default function IntegrationManager() {
   const testConnection = async (integrationId) => {
     try {
       setTestingConnection(integrationId);
-      const result = await api.post(`/api/integrations/${integrationId}/test`, { dry_run: dryRunTests });
+      const result = await api.post(`/api/integrations/${integrationId}/test`, {
+        dry_run: integrationId === 'cortex_xsiam' || integrationId === 'cortex_xsoar' || integrationId === 'cortex'
+          ? false
+          : dryRunTests,
+      });
 
       // Update integration status
       setIntegrations((prev) =>
@@ -454,11 +459,18 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
     try {
       setSaving(true);
       setSaveResult(null);
+      const isMasked = (v) => {
+        const t = String(v ?? '').trim()
+        return t === '••••••••' || (/^[•*]+$/.test(t) && t.length >= 4)
+      }
+      const config = Object.fromEntries(
+        Object.entries(formData.config || {}).filter(([, v]) => !isMasked(v)),
+      )
       const payload = {
         id: formData.type,
         name: formData.name,
         category: existing?.category || integration?.category || 'Custom',
-        config: formData.config,
+        config,
       };
       const result = await api.post('/api/integrations', payload);
       onSave(result);

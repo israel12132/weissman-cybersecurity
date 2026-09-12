@@ -202,18 +202,10 @@ async fn api_risk_node_flags_patch(
             if let Some(cid) = client_id {
                 crate::attack_path::mark_graph_dirty(auth.tenant_id, cid);
             }
-            (StatusCode::OK, Json(json!({"ok": true, "id": node_id}))).into_response()
+            (StatusCode::OK, Json(json!({"ok": true, "id": node_id, "client_id": client_id}))).into_response()
         }
-        Ok(_) => (
-            StatusCode::NOT_FOUND,
-            Json(json!({"ok": false, "detail": "node not found"})),
-        )
-            .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
-        )
-            .into_response(),
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "node not found"}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": scrub_internal_error(&e)}))).into_response(),
     }
 }
 

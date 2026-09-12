@@ -21,9 +21,16 @@ import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../utils/apiFetch'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
+import CrownJewelBoard, {
+  snapshotHasNoJewels,
+  graphNodesFromPayload,
+  patchCrownJewelFlag,
+} from '../components/attack-paths/CrownJewelBoard'
 
 const NS = 'pages.attackPaths'
 const columnHelper = createColumnHelper()
+
+export { snapshotHasNoJewels, graphNodesFromPayload }
 
 function riskColor(risk) {
   const r = Number(risk) || 0
@@ -126,6 +133,8 @@ export default function AttackPaths() {
   const [blockSmb, setBlockSmb] = useState(false)
   const [whatIfBusy, setWhatIfBusy] = useState(false)
   const [whatIfSnapshot, setWhatIfSnapshot] = useState(null)
+  const [graphNodes, setGraphNodes] = useState([])
+  const [jewelBusyId, setJewelBusyId] = useState(null)
 
   const load = useCallback(
     async (recompute = false) => {
@@ -148,6 +157,36 @@ export default function AttackPaths() {
       }
     },
     [selectedClientId, t, toast],
+  )
+
+  const loadGraph = useCallback(async () => {
+    if (selectedClientId == null) return
+    try {
+      const data = await apiFetch(`/api/clients/${encodeURIComponent(selectedClientId)}/risk-graph`)
+      setGraphNodes(graphNodesFromPayload(data))
+    } catch {
+      setGraphNodes([])
+    }
+  }, [selectedClientId])
+
+  const toggleCrownJewel = useCallback(
+    async (node) => {
+      if (!node?.id) return
+      setJewelBusyId(node.id)
+      setError('')
+      try {
+        await patchCrownJewelFlag(apiFetch, node)
+        setGraphNodes((prev) =>
+          prev.map((n) => (n.id === node.id ? { ...n, crown_jewel: !node.crown_jewel } : n)),
+        )
+        toast.success(t(`${NS}.jewel_toggled`))
+      } catch (e) {
+        setError(e.message || t(`${NS}.jewel_toggle_failed`))
+      } finally {
+        setJewelBusyId(null)
+      }
+    },
+    [t, toast],
   )
 
   const runWhatIf = useCallback(async () => {
@@ -176,8 +215,12 @@ export default function AttackPaths() {
   useEffect(() => {
     setSnapshot(null)
     setWhatIfSnapshot(null)
-    if (selectedClientId != null) load(false)
-  }, [selectedClientId, load])
+    setGraphNodes([])
+    if (selectedClientId != null) {
+      load(false)
+      loadGraph()
+    }
+  }, [selectedClientId, load, loadGraph])
 
   const display = whatIfSnapshot || snapshot
   const chokePoints = useMemo(
@@ -308,6 +351,10 @@ export default function AttackPaths() {
           </div>
         )}
 
+        {selectedClientId != null && !loading && (
+          <CrownJewelBoard nodes={graphNodes} busyId={jewelBusyId} onToggle={toggleCrownJewel} t={t} />
+        )}
+
         {selectedClientId != null && !loading && !error && !hasSnapshot && (
           <EmptyState
             icon="network"
@@ -357,6 +404,16 @@ export default function AttackPaths() {
               <ExecutiveWidget label={t(`${NS}.kpi_path_ale`)} value={`$${(Number(display?.total_path_ale_usd) || 0).toLocaleString()}`} hint={t(`${NS}.kpi_path_ale_hint`)} accent="#f59e0b" />
               <ExecutiveWidget label={t(`${NS}.kpi_top_risk`)} value={topRisk.toFixed(1)} hint={t(`${NS}.kpi_top_risk_hint`)} accent={riskColor(topRisk)} />
             </div>
+
+            {snapshotHasNoJewels(display) && (
+              <div
+                data-testid="no-jewels-banner"
+                className="rounded-xl border border-amber-500/35 bg-amber-950/25 px-4 py-3"
+              >
+                <p className="text-sm text-amber-100">{t(`${NS}.no_jewels_banner`)}</p>
+                <p className="text-[11px] font-mono text-amber-200/80 mt-1">{t(`${NS}.no_jewels_hint`)}</p>
+              </div>
+            )}
 
             <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--table-surface)] p-4 flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2 text-[12px] text-[var(--text-secondary)]">

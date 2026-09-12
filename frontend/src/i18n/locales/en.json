@@ -537,9 +537,9 @@
     "sso_saml": "Sign in with SAML",
     "enterprise_sso": "Enterprise SSO",
     "brand_tagline": "Unified offensive security for enterprise teams",
-    "brand_story": "Correlate findings across {{engines}} attack engines, orchestrate SOAR playbooks, and prove compliance — from a single command center.",
+    "brand_story": "Correlate findings across 254 attack engines, orchestrate SOAR playbooks, and prove compliance — from a single command center.",
     "brand_release": "{{name}} · {{release}}",
-    "trust_engines": "{{engines}} engines",
+    "trust_engines": "254 engines",
     "trust_soc2": "SOC2-ready",
     "trust_region": "EU-West",
     "trust_label": "Platform trust indicators",
@@ -883,6 +883,15 @@
       "verdict_INCONCLUSIVE": "Inconclusive",
       "verdict_NOISE": "Noise",
       "verdict_FALSE_POSITIVE": "False positive"
+    },
+    "cortexPush": {
+      "button": "Push to Cortex",
+      "hint": "POST /api/findings/:id/push-cortex — live XSIAM/XSOAR ingest of this proven finding",
+      "need_proof": "Verify the finding or attach live proof before pushing to Cortex",
+      "failed": "Cortex push failed",
+      "ok": "Cortex accepted the finding",
+      "blind_spot": "Pushed — XDR had no matching alert (blind spot)",
+      "xdr_already": "Pushed — XDR already had a matching alert"
     }
   },
   "vuln_intel": {
@@ -1505,8 +1514,29 @@
       "no_choke_body": "No shared choke-points across the computed paths.",
       "no_paths_title": "No attack paths",
       "no_paths_body": "No internet → crown-jewel path was found in the current graph.",
-      "no_jewels_banner": "Zero crown jewels — Dijkstra has no sinks. Recompute auto-tags identity/cloud/OT/high-risk nodes so paths can form.",
-      "no_jewels_recompute": "Auto-tag jewels and recompute"
+      "no_jewels_banner": "No crown jewels are flagged — attack paths stay empty until an operator marks them.",
+      "no_jewels_recompute": "Auto-tag jewels and recompute",
+      "score": "Score",
+      "root_cause": "Root cause",
+      "path_ale": "Path ALE {{value}}",
+      "kpi_top_score": "Top score",
+      "kpi_top_score_hint": "Highest ranked path score",
+      "kpi_path_ale": "Path ALE",
+      "kpi_path_ale_hint": "Annualized loss expectancy on ranked paths",
+      "what_if_smb": "What-if: block SMB (445)",
+      "what_if_run": "Run what-if",
+      "what_if_clear": "Clear what-if",
+      "what_if_done": "What-if snapshot computed",
+      "no_jewels_hint": "Use the board below. Dijkstra only walks internet-exposed → crown-jewel.",
+      "jewel_board": "Crown jewels",
+      "jewel_board_hint": "PATCH /api/risk-graph/nodes/:id/flags — live operator truth, not a guessed inventory.",
+      "jewel_on": "Crown jewel",
+      "jewel_off": "Mark jewel",
+      "jewel_toggled": "Crown-jewel flag saved",
+      "jewel_toggle_failed": "Could not update crown-jewel flag.",
+      "no_graph_title": "No graph nodes",
+      "no_graph_body": "Build or refresh the risk graph for this client, then flag crown jewels here.",
+      "entry_flag": "internet-exposed"
     },
     "attackCoverage": {
       "title": "ATT&CK Coverage Matrix",
@@ -3724,7 +3754,7 @@
       "safety_decoy": "PLC decoy",
       "safety_events": "{{count}} live safety events",
       "safety_fair": "FAIR ALE ${{ale}} · crown jewels ${{jewels}}",
-      "evidence_notice": "OT/ICS protocol probes via POST /api/command-center/scan (ot_passive_active_safety, ot_crown_jewel_path) against authorized industrial IP ranges. Empty state means no reachable PLCs/RTUs in scope — not simulated Modbus traffic."
+      "evidence_notice": "OT/ICS protocol probes via POST /api/command-center/scan (ot_ics) against authorized industrial IP ranges. Empty state means no reachable PLCs/RTUs in scope — not simulated Modbus traffic."
     },
     "networkProtocols": {
       "title": "Network Protocol Analysis",

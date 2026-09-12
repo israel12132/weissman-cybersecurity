@@ -388,13 +388,23 @@ async fn api_integrations_post(
     }
     // Load the UNREDACTED registry so other integrations' encrypted credentials survive this write.
     let mut list: Vec<Value> = load_integrations_raw(&state, auth.tenant_id).await;
+    let stored_cfg = list
+        .iter()
+        .find(|i| i.get("id").and_then(Value::as_str) == Some(body.id.as_str()))
+        .and_then(|i| i.get("config"))
+        .cloned()
+        .unwrap_or(json!({}));
+    let merged = crate::soar::integrations_vault::merge_config_preserving_secrets(
+        &body.config,
+        &stored_cfg,
+    );
     let entry = json!({
         "id": body.id,
         "name": body.name,
         "category": body.category,
         "type": body.id,
         "status": "configured",
-        "config": crate::soar::integrations_vault::encrypt_config(&body.config),
+        "config": crate::soar::integrations_vault::encrypt_config(&merged),
         "last_test": null,
     });
     list.retain(|i| i.get("id").and_then(Value::as_str) != Some(body.id.as_str()));
@@ -514,7 +524,7 @@ async fn integration_live_test(
             "opsgenie" | "pagerduty" => "page_oncall",
             "teams" | "splunk" | "sentinel" => "slack_notify",
             "jira" => "create_incident",
-            _ => "page_oncall",
+            "cortex_xsiam" | "cortex_xsoar" | "cortex" => "siem_ingest",
             _ => "page_oncall",
         },
         tenant_id,
@@ -525,6 +535,42 @@ async fn integration_live_test(
         evidence,
         dry_run,
     );
+
+    if matches!(
+        provider.as_str(),
+        "cortex_xsiam" | "cortex_xsoar" | "cortex"
+    ) {
+        match crate::soar::adapters::cortex_xsiam::probe_connection(&record.config, false).await
+        {
+            Ok(detail) => {
+                return (
+                    StatusCode::OK,
+                    Json(json!({
+                        "ok": true,
+                        "success": true,
+                        "status": "connected",
+                        "provider": provider,
+                        "detail": detail,
+                        "dry_run": false,
+                    })),
+                )
+                    .into_response();
+            }
+            Err(e) => {
+                return (
+                    StatusCode::OK,
+                    Json(json!({
+                        "ok": true,
+                        "success": false,
+                        "status": "error",
+                        "provider": provider,
+                        "detail": e.to_string(),
+                    })),
+                )
+                    .into_response();
+            }
+        }
+    }
 
     if provider == "alert_webhook" || item.get("category").and_then(Value::as_str) == Some("Communication") {
         if let Some(url) = record.config.get("url").and_then(Value::as_str) {

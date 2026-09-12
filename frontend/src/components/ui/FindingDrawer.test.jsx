@@ -27,6 +27,10 @@ vi.mock('../findings/FindingLiveVerify', () => ({
   LiveVerdictBadge: () => null,
   liveVerdictFromFinding: () => null,
 }))
+vi.mock('../findings/FindingCortexPush', () => ({
+  __esModule: true,
+  default: () => null,
+}))
 vi.mock('./SupplyChainGraph', () => ({ __esModule: true, default: () => null }))
 
 const FINDING = {

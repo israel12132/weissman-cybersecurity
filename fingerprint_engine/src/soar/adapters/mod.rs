@@ -38,6 +38,7 @@ pub const REGISTERED_ADAPTER_IDS: &[&str] = &[
     "jira",
     "teams",
     "weissman_agent",
+    "cortex_xsiam",
 ];
 
 #[must_use]
@@ -84,6 +85,7 @@ pub trait PageOncallAdapter: Send + Sync {
 pub mod aws_ec2;
 pub mod azure_vm;
 pub mod common;
+pub mod cortex_xsiam;
 pub mod crowdstrike_falcon;
 pub mod github;
 pub mod jira;
@@ -98,6 +100,7 @@ pub mod weissman_agent;
 
 use aws_ec2::AwsEc2IsolateAdapter;
 use azure_vm::AzureVmIsolateAdapter;
+use cortex_xsiam::CortexXsiamAdapter;
 use crowdstrike_falcon::CrowdStrikeFalconAdapter;
 use github::GithubPrAdapter;
 use jira::JiraAdapter;
@@ -171,10 +174,14 @@ pub async fn dispatch(
         },
         "siem_ingest" => match normalize_provider(provider).as_str() {
             "sentinel" => SentinelAdapter.notify(&ctx).await,
+            "cortex_xsiam" | "cortex_xsoar" | "cortex" => CortexXsiamAdapter.notify(&ctx).await,
             _ => SplunkHecAdapter.notify(&ctx).await,
         },
         "create_incident" => match normalize_provider(provider).as_str() {
             "jira" => JiraAdapter.create_incident(&ctx).await,
+            "cortex_xsiam" | "cortex_xsoar" | "cortex" => {
+                CortexXsiamAdapter.create_incident(&ctx).await
+            }
             _ => ServiceNowAdapter.create_incident(&ctx).await,
         },
         other => Err(AdapterError::Skipped(format!("no adapter for {other}"))),
@@ -218,9 +225,13 @@ pub async fn verify_probe(
             "opsgenie" => OpsGenieAdapter.verify_delivery(target, payload).await,
             _ => PagerDutyAdapter.verify_delivery(target, payload).await,
         },
-        "incident_exists" | "create_incident" => {
-            ServiceNowAdapter.verify_incident(target, payload).await
-        }
+        "incident_exists" | "create_incident" => match p.as_str() {
+            "jira" => JiraAdapter.verify_incident(target, payload).await,
+            "cortex_xsiam" | "cortex_xsoar" | "cortex" => {
+                CortexXsiamAdapter.verify_incident(target, payload).await
+            }
+            _ => ServiceNowAdapter.verify_incident(target, payload).await,
+        },
         other => Err(AdapterError::Config(format!("unknown probe type {other}"))),
     }
 }
@@ -279,5 +290,6 @@ mod tests {
         assert!(REGISTERED_ADAPTER_IDS.contains(&"servicenow"));
         assert!(REGISTERED_ADAPTER_IDS.contains(&"azure_vm"));
         assert!(REGISTERED_ADAPTER_IDS.contains(&"crowdstrike_falcon"));
+        assert!(REGISTERED_ADAPTER_IDS.contains(&"cortex_xsiam"));
     }
 }

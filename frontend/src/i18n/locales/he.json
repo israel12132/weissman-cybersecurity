@@ -527,9 +527,9 @@
     "sso_saml": "התחבר עם SAML",
     "enterprise_sso": "כניסת ארגון (SSO)",
     "brand_tagline": "אבטחה התקפית מאוחדת לצוותי ארגון",
-    "brand_story": "קשר ממצאים מ-{{engines}} מנועי תקיפה, תזמר מדריכי SOAR והוכח עמידה ברגולציה — ממרכז פיקוד אחד.",
+    "brand_story": "קשר ממצאים מ-254 מנועי תקיפה, תזמר מדריכי SOAR והוכח עמידה ברגולציה — ממרכז פיקוד אחד.",
     "brand_release": "{{name}} · {{release}}",
-    "trust_engines": "{{engines}} מנועים",
+    "trust_engines": "254 מנועים",
     "trust_soc2": "מוכן ל-SOC2",
     "trust_region": "EU-West",
     "trust_label": "אינדיקטורי אמון בפלטפורמה",
@@ -813,6 +813,15 @@
       "verdict_INCONCLUSIVE": "לא חד משמעי",
       "verdict_NOISE": "רעש",
       "verdict_FALSE_POSITIVE": "False positive"
+    },
+    "cortexPush": {
+      "button": "דחיפה ל-Cortex",
+      "hint": "POST /api/findings/:id/push-cortex — הזרמה חיה ל-XSIAM/XSOAR של ממצא מוכח",
+      "need_proof": "אמת את הממצא או צרף הוכחה חיה לפני דחיפה ל-Cortex",
+      "failed": "דחיפה ל-Cortex נכשלה",
+      "ok": "Cortex קיבל את הממצא",
+      "blind_spot": "נדחף — ל-XDR לא היה התרעה תואמת (נקודת עיוורון)",
+      "xdr_already": "נדחף — ל-XDR כבר הייתה התרעה תואמת"
     }
   },
   "vuln_intel": {
@@ -1505,8 +1514,29 @@
       "no_choke_body": "אין צווארי בקבוק משותפים בין הנתיבים שחושבו.",
       "no_paths_title": "אין נתיבי תקיפה",
       "no_paths_body": "לא נמצא נתיב אינטרנט → נכס כתר בגרף הנוכחי.",
-      "no_jewels_banner": "אין נכסי כתר — לדייקסטרה אין יעדים. חישוב מחדש מתייג אוטומטית צמתי זהות/ענן/OT/סיכון-גבוה כדי שנתיבים יוכלו להיווצר.",
-      "no_jewels_recompute": "תייג נכסי כתר וחשב מחדש"
+      "no_jewels_banner": "אין נכסי כתר מסומנים — נתיבי התקיפה נשארים ריקים עד שמסמנים אותם.",
+      "no_jewels_recompute": "תייג נכסי כתר וחשב מחדש",
+      "score": "ציון",
+      "root_cause": "שורש",
+      "path_ale": "ALE נתיב {{value}}",
+      "kpi_top_score": "ציון מוביל",
+      "kpi_top_score_hint": "ציון הנתיב המדורג הגבוה ביותר",
+      "kpi_path_ale": "ALE נתיבים",
+      "kpi_path_ale_hint": "הפסד שנתי צפוי על הנתיבים המדורגים",
+      "what_if_smb": "What-if: חסימת SMB (445)",
+      "what_if_run": "הרץ what-if",
+      "what_if_clear": "נקה what-if",
+      "what_if_done": "תמונת what-if חושבה",
+      "no_jewels_hint": "השתמש בלוח למטה. Dijkstra הולך רק מאינטרנט חשוף אל נכס כתר.",
+      "jewel_board": "נכסי כתר",
+      "jewel_board_hint": "PATCH /api/risk-graph/nodes/:id/flags — אמת מפעיל חיה, לא מלאי מנוחש.",
+      "jewel_on": "נכס כתר",
+      "jewel_off": "סמן כתר",
+      "jewel_toggled": "דגל נכס הכתר נשמר",
+      "jewel_toggle_failed": "עדכון דגל נכס הכתר נכשל.",
+      "no_graph_title": "אין צמתי גרף",
+      "no_graph_body": "בנה או רענן את גרף הסיכון ללקוח, ואז סמן כאן נכסי כתר.",
+      "entry_flag": "חשוף לאינטרנט"
     },
     "attackCoverage": {
       "title": "מטריצת כיסוי ATT&CK",
@@ -2780,7 +2810,7 @@
       "safety_decoy": "פתיון PLC",
       "safety_events": "{{count}} אירועי בטיחות חיים",
       "safety_fair": "FAIR ALE ${{ale}} · נכסי כתר ${{jewels}}",
-      "evidence_notice": "בדיקות פרוטוקול OT/ICS ב-POST /api/command-center/scan (ot_passive_active_safety, ot_crown_jewel_path) על טווחי IP תעשייתיים מורשים. מצב ריק = אין PLCs/RTUs נגישים בהיקף — לא תעבורת Modbus מדומה."
+      "evidence_notice": "probes פרוטוקול OT/ICS ב-POST /api/command-center/scan (ot_ics) על טווחי IP ת industrial מורשים. מצב ריק = אין PLCs/RTUs נגישים ב-scope — לא תעבורת Modbus מדומה."
     },
     "networkIntelligence": {
       "title": "מודיעין רשת",
