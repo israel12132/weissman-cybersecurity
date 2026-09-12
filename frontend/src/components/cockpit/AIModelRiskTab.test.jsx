@@ -42,7 +42,16 @@ describe('AIModelRiskTab → DataTable', () => {
   })
 
   it('does not paint a clean AI-risk tab when telemetry APIs are down', async () => {
-    apiFetch.mockImplementation(() => Promise.reject(new Error('store down')))
+    apiFetch.mockImplementation((url) => {
+      const u = String(url)
+      if (u.includes('/events')) {
+        return Promise.resolve({ ok: false, unavailable: true, events: [], detail: 'store down' })
+      }
+      if (u.includes('/summary')) {
+        return Promise.resolve({ ok: false, unavailable: true, vectors: [], detail: 'store down' })
+      }
+      return Promise.resolve({})
+    })
     render(<AIModelRiskTab />)
     expect(await screen.findByTestId('ai-model-risk-unavailable')).toBeTruthy()
     expect(screen.queryByText('components.cockpitTabs.aiModelRisk.noTelemetry')).toBeNull()

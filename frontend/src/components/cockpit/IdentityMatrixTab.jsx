@@ -8,6 +8,7 @@ import { ShieldAlert, UserPlus, Trash2, ArrowRight, Zap, Sparkles } from 'lucide
 import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 import DataTable from '../ui/DataTable'
+import { useVisiblePolling } from '../../hooks/useVisiblePolling'
 
 const columnHelper = createColumnHelper()
 const IM = 'components.cockpitTabs.identityMatrix'
@@ -26,22 +27,22 @@ export default function IdentityMatrixTab() {
   const [harvestAlert, setHarvestAlert] = useState(false)
 
   const fetchContexts = useCallback(async () => {
-    if (!selectedClientId) return
+    if (!selectedClientId) return []
     const d = await apiFetch(`/api/clients/${selectedClientId}/identity-contexts`)
     if (d?.ok === false || d?.unavailable) {
       throw new Error(d.detail || t(`${IM}.unavailable`))
     }
-    setContexts(d.contexts || [])
-  }, [selectedClientId, t])
+    return d.contexts || []
+  }, [selectedClientId])
 
   const fetchEvents = useCallback(async () => {
-    if (!selectedClientId) return
+    if (!selectedClientId) return []
     const d = await apiFetch(`/api/clients/${selectedClientId}/privilege-escalation`)
     if (d?.ok === false || d?.unavailable) {
       throw new Error(d.detail || t(`${IM}.unavailable`))
     }
-    setEvents(d.events || [])
-  }, [selectedClientId, t])
+    return d.events || []
+  }, [selectedClientId])
 
   useEffect(() => {
     if (!selectedClientId) {
@@ -52,9 +53,16 @@ export default function IdentityMatrixTab() {
       return
     }
     let cancelled = false
+    setContexts([])
+    setEvents([])
     setLoading(true)
     setLoadError(null)
     Promise.all([fetchContexts(), fetchEvents()])
+      .then(([c, e]) => {
+        if (cancelled) return
+        setContexts(c)
+        setEvents(e)
+      })
       .catch((e) => {
         if (!cancelled) setLoadError(e?.message || t(`${IM}.unavailable`))
       })
@@ -62,21 +70,29 @@ export default function IdentityMatrixTab() {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [selectedClientId, fetchContexts, fetchEvents, t])
+  }, [selectedClientId, fetchContexts, fetchEvents])
 
-  useEffect(() => {
-    if (!polling || !selectedClientId) return
-    const timer = setInterval(() => {
-      fetchEvents().catch(() => {})
-    }, 4000)
-    return () => clearInterval(timer)
-  }, [polling, selectedClientId, fetchEvents])
+  useVisiblePolling(
+    () => {
+      fetchEvents()
+        .then((ev) => {
+          setEvents(ev)
+        })
+        .catch(() => {
+          setLoadError(t(`${IM}.unavailable`))
+          setPolling(false)
+        })
+    },
+    4000,
+    { paused: !polling || !selectedClientId },
+  )
 
   useEffect(() => {
     if (!lastHarvestedToken || String(lastHarvestedToken.client_id) !== String(selectedClientId)) return
     setHarvestAlert(true)
     fetchContexts()
-      .then(() => {
+      .then((list) => {
+        setContexts(list)
         setLastHarvestedToken?.(null)
       })
       .catch((e) => setLoadError(e?.message || t(`${IM}.unavailable`)))
@@ -104,7 +120,7 @@ export default function IdentityMatrixTab() {
         },
       })
       setForm({ role_name: '', privilege_order: 0, token_type: 'bearer', token_value: '' })
-      await fetchContexts()
+      setContexts(await fetchContexts())
     } catch (_) { /* best-effort; non-fatal */ }
     setSubmitting(false)
   }
@@ -116,7 +132,7 @@ export default function IdentityMatrixTab() {
         await apiFetch(`/api/clients/${selectedClientId}/identity-contexts/${ctxId}`, {
           method: 'DELETE',
         })
-        await fetchContexts()
+        setContexts(await fetchContexts())
       } catch (_) { /* best-effort; non-fatal */ }
     },
     [selectedClientId, fetchContexts],
@@ -300,7 +316,9 @@ export default function IdentityMatrixTab() {
       <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden">
         <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
           <span className="text-xs uppercase tracking-wider text-white/50">
-            {t('components.cockpitTabs.identityMatrix.session_contexts', { count: contexts.length })}
+            {loadError
+              ? t(`${IM}.unavailable`)
+              : t('components.cockpitTabs.identityMatrix.session_contexts', { count: contexts.length })}
           </span>
           {contexts.length >= 2 && (
             <Button variant="unstyled"
@@ -314,14 +332,16 @@ export default function IdentityMatrixTab() {
             </Button>
           )}
         </div>
+        {loadError && contexts.length === 0 ? null : (
         <DataTable
           id="identity-matrix-contexts-table"
           columns={contextColumns}
           data={contexts}
           getRowId={(c) => c.id}
           animateRows={false}
-          emptyState={<span className="text-white/50">{loadError ? t(`${IM}.unavailable`) : t(`${IM}.empty_contexts`)}</span>}
+          emptyState={<span className="text-white/50">{t(`${IM}.empty_contexts`)}</span>}
         />
+        )}
       </div>
 
       {/* Privilege Escalation Graph */}

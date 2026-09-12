@@ -111,13 +111,15 @@ export function useEngineCapabilities() {
 
   const { byId, kindById } = useMemo(() => buildMaps(payload), [payload])
 
-  const summary = payload?.summary ?? {}
-  const total = payload?.total ?? 0
-  const legend = payload?.legend ?? {}
+  const summary = unavailable || !payload ? {} : (payload?.summary ?? {})
+  const total = unavailable || !payload ? null : payload.total
+  const legend = unavailable || !payload ? {} : (payload?.legend ?? {})
 
   const remoteDetectionCount = useMemo(
-    () => Object.values(byId).filter((e) => e?.remote_detection).length,
-    [byId],
+    () => (unavailable || !payload
+      ? null
+      : Object.values(byId).filter((e) => e?.remote_detection).length),
+    [byId, unavailable, payload],
   )
 
   const getEngine = useCallback((engineId) => byId[engineId] ?? null, [byId])

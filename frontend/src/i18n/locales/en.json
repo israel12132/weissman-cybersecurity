@@ -6558,6 +6558,8 @@
         "loading": "Loading…",
         "noRequests": "No heal requests yet. Trigger one above.",
         "unavailable": "Heal-requests API unavailable — empty is not confirmed.",
+        "triggerFailed": "Auto-heal trigger failed — the request was not accepted.",
+        "verifyPollFailed": "Sandbox verification polling failed — last status is not confirmed.",
         "verifyJobPrefix": "verify job: {{id}}",
         "openPr": "Open PR / Approve & merge"
       },
@@ -7671,6 +7673,9 @@
     "search_placeholder": "Filter hosts…",
     "no_match": "No matching hosts",
     "noMatch": "No hosts match your filters."
+  },
+  "engineReality": {
+    "unavailable": "Engine capabilities API unavailable — 0 engines is not confirmed."
   },
   "engineAccounting": {
     "title": "Capability accounting · honest count",

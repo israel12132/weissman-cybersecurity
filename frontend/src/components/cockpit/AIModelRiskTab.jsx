@@ -104,7 +104,7 @@ export default function AIModelRiskTab() {
     } finally {
       setLoading(false)
     }
-  }, [selectedClientId, loadEndpoints, t])
+  }, [selectedClientId, loadEndpoints])
 
   useEffect(() => {
     load()
@@ -260,7 +260,7 @@ export default function AIModelRiskTab() {
           <p className="text-white/50 text-sm">{t(`${NS}.noTelemetry`)}</p>
         )}
         <div className="space-y-4">
-          {(summary.vectors || []).map((v) => {
+          {!loading && !loadError && (summary.vectors || []).map((v) => {
             const label = vectorLabel(v.attack_vector)
             const leak = Math.min(100, (v.avg_leakage || 0) * 100)
             const hall = Math.min(100, (v.avg_hallucination_under_duress || 0) * 100)

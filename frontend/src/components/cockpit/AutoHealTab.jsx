@@ -24,6 +24,7 @@ export default function AutoHealTab() {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState(null)
+  const [actionError, setActionError] = useState(null)
   const [healing, setHealing] = useState(null)
   const [verifyJobId, setVerifyJobId] = useState(null)
   const [verifySteps, setVerifySteps] = useState([])
@@ -84,6 +85,9 @@ export default function AutoHealTab() {
     const tick = async () => {
       try {
         const d = await apiFetch(`/api/heal-verify/${encodeURIComponent(jobId)}/steps`)
+        if (d?.ok === false || d?.unavailable) {
+          throw new Error(d.detail || t(`${NS}.verifyPollFailed`))
+        }
         const steps = d.steps || []
         setVerifySteps(steps)
         const last = steps[steps.length - 1]
@@ -92,10 +96,10 @@ export default function AutoHealTab() {
           setVerifyJobId(null)
           await fetchRequests()
         }
-      } catch (_) {
+      } catch (e) {
         stopPoll()
         setVerifyJobId(null)
-        await fetchRequests()
+        setActionError(e?.message || t(`${NS}.verifyPollFailed`))
       }
     }
     tick()
@@ -108,6 +112,7 @@ export default function AutoHealTab() {
     stopPoll()
     setVerifySteps([])
     setVerifyJobId(null)
+    setActionError(null)
     try {
       const port = parseInt(healForm.container_port, 10)
       const body = {
@@ -124,6 +129,9 @@ export default function AutoHealTab() {
         headers: destructiveHeaders({ 'Content-Type': 'application/json' }),
         body: dualControlBody('', '', body),
       })
+      if (data?.ok === false || data?.unavailable) {
+        throw new Error(data.detail || t(`${NS}.triggerFailed`))
+      }
       // 202-accepted was keyed on status===202 && data.job_id; on a 2xx
       // utils/apiFetch resolves to the parsed body, so key on data.job_id alone
       // (equivalent for the accepted case). A null JSON body still throws on
@@ -134,11 +142,7 @@ export default function AutoHealTab() {
         await fetchRequests()
       }
     } catch (e) {
-      // Before migration a non-OK HTTP response never threw: it fell through the
-      // else branch to fetchRequests(). Only a real exception (network error) hit
-      // the empty catch and did nothing. Reproduce both: refresh on HTTP errors
-      // (e.status set), do nothing on network errors (no e.status).
-      if (e?.status != null) await fetchRequests()
+      setActionError(e?.message || t(`${NS}.triggerFailed`))
     }
     setHealing(null)
   }
@@ -157,6 +161,16 @@ export default function AutoHealTab() {
         <Shield className="w-5 h-5 text-[#10b981]" />
         <h2 className="text-lg font-semibold text-white">{t(`${NS}.title`)}</h2>
       </div>
+
+      {actionError && (
+        <p
+          data-testid="auto-heal-action-failed"
+          role="alert"
+          className="text-sm text-red-300"
+        >
+          {actionError}
+        </p>
+      )}
 
       <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-4">
         <h3 className="text-sm font-medium text-white/90 mb-3">{t(`${NS}.formTitle`)}</h3>

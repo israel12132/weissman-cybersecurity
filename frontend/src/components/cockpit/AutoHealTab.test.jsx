@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k) => k, i18n: { language: 'en' } }),
@@ -30,5 +30,19 @@ describe('AutoHealTab', () => {
     render(<AutoHealTab />)
     expect(await screen.findByTestId('auto-heal-unavailable')).toBeTruthy()
     expect(screen.queryByText('components.cockpitTabs.autoHeal.noRequests')).toBeNull()
+  })
+
+  it('does not look idle when auto-heal trigger is refused', async () => {
+    apiFetch.mockImplementation((url, opts) => {
+      if (opts?.method === 'POST') {
+        return Promise.resolve({ ok: false, unavailable: true, detail: 'store down' })
+      }
+      return Promise.resolve({ requests: [] })
+    })
+    render(<AutoHealTab />)
+    const finding = await screen.findByPlaceholderText('components.cockpitTabs.autoHeal.findingId')
+    fireEvent.change(finding, { target: { value: 'CVE-1' } })
+    fireEvent.click(screen.getByText('components.cockpitTabs.autoHeal.verifyButton'))
+    expect(await screen.findByTestId('auto-heal-action-failed')).toBeTruthy()
   })
 })

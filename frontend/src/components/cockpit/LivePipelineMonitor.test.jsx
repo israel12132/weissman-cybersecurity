@@ -32,7 +32,13 @@ describe('LivePipelineMonitor', () => {
   it('does not claim no active run when pipeline state is unavailable', async () => {
     apiFetch.mockImplementation((url) => {
       if (String(url).includes('/api/pipeline/state')) {
-        return Promise.reject(new Error('store down'))
+        return Promise.resolve({
+          ok: false,
+          unavailable: true,
+          run_id: null,
+          states: [],
+          detail: 'store down',
+        })
       }
       return Promise.resolve({ nodes: [], edges: [] })
     })
