@@ -16,6 +16,7 @@ export default function AIModelRiskTab() {
   const [summary, setSummary] = useState({ vectors: [] })
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState(null)
   const [running, setRunning] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
@@ -83,29 +84,27 @@ export default function AIModelRiskTab() {
     if (!selectedClientId) return
     setLoading(true)
     setMsg(null)
+    setLoadError(null)
     try {
       await loadEndpoints()
       const [sRes, eRes] = await Promise.all([
-        apiFetch(`/api/clients/${selectedClientId}/llm-fuzz/summary`).catch(() => null),
-        apiFetch(`/api/clients/${selectedClientId}/llm-fuzz/events`).catch(() => null),
+        apiFetch(`/api/clients/${selectedClientId}/llm-fuzz/summary`),
+        apiFetch(`/api/clients/${selectedClientId}/llm-fuzz/events`),
       ])
-      if (sRes) {
-        setSummary({ vectors: sRes.vectors ?? [] })
-      } else {
-        setSummary({ vectors: [] })
+      if (sRes?.ok === false || sRes?.unavailable) {
+        throw new Error(sRes.detail || t(`${NS}.unavailable`))
       }
-      if (eRes) {
-        setEvents(eRes.events ?? [])
-      } else {
-        setEvents([])
+      if (eRes?.ok === false || eRes?.unavailable) {
+        throw new Error(eRes.detail || t(`${NS}.unavailable`))
       }
-    } catch (_) {
-      setSummary({ vectors: [] })
-      setEvents([])
+      setSummary({ vectors: sRes.vectors ?? [] })
+      setEvents(eRes.events ?? [])
+    } catch (e) {
+      setLoadError(e?.message || t(`${NS}.unavailable`))
     } finally {
       setLoading(false)
     }
-  }, [selectedClientId, loadEndpoints])
+  }, [selectedClientId, loadEndpoints, t])
 
   useEffect(() => {
     load()
@@ -247,7 +246,17 @@ export default function AIModelRiskTab() {
       <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6">
         <h3 className="text-xs font-mono uppercase tracking-wider text-violet-400 mb-4">{t(`${NS}.attackVectorsTitle`)}</h3>
         {loading && <p className="text-white/50 text-sm">{t(`${NS}.loading`)}</p>}
-        {!loading && (!summary.vectors || summary.vectors.length === 0) && (
+        {!loading && loadError && (
+          <p
+            className="text-amber-200/90 text-sm"
+            data-testid="ai-model-risk-unavailable"
+            data-live="false"
+            role="alert"
+          >
+            {t(`${NS}.unavailable`)}
+          </p>
+        )}
+        {!loading && !loadError && (!summary.vectors || summary.vectors.length === 0) && (
           <p className="text-white/50 text-sm">{t(`${NS}.noTelemetry`)}</p>
         )}
         <div className="space-y-4">
@@ -292,7 +301,7 @@ export default function AIModelRiskTab() {
           loading={loading}
           getRowId={(e) => e.id}
           animateRows={false}
-          emptyState={<span className="text-white/40">{t(`${NS}.noEvents`)}</span>}
+          emptyState={<span className="text-white/40">{loadError ? t(`${NS}.unavailable`) : t(`${NS}.noEvents`)}</span>}
         />
       </div>
     </div>

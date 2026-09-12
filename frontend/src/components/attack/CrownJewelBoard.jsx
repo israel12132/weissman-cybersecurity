@@ -20,29 +20,30 @@ export default function CrownJewelBoard({ clientId, onChanged, onInventory }) {
   const [busyId, setBusyId] = useState(null)
   const [error, setError] = useState('')
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    let cancelled = false
     if (clientId == null) {
       setNodes([])
-      return
+      return undefined
     }
     setLoading(true)
     setError('')
-    try {
-      const data = await apiFetch(`/api/clients/${encodeURIComponent(clientId)}/risk-graph`)
-      if (data?.unavailable) throw new Error(t(`${NS}.jewel_load_failed`))
-      const list = Array.isArray(data?.nodes) ? data.nodes : []
-      setNodes(list)
-    } catch (e) {
-      setError(e.message || t(`${NS}.jewel_load_failed`))
-      setNodes([])
-    } finally {
-      setLoading(false)
-    }
+    apiFetch(`/api/clients/${encodeURIComponent(clientId)}/risk-graph`)
+      .then((data) => {
+        if (cancelled) return
+        if (data?.unavailable || data?.ok === false) throw new Error(t(`${NS}.jewel_load_failed`))
+        setNodes(Array.isArray(data?.nodes) ? data.nodes : [])
+      })
+      .catch((e) => {
+        if (cancelled) return
+        setError(e.message || t(`${NS}.jewel_load_failed`))
+        setNodes([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
   }, [clientId, t])
-
-  useEffect(() => {
-    load()
-  }, [load])
 
   const jewelCount = useMemo(
     () => nodes.filter((n) => n.crown_jewel).length,

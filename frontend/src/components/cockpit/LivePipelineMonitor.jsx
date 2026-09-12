@@ -85,6 +85,7 @@ export default function LivePipelineMonitor() {
   const [states, setStates] = useState([])
   const [apiStageLabels, setApiStageLabels] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState(null)
   const [patching, setPatching] = useState(false)
   const [dagNodes, setDagNodes, onDagNodesChange] = useNodesState([])
   const [dagEdges, setDagEdges, onDagEdgesChange] = useEdgesState([])
@@ -94,11 +95,15 @@ export default function LivePipelineMonitor() {
 
   const fetchState = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const url = selectedClientId
         ? `/api/pipeline/state?client_id=${encodeURIComponent(selectedClientId)}`
         : '/api/pipeline/state'
       const d = await apiFetch(url)
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || t(`${NS}.unavailable`))
+      }
       setRunId(d.run_id ?? null)
       setStates(d.states ?? [])
       if (Array.isArray(d.stage_labels) && d.stage_labels.length) {
@@ -106,13 +111,12 @@ export default function LivePipelineMonitor() {
       } else {
         setApiStageLabels(null)
       }
-    } catch (_) {
-      setStates([])
-      setRunId(null)
+    } catch (e) {
+      setLoadError(e?.message || t(`${NS}.unavailable`))
     } finally {
       setLoading(false)
     }
-  }, [selectedClientId])
+  }, [selectedClientId, t])
 
   const fetchDag = useCallback(async () => {
     try {
@@ -232,7 +236,16 @@ export default function LivePipelineMonitor() {
             `}</style>
           </div>
         )}
-        {loading && !states.length ? (
+        {loadError ? (
+          <p
+            className="text-sm text-amber-200/90"
+            data-testid="pipeline-monitor-unavailable"
+            data-live="false"
+            role="alert"
+          >
+            {t(`${NS}.unavailable`)}
+          </p>
+        ) : loading && !states.length ? (
           <p className="text-sm text-white/50">{t(`${NS}.loading`)}</p>
         ) : !runId ? (
           <p className="text-sm text-white/50">{t(`${NS}.noActiveRun`)}</p>

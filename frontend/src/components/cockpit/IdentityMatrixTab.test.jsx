@@ -50,4 +50,12 @@ describe('IdentityMatrixTab → DataTable', () => {
       ),
     )
   })
+
+  it('does not paint a clean identity surface when the contexts API is down', async () => {
+    apiFetch.mockRejectedValue(new Error('store down'))
+    render(<IdentityMatrixTab />)
+    expect(await screen.findByTestId('identity-matrix-unavailable')).toBeTruthy()
+    expect(screen.queryByText('components.cockpitTabs.identityMatrix.empty_contexts')).toBeNull()
+    expect(screen.queryByText('components.cockpitTabs.identityMatrix.escalation.empty')).toBeNull()
+  })
 })

@@ -327,14 +327,13 @@ async fn api_containment_rules_list(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(Value::Object(serde_json::Map::from_iter([(
-                "rules".to_string(),
-                Value::Array(vec![]),
-            )]))),
+            Json(crate::http_unavailable::containment_rules_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, name, enabled, pre_approved, aws_region, forensic_source_cidr, forensic_ports_csv,
                   k8s_api_server, k8s_token_env_var, k8s_namespace, k8s_pod_label_key, k8s_pod_label_value, allow_dns_egress, created_at
            FROM containment_rules WHERE client_id = $1 ORDER BY id DESC"#,
@@ -342,7 +341,18 @@ async fn api_containment_rules_list(
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::containment_rules_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let out: Vec<Value> = rows
         .into_iter()

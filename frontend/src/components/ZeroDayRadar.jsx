@@ -36,6 +36,9 @@ export default function ZeroDayRadar() {
     setFeedError('')
     apiFetch('/api/threat-intel/feed')
       .then((data) => {
+        if (data?.ok === false || data?.unavailable) {
+          throw new Error(data.detail || t(`${NS}.feed_unavailable`))
+        }
         setFeedItems(data?.items ?? [])
       })
       .catch((e) => {

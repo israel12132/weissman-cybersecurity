@@ -99,4 +99,11 @@ describe('CrownJewelBoard', () => {
     render(<CrownJewelBoard clientId={7} />)
     expect(await screen.findByText('pages.attackPaths.jewel_empty_title')).toBeTruthy()
   })
+
+  it('does not paint empty-graph success when the risk-graph API is unavailable', async () => {
+    apiFetch.mockResolvedValue({ ok: false, unavailable: true, nodes: [], edges: [] })
+    render(<CrownJewelBoard clientId={7} />)
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(screen.queryByText('pages.attackPaths.jewel_empty_title')).toBeNull()
+  })
 })

@@ -9,23 +9,36 @@ export default function RuntimeExecutionFlow({ clientId, findingId }) {
   const { t } = useTranslation()
   const [traces, setTraces] = useState([])
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState(null)
 
   useEffect(() => {
     if (!clientId) {
       setTraces([])
+      setLoadError(null)
       return
     }
+    let cancelled = false
     setLoading(true)
+    setLoadError(null)
     const url = findingId
       ? `/api/clients/${clientId}/runtime-traces?finding_id=${encodeURIComponent(findingId)}`
       : `/api/clients/${clientId}/runtime-traces`
     apiFetch(url)
-      .then(d => {
+      .then((d) => {
+        if (cancelled) return
+        if (d?.ok === false || d?.unavailable) {
+          throw new Error(d.detail || t(`${NS}.unavailable`))
+        }
         setTraces(d.traces || [])
       })
-      .catch(() => setTraces([]))
-      .finally(() => setLoading(false))
-  }, [clientId, findingId])
+      .catch((e) => {
+        if (!cancelled) setLoadError(e?.message || t(`${NS}.unavailable`))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [clientId, findingId, t])
 
   if (!clientId) return null
 
@@ -38,6 +51,15 @@ export default function RuntimeExecutionFlow({ clientId, findingId }) {
       <div className="p-3 max-h-48 overflow-y-auto">
         {loading ? (
           <p className="text-xs text-white/50">{t(`${NS}.loading`)}</p>
+        ) : loadError ? (
+          <p
+            className="text-xs text-amber-200/90"
+            data-testid="runtime-traces-unavailable"
+            data-live="false"
+            role="alert"
+          >
+            {t(`${NS}.unavailable`)}
+          </p>
         ) : traces.length === 0 ? (
           <p className="text-xs text-white/50">
             {findingId

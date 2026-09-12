@@ -974,15 +974,32 @@ async fn api_identity_contexts_list(
     Path(id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!([]))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::identity_contexts_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         "SELECT id, role_name, privilege_order, token_type, created_at FROM identity_contexts WHERE client_id = $1 ORDER BY privilege_order, id",
     )
     .bind(id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::identity_contexts_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let out: Vec<Value> = rows
         .into_iter()
@@ -1063,16 +1080,33 @@ async fn api_privilege_escalation(
     Path(id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"events": []}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::privilege_events_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, from_context, to_context, method, url, response_status, severity, kill_chain_step_order, created_at
            FROM privilege_escalation_events WHERE client_id = $1 ORDER BY id DESC LIMIT 100"#,
     )
     .bind(id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::privilege_events_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let events: Vec<Value> = rows
         .into_iter()
@@ -1099,9 +1133,15 @@ async fn api_pipeline_state_get(
     Query(q): Query<PipelineStateQuery>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!(null))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::pipeline_state_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let row = if let (Some(run_id), Some(client_id)) = (q.run_id, q.client_id.as_ref()) {
+    let queried = if let (Some(run_id), Some(client_id)) = (q.run_id, q.client_id.as_ref()) {
         sqlx::query(
             r#"SELECT run_id, client_id, current_stage, paused, skip_to_stage, updated_at
                FROM pipeline_run_state WHERE tenant_id = $1 AND run_id = $2 AND client_id = $3"#,
@@ -1111,8 +1151,6 @@ async fn api_pipeline_state_get(
         .bind(client_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten()
     } else if let Some(client_id) = q.client_id.as_ref() {
         sqlx::query(
             r#"SELECT run_id, client_id, current_stage, paused, skip_to_stage, updated_at
@@ -1123,8 +1161,6 @@ async fn api_pipeline_state_get(
         .bind(client_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten()
     } else {
         sqlx::query(
             r#"SELECT run_id, client_id, current_stage, paused, skip_to_stage, updated_at
@@ -1134,8 +1170,18 @@ async fn api_pipeline_state_get(
         .bind(auth.tenant_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten()
+    };
+    let row = match queried {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::pipeline_state_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
     };
     let _ = tx.commit().await;
     match row {
@@ -1354,9 +1400,15 @@ async fn api_runtime_traces_list(
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"traces": []}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::runtime_traces_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, run_id, finding_id, trace_id, source_file, line_number, function_name, payload_hash, metadata, created_at
            FROM runtime_traces WHERE client_id = $1 AND ($2::text IS NULL OR finding_id = $2) ORDER BY id DESC LIMIT 200"#,
     )
@@ -1364,7 +1416,18 @@ async fn api_runtime_traces_list(
     .bind(finding_filter.as_deref())
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::runtime_traces_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let out: Vec<Value> = rows
         .into_iter()
@@ -3192,14 +3255,14 @@ async fn api_oast_callbacks(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({
-                "callbacks": [],
-                "health": oast_health(None, 0),
-            })),
+            Json(crate::http_unavailable::oast_callbacks_unavailable_json(
+                "database unavailable",
+                oast_health(None, 0),
+            )),
         )
             .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT h.id, h.interaction_token, h.channel, h.source_ip::text AS source_ip,
                   h.http_method, h.http_path, h.host_header, h.dns_qname, h.dns_qtype,
                   h.user_agent, h.created_at, COALESCE(p.probe_type, h.channel) AS probe_type
@@ -3212,7 +3275,19 @@ async fn api_oast_callbacks(
     .bind(auth.tenant_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::oast_callbacks_unavailable_json(
+                    scrub_internal_error(&e),
+                    oast_health(None, 0),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
 
     let mut last_callback_at: Option<String> = None;

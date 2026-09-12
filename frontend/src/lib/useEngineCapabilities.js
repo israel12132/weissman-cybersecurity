@@ -29,6 +29,9 @@ async function fetchCapabilities(force = false) {
   if (!fetchPromise || force) {
     fetchPromise = apiFetch('/api/engines/capabilities')
       .then(async (r) => {
+        if (r?.unavailable === true || r?.ok === false) {
+          throw markUnavailable(new Error(r?.detail || 'capabilities unavailable'), 'capabilities unavailable')
+        }
         if (!r || typeof r.ok !== 'boolean') {
           // utils-style clients may already return parsed JSON.
           if (r && typeof r === 'object' && Array.isArray(r.engines)) {
@@ -43,6 +46,9 @@ async function fetchCapabilities(force = false) {
           throw markUnavailable(err, 'capabilities unavailable')
         }
         const data = await r.json()
+        if (data?.unavailable === true || data?.ok === false) {
+          throw markUnavailable(new Error(data?.detail || 'capabilities unavailable'), 'capabilities unavailable')
+        }
         if (!data || typeof data !== 'object' || !Array.isArray(data.engines)) {
           throw markUnavailable(new Error('capabilities manifest missing'), 'capabilities manifest missing')
         }

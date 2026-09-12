@@ -32,22 +32,28 @@ export default function ContainmentRulesTab() {
   })
   const [exec, setExec] = useState({ rule_id: '', mode: 'aws_sg', aws_instance_id: '' })
   const [msg, setMsg] = useState(null)
+  const [loadError, setLoadError] = useState(null)
 
   const fetchRules = useCallback(async () => {
     if (!selectedClientId) {
       setRules([])
+      setLoadError(null)
       return
     }
     setLoading(true)
+    setLoadError(null)
     try {
       const d = await apiFetch(`/api/clients/${selectedClientId}/containment-rules`)
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || t(`${NS}.unavailable`))
+      }
       setRules(d.rules || [])
-    } catch (_) {
-      setRules([])
+    } catch (e) {
+      setLoadError(e?.message || t(`${NS}.unavailable`))
     } finally {
       setLoading(false)
     }
-  }, [selectedClientId])
+  }, [selectedClientId, t])
 
   useEffect(() => {
     fetchRules()
@@ -261,6 +267,15 @@ export default function ContainmentRulesTab() {
         </div>
         {loading ? (
           <div className="p-6 text-white/50 text-sm">{t(`${NS}.loading`)}</div>
+        ) : loadError ? (
+          <div
+            className="p-6 text-amber-200/90 text-sm"
+            data-testid="containment-rules-unavailable"
+            data-live="false"
+            role="alert"
+          >
+            {t(`${NS}.unavailable`)}
+          </div>
         ) : rules.length === 0 ? (
           <div className="p-6 text-white/50 text-sm">{t(`${NS}.noRules`)}</div>
         ) : (

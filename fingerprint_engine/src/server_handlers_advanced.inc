@@ -991,16 +991,33 @@ async fn api_playbooks_list(
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::playbook_list_unavailable_json("database unavailable")),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, name, description, enabled, trigger_dsl, actions_dsl,
                   last_run_at, last_run_status, run_count, failure_count,
                   created_at, updated_at
              FROM weissman_playbooks
             ORDER BY enabled DESC, updated_at DESC"#,
     )
-    .fetch_all(&mut *tx).await.unwrap_or_default();
+    .fetch_all(&mut *tx)
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::playbook_list_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
 
     let list: Vec<Value> = rows.into_iter().map(|r| {
@@ -1871,9 +1888,13 @@ async fn api_playbook_runs(
 ) -> Response {
     let limit: i64 = q.get("limit").and_then(|s| s.parse::<i64>().ok()).unwrap_or(50).clamp(1, 500);
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::playbook_runs_unavailable_json("database unavailable")),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, triggered_at, trigger_kind, trigger_event,
                   actions_total, actions_succeeded, actions_failed,
                   action_results, status, run_dedup_key
@@ -1884,7 +1905,20 @@ async fn api_playbook_runs(
     )
     .bind(playbook_id)
     .bind(limit)
-    .fetch_all(&mut *tx).await.unwrap_or_default();
+    .fetch_all(&mut *tx)
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::playbook_runs_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let runs: Vec<Value> = rows.into_iter().map(|r| json!({
         "id":                r.try_get::<i64, _>("id").unwrap_or(0),

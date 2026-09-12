@@ -259,6 +259,7 @@ pub mod heal_priority;
 pub mod heal_rate_limit;
 pub mod heal_readiness;
 pub mod heal_trends;
+pub mod http_unavailable;
 pub mod http_smuggling_engine;
 pub mod iac_misconfig_engine;
 pub mod casb_dlp_api;

@@ -19,6 +19,7 @@ export default function IdentityMatrixTab() {
   const [contexts, setContexts] = useState([])
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
   const [form, setForm] = useState({ role_name: '', privilege_order: 0, token_type: 'bearer', token_value: '' })
   const [submitting, setSubmitting] = useState(false)
   const [polling, setPolling] = useState(false)
@@ -26,35 +27,47 @@ export default function IdentityMatrixTab() {
 
   const fetchContexts = useCallback(async () => {
     if (!selectedClientId) return
-    try {
-      const d = await apiFetch(`/api/clients/${selectedClientId}/identity-contexts`)
-      setContexts(d.contexts || [])
-    } catch (_) { /* best-effort; non-fatal */ }
-  }, [selectedClientId])
+    const d = await apiFetch(`/api/clients/${selectedClientId}/identity-contexts`)
+    if (d?.ok === false || d?.unavailable) {
+      throw new Error(d.detail || t(`${IM}.unavailable`))
+    }
+    setContexts(d.contexts || [])
+  }, [selectedClientId, t])
 
   const fetchEvents = useCallback(async () => {
     if (!selectedClientId) return
-    try {
-      const d = await apiFetch(`/api/clients/${selectedClientId}/privilege-escalation`)
-      setEvents(d.events || [])
-    } catch (_) { /* best-effort; non-fatal */ }
-  }, [selectedClientId])
+    const d = await apiFetch(`/api/clients/${selectedClientId}/privilege-escalation`)
+    if (d?.ok === false || d?.unavailable) {
+      throw new Error(d.detail || t(`${IM}.unavailable`))
+    }
+    setEvents(d.events || [])
+  }, [selectedClientId, t])
 
   useEffect(() => {
     if (!selectedClientId) {
       setContexts([])
       setEvents([])
+      setLoadError(null)
       setLoading(false)
       return
     }
+    let cancelled = false
     setLoading(true)
-    Promise.all([fetchContexts(), fetchEvents()]).finally(() => setLoading(false))
-  }, [selectedClientId, fetchContexts, fetchEvents])
+    setLoadError(null)
+    Promise.all([fetchContexts(), fetchEvents()])
+      .catch((e) => {
+        if (!cancelled) setLoadError(e?.message || t(`${IM}.unavailable`))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [selectedClientId, fetchContexts, fetchEvents, t])
 
   useEffect(() => {
     if (!polling || !selectedClientId) return
     const timer = setInterval(() => {
-      fetchEvents()
+      fetchEvents().catch(() => {})
     }, 4000)
     return () => clearInterval(timer)
   }, [polling, selectedClientId, fetchEvents])
@@ -62,12 +75,14 @@ export default function IdentityMatrixTab() {
   useEffect(() => {
     if (!lastHarvestedToken || String(lastHarvestedToken.client_id) !== String(selectedClientId)) return
     setHarvestAlert(true)
-    fetchContexts().then(() => {
-      setLastHarvestedToken?.(null)
-    })
+    fetchContexts()
+      .then(() => {
+        setLastHarvestedToken?.(null)
+      })
+      .catch((e) => setLoadError(e?.message || t(`${IM}.unavailable`)))
     const timeout = setTimeout(() => setHarvestAlert(false), 8000)
     return () => clearTimeout(timeout)
-  }, [lastHarvestedToken, selectedClientId, fetchContexts, setLastHarvestedToken])
+  }, [lastHarvestedToken, selectedClientId, fetchContexts, setLastHarvestedToken, t])
 
   const autoHarvest = clientConfig?.auto_harvest !== false
   const toggleAutoHarvest = useCallback(async () => {
@@ -177,6 +192,16 @@ export default function IdentityMatrixTab() {
             <p className="text-xs text-amber-200/80">{t('components.cockpitTabs.identityMatrix.harvest_alert_body')}</p>
           </div>
         </motion.div>
+      )}
+      {loadError && (
+        <p
+          data-testid="identity-matrix-unavailable"
+          data-live="false"
+          role="alert"
+          className="text-sm text-amber-200/90"
+        >
+          {t(`${IM}.unavailable`)}
+        </p>
       )}
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2 text-white/90">
@@ -295,7 +320,7 @@ export default function IdentityMatrixTab() {
           data={contexts}
           getRowId={(c) => c.id}
           animateRows={false}
-          emptyState={<span className="text-white/50">{t(`${IM}.empty_contexts`)}</span>}
+          emptyState={<span className="text-white/50">{loadError ? t(`${IM}.unavailable`) : t(`${IM}.empty_contexts`)}</span>}
         />
       </div>
 
@@ -311,7 +336,9 @@ export default function IdentityMatrixTab() {
           </span>
         </div>
         <div className="p-4">
-          {events.length === 0 ? (
+          {loadError ? (
+            <p className="text-sm text-amber-200/90 py-6 text-center">{t(`${IM}.unavailable`)}</p>
+          ) : events.length === 0 ? (
             <p className="text-sm text-white/50 py-6 text-center">
               {t('components.cockpitTabs.identityMatrix.escalation.empty')}
             </p>

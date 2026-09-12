@@ -6225,6 +6225,7 @@
         "loading": "טוען traces…",
         "noTracesFinding": "אין traces מקושרים לממצא זה. פרוס סוכן IAST או הפעל eBPF ingestion לצפייה בזרימת ביצוע.",
         "noTracesClient": "אין runtime traces ללקוח זה עדיין.",
+        "unavailable": "API של runtime traces אינו זמין — שקט אינו מאושר.",
         "payloadHash": "payload_hash: {{hash}}"
       },
       "severityTrendChart": {
@@ -6507,6 +6508,7 @@
           "token": "אסימון"
         },
         "empty_contexts": "הוסף לפחות שני הקשרים (למשל Admin, User) להרצת Shadow Replay. הפעל ENGAGE TARGET להפעלת בדיקות BOLA + זהות.",
+        "unavailable": "API משטח הזהות אינו זמין — ריק אינו מאושר.",
         "delete": "מחק",
         "escalation": {
           "title": "הסלמת הרשאות (Kill Chain)",
@@ -6627,6 +6629,7 @@
         "savedRules": "כללים שמורים",
         "loading": "טוען…",
         "noRules": "אין כללים. צור אחד למעלה.",
+        "unavailable": "API כללי הבידוד אינו זמין — לא ניתן לאמת את סט הכללים.",
         "on": "פעיל",
         "off": "כבוי",
         "preApprovedStatus": "מאושר מראש",
@@ -6640,6 +6643,7 @@
         "dagTree": "עץ DAG",
         "refresh": "רענן",
         "loading": "טוען מצב pipeline…",
+        "unavailable": "API מצב ה-pipeline אינו זמין — לא מאושר שאין ריצה.",
         "noActiveRun": "אין ריצה פעילה. התחל סריקה לראות שלבים 0→4.",
         "global": "גלובלי",
         "resume": "המשך",
@@ -6765,6 +6769,7 @@
         "attackVectorsTitle": "וקטורי תקיפה × מדדי stress",
         "loading": "טוען…",
         "noTelemetry": "אין telemetry עדיין. הגדר endpoints והרץ את החבילה.",
+        "unavailable": "API סיכון מודל AI אינו זמין — ציונים נקיים אינם מאושרים.",
         "vectors": {
           "jailbreak_system_override": "Jailbreak / override מדיניות",
           "prompt_instruction_leak": "דליפת prompt / system",

@@ -46,7 +46,12 @@ export default function CICDThreatMatrix() {
     setLoading(true)
     setFindingsError('')
     apiFetch(`/api/clients/${clientId}/cicd-findings`)
-      .then((data) => setFindings(data?.findings ?? []))
+      .then((data) => {
+        if (data?.ok === false || data?.unavailable) {
+          throw new Error(data.detail || t(`${NS}.fetch_failed`))
+        }
+        setFindings(data?.findings ?? [])
+      })
       .catch((e) => {
         setFindingsError(e?.message || t(`${NS}.fetch_failed`))
       })

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../../utils/apiFetch'
 import EmptyState from '../ui/EmptyState'
@@ -23,30 +23,34 @@ export default function FirstSeenHitsPanel({ clientId }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const load = useCallback(async () => {
+  useEffect(() => {
     if (clientId == null) {
       setPayload(null)
-      return
+      setError('')
+      setLoading(false)
+      return undefined
     }
+    let cancelled = false
     setLoading(true)
     setError('')
-    try {
-      const data = await apiFetch(`/api/clients/${encodeURIComponent(clientId)}/first-seen-hits`)
-      if (!data || data.ok === false || data.unavailable) {
-        throw new Error(data?.detail || t(`${NS}.first_seen_load_failed`))
-      }
-      setPayload(data)
-    } catch (e) {
-      setError(e.message || t(`${NS}.first_seen_load_failed`))
-      setPayload(null)
-    } finally {
-      setLoading(false)
-    }
+    apiFetch(`/api/clients/${encodeURIComponent(clientId)}/first-seen-hits`)
+      .then((data) => {
+        if (cancelled) return
+        if (!data || data.ok === false || data.unavailable) {
+          throw new Error(data?.detail || t(`${NS}.first_seen_load_failed`))
+        }
+        setPayload(data)
+      })
+      .catch((e) => {
+        if (cancelled) return
+        setError(e.message || t(`${NS}.first_seen_load_failed`))
+        setPayload(null)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
   }, [clientId, t])
-
-  useEffect(() => {
-    load()
-  }, [load])
 
   if (clientId == null) return null
 

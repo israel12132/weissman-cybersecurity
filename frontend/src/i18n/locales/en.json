@@ -6225,6 +6225,7 @@
         "loading": "Loading traces…",
         "noTracesFinding": "No runtime traces linked to this finding. Deploy the IAST agent or enable eBPF ingestion to see execution flow.",
         "noTracesClient": "No runtime traces for this client yet.",
+        "unavailable": "Runtime traces API unavailable — quiet is not confirmed.",
         "payloadHash": "payload_hash: {{hash}}"
       },
       "severityTrendChart": {
@@ -6507,6 +6508,7 @@
           "token": "Token"
         },
         "empty_contexts": "Add at least two contexts (e.g. Admin, User) to run Shadow Replay. Run ENGAGE TARGET to trigger BOLA + identity tests.",
+        "unavailable": "Identity surface API unavailable — empty is not confirmed.",
         "delete": "Delete",
         "escalation": {
           "title": "Privilege Escalation (Kill Chain)",
@@ -6627,6 +6629,7 @@
         "savedRules": "Saved rules",
         "loading": "Loading…",
         "noRules": "No rules. Create one above.",
+        "unavailable": "Containment rules API unavailable — cannot verify the rule set.",
         "on": "on",
         "off": "off",
         "preApprovedStatus": "pre-approved",
@@ -6640,6 +6643,7 @@
         "dagTree": "DAG tree",
         "refresh": "Refresh",
         "loading": "Loading pipeline state…",
+        "unavailable": "Pipeline state API unavailable — idle is not confirmed.",
         "noActiveRun": "No active run. Start a scan to see stages 0→4.",
         "global": "Global",
         "resume": "Resume",
@@ -6765,6 +6769,7 @@
         "attackVectorsTitle": "Attack vectors × stress metrics",
         "loading": "Loading…",
         "noTelemetry": "No telemetry yet. Configure endpoints and run the suite.",
+        "unavailable": "AI model-risk API unavailable — clean scores are not confirmed.",
         "vectors": {
           "jailbreak_system_override": "Jailbreak / policy override",
           "prompt_instruction_leak": "Prompt / system leak",
