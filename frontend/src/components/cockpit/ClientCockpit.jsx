@@ -30,6 +30,7 @@ import { useContainerChartSize } from '../../hooks/useViewportChartSize'
 import { apiFetch } from '../../utils/apiFetch'
 import { useToast } from '../ui/Toaster'
 import Button from '../ui/Button'
+import { useNavigate } from 'react-router'
 
 const TAB_DEFS = [
   { id: 'overview', labelKey: 'overview', Component: OverviewTab },
@@ -69,6 +70,7 @@ function targetUrlFromClient(client) {
 export default function ClientCockpit({ ceoIntegrated = false }) {
   const { t } = useTranslation()
   const { toast } = useToast()
+  const navigate = useNavigate()
   const [neuralWrapRef, neuralSize] = useContainerChartSize(120)
   const { selectedClient, selectedClientId, refreshClients, setPoeJobId } = useClient()
   const [activeTab, setActiveTab] = useState(() =>
@@ -297,6 +299,14 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
               className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold text-[10px] sm:text-xs uppercase tracking-wider border border-white/20 bg-white/5 text-white/85 hover:bg-white/10 hover:border-white/30 disabled:opacity-50"
             >
               {boardReportLoading ? t('components.cockpit.board_report_loading') : t('components.cockpit.board_report')}
+            </Button>
+            <Button variant="unstyled"
+              id="cockpit-board-pack-btn"
+              type="button"
+              onClick={() => navigate('/board-pack')}
+              className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold text-[10px] sm:text-xs uppercase tracking-wider border border-cyan-400/40 bg-cyan-950/40 text-cyan-200 hover:bg-cyan-900/50"
+            >
+              {t('components.cockpit.board_pack')}
             </Button>
             <Button variant="unstyled"
               id="cockpit-engage-scan-btn"

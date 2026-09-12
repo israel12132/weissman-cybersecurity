@@ -384,6 +384,15 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/clients/:id/findings", get(api_client_findings_all))
         .route("/api/clients/:id/export/csv", get(api_client_export_csv))
         .route("/api/clients/:id/report/pdf", get(api_client_report_pdf))
+        .route("/api/clients/:id/board-pack", get(api_client_board_pack))
+        .route(
+            "/api/clients/:id/board-pack/pdf",
+            get(api_client_board_pack_pdf),
+        )
+        .route(
+            "/api/clients/:id/board-pack/xlsx",
+            get(api_client_board_pack_xlsx),
+        )
         .route(
             "/api/clients/:id/report/crypto-proof",
             get(api_client_report_crypto_proof),

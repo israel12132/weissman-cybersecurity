@@ -167,6 +167,7 @@ export const NAV_GROUPS = [
       { to: '/security-posture', labelKey: 'nav.security_posture', icon: '🛡' },
       { to: '/crypto-posture', labelKey: 'nav.crypto_posture', icon: '🔑' },
       { to: '/financial-risk', labelKey: 'nav.financial_risk', icon: '💵' },
+      { to: '/board-pack', labelKey: 'nav.board_pack', icon: '📑' },
       { to: '/attack-coverage', labelKey: 'nav.attack_coverage', icon: '▦' },
       { to: '/compliance', labelKey: 'nav.compliance', icon: '🛡' },
       { to: '/sbom', labelKey: 'nav.sbom', icon: '📦' },

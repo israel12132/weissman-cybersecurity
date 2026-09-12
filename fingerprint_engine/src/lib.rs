@@ -128,6 +128,7 @@ pub mod orchestrator;
 pub mod outbound_http;
 pub mod panic_shield;
 pub mod payload_sync_worker;
+pub mod board_pack;
 pub mod pdf_report;
 pub mod pentest_memory;
 pub mod pipeline_context;
