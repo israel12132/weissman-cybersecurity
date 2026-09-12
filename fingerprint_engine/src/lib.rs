@@ -376,6 +376,8 @@ pub use fingerprint::{
 pub use fuzzer::{
     run_fuzzer, run_fuzzer_collect, run_fuzzer_collect_tenant, Baseline, Mutator, ValidatedAnomaly,
 };
-pub use recon::{enum_subdomains, enum_subdomains_default, DEFAULT_SUBDOMAINS};
+pub use recon::{
+    default_subdomain_wordlist, enum_subdomains, enum_subdomains_default, DEFAULT_SUBDOMAINS,
+};
 pub use risk_graph::export_risk_graph_json;
 pub use safe_probe::{safe_probe, SafeProbeResult};
