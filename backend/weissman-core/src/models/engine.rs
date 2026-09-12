@@ -678,6 +678,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "ngfw_posture",
     "malware_detonation",
     "weissman_vngfw",
+    "adversary_path_prover",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -782,6 +783,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "typosquatting_monitor",
     // APT / Top-Tier (run last as they may depend on previous findings)
     "kill_chain",
+    "adversary_path_prover",
     "oast_oob",
     "deception_honeypot",
     "digital_twin",

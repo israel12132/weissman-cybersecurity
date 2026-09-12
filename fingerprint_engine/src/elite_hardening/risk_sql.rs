@@ -52,6 +52,46 @@ UPDATE risk_graph_nodes
    )
 "#;
 
+/// Tag likely crown jewels so Dijkstra has sinks. Operator flags stay authoritative;
+/// this only fills empty jewels from business value / high-risk identity-cloud-k8s
+/// nodes. Honey nodes are never tagged.
+pub const AUTO_TAG_CROWN_JEWEL_SQL: &str = r#"
+UPDATE risk_graph_nodes
+   SET crown_jewel = TRUE
+ WHERE tenant_id = $1
+   AND client_id = $2
+   AND crown_jewel IS NOT TRUE
+   AND COALESCE(honey_node, FALSE) IS NOT TRUE
+   AND (
+        COALESCE(business_value_usd, 0) > 0
+     OR (
+          node_type IN ('identity', 'database', 'k8s', 'k8s_secret', 'domain_controller', 'secret', 'dc')
+      AND COALESCE(risk_score, 0) >= 55
+        )
+   )
+"#;
+
+/// If a client still has zero jewels after the heuristic, seed the top 3 by
+/// business value then risk so attack-path inference is not vacuously empty.
+pub const AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL: &str = r#"
+UPDATE risk_graph_nodes
+   SET crown_jewel = TRUE
+ WHERE tenant_id = $1
+   AND client_id = $2
+   AND id IN (
+        SELECT id FROM risk_graph_nodes
+         WHERE tenant_id = $1
+           AND client_id = $2
+           AND COALESCE(honey_node, FALSE) IS NOT TRUE
+         ORDER BY COALESCE(business_value_usd, 0) DESC, COALESCE(risk_score, 0) DESC
+         LIMIT 3
+   )
+   AND NOT EXISTS (
+        SELECT 1 FROM risk_graph_nodes
+         WHERE tenant_id = $1 AND client_id = $2 AND crown_jewel = TRUE
+   )
+"#;
+
 pub fn max_hops() -> i32 {
     12
 }
@@ -73,5 +113,9 @@ mod tests {
                     .trim_start()
                     .starts_with("UPDATE")
         );
+        for sql in [AUTO_TAG_CROWN_JEWEL_SQL, AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL] {
+            assert!(sql.trim_start().to_ascii_uppercase().starts_with("UPDATE"));
+            assert!(!sql.to_ascii_uppercase().contains("DROP "));
+        }
     }
 }

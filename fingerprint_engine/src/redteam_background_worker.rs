@@ -17,6 +17,14 @@ fn interval_secs() -> u64 {
 }
 
 /// Enable with `WEISSMAN_REDTEAM_CRON=1`.
+pub const REDTEAM_CRON_ENGINES: &[&str] = &[
+    "ai_adversarial_redteam",
+    "kill_chain",
+    "autonomous_pentest",
+    "adversary_path_prover",
+    "threat_emulation",
+];
+
 pub fn spawn_cron_worker(
     app_pool: Arc<PgPool>,
     auth_pool: Arc<PgPool>,
@@ -69,15 +77,17 @@ async fn dispatch_redteam_jobs(app_pool: &PgPool, tenant_id: i64) -> Result<(), 
         if client_id == 0 || target.is_empty() {
             continue;
         }
-        let payload = serde_json::json!({
-            "engine": "ai_adversarial_redteam",
-            "target": target,
-            "client_id": client_id,
-            "trigger": "redteam_cron",
-        });
-        crate::async_jobs::enqueue(app_pool, tenant_id, "command_center_engine", payload, None)
-            .await
-            .map_err(|e| e.to_string())?;
+        for engine in REDTEAM_CRON_ENGINES {
+            let payload = serde_json::json!({
+                "engine": engine,
+                "target": target,
+                "client_id": client_id,
+                "trigger": "redteam_cron",
+            });
+            crate::async_jobs::enqueue(app_pool, tenant_id, "command_center_engine", payload, None)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
     }
     Ok(())
 }

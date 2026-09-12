@@ -302,6 +302,22 @@ pub fn default_technique_library() -> Vec<Technique> {
             &["impact:objective"],
             2,
         ),
+        Technique::new(
+            "smb_lateral",
+            "Lateral movement over SMB",
+            "T1021.002",
+            &["access:foothold", "service:smb"],
+            &["access:internal"],
+            4,
+        ),
+        Technique::new(
+            "rdp_lateral",
+            "Lateral movement over RDP",
+            "T1021.001",
+            &["access:foothold", "service:rdp"],
+            &["access:internal"],
+            4,
+        ),
     ]
 }
 
@@ -367,6 +383,12 @@ pub fn facts_from_findings(findings: &[serde_json::Value]) -> HashSet<Fact> {
         {
             facts.insert("cloud:exposed".to_string());
         }
+        if hay.contains("smb") || hay.contains("445") || hay.contains("netbios") {
+            facts.insert("service:smb".to_string());
+        }
+        if hay.contains("rdp") || hay.contains("3389") || hay.contains("winrm") {
+            facts.insert("service:rdp".to_string());
+        }
         // A verified exploit is direct evidence of a foothold when it is high/critical by
         // categorical severity OR by its EPSS/KEV-adjusted effective_risk. A finding whose base
         // severity is only "medium" but is known-exploited (KEV) or scored >= 8.5 by the intel
@@ -391,6 +413,39 @@ fn field(v: &serde_json::Value, key: &str) -> String {
         .and_then(serde_json::Value::as_str)
         .unwrap_or("")
         .to_string()
+}
+
+/// Emit a finding when STRIPS can reach `goal` from *these* findings. Returns `None` when
+/// the goal is unreachable — callers must not invent a chain.
+pub fn strips_chain_finding(
+    engine_id: &str,
+    target: &str,
+    findings: &[serde_json::Value],
+    goal: &str,
+) -> Option<serde_json::Value> {
+    let chain = plan_from_findings(findings, goal)?;
+    if !chain.reached_goal || chain.steps.is_empty() {
+        return None;
+    }
+    let facts: Vec<String> = facts_from_findings(findings).into_iter().collect();
+    Some(serde_json::json!({
+        "type": engine_id,
+        "engine": engine_id,
+        "title": format!("STRIPS chain reached {goal} ({} step(s))", chain.steps.len()),
+        "severity": "high",
+        "mitre_attack": chain.mitre_path.first().cloned().unwrap_or_else(|| "T1190".to_string()),
+        "description": format!(
+            "Planner reached {goal} from observed facts {:?} via {} (cost {}). No hop was invented.",
+            facts,
+            chain.mitre_path.join(" → "),
+            chain.total_cost
+        ),
+        "target": target,
+        "probe_depth": "strips_from_observed_facts",
+        "strips_chain": chain.to_json(),
+        "reached_goal": true,
+        "goal": goal,
+    }))
 }
 
 /// Convenience: plan from real findings toward a goal using the default technique library.
@@ -594,5 +649,56 @@ mod tests {
             chain.mitre_path.contains(&"T1068".to_string())
                 || chain.mitre_path.contains(&"T1567".to_string())
         );
+    }
+
+    #[test]
+    fn smb_and_rdp_facts_from_live_port_findings() {
+        let findings = vec![serde_json::json!({
+            "type": "adversary_path_prover",
+            "title": "Lateral/admin ports open: [445, 3389]",
+            "severity": "high",
+            "mitre_attack": "T1021",
+        })];
+        let facts = facts_from_findings(&findings);
+        assert!(facts.contains("service:smb"));
+        assert!(facts.contains("service:rdp"));
+    }
+
+    #[test]
+    fn strips_finding_none_without_evidence() {
+        let findings = vec![serde_json::json!({
+            "type": "kill_chain",
+            "title": "HTTP stack fingerprint: nginx",
+            "severity": "info",
+            "mitre_attack": "T1595",
+        })];
+        assert!(strips_chain_finding(
+            "kill_chain",
+            "https://x.example",
+            &findings,
+            "impact:objective"
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn strips_finding_emits_when_verified_rce_reaches_goal() {
+        let findings = vec![serde_json::json!({
+            "type": "http_feedback_fuzz",
+            "title": "RCE via command injection",
+            "severity": "critical",
+            "verified": true,
+            "target": "https://app.example",
+        })];
+        let f = strips_chain_finding(
+            "kill_chain",
+            "https://app.example",
+            &findings,
+            "impact:objective",
+        )
+        .expect("verified RCE must produce a chain finding");
+        assert_eq!(f["reached_goal"], true);
+        assert_eq!(f["type"], "kill_chain");
+        assert!(f["strips_chain"]["steps"].as_array().unwrap().len() >= 1);
     }
 }

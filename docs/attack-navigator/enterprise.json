@@ -28,8 +28,8 @@
     },
     {
       "techniqueID": "T1190",
-      "score": 70,
-      "comment": "ai_casb_saas, ai_cloud_escalation_chain, api_all_vectors_engine, api_fuzzing, api_gateway_attack, api_gateway_bypass, api_versioning_attack, apt29_techniques, apt41_techniques, asm, ble_rf, blockchain_bridge_exploit, carbon_spider_ttps, cl0p_techniques, deserialization_java, deserialization_net, dns_rebinding, earth_longzhi_ttps, external_exposure_supreme, file_upload, fin7_techniques, graphql_attack, graphql_deep_attack, graphql_injection, graphql_subscription_attack, grpc_reflection_attack, host_header_injection, http2_attack, http_feedback_fuzz, http_parameter_pollution, http_smuggling, kernel_exploit, kill_chain, lazarus_group_ttps, ldap_injection_engine, liminal_boundary, llm_path_fuzz, log4shell_scan, mainframe_zos_attack, mass_assignment, microsecond_timing, mobile_backend_chain, network_slice_isolation_bypass, nexus_sovereign_swarm, ngfw_posture, nosql_deep_injection, nosql_injection, odata_injection, ollama_fuzz, open_redirect, rce_chain, rce_deserialization, rce_exploit_engine, react_native_attack, salt_typhoon_ttps, sandworm_techniques, sap_erp_attack, service_mesh_attack, shodan_mass_scan, smart_contract_audit, soap_injection, sqli_advanced, ssti, swagger_abuse, tactic_chain_synthesizer, volt_typhoon_ttps, vuln_chaining, web3_dapp_attack, xxe, xxe_injection",
+      "score": 71,
+      "comment": "adversary_path_prover, ai_casb_saas, ai_cloud_escalation_chain, api_all_vectors_engine, api_fuzzing, api_gateway_attack, api_gateway_bypass, api_versioning_attack, apt29_techniques, apt41_techniques, asm, ble_rf, blockchain_bridge_exploit, carbon_spider_ttps, cl0p_techniques, deserialization_java, deserialization_net, dns_rebinding, earth_longzhi_ttps, external_exposure_supreme, file_upload, fin7_techniques, graphql_attack, graphql_deep_attack, graphql_injection, graphql_subscription_attack, grpc_reflection_attack, host_header_injection, http2_attack, http_feedback_fuzz, http_parameter_pollution, http_smuggling, kernel_exploit, kill_chain, lazarus_group_ttps, ldap_injection_engine, liminal_boundary, llm_path_fuzz, log4shell_scan, mainframe_zos_attack, mass_assignment, microsecond_timing, mobile_backend_chain, network_slice_isolation_bypass, nexus_sovereign_swarm, ngfw_posture, nosql_deep_injection, nosql_injection, odata_injection, ollama_fuzz, open_redirect, rce_chain, rce_deserialization, rce_exploit_engine, react_native_attack, salt_typhoon_ttps, sandworm_techniques, sap_erp_attack, service_mesh_attack, shodan_mass_scan, smart_contract_audit, soap_injection, sqli_advanced, ssti, swagger_abuse, tactic_chain_synthesizer, volt_typhoon_ttps, vuln_chaining, web3_dapp_attack, xxe, xxe_injection",
       "enabled": true
     },
     {
@@ -130,8 +130,8 @@
     },
     {
       "techniqueID": "T1685",
-      "score": 11,
-      "comment": "adversarial_ml, amsi_bypass, av_bypass_engine, cloud_logging_blind, cloud_waf_bypass, detection_gap_exploiter, edr_evasion, sase_security_bypass, siem_evasion, syscall_evasion, waf_ids_bypass",
+      "score": 14,
+      "comment": "adversarial_ml, amsi_bypass, av_bypass_engine, cloud_logging_blind, cloud_waf_bypass, detection_gap_exploiter, edr_evasion, full_breach_sim, post_exploitation, sase_security_bypass, siem_evasion, syscall_evasion, threat_emulation, waf_ids_bypass",
       "enabled": true
     },
     {
@@ -345,6 +345,12 @@
       "enabled": true
     },
     {
+      "techniqueID": "T1021",
+      "score": 6,
+      "comment": "adversary_path_prover, apt_lateral_movement, lateral_movement, lateral_movement_engine, ot_it_lateral_chain, risk_superposition_collapse",
+      "enabled": true
+    },
+    {
       "techniqueID": "T1071",
       "score": 8,
       "comment": "apt_c2_infra, botnet_c2_engine, c2_emulation, c2_rotation_engine, icmp_covert_channel, network_covert_channel, oast_oob, obfuscated_c2",
@@ -408,12 +414,6 @@
       "techniqueID": "T1486",
       "score": 9,
       "comment": "blackcat_alphv_ttps, cl0p_techniques, cloud_ransomware, conti_ransomware_ttps, destructive_wiper, lockbit_techniques, ransomware_emulation, ransomware_sim, wizard_spider_ttps",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1021",
-      "score": 5,
-      "comment": "apt_lateral_movement, lateral_movement, lateral_movement_engine, ot_it_lateral_chain, risk_superposition_collapse",
       "enabled": true
     },
     {
@@ -1228,7 +1228,7 @@
       "#1e3a8a"
     ],
     "minValue": 0,
-    "maxValue": 70
+    "maxValue": 71
   },
   "legendItems": [
     {

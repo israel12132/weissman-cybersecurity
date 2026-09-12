@@ -22,7 +22,7 @@
 //! | `bec_ato_chain` | Email DNS + BEC + OAuth + ITDR |
 //! | `ai_casb_saas` | LLM agent hijack + OAuth SaaS grants |
 //! | `dns_security_posture_fusion` | DNS exfil + email DNS + ASM |
-//! | `toxic_combo_runtime_proof` | CNAPP + IMDS + S3 + IAM + K8s |
+//! | `adversary_path_prover` | Live HTTP/TCP + WAF/UA control-gap + STRIPS from observed facts |
 
 /// Production fusion engine IDs — must remain a subset of `PRODUCTION_ENGINE_IDS`.
 pub const FUSION_ENGINE_IDS: &[&str] = &[
@@ -41,6 +41,7 @@ pub const FUSION_ENGINE_IDS: &[&str] = &[
     "ai_casb_saas",
     "dns_security_posture_fusion",
     "toxic_combo_runtime_proof",
+    "adversary_path_prover",
 ];
 
 pub use crate::external_exposure_supreme::{

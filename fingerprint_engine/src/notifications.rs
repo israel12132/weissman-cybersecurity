@@ -124,6 +124,46 @@ pub fn spawn_critical_poe_alert(
     });
 }
 
+/// Fire-and-forget webhook when a new internet → crown-jewel path appears.
+pub fn spawn_internet_jewel_path_alert(
+    pool: Arc<PgPool>,
+    tenant_id: i64,
+    client_id: i64,
+    path_count: usize,
+    jewel_count: usize,
+    max_path_score: u8,
+    ale_usd: i64,
+) {
+    tokio::spawn(async move {
+        let webhook = webhook_url_effective(Some((pool.as_ref(), tenant_id))).await;
+        let Some(url) = webhook else {
+            return;
+        };
+        let payload = json!({
+            "text": format!(
+                "[Weissman] NEW internet→crown-jewel path(s)\nclient_id={}\npaths={}\njewels={}\nmax_score={}\nale_usd={}",
+                client_id, path_count, jewel_count, max_path_score, ale_usd
+            ),
+            "weissman": {
+                "kind": "internet_jewel_path",
+                "severity": if max_path_score >= 80 { "critical" } else { "high" },
+                "client_id": client_id,
+                "path_count": path_count,
+                "jewel_count": jewel_count,
+                "max_path_score": max_path_score,
+                "ale_usd": ale_usd,
+            }
+        });
+        let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .unwrap_or_else(|_| Client::new());
+        if let Err(e) = client.post(&url).json(&payload).send().await {
+            eprintln!("[Weissman][Notify] Jewel-path webhook failed: {}", e);
+        }
+    });
+}
+
 async fn send_smtp_critical_optional(
     title: String,
     client_id: String,

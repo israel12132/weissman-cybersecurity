@@ -536,8 +536,9 @@
     "sso_saml": "Sign in with SAML",
     "enterprise_sso": "Enterprise SSO",
     "brand_tagline": "Unified offensive security for enterprise teams",
-    "brand_story": "Correlate findings across 254 attack engines, orchestrate SOAR playbooks, and prove compliance — from a single command center.",
-    "trust_engines": "254 engines",
+    "brand_release": "{{name}} · {{release}}",
+    "brand_story": "Correlate findings across {{engines}} attack engines, orchestrate SOAR playbooks, and prove compliance — from a single command center.",
+    "trust_engines": "{{engines}} engines",
     "trust_soc2": "SOC2-ready",
     "trust_region": "EU-West",
     "trust_label": "Platform trust indicators",
@@ -1430,7 +1431,9 @@
       "no_choke_title": "No choke-points",
       "no_choke_body": "No shared choke-points across the computed paths.",
       "no_paths_title": "No attack paths",
-      "no_paths_body": "No internet → crown-jewel path was found in the current graph."
+      "no_paths_body": "No internet → crown-jewel path was found in the current graph.",
+      "zero_jewel_title": "No crown jewels tagged",
+      "zero_jewel_body": "Recompute runs live auto-tag from business value and high-risk identity/cloud/k8s nodes, then Dijkstra. Paths stay empty until a jewel exists."
     },
     "attackCoverage": {
       "title": "ATT&CK Coverage Matrix",
@@ -1446,7 +1449,21 @@
       "search_placeholder": "Filter by technique, ID, or engine…",
       "showing": "{{techniques}} techniques across {{tactics}} tactics",
       "no_match_title": "No matches",
-      "no_match_body": "No technique or engine matches your filter."
+      "no_match_body": "No technique or engine matches your filter.",
+      "readiness_title": "Attack readiness (live)",
+      "readiness_body": "Computed from the live ATT&CK catalog, RoE, red-team cron, and STRIPS-wired engines — not a hardcoded gap list.",
+      "kpi_roe": "Default RoE",
+      "kpi_roe_hint": "safe_proofs unless WEISSMAN_DEFAULT_ROE is set",
+      "kpi_apt": "APT scenarios",
+      "kpi_apt_hint": "Named groups in threat_emulation",
+      "kpi_cron": "Red-team cron",
+      "kpi_cron_hint": "WEISSMAN_REDTEAM_CRON",
+      "cron_on": "ON",
+      "cron_off": "OFF",
+      "kpi_agent_required": "Agent-required engines",
+      "kpi_agent_required_hint": "Host-resident catalog size",
+      "planner_wired": "STRIPS planner wired",
+      "thin_tactic": "{{tactic}}: {{count}} curated techniques"
     },
     "securityPosture": {
       "title": "Platform Security Posture",

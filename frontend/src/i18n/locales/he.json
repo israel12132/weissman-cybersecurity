@@ -526,8 +526,9 @@
     "sso_saml": "התחבר עם SAML",
     "enterprise_sso": "כניסת ארגון (SSO)",
     "brand_tagline": "אבטחה התקפית מאוחדת לצוותי ארגון",
-    "brand_story": "קשר ממצאים מ-254 מנועי תקיפה, תזמר מדריכי SOAR והוכח עמידה ברגולציה — ממרכז פיקוד אחד.",
-    "trust_engines": "254 מנועים",
+    "brand_release": "{{name}} · {{release}}",
+    "brand_story": "קשר ממצאים מ-{{engines}} מנועי תקיפה, תזמר מדריכי SOAR והוכח עמידה ברגולציה — ממרכז פיקוד אחד.",
+    "trust_engines": "{{engines}} מנועים",
     "trust_soc2": "מוכן ל-SOC2",
     "trust_region": "EU-West",
     "trust_label": "אינדיקטורי אמון בפלטפורמה",
@@ -1430,7 +1431,9 @@
       "no_choke_title": "אין צווארי בקבוק",
       "no_choke_body": "אין צווארי בקבוק משותפים בין הנתיבים שחושבו.",
       "no_paths_title": "אין נתיבי תקיפה",
-      "no_paths_body": "לא נמצא נתיב אינטרנט → נכס כתר בגרף הנוכחי."
+      "no_paths_body": "לא נמצא נתיב אינטרנט → נכס כתר בגרף הנוכחי.",
+      "zero_jewel_title": "אין נכסי כתר מסומנים",
+      "zero_jewel_body": "חישוב מחדש מריץ תיוג חי לפי ערך עסקי וצמתי זהות/ענן/k8s בסיכון גבוה, ואז Dijkstra. הנתיבים נשארים ריקים עד שיש כתר."
     },
     "attackCoverage": {
       "title": "מטריצת כיסוי ATT&CK",
@@ -1446,7 +1449,21 @@
       "search_placeholder": "סינון לפי טכניקה, מזהה או מנוע…",
       "showing": "{{techniques}} טכניקות ב-{{tactics}} טקטיקות",
       "no_match_title": "אין התאמות",
-      "no_match_body": "אף טכניקה או מנוע לא תואמים לסינון."
+      "no_match_body": "אף טכניקה או מנוע לא תואמים לסינון.",
+      "readiness_title": "מוכנות תקיפה (חי)",
+      "readiness_body": "מחושב מתוך קטלוג ATT&CK החי, RoE, cron צוות אדום ומנועי STRIPS — לא רשימת פערים מקודדת.",
+      "kpi_roe": "RoE ברירת מחדל",
+      "kpi_roe_hint": "safe_proofs אלא אם הוגדר WEISSMAN_DEFAULT_ROE",
+      "kpi_apt": "תרחישי APT",
+      "kpi_apt_hint": "קבוצות במנוע threat_emulation",
+      "kpi_cron": "Cron צוות אדום",
+      "kpi_cron_hint": "WEISSMAN_REDTEAM_CRON",
+      "cron_on": "פעיל",
+      "cron_off": "כבוי",
+      "kpi_agent_required": "מנועים שדורשים סוכן",
+      "kpi_agent_required_hint": "גודל קטלוג מארח",
+      "planner_wired": "מתכנן STRIPS מחובר",
+      "thin_tactic": "{{tactic}}: {{count}} טכניקות מקורסות"
     },
     "securityPosture": {
       "title": "מצב אבטחת הפלטפורמה",

@@ -862,6 +862,9 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     if engine_id.contains("first_seen") {
         return "Patch or isolate the affected SBOM component. The OSV advisory hit this inventory before (or without) an NVD CVE — do not wait for a weekly scanner or a CVE number.";
     }
+    if engine_id.contains("adversary_path") {
+        return "Close the observed entry point (auth, admin, SCM, GraphQL) and the WAF/UA control-gap on that same path. Re-run adversary_path_prover after the change — STRIPS will only emit a chain from remaining live facts.";
+    }
     if engine_id.contains("s3") || engine_id.contains("cloud_data_exfil") {
         return "Block public ACLs at the AWS account level (`BlockPublicAccess`), set bucket policy to private, and enable S3 Object Ownership = BucketOwnerEnforced.";
     }

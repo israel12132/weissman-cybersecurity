@@ -1,5 +1,5 @@
 /**
- * Master registry of all 583 production attack engines.
+ * Master registry of all 584 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 583 production engines in registry order */
+/** All 584 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -579,6 +579,14 @@ export const ENGINES_REGISTRY = [
     group: 'apt',
     mitre: 'T1210',
     description: 'Full Cyber Kill Chain execution across Recon → Exfiltration phases',
+    requiresTarget: true,
+  },
+  {
+    id: 'adversary_path_prover',
+    label: 'Adversary Path Prover',
+    group: 'apt',
+    mitre: 'T1190',
+    description: 'Live HTTP/TCP recon fused with WAF/UA control-gap differentials and a STRIPS chain seeded only from observed facts — never invents hops',
     requiresTarget: true,
   },
   {
