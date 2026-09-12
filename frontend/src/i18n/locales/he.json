@@ -1928,7 +1928,7 @@
       "title": "מראת יריב",
       "subtitle": "מה שתוקף כבר יכול לדעת — מודיעין קלירנט חוקי משולב עם בדיקות חשיפה מורשות",
       "badge": "מודיעין חי",
-      "evidence_notice": "כל שורה היא ממצא חי מ-GET /api/findings או GET /api/clients/:id/findings (adversary_gap_mirror, leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor). מקורות: ransomware.live, ThreatFox/URLhaus של abuse.ch, קטלוג HIBP. בלי Tor, בלי דאמפים, בלי קורבנות מומצאים. PDF דירקטוריון: GET /api/clients/:id/adversary-mirror/pdf. אקסל: GET /api/clients/:id/adversary-mirror/xlsx. מדדי אתר-דלף ו-IAB סופרים רק שורות אות (לא info).",
+      "evidence_notice": "כל שורה היא ממצא חי מ-GET /api/findings או GET /api/clients/:id/findings (adversary_gap_mirror, leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor). מקורות: ransomware.live, קטלוג פוסטים של RansomLook (בלי חיפוש דאמפים), ThreatFox/URLhaus של abuse.ch, קטלוג HIBP, urlscan.io. בלי Tor, בלי דאמפים, בלי קורבנות מומצאים. PDF דירקטוריון: GET /api/clients/:id/adversary-mirror/pdf. אקסל: GET /api/clients/:id/adversary-mirror/xlsx. מדדי אתר-דלף ו-IAB סופרים רק שורות אות (לא info).",
       "load_error": "טעינת ממצאים נכשלה: {{error}}.",
       "auto_on": "רענון חי פעיל",
       "auto_off": "רענון חי כבוי",

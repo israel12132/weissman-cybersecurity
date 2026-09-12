@@ -2,7 +2,8 @@
 
 use crate::engine_probes::{
     dns_a, dns_mx, dns_txt, empty_ok, extract_host, finding, header_value, http_client, http_get,
-    http_get_with_headers, http_post_json_with_headers, normalize_url, tcp_scan,
+    http_get_with_headers, http_post_bytes_with_headers, http_post_json_with_headers,
+    normalize_url, tcp_scan,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
@@ -99,7 +100,7 @@ pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
     let host = extract_host(target);
     let key = intelx_api_key();
 
-    // Always run legal clearnet defender feeds (ransomware.live / ThreatFox / URLhaus / HIBP catalog).
+    // Always run legal clearnet defender feeds (ransomware.live / RansomLook / ThreatFox / URLhaus / HIBP / urlscan).
     // IntelX remains optional paid enrichment — never the only path.
     let mut findings =
         crate::adversary_gap_mirror::collect_clearnet_intel("darkweb_intel", target).await;
@@ -111,7 +112,7 @@ pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
             "info",
             "T1597",
             &format!(
-                "INTELX_API_KEY is unset. Live ransomware.live, ThreatFox, URLhaus, and HIBP catalog already ran for '{}'. Set INTELX_API_KEY for additional paid deep-web index hits.",
+                "INTELX_API_KEY is unset. Live ransomware.live, RansomLook, ThreatFox, URLhaus, HIBP catalog, and urlscan.io already ran for '{}'. Set INTELX_API_KEY for additional paid deep-web index hits.",
                 host
             ),
             target,
@@ -869,34 +870,69 @@ pub async fn run_threat_intel_fusion_result(target: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let host = extract_host(target);
+    let apex = crate::adversary_gap_mirror::registrable_apex(&host);
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
-    let url = format!(
-        "https://urlhaus.abuse.ch/api/v1/hostinfo/{}/",
-        urlencoding::encode(&host)
-    );
-    if let Some(p) = http_get(&client, &url).await {
-        if p.status == 200 {
-            if let Ok(v) = serde_json::from_str::<Value>(&p.body) {
-                let listed = v
-                    .get("query_status")
-                    .and_then(Value::as_str)
-                    .map(|s| s.eq_ignore_ascii_case("ok"))
-                    .unwrap_or(false);
-                let url_count = v
-                    .get("urls")
-                    .and_then(Value::as_array)
-                    .map(|a| a.len())
-                    .unwrap_or(0);
-                if listed && url_count > 0 {
+    let key = crate::adversary_gap_mirror::abusech_auth_key();
+    // Real URLhaus host API is POST /v1/host/ with Auth-Key. The old GET
+    // urlhaus.abuse.ch/api/v1/hostinfo/{}/ path does not exist.
+    if !key.is_empty() {
+        let uh_api = "https://urlhaus-api.abuse.ch/v1/host/";
+        let form = format!("host={}", urlencoding::encode(&apex));
+        if let Some(p) = http_post_bytes_with_headers(
+            &client,
+            uh_api,
+            form.as_bytes(),
+            &[
+                ("Content-Type", "application/x-www-form-urlencoded"),
+                ("Auth-Key", key.as_str()),
+            ],
+        )
+        .await
+        {
+            if p.status == 200 {
+                let url_count = crate::adversary_gap_mirror::parse_urlhaus_host(&p.body);
+                if url_count > 0 {
                     findings.push(finding(
                         "threat_intel_fusion",
                         &format!("URLhaus lists {} malicious URL(s) for host", url_count),
                         "high",
                         "T1597",
                         &format!(
-                            "Abuse.ch URLhaus hostinfo returned {} URL(s) for {} — cross-check for malware delivery or C2.",
+                            "Abuse.ch URLhaus host query returned {} URL(s) for {} — cross-check for malware delivery or C2.",
                             url_count, host
+                        ),
+                        target,
+                    ));
+                }
+                if let Some(dbl) = crate::adversary_gap_mirror::parse_urlhaus_abused_legit(&p.body)
+                {
+                    findings.push(finding(
+                        "threat_intel_fusion",
+                        &format!("URLhaus Spamhaus DBL: {apex} is {dbl}"),
+                        "high",
+                        "T1597",
+                        &format!(
+                            "Abuse.ch URLhaus reports Spamhaus DBL '{dbl}' for '{apex}' (abused legitimate site)."
+                        ),
+                        target,
+                    ));
+                }
+            }
+        }
+    } else {
+        let uh_export = "https://urlhaus.abuse.ch/downloads/hostfile/";
+        if let Some(p) = http_get(&client, uh_export).await {
+            if p.status == 200 {
+                let n = crate::adversary_gap_mirror::parse_urlhaus_hostfile(&p.body, &host);
+                if n > 0 {
+                    findings.push(finding(
+                        "threat_intel_fusion",
+                        &format!("URLhaus hostfile lists {n} malicious host(s) for {apex}"),
+                        "high",
+                        "T1597",
+                        &format!(
+                            "Live URLhaus hostfile matched {n} row(s) for '{apex}'. Set ABUSECH_AUTH_KEY for full URL rows."
                         ),
                         target,
                     ));

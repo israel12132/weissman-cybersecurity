@@ -332,7 +332,7 @@ pub fn build_findings_workbook(
         rows: vec![
             vec![
                 "adversary_gap_mirror".into(),
-                "Clearnet leak intel + IAB-interesting ports".into(),
+                "Clearnet leak intel (ransomware.live, RansomLook, abuse.ch, HIBP, urlscan) + IAB-interesting ports".into(),
             ],
             vec!["leak_hunter".into(), "Credential / paste exposure".into()],
             vec![

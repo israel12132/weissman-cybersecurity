@@ -1928,7 +1928,7 @@
       "title": "Adversary Gap Mirror",
       "subtitle": "What an attacker can already know — legal clearnet intel fused with authorized exposure probes",
       "badge": "LIVE INTEL",
-      "evidence_notice": "Every row is a live finding from GET /api/findings or GET /api/clients/:id/findings (adversary_gap_mirror, leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor). Feeds: ransomware.live, abuse.ch ThreatFox/URLhaus, HIBP public catalog. No Tor, no dumps, no invented victims. Board PDF: GET /api/clients/:id/adversary-mirror/pdf. Excel: GET /api/clients/:id/adversary-mirror/xlsx. Leak-site and IAB KPIs count non-info signal rows only.",
+      "evidence_notice": "Every row is a live finding from GET /api/findings or GET /api/clients/:id/findings (adversary_gap_mirror, leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor). Feeds: ransomware.live, RansomLook posts catalog (never dump search), abuse.ch ThreatFox/URLhaus, HIBP public catalog, urlscan.io. No Tor, no dumps, no invented victims. Board PDF: GET /api/clients/:id/adversary-mirror/pdf. Excel: GET /api/clients/:id/adversary-mirror/xlsx. Leak-site and IAB KPIs count non-info signal rows only.",
       "load_error": "Couldn't load findings: {{error}}.",
       "auto_on": "Live refresh ON",
       "auto_off": "Live refresh OFF",

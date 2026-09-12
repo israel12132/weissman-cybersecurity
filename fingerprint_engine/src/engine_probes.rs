@@ -241,6 +241,16 @@ pub async fn http_get_with_headers(
     url: &str,
     extra: &[(&str, &str)],
 ) -> Option<HttpProbe> {
+    http_get_with_headers_max(client, url, extra, 65_536).await
+}
+
+/// GET that keeps a larger body (catalog feeds that exceed the default 64 KiB cap).
+pub async fn http_get_with_headers_max(
+    client: &Client,
+    url: &str,
+    extra: &[(&str, &str)],
+    max_body: usize,
+) -> Option<HttpProbe> {
     crate::fleet_shaping::acquire_for_url(url).await;
     // Smart Stealth Queue: bound concurrent requests per target + jitter, and
     // stamp a rotating browser identity (overriding the fixed probe UA). The
@@ -271,8 +281,9 @@ pub async fn http_get_with_headers(
         .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or_default().to_string()))
         .collect();
     let body = resp.text().await.unwrap_or_default();
-    let body = if body.len() > 65_536 {
-        body[..65_536].to_string()
+    let cap = max_body.max(1024);
+    let body = if body.len() > cap {
+        body[..cap].to_string()
     } else {
         body
     };

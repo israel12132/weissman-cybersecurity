@@ -1097,7 +1097,7 @@ pub fn build_adversary_mirror_pdf(
     b.set_fill_rgb(0.45, 0.5, 0.58);
     b.text(
         9,
-        "Sources: ransomware.live, abuse.ch ThreatFox, URLhaus, Have I Been Pwned public catalog.",
+        "Sources: ransomware.live, RansomLook posts catalog, abuse.ch ThreatFox, URLhaus, Have I Been Pwned public catalog, urlscan.io.",
     );
     b.text(
         9,

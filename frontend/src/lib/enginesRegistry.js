@@ -70,7 +70,7 @@ export const ENGINES_REGISTRY = [
     label: 'Adversary Gap Mirror',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Legal clearnet intel (ransomware.live, ThreatFox, URLhaus, HIBP catalog) fused with authorized remote-access port/banner probes and published IAB economics — never Tor, never invented victims',
+    description: 'Legal clearnet intel (ransomware.live, RansomLook posts, ThreatFox, URLhaus, HIBP catalog, urlscan.io) fused with authorized remote-access port/banner probes and published IAB economics — never Tor, never invented victims',
     requiresTarget: true,
   },
   {
@@ -2252,7 +2252,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark Web Intelligence',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Legal clearnet defender intel: ransomware.live victim search, abuse.ch ThreatFox/URLhaus, HIBP public catalog, optional IntelX paid index. Never Tor, never dumps, never invented victims',
+    description: 'Legal clearnet defender intel: ransomware.live victim search, RansomLook posts catalog, abuse.ch ThreatFox/URLhaus, HIBP public catalog, urlscan.io, optional IntelX paid index. Never Tor, never dumps, never invented victims',
     requiresTarget: true,
   },
   {
@@ -4051,7 +4051,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark Web Brand Monitor',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Clearnet brand/intel monitor wrapping darkweb_intel: ransomware.live, ThreatFox/URLhaus, HIBP catalog, optional IntelX. Never Tor marketplaces or credential dumps',
+    description: 'Clearnet brand/intel monitor wrapping darkweb_intel: ransomware.live, RansomLook, ThreatFox/URLhaus, HIBP catalog, urlscan.io, optional IntelX. Never Tor marketplaces or credential dumps',
     requiresTarget: true,
   },
   {

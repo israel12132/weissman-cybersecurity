@@ -331,10 +331,10 @@ async fn api_client_adversary_mirror_pdf(
         total += 1;
         let title = r.try_get::<String, _>("title").unwrap_or_default();
         let blob = format!("{title} {src}").to_ascii_lowercase();
-        if blob.contains("ransomware") || blob.contains("leak-site") {
+        if blob.contains("ransomware") || blob.contains("leak-site") || blob.contains("ransomlook") {
             ransom += 1;
         }
-        if blob.contains("threatfox") || blob.contains("urlhaus") || blob.contains("ioc") {
+        if blob.contains("threatfox") || blob.contains("urlhaus") || blob.contains("ioc") || blob.contains("urlscan") {
             ioc += 1;
         }
         if blob.contains("hibp") || blob.contains("breach catalog") {

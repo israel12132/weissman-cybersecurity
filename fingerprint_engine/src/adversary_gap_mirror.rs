@@ -5,10 +5,12 @@
 //! Empty feeds → informational “queried, zero hits” evidence — never invented victims.
 //!
 //! Public sources (no paid IntelX required):
-//! - ransomware.live victim search (ransomware leak-site *names* published on clearnet)
+//! - ransomware.live v2 victim search (PRO when `RANSOMWARE_LIVE_API_KEY` is set)
+//! - RansomLook leak-blog *posts catalog* (`GET /api/posts` only — never `/api/search`)
 //! - abuse.ch ThreatFox (`search_ioc` with free Auth-Key, else recent domain export)
 //! - abuse.ch URLhaus (host API with Auth-Key, else public hostfile)
-//! - Have I Been Pwned public breach *catalog* (`GET /breaches`, no key)
+//! - Have I Been Pwned public breach *catalog* (`GET /breaches?Domain=`, no key)
+//! - urlscan.io public search (`page.apexDomain:`, optional `URLSCAN_API_KEY`)
 //!
 //! Exposure fusion (authorized RoE only): TCP connect of common remote-access ports and
 //! HTTP product tokens (VPN/OWA/Citrix). Underground USD bands are cited from *public*
@@ -17,7 +19,7 @@
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
     empty_ok, extract_host, finding, http_client, http_get, http_get_with_headers,
-    http_post_bytes_with_headers, http_post_json_with_headers, tcp_scan,
+    http_get_with_headers_max, http_post_bytes_with_headers, http_post_json_with_headers, tcp_scan,
 };
 use crate::engine_result::EngineResult;
 use serde_json::{json, Value};
@@ -25,6 +27,8 @@ use serde_json::{json, Value};
 pub const ENGINE_ID: &str = "adversary_gap_mirror";
 const MITRE: &str = "T1597";
 const UA: &str = "WeissmanCybersecurity/1.0 (adversary-gap-mirror; authorized-assessment)";
+/// RansomLook `/api/posts` is ~110 KiB; default probe cap is 64 KiB.
+const INTEL_BODY_MAX: usize = 262_144;
 
 /// Remote-access ports initial-access brokers historically list (public reporting).
 pub const IAB_PORTS: &[u16] = &[
@@ -60,6 +64,24 @@ pub struct RansomHit {
     pub group: String,
     pub website: String,
     pub attack_date: String,
+    pub infostealer_employees: i64,
+    pub infostealer_users: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RansomLookHit {
+    pub title: String,
+    pub group: String,
+    pub discovered: String,
+    pub site: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UrlscanHit {
+    pub id: String,
+    pub page_domain: String,
+    pub task_url: String,
+    pub total: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,13 +109,8 @@ pub struct IabQuote {
     pub next_engines: &'static [&'static str],
 }
 
-fn abusech_auth_key() -> String {
-    for k in [
-        "ABUSECH_AUTH_KEY",
-        "ABUSECH_API_KEY",
-        "THREATFOX_AUTH_KEY",
-        "URLHAUS_AUTH_KEY",
-    ] {
+fn env_nonempty(keys: &[&str]) -> String {
+    for k in keys {
         if let Ok(v) = std::env::var(k) {
             let t = v.trim().to_string();
             if !t.is_empty() {
@@ -102,6 +119,23 @@ fn abusech_auth_key() -> String {
         }
     }
     String::new()
+}
+
+pub(crate) fn abusech_auth_key() -> String {
+    env_nonempty(&[
+        "ABUSECH_AUTH_KEY",
+        "ABUSECH_API_KEY",
+        "THREATFOX_AUTH_KEY",
+        "URLHAUS_AUTH_KEY",
+    ])
+}
+
+fn ransomware_live_api_key() -> String {
+    env_nonempty(&["RANSOMWARE_LIVE_API_KEY", "RANSOMWARE_LIVE_PRO_KEY"])
+}
+
+fn urlscan_api_key() -> String {
+    env_nonempty(&["URLSCAN_API_KEY", "URLSCAN_APIKEY"])
 }
 
 fn pbool(params: &Value, key: &str, default: bool) -> bool {
@@ -230,6 +264,13 @@ pub fn parse_ransomware_live(body: &str, host: &str) -> Vec<RansomHit> {
         if !host_matches_needle(host, &website) && !victim_mentions_org(&victim, host) {
             continue;
         }
+        let (infostealer_employees, infostealer_users) = match row.get("infostealer") {
+            Some(Value::Object(o)) => (
+                o.get("employees").and_then(Value::as_i64).unwrap_or(0),
+                o.get("users").and_then(Value::as_i64).unwrap_or(0),
+            ),
+            _ => (0, 0),
+        };
         out.push(RansomHit {
             victim,
             group: row
@@ -247,6 +288,8 @@ pub fn parse_ransomware_live(body: &str, host: &str) -> Vec<RansomHit> {
                 .and_then(Value::as_str)
                 .unwrap_or("")
                 .to_string(),
+            infostealer_employees,
+            infostealer_users,
         });
         if out.len() >= 20 {
             break;
@@ -433,6 +476,159 @@ pub fn parse_hibp_breaches(body: &str, host: &str) -> Vec<BreachCatalogHit> {
     out
 }
 
+/// v2 returns HTTP 404 JSON `{ "error": "No victims found for keyword '…'." }` when the
+/// keyword has zero rows — that is a live zero-hit, not a feed outage.
+#[must_use]
+pub fn ransomware_live_no_victims(status: u16, body: &str) -> bool {
+    if status != 404 {
+        return false;
+    }
+    let lower = body.to_ascii_lowercase();
+    lower.contains("no victims found") || lower.contains("\"error\"")
+}
+
+fn is_onion_or_magnet(s: &str) -> bool {
+    let s = s.trim().to_ascii_lowercase();
+    s.contains(".onion") || s.starts_with("magnet:") || s.starts_with("urn:")
+}
+
+/// Parse RansomLook **posts only**. Never read `leaks` / `records` (those can carry
+/// credential-column dumps from `GET /api/search`). Never copy `magnet`.
+#[must_use]
+pub fn parse_ransomlook_posts(body: &str, host: &str) -> Vec<RansomLookHit> {
+    let Ok(v) = serde_json::from_str::<Value>(body) else {
+        return Vec::new();
+    };
+    let rows = v
+        .get("posts")
+        .and_then(Value::as_array)
+        .cloned()
+        .or_else(|| {
+            v.as_array().and_then(|a| {
+                if a.first()
+                    .map(|x| x.get("post_title").is_some())
+                    .unwrap_or(false)
+                {
+                    Some(a.clone())
+                } else {
+                    None
+                }
+            })
+        })
+        .unwrap_or_default();
+    let mut out = Vec::new();
+    for row in rows {
+        let title = row
+            .get("post_title")
+            .or_else(|| row.get("title"))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let link = row
+            .get("link")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let site = if is_onion_or_magnet(&link) {
+            String::new()
+        } else {
+            link
+        };
+        if !host_matches_needle(host, &site) && !victim_mentions_org(&title, host) {
+            continue;
+        }
+        out.push(RansomLookHit {
+            title,
+            group: row
+                .get("group_name")
+                .or_else(|| row.get("group"))
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
+            discovered: row
+                .get("discovered")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
+            site,
+        });
+        if out.len() >= 20 {
+            break;
+        }
+    }
+    out
+}
+
+/// urlscan.io search hits whose scanned page matches the authorized apex.
+#[must_use]
+pub fn parse_urlscan_search(body: &str, host: &str) -> (i64, Vec<UrlscanHit>) {
+    let Ok(v) = serde_json::from_str::<Value>(body) else {
+        return (0, Vec::new());
+    };
+    let total = v.get("total").and_then(Value::as_i64).unwrap_or(0);
+    let rows = v
+        .get("results")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let mut out = Vec::new();
+    for row in rows {
+        let page_domain = row
+            .pointer("/page/domain")
+            .or_else(|| row.pointer("/page/apexDomain"))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let apex_page = row
+            .pointer("/page/apexDomain")
+            .or_else(|| row.pointer("/task/apexDomain"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        if !host_matches_needle(host, &page_domain) && !host_matches_needle(host, apex_page) {
+            continue;
+        }
+        out.push(UrlscanHit {
+            id: row
+                .get("_id")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
+            page_domain,
+            task_url: row
+                .pointer("/task/url")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
+            total,
+        });
+        if out.len() >= 10 {
+            break;
+        }
+    }
+    (total, out)
+}
+
+/// Spamhaus DBL `abused_legit_*` = a legitimate site being abused for malware.
+#[must_use]
+pub fn parse_urlhaus_abused_legit(body: &str) -> Option<String> {
+    let Ok(v) = serde_json::from_str::<Value>(body) else {
+        return None;
+    };
+    let dbl = v
+        .pointer("/blacklists/spamhaus_dbl")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    if dbl.is_empty() || dbl.eq_ignore_ascii_case("not listed") {
+        return None;
+    }
+    if dbl.to_ascii_lowercase().contains("abused_legit") {
+        Some(dbl.to_string())
+    } else {
+        None
+    }
+}
+
 /// Public published IAB price bands — only attach when live evidence exists.
 #[must_use]
 pub fn iab_quote_for_ports(open: &[u16], http_tokens: &[String]) -> Option<IabQuote> {
@@ -484,6 +680,71 @@ fn finding_ev(
     )
 }
 
+fn push_ransom_live_hits(
+    findings: &mut Vec<Value>,
+    engine_id: &str,
+    target: &str,
+    apex: &str,
+    url: &str,
+    status: u16,
+    hits: &[RansomHit],
+) {
+    for hit in hits {
+        let mut desc = format!(
+            "Clearnet ransomware.live listed victim='{}' website='{}' date='{}'. Treat as confirmed extortion-intel, not a simulated hit. Next authorized engines: leak_hunter, password_spray, incident-response playbooks.",
+            hit.victim, hit.website, hit.attack_date
+        );
+        if hit.infostealer_employees > 0 || hit.infostealer_users > 0 {
+            desc.push_str(&format!(
+                " Aggregator infostealer *counts* only: employees={} users={} (no dump contents).",
+                hit.infostealer_employees, hit.infostealer_users
+            ));
+        }
+        findings.push(finding_ev(
+            engine_id,
+            &format!(
+                "Ransomware leak-site listing for {} (group {})",
+                if hit.victim.is_empty() {
+                    apex
+                } else {
+                    &hit.victim
+                },
+                if hit.group.is_empty() {
+                    "unknown"
+                } else {
+                    &hit.group
+                }
+            ),
+            "high",
+            &desc,
+            target,
+            json!({
+                "source": "ransomware.live",
+                "url": url,
+                "http_status": status,
+                "victim": hit.victim,
+                "group": hit.group,
+                "website": hit.website,
+                "attack_date": hit.attack_date,
+                "infostealer_employees": hit.infostealer_employees,
+                "infostealer_users": hit.infostealer_users,
+            }),
+        ));
+    }
+    if hits.is_empty() {
+        findings.push(finding_ev(
+            engine_id,
+            &format!("ransomware.live queried — no victim listing for {apex}"),
+            "info",
+            &format!(
+                "Live GET {url} returned HTTP {status} with zero victim rows matching '{apex}'."
+            ),
+            target,
+            json!({"source":"ransomware.live","url":url,"http_status":status,"matches":0}),
+        ));
+    }
+}
+
 /// Collect clearnet intel findings for any engine id (darkweb_intel reuses this).
 pub async fn collect_clearnet_intel(engine_id: &str, target: &str) -> Vec<Value> {
     let host = extract_host(target);
@@ -495,61 +756,131 @@ pub async fn collect_clearnet_intel(engine_id: &str, target: &str) -> Vec<Value>
     let mut findings = Vec::new();
     let headers = [("User-Agent", UA), ("Accept", "application/json")];
 
-    // ransomware.live v2 only — v1 redirects to marketing HTML.
-    let rl_urls = [format!(
-        "https://api.ransomware.live/v2/searchvictims/{}",
-        urlencoding::encode(&apex)
-    )];
+    // ransomware.live — v2 only (v1 302s to marketing HTML). PRO when a key is set.
+    // Search apex, then org-stem on zero-hit so domain-less listings can still match
+    // after exact-host / victim-token filters (never keyword-only findings).
+    let rl_key = ransomware_live_api_key();
+    let stem = apex.split('.').next().unwrap_or(&apex).to_string();
+    let mut rl_keywords: Vec<String> = vec![apex.clone()];
+    if stem.len() >= 4 && stem != apex && !GENERIC_VICTIM_STEMS.contains(&stem.as_str()) {
+        rl_keywords.push(stem);
+    }
     let mut rl_queried = false;
     let mut rl_status = 0u16;
     let mut rl_ok = false;
-    for url in &rl_urls {
-        if let Some(p) = http_get_with_headers(&client, url, &headers).await {
+    let mut rl_had_hits = false;
+    for kw in &rl_keywords {
+        if rl_had_hits {
+            break;
+        }
+        let (url, hdrs): (String, Vec<(&str, &str)>) = if !rl_key.is_empty() {
+            (
+                format!(
+                    "https://api-pro.ransomware.live/victims/search?q={}",
+                    urlencoding::encode(kw)
+                ),
+                vec![
+                    ("User-Agent", UA),
+                    ("Accept", "application/json"),
+                    ("X-API-KEY", rl_key.as_str()),
+                ],
+            )
+        } else {
+            (
+                format!(
+                    "https://api.ransomware.live/v2/searchvictims/{}",
+                    urlencoding::encode(kw)
+                ),
+                headers.to_vec(),
+            )
+        };
+        if let Some(p) = http_get_with_headers(&client, &url, &hdrs).await {
             rl_queried = true;
             rl_status = p.status;
             if p.status == 200 {
                 rl_ok = true;
                 let hits = parse_ransomware_live(&p.body, &host);
-                for hit in &hits {
-                    findings.push(finding_ev(
+                if !hits.is_empty() {
+                    rl_had_hits = true;
+                    push_ransom_live_hits(
+                        &mut findings,
                         engine_id,
-                        &format!(
-                            "Ransomware leak-site listing for {} (group {})",
-                            if hit.victim.is_empty() { &apex } else { &hit.victim },
-                            if hit.group.is_empty() { "unknown" } else { &hit.group }
-                        ),
-                        "high",
-                        &format!(
-                            "Clearnet ransomware.live listed victim='{}' website='{}' date='{}'. Treat as confirmed extortion-intel, not a simulated hit. Next authorized engines: leak_hunter, password_spray, incident-response playbooks.",
-                            hit.victim, hit.website, hit.attack_date
-                        ),
                         target,
-                        json!({
-                            "source": "ransomware.live",
-                            "url": url,
-                            "http_status": p.status,
-                            "victim": hit.victim,
-                            "group": hit.group,
-                            "website": hit.website,
-                            "attack_date": hit.attack_date,
-                        }),
-                    ));
+                        &apex,
+                        &url,
+                        p.status,
+                        &hits,
+                    );
                 }
-                if hits.is_empty() {
-                    findings.push(finding_ev(
-                        engine_id,
-                        &format!("ransomware.live queried — no victim listing for {apex}"),
-                        "info",
-                        &format!(
-                            "Live GET {} returned HTTP {} with zero victim rows matching '{}'.",
-                            url, p.status, apex
-                        ),
-                        target,
-                        json!({"source":"ransomware.live","url":url,"http_status":p.status,"matches":0}),
-                    ));
-                }
+            } else if ransomware_live_no_victims(p.status, &p.body) {
+                rl_ok = true;
+            } else if !rl_key.is_empty() && (p.status == 401 || p.status == 403) {
+                // Bad PRO key — fall through to public v2 on the next loop iteration
+                // by clearing the key after this attempt on apex.
+                findings.push(finding_ev(
+                    engine_id,
+                    "ransomware.live PRO key rejected — falling back to public v2",
+                    "info",
+                    &format!(
+                        "Live GET {url} returned HTTP {}. Check RANSOMWARE_LIVE_API_KEY.",
+                        p.status
+                    ),
+                    target,
+                    json!({"source":"ransomware.live","url":url,"http_status":p.status,"auth":"pro"}),
+                ));
                 break;
             }
+        }
+    }
+    if !rl_key.is_empty() && !rl_ok && !rl_had_hits {
+        // PRO failed; public v2 apex search.
+        let url = format!(
+            "https://api.ransomware.live/v2/searchvictims/{}",
+            urlencoding::encode(&apex)
+        );
+        if let Some(p) = http_get_with_headers(&client, &url, &headers).await {
+            rl_queried = true;
+            rl_status = p.status;
+            if p.status == 200 || ransomware_live_no_victims(p.status, &p.body) {
+                rl_ok = true;
+                let hits = if p.status == 200 {
+                    parse_ransomware_live(&p.body, &host)
+                } else {
+                    Vec::new()
+                };
+                if !hits.is_empty() {
+                    rl_had_hits = true;
+                    push_ransom_live_hits(
+                        &mut findings,
+                        engine_id,
+                        target,
+                        &apex,
+                        &url,
+                        p.status,
+                        &hits,
+                    );
+                }
+            }
+        }
+    }
+    if rl_ok && !rl_had_hits {
+        let already_zero = findings.iter().any(|f| {
+            f.get("title")
+                .and_then(Value::as_str)
+                .map(|t| t.contains("no victim listing"))
+                .unwrap_or(false)
+        });
+        if !already_zero {
+            findings.push(finding_ev(
+                engine_id,
+                &format!("ransomware.live queried — no victim listing for {apex}"),
+                "info",
+                &format!(
+                    "Live ransomware.live search for '{apex}' returned zero matching victim rows."
+                ),
+                target,
+                json!({"source":"ransomware.live","http_status": rl_status,"matches":0}),
+            ));
         }
     }
     if !rl_queried {
@@ -723,6 +1054,7 @@ pub async fn collect_clearnet_intel(engine_id: &str, target: &str) -> Vec<Value>
         .await
         {
             let n = parse_urlhaus_host(&p.body);
+            let abused = parse_urlhaus_abused_legit(&p.body);
             if p.status == 200 && n > 0 {
                 findings.push(finding_ev(
                     engine_id,
@@ -753,6 +1085,20 @@ pub async fn collect_clearnet_intel(engine_id: &str, target: &str) -> Vec<Value>
                     target,
                     json!({"source":"urlhaus","url":uh_api,"http_status":p.status,"auth":"auth_key"}),
                 ));
+            }
+            if p.status == 200 {
+                if let Some(dbl) = abused {
+                    findings.push(finding_ev(
+                        engine_id,
+                        &format!("URLhaus Spamhaus DBL: {apex} is {dbl}"),
+                        "high",
+                        &format!(
+                            "abuse.ch URLhaus reports Spamhaus DBL '{dbl}' for '{apex}' (abused legitimate site). Next authorized engines: threat_intel_fusion, asm."
+                        ),
+                        target,
+                        json!({"source":"urlhaus","url":uh_api,"http_status":p.status,"spamhaus_dbl":dbl,"auth":"auth_key"}),
+                    ));
+                }
             }
         } else {
             findings.push(finding_ev(
@@ -873,6 +1219,182 @@ pub async fn collect_clearnet_intel(engine_id: &str, target: &str) -> Vec<Value>
             "No HTTP response from haveibeenpwned.com/api/v3/breaches. Finding is a live probe failure, not a hidden breach.",
             target,
             json!({"source":"hibp_breaches","url":hibp_url,"reachable":false}),
+        ));
+    }
+
+    // RansomLook leak-blog posts catalog. Do not call /api/search — that JSON can include
+    // `leaks.records` with password columns. Ignore magnet/onion links; match titles + clearnet sites.
+    let rlk_url = "https://www.ransomlook.io/api/posts";
+    if let Some(p) = http_get_with_headers_max(&client, rlk_url, &headers, INTEL_BODY_MAX).await {
+        if p.status == 200 {
+            let hits = parse_ransomlook_posts(&p.body, &host);
+            if hits.is_empty() {
+                findings.push(finding_ev(
+                    engine_id,
+                    &format!("RansomLook posts catalog queried — no listing for {apex}"),
+                    "info",
+                    &format!(
+                        "Live GET {rlk_url} returned HTTP {} with zero post_title/site rows matching '{apex}'. Magnets and leak records are not fetched.",
+                        p.status
+                    ),
+                    target,
+                    json!({"source":"ransomlook","url":rlk_url,"http_status":p.status,"matches":0}),
+                ));
+            } else {
+                for hit in &hits {
+                    findings.push(finding_ev(
+                        engine_id,
+                        &format!(
+                            "RansomLook leak-site listing for {} (group {})",
+                            if hit.title.is_empty() { &apex } else { &hit.title },
+                            if hit.group.is_empty() { "unknown" } else { &hit.group }
+                        ),
+                        "high",
+                        &format!(
+                            "Clearnet RansomLook posts catalog listed post_title='{}' group='{}' discovered='{}'. Magnet/onion locations are not retrieved. Next authorized engines: leak_hunter, password_spray.",
+                            hit.title, hit.group, hit.discovered
+                        ),
+                        target,
+                        json!({
+                            "source": "ransomlook",
+                            "url": rlk_url,
+                            "http_status": p.status,
+                            "post_title": hit.title,
+                            "group": hit.group,
+                            "discovered": hit.discovered,
+                            "site": hit.site,
+                        }),
+                    ));
+                }
+            }
+        } else {
+            findings.push(finding_ev(
+                engine_id,
+                "RansomLook posts catalog returned a non-success status",
+                "info",
+                &format!("Live GET {rlk_url} returned HTTP {}.", p.status),
+                target,
+                json!({"source":"ransomlook","url":rlk_url,"http_status":p.status}),
+            ));
+        }
+    } else {
+        findings.push(finding_ev(
+            engine_id,
+            "RansomLook unreachable this run",
+            "info",
+            "No HTTP response from www.ransomlook.io/api/posts. Finding is a live probe failure, not a hidden listing.",
+            target,
+            json!({"source":"ransomlook","url":rlk_url,"reachable":false}),
+        ));
+    }
+
+    // urlscan.io — page.apexDomain only (bare `domain:` matches any contacted host = false positives).
+    // Malicious-verdict filter requires URLSCAN_API_KEY. Unauthenticated = public scan inventory (info).
+    let us_key = urlscan_api_key();
+    let us_q_mal = format!("page.apexDomain:{apex} AND verdicts.overall.malicious:true");
+    let us_q_pub = format!("page.apexDomain:{apex}");
+    let mut us_query = if us_key.is_empty() {
+        us_q_pub.clone()
+    } else {
+        us_q_mal.clone()
+    };
+    let mut us_url = format!(
+        "https://urlscan.io/api/v1/search/?q={}&size=10",
+        urlencoding::encode(&us_query)
+    );
+    let us_hdrs: Vec<(&str, &str)> = if us_key.is_empty() {
+        headers.to_vec()
+    } else {
+        vec![
+            ("User-Agent", UA),
+            ("Accept", "application/json"),
+            ("API-Key", us_key.as_str()),
+        ]
+    };
+    let mut us_probe = http_get_with_headers(&client, &us_url, &us_hdrs).await;
+    if !us_key.is_empty() {
+        if let Some(p) = &us_probe {
+            if p.status == 403 || p.status == 401 {
+                us_query = us_q_pub.clone();
+                us_url = format!(
+                    "https://urlscan.io/api/v1/search/?q={}&size=10",
+                    urlencoding::encode(&us_query)
+                );
+                us_probe = http_get_with_headers(&client, &us_url, &headers).await;
+            }
+        }
+    }
+    if let Some(p) = us_probe {
+        if p.status == 200 {
+            let (total, hits) = parse_urlscan_search(&p.body, &host);
+            let malicious = us_query.contains("malicious");
+            if malicious && !hits.is_empty() {
+                for hit in &hits {
+                    let permalink = if hit.id.is_empty() {
+                        us_url.clone()
+                    } else {
+                        format!("https://urlscan.io/result/{}/", hit.id)
+                    };
+                    findings.push(finding_ev(
+                        engine_id,
+                        &format!("urlscan.io malicious verdict for {}", hit.page_domain),
+                        "medium",
+                        &format!(
+                            "urlscan.io search listed a malicious verdict for scanned host '{}'. Permalink {}. Next authorized engines: typosquatting_monitor, leak_hunter.",
+                            hit.page_domain, permalink
+                        ),
+                        target,
+                        json!({
+                            "source": "urlscan",
+                            "url": us_url,
+                            "http_status": p.status,
+                            "page_domain": hit.page_domain,
+                            "task_url": hit.task_url,
+                            "permalink": permalink,
+                            "verdict": "malicious",
+                            "attribution": "urlscan.io",
+                        }),
+                    ));
+                }
+            } else {
+                findings.push(finding_ev(
+                    engine_id,
+                    &format!("urlscan.io queried — {total} public scan(s) of {apex}"),
+                    "info",
+                    &format!(
+                        "Live GET urlscan.io search q='{us_query}' returned HTTP {} total={total} matching page.apexDomain '{apex}'. Unauthenticated search cannot filter malicious verdicts.",
+                        p.status
+                    ),
+                    target,
+                    json!({
+                        "source": "urlscan",
+                        "url": us_url,
+                        "http_status": p.status,
+                        "total": total,
+                        "matches": hits.len(),
+                        "query": us_query,
+                        "attribution": "urlscan.io",
+                    }),
+                ));
+            }
+        } else {
+            findings.push(finding_ev(
+                engine_id,
+                "urlscan.io search returned a non-success status",
+                "info",
+                &format!("Live GET {us_url} returned HTTP {}.", p.status),
+                target,
+                json!({"source":"urlscan","url":us_url,"http_status":p.status}),
+            ));
+        }
+    } else {
+        findings.push(finding_ev(
+            engine_id,
+            "urlscan.io unreachable this run",
+            "info",
+            "No HTTP response from urlscan.io/api/v1/search. Finding is a live probe failure, not a hidden scan.",
+            target,
+            json!({"source":"urlscan","url":us_url,"reachable":false}),
         ));
     }
 
@@ -1103,5 +1625,64 @@ mod tests {
     fn iab_quote_vpn_tokens() {
         let q = iab_quote_for_ports(&[443], &["citrix".into()]).expect("vpn");
         assert_eq!(q.usd_high, 10_000);
+    }
+
+    #[test]
+    fn ransomware_live_404_is_zero_not_outage() {
+        assert!(ransomware_live_no_victims(
+            404,
+            r#"{"error": "No victims found for keyword 'adobe.com'."}"#
+        ));
+        assert!(!ransomware_live_no_victims(200, "[]"));
+        assert!(!ransomware_live_no_victims(500, "oops"));
+    }
+
+    #[test]
+    fn ransomware_live_infostealer_counts_only() {
+        let body = r#"[{"victim":"Acme Ltd","group":"play","website":"acme.com","attackdate":"2025-02-02","infostealer":{"employees":1,"users":4}}]"#;
+        let hits = parse_ransomware_live(body, "www.acme.com");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].infostealer_users, 4);
+        assert_eq!(hits[0].infostealer_employees, 1);
+    }
+
+    #[test]
+    fn ransomlook_matches_title_and_ignores_leaks_and_magnet() {
+        let body = r#"{"posts":[{"post_title":"Acme Ltd","group_name":"lockbit","discovered":"2026-01-01","magnet":"magnet:?xt=urn:btih:deadbeef","link":"http://abc.onion/post"}],"leaks":[{"name":"acme.com","columns":["password","email"],"records":[["secret","a@acme.com"]]}]}"#;
+        let hits = parse_ransomlook_posts(body, "acme.com");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].group, "lockbit");
+        assert!(hits[0].site.is_empty());
+        assert!(!hits[0].title.to_ascii_lowercase().contains("magnet"));
+        assert!(!hits[0].group.contains("password"));
+    }
+
+    #[test]
+    fn ransomlook_ignores_unrelated_and_search_leaks_only() {
+        let body = r#"{"posts":[],"leaks":[{"name":"acme.com","columns":["password"],"records":"REDACTED"}]}"#;
+        assert!(parse_ransomlook_posts(body, "acme.com").is_empty());
+    }
+
+    #[test]
+    fn urlscan_filters_to_apex() {
+        let body = r#"{"total":3,"results":[{"_id":"aaa","task":{"url":"https://www.acme.com/","apexDomain":"acme.com"},"page":{"domain":"www.acme.com","apexDomain":"acme.com"}},{"_id":"bbb","task":{"url":"https://evil.example/","apexDomain":"example"},"page":{"domain":"evil.example","apexDomain":"example"}}]}"#;
+        let (total, hits) = parse_urlscan_search(body, "mail.acme.com");
+        assert_eq!(total, 3);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, "aaa");
+    }
+
+    #[test]
+    fn urlhaus_abused_legit_flag() {
+        assert_eq!(
+            parse_urlhaus_abused_legit(
+                r#"{"query_status":"ok","blacklists":{"spamhaus_dbl":"abused_legit_malware","surbl":"not listed"}}"#
+            )
+            .as_deref(),
+            Some("abused_legit_malware")
+        );
+        assert!(
+            parse_urlhaus_abused_legit(r#"{"blacklists":{"spamhaus_dbl":"not listed"}}"#).is_none()
+        );
     }
 }
