@@ -2,6 +2,8 @@
 
 use crate::error::JobBusError;
 use rand::Rng;
+use serde::Serialize;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 const LEASE_PREFIX: &str = "weissman:job:lease:";
@@ -18,6 +20,49 @@ fn lease_key(job_id: Uuid) -> String {
 
 fn lease_value(worker_id: &str, claim_token: &str) -> String {
     format!("{}:{}", worker_id, claim_token)
+}
+
+/// Live Redis lease as seen by operators. Never includes the claim token.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LeaseView {
+    pub present: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner_worker_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ttl_secs: Option<i64>,
+    /// Key exists but has no EXPIRE — this is the wedge the acquire path was written to prevent.
+    pub no_ttl: bool,
+}
+
+/// Extract the owning worker from a lease value (`{worker_id}:{64-hex-token}`).
+#[must_use]
+pub fn parse_lease_owner(value: &str) -> Option<String> {
+    let (worker, token) = value.rsplit_once(':')?;
+    if worker.is_empty() {
+        return None;
+    }
+    if token.len() == 64 && token.bytes().all(|b| b.is_ascii_hexdigit()) {
+        Some(worker.to_string())
+    } else {
+        None
+    }
+}
+
+fn lease_view_from_get_ttl(value: Option<&str>, ttl: i64) -> LeaseView {
+    if ttl == -2 || value.map(str::trim).unwrap_or("").is_empty() {
+        return LeaseView {
+            present: false,
+            owner_worker_id: None,
+            ttl_secs: None,
+            no_ttl: false,
+        };
+    }
+    LeaseView {
+        present: true,
+        owner_worker_id: value.and_then(parse_lease_owner),
+        ttl_secs: if ttl >= 0 { Some(ttl) } else { None },
+        no_ttl: ttl == -1,
+    }
 }
 
 /// Active distributed lease — only the holder with the claim token may extend/release.
@@ -154,5 +199,35 @@ impl DistributedLease {
             .await
             .map_err(|e| JobBusError::Redis(e.to_string()))?;
         Ok(removed > 0)
+    }
+
+    /// Operator inspect of a single lease (GET + TTL). Never mutates.
+    pub async fn inspect<C: redis::aio::ConnectionLike>(
+        conn: &mut C,
+        job_id: Uuid,
+    ) -> Result<LeaseView, JobBusError> {
+        let key = lease_key(job_id);
+        let value: Option<String> = redis::cmd("GET")
+            .arg(&key)
+            .query_async(conn)
+            .await
+            .map_err(|e| JobBusError::Redis(e.to_string()))?;
+        let ttl: i64 = redis::cmd("TTL")
+            .arg(&key)
+            .query_async(conn)
+            .await
+            .map_err(|e| JobBusError::Redis(e.to_string()))?;
+        Ok(lease_view_from_get_ttl(value.as_deref(), ttl))
+    }
+
+    pub async fn inspect_many<C: redis::aio::ConnectionLike>(
+        conn: &mut C,
+        job_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, LeaseView>, JobBusError> {
+        let mut out = HashMap::with_capacity(job_ids.len());
+        for id in job_ids {
+            out.insert(*id, Self::inspect(conn, *id).await?);
+        }
+        Ok(out)
     }
 }

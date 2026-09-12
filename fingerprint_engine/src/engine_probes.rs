@@ -1103,6 +1103,18 @@ pub fn status_indicates_presence(status: u16) -> bool {
     )
 }
 
+/// 401/403: the path exists and is auth-gated. Never "public content".
+#[must_use]
+pub fn status_indicates_auth_gated(status: u16) -> bool {
+    matches!(status, 401 | 403)
+}
+
+/// 2xx/3xx that can carry a public body. 401/403 are never public.
+#[must_use]
+pub fn status_indicates_public_content(status: u16) -> bool {
+    matches!(status, 200 | 201 | 204 | 301 | 302 | 307 | 308)
+}
+
 /// A product/version observation parsed from a real HTTP response.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct StackFingerprint {

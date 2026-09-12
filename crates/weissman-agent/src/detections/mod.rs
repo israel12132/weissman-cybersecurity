@@ -22,7 +22,10 @@ mod process_modules;
 mod scheduled_tasks;
 mod social_local;
 mod stealth_host;
+mod stealth_integrity;
+mod syscall_hooks;
 mod timestomp;
+pub mod ueba;
 mod usb_devices;
 mod util;
 mod yara_hunt;
@@ -106,6 +109,8 @@ pub fn all_capability_ids() -> Vec<&'static str> {
         "host_privilege_escalation",
         "ebpf_sensor",
         "ioc_yara_hunt",
+        "syscall_evasion",
+        "stealthy_persistence_evasion",
     ]
 }
 
@@ -202,6 +207,8 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
             }
             "ebpf_sensor" => ebpf_sensor::run(&engine, &params).await,
             "ioc_yara_hunt" => yara_hunt::run(&engine, &params).await,
+            "syscall_evasion" => syscall_hooks::run(&engine).await,
+            "stealthy_persistence_evasion" => stealth_integrity::run(&engine, &params).await,
             other => Err(anyhow::anyhow!(
                 "agent has no implementation for engine '{other}'"
             )),
@@ -300,6 +307,8 @@ mod tests {
         "host_privilege_escalation",
         "ebpf_sensor",
         "ioc_yara_hunt",
+        "syscall_evasion",
+        "stealthy_persistence_evasion",
     ];
 
     #[test]

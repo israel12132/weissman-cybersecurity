@@ -1,5 +1,5 @@
 /**
- * Master registry of all 585 production attack engines.
+ * Master registry of all 592 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 585 production engines in registry order */
+/** All 592 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -4840,9 +4840,58 @@ export const ENGINES_REGISTRY = [
     id: 'cortex_proven_finding_bridge',
     label: 'Cortex Proven Finding Bridge',
     group: 'defense',
-    mitre: 'T1562.001',
+    mitre: 'T1685',
     description: 'Maps live scan jobs to persisted findings, then compares proven evidence against Cortex XSIAM get_alerts. Emits coverage-gap findings only when XDR actually missed a proof-backed row — never a fake alert',
     requiresTarget: false,
+  },
+  {
+    id: 'honey_routing_gateway',
+    label: 'Honey-Routing Gateway',
+    group: 'defense',
+    mitre: 'T1599',
+    description: 'Live decoy-path fusion: HMAC TLS hello, Dijkstra honey routes, FAIR ARO — no simulated attacker traffic',
+    requiresTarget: true,
+  },
+  {
+    id: 'advanced_c2_covert_exfil',
+    label: 'Advanced C2 & Covert Exfil',
+    group: 'apt',
+    mitre: 'T1071',
+    description: 'Assessment-only covert-channel surface: DNS entropy, beacon cadence, HTTP/3 and WebSocket masquerade — never implants C2',
+    requiresTarget: true,
+  },
+  {
+    id: 'stealthy_persistence_evasion',
+    label: 'Stealthy Persistence & Evasion',
+    group: 'apt',
+    mitre: 'T1547',
+    description: 'Intelligence-grade persistence and defense-evasion assessment across host, kernel, and control-plane checks',
+    requiresTarget: true,
+    requiresAgent: false,
+  },
+  {
+    id: 'web_http_intel',
+    label: 'Web HTTP Intelligence',
+    group: 'web',
+    mitre: 'T1190',
+    description: 'Live HTTP/DNS/TLS intelligence: header values, cookie flags, CORS, auth-gated 401/403 are existence not public exposure',
+    requiresTarget: true,
+  },
+  {
+    id: 'web_identity_surface',
+    label: 'Web Identity Surface',
+    group: 'crypto',
+    mitre: 'T1550.001',
+    description: 'OIDC/OAuth/SAML well-known surfaces, WWW-Authenticate, login forms, IdP fingerprints — never treats 401 as public data',
+    requiresTarget: true,
+  },
+  {
+    id: 'api_cloud_intel',
+    label: 'API & Cloud Storage Intel',
+    group: 'cloud',
+    mitre: 'T1530',
+    description: 'GraphQL/OpenAPI and object-storage probes: 401/403 and empty listings are never labelled public',
+    requiresTarget: true,
   },
 ]
 

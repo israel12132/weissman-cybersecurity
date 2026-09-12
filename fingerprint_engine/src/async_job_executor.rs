@@ -2476,6 +2476,7 @@ mod tests {
             baseline_vs_anomaly: "base vs anom".to_string(),
             oob_token: oob.map(str::to_string),
             llm_user_prompt: llm.map(str::to_string),
+            ..Default::default()
         }
     }
 

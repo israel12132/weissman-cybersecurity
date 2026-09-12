@@ -1104,6 +1104,27 @@ async fn dispatch_engine_match(
         "cortex_proven_finding_bridge" => {
             crate::scan_finding_bridge::run_cortex_proven_finding_bridge_result(target, ctx).await
         }
+        "honey_routing_gateway" => {
+            crate::honey_routing_gateway_engine::run_honey_routing_gateway_result(target, ctx)
+                .await
+        }
+        "advanced_c2_covert_exfil" => {
+            crate::advanced_c2_covert_exfil_engine::run_advanced_c2_covert_exfil_result_ctx(
+                target, ctx,
+            )
+            .await
+        }
+        "stealthy_persistence_evasion" => {
+            crate::stealthy_persistence_evasion::run_stealthy_persistence_evasion_result(
+                target, ctx,
+            )
+            .await
+        }
+        "web_http_intel" => crate::web_scan_intel::run_web_http_intel_result(target).await,
+        "web_identity_surface" => {
+            crate::web_scan_intel::run_web_identity_surface_result(target).await
+        }
+        "api_cloud_intel" => crate::api_cloud_intel::run_api_cloud_intel_result(target).await,
 
         _ => EngineResult::error(
             format!(

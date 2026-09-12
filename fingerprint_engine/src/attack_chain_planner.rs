@@ -17,7 +17,7 @@
 
 use serde::Serialize;
 use std::cmp::Reverse;
-use std::collections::{BinaryHeap, HashSet};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 
 /// A grounded fact. Namespaced `domain:detail` strings keep the model open while staying readable
 /// (e.g. `service:web`, `vuln:sqli`, `access:privileged`, `impact:objective`).
@@ -53,7 +53,8 @@ impl Technique {
         }
     }
 
-    fn applicable(&self, state: &HashSet<Fact>) -> bool {
+    #[must_use]
+    pub fn applicable(&self, state: &HashSet<Fact>) -> bool {
         self.preconditions.iter().all(|p| state.contains(p))
     }
 
@@ -408,6 +409,28 @@ pub fn facts_from_findings(findings: &[serde_json::Value]) -> HashSet<Fact> {
     facts
 }
 
+/// Same facts as [`facts_from_findings`], keyed to the `finding_id`s that produced them.
+/// Empty ids are skipped so the campaign blackboard cannot cite an anonymous hop.
+#[must_use]
+pub fn facts_from_findings_with_evidence(
+    findings: &[serde_json::Value],
+) -> HashMap<String, Vec<String>> {
+    let mut out: HashMap<String, Vec<String>> = HashMap::new();
+    for f in findings {
+        let fid = field(f, "finding_id");
+        if fid.is_empty() {
+            continue;
+        }
+        for fact in facts_from_findings(std::slice::from_ref(f)) {
+            let ids = out.entry(fact).or_default();
+            if !ids.iter().any(|id| id == &fid) {
+                ids.push(fid.clone());
+            }
+        }
+    }
+    out
+}
+
 fn field(v: &serde_json::Value, key: &str) -> String {
     v.get(key)
         .and_then(serde_json::Value::as_str)
@@ -469,9 +492,61 @@ pub fn plan_from_findings(findings: &[serde_json::Value], goal: &str) -> Option<
         .max_by_key(|chain| (chain.reached_goal, chain.steps.len()))
 }
 
+/// True when STRIPS technique `technique_id` is applicable in `facts` (default library).
+#[must_use]
+pub fn technique_preconditions_met(technique_id: &str, facts: &HashSet<Fact>) -> bool {
+    technique_preconditions_met_in(technique_id, facts, &default_technique_library())
+}
+
+/// True when STRIPS technique `technique_id` is applicable in `facts`.
+#[must_use]
+pub fn technique_preconditions_met_in(
+    technique_id: &str,
+    facts: &HashSet<Fact>,
+    techniques: &[Technique],
+) -> bool {
+    techniques
+        .iter()
+        .find(|t| t.id == technique_id)
+        .map(|t| t.applicable(facts))
+        .unwrap_or(false)
+}
+
+/// Strongest per-asset chain using the default technique library.
+#[must_use]
+pub fn plan_strongest_asset(
+    findings: &[serde_json::Value],
+    goal: &str,
+) -> Option<(String, AttackChain, HashSet<Fact>)> {
+    plan_strongest_asset_with(findings, goal, &default_technique_library())
+}
+
+/// Strongest per-asset chain using an explicit technique library (APT profile overlay).
+#[must_use]
+pub fn plan_strongest_asset_with(
+    findings: &[serde_json::Value],
+    goal: &str,
+    lib: &[Technique],
+) -> Option<(String, AttackChain, HashSet<Fact>)> {
+    let mut by_asset: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+    for f in findings {
+        by_asset
+            .entry(finding_asset_key(f))
+            .or_default()
+            .push(f.clone());
+    }
+    by_asset
+        .into_iter()
+        .filter_map(|(key, group)| {
+            let facts = facts_from_findings(&group);
+            plan(&facts, lib, goal, 50_000).map(|chain| (key, chain, facts))
+        })
+        .max_by_key(|(_, chain, _)| (chain.reached_goal, chain.steps.len()))
+}
+
 /// Normalized host a finding pertains to, so attack-chain planning stays within one asset.
 /// Empty string groups findings with no locatable host together (a conservative shared bucket).
-fn finding_asset_key(f: &serde_json::Value) -> String {
+pub fn finding_asset_key(f: &serde_json::Value) -> String {
     for key in ["target", "url", "host", "asset", "evidence_url"] {
         let v = field(f, key);
         let t = v.trim();

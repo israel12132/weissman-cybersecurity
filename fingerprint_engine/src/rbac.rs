@@ -78,6 +78,12 @@ pub fn require_operator(auth: &AuthContext) -> Result<(), Response> {
     require_role(auth, roles::OPERATOR)
 }
 
+/// Discovery Lab mutates live fuzz campaigns — operator or above.
+#[inline]
+pub fn require_discovery_lab_steward(auth: &AuthContext) -> Result<(), Response> {
+    require_operator(auth)
+}
+
 /// Reject anything below analyst (analyst, operator, admin, ceo, or superadmin).
 #[inline]
 pub fn require_analyst(auth: &AuthContext) -> Result<(), Response> {

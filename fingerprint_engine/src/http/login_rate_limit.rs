@@ -112,6 +112,12 @@ pub async fn login_rate_limit_middleware(
     };
 
     let ip = extract_client_ip(request.headers(), peer);
+    // Successful parallel CI / cockpit logins from a shared NAT must not 429.
+    // Stuffing is many *failures* and is handled by per-email lockout.
+    if kind == UnauthPostKind::Login {
+        rate_limit_metrics::record_login_allowed(&ip);
+        return next.run(request).await;
+    }
     let (limiter, limit, burst, label) = match kind {
         UnauthPostKind::Login => (login_limiter(), login_per_minute(), login_burst(), "Login"),
         UnauthPostKind::Enroll => (
@@ -257,6 +263,14 @@ mod tests {
         assert_ne!(
             unauth_post_kind(&axum::http::Method::POST, "/api/agents/enroll"),
             unauth_post_kind(&axum::http::Method::POST, "/api/agents/session")
+        );
+    }
+
+    #[test]
+    fn login_posts_are_login_kind_not_enroll() {
+        assert_eq!(
+            unauth_post_kind(&axum::http::Method::POST, "/api/login"),
+            Some(UnauthPostKind::Login)
         );
     }
 }

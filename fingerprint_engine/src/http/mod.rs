@@ -22,6 +22,14 @@ pub mod sse_bridge;
 pub mod sse_context;
 pub mod tenant_scan_limit;
 pub mod tenant_stream;
+pub mod honey_routing_mw;
+pub mod ai_quota_mem;
+pub mod blocking_io;
+pub mod bounded_codec;
+pub mod dashmap_gc;
+pub mod http_serve_loop;
+pub mod simd_json;
+pub mod tcp_socket;
 
 pub use client_ip::extract_client_ip;
 pub use privilege_headers::privilege_header_proxy_middleware;

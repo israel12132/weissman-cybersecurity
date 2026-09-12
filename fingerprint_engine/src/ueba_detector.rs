@@ -166,6 +166,21 @@ pub async fn ingest_sample(
     .await
     .map_err(|e| format!("insert sample: {e}"))?;
 
+    let summary = analyze_sample_in_tx(&mut tx, tenant_id, sample_id, &p).await?;
+    tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+    Ok(summary)
+}
+
+/// Baseline + anomaly pass for a sample that is already in `agent_metric_samples`.
+/// Does not INSERT and does not COMMIT — callers own the tenant transaction
+/// (single-row ingest commits after this; binary COPY analyzes a whole batch).
+pub async fn analyze_sample_in_tx(
+    mut tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    sample_id: i64,
+    p: &UebaIngestPayload,
+) -> Result<UebaIngestSummary, String> {
+    let scrubbed = scrub_ueba_metrics(&p.metrics);
     let enrolled_at: Option<DateTime<Utc>> = if let Ok(uuid) = p.agent_id.parse::<uuid::Uuid>() {
         sqlx::query_scalar(
             "SELECT enrolled_at FROM endpoint_agents
@@ -173,7 +188,7 @@ pub async fn ingest_sample(
         )
         .bind(tenant_id)
         .bind(uuid)
-        .fetch_optional(&mut *tx)
+        .fetch_optional(&mut **tx)
         .await
         .ok()
         .flatten()
@@ -285,7 +300,6 @@ pub async fn ingest_sample(
         }
     }
 
-    tx.commit().await.map_err(|e| format!("commit: {e}"))?;
     Ok(summary)
 }
 

@@ -21,6 +21,10 @@ use std::time::{Duration, Instant};
 /// and the fail-closed paths (`StrictOp::Unavailable`) never fire because the await never returns.
 const REDIS_OP_TIMEOUT: Duration = Duration::from_secs(2);
 
+/// Ask Weissman cockpit cannot wait the general 2s Redis bound. 50ms fail-closed
+/// so a hung Redis surfaces as `StrictOp::Unavailable` instead of stalling NLQA.
+pub const ASK_REDIS_ACQUIRE_TIMEOUT_MS: u64 = 50;
+
 pub struct RedisRateLimiter {
     client: redis::Client,
 }
@@ -29,18 +33,22 @@ impl RedisRateLimiter {
     /// Multiplexed connection whose acquire and every command are bounded by
     /// [`REDIS_OP_TIMEOUT`]; a hung Redis surfaces as an error (→ fail-closed) instead of a hang.
     async fn conn(&self) -> redis::RedisResult<redis::aio::MultiplexedConnection> {
+        self.conn_within(REDIS_OP_TIMEOUT).await
+    }
+
+    async fn conn_within(
+        &self,
+        timeout: Duration,
+    ) -> redis::RedisResult<redis::aio::MultiplexedConnection> {
         // Bound the acquire with tokio::timeout, and bound every subsequent command with the
         // connection's own response timeout — together these turn a hung Redis into an error
         // (→ fail-closed) instead of an unbounded await on the per-request hot path.
-        let mut conn = tokio::time::timeout(
-            REDIS_OP_TIMEOUT,
-            self.client.get_multiplexed_async_connection(),
-        )
-        .await
-        .map_err(|_| {
-            redis::RedisError::from((redis::ErrorKind::IoError, "redis connect timeout"))
-        })??;
-        conn.set_response_timeout(REDIS_OP_TIMEOUT);
+        let mut conn = tokio::time::timeout(timeout, self.client.get_multiplexed_async_connection())
+            .await
+            .map_err(|_| {
+                redis::RedisError::from((redis::ErrorKind::IoError, "redis connect timeout"))
+            })??;
+        conn.set_response_timeout(timeout);
         Ok(conn)
     }
 }
@@ -316,6 +324,43 @@ pub fn is_enabled() -> bool {
     shared().is_some()
 }
 
+/// True when `REDIS_URL` is set (even if the client failed to initialize).
+#[must_use]
+pub fn redis_url_configured() -> bool {
+    std::env::var("REDIS_URL")
+        .ok()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
+}
+
+/// Read-only GET. `None` when Redis is unset, down, or the key is missing.
+pub async fn kv_get(key: &str) -> Option<String> {
+    let rl = shared()?;
+    let mut conn = rl.conn().await.ok()?;
+    conn.get::<_, Option<String>>(key).await.ok().flatten()
+}
+
+/// SET + EXPIRE. Returns `Err` when Redis is unavailable (callers keep the LRU).
+pub async fn kv_set_ex(key: &str, value: &str, ttl: Duration) -> Result<(), ()> {
+    let rl = shared().ok_or(())?;
+    let mut conn = rl.conn().await.map_err(|_| ())?;
+    let secs = ttl.as_secs().max(1);
+    conn.set_ex::<_, _, ()>(key, value, secs)
+        .await
+        .map_err(|_| ())
+}
+
+/// Per-user Ask Weissman budget (60s window). Acquire is 50ms so the cockpit
+/// never waits on a hung Redis.
+pub async fn incr_ask_user_strict(user_id: i64) -> StrictOp<u64> {
+    incr_window_strict_within(
+        &format!("weissman:rl:ask:{user_id}"),
+        Duration::from_secs(60),
+        Duration::from_millis(ASK_REDIS_ACQUIRE_TIMEOUT_MS),
+    )
+    .await
+}
+
 /// Production multi-replica deployments require Redis-backed distributed state.
 #[must_use]
 pub fn distributed_state_required() -> bool {
@@ -448,6 +493,14 @@ pub fn distributed_store_unavailable_response() -> Response {
 }
 
 async fn incr_window_strict(key: &str, window: Duration) -> StrictOp<u64> {
+    incr_window_strict_within(key, window, REDIS_OP_TIMEOUT).await
+}
+
+async fn incr_window_strict_within(
+    key: &str,
+    window: Duration,
+    acquire_timeout: Duration,
+) -> StrictOp<u64> {
     let Some(rl) = shared() else {
         return if distributed_state_required() {
             StrictOp::Unavailable
@@ -455,7 +508,7 @@ async fn incr_window_strict(key: &str, window: Duration) -> StrictOp<u64> {
             StrictOp::Ok(0)
         };
     };
-    let Ok(mut conn) = rl.conn().await else {
+    let Ok(mut conn) = rl.conn_within(acquire_timeout).await else {
         return StrictOp::Unavailable;
     };
     match incr_and_bound_ttl(&mut conn, key, window).await {

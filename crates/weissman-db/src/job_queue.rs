@@ -667,6 +667,28 @@ pub async fn complete_job_with_result_owned(
     Ok(r.rows_affected() == 1)
 }
 
+/// Park a running job until an endpoint agent executes the queued host task.
+pub async fn park_job_waiting_for_agent(
+    pool: &PgPool,
+    job_id: Uuid,
+    worker_id: &str,
+    result: &Value,
+) -> Result<bool, sqlx::Error> {
+    let mut tx = begin_worker_tx(pool).await?;
+    let r = sqlx::query(
+        r#"UPDATE weissman_async_jobs SET status = 'waiting_for_agent', result_json = $3,
+           locked_until = NULL, worker_id = NULL, updated_at = now()
+           WHERE id = $1 AND worker_id = $2 AND status = 'running'"#,
+    )
+    .bind(job_id)
+    .bind(worker_id)
+    .bind(Json(result))
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(r.rows_affected() == 1)
+}
+
 /// Unfenced completion. Prefer [`complete_job_with_result_owned`]; this remains for callers that
 /// genuinely have no worker identity to fence on.
 pub async fn complete_job_with_result(
@@ -703,6 +725,12 @@ pub struct JobStatusView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub heartbeat_at: Option<chrono::DateTime<chrono::Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub worker_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub locked_until: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_after: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub trace_id: Option<String>,
     pub source: &'static str,
 }
@@ -717,7 +745,7 @@ pub async fn get_job_for_tenant(
 ) -> Result<Option<JobStatusView>, sqlx::Error> {
     let mut tx = crate::begin_tenant_tx(pool, tenant_id).await?;
     let row = sqlx::query(
-        r#"SELECT id, kind, status, payload, result_json, last_error, attempt_count, created_at, updated_at, heartbeat_at, trace_id
+        r#"SELECT id, kind, status, payload, result_json, last_error, attempt_count, created_at, updated_at, heartbeat_at, worker_id, locked_until, run_after, trace_id
            FROM weissman_async_jobs WHERE id = $1 AND tenant_id = $2"#,
     )
     .bind(job_id)
@@ -742,6 +770,9 @@ pub async fn get_job_for_tenant(
     let created_at: chrono::DateTime<chrono::Utc> = row.try_get("created_at")?;
     let updated_at: chrono::DateTime<chrono::Utc> = row.try_get("updated_at")?;
     let heartbeat_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("heartbeat_at").ok();
+    let worker_id: Option<String> = row.try_get("worker_id").ok();
+    let locked_until: Option<chrono::DateTime<chrono::Utc>> = row.try_get("locked_until").ok();
+    let run_after: Option<chrono::DateTime<chrono::Utc>> = row.try_get("run_after").ok();
     let trace_id: Option<String> = row.try_get("trace_id").ok();
     Ok(Some(JobStatusView {
         id,
@@ -754,6 +785,9 @@ pub async fn get_job_for_tenant(
         created_at,
         updated_at,
         heartbeat_at,
+        worker_id,
+        locked_until,
+        run_after,
         trace_id,
         source: "async_job",
     }))

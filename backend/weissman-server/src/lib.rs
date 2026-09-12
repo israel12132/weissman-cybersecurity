@@ -137,6 +137,9 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     fingerprint_engine::http::spawn_http_background_tasks(&state, pools.job_control.clone());
     let static_dir = resolve_static_dir();
     let router = api::routes::build_full_router(state, static_dir).await;
+    let router = middleware::inbound_decode::apply(router);
+    let router = middleware::content_length_limit::apply(router);
+    let router = middleware::compression::apply(router);
     let router = middleware::cors::apply(router);
     let router = middleware::security_headers::apply(router);
     let router = middleware::rate_limiter::apply_global_rate_limit(router);

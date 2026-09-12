@@ -201,6 +201,155 @@ pub fn analyze(samples: &[FlowSample], cfg: &NdrConfig) -> Vec<NdrFinding> {
     v
 }
 
+/// Floor for live beacon sampling so Lomb–Scargle / FFT have enough intervals.
+pub const MIN_BEACON_SAMPLES: usize = 12;
+/// Ceiling so a single engine cannot hang on an unbounded sample loop.
+pub const MAX_BEACON_SAMPLES: usize = 48;
+/// Minimum inter-arrival count before a periodogram is honest.
+pub const MIN_SPECTRAL_INTERVALS: usize = 8;
+/// Peak / median DFT power required to call a bin significant.
+pub const SPECTRAL_FFT_SNR: f64 = 4.0;
+
+/// Standard score. Returns 0 when σ is not usable.
+#[must_use]
+pub fn zscore(x: f64, mean: f64, sd: f64) -> f64 {
+    if !sd.is_finite() || sd.abs() < f64::EPSILON {
+        return 0.0;
+    }
+    (x - mean) / sd
+}
+
+/// Stretch jitter when the last sample is an outlier vs the live mean.
+#[must_use]
+pub fn jitter_should_adapt(z: f64, threshold: f64) -> bool {
+    z.abs() > threshold
+}
+
+/// Peak of a Lomb–Scargle periodogram over uneven samples.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LombScarglePeak {
+    pub period: f64,
+    pub power: f64,
+    pub false_alarm_prob: f64,
+    pub significant: bool,
+}
+
+/// Lomb–Scargle periodogram peak (uneven sampling). Returns `None` when the
+/// series is too short or has no positive time span.
+#[must_use]
+pub fn lomb_scargle_peak(times: &[f64], values: &[f64]) -> Option<LombScarglePeak> {
+    if times.len() < 4 || times.len() != values.len() {
+        return None;
+    }
+    let t0 = *times.first()?;
+    let t1 = *times.last()?;
+    let tspan = t1 - t0;
+    if tspan <= 0.0 {
+        return None;
+    }
+    let mut dts: Vec<f64> = times
+        .windows(2)
+        .map(|w| w[1] - w[0])
+        .filter(|d| *d > 0.0)
+        .collect();
+    if dts.is_empty() {
+        return None;
+    }
+    dts.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let min_p = dts[dts.len() / 2].max(1e-4);
+    let max_p = (tspan / 2.0).max(min_p * 1.01);
+    let ymean = mean(values);
+    let yy: f64 = values.iter().map(|v| (v - ymean).powi(2)).sum();
+    if yy <= 0.0 {
+        return None;
+    }
+    let steps = 64usize;
+    let mut best: Option<LombScarglePeak> = None;
+    for i in 1..=steps {
+        let frac = i as f64 / steps as f64;
+        let period = min_p * (max_p / min_p).powf(frac);
+        let omega = 2.0 * std::f64::consts::PI / period;
+        let mut s2 = 0.0;
+        let mut c2 = 0.0;
+        for &t in times {
+            s2 += (2.0 * omega * t).sin();
+            c2 += (2.0 * omega * t).cos();
+        }
+        let tau = 0.5 * s2.atan2(c2) / omega;
+        let mut yc = 0.0;
+        let mut ys = 0.0;
+        let mut cc = 0.0;
+        let mut ss = 0.0;
+        for (idx, &t) in times.iter().enumerate() {
+            let wt = omega * (t - tau);
+            let y = values[idx] - ymean;
+            yc += y * wt.cos();
+            ys += y * wt.sin();
+            cc += wt.cos().powi(2);
+            ss += wt.sin().powi(2);
+        }
+        if cc <= 0.0 || ss <= 0.0 {
+            continue;
+        }
+        let power = 0.5 * (yc.powi(2) / cc + ys.powi(2) / ss);
+        let fap = (-power).exp().clamp(0.0, 1.0);
+        let significant = power > 0.5 && fap < 0.05;
+        let cand = LombScarglePeak {
+            period,
+            power,
+            false_alarm_prob: fap,
+            significant,
+        };
+        match best {
+            None => best = Some(cand),
+            Some(prev) if cand.power > prev.power => best = Some(cand),
+            _ => {}
+        }
+    }
+    best
+}
+
+/// Discrete Fourier peak vs median bin power. `snr` is peak/median.
+#[must_use]
+pub fn fft_peak_significant(values: &[f64], snr_thresh: f64) -> Option<(usize, f64)> {
+    let n = values.len();
+    if n < 8 {
+        return None;
+    }
+    let m = mean(values);
+    let xs: Vec<f64> = values.iter().map(|v| v - m).collect();
+    let mut powers: Vec<(usize, f64)> = Vec::with_capacity(n / 2);
+    for k in 1..=n / 2 {
+        let mut re = 0.0;
+        let mut im = 0.0;
+        for (i, &x) in xs.iter().enumerate() {
+            let ang = 2.0 * std::f64::consts::PI * k as f64 * i as f64 / n as f64;
+            re += x * ang.cos();
+            im += x * ang.sin();
+        }
+        powers.push((k, (re * re + im * im).sqrt()));
+    }
+    let mut sorted: Vec<f64> = powers.iter().map(|(_, p)| *p).collect();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let median = sorted[sorted.len() / 2];
+    let (k, peak) = powers
+        .iter()
+        .copied()
+        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))?;
+    let snr = if median > 1e-12 { peak / median } else { peak };
+    if snr >= snr_thresh {
+        Some((k, snr))
+    } else {
+        None
+    }
+}
+
+/// True when either periodogram recovered a significant peak.
+#[must_use]
+pub fn spectral_hit(ls: Option<LombScarglePeak>, fft: Option<(usize, f64)>) -> bool {
+    ls.map(|p| p.significant).unwrap_or(false) || fft.is_some()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -278,5 +427,23 @@ mod tests {
         let hits = analyze(&samples, &NdrConfig::default());
         assert!(hits.iter().any(|h| h.kind == "c2_beacon"));
         assert!(hits.iter().any(|h| h.kind == "bulk_exfiltration"));
+    }
+
+    #[test]
+    fn periodic_series_has_fft_peak() {
+        let values: Vec<f64> = (0..32)
+            .map(|i| (2.0 * std::f64::consts::PI * (i as f64) / 8.0).sin())
+            .collect();
+        let fft = fft_peak_significant(&values, 2.0);
+        assert!(fft.is_some(), "sine wave must produce an FFT peak");
+        assert!(spectral_hit(None, fft));
+    }
+
+    #[test]
+    fn regular_intervals_have_lomb_peak() {
+        let times: Vec<f64> = (0..16).map(|i| i as f64 * 0.5).collect();
+        let values: Vec<f64> = times.iter().map(|t| (2.0 * std::f64::consts::PI * t).sin()).collect();
+        let ls = lomb_scargle_peak(&times, &values);
+        assert!(ls.is_some());
     }
 }

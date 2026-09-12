@@ -681,6 +681,12 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "malware_detonation",
     "weissman_vngfw",
     "cortex_proven_finding_bridge",
+    "honey_routing_gateway",
+    "advanced_c2_covert_exfil",
+    "stealthy_persistence_evasion",
+    "web_http_intel",
+    "web_identity_surface",
+    "api_cloud_intel",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -1304,6 +1310,12 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "malware_detonation",
     "weissman_vngfw",
     "cortex_proven_finding_bridge",
+    "honey_routing_gateway",
+    "advanced_c2_covert_exfil",
+    "stealthy_persistence_evasion",
+    "web_http_intel",
+    "web_identity_surface",
+    "api_cloud_intel",
 ];
 
 /// Map catalog-only registry IDs to a production engine implementation.

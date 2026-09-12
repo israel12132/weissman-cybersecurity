@@ -64,6 +64,25 @@ impl EngineResult {
             graph_edges: None,
         }
     }
+
+    /// Honest queue state: host work is parked for an endpoint agent.
+    /// Never a success and never a fabricated host finding.
+    pub fn waiting_for_agent(message: impl Into<String>) -> Self {
+        let msg = message.into();
+        Self {
+            status: "waiting_for_agent".to_string(),
+            findings: vec![],
+            message: msg.clone(),
+            success: false,
+            summary: msg,
+            graph_nodes: None,
+            graph_edges: None,
+        }
+    }
+
+    pub fn is_waiting_for_agent(&self) -> bool {
+        self.status.eq_ignore_ascii_case("waiting_for_agent")
+    }
 }
 
 impl From<weissman_engines::EngineResult> for EngineResult {
