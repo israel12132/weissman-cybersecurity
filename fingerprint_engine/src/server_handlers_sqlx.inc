@@ -1130,7 +1130,7 @@ async fn api_intel_status(State(state): State<Arc<AppState>>) -> Response {
                 .into_response();
         }
     };
-    let epss_total: i64 = match epss.try_get("n") {
+    let epss_total: i64 = match epss.try_get::<i64, _>("n") {
         Ok(n) => n,
         Err(_) => {
             return (
