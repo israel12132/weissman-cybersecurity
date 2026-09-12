@@ -384,8 +384,6 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/clients/:id/findings", get(api_client_findings_all))
         .route("/api/clients/:id/export/csv", get(api_client_export_csv))
         .route("/api/clients/:id/report/pdf", get(api_client_report_pdf))
-        .route("/api/clients/:id/report/xlsx", get(api_client_report_xlsx))
-        .route("/api/clients/:id/dominion-pack", get(api_client_dominion_pack))
         .route(
             "/api/clients/:id/report/crypto-proof",
             get(api_client_report_crypto_proof),
@@ -484,50 +482,6 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route(
             "/api/sso/idps/:id/toggle",
             post(crate::sso_management::api_sso_idp_toggle),
-        )
-        .route("/api/sso/scim/status", get(crate::scim::api_scim_status))
-        .route(
-            "/api/sso/scim/tokens",
-            get(crate::scim::api_scim_tokens_list).post(crate::scim::api_scim_token_mint),
-        )
-        .route(
-            "/api/sso/scim/tokens/:id",
-            delete(crate::scim::api_scim_token_revoke),
-        )
-        .route(
-            "/api/sso/scim/group-maps",
-            get(crate::scim::api_scim_group_maps_get).put(crate::scim::api_scim_group_maps_put),
-        )
-        .route("/api/sso/scim/events", get(crate::scim::api_scim_events))
-        .route(
-            "/scim/v2/ServiceProviderConfig",
-            get(crate::scim::scim_service_provider_config),
-        )
-        .route(
-            "/scim/v2/ResourceTypes",
-            get(crate::scim::scim_resource_types),
-        )
-        .route(
-            "/scim/v2/Users",
-            get(crate::scim::scim_users_list).post(crate::scim::scim_users_create),
-        )
-        .route(
-            "/scim/v2/Users/:id",
-            get(crate::scim::scim_users_get)
-                .put(crate::scim::scim_users_put)
-                .patch(crate::scim::scim_users_patch)
-                .delete(crate::scim::scim_users_delete),
-        )
-        .route(
-            "/scim/v2/Groups",
-            get(crate::scim::scim_groups_list).post(crate::scim::scim_groups_create),
-        )
-        .route(
-            "/scim/v2/Groups/:id",
-            get(crate::scim::scim_groups_get)
-                .put(crate::scim::scim_groups_put)
-                .patch(crate::scim::scim_groups_patch)
-                .delete(crate::scim::scim_groups_delete),
         )
         .route("/api/general/ascension", post(api_general_ascension))
         .route("/api/general/self-audit", post(api_general_self_audit))
@@ -695,9 +649,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/integrations/:id/test", post(api_integrations_test))
         .route("/api/integrations/:id", delete(api_integrations_delete))
         .route("/api/ot-ics/devices", get(api_ot_ics_devices))
+        .route("/api/ot-ics/safety", get(api_ot_ics_safety))
         .route(
-            "/api/elite-hardening/status",
-            get(api_elite_hardening_status),
+            "/api/clients/:id/ot-ics/safety",
+            get(api_client_ot_ics_safety),
         )
         .route("/api/mobile-security/apps", get(api_mobile_security_apps))
         .route("/api/soc/incidents", get(api_soc_incidents))
@@ -807,6 +762,70 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route(
             "/api/clients/:id/ot-ics/fingerprints",
             get(api_client_ot_ics_fingerprints),
+        )
+        .route(
+            "/api/elite-hardening/status",
+            get(api_elite_hardening_status),
+        )
+        .route("/api/cem-dago/status", get(api_cem_dago_status))
+        .route("/api/cem-dago/manifests", get(api_cem_dago_manifests))
+        .route("/api/cem-dago/waves", get(api_cem_dago_waves))
+        .route("/api/cem-dago/blackboard", get(api_cem_dago_blackboard))
+        .route(
+            "/api/sovereign/operator/chat",
+            post(api_sovereign_operator_chat),
+        )
+        .route(
+            "/api/sovereign/operator/session",
+            get(api_sovereign_operator_session_get),
+        )
+        .route(
+            "/api/sovereign/operator/knowledge",
+            get(api_sovereign_operator_knowledge_get),
+        )
+        .route(
+            "/api/sovereign/operator/logs",
+            get(api_sovereign_operator_logs_get),
+        )
+        .route(
+            "/api/sovereign/operator/windows",
+            get(api_sovereign_operator_windows_get),
+        )
+        .route(
+            "/api/sovereign/operator/tools",
+            post(api_sovereign_operator_tools_post),
+        )
+        .route(
+            "/api/sovereign/operator/tune",
+            post(api_sovereign_operator_tune_post),
+        )
+        .route(
+            "/api/sovereign/operator/race",
+            post(api_sovereign_operator_race_post),
+        )
+        .route(
+            "/api/sovereign/operator/stream-ticket",
+            post(api_sovereign_operator_stream_ticket),
+        )
+        .route(
+            "/api/sovereign/operator/stream",
+            get(api_sovereign_operator_stream),
+        )
+        .route(
+            "/api/sovereign/operator/memory",
+            get(api_sovereign_operator_memory_get),
+        )
+        .route(
+            "/api/sovereign/operator/forge",
+            get(api_sovereign_operator_forge_get),
+        )
+        .route(
+            "/api/sovereign/operator/scripts",
+            get(api_sovereign_operator_scripts_get),
+        )
+        .route(
+            "/api/competitive-delta",
+            get(crate::competitive_delta::api_competitive_delta),
         )
         .route(
             "/api/ceo/council/sessions/:job_id/stream",

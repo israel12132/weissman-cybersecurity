@@ -10,10 +10,10 @@
 
 | Metric | Value | Verification command |
 |--------|-------|----------------------|
-| Production engines | **584** | `node scripts/verify_engine_wiring.mjs` |
-| Command Center routes | **145** | `node scripts/weissman-ui-audit.mjs` |
-| UI pages audited | **126/126** | `node scripts/weissman-ui-audit.mjs` |
-| Real probes | **322** | `node scripts/engine_reality_audit.mjs` |
+| Production engines | **585** | `node scripts/verify_engine_wiring.mjs` |
+| Command Center routes | **130** | `node scripts/weissman-ui-audit.mjs` |
+| UI pages audited | **111/111** | `node scripts/weissman-ui-audit.mjs` |
+| Real probes | **323** | `node scripts/engine_reality_audit.mjs` |
 | Agent-required surfaces | **58** | same |
 | JWT secret minimum (production) | **48 characters** | `fingerprint_engine/src/security_startup.rs` |
 | Destructive / metrics / job-bus secrets | **≥32 characters** | `PRODUCTION.env.template` |
@@ -37,7 +37,7 @@ Expected: **GLOBAL PASS**, exit code 0.
 1. Open **`https://<host>/api/health`** — show JSON: Postgres OK, scanning enabled.
 2. Login at **`/command-center/login`** via `POST /api/login` (not `/api/auth/login`).
 3. Show **Command Center KPI strip** — cite live sources: `GET /api/dashboard/exec-kpis`, `GET /api/jobs`, `GET /api/findings`.
-4. Optional: **`GET /api/engines/capabilities`** — 580 engines, kinds: `real_probe`, `alias`, `agent_required`.
+4. Optional: **`GET /api/engines/capabilities`** — 585 engines, kinds: `real_probe`, `alias`, `agent_required`.
 
 **Talking point:** No simulated telemetry in production paths; UI evidence banners map to `routeEvidence.js`.
 
@@ -110,17 +110,17 @@ flowchart LR
 
 Show **`scripts/generate_audit_evidence_pack.sh`** output and verify hashes.
 
-### Minutes 14–20 — Engine integrity (580 engines)
+### Minutes 14–20 — Engine integrity (585 engines)
 
 Run live (or show CI logs):
 
 ```bash
 node scripts/verify_engine_wiring.mjs      # 0 gaps
 node scripts/engine_reality_audit.mjs      # 0 no_path
-node scripts/weissman-ui-audit.mjs         # 145 routes, 126 pages
+node scripts/weissman-ui-audit.mjs         # 130 routes, 111 pages
 ```
 
-Explain taxonomy: **322 real_probe**, **204 alias**, **58 agent_required** — no fake findings.
+Explain taxonomy: **323 real_probe**, **204 alias**, **58 agent_required** — no fake findings.
 
 ### Minutes 20–26 — SDLC, CI, and audit gates
 

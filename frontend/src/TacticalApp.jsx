@@ -106,6 +106,7 @@ import {
   TargetIntelligence,
   StealthOperations,
   EliteHardeningCommandCenter,
+  CompetitiveDelta,
   ThreatHuntingWorkbench,
   ThreatAnalysisCenter,
   EngineClientCatalog,
@@ -307,6 +308,7 @@ export default function TacticalApp() {
           <Route path="target-intel" element={<TargetIntelligence />} />
           <Route path="stealth-ops" element={<StealthOperations />} />
           <Route path="elite-hardening" element={<EliteHardeningCommandCenter />} />
+          <Route path="competitive-delta" element={<CompetitiveDelta />} />
           <Route path="threat-hunting" element={<ThreatHuntingWorkbench />} />
           <Route path="threat-analysis" element={<ThreatAnalysisCenter />} />
           <Route path="engine-catalog" element={<EngineClientCatalog />} />

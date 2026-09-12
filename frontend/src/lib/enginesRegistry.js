@@ -1,5 +1,5 @@
 /**
- * Master registry of all 584 production attack engines.
+ * Master registry of all 585 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 584 production engines in registry order */
+/** All 585 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -393,6 +393,22 @@ export const ENGINES_REGISTRY = [
     group: 'ot',
     mitre: 'T0853',
     description: 'Triconex TriStation safety-instrumented-system reachability — TRITON-class life-safety exposure mapping under RoE',
+    requiresTarget: true,
+  },
+  {
+    id: 'ot_passive_active_safety',
+    label: 'OT Passive / Active Safety Interlock',
+    group: 'ot',
+    mitre: 'T0843',
+    description: 'RoE-gated safe-read OT probes with compiled protocol FSM abort — coil writes, Direct Operate, CPU stop, and GOOSE inject never leave the parser',
+    requiresTarget: true,
+  },
+  {
+    id: 'ot_crown_jewel_path',
+    label: 'OT Crown-Jewel Path',
+    group: 'ot',
+    mitre: 'T0836',
+    description: 'Safety-interlock findings fused with crown-jewel FAIR blast radius on the live OT graph — prices process disruption, not a packet-path NGFW',
     requiresTarget: true,
   },
 
@@ -2244,7 +2260,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark Web Intelligence',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Public leak and malware-URL OSINT: crt.sh CT, urlscan.io, URLHaus/ThreatFox/IntelX/OTX when API keys are set. Does not crawl Tor. Evidence-only HTTP responses.',
+    description: 'Comprehensive dark web monitoring: Tor hidden service enumeration, paste site scraping, underground forum credential leak correlation, ransomware leak site monitoring, threat actor attribution',
     requiresTarget: true,
   },
   {
@@ -4043,7 +4059,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark Web Brand Monitor',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Brand leak monitoring via public OSINT: crt.sh, urlscan.io, URLHaus/ThreatFox/IntelX/OTX when keyed. No Tor hidden-service crawling. Evidence-only.',
+    description: 'Comprehensive dark web brand monitoring: Tor marketplace credential listing detection, ransomware leak site monitoring, corporate data paste detection, threat actor chatter monitoring, underground forum API key listing alerts, dark web search engine integration',
     requiresTarget: true,
   },
   {
@@ -4766,14 +4782,6 @@ export const ENGINES_REGISTRY = [
     group: 'network',
     mitre: 'T1686',
     description: 'Software NGFW control plane. Errors if WEISSMAN_VNGFW_ADMIN dataplane is down — never pretends the firewall is live',
-    requiresTarget: true,
-  },
-  {
-    id: 'dominion_fusion',
-    label: 'Dominion Public-Intel Fusion',
-    group: 'recon',
-    mitre: 'T1597',
-    description: 'Board-pack fusion: live crt.sh + urlscan.io + URLHaus/ThreatFox/IntelX/OTX (when keyed) leak/malware-URL OSINT. No Tor. Feeds the Dominion PDF/XLSX pack.',
     requiresTarget: true,
   },
 ]

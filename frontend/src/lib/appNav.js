@@ -110,6 +110,7 @@ export const NAV_GROUPS = [
       { to: '/endpoint-edr', labelKey: 'nav.endpoint_edr', icon: '🛡' },
       { to: '/stealth-ops', labelKey: 'nav.stealth_ops', icon: '🕶' },
       { to: '/elite-hardening', labelKey: 'nav.elite_hardening', icon: '🛡' },
+      { to: '/competitive-delta', labelKey: 'nav.competitive_delta', icon: '⚔' },
       { to: '/nexus-swarm', labelKey: 'nav.nexus_swarm', icon: '⚡' },
       { to: '/superposition-collapse', labelKey: 'nav.superposition_collapse', icon: '◈' },
       { to: '/sovereign-defense-matrix', labelKey: 'nav.sovereign_defense', icon: '⬡' },

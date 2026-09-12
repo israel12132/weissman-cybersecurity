@@ -100,6 +100,7 @@ export const AdversaryDominance = React$lazy(() => import('../pages/AdversaryDom
 export const TargetIntelligence = React$lazy(() => import('../pages/TargetIntelligence'))
 export const StealthOperations = React$lazy(() => import('../pages/StealthOperations'))
 export const EliteHardeningCommandCenter = React$lazy(() => import('../pages/EliteHardeningCommandCenter'))
+export const CompetitiveDelta = React$lazy(() => import('../pages/CompetitiveDelta'))
 export const ThreatHuntingWorkbench = React$lazy(() => import('../pages/ThreatHuntingWorkbench'))
 export const ThreatAnalysisCenter = React$lazy(() => import('../pages/ThreatAnalysisCenter'))
 export const EngineClientCatalog = React$lazy(() => import('../pages/EngineClientCatalog'))
