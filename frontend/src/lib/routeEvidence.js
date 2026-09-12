@@ -11,6 +11,7 @@ export const ROUTE_EVIDENCE_SKIP = new Set([
   '/billing',
   '/findings',
   '/finding-clusters',
+  '/scan-finding-spine',
   '/playbooks',
   '/vuln-intel',
   '/status',

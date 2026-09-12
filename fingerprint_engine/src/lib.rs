@@ -149,6 +149,7 @@ pub mod saas_idp_discovery;
 pub mod safe_probe;
 pub mod saml_auth;
 pub mod scan_concurrency;
+pub mod scan_finding_spine;
 pub mod scan_http_client;
 pub mod self_heal_recovery;
 pub mod self_heal_shared;
