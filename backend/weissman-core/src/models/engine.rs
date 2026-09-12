@@ -121,6 +121,8 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "building_automation_attack",
     "robotics_ros2_attack",
     "ot_sis_triton_attack",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
     "iot_firmware",
     "ble_rf",
     "edr_evasion",
@@ -753,6 +755,8 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "building_automation_attack",
     "robotics_ros2_attack",
     "ot_sis_triton_attack",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
     "iot_firmware",
     "ble_rf",
     // Stealth / Evasion

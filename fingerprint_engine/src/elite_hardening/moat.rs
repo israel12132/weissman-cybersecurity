@@ -101,7 +101,7 @@ const LANES: &[LaneDef] = &[
     LaneDef {
         id: "cloud_cnapp",
         title: "Cloud / CNAPP / IaC",
-        beats: "Wiz, Orca, Prisma, CrowdStrike Falcon Cloud — posture/graph, not offensive 563-engine fabric + Ask",
+        beats: "Wiz, Orca, Prisma Cloud, CrowdStrike Falcon Cloud — posture/graph, not offensive live-probe fabric + Ask",
         needles: &[
             "aws",
             "azure",
@@ -169,7 +169,14 @@ const LANES: &[LaneDef] = &[
             "bgp_dns",
             "email_dns",
             "takeover",
+            "first_mover",
         ],
+    },
+    LaneDef {
+        id: "network_prevention",
+        title: "NGFW / SASE / CASB posture (companion, not packet-path)",
+        beats: "Palo Alto Strata / Prisma Access / Cortex XDR — Weissman is not a PAN-OS replacement; this lane is live posture of ngfw/vngfw/sase/casb engines, not inline packet prevention",
+        needles: &["ngfw", "vngfw", "sase", "casb"],
     },
     LaneDef {
         id: "deception",
@@ -342,7 +349,19 @@ fn market_research() -> Value {
             "cluster": "cnapp",
             "vendors": ["Wiz", "Orca", "Prisma Cloud", "CrowdStrike Falcon Cloud"],
             "owns": "agentless graph, pentest-finding *ingest* (Wiz GA 2026)",
-            "lacks": "native 303 live probes, Ask JSON QueryPlan, OT FSM"
+            "lacks": "native live dual-probe fabric, Ask JSON QueryPlan, OT FSM"
+        },
+        {
+            "cluster": "network_prevention_sase",
+            "vendors": [
+                "Palo Alto Networks Strata",
+                "Prisma Access",
+                "Cortex XDR",
+                "Prisma Cloud"
+            ],
+            "owns": "inline packet-path NGFW, SASE, endpoint XDR, CNAPP graph — the prevention plane",
+            "lacks": "live dual-probe evidence-doubt, OT protocol FSM abort, FAIR-from-Dijkstra that stays priced until an absence scan, Ask 13-table RLS, Hebrew Command Center",
+            "weissman_posture": "companion evidence + autonomous assessment loop — not a PAN-OS / Strata replacement"
         },
         {
             "cluster": "identity_graph",
@@ -430,7 +449,7 @@ pub fn snapshot() -> Value {
             "as_of": "2026-08-27",
             "method": "public_web_github_forums",
             "clusters": market_research(),
-            "verdict": "No public product combines 563 live engines + OT protocol FSM + dual-probe evidence-doubt + FAIR-from-graph (ALE priced until Hack-Fix-Verify absence scan) + Ask 13-table RLS + WSS inner crypto + Hebrew Command Center."
+            "verdict": "No public product combines the live production-engine fabric + OT protocol FSM + dual-probe evidence-doubt + FAIR-from-graph (ALE priced until Hack-Fix-Verify absence scan) + Ask 13-table RLS + WSS inner crypto + Hebrew Command Center. Weissman does not replace packet-path NGFW (Palo Alto Strata / Prisma Access); it wins as the live-evidence assessment plane those products do not ship."
         },
         "kernel_sanity": {
             "wss_nonce_bits": 96,
@@ -467,6 +486,34 @@ mod tests {
         let snap = snapshot();
         assert_eq!(snap["market_research"]["live"], false);
         assert_eq!(snap["live"], true);
+    }
+
+    #[test]
+    fn network_prevention_lane_is_companion_not_panos() {
+        let snap = snapshot();
+        let lanes = snap["lanes"].as_array().expect("lanes");
+        let np = lanes
+            .iter()
+            .find(|l| lane_id(l) == "network_prevention")
+            .expect("network_prevention lane");
+        assert!(np["live_engine_count"].as_u64().unwrap() >= 1);
+        let beats = np["beats"].as_str().unwrap_or("");
+        assert!(beats.contains("not a PAN-OS replacement"));
+        let clusters = snap["market_research"]["clusters"]
+            .as_array()
+            .expect("clusters");
+        let panw = clusters
+            .iter()
+            .find(|c| c["cluster"] == "network_prevention_sase")
+            .expect("palo alto cluster");
+        assert!(panw["weissman_posture"]
+            .as_str()
+            .unwrap_or("")
+            .contains("not a PAN-OS"));
+    }
+
+    fn lane_id(lane: &Value) -> &str {
+        lane["id"].as_str().unwrap_or("")
     }
 
     #[test]
