@@ -21,6 +21,7 @@
 //! | `risk_superposition_collapse` | Multi-engine Bayesian belief + STRIPS + FAIR |
 //! | `sovereign_active_defense_fusion` | MTD + cognitive starvation + deception + CHRONOS |
 //! | `fair_exposure_fusion` | External exposure grade + FAIR ALE/SLE roll-up |
+//! | `supreme_path_fair_rag` | Dijkstra crown-jewel paths × FAIR $ × pentest-memory RAG |
 //! | `control_plane_of_controls` | EDR/WAF/email-DNS/cloud control proof |
 //! | `ot_cloud_identity_killpath` | OT + cloud + identity kill path |
 //! | `bec_ato_chain` | Email DNS + BEC + OAuth + ITDR |
@@ -44,6 +45,7 @@ pub const FUSION_ENGINE_IDS: &[&str] = &[
     "risk_superposition_collapse",
     "sovereign_active_defense_fusion",
     "fair_exposure_fusion",
+    "supreme_path_fair_rag",
     "control_plane_of_controls",
     "ot_cloud_identity_killpath",
     "bec_ato_chain",

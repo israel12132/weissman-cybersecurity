@@ -525,6 +525,137 @@ async fn api_client_report_pdf(
     res
 }
 
+#[derive(Deserialize)]
+struct BoardPackQs {
+    lang: Option<String>,
+}
+
+fn board_pack_binary(bytes: Vec<u8>, content_type: &'static str, filename: &str) -> Response {
+    let mut res = Response::new(Body::from(bytes));
+    res.headers_mut()
+        .insert(CONTENT_TYPE, HeaderValue::from_static(content_type));
+    res.headers_mut().insert(
+        CONTENT_DISPOSITION,
+        HeaderValue::try_from(format!("attachment; filename=\"{filename}\""))
+            .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
+    );
+    res.headers_mut().insert(
+        axum::http::HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
+    res
+}
+
+async fn api_client_board_pack(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+    Query(qs): Query<BoardPackQs>,
+) -> Response {
+    let lang = crate::board_pack::PackLang::parse(qs.lang.as_deref());
+    match crate::board_pack::compose(&state.app_pool, auth.tenant_id, id, lang).await {
+        Ok(pack) => (StatusCode::OK, Json(crate::board_pack::preview_json(&pack))).into_response(),
+        Err(e) if e == "client not found" => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "client not found"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"error": "board pack unavailable", "detail": scrub_internal_error(&e)})),
+        )
+            .into_response(),
+    }
+}
+
+async fn api_client_board_pack_pdf(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+    Query(qs): Query<BoardPackQs>,
+) -> Response {
+    let lang = crate::board_pack::PackLang::parse(qs.lang.as_deref());
+    let pack = match crate::board_pack::compose(&state.app_pool, auth.tenant_id, id, lang).await {
+        Ok(p) => p,
+        Err(e) if e == "client not found" => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "client not found"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(
+                    json!({"error": "board pack unavailable", "detail": scrub_internal_error(&e)}),
+                ),
+            )
+                .into_response();
+        }
+    };
+    match crate::board_pack::pdf::render_pdf(&pack) {
+        Ok(bytes) => {
+            let filename = format!(
+                "Weissman_TIBP_{}.pdf",
+                crate::board_pack::safe_filename(&pack.client_name)
+            );
+            board_pack_binary(bytes, "application/pdf", &filename)
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "PDF generation failed", "detail": scrub_internal_error(&e)})),
+        )
+            .into_response(),
+    }
+}
+
+async fn api_client_board_pack_xlsx(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+    Query(qs): Query<BoardPackQs>,
+) -> Response {
+    let lang = crate::board_pack::PackLang::parse(qs.lang.as_deref());
+    let pack = match crate::board_pack::compose(&state.app_pool, auth.tenant_id, id, lang).await {
+        Ok(p) => p,
+        Err(e) if e == "client not found" => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "client not found"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(
+                    json!({"error": "board pack unavailable", "detail": scrub_internal_error(&e)}),
+                ),
+            )
+                .into_response();
+        }
+    };
+    match crate::board_pack::xlsx::render_xlsx(&pack) {
+        Ok(bytes) => {
+            let filename = format!(
+                "Weissman_TIBP_{}.xlsx",
+                crate::board_pack::safe_filename(&pack.client_name)
+            );
+            board_pack_binary(
+                bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                &filename,
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "Excel generation failed", "detail": scrub_internal_error(&e)})),
+        )
+            .into_response(),
+    }
+}
+
 async fn api_client_report_crypto_proof(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
