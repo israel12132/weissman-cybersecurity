@@ -6,7 +6,7 @@
  * trail of report generation — when reports were produced and where the
  * artifact was written. Route: /reports
  */
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
 import { FileClock, Search } from 'lucide-react'
@@ -29,12 +29,17 @@ export default function ReportHistory() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const abortRef = useRef(null)
 
   const load = useCallback(async () => {
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
     setLoading(true)
     setError('')
     try {
-      const d = await apiFetch('/api/reports')
+      const d = await apiFetch('/api/reports', { signal: ac.signal })
+      if (ac.signal.aborted) return
       if (d?.ok === false || d?.unavailable) {
         throw new Error(d.detail || t(`${NS}.load_failed`))
       }
@@ -43,14 +48,16 @@ export default function ReportHistory() {
       }
       setRows(d)
     } catch (e) {
+      if (e?.name === 'AbortError' || ac.signal.aborted) return
       setError(e.message || t(`${NS}.load_failed`))
     } finally {
-      setLoading(false)
+      if (abortRef.current === ac && !ac.signal.aborted) setLoading(false)
     }
   }, [t])
 
   useEffect(() => {
     load()
+    return () => abortRef.current?.abort()
   }, [load])
 
   const filtered = useMemo(() => {

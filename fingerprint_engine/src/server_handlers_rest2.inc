@@ -5,9 +5,15 @@ async fn api_client_findings_all(
 ) -> Response {
     let cid = id;
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({ "findings": [] }))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, finding_id, title, severity, source, COALESCE(description,''), COALESCE(poc_exploit,''),
                   COALESCE(poc_sealed, false), COALESCE(poc_commitment_sha256,''),
                   COALESCE(raw_data, '{}'::jsonb) AS raw_data
@@ -16,8 +22,27 @@ async fn api_client_findings_all(
     .bind(cid)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let findings: Vec<Value> = rows
         .into_iter()
         .map(|r| {

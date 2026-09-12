@@ -1790,6 +1790,8 @@
       "saving": "שומר…",
       "saved": "ההגדרות נשמרו",
       "save_error": "שמירת ההגדרות נכשלה",
+      "load_failed": "טעינת ההגדרות נכשלה",
+      "config_unavailable": "מאגר ההגדרות לא זמין — ערכי MFA ומדיניות אינם מאושרים.",
       "evidence_notice": "הגדרות נטענות ונשמרות דרך GET/PUT /api/system/config. שירות MFA עצמי משתמש ב-GET /api/auth/mfa/status, POST /api/auth/mfa/setup, POST /api/auth/mfa/enable ו-POST /api/auth/mfa/disable — מצב סשן חי בלבד, ללא מדיניות מדומה.",
       "common": {
         "enabled": "מופעל",

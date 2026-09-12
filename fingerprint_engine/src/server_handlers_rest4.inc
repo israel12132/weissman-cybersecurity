@@ -1105,7 +1105,15 @@ async fn api_identity_contexts_list(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::identity_contexts_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let out: Vec<Value> = rows
         .into_iter()
         .map(|r| {
@@ -1130,7 +1138,13 @@ async fn api_identity_contexts_add(
     Json(body): Json<IdentityContextBody>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::identity_contexts_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     let res = sqlx::query(
         r#"INSERT INTO identity_contexts (tenant_id, client_id, role_name, privilege_order, token_type, token_value)
@@ -1148,14 +1162,28 @@ async fn api_identity_contexts_add(
     .bind(&body.token_value)
     .execute(&mut *tx)
     .await;
-    let _ = tx.commit().await;
     match res {
-        Ok(r) => (
-            StatusCode::OK,
-            Json(json!({"ok": true, "rows": r.rows_affected()})),
+        Ok(r) => {
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::identity_contexts_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+            (
+                StatusCode::OK,
+                Json(json!({"ok": true, "rows": r.rows_affected()})),
+            )
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "error": e.to_string()})),
         )
             .into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "error": e.to_string()}))).into_response(),
     }
 }
 
@@ -1165,16 +1193,32 @@ async fn api_identity_contexts_delete(
     Path((cid, ctx_id)): Path<(i64, i64)>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::identity_contexts_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     let res = sqlx::query("DELETE FROM identity_contexts WHERE id = $1 AND client_id = $2")
         .bind(ctx_id)
         .bind(cid)
         .execute(&mut *tx)
         .await;
-    let _ = tx.commit().await;
     match res {
-        Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"ok": true}))).into_response(),
+        Ok(r) if r.rows_affected() > 0 => {
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::identity_contexts_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+            (StatusCode::OK, Json(json!({"ok": true}))).into_response()
+        }
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
     }
@@ -1335,7 +1379,13 @@ async fn api_pipeline_state_patch(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "run_id required"}))).into_response();
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::pipeline_state_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     let res = sqlx::query(
         r#"UPDATE pipeline_run_state SET
@@ -1351,9 +1401,19 @@ async fn api_pipeline_state_patch(
     .bind(body.skip_to_stage)
     .execute(&mut *tx)
     .await;
-    let _ = tx.commit().await;
     match res {
-        Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"ok": true}))).into_response(),
+        Ok(r) if r.rows_affected() > 0 => {
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::pipeline_state_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+            (StatusCode::OK, Json(json!({"ok": true}))).into_response()
+        }
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
     }
@@ -1472,27 +1532,55 @@ async fn api_risk_graph_build(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
     };
-    let llm_base: String = sqlx::query_scalar(
+    let llm_base: String = match sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_base_url'",
     )
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten()
-    .unwrap_or_else(|| "http://127.0.0.1:8000/v1".into());
-    let llm_model: String = sqlx::query_scalar(
+    {
+        Ok(Some(s)) if !s.trim().is_empty() => s,
+        Ok(_) => "http://127.0.0.1:8000/v1".into(),
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::risk_graph_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let llm_model: String = match sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_model'",
     )
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten()
-    .unwrap_or_default();
+    {
+        Ok(Some(s)) => s,
+        Ok(None) => String::new(),
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::risk_graph_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     match risk_graph::build_risk_graph_for_client(&mut tx, auth.tenant_id, id).await {
         Ok((n, e)) => {
-            let _ = tx.commit().await;
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::risk_graph_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
             let fusion = risk_graph::fusion_ot_it_graph_edges_llm(
                 state.app_pool.as_ref(),
                 auth.tenant_id,
@@ -1589,7 +1677,13 @@ async fn api_runtime_traces_ingest(
     let meta = serde_json::to_string(&body.metadata.clone().unwrap_or(json!({})))
         .unwrap_or_else(|_| "{}".to_string());
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::runtime_traces_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     let res = sqlx::query(
         r#"INSERT INTO runtime_traces (tenant_id, client_id, run_id, finding_id, trace_id, source_file, line_number, function_name, payload_hash, metadata)
@@ -1607,9 +1701,19 @@ async fn api_runtime_traces_ingest(
     .bind(&meta)
     .execute(&mut *tx)
     .await;
-    let _ = tx.commit().await;
     match res {
-        Ok(_) => (StatusCode::OK, Json(json!({"ok": true}))).into_response(),
+        Ok(_) => {
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::runtime_traces_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+            (StatusCode::OK, Json(json!({"ok": true}))).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "error": e.to_string()}))).into_response(),
     }
 }
@@ -1836,7 +1940,15 @@ async fn api_auto_heal(
         )
             .into_response();
     }
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_requests_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     let queue_payload = json!({ "spec_id": spec_id.to_string() });
     match db::job_queue::enqueue_with_max_attempts(
@@ -2324,15 +2436,22 @@ async fn api_heal_batch(
             skipped += 1;
             continue;
         };
-        let row = sqlx::query(
+        let row = match sqlx::query(
             "SELECT id, COALESCE(generated_patch,'') AS generated_patch, COALESCE(poc_exploit,'') AS poc_exploit FROM vulnerabilities WHERE client_id = $1 AND finding_id = $2 LIMIT 1",
         )
         .bind(id)
         .bind(&fid)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
+        {
+            Ok(v) => v,
+            Err(_) => {
+                let _ = tx.rollback().await;
+                results.push(json!({"finding_id": fid, "status": "persist_failed"}));
+                skipped += 1;
+                continue;
+            }
+        };
         let Some(r) = row else {
             let _ = tx.rollback().await;
             results.push(json!({"finding_id": fid, "status": "not_found"}));
@@ -2376,7 +2495,11 @@ async fn api_heal_batch(
             skipped += 1;
             continue;
         }
-        let _ = tx.commit().await;
+        if tx.commit().await.is_err() {
+            results.push(json!({"finding_id": fid, "status": "persist_failed"}));
+            skipped += 1;
+            continue;
+        }
         match db::job_queue::enqueue_with_max_attempts(
             state.app_pool.as_ref(),
             auth.tenant_id,
@@ -2723,7 +2846,15 @@ async fn api_deception_generate(
             }
         }
     }
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::deception_generate_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     (StatusCode::OK, Json(json!({ "inserted": inserted }))).into_response()
 }
 
@@ -2739,15 +2870,31 @@ async fn api_deception_triggered(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "asset_id required"}))).into_response();
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::deception_assets_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let cid: Option<i64> = sqlx::query_scalar("SELECT client_id FROM deception_assets WHERE id = $1 AND tenant_id = $2")
+    let cid: Option<i64> = match sqlx::query_scalar("SELECT client_id FROM deception_assets WHERE id = $1 AND tenant_id = $2")
         .bind(aid)
         .bind(auth.tenant_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::deception_assets_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     let Some(client_id) = cid else {
         let _ = tx.rollback().await;
         return (StatusCode::NOT_FOUND, Json(json!({"error": "asset not found"}))).into_response();
@@ -2766,9 +2913,17 @@ async fn api_deception_triggered(
     .bind(&meta)
     .execute(&mut *tx)
     .await;
-    let _ = tx.commit().await;
     match res {
         Ok(_) => {
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::deception_assets_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
             let meta_ip = body.request_meta.as_ref().and_then(|v| {
                 crate::deception_cf_blackhole::sniff_ipv4_from_json(v, 0).map(std::net::IpAddr::V4)
             });

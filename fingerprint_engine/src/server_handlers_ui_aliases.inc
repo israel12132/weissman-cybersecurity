@@ -16,15 +16,36 @@ async fn api_system_config_alias(
     let Ok(mut tx) = crate::db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"ok": false, "detail": "Database unavailable"})),
+            Json(crate::http_unavailable::system_configs_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
-    let rows = sqlx::query("SELECT key, value FROM system_configs")
+    let rows = match sqlx::query("SELECT key, value FROM system_configs")
         .fetch_all(&mut *tx)
         .await
-        .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::system_configs_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::system_configs_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     // Bucket each system_configs row into one of the seven tabs the UI renders
     // (general / security / scanning / integrations / retention / performance / compliance).
     // Anything we don't have a default place for goes under `extra`.

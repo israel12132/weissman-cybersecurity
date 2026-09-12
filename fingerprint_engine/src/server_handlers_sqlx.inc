@@ -2180,6 +2180,20 @@ async fn api_top_tier_health_probe_start(
     }
 }
 
+fn history_findings_count(status: &str, result_json: &Value) -> Value {
+    let st = status.trim().to_ascii_lowercase();
+    if matches!(st.as_str(), "pending" | "running" | "queued" | "held") {
+        return Value::Null;
+    }
+    if let Some(arr) = result_json.get("findings").and_then(Value::as_array) {
+        return json!(arr.len());
+    }
+    if let Some(n) = result_json.get("findings_count").and_then(Value::as_u64) {
+        return json!(n);
+    }
+    Value::Null
+}
+
 async fn collect_top_tier_history_json(
     state: &Arc<AppState>,
     tenant_id: i64,
@@ -2218,11 +2232,10 @@ async fn collect_top_tier_history_json(
             .ok()
             .flatten()
             .unwrap_or_else(|| json!({}));
-        let findings_count = result_json
-            .get("findings")
-            .and_then(Value::as_array)
-            .map(|a| a.len())
-            .unwrap_or(0);
+        let findings_count = history_findings_count(
+            r.try_get::<String, _>("status").ok().as_deref().unwrap_or(""),
+            &result_json,
+        );
         jobs.push(json!({
             "job_id": r.try_get::<uuid::Uuid,_>("id").map(|v| v.to_string()).unwrap_or_default(),
             "kind": r.try_get::<String,_>("kind").unwrap_or_default(),
@@ -2379,11 +2392,10 @@ async fn collect_engine_history_json(
             .ok()
             .flatten()
             .unwrap_or_else(|| json!({}));
-        let findings_count = result_json
-            .get("findings")
-            .and_then(Value::as_array)
-            .map(|a| a.len())
-            .unwrap_or(0);
+        let findings_count = history_findings_count(
+            r.try_get::<String, _>("status").ok().as_deref().unwrap_or(""),
+            &result_json,
+        );
         let target = payload
             .get("target")
             .and_then(Value::as_str)
@@ -2568,16 +2580,10 @@ async fn collect_engine_history_summary_json(
             .ok()
             .flatten()
             .unwrap_or_else(|| json!({}));
-        let mut findings_count = result_json
-            .get("findings")
-            .and_then(Value::as_array)
-            .map(|a| a.len())
-            .unwrap_or(0);
-        if findings_count == 0 {
-            if let Some(n) = result_json.get("findings_count").and_then(Value::as_u64) {
-                findings_count = n as usize;
-            }
-        }
+        let findings_count = history_findings_count(
+            r.try_get::<String, _>("status").ok().as_deref().unwrap_or(""),
+            &result_json,
+        );
         engines.insert(
             engine_id,
             json!({

@@ -63,9 +63,15 @@ async fn api_alert_rules_list(
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false, "rules": []}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::alert_rules_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT r.id, r.name, r.condition, r.actions, r.enabled,
                   COALESCE(f.cnt, 0)::bigint AS triggered_count
              FROM weissman_alert_rules r
@@ -78,8 +84,27 @@ async fn api_alert_rules_list(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::alert_rules_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::alert_rules_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     let rules: Vec<Value> = rows
         .into_iter()

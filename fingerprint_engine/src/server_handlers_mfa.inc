@@ -203,7 +203,7 @@ async fn api_auth_mfa_setup(
                 .into_response();
         }
     };
-    let cur = sqlx::query(
+    let cur = match sqlx::query(
         "SELECT COALESCE(NULLIF(trim(email),''), '') AS email, COALESCE(mfa_enabled, false) AS mfa_enabled
          FROM users WHERE id = $1 AND tenant_id = $2",
     )
@@ -211,12 +211,27 @@ async fn api_auth_mfa_setup(
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let already_enabled = cur
-        .as_ref()
-        .and_then(|r| r.try_get::<bool, _>("mfa_enabled").ok())
-        .unwrap_or(false);
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(target: "auth_mfa", error = %e, "mfa setup user lookup failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                    "MFA service temporarily unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let Some(cur) = cur else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "detail": "user not found"})),
+        )
+            .into_response();
+    };
+    let already_enabled = cur.try_get::<bool, _>("mfa_enabled").unwrap_or(false);
     // Do not let a caller holding only a session cookie silently reset an active
     // enrollment (which would clear mfa_enabled and desync the authenticator).
     // Re-enrolling requires first disabling MFA, which is gated on a current TOTP code.
@@ -231,8 +246,8 @@ async fn api_auth_mfa_setup(
             .into_response();
     }
     let email_row = cur
-        .as_ref()
-        .and_then(|r| r.try_get::<String, _>("email").ok())
+        .try_get::<String, _>("email")
+        .ok()
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| format!("user{}", auth.user_id));
     let otpauth = crate::auth_mfa::otpauth_uri(&secret, &email_row).unwrap_or_default();
@@ -248,7 +263,15 @@ async fn api_auth_mfa_setup(
     .await
     {
         Ok(r) if r.rows_affected() == 1 => {
-            let _ = tx.commit().await;
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
         }
         Ok(_) => {
             return (
@@ -294,17 +317,36 @@ async fn api_auth_mfa_enable(
                 .into_response();
         }
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         "SELECT COALESCE(mfa_secret,'') AS mfa_secret FROM users WHERE id = $1 AND tenant_id = $2",
     )
     .bind(auth.user_id)
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(target: "auth_mfa", error = %e, "mfa enable user lookup failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                    "MFA service temporarily unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let Some(row) = row else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "detail": "user not found"})),
+        )
+            .into_response();
+    };
     let secret: String = row
-        .and_then(|r| r.try_get::<String, _>("mfa_secret").ok())
+        .try_get::<String, _>("mfa_secret")
+        .ok()
         .map(|s| crate::auth_mfa::decrypt_secret_at_rest(&s))
         .unwrap_or_default();
     if secret.is_empty() {
@@ -330,7 +372,15 @@ async fn api_auth_mfa_enable(
     .await
     {
         Ok(r) if r.rows_affected() == 1 => {
-            let _ = tx.commit().await;
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
         }
         Ok(_) => {
             return (
@@ -366,7 +416,7 @@ async fn api_auth_mfa_status(
 ) -> Response {
     let row = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(mut tx) => {
-            let r = sqlx::query(
+            let r = match sqlx::query(
                 "SELECT COALESCE(mfa_enabled, false) AS mfa_enabled, COALESCE(mfa_secret,'') AS mfa_secret
                  FROM users WHERE id = $1 AND tenant_id = $2",
             )
@@ -374,20 +424,50 @@ async fn api_auth_mfa_status(
             .bind(auth.tenant_id)
             .fetch_optional(&mut *tx)
             .await
-            .ok()
-            .flatten();
-            let _ = tx.commit().await;
+            {
+                Ok(v) => v,
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                            "Authentication service temporarily unavailable; cannot verify MFA status",
+                        )),
+                    )
+                        .into_response();
+                }
+            };
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "Authentication service temporarily unavailable; cannot verify MFA status",
+                    )),
+                )
+                    .into_response();
+            }
             r
         }
-        Err(_) => None,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                    "Authentication service temporarily unavailable; cannot verify MFA status",
+                )),
+            )
+                .into_response();
+        }
     };
-    let enabled = row
-        .as_ref()
-        .and_then(|r| r.try_get::<bool, _>("mfa_enabled").ok())
-        .unwrap_or(false);
+    let Some(row) = row else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "detail": "user not found"})),
+        )
+            .into_response();
+    };
+    let enabled = row.try_get::<bool, _>("mfa_enabled").unwrap_or(false);
     let provisioned = row
-        .as_ref()
-        .and_then(|r| r.try_get::<String, _>("mfa_secret").ok())
+        .try_get::<String, _>("mfa_secret")
+        .ok()
         .map(|s| !s.is_empty())
         .unwrap_or(false);
     (
@@ -418,7 +498,7 @@ async fn api_auth_mfa_disable(
                 .into_response();
         }
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         "SELECT COALESCE(mfa_secret,'') AS mfa_secret, COALESCE(mfa_enabled,false) AS mfa_enabled
          FROM users WHERE id = $1 AND tenant_id = $2",
     )
@@ -426,17 +506,32 @@ async fn api_auth_mfa_disable(
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(target: "auth_mfa", error = %e, "mfa disable user lookup failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                    "MFA service temporarily unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let Some(row) = row else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "detail": "user not found"})),
+        )
+            .into_response();
+    };
     let secret: String = row
-        .as_ref()
-        .and_then(|r| r.try_get::<String, _>("mfa_secret").ok())
+        .try_get::<String, _>("mfa_secret")
+        .ok()
         .map(|s| crate::auth_mfa::decrypt_secret_at_rest(&s))
         .unwrap_or_default();
-    let enabled: bool = row
-        .as_ref()
-        .and_then(|r| r.try_get("mfa_enabled").ok())
-        .unwrap_or(false);
+    let enabled: bool = row.try_get("mfa_enabled").unwrap_or(false);
     if !enabled {
         return (
             StatusCode::OK,
@@ -467,7 +562,15 @@ async fn api_auth_mfa_disable(
     .await
     {
         Ok(r) if r.rows_affected() == 1 => {
-            let _ = tx.commit().await;
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
         }
         Ok(_) => {
             return (

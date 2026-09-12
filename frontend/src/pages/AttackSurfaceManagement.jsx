@@ -519,6 +519,7 @@ export default function AttackSurfaceManagement() {
   const [fusionJobId, setFusionJobId] = useState(null)
   const [nerve, setNerve] = useState(null)
   const nerveAbortRef = useRef(null)
+  const nerveInflightRef = useRef(false)
   const deltaAbortRef = useRef(null)
 
   const refreshCorpus = useCallback(() => {
@@ -603,10 +604,12 @@ export default function AttackSurfaceManagement() {
     }
   }, [])
 
-  const loadNerve = useCallback(async () => {
-    nerveAbortRef.current?.abort()
+  const loadNerve = useCallback(async ({ silent = false } = {}) => {
+    if (silent && nerveInflightRef.current) return
+    if (!silent) nerveAbortRef.current?.abort()
     const ac = new AbortController()
     nerveAbortRef.current = ac
+    nerveInflightRef.current = true
     try {
       const d = await apiFetch('/api/first-mover/nerve', { signal: ac.signal })
       if (ac.signal.aborted) return
@@ -621,6 +624,8 @@ export default function AttackSurfaceManagement() {
         console.debug('first-mover nerve skipped', err)
       }
       setNerve({ unavailable: true })
+    } finally {
+      if (nerveAbortRef.current === ac) nerveInflightRef.current = false
     }
   }, [])
 
@@ -657,7 +662,7 @@ export default function AttackSurfaceManagement() {
     loadNerve()
     return () => nerveAbortRef.current?.abort()
   }, [loadNerve])
-  useVisiblePolling(loadNerve, 20000)
+  useVisiblePolling(() => loadNerve({ silent: true }), 20000)
 
   useEffect(() => {
     refreshCorpus()

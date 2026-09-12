@@ -86,8 +86,10 @@ export default function OastDashboard() {
   const [mintedTokens, setMintedTokens] = useState([])
 
   useEffect(() => {
-    apiFetch('/api/clients')
+    const ac = new AbortController()
+    apiFetch('/api/clients', { signal: ac.signal })
       .then((d) => {
+        if (ac.signal.aborted) return
         if (d?.ok === false || d?.unavailable) {
           throw new Error(d.detail || t('pages.oastDashboard.clients_unavailable'))
         }
@@ -95,10 +97,11 @@ export default function OastDashboard() {
         setClientsError(null)
       })
       .catch((e) => {
-        if (e?.name === 'AbortError') return
+        if (e?.name === 'AbortError' || ac.signal.aborted) return
         setClients([])
         setClientsError(e?.message || t('pages.oastDashboard.clients_unavailable'))
       })
+    return () => ac.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

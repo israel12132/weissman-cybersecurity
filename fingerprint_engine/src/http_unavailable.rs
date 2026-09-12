@@ -119,6 +119,11 @@ pub fn cognitive_sessions_unavailable_json(detail: &str) -> Value {
     list_envelope("sessions", detail)
 }
 
+/// `GET /api/alerts/rules`
+pub fn alert_rules_unavailable_json(detail: &str) -> Value {
+    list_envelope("rules", detail)
+}
+
 /// `GET /api/clients/:id/heal-requests`
 pub fn heal_requests_unavailable_json(detail: &str) -> Value {
     list_envelope("requests", detail)
@@ -647,6 +652,47 @@ mod tests {
             &cognitive_sessions_unavailable_json("store down"),
             "sessions",
         );
+    }
+
+    #[test]
+    fn alert_rules_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&alert_rules_unavailable_json("store down"), "rules");
+    }
+
+    #[test]
+    fn mfa_status_handler_is_store_down_503_not_ok_flatten() {
+        let src = include_str!("server_handlers_mfa.inc");
+        let start = src
+            .find("async fn api_auth_mfa_status")
+            .expect("api_auth_mfa_status");
+        let rest = &src[start..];
+        let end = rest.find("\nasync fn ").unwrap_or(rest.len());
+        let fn_src = &rest[..end];
+        assert!(fn_src.contains("auth_degraded_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn scan_all_engines_does_not_widen_known_engine_ids_on_store_down() {
+        let src = include_str!("server_handlers_rest.inc");
+        let start = src
+            .find("async fn api_scan_all_engines")
+            .expect("api_scan_all_engines");
+        let rest = &src[start..];
+        let end = rest.find("\nasync fn ").unwrap_or(rest.len());
+        let fn_src = &rest[..end];
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(fn_src.contains("No engines configured for this client"));
+        assert!(!fn_src.contains("KNOWN_ENGINE_IDS.iter"));
+        assert!(!fn_src.contains("&KNOWN_ENGINE_IDS"));
+    }
+
+    #[test]
+    fn history_findings_count_pending_is_null_not_invented_zero() {
+        let src = include_str!("server_handlers_sqlx.inc");
+        assert!(src.contains("fn history_findings_count"));
+        assert!(src.contains("\"pending\" | \"running\" | \"queued\" | \"held\""));
+        assert!(src.contains("Value::Null"));
     }
 
     #[test]

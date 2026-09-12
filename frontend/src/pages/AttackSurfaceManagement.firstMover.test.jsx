@@ -200,4 +200,13 @@ describe('FirstMoverDeltaPanel', () => {
     expect(src).toMatch(/d\.ok === false \|\| d\.unavailable/)
     expect(src).toMatch(/deltaAbortRef\.current === ac/)
   })
+
+  it('silent nerve polls skip while inflight instead of aborting the live request', () => {
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), 'AttackSurfaceManagement.jsx'),
+      'utf8',
+    )
+    expect(src).toMatch(/silent && nerveInflightRef/)
+    expect(src).toMatch(/loadNerve\(\{ silent: true \}\)/)
+  })
 })

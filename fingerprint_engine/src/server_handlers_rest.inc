@@ -1988,27 +1988,72 @@ async fn api_scan_all_engines(
         // match zero rows and silently widen the engine set to the full KNOWN_ENGINE_IDS list).
         let cfg_text: Option<String> = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
             Ok(mut tx) => {
-                let r = sqlx::query_scalar::<_, String>(
+                let r = match sqlx::query_scalar::<_, String>(
                     "SELECT COALESCE(NULLIF(trim(client_configs), ''), '') FROM clients WHERE id = $1 AND tenant_id = $2",
                 )
                 .bind(body.client_id)
                 .bind(auth.tenant_id)
                 .fetch_optional(&mut *tx)
                 .await
-                .ok()
-                .flatten();
-                let _ = tx.commit().await;
+                {
+                    Ok(v) => v,
+                    Err(_) => {
+                        return (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(json!({
+                                "ok": false,
+                                "unavailable": true,
+                                "detail": "database unavailable",
+                            })),
+                        )
+                            .into_response();
+                    }
+                };
+                if tx.commit().await.is_err() {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(json!({
+                            "ok": false,
+                            "unavailable": true,
+                            "detail": "database unavailable",
+                        })),
+                    )
+                        .into_response();
+                }
                 r
             }
-            Err(_) => None,
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(json!({
+                        "ok": false,
+                        "unavailable": true,
+                        "detail": "database unavailable",
+                    })),
+                )
+                    .into_response();
+            }
         };
 
-        cfg_text
-            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-            .and_then(|c| c.get("enabled_engines").cloned())
-            .and_then(|e| e.as_array().cloned())
-            .map(|arr| arr.into_iter().filter_map(|v| v.as_str().map(String::from)).collect())
-            .unwrap_or_else(|| weissman_core::models::engine::KNOWN_ENGINE_IDS.iter().map(|s| s.to_string()).collect())
+        match cfg_text {
+            None => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(json!({"ok": false, "detail": "client not found"})),
+                )
+                    .into_response();
+            }
+            Some(s) => serde_json::from_str::<Value>(&s)
+                .ok()
+                .and_then(|c| c.get("enabled_engines").cloned())
+                .and_then(|e| e.as_array().cloned())
+                .map(|arr| {
+                    arr.into_iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default()
+        }
     };
 
     if engines.is_empty() {
