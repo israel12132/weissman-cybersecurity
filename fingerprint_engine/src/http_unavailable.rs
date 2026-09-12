@@ -667,6 +667,37 @@ pub fn swarm_run_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// `GET /api/heal-verify/:job_id` (status / patch / attestation) when the spec cannot be read
+pub fn heal_verify_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "job": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/heal/readiness` when tenant config cannot be confirmed
+pub fn heal_readiness_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "ready": Value::Null,
+        "llm_configured": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/findings/:finding_id/channel-suggestion`
+pub fn heal_channel_suggestion_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "channel": Value::Null,
+        "detail": detail,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1497,5 +1528,172 @@ mod tests {
         let lookup_src = &after[..github];
         assert!(lookup_src.contains("heal_requests_unavailable_json"));
         assert!(!lookup_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn heal_verify_store_down_is_never_job_not_found() {
+        let v = heal_verify_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["job"].is_null());
+        assert_ne!(v["detail"], json!("job not found"));
+    }
+
+    #[test]
+    fn heal_readiness_store_down_is_never_not_configured() {
+        let v = heal_readiness_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["ready"].is_null());
+        assert!(v["llm_configured"].is_null());
+        assert_ne!(v["llm_configured"], json!(false));
+    }
+
+    #[test]
+    fn heal_channel_suggestion_store_down_is_never_empty_channel() {
+        let v = heal_channel_suggestion_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert!(v["channel"].is_null());
+    }
+
+    #[test]
+    fn client_integrations_get_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase3.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_integrations_get");
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(fn_src.contains("client not found"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn client_integrations_patch_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase3.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_integrations_patch");
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn client_cloud_scan_run_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase3.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_cloud_scan_run");
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn saas_idp_discovery_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_saas_idp_discovery.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_saas_idp_discovery");
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn engagement_patch_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_engagements.inc");
+        let fn_src = named_fn_src(src, "async fn api_engagement_patch");
+        assert!(fn_src.contains("engagements_unavailable_json"));
+        assert!(fn_src.contains("engagement not found"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        assert!(!fn_src.contains("let _ = tx.commit()"));
+    }
+
+    #[test]
+    fn deception_deploy_cloud_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_deception_deploy_cloud");
+        assert!(fn_src.contains("client_lookup_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn heal_verify_status_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_verify_status");
+        assert!(fn_src.contains("heal_verify_unavailable_json"));
+        assert!(fn_src.contains("job not found"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn heal_verify_patch_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_verify_patch");
+        assert!(fn_src.contains("heal_verify_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn heal_verify_attestation_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_verify_attestation");
+        assert!(fn_src.contains("heal_verify_unavailable_json"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn load_heal_report_data_spec_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn load_heal_report_data");
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(fn_src.contains("job not found"));
+        let spec = fn_src
+            .find("FROM auto_heal_job_specs")
+            .expect("spec lookup");
+        let after = &fn_src[spec..];
+        let hr = after.find("FROM heal_requests").unwrap_or(after.len());
+        assert!(!after[..hr].contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn heal_readiness_is_store_down_503_not_not_configured() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_heal_readiness");
+        assert!(fn_src.contains("heal_readiness_unavailable_json"));
+        assert!(!fn_src.contains("if let Ok(mut tx)"));
+    }
+
+    #[test]
+    fn channel_suggestion_lookup_is_store_down_503_not_empty_live() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_channel_suggestion");
+        assert!(fn_src.contains("heal_channel_suggestion_unavailable_json"));
+        assert!(fn_src.contains("finding not found"));
+        assert!(!fn_src.contains(".ok().flatten()"));
+        assert!(!fn_src.contains("None => (String::new(), String::new())"));
+    }
+
+    #[test]
+    fn health_safe_mode_query_err_is_null_not_off() {
+        let src = include_str!("server_handlers_rest.inc");
+        let fn_src = named_fn_src(src, "async fn api_health");
+        assert!(fn_src.contains("global_safe_mode"));
+        assert!(!fn_src.contains("let mut safe_mode = false"));
+        assert!(fn_src.contains("Option<bool>"));
+    }
+
+    #[test]
+    fn client_config_patch_roe_select_is_store_down_503_not_insert() {
+        let src = include_str!("server_handlers_rest.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_config_patch");
+        let roe = fn_src
+            .find("FROM roe_override_requests")
+            .expect("roe select");
+        let after = &fn_src[roe..];
+        let insert = after.find("INSERT INTO roe_override_requests").unwrap_or(after.len());
+        let select_src = &after[..insert];
+        assert!(select_src.contains("roe_override_requests_unavailable_json"));
+        assert!(!select_src.contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn alert_rules_test_is_store_down_503_not_ok_true() {
+        let src = include_str!("server_handlers_alert_rules.inc");
+        let fn_src = named_fn_src(src, "async fn api_alert_rules_test");
+        assert!(fn_src.contains("alert_rules_unavailable_json"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        assert!(!fn_src.contains("let _ = tx.commit()"));
     }
 }

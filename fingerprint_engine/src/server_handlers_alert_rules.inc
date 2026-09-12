@@ -448,32 +448,44 @@ async fn api_alert_rules_test(
             }
             match count_findings_matching_condition(&mut tx, &eval_condition).await {
                 Ok(matched) => {
-                    let _ = tx.commit().await;
+                    if tx.commit().await.is_err() {
+                        return (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(crate::http_unavailable::alert_rules_unavailable_json(
+                                "database unavailable",
+                            )),
+                        )
+                            .into_response();
+                    }
                     (
                         StatusCode::OK,
                         Json(json!({"ok": true, "success": true, "matched": matched})),
                     )
                         .into_response()
                 }
-                Err(e) => {
+                Err(_) => {
                     let _ = tx.rollback().await;
                     (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({"ok": false, "success": false, "detail": scrub_internal_error(&e)})),
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::alert_rules_unavailable_json(
+                            "database unavailable",
+                        )),
                     )
                         .into_response()
                 }
             }
         }
         Ok(None) => {
-            let _ = tx.commit().await;
+            let _ = tx.rollback().await;
             (StatusCode::NOT_FOUND, Json(json!({"ok": false, "success": false}))).into_response()
         }
-        Err(e) => {
+        Err(_) => {
             let _ = tx.rollback().await;
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "success": false, "detail": scrub_internal_error(&e)})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::alert_rules_unavailable_json(
+                    "database unavailable",
+                )),
             )
                 .into_response()
         }

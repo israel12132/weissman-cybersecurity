@@ -320,17 +320,33 @@ async fn api_engagement_patch(
     body: axum::extract::Json<EngagementPatchBody>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::engagements_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     // Load row (for client_id + old values).
-    let row = sqlx::query(
+    let row = match sqlx::query(
         "SELECT id, client_id, roe_mode, status FROM engagements WHERE id = $1",
     )
     .bind(engagement_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::engagements_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     let Some(r) = row else {
         let _ = tx.rollback().await;
         return (
@@ -410,15 +426,19 @@ async fn api_engagement_patch(
 
     separated.push("updated_at = now()");
     qb.push(" WHERE id = ").push_bind(engagement_id);
-    let updated = qb.build().execute(&mut *tx).await.is_ok();
-    if !updated {
-        let _ = tx.rollback().await;
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false}))).into_response();
+    if qb.build().execute(&mut *tx).await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::engagements_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     }
 
     let ip = extract_client_ip(&headers, addr);
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-    let _ = audit_log::insert_audit(
+    if audit_log::insert_audit(
         &mut tx,
         auth.tenant_id,
         Some(auth.user_id),
@@ -427,7 +447,25 @@ async fn api_engagement_patch(
         &format!("client_id={} engagement_id={} keys={} old_status={} old_roe={}", client_id, engagement_id, changed_keys.join(","), old_status, old_roe),
         &ip,
     )
-    .await;
-    let _ = tx.commit().await;
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::engagements_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::engagements_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     (StatusCode::OK, Json(json!({"ok": true}))).into_response()
 }

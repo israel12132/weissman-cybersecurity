@@ -127,8 +127,8 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
     let mut scan_in_progress = crate::orchestrator::scan_in_progress();
     let active_tenant_cycles = crate::orchestrator::active_tenant_scan_count();
     let mut running_async_jobs: i64 = 0;
-    let mut engines: Vec<String> = vec![];
-    let mut safe_mode = false;
+    let mut engines: Option<Vec<String>> = None;
+    let mut global_safe_mode: Option<bool> = None;
     if postgres_ok {
         running_async_jobs = weissman_db::job_queue::count_running_jobs(state.app_pool.as_ref())
             .await
@@ -136,28 +136,61 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
         if running_async_jobs > 0 {
             scan_in_progress = true;
         }
-        if let Some(tid) = sqlx::query_scalar::<_, i64>("SELECT id FROM tenants WHERE slug = 'default' AND active = true LIMIT 1")
+        match sqlx::query_scalar::<_, i64>("SELECT id FROM tenants WHERE slug = 'default' AND active = true LIMIT 1")
             .fetch_optional(state.auth_pool.as_ref())
             .await
-            .ok()
-            .flatten()
         {
-            if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, tid).await {
-                if let Ok(Some(s)) = sqlx::query_scalar::<_, String>("SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'active_engines'")
-                    .bind(tid)
-                    .fetch_optional(&mut *tx)
-                    .await
-                {
-                    engines = serde_json::from_str(&s).unwrap_or_default();
+            Ok(Some(tid)) => {
+                match db::begin_tenant_tx(&state.app_pool, tid).await {
+                    Ok(mut tx) => {
+                        match sqlx::query_scalar::<_, String>("SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'active_engines'")
+                            .bind(tid)
+                            .fetch_optional(&mut *tx)
+                            .await
+                        {
+                            Ok(Some(s)) => {
+                                engines = Some(serde_json::from_str(&s).unwrap_or_default());
+                            }
+                            Ok(None) => {
+                                engines = Some(vec![]);
+                            }
+                            Err(_) => {
+                                engines = None;
+                            }
+                        }
+                        match sqlx::query_scalar::<_, String>("SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'global_safe_mode'")
+                            .bind(tid)
+                            .fetch_optional(&mut *tx)
+                            .await
+                        {
+                            Ok(Some(s)) => {
+                                global_safe_mode = Some(s == "true" || s == "1");
+                            }
+                            Ok(None) => {
+                                global_safe_mode = Some(false);
+                            }
+                            Err(_) => {
+                                global_safe_mode = None;
+                            }
+                        }
+                        if tx.commit().await.is_err() {
+                            engines = None;
+                            global_safe_mode = None;
+                        }
+                    }
+                    Err(_) => {
+                        engines = None;
+                        global_safe_mode = None;
+                    }
                 }
-                if let Ok(Some(s)) = sqlx::query_scalar::<_, String>("SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'global_safe_mode'")
-                    .bind(tid)
-                    .fetch_optional(&mut *tx)
-                    .await
-                {
-                    safe_mode = s == "true" || s == "1";
-                }
-                let _ = tx.commit().await;
+            }
+            Ok(None) => {
+                engines = Some(vec![]);
+                global_safe_mode = Some(false);
+            }
+            Err(_) => {
+                engines = None;
+                global_safe_mode = None;
             }
         }
     }
@@ -186,7 +219,7 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
         "active_tenant_cycles": active_tenant_cycles,
         "running_async_jobs": running_async_jobs,
         "active_engines": engines,
-        "global_safe_mode": safe_mode,
+        "global_safe_mode": global_safe_mode,
         "process_rss_kb": rss_kb,
         "telemetry_broadcast_capacity": 128,
         "ws_note": "Clients should reconnect with exponential backoff; server uses bounded broadcast channels.",
@@ -1469,7 +1502,7 @@ async fn api_client_config_patch(
                 );
             } else {
                 // Check for an existing approved request (2 distinct approvals) or create a pending one.
-                let row = sqlx::query(
+                let row = match sqlx::query(
                     r#"SELECT id, status, expires_at, first_approved_by_user_id, second_approved_by_user_id
                        FROM roe_override_requests
                        WHERE client_id = $1
@@ -1482,16 +1515,29 @@ async fn api_client_config_patch(
                 .bind(id)
                 .fetch_optional(&mut *tx)
                 .await
-                .ok()
-                .flatten();
+                {
+                    Ok(v) => v,
+                    Err(_) => {
+                        return (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(crate::http_unavailable::roe_override_requests_unavailable_json(
+                                "database unavailable",
+                            )),
+                        )
+                            .into_response();
+                    }
+                };
 
                 if let Some(r) = row {
                     let req_id: i64 = r.try_get("id").unwrap_or(0);
                     let status: String =
                         r.try_get("status").unwrap_or_else(|_| "pending".to_string());
-                    let first: Option<i64> = r.try_get("first_approved_by_user_id").ok().flatten();
-                    let second: Option<i64> =
-                        r.try_get("second_approved_by_user_id").ok().flatten();
+                    let first: Option<i64> = r
+                        .try_get::<Option<i64>, _>("first_approved_by_user_id")
+                        .unwrap_or(None);
+                    let second: Option<i64> = r
+                        .try_get::<Option<i64>, _>("second_approved_by_user_id")
+                        .unwrap_or(None);
                     if status == "approved" && first.is_some() && second.is_some() {
                         let _ = sqlx::query(
                             "UPDATE roe_override_requests SET status = 'applied', applied_by_user_id = $1, applied_at = now(), updated_at = now() WHERE id = $2",
@@ -1521,7 +1567,7 @@ async fn api_client_config_patch(
                             .into_response();
                     }
                 } else {
-                    let created: Option<(i64,)> = sqlx::query_as(
+                    let created: Option<(i64,)> = match sqlx::query_as(
                         r#"INSERT INTO roe_override_requests (tenant_id, client_id, desired_roe_mode, status, requested_by_user_id)
                            VALUES ($1, $2, 'weaponized_god_mode', 'pending', $3)
                            RETURNING id"#,
@@ -1531,9 +1577,27 @@ async fn api_client_config_patch(
                     .bind(auth.user_id)
                     .fetch_optional(&mut *tx)
                     .await
-                    .ok()
-                    .flatten();
-                    let req_id = created.map(|(x,)| x).unwrap_or(0);
+                    {
+                        Ok(v) => v,
+                        Err(_) => {
+                            return (
+                                StatusCode::SERVICE_UNAVAILABLE,
+                                Json(crate::http_unavailable::roe_override_requests_unavailable_json(
+                                    "database unavailable",
+                                )),
+                            )
+                                .into_response();
+                        }
+                    };
+                    let Some((req_id,)) = created else {
+                        return (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(crate::http_unavailable::roe_override_requests_unavailable_json(
+                                "database unavailable",
+                            )),
+                        )
+                            .into_response();
+                    };
                     let _ = audit_log::insert_audit(
                         &mut tx,
                         auth.tenant_id,
