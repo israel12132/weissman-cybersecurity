@@ -32,7 +32,7 @@ export default function FindingCortexPush({ finding }) {
   const run = async (e) => {
     e?.preventDefault?.()
     e?.stopPropagation?.()
-    if (!rawId || loading) return
+    if (!rawId || loading || !eligible) return
     setLoading(true)
     setError('')
     try {

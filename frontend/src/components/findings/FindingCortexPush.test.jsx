@@ -1,5 +1,23 @@
-import { describe, it, expect } from 'vitest'
-import { canPushFindingToCortex } from './FindingCortexPush.jsx'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import FindingCortexPush, { canPushFindingToCortex } from './FindingCortexPush.jsx'
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (k) => k, i18n: { language: 'en' } }),
+}))
+vi.mock('../ui/Button', () => ({
+  __esModule: true,
+  default: ({ children, onClick, disabled, ...rest }) => (
+    <button type="button" onClick={onClick} disabled={disabled} {...rest}>{children}</button>
+  ),
+}))
+vi.mock('lucide-react', () => ({
+  Loader2: () => null,
+  Radio: () => null,
+}))
+
+const apiFetch = vi.fn()
+vi.mock('../../utils/apiFetch', () => ({ apiFetch: (...args) => apiFetch(...args) }))
 
 describe('canPushFindingToCortex', () => {
   it('allows confirmed live verdicts', () => {
@@ -19,5 +37,37 @@ describe('canPushFindingToCortex', () => {
   it('rejects empty findings', () => {
     expect(canPushFindingToCortex({})).toBe(false)
     expect(canPushFindingToCortex(null)).toBe(false)
+  })
+})
+
+describe('FindingCortexPush', () => {
+  beforeEach(() => {
+    apiFetch.mockReset()
+  })
+
+  it('does not POST when the finding is noise', () => {
+    render(<FindingCortexPush finding={{ raw_id: 9, live_verdict: 'NOISE' }} />)
+    fireEvent.click(screen.getByRole('button'))
+    expect(apiFetch).not.toHaveBeenCalled()
+  })
+
+  it('POSTs /api/findings/:id/push-cortex for a confirmed finding', async () => {
+    apiFetch.mockResolvedValue({ ok: true, xdr_had_matching_alert: false })
+    render(<FindingCortexPush finding={{ raw_id: 42, live_verdict: 'CONFIRMED' }} />)
+    fireEvent.click(screen.getByRole('button'))
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/findings/42/push-cortex',
+        expect.objectContaining({ method: 'POST', body: { dry_run: false } }),
+      )
+    })
+    expect(screen.getByText('findings.cortexPush.blind_spot')).toBeTruthy()
+  })
+
+  it('surfaces a live 409 when Cortex is not configured', async () => {
+    apiFetch.mockRejectedValue(new Error('cortex_xsiam integration is not configured'))
+    render(<FindingCortexPush finding={{ raw_id: 7, live_verdict: 'CONFIRMED' }} />)
+    fireEvent.click(screen.getByRole('button'))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/not configured/)
   })
 })
