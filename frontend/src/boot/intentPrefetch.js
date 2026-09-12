@@ -13,11 +13,15 @@ const CHAIN_PREDICT = {
   '/engines': ['/jwt-lab', '/waf-bypass', '/graphql-security', '/template-engine'],
   '/kill-chain': ['/threat-emulation', '/exploit-lab', '/roe-approvals'],
   '/threat-emulation': ['/kill-chain', '/agents'],
-  '/findings': ['/remediation', '/incident-response'],
+  '/findings': ['/remediation', '/incident-response', '/board-pack'],
+  '/reports': ['/board-pack'],
+  '/dark-web': ['/board-pack'],
   '/clients': ['/domain-discovery', '/jobs'],
   '/template-engine': ['/ast-fuzzing', '/file-upload-lab'],
   '/ast-fuzzing': ['/template-engine', '/feedback-loop'],
-  '/intel-map': ['/threat-intel', '/risk-graph', '/dark-web'],
+  '/intel-map': ['/threat-intel', '/risk-graph', '/dark-web', '/adversary-mirror'],
+  '/dark-web': ['/adversary-mirror', '/threat-intel'],
+  '/adversary-mirror': ['/dark-web', '/attack-paths', '/remediation'],
 }
 
 /**

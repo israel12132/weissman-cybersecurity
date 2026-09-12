@@ -95,31 +95,23 @@ pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
-    let client = http_client().await;
     let host = extract_host(target);
     let key = intelx_api_key();
+    let mut findings: Vec<Value> =
+        crate::adversary_exposure_delta::collect_public_adversary_intel("darkweb_intel", target)
+            .await;
 
     if key.is_empty() {
-        let finding = finding(
-            "darkweb_intel",
-            "IntelX deep-web lookup requires API key",
-            "info",
-            "T1597",
-            &format!(
-                "Intelligence X indexes leaks, paste sites, and dark-web mentions. Set INTELX_API_KEY (or WEISSMAN_INTELX_KEY) to query records for '{}'. Without a key, only manual lookup at https://intelx.io/?s={} is available.",
-                host, urlencoding::encode(&host)
-            ),
-            target,
-        );
+        if findings.is_empty() {
+            return empty_ok("darkweb_intel", target);
+        }
         return EngineResult::ok(
-            vec![finding],
-            format!(
-                "darkweb_intel: API key required for live lookup on {}",
-                host
-            ),
+            findings.clone(),
+            format!("darkweb_intel: {}", findings.len()),
         );
     }
 
+    let client = http_client().await;
     let base = intelx_api_base();
     let search_url = format!("{}/intelligent/search", base);
     let payload = serde_json::json!({
@@ -134,7 +126,6 @@ pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
         "media": 0,
         "terminate": []
     });
-    let mut findings: Vec<Value> = Vec::new();
 
     if let Some(p) =
         http_post_json_with_headers(&client, &search_url, &payload, &[("x-key", key.as_str())])
@@ -869,42 +860,11 @@ pub async fn run_threat_intel_fusion_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
-    let host = extract_host(target);
-    let client = http_client().await;
-    let mut findings: Vec<Value> = Vec::new();
-    let url = format!(
-        "https://urlhaus.abuse.ch/api/v1/hostinfo/{}/",
-        urlencoding::encode(&host)
-    );
-    if let Some(p) = http_get(&client, &url).await {
-        if p.status == 200 {
-            if let Ok(v) = serde_json::from_str::<Value>(&p.body) {
-                let listed = v
-                    .get("query_status")
-                    .and_then(Value::as_str)
-                    .map(|s| s.eq_ignore_ascii_case("ok"))
-                    .unwrap_or(false);
-                let url_count = v
-                    .get("urls")
-                    .and_then(Value::as_array)
-                    .map(|a| a.len())
-                    .unwrap_or(0);
-                if listed && url_count > 0 {
-                    findings.push(finding(
-                        "threat_intel_fusion",
-                        &format!("URLhaus lists {} malicious URL(s) for host", url_count),
-                        "high",
-                        "T1597",
-                        &format!(
-                            "Abuse.ch URLhaus hostinfo returned {} URL(s) for {} — cross-check for malware delivery or C2.",
-                            url_count, host
-                        ),
-                        target,
-                    ));
-                }
-            }
-        }
-    }
+    let findings = crate::adversary_exposure_delta::collect_public_adversary_intel(
+        "threat_intel_fusion",
+        target,
+    )
+    .await;
     if findings.is_empty() {
         empty_ok("threat_intel_fusion", target)
     } else {

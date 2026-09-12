@@ -48,7 +48,12 @@ if (!pageSrc.includes('EvidenceNotice')) fail('page missing EvidenceNotice')
 if (!pageSrc.includes('searchQuery')) fail('page missing search')
 if (!pageSrc.includes('moat')) fail('page missing sovereign moat lanes')
 if (!pageSrc.includes('hfv')) fail('page missing Hack-Fix-Verify loop')
+if (!pageSrc.includes('palo-bakeoff')) fail('page missing honest Palo Alto bake-off')
 if (!readFileSync(moat, 'utf8').includes('PRODUCTION_ENGINE_IDS')) fail('moat.rs not live-wired to production engines')
+if (!readFileSync(moat, 'utf8').includes('palo_alto_bakeoff')) fail('moat.rs missing palo_alto_bakeoff')
+if (!readFileSync(moat, 'utf8').includes('companion_not_ngfw_replacement')) {
+  fail('moat.rs must label Palo positioning as companion_not_ngfw_replacement')
+}
 if (!readFileSync(hfv, 'utf8').includes('failed_scan_cannot_close')) fail('hack_fix_verify missing fail-closed rule')
 if (!readFileSync(hfv, 'utf8').includes('host_liveness_required_to_close')) {
   fail('hack_fix_verify missing host liveness rule')

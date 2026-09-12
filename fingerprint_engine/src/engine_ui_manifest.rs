@@ -233,4 +233,12 @@ mod tests {
         let m = resolve_by_route("/jwt-lab").expect("jwt");
         assert_eq!(m.engine_id, "jwt_attack");
     }
+
+    #[test]
+    fn dominion_board_pack_is_not_agent_gated() {
+        let m = resolve_by_route("/dominion").expect("dominion");
+        assert_eq!(m.engine_id, "dominion_fusion");
+        assert!(!m.capabilities.requires_agent_gate);
+        assert!(m.capabilities.requires_kill_switch);
+    }
 }

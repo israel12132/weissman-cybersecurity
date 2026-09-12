@@ -51,8 +51,8 @@ const ENTRIES = [
   },
   {
     key: 'pages.attackSurfaceManagement.evidence_notice',
-    en: 'ASM inventory from POST /api/command-center/scan (asm). First-mover drift from GET /api/clients/:id/surface-diff, CT squirt nerve from GET /api/first-mover/nerve, delta hunt POST first_mover_surface_delta, kill-chain POST first_mover_delta_fusion — live DNS/HTTP/CT vs last snapshot, no canned graphs.',
-    he: 'מלאי ASM מ-POST /api/command-center/scan (asm). סחיפת first-mover מ-GET /api/clients/:id/surface-diff, עצב CT מ-GET /api/first-mover/nerve, ציד דלתא POST first_mover_surface_delta, kill-chain POST first_mover_delta_fusion — DNS/HTTP/CT חי מול snapshot אחרון, בלי גרפים מוכנים.',
+    en: 'ASM inventory from POST /api/command-center/scan (asm). First-mover drift from GET /api/clients/:id/surface-diff, CT squirt nerve from GET /api/first-mover/nerve, delta hunt POST first_mover_surface_delta, kill-chain POST first_mover_delta_fusion, protocol-schism POST exposure_schism_fusion — live DNS/HTTP/CT vs last snapshot, no canned graphs.',
+    he: 'מלאי ASM מ-POST /api/command-center/scan (asm). סחיפת first-mover מ-GET /api/clients/:id/surface-diff, עצב CT מ-GET /api/first-mover/nerve, ציד דלתא POST first_mover_surface_delta, kill-chain POST first_mover_delta_fusion, שבר-פרוטוקול POST exposure_schism_fusion — DNS/HTTP/CT חי מול snapshot אחרון, בלי גרפים מוכנים.',
   },
   {
     key: 'pages.dnsDomainPosture.evidence_notice',
@@ -308,6 +308,11 @@ const ENTRIES = [
     key: 'pages.systemCore.evidence_notice',
     en: 'Platform core health from GET /api/health, worker queue depth from GET /api/jobs, and engine production flags from GET /api/engines/production — operator-grade live diagnostics.',
     he: 'בריאות core הפלטפורמה מ-GET /api/health, עומק תור worker מ-GET /api/jobs, ודגלי production מנועים מ-GET /api/engines/production — אבחון חי ברמת operator.',
+  },
+  {
+    key: 'pages.panwDisplacement.evidence_notice',
+    en: 'SKU verdicts from GET /api/competitive/panw-displacement (AWS role, Azure/GCP onboarding, SSO IdPs, enrolled agents, surface snapshots, Certstream/OAST nerve, SOAR adapters). Schism hunt queues POST /api/command-center/scan with exposure_schism_fusion. Empty connectors are unproven, not a fake score. Prisma Access / WildFire are explicit non-goals.',
+    he: 'פסקי SKU מ-GET /api/competitive/panw-displacement (תפקיד AWS, onboarding Azure/GCP, IdP של SSO, סוכנים רשומים, snapshots של משטח, עצב Certstream/OAST, מתאמי SOAR). ציד schism נכנס לתור ב-POST /api/command-center/scan עם exposure_schism_fusion. מחבר ריק הוא unproven, לא ציון מזויף. Prisma Access / WildFire הם non-goal מפורש.',
   },
   {
     key: 'pages.strategicEngineProgram.evidence_notice',

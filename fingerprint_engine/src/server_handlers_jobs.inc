@@ -130,6 +130,194 @@ async fn api_async_jobs_list(
         .into_response()
 }
 
+/// GET /api/scan-finding-spine — live join of scan jobs + finding evidence.
+async fn api_scan_finding_spine(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let client_filter: Option<i64> = q
+        .get("client_id")
+        .and_then(|s| s.parse::<i64>().ok())
+        .filter(|id| *id > 0);
+    let client_filter = match crate::client_isolation::bind_requested_client(&auth, client_filter) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+
+    let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable"})),
+        )
+            .into_response();
+    };
+
+    let kpis_row = sqlx::query(
+        r#"SELECT
+              COUNT(*)::bigint AS findings_total,
+              COUNT(*) FILTER (WHERE COALESCE(status, 'OPEN') NOT IN ('FIXED', 'FALSE_POSITIVE', 'VERIFIED_FIXED'))::bigint AS open_findings,
+              COUNT(*) FILTER (WHERE lower(severity) IN ('critical', 'high'))::bigint AS high_critical,
+              COUNT(*) FILTER (WHERE COALESCE(poc_sealed, false))::bigint AS evidence,
+              COUNT(*) FILTER (WHERE COALESCE(raw_data->'live_verification'->>'verdict', '') IN ('CONFIRMED', 'LIKELY_VALID'))::bigint AS proven,
+              COUNT(*) FILTER (WHERE raw_data ? 'live_verification')::bigint AS verified,
+              COUNT(*) FILTER (
+                WHERE lower(severity) IN ('critical', 'high')
+                  AND COALESCE(status, 'OPEN') NOT IN ('FIXED', 'FALSE_POSITIVE', 'VERIFIED_FIXED')
+                  AND NOT (raw_data ? 'live_verification')
+              )::bigint AS unverified_critical,
+              COUNT(*) FILTER (
+                WHERE COALESCE(raw_data->>'mitre_attack', '') <> ''
+              )::bigint AS mitre,
+              COUNT(*) FILTER (
+                WHERE COALESCE(status, 'OPEN') NOT IN ('FIXED', 'FALSE_POSITIVE', 'VERIFIED_FIXED')
+                  AND NOT COALESCE(poc_sealed, false)
+              )::bigint AS open_without_evidence
+           FROM vulnerabilities
+          WHERE ($1::bigint IS NULL OR client_id = $1)"#,
+    )
+    .bind(client_filter)
+    .fetch_optional(&mut *tx)
+    .await;
+
+    let kpis = match kpis_row {
+        Ok(Some(r)) => crate::scan_finding_spine::SpineKpis {
+            findings_total: r.try_get("findings_total").unwrap_or(0),
+            open_findings: r.try_get("open_findings").unwrap_or(0),
+            high_critical: r.try_get("high_critical").unwrap_or(0),
+            evidence: r.try_get("evidence").unwrap_or(0),
+            proven: r.try_get("proven").unwrap_or(0),
+            verified: r.try_get("verified").unwrap_or(0),
+            unverified_critical: r.try_get("unverified_critical").unwrap_or(0),
+            mitre: r.try_get("mitre").unwrap_or(0),
+            open_without_evidence: r.try_get("open_without_evidence").unwrap_or(0),
+        },
+        Ok(None) => crate::scan_finding_spine::SpineKpis::default(),
+        Err(e) => {
+            tracing::error!(target: "scan_finding_spine", tenant_id = auth.tenant_id, error = %e, "kpi query failed");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": "findings query failed"})),
+            )
+                .into_response();
+        }
+    };
+
+    let engine_rows = sqlx::query(
+        r#"SELECT
+              COALESCE(NULLIF(trim(source), ''), 'unknown') AS source,
+              COUNT(*)::bigint AS findings,
+              COUNT(*) FILTER (WHERE COALESCE(status, 'OPEN') NOT IN ('FIXED', 'FALSE_POSITIVE', 'VERIFIED_FIXED'))::bigint AS open_findings,
+              COUNT(*) FILTER (WHERE lower(severity) IN ('critical', 'high'))::bigint AS high_critical,
+              COUNT(*) FILTER (WHERE COALESCE(poc_sealed, false))::bigint AS evidence,
+              COUNT(*) FILTER (WHERE COALESCE(raw_data->'live_verification'->>'verdict', '') IN ('CONFIRMED', 'LIKELY_VALID'))::bigint AS proven,
+              COUNT(*) FILTER (WHERE raw_data ? 'live_verification')::bigint AS verified,
+              COUNT(*) FILTER (
+                WHERE lower(severity) IN ('critical', 'high')
+                  AND COALESCE(status, 'OPEN') NOT IN ('FIXED', 'FALSE_POSITIVE', 'VERIFIED_FIXED')
+                  AND NOT (raw_data ? 'live_verification')
+              )::bigint AS unverified_critical,
+              COUNT(*) FILTER (WHERE COALESCE(raw_data->>'mitre_attack', '') <> '')::bigint AS mitre
+           FROM vulnerabilities
+          WHERE ($1::bigint IS NULL OR client_id = $1)
+          GROUP BY 1
+          ORDER BY high_critical DESC, findings DESC
+          LIMIT 200"#,
+    )
+    .bind(client_filter)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let _ = tx.commit().await;
+
+    let engines: Vec<crate::scan_finding_spine::EngineRollup> = engine_rows
+        .into_iter()
+        .map(|r| {
+            let source: String = r.try_get("source").unwrap_or_else(|_| "unknown".into());
+            let reality_kind = crate::engine_capabilities::classify(&source).to_string();
+            crate::scan_finding_spine::EngineRollup {
+                source,
+                findings: r.try_get("findings").unwrap_or(0),
+                open_findings: r.try_get("open_findings").unwrap_or(0),
+                high_critical: r.try_get("high_critical").unwrap_or(0),
+                evidence: r.try_get("evidence").unwrap_or(0),
+                proven: r.try_get("proven").unwrap_or(0),
+                verified: r.try_get("verified").unwrap_or(0),
+                unverified_critical: r.try_get("unverified_critical").unwrap_or(0),
+                mitre: r.try_get("mitre").unwrap_or(0),
+                reality_kind,
+            }
+        })
+        .collect();
+
+    let Ok(mut jobs_tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable"})),
+        )
+            .into_response();
+    };
+
+    let kinds: Vec<String> = crate::scan_finding_spine::SCAN_KINDS
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect();
+
+    let job_rows = sqlx::query(
+        r#"SELECT id, kind, status, last_error, attempt_count,
+                  COALESCE(payload, '{}'::jsonb) AS payload,
+                  heartbeat_at, created_at, updated_at
+             FROM weissman_async_jobs
+            WHERE tenant_id = $1
+              AND kind = ANY($2)
+              AND (
+                    $3::bigint IS NULL
+                    OR payload->>'client_id' = $3::text
+                    OR (jsonb_typeof(payload->'client_id') = 'number' AND (payload->>'client_id')::bigint = $3)
+                  )
+            ORDER BY created_at DESC
+            LIMIT 40"#,
+    )
+    .bind(auth.tenant_id)
+    .bind(&kinds)
+    .bind(client_filter)
+    .fetch_all(&mut *jobs_tx)
+    .await
+    .unwrap_or_default();
+    let _ = jobs_tx.commit().await;
+
+    let tenant_id = auth.tenant_id;
+    let scans: Vec<crate::scan_finding_spine::ScanJobView> = job_rows
+        .into_iter()
+        .map(|r| {
+            let id_uuid: uuid::Uuid = r.try_get("id").unwrap_or_else(|_| uuid::Uuid::nil());
+            let stored: Value = r.try_get("payload").unwrap_or(Value::Null);
+            let payload = crate::job_envelope::reveal_job_payload_for_tenant(&stored, tenant_id);
+            crate::scan_finding_spine::ScanJobView {
+                id: id_uuid.to_string(),
+                kind: r.try_get("kind").unwrap_or_default(),
+                status: r.try_get("status").unwrap_or_default(),
+                last_error: r.try_get::<Option<String>, _>("last_error").ok().flatten(),
+                attempt_count: r.try_get("attempt_count").unwrap_or(0),
+                created_at: r.try_get::<DateTime<Utc>, _>("created_at").ok(),
+                updated_at: r.try_get::<DateTime<Utc>, _>("updated_at").ok(),
+                heartbeat_at: r.try_get::<DateTime<Utc>, _>("heartbeat_at").ok(),
+                engine: payload
+                    .get("engine")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+                target: payload
+                    .get("target")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+            }
+        })
+        .collect();
+
+    let body = crate::scan_finding_spine::build_spine_payload(kpis, engines, scans, Utc::now());
+    (StatusCode::OK, Json(body)).into_response()
+}
+
 /// Unified async job + PoE job status (tenant-scoped).
 async fn api_async_job_status(
     State(state): State<Arc<AppState>>,

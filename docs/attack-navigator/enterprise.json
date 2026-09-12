@@ -16,8 +16,8 @@
     },
     {
       "techniqueID": "T1595",
-      "score": 39,
-      "comment": "ai_cloud_escalation_chain, asm, attack_graph_traversal, attack_surface_quantify, autonomous_pentest, can_bus_surface, compliance_gap_scan, control_plane_of_controls, digital_twin, external_exposure_supreme, fair_exposure_fusion, firmware_emulation, firmware_exploit, first_mover_delta_fusion, first_mover_surface_delta, full_breach_sim, hardware_implant, implantable_device_hack, iot_firmware, jtag_swd_exploitation, kill_chain, lora_attack, medical_device_exploit, mobile_backend_chain, network_topology_map, nexus_sovereign_swarm, ngfw_posture, ntlm_relay, post_exploitation, printer_mfp_attack, rce_chain, risk_superposition_collapse, smb_netbios, smb_relay, tactic_chain_synthesizer, threat_emulation, threat_model_automation, vuln_chaining, weissman_vngfw",
+      "score": 40,
+      "comment": "ai_cloud_escalation_chain, asm, attack_graph_traversal, attack_surface_quantify, autonomous_pentest, can_bus_surface, compliance_gap_scan, control_plane_of_controls, digital_twin, exposure_schism_fusion, external_exposure_supreme, fair_exposure_fusion, firmware_emulation, firmware_exploit, first_mover_delta_fusion, first_mover_surface_delta, full_breach_sim, hardware_implant, implantable_device_hack, iot_firmware, jtag_swd_exploitation, kill_chain, lora_attack, medical_device_exploit, mobile_backend_chain, network_topology_map, nexus_sovereign_swarm, ngfw_posture, ntlm_relay, post_exploitation, printer_mfp_attack, rce_chain, risk_superposition_collapse, smb_netbios, smb_relay, tactic_chain_synthesizer, threat_emulation, threat_model_automation, vuln_chaining, weissman_vngfw",
       "enabled": true
     },
     {
@@ -28,8 +28,8 @@
     },
     {
       "techniqueID": "T1190",
-      "score": 70,
-      "comment": "ai_casb_saas, ai_cloud_escalation_chain, api_all_vectors_engine, api_fuzzing, api_gateway_attack, api_gateway_bypass, api_versioning_attack, apt29_techniques, apt41_techniques, asm, ble_rf, blockchain_bridge_exploit, carbon_spider_ttps, cl0p_techniques, deserialization_java, deserialization_net, dns_rebinding, earth_longzhi_ttps, external_exposure_supreme, file_upload, fin7_techniques, graphql_attack, graphql_deep_attack, graphql_injection, graphql_subscription_attack, grpc_reflection_attack, host_header_injection, http2_attack, http_feedback_fuzz, http_parameter_pollution, http_smuggling, kernel_exploit, kill_chain, lazarus_group_ttps, ldap_injection_engine, liminal_boundary, llm_path_fuzz, log4shell_scan, mainframe_zos_attack, mass_assignment, microsecond_timing, mobile_backend_chain, network_slice_isolation_bypass, nexus_sovereign_swarm, ngfw_posture, nosql_deep_injection, nosql_injection, odata_injection, ollama_fuzz, open_redirect, rce_chain, rce_deserialization, rce_exploit_engine, react_native_attack, salt_typhoon_ttps, sandworm_techniques, sap_erp_attack, service_mesh_attack, shodan_mass_scan, smart_contract_audit, soap_injection, sqli_advanced, ssti, swagger_abuse, tactic_chain_synthesizer, volt_typhoon_ttps, vuln_chaining, web3_dapp_attack, xxe, xxe_injection",
+      "score": 71,
+      "comment": "ai_casb_saas, ai_cloud_escalation_chain, api_all_vectors_engine, api_fuzzing, api_gateway_attack, api_gateway_bypass, api_versioning_attack, apt29_techniques, apt41_techniques, asm, ble_rf, blockchain_bridge_exploit, carbon_spider_ttps, cl0p_techniques, deserialization_java, deserialization_net, dns_rebinding, earth_longzhi_ttps, exposure_schism_fusion, external_exposure_supreme, file_upload, fin7_techniques, graphql_attack, graphql_deep_attack, graphql_injection, graphql_subscription_attack, grpc_reflection_attack, host_header_injection, http2_attack, http_feedback_fuzz, http_parameter_pollution, http_smuggling, kernel_exploit, kill_chain, lazarus_group_ttps, ldap_injection_engine, liminal_boundary, llm_path_fuzz, log4shell_scan, mainframe_zos_attack, mass_assignment, microsecond_timing, mobile_backend_chain, network_slice_isolation_bypass, nexus_sovereign_swarm, ngfw_posture, nosql_deep_injection, nosql_injection, odata_injection, ollama_fuzz, open_redirect, rce_chain, rce_deserialization, rce_exploit_engine, react_native_attack, salt_typhoon_ttps, sandworm_techniques, sap_erp_attack, service_mesh_attack, shodan_mass_scan, smart_contract_audit, soap_injection, sqli_advanced, ssti, swagger_abuse, tactic_chain_synthesizer, volt_typhoon_ttps, vuln_chaining, web3_dapp_attack, xxe, xxe_injection",
       "enabled": true
     },
     {
@@ -60,6 +60,30 @@
       "techniqueID": "T1592.002",
       "score": 3,
       "comment": "asm, metadata_harvest, shodan_mass_scan",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1078",
+      "score": 19,
+      "comment": "casb_saas_posture, continuous_auth_evasion, external_exposure_supreme, identity_attack_chain, identity_surface_delta, idor_advanced, itdr, ldap_injection, ldap_injection_engine, mainframe_zos_attack, microsegmentation_bypass, midnight_blizzard_ttps, ntlm_relay, risk_superposition_collapse, smb_netbios, smb_relay, threat_hunting_apt, volt_typhoon_ttps, zero_trust_bypass",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1590.005",
+      "score": 2,
+      "comment": "dualstack_edge_skip_fusion, ipv6_attack",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1021",
+      "score": 6,
+      "comment": "apt_lateral_movement, lateral_movement, lateral_movement_engine, ot_it_lateral_chain, ransomware_preposition_surface, risk_superposition_collapse",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1486",
+      "score": 10,
+      "comment": "blackcat_alphv_ttps, cl0p_techniques, cloud_ransomware, conti_ransomware_ttps, destructive_wiper, lockbit_techniques, ransomware_emulation, ransomware_preposition_surface, ransomware_sim, wizard_spider_ttps",
       "enabled": true
     },
     {
@@ -261,12 +285,6 @@
       "enabled": true
     },
     {
-      "techniqueID": "T1590.005",
-      "score": 1,
-      "comment": "ipv6_attack",
-      "enabled": true
-    },
-    {
       "techniqueID": "T1021.002",
       "score": 8,
       "comment": "apt_lateral_movement, control_plane_of_controls, lateral_movement, lateral_movement_engine, ntlm_relay, ot_it_lateral_chain, smb_netbios, smb_relay",
@@ -276,12 +294,6 @@
       "techniqueID": "T1053",
       "score": 3,
       "comment": "ntlm_relay, smb_netbios, smb_relay",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1078",
-      "score": 18,
-      "comment": "casb_saas_posture, continuous_auth_evasion, external_exposure_supreme, identity_attack_chain, idor_advanced, itdr, ldap_injection, ldap_injection_engine, mainframe_zos_attack, microsegmentation_bypass, midnight_blizzard_ttps, ntlm_relay, risk_superposition_collapse, smb_netbios, smb_relay, threat_hunting_apt, volt_typhoon_ttps, zero_trust_bypass",
       "enabled": true
     },
     {
@@ -402,18 +414,6 @@
       "techniqueID": "T1071.004",
       "score": 9,
       "comment": "apt_c2_infra, botnet_c2_engine, c2_emulation, c2_rotation_engine, dns_cache_poisoning, dns_security_posture_fusion, dns_tunneling, dns_tunneling_c2, obfuscated_c2",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1486",
-      "score": 9,
-      "comment": "blackcat_alphv_ttps, cl0p_techniques, cloud_ransomware, conti_ransomware_ttps, destructive_wiper, lockbit_techniques, ransomware_emulation, ransomware_sim, wizard_spider_ttps",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1021",
-      "score": 5,
-      "comment": "apt_lateral_movement, lateral_movement, lateral_movement_engine, ot_it_lateral_chain, risk_superposition_collapse",
       "enabled": true
     },
     {
@@ -622,8 +622,8 @@
     },
     {
       "techniqueID": "T1597",
-      "score": 5,
-      "comment": "dark_web_monitor, darkweb_intel, deepweb_intel, threat_hunting_apt, threat_intel_fusion",
+      "score": 6,
+      "comment": "credential_ransomware_fusion, dark_web_monitor, darkweb_intel, deepweb_intel, threat_hunting_apt, threat_intel_fusion",
       "enabled": true
     },
     {
@@ -934,8 +934,8 @@
     },
     {
       "techniqueID": "T1555",
-      "score": 1,
-      "comment": "secrets_manager_attack",
+      "score": 2,
+      "comment": "credential_ransomware_fusion, secrets_manager_attack",
       "enabled": true
     },
     {
@@ -1219,6 +1219,90 @@
       "score": 1,
       "comment": "weissman_vngfw",
       "enabled": true
+    },
+    {
+      "techniqueID": "T1595",
+      "score": 40,
+      "comment": "ai_cloud_escalation_chain, asm, attack_graph_traversal, attack_surface_quantify, autonomous_pentest, can_bus_surface, compliance_gap_scan, control_plane_of_controls, digital_twin, external_exposure_supreme, fair_exposure_fusion, firmware_emulation, firmware_exploit, first_mover_delta_fusion, first_mover_surface_delta, full_breach_sim, hardware_implant, implantable_device_hack, iot_firmware, jtag_swd_exploitation, kill_chain, lora_attack, medical_device_exploit, mobile_backend_chain, network_topology_map, nexus_sovereign_swarm, ngfw_posture, ntlm_relay, post_exploitation, prevention_fabric_breach_proof, printer_mfp_attack, rce_chain, risk_superposition_collapse, smb_netbios, smb_relay, tactic_chain_synthesizer, threat_emulation, threat_model_automation, vuln_chaining, weissman_vngfw",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1190",
+      "score": 70,
+      "comment": "ai_casb_saas, ai_cloud_escalation_chain, api_all_vectors_engine, api_fuzzing, api_gateway_attack, api_gateway_bypass, api_versioning_attack, apt29_techniques, apt41_techniques, asm, ble_rf, blockchain_bridge_exploit, carbon_spider_ttps, cl0p_techniques, deserialization_java, deserialization_net, dns_rebinding, earth_longzhi_ttps, external_exposure_supreme, file_upload, fin7_techniques, graphql_attack, graphql_deep_attack, graphql_injection, graphql_subscription_attack, grpc_reflection_attack, host_header_injection, http2_attack, http_feedback_fuzz, http_parameter_pollution, http_smuggling, kernel_exploit, kill_chain, lazarus_group_ttps, ldap_injection_engine, liminal_boundary, llm_path_fuzz, log4shell_scan, mainframe_zos_attack, mass_assignment, microsecond_timing, mobile_backend_chain, network_slice_isolation_bypass, nexus_sovereign_swarm, ngfw_posture, nosql_deep_injection, nosql_injection, odata_injection, ollama_fuzz, open_redirect, rce_chain, rce_deserialization, rce_exploit_engine, react_native_attack, salt_typhoon_ttps, sandworm_techniques, sap_erp_attack, service_mesh_attack, shodan_mass_scan, smart_contract_audit, soap_injection, sqli_advanced, ssti, swagger_abuse, tactic_chain_synthesizer, volt_typhoon_ttps, vuln_chaining, web3_dapp_attack, xxe, xxe_injection",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1595",
+      "score": 39,
+      "comment": "ai_cloud_escalation_chain, asm, attack_graph_traversal, attack_surface_quantify, autonomous_pentest, can_bus_surface, compliance_gap_scan, control_plane_of_controls, digital_twin, external_exposure_supreme, fair_exposure_fusion, firmware_emulation, firmware_exploit, first_mover_delta_fusion, first_mover_surface_delta, full_breach_sim, hardware_implant, implantable_device_hack, iot_firmware, jtag_swd_exploitation, kill_chain, lora_attack, medical_device_exploit, mobile_backend_chain, network_topology_map, nexus_sovereign_swarm, ngfw_posture, ntlm_relay, post_exploitation, printer_mfp_attack, rce_chain, risk_superposition_collapse, smb_netbios, smb_relay, tactic_chain_synthesizer, threat_emulation, threat_model_automation, vuln_chaining, weissman_vngfw",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1597",
+      "score": 6,
+      "comment": "dark_web_monitor, darkweb_intel, deepweb_intel, dominion_fusion, threat_hunting_apt, threat_intel_fusion",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1555",
+      "score": 1,
+      "comment": "secrets_manager_attack",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1597",
+      "score": 6,
+      "comment": "adversary_underground_delta, dark_web_monitor, darkweb_intel, deepweb_intel, threat_hunting_apt, threat_intel_fusion",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1590.005",
+      "score": 1,
+      "comment": "ipv6_attack",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1078",
+      "score": 18,
+      "comment": "casb_saas_posture, continuous_auth_evasion, external_exposure_supreme, identity_attack_chain, idor_advanced, itdr, ldap_injection, ldap_injection_engine, mainframe_zos_attack, microsegmentation_bypass, midnight_blizzard_ttps, ntlm_relay, risk_superposition_collapse, smb_netbios, smb_relay, threat_hunting_apt, volt_typhoon_ttps, zero_trust_bypass",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1486",
+      "score": 9,
+      "comment": "blackcat_alphv_ttps, cl0p_techniques, cloud_ransomware, conti_ransomware_ttps, destructive_wiper, lockbit_techniques, ransomware_emulation, ransomware_sim, wizard_spider_ttps",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1021",
+      "score": 5,
+      "comment": "apt_lateral_movement, lateral_movement, lateral_movement_engine, ot_it_lateral_chain, risk_superposition_collapse",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1190",
+      "score": 71,
+      "comment": "adversary_path_prover, ai_casb_saas, ai_cloud_escalation_chain, api_all_vectors_engine, api_fuzzing, api_gateway_attack, api_gateway_bypass, api_versioning_attack, apt29_techniques, apt41_techniques, asm, ble_rf, blockchain_bridge_exploit, carbon_spider_ttps, cl0p_techniques, deserialization_java, deserialization_net, dns_rebinding, earth_longzhi_ttps, external_exposure_supreme, file_upload, fin7_techniques, graphql_attack, graphql_deep_attack, graphql_injection, graphql_subscription_attack, grpc_reflection_attack, host_header_injection, http2_attack, http_feedback_fuzz, http_parameter_pollution, http_smuggling, kernel_exploit, kill_chain, lazarus_group_ttps, ldap_injection_engine, liminal_boundary, llm_path_fuzz, log4shell_scan, mainframe_zos_attack, mass_assignment, microsecond_timing, mobile_backend_chain, network_slice_isolation_bypass, nexus_sovereign_swarm, ngfw_posture, nosql_deep_injection, nosql_injection, odata_injection, ollama_fuzz, open_redirect, rce_chain, rce_deserialization, rce_exploit_engine, react_native_attack, salt_typhoon_ttps, sandworm_techniques, sap_erp_attack, service_mesh_attack, shodan_mass_scan, smart_contract_audit, soap_injection, sqli_advanced, ssti, swagger_abuse, tactic_chain_synthesizer, volt_typhoon_ttps, vuln_chaining, web3_dapp_attack, xxe, xxe_injection",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1685",
+      "score": 14,
+      "comment": "adversarial_ml, amsi_bypass, av_bypass_engine, cloud_logging_blind, cloud_waf_bypass, detection_gap_exploiter, edr_evasion, full_breach_sim, post_exploitation, sase_security_bypass, siem_evasion, syscall_evasion, threat_emulation, waf_ids_bypass",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1021",
+      "score": 6,
+      "comment": "adversary_path_prover, apt_lateral_movement, lateral_movement, lateral_movement_engine, ot_it_lateral_chain, risk_superposition_collapse",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1597",
+      "score": 5,
+      "comment": "dark_web_monitor, darkweb_intel, deepweb_intel, threat_hunting_apt, threat_intel_fusion",
+      "enabled": true
     }
   ],
   "gradient": {
@@ -1228,7 +1312,7 @@
       "#1e3a8a"
     ],
     "minValue": 0,
-    "maxValue": 70
+    "maxValue": 71
   },
   "legendItems": [
     {

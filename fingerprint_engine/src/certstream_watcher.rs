@@ -1,8 +1,8 @@
 //! Live Certificate Transparency squirt — push when a cert is issued, not crt.sh polling.
 //!
 //! Connects to a Certstream-compatible WebSocket (default `wss://certstream.calidog.io/`),
-//! matches SANs against authorized client apexes, and enqueues `first_mover_surface_delta`
-//! with `extra_hosts` so the new FQDN is probed immediately (RoE-gated).
+//! matches SANs against authorized client apexes, and enqueues `first_mover_delta_fusion`
+//! with `extra_hosts` so the new FQDN is probed AND exploit-proofed immediately (RoE-gated).
 //!
 //! Empty scope or a down feed is honest: no hunts, visible nerve-center status. Never
 //! fabricates findings from CT.
@@ -262,17 +262,26 @@ impl Dedup {
     }
 }
 
-async fn enqueue_hunt(pool: &PgPool, tenant_id: i64, client_id: i64, apex: &str, fqdn: &str) {
-    let payload = json!({
-        "engine": "first_mover_surface_delta",
+const CT_SQUIRT_ENGINE: &str = "first_mover_delta_fusion";
+
+/// Job payload for a Certstream SAN that matched an authorized apex.
+#[must_use]
+pub fn ct_squirt_payload(client_id: i64, apex: &str, fqdn: &str) -> Value {
+    json!({
+        "engine": CT_SQUIRT_ENGINE,
         "target": apex,
         "client_id": client_id,
         "extra_hosts": [fqdn],
         "include_ct": false,
         "include_http": true,
-        "chain_web_engines": true,
+        "chain_web_engines": false,
+        "fusion_inline": true,
         "trigger": "certstream",
-    });
+    })
+}
+
+async fn enqueue_hunt(pool: &PgPool, tenant_id: i64, client_id: i64, apex: &str, fqdn: &str) {
+    let payload = ct_squirt_payload(client_id, apex, fqdn);
     match crate::async_jobs::enqueue(pool, tenant_id, "command_center_engine", payload, None).await
     {
         Ok(_) => {
@@ -283,7 +292,7 @@ async fn enqueue_hunt(pool: &PgPool, tenant_id: i64, client_id: i64, apex: &str,
                 client_id,
                 apex,
                 fqdn,
-                "CT squirt → first-mover hunt"
+                "CT squirt → delta fusion hunt"
             );
         }
         Err(e) => {
@@ -465,5 +474,17 @@ mod tests {
         assert!(d.allow(1, 2, "a.acme.test"));
         assert!(!d.allow(1, 2, "a.acme.test"));
         assert!(d.allow(1, 2, "b.acme.test"));
+    }
+
+    #[test]
+    fn ct_squirt_payload_is_inline_fusion_not_async_chain() {
+        let p = ct_squirt_payload(9, "acme.test", "shop.acme.test");
+        assert_eq!(p["engine"], CT_SQUIRT_ENGINE);
+        assert_eq!(p["target"], "acme.test");
+        assert_eq!(p["client_id"], 9);
+        assert_eq!(p["extra_hosts"][0], "shop.acme.test");
+        assert_eq!(p["trigger"], "certstream");
+        assert_eq!(p["fusion_inline"], true);
+        assert_eq!(p["chain_web_engines"], false);
     }
 }

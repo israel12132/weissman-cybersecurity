@@ -197,7 +197,7 @@ pub async fn run_first_mover_delta_fusion_result(
         finding(
             ENGINE_ID,
             &format!(
-                "Delta fusion kill-chain on {} new host(s) — takeover/leak/BOLA/JWT same FQDN",
+                "Delta fusion kill-chain on {} new host(s) — takeover/leak/BOLA/JWT/OIDC/GraphQL same FQDN",
                 added.len()
             ),
             if fused > 0 { "high" } else { "info" },
@@ -257,7 +257,8 @@ mod tests {
         assert!(DELTA_FOLLOW_ON_ENGINES.contains(&"subdomain_takeover"));
         assert!(DELTA_FOLLOW_ON_ENGINES.contains(&"leak_hunter"));
         assert!(DELTA_FOLLOW_ON_ENGINES.contains(&"bola_idor"));
-        assert!(DELTA_FOLLOW_ON_ENGINES.contains(&"jwt_attack"));
+        assert!(DELTA_FOLLOW_ON_ENGINES.contains(&"oauth_oidc"));
+        assert!(DELTA_FOLLOW_ON_ENGINES.contains(&"graphql_attack"));
         assert!(!DELTA_FOLLOW_ON_ENGINES.contains(&ENGINE_ID));
     }
 }

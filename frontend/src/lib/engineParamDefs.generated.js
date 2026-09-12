@@ -24957,5 +24957,37 @@ export const GENERATED_PARAM_DEFS = {
       "min": 1,
       "max": 5000
     }
+  ],
+  "cortex_proven_finding_bridge": [
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "evidence_mode",
+      "label": "Evidence Mode",
+      "type": "select",
+      "defaultVal": "standard",
+      "options": [
+        "standard",
+        "strict",
+        "forensic"
+      ]
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
   ]
 }

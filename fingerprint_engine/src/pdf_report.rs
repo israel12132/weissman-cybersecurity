@@ -35,6 +35,42 @@ fn truncate_ascii(s: &str, max: usize) -> String {
     format!("{}…", chars.into_iter().take(max).collect::<String>())
 }
 
+/// Live-only intel line for the board PDF — never invents APT group names.
+fn live_intel_summary(findings: &[FindingRow]) -> String {
+    let mut kev = 0u32;
+    let mut leak = 0u32;
+    let mut fusion = 0u32;
+    let mut ransom = 0u32;
+    for (_, title, _, source, desc, poc) in findings {
+        let hay = format!("{title} {source} {desc} {poc}").to_ascii_lowercase();
+        if hay.contains("kev") || hay.contains("known exploited") {
+            kev += 1;
+        }
+        if source.to_ascii_lowercase().contains("leak")
+            || source.to_ascii_lowercase().contains("hibp")
+            || source.to_ascii_lowercase().contains("darkweb")
+            || source.to_ascii_lowercase().contains("dark_web")
+        {
+            leak += 1;
+        }
+        if source
+            .to_ascii_lowercase()
+            .contains("credential_ransomware")
+        {
+            fusion += 1;
+        }
+        if hay.contains("ransomware") {
+            ransom += 1;
+        }
+    }
+    truncate_ascii(
+        &format!(
+            "KEV-tagged {kev} · leak/HIBP {leak} · fusion {fusion} · ransomware-signal {ransom}. Actor names are not inferred."
+        ),
+        95,
+    )
+}
+
 fn israel_now() -> String {
     Jerusalem
         .from_utc_datetime(&chrono::Utc::now().naive_utc())
@@ -527,40 +563,57 @@ pub fn build_client_report_pdf(
 
     let hm_x = 280.0;
     let hm_y = b.y - 5.0;
-    let cell = 22.0;
-    for row in 0..5 {
-        for col in 0..5 {
-            let t = (row + col) as f64 / 8.0;
-            let r = t.min(1.0);
-            let g = (1.0 - t).max(0.0);
-            b.set_fill_rgb(r * 0.9 + 0.1, g * 0.8 + 0.1, 0.15);
-            b.rect_fill(
-                hm_x + col as f64 * cell,
-                hm_y - row as f64 * cell,
-                cell - 1.0,
-                cell - 1.0,
-            );
-        }
+    let cell_w = 52.0;
+    let cell_h = 36.0;
+    let live_cells: [(i64, f64, f64, f64); 4] = [
+        (critical, 0.90, 0.22, 0.22),
+        (high, 0.95, 0.55, 0.15),
+        (medium, 0.90, 0.82, 0.20),
+        (low_info, 0.25, 0.70, 0.40),
+    ];
+    for (i, (n, r, g, bb)) in live_cells.iter().enumerate() {
+        let col = (i % 2) as f64;
+        let row = (i / 2) as f64;
+        let intensity = if total > 0.0 {
+            ((*n as f64 / total) * 0.85 + 0.15).clamp(0.15, 1.0)
+        } else {
+            0.12
+        };
+        b.set_fill_rgb(r * intensity, g * intensity, bb * intensity);
+        b.rect_fill(
+            hm_x + col * cell_w,
+            hm_y - row * cell_h,
+            cell_w - 2.0,
+            cell_h - 2.0,
+        );
     }
-    b.y = hm_y - 5.0 * cell - 8.0;
+    b.y = hm_y - 2.0 * cell_h - 8.0;
     b.set_fill_rgb(0.2, 0.2, 0.2);
-    b.text_at(hm_x, 9, "Risk Heatmap");
-    b.y = hm_y - 5.0 * cell - 28.0;
+    b.text_at(
+        hm_x,
+        8,
+        &format!("Live severity heatmap C{critical} H{high} M{medium} L{low_info}"),
+    );
+    b.y = hm_y - 2.0 * cell_h - 28.0;
 
     let bar_x = 72.0;
     let bar_max = 180.0;
-    b.text(10, "Client vs Industry Benchmark");
+    b.text(10, "Live finding-weight score");
     let client_len = (score as f64 / 100.0 * bar_max).max(4.0);
     b.set_fill_rgb(0.2, 0.65, 0.9);
     b.rect_fill(bar_x, b.y - 18.0, client_len, 14.0);
     b.set_fill_rgb(0.3, 0.3, 0.35);
-    b.text_at(bar_x + client_len + 6.0, 9, &format!("Client: {}", score));
+    b.text_at(
+        bar_x + client_len + 6.0,
+        9,
+        &format!("Client live score: {}", score),
+    );
     b.y -= 28.0;
-    let ind_len = (65.0_f64 / 100.0 * bar_max).max(4.0);
-    b.set_fill_rgb(0.5, 0.5, 0.55);
-    b.rect_fill(bar_x, b.y - 18.0, ind_len, 14.0);
     b.set_fill_rgb(0.4, 0.4, 0.45);
-    b.text_at(bar_x + ind_len + 6.0, 9, "Industry Avg: 65");
+    b.text(
+        10,
+        "Score is 100 minus live finding weights (critical 25 / high 15 / medium 5). No fabricated industry average.",
+    );
     b.y -= 24.0;
 
     let discovery_n = discovery_noise_count(findings);
@@ -663,13 +716,13 @@ pub fn build_client_report_pdf(
     b.current.push_str("0.5 w\n");
     b.rect_stroke(72.0, b.y - 42.0, PAGE_W - 144.0, 38.0);
     b.set_fill_rgb(0.9, 0.4, 0.4);
-    b.text_at(82.0, 9, "Likely Threat Actors (contextual):");
-    b.set_fill_rgb(0.75, 0.78, 0.85);
     b.text_at(
         82.0,
         9,
-        "APT28, FIN7, Lazarus — prioritize external exposure and auth findings.",
+        "Live intel (from this client's persisted findings):",
     );
+    b.set_fill_rgb(0.75, 0.78, 0.85);
+    b.text_at(82.0, 9, &live_intel_summary(findings));
     b.y -= 52.0;
     b.new_page();
 
@@ -1015,6 +1068,161 @@ pub fn build_executive_board_pdf(
             )
             .as_bytes(),
         );
+        offsets.push(out.len());
+    }
+    out.extend_from_slice(
+        format!(
+            "{} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+            font_obj
+        )
+        .as_bytes(),
+    );
+    offsets.push(out.len());
+    let xref_start = out.len();
+    let num_objs = font_obj;
+    out.extend_from_slice(b"xref\n");
+    out.extend_from_slice(format!("0 {} \n", num_objs + 1).as_bytes());
+    out.extend_from_slice(b"0000000000 65535 f \n");
+    for off in offsets.iter().skip(1).take(num_objs) {
+        out.extend_from_slice(format!("{:010} 00000 n \n", off).as_bytes());
+    }
+    out.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n",
+            num_objs + 1,
+            xref_start
+        )
+        .as_bytes(),
+    );
+    Ok(out)
+}
+
+/// Board pack for Adversary Gap Mirror — live intel counts only.
+pub fn build_adversary_mirror_pdf(
+    org_label: &str,
+    client_opt: Option<&str>,
+    ransom_hits: u32,
+    ioc_hits: u32,
+    breach_catalog: u32,
+    iab_signals: u32,
+    total_findings: u32,
+    headline: &str,
+    signal_titles: &[String],
+) -> Result<Vec<u8>, String> {
+    let date = israel_now();
+    let mut b = PdfBuilder::new();
+    b.set_fill_rgb(0.06, 0.09, 0.14);
+    b.text(22, "WEISSMAN — ADVERSARY GAP MIRROR");
+    b.set_fill_rgb(0.55, 0.62, 0.72);
+    b.text(
+        11,
+        &format!("Organization: {}", truncate_ascii(org_label, 80)),
+    );
+    if let Some(c) = client_opt {
+        b.text(11, &format!("Scope (client): {}", truncate_ascii(c, 80)));
+    }
+    b.text(10, &format!("Generated (Israel): {}", date));
+    b.y -= 8.0;
+
+    b.set_fill_rgb(0.75, 0.25, 0.45);
+    b.text(14, "Clearnet adversary knowledge (live queries)");
+    b.set_fill_rgb(0.9, 0.92, 0.95);
+    b.text(
+        11,
+        &format!(
+            "Ransomware leak-site listings: {}  |  ThreatFox/URLhaus IOC: {}  |  HIBP catalog: {}",
+            ransom_hits, ioc_hits, breach_catalog
+        ),
+    );
+    b.text(
+        11,
+        &format!(
+            "IAB-interesting exposure signals: {}  |  Total live findings: {}",
+            iab_signals, total_findings
+        ),
+    );
+    b.y -= 8.0;
+    b.set_fill_rgb(0.2, 0.75, 0.95);
+    b.text(14, "Headline");
+    b.set_fill_rgb(0.9, 0.92, 0.95);
+    b.text(11, &truncate_ascii(headline, 220));
+
+    if !signal_titles.is_empty() {
+        b.y -= 8.0;
+        b.set_fill_rgb(0.2, 0.75, 0.95);
+        b.text(14, "Signal findings (info/zero-hit omitted)");
+        b.set_fill_rgb(0.9, 0.92, 0.95);
+        for (i, title) in signal_titles.iter().take(16).enumerate() {
+            b.text(9, &format!("{}. {}", i + 1, truncate_ascii(title, 110)));
+        }
+        if signal_titles.len() > 16 {
+            b.text(
+                9,
+                &format!(
+                    "… {} more signal rows in the live findings table / Excel pack",
+                    signal_titles.len() - 16
+                ),
+            );
+        }
+    }
+
+    b.y -= 10.0;
+    b.set_fill_rgb(0.45, 0.5, 0.58);
+    b.text(
+        9,
+        "Sources: ransomware.live, RansomLook posts catalog, abuse.ch ThreatFox, URLhaus, Have I Been Pwned public catalog, urlscan.io.",
+    );
+    b.text(
+        9,
+        "No Tor, no marketplaces, no credential dumps. Empty counts mean the live query returned zero matches.",
+    );
+    b.text(
+        9,
+        "USD bands, if present in findings, are published industry ranges — not live dark-web quotes.",
+    );
+
+    let streams = b.finish();
+    let mut out = Vec::new();
+    let mut offsets: Vec<usize> = vec![0];
+    out.extend_from_slice(b"%PDF-1.4\n");
+    offsets.push(out.len());
+    out.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    offsets.push(out.len());
+    let n = streams.len();
+    let page_objects: Vec<usize> = (0..n).map(|i| 3 + i * 2).collect();
+    let contents_objects: Vec<usize> = (0..n).map(|i| 4 + i * 2).collect();
+    let pages_refs: String = page_objects.iter().map(|i| format!("{} 0 R ", i)).collect();
+    out.extend_from_slice(
+        format!(
+            "2 0 obj\n<< /Type /Pages /Kids [ {}] /Count {} >>\nendobj\n",
+            pages_refs.trim(),
+            n
+        )
+        .as_bytes(),
+    );
+    offsets.push(out.len());
+    let font_obj = 3 + 2 * n;
+    for (i, stream_body) in streams.iter().enumerate() {
+        out.extend_from_slice(
+            format!(
+                "{} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {} 0 R /Resources << /Font << /F1 {} 0 R >> >> >>\nendobj\n",
+                page_objects[i],
+                contents_objects[i],
+                font_obj
+            )
+            .as_bytes(),
+        );
+        offsets.push(out.len());
+        out.extend_from_slice(
+            format!(
+                "{} 0 obj\n<< /Length {} >>\nstream\n",
+                contents_objects[i],
+                stream_body.len()
+            )
+            .as_bytes(),
+        );
+        out.extend_from_slice(stream_body.as_bytes());
+        out.extend_from_slice(b"\nendstream\nendobj\n");
         offsets.push(out.len());
     }
     out.extend_from_slice(
@@ -1488,6 +1696,32 @@ mod watermark_tests {
 }
 
 #[cfg(test)]
+mod adversary_mirror_pdf_tests {
+    use super::*;
+
+    #[test]
+    fn adversary_mirror_pdf_is_pdf14() {
+        let bytes = build_adversary_mirror_pdf(
+            "Weissman",
+            Some("Acme"),
+            1,
+            2,
+            0,
+            1,
+            4,
+            "Ransomware leak-site listing",
+            &["Ransomware leak-site listing".into()],
+        )
+        .expect("pdf");
+        assert!(bytes.starts_with(b"%PDF-1.4"));
+        assert!(bytes.ends_with(b"%%EOF\n"));
+        let body = String::from_utf8_lossy(&bytes);
+        assert!(body.contains("ADVERSARY GAP MIRROR"));
+        assert!(body.contains("ransomware.live"));
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -1772,5 +2006,28 @@ mod tests {
         assert!(html.contains("Cryptographic Proof of Integrity"));
         assert!(html.contains("deadbeef"));
         assert!(html.contains("http://verify.example"));
+    }
+
+    #[test]
+    fn board_pdf_does_not_invent_apt_or_industry_average() {
+        let findings = vec![row(
+            1,
+            "CISA KEV product match",
+            "critical",
+            "credential_ransomware_fusion",
+            "known ransomware campaign use",
+            "GET https://www.cisa.gov HTTP 200",
+        )];
+        let bytes = build_client_report_pdf("Acme", &findings, None).expect("pdf");
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(text.contains("%PDF-1.4"));
+        assert!(!text.contains("APT28"));
+        assert!(!text.contains("FIN7"));
+        assert!(!text.contains("Lazarus"));
+        assert!(!text.contains("Industry Avg: 65"));
+        assert!(text.contains("Client live score") || text.contains("no fabricated"));
+        assert!(text.contains("KEV-tagged") || text.contains("fusion"));
+        assert!(!text.contains("Industry Benchmark"));
+        assert!(text.contains("Live severity heatmap") || text.contains("finding-weight"));
     }
 }

@@ -2,7 +2,7 @@
 //! blast-radius scoring, and D3/WebGL export for AI + cockpit visualisation.
 
 use chrono::Utc;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sqlx::{Postgres, Row, Transaction};
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -460,6 +460,11 @@ pub async fn build_risk_graph_for_client(
         .bind(client_id)
         .execute(&mut **tx)
         .await;
+    sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_CROWN_JEWEL_SQL)
+        .bind(tenant_id)
+        .bind(client_id)
+        .execute(&mut **tx)
+        .await?;
 
     let node_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM risk_graph_nodes WHERE tenant_id = $1 AND client_id = $2",

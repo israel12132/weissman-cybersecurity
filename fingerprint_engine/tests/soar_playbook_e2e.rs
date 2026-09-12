@@ -48,6 +48,7 @@ fn eight_soar_adapters_registered() {
         "opsgenie",
         "slack",
         "servicenow",
+        "cortex_xsiam",
     ] {
         assert!(REGISTERED_ADAPTER_IDS.contains(&id), "missing adapter {id}");
     }

@@ -1,0 +1,95 @@
+import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Loader2, Radio } from 'lucide-react'
+import { apiFetch } from '../../utils/apiFetch'
+import Button from '../ui/Button'
+import { findingVerifyId, liveVerdictFromFinding } from './FindingLiveVerify'
+
+export function canPushFindingToCortex(finding) {
+  const verdict = String(liveVerdictFromFinding(finding) || '').toUpperCase()
+  if (verdict === 'NOISE' || verdict === 'FALSE_POSITIVE') return false
+  if (verdict === 'CONFIRMED' || verdict === 'LIKELY_VALID') return true
+  const raw = finding?.raw && typeof finding.raw === 'object' ? finding.raw : finding || {}
+  return hasLiveProof(raw)
+}
+
+function hasLiveProof(raw, depth = 0) {
+  if (!raw || typeof raw !== 'object' || depth > 2) return false
+  const keys = ['proof', 'poc', 'poc_exploit', 'oast', 'oast_callback', 'http_status', 'http_evidence']
+  if (keys.some((k) => {
+    const v = raw[k]
+    if (v === true) return true
+    if (typeof v === 'number') return true
+    if (typeof v === 'string' && v.trim()) return true
+    if (v && typeof v === 'object' && Object.keys(v).length) return true
+    return false
+  })) return true
+  const ev = raw.evidence
+  if (typeof ev === 'string' && ev.trim()) return true
+  if (ev && typeof ev === 'object') {
+    if (typeof ev.proof === 'string' && ev.proof.trim()) return true
+    if (Object.keys(ev).length) return true
+  }
+  if (raw.raw && raw.raw !== raw) return hasLiveProof(raw.raw, depth + 1)
+  return false
+}
+
+export default function FindingCortexPush({ finding }) {
+  const { t } = useTranslation()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [result, setResult] = useState(null)
+  const rawId = useMemo(() => findingVerifyId(finding), [finding])
+  const eligible = canPushFindingToCortex(finding)
+
+  const run = async (e) => {
+    e?.preventDefault?.()
+    e?.stopPropagation?.()
+    if (!rawId || loading || !eligible) return
+    setLoading(true)
+    setError('')
+    try {
+      const data = await apiFetch(`/api/findings/${encodeURIComponent(rawId)}/push-cortex`, {
+        method: 'POST',
+        body: { dry_run: false },
+      })
+      if (data?.ok === false) throw new Error(data.detail || t('findings.cortexPush.failed'))
+      setResult(data)
+    } catch (err) {
+      setError(err.message || t('findings.cortexPush.failed'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <span className="inline-flex flex-col items-start gap-1">
+      <Button
+        variant="unstyled"
+        type="button"
+        onClick={run}
+        disabled={loading || !rawId || !eligible}
+        data-testid="push-cortex"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-mono border border-orange-500/35 bg-orange-500/10 text-orange-100 hover:bg-orange-500/20 disabled:opacity-40"
+        title={eligible ? t('findings.cortexPush.hint') : t('findings.cortexPush.need_proof')}
+      >
+        {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Radio className="w-3.5 h-3.5" />}
+        {t('findings.cortexPush.button')}
+      </Button>
+      {error && (
+        <span role="alert" className="text-[9px] font-mono text-rose-300/90 max-w-[18rem] leading-snug">
+          {error}
+        </span>
+      )}
+      {result?.ok && (
+        <span className="text-[9px] font-mono text-orange-200/90 max-w-[18rem] leading-snug">
+          {result.xdr_had_matching_alert === false
+            ? t('findings.cortexPush.blind_spot')
+            : result.xdr_had_matching_alert === true
+              ? t('findings.cortexPush.xdr_already')
+              : result.detail || t('findings.cortexPush.ok')}
+        </span>
+      )}
+    </span>
+  )
+}

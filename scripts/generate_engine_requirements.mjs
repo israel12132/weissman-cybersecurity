@@ -219,6 +219,39 @@ const REQUIREMENTS = {
     hint_en: 'Out-of-band verification for blind SSRF/XSS/OAST engines.',
     hint_he: 'אימות OOB ל-SSRF/XSS blind.',
   },
+  intelx_key: {
+    id: 'intelx_key',
+    scope: 'tenant',
+    env: 'INTELX_API_KEY',
+    type: 'tenant_env',
+    required: false,
+    label_en: 'Intelligence X API key (optional)',
+    label_he: 'מפתח Intelligence X (אופציונלי)',
+    hint_en: 'Enriches darkweb_intel / dominion_fusion leak index. Alias: WEISSMAN_INTELX_KEY. crt.sh and urlscan still run without it.',
+    hint_he: 'מעשיר אינדקס דליפות. כינוי: WEISSMAN_INTELX_KEY. crt.sh ו-urlscan רצים גם בלעדיו.',
+  },
+  abusech_key: {
+    id: 'abusech_key',
+    scope: 'tenant',
+    env: 'WEISSMAN_ABUSECH_AUTH_KEY',
+    type: 'tenant_env',
+    required: false,
+    label_en: 'abuse.ch Auth-Key (optional)',
+    label_he: 'מפתח abuse.ch (אופציונלי)',
+    hint_en: 'URLHaus malware-URL host lookup and ThreatFox IOCs. Alias: ABUSECH_AUTH_KEY. Register at https://auth.abuse.ch/',
+    hint_he: 'URLHaus ו-ThreatFox. כינוי: ABUSECH_AUTH_KEY. רישום ב-https://auth.abuse.ch/',
+  },
+  otx_key: {
+    id: 'otx_key',
+    scope: 'tenant',
+    env: 'OTX_API_KEY',
+    type: 'tenant_env',
+    required: false,
+    label_en: 'AlienVault OTX API key (optional)',
+    label_he: 'מפתח AlienVault OTX (אופציונלי)',
+    hint_en: 'OTX domain pulses for darkweb_intel / dominion_fusion. Not a substitute for IntelX or abuse.ch.',
+    hint_he: 'פולסי דומיין ב-OTX. לא מחליף IntelX או abuse.ch.',
+  },
   tenant_ai_entitlement: {
     id: 'tenant_ai_entitlement',
     scope: 'tenant',
@@ -332,6 +365,11 @@ function requirementsForEngine(id) {
   }
   if (OAST_ENGINES.has(id)) reqs.add('tenant_oast')
   if (group === 'network' && !agentRequired.has(id)) reqs.add('scope_ips')
+  if (id === 'darkweb_intel' || id === 'dark_web_monitor' || id === 'dominion_fusion') {
+    reqs.add('intelx_key')
+    reqs.add('abusech_key')
+    reqs.add('otx_key')
+  }
 
   return [...reqs].sort()
 }

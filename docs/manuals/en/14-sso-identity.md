@@ -52,15 +52,19 @@ Admin → **SSO Dashboard** → Add OIDC Provider
 
 Backend: `fingerprint_engine/src/oidc_auth.rs`
 
-### 3. Map groups to roles
+### 3. Map groups to roles (SCIM, not a hidden login claim)
 
-Configure IdP group claims → Weissman roles:
+Group → role mapping is **live configuration** on Command Center → SSO → SCIM kill-switch (`PUT /api/sso/scim/group-maps`). It is applied when:
 
-- `Security-Analysts` → `analyst`
-- `Scan-Operators` → `operator`
-- `Platform-Admins` → `admin`
+1. Entra/Okta SCIM adds the user to a mapped group (`/scim/v2/Groups`)
+2. The user signs in via OIDC (`groups` claim) or SAML (`memberOf` / groups attributes)
 
-Unmapped users receive default role (minimum `viewer`).
+Unmapped users receive `viewer`. SCIM cannot assign `ceo` or `superadmin`.
+
+SCIM base URL: `{WEISSMAN_PUBLIC_BASE_URL}/scim/v2`  
+Mint a tenant bearer in the dashboard (shown once; stored as SHA-256).
+
+Deprovision (`active=false` or DELETE User) **kills the session immediately**: `users.is_active=false`, refresh tokens revoked, access JTIs revoked. A deactivated account cannot JIT-login.
 
 ### 4. Test login
 
@@ -114,6 +118,9 @@ Operator+ endpoints in `fingerprint_engine/src/sso_management.rs`:
 - List/configure/disable SSO providers
 - Test connectivity
 - View last sync status
+- Mint/revoke SCIM tokens (`/api/sso/scim/tokens`)
+- Group → role maps (`/api/sso/scim/group-maps`)
+- Live joiner/leaver tape (`GET /api/sso/scim/events`)
 
 Destructive SSO changes may require admin role.
 
@@ -157,7 +164,9 @@ grep WEISSMAN_SAML_INSECURE /etc/weissman/weissman.env
 Checklist:
 
 - [ ] SSO login completes without error
-- [ ] Role mapping correct for test users
+- [ ] Role mapping correct for test users (SCIM group map or IdP group claim)
+- [ ] SCIM deprovision blocks login (`code=scim_deprovisioned`)
+- [ ] Logout clears session; re-login works
 - [ ] Logout clears session; re-login works
 - [ ] Audit log shows SSO authentication event
 - [ ] Break-glass local admin still functional
@@ -170,7 +179,7 @@ Checklist:
 |---------|-----|
 | Redirect URI mismatch | Align IdP callback with `WEISSMAN_PUBLIC_BASE_URL` |
 | SAML signature fail | Install xmlsec1; verify IdP cert not expired |
-| User gets viewer only | Fix group claim mapping |
+| User gets viewer only | Save a group map on the SCIM panel; confirm IdP sends groups / SCIM members |
 | SSO button 503 | Provider not configured for tenant |
 | Cookie not set | `WEISSMAN_COOKIE_SECURE=1` requires HTTPS |
 

@@ -1,9 +1,8 @@
 //! API route mounting — split from serve.rs for maintainability.
 use super::*;
 use axum::{
-    middleware,
+    Router, middleware,
     routing::{delete, get, patch, post, put},
-    Router,
 };
 use std::sync::Arc;
 
@@ -18,10 +17,22 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/findings/export/csv", get(api_findings_export_csv))
         .route("/api/export/findings", get(api_findings_export_csv))
         .route(
+            "/api/findings/scan-cortex-bridge",
+            get(api_findings_scan_cortex_bridge),
+        )
+        .route(
+            "/api/findings/scan-cortex-bridge/flush",
+            post(api_findings_scan_cortex_bridge_flush),
+        )
+        .route(
             "/api/findings/:id/status",
             patch(api_findings_update_status),
         )
         .route("/api/findings/:id/verify", post(api_findings_verify_live))
+        .route(
+            "/api/findings/:id/push-cortex",
+            post(api_findings_push_cortex),
+        )
         .route("/api/intel/status", get(api_intel_status))
         .route("/api/attack-coverage", get(api_attack_coverage))
         .route("/api/intel/suppressions", get(api_intel_suppressions))

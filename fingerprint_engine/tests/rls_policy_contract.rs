@@ -460,3 +460,35 @@ fn privilege_escalation_controls_migration_in_sync_both_dirs() {
         "privilege_escalation_controls migration must be identical in both dirs"
     );
 }
+
+#[test]
+fn scim_identity_killswitch_migration_forces_rls_and_syncs() {
+    let fe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("migrations/20260911235900_scim_identity_killswitch.sql");
+    let db = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../crates/weissman-db/migrations/20260911235900_scim_identity_killswitch.sql");
+    let a = std::fs::read_to_string(&fe).unwrap_or_default();
+    let b = std::fs::read_to_string(&db).unwrap_or_default();
+    assert!(
+        !a.is_empty(),
+        "scim migration missing in fingerprint_engine"
+    );
+    assert_eq!(a, b, "scim migration must be identical in both dirs");
+    for table in [
+        "weissman_scim_tokens",
+        "weissman_scim_groups",
+        "weissman_scim_group_members",
+        "weissman_scim_group_role_maps",
+        "weissman_scim_events",
+    ] {
+        assert!(a.contains(&format!("CREATE TABLE IF NOT EXISTS {table}")));
+        assert!(a.contains(&format!("ALTER TABLE {table} FORCE ROW LEVEL SECURITY")));
+        assert!(a.contains(&format!("{table}_tenant")));
+    }
+    assert!(a.contains("public.app_current_tenant_id()"));
+    assert!(!a.contains("current_setting('app.current_tenant_id', true)::bigint"));
+    assert!(a.contains("public.lookup_scim_token"));
+    assert!(a.contains("SECURITY DEFINER"));
+    assert!(a.contains("SET search_path = public, pg_temp"));
+    assert!(!a.contains("GRANT INSERT ON weissman_revoked_tokens TO weissman_app"));
+}

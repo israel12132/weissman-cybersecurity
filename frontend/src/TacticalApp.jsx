@@ -84,6 +84,7 @@ import {
   IncidentResponseCenter,
   VulnIntelDashboard,
   FinancialRisk,
+  BoardPack,
   AttackPaths,
   SupremeBrain,
   CemDagoMesh,
@@ -93,12 +94,15 @@ import {
   UebaAnomalies,
   FindingSuppressions,
   FindingClusters,
+  ScanFindingSpine,
   CryptoPosture,
   LiveFeed,
   ReportHistory,
+  BoardEvidencePack,
   ExecutiveOverview,
   AgentManagement,
   DarkWebMonitor,
+  AdversaryMirror,
   TargetIntelligence,
   StealthOperations,
   EliteHardeningCommandCenter,
@@ -158,6 +162,7 @@ import {
   CasbDlpCenter,
   NgfwGate,
   EndpointEdr,
+  CortexProvenBridge,
 } from './routing/routeChunks'
 
 function ChainPredictor() {
@@ -277,11 +282,13 @@ export default function TacticalApp() {
           <Route path="serverless-security" element={<ServerlessSecurityCommandCenter />} />
           <Route path="findings" element={<FindingsCommandCenter />} />
           <Route path="finding-clusters" element={<FindingClusters />} />
+          <Route path="scan-finding-spine" element={<ScanFindingSpine />} />
           <Route path="threat-intel" element={<ThreatIntelHub />} />
           <Route path="intel-map" element={<App />} />
           <Route path="incident-response" element={<IncidentResponseCenter />} />
           <Route path="vuln-intel" element={<VulnIntelDashboard />} />
           <Route path="financial-risk" element={<FinancialRisk />} />
+          <Route path="board-pack" element={<BoardPack />} />
           <Route path="attack-paths" element={<AttackPaths />} />
           <Route path="supreme-brain" element={<SupremeBrain />} />
           <Route path="cem-dago" element={<CemDagoMesh />} />
@@ -293,8 +300,10 @@ export default function TacticalApp() {
           <Route path="crypto-posture" element={<CryptoPosture />} />
           <Route path="live-feed" element={<LiveFeed />} />
           <Route path="reports" element={<ReportHistory />} />
+          <Route path="board-pack" element={<BoardEvidencePack />} />
           <Route path="overview" element={<ExecutiveOverview />} />
           <Route path="dark-web" element={<DarkWebMonitor />} />
+          <Route path="adversary-mirror" element={<AdversaryMirror />} />
           <Route path="target-intel" element={<TargetIntelligence />} />
           <Route path="stealth-ops" element={<StealthOperations />} />
           <Route path="elite-hardening" element={<EliteHardeningCommandCenter />} />
@@ -346,6 +355,7 @@ export default function TacticalApp() {
           <Route path="itdr" element={<ItdrCommandCenter />} />
           <Route path="casb-dlp" element={<CasbDlpCenter />} />
           <Route path="ngfw-gate" element={<NgfwGate />} />
+          <Route path="cortex-bridge" element={<CortexProvenBridge />} />
           <Route path="endpoint-edr" element={<EndpointEdr />} />
           <Route path="ceo" element={<CeoProtectedRoute><CeoCommandCenter /></CeoProtectedRoute>} />
           <Route path="supreme-nerve-center" element={<RequireRole min="ceo"><SupremeNerveCenter /></RequireRole>} />

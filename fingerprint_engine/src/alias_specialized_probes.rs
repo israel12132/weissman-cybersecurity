@@ -204,6 +204,8 @@ pub async fn run_specialized_probe(
         "zero_click_exploit" | "zero_day_chain" => {
             probe_zero_click_alias(engine_id, canonical, target).await
         }
+        "full_breach_sim" => probe_full_breach_sim(engine_id, canonical, target).await,
+        "post_exploitation" => probe_post_exploitation(engine_id, canonical, target).await,
 
         // ── Default: no specialized remote signal for this alias id ──────────
         _ => empty_ok(engine_id, target),
@@ -1245,12 +1247,20 @@ async fn probe_edr_evasion_alias(engine_id: &str, canonical: &str, target: &str)
                     "info",
                     "T1562.001",
                     &format!(
-                        "{} sits behind {} — EDR/AMSI bypass tradecraft must evade this stack; agent validates host controls.",
-                        p.final_url, sig
+                        "{} sits behind {} — {} is a perimeter WAF/CDN signal, not host syscall unhooking/Hell's Gate. Agent validates EDR on the endpoint.",
+                        p.final_url, sig, engine_id
                     ),
                     target,
                     canonical,
                 ));
+                if let Some(obj) = findings.last_mut().and_then(|f| f.as_object_mut()) {
+                    if engine_id == "syscall_evasion" {
+                        obj.insert(
+                            "probe_fidelity".to_string(),
+                            json!("perimeter_waf_not_host_syscall"),
+                        );
+                    }
+                }
                 break;
             }
         }
@@ -1574,6 +1584,114 @@ async fn probe_zero_click_alias(engine_id: &str, canonical: &str, target: &str) 
             ));
             break;
         }
+    }
+    collect(engine_id, target, canonical, findings)
+}
+
+async fn probe_full_breach_sim(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
+    let host = extract_host(target);
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let mut findings = Vec::new();
+    let open = tcp_scan(&host, &[22, 80, 443, 445, 3389, 5985, 8080], 8).await;
+    if !open.is_empty() {
+        findings.push(alias_finding(
+            engine_id,
+            &format!("Breach-sim perimeter ports: {open:?}"),
+            if open.iter().any(|p| matches!(p, 445 | 3389 | 5985)) {
+                "high"
+            } else {
+                "medium"
+            },
+            "T1190",
+            &format!(
+                "Host {host} accepts {open:?} — full_breach_sim is a live surface + STRIPS plan, not a weaponized breach."
+            ),
+            target,
+            canonical,
+        ));
+    }
+    let paths = &[
+        "/login",
+        "/admin",
+        "/upload",
+        "/.git/HEAD",
+        "/actuator/health",
+        "/graphql",
+        "/api",
+        "/wp-login.php",
+    ];
+    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if status_indicates_presence(p.status) {
+            findings.push(alias_finding(
+                engine_id,
+                &format!("Breach-sim entry {} ({})", p.final_url, p.status),
+                if p.status == 200 { "medium" } else { "info" },
+                "T1190",
+                &format!(
+                    "Live GET {} returned {} — evidence for the STRIPS planner, not an exploit chain.",
+                    p.final_url, p.status
+                ),
+                target,
+                canonical,
+            ));
+        }
+    }
+    if let Some(chain) = crate::attack_chain_planner::strips_chain_finding(
+        engine_id,
+        target,
+        &findings,
+        "impact:objective",
+    ) {
+        findings.push(chain);
+    }
+    collect(engine_id, target, canonical, findings)
+}
+
+async fn probe_post_exploitation(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
+    let host = extract_host(target);
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let mut findings = Vec::new();
+    let paths = &[
+        "/admin",
+        "/debug",
+        "/server-status",
+        "/phpinfo.php",
+        "/actuator/env",
+        "/.git/config",
+    ];
+    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if status_indicates_presence(p.status) {
+            findings.push(alias_finding(
+                engine_id,
+                &format!("Post-ex admin/debug path {} ({})", p.final_url, p.status),
+                if p.status == 200 { "high" } else { "medium" },
+                "T1082",
+                &format!(
+                    "{} ({}) — post-exploitation inventory of admin/debug surfaces. No shell is spawned.",
+                    p.final_url, p.status
+                ),
+                target,
+                canonical,
+            ));
+        }
+    }
+    let lateral = tcp_scan(&host, &[445, 3389, 5985, 22], 8).await;
+    if !lateral.is_empty() {
+        findings.push(alias_finding(
+            engine_id,
+            &format!("Post-ex lateral ports: {lateral:?}"),
+            "high",
+            "T1021",
+            &format!(
+                "Host {host} accepts {lateral:?} — observed post-foothold adjacency, not a lateral exploit."
+            ),
+            target,
+            canonical,
+        ));
     }
     collect(engine_id, target, canonical, findings)
 }

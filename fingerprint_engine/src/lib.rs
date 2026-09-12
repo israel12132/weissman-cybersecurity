@@ -31,6 +31,7 @@
 )]
 
 pub mod agent_remote_surface;
+pub mod adversary_path_prover;
 pub mod ai_redteam_engine;
 pub mod alias_engine_runner;
 pub mod alias_specialized_probes;
@@ -71,6 +72,7 @@ pub mod db;
 pub mod db_backup;
 pub mod dedicated_web_ztna_engines;
 pub mod discovery_engine;
+pub mod dualstack_edge_skip;
 pub mod embeddings;
 pub mod engine_accounting;
 pub mod engine_capabilities;
@@ -93,10 +95,12 @@ pub mod fair_exposure_fusion_engine;
 pub mod financial_risk;
 pub mod finding_aging;
 pub mod finding_attestation;
+pub mod finding_cortex_push;
 pub mod finding_live_verify;
 pub mod findings_correlator;
 pub mod findings_gate;
 pub mod findings_persist;
+pub mod scan_finding_bridge;
 pub mod fingerprint;
 pub mod first_mover_delta_fusion;
 pub mod first_mover_surface_delta;
@@ -148,7 +152,9 @@ pub mod saas_idp_discovery;
 pub mod safe_probe;
 pub mod saml_auth;
 pub mod scan_concurrency;
+pub mod scan_finding_spine;
 pub mod scan_http_client;
+pub mod scim;
 pub mod self_heal_recovery;
 pub mod self_heal_shared;
 pub mod self_healing;
@@ -198,6 +204,8 @@ pub mod advanced_stealth_engines;
 pub mod advanced_supply_chain_engines;
 pub mod advanced_web_engines;
 pub mod adversarial_ml_engine;
+pub mod adversary_exposure_delta;
+pub mod adversary_underground_delta;
 pub mod agent_registry_sync;
 pub mod alert_delivery;
 pub mod alert_evaluator_worker;
@@ -224,6 +232,7 @@ pub mod cicd_pipeline_engine;
 pub mod cloud_containment_engine;
 pub mod cloud_posture_engine;
 pub mod container_registry_engine;
+pub mod credential_ransomware_fusion;
 pub mod crypto_policy;
 pub mod dag_engine;
 pub mod dag_pipeline;
@@ -335,6 +344,7 @@ pub mod ws_intelligence_bus;
 pub mod ws_race_executor;
 pub mod ws_session;
 pub mod ws_state_machine;
+pub mod xlsx_pack;
 pub mod xxe_engine;
 pub mod zero_day_prediction_engine;
 
@@ -376,6 +386,8 @@ pub use fingerprint::{
 pub use fuzzer::{
     run_fuzzer, run_fuzzer_collect, run_fuzzer_collect_tenant, Baseline, Mutator, ValidatedAnomaly,
 };
-pub use recon::{enum_subdomains, enum_subdomains_default, DEFAULT_SUBDOMAINS};
+pub use recon::{
+    default_subdomain_wordlist, enum_subdomains, enum_subdomains_default, DEFAULT_SUBDOMAINS,
+};
 pub use risk_graph::export_risk_graph_json;
 pub use safe_probe::{safe_probe, SafeProbeResult};

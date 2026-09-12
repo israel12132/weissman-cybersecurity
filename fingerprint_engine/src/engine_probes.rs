@@ -523,6 +523,25 @@ pub async fn dns_a(host: &str) -> Vec<String> {
     out
 }
 
+/// Live AAAA lookup. Empty when the name has no IPv6 (or DNS fails).
+pub async fn dns_aaaa(host: &str) -> Vec<String> {
+    use hickory_resolver::TokioResolver;
+    let resolver = match TokioResolver::builder_tokio().and_then(|b| b.build()) {
+        Ok(r) => r,
+        Err(_) => return vec![],
+    };
+    let mut out = Vec::new();
+    if let Ok(aaaa) = resolver.ipv6_lookup(host).await {
+        for record in aaaa.answers() {
+            let hickory_resolver::proto::rr::RData::AAAA(aaaa) = &record.data else {
+                continue;
+            };
+            out.push(aaaa.0.to_string());
+        }
+    }
+    out
+}
+
 /// Minimum TTL (seconds) among A records for `host`, if any.
 pub async fn dns_a_min_ttl(host: &str) -> Option<u32> {
     use hickory_resolver::TokioResolver;
@@ -861,6 +880,9 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     }
     if engine_id.contains("first_seen") {
         return "Patch or isolate the affected SBOM component. The OSV advisory hit this inventory before (or without) an NVD CVE — do not wait for a weekly scanner or a CVE number.";
+    }
+    if engine_id.contains("adversary_path") {
+        return "Close the observed entry point (auth, admin, SCM, GraphQL) and the WAF/UA control-gap on that same path. Re-run adversary_path_prover after the change — STRIPS will only emit a chain from remaining live facts.";
     }
     if engine_id.contains("s3") || engine_id.contains("cloud_data_exfil") {
         return "Block public ACLs at the AWS account level (`BlockPublicAccess`), set bucket policy to private, and enable S3 Object Ownership = BucketOwnerEnforced.";

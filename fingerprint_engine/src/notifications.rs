@@ -41,15 +41,19 @@ pub fn spawn_ascension_poe_followup(pool: Arc<PgPool>, tenant_id: i64, target: S
 }
 
 async fn webhook_url_from_db(pool: &PgPool, tenant_id: i64) -> Option<String> {
-    sqlx::query_scalar::<_, String>(
+    // system_configs is FORCE RLS — a raw pool query cannot see tenant rows.
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await.ok()?;
+    let url = sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'alert_webhook_url'",
     )
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await
     .ok()
     .flatten()
-    .filter(|s| !s.trim().is_empty())
+    .filter(|s| !s.trim().is_empty());
+    let _ = tx.commit().await;
+    url
 }
 
 async fn webhook_url_effective(pool: Option<(&PgPool, i64)>) -> Option<String> {
@@ -124,6 +128,46 @@ pub fn spawn_critical_poe_alert(
     });
 }
 
+/// Fire-and-forget webhook when a new internet → crown-jewel path appears.
+pub fn spawn_internet_jewel_path_alert(
+    pool: Arc<PgPool>,
+    tenant_id: i64,
+    client_id: i64,
+    path_count: usize,
+    jewel_count: usize,
+    max_path_score: u8,
+    ale_usd: i64,
+) {
+    tokio::spawn(async move {
+        let webhook = webhook_url_effective(Some((pool.as_ref(), tenant_id))).await;
+        let Some(url) = webhook else {
+            return;
+        };
+        let payload = json!({
+            "text": format!(
+                "[Weissman] NEW internet→crown-jewel path(s)\nclient_id={}\npaths={}\njewels={}\nmax_score={}\nale_usd={}",
+                client_id, path_count, jewel_count, max_path_score, ale_usd
+            ),
+            "weissman": {
+                "kind": "internet_jewel_path",
+                "severity": if max_path_score >= 80 { "critical" } else { "high" },
+                "client_id": client_id,
+                "path_count": path_count,
+                "jewel_count": jewel_count,
+                "max_path_score": max_path_score,
+                "ale_usd": ale_usd,
+            }
+        });
+        let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .unwrap_or_else(|_| Client::new());
+        if let Err(e) = client.post(&url).json(&payload).send().await {
+            eprintln!("[Weissman][Notify] Jewel-path webhook failed: {}", e);
+        }
+    });
+}
+
 async fn send_smtp_critical_optional(
     title: String,
     client_id: String,
@@ -161,7 +205,7 @@ async fn send_smtp_critical_optional(
         title.chars().take(80).collect::<String>()
     );
     tokio::task::spawn_blocking(move || {
-        use lettre::message::{header::ContentType, Mailbox, Message};
+        use lettre::message::{Mailbox, Message, header::ContentType};
         use lettre::transport::smtp::authentication::Credentials;
         use lettre::{SmtpTransport, Transport};
         let from_m: Mailbox = from
@@ -236,5 +280,24 @@ mod tests {
         assert!(!poc_has_curl(""));
         assert!(!poc_has_curl("wget https://x"));
         assert!(!poc_has_curl("no exploit tooling mentioned here"));
+    }
+
+    #[test]
+    fn tenant_webhook_lookup_uses_tenant_transaction() {
+        let src = include_str!("notifications.rs");
+        let fn_idx = src
+            .find("async fn webhook_url_from_db")
+            .expect("webhook_url_from_db present");
+        let body = &src[fn_idx..];
+        let body = body.split("async fn webhook_url_effective").next().unwrap();
+        assert!(
+            body.contains("begin_tenant_tx"),
+            "system_configs is FORCE RLS — lookup must run inside begin_tenant_tx"
+        );
+        assert!(
+            !body.contains("pool.as_ref())") && !body.contains("fetch_optional(pool)"),
+            "must not query system_configs on the raw pool"
+        );
+        assert!(body.contains("alert_webhook_url"));
     }
 }

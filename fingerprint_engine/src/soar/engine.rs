@@ -227,8 +227,14 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
         "open_pr" => vec!["github", "gitlab"],
         "page_oncall" => vec!["pagerduty", "opsgenie"],
         "slack_notify" => vec!["slack", "teams", "splunk", "sentinel"],
-        "siem_ingest" => vec!["splunk", "sentinel"],
-        "create_incident" => vec!["servicenow", "jira"],
+        "siem_ingest" => vec![
+            "cortex_xsiam",
+            "cortex_xsoar",
+            "cortex",
+            "splunk",
+            "sentinel",
+        ],
+        "create_incident" => vec!["cortex_xsoar", "servicenow", "jira"],
         _ => vec![],
     };
     let integration = match pick_provider(&integrations, &prefer) {

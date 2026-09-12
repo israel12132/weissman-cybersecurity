@@ -15,6 +15,9 @@ import Button from '../components/ui/Button'
 const ENGINE = 'asm'
 const DELTA_ENGINE = 'first_mover_surface_delta'
 const FUSION_ENGINE = 'first_mover_delta_fusion'
+const IDP_ENGINE = 'identity_surface_delta'
+const SKIP_ENGINE = 'dualstack_edge_skip_fusion'
+const PREP_ENGINE = 'ransomware_preposition_surface'
 const ACCENT = '#22d3ee'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -255,13 +258,35 @@ function SubdomainInventory({ hosts }) {
   )
 }
 
+export function ctKillChain(nerve) {
+  const fusion = nerve?.fusion || {}
+  const cs = nerve?.certstream || {}
+  const follow = Array.isArray(fusion.follow_on_engines) ? fusion.follow_on_engines : []
+  const oastFollow = Array.isArray(fusion.oast_follow_on_engines)
+    ? fusion.oast_follow_on_engines
+    : []
+  return {
+    ctEngine: fusion.ct_enqueue_engine || fusion.inline_engine || 'first_mover_delta_fusion',
+    followOn: follow,
+    oastFollowOn: oastFollow,
+    hunts: Number(cs.hunts_enqueued || 0),
+    oastLive: Boolean(nerve?.oast?.configured),
+  }
+}
+
 export function FirstMoverDeltaPanel({
   diff,
   loading,
   hunting,
   fusionHunting,
+  idpHunting,
+  skipHunting,
+  prepHunting,
   onHunt,
   onFusion,
+  onIdp,
+  onDualstack,
+  onPreposition,
   huntDisabled,
   nerve,
 }) {
@@ -287,6 +312,7 @@ export function FirstMoverDeltaPanel({
   const cs = nerve?.certstream || {}
   const oast = nerve?.oast || {}
   const nvd = nerve?.nvd || {}
+  const chain = ctKillChain(nerve)
 
   return (
     <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-950/40 via-black/40 to-cyan-950/30 p-4 mb-5">
@@ -322,6 +348,39 @@ export function FirstMoverDeltaPanel({
               ? `⟳ ${t('pages.attackSurfaceManagement.first_mover_fusing')}`
               : `⛓ ${t('pages.attackSurfaceManagement.first_mover_fusion')}`}
           </Button>
+          <Button
+            variant="unstyled"
+            type="button"
+            onClick={onIdp}
+            disabled={huntDisabled || idpHunting}
+            className="px-4 py-2 rounded-lg text-sm font-mono font-semibold bg-emerald-500/20 border border-emerald-400/40 text-emerald-100 hover:bg-emerald-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            {idpHunting
+              ? `⟳ ${t('pages.attackSurfaceManagement.idp_hunting')}`
+              : `🪪 ${t('pages.attackSurfaceManagement.idp_hunt')}`}
+          </Button>
+          <Button
+            variant="unstyled"
+            type="button"
+            onClick={onDualstack}
+            disabled={huntDisabled || skipHunting}
+            className="px-4 py-2 rounded-lg text-sm font-mono font-semibold bg-sky-500/20 border border-sky-400/40 text-sky-100 hover:bg-sky-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            {skipHunting
+              ? `⟳ ${t('pages.attackSurfaceManagement.skip_hunting')}`
+              : `🧬 ${t('pages.attackSurfaceManagement.skip_hunt')}`}
+          </Button>
+          <Button
+            variant="unstyled"
+            type="button"
+            onClick={onPreposition}
+            disabled={huntDisabled || prepHunting}
+            className="px-4 py-2 rounded-lg text-sm font-mono font-semibold bg-rose-500/20 border border-rose-400/40 text-rose-100 hover:bg-rose-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            {prepHunting
+              ? `⟳ ${t('pages.attackSurfaceManagement.prep_hunting')}`
+              : `☠ ${t('pages.attackSurfaceManagement.prep_hunt')}`}
+          </Button>
         </div>
       </div>
       <div className="flex flex-wrap gap-2 mb-3">
@@ -347,6 +406,11 @@ export function FirstMoverDeltaPanel({
               : t('pages.attackSurfaceManagement.nerve_nvd_osv_only'),
             nvd.api_key_configured ? '#34d399' : '#22d3ee',
           ],
+          [
+            t('pages.attackSurfaceManagement.nerve_kill_chain'),
+            t('pages.attackSurfaceManagement.nerve_hunts', { count: chain.hunts }),
+            chain.oastLive ? '#34d399' : '#fbbf24',
+          ],
         ].map(([label, value, color]) => (
           <span
             key={label}
@@ -357,6 +421,18 @@ export function FirstMoverDeltaPanel({
           </span>
         ))}
       </div>
+      {chain.followOn.length > 0 && (
+        <p
+          data-testid="ct-kill-chain"
+          className="text-[10px] font-mono text-fuchsia-200/80 mb-3"
+        >
+          {chain.ctEngine}
+          {' → '}
+          {t('pages.attackSurfaceManagement.nerve_follow_on', {
+            engines: [...chain.followOn, ...(chain.oastLive ? chain.oastFollowOn : [])].join(' · '),
+          })}
+        </p>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
         {[
           [t('pages.attackSurfaceManagement.first_mover_added'), added.length, '#22d3ee'],
@@ -481,6 +557,9 @@ export default function AttackSurfaceManagement() {
   const [deltaLoading, setDeltaLoading] = useState(false)
   const [deltaJobId, setDeltaJobId] = useState(null)
   const [fusionJobId, setFusionJobId] = useState(null)
+  const [idpJobId, setIdpJobId] = useState(null)
+  const [skipJobId, setSkipJobId] = useState(null)
+  const [prepJobId, setPrepJobId] = useState(null)
   const [nerve, setNerve] = useState(null)
 
   const refreshCorpus = useCallback(() => {
@@ -626,6 +705,41 @@ export default function AttackSurfaceManagement() {
     },
   })
 
+  useJobPoll(idpJobId, {
+    enabled: Boolean(idpJobId),
+    onComplete: async (job) => {
+      const f = await resolveJobFindings(job, IDP_ENGINE, selectedClientId)
+      if (Array.isArray(f) && f.length) {
+        setFindings((prev) => [...f, ...prev])
+        setLastUpdated(new Date().toISOString())
+      }
+      setIdpJobId(null)
+      await loadSurfaceDiff(selectedClientId)
+    },
+  })
+  useJobPoll(skipJobId, {
+    enabled: Boolean(skipJobId),
+    onComplete: async (job) => {
+      const f = await resolveJobFindings(job, SKIP_ENGINE, selectedClientId)
+      if (Array.isArray(f) && f.length) {
+        setFindings((prev) => [...f, ...prev])
+        setLastUpdated(new Date().toISOString())
+      }
+      setSkipJobId(null)
+    },
+  })
+  useJobPoll(prepJobId, {
+    enabled: Boolean(prepJobId),
+    onComplete: async (job) => {
+      const f = await resolveJobFindings(job, PREP_ENGINE, selectedClientId)
+      if (Array.isArray(f) && f.length) {
+        setFindings((prev) => [...f, ...prev])
+        setLastUpdated(new Date().toISOString())
+      }
+      setPrepJobId(null)
+    },
+  })
+
   const handleRun = useCallback(async () => {
     if (!selectedClientId) { showToast('error', t('pages.attackSurfaceManagement.toast_select_client')); return }
     if (!target.trim()) { showToast('error', t('pages.attackSurfaceManagement.toast_enter_target')); return }
@@ -653,35 +767,12 @@ export default function AttackSurfaceManagement() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, target, params, showToast, t])
 
-  const handleFirstMoverHunt = useCallback(async () => {
+  const launchNamed = useCallback(async (engine, setter) => {
     if (!selectedClientId) { showToast('error', t('pages.attackSurfaceManagement.toast_select_client')); return }
     if (!target.trim()) { showToast('error', t('pages.attackSurfaceManagement.toast_enter_target')); return }
     try {
       const { ok, data: d, status } = await postScan({
-        engine: DELTA_ENGINE,
-        client_id: Number(selectedClientId),
-        target: target.trim(),
-        include_ct: true,
-        include_http: true,
-      })
-      if (!ok) {
-        showToast('error', d.detail || d.error || t('pages.attackSurfaceManagement.toast_scan_failed', { status }))
-        return
-      }
-      const jid = d.job_id ?? ''
-      showToast('info', t('pages.attackSurfaceManagement.toast_scan_queued', { jid }))
-      if (jid) setDeltaJobId(jid)
-    } catch (e) {
-      showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
-    }
-  }, [selectedClientId, target, postScan, showToast, t])
-
-  const handleDeltaFusion = useCallback(async () => {
-    if (!selectedClientId) { showToast('error', t('pages.attackSurfaceManagement.toast_select_client')); return }
-    if (!target.trim()) { showToast('error', t('pages.attackSurfaceManagement.toast_enter_target')); return }
-    try {
-      const { ok, data: d, status } = await postScan({
-        engine: FUSION_ENGINE,
+        engine,
         client_id: Number(selectedClientId),
         target: target.trim(),
         include_ct: true,
@@ -694,11 +785,31 @@ export default function AttackSurfaceManagement() {
       }
       const jid = d.job_id ?? ''
       showToast('info', t('pages.attackSurfaceManagement.toast_scan_queued', { jid }))
-      if (jid) setFusionJobId(jid)
+      if (jid) setter(jid)
     } catch (e) {
       showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
     }
   }, [selectedClientId, target, postScan, showToast, t])
+
+  const handleFirstMoverHunt = useCallback(async () => {
+    await launchNamed(DELTA_ENGINE, setDeltaJobId)
+  }, [launchNamed])
+
+  const handleDeltaFusion = useCallback(async () => {
+    await launchNamed(FUSION_ENGINE, setFusionJobId)
+  }, [launchNamed])
+
+  const handleIdpDelta = useCallback(async () => {
+    await launchNamed(IDP_ENGINE, setIdpJobId)
+  }, [launchNamed])
+
+  const handleDualstack = useCallback(async () => {
+    await launchNamed(SKIP_ENGINE, setSkipJobId)
+  }, [launchNamed])
+
+  const handlePreposition = useCallback(async () => {
+    await launchNamed(PREP_ENGINE, setPrepJobId)
+  }, [launchNamed])
 
   const assetTypes = useMemo(() => {
     const s = new Set(issues.map((f) => f.asset).filter(Boolean))
@@ -909,8 +1020,14 @@ export default function AttackSurfaceManagement() {
         loading={deltaLoading}
         hunting={Boolean(deltaJobId)}
         fusionHunting={Boolean(fusionJobId)}
+        idpHunting={Boolean(idpJobId)}
+        skipHunting={Boolean(skipJobId)}
+        prepHunting={Boolean(prepJobId)}
         onHunt={handleFirstMoverHunt}
         onFusion={handleDeltaFusion}
+        onIdp={handleIdpDelta}
+        onDualstack={handleDualstack}
+        onPreposition={handlePreposition}
         huntDisabled={!selectedClientId || status === 'running'}
         nerve={nerve}
       />

@@ -12,6 +12,7 @@ const DISPATCH_SOURCES: &[&str] = &[
     include_str!("../src/engine_dispatch_agent.rs"),
     include_str!("../src/critical_infra/engines.rs"),
     include_str!("../src/agent_remote_surface.rs"),
+    include_str!("../../backend/weissman-core/src/models/engine_agent.rs"),
 ];
 
 /// Drift guard: every id in `PRODUCTION_ENGINE_IDS` must appear as a string literal in one of
@@ -47,6 +48,7 @@ fn synthesis_and_sovereign_engines_wired_in_dispatch() {
         "chronos",
         "liquid_matrix",
         "cognitive_starvation",
+        "adversary_exposure_delta",
     ];
     for engine_id in required {
         assert!(
@@ -59,4 +61,24 @@ fn synthesis_and_sovereign_engines_wired_in_dispatch() {
             "missing dispatch arm for {engine_id}"
         );
     }
+}
+
+#[test]
+fn ot_safety_engines_have_dedicated_dispatch_arms() {
+    let dispatch = include_str!("../src/engine_dispatch.rs");
+    for engine_id in ["ot_passive_active_safety", "ot_crown_jewel_path"] {
+        assert!(
+            dispatch.contains(&format!("\"{engine_id}\" =>")),
+            "missing dedicated dispatch arm for {engine_id}"
+        );
+    }
+    let routes = include_str!("../src/http/serve_route_groups.rs");
+    assert!(
+        routes.contains("/api/ot-ics/safety"),
+        "GET /api/ot-ics/safety must be mounted"
+    );
+    assert!(
+        routes.contains("/api/clients/:id/ot-ics/safety"),
+        "GET /api/clients/:id/ot-ics/safety must be mounted"
+    );
 }

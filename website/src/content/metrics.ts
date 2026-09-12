@@ -11,32 +11,32 @@
 export const metrics = {
   /** Production engine IDs in the catalog (aliases + live probes + agent-required). */
   productionEngines: {
-    value: 563,
+    value: 586,
     label: 'Production engines',
     verify: 'node scripts/verify_engine_wiring.mjs',
   },
   liveProbes: {
-    value: 303,
+    value: 324,
     label: 'Live probes',
     verify: 'node scripts/engine_reality_audit.mjs',
   },
   engineAliases: {
-    value: 212,
+    value: 204,
     label: 'Catalog aliases',
     verify: 'node scripts/engine_reality_audit.mjs',
   },
   agentRequired: {
-    value: 48,
+    value: 58,
     label: 'Agent-required engines',
     verify: 'node scripts/engine_reality_audit.mjs',
   },
   commandCenterRoutes: {
-    value: 130,
+    value: 145,
     label: 'Command Center routes',
     verify: 'node scripts/weissman-ui-audit.mjs',
   },
   auditedPages: {
-    value: 111,
+    value: 126,
     label: 'Audited UI pages',
     verify: 'node scripts/weissman-ui-audit.mjs',
   },

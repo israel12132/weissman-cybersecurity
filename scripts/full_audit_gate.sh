@@ -59,6 +59,7 @@ gate_g4_wiring() {
     && node scripts/generate_engine_catalog_snapshot.mjs >/dev/null \
     && node scripts/live_only_audit.mjs >/dev/null \
     && node scripts/engine_quality_audit.mjs >/dev/null \
+    && node scripts/elite_hardening_gate.mjs >/dev/null \
     || return 1
   local gaps
   gaps="$(node scripts/verify_engine_wiring.mjs | node -e "

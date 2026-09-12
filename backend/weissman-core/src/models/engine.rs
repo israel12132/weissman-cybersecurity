@@ -121,6 +121,8 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "building_automation_attack",
     "robotics_ros2_attack",
     "ot_sis_triton_attack",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
     "iot_firmware",
     "ble_rf",
     "edr_evasion",
@@ -678,6 +680,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "ngfw_posture",
     "malware_detonation",
     "weissman_vngfw",
+    "cortex_proven_finding_bridge",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -753,6 +756,8 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "building_automation_attack",
     "robotics_ros2_attack",
     "ot_sis_triton_attack",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
     "iot_firmware",
     "ble_rf",
     // Stealth / Evasion
@@ -1298,6 +1303,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "ngfw_posture",
     "malware_detonation",
     "weissman_vngfw",
+    "cortex_proven_finding_bridge",
 ];
 
 /// Map catalog-only registry IDs to a production engine implementation.
@@ -1609,6 +1615,18 @@ mod production_registry_tests {
         assert!(
             PRODUCTION_ENGINE_IDS.len() >= 580,
             "do not shrink the registry to match an old container image"
+        );
+    }
+
+    #[test]
+    fn ot_safety_engines_are_in_production_catalog() {
+        assert!(
+            PRODUCTION_ENGINE_IDS.contains(&"ot_passive_active_safety"),
+            "OT safety interlock must be in the production catalog"
+        );
+        assert!(
+            PRODUCTION_ENGINE_IDS.contains(&"ot_crown_jewel_path"),
+            "OT crown-jewel path must be in the production catalog"
         );
     }
 

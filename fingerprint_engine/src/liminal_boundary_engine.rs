@@ -171,6 +171,35 @@ impl Clone for ScanConfig {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
+fn is_safe_liminal_path(path: &str) -> bool {
+    let p = path.trim();
+    p.starts_with('/') && !p.contains('@') && !p.contains("://") && !p.contains('\\')
+}
+
+fn origin_url(base: &str, path: &str) -> Option<String> {
+    if !is_safe_liminal_path(path) {
+        return None;
+    }
+    Some(format!("{}{}", base.trim_end_matches('/'), path))
+}
+
+async fn get_timed(
+    client: &reqwest::Client,
+    url: &str,
+    headers: &[(&str, &str)],
+    timeout_ms: u64,
+) -> Option<HttpProbe> {
+    match tokio::time::timeout(
+        Duration::from_millis(timeout_ms.clamp(500, 15_000)),
+        http_get_with_headers(client, url, headers),
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(_) => None,
+    }
+}
+
 fn with_category(mut f: Value, category: &str) -> Value {
     if let Some(o) = f.as_object_mut() {
         o.insert("category".to_string(), json!(category));
@@ -231,21 +260,17 @@ fn header_pairs(headers: &[(String, String)]) -> Vec<(&str, &str)> {
 async fn get_with_merged(
     client: &reqwest::Client,
     url: &str,
-    base: &[(String, String)],
+    cfg: &ScanConfig,
     extra: &[(String, String)],
 ) -> Option<HttpProbe> {
-    let merged = merge_headers(base, extra);
+    let merged = merge_headers(&cfg.auth_headers, extra);
     let refs = header_pairs(&merged);
-    http_get_with_headers(client, url, &refs).await
+    get_timed(client, url, &refs, cfg.timeout_ms).await
 }
 
-async fn options_probe(
-    client: &reqwest::Client,
-    url: &str,
-    auth_headers: &[(String, String)],
-) -> Option<HttpProbe> {
+async fn options_probe(client: &reqwest::Client, url: &str, cfg: &ScanConfig) -> Option<HttpProbe> {
     let mut h = reqwest::header::HeaderMap::new();
-    for (k, v) in auth_headers {
+    for (k, v) in &cfg.auth_headers {
         if let (Ok(n), Ok(val)) = (
             reqwest::header::HeaderName::from_bytes(k.as_bytes()),
             reqwest::header::HeaderValue::from_str(v),
@@ -253,12 +278,18 @@ async fn options_probe(
             h.insert(n, val);
         }
     }
-    let resp = client
-        .request(reqwest::Method::OPTIONS, url)
-        .headers(h)
-        .send()
-        .await
-        .ok()?;
+    let resp = match tokio::time::timeout(
+        Duration::from_millis(cfg.timeout_ms.clamp(500, 15_000)),
+        client
+            .request(reqwest::Method::OPTIONS, url)
+            .headers(h)
+            .send(),
+    )
+    .await
+    {
+        Ok(Ok(r)) => r,
+        _ => return None,
+    };
     let status = resp.status().as_u16();
     let final_url = resp.url().to_string();
     let headers: Vec<(String, String)> = resp
@@ -279,11 +310,11 @@ async fn fetch_get(
     h1: &reqwest::Client,
     h2: &reqwest::Client,
     url: &str,
-    extra: &[(String, String)],
+    cfg: &ScanConfig,
 ) -> (Option<HttpProbe>, Option<HttpProbe>) {
-    let refs = header_pairs(extra);
-    let p1 = http_get_with_headers(h1, url, &refs).await;
-    let p2 = http_get_with_headers(h2, url, &refs).await;
+    let refs = header_pairs(&cfg.auth_headers);
+    let p1 = get_timed(h1, url, &refs, cfg.timeout_ms).await;
+    let p2 = get_timed(h2, url, &refs, cfg.timeout_ms).await;
     (p1, p2)
 }
 
@@ -549,15 +580,17 @@ async fn probe_method_schism(
     posture: &mut LiminalPosture,
     findings: &mut Vec<Value>,
 ) {
-    let url = format!("{}{}", base.trim_end_matches('/'), path);
+    let Some(url) = origin_url(base, path) else {
+        return;
+    };
     let h1c = http1_client().await;
     let h2c = http2_client().await;
     let refs = header_pairs(&cfg.auth_headers);
 
-    let h1_get = http_get_with_headers(&h1c, &url, &refs).await;
-    let h2_get = http_get_with_headers(&h2c, &url, &refs).await;
-    let h1_opt = options_probe(&h1c, &url, &cfg.auth_headers).await;
-    let h2_opt = options_probe(&h2c, &url, &cfg.auth_headers).await;
+    let h1_get = get_timed(&h1c, &url, &refs, cfg.timeout_ms).await;
+    let h2_get = get_timed(&h2c, &url, &refs, cfg.timeout_ms).await;
+    let h1_opt = options_probe(&h1c, &url, cfg).await;
+    let h2_opt = options_probe(&h2c, &url, cfg).await;
 
     if let (Some(get), Some(opt)) = (&h1_get, &h1_opt) {
         if is_auth_block(get.status) && is_auth_success(opt.status) {
@@ -640,23 +673,29 @@ async fn probe_cache_vary_oracle(
 ) {
     let client = http1_client().await;
     let url = format!("{}/", base.trim_end_matches('/'));
-    let baseline =
-        match http_get_with_headers(&client, &url, &header_pairs(&cfg.auth_headers)).await {
-            Some(p) => p,
-            None => return,
-        };
+    let baseline = match get_timed(
+        &client,
+        &url,
+        &header_pairs(&cfg.auth_headers),
+        cfg.timeout_ms,
+    )
+    .await
+    {
+        Some(p) => p,
+        None => return,
+    };
 
     let lang_a = get_with_merged(
         &client,
         &url,
-        &cfg.auth_headers,
+        cfg,
         &[("Accept-Language".to_string(), "en-US,en;q=0.9".to_string())],
     )
     .await;
     let lang_b = get_with_merged(
         &client,
         &url,
-        &cfg.auth_headers,
+        cfg,
         &[("Accept-Language".to_string(), "zh-CN,zh;q=0.9".to_string())],
     )
     .await;
@@ -703,7 +742,7 @@ async fn probe_cache_vary_oracle(
     if let Some(with_cookie) = get_with_merged(
         &client,
         &url,
-        &cfg.auth_headers,
+        cfg,
         &[("Cookie".to_string(), cfg.cookie_probe.clone())],
     )
     .await
@@ -752,14 +791,14 @@ async fn probe_cache_vary_oracle(
         let enc_a = get_with_merged(
             &client,
             &url,
-            &cfg.auth_headers,
+            cfg,
             &[("Accept-Encoding".to_string(), "gzip, deflate".to_string())],
         )
         .await;
         let enc_b = get_with_merged(
             &client,
             &url,
-            &cfg.auth_headers,
+            cfg,
             &[("Accept-Encoding".to_string(), "identity".to_string())],
         )
         .await;
@@ -814,23 +853,24 @@ async fn probe_trusted_header_rewrite(
     let root_url = format!("{}/", base.trim_end_matches('/'));
 
     for path in &cfg.sensitive_paths {
-        let direct_url = format!("{}{}", base.trim_end_matches('/'), path);
-        let direct =
-            match http_get_with_headers(&client, &direct_url, &header_pairs(&cfg.auth_headers))
-                .await
-            {
-                Some(p) => p,
-                None => continue,
-            };
+        let Some(direct_url) = origin_url(base, path) else {
+            continue;
+        };
+        let direct = match get_timed(
+            &client,
+            &direct_url,
+            &header_pairs(&cfg.auth_headers),
+            cfg.timeout_ms,
+        )
+        .await
+        {
+            Some(p) => p,
+            None => continue,
+        };
 
         for header in &cfg.rewrite_headers {
-            if let Some(rewritten) = get_with_merged(
-                &client,
-                &root_url,
-                &cfg.auth_headers,
-                &[(header.clone(), path.clone())],
-            )
-            .await
+            if let Some(rewritten) =
+                get_with_merged(&client, &root_url, cfg, &[(header.clone(), path.clone())]).await
             {
                 let direct_hash = body_sha256(&direct.body);
                 let rewrite_hash = body_sha256(&rewritten.body);
@@ -915,12 +955,20 @@ async fn probe_ip_trust_headers(
     findings: &mut Vec<Value>,
 ) {
     let client = http1_client().await;
-    let url = format!("{}{}", base.trim_end_matches('/'), path);
-    let baseline =
-        match http_get_with_headers(&client, &url, &header_pairs(&cfg.auth_headers)).await {
-            Some(p) => p,
-            None => return,
-        };
+    let Some(url) = origin_url(base, path) else {
+        return;
+    };
+    let baseline = match get_timed(
+        &client,
+        &url,
+        &header_pairs(&cfg.auth_headers),
+        cfg.timeout_ms,
+    )
+    .await
+    {
+        Some(p) => p,
+        None => return,
+    };
     if !is_auth_block(baseline.status) {
         return;
     }
@@ -935,7 +983,7 @@ async fn probe_ip_trust_headers(
         if let Some(probe) = get_with_merged(
             &client,
             &url,
-            &cfg.auth_headers,
+            cfg,
             &[(header.to_string(), value.to_string())],
         )
         .await
@@ -1117,13 +1165,15 @@ async fn probe_path(
     let mut posture = LiminalPosture::default();
     posture.checks += 1;
 
-    let url = format!("{}{}", base.trim_end_matches('/'), path);
+    let Some(url) = origin_url(base, path) else {
+        return (findings, posture);
+    };
     let h1c = http1_client().await;
     let h2c = http2_client().await;
 
     if cfg.check_fingerprint && path == cfg.paths.first().map(String::as_str).unwrap_or("/") {
         if let Some(probe) =
-            http_get_with_headers(&h1c, &url, &header_pairs(&cfg.auth_headers)).await
+            get_timed(&h1c, &url, &header_pairs(&cfg.auth_headers), cfg.timeout_ms).await
         {
             if let Some((vendor, ev)) = fingerprint_edge(&probe.headers, &probe.body) {
                 posture.edge_vendor = Some(vendor.to_string());
@@ -1155,8 +1205,7 @@ async fn probe_path(
     }
 
     if is_https && cfg.check_protocol_schism {
-        let refs = header_pairs(&cfg.auth_headers);
-        if let (Some(h1), Some(h2)) = fetch_get(&h1c, &h2c, &url, &cfg.auth_headers).await {
+        if let (Some(h1), Some(h2)) = fetch_get(&h1c, &h2c, &url, cfg).await {
             let pair = ProbePair {
                 path: path.to_string(),
                 h1,
@@ -1164,7 +1213,6 @@ async fn probe_path(
             };
             probe_protocol_schism(target, &pair, cfg, &mut posture, &mut findings);
         }
-        let _ = refs;
         tokio::time::sleep(Duration::from_millis(60)).await;
     }
 
@@ -1190,7 +1238,16 @@ pub async fn run_liminal_boundary_result_ctx(target: &str, ctx: &EngineRunContex
     if target.is_empty() {
         return EngineResult::error("target required");
     }
-    let cfg = ScanConfig::load(&ArsenalConfig::from_ctx(ctx));
+    let mut cfg = ScanConfig::load(&ArsenalConfig::from_ctx(ctx));
+    cfg.paths = cfg
+        .paths
+        .into_iter()
+        .filter(|p| is_safe_liminal_path(p))
+        .collect();
+    if cfg.paths.is_empty() {
+        cfg.paths.push("/".into());
+    }
+    cfg.sensitive_paths.retain(|p| is_safe_liminal_path(p));
     let base = normalize_url(target);
     let host = extract_host(target);
     if host.is_empty() {
@@ -1377,5 +1434,19 @@ mod tests {
         let cfg = ScanConfig::load(&ArsenalConfig::from_value(json!({})));
         assert!(cfg.check_protocol_schism);
         assert!(!cfg.paths.is_empty());
+    }
+
+    #[test]
+    fn userinfo_paths_cannot_rewrite_the_origin_host() {
+        assert!(is_safe_liminal_path("/"));
+        assert!(is_safe_liminal_path("/api"));
+        assert!(!is_safe_liminal_path("@evil.example/"));
+        assert!(!is_safe_liminal_path("@169.254.169.254/"));
+        assert!(!is_safe_liminal_path("https://evil.example/"));
+        assert!(origin_url("https://shop.acme.test", "@evil.example/").is_none());
+        assert_eq!(
+            origin_url("https://shop.acme.test", "/api").as_deref(),
+            Some("https://shop.acme.test/api")
+        );
     }
 }

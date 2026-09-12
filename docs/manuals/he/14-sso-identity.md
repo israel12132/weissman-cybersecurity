@@ -50,9 +50,9 @@ Metadata: `{WEISSMAN_PUBLIC_BASE_URL}/saml/metadata`
 
 ### 3. Group mapping
 
-- `Security-Analysts` → `analyst`
-- `Scan-Operators` → `operator`
-- `Platform-Admins` → `admin`
+מיפוי קבוצה → תפקיד הוא הגדרה חיה ב-Command Center → SSO → SCIM (`PUT /api/sso/scim/group-maps`), לא טקסט במדריך. מוחל ב-SCIM membership ובכניסת OIDC/SAML. משתמש בלי מיפוי מקבל `viewer`. SCIM לא יכול להקצות `ceo`.
+
+ביטול provisioning משבית את החשבון ומבטל סשנים מיד.
 
 ### 4. בדיקה
 

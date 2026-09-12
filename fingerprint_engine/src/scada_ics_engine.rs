@@ -1,4 +1,8 @@
 //! SCADA/ICS wrapper around ot_ics_engine.
+use crate::engine_probes::{
+    http_client, normalize_url, probe_paths_concurrent, status_indicates_presence, tcp_scan,
+    DEFAULT_PROBE_CONCURRENCY,
+};
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::json;
 
@@ -22,6 +26,16 @@ pub async fn run_scada_ics_result(target: &str) -> EngineResult {
     let fingerprints = crate::ot_ics_engine::scan_hosts_passive(&hosts).await;
     let mut findings: Vec<serde_json::Value> = Vec::new();
     for fp in &fingerprints {
+        let proto = fp.protocol.to_ascii_lowercase();
+        let mitre = if proto.contains("mqtt")
+            || proto.contains("opc")
+            || proto.contains("iec")
+            || proto.contains("dnp")
+        {
+            "T0869"
+        } else {
+            "T0843"
+        };
         let severity = if fp.confidence > 0.8 {
             "critical"
         } else if fp.confidence > 0.5 {
@@ -33,10 +47,91 @@ pub async fn run_scada_ics_result(target: &str) -> EngineResult {
             "type": "scada_ics",
             "title": format!("OT/ICS device detected: {} on {}:{}", fp.protocol, fp.host, fp.port),
             "severity": severity,
-            "mitre_attack": "T0843",
+            "mitre_attack": mitre,
             "description": format!("Vendor: {}, confidence: {:.2}, protocol: {}", fp.vendor_hint, fp.confidence, fp.protocol)
         }));
     }
+
+    // ICS C2: commonly used industrial application-layer ports (evidence only, no writes).
+    let c2_ports = tcp_scan(&host, &[1883, 8883, 2404, 4840, 20000, 44818], 8).await;
+    for port in c2_ports {
+        let (title, mitre) = match port {
+            1883 | 8883 => (
+                format!("MQTT broker on {host}:{port} — ICS C2 via standard application protocol"),
+                "T0869",
+            ),
+            2404 => (
+                format!("IEC 60870-5-104 on {host}:2404 — commonly used ICS C2 port"),
+                "T0885",
+            ),
+            4840 => (
+                format!("OPC UA discovery on {host}:4840 — engineering C2/session surface"),
+                "T0869",
+            ),
+            20000 => (
+                format!("DNP3 TCP 20000 on {host} — commonly used ICS C2 port"),
+                "T0885",
+            ),
+            44818 => (
+                format!("EtherNet/IP 44818 on {host} — commonly used ICS C2 port"),
+                "T0885",
+            ),
+            _ => continue,
+        };
+        findings.push(json!({
+            "type": "scada_ics",
+            "title": title,
+            "severity": "high",
+            "mitre_attack": mitre,
+            "description": format!(
+                "Live TCP connect to {host}:{port} succeeded. This is C2/channel surface evidence — no industrial write, no SIS/Triton payload."
+            )
+        }));
+    }
+
+    // ICS privilege-escalation surface: engineering HMI/PLC admin panels (no exploit).
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let paths = &[
+        "/portal",
+        "/webvisu",
+        "/codesys",
+        "/TIAPortal",
+        "/plc",
+        "/hmi",
+    ];
+    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if !status_indicates_presence(p.status) {
+            continue;
+        }
+        let body = p.body.to_ascii_lowercase();
+        let path_l = p.final_url.to_ascii_lowercase();
+        let ics_path = ["/webvisu", "/codesys", "/tiaportal", "/plc", "/hmi"]
+            .iter()
+            .any(|frag| path_l.contains(frag));
+        let ics_body = body.contains("codesys")
+            || body.contains("siemens")
+            || body.contains("tia portal")
+            || body.contains("plc")
+            || body.contains("hmi")
+            || body.contains("scada")
+            || body.contains("modbus");
+        if ics_path || ics_body {
+            findings.push(json!({
+                "type": "scada_ics",
+                "title": format!("Engineering/PLC admin panel at {}", p.final_url),
+                "severity": if p.status == 200 { "critical" } else { "high" },
+                "mitre_attack": "T0883",
+                "description": format!(
+                    "{} returned HTTP {} — internet-accessible ICS engineering/HMI surface. Auditor only; no write to process I/O and no privilege-escalation exploit.",
+                    p.final_url, p.status
+                )
+            }));
+            break;
+        }
+    }
+
     EngineResult::ok(
         findings.clone(),
         format!("SCADA/ICS: {} findings", findings.len()),

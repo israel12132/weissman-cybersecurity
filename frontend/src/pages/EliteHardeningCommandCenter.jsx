@@ -179,10 +179,10 @@ export default function EliteHardeningCommandCenter() {
         {!loading && !error && (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
-              <ExecutiveWidget label={t(`${NS}.kpi_enforced`)} value={`${enforced}/${total || 100}`} accent="#22d3ee" />
+              <ExecutiveWidget label={t(`${NS}.kpi_enforced`)} value={`${enforced}/${data?.controls_total ?? '—'}`} accent="#22d3ee" />
               <ExecutiveWidget label={t(`${NS}.kpi_gaps`)} value={gaps} accent={gaps ? '#f43f5e' : '#34d399'} />
-              <ExecutiveWidget label={t(`${NS}.kpi_mitre`)} value={data?.mitre_attack || 'v19.1'} accent="#a78bfa" />
-              <ExecutiveWidget label={t(`${NS}.kpi_probes`)} value={data?.live_probes_target || 303} accent="#f97316" />
+              <ExecutiveWidget label={t(`${NS}.kpi_mitre`)} value={data?.mitre_attack ?? '—'} accent="#a78bfa" />
+              <ExecutiveWidget label={t(`${NS}.kpi_probes`)} value={data?.live_probes_target ?? '—'} accent="#f97316" />
               <ExecutiveWidget
                 label={t(`${NS}.kpi_engines`)}
                 value={data?.moat?.engines_total ?? '—'}
@@ -242,6 +242,108 @@ export default function EliteHardeningCommandCenter() {
                     </article>
                   ))}
                 </div>
+              </section>
+            )}
+
+            {data?.moat?.palo_alto && (
+              <section
+                className="rounded-xl border border-amber-500/20 bg-amber-950/10 p-4 space-y-3"
+                data-testid="palo-bakeoff"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 className="text-sm font-semibold uppercase tracking-wider text-amber-200">
+                    {t(`${NS}.palo_title`)}
+                  </h2>
+                  <span className="font-mono text-[11px] text-[var(--text-muted)]">
+                    {t(`${NS}.palo_companion`)}
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.palo_notice`)}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <article className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+                      {t(`${NS}.palo_catalog_ids`)}
+                    </div>
+                    <div className="font-mono text-amber-200 text-lg tabular-nums">
+                      {data.moat.palo_alto.catalog?.total_ids ?? data.catalog?.total_ids ?? '—'}
+                    </div>
+                  </article>
+                  <article className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+                      {t(`${NS}.palo_catalog_distinct`)}
+                    </div>
+                    <div className="font-mono text-emerald-300 text-lg tabular-nums">
+                      {data.moat.palo_alto.catalog?.distinct_canonical ?? '—'}
+                    </div>
+                  </article>
+                  <article className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+                      {t(`${NS}.palo_catalog_aliases`)}
+                    </div>
+                    <div className="font-mono text-amber-300 text-lg tabular-nums">
+                      {data.moat.palo_alto.catalog?.alias_ids ?? '—'}
+                    </div>
+                  </article>
+                  <article className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+                      {t(`${NS}.palo_find_vs_block`)}
+                    </div>
+                    <div className="font-mono text-sm text-white">
+                      {data.moat.palo_alto.find_vs_block?.find
+                        ? t(`${NS}.palo_finds`)
+                        : '—'}
+                      {' · '}
+                      {data.moat.palo_alto.find_vs_block?.inline_packet_path
+                        ? t(`${NS}.palo_blocks`)
+                        : t(`${NS}.palo_no_inline`)}
+                    </div>
+                  </article>
+                </div>
+                {Array.isArray(data.moat.palo_alto.unique_closed_loops) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                    {data.moat.palo_alto.unique_closed_loops.map((loop) => (
+                      <article
+                        key={loop.id}
+                        data-testid="palo-loop"
+                        className="rounded-lg border border-white/10 bg-black/30 px-3 py-2"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="text-xs text-white font-mono">{loop.id}</h3>
+                          <span
+                            className={`text-[10px] uppercase tracking-wider ${
+                              loop.present ? 'text-emerald-300' : 'text-rose-300'
+                            }`}
+                          >
+                            {loop.present ? t(`${NS}.live`) : t(`${NS}.gap`)}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[10px] text-[var(--text-muted)]">{loop.loop}</p>
+                      </article>
+                    ))}
+                  </div>
+                )}
+                {Array.isArray(data.moat.palo_alto.palo_sku_overlap) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2">
+                    {data.moat.palo_alto.palo_sku_overlap.map((sku) => (
+                      <article
+                        key={sku.sku}
+                        data-testid="palo-sku"
+                        className="rounded-lg border border-white/10 bg-black/30 px-3 py-2"
+                      >
+                        <h3 className="text-xs text-white font-medium">{sku.sku}</h3>
+                        <p className="font-mono text-[10px] text-amber-300/90">{sku.maturity}</p>
+                        <p className="mt-1 text-[10px] font-mono text-[var(--text-muted)]">
+                          {(sku.ids || []).join(', ') || t(`${NS}.palo_no_ids`)}
+                        </p>
+                        {Array.isArray(sku.agent_required_ids) && sku.agent_required_ids.length > 0 && (
+                          <p className="mt-1 text-[10px] font-mono text-amber-200/80">
+                            {t(`${NS}.palo_agent_required`)}: {sku.agent_required_ids.join(', ')}
+                          </p>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                )}
               </section>
             )}
 

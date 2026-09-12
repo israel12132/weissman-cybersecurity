@@ -6,4 +6,7 @@ describe('routeEvidence extra', () => {
     const t = resolveRouteEvidence('/clients', (k) => (k === 'clients_page.evidence_notice' ? 'Clients evidence' : k))
     expect(t).toBe('Clients evidence')
   })
+  it('scim provisioning cites live token APIs', () => {
+    expect(ROUTE_EVIDENCE['/scim-provisioning']).toBe('pages.scimProvisioning.evidence_notice')
+  })
 })

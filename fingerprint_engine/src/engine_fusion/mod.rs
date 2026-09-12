@@ -11,6 +11,7 @@
 //! | `first_mover_surface_delta` | Live DNS/HTTP/CT vs last snapshot — new/changed hosts before weekly scanners |
 //! | `first_mover_delta_fusion` | New host → immediate takeover/leak/BOLA/JWT on that same FQDN |
 //! | `first_seen_osv_nvd` | Live SBOM × OSV, proven before NVD when nvd_status is absent_cve/unpublished |
+//! | `adversary_underground_delta` | HIBP + ransomware.live exact-domain + ThreatFox/URLhaus/urlscan/Hudson Rock counts vs last snapshot — new criminal-index hits then leak_hunter |
 //! | `external_exposure_supreme` | ASM + email/DNS + cloud posture |
 //! | `identity_attack_chain` | Kerberos + spray + ITDR auth events |
 //! | `pipeline_to_runtime_risk` | IaC + supply chain + CI/CD |
@@ -22,13 +23,14 @@
 //! | `bec_ato_chain` | Email DNS + BEC + OAuth + ITDR |
 //! | `ai_casb_saas` | LLM agent hijack + OAuth SaaS grants |
 //! | `dns_security_posture_fusion` | DNS exfil + email DNS + ASM |
-//! | `toxic_combo_runtime_proof` | CNAPP + IMDS + S3 + IAM + K8s |
+//! | `adversary_path_prover` | Live HTTP/TCP + WAF/UA control-gap + STRIPS from observed facts |
 
 /// Production fusion engine IDs — must remain a subset of `PRODUCTION_ENGINE_IDS`.
 pub const FUSION_ENGINE_IDS: &[&str] = &[
     "first_mover_surface_delta",
     "first_mover_delta_fusion",
     "first_seen_osv_nvd",
+    "adversary_underground_delta",
     "external_exposure_supreme",
     "identity_attack_chain",
     "pipeline_to_runtime_risk",
@@ -41,6 +43,7 @@ pub const FUSION_ENGINE_IDS: &[&str] = &[
     "ai_casb_saas",
     "dns_security_posture_fusion",
     "toxic_combo_runtime_proof",
+    "adversary_path_prover",
 ];
 
 pub use crate::external_exposure_supreme::{

@@ -9,6 +9,7 @@ import KevEpssBadge from './KevEpssBadge'
 import CopyButton from './CopyButton'
 import SupplyChainGraph from './SupplyChainGraph'
 import FindingVerifyButton, { LiveVerdictBadge } from '../findings/FindingLiveVerify'
+import FindingCortexPush from '../findings/FindingCortexPush'
 import Button from './Button'
 
 const REACH_META = {
@@ -402,6 +403,7 @@ export default function FindingDrawer({
                     onVerified={(rawId, verification) => onVerifyComplete?.(rawId, verification)}
                     variant="primary"
                   />
+                  <FindingCortexPush finding={finding} />
                   {actions.map((action) => (
                     <Button variant="unstyled"
                       key={action.label}
