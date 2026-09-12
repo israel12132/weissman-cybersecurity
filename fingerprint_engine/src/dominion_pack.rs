@@ -530,6 +530,9 @@ mod tests {
         assert_eq!(p.kpis.leak, 1);
         let xlsx = pack_to_xlsx(&p).expect("xlsx");
         assert!(xlsx.starts_with(b"PK"));
+        if let Ok(path) = std::env::var("WEISSMAN_DUMP_XLSX") {
+            std::fs::write(&path, &xlsx).expect("dump xlsx");
+        }
         let s = String::from_utf8_lossy(&xlsx);
         assert!(s.contains("Executive"));
         assert!(s.contains("LeakIntel"));

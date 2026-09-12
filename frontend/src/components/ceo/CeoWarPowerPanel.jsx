@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
