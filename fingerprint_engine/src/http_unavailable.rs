@@ -1808,9 +1808,15 @@ mod tests {
     fn sso_idp_delete_lookup_is_store_down_503_not_404() {
         let src = include_str!("sso_management.rs");
         let fn_src = named_fn_src(src, "pub async fn api_sso_idp_delete");
-        assert!(fn_src.contains("sso_store_down"));
-        assert!(!fn_src.contains(".ok().flatten()"));
-        assert!(fn_src.contains("not_found"));
+        let del = fn_src
+            .find("DELETE FROM tenant_idps")
+            .expect("delete lookup");
+        let after = &fn_src[del..];
+        let next = after.find("\npub async fn").unwrap_or(after.len());
+        let body = &after[..next];
+        assert!(body.contains("sso_store_down"));
+        assert!(!body.contains(".ok().flatten()"));
+        assert!(body.contains("not_found"));
     }
 
     #[test]
