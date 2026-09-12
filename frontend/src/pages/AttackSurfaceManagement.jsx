@@ -255,6 +255,22 @@ function SubdomainInventory({ hosts }) {
   )
 }
 
+export function ctKillChain(nerve) {
+  const fusion = nerve?.fusion || {}
+  const cs = nerve?.certstream || {}
+  const follow = Array.isArray(fusion.follow_on_engines) ? fusion.follow_on_engines : []
+  const oastFollow = Array.isArray(fusion.oast_follow_on_engines)
+    ? fusion.oast_follow_on_engines
+    : []
+  return {
+    ctEngine: fusion.ct_enqueue_engine || fusion.inline_engine || 'first_mover_delta_fusion',
+    followOn: follow,
+    oastFollowOn: oastFollow,
+    hunts: Number(cs.hunts_enqueued || 0),
+    oastLive: Boolean(nerve?.oast?.configured),
+  }
+}
+
 export function FirstMoverDeltaPanel({
   diff,
   loading,
@@ -287,6 +303,7 @@ export function FirstMoverDeltaPanel({
   const cs = nerve?.certstream || {}
   const oast = nerve?.oast || {}
   const nvd = nerve?.nvd || {}
+  const chain = ctKillChain(nerve)
 
   return (
     <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-950/40 via-black/40 to-cyan-950/30 p-4 mb-5">
@@ -347,6 +364,11 @@ export function FirstMoverDeltaPanel({
               : t('pages.attackSurfaceManagement.nerve_nvd_osv_only'),
             nvd.api_key_configured ? '#34d399' : '#22d3ee',
           ],
+          [
+            t('pages.attackSurfaceManagement.nerve_kill_chain'),
+            t('pages.attackSurfaceManagement.nerve_hunts', { count: chain.hunts }),
+            chain.oastLive ? '#34d399' : '#fbbf24',
+          ],
         ].map(([label, value, color]) => (
           <span
             key={label}
@@ -357,7 +379,18 @@ export function FirstMoverDeltaPanel({
           </span>
         ))}
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+      {chain.followOn.length > 0 && (
+        <p
+          data-testid="ct-kill-chain"
+          className="text-[10px] font-mono text-fuchsia-200/80 mb-3"
+        >
+          {chain.ctEngine}
+          {' → '}
+          {t('pages.attackSurfaceManagement.nerve_follow_on', {
+            engines: [...chain.followOn, ...(chain.oastLive ? chain.oastFollowOn : [])].join(' · '),
+          })}
+        </p>
+      )}
         {[
           [t('pages.attackSurfaceManagement.first_mover_added'), added.length, '#22d3ee'],
           [t('pages.attackSurfaceManagement.first_mover_changed'), changed.length, '#fbbf24'],

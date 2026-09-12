@@ -331,6 +331,15 @@ async fn count_findings_matching_condition(
         })
         .unwrap_or_default();
 
+    let require_oast = condition
+        .get("require_oast_confirmed")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let require_proof = condition
+        .get("require_live_proof")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     let count: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint
              FROM vulnerabilities
@@ -341,7 +350,19 @@ async fn count_findings_matching_condition(
                     OR description ILIKE $2
                     OR COALESCE(raw_data, '{}'::jsonb)::text ILIKE $2
                   )
-              AND ($3::text[] IS NULL OR cardinality($3::text[]) = 0 OR source = ANY($3))"#,
+              AND ($3::text[] IS NULL OR cardinality($3::text[]) = 0 OR source = ANY($3))
+              AND (
+                    $4::boolean IS NOT TRUE
+                    OR COALESCE(raw_data->>'oast_confirmed','') = 'true'
+                    OR (
+                         COALESCE(raw_data->>'verified','') = 'true'
+                         AND COALESCE(raw_data->>'verification_method','') = 'oob_oast_callback'
+                       )
+                  )
+              AND (
+                    $5::boolean IS NOT TRUE
+                    OR COALESCE(NULLIF(proof, ''), raw_data #>> '{evidence,proof}', '') <> ''
+                  )"#,
     )
     .bind(if severities.is_empty() {
         None::<Vec<String>>
@@ -354,6 +375,8 @@ async fn count_findings_matching_condition(
     } else {
         Some(engines)
     })
+    .bind(require_oast)
+    .bind(require_proof)
     .fetch_one(&mut **tx)
     .await?;
 

@@ -73,6 +73,55 @@ fn cve_matches(condition: &Value, title: &str, desc: &str) -> bool {
     hay.contains(&pattern.to_ascii_lowercase())
 }
 
+fn cond_flag(condition: &Value, key: &str) -> bool {
+    condition
+        .get(key)
+        .and_then(|v| {
+            v.as_bool()
+                .or_else(|| v.as_str().map(|s| s == "true" || s == "1"))
+        })
+        .unwrap_or(false)
+}
+
+fn finding_is_oast_confirmed(raw: &Value, proof: &str, desc: &str) -> bool {
+    if raw.get("oast_confirmed").and_then(Value::as_bool) == Some(true) {
+        return true;
+    }
+    if raw.get("verified").and_then(Value::as_bool) == Some(true)
+        && raw
+            .get("verification_method")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            == "oob_oast_callback"
+    {
+        return true;
+    }
+    let hay = format!("{proof} {desc}").to_ascii_lowercase();
+    hay.contains("oob_oast_callback") || hay.contains("confirmed oob")
+}
+
+fn finding_has_live_proof(proof: &str, raw: &Value) -> bool {
+    if !proof.trim().is_empty() {
+        return true;
+    }
+    raw.pointer("/evidence/proof")
+        .and_then(Value::as_str)
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
+}
+
+fn evidence_matches(condition: &Value, raw: &Value, proof: &str, desc: &str) -> bool {
+    if cond_flag(condition, "require_oast_confirmed")
+        && !finding_is_oast_confirmed(raw, proof, desc)
+    {
+        return false;
+    }
+    if cond_flag(condition, "require_live_proof") && !finding_has_live_proof(proof, raw) {
+        return false;
+    }
+    true
+}
+
 async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, String> {
     let mut tx = crate::db::begin_tenant_tx(app_pool, tenant_id)
         .await
@@ -89,7 +138,9 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
     }
 
     let findings = sqlx::query(
-        r#"SELECT id, severity, title, description, source
+        r#"SELECT id, severity, title, description, source,
+                  COALESCE(proof, '') AS proof,
+                  COALESCE(raw_data, '{}'::jsonb) AS raw_data
            FROM vulnerabilities
            WHERE created_at >= now() - interval '5 minutes'
            ORDER BY id DESC
@@ -106,6 +157,8 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
         let title: String = finding.try_get("title").unwrap_or_default();
         let description: String = finding.try_get("description").unwrap_or_default();
         let source: String = finding.try_get("source").unwrap_or_default();
+        let proof: String = finding.try_get("proof").unwrap_or_default();
+        let raw_data: Value = finding.try_get("raw_data").unwrap_or(json!({}));
 
         for rule in &rules {
             let rule_id: i64 = rule.try_get("id").unwrap_or(0);
@@ -119,6 +172,9 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
                 continue;
             }
             if !cve_matches(&condition, &title, &description) {
+                continue;
+            }
+            if !evidence_matches(&condition, &raw_data, &proof, &description) {
                 continue;
             }
 
@@ -295,5 +351,65 @@ mod tests {
         let cond = json!({ "cve": "log4j" });
         assert!(cve_matches(&cond, "Apache Log4J RCE", "d"));
         assert!(!cve_matches(&cond, "nginx", "d"));
+    }
+
+    #[test]
+    fn evidence_gate_requires_oast_callback() {
+        let cond = json!({ "require_oast_confirmed": true });
+        assert!(!evidence_matches(
+            &cond,
+            &json!({}),
+            "",
+            "info finding planted"
+        ));
+        assert!(evidence_matches(
+            &cond,
+            &json!({
+                "oast_confirmed": true,
+            }),
+            "oob_oast_callback token=x",
+            "callback received"
+        ));
+        assert!(evidence_matches(
+            &cond,
+            &json!({
+                "verified": true,
+                "verification_method": "oob_oast_callback",
+            }),
+            "",
+            ""
+        ));
+        assert!(!evidence_matches(
+            &cond,
+            &json!({
+                "verified": true,
+                "verification_method": "oob_probe_planted",
+            }),
+            "planted",
+            ""
+        ));
+    }
+
+    #[test]
+    fn evidence_gate_requires_live_proof() {
+        let cond = json!({ "require_live_proof": true });
+        assert!(!evidence_matches(
+            &cond,
+            &json!({}),
+            "",
+            "desc without proof"
+        ));
+        assert!(evidence_matches(
+            &cond,
+            &json!({}),
+            "HTTP 200 on /admin",
+            ""
+        ));
+        assert!(evidence_matches(
+            &cond,
+            &json!({ "evidence": { "proof": "tcp 445 open" } }),
+            "",
+            ""
+        ));
     }
 }

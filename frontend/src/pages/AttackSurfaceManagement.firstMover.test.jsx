@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { FirstMoverDeltaPanel } from './AttackSurfaceManagement.jsx'
+import { FirstMoverDeltaPanel, ctKillChain } from './AttackSurfaceManagement.jsx'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k) => k, i18n: { language: 'en' } }),
@@ -47,6 +47,22 @@ vi.mock('../lib/useJobPoll', () => ({
 vi.mock('../lib/clientTarget', () => ({ firstClientTarget: () => '' }))
 
 describe('FirstMoverDeltaPanel', () => {
+  it('ctKillChain reads CT fusion + OAST follow-on from nerve', () => {
+    const chain = ctKillChain({
+      certstream: { hunts_enqueued: 4 },
+      oast: { configured: true },
+      fusion: {
+        ct_enqueue_engine: 'first_mover_delta_fusion',
+        follow_on_engines: ['subdomain_takeover', 'jwt_attack'],
+        oast_follow_on_engines: ['oast_oob', 'ssrf_advanced'],
+      },
+    })
+    expect(chain.ctEngine).toBe('first_mover_delta_fusion')
+    expect(chain.hunts).toBe(4)
+    expect(chain.oastLive).toBe(true)
+    expect(chain.followOn).toContain('jwt_attack')
+    expect(chain.oastFollowOn).toContain('oast_oob')
+  })
   it('renders added/changed/removed hosts from live surface-diff payload', () => {
     const diff = {
       current_count: 3,
@@ -65,7 +81,16 @@ describe('FirstMoverDeltaPanel', () => {
         onHunt={() => {}}
         onFusion={() => {}}
         huntDisabled={false}
-        nerve={{ certstream: { connected: true, enabled: true }, oast: { configured: true }, nvd: { api_key_configured: false } }}
+        nerve={{
+          certstream: { connected: true, enabled: true, hunts_enqueued: 2 },
+          oast: { configured: true },
+          nvd: { api_key_configured: false },
+          fusion: {
+            ct_enqueue_engine: 'first_mover_delta_fusion',
+            follow_on_engines: ['subdomain_takeover', 'jwt_attack'],
+            oast_follow_on_engines: ['oast_oob'],
+          },
+        }}
       />,
     )
     expect(screen.getByText('shop.example.com')).toBeTruthy()
@@ -74,6 +99,7 @@ describe('FirstMoverDeltaPanel', () => {
     expect(screen.getByText('pages.attackSurfaceManagement.first_mover_title')).toBeTruthy()
     expect(screen.getByText(/pages.attackSurfaceManagement.first_mover_fusion/)).toBeTruthy()
     expect(screen.getByText(/pages.attackSurfaceManagement.nerve_certstream/)).toBeTruthy()
+    expect(screen.getByTestId('ct-kill-chain')).toBeTruthy()
   })
 
   it('shows unavailable copy when the store is down without treating it as empty', () => {

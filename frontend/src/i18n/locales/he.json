@@ -1430,7 +1430,9 @@
       "no_choke_title": "אין צווארי בקבוק",
       "no_choke_body": "אין צווארי בקבוק משותפים בין הנתיבים שחושבו.",
       "no_paths_title": "אין נתיבי תקיפה",
-      "no_paths_body": "לא נמצא נתיב אינטרנט → נכס כתר בגרף הנוכחי."
+      "no_paths_body": "לא נמצא נתיב אינטרנט → נכס כתר בגרף הנוכחי.",
+      "no_jewels_banner": "אין נכסי כתר — לדייקסטרה אין יעדים. חישוב מחדש מתייג אוטומטית צמתי זהות/ענן/OT/סיכון-גבוה כדי שנתיבים יוכלו להיווצר.",
+      "no_jewels_recompute": "תייג נכסי כתר וחשב מחדש"
     },
     "attackCoverage": {
       "title": "מטריצת כיסוי ATT&CK",
@@ -1446,7 +1448,18 @@
       "search_placeholder": "סינון לפי טכניקה, מזהה או מנוע…",
       "showing": "{{techniques}} טכניקות ב-{{tactics}} טקטיקות",
       "no_match_title": "אין התאמות",
-      "no_match_body": "אף טכניקה או מנוע לא תואמים לסינון."
+      "no_match_body": "אף טכניקה או מנוע לא תואמים לסינון.",
+      "readiness_title": "מוכנות פריצה / תקיפה",
+      "readiness_hint": "שערי תפעול כנים — לא צ׳קליסט MITRE. חי מ-GET /api/attack-coverage.",
+      "roe": "RoE ברירת מחדל",
+      "apt_scenarios": "תרחישי אמולציית APT",
+      "cron_engines": "מנועי רד-טים מתוזמנים",
+      "agent_required": "מנועים שדורשים סוכן",
+      "gaps_heading": "איפה התקיפה עדיין לא מוכנה",
+      "jewel_auto": "נכסי כתר מתויגים אוטומטית",
+      "weaponized": "מצב מחומש דורש בקרה כפולה",
+      "ct_squirt": "מנוע CT squirt",
+      "oast_alerts": "התראות עם שער OAST"
     },
     "securityPosture": {
       "title": "מצב אבטחת הפלטפורמה",
@@ -2121,7 +2134,13 @@
       "save_updated": "הכלל עודכן",
       "save_failed": "שמירת הכלל נכשלה",
       "test_error": "בדיקת הכלל נכשלה",
-      "toggle_failed": "שינוי מצב הכלל נכשל"
+      "toggle_failed": "שינוי מצב הכלל נכשל",
+      "require_oast": "דרוש callback OAST מאושר",
+      "require_oast_hint": "אל תתריע עד שהקולקטור ראה פגיעה out-of-band.",
+      "require_proof": "דרוש טקסט הוכחה חי",
+      "require_proof_hint": "דלג על ממצאים בלי proof / evidence.",
+      "template_oast": "קריטי מוכח-OAST",
+      "template_oast_hint": "קריטי/גבוה רק אחרי callback OAST חי."
     },
     "adminManagement": {
       "search_users": "חיפוש משתמשים…",
@@ -4989,6 +5008,9 @@
       "nerve_off": "כבוי",
       "nerve_reconnect": "מתחבר מחדש",
       "nerve_nvd_osv_only": "OSV בלבד",
+      "nerve_kill_chain": "CT → fusion → OAST",
+      "nerve_hunts": "{{count}} ציד",
+      "nerve_follow_on": "המשך: {{engines}}",
       "first_mover_last_snapshot": "Snapshot אחרון",
       "first_mover_col_host": "מארח",
       "first_mover_col_change": "שינוי",

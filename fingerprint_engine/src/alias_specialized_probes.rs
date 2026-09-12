@@ -204,6 +204,8 @@ pub async fn run_specialized_probe(
         "zero_click_exploit" | "zero_day_chain" => {
             probe_zero_click_alias(engine_id, canonical, target).await
         }
+        "full_breach_sim" => probe_full_breach_sim(engine_id, canonical, target).await,
+        "post_exploitation" => probe_post_exploitation(engine_id, canonical, target).await,
 
         // ── Default: no specialized remote signal for this alias id ──────────
         _ => empty_ok(engine_id, target),
@@ -1578,6 +1580,154 @@ async fn probe_zero_click_alias(engine_id: &str, canonical: &str, target: &str) 
     collect(engine_id, target, canonical, findings)
 }
 
+async fn probe_full_breach_sim(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
+    let host = extract_host(target);
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let mut findings = Vec::new();
+
+    let perimeter = tcp_scan(&host, &[22, 80, 443, 445, 3389, 5985, 8080], 8).await;
+    if !perimeter.is_empty() {
+        findings.push(alias_finding(
+            engine_id,
+            &format!("Breach-sim web/lateral perimeter: {perimeter:?}"),
+            if perimeter.len() >= 3 { "high" } else { "medium" },
+            "T1190",
+            &format!(
+                "Host {host} exposes {perimeter:?} — live kill-chain surface for breach-path synthesis (no shells)."
+            ),
+            target,
+            canonical,
+        ));
+    }
+
+    let paths = [
+        "/login",
+        "/admin",
+        "/upload",
+        "/.git/config",
+        "/actuator/health",
+        "/graphql",
+        "/api",
+        "/wp-login.php",
+    ];
+    let probes = probe_paths_concurrent(&client, &base, &paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if status_indicates_presence(p.status) {
+            findings.push(alias_finding(
+                engine_id,
+                &format!("Breach delivery vector: {}", p.final_url),
+                if p.status == 200 { "medium" } else { "info" },
+                "T1190",
+                &format!(
+                    "{} responded HTTP {} — evidence-backed initial-access vector for STRIPS breach planning.",
+                    p.final_url, p.status
+                ),
+                target,
+                canonical,
+            ));
+        }
+    }
+
+    if let Some(chain) =
+        crate::attack_chain_planner::plan_from_findings(&findings, "impact:objective")
+    {
+        let mut f = alias_finding(
+            engine_id,
+            if chain.reached_goal {
+                "Evidence-backed breach path reached objective"
+            } else {
+                "Partial breach path (objective not reached from live facts)"
+            },
+            if chain.reached_goal { "high" } else { "info" },
+            "T1650",
+            &format!(
+                "STRIPS planner over live observations: goal={} cost={} steps={} mitre={:?}. No fabricated hops.",
+                chain.goal,
+                chain.total_cost,
+                chain.steps.len(),
+                chain.mitre_path
+            ),
+            target,
+            canonical,
+        );
+        if let Some(obj) = f.as_object_mut() {
+            obj.insert("category".into(), json!("attack_path"));
+            obj.insert("attack_chain".into(), chain.to_json());
+            obj.insert("reached_goal".into(), json!(chain.reached_goal));
+        }
+        findings.push(f);
+    } else {
+        findings.push(alias_finding(
+            engine_id,
+            "Breach objective unreachable from observed facts",
+            "info",
+            "T1650",
+            "STRIPS planner found no realizable path to impact:objective from this target's live evidence — nothing was invented.",
+            target,
+            canonical,
+        ));
+    }
+
+    collect(engine_id, target, canonical, findings)
+}
+
+async fn probe_post_exploitation(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
+    let host = extract_host(target);
+    let mut findings = Vec::new();
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let paths = [
+        "/admin",
+        "/administrator",
+        "/actuator",
+        "/actuator/env",
+        "/debug",
+        "/.git/HEAD",
+        "/metrics",
+        "/graphql",
+        "/server-status",
+        "/phpinfo.php",
+        "/server-info",
+    ];
+    let probes = probe_paths_concurrent(&client, &base, &paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if status_indicates_presence(p.status) {
+            findings.push(alias_finding(
+                engine_id,
+                &format!("Post-exploitation admin/debug surface: {}", p.final_url),
+                if matches!(p.status, 200 | 401) {
+                    "high"
+                } else {
+                    "medium"
+                },
+                "T1003",
+                &format!(
+                    "{} returned HTTP {} — post-auth/debug surface for credential/config harvest (no LSASS dump; evidence only).",
+                    p.final_url, p.status
+                ),
+                target,
+                canonical,
+            ));
+        }
+    }
+    let lateral = tcp_scan(&host, &[22, 445, 3389, 5985], 8).await;
+    if !lateral.is_empty() {
+        findings.push(alias_finding(
+            engine_id,
+            &format!("Post-exploitation lateral ports: {lateral:?}"),
+            "high",
+            "T1021",
+            &format!(
+                "Host {host} accepts {lateral:?} — SSH/SMB/RDP/WinRM are post-foothold lateral channels; agent required for host credential collection."
+            ),
+            target,
+            canonical,
+        ));
+    }
+    collect(engine_id, target, canonical, findings)
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 trait AliasResultExt {
@@ -1679,6 +1829,26 @@ mod tests {
         let r = rt.block_on(run_specialized_probe("any_engine", "canon", "   ", &ctx));
         assert_eq!(r.status, "error");
         assert_eq!(r.message, "target required");
+    }
+
+    #[test]
+    fn breach_aliases_have_specialized_match_arms() {
+        let src = include_str!("alias_specialized_probes.rs");
+        let start = src
+            .find("match engine_id {")
+            .expect("match engine_id in run_specialized_probe");
+        let other = src[start..]
+            .find("_ => empty_ok")
+            .expect("default empty_ok arm");
+        let chunk = &src[start..start + other];
+        assert!(
+            chunk.contains("\"full_breach_sim\""),
+            "full_breach_sim must not fall through to empty_ok"
+        );
+        assert!(
+            chunk.contains("\"post_exploitation\""),
+            "post_exploitation must not fall through to empty_ok"
+        );
     }
 
     #[test]

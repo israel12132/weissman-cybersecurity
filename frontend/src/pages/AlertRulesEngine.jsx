@@ -364,7 +364,7 @@ export default function AlertRulesEngine() {
         {/* Quick Templates */}
         <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 backdrop-blur-md border border-purple-500/30 rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-3">Quick Templates</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
             <Button variant="unstyled"
               onClick={() =>
                 setCreateModal({
@@ -403,6 +403,22 @@ export default function AlertRulesEngine() {
             >
               <div className="text-sm font-medium text-white mb-1">High Volume</div>
               <div className="text-xs text-[var(--text-tertiary)]">Alert when findings exceed threshold</div>
+            </Button>
+            <Button variant="unstyled"
+              onClick={() =>
+                setCreateModal({
+                  template: 'oast-proven',
+                  name: t('pages.alertRulesEngine.template_oast'),
+                  conditions: {
+                    severity: ['critical', 'high'],
+                    require_oast_confirmed: true,
+                  },
+                })
+              }
+              className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
+            >
+              <div className="text-sm font-medium text-white mb-1">{t('pages.alertRulesEngine.template_oast')}</div>
+              <div className="text-xs text-[var(--text-tertiary)]">{t('pages.alertRulesEngine.template_oast_hint')}</div>
             </Button>
           </div>
         </div>
@@ -573,6 +589,60 @@ function RuleModal({ rule, template, onClose, onSave }) {
                   {channel.charAt(0).toUpperCase() + channel.slice(1)}
                 </label>
               ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+              {t('pages.alertRulesEngine.require_oast')}
+            </span>
+            <div className="space-y-2">
+              <label className="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
+                <input
+                  type="checkbox"
+                  data-testid="require-oast-confirmed"
+                  checked={!!formData.conditions?.require_oast_confirmed}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      conditions: {
+                        ...(formData.conditions || {}),
+                        require_oast_confirmed: e.target.checked,
+                      },
+                    })
+                  }
+                  className="rounded mt-0.5"
+                />
+                <span>
+                  {t('pages.alertRulesEngine.require_oast')}
+                  <span className="block text-xs text-[var(--text-tertiary)]">
+                    {t('pages.alertRulesEngine.require_oast_hint')}
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
+                <input
+                  type="checkbox"
+                  data-testid="require-live-proof"
+                  checked={!!formData.conditions?.require_live_proof}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      conditions: {
+                        ...(formData.conditions || {}),
+                        require_live_proof: e.target.checked,
+                      },
+                    })
+                  }
+                  className="rounded mt-0.5"
+                />
+                <span>
+                  {t('pages.alertRulesEngine.require_proof')}
+                  <span className="block text-xs text-[var(--text-tertiary)]">
+                    {t('pages.alertRulesEngine.require_proof_hint')}
+                  </span>
+                </span>
+              </label>
             </div>
           </div>
         </div>

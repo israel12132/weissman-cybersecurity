@@ -27,6 +27,22 @@ pub const DELTA_FOLLOW_ON_ENGINES: &[&str] = &[
     "bola_idor",
     "jwt_attack",
 ];
+/// OAST-gated exploitability proof. Included only when the live listener is configured.
+pub const DELTA_OAST_FOLLOW_ON_ENGINES: &[&str] = &["oast_oob", "ssrf_advanced"];
+
+/// Core kill-chain plus OAST proof engines when the collector is live.
+#[must_use]
+pub fn live_delta_follow_on_engines() -> Vec<&'static str> {
+    let mut v: Vec<&'static str> = DELTA_FOLLOW_ON_ENGINES.to_vec();
+    if crate::fuzz_oob::oast_correlation_enabled() {
+        for e in DELTA_OAST_FOLLOW_ON_ENGINES {
+            if !v.contains(e) {
+                v.push(*e);
+            }
+        }
+    }
+    v
+}
 const MAX_CHAIN_HOSTS: usize = 6;
 const MAX_DISCOVERY: usize = 40;
 const MAX_TOTAL_HOSTS: usize = 80;
@@ -599,11 +615,11 @@ pub fn follow_on_payloads(client_id: i64, added_fqdns: &[String]) -> Vec<(String
         if h.is_empty() || !h.contains('.') {
             continue;
         }
-        for eng in DELTA_FOLLOW_ON_ENGINES {
+        for eng in live_delta_follow_on_engines() {
             out.push((
-                (*eng).to_string(),
+                eng.to_string(),
                 json!({
-                    "engine": *eng,
+                    "engine": eng,
                     "target": format!("https://{h}"),
                     "client_id": client_id,
                     "trigger": "first_mover_delta",
@@ -991,13 +1007,30 @@ mod tests {
     #[test]
     fn follow_on_payloads_cover_kill_chain_per_host() {
         let p = follow_on_payloads(7, &["shop.acme.test".into()]);
-        assert_eq!(p.len(), DELTA_FOLLOW_ON_ENGINES.len());
+        assert_eq!(p.len(), live_delta_follow_on_engines().len());
+        assert!(p.len() >= DELTA_FOLLOW_ON_ENGINES.len());
         assert!(p.iter().all(|(_, v)| v["client_id"] == 7));
         assert!(p
             .iter()
             .all(|(_, v)| v["target"] == "https://shop.acme.test"));
         assert!(p.iter().any(|(e, _)| e == "bola_idor"));
         assert!(p.iter().any(|(e, _)| e == "jwt_attack"));
+    }
+
+    #[test]
+    fn live_follow_on_always_includes_core_and_oast_ids_are_real() {
+        let live = live_delta_follow_on_engines();
+        for e in DELTA_FOLLOW_ON_ENGINES {
+            assert!(live.contains(e), "missing core follow-on {e}");
+        }
+        for e in DELTA_OAST_FOLLOW_ON_ENGINES {
+            assert!(!e.is_empty());
+        }
+        if crate::fuzz_oob::oast_correlation_enabled() {
+            for e in DELTA_OAST_FOLLOW_ON_ENGINES {
+                assert!(live.contains(e), "OAST live but {e} not chained");
+            }
+        }
     }
 
     #[test]
