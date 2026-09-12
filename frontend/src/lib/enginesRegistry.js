@@ -1,5 +1,5 @@
 /**
- * Master registry of all 583 production attack engines.
+ * Master registry of all 584 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 583 production engines in registry order */
+/** All 584 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -62,7 +62,7 @@ export const ENGINES_REGISTRY = [
     label: 'Leak Hunter',
     group: 'recon',
     mitre: 'T1530',
-    description: 'Dark web & paste-site credential and data leak detection',
+    description: 'HTTP path leak hunter: live GET of .env/.git/backup surfaces plus optional GitHub code search. Not a dark-web marketplace crawler.',
     requiresTarget: true,
   },
   {
@@ -2244,7 +2244,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark Web Intelligence',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Comprehensive dark web monitoring: Tor hidden service enumeration, paste site scraping, underground forum credential leak correlation, ransomware leak site monitoring, threat actor attribution',
+    description: 'Clearnet leak-index lookup via Intelligence X when INTELX_API_KEY is set; otherwise an honest config advisory. Not Tor crawls, not ransomware leak-site victim lists.',
     requiresTarget: true,
   },
   {
@@ -3956,7 +3956,7 @@ export const ENGINES_REGISTRY = [
     label: 'Threat Intelligence Fusion Engine',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Multi-source threat intelligence fusion: MISP/OpenCTI/TAXII correlation, CVE-to-exploit correlation mapping, threat actor TTPs attribution engine, IOC enrichment via VirusTotal/Shodan/OTX/MISP, STIX2.1 intelligence sharing, threat landscape scoring',
+    description: 'Live URLhaus hostinfo plus (via credential_ransomware_fusion) CISA KEV and HIBP. Not MISP/OpenCTI/TAXII/VirusTotal — those remain catalog claims until wired.',
     requiresTarget: true,
   },
   {
@@ -4043,7 +4043,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark Web Brand Monitor',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Comprehensive dark web brand monitoring: Tor marketplace credential listing detection, ransomware leak site monitoring, corporate data paste detection, threat actor chatter monitoring, underground forum API key listing alerts, dark web search engine integration',
+    description: 'Brand-watch alias of darkweb_intel (Intelligence X clearnet index when keyed). Not a distinct Tor crawler.',
     requiresTarget: true,
   },
   {
@@ -4766,6 +4766,14 @@ export const ENGINES_REGISTRY = [
     group: 'network',
     mitre: 'T1686',
     description: 'Software NGFW control plane. Errors if WEISSMAN_VNGFW_ADMIN dataplane is down — never pretends the firewall is live',
+    requiresTarget: true,
+  },
+  {
+    id: 'credential_ransomware_fusion',
+    label: 'Credential-to-Ransomware Fusion',
+    group: 'recon',
+    mitre: 'T1555',
+    description: 'Legal clearnet fusion: CISA KEV ransomware-use × live HTTP Server product match, Have I Been Pwned public/Pro domain counts (no passwords), URLhaus host IOCs. Not Tor, not leak-site victim lists.',
     requiresTarget: true,
   },
 ]

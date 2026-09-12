@@ -73,6 +73,7 @@ export const ROUTE_EVIDENCE = {
   '/serverless-security': 'pages.serverlessSecurityCommandCenter.evidence_notice',
   '/websocket-security': 'pages.websocketSecurity.evidence_notice',
   '/threat-intel': 'pages.threatIntelHub.evidence_notice',
+  '/adversary-dominance': 'pages.adversaryDominance.evidence_notice',
   '/threat-analysis': 'pages.threatAnalysisCenter.evidence_notice',
   '/engine-reliability': 'pages.engineReliability.evidence_notice',
   '/admin': 'pages.adminManagement.evidence_notice',

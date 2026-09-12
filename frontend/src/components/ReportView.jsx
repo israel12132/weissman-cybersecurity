@@ -6,8 +6,8 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router'
 import { useTranslation, Trans } from 'react-i18next'
 import { apiFetch } from '../utils/apiFetch'
-import { apiUrl } from '../lib/apiBase'
 import StandaloneLabShell from './ui/StandaloneLabShell'
+import ClientReportDownloadBar from './ClientReportDownloadBar'
 
 export default function ReportView() {
   const { t } = useTranslation()
@@ -57,15 +57,7 @@ export default function ReportView() {
     <StandaloneLabShell
       title={t('components.reportView.title', { name: clientName })}
       maxWidth="max-w-4xl"
-      actions={(
-        <a
-          href={apiUrl(`/api/clients/${clientId}/report/pdf`)}
-          download
-          className="text-sm text-cyan-400 hover:underline"
-        >
-          {t('components.reportView.download_pdf')}
-        </a>
-      )}
+      actions={<ClientReportDownloadBar clientId={clientId} />}
     >
       {error && (
         <div className="mb-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm">

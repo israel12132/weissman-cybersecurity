@@ -12,13 +12,13 @@ Regenerate: `node scripts/engine_coverage_accuracy_report.mjs` · Gate: `--check
 
 | Class | Count | Share |
 |-------|------:|------:|
-| **Live probes** (real network / host / TLS / DNS I/O) | 321 | 55.1% |
-| Aliases (retag → a live probe, same detection logic) | 204 | 35.0% |
+| **Live probes** (real network / host / TLS / DNS I/O) | 322 | 55.1% |
+| Aliases (retag → a live probe, same detection logic) | 204 | 34.9% |
 | Agent-required (host-level; endpoint agent performs the detection) | 58 | 9.9% |
 | **No execution path** (catalog entries that do nothing) | 0 | 0.0% |
-| **Catalog total** | **583** | 100% |
+| **Catalog total** | **584** | 100% |
 
-- **313 distinct probe implementations** back the 321 live
+- **314 distinct probe implementations** back the 322 live
   probes (delegates that share one implementation are counted once).
 - **0 engines with no execution path** — the catalog headline is fully backed.
 - A companion gate, `engine_reality_audit.mjs`, independently proves the same *depth* invariant.
@@ -37,7 +37,7 @@ is pure-alias "coverage theater".
 | Network / Protocol | 59 | 25 | 23 | 11 | 32 |
 | Stealth / Evasion | 53 | 11 | 25 | 17 | 35 |
 | Cloud / Infra | 51 | 28 | 23 | 0 | 24 |
-| Recon & OSINT | 49 | 28 | 21 | 0 | 28 |
+| Recon & OSINT | 50 | 29 | 21 | 0 | 29 |
 | AI / LLM | 47 | 29 | 18 | 0 | 23 |
 | Crypto / Identity | 44 | 22 | 19 | 3 | 24 |
 | OT / ICS / IoT | 43 | 31 | 10 | 2 | 20 |
@@ -64,7 +64,7 @@ False positives are handled by a per-`(tenant, engine, signature_hash)` feedback
 
 ## 4. Why this matters against XSOAR / Splunk SOAR / Torq / Tines / Swimlane
 
-Those platforms orchestrate *other people's* detections. Weissman ships **321 in-house
+Those platforms orchestrate *other people's* detections. Weissman ships **322 in-house
 offensive probes across 15 domains and 199 ATT&CK
 techniques**, each wired to real I/O and each discounted by a live accuracy loop — offensive
 coverage plus in-house threat intelligence in one backend, not a workflow engine bolted onto

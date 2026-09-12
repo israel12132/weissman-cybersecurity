@@ -35,6 +35,39 @@ fn truncate_ascii(s: &str, max: usize) -> String {
     format!("{}…", chars.into_iter().take(max).collect::<String>())
 }
 
+/// Live-only intel line for the board PDF — never invents APT group names.
+fn live_intel_summary(findings: &[FindingRow]) -> String {
+    let mut kev = 0u32;
+    let mut leak = 0u32;
+    let mut fusion = 0u32;
+    let mut ransom = 0u32;
+    for (_, title, _, source, desc, poc) in findings {
+        let hay = format!("{title} {source} {desc} {poc}").to_ascii_lowercase();
+        if hay.contains("kev") || hay.contains("known exploited") {
+            kev += 1;
+        }
+        if source.to_ascii_lowercase().contains("leak")
+            || source.to_ascii_lowercase().contains("hibp")
+            || source.to_ascii_lowercase().contains("darkweb")
+            || source.to_ascii_lowercase().contains("dark_web")
+        {
+            leak += 1;
+        }
+        if source.to_ascii_lowercase().contains("credential_ransomware") {
+            fusion += 1;
+        }
+        if hay.contains("ransomware") {
+            ransom += 1;
+        }
+    }
+    truncate_ascii(
+        &format!(
+            "KEV-tagged {kev} · leak/HIBP {leak} · fusion {fusion} · ransomware-signal {ransom}. Actor names are not inferred."
+        ),
+        95,
+    )
+}
+
 fn israel_now() -> String {
     Jerusalem
         .from_utc_datetime(&chrono::Utc::now().naive_utc())
@@ -554,13 +587,13 @@ pub fn build_client_report_pdf(
     b.set_fill_rgb(0.2, 0.65, 0.9);
     b.rect_fill(bar_x, b.y - 18.0, client_len, 14.0);
     b.set_fill_rgb(0.3, 0.3, 0.35);
-    b.text_at(bar_x + client_len + 6.0, 9, &format!("Client: {}", score));
+    b.text_at(bar_x + client_len + 6.0, 9, &format!("Client live score: {}", score));
     b.y -= 28.0;
-    let ind_len = (65.0_f64 / 100.0 * bar_max).max(4.0);
-    b.set_fill_rgb(0.5, 0.5, 0.55);
-    b.rect_fill(bar_x, b.y - 18.0, ind_len, 14.0);
     b.set_fill_rgb(0.4, 0.4, 0.45);
-    b.text_at(bar_x + ind_len + 6.0, 9, "Industry Avg: 65");
+    b.text(
+        10,
+        "Score is 100 minus live finding weights (critical 25 / high 15 / medium 5). No fabricated industry average.",
+    );
     b.y -= 24.0;
 
     let discovery_n = discovery_noise_count(findings);
@@ -663,13 +696,9 @@ pub fn build_client_report_pdf(
     b.current.push_str("0.5 w\n");
     b.rect_stroke(72.0, b.y - 42.0, PAGE_W - 144.0, 38.0);
     b.set_fill_rgb(0.9, 0.4, 0.4);
-    b.text_at(82.0, 9, "Likely Threat Actors (contextual):");
+    b.text_at(82.0, 9, "Live intel (from this client's persisted findings):");
     b.set_fill_rgb(0.75, 0.78, 0.85);
-    b.text_at(
-        82.0,
-        9,
-        "APT28, FIN7, Lazarus — prioritize external exposure and auth findings.",
-    );
+    b.text_at(82.0, 9, &live_intel_summary(findings));
     b.y -= 52.0;
     b.new_page();
 
@@ -1772,5 +1801,26 @@ mod tests {
         assert!(html.contains("Cryptographic Proof of Integrity"));
         assert!(html.contains("deadbeef"));
         assert!(html.contains("http://verify.example"));
+    }
+
+    #[test]
+    fn board_pdf_does_not_invent_apt_or_industry_average() {
+        let findings = vec![row(
+            1,
+            "CISA KEV product match",
+            "critical",
+            "credential_ransomware_fusion",
+            "known ransomware campaign use",
+            "GET https://www.cisa.gov HTTP 200",
+        )];
+        let bytes = build_client_report_pdf("Acme", &findings, None).expect("pdf");
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(text.contains("%PDF-1.4"));
+        assert!(!text.contains("APT28"));
+        assert!(!text.contains("FIN7"));
+        assert!(!text.contains("Lazarus"));
+        assert!(!text.contains("Industry Avg: 65"));
+        assert!(text.contains("Client live score") || text.contains("no fabricated"));
+        assert!(text.contains("KEV-tagged") || text.contains("fusion"));
     }
 }

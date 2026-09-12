@@ -829,6 +829,9 @@ pub fn finding_with_probe_depth(
 #[must_use]
 pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     let sev = severity.to_ascii_lowercase();
+    if engine_id.contains("credential_ransomware") || engine_id.contains("hibp") {
+        return "Rotate credentials and IdP sessions for the affected domain, patch CISA KEV CVEs on the observed product, and hunt unmanaged infostealer stores. Do not store stealer passwords — counts and live HTTP proof only.";
+    }
     if engine_id.contains("ssrf") {
         return "Block outbound requests to 169.254.169.254 / metadata.google.internal at the egress firewall and on the application server. Validate URL inputs with an allow-list of approved hosts.";
     }

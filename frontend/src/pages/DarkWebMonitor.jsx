@@ -26,6 +26,8 @@ const DARK_WEB_SOURCES = new Set([
   'darkweb_intel',
   'dark_web_monitor',
   'typosquatting_monitor',
+  'credential_ransomware_fusion',
+  'threat_intel_fusion',
 ])
 const SEV_KEYS = ['critical', 'high', 'medium', 'low', 'info']
 

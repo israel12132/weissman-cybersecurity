@@ -102,6 +102,138 @@ async fn api_client_export_csv(
     res
 }
 
+async fn api_client_export_xlsx(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+) -> Response {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
+    };
+    let client_name: String = match sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
+    {
+        Some(n) => n,
+        None => {
+            let _ = tx.rollback().await;
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
+        }
+    };
+    let rows = sqlx::query(
+        r#"SELECT id, title, severity, source,
+                  COALESCE(status,'') AS status, discovered_at,
+                  COALESCE(description,'') AS description,
+                  COALESCE(poc_exploit,'') AS poc_exploit,
+                  COALESCE(raw_data, '{}'::jsonb) AS raw_data
+             FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC"#,
+    )
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let proof = get_crypto_proof_for_client_tx(&mut tx, auth.tenant_id, id)
+        .await
+        .ok()
+        .flatten();
+    let _ = tx.commit().await;
+
+    let mut findings: Vec<crate::board_xlsx::BoardFinding> = Vec::new();
+    for r in rows {
+        let raw: Value = r
+            .try_get::<Value, _>("raw_data")
+            .unwrap_or_else(|_| json!({}));
+        let mitre = raw
+            .get("mitre_attack")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let cve = raw
+            .get("cve")
+            .and_then(Value::as_str)
+            .or_else(|| raw.get("cve_id").and_then(Value::as_str))
+            .unwrap_or("")
+            .to_string();
+        let kev = raw
+            .get("kev")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let discovered = r
+            .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
+            .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_default();
+        findings.push(crate::board_xlsx::BoardFinding {
+            id: r.try_get::<i64, _>("id").unwrap_or(0),
+            title: r.try_get::<String, _>("title").unwrap_or_default(),
+            severity: r.try_get::<String, _>("severity").unwrap_or_default(),
+            source: r.try_get::<String, _>("source").unwrap_or_default(),
+            description: r.try_get::<String, _>("description").unwrap_or_default(),
+            proof: r.try_get::<String, _>("poc_exploit").unwrap_or_default(),
+            mitre,
+            cve,
+            kev,
+            ransomware: false,
+            status: r.try_get::<String, _>("status").unwrap_or_default(),
+            discovered,
+        });
+    }
+    let generated_at = Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string();
+    let integrity = proof
+        .as_ref()
+        .map(|(h, _, _)| h.clone())
+        .unwrap_or_default();
+    let wb = crate::board_xlsx::BoardWorkbook {
+        client_name: client_name.clone(),
+        generated_at,
+        integrity_hash: integrity,
+        findings,
+    };
+    let bytes = match crate::board_xlsx::build_client_board_xlsx(&wb) {
+        Ok(b) => b,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "XLSX generation failed", "detail": scrub_internal_error(&e)})),
+            )
+                .into_response();
+        }
+    };
+    let digest = crate::board_xlsx::workbook_sha256(&bytes);
+    let safe_name: String = client_name
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
+    let filename = format!("Weissman_Board_{}.xlsx", safe_name);
+    let mut res = Response::new(Body::from(bytes));
+    res.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static(crate::board_xlsx::xlsx_content_type()),
+    );
+    res.headers_mut().insert(
+        CONTENT_DISPOSITION,
+        HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename))
+            .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
+    );
+    res.headers_mut().insert(
+        axum::http::HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
+    res.headers_mut().insert(
+        axum::http::header::CACHE_CONTROL,
+        HeaderValue::from_static("no-store"),
+    );
+    if let Ok(hv) = HeaderValue::try_from(digest) {
+        res.headers_mut().insert(
+            axum::http::HeaderName::from_static("x-weissman-workbook-sha256"),
+            hv,
+        );
+    }
+    res
+}
+
 async fn get_crypto_proof_for_client_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: i64,

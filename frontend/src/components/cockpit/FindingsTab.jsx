@@ -11,6 +11,7 @@ import { apiFetch } from '../../utils/apiFetch'
 import SeverityBadge from '../ui/SeverityBadge'
 import DataTable from '../ui/DataTable'
 import Button from '../ui/Button'
+import { downloadClientPdf, downloadClientXlsx } from '../../lib/downloadClientReport'
 
 const columnHelper = createColumnHelper()
 const FT = 'components.cockpitTabs.findings'
@@ -129,37 +130,30 @@ export default function FindingsTab() {
 
   const openPdf = async () => {
     if (!selectedClientId) return
-    const url = `/api/clients/${selectedClientId}/report/pdf`
     try {
-      // raw:true so utils returns the unparsed Response even for a JSON body,
-      // so a non-PDF response reports its ACTUAL Content-Type (matching the old
-      // r.headers.get('Content-Type')) rather than a hardcoded 'application/json'.
-      const res = await apiFetch(url, { raw: true })
-      const contentType = res.headers.get('Content-Type') || ''
-      if (!contentType.includes('application/pdf')) {
-        setFindingsError(
-          t('components.cockpitTabs.findings.report_unexpected_type', { type: contentType || 'unknown' }),
-        )
-        return
-      }
-      const blob = await res.blob()
-      const disposition = res.headers.get('Content-Disposition') || ''
-      const match = disposition.match(/filename="?([^";\n]+)"?/)
-      let filename = match ? match[1].trim() : 'Weissman_Report.pdf'
-      if (!filename.toLowerCase().endsWith('.pdf')) filename = `${filename.replace(/\.[^.]+$/, '')}.pdf`
-      const objectUrl = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = objectUrl
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(objectUrl)
+      await downloadClientPdf(apiFetch, selectedClientId)
     } catch (e) {
       setFindingsError(
-        e?.response
-          ? await formatApiErrorResponse(e.response)
-          : e?.message || t('components.cockpitTabs.findings.pdf_download_failed'),
+        e?.contentType
+          ? t('components.cockpitTabs.findings.report_unexpected_type', { type: e.contentType || 'unknown' })
+          : e?.response
+            ? await formatApiErrorResponse(e.response)
+            : e?.message || t('components.cockpitTabs.findings.pdf_download_failed'),
+      )
+    }
+  }
+
+  const openXlsx = async () => {
+    if (!selectedClientId) return
+    try {
+      await downloadClientXlsx(apiFetch, selectedClientId)
+    } catch (e) {
+      setFindingsError(
+        e?.contentType
+          ? t('components.cockpitTabs.findings.report_unexpected_type', { type: e.contentType || 'unknown' })
+          : e?.response
+            ? await formatApiErrorResponse(e.response)
+            : e?.message || t('components.cockpitTabs.findings.xlsx_download_failed'),
       )
     }
   }
@@ -200,6 +194,13 @@ export default function FindingsTab() {
           className="px-5 py-2.5 rounded-xl font-semibold text-sm border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20 hover:shadow-[0_0_20px_rgba(34,211,238,0.2)] transition-all duration-300"
         >
           {t('components.cockpitTabs.findings.generate_executive_pdf')}
+        </Button>
+        <Button variant="unstyled"
+          type="button"
+          onClick={openXlsx}
+          className="px-5 py-2.5 rounded-xl font-semibold text-sm border border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition-all duration-300"
+        >
+          {t('components.cockpitTabs.findings.generate_xlsx')}
         </Button>
       </div>
 
