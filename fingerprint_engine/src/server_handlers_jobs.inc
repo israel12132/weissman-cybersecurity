@@ -402,3 +402,50 @@ async fn api_async_job_status(
         }
     }
 }
+
+/// GET /api/jobs/:job_id/diagnostics — live lease / heartbeat / stuck_reason.
+async fn api_async_job_diagnostics(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(job_id): Path<uuid::Uuid>,
+) -> Response {
+    match db::job_queue::get_job_for_tenant(state.app_pool.as_ref(), auth.tenant_id, job_id).await {
+        Ok(Some(status)) => {
+            if !crate::client_isolation::payload_visible_to(&auth, &status.payload) {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(json!({"ok": false, "detail": "Not found", "error_code": "not_found"})),
+                )
+                    .into_response();
+            }
+            let now = chrono::Utc::now();
+            let mut facts =
+                vec![crate::job_operator_diagnostics::JobFacts::from_status_view(&status, now)];
+            crate::job_operator_diagnostics::apply_live_orchestration(&mut facts).await;
+            let diag = crate::job_operator_diagnostics::classify(&facts[0]);
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "ok": true,
+                    "job_id": job_id,
+                    "status": status.status,
+                    "diagnostics": diag,
+                })),
+            )
+                .into_response()
+        }
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "job_not_found"})),
+        )
+            .into_response(),
+        Err(e) => {
+            tracing::error!(target: "async_jobs", error = %e, "job diagnostics failed");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "database_error", "detail": scrub_internal_error(&e)})),
+            )
+                .into_response()
+        }
+    }
+}

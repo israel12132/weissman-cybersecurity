@@ -72,6 +72,24 @@ fn clear_failures_mem(tenant_id: i64, email: &str) {
     store().remove(&key(tenant_id, email));
 }
 
+/// Drop expired in-memory lockout rows so the DashMap cannot grow without bound.
+pub fn evict_stale() -> usize {
+    let now = Instant::now();
+    let before = store().len();
+    store().retain(|_, cell| {
+        let Ok(entry) = cell.lock() else {
+            return true;
+        };
+        match entry.locked_until {
+            Some(until) if now < until => true,
+            Some(_) => false,
+            None if entry.failures == 0 => false,
+            None => true,
+        }
+    });
+    before.saturating_sub(store().len())
+}
+
 // ── Public API: distributed via Redis when REDIS_URL is set, else in-memory ────
 
 /// Outcome of a lockout probe (fail-closed when Redis is required but down).

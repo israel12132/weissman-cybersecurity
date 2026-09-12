@@ -482,7 +482,36 @@ async fn process_one(
 
     match outcome {
         Ok(v) => {
-            if bus_on {
+            let waiting_for_agent = v
+                .get("status")
+                .and_then(|s| s.as_str())
+                .map(|s| s.eq_ignore_ascii_case("waiting_for_agent"))
+                .unwrap_or(false);
+            if waiting_for_agent {
+                match job_queue::park_job_waiting_for_agent(pool, job.id, &wid, &v).await {
+                    Ok(true) => info!(
+                        target: "weissman_worker",
+                        job_id = %job.id,
+                        "parked job waiting_for_agent — host task queued, no invented findings"
+                    ),
+                    Ok(false) => warn!(
+                        target: "weissman_worker",
+                        job_id = %job.id,
+                        "waiting_for_agent park discarded — this worker no longer owns the job"
+                    ),
+                    Err(e) => {
+                        error!(target: "weissman_worker", job_id = %job.id, error = %e, "park waiting_for_agent failed");
+                        let _ = job_queue::fail_job(
+                            pool,
+                            &job,
+                            &wid,
+                            &e.to_string(),
+                            BASE_BACKOFF_SECS,
+                        )
+                        .await;
+                    }
+                }
+            } else if bus_on {
                 if let Err(e) = bus
                     .on_job_completed(job.id, job.tenant_id, &wid, &v, lease_out.take())
                     .await

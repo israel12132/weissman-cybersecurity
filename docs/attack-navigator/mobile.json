@@ -27,6 +27,36 @@
       "enabled": true
     },
     {
+      "techniqueID": "T1428",
+      "score": 2,
+      "comment": "graphene_os_bypass, mdm_bypass_engine",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1603",
+      "score": 2,
+      "comment": "graphene_os_bypass, mdm_bypass_engine",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1623",
+      "score": 2,
+      "comment": "graphene_os_bypass, mdm_bypass_engine",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1639",
+      "score": 2,
+      "comment": "graphene_os_bypass, mdm_bypass_engine",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1640",
+      "score": 2,
+      "comment": "graphene_os_bypass, mdm_bypass_engine",
+      "enabled": true
+    },
+    {
       "techniqueID": "T1660",
       "score": 1,
       "comment": "deepfake_synthesis",

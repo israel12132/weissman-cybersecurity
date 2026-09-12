@@ -163,6 +163,12 @@ import {
   NgfwGate,
   EndpointEdr,
   CortexProvenBridge,
+  AdversaryCampaignFabric,
+  DiscoveryLab,
+  HoneyRoutingGateway,
+  LlmUltraGuard,
+  C2CovertExfilCommandCenter,
+  StealthyPersistenceEvasion,
 } from './routing/routeChunks'
 
 function ChainPredictor() {
@@ -356,6 +362,12 @@ export default function TacticalApp() {
           <Route path="casb-dlp" element={<CasbDlpCenter />} />
           <Route path="ngfw-gate" element={<NgfwGate />} />
           <Route path="cortex-bridge" element={<CortexProvenBridge />} />
+          <Route path="campaigns" element={<AdversaryCampaignFabric />} />
+          <Route path="discovery-lab" element={<DiscoveryLab />} />
+          <Route path="honey-routing" element={<HoneyRoutingGateway />} />
+          <Route path="llm-ultra-guard" element={<LlmUltraGuard />} />
+          <Route path="c2-covert-exfil" element={<C2CovertExfilCommandCenter />} />
+          <Route path="stealthy-persistence" element={<StealthyPersistenceEvasion />} />
           <Route path="endpoint-edr" element={<EndpointEdr />} />
           <Route path="ceo" element={<CeoProtectedRoute><CeoCommandCenter /></CeoProtectedRoute>} />
           <Route path="supreme-nerve-center" element={<RequireRole min="ceo"><SupremeNerveCenter /></RequireRole>} />

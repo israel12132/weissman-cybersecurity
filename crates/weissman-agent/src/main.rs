@@ -10,8 +10,10 @@
 //! No persistent storage; all state in memory.
 
 mod detections;
+mod direct_syscalls;
 mod hardening;
 mod inner_crypto;
+mod probe;
 mod protocol;
 mod transport;
 

@@ -5,16 +5,20 @@
 //! payloads are rejected before deserialization and before any database work.
 
 const DEFAULT_MAX_BYTES: usize = 5 * 1024 * 1024;
+/// Absolute ingest ceiling (Content-Length middleware / inflate bomb).
+pub const ABSOLUTE_MAX_REQUEST_BODY_BYTES: usize = 8 * 1024 * 1024;
+/// Gzip / deflate / brotli request inflate cap.
+pub const MAX_DECOMPRESSED_BODY_BYTES: usize = 4 * 1024 * 1024;
 
 /// Maximum request body size applied at the router (`DefaultBodyLimit`).
 ///
-/// Override with `WEISSMAN_MAX_REQUEST_BODY_BYTES` (clamped between 1 KiB and 128 MiB).
+/// Override with `WEISSMAN_MAX_REQUEST_BODY_BYTES` (clamped between 1 KiB and 8 MiB).
 #[must_use]
 pub fn max_request_body_bytes() -> usize {
     std::env::var("WEISSMAN_MAX_REQUEST_BODY_BYTES")
         .ok()
         .and_then(|s| s.parse().ok())
-        .filter(|&n| (1024..=128 * 1024 * 1024).contains(&n))
+        .filter(|&n| (1024..=ABSOLUTE_MAX_REQUEST_BODY_BYTES).contains(&n))
         .unwrap_or(DEFAULT_MAX_BYTES)
 }
 
@@ -38,8 +42,8 @@ mod tests {
         std::env::set_var(key, "512");
         assert_eq!(max_request_body_bytes(), DEFAULT_MAX_BYTES);
 
-        // Above ceiling (128 MiB) rejected -> default.
-        std::env::set_var(key, &(129 * 1024 * 1024).to_string());
+        // Above ceiling (8 MiB) rejected -> default.
+        std::env::set_var(key, &(9 * 1024 * 1024).to_string());
         assert_eq!(max_request_body_bytes(), DEFAULT_MAX_BYTES);
 
         // Non-numeric rejected -> default.

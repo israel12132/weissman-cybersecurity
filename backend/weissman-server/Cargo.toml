@@ -17,7 +17,9 @@ weissman-db = { path = "../../crates/weissman-db" }
 axum = { version = "0.7", features = ["json", "ws"] }
 tokio = { version = "1", features = ["full"] }
 tower = { version = "0.4" }
-tower-http = { version = "0.5", features = ["set-header", "trace", "cors"] }
+tower-http = { version = "0.5", features = ["set-header", "trace", "cors", "compression-br", "compression-gzip"] }
+flate2 = "1"
+brotli = "7"
 governor = "0.6"
 nonzero_ext = "0.3"
 serde_json = "1"

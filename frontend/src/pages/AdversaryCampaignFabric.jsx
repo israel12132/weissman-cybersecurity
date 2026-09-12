@@ -1,0 +1,850 @@
+/**
+ * Adversary Campaign Fabric — evidence-grounded STRIPS campaigns.
+ *
+ * Operator starts a client-scoped campaign toward a planner goal. WorldState is
+ * seeded from live findings (FP-suppressed rows excluded). Each step dispatches a
+ * real engine job inside authorized scope. Route: /campaigns
+ *
+ * Live APIs: GET/POST /api/campaigns, GET /api/campaigns/profiles,
+ * POST …/start|pause|/remediate, GET …/plan, GET …/steps.
+ */
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
+import { Crosshair, Play, Pause, GitBranch, FlaskConical, Loader2, Wrench, ShieldAlert } from 'lucide-react'
+import PageShell from './PageShell'
+import EmptyState from '../components/ui/EmptyState'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import { useClient } from '../context/ClientContext'
+import { apiFetch } from '../utils/apiFetch'
+import { downloadCsv } from '../lib/exportFindingsCsv'
+import Button from '../components/ui/Button'
+import ProofStatusBadge, { proofStatusOf } from '../components/findings/ProofStatusBadge'
+
+const NS = 'pages.adversaryCampaign'
+
+const STATUS_TONE = {
+  draft: 'text-slate-300 border-slate-500/30 bg-slate-500/10',
+  running: 'text-cyan-300 border-cyan-500/40 bg-cyan-500/10',
+  paused: 'text-amber-300 border-amber-500/40 bg-amber-500/10',
+  completed: 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10',
+  blocked: 'text-rose-300 border-rose-500/40 bg-rose-500/10',
+  failed: 'text-rose-400 border-rose-500/50 bg-rose-900/20',
+}
+
+const STEP_TONE = {
+  planned: 'text-[var(--text-muted)] border-[var(--border-default)]',
+  dispatched: 'text-cyan-300 border-cyan-500/40 bg-cyan-500/10',
+  succeeded: 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10',
+  failed: 'text-rose-300 border-rose-500/40 bg-rose-500/10',
+  skipped: 'text-[var(--text-disabled)] border-[var(--border-default)]',
+}
+
+const STAGE_TONE = {
+  pending: 'text-[var(--text-muted)] border-[var(--border-default)]',
+  in_progress: 'text-cyan-300 border-cyan-500/40 bg-cyan-500/10',
+  proven: 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10',
+  blocked: 'text-rose-300 border-rose-500/40 bg-rose-500/10',
+}
+
+const GAP_TONE = {
+  proof_failed: 'border-amber-500/40 bg-amber-500/10',
+  job_failed: 'border-rose-500/40 bg-rose-500/10',
+  control_blocked: 'border-orange-500/40 bg-orange-500/10',
+  roe_blocked: 'border-violet-500/40 bg-violet-500/10',
+}
+
+function profileI18nKey(id) {
+  return String(id || '').replace(/-/g, '_')
+}
+
+function StatusBadge({ status, ns = 'status' }) {
+  const { t } = useTranslation()
+  const tone = STATUS_TONE[status] || STEP_TONE[status] || 'text-[var(--text-muted)] border-[var(--border-default)]'
+  return (
+    <span className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded border ${tone}`}>
+      {t(`${NS}.${ns}_${status}`)}
+    </span>
+  )
+}
+
+function exportCampaignsCsv(rows) {
+  const header = ['id', 'client_id', 'goal_fact', 'status', 'profile_id', 'asset_key', 'updated_at']
+  const data = rows.map((c) => [c.id, c.client_id, c.goal_fact, c.status, c.profile_id || '', c.asset_key, c.updated_at])
+  downloadCsv(data, header, 'weissman-campaigns')
+}
+
+export default function AdversaryCampaignFabric() {
+  const { t } = useTranslation()
+  const { clients, selectedClientId, setSelectedClientId } = useClient()
+
+  const [campaigns, setCampaigns] = useState([])
+  const [allowedGoals, setAllowedGoals] = useState(['impact:objective'])
+  const [active, setActive] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [goal, setGoal] = useState('impact:objective')
+  const [profileId, setProfileId] = useState('')
+  const [profiles, setProfiles] = useState([])
+  const [provenOnly, setProvenOnly] = useState(false)
+  const [provingStep, setProvingStep] = useState(null)
+
+  const loadList = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const qs = selectedClientId != null ? `?client_id=${encodeURIComponent(selectedClientId)}` : ''
+      const data = await apiFetch(`/api/campaigns${qs}`)
+      const list = Array.isArray(data?.campaigns) ? data.campaigns : []
+      setCampaigns(list)
+      if (Array.isArray(data?.allowed_goals) && data.allowed_goals.length) {
+        setAllowedGoals(data.allowed_goals)
+      }
+      const catalog = Array.isArray(data?.profiles) ? data.profiles : []
+      setProfiles(catalog)
+    } catch (e) {
+      setError(e.message || t(`${NS}.load_failed`))
+      setCampaigns([])
+    } finally {
+      setLoading(false)
+    }
+  }, [selectedClientId, t])
+
+  const loadOne = useCallback(async (id) => {
+    if (!id) {
+      setActive(null)
+      return
+    }
+    try {
+      const data = await apiFetch(`/api/campaigns/${encodeURIComponent(id)}`)
+      const campaignClient = data?.campaign?.client_id
+      if (
+        selectedClientId != null &&
+        campaignClient != null &&
+        Number(campaignClient) !== Number(selectedClientId)
+      ) {
+        return
+      }
+      setActive(data)
+    } catch (e) {
+      setError(e.message || t(`${NS}.load_failed`))
+    }
+  }, [selectedClientId, t])
+
+  useEffect(() => {
+    setActive(null)
+  }, [selectedClientId])
+
+  useEffect(() => {
+    loadList()
+  }, [loadList])
+
+  useEffect(() => {
+    let cancelled = false
+    apiFetch('/api/campaigns/profiles')
+      .then((data) => {
+        const catalog = Array.isArray(data?.profiles) ? data.profiles : []
+        if (!cancelled && catalog.length) setProfiles(catalog)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (loading || active?.campaign?.id) return
+    if (campaigns.length) loadOne(campaigns[0].id)
+  }, [loading, campaigns, active?.campaign?.id, loadOne])
+
+  useEffect(() => {
+    const id = active?.campaign?.id
+    if (!id || active?.campaign?.status !== 'running') return undefined
+    const timer = setInterval(() => {
+      loadOne(id)
+      loadList()
+    }, 4000)
+    return () => clearInterval(timer)
+  }, [active?.campaign?.id, active?.campaign?.status, loadList, loadOne])
+
+  const createCampaign = useCallback(async () => {
+    if (selectedClientId == null) return
+    setBusy(true)
+    setError('')
+    try {
+      const body = { client_id: selectedClientId, goal }
+      if (profileId) body.profile_id = profileId
+      const data = await apiFetch('/api/campaigns', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      })
+      await loadList()
+      if (data?.campaign?.id) await loadOne(data.campaign.id)
+    } catch (e) {
+      setError(e.message || t(`${NS}.create_failed`))
+    } finally {
+      setBusy(false)
+    }
+  }, [selectedClientId, goal, profileId, loadList, loadOne, t])
+
+  const startCampaign = useCallback(async (id) => {
+    setBusy(true)
+    setError('')
+    try {
+      const data = await apiFetch(`/api/campaigns/${encodeURIComponent(id)}/start`, { method: 'POST' })
+      setActive(data)
+      await loadList()
+    } catch (e) {
+      setError(e.message || t(`${NS}.start_failed`))
+    } finally {
+      setBusy(false)
+    }
+  }, [loadList, t])
+
+  const pauseCampaign = useCallback(async (id) => {
+    setBusy(true)
+    setError('')
+    try {
+      const data = await apiFetch(`/api/campaigns/${encodeURIComponent(id)}/pause`, { method: 'POST' })
+      setActive(data)
+      await loadList()
+    } catch (e) {
+      setError(e.message || t(`${NS}.pause_failed`))
+    } finally {
+      setBusy(false)
+    }
+  }, [loadList, t])
+
+  const proveStep = useCallback(async (campaignId, stepId) => {
+    if (!campaignId || !stepId) return
+    setProvingStep(stepId)
+    setError('')
+    try {
+      const data = await apiFetch(
+        `/api/campaigns/${encodeURIComponent(campaignId)}/steps/${encodeURIComponent(stepId)}/proof`,
+        { method: 'POST' },
+      )
+      setActive(data)
+      await loadList()
+    } catch (e) {
+      setError(e.message || t(`${NS}.proof_failed_btn`))
+    } finally {
+      setProvingStep(null)
+    }
+  }, [loadList, t])
+
+  const queueRemediation = useCallback(async (id) => {
+    if (!id) return
+    setBusy(true)
+    setError('')
+    try {
+      const data = await apiFetch(`/api/campaigns/${encodeURIComponent(id)}/remediate`, { method: 'POST' })
+      setActive(data)
+      await loadList()
+    } catch (e) {
+      setError(e.message || t(`${NS}.remediate_failed`))
+    } finally {
+      setBusy(false)
+    }
+  }, [loadList, t])
+
+  const campaignRows = useMemo(
+    () =>
+      campaigns.map((c) => ({
+        id: c.id,
+        severity: c.status === 'blocked' || c.status === 'failed' ? 'high' : 'info',
+        title: c.goal_fact,
+        type: c.status,
+        description: c.asset_key || '',
+        resource: String(c.client_id ?? ''),
+        profile_id: c.profile_id || '',
+      })),
+    [campaigns],
+  )
+
+  const { searchQuery, setSearchQuery, filteredFindings, exportCsv } = useFindingsWorkbench(
+    campaignRows,
+    {
+      csvPrefix: 'weissman-campaigns',
+      haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource} ${f.id} ${f.profile_id || ''}`,
+    },
+  )
+
+  const visible = useMemo(() => {
+    const ids = new Set(filteredFindings.map((f) => String(f.id)))
+    if (!searchQuery.trim()) return campaigns
+    return campaigns.filter((c) => ids.has(String(c.id)))
+  }, [campaigns, filteredFindings, searchQuery])
+
+  const facts = active?.world_state?.facts
+  const evidence = active?.world_state?.evidence || {}
+  const provenFacts = useMemo(() => {
+    const raw = active?.world_state?.proven_facts
+    return new Set(Array.isArray(raw) ? raw.map(String) : [])
+  }, [active?.world_state?.proven_facts])
+  const steps = Array.isArray(active?.steps) ? active.steps : []
+  const visibleSteps = useMemo(
+    () => (provenOnly ? steps.filter((s) => proofStatusOf(s) === 'proven') : steps),
+    [steps, provenOnly],
+  )
+  const events = Array.isArray(active?.events) ? active.events : []
+  const campaign = active?.campaign
+  const mesh = active?.mesh
+  const spine = active?.spine
+  const council = active?.council
+  const emulation = active?.emulation
+  const detectionGaps = Array.isArray(active?.detection_gaps) ? active.detection_gaps : []
+  const remediation = active?.remediation
+  const campaignQuery = campaign?.id ? `campaign_id=${encodeURIComponent(campaign.id)}` : ''
+
+  return (
+    <PageShell
+      title={t(`${NS}.title`)}
+      subtitle={t(`${NS}.subtitle`)}
+      badge={t(`${NS}.badge`)}
+      badgeColor="#ef4444"
+      icon={<Crosshair className="w-5 h-5" />}
+      actions={
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={selectedClientId ?? ''}
+            onChange={(e) => setSelectedClientId(e.target.value ? Number(e.target.value) : null)}
+            className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] focus:outline-none"
+            aria-label={t(`${NS}.select_client`)}
+          >
+            <option value="">{t(`${NS}.select_client`)}</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name || c.domain || `#${c.id}`}
+              </option>
+            ))}
+          </select>
+          <select
+            value={profileId}
+            onChange={(e) => {
+              const next = e.target.value
+              setProfileId(next)
+              const p = profiles.find((x) => x.id === next)
+              if (p?.goal_fact) setGoal(p.goal_fact)
+            }}
+            className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] focus:outline-none"
+            aria-label={t(`${NS}.select_profile`)}
+          >
+            <option value="">{t(`${NS}.profile_generic`)}</option>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {t(`${NS}.profile_${profileI18nKey(p.id)}_name`)}
+              </option>
+            ))}
+          </select>
+          <select
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] focus:outline-none"
+            aria-label={t(`${NS}.select_goal`)}
+          >
+            {allowedGoals.map((g) => (
+              <option key={g} value={g}>
+                {t(`${NS}.goal_${g.replace(':', '_')}`)}
+              </option>
+            ))}
+          </select>
+          <Button
+            variant="unstyled"
+            type="button"
+            onClick={createCampaign}
+            disabled={selectedClientId == null || busy}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10 text-rose-200 text-xs font-medium hover:bg-rose-500/20 disabled:opacity-40"
+          >
+            {t(`${NS}.create`)}
+          </Button>
+          <ShellScanActions
+            onRefresh={() => {
+              loadList()
+              if (campaign?.id) loadOne(campaign.id)
+            }}
+            onExport={() => {
+              exportCsv()
+              exportCampaignsCsv(visible)
+            }}
+            refreshLoading={loading}
+            exportDisabled={!visible.length}
+          />
+        </div>
+      }
+    >
+      <div className="space-y-6">
+        <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
+        <p className="text-[11px] font-mono text-[var(--text-muted)]">{t(`${NS}.privacy_note`)}</p>
+
+        <label className="block">
+          <span className="sr-only">{t('common.search')}</span>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t(`${NS}.search_placeholder`)}
+            className="w-full max-w-md bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)]"
+          />
+        </label>
+
+        {error && (
+          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono">
+            {error}
+          </div>
+        )}
+
+        {selectedClientId == null && (
+          <EmptyState icon="building" title={t(`${NS}.pick_client_title`)} body={t(`${NS}.pick_client_body`)} />
+        )}
+
+        {selectedClientId != null && loading && <SkeletonWidgetGrid count={4} />}
+
+        {selectedClientId != null && !loading && visible.length === 0 && (
+          <EmptyState
+            icon="network"
+            title={t(`${NS}.empty_title`)}
+            body={t(`${NS}.empty_body`)}
+            action={
+              <Button
+                variant="unstyled"
+                type="button"
+                onClick={createCampaign}
+                disabled={busy}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 text-white text-sm font-medium hover:bg-rose-700 disabled:opacity-50"
+              >
+                {t(`${NS}.create`)}
+              </Button>
+            }
+          />
+        )}
+
+        {selectedClientId != null && !loading && visible.length > 0 && (
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-4">
+            <div className="space-y-2">
+              <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)]">
+                {t(`${NS}.list_heading`)}
+              </h2>
+              {visible.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => loadOne(c.id)}
+                  className={`w-full text-start rounded-xl border p-3 transition-colors ${
+                    campaign?.id === c.id
+                      ? 'border-rose-500/50 bg-rose-500/10'
+                      : 'border-[var(--border-default)] bg-[var(--table-surface)] hover:border-[var(--border-strong)]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-[11px] font-mono text-[var(--text-disabled)]">{String(c.id).slice(0, 8)}</span>
+                    <StatusBadge status={c.status} />
+                  </div>
+                  <div className="mt-1 text-sm text-[var(--text-primary)] font-medium">{c.goal_fact}</div>
+                  {c.profile_id ? (
+                    <div className="text-[11px] font-mono text-rose-200/80">
+                      {t(`${NS}.profile_${profileI18nKey(c.profile_id)}_name`)}
+                    </div>
+                  ) : null}
+                  <div className="text-[11px] font-mono text-[var(--text-muted)]">
+                    {c.asset_key || t(`${NS}.no_asset`)}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-4">
+              {!campaign && (
+                <EmptyState icon="chart" title={t(`${NS}.select_campaign_title`)} body={t(`${NS}.select_campaign_body`)} />
+              )}
+              {campaign && (
+                <>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <StatusBadge status={campaign.status} />
+                    {(campaign.status === 'draft' || campaign.status === 'paused' || campaign.status === 'blocked' || campaign.status === 'failed') && (
+                      <Button
+                        variant="unstyled"
+                        type="button"
+                        onClick={() => startCampaign(campaign.id)}
+                        disabled={busy}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-500/40 text-cyan-200 text-xs hover:bg-cyan-500/10 disabled:opacity-40"
+                      >
+                        <Play className="w-3.5 h-3.5" />
+                        {t(`${NS}.start`)}
+                      </Button>
+                    )}
+                    {campaign.status === 'running' && (
+                      <Button
+                        variant="unstyled"
+                        type="button"
+                        onClick={() => pauseCampaign(campaign.id)}
+                        disabled={busy}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/40 text-amber-200 text-xs hover:bg-amber-500/10 disabled:opacity-40"
+                      >
+                        <Pause className="w-3.5 h-3.5" />
+                        {t(`${NS}.pause`)}
+                      </Button>
+                    )}
+                    <Link
+                      to="/kill-chain"
+                      className="inline-flex items-center gap-1.5 text-[11px] font-mono text-cyan-300 hover:underline"
+                    >
+                      <GitBranch className="w-3.5 h-3.5" />
+                      {t(`${NS}.open_kill_chain`)}
+                    </Link>
+                    <Link
+                      to={`/attack-paths${campaignQuery ? `?${campaignQuery}` : ''}`}
+                      className="text-[11px] font-mono text-cyan-300 hover:underline"
+                    >
+                      {t(`${NS}.open_attack_paths`)}
+                    </Link>
+                    <Link
+                      to={`/jobs${campaignQuery ? `?${campaignQuery}` : ''}`}
+                      className="text-[11px] font-mono text-cyan-300 hover:underline"
+                    >
+                      {t(`${NS}.open_jobs`)}
+                    </Link>
+                    <Link
+                      to={council?.queue_path || `/council-queue${campaignQuery ? `?${campaignQuery}` : ''}`}
+                      className="text-[11px] font-mono text-cyan-300 hover:underline"
+                    >
+                      {t(`${NS}.open_council`)}
+                    </Link>
+                    <Link
+                      to={`/cem-dago?${[
+                        campaign?.client_id != null ? `client_id=${encodeURIComponent(campaign.client_id)}` : '',
+                        mesh?.scan_id ? `scan_id=${encodeURIComponent(mesh.scan_id)}` : '',
+                      ].filter(Boolean).join('&')}`}
+                      className="text-[11px] font-mono text-cyan-300 hover:underline"
+                    >
+                      {t(`${NS}.open_mesh`)}
+                    </Link>
+                    <Link
+                      to={`/remediation${campaign?.client_id != null ? `?client_id=${encodeURIComponent(campaign.client_id)}` : ''}`}
+                      className="inline-flex items-center gap-1 text-[11px] font-mono text-cyan-300 hover:underline"
+                    >
+                      <Wrench className="w-3.5 h-3.5" />
+                      {t(`${NS}.open_fix_first`)}
+                    </Link>
+                    <Link
+                      to="/threat-emulation"
+                      className="text-[11px] font-mono text-cyan-300 hover:underline"
+                    >
+                      {t(`${NS}.open_threat_emulation`)}
+                    </Link>
+                  </div>
+                  {campaign.last_error && (
+                    <p className="text-[11px] font-mono text-rose-300">{campaign.last_error}</p>
+                  )}
+
+                  {(emulation?.profile_id || campaign.profile_id) && (
+                    <div data-testid="campaign-apt-profile">
+                      <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+                        {t(`${NS}.profile_heading`)}
+                      </h2>
+                      <p className="text-sm text-[var(--text-primary)] font-medium">
+                        {t(`${NS}.profile_${profileI18nKey(emulation?.profile_id || campaign.profile_id)}_name`)}
+                      </p>
+                      <p className="text-[12px] text-[var(--text-secondary)] mt-1">
+                        {t(`${NS}.profile_${profileI18nKey(emulation?.profile_id || campaign.profile_id)}_blurb`)}
+                      </p>
+                      <p className="text-[11px] font-mono text-cyan-200/80 mt-2">{t(`${NS}.mitre_set`)}</p>
+                      <p className="text-[11px] font-mono text-[var(--text-muted)]">
+                        {(emulation?.profile?.mitre || []).join(' · ')}
+                      </p>
+                      <p className="text-[12px] text-[var(--text-secondary)] mt-2">{t(`${NS}.roe_notes`)}</p>
+                      <p className="text-[11px] text-[var(--text-muted)]">{emulation?.profile?.roe_notes || t(`${NS}.rails_roe`)}</p>
+                      <p className="text-[12px] text-[var(--text-secondary)] mt-2">{t(`${NS}.honest_coverage`)}</p>
+                      <p className="text-[11px] text-[var(--text-muted)]">{emulation?.profile?.honest_coverage}</p>
+                    </div>
+                  )}
+
+                  {Array.isArray(emulation?.stages) && emulation.stages.length > 0 && (
+                    <div data-testid="campaign-apt-stages">
+                      <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+                        {t(`${NS}.stages_heading`)}
+                      </h2>
+                      <ol className="grid sm:grid-cols-2 gap-2">
+                        {emulation.stages.map((st) => (
+                          <li
+                            key={st.id}
+                            className={`rounded-xl border p-3 ${STAGE_TONE[st.status] || STAGE_TONE.pending}`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[12px] font-medium">
+                                {t(`${NS}.stage_${st.id}`)}
+                              </span>
+                              <StatusBadge status={st.status} ns="stage" />
+                            </div>
+                            <div className="text-[10px] font-mono text-[var(--text-disabled)] mt-1">
+                              {st.mitre_tactic}
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+
+                  <div>
+                    <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+                      {t(`${NS}.spine_heading`)}
+                    </h2>
+                    <p className="text-[12px] font-mono text-[var(--text-secondary)]">{t(`${NS}.spine_no_disclose`)}</p>
+                    <p className="text-[11px] text-[var(--text-muted)]">{t(`${NS}.rails_roe`)}</p>
+                    {spine?.campaign_id && (
+                      <p className="text-[11px] font-mono text-[var(--text-disabled)] mt-1">{spine.campaign_id}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+                      {t(`${NS}.council_heading`)}
+                    </h2>
+                    <p className="text-[12px] text-[var(--text-secondary)]">{t(`${NS}.council_hitl_note`)}</p>
+                  </div>
+
+                  <div>
+                    <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+                      {t(`${NS}.mesh_heading`)}
+                    </h2>
+                    <p className="text-[12px] font-mono text-[var(--text-secondary)]">
+                      {mesh?.enabled
+                        ? t(`${NS}.mesh_enabled`, { id: mesh?.scan_id || '' })
+                        : t(`${NS}.mesh_disabled`)}
+                    </p>
+                    <p className="text-[11px] text-[var(--text-muted)]">
+                      {mesh?.world_state_on_blackboard ? t(`${NS}.mesh_seeded`) : t(`${NS}.mesh_unseeded`)}
+                    </p>
+                    <p className="text-[11px] text-[var(--text-muted)]">{t(`${NS}.mesh_executor`)}</p>
+                    {Array.isArray(mesh?.waves) && mesh.waves.length > 0 && (
+                      <ol className="mt-2 space-y-1">
+                        {mesh.waves.map((wave, i) => (
+                          <li key={`wave-${i}`} className="text-[11px] font-mono text-[var(--text-secondary)]">
+                            {t(`${NS}.mesh_wave_n`, { n: i + 1 })}{' '}
+                            {Array.isArray(wave) ? wave.join(', ') : ''}
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                    <p className="sr-only">{t(`${NS}.mesh_waves`)}</p>
+                  </div>
+
+                  <div>
+                    <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+                      {t(`${NS}.world_state`)}
+                    </h2>
+                    {(!facts || facts.length === 0) ? (
+                      <p className="text-[12px] text-[var(--text-muted)]">{t(`${NS}.no_facts`)}</p>
+                    ) : (
+                      <ul className="flex flex-wrap gap-2">
+                        {facts.map((fact) => (
+                          <li
+                            key={fact}
+                            className={`rounded-lg border px-2 py-1 text-[11px] font-mono ${
+                              provenFacts.has(String(fact))
+                                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
+                                : 'border-cyan-500/30 bg-cyan-500/10 text-cyan-100'
+                            }`}
+                            title={(evidence[fact] || []).join(', ')}
+                          >
+                            <span>{fact}</span>
+                            {provenFacts.has(String(fact)) && (
+                              <span className="ms-1 text-[10px] text-emerald-300">{t(`${NS}.fact_proven`)}</span>
+                            )}
+                            {Array.isArray(evidence[fact]) && evidence[fact].length > 0 && (
+                              <span className="ms-1 text-[10px] text-cyan-300/70">×{evidence[fact].length}</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  <div data-testid="campaign-proof-gate">
+                    <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+                      {t(`${NS}.proof_heading`)}
+                    </h2>
+                    <p className="text-[12px] text-[var(--text-secondary)]">{t(`${NS}.proof_note`)}</p>
+                    {active?.proof?.safety_rails_no_shells && (
+                      <p className="text-[11px] font-mono text-emerald-300/80 mt-1">
+                        {t(`${NS}.rails_roe`)}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                      <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)]">
+                        {t(`${NS}.planned_chain`)}
+                      </h2>
+                      <Button
+                        variant="unstyled"
+                        type="button"
+                        onClick={() => setProvenOnly((v) => !v)}
+                        className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded border ${
+                          provenOnly
+                            ? 'border-emerald-500/40 text-emerald-200 bg-emerald-500/10'
+                            : 'border-[var(--border-default)] text-[var(--text-muted)]'
+                        }`}
+                      >
+                        {t(`${NS}.filter_proven`)}
+                      </Button>
+                    </div>
+                    {visibleSteps.length === 0 ? (
+                      <p className="text-[12px] text-[var(--text-muted)]">{t(`${NS}.no_steps`)}</p>
+                    ) : (
+                      <ol className="space-y-2">
+                        {visibleSteps.map((s) => (
+                          <li
+                            key={s.id || s.seq}
+                            className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-3"
+                          >
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <span className="text-[11px] font-mono text-[var(--text-disabled)]">
+                                {t(`${NS}.step_n`, { n: s.seq })} · {s.mitre}
+                              </span>
+                              <span className="inline-flex items-center gap-1.5">
+                                <ProofStatusBadge status={proofStatusOf(s)} compact />
+                                <StatusBadge status={s.status} ns="step" />
+                              </span>
+                            </div>
+                            <div className="mt-1 text-sm text-[var(--text-primary)]">{s.technique_name}</div>
+                            <div className="text-[11px] font-mono text-[var(--text-muted)]">
+                              {s.engine_id}
+                              {s.job_id ? ` · ${String(s.job_id).slice(0, 8)}` : ''}
+                            </div>
+                            {s.proof_evidence?.reason && (
+                              <p className="mt-1 text-[11px] text-[var(--text-secondary)]">{s.proof_evidence.reason}</p>
+                            )}
+                            {Array.isArray(s.proof_evidence?.artifact_ids) && s.proof_evidence.artifact_ids.length > 0 && (
+                              <p className="text-[10px] font-mono text-emerald-300/80">
+                                {t(`${NS}.open_evidence`)} · {s.proof_evidence.artifact_ids.length}
+                              </p>
+                            )}
+                            {s.last_error && (
+                              <p className="mt-1 text-[11px] text-rose-300">{s.last_error}</p>
+                            )}
+                            {s.status === 'succeeded' && proofStatusOf(s) !== 'proven' && (
+                              <Button
+                                variant="unstyled"
+                                type="button"
+                                onClick={() => proveStep(campaign.id, s.id)}
+                                disabled={busy || provingStep === s.id}
+                                className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-500/40 text-emerald-200 text-[11px] font-mono hover:bg-emerald-500/10 disabled:opacity-40"
+                              >
+                                {provingStep === s.id
+                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  : <FlaskConical className="w-3.5 h-3.5" />}
+                                {provingStep === s.id ? t(`${NS}.proving`) : t(`${NS}.run_proof`)}
+                              </Button>
+                            )}
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </div>
+
+                  <div data-testid="campaign-detection-gaps">
+                    <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+                      {t(`${NS}.detection_gaps_heading`)}
+                    </h2>
+                    {detectionGaps.length === 0 ? (
+                      <p className="text-[12px] text-[var(--text-muted)]">{t(`${NS}.no_detection_gaps`)}</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {detectionGaps.map((g) => (
+                          <li
+                            key={g.id || `${g.technique_id}-${g.gap_kind}`}
+                            className={`rounded-xl border p-3 ${GAP_TONE[g.gap_kind] || 'border-[var(--border-default)]'}`}
+                          >
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <span className="inline-flex items-center gap-1.5 text-[11px] font-mono">
+                                <ShieldAlert className="w-3.5 h-3.5" />
+                                {t(`${NS}.gap_${g.gap_kind}`)}
+                              </span>
+                              <span className="text-[10px] font-mono uppercase tracking-wider">
+                                {t(`${NS}.control_${g.control_surface || 'unknown'}`)}
+                              </span>
+                            </div>
+                            <p className="text-[12px] text-[var(--text-secondary)] mt-1">{g.summary}</p>
+                            <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-1">
+                              {g.technique_id} · {g.engine_id} · {g.mitre}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  <div data-testid="campaign-remediation">
+                    <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+                      {t(`${NS}.remediation_heading`)}
+                    </h2>
+                    <p className="text-[12px] text-[var(--text-secondary)]">{t(`${NS}.remediation_note`)}</p>
+                    {remediation?.choke_point_proven && (
+                      <p className="text-[11px] font-mono text-emerald-300 mt-1">{t(`${NS}.choke_point_proven`)}</p>
+                    )}
+                    {Array.isArray(remediation?.program) && remediation.program.length > 0 && (
+                      <ol className="mt-2 space-y-1">
+                        {remediation.program.slice(0, 5).map((item) => (
+                          <li key={item.rank || item.title} className="text-[11px] font-mono text-[var(--text-secondary)]">
+                            {item.rank}. {item.title}
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Link
+                        to={remediation?.fix_first_path || '/remediation'}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-cyan-500/40 text-cyan-200 text-[11px] font-mono hover:bg-cyan-500/10"
+                      >
+                        <Wrench className="w-3.5 h-3.5" />
+                        {t(`${NS}.open_fix_first`)}
+                      </Link>
+                      {(campaign.status === 'completed' || remediation?.choke_point_proven) && (
+                        <Button
+                          variant="unstyled"
+                          type="button"
+                          onClick={() => queueRemediation(campaign.id)}
+                          disabled={busy}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-500/40 text-emerald-200 text-[11px] font-mono hover:bg-emerald-500/10 disabled:opacity-40"
+                        >
+                          {t(`${NS}.queue_verify`)}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+                      {t(`${NS}.event_log`)}
+                    </h2>
+                    {events.length === 0 ? (
+                      <p className="text-[12px] text-[var(--text-muted)]">{t(`${NS}.no_events`)}</p>
+                    ) : (
+                      <ol className="space-y-1.5 max-h-64 overflow-auto">
+                        {events.map((ev, i) => (
+                          <li
+                            key={`${ev.event_hash || i}-${ev.created_at}`}
+                            className="rounded-lg border border-[var(--border-default)] px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)]"
+                          >
+                            <span className="text-cyan-300">{ev.kind}</span>
+                            <span className="ms-2 text-[var(--text-disabled)]">v{ev.event_version || 1}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </PageShell>
+  )
+}

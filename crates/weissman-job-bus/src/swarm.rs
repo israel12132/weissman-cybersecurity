@@ -16,6 +16,7 @@ use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use sqlx::Row;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -375,6 +376,49 @@ pub fn spawn_coordinator_if_enabled(pool: PgPool) {
         coord.spawn();
         tracing::info!(target: "job_bus_swarm", "swarm coordinator active");
     });
+}
+
+/// Live swarm registry key as seen by operators. Never mutates TTL.
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkerLivenessView {
+    pub worker_id: String,
+    pub alive: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payload: Option<String>,
+}
+
+/// Shared Redis manager from `REDIS_URL` (inspect path; does not acquire leases).
+pub async fn shared_redis() -> Option<redis::aio::ConnectionManager> {
+    redis_manager_from_env().await
+}
+
+/// Read-only GET of `weissman:swarm:worker:{id}` keys.
+pub async fn inspect_workers<C: redis::aio::ConnectionLike>(
+    conn: &mut C,
+    worker_ids: &[String],
+) -> Result<HashMap<String, WorkerLivenessView>, JobBusError> {
+    let mut out = HashMap::with_capacity(worker_ids.len());
+    for worker_id in worker_ids {
+        let id = worker_id.trim();
+        if id.is_empty() {
+            continue;
+        }
+        let key = format!("{}{}", SWARM_REGISTRY_PREFIX, id);
+        let payload: Option<String> = redis::cmd("GET")
+            .arg(&key)
+            .query_async(conn)
+            .await
+            .map_err(|e| JobBusError::Redis(e.to_string()))?;
+        out.insert(
+            id.to_string(),
+            WorkerLivenessView {
+                worker_id: id.to_string(),
+                alive: payload.is_some(),
+                payload,
+            },
+        );
+    }
+    Ok(out)
 }
 
 // Silence unused import warning for broadcast in future gossip subscribers
