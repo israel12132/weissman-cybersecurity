@@ -1,7 +1,7 @@
 import { firstClientTarget } from '../lib/clientTarget'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
@@ -15,7 +15,47 @@ import Button from '../components/ui/Button'
 const ENGINE = 'asm'
 const DELTA_ENGINE = 'first_mover_surface_delta'
 const FUSION_ENGINE = 'first_mover_delta_fusion'
+const SCHISM_ENGINE = 'exposure_schism_fusion'
 const ACCENT = '#22d3ee'
+
+/** Live schism evidence only — first-mover inventory rows must never render as fracture proof. */
+export function isSchismPanelFinding(f) {
+  if (!f || typeof f !== 'object') return false
+  if (f.fusion === SCHISM_ENGINE || f.type === SCHISM_ENGINE) return true
+  const fe = f.fusion_engine
+  return fe === 'liminal_boundary' || fe === 'kill_chain'
+}
+
+export function extraHostsFromSurfaceDiff(diff) {
+  if (!diff || diff.unavailable) return []
+  const rows = [
+    ...(Array.isArray(diff.added) ? diff.added : []),
+    ...(Array.isArray(diff.changed) ? diff.changed : []),
+  ]
+  const out = []
+  for (const r of rows) {
+    const h = String(r?.fqdn || '').trim().toLowerCase()
+    if (!h.includes('.') || out.includes(h)) continue
+    out.push(h)
+    if (out.length >= 8) break
+  }
+  return out
+}
+
+/** POST body for Prove protocol schism — extra_hosts from live surface-diff only. */
+export function schismScanBody({ clientId, target, surfaceDiff }) {
+  const extras = extraHostsFromSurfaceDiff(surfaceDiff)
+  const body = {
+    engine: SCHISM_ENGINE,
+    client_id: Number(clientId),
+    target: String(target || '').trim(),
+    include_ct: true,
+    include_http: true,
+    chain_web_engines: false,
+  }
+  if (extras.length) body.extra_hosts = extras.join(',')
+  return body
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -260,10 +300,14 @@ export function FirstMoverDeltaPanel({
   loading,
   hunting,
   fusionHunting,
+  schismHunting,
+  pending,
   onHunt,
   onFusion,
+  onSchism,
   huntDisabled,
   nerve,
+  schismFindings,
 }) {
   const { t } = useTranslation()
   const added = Array.isArray(diff?.added) ? diff.added : []
@@ -287,6 +331,8 @@ export function FirstMoverDeltaPanel({
   const cs = nerve?.certstream || {}
   const oast = nerve?.oast || {}
   const nvd = nerve?.nvd || {}
+  const liveSchism = Array.isArray(schismFindings) ? schismFindings.filter(isSchismPanelFinding) : []
+  const firstMoverBusy = Boolean(hunting || fusionHunting || schismHunting || pending)
 
   return (
     <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-950/40 via-black/40 to-cyan-950/30 p-4 mb-5">
@@ -304,7 +350,7 @@ export function FirstMoverDeltaPanel({
             variant="unstyled"
             type="button"
             onClick={onHunt}
-            disabled={huntDisabled || hunting}
+            disabled={huntDisabled || firstMoverBusy}
             className="px-4 py-2 rounded-lg text-sm font-mono font-semibold bg-amber-500/20 border border-amber-400/40 text-amber-100 hover:bg-amber-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             {hunting
@@ -315,12 +361,23 @@ export function FirstMoverDeltaPanel({
             variant="unstyled"
             type="button"
             onClick={onFusion}
-            disabled={huntDisabled || fusionHunting}
+            disabled={huntDisabled || firstMoverBusy}
             className="px-4 py-2 rounded-lg text-sm font-mono font-semibold bg-fuchsia-500/20 border border-fuchsia-400/40 text-fuchsia-100 hover:bg-fuchsia-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             {fusionHunting
               ? `⟳ ${t('pages.attackSurfaceManagement.first_mover_fusing')}`
               : `⛓ ${t('pages.attackSurfaceManagement.first_mover_fusion')}`}
+          </Button>
+          <Button
+            variant="unstyled"
+            type="button"
+            onClick={onSchism}
+            disabled={huntDisabled || firstMoverBusy}
+            className="px-4 py-2 rounded-lg text-sm font-mono font-semibold bg-rose-500/20 border border-rose-400/40 text-rose-100 hover:bg-rose-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            {schismHunting
+              ? `⟳ ${t('pages.attackSurfaceManagement.first_mover_schism_running')}`
+              : `⚡ ${t('pages.attackSurfaceManagement.first_mover_schism')}`}
           </Button>
         </div>
       </div>
@@ -409,6 +466,34 @@ export function FirstMoverDeltaPanel({
           </table>
         </div>
       )}
+      {liveSchism.length > 0 && (
+        <div className="mt-3 rounded-xl border border-rose-500/25 bg-rose-950/20 p-3 space-y-2">
+          <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-rose-200/80">
+            {t('pages.attackSurfaceManagement.first_mover_schism_live')}
+          </p>
+          {liveSchism.slice(0, 8).map((f, i) => {
+            const proof = String(f.evidence || f.description || f.proof || '').trim()
+            return (
+              <div key={`${f.title || f.type || 'schism'}-${i}`} className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[12px] text-rose-50/90 truncate">{f.title || f.value}</p>
+                  {proof ? (
+                    <p className="text-[10px] font-mono text-rose-200/55 truncate">{proof}</p>
+                  ) : null}
+                </div>
+                <span className="text-[10px] font-mono uppercase text-rose-300/80 shrink-0">
+                  {f.severity || 'info'}
+                </span>
+              </div>
+            )
+          })}
+          {liveSchism.length > 8 ? (
+            <p className="text-[10px] font-mono text-rose-300/70">
+              {t('pages.attackSurfaceManagement.first_mover_schism_more', { count: liveSchism.length - 8 })}
+            </p>
+          ) : null}
+        </div>
+      )}
     </div>
   )
 }
@@ -481,7 +566,25 @@ export default function AttackSurfaceManagement() {
   const [deltaLoading, setDeltaLoading] = useState(false)
   const [deltaJobId, setDeltaJobId] = useState(null)
   const [fusionJobId, setFusionJobId] = useState(null)
+  const [schismJobId, setSchismJobId] = useState(null)
+  const [schismFindings, setSchismFindings] = useState([])
+  const [firstMoverPending, setFirstMoverPending] = useState(false)
+  const firstMoverLockRef = useRef(false)
+  const firstMoverGenRef = useRef(0)
+  const firstMoverJobGenRef = useRef(0)
   const [nerve, setNerve] = useState(null)
+
+  const releaseFirstMover = useCallback(() => {
+    firstMoverLockRef.current = false
+    setFirstMoverPending(false)
+  }, [])
+
+  const acquireFirstMover = useCallback(() => {
+    if (firstMoverLockRef.current) return false
+    firstMoverLockRef.current = true
+    setFirstMoverPending(true)
+    return true
+  }, [])
 
   const refreshCorpus = useCallback(() => {
     apiFetch('/api/discovery-knowledge/stats')
@@ -571,6 +674,16 @@ export default function AttackSurfaceManagement() {
   }, [selectedClientId, loadSurfaceDiff])
 
   useEffect(() => {
+    firstMoverGenRef.current += 1
+    setSchismFindings([])
+    setSchismJobId(null)
+    setDeltaJobId(null)
+    setFusionJobId(null)
+    firstMoverLockRef.current = false
+    setFirstMoverPending(false)
+  }, [selectedClientId])
+
+  useEffect(() => {
     loadNerve()
     const id = setInterval(loadNerve, 20000)
     return () => clearInterval(id)
@@ -612,6 +725,8 @@ export default function AttackSurfaceManagement() {
     enabled: Boolean(deltaJobId),
     onComplete: async () => {
       setDeltaJobId(null)
+      if (firstMoverGenRef.current !== firstMoverJobGenRef.current) return
+      releaseFirstMover()
       await loadSurfaceDiff(selectedClientId)
       loadNerve()
     },
@@ -621,6 +736,22 @@ export default function AttackSurfaceManagement() {
     enabled: Boolean(fusionJobId),
     onComplete: async () => {
       setFusionJobId(null)
+      if (firstMoverGenRef.current !== firstMoverJobGenRef.current) return
+      releaseFirstMover()
+      await loadSurfaceDiff(selectedClientId)
+      loadNerve()
+    },
+  })
+
+  useJobPoll(schismJobId, {
+    enabled: Boolean(schismJobId),
+    onComplete: async (job) => {
+      setSchismJobId(null)
+      if (firstMoverGenRef.current !== firstMoverJobGenRef.current) return
+      releaseFirstMover()
+      const f = await resolveJobFindings(job, SCHISM_ENGINE, selectedClientId)
+      if (firstMoverGenRef.current !== firstMoverJobGenRef.current) return
+      setSchismFindings(Array.isArray(f) ? f.filter(isSchismPanelFinding) : [])
       await loadSurfaceDiff(selectedClientId)
       loadNerve()
     },
@@ -656,6 +787,8 @@ export default function AttackSurfaceManagement() {
   const handleFirstMoverHunt = useCallback(async () => {
     if (!selectedClientId) { showToast('error', t('pages.attackSurfaceManagement.toast_select_client')); return }
     if (!target.trim()) { showToast('error', t('pages.attackSurfaceManagement.toast_enter_target')); return }
+    if (!acquireFirstMover()) return
+    const gen = firstMoverGenRef.current
     try {
       const { ok, data: d, status } = await postScan({
         engine: DELTA_ENGINE,
@@ -664,21 +797,30 @@ export default function AttackSurfaceManagement() {
         include_ct: true,
         include_http: true,
       })
+      if (firstMoverGenRef.current !== gen) return
       if (!ok) {
         showToast('error', d.detail || d.error || t('pages.attackSurfaceManagement.toast_scan_failed', { status }))
+        releaseFirstMover()
         return
       }
       const jid = d.job_id ?? ''
       showToast('info', t('pages.attackSurfaceManagement.toast_scan_queued', { jid }))
-      if (jid) setDeltaJobId(jid)
+      if (jid) {
+        firstMoverJobGenRef.current = gen
+        setDeltaJobId(jid)
+      } else releaseFirstMover()
     } catch (e) {
+      if (firstMoverGenRef.current !== gen) return
       showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
+      releaseFirstMover()
     }
-  }, [selectedClientId, target, postScan, showToast, t])
+  }, [selectedClientId, target, postScan, showToast, t, acquireFirstMover, releaseFirstMover])
 
   const handleDeltaFusion = useCallback(async () => {
     if (!selectedClientId) { showToast('error', t('pages.attackSurfaceManagement.toast_select_client')); return }
     if (!target.trim()) { showToast('error', t('pages.attackSurfaceManagement.toast_enter_target')); return }
+    if (!acquireFirstMover()) return
+    const gen = firstMoverGenRef.current
     try {
       const { ok, data: d, status } = await postScan({
         engine: FUSION_ENGINE,
@@ -688,17 +830,56 @@ export default function AttackSurfaceManagement() {
         include_http: true,
         chain_web_engines: false,
       })
+      if (firstMoverGenRef.current !== gen) return
       if (!ok) {
         showToast('error', d.detail || d.error || t('pages.attackSurfaceManagement.toast_scan_failed', { status }))
+        releaseFirstMover()
         return
       }
       const jid = d.job_id ?? ''
       showToast('info', t('pages.attackSurfaceManagement.toast_scan_queued', { jid }))
-      if (jid) setFusionJobId(jid)
+      if (jid) {
+        firstMoverJobGenRef.current = gen
+        setFusionJobId(jid)
+      } else releaseFirstMover()
     } catch (e) {
+      if (firstMoverGenRef.current !== gen) return
       showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
+      releaseFirstMover()
     }
-  }, [selectedClientId, target, postScan, showToast, t])
+  }, [selectedClientId, target, postScan, showToast, t, acquireFirstMover, releaseFirstMover])
+
+  const handleExposureSchism = useCallback(async () => {
+    if (!selectedClientId) { showToast('error', t('pages.attackSurfaceManagement.toast_select_client')); return }
+    if (!target.trim()) { showToast('error', t('pages.attackSurfaceManagement.toast_enter_target')); return }
+    if (!acquireFirstMover()) return
+    const gen = firstMoverGenRef.current
+    setSchismFindings([])
+    try {
+      const body = schismScanBody({
+        clientId: selectedClientId,
+        target,
+        surfaceDiff,
+      })
+      const { ok, data: d, status } = await postScan(body)
+      if (firstMoverGenRef.current !== gen) return
+      if (!ok) {
+        showToast('error', d.detail || d.error || t('pages.attackSurfaceManagement.toast_scan_failed', { status }))
+        releaseFirstMover()
+        return
+      }
+      const jid = d.job_id ?? ''
+      showToast('info', t('pages.attackSurfaceManagement.toast_scan_queued', { jid }))
+      if (jid) {
+        firstMoverJobGenRef.current = gen
+        setSchismJobId(jid)
+      } else releaseFirstMover()
+    } catch (e) {
+      if (firstMoverGenRef.current !== gen) return
+      showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
+      releaseFirstMover()
+    }
+  }, [selectedClientId, target, postScan, showToast, t, surfaceDiff, acquireFirstMover, releaseFirstMover])
 
   const assetTypes = useMemo(() => {
     const s = new Set(issues.map((f) => f.asset).filter(Boolean))
@@ -909,8 +1090,12 @@ export default function AttackSurfaceManagement() {
         loading={deltaLoading}
         hunting={Boolean(deltaJobId)}
         fusionHunting={Boolean(fusionJobId)}
+        schismHunting={Boolean(schismJobId)}
+        pending={firstMoverPending}
         onHunt={handleFirstMoverHunt}
         onFusion={handleDeltaFusion}
+        onSchism={handleExposureSchism}
+        schismFindings={schismFindings}
         huntDisabled={!selectedClientId || status === 'running'}
         nerve={nerve}
       />

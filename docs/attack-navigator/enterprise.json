@@ -28,8 +28,8 @@
     },
     {
       "techniqueID": "T1190",
-      "score": 70,
-      "comment": "ai_casb_saas, ai_cloud_escalation_chain, api_all_vectors_engine, api_fuzzing, api_gateway_attack, api_gateway_bypass, api_versioning_attack, apt29_techniques, apt41_techniques, asm, ble_rf, blockchain_bridge_exploit, carbon_spider_ttps, cl0p_techniques, deserialization_java, deserialization_net, dns_rebinding, earth_longzhi_ttps, external_exposure_supreme, file_upload, fin7_techniques, graphql_attack, graphql_deep_attack, graphql_injection, graphql_subscription_attack, grpc_reflection_attack, host_header_injection, http2_attack, http_feedback_fuzz, http_parameter_pollution, http_smuggling, kernel_exploit, kill_chain, lazarus_group_ttps, ldap_injection_engine, liminal_boundary, llm_path_fuzz, log4shell_scan, mainframe_zos_attack, mass_assignment, microsecond_timing, mobile_backend_chain, network_slice_isolation_bypass, nexus_sovereign_swarm, ngfw_posture, nosql_deep_injection, nosql_injection, odata_injection, ollama_fuzz, open_redirect, rce_chain, rce_deserialization, rce_exploit_engine, react_native_attack, salt_typhoon_ttps, sandworm_techniques, sap_erp_attack, service_mesh_attack, shodan_mass_scan, smart_contract_audit, soap_injection, sqli_advanced, ssti, swagger_abuse, tactic_chain_synthesizer, volt_typhoon_ttps, vuln_chaining, web3_dapp_attack, xxe, xxe_injection",
+      "score": 71,
+      "comment": "ai_casb_saas, ai_cloud_escalation_chain, api_all_vectors_engine, api_fuzzing, api_gateway_attack, api_gateway_bypass, api_versioning_attack, apt29_techniques, apt41_techniques, asm, ble_rf, blockchain_bridge_exploit, carbon_spider_ttps, cl0p_techniques, deserialization_java, deserialization_net, dns_rebinding, earth_longzhi_ttps, exposure_schism_fusion, external_exposure_supreme, file_upload, fin7_techniques, graphql_attack, graphql_deep_attack, graphql_injection, graphql_subscription_attack, grpc_reflection_attack, host_header_injection, http2_attack, http_feedback_fuzz, http_parameter_pollution, http_smuggling, kernel_exploit, kill_chain, lazarus_group_ttps, ldap_injection_engine, liminal_boundary, llm_path_fuzz, log4shell_scan, mainframe_zos_attack, mass_assignment, microsecond_timing, mobile_backend_chain, network_slice_isolation_bypass, nexus_sovereign_swarm, ngfw_posture, nosql_deep_injection, nosql_injection, odata_injection, ollama_fuzz, open_redirect, rce_chain, rce_deserialization, rce_exploit_engine, react_native_attack, salt_typhoon_ttps, sandworm_techniques, sap_erp_attack, service_mesh_attack, shodan_mass_scan, smart_contract_audit, soap_injection, sqli_advanced, ssti, swagger_abuse, tactic_chain_synthesizer, volt_typhoon_ttps, vuln_chaining, web3_dapp_attack, xxe, xxe_injection",
       "enabled": true
     },
     {
@@ -1228,7 +1228,7 @@
       "#1e3a8a"
     ],
     "minValue": 0,
-    "maxValue": 70
+    "maxValue": 71
   },
   "legendItems": [
     {

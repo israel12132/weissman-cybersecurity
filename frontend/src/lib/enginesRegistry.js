@@ -53,8 +53,8 @@ export const ENGINES_REGISTRY = [
     id: 'exposure_schism_fusion',
     label: 'Exposure Schism Fusion',
     group: 'recon',
-    mitre: 'T1595',
-    description: 'New host from live surface delta is immediately probed for HTTP/1.1↔HTTP/2 / Vary / rewrite-header schisms on that same FQDN — first-seen exposure plus protocol-boundary proof in one job.',
+    mitre: 'T1190',
+    description: 'New or changed internet host from live surface delta is immediately fracture-tested: HTTP/1.1↔HTTP/2 auth bypass, cache Vary oracle, rewrite-header trust. Kill-chain stages are mapped from those same live HTTP fractures (optional deep crawl). Empty delta is idle — timeouts are never a filler score.',
     requiresTarget: true,
   },
   {

@@ -10,7 +10,7 @@
 
 | Metric | Value | Verification command |
 |--------|-------|----------------------|
-| Production engines | **583** | `node scripts/verify_engine_wiring.mjs` |
+| Production engines | **584** | `node scripts/verify_engine_wiring.mjs` |
 | Command Center routes | **130** | `node scripts/weissman-ui-audit.mjs` |
 | UI pages audited | **111/111** | `node scripts/weissman-ui-audit.mjs` |
 | Real probes | **318** | `node scripts/engine_reality_audit.mjs` |

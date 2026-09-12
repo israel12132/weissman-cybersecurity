@@ -537,9 +537,9 @@
     "sso_saml": "Sign in with SAML",
     "enterprise_sso": "Enterprise SSO",
     "brand_tagline": "Unified offensive security for enterprise teams",
-    "brand_story": "Correlate findings across 254 attack engines, orchestrate SOAR playbooks, and prove compliance — from a single command center.",
+    "brand_story": "Correlate findings across {{engines}} attack engines, orchestrate SOAR playbooks, and prove compliance — from a single command center.",
     "brand_release": "{{name}} · {{release}}",
-    "trust_engines": "254 engines",
+    "trust_engines": "{{engines}} engines",
     "trust_soc2": "SOC2-ready",
     "trust_region": "EU-West",
     "trust_label": "Platform trust indicators",
@@ -5045,7 +5045,7 @@
       }
     },
     "attackSurfaceManagement": {
-      "evidence_notice": "ASM inventory from POST /api/command-center/scan (asm). First-mover drift from GET /api/clients/:id/surface-diff, CT squirt nerve from GET /api/first-mover/nerve, delta hunt POST first_mover_surface_delta, kill-chain POST first_mover_delta_fusion — live DNS/HTTP/CT vs last snapshot, no canned graphs.",
+      "evidence_notice": "ASM inventory from POST /api/command-center/scan (asm). First-mover drift from GET /api/clients/:id/surface-diff, CT squirt nerve from GET /api/first-mover/nerve, delta hunt POST first_mover_surface_delta, kill-chain POST first_mover_delta_fusion, protocol-schism POST exposure_schism_fusion — live DNS/HTTP/CT vs last snapshot, no canned graphs.",
       "severity_critical": "Critical",
       "severity_high": "High",
       "severity_medium": "Medium",
@@ -5109,9 +5109,9 @@
       "toggle_attack_path_correlation_label": "Attack path correlation",
       "toggle_attack_path_correlation_hint": "Toxic combination synthesis (CORS+leaks, etc.)",
       "page_title": "Attack Surface Management",
-      "page_subtitle": "Agentless external attack-surface discovery, CT squirt, first-mover drift, and delta kill-chain — new hosts get BOLA/JWT/takeover/leak on that FQDN before weekly scanners.",
+      "page_subtitle": "Agentless external attack-surface discovery, CT squirt, first-mover drift, delta kill-chain, and protocol-schism proof — new hosts get BOLA/JWT/takeover/leak and HTTP/1.1↔HTTP/2 fracture tests on that FQDN before weekly scanners.",
       "first_mover_title": "First-mover drift",
-      "first_mover_subtitle": "Live DNS/HTTP/CT versus the last snapshot for this client. Empty until the first hunt stores a baseline.",
+      "first_mover_subtitle": "Live DNS/HTTP/CT versus the last snapshot for this client. Hunt stores a baseline; fusion kill-chains the FQDN; schism proves HTTP/1.1↔HTTP/2 / Vary / rewrite fractures on only new or changed hosts.",
       "first_mover_added": "New hosts",
       "first_mover_removed": "Gone",
       "first_mover_changed": "Changed",
@@ -5188,7 +5188,11 @@
       "toast_scan_failed": "Scan failed ({{status}})",
       "toast_scan_queued": "Attack-surface scan queued (job {{jid}})",
       "toast_network_error": "Network error",
-      "toast_exported": "Exported attack-surface report JSON"
+      "toast_exported": "Exported attack-surface report JSON",
+      "first_mover_schism": "Prove protocol schism",
+      "first_mover_schism_running": "Fracture-testing…",
+      "first_mover_schism_live": "Live schism + kill-chain evidence",
+      "first_mover_schism_more": "+{{count}} more live fractures in the job"
     },
     "dnsDomainPosture": {
       "evidence_notice": "DNS, SPF, DMARC, and subdomain posture from POST /api/command-center/scan (email_dns_posture / dns engines). Records are resolved live against public resolvers for authorized domains.",

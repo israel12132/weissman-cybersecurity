@@ -34,7 +34,7 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 |--------|-------------------:|------------:|--------:|
 | Reconnaissance | 21 / 46 | 46% | 76 |
 | Resource Development | 15 / 50 | 30% | 33 |
-| Initial Access | 19 / 22 | 86% | 169 |
+| Initial Access | 19 / 22 | 86% | 170 |
 | Execution | 15 / 64 | 23% | 61 |
 | Persistence | 15 / 113 | 13% | 56 |
 | Privilege Escalation | 14 / 96 | 15% | 56 |

@@ -13,8 +13,8 @@ This is a Rust-first monorepo (Cargo workspace) with a React/Vite frontend and l
 | Metric | Value | Verify |
 |--------|-------|--------|
 | Production engines | **584** | `node scripts/verify_engine_wiring.mjs` |
-| Command Center routes | **145** (target ≥112) | `node scripts/weissman-ui-audit.mjs` |
-| UI pages (audit) | **126/126** — all pages meet the Weissman UI standard (exit 0) | `node scripts/weissman-ui-audit.mjs` |
+| Command Center routes | **137** (target ≥112) | `node scripts/weissman-ui-audit.mjs` |
+| UI pages (audit) | **118/118** — all pages meet the Weissman UI standard (exit 0) | `node scripts/weissman-ui-audit.mjs` |
 | Real probes | **322** | `node scripts/engine_reality_audit.mjs` |
 | Agent-required engines | **58** | same |
 
@@ -65,7 +65,7 @@ This is a Rust-first monorepo (Cargo workspace) with a React/Vite frontend and l
 | `scripts/go_live_check.sh` | Production readiness (K8s, DR, secrets template, OT engines) |
 | `scripts/generate_audit_evidence_pack.sh` | Auditor JSON + PDF (wiring, SBOM, NIST/SOC2 mapping) |
 | `scripts/verify_engine_wiring.mjs` | 584 engine IDs ↔ dispatch — 0 gaps |
-| `scripts/weissman-ui-audit.mjs` | 145 routes (target ≥112), 126/126 pages — live API evidence rules; run for live numbers |
+| `scripts/weissman-ui-audit.mjs` | 130 routes (target ≥112), 111/111 pages — live API evidence rules; run for live numbers |
 
 See **`docs/operations/INSPECTION-DAY-RUNBOOK.md`** for 30+30 minute demo and CISO deep-dive scripts.  
 Week 8 sign-off: **`docs/operations/INSPECTION-READY-SIGNOFF.md`**.
