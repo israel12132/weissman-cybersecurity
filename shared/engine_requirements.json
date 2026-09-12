@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-09-10T15:48:50.483Z",
-  "production_engine_count": 583,
+  "generated_at": "2026-09-12T00:23:37.269Z",
+  "production_engine_count": 584,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -183,6 +183,39 @@
       "hint_en": "Out-of-band verification for blind SSRF/XSS/OAST engines.",
       "hint_he": "אימות OOB ל-SSRF/XSS blind."
     },
+    "intelx_key": {
+      "id": "intelx_key",
+      "scope": "tenant",
+      "env": "INTELX_API_KEY",
+      "type": "tenant_env",
+      "required": false,
+      "label_en": "Intelligence X API key (optional)",
+      "label_he": "מפתח Intelligence X (אופציונלי)",
+      "hint_en": "Enriches darkweb_intel / dominion_fusion leak index. Alias: WEISSMAN_INTELX_KEY. crt.sh and urlscan still run without it.",
+      "hint_he": "מעשיר אינדקס דליפות. כינוי: WEISSMAN_INTELX_KEY. crt.sh ו-urlscan רצים גם בלעדיו."
+    },
+    "abusech_key": {
+      "id": "abusech_key",
+      "scope": "tenant",
+      "env": "WEISSMAN_ABUSECH_AUTH_KEY",
+      "type": "tenant_env",
+      "required": false,
+      "label_en": "abuse.ch Auth-Key (optional)",
+      "label_he": "מפתח abuse.ch (אופציונלי)",
+      "hint_en": "URLHaus malware-URL host lookup and ThreatFox IOCs. Alias: ABUSECH_AUTH_KEY. Register at https://auth.abuse.ch/",
+      "hint_he": "URLHaus ו-ThreatFox. כינוי: ABUSECH_AUTH_KEY. רישום ב-https://auth.abuse.ch/"
+    },
+    "otx_key": {
+      "id": "otx_key",
+      "scope": "tenant",
+      "env": "OTX_API_KEY",
+      "type": "tenant_env",
+      "required": false,
+      "label_en": "AlienVault OTX API key (optional)",
+      "label_he": "מפתח AlienVault OTX (אופציונלי)",
+      "hint_en": "OTX domain pulses for darkweb_intel / dominion_fusion. Not a substitute for IntelX or abuse.ch.",
+      "hint_he": "פולסי דומיין ב-OTX. לא מחליף IntelX או abuse.ch."
+    },
     "tenant_ai_entitlement": {
       "id": "tenant_ai_entitlement",
       "scope": "tenant",
@@ -205,7 +238,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 426
+      "engine_count": 427
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -2800,7 +2833,10 @@
       "kind": "real_probe",
       "label": "Dark Web Brand Monitor",
       "requirements": [
+        "abusech_key",
         "contact_email",
+        "intelx_key",
+        "otx_key",
         "scope_domains"
       ]
     },
@@ -3416,7 +3452,10 @@
       "kind": "real_probe",
       "label": "Dark Web Intelligence",
       "requirements": [
+        "abusech_key",
         "contact_email",
+        "intelx_key",
+        "otx_key",
         "scope_domains"
       ]
     },
@@ -6544,6 +6583,19 @@
         "contact_email",
         "scope_domains",
         "scope_ips"
+      ]
+    },
+    "dominion_fusion": {
+      "id": "dominion_fusion",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Dominion Public-Intel Fusion",
+      "requirements": [
+        "abusech_key",
+        "contact_email",
+        "intelx_key",
+        "otx_key",
+        "scope_domains"
       ]
     }
   }
