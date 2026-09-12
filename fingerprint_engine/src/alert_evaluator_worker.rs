@@ -89,7 +89,7 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
     }
 
     let findings = sqlx::query(
-        r#"SELECT id, severity, title, description, source
+        r#"SELECT id, severity, title, description, source, client_id
            FROM vulnerabilities
            WHERE created_at >= now() - interval '5 minutes'
            ORDER BY id DESC
@@ -106,6 +106,26 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
         let title: String = finding.try_get("title").unwrap_or_default();
         let description: String = finding.try_get("description").unwrap_or_default();
         let source: String = finding.try_get("source").unwrap_or_default();
+        let client_id: i64 = finding.try_get("client_id").unwrap_or(0);
+
+        let path_hit = if client_id > 0 {
+            let paths_json: Option<Value> = sqlx::query_scalar(
+                r#"SELECT paths_json FROM attack_path_snapshots
+                    WHERE tenant_id = $1 AND client_id = $2
+                    ORDER BY computed_at DESC LIMIT 1"#,
+            )
+            .bind(tenant_id)
+            .bind(client_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .ok()
+            .flatten();
+            paths_json.and_then(|pj| {
+                crate::engine_fusion::correlate_finding_to_paths(&title, &source, &pj)
+            })
+        } else {
+            None
+        };
 
         for rule in &rules {
             let rule_id: i64 = rule.try_get("id").unwrap_or(0);
@@ -143,6 +163,8 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
                 title: title.clone(),
                 description: description.clone(),
                 source: source.clone(),
+                attack_path_hops: path_hit.as_ref().map(|h| h.0),
+                attack_path_jewel: path_hit.as_ref().map(|h| h.1.clone()),
             };
 
             // The INSERT itself is the dedup gate: the (rule_id, finding_id) unique index makes a

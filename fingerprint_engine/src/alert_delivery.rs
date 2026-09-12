@@ -18,6 +18,8 @@ pub struct AlertFindingInfo {
     pub title: String,
     pub description: String,
     pub source: String,
+    pub attack_path_hops: Option<u32>,
+    pub attack_path_jewel: Option<String>,
 }
 
 struct DeliveryConfig {
@@ -123,6 +125,8 @@ fn alert_payload(channel: &str, rule: &AlertRuleInfo, finding: &AlertFindingInfo
             "title": finding.title,
             "description": finding.description,
             "source": finding.source,
+            "attack_path_hops": finding.attack_path_hops,
+            "attack_path_jewel": finding.attack_path_jewel,
         },
         "text": format!(
             "[Weissman][{}] rule \"{}\" fired on {} finding: {}",

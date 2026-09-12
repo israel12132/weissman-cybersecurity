@@ -9,7 +9,7 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
 import { downloadCsv } from '../lib/exportFindingsCsv'
-import { GitBranch, RefreshCw, ChevronRight } from 'lucide-react'
+import { GitBranch, RefreshCw, ChevronRight, Crown } from 'lucide-react'
 import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
@@ -121,6 +121,9 @@ export default function AttackPaths() {
   const [blockSmb, setBlockSmb] = useState(false)
   const [whatIfBusy, setWhatIfBusy] = useState(false)
   const [whatIfSnapshot, setWhatIfSnapshot] = useState(null)
+  const [zeroJewel, setZeroJewel] = useState(false)
+  const [candidateJewels, setCandidateJewels] = useState([])
+  const [markingId, setMarkingId] = useState(null)
 
   const load = useCallback(
     async (recompute = false) => {
@@ -134,6 +137,8 @@ export default function AttackPaths() {
         if (data?.ok === false) throw new Error(data.detail || 'load failed')
         setSnapshot(data.snapshot || null)
         setHasSnapshot(Boolean(data.snapshot))
+        setZeroJewel(Boolean(data.zero_jewel) || Number(data.snapshot?.jewel_count) === 0)
+        setCandidateJewels(Array.isArray(data.candidate_jewels) ? data.candidate_jewels : [])
         if (recompute && data.snapshot) toast.success(t(`${NS}.recompute_done`))
       } catch (e) {
         setError(e.message || t(`${NS}.load_failed`))
@@ -143,6 +148,28 @@ export default function AttackPaths() {
       }
     },
     [selectedClientId, t, toast],
+  )
+
+  const markCrownJewel = useCallback(
+    async (nodeId) => {
+      if (nodeId == null) return
+      setMarkingId(nodeId)
+      setError('')
+      try {
+        const data = await apiFetch(`/api/risk-graph/nodes/${encodeURIComponent(nodeId)}/flags`, {
+          method: 'PATCH',
+          body: { crown_jewel: true },
+        })
+        if (data?.ok === false) throw new Error(data.detail || t(`${NS}.mark_jewel_failed`))
+        toast.success(t(`${NS}.mark_jewel_done`))
+        await load(true)
+      } catch (e) {
+        setError(e.message || t(`${NS}.mark_jewel_failed`))
+      } finally {
+        setMarkingId(null)
+      }
+    },
+    [load, t, toast],
   )
 
   const runWhatIf = useCallback(async () => {
@@ -171,6 +198,8 @@ export default function AttackPaths() {
   useEffect(() => {
     setSnapshot(null)
     setWhatIfSnapshot(null)
+    setZeroJewel(false)
+    setCandidateJewels([])
     if (selectedClientId != null) load(false)
   }, [selectedClientId, load])
 
@@ -190,6 +219,9 @@ export default function AttackPaths() {
   const topScore = useMemo(
     () => (paths.length ? Math.max(...paths.map((p) => Number(p.path_score) || 0)) : 0),
     [paths],
+  )
+  const showZeroJewel = selectedClientId != null && !loading && !error && (
+    zeroJewel || Number(display?.jewel_count) === 0
   )
 
   const columns = useMemo(
@@ -300,6 +332,55 @@ export default function AttackPaths() {
         {error && (
           <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono">
             {error}
+          </div>
+        )}
+
+        {showZeroJewel && (
+          <div
+            role="status"
+            data-testid="zero-jewel-banner"
+            className="rounded-xl border border-amber-500/40 bg-amber-950/25 p-4 space-y-3"
+          >
+            <div className="flex items-start gap-3">
+              <Crown className="w-5 h-5 text-amber-300 shrink-0 mt-0.5" aria-hidden />
+              <div>
+                <h2 className="text-sm font-semibold text-amber-100">{t(`${NS}.zero_jewel_title`)}</h2>
+                <p className="text-[12px] text-[var(--text-muted)] mt-1">{t(`${NS}.zero_jewel_body`)}</p>
+              </div>
+            </div>
+            {candidateJewels.length === 0 ? (
+              <p className="text-[12px] font-mono text-[var(--text-muted)]">{t(`${NS}.zero_jewel_no_candidates`)}</p>
+            ) : (
+              <ul className="space-y-2">
+                {candidateJewels.map((node) => (
+                  <li
+                    key={node.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--table-surface)] px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[13px] text-[var(--text-primary)] truncate">
+                        {node.label || node.graph_key || `#${node.id}`}
+                      </div>
+                      <div className="text-[10px] font-mono text-[var(--text-muted)]">
+                        {node.node_type || 'node'} · {t(`${NS}.candidate_value`, {
+                          value: `$${(Number(node.business_value_usd) || 0).toLocaleString()}`,
+                        })}
+                      </div>
+                    </div>
+                    <Button
+                      variant="unstyled"
+                      type="button"
+                      disabled={markingId != null}
+                      onClick={() => markCrownJewel(node.id)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 text-amber-100 text-xs font-medium hover:bg-amber-500/25 disabled:opacity-40"
+                    >
+                      <Crown className="w-3.5 h-3.5" aria-hidden />
+                      {markingId === node.id ? t(`${NS}.mark_jewel_busy`) : t(`${NS}.mark_jewel`)}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 

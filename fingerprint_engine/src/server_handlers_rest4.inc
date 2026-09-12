@@ -1216,7 +1216,9 @@ async fn api_risk_graph_get(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"nodes":[],"edges":[]}))).into_response();
     };
     let nodes = sqlx::query(
-        r#"SELECT id, graph_key, node_type, label, external_id, metadata, risk_score, is_choke_point
+        r#"SELECT id, graph_key, node_type, label, external_id, metadata, risk_score, is_choke_point,
+                  internet_exposed, crown_jewel, COALESCE(business_value_usd, 0) AS business_value_usd,
+                  COALESCE(honey_node, FALSE) AS honey_node
            FROM risk_graph_nodes WHERE client_id = $1 ORDER BY id"#,
     )
     .bind(id)
@@ -1243,6 +1245,10 @@ async fn api_risk_graph_get(
                 "metadata": r.try_get::<String,_>("metadata").unwrap_or_else(|_| "{}".into()),
                 "risk_score": r.try_get::<i32,_>("risk_score").unwrap_or(0),
                 "is_choke_point": r.try_get::<bool,_>("is_choke_point").unwrap_or(false),
+                "internet_exposed": r.try_get::<bool,_>("internet_exposed").unwrap_or(false),
+                "crown_jewel": r.try_get::<bool,_>("crown_jewel").unwrap_or(false),
+                "business_value_usd": r.try_get::<i64,_>("business_value_usd").unwrap_or(0),
+                "honey_node": r.try_get::<bool,_>("honey_node").unwrap_or(false),
             })
         })
         .collect();
@@ -1308,6 +1314,7 @@ async fn api_risk_graph_build(
     match risk_graph::build_risk_graph_for_client(&mut tx, auth.tenant_id, id).await {
         Ok((n, e)) => {
             let _ = tx.commit().await;
+            crate::attack_path::mark_graph_dirty(auth.tenant_id, id);
             let fusion = risk_graph::fusion_ot_it_graph_edges_llm(
                 state.app_pool.as_ref(),
                 auth.tenant_id,

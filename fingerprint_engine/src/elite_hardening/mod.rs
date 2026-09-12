@@ -92,7 +92,7 @@ fn live_status(id: u16) -> ControlStatus {
             ControlStatus::ok("GraphQL/BOLA session tracker suppresses auth-churn false positives")
         }
         8 => ControlStatus::ok("MITRE ATT&CK v19.1 currency gate in CI"),
-        9 => ControlStatus::ok("OSINT/ASM nodes auto-tagged internet_exposed on risk graph"),
+        9 => ControlStatus::ok("OSINT/ASM nodes auto-tagged internet_exposed; crown jewels auto-tagged (never honey)"),
         10 => ControlStatus::ok("Mobile surface included in core scan engine set"),
         11 => ControlStatus::ok("HTTPS beacon jitter 15–30%"),
         12 => ControlStatus::ok("TLS 1.2+ / production insecure-TLS refused"),
@@ -156,7 +156,7 @@ fn live_status(id: u16) -> ControlStatus {
         64 => ControlStatus::ok("KEV×2 EPSS×1.5 path cost"),
         65 => ControlStatus::ok("Choke-point P75 degree + top-K coverage"),
         66 => ControlStatus::ok("attack_path_snapshots persisted"),
-        67 => ControlStatus::ok("Internet-exposed auto-tag from ASM/OSINT"),
+        67 => ControlStatus::ok("Internet-exposed + crown-jewel auto-tag from ASM/OSINT; honey excluded"),
         68 => ControlStatus::ok("Post-breach next-hop simulation from graph"),
         69 => ControlStatus::ok("Worker-safe graph rebuild (delta upserts)"),
         70 => ControlStatus::ok("Sub-second path compute feeds containment"),

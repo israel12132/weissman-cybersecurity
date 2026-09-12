@@ -1,4 +1,5 @@
-//! SQL helpers for attack-path inference (recursive CTE) and internet-exposed auto-tag.
+//! SQL helpers for attack-path inference (recursive CTE), internet-exposed
+//! auto-tag, and crown-jewel auto-tag (never honey, never overwrite operator flags).
 
 /// Bounded recursive walk from internet-exposed entry nodes toward crown jewels.
 /// Used as a DB-side accelerator; in-memory Dijkstra remains the primary scorer.
@@ -52,6 +53,45 @@ UPDATE risk_graph_nodes
    )
 "#;
 
+/// Heuristic crown-jewel tag so Dijkstra is not silently empty.
+/// Never overwrites an operator-set flag; never tags honey nodes.
+pub const AUTO_TAG_CROWN_JEWEL_SQL: &str = r#"
+UPDATE risk_graph_nodes
+   SET crown_jewel = TRUE
+ WHERE tenant_id = $1
+   AND client_id = $2
+   AND crown_jewel IS NOT TRUE
+   AND COALESCE(honey_node, FALSE) IS NOT TRUE
+   AND (
+        node_type IN ('identity', 'ot', 'ics', 'k8s_cluster', 'k8s', 'llm')
+     OR COALESCE(business_value_usd, 0) >= 100000
+     OR COALESCE(asset_value, 0) >= 80
+     OR lower(label) ~ '(vault|hsm|domain.?control|adfs|okta|payroll|historian|scada|sap|kube-apiserver|postgres-primary|payment|pci)'
+     OR lower(graph_key) ~ '(vault|identity:|ot:|k8s:|crown)'
+   )
+"#;
+
+/// If the heuristic tagged nothing, pick the single highest-value non-honey node.
+pub const AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL: &str = r#"
+UPDATE risk_graph_nodes
+   SET crown_jewel = TRUE
+ WHERE id = (
+   SELECT id FROM risk_graph_nodes
+    WHERE tenant_id = $1 AND client_id = $2
+      AND COALESCE(honey_node, FALSE) IS NOT TRUE
+    ORDER BY COALESCE(business_value_usd, 0) DESC,
+             COALESCE(asset_value, 0) DESC,
+             COALESCE(risk_score, 0) DESC
+    LIMIT 1
+ )
+ AND tenant_id = $1
+ AND client_id = $2
+ AND NOT EXISTS (
+   SELECT 1 FROM risk_graph_nodes
+    WHERE tenant_id = $1 AND client_id = $2 AND crown_jewel = TRUE
+ )
+"#;
+
 pub fn max_hops() -> i32 {
     12
 }
@@ -73,5 +113,18 @@ mod tests {
                     .trim_start()
                     .starts_with("UPDATE")
         );
+        for sql in [AUTO_TAG_CROWN_JEWEL_SQL, AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL] {
+            let u = sql.to_ascii_uppercase();
+            assert!(u.contains("UPDATE"));
+            assert!(u.contains("CROWN_JEWEL"));
+            assert!(!u.contains("DROP "));
+            assert!(!u.contains("TRUNCATE"));
+        }
+    }
+
+    #[test]
+    fn crown_jewel_sql_never_tags_honey() {
+        assert!(AUTO_TAG_CROWN_JEWEL_SQL.contains("honey_node"));
+        assert!(AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL.contains("honey_node"));
     }
 }

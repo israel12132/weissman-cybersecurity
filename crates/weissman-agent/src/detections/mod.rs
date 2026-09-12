@@ -24,6 +24,8 @@ mod timestomp;
 mod usb_devices;
 mod util;
 mod yara_hunt;
+pub mod ot_plc_decoy;
+pub mod priv_esc_cred;
 
 use serde_json::Value;
 
@@ -189,7 +191,11 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
             "com_hijacking" => stealth_host::run_com_hijack(&engine).await,
             "parent_pid_spoof" => stealth_host::run_ppid_spoof(&engine).await,
             "host_isolation" => host_isolation::run(&engine, &params).await,
-            "host_privilege_escalation" => stealth_host::run_privesc(&engine).await,
+            "host_privilege_escalation" => {
+                let mut a = stealth_host::run_privesc(&engine).await?;
+                a.extend(priv_esc_cred::run(&engine).await?);
+                Ok(a)
+            }
             "ebpf_sensor" => ebpf_sensor::run(&engine, &params).await,
             "ioc_yara_hunt" => yara_hunt::run(&engine, &params).await,
             other => Err(anyhow::anyhow!(

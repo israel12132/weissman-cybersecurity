@@ -33,15 +33,39 @@ async fn api_attack_paths_for_client(
     };
 
     match snap {
-        Some(s) => (StatusCode::OK, Json(json!({ "ok": true, "snapshot": s }))).into_response(),
+        Some(s) => {
+            let zero_jewel = s.jewel_count == 0;
+            let candidate_jewels = if zero_jewel {
+                crate::attack_path::list_candidate_jewels(&state.app_pool, auth.tenant_id, client_id, 8)
+                    .await
+                    .unwrap_or_default()
+            } else {
+                vec![]
+            };
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "ok": true,
+                    "snapshot": s,
+                    "zero_jewel": zero_jewel,
+                    "candidate_jewels": candidate_jewels,
+                })),
+            )
+                .into_response()
+        }
         None => (
             StatusCode::OK,
             Json(json!({
                 "ok": true,
                 "snapshot": null,
+                "zero_jewel": true,
+                "candidate_jewels": crate::attack_path::list_candidate_jewels(
+                    &state.app_pool, auth.tenant_id, client_id, 8
+                ).await.unwrap_or_default(),
                 "detail": "no snapshot yet — call with ?recompute=1 to generate"
             })),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }
 
@@ -170,24 +194,28 @@ async fn api_risk_node_flags_patch(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
-    let res = sqlx::query(
+    let res = sqlx::query_scalar::<_, i64>(
         r#"UPDATE risk_graph_nodes
               SET internet_exposed = COALESCE($1, internet_exposed),
                   crown_jewel      = COALESCE($2, crown_jewel),
                   asset_value      = COALESCE($3, asset_value)
-            WHERE id = $4 AND tenant_id = $5"#,
+            WHERE id = $4 AND tenant_id = $5
+        RETURNING client_id"#,
     )
     .bind(body.internet_exposed)
     .bind(body.crown_jewel)
     .bind(body.asset_value)
     .bind(node_id)
     .bind(auth.tenant_id)
-    .execute(&mut *tx)
+    .fetch_optional(&mut *tx)
     .await;
     let _ = tx.commit().await;
     match res {
-        Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"ok": true, "id": node_id}))).into_response(),
-        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "node not found"}))).into_response(),
+        Ok(Some(client_id)) => {
+            crate::attack_path::mark_graph_dirty(auth.tenant_id, client_id);
+            (StatusCode::OK, Json(json!({"ok": true, "id": node_id, "client_id": client_id}))).into_response()
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "node not found"}))).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": scrub_internal_error(&e)}))).into_response(),
     }
 }

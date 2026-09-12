@@ -121,6 +121,12 @@ pub const COVERAGE: &[Technique] = &[
             "autonomous_ai_escape",
         ],
     },
+    Technique {
+        id: "T1623",
+        name: "Command and Scripting Interpreter (Mobile)",
+        tactic: "Execution",
+        engines: &["mdm_bypass_engine"],
+    },
     // ── Persistence ─────────────────────────────────────────────────────────
     Technique {
         id: "T1505.003",
@@ -133,6 +139,12 @@ pub const COVERAGE: &[Technique] = &[
         name: "Create Account",
         tactic: "Persistence",
         engines: &["identity_auto_harvest"],
+    },
+    Technique {
+        id: "T1603",
+        name: "Scheduled Task/Job (Mobile)",
+        tactic: "Persistence",
+        engines: &["mdm_bypass_engine"],
     },
     // ── Privilege Escalation ────────────────────────────────────────────────
     Technique {
@@ -156,6 +168,12 @@ pub const COVERAGE: &[Technique] = &[
         name: "Abuse Elevation Control Mechanism: Bypass User Account Control",
         tactic: "Privilege Escalation",
         engines: &["privilege_escalation_credential_access"],
+    },
+    Technique {
+        id: "T0890",
+        name: "Exploitation for Privilege Escalation (ICS)",
+        tactic: "Privilege Escalation",
+        engines: &["scada_ics", "ot_cloud_identity_killpath"],
     },
     // ── Defense Evasion ─────────────────────────────────────────────────────
     Technique {
@@ -255,6 +273,12 @@ pub const COVERAGE: &[Technique] = &[
         tactic: "Lateral Movement",
         engines: &["equation_group_ttps", "worm_propagation"],
     },
+    Technique {
+        id: "T1428",
+        name: "Exploitation of Remote Services (Mobile)",
+        tactic: "Lateral Movement",
+        engines: &["mdm_bypass_engine"],
+    },
     // ── Collection ──────────────────────────────────────────────────────────
     Technique {
         id: "T1213",
@@ -281,6 +305,18 @@ pub const COVERAGE: &[Technique] = &[
         tactic: "Command and Control",
         engines: &["tor_exit_attack"],
     },
+    Technique {
+        id: "T0869",
+        name: "Standard Application Layer Protocol (ICS C2)",
+        tactic: "Command and Control",
+        engines: &["scada_ics", "ot_cloud_identity_killpath"],
+    },
+    Technique {
+        id: "T0885",
+        name: "Commonly Used Port (ICS C2)",
+        tactic: "Command and Control",
+        engines: &["scada_ics"],
+    },
     // ── Exfiltration ────────────────────────────────────────────────────────
     Technique {
         id: "T1041",
@@ -293,6 +329,12 @@ pub const COVERAGE: &[Technique] = &[
         name: "Exfiltration Over Web Service",
         tactic: "Exfiltration",
         engines: &["cloud_data_exfil", "database_exfil"],
+    },
+    Technique {
+        id: "T1639",
+        name: "Exfiltration Over Alternative Protocol (Mobile)",
+        tactic: "Exfiltration",
+        engines: &["mdm_bypass_engine"],
     },
     // ── Impact ──────────────────────────────────────────────────────────────
     Technique {
@@ -317,6 +359,12 @@ pub const COVERAGE: &[Technique] = &[
         name: "Endpoint Denial of Service",
         tactic: "Impact",
         engines: &["api_rate_limit_bypass"],
+    },
+    Technique {
+        id: "T1640",
+        name: "Account Access Removal (Mobile)",
+        tactic: "Impact",
+        engines: &["mdm_bypass_engine"],
     },
     // ── Mobile (ATT&CK Mobile) ──────────────────────────────────────────────
     Technique {
@@ -415,6 +463,40 @@ pub fn coverage_json() -> Value {
             "tactics_covered": tactic_rollup().len(),
             "engine_references": COVERAGE.iter().map(|t| t.engines.len()).sum::<usize>(),
         },
+        "readiness": readiness_json(),
+    })
+}
+
+fn readiness_json() -> Value {
+    json!({
+        "roe_default": "safe_proofs",
+        "weaponized_exploits": false,
+        "scheduled_redteam": "off_by_default",
+        "scheduled_redteam_env": "WEISSMAN_REDTEAM_CRON=1",
+        "scheduled_redteam_engines": ["ai_adversarial_redteam", "kill_chain", "autonomous_pentest"],
+        "host_resident": "ROP/heap/JIT/COM/PPID are inventory + remote surface, not exploit execution",
+        "gaps": [
+            {
+                "id": "enterprise_persistence",
+                "label": "Enterprise Persistence",
+                "note": "Still sparse vs ATT&CK v19.1; agent hybrid, not implant execution"
+            },
+            {
+                "id": "enterprise_privesc",
+                "label": "Enterprise Privilege Escalation",
+                "note": "W^X/sudo/UAC auditor + remote admin ports; never dumps LSASS or runs a UAC bypass"
+            },
+            {
+                "id": "mobile_mdm",
+                "label": "Mobile Execution / Persistence / Exfil / Impact",
+                "note": "MDM command/profile/backup/wipe APIs — live HTTP only, no implant"
+            },
+            {
+                "id": "ics_c2_privesc",
+                "label": "ICS C2 / Privilege Escalation",
+                "note": "MQTT/IEC-104/OPC UA + engineering panels; never SIS/Triton weaponization"
+            }
+        ]
     })
 }
 
@@ -462,5 +544,8 @@ mod tests {
             "broad tactic coverage"
         );
         assert_eq!(j["framework"], "MITRE ATT&CK");
+        assert_eq!(j["readiness"]["weaponized_exploits"], false);
+        assert_eq!(j["readiness"]["roe_default"], "safe_proofs");
+        assert!(j["readiness"]["gaps"].as_array().unwrap().len() >= 4);
     }
 }

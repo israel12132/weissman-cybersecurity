@@ -69,15 +69,44 @@ async fn dispatch_redteam_jobs(app_pool: &PgPool, tenant_id: i64) -> Result<(), 
         if client_id == 0 || target.is_empty() {
             continue;
         }
-        let payload = serde_json::json!({
-            "engine": "ai_adversarial_redteam",
-            "target": target,
-            "client_id": client_id,
-            "trigger": "redteam_cron",
-        });
-        crate::async_jobs::enqueue(app_pool, tenant_id, "command_center_engine", payload, None)
-            .await
-            .map_err(|e| e.to_string())?;
+        for engine in REDTEAM_CRON_ENGINES {
+            let payload = serde_json::json!({
+                "engine": engine,
+                "target": target,
+                "client_id": client_id,
+                "trigger": "redteam_cron",
+            });
+            crate::async_jobs::enqueue(app_pool, tenant_id, "command_center_engine", payload, None)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
     }
     Ok(())
+}
+
+/// Engines the scheduled red-team cron enqueues (off by default: WEISSMAN_REDTEAM_CRON=1).
+pub const REDTEAM_CRON_ENGINES: &[&str] = &[
+    "ai_adversarial_redteam",
+    "kill_chain",
+    "autonomous_pentest",
+];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use weissman_core::models::engine::is_production_engine_id;
+
+    #[test]
+    fn cron_engines_are_production_and_not_llm_only() {
+        assert!(REDTEAM_CRON_ENGINES.contains(&"ai_adversarial_redteam"));
+        assert!(REDTEAM_CRON_ENGINES.contains(&"kill_chain"));
+        assert!(REDTEAM_CRON_ENGINES.contains(&"autonomous_pentest"));
+        assert!(REDTEAM_CRON_ENGINES.len() >= 3);
+        for id in REDTEAM_CRON_ENGINES {
+            assert!(
+                is_production_engine_id(id),
+                "red-team cron engine {id} missing from PRODUCTION_ENGINE_IDS"
+            );
+        }
+    }
 }

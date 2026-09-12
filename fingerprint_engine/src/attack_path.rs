@@ -878,6 +878,109 @@ async fn persist_snapshot(
     Ok(())
 }
 
+/// Mark internet-exposed + crown-jewel seeds so Dijkstra is not silently empty.
+pub async fn auto_tag_path_seeds(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+) -> Result<u64, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let internet = sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_INTERNET_EXPOSED_SQL)
+        .bind(tenant_id)
+        .bind(client_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    let jewels = sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_CROWN_JEWEL_SQL)
+        .bind(tenant_id)
+        .bind(client_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    let fallback =
+        sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL)
+            .bind(tenant_id)
+            .bind(client_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(internet.rows_affected() + jewels.rows_affected() + fallback.rows_affected())
+}
+
+/// Highest-value non-honey nodes an operator can PATCH as crown jewels.
+pub async fn list_candidate_jewels(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    limit: i64,
+) -> Result<Vec<Value>, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let rows = sqlx::query(
+        r#"SELECT id, label, graph_key, node_type, risk_score,
+                  COALESCE(business_value_usd, 0) AS business_value_usd,
+                  COALESCE(asset_value, 0) AS asset_value,
+                  crown_jewel
+             FROM risk_graph_nodes
+            WHERE tenant_id = $1 AND client_id = $2
+              AND COALESCE(honey_node, FALSE) IS NOT TRUE
+            ORDER BY crown_jewel DESC,
+                     COALESCE(business_value_usd, 0) DESC,
+                     COALESCE(asset_value, 0) DESC,
+                     risk_score DESC
+            LIMIT $3"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(limit.clamp(1, 25))
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    let _ = tx.commit().await;
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            json!({
+                "id": r.try_get::<i64, _>("id").unwrap_or(0),
+                "label": r.try_get::<String, _>("label").unwrap_or_default(),
+                "graph_key": r.try_get::<String, _>("graph_key").unwrap_or_default(),
+                "node_type": r.try_get::<String, _>("node_type").unwrap_or_default(),
+                "risk_score": r.try_get::<i32, _>("risk_score").unwrap_or(0),
+                "business_value_usd": r.try_get::<i64, _>("business_value_usd").unwrap_or(0),
+                "asset_value": r.try_get::<f32, _>("asset_value").unwrap_or(0.0),
+                "crown_jewel": r.try_get::<bool, _>("crown_jewel").unwrap_or(false),
+            })
+        })
+        .collect())
+}
+
+/// Heuristic used by AUTO_TAG_CROWN_JEWEL_SQL — unit-tested without Postgres.
+pub fn looks_like_crown_jewel(n: &GraphNode) -> bool {
+    if n.honey_node {
+        return false;
+    }
+    if n.crown_jewel {
+        return true;
+    }
+    if matches!(
+        n.node_type.as_str(),
+        "identity" | "ot" | "ics" | "k8s_cluster" | "k8s" | "llm"
+    ) {
+        return true;
+    }
+    if n.business_value_usd >= 100_000 || n.asset_value >= 80.0 {
+        return true;
+    }
+    let blob = format!("{} {}", n.label, n.graph_key).to_ascii_lowercase();
+    ["vault", "hsm", "domain control", "adfs", "okta", "payroll", "historian", "scada", "sap", "payment"]
+        .iter()
+        .any(|k| blob.contains(k))
+}
+
 /// Public entry point: compute (and persist) the top-K attack paths for a client.
 /// Coalesces concurrent rebuilds for the same `(tenant, client)` — one Dijkstra,
 /// waiters reuse the snapshot that just landed.
@@ -899,6 +1002,8 @@ pub async fn compute_and_store(
             }
         }
     }
+    let _ = auto_tag_path_seeds(pool, tenant_id, client_id).await;
+    mark_graph_dirty(tenant_id, client_id);
     let graph = cached_graph(pool, tenant_id, client_id).await?;
     let infer = tokio::task::spawn_blocking(move || {
         infer_paths(&graph.nodes, &graph.adjacency, &graph.mitre, top_k, None)
@@ -1151,6 +1256,37 @@ mod tests {
         let (paths, _, _, jewels) = infer_paths(&nodes, &adj, &HashMap::new(), 10, None);
         assert_eq!(jewels, 0);
         assert!(paths.is_empty());
+    }
+
+    #[test]
+    fn infer_paths_is_empty_without_crown_jewels() {
+        let mut nodes = HashMap::new();
+        nodes.insert(1, n(1, true, false, 0.0));
+        nodes.insert(2, n(2, false, false, 5.0));
+        let mut adj: HashMap<i64, Vec<(i64, String)>> = HashMap::new();
+        adj.insert(1, vec![(2, "connects".into())]);
+        let (paths, _, entries, jewels) = infer_paths(&nodes, &adj, &HashMap::new(), 10, None);
+        assert_eq!(entries, 1);
+        assert_eq!(jewels, 0);
+        assert!(paths.is_empty());
+    }
+
+    #[test]
+    fn looks_like_crown_jewel_heuristic() {
+        let mut vault = n(9, false, false, 0.0);
+        vault.label = "prod-vault".into();
+        assert!(looks_like_crown_jewel(&vault));
+        let mut ot = n(8, false, false, 0.0);
+        ot.node_type = "ot".into();
+        assert!(looks_like_crown_jewel(&ot));
+        let mut honey = n(7, false, true, 9.0);
+        honey.honey_node = true;
+        assert!(!looks_like_crown_jewel(&honey));
+        let mundane = n(6, true, false, 1.0);
+        assert!(!looks_like_crown_jewel(&mundane));
+        let mut rich = n(5, false, false, 0.0);
+        rich.business_value_usd = 250_000;
+        assert!(looks_like_crown_jewel(&rich));
     }
 
     #[test]

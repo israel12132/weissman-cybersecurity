@@ -189,6 +189,26 @@ pub async fn run_ot_cloud_identity_killpath_result(
             target,
         ));
     }
+    if has_kw(&merged, &["mqtt", "iec", "opc ua", "dnp3", "ethernet/ip"]) {
+        merged.push(finding(
+            "ot_cloud_identity_killpath",
+            "ICS C2 channel fused onto the OT/cloud kill path",
+            "high",
+            "T0869",
+            "MQTT/IEC-104/OPC UA/DNP3 evidence on this target is a standard-application-layer C2 path. No industrial write is issued.",
+            target,
+        ));
+    }
+    if has_kw(&merged, &["engineering", "plc admin", "codesys", "tiaportal", "webvisu"]) {
+        merged.push(finding(
+            "ot_cloud_identity_killpath",
+            "ICS privilege-escalation surface on engineering panel",
+            "critical",
+            "T0890",
+            "Engineering/PLC admin HTTP is the ICS privilege-escalation surface. Auditor only — no process-I/O write.",
+            target,
+        ));
+    }
 
     if merged.is_empty() {
         empty_ok("ot_cloud_identity_killpath", target)
