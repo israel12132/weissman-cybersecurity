@@ -1516,151 +1516,198 @@ async fn probe_infostealer_surface(engine_id: &str, target: &str) -> EngineResul
     collect(engine_id, target, findings)
 }
 
-async fn probe_sandbox_evasion_surface(engine_id: &str, target: &str) -> EngineResult {
+/// Live HTTP inventory for a host-resident engine. Every finding carries URL + status
+/// evidence; empty means no remote signal (agent still required for host confirmation).
+async fn probe_http_hits(
+    engine_id: &str,
+    target: &str,
+    paths: &[&str],
+    title: &str,
+    severity: &str,
+    mitre: &str,
+    why: &str,
+    needles: &[&str],
+) -> Vec<Value> {
     let client = http_client().await;
     let base = normalize_url(target);
-    let paths = &[
-        "/debug",
-        "/sandbox",
-        "/.dockerenv",
-        "/proc/1/cgroup",
-        "/actuator/health",
-    ];
-    let mut findings = Vec::new();
     let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
+    let mut findings = Vec::new();
     for p in probes {
         if !status_indicates_presence(p.status) {
             continue;
         }
-        let blob = format!("{} {}", p.body.to_ascii_lowercase(), headers_blob(&p));
-        if blob.contains("docker")
-            || blob.contains("kube")
-            || blob.contains("sandbox")
-            || blob.contains("vbox")
-            || blob.contains("vmware")
-        {
-            findings.push(remote_finding(
-                engine_id,
-                "Sandbox/VM fingerprint leaked on the perimeter",
-                "medium",
-                "T1497",
-                &format!(
-                    "{} returned {} with hypervisor/container signals — malware sandbox-evasion checks this remotely; agent confirms host guest-tools.",
-                    p.final_url, p.status
-                ),
-                target,
-            ));
+        if !needles.is_empty() {
+            let blob = format!("{} {}", headers_blob(&p), p.body).to_ascii_lowercase();
+            if !needles
+                .iter()
+                .any(|n| blob.contains(&n.to_ascii_lowercase()))
+            {
+                continue;
+            }
+        }
+        let ct = header_value(&p.headers, "content-type").unwrap_or_default();
+        findings.push(remote_finding(
+            engine_id,
+            title,
+            severity,
+            mitre,
+            &format!(
+                "{} returned HTTP {} (content-type={}) — {why}",
+                p.final_url,
+                p.status,
+                if ct.is_empty() { "unknown" } else { ct }
+            ),
+            target,
+        ));
+        if findings.len() >= 4 {
             break;
+        }
+    }
+    findings
+}
+
+async fn probe_tcp_ports(
+    engine_id: &str,
+    target: &str,
+    ports: &[u16],
+    title: &str,
+    severity: &str,
+    mitre: &str,
+    why: &str,
+) -> Vec<Value> {
+    let host = extract_host(target);
+    let open = tcp_scan(&host, ports, 8).await;
+    if open.is_empty() {
+        return Vec::new();
+    }
+    vec![remote_finding(
+        engine_id,
+        title,
+        severity,
+        mitre,
+        &format!("Host {host} accepts {open:?} — {why}"),
+        target,
+    )]
+}
+
+async fn probe_sandbox_evasion_surface(engine_id: &str, target: &str) -> EngineResult {
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let mut findings = Vec::new();
+    if let Some(p) = http_get(&client, &base).await {
+        let blob = format!("{} {}", headers_blob(&p), p.body).to_ascii_lowercase();
+        for (sig, label) in [
+            ("cf-ray", "Cloudflare"),
+            ("cf-mitigated", "Cloudflare bot fight"),
+            ("x-sucuri-id", "Sucuri"),
+            ("x-akamai-transformed", "Akamai"),
+            ("x-datadome", "DataDome"),
+            ("captcha", "CAPTCHA"),
+            ("recaptcha", "reCAPTCHA"),
+            ("hcaptcha", "hCaptcha"),
+            ("bot-management", "bot management"),
+            ("perimeterx", "PerimeterX"),
+        ] {
+            if blob.contains(sig) {
+                findings.push(remote_finding(
+                    engine_id,
+                    &format!("Sandbox/bot-defense signal: {label}"),
+                    "info",
+                    "T1497",
+                    &format!(
+                        "{} HTTP {} advertises {label} (`{sig}`) — malware sandbox-evasion fingerprints WAF/bot stacks; agent validates VM/guest-tool artifacts on the host.",
+                        p.final_url, p.status
+                    ),
+                    target,
+                ));
+                break;
+            }
         }
     }
     collect(engine_id, target, findings)
 }
 
 async fn probe_rop_chain_surface(engine_id: &str, target: &str) -> EngineResult {
-    let client = http_client().await;
-    let base = normalize_url(target);
-    let paths = &[
-        "/core",
-        "/coredump",
-        "/debug/pprof/heap",
-        "/crash",
-        "/exception",
-    ];
-    let mut findings = Vec::new();
-    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
-    for p in probes {
-        if !status_indicates_presence(p.status) {
-            continue;
-        }
-        let body = p.body.to_ascii_lowercase();
-        if body.contains("stack")
-            || body.contains("segfault")
-            || body.contains("pprof")
-            || body.contains("core dumped")
-        {
-            findings.push(remote_finding(
-                engine_id,
-                "Crash/debug surface that ROP tradecraft fingerprints",
-                "medium",
-                "T1082",
-                &format!(
-                    "{} returned {} — crash dumps and pprof heaps are the remote tell for memory-corruption / ROP inventory; agent validates W^X.",
-                    p.final_url, p.status
-                ),
-                target,
-            ));
-            break;
-        }
-    }
+    let mut findings = probe_http_hits(
+        engine_id,
+        target,
+        &["/cgi-bin/", "/debug/coredump", "/core", "/.exe", "/downloads/"],
+        "Native/CGI crash-dump surface exposed",
+        "medium",
+        "T1055.001",
+        "ROP/JOP gadget chains execute in-process; exposed CGI/native artifacts are the remote lead, agent inspects CFI/runtime.",
+        &[],
+    )
+    .await;
+    findings.extend(
+        probe_tcp_ports(
+            engine_id,
+            target,
+            &[21, 445],
+            "File-share/FTP reachable — native binary delivery surface",
+            "medium",
+            "T1055.001",
+            "native binaries on shares are a typical ROP exploit delivery path; agent validates host CFI",
+        )
+        .await,
+    );
     collect(engine_id, target, findings)
 }
 
 async fn probe_heap_exploitation_surface(engine_id: &str, target: &str) -> EngineResult {
-    let client = http_client().await;
-    let base = normalize_url(target);
-    let paths = &[
-        "/debug/pprof/heap",
-        "/metrics",
-        "/heapdump",
-        "/actuator/heapdump",
-    ];
-    let mut findings = Vec::new();
-    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
-    for p in probes {
-        let body = p.body.to_ascii_lowercase();
-        if p.status == 200
-            && (body.contains("heap")
-                || body.contains("jvm_memory")
-                || body.contains("jemalloc")
-                || body.contains("asan"))
-        {
-            findings.push(remote_finding(
-                engine_id,
-                "Heap/allocator telemetry exposed",
-                "medium",
-                "T1082",
-                &format!(
-                    "{} exposes heap/allocator metrics — heap-spray tradecraft inventories this remotely; agent confirms interpreter/RWX pages.",
-                    p.final_url
-                ),
-                target,
-            ));
-            break;
-        }
-    }
-    collect(engine_id, target, findings)
+    collect(
+        engine_id,
+        target,
+        probe_http_hits(
+            engine_id,
+            target,
+            &[
+                "/upload",
+                "/api/upload",
+                "/upload.php",
+                "/fileupload",
+                "/api/files",
+                "/media/upload",
+            ],
+            "Upload endpoint exposed (heap-grooming surface)",
+            "medium",
+            "T1203",
+            "large uploads and parser bugs are the remote heap-grooming lead; agent instruments allocator telemetry",
+            &[],
+        )
+        .await,
+    )
 }
 
 async fn probe_jit_spray_surface(engine_id: &str, target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
-    let paths = &[
-        "/json/version",
-        "/json/list",
-        "/inspector",
-        "/debug/inspector",
-        "/_node/inspect",
-    ];
     let mut findings = Vec::new();
-    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
+    let probes = probe_paths_concurrent(
+        &client,
+        &base,
+        &["/", "/index.wasm", "/app.wasm", "/static/js/", "/wasm/"],
+        DEFAULT_PROBE_CONCURRENCY,
+    )
+    .await;
     for p in probes {
         if !status_indicates_presence(p.status) {
             continue;
         }
-        let blob = format!("{} {}", p.body.to_ascii_lowercase(), headers_blob(&p));
-        if blob.contains("devtools")
-            || blob.contains("inspector")
-            || blob.contains("v8")
-            || blob.contains("websocketdebugger")
-            || blob.contains("chrome-devtools")
+        let ct = header_value(&p.headers, "content-type").unwrap_or_default();
+        let ct_l = ct.to_ascii_lowercase();
+        if ct_l.contains("wasm")
+            || p.final_url.ends_with(".wasm")
+            || p.body.contains("WebAssembly")
+            || (ct_l.contains("javascript") && p.body.contains("WebAssembly"))
         {
             findings.push(remote_finding(
                 engine_id,
-                "JS/JIT inspector endpoint exposed",
-                "high",
-                "T1082",
+                "WASM/JS JIT surface exposed",
+                "info",
+                "T1055.001",
                 &format!(
-                    "{} returned {} with a debugger/inspector signal — JIT-spray tradecraft needs an RWX compiler; agent inventories JIT processes.",
+                    "{} HTTP {} ({ct}) — JIT/RWX spray is host-resident; agent inventories interpreter processes.",
                     p.final_url, p.status
                 ),
                 target,
@@ -1672,239 +1719,172 @@ async fn probe_jit_spray_surface(engine_id: &str, target: &str) -> EngineResult 
 }
 
 async fn probe_com_hijack_surface(engine_id: &str, target: &str) -> EngineResult {
-    let host = extract_host(target);
-    let mut findings = Vec::new();
-    let open = tcp_scan(&host, &[135, 139, 445, 5985], 8).await;
-    if open.contains(&135) {
-        findings.push(remote_finding(
+    collect(
+        engine_id,
+        target,
+        probe_http_hits(
             engine_id,
-            "RPC mapper (135) reachable — COM/DCOM hijack surface",
+            target,
+            &[
+                "/webdav/",
+                "/clickonce/",
+                "/setup.application",
+                "/install.application",
+                "/activex/",
+            ],
+            "COM/ClickOnce/WebDAV delivery surface",
             "medium",
             "T1546.015",
-            &format!(
-                "Host {} accepts TCP/135 — COM hijacking is host-resident; this is the remote DCOM/RPC tell. Agent enumerates CLSID/InprocServer32.",
-                host
-            ),
-            target,
-        ));
-    }
-    let client = http_client().await;
-    let base = normalize_url(target);
-    let paths = &["/_vti_bin/", "/owa/", "/EWS/Exchange.asmx"];
-    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
-    for p in probes {
-        if status_indicates_presence(p.status) {
-            findings.push(remote_finding(
-                engine_id,
-                "Windows application endpoint that COM hijacks often ride",
-                "info",
-                "T1546.015",
-                &format!(
-                    "{} returned {} — Outlook/SharePoint surfaces correlate with COM hijack blast radius.",
-                    p.final_url, p.status
-                ),
-                target,
-            ));
-            break;
-        }
-    }
-    collect(engine_id, target, findings)
+            "COM hijacking is Windows host-resident; exposed ClickOnce/WebDAV is the remote lead",
+            &[],
+        )
+        .await,
+    )
 }
 
 async fn probe_ppid_spoof_surface(engine_id: &str, target: &str) -> EngineResult {
-    let host = extract_host(target);
-    let mut findings = Vec::new();
-    let open = tcp_scan(&host, &[135, 445, 5985, 5986], 8).await;
-    if open.contains(&5985) || open.contains(&5986) {
-        findings.push(remote_finding(
+    collect(
+        engine_id,
+        target,
+        probe_http_hits(
             engine_id,
-            "WinRM reachable — parent-PID spoof / remote process create surface",
+            target,
+            &[
+                "/downloads/",
+                "/files/macro.docm",
+                "/templates/",
+                "/outlook/",
+                "/owa/",
+            ],
+            "Office/macro download surface (PPID-spoof parent)",
             "medium",
             "T1134.004",
-            &format!(
-                "Host {} WinRM {:?} — PPID spoof is host-resident; WinRM is the remote process-create tell. Agent inspects parent/child trees.",
-                host, open
-            ),
-            target,
-        ));
-    }
-    let client = http_client().await;
-    let base = normalize_url(target);
-    let paths = &["/api/process", "/api/jobs", "/winrm"];
-    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
-    for p in probes {
-        if status_indicates_presence(p.status)
-            && (p.body.contains("pid") || p.body.contains("process") || p.body.contains("job"))
-        {
-            findings.push(remote_finding(
-                engine_id,
-                "Process-create API exposed",
-                "high",
-                "T1134.004",
-                &format!(
-                    "{} returned {} — remote process APIs are the PPID-spoof staging surface.",
-                    p.final_url, p.status
-                ),
-                target,
-            ));
-            break;
-        }
-    }
-    collect(engine_id, target, findings)
+            "Office→shell parent spoof starts from a delivered document; agent inspects process tree",
+            &[],
+        )
+        .await,
+    )
 }
 
 async fn probe_host_isolation_surface(engine_id: &str, target: &str) -> EngineResult {
-    let client = http_client().await;
-    let base = normalize_url(target);
-    let paths = &[
-        "/api/isolate",
-        "/api/containment",
-        "/api/quarantine",
-        "/falcon/devices",
-        "/rtr/contain",
-    ];
-    let mut findings = Vec::new();
-    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
-    for p in probes {
-        if status_indicates_presence(p.status) {
-            findings.push(remote_finding(
-                engine_id,
-                "EDR isolation/containment API reachable from this target",
-                "high",
-                "T1562",
-                &format!(
-                    "{} returned {} — host isolation is agent-enforced; a public containment API is itself a control-plane finding.",
-                    p.final_url, p.status
-                ),
-                target,
-            ));
-            break;
-        }
-    }
-    collect(engine_id, target, findings)
+    collect(
+        engine_id,
+        target,
+        probe_http_hits(
+            engine_id,
+            target,
+            &[
+                "/api/isolate",
+                "/edr/",
+                "/crowdstrike/",
+                "/sentinel/",
+                "/api/containment",
+                "/api/v1/policy/containment",
+            ],
+            "EDR/isolation control-plane endpoint exposed",
+            "high",
+            "T1489",
+            "host isolation is agent-enforced; an exposed EDR/containment API is the remote blast-radius signal",
+            &[],
+        )
+        .await,
+    )
 }
 
 async fn probe_host_privesc_surface(engine_id: &str, target: &str) -> EngineResult {
-    let host = extract_host(target);
-    let mut findings = Vec::new();
-    let open = tcp_scan(&host, &[22, 3389, 5985, 5986, 445], 8).await;
-    if open.contains(&3389) || open.contains(&5985) {
-        findings.push(remote_finding(
+    let mut findings = probe_http_hits(
+        engine_id,
+        target,
+        &[
+            "/actuator/env",
+            "/debug/pprof",
+            "/var/run/docker.sock",
+            "/docker/",
+            "/api/v1/namespaces",
+        ],
+        "Privilege-escalation control/debug surface",
+        "high",
+        "T1068",
+        "debug/docker/k8s endpoints are the remote priv-esc lead; agent inventories sudoers/SUID/UID 0",
+        &[],
+    )
+    .await;
+    findings.extend(
+        probe_tcp_ports(
             engine_id,
-            "Admin remote-control port open (RDP/WinRM)",
+            target,
+            &[2375, 2376, 6443, 10250],
+            "Container/K8s control ports open",
             "high",
             "T1068",
-            &format!(
-                "Host {} {:?} — privilege escalation is host-resident; these ports are the remote admin tell. Agent runs the W^X / sudo / UAC auditor.",
-                host, open
-            ),
-            target,
-        ));
-    }
-    let client = http_client().await;
-    let base = normalize_url(target);
-    let paths = &[
-        "/admin",
-        "/administrator",
-        "/sudo",
-        "/wp-admin",
-        "/phpmyadmin",
-    ];
-    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
-    for p in probes {
-        if status_indicates_presence(p.status) {
-            findings.push(remote_finding(
-                engine_id,
-                "Administrative HTTP surface",
-                "medium",
-                "T1068",
-                &format!(
-                    "{} returned {} — admin consoles are privilege-escalation blast radius; agent enumerates sudo/UAC/LSASS exposure without dumping secrets.",
-                    p.final_url, p.status
-                ),
-                target,
-            ));
-            break;
-        }
-    }
+            "unauthenticated docker/k8s APIs are classic priv-esc; agent confirms host identity",
+        )
+        .await,
+    );
     collect(engine_id, target, findings)
 }
 
 async fn probe_ebpf_sensor_surface(engine_id: &str, target: &str) -> EngineResult {
-    let client = http_client().await;
-    let base = normalize_url(target);
-    let paths = &[
-        "/metrics",
-        "/api/v1/sys/health",
-        "/v1/sys/health",
-        "/falco/rules",
-        "/cilium/healthz",
-    ];
+    let host = extract_host(target);
     let mut findings = Vec::new();
-    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
-    for p in probes {
-        if !status_indicates_presence(p.status) {
-            continue;
-        }
-        let body = p.body.to_ascii_lowercase();
-        if body.contains("ebpf")
-            || body.contains("bpf_")
-            || body.contains("falco")
-            || body.contains("cilium")
-            || body.contains("bpftool")
-        {
+    if tcp_open(&host, 22).await {
+        if let Some(banner) = tcp_banner(&host, 22).await {
             findings.push(remote_finding(
                 engine_id,
-                "eBPF/Falco/Cilium control plane reachable",
-                "medium",
-                "T1518.001",
+                "SSH reachable — eBPF/kernel telemetry requires host agent",
+                "info",
+                "T1055",
                 &format!(
-                    "{} returned {} with eBPF/Falco/Cilium signals — the sensor is host-resident; this is the remote tell.",
-                    p.final_url, p.status
+                    "SSH banner on {host}:22 ({}) — eBPF sensors attach on the endpoint; agent reports BTF/bpftrace availability.",
+                    banner.chars().take(80).collect::<String>()
                 ),
                 target,
             ));
-            break;
+        } else {
+            findings.push(remote_finding(
+                engine_id,
+                "SSH port open — eBPF/kernel telemetry requires host agent",
+                "info",
+                "T1055",
+                &format!(
+                    "TCP/22 open on {host} with no banner — eBPF sensors still require an enrolled agent for BTF/bpftrace."
+                ),
+                target,
+            ));
         }
     }
+    findings.extend(
+        probe_http_hits(
+            engine_id,
+            target,
+            &["/metrics", "/debug/pprof/", "/actuator/prometheus"],
+            "Host metrics/pprof endpoint (kernel/eBPF observability lead)",
+            "info",
+            "T1055",
+            "exposed metrics/pprof is the remote lead; agent confirms bpf programs on the host",
+            &["bpf", "ebpf", "kprobe", "process_"],
+        )
+        .await,
+    );
     collect(engine_id, target, findings)
 }
 
 async fn probe_yara_hunt_surface(engine_id: &str, target: &str) -> EngineResult {
-    let client = http_client().await;
-    let base = normalize_url(target);
-    let paths = &[
-        "/yara",
-        "/api/yara",
-        "/api/iocs",
-        "/api/malware/scan",
-        "/ioc/feed",
-    ];
-    let mut findings = Vec::new();
-    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
-    for p in probes {
-        let body = p.body.to_ascii_lowercase();
-        if status_indicates_presence(p.status)
-            && (body.contains("yara")
-                || body.contains("ioc")
-                || body.contains("rule")
-                || body.contains("indicator"))
-        {
-            findings.push(remote_finding(
-                engine_id,
-                "YARA/IOC hunt API exposed",
-                "info",
-                "T1518.001",
-                &format!(
-                    "{} returned {} — IOC/YARA hunting is agent-side on disk/memory; a public hunt API is a control-plane finding.",
-                    p.final_url, p.status
-                ),
-                target,
-            ));
-            break;
-        }
-    }
-    collect(engine_id, target, findings)
+    collect(
+        engine_id,
+        target,
+        probe_http_hits(
+            engine_id,
+            target,
+            &["/samples/", "/malware/", "/ioc/", "/hashes/", "/api/ioc"],
+            "Sample/IOC listing endpoint exposed",
+            "medium",
+            "T1588.001",
+            "YARA/IOC hunts run on disk via the agent; a public sample/hash listing is the remote lead",
+            &[],
+        )
+        .await,
+    )
 }
 
 fn headers_blob(probe: &crate::engine_probes::HttpProbe) -> String {
@@ -1979,6 +1959,23 @@ mod tests {
     }
 
     #[test]
+    fn every_agent_required_engine_is_in_remote_surface_match() {
+        use weissman_core::models::engine_agent::AGENT_REQUIRED_ENGINES;
+        let src = include_str!("agent_remote_surface.rs");
+        let start = src
+            .find("match engine_id {")
+            .expect("match engine_id in run_remote_surface_probe");
+        let other = src[start..].find("other => empty_ok").expect("other arm");
+        let chunk = &src[start..start + other];
+        for id in AGENT_REQUIRED_ENGINES {
+            assert!(
+                chunk.contains(&format!("\"{id}\"")),
+                "agent-required engine {id} has no remote-surface match arm"
+            );
+        }
+    }
+
+    #[test]
     fn headers_blob_joins_key_value_pairs() {
         let probe = HttpProbe {
             status: 200,
@@ -2001,22 +1998,5 @@ mod tests {
             final_url: String::new(),
         };
         assert_eq!(headers_blob(&probe), "");
-    }
-
-    #[test]
-    fn every_agent_required_engine_is_in_remote_surface_match() {
-        let src = include_str!("agent_remote_surface.rs");
-        let start = src
-            .find("match engine_id {")
-            .expect("run_remote_surface_probe match");
-        let rest = &src[start..];
-        let end = rest.find("other =>").expect("other arm");
-        let chunk = &rest[..end];
-        for id in weissman_core::models::engine_agent::AGENT_REQUIRED_ENGINES {
-            assert!(
-                chunk.contains(&format!("\"{id}\"")),
-                "AGENT_REQUIRED engine {id} has no remote-surface match arm"
-            );
-        }
     }
 }

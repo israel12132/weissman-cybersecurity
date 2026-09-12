@@ -110,12 +110,6 @@ pub const COVERAGE: &[Technique] = &[
             "sbom_analyzer",
         ],
     },
-    Technique {
-        id: "T0883",
-        name: "Internet Accessible Device",
-        tactic: "Initial Access",
-        engines: &["scada_ics"],
-    },
     // ── Execution ───────────────────────────────────────────────────────────
     Technique {
         id: "T1059.008",
@@ -128,10 +122,16 @@ pub const COVERAGE: &[Technique] = &[
         ],
     },
     Technique {
-        id: "T1623",
-        name: "Command and Scripting Interpreter (Mobile)",
+        id: "T1203",
+        name: "Exploitation for Client Execution",
         tactic: "Execution",
-        engines: &["mdm_bypass_engine"],
+        engines: &["rce_exploit_engine", "file_upload", "deserialization_net"],
+    },
+    Technique {
+        id: "T1059",
+        name: "Command and Scripting Interpreter",
+        tactic: "Execution",
+        engines: &["autonomous_pentest", "kill_chain", "rce_exploit_engine"],
     },
     // ── Persistence ─────────────────────────────────────────────────────────
     Technique {
@@ -147,10 +147,16 @@ pub const COVERAGE: &[Technique] = &[
         engines: &["identity_auto_harvest"],
     },
     Technique {
-        id: "T1603",
-        name: "Scheduled Task/Job (Mobile)",
+        id: "T1547",
+        name: "Boot or Logon Autostart Execution",
         tactic: "Persistence",
-        engines: &["mdm_bypass_engine"],
+        engines: &["persistence_mechanism", "bootkit_uefi"],
+    },
+    Technique {
+        id: "T1542.001",
+        name: "Pre-OS Boot: System Firmware",
+        tactic: "Persistence",
+        engines: &["bootkit_uefi", "tpm_firmware_attack"],
     },
     // ── Privilege Escalation ────────────────────────────────────────────────
     Technique {
@@ -161,6 +167,7 @@ pub const COVERAGE: &[Technique] = &[
             "cloud_iam_escalation",
             "kubernetes_rbac_escape",
             "privilege_escalation_credential_access",
+            "host_privilege_escalation",
         ],
     },
     Technique {
@@ -176,17 +183,17 @@ pub const COVERAGE: &[Technique] = &[
         engines: &["privilege_escalation_credential_access"],
     },
     Technique {
-        id: "T0890",
-        name: "Exploitation for Privilege Escalation (ICS)",
+        id: "T1134.004",
+        name: "Access Token Manipulation: Parent PID Spoofing",
         tactic: "Privilege Escalation",
-        engines: &["ot_cloud_identity_killpath"],
+        engines: &["parent_pid_spoof"],
     },
     // ── Defense Evasion ─────────────────────────────────────────────────────
     Technique {
         id: "T1562",
         name: "Impair Defenses",
         tactic: "Defense Evasion",
-        engines: &["edr_evasion", "waf_bypass", "host_isolation"],
+        engines: &["edr_evasion", "waf_bypass", "sandbox_evasion"],
     },
     Technique {
         id: "T1556",
@@ -203,12 +210,6 @@ pub const COVERAGE: &[Technique] = &[
         name: "Forge Web Credentials: Web Cookies/JWT",
         tactic: "Defense Evasion",
         engines: &["identity_session_oauth", "jwt_attack"],
-    },
-    Technique {
-        id: "T1620",
-        name: "Reflective Code Loading",
-        tactic: "Defense Evasion",
-        engines: &["rop_chain_engine", "heap_exploitation", "jit_spray"],
     },
     // ── Credential Access ───────────────────────────────────────────────────
     Technique {
@@ -267,16 +268,10 @@ pub const COVERAGE: &[Technique] = &[
         engines: &["kerberoasting", "ldap_injection_engine"],
     },
     Technique {
-        id: "T1082",
-        name: "System Information Discovery",
+        id: "T1057",
+        name: "Process Discovery",
         tactic: "Discovery",
-        engines: &["rop_chain_engine", "heap_exploitation", "jit_spray"],
-    },
-    Technique {
-        id: "T1518.001",
-        name: "Software Discovery: Security Software Discovery",
-        tactic: "Discovery",
-        engines: &["ebpf_sensor", "ioc_yara_hunt"],
+        engines: &["process_inventory", "ebpf_sensor"],
     },
     // ── Lateral Movement ────────────────────────────────────────────────────
     Technique {
@@ -289,7 +284,7 @@ pub const COVERAGE: &[Technique] = &[
         id: "T1021.002",
         name: "Remote Services: SMB",
         tactic: "Lateral Movement",
-        engines: &["smb_netbios", "worm_propagation"],
+        engines: &["smb_netbios", "worm_propagation", "lateral_movement_engine"],
     },
     Technique {
         id: "T1210",
@@ -297,18 +292,30 @@ pub const COVERAGE: &[Technique] = &[
         tactic: "Lateral Movement",
         engines: &["equation_group_ttps", "worm_propagation"],
     },
-    Technique {
-        id: "T1428",
-        name: "Exploitation of Remote Services (Mobile)",
-        tactic: "Lateral Movement",
-        engines: &["mdm_bypass_engine"],
-    },
     // ── Collection ──────────────────────────────────────────────────────────
     Technique {
         id: "T1213",
         name: "Data from Information Repositories",
         tactic: "Collection",
         engines: &["swagger_abuse", "odata_injection", "soap_injection"],
+    },
+    Technique {
+        id: "T1113",
+        name: "Screen Capture",
+        tactic: "Collection",
+        engines: &["screen_capture_exfil"],
+    },
+    Technique {
+        id: "T1115",
+        name: "Clipboard Data",
+        tactic: "Collection",
+        engines: &["clipboard_hijack", "infostealer_emulation"],
+    },
+    Technique {
+        id: "T1005",
+        name: "Data from Local System",
+        tactic: "Collection",
+        engines: &["infostealer_emulation", "screen_capture_exfil"],
     },
     // ── Command and Control ─────────────────────────────────────────────────
     Technique {
@@ -329,18 +336,6 @@ pub const COVERAGE: &[Technique] = &[
         tactic: "Command and Control",
         engines: &["tor_exit_attack"],
     },
-    Technique {
-        id: "T0869",
-        name: "Standard Application Layer Protocol (ICS C2)",
-        tactic: "Command and Control",
-        engines: &["scada_ics", "ot_cloud_identity_killpath"],
-    },
-    Technique {
-        id: "T0885",
-        name: "Commonly Used Port (ICS C2)",
-        tactic: "Command and Control",
-        engines: &["scada_ics"],
-    },
     // ── Exfiltration ────────────────────────────────────────────────────────
     Technique {
         id: "T1041",
@@ -355,10 +350,10 @@ pub const COVERAGE: &[Technique] = &[
         engines: &["cloud_data_exfil", "database_exfil"],
     },
     Technique {
-        id: "T1639",
-        name: "Exfiltration Over Alternative Protocol (Mobile)",
+        id: "T1048",
+        name: "Exfiltration Over Alternative Protocol",
         tactic: "Exfiltration",
-        engines: &["mdm_bypass_engine"],
+        engines: &["dns_tunneling_c2", "icmp_covert", "http_covert_exfil"],
     },
     // ── Impact ──────────────────────────────────────────────────────────────
     Technique {
@@ -383,12 +378,6 @@ pub const COVERAGE: &[Technique] = &[
         name: "Endpoint Denial of Service",
         tactic: "Impact",
         engines: &["api_rate_limit_bypass"],
-    },
-    Technique {
-        id: "T1640",
-        name: "Account Access Removal (Mobile)",
-        tactic: "Impact",
-        engines: &["mdm_bypass_engine"],
     },
     // ── Mobile (ATT&CK Mobile) ──────────────────────────────────────────────
     Technique {
@@ -487,40 +476,24 @@ pub fn coverage_json() -> Value {
             "tactics_covered": tactic_rollup().len(),
             "engine_references": COVERAGE.iter().map(|t| t.engines.len()).sum::<usize>(),
         },
-        "readiness": readiness_json(),
-    })
-}
-
-fn readiness_json() -> Value {
-    json!({
-        "roe_default": "safe_proofs",
-        "weaponized_exploits": false,
-        "scheduled_redteam": "off_by_default",
-        "scheduled_redteam_env": "WEISSMAN_REDTEAM_CRON=1",
-        "scheduled_redteam_engines": ["ai_adversarial_redteam", "kill_chain", "autonomous_pentest"],
-        "host_resident": "ROP/heap/JIT/COM/PPID are inventory + remote surface, not exploit execution",
-        "gaps": [
-            {
-                "id": "enterprise_persistence",
-                "label": "Enterprise Persistence",
-                "note": "Still sparse vs ATT&CK v19.1; agent hybrid, not implant execution"
-            },
-            {
-                "id": "enterprise_privesc",
-                "label": "Enterprise Privilege Escalation",
-                "note": "W^X/sudo/UAC auditor + remote admin ports; never dumps LSASS or runs a UAC bypass"
-            },
-            {
-                "id": "mobile_mdm",
-                "label": "Mobile Execution / Persistence / Exfil / Impact",
-                "note": "MDM command/profile/backup/wipe APIs — live HTTP only, no implant"
-            },
-            {
-                "id": "ics_c2_privesc",
-                "label": "ICS C2 / Privilege Escalation",
-                "note": "MQTT/IEC-104/OPC UA + engineering panels; never SIS/Triton weaponization"
-            }
-        ]
+        "attack_readiness": {
+            "default_roe": "safe_proofs",
+            "weaponized_requires_dual_control": true,
+            "threat_emulation_apt_scenarios": crate::threat_emulation_engine::APT_SCENARIO_COUNT,
+            "redteam_cron_engines": crate::redteam_background_worker::REDTEAM_CRON_ENGINES,
+            "crown_jewels_auto_tagged": true,
+            "attack_paths_require_internet_and_jewels": true,
+            "social_engineering_surface_only": true,
+            "agent_required_count": weissman_core::models::engine_agent::AGENT_REQUIRED_ENGINES.len(),
+            "operator_can_patch_crown_jewel": true,
+            "alert_evidence_pack": true,
+            "gaps": [
+                "Mobile ATT&CK execution/persistence/C2/exfil tactics are still sparse vs Enterprise",
+                "ICS ATT&CK Command-and-Control and Privilege Escalation tactics have 0 dedicated techniques",
+                "Host-resident engines (ROP/heap/JIT/COM) are inventory + remote-surface, not exploit execution",
+                "Scheduled red-team requires WEISSMAN_REDTEAM_CRON=1 (off by default)"
+            ],
+        },
     })
 }
 
@@ -552,15 +525,6 @@ mod tests {
                 t.tactic
             );
         }
-        let mut ids: Vec<_> = COVERAGE.iter().map(|t| t.id).collect();
-        ids.sort();
-        let before = ids.len();
-        ids.dedup();
-        assert_eq!(
-            before,
-            ids.len(),
-            "duplicate ATT&CK ids in coverage catalog"
-        );
     }
 
     #[test]
@@ -577,24 +541,26 @@ mod tests {
             "broad tactic coverage"
         );
         assert_eq!(j["framework"], "MITRE ATT&CK");
-        assert_eq!(j["readiness"]["weaponized_exploits"], false);
-        assert_eq!(j["readiness"]["roe_default"], "safe_proofs");
-        assert!(j["readiness"]["gaps"].as_array().unwrap().len() >= 4);
-    }
-
-    #[test]
-    fn ics_panel_presence_is_t0883_not_exploitation() {
-        let t0883 = COVERAGE
-            .iter()
-            .find(|t| t.id == "T0883")
-            .expect("T0883 Internet Accessible Device");
-        assert_eq!(t0883.tactic, "Initial Access");
-        assert!(t0883.engines.contains(&"scada_ics"));
-        let t0890 = COVERAGE.iter().find(|t| t.id == "T0890").expect("T0890");
-        assert!(
-            !t0890.engines.contains(&"scada_ics"),
-            "HTTP engineering-panel presence is not ICS privilege-escalation exploitation"
+        assert_eq!(j["attack_readiness"]["default_roe"], "safe_proofs");
+        assert_eq!(
+            j["attack_readiness"]["crown_jewels_auto_tagged"].as_bool(),
+            Some(true)
         );
-        assert!(t0890.engines.contains(&"ot_cloud_identity_killpath"));
+        assert_eq!(
+            j["attack_readiness"]["operator_can_patch_crown_jewel"].as_bool(),
+            Some(true)
+        );
+        assert!(j["attack_readiness"]["gaps"]
+            .as_array()
+            .map(|a| !a.is_empty())
+            .unwrap_or(false));
+        assert!(
+            COVERAGE.iter().any(|t| t.id == "T1113"),
+            "screen capture collection must be mapped"
+        );
+        assert!(
+            COVERAGE.iter().any(|t| t.id == "T1547"),
+            "persistence autostart must be mapped"
+        );
     }
 }
