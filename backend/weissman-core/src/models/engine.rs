@@ -79,7 +79,6 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "asm",
     "first_mover_surface_delta",
     "first_mover_delta_fusion",
-    "exposure_schism_fusion",
     "first_seen_osv_nvd",
     "leak_hunter",
     "discovery_engine",
@@ -113,8 +112,6 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "iac_misconfig",
     "serverless_attack",
     "scada_ics",
-    "ot_passive_active_safety",
-    "ot_crown_jewel_path",
     // Critical infrastructure (RoE-gated; `high_risk_engines` compile feature)
     "avionics_adsb_attack",
     "maritime_ais_attack",
@@ -124,8 +121,6 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "building_automation_attack",
     "robotics_ros2_attack",
     "ot_sis_triton_attack",
-    "ot_passive_active_safety",
-    "ot_crown_jewel_path",
     "iot_firmware",
     "ble_rf",
     "edr_evasion",
@@ -683,9 +678,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "ngfw_posture",
     "malware_detonation",
     "weissman_vngfw",
-    "ot_passive_active_safety",
-    "ot_crown_jewel_path",
-    "prevention_fabric_breach_proof",
+    "credential_ransomware_fusion",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -717,7 +710,6 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "asm",
     "first_mover_surface_delta",
     "first_mover_delta_fusion",
-    "exposure_schism_fusion",
     "first_seen_osv_nvd",
     "leak_hunter",
     "discovery_engine",
@@ -754,8 +746,6 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "serverless_attack",
     // OT / ICS / IoT
     "scada_ics",
-    "ot_passive_active_safety",
-    "ot_crown_jewel_path",
     "avionics_adsb_attack",
     "maritime_ais_attack",
     "ev_charging_ocpp_attack",
@@ -764,8 +754,6 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "building_automation_attack",
     "robotics_ros2_attack",
     "ot_sis_triton_attack",
-    "ot_passive_active_safety",
-    "ot_crown_jewel_path",
     "iot_firmware",
     "ble_rf",
     // Stealth / Evasion
@@ -1311,9 +1299,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "ngfw_posture",
     "malware_detonation",
     "weissman_vngfw",
-    "ot_passive_active_safety",
-    "ot_crown_jewel_path",
-    "prevention_fabric_breach_proof",
+    "credential_ransomware_fusion",
 ];
 
 /// Map catalog-only registry IDs to a production engine implementation.
@@ -1626,14 +1612,6 @@ mod production_registry_tests {
             PRODUCTION_ENGINE_IDS.len() >= 580,
             "do not shrink the registry to match an old container image"
         );
-        assert!(
-            PRODUCTION_ENGINE_IDS.contains(&"ot_passive_active_safety"),
-            "OT safety interlock must be in the production catalog"
-        );
-        assert!(
-            PRODUCTION_ENGINE_IDS.contains(&"ot_crown_jewel_path"),
-            "OT crown-jewel path must be in the production catalog"
-        );
     }
 
     #[test]
@@ -1648,7 +1626,6 @@ mod production_registry_tests {
         assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_mover_surface_delta"));
         assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_seen_osv_nvd"));
         assert!(!DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_mover_delta_fusion"));
-        assert!(!DEFAULT_ORCHESTRATOR_ENGINES.contains(&"exposure_schism_fusion"));
         assert!(
             !DEFAULT_ORCHESTRATOR_ENGINES
                 .iter()

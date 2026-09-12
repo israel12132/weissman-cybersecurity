@@ -26,6 +26,7 @@ pub const DELTA_FOLLOW_ON_ENGINES: &[&str] = &[
     "leak_hunter",
     "bola_idor",
     "jwt_attack",
+    "credential_ransomware_fusion",
 ];
 /// OAST-gated exploitability proof. Included only when the live listener is configured.
 pub const DELTA_OAST_FOLLOW_ON_ENGINES: &[&str] = &["oast_oob", "ssrf_advanced"];

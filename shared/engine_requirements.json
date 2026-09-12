@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-09-12T00:04:23.000Z",
-  "production_engine_count": 585,
+  "generated_at": "2026-09-12T00:11:42.379Z",
+  "production_engine_count": 584,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 428
+      "engine_count": 427
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -275,7 +275,7 @@
         "industrial_ot",
         "scope_ips"
       ],
-      "engine_count": 45
+      "engine_count": 43
     },
     "ai_redteam": {
       "id": "ai_redteam",
@@ -6585,6 +6585,16 @@
       "group": "defense",
       "kind": "real_probe",
       "label": "Prevention Fabric Breach Proof",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "credential_ransomware_fusion": {
+      "id": "credential_ransomware_fusion",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Credential-to-Ransomware Fusion",
       "requirements": [
         "contact_email",
         "scope_domains"

@@ -6,8 +6,8 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router'
 import { useTranslation, Trans } from 'react-i18next'
 import { apiFetch } from '../utils/apiFetch'
-import { apiUrl } from '../lib/apiBase'
 import StandaloneLabShell from './ui/StandaloneLabShell'
+import ClientReportDownloadBar from './ClientReportDownloadBar'
 
 export default function ReportView() {
   const { t } = useTranslation()
@@ -22,13 +22,18 @@ export default function ReportView() {
     if (!clientId) return
     Promise.all([
       apiFetch('/api/clients').catch(() => []),
-      apiFetch('/api/findings').catch(() => []),
+      apiFetch(`/api/findings?client_id=${encodeURIComponent(clientId)}&limit=2000`).catch(() => ({ findings: [] })),
       apiFetch(`/api/clients/${clientId}/report/crypto-proof`).catch(() => null),
     ])
-      .then(([clients, findingsList, proof]) => {
+      .then(([clients, findingsPayload, proof]) => {
         const c = Array.isArray(clients) ? clients.find((x) => String(x?.id) === String(clientId)) : null
         setClient(c || null)
-        setFindings(Array.isArray(findingsList) ? findingsList.filter((f) => String(f.client) === String(clientId)) : [])
+        const findingsList = Array.isArray(findingsPayload)
+          ? findingsPayload
+          : Array.isArray(findingsPayload?.findings)
+            ? findingsPayload.findings
+            : []
+        setFindings(findingsList)
         setCryptoProof(proof?.audit_root_hash ? proof : null)
       })
       .catch((e) => setError(e?.message || t('components.reportView.load_failed')))
@@ -57,15 +62,7 @@ export default function ReportView() {
     <StandaloneLabShell
       title={t('components.reportView.title', { name: clientName })}
       maxWidth="max-w-4xl"
-      actions={(
-        <a
-          href={apiUrl(`/api/clients/${clientId}/report/pdf`)}
-          download
-          className="text-sm text-cyan-400 hover:underline"
-        >
-          {t('components.reportView.download_pdf')}
-        </a>
-      )}
+      actions={<ClientReportDownloadBar clientId={clientId} />}
     >
       {error && (
         <div className="mb-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm">

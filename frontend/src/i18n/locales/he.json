@@ -277,7 +277,8 @@
     "win_room": "חדר ניצחון תחרותי",
     "elite_hardening": "הקשחה עליונה",
     "cem_dago": "CEM-DAGO",
-    "scim_provisioning": "הקצאת SCIM"
+    "scim_provisioning": "הקצאת SCIM",
+    "adversary_dominance": "עליונות יריב"
   },
   "ask_weissman": {
     "title": "שאל את Weissman",
@@ -531,9 +532,9 @@
     "sso_saml": "התחבר עם SAML",
     "enterprise_sso": "כניסת ארגון (SSO)",
     "brand_tagline": "אבטחה התקפית מאוחדת לצוותי ארגון",
-    "brand_story": "קשר ממצאים מ-254 מנועי תקיפה, תזמר מדריכי SOAR והוכח עמידה ברגולציה — ממרכז פיקוד אחד.",
+    "brand_story": "קשר ממצאים מ-{{engines}} מנועי תקיפה, תזמר מדריכי SOAR והוכח עמידה ברגולציה — ממרכז פיקוד אחד.",
     "brand_release": "{{name}} · {{release}}",
-    "trust_engines": "254 מנועים",
+    "trust_engines": "{{engines}} מנועים",
     "trust_soc2": "מוכן ל-SOC2",
     "trust_region": "EU-West",
     "trust_label": "אינדיקטורי אמון בפלטפורמה",
@@ -854,7 +855,7 @@
     "title": "פרטי לקוח",
     "subtitle": "סקופ מורשה, ניהול סריקות ופעולות מהירות",
     "export_server": "CSV משרת",
-    "export_server_hint": "הורדת כל הממצאים של הלקוח מצד השרת דרך GET /api/clients/:id/export/csv (לא רק השורות הטעונות בדפדפן).",
+    "export_server_hint": "הורדת כל הממצאים של הלקוח מצד השרת דרך GET /api/clients/:id/export/csv (CSV) או /export/xlsx (Excel אמיתי — לא CSV שמסומן כ-Excel).",
     "export_server_running": "מייצא…",
     "export_server_ok": "ממצאי הלקוח יוצאו.",
     "export_server_failed": "הייצוא מצד השרת נכשל.",
@@ -880,11 +881,13 @@
     "quick_actions": "פעולות מהירות",
     "view_findings_desc": "ראה את כל החולשות",
     "generate_report": "צור דוח",
-    "generate_report_desc": "ייצוא PDF/CSV",
+    "generate_report_desc": "חבילת דירקטוריון PDF ו-Excel אמיתי",
     "attack_surface": "משטח התקפה",
     "attack_surface_desc": "צפה בגרף ASM",
     "integrations": "אינטגרציות",
-    "sector": "ענף"
+    "sector": "ענף",
+    "download_pdf": "הורד PDF",
+    "download_xlsx": "הורד Excel (XLSX)"
   },
   "clients": {
     "title": "לקוחות",
@@ -6371,6 +6374,45 @@
       "revoke": "בטל",
       "audit_heading": "ביקורת הקצאה",
       "audit_empty": "עדיין אין קריאות SCIM."
+    },
+    "adversaryDominance": {
+      "title": "עליונות יריב",
+      "subtitle": "מיזוג חי CISA KEV × HIBP × URLhaus — קלירנט חוקי בלבד, בלי שחקנים מומצאים",
+      "badge": "DOMINANCE",
+      "evidence_notice": "שורות מ-GET /api/findings למנועי fusion / leak / darkweb / URLhaus. סריקה: POST /api/command-center/scan עם credential_ransomware_fusion. חבילת דירקטוריון: PDF ו-/export/xlsx.",
+      "total_hits": "סה״כ",
+      "critical": "קריטי",
+      "high": "גבוה",
+      "medium": "בינוני",
+      "low": "נמוך",
+      "info": "מידע",
+      "load_error": "טעינת ממצאים נכשלה: {{error}}.",
+      "search_placeholder": "חיפוש כותרת, מקור, יעד…",
+      "filter_all": "כל החומרות",
+      "col_severity": "חומרה",
+      "col_title": "כותרת",
+      "col_source": "מקור",
+      "col_target": "יעד",
+      "empty_title": "אין עדיין פגיעות fusion חיות",
+      "empty_body": "בחר לקוח עם דומיין מורשה והפעל את מנוע Credential-to-Ransomware Fusion. ריק = הפידים לא החזירו התאמות. אנחנו לא ממציאים שמות APT.",
+      "run_fusion": "הרץ סריקת fusion",
+      "scanning": "סורק…",
+      "need_client": "יש לבחור לקוח עם דומיין מורשה.",
+      "scan_failed": "סריקת fusion נכשלה.",
+      "job_status": "משימה {{status}}",
+      "open_dark_web": "מוניטור רשת אפלה →",
+      "open_graph": "גרף נתיב תקיפה →",
+      "feed_legend": "עצב פידי קלירנט",
+      "feed_kev": "CISA KEV",
+      "feed_hibp": "HIBP",
+      "feed_urlhaus": "URLhaus",
+      "feed_intelx": "ספירות IntelX",
+      "feed_hit": "פגיעה",
+      "feed_armed": "מפתח מוכן",
+      "feed_silent": "שקט",
+      "last_updated": "סונכרן לאחרונה {{time}}",
+      "auto_on": "רענון חי פעיל",
+      "auto_off": "רענון חי כבוי"
     }
   },
   "components": {
@@ -6862,7 +6904,9 @@
           "no_crime_scene": "אין דוח זירת פשע.",
           "bleed_preview": "תצוגת bleed (חלון 64 בתים):\n{{preview}}",
           "entropy_map": "מפת entropy:\n{{map}}"
-        }
+        },
+        "xlsx_download_failed": "הורדת Excel נכשלה",
+        "generate_xlsx": "הורד Excel (XLSX)"
       },
       "identityMatrix": {
         "select_client": "בחר לקוח לניהול מטריצת זהות.",
@@ -7285,7 +7329,7 @@
       "evidence_notice": "שורות דוח executive מ-GET /api/clients/:id/report וחותמות קryptografיות מ-GET /api/clients/:id/audit-trail — ללא ממצאי placeholder.",
       "loading": "טוען דוח…",
       "title": "דוח — {{name}}",
-      "download_pdf": "הורד PDF (HTML)",
+      "download_pdf": "הורד PDF",
       "back_war_room": "← חדר מלחמה",
       "load_failed": "טעינה נכשלה",
       "executive_summary": "סיכום מנהלים",
@@ -7308,7 +7352,8 @@
       "audit_root_hash_label": "Audit Root Hash (SHA-256):",
       "verify_link": "אימות: {{url}}",
       "no_sealed_run": "אין ריצה חתומה ללקוח זה עדיין. הפעל סריקה ליצירת audit trail.",
-      "client_fallback": "לקוח {{id}}"
+      "client_fallback": "לקוח {{id}}",
+      "download_xlsx": "הורד Excel (XLSX)"
     },
     "tools": {
       "memoryForensicsLab": {

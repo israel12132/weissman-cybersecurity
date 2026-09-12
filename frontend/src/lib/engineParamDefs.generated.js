@@ -591,124 +591,6 @@ export const GENERATED_PARAM_DEFS = {
       "max": 5000
     }
   ],
-  "ot_passive_active_safety": [
-    {
-      "key": "protocol_strict",
-      "label": "OT Protocol Strict",
-      "type": "select",
-      "defaultVal": "true",
-      "options": [
-        "true",
-        "false"
-      ]
-    },
-    {
-      "key": "ports",
-      "label": "Ports / Port Range",
-      "type": "text",
-      "defaultVal": "top",
-      "placeholder": "top | 80,443,8080"
-    },
-    {
-      "key": "probe_mode",
-      "label": "OT Probe Mode",
-      "type": "select",
-      "defaultVal": "safe_read",
-      "options": [
-        "passive",
-        "safe_read",
-        "active_validation"
-      ]
-    },
-    {
-      "key": "depth",
-      "label": "Probe Depth",
-      "type": "select",
-      "defaultVal": "3",
-      "options": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "5"
-      ]
-    },
-    {
-      "key": "timeout_ms",
-      "label": "Probe Timeout (ms)",
-      "type": "number",
-      "defaultVal": "8000",
-      "min": 500,
-      "max": 60000
-    },
-    {
-      "key": "max_findings",
-      "label": "Max Findings",
-      "type": "number",
-      "defaultVal": "200",
-      "min": 1,
-      "max": 5000
-    }
-  ],
-  "ot_crown_jewel_path": [
-    {
-      "key": "protocol_strict",
-      "label": "OT Protocol Strict",
-      "type": "select",
-      "defaultVal": "true",
-      "options": [
-        "true",
-        "false"
-      ]
-    },
-    {
-      "key": "ports",
-      "label": "Ports / Port Range",
-      "type": "text",
-      "defaultVal": "top",
-      "placeholder": "top | 80,443,8080"
-    },
-    {
-      "key": "probe_mode",
-      "label": "OT Probe Mode",
-      "type": "select",
-      "defaultVal": "safe_read",
-      "options": [
-        "passive",
-        "safe_read",
-        "active_validation"
-      ]
-    },
-    {
-      "key": "depth",
-      "label": "Probe Depth",
-      "type": "select",
-      "defaultVal": "3",
-      "options": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "5"
-      ]
-    },
-    {
-      "key": "timeout_ms",
-      "label": "Probe Timeout (ms)",
-      "type": "number",
-      "defaultVal": "8000",
-      "min": 500,
-      "max": 60000
-    },
-    {
-      "key": "max_findings",
-      "label": "Max Findings",
-      "type": "number",
-      "defaultVal": "200",
-      "min": 1,
-      "max": 5000
-    }
-  ],
   "avionics_adsb_attack": [
     {
       "key": "ports",
@@ -1123,124 +1005,6 @@ export const GENERATED_PARAM_DEFS = {
     }
   ],
   "ot_sis_triton_attack": [
-    {
-      "key": "protocol_strict",
-      "label": "OT Protocol Strict",
-      "type": "select",
-      "defaultVal": "true",
-      "options": [
-        "true",
-        "false"
-      ]
-    },
-    {
-      "key": "ports",
-      "label": "Ports / Port Range",
-      "type": "text",
-      "defaultVal": "top",
-      "placeholder": "top | 80,443,8080"
-    },
-    {
-      "key": "probe_mode",
-      "label": "OT Probe Mode",
-      "type": "select",
-      "defaultVal": "safe_read",
-      "options": [
-        "passive",
-        "safe_read",
-        "active_validation"
-      ]
-    },
-    {
-      "key": "depth",
-      "label": "Probe Depth",
-      "type": "select",
-      "defaultVal": "3",
-      "options": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "5"
-      ]
-    },
-    {
-      "key": "timeout_ms",
-      "label": "Probe Timeout (ms)",
-      "type": "number",
-      "defaultVal": "8000",
-      "min": 500,
-      "max": 60000
-    },
-    {
-      "key": "max_findings",
-      "label": "Max Findings",
-      "type": "number",
-      "defaultVal": "200",
-      "min": 1,
-      "max": 5000
-    }
-  ],
-  "ot_passive_active_safety": [
-    {
-      "key": "protocol_strict",
-      "label": "OT Protocol Strict",
-      "type": "select",
-      "defaultVal": "true",
-      "options": [
-        "true",
-        "false"
-      ]
-    },
-    {
-      "key": "ports",
-      "label": "Ports / Port Range",
-      "type": "text",
-      "defaultVal": "top",
-      "placeholder": "top | 80,443,8080"
-    },
-    {
-      "key": "probe_mode",
-      "label": "OT Probe Mode",
-      "type": "select",
-      "defaultVal": "safe_read",
-      "options": [
-        "passive",
-        "safe_read",
-        "active_validation"
-      ]
-    },
-    {
-      "key": "depth",
-      "label": "Probe Depth",
-      "type": "select",
-      "defaultVal": "3",
-      "options": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "5"
-      ]
-    },
-    {
-      "key": "timeout_ms",
-      "label": "Probe Timeout (ms)",
-      "type": "number",
-      "defaultVal": "8000",
-      "min": 500,
-      "max": 60000
-    },
-    {
-      "key": "max_findings",
-      "label": "Max Findings",
-      "type": "number",
-      "defaultVal": "200",
-      "min": 1,
-      "max": 5000
-    }
-  ],
-  "ot_crown_jewel_path": [
     {
       "key": "protocol_strict",
       "label": "OT Protocol Strict",
@@ -25194,33 +24958,15 @@ export const GENERATED_PARAM_DEFS = {
       "max": 5000
     }
   ],
-  "ot_passive_active_safety": [
+  "credential_ransomware_fusion": [
     {
-      "key": "protocol_strict",
-      "label": "OT Protocol Strict",
+      "key": "safe_mode",
+      "label": "Safe Mode (no destructive exec)",
       "type": "select",
       "defaultVal": "true",
       "options": [
         "true",
         "false"
-      ]
-    },
-    {
-      "key": "ports",
-      "label": "Ports / Port Range",
-      "type": "text",
-      "defaultVal": "top",
-      "placeholder": "top | 80,443,8080"
-    },
-    {
-      "key": "probe_mode",
-      "label": "OT Probe Mode",
-      "type": "select",
-      "defaultVal": "safe_read",
-      "options": [
-        "passive",
-        "safe_read",
-        "active_validation"
       ]
     },
     {
@@ -25237,34 +24983,6 @@ export const GENERATED_PARAM_DEFS = {
       ]
     },
     {
-      "key": "timeout_ms",
-      "label": "Probe Timeout (ms)",
-      "type": "number",
-      "defaultVal": "8000",
-      "min": 500,
-      "max": 60000
-    },
-    {
-      "key": "max_findings",
-      "label": "Max Findings",
-      "type": "number",
-      "defaultVal": "200",
-      "min": 1,
-      "max": 5000
-    }
-  ],
-  "ot_crown_jewel_path": [
-    {
-      "key": "protocol_strict",
-      "label": "OT Protocol Strict",
-      "type": "select",
-      "defaultVal": "true",
-      "options": [
-        "true",
-        "false"
-      ]
-    },
-    {
       "key": "ports",
       "label": "Ports / Port Range",
       "type": "text",
@@ -25272,67 +24990,21 @@ export const GENERATED_PARAM_DEFS = {
       "placeholder": "top | 80,443,8080"
     },
     {
-      "key": "probe_mode",
-      "label": "OT Probe Mode",
-      "type": "select",
-      "defaultVal": "safe_read",
-      "options": [
-        "passive",
-        "safe_read",
-        "active_validation"
-      ]
+      "key": "github_token",
+      "label": "GitHub Token (optional)",
+      "type": "password",
+      "defaultVal": "",
+      "placeholder": "ghp_..."
     },
     {
-      "key": "depth",
-      "label": "Probe Depth",
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
       "type": "select",
-      "defaultVal": "3",
+      "defaultVal": "low",
       "options": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "5"
-      ]
-    },
-    {
-      "key": "timeout_ms",
-      "label": "Probe Timeout (ms)",
-      "type": "number",
-      "defaultVal": "8000",
-      "min": 500,
-      "max": 60000
-    },
-    {
-      "key": "max_findings",
-      "label": "Max Findings",
-      "type": "number",
-      "defaultVal": "200",
-      "min": 1,
-      "max": 5000
-    }
-  ],
-  "prevention_fabric_breach_proof": [
-    {
-      "key": "intensity",
-      "label": "Scan Intensity",
-      "type": "select",
-      "defaultVal": "normal",
-      "options": [
-        "light",
-        "normal",
-        "aggressive"
-      ]
-    },
-    {
-      "key": "evidence_mode",
-      "label": "Evidence Mode",
-      "type": "select",
-      "defaultVal": "standard",
-      "options": [
-        "standard",
-        "strict",
-        "forensic"
+        "off",
+        "low",
+        "high"
       ]
     },
     {

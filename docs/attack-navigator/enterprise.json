@@ -622,8 +622,8 @@
     },
     {
       "techniqueID": "T1597",
-      "score": 5,
-      "comment": "dark_web_monitor, darkweb_intel, deepweb_intel, threat_hunting_apt, threat_intel_fusion",
+      "score": 6,
+      "comment": "credential_ransomware_fusion, dark_web_monitor, darkweb_intel, deepweb_intel, threat_hunting_apt, threat_intel_fusion",
       "enabled": true
     },
     {
@@ -934,8 +934,8 @@
     },
     {
       "techniqueID": "T1555",
-      "score": 1,
-      "comment": "secrets_manager_attack",
+      "score": 2,
+      "comment": "credential_ransomware_fusion, secrets_manager_attack",
       "enabled": true
     },
     {

@@ -196,6 +196,8 @@ pub mod advanced_mobile_engines;
 pub mod advanced_network_engines;
 pub mod advanced_ot_engines;
 pub mod advanced_recon_engines;
+pub mod board_xlsx;
+pub mod credential_ransomware_fusion;
 pub mod advanced_social_engines;
 pub mod advanced_stealth_engines;
 pub mod advanced_supply_chain_engines;

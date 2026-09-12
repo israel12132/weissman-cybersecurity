@@ -287,7 +287,8 @@
     "win_room": "Competitive Win Room",
     "elite_hardening": "Elite Hardening",
     "cem_dago": "CEM-DAGO",
-    "scim_provisioning": "SCIM Provisioning"
+    "scim_provisioning": "SCIM Provisioning",
+    "adversary_dominance": "Adversary Dominance"
   },
   "ask_weissman": {
     "title": "Ask Weissman",
@@ -541,9 +542,9 @@
     "sso_saml": "Sign in with SAML",
     "enterprise_sso": "Enterprise SSO",
     "brand_tagline": "Unified offensive security for enterprise teams",
-    "brand_story": "Correlate findings across 254 attack engines, orchestrate SOAR playbooks, and prove compliance — from a single command center.",
+    "brand_story": "Correlate findings across {{engines}} attack engines, orchestrate SOAR playbooks, and prove compliance — from a single command center.",
     "brand_release": "{{name}} · {{release}}",
-    "trust_engines": "254 engines",
+    "trust_engines": "{{engines}} engines",
     "trust_soc2": "SOC2-ready",
     "trust_region": "EU-West",
     "trust_label": "Platform trust indicators",
@@ -924,7 +925,7 @@
     "title": "Client Details",
     "subtitle": "Authorized scope, scan management, and quick actions",
     "export_server": "Server CSV",
-    "export_server_hint": "Download every finding for this client server-side via GET /api/clients/:id/export/csv (not just the rows loaded in the browser).",
+    "export_server_hint": "Download every finding for this client server-side via GET /api/clients/:id/export/csv (CSV) or /export/xlsx (real Excel workbook — not CSV labeled as Excel).",
     "export_server_running": "Exporting…",
     "export_server_ok": "Client findings exported.",
     "export_server_failed": "Server-side export failed.",
@@ -950,11 +951,13 @@
     "quick_actions": "Quick Actions",
     "view_findings_desc": "See all vulnerabilities",
     "generate_report": "Generate Report",
-    "generate_report_desc": "Export PDF/CSV",
+    "generate_report_desc": "Board PDF and real Excel workbook",
     "attack_surface": "Attack Surface",
     "attack_surface_desc": "View ASM graph",
     "integrations": "Integrations",
-    "sector": "Sector"
+    "sector": "Sector",
+    "download_pdf": "Download PDF",
+    "download_xlsx": "Download Excel (XLSX)"
   },
   "clients": {
     "title": "Clients",
@@ -2091,7 +2094,7 @@
       "empty_body": "Run Leak Hunter or darkweb_intel against an authorized domain. Findings appear here automatically from GET /api/findings.",
       "empty_step_scan_link": "run the baseline scan",
       "empty_step_scan_after": "(Leak Hunter is included in the bundle).",
-      "empty_step_keys": "For richer breach feeds, set HIBP_API_KEY / OTX_API_KEY in System Configuration; the engine is wired but degrades gracefully without keys.",
+      "empty_step_keys": "HIBP Pro (HIBP_API_KEY) adds verified-domain account counts to credential_ransomware_fusion. IntelX is optional for darkweb_intel. We never crawl Tor.",
       "empty_step_engine_before": "Run the darkweb_intel engine from the",
       "empty_step_engine_link": "Engine Matrix",
       "empty_step_engine_after": "(requires an authorized domain)."
@@ -6371,6 +6374,45 @@
       "revoke": "Revoke",
       "audit_heading": "Provisioning audit",
       "audit_empty": "No SCIM calls recorded yet."
+    },
+    "adversaryDominance": {
+      "title": "Adversary Dominance",
+      "subtitle": "Live CISA KEV × HIBP × URLhaus fusion — legal clearnet only, no fabricated actors",
+      "badge": "DOMINANCE",
+      "evidence_notice": "Rows from GET /api/findings filtered to credential_ransomware_fusion, leak_hunter, darkweb_intel, URLhaus, and typosquat. Scan is POST /api/command-center/scan with engine credential_ransomware_fusion. Board pack: GET /api/clients/:id/report/pdf and /export/xlsx.",
+      "total_hits": "Total",
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "info": "Info",
+      "load_error": "Couldn't load findings: {{error}}.",
+      "search_placeholder": "Search title, source, target…",
+      "filter_all": "All severities",
+      "col_severity": "Severity",
+      "col_title": "Title",
+      "col_source": "Source",
+      "col_target": "Target",
+      "empty_title": "No live fusion hits yet",
+      "empty_body": "Select a client with an authorized domain and run Credential-to-Ransomware Fusion. Empty means the clearnet feeds returned no matches — we never invent APT names.",
+      "run_fusion": "Run fusion scan",
+      "scanning": "Scanning…",
+      "need_client": "Select a client with an authorized domain first.",
+      "scan_failed": "Fusion scan failed.",
+      "job_status": "Job {{status}}",
+      "open_dark_web": "Dark Web Monitor →",
+      "open_graph": "Attack-path graph →",
+      "feed_legend": "Clearnet feed nerve",
+      "feed_kev": "CISA KEV",
+      "feed_hibp": "HIBP",
+      "feed_urlhaus": "URLhaus",
+      "feed_intelx": "IntelX counts",
+      "feed_hit": "hit",
+      "feed_armed": "key armed",
+      "feed_silent": "silent",
+      "last_updated": "Last synced {{time}}",
+      "auto_on": "Live refresh ON",
+      "auto_off": "Live refresh OFF"
     }
   },
   "components": {
@@ -6862,7 +6904,9 @@
           "no_crime_scene": "No crime scene report.",
           "bleed_preview": "Bleed preview (64-byte window):\n{{preview}}",
           "entropy_map": "Entropy map:\n{{map}}"
-        }
+        },
+        "xlsx_download_failed": "Failed to download Excel workbook",
+        "generate_xlsx": "DOWNLOAD EXCEL (XLSX)"
       },
       "identityMatrix": {
         "select_client": "Select a client to manage Identity Matrix.",
@@ -7285,7 +7329,7 @@
       "evidence_notice": "Executive report rows from GET /api/clients/:id/report and cryptographic seals from GET /api/clients/:id/audit-trail — no placeholder findings.",
       "loading": "Loading report…",
       "title": "Report — {{name}}",
-      "download_pdf": "Download PDF (HTML)",
+      "download_pdf": "Download PDF",
       "back_war_room": "← War Room",
       "load_failed": "Load failed",
       "executive_summary": "Executive Summary",
@@ -7308,7 +7352,8 @@
       "audit_root_hash_label": "Audit Root Hash (SHA-256):",
       "verify_link": "Verify: {{url}}",
       "no_sealed_run": "No sealed run for this client yet. Run a scan to generate the audit trail.",
-      "client_fallback": "Client {{id}}"
+      "client_fallback": "Client {{id}}",
+      "download_xlsx": "Download Excel (XLSX)"
     },
     "tools": {
       "memoryForensicsLab": {

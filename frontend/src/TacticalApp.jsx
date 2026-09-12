@@ -101,6 +101,7 @@ import {
   ExecutiveOverview,
   AgentManagement,
   DarkWebMonitor,
+  AdversaryDominance,
   TargetIntelligence,
   StealthOperations,
   EliteHardeningCommandCenter,
@@ -300,6 +301,7 @@ export default function TacticalApp() {
           <Route path="reports" element={<ReportHistory />} />
           <Route path="overview" element={<ExecutiveOverview />} />
           <Route path="dark-web" element={<DarkWebMonitor />} />
+          <Route path="adversary-dominance" element={<AdversaryDominance />} />
           <Route path="target-intel" element={<TargetIntelligence />} />
           <Route path="stealth-ops" element={<StealthOperations />} />
           <Route path="elite-hardening" element={<EliteHardeningCommandCenter />} />
