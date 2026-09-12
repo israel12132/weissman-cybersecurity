@@ -699,6 +699,7 @@ export default function RiskGraphVisualization() {
                             String(n.id) === String(selectedNode.id) ? { ...n, internet_exposed: next } : n,
                           ),
                         }))
+                        await recomputeAttackPaths()
                       } catch (e) {
                         console.error('flag patch failed', e)
                       }
@@ -727,6 +728,7 @@ export default function RiskGraphVisualization() {
                             String(n.id) === String(selectedNode.id) ? { ...n, crown_jewel: next } : n,
                           ),
                         }))
+                        await recomputeAttackPaths()
                       } catch (e) {
                         console.error('flag patch failed', e)
                       }
