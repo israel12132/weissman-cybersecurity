@@ -93,6 +93,7 @@ import {
   UebaAnomalies,
   FindingSuppressions,
   FindingClusters,
+  ScanFindingSpine,
   CryptoPosture,
   LiveFeed,
   ReportHistory,
@@ -277,6 +278,7 @@ export default function TacticalApp() {
           <Route path="serverless-security" element={<ServerlessSecurityCommandCenter />} />
           <Route path="findings" element={<FindingsCommandCenter />} />
           <Route path="finding-clusters" element={<FindingClusters />} />
+          <Route path="scan-finding-spine" element={<ScanFindingSpine />} />
           <Route path="threat-intel" element={<ThreatIntelHub />} />
           <Route path="intel-map" element={<App />} />
           <Route path="incident-response" element={<IncidentResponseCenter />} />

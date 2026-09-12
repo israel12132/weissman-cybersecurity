@@ -2042,6 +2042,7 @@ mod public_route_guard_tests {
     #[test]
     fn protected_routes_are_not_public() {
         assert!(!is_public_route(&Method::GET, "/api/findings"));
+        assert!(!is_public_route(&Method::GET, "/api/scan-finding-spine"));
         assert!(!is_public_route(&Method::POST, "/api/command-center/scan"));
         assert!(!is_public_route(&Method::DELETE, "/api/clients/1"));
         // Correct public path but wrong method is not public.

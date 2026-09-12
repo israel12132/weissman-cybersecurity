@@ -503,6 +503,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/poe-scan/run", post(api_poe_scan_run))
         .route("/api/jobs", get(api_async_jobs_list))
         .route("/api/jobs/:job_id", get(api_async_job_status))
+        .route("/api/scan-finding-spine", get(api_scan_finding_spine))
         .route("/api/poe-scan/status/:job_id", get(api_poe_scan_status))
         .route("/api/poe-scan/stream/:job_id", get(api_poe_scan_stream))
         .route(
