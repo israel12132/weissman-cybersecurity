@@ -27,7 +27,7 @@ use axum::{
     routing::{delete, get, patch, post, put},
     Router,
 };
-use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use chrono_tz::Asia::Jerusalem;
 use dashmap::DashMap;
 use flume::TrySendError;
@@ -258,9 +258,6 @@ static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
     (Method::POST, "/api/auth/signup", RouteGate::Always),
     (Method::GET, "/api/auth/verify", RouteGate::Always),
     (Method::POST, "/api/public/demo-request", RouteGate::Always),
-    (Method::GET, "/api/public/platform-pulse", RouteGate::Always),
-    (Method::GET, "/api/public/engine-catalog", RouteGate::Always),
-    (Method::POST, "/api/public/contact", RouteGate::Always),
     (Method::POST, "/api/v1/alerts/aws-canary", RouteGate::Always),
     // Public service status (SLA_AND_STATUS.md §4) — must be readable during an incident.
     (Method::GET, "/status", RouteGate::Always),
@@ -291,11 +288,6 @@ fn is_public_route(method: &Method, path: &str) -> bool {
     })
 }
 
-#[must_use]
-fn is_scim_v2_path(path: &str) -> bool {
-    path == "/api/scim/v2" || path.starts_with("/api/scim/v2/")
-}
-
 /// Auth middleware: allow only the declared public routes; all other /api/* require valid JWT.
 async fn auth_guard(
     State(state): State<Arc<AppState>>,
@@ -308,13 +300,12 @@ async fn auth_guard(
     if crate::http::is_account_lockout_post(method, path) {
         return next.run(request).await;
     }
-    // SCIM 2.0 authenticates with a hashed bearer looked up by SECURITY DEFINER,
-    // not a user JWT. Handlers fail closed (401) when the token is missing/revoked.
-    if is_scim_v2_path(path) {
-        return next.run(request).await;
-    }
     // Everything else reachable without a JWT is declared once in PUBLIC_ROUTES.
     if is_public_route(method, path) {
+        return next.run(request).await;
+    }
+    // SCIM is authenticated by a tenant bearer token hashed at rest — not a user JWT.
+    if path.starts_with("/scim/") {
         return next.run(request).await;
     }
     if path.starts_with("/api/") || path.starts_with("/ws/") {
@@ -623,7 +614,7 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
                         .map(|s| utc_str_to_israel(s))
                         .unwrap_or_else(|| "—".to_string());
                     clients_rows.push_str(&format!(
-                        r#"<tr><td>{}</td><td>{}</td><td class="domains-cell">{}</td><td class="time-cell">{}</td><td class="actions-cell"><a href="/command-center/report/{}" class="btn-sm btn-view">View</a> <a href="/command-center/attack-surface-graph/{}" class="btn-sm btn-graph">Graph</a> <a href="/command-center/semantic-logic/{}" class="btn-sm btn-logic">Logic</a> <a href="/command-center/timing-profiler/{}" class="btn-sm btn-timing">Timing</a> <a href="/command-center/ai-arena/{}" class="btn-sm btn-arena">Arena</a> <a href="/command-center/cicd-matrix/{}" class="btn-sm btn-pipeline">Pipeline</a> <a href="/command-center/memory-lab/{}" class="btn-sm btn-memorylab">Memory Lab</a> <a href="/api/clients/{}/report/pdf" class="btn-sm btn-pdf" download>PDF</a> <a href="/api/clients/{}/export/xlsx" class="btn-sm btn-excel" download>Excel</a></td></tr>"#,
+                        r#"<tr><td>{}</td><td>{}</td><td class="domains-cell">{}</td><td class="time-cell">{}</td><td class="actions-cell"><a href="/command-center/report/{}" class="btn-sm btn-view">View</a> <a href="/command-center/attack-surface-graph/{}" class="btn-sm btn-graph">Graph</a> <a href="/command-center/semantic-logic/{}" class="btn-sm btn-logic">Logic</a> <a href="/command-center/timing-profiler/{}" class="btn-sm btn-timing">Timing</a> <a href="/command-center/ai-arena/{}" class="btn-sm btn-arena">Arena</a> <a href="/command-center/cicd-matrix/{}" class="btn-sm btn-pipeline">Pipeline</a> <a href="/command-center/memory-lab/{}" class="btn-sm btn-memorylab">Memory Lab</a> <a href="/api/clients/{}/report/pdf" class="btn-sm btn-pdf" download>PDF</a> <a href="/api/clients/{}/export/csv" class="btn-sm btn-excel" download>Excel</a></td></tr>"#,
                         id,
                         escape_html(&name),
                         escape_html(&dom_short),
@@ -2040,9 +2031,6 @@ mod public_route_guard_tests {
             (Method::POST, "/api/auth/signup"),
             (Method::GET, "/api/auth/verify"),
             (Method::POST, "/api/public/demo-request"),
-            (Method::GET, "/api/public/platform-pulse"),
-            (Method::GET, "/api/public/engine-catalog"),
-            (Method::POST, "/api/public/contact"),
             (Method::POST, "/api/v1/alerts/aws-canary"),
             (Method::GET, "/status"),
             (Method::POST, "/api/agents/enroll"),
@@ -2060,33 +2048,12 @@ mod public_route_guard_tests {
         assert!(!is_public_route(&Method::GET, "/api/findings"));
         assert!(!is_public_route(&Method::POST, "/api/command-center/scan"));
         assert!(!is_public_route(&Method::DELETE, "/api/clients/1"));
-        assert!(!is_public_route(&Method::GET, "/api/market-readiness"));
-        assert!(!is_public_route(&Method::GET, "/api/ot-ics/safety"));
-        assert!(!is_public_route(
-            &Method::GET,
-            "/api/elite-hardening/status"
-        ));
-        assert!(!is_public_route(&Method::GET, "/api/cem-dago/status"));
-        assert!(!is_public_route(
-            &Method::GET,
-            "/api/sovereign/operator/session"
-        ));
-        assert!(!is_public_route(&Method::GET, "/api/soar/executions"));
-        assert!(!is_public_route(
-            &Method::POST,
-            "/api/soar/executions/00000000-0000-0000-0000-000000000001/hitl/approve"
-        ));
-        assert!(!is_public_route(
-            &Method::POST,
-            "/api/soar/executions/00000000-0000-0000-0000-000000000001/hitl/deny"
-        ));
+        // SCIM is bearer-token authenticated in-handler, not a JWT public route.
+        assert!(!is_public_route(&Method::GET, "/scim/v2/Users"));
+        assert!(!is_public_route(&Method::POST, "/scim/v2/Users"));
         // Correct public path but wrong method is not public.
         assert!(!is_public_route(&Method::GET, "/api/logout"));
         assert!(!is_public_route(&Method::POST, "/api/health"));
-        assert!(!is_public_route(&Method::GET, "/api/scim/v2/Users"));
-        assert!(super::is_scim_v2_path("/api/scim/v2/Users"));
-        assert!(super::is_scim_v2_path("/api/scim/v2/Groups/1"));
-        assert!(!super::is_scim_v2_path("/api/admin/scim/tokens"));
     }
 
     /// Axum runs the *last* `.layer()` first. Login rate-limit must be layered

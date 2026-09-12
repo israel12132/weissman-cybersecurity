@@ -446,30 +446,15 @@ pub async fn saml_acs(
                 Json(json!({"ok": false, "detail": format!("auth audit: {}", e)})),
             )
         })?;
-    let user_id: i64 = if let Some(uid) = sqlx::query_scalar::<_, i64>(
-        "SELECT id FROM auth.v_user_lookup WHERE tenant_id = $1 AND lower(trim(email)) = lower(trim($2)) AND is_active = true",
+    let claim_groups = crate::scim::groups_from_saml_xml(&xml);
+    let user_id = crate::scim::resolve_sso_user(
+        auth,
+        state.app_pool.as_ref(),
+        r.tenant_id,
+        &email,
+        &claim_groups,
     )
-    .bind(r.tenant_id)
-    .bind(&email)
-    .fetch_optional(auth)
-    .await
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": format!("{}", e)})),
-        )
-    })? {
-        uid
-    } else {
-        weissman_db::auth_access::insert_user_auth(auth, r.tenant_id, &email, None, "viewer")
-            .await
-            .map_err(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"ok": false, "detail": format!("provision: {}", e)})),
-                )
-            })?
-    };
+    .await?;
     let ip = crate::http::extract_client_ip(&headers, addr);
     if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, r.tenant_id).await {
         let _ = audit_log::insert_audit(

@@ -283,6 +283,183 @@ function IdpRow({ idp, onEdit, onDelete, onToggle, onTest, testing }) {
   )
 }
 
+const SCIM_ROLES = ['viewer', 'analyst', 'operator', 'admin']
+
+function ScimKillSwitchPanel({ showToast }) {
+  const { t } = useTranslation()
+  const [status, setStatus] = useState(null)
+  const [tokens, setTokens] = useState([])
+  const [events, setEvents] = useState([])
+  const [draftMaps, setDraftMaps] = useState([{ group_external_id: '', group_display_name: '', weissman_role: 'viewer' }])
+  const [minted, setMinted] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  const load = useCallback(async () => {
+    try {
+      const [st, tok, gm, ev] = await Promise.all([
+        api.get('/api/sso/scim/status'),
+        api.get('/api/sso/scim/tokens').catch(() => ({ tokens: [] })),
+        api.get('/api/sso/scim/group-maps'),
+        api.get('/api/sso/scim/events'),
+      ])
+      setStatus(st)
+      setTokens(tok.tokens ?? [])
+      const loaded = gm.maps ?? []
+      setDraftMaps(loaded.length ? loaded.map((m) => ({
+        group_external_id: m.group_external_id || '',
+        group_display_name: m.group_display_name || '',
+        weissman_role: m.weissman_role || 'viewer',
+      })) : [{ group_external_id: '', group_display_name: '', weissman_role: 'viewer' }])
+      setEvents(ev.events ?? [])
+    } catch (e) {
+      showToast(t('pages.ssoDashboard.scim_load_failed', { message: e.message }), false)
+    }
+  }, [showToast, t])
+
+  useEffect(() => { load() }, [load])
+
+  const mint = async () => {
+    setBusy(true)
+    try {
+      const data = await api.post('/api/sso/scim/tokens', { label: 'entra-okta' })
+      setMinted(data.token)
+      showToast(t('pages.ssoDashboard.scim_token_minted'))
+      await load()
+    } catch (e) {
+      showToast(t('pages.ssoDashboard.scim_token_failed', { message: e.message }), false)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const revoke = async (id) => {
+    if (!(await confirmDialog(t('pages.ssoDashboard.scim_revoke_confirm')))) return
+    try {
+      await api.delete(`/api/sso/scim/tokens/${id}`)
+      showToast(t('pages.ssoDashboard.scim_token_revoked'))
+      await load()
+    } catch (e) {
+      showToast(t('pages.ssoDashboard.scim_token_failed', { message: e.message }), false)
+    }
+  }
+
+  const saveMaps = async () => {
+    const mapsToSave = draftMaps.filter((m) => m.group_external_id.trim())
+    setBusy(true)
+    try {
+      await api.put('/api/sso/scim/group-maps', { maps: mapsToSave })
+      showToast(t('pages.ssoDashboard.scim_maps_saved'))
+      await load()
+    } catch (e) {
+      showToast(t('pages.ssoDashboard.scim_maps_failed', { message: e.message }), false)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="rounded-2xl bg-[var(--bg-2)] border border-cyan-500/20 p-5 space-y-5" data-testid="scim-kill-switch">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-400/80">{t('pages.ssoDashboard.scim_badge')}</p>
+          <h3 className="text-sm font-bold text-white mt-1">{t('pages.ssoDashboard.scim_title')}</h3>
+          <p className="text-[12px] text-[var(--text-muted)] mt-1">{t('pages.ssoDashboard.scim_detail')}</p>
+        </div>
+        <div className="flex gap-2 text-[10px] font-mono uppercase">
+          <span className="px-2 py-1 rounded border border-cyan-500/30 text-cyan-300">{t('pages.ssoDashboard.scim_tokens_count', { count: status?.active_tokens ?? 0 })}</span>
+          <span className="px-2 py-1 rounded border border-amber-500/30 text-amber-300">{t('pages.ssoDashboard.scim_kills_count', { count: status?.kill_switches_7d ?? 0 })}</span>
+        </div>
+      </div>
+
+      {minted && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 p-3 space-y-1">
+          <p className="text-[10px] font-mono uppercase text-amber-300">{t('pages.ssoDashboard.scim_token_once')}</p>
+          <code className="block text-[11px] font-mono text-amber-100 break-all">{minted}</code>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <Button variant="unstyled" type="button" disabled={busy} onClick={mint} className="px-3 py-1.5 rounded-xl border border-cyan-500/40 text-cyan-300 text-[11px] font-mono uppercase">
+          {t('pages.ssoDashboard.scim_mint')}
+        </Button>
+        <Button variant="unstyled" type="button" onClick={load} className="px-3 py-1.5 rounded-xl border border-[var(--border-default)] text-[var(--text-muted)] text-[11px] font-mono">
+          {t('pages.ssoDashboard.refresh')}
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        <h4 className="text-[11px] font-mono text-[var(--text-muted)] uppercase">{t('pages.ssoDashboard.scim_tokens')}</h4>
+        {tokens.length === 0 && <p className="text-[11px] text-[var(--text-disabled)]">{t('pages.ssoDashboard.scim_no_tokens')}</p>}
+        {tokens.map((tok) => (
+          <div key={tok.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border-default)] px-3 py-2">
+            <div>
+              <p className="text-[12px] font-mono text-white">{tok.token_prefix}…</p>
+              <p className="text-[10px] text-[var(--text-disabled)]">{tok.label} · {tok.revoked_at ? t('pages.ssoDashboard.status_inactive') : t('pages.ssoDashboard.status_active')}</p>
+            </div>
+            {!tok.revoked_at && (
+              <Button variant="unstyled" type="button" onClick={() => revoke(tok.id)} className="text-[10px] font-mono text-rose-300 border border-rose-500/30 px-2 py-1 rounded">
+                {t('pages.ssoDashboard.scim_revoke')}
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-2">
+        <h4 className="text-[11px] font-mono text-[var(--text-muted)] uppercase">{t('pages.ssoDashboard.scim_maps')}</h4>
+        {draftMaps.map((row, idx) => (
+          <div key={idx} className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <input
+              aria-label={t('pages.ssoDashboard.scim_group_id')}
+              placeholder={t('pages.ssoDashboard.scim_group_id')}
+              value={row.group_external_id}
+              onChange={(e) => setDraftMaps((prev) => prev.map((m, i) => i === idx ? { ...m, group_external_id: e.target.value } : m))}
+              className="rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] font-mono text-[var(--text-secondary)]"
+            />
+            <input
+              aria-label={t('pages.ssoDashboard.scim_group_name')}
+              placeholder={t('pages.ssoDashboard.scim_group_name')}
+              value={row.group_display_name}
+              onChange={(e) => setDraftMaps((prev) => prev.map((m, i) => i === idx ? { ...m, group_display_name: e.target.value } : m))}
+              className="rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)]"
+            />
+            <select
+              aria-label={t('pages.ssoDashboard.scim_role')}
+              value={row.weissman_role}
+              onChange={(e) => setDraftMaps((prev) => prev.map((m, i) => i === idx ? { ...m, weissman_role: e.target.value } : m))}
+              className="rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)]"
+            >
+              {SCIM_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+        ))}
+        <div className="flex gap-2">
+          <Button variant="unstyled" type="button" onClick={() => setDraftMaps((p) => [...p, { group_external_id: '', group_display_name: '', weissman_role: 'viewer' }])} className="px-3 py-1.5 rounded-xl border border-[var(--border-default)] text-[11px] font-mono text-[var(--text-muted)]">
+            {t('pages.ssoDashboard.scim_add_map')}
+          </Button>
+          <Button variant="unstyled" type="button" disabled={busy} onClick={saveMaps} className="px-3 py-1.5 rounded-xl border border-cyan-500/40 text-cyan-300 text-[11px] font-mono uppercase">
+            {t('pages.ssoDashboard.scim_save_maps')}
+          </Button>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <h4 className="text-[11px] font-mono text-[var(--text-muted)] uppercase">{t('pages.ssoDashboard.scim_tape')}</h4>
+        {events.length === 0 && <p className="text-[11px] text-[var(--text-disabled)]">{t('pages.ssoDashboard.scim_no_events')}</p>}
+        {events.slice(0, 12).map((ev) => (
+          <div key={ev.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border-subtle)] px-3 py-2">
+            <div>
+              <p className="text-[12px] text-white font-mono">{ev.action} · {ev.user_email}</p>
+              <p className="text-[10px] text-[var(--text-disabled)]">{ev.sessions_revoked ? t('pages.ssoDashboard.scim_sessions_revoked', { count: ev.sessions_revoked }) : ev.role || ''}</p>
+            </div>
+            <span className="text-[10px] font-mono text-[var(--text-disabled)]">{ev.created_at ? String(ev.created_at).slice(0, 19) : ''}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SsoDashboard() {
@@ -526,6 +703,9 @@ export default function SsoDashboard() {
           </AnimatePresence>
         </div>
 
+        {/* Identity kill-switch — live SCIM joiner/leaver tape */}
+        <ScimKillSwitchPanel showToast={showToast} />
+
         {/* SP Metadata info */}
         <div className="rounded-2xl bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] px-5 py-4 space-y-2">
           <h4 className="text-[11px] font-mono text-[var(--text-muted)] uppercase">{t('pages.ssoDashboard.sp_metadata')}</h4>
@@ -535,6 +715,7 @@ export default function SsoDashboard() {
               { label: t('pages.ssoDashboard.saml_acs'), value: apiUrl('/api/auth/saml/acs') },
               { label: t('pages.ssoDashboard.oidc_login'), value: `${apiUrl('/api/auth/oidc/begin')}?tenant_slug=TENANT&idp_name=NAME` },
               { label: t('pages.ssoDashboard.saml_login'), value: `${apiUrl('/api/auth/saml/begin')}?tenant_slug=TENANT&idp_name=NAME` },
+              { label: t('pages.ssoDashboard.scim_base'), value: apiUrl('/scim/v2') },
             ].map(item => (
               <div key={item.label} className="space-y-0.5">
                 <p className="text-[9px] font-mono text-[var(--text-disabled)] uppercase">{item.label}</p>
