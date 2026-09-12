@@ -8,11 +8,8 @@ async fn api_client_findings_all(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({ "findings": [] }))).into_response();
     };
     let rows = sqlx::query(
-        r#"SELECT id, finding_id, title, severity, source,
-                  COALESCE(description,'') AS description,
-                  COALESCE(NULLIF(poc_exploit,''), NULLIF(proof,''), raw_data#>>'{evidence,proof}', '') AS poc_exploit,
-                  COALESCE(poc_sealed, false) AS poc_sealed,
-                  COALESCE(poc_commitment_sha256,'') AS poc_commitment_sha256,
+        r#"SELECT id, finding_id, title, severity, source, COALESCE(description,''), COALESCE(poc_exploit,''),
+                  COALESCE(poc_sealed, false), COALESCE(poc_commitment_sha256,''),
                   COALESCE(raw_data, '{}'::jsonb) AS raw_data
              FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC"#,
     )
@@ -105,6 +102,27 @@ async fn api_client_export_csv(
     res
 }
 
+const ADVERSARY_MIRROR_SOURCES: &[&str] = &[
+    "adversary_gap_mirror",
+    "darkweb_intel",
+    "dark_web_monitor",
+    "leak_hunter",
+    "typosquatting_monitor",
+];
+
+fn is_adversary_source(src: &str) -> bool {
+    let s = src.to_ascii_lowercase();
+    ADVERSARY_MIRROR_SOURCES.iter().any(|x| s == *x)
+}
+
+fn db_query_fail(e: impl std::fmt::Display) -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(json!({"error": "query failed", "detail": e.to_string()})),
+    )
+        .into_response()
+}
+
 async fn api_client_export_xlsx(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -126,128 +144,275 @@ async fn api_client_export_xlsx(
             return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
         }
     };
-    let rows = sqlx::query(
-        r#"SELECT id, title, severity, source,
-                  COALESCE(status,'') AS status, discovered_at,
-                  COALESCE(description,'') AS description,
-                  COALESCE(NULLIF(poc_exploit,''), NULLIF(proof,''), raw_data#>>'{evidence,proof}', raw_data#>>'{raw,proof}', '') AS proof,
-                  COALESCE(raw_data, '{}'::jsonb) AS raw_data,
-                  COALESCE(kev_listed, false) AS kev_listed,
-                  COALESCE(kev_known_ransomware, false) AS kev_known_ransomware
-             FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC"#,
+    let rows = match sqlx::query(
+        "SELECT id, title, severity, source, COALESCE(status,'') AS status, discovered_at, COALESCE(description,'') AS description FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
     )
     .bind(id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let proof = get_crypto_proof_for_client_tx(&mut tx, auth.tenant_id, id)
-        .await
-        .ok()
-        .flatten();
-    let _ = tx.commit().await;
-
-    let mut findings: Vec<crate::board_xlsx::BoardFinding> = Vec::new();
-    for r in rows {
-        let raw: Value = r
-            .try_get::<Value, _>("raw_data")
-            .unwrap_or_else(|_| json!({}));
-        let mitre = raw
-            .get("mitre_attack")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_string();
-        let cve = raw
-            .get("cve")
-            .and_then(Value::as_str)
-            .or_else(|| raw.get("cve_id").and_then(Value::as_str))
-            .unwrap_or("")
-            .to_string();
-        let kev = r.try_get::<bool, _>("kev_listed").unwrap_or(false)
-            || raw
-                .get("kev")
-                .and_then(|v| v.as_bool().or_else(|| v.get("listed").and_then(Value::as_bool)))
-                .unwrap_or(false);
-        let ransomware = r
-            .try_get::<bool, _>("kev_known_ransomware")
-            .unwrap_or(false)
-            || raw
-                .get("kev")
-                .and_then(|v| v.get("known_ransomware_use"))
-                .and_then(Value::as_bool)
-                .unwrap_or(false);
-        let discovered = r
-            .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
-            .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
-            .unwrap_or_default();
-        findings.push(crate::board_xlsx::BoardFinding {
-            id: r.try_get::<i64, _>("id").unwrap_or(0),
-            title: r.try_get::<String, _>("title").unwrap_or_default(),
-            severity: r.try_get::<String, _>("severity").unwrap_or_default(),
-            source: r.try_get::<String, _>("source").unwrap_or_default(),
-            description: r.try_get::<String, _>("description").unwrap_or_default(),
-            proof: r.try_get::<String, _>("proof").unwrap_or_default(),
-            mitre,
-            cve,
-            kev,
-            ransomware,
-            status: r.try_get::<String, _>("status").unwrap_or_default(),
-            discovered,
-        });
-    }
-    let generated_at = Jerusalem
-        .from_utc_datetime(&Utc::now().naive_utc())
-        .format("%Y-%m-%d %H:%M:%S %Z")
-        .to_string();
-    let integrity = proof
-        .as_ref()
-        .map(|(h, _, _)| h.clone())
-        .unwrap_or_default();
-    let wb = crate::board_xlsx::BoardWorkbook {
-        client_name: client_name.clone(),
-        generated_at,
-        integrity_hash: integrity,
-        findings,
+    {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return db_query_fail(e);
+        }
     };
-    let bytes = match crate::board_xlsx::build_client_board_xlsx(&wb) {
+    let _ = tx.commit().await;
+    let tuples: Vec<(i64, String, String, String, String, String, String)> = rows
+        .into_iter()
+        .map(|r| {
+            let disc = r
+                .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
+                .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
+                .unwrap_or_default();
+            (
+                r.try_get::<i64, _>("id").unwrap_or(0),
+                r.try_get::<String, _>("title").unwrap_or_default(),
+                r.try_get::<String, _>("severity").unwrap_or_default(),
+                r.try_get::<String, _>("source").unwrap_or_default(),
+                r.try_get::<String, _>("status").unwrap_or_default(),
+                disc,
+                r.try_get::<String, _>("description").unwrap_or_default(),
+            )
+        })
+        .collect();
+    let bytes = match crate::xlsx_export::build_findings_workbook_from_tuples(
+        "Weissman",
+        &client_name,
+        &tuples,
+    ) {
         Ok(b) => b,
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "XLSX generation failed", "detail": scrub_internal_error(&e)})),
+                Json(json!({"error": "XLSX generation failed", "detail": e})),
             )
                 .into_response();
         }
     };
-    let digest = crate::board_xlsx::workbook_sha256(&bytes);
-    let safe_name: String = client_name
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-        .collect();
-    let filename = format!("Weissman_Board_{}.xlsx", safe_name);
+    let filename = format!("Weissman_findings_client_{}.xlsx", id);
     let mut res = Response::new(Body::from(bytes));
     res.headers_mut().insert(
         CONTENT_TYPE,
-        HeaderValue::from_static(crate::board_xlsx::xlsx_content_type()),
+        HeaderValue::from_static(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ),
     );
     res.headers_mut().insert(
         CONTENT_DISPOSITION,
         HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename))
-            .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
+            .unwrap_or(HeaderValue::from_static("attachment")),
     );
     res.headers_mut().insert(
         axum::http::HeaderName::from_static("x-content-type-options"),
         HeaderValue::from_static("nosniff"),
     );
+    res
+}
+
+async fn api_client_adversary_mirror_xlsx(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+) -> Response {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
+    };
+    let client_name: String = match sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
+    {
+        Some(n) => n,
+        None => {
+            let _ = tx.rollback().await;
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
+        }
+    };
+    let rows = match sqlx::query(
+        "SELECT id, title, severity, source, COALESCE(status,'') AS status, discovered_at, COALESCE(description,'') AS description FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
+    )
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return db_query_fail(e);
+        }
+    };
+    let _ = tx.commit().await;
+    let tuples: Vec<(i64, String, String, String, String, String, String)> = rows
+        .into_iter()
+        .filter_map(|r| {
+            let source = r.try_get::<String, _>("source").unwrap_or_default();
+            if !is_adversary_source(&source) {
+                return None;
+            }
+            let disc = r
+                .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
+                .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
+                .unwrap_or_default();
+            Some((
+                r.try_get::<i64, _>("id").unwrap_or(0),
+                r.try_get::<String, _>("title").unwrap_or_default(),
+                r.try_get::<String, _>("severity").unwrap_or_default(),
+                source,
+                r.try_get::<String, _>("status").unwrap_or_default(),
+                disc,
+                r.try_get::<String, _>("description").unwrap_or_default(),
+            ))
+        })
+        .collect();
+    let bytes = match crate::xlsx_export::build_findings_workbook_from_tuples(
+        "Weissman",
+        &client_name,
+        &tuples,
+    ) {
+        Ok(b) => b,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "XLSX generation failed", "detail": e})),
+            )
+                .into_response();
+        }
+    };
+    let filename = format!("Weissman_AdversaryMirror_{}.xlsx", id);
+    let mut res = Response::new(Body::from(bytes));
     res.headers_mut().insert(
-        axum::http::header::CACHE_CONTROL,
-        HeaderValue::from_static("no-store"),
+        CONTENT_TYPE,
+        HeaderValue::from_static(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ),
     );
-    if let Ok(hv) = HeaderValue::try_from(digest) {
-        res.headers_mut().insert(
-            axum::http::HeaderName::from_static("x-weissman-workbook-sha256"),
-            hv,
-        );
+    res.headers_mut().insert(
+        CONTENT_DISPOSITION,
+        HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename))
+            .unwrap_or(HeaderValue::from_static("attachment")),
+    );
+    res.headers_mut().insert(
+        axum::http::HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
+    res
+}
+
+async fn api_client_adversary_mirror_pdf(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+) -> Response {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
+    };
+    let client_name: String = match sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
+    {
+        Some(n) => n,
+        None => {
+            let _ = tx.rollback().await;
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
+        }
+    };
+    let rows = match sqlx::query(
+        "SELECT title, severity, source, COALESCE(description,'') AS description FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
+    )
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return db_query_fail(e);
+        }
+    };
+    let _ = tx.commit().await;
+    let mut ransom = 0u32;
+    let mut ioc = 0u32;
+    let mut breach = 0u32;
+    let mut iab = 0u32;
+    let mut total = 0u32;
+    let mut headline = String::from("No adversary-intel signal findings yet. Info rows (zero-hit / unreachable feeds) are omitted from these counts.");
+    let mut signal_titles: Vec<String> = Vec::new();
+    for r in &rows {
+        let src = r.try_get::<String, _>("source").unwrap_or_default();
+        if !is_adversary_source(&src) {
+            continue;
+        }
+        let sev = r
+            .try_get::<String, _>("severity")
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if sev == "info" || sev == "advisory" {
+            continue;
+        }
+        total += 1;
+        let title = r.try_get::<String, _>("title").unwrap_or_default();
+        let blob = format!("{title} {src}").to_ascii_lowercase();
+        if blob.contains("ransomware") || blob.contains("leak-site") || blob.contains("ransomlook") {
+            ransom += 1;
+        }
+        if blob.contains("threatfox") || blob.contains("urlhaus") || blob.contains("ioc") || blob.contains("urlscan") {
+            ioc += 1;
+        }
+        if blob.contains("hibp") || blob.contains("breach catalog") {
+            breach += 1;
+        }
+        if blob.contains("iab") || blob.contains("rdp") || blob.contains("vpn") || blob.contains("product token") {
+            iab += 1;
+        }
+        if headline.starts_with("No adversary") {
+            headline = title.clone();
+        }
+        if signal_titles.len() < 20 {
+            signal_titles.push(title);
+        }
     }
+    let pdf_bytes = match crate::pdf_report::build_adversary_mirror_pdf(
+        "Weissman",
+        Some(&client_name),
+        ransom,
+        ioc,
+        breach,
+        iab,
+        total,
+        &headline,
+        &signal_titles,
+    ) {
+        Ok(b) => b,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "PDF generation failed", "detail": e})),
+            )
+                .into_response();
+        }
+    };
+    let safe_name = client_name
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect::<String>();
+    let filename = format!("Weissman_AdversaryMirror_{}.pdf", safe_name);
+    let mut res = Response::new(Body::from(pdf_bytes));
+    res.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("application/pdf"));
+    res.headers_mut().insert(
+        CONTENT_DISPOSITION,
+        HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename))
+            .unwrap_or(HeaderValue::from_static("attachment")),
+    );
+    res.headers_mut().insert(
+        axum::http::HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
     res
 }
 
@@ -281,7 +446,7 @@ async fn get_crypto_proof_for_client_tx(
         None => return Ok(None),
     };
     let base_url = std::env::var("WEISSMAN_BASE_URL").unwrap_or_else(|_| "http://localhost:8000".to_string());
-    let qr_data_url = crate::crypto_engine::qr_code_for_audit(&base_url, &hash).unwrap_or_default();
+    let qr_data_url = crate::crypto_engine::qr_code_for_audit(&base_url, &hash)?;
     let verification_url = crate::crypto_engine::verification_url_for_hash(&base_url, &hash);
     Ok(Some((hash, qr_data_url, verification_url)))
 }
@@ -308,10 +473,7 @@ async fn api_client_report_pdf(
         }
     };
     let rows = sqlx::query(
-        r#"SELECT id, title, severity, source,
-                  COALESCE(description,'') AS description,
-                  COALESCE(NULLIF(poc_exploit,''), NULLIF(proof,''), raw_data#>>'{evidence,proof}', '') AS poc_exploit
-             FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC"#,
+        "SELECT id, title, severity, source, COALESCE(description,''), COALESCE(poc_exploit,'') FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
     )
     .bind(id)
     .fetch_all(&mut *tx)
@@ -355,184 +517,6 @@ async fn api_client_report_pdf(
     res.headers_mut().insert(
         CONTENT_DISPOSITION,
         HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename)).unwrap_or_else(|_| HeaderValue::from_static("attachment")),
-    );
-    res.headers_mut().insert(
-        axum::http::HeaderName::from_static("x-content-type-options"),
-        HeaderValue::from_static("nosniff"),
-    );
-    res
-}
-
-async fn load_dominion_pack_for_client(
-    state: &Arc<AppState>,
-    tenant_id: i64,
-    client_id: i64,
-) -> Result<crate::dominion_pack::DominionPack, (StatusCode, String)> {
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, tenant_id).await else {
-        return Err((StatusCode::SERVICE_UNAVAILABLE, "DB unavailable".into()));
-    };
-    let client_name: String = match sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
-        .bind(client_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .ok()
-        .flatten()
-    {
-        Some(n) => n,
-        None => {
-            let _ = tx.rollback().await;
-            return Err((StatusCode::NOT_FOUND, "client not found".into()));
-        }
-    };
-    let rows = match sqlx::query(
-        r#"SELECT id, title, severity, source,
-                  COALESCE(description,'') AS description,
-                  COALESCE(poc_exploit,'') AS poc_exploit,
-                  COALESCE(status,'') AS status,
-                  discovered_at,
-                  COALESCE(proof,'') AS proof,
-                  COALESCE(kev_listed, false) AS kev_listed,
-                  COALESCE(epss_score, 0)::real AS epss_score
-             FROM vulnerabilities
-            WHERE client_id = $1
-            ORDER BY discovered_at DESC
-            LIMIT 2000"#,
-    )
-    .bind(client_id)
-    .fetch_all(&mut *tx)
-    .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            tracing::error!(error = %e, client_id, "dominion pack findings query failed");
-            let _ = tx.rollback().await;
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "findings query failed".into(),
-            ));
-        }
-    };
-    let proof = match get_crypto_proof_for_client_tx(&mut tx, tenant_id, client_id).await {
-        Ok(p) => p,
-        Err(e) => {
-            let _ = tx.rollback().await;
-            return Err((StatusCode::INTERNAL_SERVER_ERROR, e));
-        }
-    };
-    let _ = tx.commit().await;
-    let inputs: Vec<crate::dominion_pack::DominionFindingInput> = rows
-        .into_iter()
-        .map(|r| crate::dominion_pack::DominionFindingInput {
-            id: r.try_get::<i64, _>("id").unwrap_or(0),
-            title: r.try_get::<String, _>("title").unwrap_or_default(),
-            severity: r.try_get::<String, _>("severity").unwrap_or_default(),
-            source: r.try_get::<String, _>("source").unwrap_or_default(),
-            status: r.try_get::<String, _>("status").unwrap_or_default(),
-            discovered_at: r
-                .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
-                .map(|d| d.format("%Y-%m-%d %H:%M:%S UTC").to_string())
-                .unwrap_or_default(),
-            description: r.try_get::<String, _>("description").unwrap_or_default(),
-            poc_exploit: r.try_get::<String, _>("poc_exploit").unwrap_or_default(),
-            proof: r.try_get::<String, _>("proof").unwrap_or_default(),
-            kev_listed: r.try_get::<bool, _>("kev_listed").unwrap_or(false),
-            epss_score: r.try_get::<f32, _>("epss_score").unwrap_or(0.0),
-        })
-        .collect();
-    let financial = crate::financial_risk::latest_snapshot(&state.app_pool, tenant_id, client_id)
-        .await
-        .ok()
-        .flatten()
-        .and_then(|s| serde_json::to_value(s).ok());
-    let attack_paths = crate::attack_path::latest_snapshot(&state.app_pool, tenant_id, client_id)
-        .await
-        .ok()
-        .flatten()
-        .and_then(|s| {
-            serde_json::to_value(json!({
-                "entry_count": s.entry_count,
-                "jewel_count": s.jewel_count,
-                "path_count": s.paths.len(),
-                "max_path_score": s.max_path_score,
-                "total_path_ale_usd": s.total_path_ale_usd,
-                "paths": s.paths.into_iter().take(40).collect::<Vec<_>>(),
-                "choke_points": s.choke_points.into_iter().take(25).collect::<Vec<_>>(),
-            }))
-            .ok()
-        });
-    let crypto = proof.map(|(audit_root_hash, qr_data_url, verification_url)| {
-        json!({
-            "audit_root_hash": audit_root_hash,
-            "qr_data_url": qr_data_url,
-            "verification_url": verification_url,
-        })
-    });
-    Ok(crate::dominion_pack::build_pack(
-        client_id,
-        &client_name,
-        inputs,
-        financial,
-        attack_paths,
-        crypto,
-    ))
-}
-
-async fn api_client_dominion_pack(
-    State(state): State<Arc<AppState>>,
-    Extension(auth): Extension<AuthContext>,
-    Path(id): Path<i64>,
-) -> Response {
-    match load_dominion_pack_for_client(&state, auth.tenant_id, id).await {
-        Ok(pack) => match serde_json::to_value(&pack) {
-            Ok(v) => (StatusCode::OK, Json(v)).into_response(),
-            Err(e) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "pack serialize failed", "detail": scrub_internal_error(&e.to_string())})),
-            )
-                .into_response(),
-        },
-        Err((code, msg)) => (code, Json(json!({"error": msg}))).into_response(),
-    }
-}
-
-async fn api_client_report_xlsx(
-    State(state): State<Arc<AppState>>,
-    Extension(auth): Extension<AuthContext>,
-    Path(id): Path<i64>,
-) -> Response {
-    let pack = match load_dominion_pack_for_client(&state, auth.tenant_id, id).await {
-        Ok(p) => p,
-        Err((code, msg)) => {
-            return (code, Json(json!({"error": msg}))).into_response();
-        }
-    };
-    let bytes = match crate::dominion_pack::pack_to_xlsx(&pack) {
-        Ok(b) => b,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "XLSX generation failed", "detail": scrub_internal_error(&e)})),
-            )
-                .into_response();
-        }
-    };
-    let safe_name = pack
-        .client_name
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '_' })
-        .collect::<String>();
-    let filename = format!("Weissman_Dominion_{}.xlsx", safe_name);
-    let mut res = Response::new(Body::from(bytes));
-    res.headers_mut().insert(
-        CONTENT_TYPE,
-        HeaderValue::from_static(
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        ),
-    );
-    res.headers_mut().insert(
-        CONTENT_DISPOSITION,
-        HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename))
-            .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
     );
     res.headers_mut().insert(
         axum::http::HeaderName::from_static("x-content-type-options"),
@@ -940,54 +924,6 @@ async fn api_findings_verify_live(
     }
 }
 
-#[derive(serde::Deserialize, Default)]
-struct FindingCortexPushBody {
-    #[serde(default)]
-    dry_run: Option<bool>,
-}
-
-/// POST /api/findings/:id/push-cortex — ingest a proven finding into Cortex XSIAM/XSOAR.
-async fn api_findings_push_cortex(
-    State(state): State<Arc<AppState>>,
-    Extension(auth): Extension<AuthContext>,
-    Path(id): Path<String>,
-    body: Option<Json<FindingCortexPushBody>>,
-) -> Response {
-    if let Err(r) = crate::rbac::require_operator(&auth) {
-        return r;
-    }
-    if body.as_ref().and_then(|b| b.0.dry_run).unwrap_or(false) {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"ok": false, "detail": "push-cortex is live-only; dry_run is not allowed"})),
-        )
-            .into_response();
-    }
-    let id_token = id.trim().to_string();
-    if id_token.is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"ok": false, "detail": "finding id required"})),
-        )
-            .into_response();
-    }
-    match crate::finding_cortex_push::push_finding_to_cortex(
-        state.app_pool.as_ref(),
-        auth.tenant_id,
-        &id_token,
-        false,
-    )
-    .await
-    {
-        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
-        Err((code, detail)) => (
-            StatusCode::from_u16(code).unwrap_or(StatusCode::BAD_REQUEST),
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response(),
-    }
-}
-
 /// GET /api/findings/export/csv — export all findings for the current tenant as CSV.
 async fn api_findings_export_csv(
     State(state): State<Arc<AppState>>,
@@ -1217,32 +1153,6 @@ async fn api_openapi_spec() -> Response {
                     }
                 }
             },
-            "/api/findings/{id}/push-cortex": {
-                "post": {
-                    "summary": "Push an evidence-backed finding into Cortex XSIAM/XSOAR",
-                    "description": "Requires a configured cortex_xsiam integration. Refuses noise/false-positive verdicts and findings with no proof artifact. Live HTTP to Palo Alto APIs; missing config returns 409.",
-                    "tags": ["Findings", "SOAR"],
-                    "parameters": [
-                        { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
-                    ],
-                    "requestBody": {
-                        "required": false,
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": { "dry_run": { "type": "boolean" } }
-                                }
-                            }
-                        }
-                    },
-                    "responses": {
-                        "200": { "description": "Cortex accepted the proven finding" },
-                        "409": { "description": "Not configured, or finding not eligible" },
-                        "502": { "description": "Cortex API error" }
-                    }
-                }
-            },
             "/api/clients": {
                 "get": {
                     "summary": "List all clients for the current tenant",
@@ -1285,25 +1195,31 @@ async fn api_openapi_spec() -> Response {
             },
             "/api/clients/{id}/export/xlsx": {
                 "get": {
-                    "summary": "Export a real OOXML board workbook (not CSV labeled as Excel)",
-                    "tags": ["Clients","Findings","Reports"],
+                    "summary": "Export findings for a specific client as an OOXML workbook",
+                    "tags": ["Clients","Findings"],
                     "parameters": [
                         { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
                     ],
                     "responses": {
-                        "200": {
-                            "description": "XLSX workbook",
-                            "content": {
-                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
-                            }
-                        }
+                        "200": { "description": "XLSX file download", "content": { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {} } }
                     }
                 }
             },
-            "/api/clients/{id}/report/pdf": {
+            "/api/clients/{id}/adversary-mirror/xlsx": {
                 "get": {
-                    "summary": "Generate Executive PDF report for a client",
-                    "description": "Returns a signed PDF from live persisted findings (severity, CVSS, KEV/HIBP/fusion counts, SHA-256 audit trail). Actor names and industry averages are never invented.",
+                    "summary": "Adversary Gap Mirror Excel pack for a client (leak-intel sources only)",
+                    "tags": ["Clients","Reports"],
+                    "parameters": [
+                        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+                    ],
+                    "responses": {
+                        "200": { "description": "XLSX file download", "content": { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {} } }
+                    }
+                }
+            },
+            "/api/clients/{id}/adversary-mirror/pdf": {
+                "get": {
+                    "summary": "Adversary Gap Mirror board PDF (signal findings only)",
                     "tags": ["Clients","Reports"],
                     "parameters": [
                         { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
@@ -1313,34 +1229,16 @@ async fn api_openapi_spec() -> Response {
                     }
                 }
             },
-            "/api/clients/{id}/report/xlsx": {
+            "/api/clients/{id}/report/pdf": {
                 "get": {
-                    "summary": "Download Dominion Board Pack as real Excel (.xlsx)",
-                    "description": "OOXML workbook (not CSV). Sheets: Executive, Findings, LeakIntel, AttackPaths, Financial, Remediation, Evidence. Built from the live tenant ledger.",
+                    "summary": "Generate Executive PDF report for a client",
+                    "description": "Returns a signed PDF with severity heatmap, CVSS scoring, APT attribution, benchmarking, and SHA-256 audit trail.",
                     "tags": ["Clients","Reports"],
                     "parameters": [
                         { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
                     ],
                     "responses": {
-                        "200": {
-                            "description": "XLSX workbook",
-                            "content": {
-                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
-                            }
-                        }
-                    }
-                }
-            },
-            "/api/clients/{id}/dominion-pack": {
-                "get": {
-                    "summary": "Live Dominion Board Pack JSON",
-                    "description": "Fuses findings, FAIR snapshot, attack-path snapshot, and crypto proof. Empty ledger grades NO LEDGER — never a clean bill of health.",
-                    "tags": ["Clients","Reports"],
-                    "parameters": [
-                        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
-                    ],
-                    "responses": {
-                        "200": { "description": "Dominion pack JSON" }
+                        "200": { "description": "PDF file", "content": { "application/pdf": {} } }
                     }
                 }
             },

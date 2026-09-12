@@ -10,7 +10,6 @@ import { canCreateClients, isClientUser, isPortalBlockedPath } from './clientSco
 
 /** Production-ready surfaces — always visible at the top of the sidebar. */
 export const PRIMARY_NAV = [
-  { to: '/dominion', labelKey: 'nav.dominion', icon: '♛' },
   { to: '/clients', labelKey: 'nav.clients', icon: '🏢' },
   { to: '/vuln-intel', labelKey: 'nav.vuln_intel', icon: '🔬' },
   { to: '/engines', labelKey: 'nav.engines', icon: '⬡' },
@@ -51,7 +50,7 @@ export const INTEL_MAP_QUICKNAV = [
   { to: '/incident-response', labelKey: 'components.intelMap.ir_center', color: 'rgba(239,68,68,0.85)' },
   { to: '/vuln-intel', labelKey: 'components.intelMap.vuln_intel', color: 'rgba(249,115,22,0.85)' },
   { to: '/dark-web', labelKey: 'components.intelMap.dark_web', color: 'rgba(167,139,250,0.85)' },
-  { to: '/dominion', labelKey: 'nav.dominion', color: 'rgba(251,191,36,0.9)' },
+  { to: '/adversary-mirror', labelKey: 'nav.adversary_mirror', color: 'rgba(244,63,94,0.9)' },
   { to: '/threat-hunting', labelKey: 'components.intelMap.threat_hunt', color: 'rgba(139,92,246,0.85)' },
   { to: '/council-queue', labelKey: 'components.intelMap.council', color: 'rgba(251,191,36,0.7)', separatorBefore: true },
   { to: '/soar-hitl', labelKey: 'components.intelMap.soar_hitl', color: 'rgba(251,113,133,0.85)' },
@@ -85,6 +84,7 @@ export const NAV_GROUPS = [
       { to: '/ueba', labelKey: 'nav.ueba', icon: '📈' },
       { to: '/threat-analysis', labelKey: 'nav.threat_analysis', icon: '🧩' },
       { to: '/dark-web', labelKey: 'nav.dark_web', icon: '🕸' },
+      { to: '/adversary-mirror', labelKey: 'nav.adversary_mirror', icon: '⚔' },
       { to: '/intel-map', labelKey: 'nav.intel_map', icon: '🌐' },
       { to: '/incident-response', labelKey: 'nav.incident_response', icon: '🚨' },
     ],
@@ -110,7 +110,6 @@ export const NAV_GROUPS = [
       { to: '/endpoint-edr', labelKey: 'nav.endpoint_edr', icon: '🛡' },
       { to: '/stealth-ops', labelKey: 'nav.stealth_ops', icon: '🕶' },
       { to: '/elite-hardening', labelKey: 'nav.elite_hardening', icon: '🛡' },
-      { to: '/competitive-delta', labelKey: 'nav.competitive_delta', icon: '⚔' },
       { to: '/nexus-swarm', labelKey: 'nav.nexus_swarm', icon: '⚡' },
       { to: '/superposition-collapse', labelKey: 'nav.superposition_collapse', icon: '◈' },
       { to: '/sovereign-defense-matrix', labelKey: 'nav.sovereign_defense', icon: '⬡' },

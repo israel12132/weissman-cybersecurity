@@ -30,6 +30,7 @@
     clippy::useless_format
 )]
 
+pub mod adversary_gap_mirror;
 pub mod agent_remote_surface;
 pub mod ai_redteam_engine;
 pub mod alias_engine_runner;
@@ -55,7 +56,6 @@ pub mod billing;
 pub mod ceo;
 pub mod chronos_engine;
 pub mod client_isolation;
-pub mod cluster_ingest;
 pub mod cloud_hunter;
 pub mod cloud_integration_engine;
 pub mod cognitive_starvation_engine;
@@ -72,7 +72,6 @@ pub mod db;
 pub mod db_backup;
 pub mod dedicated_web_ztna_engines;
 pub mod discovery_engine;
-pub mod dominion_pack;
 pub mod embeddings;
 pub mod engine_accounting;
 pub mod engine_capabilities;
@@ -90,13 +89,11 @@ pub mod eternal_fuzz;
 pub mod executive_pdf;
 pub mod executive_summary;
 pub mod exploit_synthesis_engine;
-pub mod exposure_schism_fusion;
 pub mod external_exposure_supreme;
 pub mod fair_exposure_fusion_engine;
 pub mod financial_risk;
 pub mod finding_aging;
 pub mod finding_attestation;
-pub mod finding_cortex_push;
 pub mod finding_live_verify;
 pub mod findings_correlator;
 pub mod findings_gate;
@@ -134,7 +131,6 @@ pub mod outbound_http;
 pub mod panic_shield;
 pub mod payload_sync_worker;
 pub mod pdf_report;
-pub mod public_leak_osint;
 pub mod pentest_memory;
 pub mod pipeline_context;
 pub mod pipeline_engine;
@@ -155,7 +151,6 @@ pub mod safe_probe;
 pub mod saml_auth;
 pub mod scan_concurrency;
 pub mod scan_http_client;
-pub mod scim;
 pub mod self_heal_recovery;
 pub mod self_heal_shared;
 pub mod self_healing;
@@ -186,9 +181,9 @@ pub mod timing_engine;
 pub mod ueba_detector;
 pub mod validator;
 pub mod waf_signals;
+pub mod xlsx_export;
 
 pub mod admin_users;
-pub mod scim;
 pub mod advanced_ai_engines;
 // ── Next-Gen Arsenal (20 world-class additions) ──
 pub mod advanced_apt_engines;
@@ -200,8 +195,6 @@ pub mod advanced_mobile_engines;
 pub mod advanced_network_engines;
 pub mod advanced_ot_engines;
 pub mod advanced_recon_engines;
-pub mod board_xlsx;
-pub mod credential_ransomware_fusion;
 pub mod advanced_social_engines;
 pub mod advanced_stealth_engines;
 pub mod advanced_supply_chain_engines;
@@ -294,7 +287,6 @@ pub mod oast_oob_engine;
 pub mod oauth_oidc_engine;
 pub mod osint_engine;
 pub mod ot_ics_engine;
-pub mod panw_displacement;
 pub mod password_spray_engine;
 pub mod pki_tls_engine;
 pub mod pqc_kem;
@@ -345,7 +337,6 @@ pub mod ws_intelligence_bus;
 pub mod ws_race_executor;
 pub mod ws_session;
 pub mod ws_state_machine;
-pub mod xlsx_workbook;
 pub mod xxe_engine;
 pub mod zero_day_prediction_engine;
 
@@ -357,7 +348,6 @@ pub mod agent_min_version;
 pub mod audit_spool;
 pub mod cem_dago;
 pub mod certstream_watcher;
-pub mod competitive_delta;
 pub mod discovery_ai;
 pub mod discovery_knowledge;
 pub mod discovery_pace;
@@ -373,8 +363,6 @@ pub mod overflow_log;
 pub mod path_templates;
 pub mod playbook_dsl;
 pub mod priv_esc_cred_access;
-pub mod public_site;
-pub mod demo_request;
 pub mod secret_zeroize;
 pub mod sovereign_operator;
 pub mod suppression_cache_sync;
@@ -390,8 +378,6 @@ pub use fingerprint::{
 pub use fuzzer::{
     run_fuzzer, run_fuzzer_collect, run_fuzzer_collect_tenant, Baseline, Mutator, ValidatedAnomaly,
 };
-pub use recon::{
-    default_subdomain_wordlist, enum_subdomains, enum_subdomains_default, DEFAULT_SUBDOMAINS,
-};
+pub use recon::{enum_subdomains, enum_subdomains_default, DEFAULT_SUBDOMAINS};
 pub use risk_graph::export_risk_graph_json;
 pub use safe_probe::{safe_probe, SafeProbeResult};

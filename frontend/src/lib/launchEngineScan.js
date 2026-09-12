@@ -22,6 +22,7 @@ export async function launchEngineScan({
   samplePayload = {},
   integrations = undefined,
   timeout,
+  signal,
 } = {}) {
   let ints = integrations
   if (ints === undefined && clientId != null && clientId !== '') {
@@ -40,6 +41,7 @@ export async function launchEngineScan({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal,
   })
   const data = await r.json().catch(() => ({}))
   return { ok: r.ok, status: r.status, data, body }

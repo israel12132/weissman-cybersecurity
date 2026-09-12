@@ -45,6 +45,12 @@ pub const COVERAGE: &[Technique] = &[
         tactic: "Reconnaissance",
         engines: &["iot_shodan_scan", "darkweb_intel"],
     },
+    Technique {
+        id: "T1597",
+        name: "Search Closed Sources",
+        tactic: "Reconnaissance",
+        engines: &["darkweb_intel", "adversary_gap_mirror", "dark_web_monitor"],
+    },
     // ── Resource Development ────────────────────────────────────────────────
     Technique {
         id: "T1588.005",

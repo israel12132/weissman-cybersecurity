@@ -907,6 +907,23 @@
       }
     },
     {
+      "engine_id": "adversary_gap_mirror",
+      "route_paths": [
+        "/adversary-mirror"
+      ],
+      "evidence_i18n_key": "pages.adversaryMirror.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": false,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#e11d48"
+      }
+    },
+    {
       "engine_id": "darkweb_intel",
       "route_paths": [
         "/engines/top-tier"

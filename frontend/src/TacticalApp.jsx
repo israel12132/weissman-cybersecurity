@@ -70,7 +70,6 @@ import {
   SelfImprovementConsole,
   RoeApprovals,
   SsoDashboard,
-  ScimProvisioning,
   NexusSovereignSwarm,
   RiskSuperpositionCollapse,
   SovereignDefenseMatrix,
@@ -85,11 +84,9 @@ import {
   IncidentResponseCenter,
   VulnIntelDashboard,
   FinancialRisk,
-  DominionBoardPack,
   AttackPaths,
   SupremeBrain,
   CemDagoMesh,
-  PanwDisplacement,
   AttackCoverage,
   SecurityPosture,
   IocFeed,
@@ -102,11 +99,10 @@ import {
   ExecutiveOverview,
   AgentManagement,
   DarkWebMonitor,
-  AdversaryDominance,
+  AdversaryMirror,
   TargetIntelligence,
   StealthOperations,
   EliteHardeningCommandCenter,
-  CompetitiveDelta,
   ThreatHuntingWorkbench,
   ThreatAnalysisCenter,
   EngineClientCatalog,
@@ -162,7 +158,6 @@ import {
   ItdrCommandCenter,
   CasbDlpCenter,
   NgfwGate,
-  CompetitiveWinRoom,
   EndpointEdr,
 } from './routing/routeChunks'
 
@@ -273,7 +268,6 @@ export default function TacticalApp() {
           <Route path="self-improve" element={<SelfImprovementConsole />} />
           <Route path="roe-approvals" element={<RoeApprovals />} />
           <Route path="sso-config" element={<RequireStaff><SsoDashboard /></RequireStaff>} />
-          <Route path="scim-provisioning" element={<RequireRole min="admin"><ScimProvisioning /></RequireRole>} />
           <Route path="digital-twin" element={<DigitalTwinSimulator />} />
           <Route path="digital-twin/:clientId" element={<DigitalTwinSimulator />} />
           <Route path="nexus-swarm" element={<NexusSovereignSwarm />} />
@@ -289,11 +283,9 @@ export default function TacticalApp() {
           <Route path="incident-response" element={<IncidentResponseCenter />} />
           <Route path="vuln-intel" element={<VulnIntelDashboard />} />
           <Route path="financial-risk" element={<FinancialRisk />} />
-          <Route path="dominion" element={<DominionBoardPack />} />
           <Route path="attack-paths" element={<AttackPaths />} />
           <Route path="supreme-brain" element={<SupremeBrain />} />
           <Route path="cem-dago" element={<CemDagoMesh />} />
-          <Route path="panw-displacement" element={<PanwDisplacement />} />
           <Route path="attack-coverage" element={<AttackCoverage />} />
           <Route path="security-posture" element={<SecurityPosture />} />
           <Route path="iocs" element={<IocFeed />} />
@@ -304,11 +296,10 @@ export default function TacticalApp() {
           <Route path="reports" element={<ReportHistory />} />
           <Route path="overview" element={<ExecutiveOverview />} />
           <Route path="dark-web" element={<DarkWebMonitor />} />
-          <Route path="adversary-dominance" element={<AdversaryDominance />} />
+          <Route path="adversary-mirror" element={<AdversaryMirror />} />
           <Route path="target-intel" element={<TargetIntelligence />} />
           <Route path="stealth-ops" element={<StealthOperations />} />
           <Route path="elite-hardening" element={<EliteHardeningCommandCenter />} />
-          <Route path="competitive-delta" element={<CompetitiveDelta />} />
           <Route path="threat-hunting" element={<ThreatHuntingWorkbench />} />
           <Route path="threat-analysis" element={<ThreatAnalysisCenter />} />
           <Route path="engine-catalog" element={<EngineClientCatalog />} />
@@ -357,7 +348,6 @@ export default function TacticalApp() {
           <Route path="itdr" element={<ItdrCommandCenter />} />
           <Route path="casb-dlp" element={<CasbDlpCenter />} />
           <Route path="ngfw-gate" element={<NgfwGate />} />
-          <Route path="win-room" element={<CompetitiveWinRoom />} />
           <Route path="endpoint-edr" element={<EndpointEdr />} />
           <Route path="ceo" element={<CeoProtectedRoute><CeoCommandCenter /></CeoProtectedRoute>} />
           <Route path="supreme-nerve-center" element={<RequireRole min="ceo"><SupremeNerveCenter /></RequireRole>} />

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-09-12T00:02:28.604Z",
-  "production_engine_count": 585,
+  "generated_at": "2026-09-11T23:59:17.235Z",
+  "production_engine_count": 584,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -238,7 +238,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 428
+      "engine_count": 427
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -308,7 +308,7 @@
         "industrial_ot",
         "scope_ips"
       ],
-      "engine_count": 45
+      "engine_count": 43
     },
     "ai_redteam": {
       "id": "ai_redteam",
@@ -6649,6 +6649,16 @@
         "contact_email",
         "intelx_key",
         "otx_key",
+        "scope_domains"
+      ]
+    },
+    "adversary_gap_mirror": {
+      "id": "adversary_gap_mirror",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Adversary Gap Mirror",
+      "requirements": [
+        "contact_email",
         "scope_domains"
       ]
     }

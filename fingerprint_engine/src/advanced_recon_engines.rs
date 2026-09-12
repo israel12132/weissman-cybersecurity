@@ -2,6 +2,7 @@
 
 use crate::engine_probes::{
     dns_a, dns_mx, dns_txt, empty_ok, extract_host, finding, header_value, http_client, http_get,
+    http_get_with_headers, http_post_bytes_with_headers, http_post_json_with_headers,
     normalize_url, tcp_scan,
 };
 use crate::engine_result::{print_result, EngineResult};
@@ -77,22 +78,132 @@ pub async fn run_satellite_recon_result(target: &str) -> EngineResult {
 cli_wrapper!(run_satellite_recon, run_satellite_recon_result);
 
 // ── darkweb_intel / deepweb_intel ─────────────────────────────────────────────
-// Live public OSINT (crt.sh, urlscan, URLHaus/ThreatFox/IntelX/OTX when keyed).
+fn intelx_api_key() -> String {
+    std::env::var("INTELX_API_KEY")
+        .or_else(|_| std::env::var("WEISSMAN_INTELX_KEY"))
+        .unwrap_or_default()
+}
+
+fn intelx_api_base() -> String {
+    std::env::var("INTELX_API_URL")
+        .or_else(|_| std::env::var("WEISSMAN_INTELX_URL"))
+        .unwrap_or_else(|_| "https://2.intelx.io".to_string())
+        .trim_end_matches('/')
+        .to_string()
+}
+
 pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
-    let report = crate::public_leak_osint::collect_public_leak_osint(target).await;
-    if report.findings.is_empty() {
+    let client = http_client().await;
+    let host = extract_host(target);
+    let key = intelx_api_key();
+
+    // Always run legal clearnet defender feeds (ransomware.live / RansomLook / ThreatFox / URLhaus / HIBP / urlscan).
+    // IntelX remains optional paid enrichment — never the only path.
+    let mut findings =
+        crate::adversary_gap_mirror::collect_clearnet_intel("darkweb_intel", target).await;
+
+    if key.is_empty() {
+        findings.push(finding(
+            "darkweb_intel",
+            "IntelX optional — clearnet feeds already queried",
+            "info",
+            "T1597",
+            &format!(
+                "INTELX_API_KEY is unset. Live ransomware.live, RansomLook, ThreatFox, URLhaus, HIBP catalog, and urlscan.io already ran for '{}'. Set INTELX_API_KEY for additional paid deep-web index hits.",
+                host
+            ),
+            target,
+        ));
+        let n = findings.len();
+        return EngineResult::ok(findings, format!("darkweb_intel: {n} (no IntelX key)"));
+    }
+
+    let base = intelx_api_base();
+    let search_url = format!("{}/intelligent/search", base);
+    let payload = serde_json::json!({
+        "term": host,
+        "buckets": [],
+        "lookuplevel": 0,
+        "maxresults": 20,
+        "timeout": 0,
+        "datefrom": "",
+        "dateto": "",
+        "sort": 4,
+        "media": 0,
+        "terminate": []
+    });
+
+    if let Some(p) =
+        http_post_json_with_headers(&client, &search_url, &payload, &[("x-key", key.as_str())])
+            .await
+    {
+        if p.status == 401 || p.status == 403 {
+            findings.push(finding(
+                "darkweb_intel",
+                "IntelX API rejected credentials",
+                "info",
+                "T1597",
+                &format!(
+                    "IntelX returned HTTP {} — verify INTELX_API_KEY and INTELX_API_URL (default 2.intelx.io for paid keys).",
+                    p.status
+                ),
+                target,
+            ));
+        } else if p.status == 200 {
+            if let Ok(v) = serde_json::from_str::<Value>(&p.body) {
+                if let Some(search_id) = v.get("id").and_then(|id| id.as_str()) {
+                    let result_url = format!("{}/intelligent/search/result?id={}", base, search_id);
+                    if let Some(rp) =
+                        http_get_with_headers(&client, &result_url, &[("x-key", key.as_str())])
+                            .await
+                    {
+                        let record_count = rp
+                            .body
+                            .matches("\"record\"")
+                            .count()
+                            .max(rp.body.matches("\"name\"").count());
+                        let status =
+                            rp.body.contains("\"status\":0") || rp.body.contains("\"status\": 0");
+                        if status && record_count > 0 {
+                            findings.push(finding(
+                                "darkweb_intel",
+                                &format!("IntelX returned {} candidate record(s) for {}", record_count, host),
+                                "medium",
+                                "T1597",
+                                &format!(
+                                    "Intelligence X search id {} returned {} hits referencing '{}'. Review for leaked credentials and breach exposure.",
+                                    search_id, record_count, host
+                                ),
+                                target,
+                            ));
+                        } else if status {
+                            findings.push(finding(
+                                "darkweb_intel",
+                                "IntelX search completed — no indexed records",
+                                "info",
+                                "T1597",
+                                &format!(
+                                    "Intelligence X query for '{}' completed with zero indexed records in configured buckets.",
+                                    host
+                                ),
+                                target,
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if findings.is_empty() {
         empty_ok("darkweb_intel", target)
     } else {
         EngineResult::ok(
-            report.findings.clone(),
-            format!(
-                "darkweb_intel: {} finding(s); live={}",
-                report.findings.len(),
-                report.sources_live.join(",")
-            ),
+            findings.clone(),
+            format!("darkweb_intel: {}", findings.len()),
         )
     }
 }
@@ -759,34 +870,69 @@ pub async fn run_threat_intel_fusion_result(target: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let host = extract_host(target);
+    let apex = crate::adversary_gap_mirror::registrable_apex(&host);
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
-    let url = format!(
-        "https://urlhaus.abuse.ch/api/v1/hostinfo/{}/",
-        urlencoding::encode(&host)
-    );
-    if let Some(p) = http_get(&client, &url).await {
-        if p.status == 200 {
-            if let Ok(v) = serde_json::from_str::<Value>(&p.body) {
-                let listed = v
-                    .get("query_status")
-                    .and_then(Value::as_str)
-                    .map(|s| s.eq_ignore_ascii_case("ok"))
-                    .unwrap_or(false);
-                let url_count = v
-                    .get("urls")
-                    .and_then(Value::as_array)
-                    .map(|a| a.len())
-                    .unwrap_or(0);
-                if listed && url_count > 0 {
+    let key = crate::adversary_gap_mirror::abusech_auth_key();
+    // Real URLhaus host API is POST /v1/host/ with Auth-Key. The old GET
+    // urlhaus.abuse.ch/api/v1/hostinfo/{}/ path does not exist.
+    if !key.is_empty() {
+        let uh_api = "https://urlhaus-api.abuse.ch/v1/host/";
+        let form = format!("host={}", urlencoding::encode(&apex));
+        if let Some(p) = http_post_bytes_with_headers(
+            &client,
+            uh_api,
+            form.as_bytes(),
+            &[
+                ("Content-Type", "application/x-www-form-urlencoded"),
+                ("Auth-Key", key.as_str()),
+            ],
+        )
+        .await
+        {
+            if p.status == 200 {
+                let url_count = crate::adversary_gap_mirror::parse_urlhaus_host(&p.body);
+                if url_count > 0 {
                     findings.push(finding(
                         "threat_intel_fusion",
                         &format!("URLhaus lists {} malicious URL(s) for host", url_count),
                         "high",
                         "T1597",
                         &format!(
-                            "Abuse.ch URLhaus hostinfo returned {} URL(s) for {} — cross-check for malware delivery or C2.",
+                            "Abuse.ch URLhaus host query returned {} URL(s) for {} — cross-check for malware delivery or C2.",
                             url_count, host
+                        ),
+                        target,
+                    ));
+                }
+                if let Some(dbl) = crate::adversary_gap_mirror::parse_urlhaus_abused_legit(&p.body)
+                {
+                    findings.push(finding(
+                        "threat_intel_fusion",
+                        &format!("URLhaus Spamhaus DBL: {apex} is {dbl}"),
+                        "high",
+                        "T1597",
+                        &format!(
+                            "Abuse.ch URLhaus reports Spamhaus DBL '{dbl}' for '{apex}' (abused legitimate site)."
+                        ),
+                        target,
+                    ));
+                }
+            }
+        }
+    } else {
+        let uh_export = "https://urlhaus.abuse.ch/downloads/hostfile/";
+        if let Some(p) = http_get(&client, uh_export).await {
+            if p.status == 200 {
+                let n = crate::adversary_gap_mirror::parse_urlhaus_hostfile(&p.body, &host);
+                if n > 0 {
+                    findings.push(finding(
+                        "threat_intel_fusion",
+                        &format!("URLhaus hostfile lists {n} malicious host(s) for {apex}"),
+                        "high",
+                        "T1597",
+                        &format!(
+                            "Live URLhaus hostfile matched {n} row(s) for '{apex}'. Set ABUSECH_AUTH_KEY for full URL rows."
                         ),
                         target,
                     ));

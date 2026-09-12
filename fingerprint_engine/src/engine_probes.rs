@@ -241,6 +241,16 @@ pub async fn http_get_with_headers(
     url: &str,
     extra: &[(&str, &str)],
 ) -> Option<HttpProbe> {
+    http_get_with_headers_max(client, url, extra, 65_536).await
+}
+
+/// GET that keeps a larger body (catalog feeds that exceed the default 64 KiB cap).
+pub async fn http_get_with_headers_max(
+    client: &Client,
+    url: &str,
+    extra: &[(&str, &str)],
+    max_body: usize,
+) -> Option<HttpProbe> {
     crate::fleet_shaping::acquire_for_url(url).await;
     // Smart Stealth Queue: bound concurrent requests per target + jitter, and
     // stamp a rotating browser identity (overriding the fixed probe UA). The
@@ -271,8 +281,9 @@ pub async fn http_get_with_headers(
         .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or_default().to_string()))
         .collect();
     let body = resp.text().await.unwrap_or_default();
-    let body = if body.len() > 65_536 {
-        body[..65_536].to_string()
+    let cap = max_body.max(1024);
+    let body = if body.len() > cap {
+        body[..cap].to_string()
     } else {
         body
     };
@@ -867,6 +878,9 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     }
     if engine_id.contains("first_seen") {
         return "Patch or isolate the affected SBOM component. The OSV advisory hit this inventory before (or without) an NVD CVE — do not wait for a weekly scanner or a CVE number.";
+    }
+    if engine_id.contains("adversary_gap") || engine_id.contains("darkweb") {
+        return "Assume any listed identity material is in adversary hands: force password reset plus MFA, hunt reuse on VPN/RDP/IdP, run leak_hunter and password_spray only in authorized scope, and open IR if a ransomware leak-site listing is confirmed.";
     }
     if engine_id.contains("s3") || engine_id.contains("cloud_data_exfil") {
         return "Block public ACLs at the AWS account level (`BlockPublicAccess`), set bucket policy to private, and enable S3 Object Ownership = BucketOwnerEnforced.";

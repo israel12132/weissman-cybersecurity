@@ -304,10 +304,6 @@ async fn auth_guard(
     if is_public_route(method, path) {
         return next.run(request).await;
     }
-    // SCIM is authenticated by a tenant bearer token hashed at rest — not a user JWT.
-    if path.starts_with("/scim/") {
-        return next.run(request).await;
-    }
     if path.starts_with("/api/") || path.starts_with("/ws/") {
         let extracted = extract_token_from_request(&request, path);
         if let Some((t, source)) = extracted {
@@ -614,12 +610,11 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
                         .map(|s| utc_str_to_israel(s))
                         .unwrap_or_else(|| "—".to_string());
                     clients_rows.push_str(&format!(
-                        r#"<tr><td>{}</td><td>{}</td><td class="domains-cell">{}</td><td class="time-cell">{}</td><td class="actions-cell"><a href="/command-center/report/{}" class="btn-sm btn-view">View</a> <a href="/command-center/attack-surface-graph/{}" class="btn-sm btn-graph">Graph</a> <a href="/command-center/semantic-logic/{}" class="btn-sm btn-logic">Logic</a> <a href="/command-center/timing-profiler/{}" class="btn-sm btn-timing">Timing</a> <a href="/command-center/ai-arena/{}" class="btn-sm btn-arena">Arena</a> <a href="/command-center/cicd-matrix/{}" class="btn-sm btn-pipeline">Pipeline</a> <a href="/command-center/memory-lab/{}" class="btn-sm btn-memorylab">Memory Lab</a> <a href="/command-center/dominion?client={}" class="btn-sm btn-view">Dominion</a> <a href="/api/clients/{}/report/pdf" class="btn-sm btn-pdf" download>PDF</a> <a href="/api/clients/{}/report/xlsx" class="btn-sm btn-excel" download>Excel</a> <a href="/api/clients/{}/export/csv" class="btn-sm btn-excel" download>CSV</a></td></tr>"#,
+                        r#"<tr><td>{}</td><td>{}</td><td class="domains-cell">{}</td><td class="time-cell">{}</td><td class="actions-cell"><a href="/command-center/report/{}" class="btn-sm btn-view">View</a> <a href="/command-center/attack-surface-graph/{}" class="btn-sm btn-graph">Graph</a> <a href="/command-center/semantic-logic/{}" class="btn-sm btn-logic">Logic</a> <a href="/command-center/timing-profiler/{}" class="btn-sm btn-timing">Timing</a> <a href="/command-center/ai-arena/{}" class="btn-sm btn-arena">Arena</a> <a href="/command-center/cicd-matrix/{}" class="btn-sm btn-pipeline">Pipeline</a> <a href="/command-center/memory-lab/{}" class="btn-sm btn-memorylab">Memory Lab</a> <a href="/api/clients/{}/report/pdf" class="btn-sm btn-pdf" download>PDF</a> <a href="/api/clients/{}/export/xlsx" class="btn-sm btn-excel" download>Excel</a> <a href="/api/clients/{}/export/csv" class="btn-sm btn-excel" download>CSV</a></td></tr>"#,
                         id,
                         escape_html(&name),
                         escape_html(&dom_short),
                         escape_html(&last_il),
-                        id,
                         id,
                         id,
                         id,
@@ -1426,7 +1421,7 @@ struct DeceptionDeployCloudBody {
     destructive_confirm: String,
 }
 
-const DEFAULT_CLIENT_CONFIGS_JSON: &str = r#"{"enabled_engines":["osint","asm","first_mover_surface_delta","leak_hunter","email_dns_posture","pki_tls","subdomain_takeover","supply_chain","first_seen_osv_nvd","bola_idor","jwt_attack","oauth_oidc","external_exposure_supreme","microsecond_timing"],"roe_mode":"safe_proofs","stealth_level":50,"industrial_ot_enabled":false}"#;
+const DEFAULT_CLIENT_CONFIGS_JSON: &str = r#"{"enabled_engines":["osint","asm","first_mover_surface_delta","leak_hunter","adversary_gap_mirror","email_dns_posture","pki_tls","subdomain_takeover","supply_chain","first_seen_osv_nvd","bola_idor","jwt_attack","oauth_oidc","external_exposure_supreme","microsecond_timing"],"roe_mode":"safe_proofs","stealth_level":50,"industrial_ot_enabled":false}"#;
 
 // Logs an internal error server-side and returns a generic, non-leaking detail string
 // for the client. Used at `INTERNAL_SERVER_ERROR` sites so raw sqlx/internal error text
@@ -2050,9 +2045,6 @@ mod public_route_guard_tests {
         assert!(!is_public_route(&Method::GET, "/api/findings"));
         assert!(!is_public_route(&Method::POST, "/api/command-center/scan"));
         assert!(!is_public_route(&Method::DELETE, "/api/clients/1"));
-        // SCIM is bearer-token authenticated in-handler, not a JWT public route.
-        assert!(!is_public_route(&Method::GET, "/scim/v2/Users"));
-        assert!(!is_public_route(&Method::POST, "/scim/v2/Users"));
         // Correct public path but wrong method is not public.
         assert!(!is_public_route(&Method::GET, "/api/logout"));
         assert!(!is_public_route(&Method::POST, "/api/health"));

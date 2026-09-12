@@ -881,6 +881,9 @@ async fn dispatch_engine_match(
         "first_seen_osv_nvd" => {
             crate::first_seen_osv_nvd_engine::run_first_seen_osv_nvd_result(target, ctx).await
         }
+        "adversary_gap_mirror" => {
+            crate::adversary_gap_mirror::run_adversary_gap_mirror_result(target, ctx).await
+        }
         "external_exposure_supreme" => {
             crate::external_exposure_supreme::run_external_exposure_supreme_result(target, ctx).await
         }

@@ -17,7 +17,9 @@ const CHAIN_PREDICT = {
   '/clients': ['/domain-discovery', '/jobs'],
   '/template-engine': ['/ast-fuzzing', '/file-upload-lab'],
   '/ast-fuzzing': ['/template-engine', '/feedback-loop'],
-  '/intel-map': ['/threat-intel', '/risk-graph', '/dark-web', '/adversary-dominance'],
+  '/intel-map': ['/threat-intel', '/risk-graph', '/dark-web', '/adversary-mirror'],
+  '/dark-web': ['/adversary-mirror', '/threat-intel'],
+  '/adversary-mirror': ['/dark-web', '/attack-paths', '/remediation'],
 }
 
 /**

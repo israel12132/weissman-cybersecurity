@@ -1097,6 +1097,161 @@ pub fn build_executive_board_pdf(
     Ok(out)
 }
 
+/// Board pack for Adversary Gap Mirror — live intel counts only.
+pub fn build_adversary_mirror_pdf(
+    org_label: &str,
+    client_opt: Option<&str>,
+    ransom_hits: u32,
+    ioc_hits: u32,
+    breach_catalog: u32,
+    iab_signals: u32,
+    total_findings: u32,
+    headline: &str,
+    signal_titles: &[String],
+) -> Result<Vec<u8>, String> {
+    let date = israel_now();
+    let mut b = PdfBuilder::new();
+    b.set_fill_rgb(0.06, 0.09, 0.14);
+    b.text(22, "WEISSMAN — ADVERSARY GAP MIRROR");
+    b.set_fill_rgb(0.55, 0.62, 0.72);
+    b.text(
+        11,
+        &format!("Organization: {}", truncate_ascii(org_label, 80)),
+    );
+    if let Some(c) = client_opt {
+        b.text(11, &format!("Scope (client): {}", truncate_ascii(c, 80)));
+    }
+    b.text(10, &format!("Generated (Israel): {}", date));
+    b.y -= 8.0;
+
+    b.set_fill_rgb(0.75, 0.25, 0.45);
+    b.text(14, "Clearnet adversary knowledge (live queries)");
+    b.set_fill_rgb(0.9, 0.92, 0.95);
+    b.text(
+        11,
+        &format!(
+            "Ransomware leak-site listings: {}  |  ThreatFox/URLhaus IOC: {}  |  HIBP catalog: {}",
+            ransom_hits, ioc_hits, breach_catalog
+        ),
+    );
+    b.text(
+        11,
+        &format!(
+            "IAB-interesting exposure signals: {}  |  Total live findings: {}",
+            iab_signals, total_findings
+        ),
+    );
+    b.y -= 8.0;
+    b.set_fill_rgb(0.2, 0.75, 0.95);
+    b.text(14, "Headline");
+    b.set_fill_rgb(0.9, 0.92, 0.95);
+    b.text(11, &truncate_ascii(headline, 220));
+
+    if !signal_titles.is_empty() {
+        b.y -= 8.0;
+        b.set_fill_rgb(0.2, 0.75, 0.95);
+        b.text(14, "Signal findings (info/zero-hit omitted)");
+        b.set_fill_rgb(0.9, 0.92, 0.95);
+        for (i, title) in signal_titles.iter().take(16).enumerate() {
+            b.text(9, &format!("{}. {}", i + 1, truncate_ascii(title, 110)));
+        }
+        if signal_titles.len() > 16 {
+            b.text(
+                9,
+                &format!(
+                    "… {} more signal rows in the live findings table / Excel pack",
+                    signal_titles.len() - 16
+                ),
+            );
+        }
+    }
+
+    b.y -= 10.0;
+    b.set_fill_rgb(0.45, 0.5, 0.58);
+    b.text(
+        9,
+        "Sources: ransomware.live, RansomLook posts catalog, abuse.ch ThreatFox, URLhaus, Have I Been Pwned public catalog, urlscan.io.",
+    );
+    b.text(
+        9,
+        "No Tor, no marketplaces, no credential dumps. Empty counts mean the live query returned zero matches.",
+    );
+    b.text(
+        9,
+        "USD bands, if present in findings, are published industry ranges — not live dark-web quotes.",
+    );
+
+    let streams = b.finish();
+    let mut out = Vec::new();
+    let mut offsets: Vec<usize> = vec![0];
+    out.extend_from_slice(b"%PDF-1.4\n");
+    offsets.push(out.len());
+    out.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    offsets.push(out.len());
+    let n = streams.len();
+    let page_objects: Vec<usize> = (0..n).map(|i| 3 + i * 2).collect();
+    let contents_objects: Vec<usize> = (0..n).map(|i| 4 + i * 2).collect();
+    let pages_refs: String = page_objects.iter().map(|i| format!("{} 0 R ", i)).collect();
+    out.extend_from_slice(
+        format!(
+            "2 0 obj\n<< /Type /Pages /Kids [ {}] /Count {} >>\nendobj\n",
+            pages_refs.trim(),
+            n
+        )
+        .as_bytes(),
+    );
+    offsets.push(out.len());
+    let font_obj = 3 + 2 * n;
+    for (i, stream_body) in streams.iter().enumerate() {
+        out.extend_from_slice(
+            format!(
+                "{} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {} 0 R /Resources << /Font << /F1 {} 0 R >> >> >>\nendobj\n",
+                page_objects[i],
+                contents_objects[i],
+                font_obj
+            )
+            .as_bytes(),
+        );
+        offsets.push(out.len());
+        out.extend_from_slice(
+            format!(
+                "{} 0 obj\n<< /Length {} >>\nstream\n",
+                contents_objects[i],
+                stream_body.len()
+            )
+            .as_bytes(),
+        );
+        out.extend_from_slice(stream_body.as_bytes());
+        out.extend_from_slice(b"\nendstream\nendobj\n");
+        offsets.push(out.len());
+    }
+    out.extend_from_slice(
+        format!(
+            "{} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+            font_obj
+        )
+        .as_bytes(),
+    );
+    offsets.push(out.len());
+    let xref_start = out.len();
+    let num_objs = font_obj;
+    out.extend_from_slice(b"xref\n");
+    out.extend_from_slice(format!("0 {} \n", num_objs + 1).as_bytes());
+    out.extend_from_slice(b"0000000000 65535 f \n");
+    for off in offsets.iter().skip(1).take(num_objs) {
+        out.extend_from_slice(format!("{:010} 00000 n \n", off).as_bytes());
+    }
+    out.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n",
+            num_objs + 1,
+            xref_start
+        )
+        .as_bytes(),
+    );
+    Ok(out)
+}
+
 /// Framework-specific compliance audit PDF from live control status rows.
 /// Build a compliance framework audit PDF.
 ///
@@ -1537,6 +1692,32 @@ mod watermark_tests {
         // cos(45)=sin(45)=0.7071; matrix is `c c -c c tx ty` — assert the rotation cells.
         assert!(ops.contains("0.7071 0.7071 -0.7071 0.7071"));
         assert!(ops.contains("(VOID) Tj"));
+    }
+}
+
+#[cfg(test)]
+mod adversary_mirror_pdf_tests {
+    use super::*;
+
+    #[test]
+    fn adversary_mirror_pdf_is_pdf14() {
+        let bytes = build_adversary_mirror_pdf(
+            "Weissman",
+            Some("Acme"),
+            1,
+            2,
+            0,
+            1,
+            4,
+            "Ransomware leak-site listing",
+            &["Ransomware leak-site listing".into()],
+        )
+        .expect("pdf");
+        assert!(bytes.starts_with(b"%PDF-1.4"));
+        assert!(bytes.ends_with(b"%%EOF\n"));
+        let body = String::from_utf8_lossy(&bytes);
+        assert!(body.contains("ADVERSARY GAP MIRROR"));
+        assert!(body.contains("ransomware.live"));
     }
 }
 
