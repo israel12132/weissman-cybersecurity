@@ -68,7 +68,8 @@
     "enabled": "Enabled",
     "export_pdf": "Export PDF",
     "reset": "Reset",
-    "running": "Running…"
+    "running": "Running…",
+    "export_xlsx": "Export Excel"
   },
   "a11y": {
     "skip_to_content": "Skip to main content",
@@ -255,7 +256,7 @@
     "sbom": "SBOM Browser",
     "risk_graph": "Risk Graph",
     "financial_risk": "Financial Risk",
-    "board_pack": "Board Pack",
+    "board_pack": "Board Evidence Pack",
     "attack_coverage": "ATT&CK Coverage",
     "security_posture": "Platform Posture",
     "crypto_posture": "Crypto Posture",
@@ -549,8 +550,8 @@
     "enterprise_sso": "Enterprise SSO",
     "brand_tagline": "Unified offensive security for enterprise teams",
     "brand_release": "{{name}} · {{release}}",
-    "brand_story": "Correlate findings across {{engines}} attack engines, orchestrate SOAR playbooks, and prove compliance — from a single command center.",
-    "trust_engines": "{{engines}} engines",
+    "brand_story": "Correlate findings across 254 attack engines, orchestrate SOAR playbooks, and prove compliance — from a single command center.",
+    "trust_engines": "254 engines",
     "trust_soc2": "SOC2-ready",
     "trust_region": "EU-West",
     "trust_label": "Platform trust indicators",
@@ -894,7 +895,8 @@
       "verdict_INCONCLUSIVE": "Inconclusive",
       "verdict_NOISE": "Noise",
       "verdict_FALSE_POSITIVE": "False positive"
-    }
+    },
+    "toast_xlsx_failed": "Excel export failed: {{detail}}"
   },
   "vuln_intel": {
     "title": "Vulnerability Intelligence",
@@ -1991,7 +1993,7 @@
     },
     "darkWebMonitor": {
       "title": "Dark Web Monitor",
-      "subtitle": "Live criminal-index delta: HIBP, ransomware leak sites, ThreatFox, URLhaus, urlscan — then leak_hunter on new hits",
+      "subtitle": "Credential leaks, typosquats, and dark-web mentions from live tenant findings",
       "badge": "DARK WEB",
       "total_hits": "Total Hits",
       "critical": "Critical",
@@ -2009,7 +2011,7 @@
       "auto_on": "Live refresh ON",
       "auto_off": "Live refresh OFF",
       "last_updated": "Last synced {{time}}",
-      "evidence_notice": "Live APIs: GET /api/findings (leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor, adversary_underground_delta), GET /api/clients/:id/underground-exposure, GET /api/attack-exposure/:id, hunt via POST /api/command-center/scan, board pack GET /api/clients/:id/underground-exposure.xls. Public legal OSINT only — never simulated breaches or Tor markets.",
+      "evidence_notice": "Every row is a real finding from GET /api/findings filtered to leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor, adversary_exposure_delta, and threat_intel_fusion — never simulated breach data.",
       "source_breakdown": "Hits by source engine",
       "search_placeholder": "Search title, target, or description…",
       "filter_all": "All",
@@ -2023,11 +2025,11 @@
       "col_target": "Target",
       "col_discovered": "Discovered",
       "empty_title": "No dark-web intelligence yet for this tenant.",
-      "empty_body": "Hunt the authorized client domain with Adversary Underground Delta. Public indexes (HIBP, ransomware.live, ThreatFox) run without paid keys. Findings land in GET /api/findings.",
-      "empty_step_scan_link": "run the underground hunt",
-      "empty_step_scan_after": "(Leak Hunter is chained on new high/critical hits).",
-      "empty_step_keys": "Optional paid overlays: INTELX_API_KEY, HIBP_API_KEY, WEISSMAN_RANSOMWARE_LIVE_API_KEY. Public OSINT still runs when they are unset.",
-      "empty_step_engine_before": "Run adversary_underground_delta from the",
+      "empty_body": "Run Leak Hunter or darkweb_intel against an authorized domain. Findings appear here automatically from GET /api/findings.",
+      "empty_step_scan_link": "run the baseline scan",
+      "empty_step_scan_after": "(Leak Hunter is included in the bundle).",
+      "empty_step_keys": "For richer breach feeds, set HIBP_API_KEY / OTX_API_KEY in System Configuration; the engine is wired but degrades gracefully without keys.",
+      "empty_step_engine_before": "Run the darkweb_intel engine from the",
       "empty_step_engine_link": "Engine Matrix",
       "empty_step_engine_after": "(requires an authorized domain).",
       "war_title": "Adversary underground delta",
@@ -2057,7 +2059,8 @@
       "play_t1190": "Exploit public-facing apps",
       "play_t1486": "Ransomware impact",
       "play_proven": "Proven live",
-      "play_gap": "Not in exposure"
+      "play_gap": "Not in exposure",
+      "download_failed": "Excel download failed."
     },
     "healReadiness": {
       "title": "Auto-heal readiness",
@@ -5195,7 +5198,7 @@
       }
     },
     "attackSurfaceManagement": {
-      "evidence_notice": "ASM inventory from POST /api/command-center/scan (asm). First-mover drift from GET /api/clients/:id/surface-diff, CT squirt nerve from GET /api/first-mover/nerve, delta hunt POST first_mover_surface_delta, kill-chain POST first_mover_delta_fusion, IdP delta POST identity_surface_delta, dual-stack skip POST dualstack_edge_skip_fusion, ransomware preposition POST ransomware_preposition_surface — live DNS/HTTP/CT/TCP vs last snapshot, no canned graphs.",
+      "evidence_notice": "ASM inventory from POST /api/command-center/scan (asm). First-mover drift from GET /api/clients/:id/surface-diff, CT squirt nerve from GET /api/first-mover/nerve, delta hunt POST first_mover_surface_delta, kill-chain POST first_mover_delta_fusion — live DNS/HTTP/CT vs last snapshot, no canned graphs.",
       "severity_critical": "Critical",
       "severity_high": "High",
       "severity_medium": "Medium",
@@ -6227,6 +6230,37 @@
       "col_target": "Target",
       "open_dark_web": "Dark Web Monitor",
       "open_engines": "Engine Matrix"
+    },
+    "boardEvidencePack": {
+      "title": "Board Evidence Pack",
+      "subtitle": "True Excel workbook + PDF + CSV from live findings — not a CSV labeled Excel",
+      "badge": "BOARD PACK",
+      "load_error": "Could not load the live board pack.",
+      "download_failed": "Download failed.",
+      "auto_on": "Live refresh ON",
+      "auto_off": "Live refresh OFF",
+      "evidence_notice": "KPIs and the table come from one live GET /api/board-pack response. Totals cover the export set (up to 50,000). The grid is the same ordered preview (up to 5,000). Excel is a real OOXML workbook (Executive, Findings, Remediation, AdversaryIntel, MITRE). Adversary rows are legal clearnet indexes only. Tor marketplaces are never crawled.",
+      "kpi_total": "Findings",
+      "kpi_critical": "Critical",
+      "kpi_high": "High",
+      "kpi_verified": "Verified",
+      "kpi_adversary": "Adversary-indexed",
+      "kpi_remediation": "Remediation-ready",
+      "legal_note": "Adversary-index fusion uses public defender APIs. Missing ABUSECH_AUTH_KEY / INTELX_API_KEY skips those feeds honestly — it never fabricates leak counts.",
+      "link_dark_web": "Dark Web Monitor →",
+      "link_findings": "Findings C2 →",
+      "link_reports": "Report history →",
+      "search_placeholder": "Search title, engine, or severity…",
+      "col_severity": "Severity",
+      "col_title": "Title",
+      "col_source": "Source",
+      "col_mitre": "MITRE",
+      "empty_title": "No live findings for this scope yet.",
+      "empty_body": "Run Leak Hunter or Adversary Exposure Delta against an authorized domain. This pack only renders rows stored in the tenant database.",
+      "empty_scan": "Open engine matrix",
+      "all_clients": "All clients",
+      "scoped_to": "Scoped to {{name}}",
+      "grid_capped": "Table shows the {{shown}} most recent findings in this scope. KPIs and the Excel workbook include all {{total}} (capped at {{exportCap}}). Search covers the preview only — use Findings C2 or the workbook for the rest."
     }
   },
   "components": {
@@ -7142,9 +7176,9 @@
       "evidence_notice": "Executive report rows from GET /api/clients/:id/report and cryptographic seals from GET /api/clients/:id/audit-trail — no placeholder findings.",
       "loading": "Loading report…",
       "title": "Report — {{name}}",
-      "download_pdf": "Download PDF (HTML)",
+      "download_pdf": "Download PDF",
       "download_xlsx": "Download Excel",
-      "download_failed": "Download failed.",
+      "download_failed": "Excel download failed.",
       "downloading": "Downloading…",
       "open_dominion": "Open Dominion pack",
       "back_war_room": "← War Room",

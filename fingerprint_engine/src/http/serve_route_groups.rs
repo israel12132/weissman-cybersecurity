@@ -16,7 +16,14 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/findings", get(api_findings))
         .route("/api/findings/clusters", get(api_findings_clusters))
         .route("/api/findings/export/csv", get(api_findings_export_csv))
+        .route("/api/findings/export/xlsx", get(api_findings_export_xlsx))
         .route("/api/export/findings", get(api_findings_export_csv))
+        .route("/api/export/xlsx", get(api_findings_export_xlsx))
+        .route(
+            "/api/export/excel",
+            get(api_export_excel_alias).post(api_export_excel_alias),
+        )
+        .route("/api/board-pack", get(api_board_pack))
         .route(
             "/api/findings/:id/status",
             patch(api_findings_update_status),

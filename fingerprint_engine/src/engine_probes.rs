@@ -241,16 +241,6 @@ pub async fn http_get_with_headers(
     url: &str,
     extra: &[(&str, &str)],
 ) -> Option<HttpProbe> {
-    http_get_with_headers_max(client, url, extra, 65_536).await
-}
-
-/// GET that keeps a larger body (catalog feeds that exceed the default 64 KiB cap).
-pub async fn http_get_with_headers_max(
-    client: &Client,
-    url: &str,
-    extra: &[(&str, &str)],
-    max_body: usize,
-) -> Option<HttpProbe> {
     crate::fleet_shaping::acquire_for_url(url).await;
     // Smart Stealth Queue: bound concurrent requests per target + jitter, and
     // stamp a rotating browser identity (overriding the fixed probe UA). The
@@ -281,9 +271,8 @@ pub async fn http_get_with_headers_max(
         .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or_default().to_string()))
         .collect();
     let body = resp.text().await.unwrap_or_default();
-    let cap = max_body.max(1024);
-    let body = if body.len() > cap {
-        body[..cap].to_string()
+    let body = if body.len() > 65_536 {
+        body[..65_536].to_string()
     } else {
         body
     };
@@ -529,25 +518,6 @@ pub async fn dns_a(host: &str) -> Vec<String> {
                 continue;
             };
             out.push(a.0.to_string());
-        }
-    }
-    out
-}
-
-/// Live AAAA lookup. Empty when the name has no IPv6 (or DNS fails).
-pub async fn dns_aaaa(host: &str) -> Vec<String> {
-    use hickory_resolver::TokioResolver;
-    let resolver = match TokioResolver::builder_tokio().and_then(|b| b.build()) {
-        Ok(r) => r,
-        Err(_) => return vec![],
-    };
-    let mut out = Vec::new();
-    if let Ok(aaaa) = resolver.ipv6_lookup(host).await {
-        for record in aaaa.answers() {
-            let hickory_resolver::proto::rr::RData::AAAA(aaaa) = &record.data else {
-                continue;
-            };
-            out.push(aaaa.0.to_string());
         }
     }
     out
@@ -859,9 +829,6 @@ pub fn finding_with_probe_depth(
 #[must_use]
 pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     let sev = severity.to_ascii_lowercase();
-    if engine_id.contains("credential_ransomware") || engine_id.contains("hibp") {
-        return "Rotate credentials and IdP sessions for the affected domain, patch CISA KEV CVEs on the observed product, and hunt unmanaged infostealer stores. Do not store stealer passwords — counts and live HTTP proof only.";
-    }
     if engine_id.contains("ssrf") {
         return "Block outbound requests to 169.254.169.254 / metadata.google.internal at the egress firewall and on the application server. Validate URL inputs with an allow-list of approved hosts.";
     }
@@ -873,9 +840,6 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     }
     if engine_id.contains("cors") {
         return "Replace `Access-Control-Allow-Origin: *` with an allow-list of trusted origins. Never combine `*` or `null` with `Access-Control-Allow-Credentials: true`.";
-    }
-    if engine_id.contains("exposure_schism") {
-        return "Close protocol-stack gaps on the new host immediately: unify WAF/auth across HTTP/1.1 and HTTP/2, emit correct Vary for Cookie/Language/Encoding, strip X-Original-URL / X-Rewrite-URL at the edge, and claim or remove the first-seen DNS record. Re-run exposure_schism_fusion after the change.";
     }
     if engine_id.contains("liminal_boundary") {
         return "Unify WAF/auth rules across HTTP/1.1 and HTTP/2 (ALPN) paths; add correct Vary headers for every cache-key dimension (Cookie, Accept-Language); strip or validate X-Original-URL / X-Rewrite-URL at the edge; disable trusted-header routing unless explicitly required.";
@@ -895,17 +859,14 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     if engine_id.contains("first_mover") {
         return "Investigate new or changed internet-facing DNS/HTTP assets immediately: claim or remove dangling CNAMEs, confirm ownership of new hosts, and restrict accidental exposure. Re-run first_mover_surface_delta after DNS changes.";
     }
-    if engine_id.contains("underground")
-        || engine_id.contains("darkweb")
-        || engine_id.contains("dark_web")
-    {
-        return "Treat index hits as confirmed exposure signals: force password resets for affected identities, rotate leaked API keys, hunt infostealer leftovers, and re-run adversary_underground_delta plus leak_hunter after containment.";
-    }
     if engine_id.contains("first_seen") {
         return "Patch or isolate the affected SBOM component. The OSV advisory hit this inventory before (or without) an NVD CVE — do not wait for a weekly scanner or a CVE number.";
     }
-    if engine_id.contains("adversary_gap") || engine_id.contains("darkweb") {
-        return "Assume any listed identity material is in adversary hands: force password reset plus MFA, hunt reuse on VPN/RDP/IdP, run leak_hunter and password_spray only in authorized scope, and open IR if a ransomware leak-site listing is confirmed.";
+    if engine_id.contains("adversary_exposure")
+        || engine_id.contains("darkweb")
+        || engine_id.contains("threat_intel_fusion")
+    {
+        return "Treat indexed URLs/IOCs as attacker-visible. Rotate any credentials mentioned, block listed hosts at the perimeter, and confirm the listing is not a third-party brand mention. Do not browse criminal marketplaces from corporate networks.";
     }
     if engine_id.contains("s3") || engine_id.contains("cloud_data_exfil") {
         return "Block public ACLs at the AWS account level (`BlockPublicAccess`), set bucket policy to private, and enable S3 Object Ownership = BucketOwnerEnforced.";
@@ -930,13 +891,6 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     }
     if engine_id.contains("mfa") {
         return "Enforce MFA for all privileged accounts. Block fallback to SMS one-time codes; prefer phishing-resistant factors (WebAuthn / FIDO2).";
-    }
-    if engine_id.contains("darkweb")
-        || engine_id.contains("dark_web")
-        || engine_id.contains("dominion")
-        || engine_id.contains("leak_hunter")
-    {
-        return "Rotate exposed credentials, force resets for affected identities, take down malware URLs, and re-query authorized public intel (URLHaus / ThreatFox / IntelX / CT). Do not pay extortion. Confirm with a second live scan.";
     }
     if engine_id.contains("password") {
         return "Disable password reuse, enforce zxcvbn ≥ 3 strength, require MFA, monitor for credential-stuffing patterns and rotate any leaked secrets.";
@@ -996,6 +950,13 @@ pub fn default_compliance(engine_id: &str) -> Vec<&'static str> {
     }
     if engine_id.contains("supply_chain") || engine_id.contains("sbom") {
         tags.extend_from_slice(&["NIS2:Art.21(2)(d)", "SOC2:CC7.1"]);
+    }
+    if engine_id.contains("leak")
+        || engine_id.contains("adversary")
+        || engine_id.contains("darkweb")
+        || engine_id.contains("threat_intel_fusion")
+    {
+        tags.extend_from_slice(&["ISO27001:A.16", "SOC2:CC7.2", "NIS2:Art.23"]);
     }
     if engine_id.contains("gdpr") || engine_id.contains("personal") || engine_id.contains("pii") {
         tags.push("GDPR:Art.32");

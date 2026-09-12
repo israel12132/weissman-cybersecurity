@@ -68,7 +68,8 @@
     "hide_filters": "הסתר מסננים",
     "export_pdf": "ייצוא PDF",
     "reset": "איפוס",
-    "running": "רץ…"
+    "running": "רץ…",
+    "export_xlsx": "ייצוא Excel"
   },
   "a11y": {
     "skip_to_content": "דלג לתוכן הראשי",
@@ -248,7 +249,7 @@
     "sbom": "SBOM Browser",
     "risk_graph": "Risk Graph",
     "financial_risk": "סיכון פיננסי",
-    "board_pack": "חבילת דירקטוריון",
+    "board_pack": "חבילת ראיות לדירקטוריון",
     "attack_coverage": "כיסוי ATT&CK",
     "security_posture": "מצב אבטחת הפלטפורמה",
     "crypto_posture": "מצב הצפנה",
@@ -539,8 +540,8 @@
     "enterprise_sso": "כניסת ארגון (SSO)",
     "brand_tagline": "אבטחה התקפית מאוחדת לצוותי ארגון",
     "brand_release": "{{name}} · {{release}}",
-    "brand_story": "קשר ממצאים מ-{{engines}} מנועי תקיפה, תזמר מדריכי SOAR והוכח עמידה ברגולציה — ממרכז פיקוד אחד.",
-    "trust_engines": "{{engines}} מנועים",
+    "brand_story": "קשר ממצאים מ-254 מנועי תקיפה, תזמר מדריכי SOAR והוכח עמידה ברגולציה — ממרכז פיקוד אחד.",
+    "trust_engines": "254 מנועים",
     "trust_soc2": "מוכן ל-SOC2",
     "trust_region": "EU-West",
     "trust_label": "אינדיקטורי אמון בפלטפורמה",
@@ -824,7 +825,8 @@
       "verdict_INCONCLUSIVE": "לא חד משמעי",
       "verdict_NOISE": "רעש",
       "verdict_FALSE_POSITIVE": "False positive"
-    }
+    },
+    "toast_xlsx_failed": "ייצוא Excel נכשל: {{detail}}"
   },
   "vuln_intel": {
     "title": "מודיעין חולשות",
@@ -1991,7 +1993,7 @@
     },
     "darkWebMonitor": {
       "title": "מעקב רשת אפלה",
-      "subtitle": "דלתא חיה מול אינדקסים פליליים: HIBP, אתרי דליפת כופרה, ThreatFox, URLhaus, urlscan — ואז leak_hunter על ממצאים חדשים",
+      "subtitle": "דליפות אישורים, typosquats ואזכורים — ממצאים חיים של הטננט",
       "badge": "DARK WEB",
       "total_hits": "סה״כ פגיעות",
       "critical": "קריטי",
@@ -2009,7 +2011,7 @@
       "auto_on": "רענון חי פעיל",
       "auto_off": "רענון חי כבוי",
       "last_updated": "סונכרן לאחרונה {{time}}",
-      "evidence_notice": "ממשקים חיים: GET /api/findings (leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor, adversary_underground_delta), GET /api/clients/:id/underground-exposure, GET /api/attack-exposure/:id, ציד ב-POST /api/command-center/scan, חבילת דירקטוריון GET /api/clients/:id/underground-exposure.xls. OSINT ציבורי חוקי בלבד — בלי פריצות מדומות ובלי שווקי Tor.",
+      "evidence_notice": "כל שורה היא ממצא אמיתי מ-GET /api/findings המסונן ל-leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor, adversary_exposure_delta ו-threat_intel_fusion — לעולם לא נתוני פריצה מדומים.",
       "source_breakdown": "פגיעות לפי מנוע מקור",
       "search_placeholder": "חפש כותרת, יעד או תיאור…",
       "filter_all": "הכל",
@@ -2023,11 +2025,11 @@
       "col_target": "יעד",
       "col_discovered": "התגלה",
       "empty_title": "אין מודיעין רשת אפלה עדיין לארגון זה.",
-      "empty_body": "צוד את דומיין הלקוח המורשה עם Adversary Underground Delta. אינדקסים ציבוריים (HIBP, ransomware.live, ThreatFox) רצים בלי מפתחות בתשלום. ממצאים נכנסים ל-GET /api/findings.",
-      "empty_step_scan_link": "הפעל ציד אנדרגראונד",
-      "empty_step_scan_after": "(Leak Hunter נשלח אחרי ממצאים קריטיים/גבוהים חדשים).",
-      "empty_step_keys": "שכבות בתשלום אופציונליות: INTELX_API_KEY, HIBP_API_KEY, WEISSMAN_RANSOMWARE_LIVE_API_KEY. OSINT ציבורי רץ גם בלעדיהן.",
-      "empty_step_engine_before": "הפעל adversary_underground_delta מ",
+      "empty_body": "הפעל Leak Hunter או darkweb_intel על דומיין מורשה. ממצאים יופיעו כאן אוטומטית מ-GET /api/findings.",
+      "empty_step_scan_link": "הפעל סריקת בסיס",
+      "empty_step_scan_after": "(Leak Hunter כלול בחבילה).",
+      "empty_step_keys": "לפידים עשירים יותר, הגדר HIBP_API_KEY / OTX_API_KEY בהגדרות המערכת; המנוע מחובר אך מתדרדר בחן ללא מפתחות.",
+      "empty_step_engine_before": "הפעל את מנוע darkweb_intel מ",
       "empty_step_engine_link": "מטריצת המנועים",
       "empty_step_engine_after": "(דורש דומיין מורשה).",
       "war_title": "דלתא אנדרגראונד של יריב",
@@ -2057,7 +2059,8 @@
       "play_t1190": "ניצול אפליקציות פומביות",
       "play_t1486": "השפעת כופרה",
       "play_proven": "הוכח בלייב",
-      "play_gap": "לא בחשיפה"
+      "play_gap": "לא בחשיפה",
+      "download_failed": "הורדת Excel נכשלה."
     },
     "healReadiness": {
       "title": "מוכנות ריפוי אוטומטי",
@@ -5195,7 +5198,7 @@
       }
     },
     "attackSurfaceManagement": {
-      "evidence_notice": "מלאי ASM מ-POST /api/command-center/scan (asm). סחיפת first-mover מ-GET /api/clients/:id/surface-diff, עצב CT מ-GET /api/first-mover/nerve, ציד דלתא POST first_mover_surface_delta, kill-chain POST first_mover_delta_fusion, דלתא IdP POST identity_surface_delta, skip דו-מערום POST dualstack_edge_skip_fusion, הכנת כופרה POST ransomware_preposition_surface — DNS/HTTP/CT/TCP חי מול snapshot אחרון, בלי גרפים מוכנים.",
+      "evidence_notice": "מלאי ASM מ-POST /api/command-center/scan (asm). סחיפת first-mover מ-GET /api/clients/:id/surface-diff, עצב CT מ-GET /api/first-mover/nerve, ציד דלתא POST first_mover_surface_delta, kill-chain POST first_mover_delta_fusion — DNS/HTTP/CT חי מול snapshot אחרון, בלי גרפים מוכנים.",
       "severity_critical": "קריטי",
       "severity_high": "גבוה",
       "severity_medium": "בינוני",
@@ -6227,6 +6230,37 @@
       "col_target": "יעד",
       "open_dark_web": "ניטור רשת אפלה",
       "open_engines": "מטריצת מנועים"
+    },
+    "boardEvidencePack": {
+      "title": "חבילת ראיות לדירקטוריון",
+      "subtitle": "חוברת Excel אמיתית + PDF + CSV מממצאים חיים — לא CSV שמכונה Excel",
+      "badge": "BOARD PACK",
+      "load_error": "לא ניתן לטעון את חבילת הדירקטוריון.",
+      "download_failed": "ההורדה נכשלה.",
+      "auto_on": "רענון חי פעיל",
+      "auto_off": "רענון חי כבוי",
+      "evidence_notice": "מדדי ה-KPI והטבלה מגיעים מאותה תשובת GET /api/board-pack חיה. הסה״כ מכסה את סט הייצוא (עד 50,000). הטבלה היא אותה תצוגה מקדימה לפי סדר (עד 5,000). Excel היא חוברת OOXML אמיתית. שורות יריב הן אינדקסים חוקיים בלבד. אין סריקת שווקי Tor.",
+      "kpi_total": "ממצאים",
+      "kpi_critical": "קריטי",
+      "kpi_high": "גבוה",
+      "kpi_verified": "מאומת",
+      "kpi_adversary": "באינדקס יריב",
+      "kpi_remediation": "מוכן לתיקון",
+      "legal_note": "איחוד אינדקס היריב משתמש ב-API ציבוריים. היעדר ABUSECH_AUTH_KEY / INTELX_API_KEY מדלג על הפיד בכנות — לעולם לא ממציא ספירות דליפה.",
+      "link_dark_web": "מעקב רשת אפלה →",
+      "link_findings": "מרכז ממצאים →",
+      "link_reports": "היסטוריית דוחות →",
+      "search_placeholder": "חפש כותרת, מנוע או חומרה…",
+      "col_severity": "חומרה",
+      "col_title": "כותרת",
+      "col_source": "מקור",
+      "col_mitre": "MITRE",
+      "empty_title": "אין ממצאים חיים להיקף זה עדיין.",
+      "empty_body": "הפעל Leak Hunter או Adversary Exposure Delta על דומיין מורשה. החבילה מציגה רק שורות שמורות במסד הנתונים.",
+      "empty_scan": "פתח מטריצת מנועים",
+      "all_clients": "כל הלקוחות",
+      "scoped_to": "מסונן ל-{{name}}",
+      "grid_capped": "הטבלה מציגה את {{shown}} הממצאים האחרונים בהיקף זה. מדדי ה-KPI וחוברת Excel כוללים את כל {{total}} (עד {{exportCap}}). החיפוש חל על התצוגה המקדימה בלבד — השתמשו במרכז הממצאים או בחוברת לשאר."
     }
   },
   "components": {
@@ -7142,9 +7176,9 @@
       "evidence_notice": "שורות דוח executive מ-GET /api/clients/:id/report וחותמות קryptografיות מ-GET /api/clients/:id/audit-trail — ללא ממצאי placeholder.",
       "loading": "טוען דוח…",
       "title": "דוח — {{name}}",
-      "download_pdf": "הורד PDF (HTML)",
+      "download_pdf": "הורד PDF",
       "download_xlsx": "הורד Excel",
-      "download_failed": "ההורדה נכשלה.",
+      "download_failed": "הורדת Excel נכשלה.",
       "downloading": "מוריד…",
       "open_dominion": "פתח חבילת דומיניון",
       "back_war_room": "← חדר מלחמה",

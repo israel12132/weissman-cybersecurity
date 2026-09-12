@@ -81,7 +81,6 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "first_mover_delta_fusion",
     "first_seen_osv_nvd",
     "leak_hunter",
-    "adversary_underground_delta",
     "discovery_engine",
     "recon",
     "supply_chain",
@@ -679,6 +678,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "ngfw_posture",
     "malware_detonation",
     "weissman_vngfw",
+    "adversary_exposure_delta",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -690,7 +690,7 @@ pub const DEFAULT_ORCHESTRATOR_ENGINES: &[&str] = &[
     "asm",
     "first_mover_surface_delta",
     "leak_hunter",
-    "adversary_underground_delta",
+    "adversary_exposure_delta",
     "email_dns_posture",
     "pki_tls",
     "subdomain_takeover",
@@ -713,7 +713,6 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "first_mover_delta_fusion",
     "first_seen_osv_nvd",
     "leak_hunter",
-    "adversary_underground_delta",
     "discovery_engine",
     "recon",
     // Web / API attacks
@@ -1301,6 +1300,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "ngfw_posture",
     "malware_detonation",
     "weissman_vngfw",
+    "adversary_exposure_delta",
 ];
 
 /// Map catalog-only registry IDs to a production engine implementation.
@@ -1626,7 +1626,6 @@ mod production_registry_tests {
         assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"asm"));
         assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_mover_surface_delta"));
         assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_seen_osv_nvd"));
-        assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"adversary_underground_delta"));
         assert!(!DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_mover_delta_fusion"));
         assert!(
             !DEFAULT_ORCHESTRATOR_ENGINES

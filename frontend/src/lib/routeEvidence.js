@@ -26,7 +26,7 @@ export const ROUTE_EVIDENCE_SKIP = new Set([
   '/metrics',
   '/jobs',
   '/dark-web',
-  '/adversary-mirror',
+  '/board-pack',
   '/verification/oob',
   '/compliance',
   '/baseline-drift',
@@ -38,7 +38,6 @@ export const ROUTE_EVIDENCE_SKIP = new Set([
   '/ceo',
   '/sovereign',
   '/elite-hardening',
-  '/competitive-delta',
 ])
 
 /** Prefixes where child pages render their own evidence banner. */
@@ -115,7 +114,6 @@ export const ROUTE_EVIDENCE = {
   '/intel-map': 'pages.intelMap.evidence_notice',
   '/ai-arena': 'components.tools.aiRedteamArena.evidence_notice',
   '/timing-profiler': 'components.tools.quantumTimingProfiler.evidence_notice',
-  '/dominion': 'pages.dominionBoardPack.evidence_notice',
 }
 
 /** Longest-prefix-first dynamic routes → i18n key. */

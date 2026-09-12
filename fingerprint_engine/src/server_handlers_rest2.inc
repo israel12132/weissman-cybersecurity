@@ -66,25 +66,35 @@ async fn api_client_export_csv(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
     };
     let rows = sqlx::query(
-        "SELECT id, title, severity, source, status, discovered_at FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
+        "SELECT id, title, severity, source, status, discovered_at FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC LIMIT 50000",
     )
     .bind(id)
     .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
+    .await;
+    let rows = match rows {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": "DB unavailable", "detail": scrub_internal_error(&e)})),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let mut csv = String::from("ID,Title,Severity,Source,Status,Discovered\n");
     for r in rows {
         let idv = r.try_get::<i64, _>("id").unwrap_or(0);
-        let title = r.try_get::<String, _>("title").unwrap_or_default().replace('"', "\"\"");
-        let sev = r.try_get::<String, _>("severity").unwrap_or_default().replace('"', "\"\"");
-        let src = r.try_get::<String, _>("source").unwrap_or_default().replace('"', "\"\"");
-        let st = r.try_get::<String, _>("status").unwrap_or_default().replace('"', "\"\"");
-        let disc = r
-            .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
-            .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
-            .unwrap_or_default()
-            .replace('"', "\"\"");
+        let title = csv_cell(&r.try_get::<String, _>("title").unwrap_or_default());
+        let sev = csv_cell(&r.try_get::<String, _>("severity").unwrap_or_default());
+        let src = csv_cell(&r.try_get::<String, _>("source").unwrap_or_default());
+        let st = csv_cell(&r.try_get::<String, _>("status").unwrap_or_default());
+        let disc = csv_cell(
+            &r.try_get::<chrono::DateTime<Utc>, _>("discovered_at")
+                .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
+                .unwrap_or_default(),
+        );
         // Quote every field (embedded quotes already doubled above) — RFC 4180, so a comma or
         // newline in a title cannot shift subsequent columns.
         csv.push_str(&format!(
@@ -102,318 +112,262 @@ async fn api_client_export_csv(
     res
 }
 
-const ADVERSARY_MIRROR_SOURCES: &[&str] = &[
-    "adversary_gap_mirror",
-    "darkweb_intel",
-    "dark_web_monitor",
-    "leak_hunter",
-    "typosquatting_monitor",
-];
-
-fn is_adversary_source(src: &str) -> bool {
-    let s = src.to_ascii_lowercase();
-    ADVERSARY_MIRROR_SOURCES.iter().any(|x| s == *x)
+fn csv_cell(s: &str) -> String {
+    crate::xlsx_pack::neutralize_formula(s).replace('"', "\"\"")
 }
 
-fn db_query_fail(e: impl std::fmt::Display) -> Response {
+fn row_to_board_finding(r: &sqlx::postgres::PgRow) -> crate::xlsx_pack::BoardFinding {
+    crate::xlsx_pack::BoardFinding {
+        id: r.try_get::<i64, _>("id").unwrap_or(0),
+        finding_id: r.try_get::<String, _>("finding_id").unwrap_or_default(),
+        title: r.try_get::<String, _>("title").unwrap_or_default(),
+        severity: r.try_get::<String, _>("severity").unwrap_or_default(),
+        source: r.try_get::<String, _>("source").unwrap_or_default(),
+        status: r.try_get::<String, _>("status").unwrap_or_default(),
+        client_id: r.try_get::<String, _>("client_id").unwrap_or_default(),
+        client_name: r.try_get::<String, _>("client_name").unwrap_or_default(),
+        description: r.try_get::<String, _>("description").unwrap_or_default(),
+        raw_data: r.try_get::<String, _>("raw_data").unwrap_or_default(),
+        poc_exploit: r.try_get::<String, _>("poc_exploit").unwrap_or_default(),
+        generated_patch: r.try_get::<String, _>("generated_patch").unwrap_or_default(),
+        poc_sealed: r.try_get::<bool, _>("poc_sealed").unwrap_or(false),
+        discovered_at: r
+            .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
+            .map(|d| d.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+            .unwrap_or_default(),
+    }
+}
+
+const BOARD_FINDINGS_SQL: &str = "SELECT v.id, v.finding_id, v.title, v.severity, v.source, v.status, \
+     v.client_id::text AS client_id, COALESCE(c.name,'') AS client_name, \
+     COALESCE(v.description,'') AS description, \
+     COALESCE(v.raw_data, '{}'::jsonb)::text AS raw_data, \
+     COALESCE(v.poc_exploit,'') AS poc_exploit, \
+     COALESCE(v.generated_patch,'') AS generated_patch, \
+     COALESCE(v.poc_sealed, false) AS poc_sealed, v.discovered_at \
+     FROM vulnerabilities v LEFT JOIN clients c ON c.id = v.client_id";
+
+fn board_db_unavailable(e: &sqlx::Error) -> Response {
     (
         StatusCode::SERVICE_UNAVAILABLE,
-        Json(json!({"error": "query failed", "detail": e.to_string()})),
+        Json(json!({"error": "DB unavailable", "detail": scrub_internal_error(e)})),
     )
         .into_response()
+}
+
+async fn fetch_client_name(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    id: i64,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&mut **tx)
+        .await
+}
+
+async fn board_client_label(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    client_id: Option<i64>,
+) -> Result<String, Response> {
+    let Some(id) = client_id else {
+        return Ok("All clients".to_string());
+    };
+    match fetch_client_name(tx, id).await {
+        Ok(Some(n)) => Ok(n),
+        Ok(None) => Err((
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "client not found"})),
+        )
+            .into_response()),
+        Err(e) => Err(board_db_unavailable(&e)),
+    }
+}
+
+fn board_source_filter(raw: Option<&str>) -> Result<Option<Vec<String>>, Response> {
+    crate::xlsx_pack::parse_source_allowlist(raw).map_err(|msg| {
+        (StatusCode::BAD_REQUEST, Json(json!({"error": msg}))).into_response()
+    })
+}
+
+fn xlsx_attachment(bytes: Vec<u8>, filename: &str) -> Response {
+    let mut res = Response::new(Body::from(bytes));
+    res.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ),
+    );
+    res.headers_mut().insert(
+        CONTENT_DISPOSITION,
+        HeaderValue::try_from(format!("attachment; filename=\"{filename}\""))
+            .unwrap_or_else(|_| HeaderValue::from_static("attachment; filename=\"Weissman_board.xlsx\"")),
+    );
+    res.headers_mut().insert(
+        axum::http::HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
+    res
 }
 
 async fn api_client_export_xlsx(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<i64>,
+    Query(q): Query<BoardPackQuery>,
 ) -> Response {
+    let client_id = match crate::client_isolation::bind_requested_client(&auth, Some(id)) {
+        Ok(Some(cid)) => cid,
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
+        }
+        Err(r) => return r,
+    };
+    let sources = match board_source_filter(q.source.as_deref()) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
     };
-    let client_name: String = match sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
-        .bind(id)
-        .fetch_optional(&mut *tx)
-        .await
-        .ok()
-        .flatten()
-    {
-        Some(n) => n,
-        None => {
-            let _ = tx.rollback().await;
-            return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
-        }
+    let client_name = match board_client_label(&mut tx, Some(client_id)).await {
+        Ok(n) => n,
+        Err(r) => return r,
     };
-    let rows = match sqlx::query(
-        "SELECT id, title, severity, source, COALESCE(status,'') AS status, discovered_at, COALESCE(description,'') AS description FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
-    )
-    .bind(id)
-    .fetch_all(&mut *tx)
-    .await
-    {
-        Ok(r) => r,
+    let findings = match load_board_findings_for_scope(&mut tx, Some(client_id), sources.as_deref()).await {
+        Ok(f) => f,
         Err(e) => {
             let _ = tx.rollback().await;
-            return db_query_fail(e);
+            return board_db_unavailable(&e);
         }
     };
     let _ = tx.commit().await;
-    let tuples: Vec<(i64, String, String, String, String, String, String)> = rows
-        .into_iter()
-        .map(|r| {
-            let disc = r
-                .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
-                .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
-                .unwrap_or_default();
-            (
-                r.try_get::<i64, _>("id").unwrap_or(0),
-                r.try_get::<String, _>("title").unwrap_or_default(),
-                r.try_get::<String, _>("severity").unwrap_or_default(),
-                r.try_get::<String, _>("source").unwrap_or_default(),
-                r.try_get::<String, _>("status").unwrap_or_default(),
-                disc,
-                r.try_get::<String, _>("description").unwrap_or_default(),
-            )
-        })
-        .collect();
-    let bytes = match crate::xlsx_export::build_findings_workbook_from_tuples(
-        "Weissman",
-        &client_name,
-        &tuples,
-    ) {
-        Ok(b) => b,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "XLSX generation failed", "detail": e})),
-            )
-                .into_response();
+    match crate::xlsx_pack::build_board_xlsx("Weissman", &client_name, &findings) {
+        Ok(b) => {
+            let safe_name = client_name
+                .chars()
+                .map(|c| if c.is_alphanumeric() { c } else { '_' })
+                .collect::<String>();
+            xlsx_attachment(b, &format!("Weissman_Board_{safe_name}.xlsx"))
         }
-    };
-    let filename = format!("Weissman_findings_client_{}.xlsx", id);
-    let mut res = Response::new(Body::from(bytes));
-    res.headers_mut().insert(
-        CONTENT_TYPE,
-        HeaderValue::from_static(
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        ),
-    );
-    res.headers_mut().insert(
-        CONTENT_DISPOSITION,
-        HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename))
-            .unwrap_or(HeaderValue::from_static("attachment")),
-    );
-    res.headers_mut().insert(
-        axum::http::HeaderName::from_static("x-content-type-options"),
-        HeaderValue::from_static("nosniff"),
-    );
-    res
-}
-
-async fn api_client_adversary_mirror_xlsx(
-    State(state): State<Arc<AppState>>,
-    Extension(auth): Extension<AuthContext>,
-    Path(id): Path<i64>,
-) -> Response {
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
-    };
-    let client_name: String = match sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
-        .bind(id)
-        .fetch_optional(&mut *tx)
-        .await
-        .ok()
-        .flatten()
-    {
-        Some(n) => n,
-        None => {
-            let _ = tx.rollback().await;
-            return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
-        }
-    };
-    let rows = match sqlx::query(
-        "SELECT id, title, severity, source, COALESCE(status,'') AS status, discovered_at, COALESCE(description,'') AS description FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
-    )
-    .bind(id)
-    .fetch_all(&mut *tx)
-    .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            let _ = tx.rollback().await;
-            return db_query_fail(e);
-        }
-    };
-    let _ = tx.commit().await;
-    let tuples: Vec<(i64, String, String, String, String, String, String)> = rows
-        .into_iter()
-        .filter_map(|r| {
-            let source = r.try_get::<String, _>("source").unwrap_or_default();
-            if !is_adversary_source(&source) {
-                return None;
-            }
-            let disc = r
-                .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
-                .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
-                .unwrap_or_default();
-            Some((
-                r.try_get::<i64, _>("id").unwrap_or(0),
-                r.try_get::<String, _>("title").unwrap_or_default(),
-                r.try_get::<String, _>("severity").unwrap_or_default(),
-                source,
-                r.try_get::<String, _>("status").unwrap_or_default(),
-                disc,
-                r.try_get::<String, _>("description").unwrap_or_default(),
-            ))
-        })
-        .collect();
-    let bytes = match crate::xlsx_export::build_findings_workbook_from_tuples(
-        "Weissman",
-        &client_name,
-        &tuples,
-    ) {
-        Ok(b) => b,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "XLSX generation failed", "detail": e})),
-            )
-                .into_response();
-        }
-    };
-    let filename = format!("Weissman_AdversaryMirror_{}.xlsx", id);
-    let mut res = Response::new(Body::from(bytes));
-    res.headers_mut().insert(
-        CONTENT_TYPE,
-        HeaderValue::from_static(
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        ),
-    );
-    res.headers_mut().insert(
-        CONTENT_DISPOSITION,
-        HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename))
-            .unwrap_or(HeaderValue::from_static("attachment")),
-    );
-    res.headers_mut().insert(
-        axum::http::HeaderName::from_static("x-content-type-options"),
-        HeaderValue::from_static("nosniff"),
-    );
-    res
-}
-
-async fn api_client_adversary_mirror_pdf(
-    State(state): State<Arc<AppState>>,
-    Extension(auth): Extension<AuthContext>,
-    Path(id): Path<i64>,
-) -> Response {
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
-    };
-    let client_name: String = match sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
-        .bind(id)
-        .fetch_optional(&mut *tx)
-        .await
-        .ok()
-        .flatten()
-    {
-        Some(n) => n,
-        None => {
-            let _ = tx.rollback().await;
-            return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
-        }
-    };
-    let rows = match sqlx::query(
-        "SELECT title, severity, source, COALESCE(description,'') AS description FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
-    )
-    .bind(id)
-    .fetch_all(&mut *tx)
-    .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            let _ = tx.rollback().await;
-            return db_query_fail(e);
-        }
-    };
-    let _ = tx.commit().await;
-    let mut ransom = 0u32;
-    let mut ioc = 0u32;
-    let mut breach = 0u32;
-    let mut iab = 0u32;
-    let mut total = 0u32;
-    let mut headline = String::from("No adversary-intel signal findings yet. Info rows (zero-hit / unreachable feeds) are omitted from these counts.");
-    let mut signal_titles: Vec<String> = Vec::new();
-    for r in &rows {
-        let src = r.try_get::<String, _>("source").unwrap_or_default();
-        if !is_adversary_source(&src) {
-            continue;
-        }
-        let sev = r
-            .try_get::<String, _>("severity")
-            .unwrap_or_default()
-            .to_ascii_lowercase();
-        if sev == "info" || sev == "advisory" {
-            continue;
-        }
-        total += 1;
-        let title = r.try_get::<String, _>("title").unwrap_or_default();
-        let blob = format!("{title} {src}").to_ascii_lowercase();
-        if blob.contains("ransomware") || blob.contains("leak-site") || blob.contains("ransomlook") {
-            ransom += 1;
-        }
-        if blob.contains("threatfox") || blob.contains("urlhaus") || blob.contains("ioc") || blob.contains("urlscan") {
-            ioc += 1;
-        }
-        if blob.contains("hibp") || blob.contains("breach catalog") {
-            breach += 1;
-        }
-        if blob.contains("iab") || blob.contains("rdp") || blob.contains("vpn") || blob.contains("product token") {
-            iab += 1;
-        }
-        if headline.starts_with("No adversary") {
-            headline = title.clone();
-        }
-        if signal_titles.len() < 20 {
-            signal_titles.push(title);
-        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "XLSX generation failed", "detail": scrub_internal_error(&e)})),
+        )
+            .into_response(),
     }
-    let pdf_bytes = match crate::pdf_report::build_adversary_mirror_pdf(
-        "Weissman",
-        Some(&client_name),
-        ransom,
-        ioc,
-        breach,
-        iab,
-        total,
-        &headline,
-        &signal_titles,
-    ) {
-        Ok(b) => b,
+}
+
+#[derive(Deserialize, Default)]
+struct BoardPackQuery {
+    client_id: Option<i64>,
+    source: Option<String>,
+}
+
+async fn load_board_findings_for_scope(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    client_id: Option<i64>,
+    sources: Option<&[String]>,
+) -> Result<Vec<crate::xlsx_pack::BoardFinding>, sqlx::Error> {
+    let sql = format!(
+        "{BOARD_FINDINGS_SQL} \
+         WHERE ($1::bigint IS NULL OR v.client_id = $1) \
+           AND ($2::text[] IS NULL OR lower(v.source) = ANY($2)) \
+         ORDER BY v.discovered_at DESC LIMIT {}",
+        crate::xlsx_pack::BOARD_EXPORT_LIMIT
+    );
+    let rows = sqlx::query(&sql)
+        .bind(client_id)
+        .bind(sources)
+        .fetch_all(&mut **tx)
+        .await?;
+    Ok(rows.iter().map(row_to_board_finding).collect())
+}
+
+async fn api_findings_export_xlsx(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<BoardPackQuery>,
+) -> Response {
+    let client_id = match crate::client_isolation::bind_requested_client(&auth, q.client_id) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let sources = match board_source_filter(q.source.as_deref()) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
+    };
+    let client_label = match board_client_label(&mut tx, client_id).await {
+        Ok(n) => n,
+        Err(r) => return r,
+    };
+    let findings = match load_board_findings_for_scope(&mut tx, client_id, sources.as_deref()).await {
+        Ok(f) => f,
         Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "PDF generation failed", "detail": e})),
-            )
-                .into_response();
+            let _ = tx.rollback().await;
+            return board_db_unavailable(&e);
         }
     };
-    let safe_name = client_name
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '_' })
-        .collect::<String>();
-    let filename = format!("Weissman_AdversaryMirror_{}.pdf", safe_name);
-    let mut res = Response::new(Body::from(pdf_bytes));
-    res.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("application/pdf"));
-    res.headers_mut().insert(
-        CONTENT_DISPOSITION,
-        HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename))
-            .unwrap_or(HeaderValue::from_static("attachment")),
-    );
-    res.headers_mut().insert(
-        axum::http::HeaderName::from_static("x-content-type-options"),
-        HeaderValue::from_static("nosniff"),
-    );
-    res
+    let _ = tx.commit().await;
+    match crate::xlsx_pack::build_board_xlsx("Weissman", &client_label, &findings) {
+        Ok(b) => {
+            let now = chrono::Utc::now().format("%Y-%m-%d");
+            xlsx_attachment(b, &format!("Weissman_Board_{now}.xlsx"))
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "XLSX generation failed", "detail": scrub_internal_error(&e)})),
+        )
+            .into_response(),
+    }
+}
+
+async fn api_board_pack(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<BoardPackQuery>,
+) -> Response {
+    let client_id = match crate::client_isolation::bind_requested_client(&auth, q.client_id) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let sources = match board_source_filter(q.source.as_deref()) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
+    };
+    let client_label = match board_client_label(&mut tx, client_id).await {
+        Ok(n) => n,
+        Err(r) => return r,
+    };
+    let findings = match load_board_findings_for_scope(&mut tx, client_id, sources.as_deref()).await {
+        Ok(f) => f,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return board_db_unavailable(&e);
+        }
+    };
+    let _ = tx.commit().await;
+    Json(crate::xlsx_pack::board_pack_json(
+        "Weissman",
+        client_id,
+        &client_label,
+        &findings,
+        q.source.as_deref(),
+    ))
+    .into_response()
+}
+
+async fn api_export_excel_alias(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<BoardPackQuery>,
+) -> Response {
+    api_findings_export_xlsx(State(state), Extension(auth), Query(q)).await
 }
 
 async fn get_crypto_proof_for_client_tx(
@@ -523,137 +477,6 @@ async fn api_client_report_pdf(
         HeaderValue::from_static("nosniff"),
     );
     res
-}
-
-#[derive(Deserialize)]
-struct BoardPackQs {
-    lang: Option<String>,
-}
-
-fn board_pack_binary(bytes: Vec<u8>, content_type: &'static str, filename: &str) -> Response {
-    let mut res = Response::new(Body::from(bytes));
-    res.headers_mut()
-        .insert(CONTENT_TYPE, HeaderValue::from_static(content_type));
-    res.headers_mut().insert(
-        CONTENT_DISPOSITION,
-        HeaderValue::try_from(format!("attachment; filename=\"{filename}\""))
-            .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
-    );
-    res.headers_mut().insert(
-        axum::http::HeaderName::from_static("x-content-type-options"),
-        HeaderValue::from_static("nosniff"),
-    );
-    res
-}
-
-async fn api_client_board_pack(
-    State(state): State<Arc<AppState>>,
-    Extension(auth): Extension<AuthContext>,
-    Path(id): Path<i64>,
-    Query(qs): Query<BoardPackQs>,
-) -> Response {
-    let lang = crate::board_pack::PackLang::parse(qs.lang.as_deref());
-    match crate::board_pack::compose(&state.app_pool, auth.tenant_id, id, lang).await {
-        Ok(pack) => (StatusCode::OK, Json(crate::board_pack::preview_json(&pack))).into_response(),
-        Err(e) if e == "client not found" => (
-            StatusCode::NOT_FOUND,
-            Json(json!({"error": "client not found"})),
-        )
-            .into_response(),
-        Err(e) => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"error": "board pack unavailable", "detail": scrub_internal_error(&e)})),
-        )
-            .into_response(),
-    }
-}
-
-async fn api_client_board_pack_pdf(
-    State(state): State<Arc<AppState>>,
-    Extension(auth): Extension<AuthContext>,
-    Path(id): Path<i64>,
-    Query(qs): Query<BoardPackQs>,
-) -> Response {
-    let lang = crate::board_pack::PackLang::parse(qs.lang.as_deref());
-    let pack = match crate::board_pack::compose(&state.app_pool, auth.tenant_id, id, lang).await {
-        Ok(p) => p,
-        Err(e) if e == "client not found" => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({"error": "client not found"})),
-            )
-                .into_response();
-        }
-        Err(e) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(
-                    json!({"error": "board pack unavailable", "detail": scrub_internal_error(&e)}),
-                ),
-            )
-                .into_response();
-        }
-    };
-    match crate::board_pack::pdf::render_pdf(&pack) {
-        Ok(bytes) => {
-            let filename = format!(
-                "Weissman_TIBP_{}.pdf",
-                crate::board_pack::safe_filename(&pack.client_name)
-            );
-            board_pack_binary(bytes, "application/pdf", &filename)
-        }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "PDF generation failed", "detail": scrub_internal_error(&e)})),
-        )
-            .into_response(),
-    }
-}
-
-async fn api_client_board_pack_xlsx(
-    State(state): State<Arc<AppState>>,
-    Extension(auth): Extension<AuthContext>,
-    Path(id): Path<i64>,
-    Query(qs): Query<BoardPackQs>,
-) -> Response {
-    let lang = crate::board_pack::PackLang::parse(qs.lang.as_deref());
-    let pack = match crate::board_pack::compose(&state.app_pool, auth.tenant_id, id, lang).await {
-        Ok(p) => p,
-        Err(e) if e == "client not found" => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({"error": "client not found"})),
-            )
-                .into_response();
-        }
-        Err(e) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(
-                    json!({"error": "board pack unavailable", "detail": scrub_internal_error(&e)}),
-                ),
-            )
-                .into_response();
-        }
-    };
-    match crate::board_pack::xlsx::render_xlsx(&pack) {
-        Ok(bytes) => {
-            let filename = format!(
-                "Weissman_TIBP_{}.xlsx",
-                crate::board_pack::safe_filename(&pack.client_name)
-            );
-            board_pack_binary(
-                bytes,
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                &filename,
-            )
-        }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Excel generation failed", "detail": scrub_internal_error(&e)})),
-        )
-            .into_response(),
-    }
 }
 
 async fn api_client_report_crypto_proof(
@@ -1066,7 +889,7 @@ async fn api_findings_export_csv(
     // Bounded to avoid pinning a pool connection for the full statement_timeout and materialising
     // the entire tenant's findings (plus the ~2x CSV string) in memory — an unauthenticated-cost
     // DoS from any viewer. 50k mirrors the audit export cap.
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         "SELECT id, finding_id, title, severity, source, status, client_id::text, \
          COALESCE(description,'') AS description, discovered_at, \
          COALESCE(poc_sealed, false) AS poc_sealed \
@@ -1074,24 +897,34 @@ async fn api_findings_export_csv(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": "DB unavailable", "detail": scrub_internal_error(&e)})),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let mut csv = String::from("ID,Finding ID,Title,Severity,Source,Status,Client,Verified,Discovered,Description\n");
     for r in rows {
         let raw_id = r.try_get::<i64, _>("id").unwrap_or(0);
-        let finding_id = r.try_get::<String, _>("finding_id").unwrap_or_default().replace('"', "\"\"");
-        let title = r.try_get::<String, _>("title").unwrap_or_default().replace('"', "\"\"");
-        let sev = r.try_get::<String, _>("severity").unwrap_or_default().replace('"', "\"\"");
-        let src = r.try_get::<String, _>("source").unwrap_or_default().replace('"', "\"\"");
-        let st = r.try_get::<String, _>("status").unwrap_or_default().replace('"', "\"\"");
-        let client = r.try_get::<String, _>("client_id").unwrap_or_default().replace('"', "\"\"");
+        let finding_id = csv_cell(&r.try_get::<String, _>("finding_id").unwrap_or_default());
+        let title = csv_cell(&r.try_get::<String, _>("title").unwrap_or_default());
+        let sev = csv_cell(&r.try_get::<String, _>("severity").unwrap_or_default());
+        let src = csv_cell(&r.try_get::<String, _>("source").unwrap_or_default());
+        let st = csv_cell(&r.try_get::<String, _>("status").unwrap_or_default());
+        let client = csv_cell(&r.try_get::<String, _>("client_id").unwrap_or_default());
         let verified = if r.try_get::<bool, _>("poc_sealed").unwrap_or(false) { "VERIFIED" } else { "POTENTIAL" };
-        let disc = r
-            .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
-            .map(|d| d.format("%Y-%m-%d %H:%M:%S UTC").to_string())
-            .unwrap_or_default()
-            .replace('"', "\"\"");
-        let desc = r.try_get::<String, _>("description").unwrap_or_default().replace('"', "\"\"");
+        let disc = csv_cell(
+            &r.try_get::<chrono::DateTime<Utc>, _>("discovered_at")
+                .map(|d| d.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+                .unwrap_or_default(),
+        );
+        let desc = csv_cell(&r.try_get::<String, _>("description").unwrap_or_default());
         // All fields quoted to handle commas and special characters safely
         csv.push_str(&format!(
             "\"VLN-{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"\n",
@@ -1236,6 +1069,35 @@ async fn api_openapi_spec() -> Response {
                     }
                 }
             },
+            "/api/findings/export/xlsx": {
+                "get": {
+                    "summary": "Export a true OOXML board workbook (Executive, Findings, Remediation, AdversaryIntel, MITRE)",
+                    "tags": ["Findings", "Reports"],
+                    "parameters": [
+                        { "name": "client_id", "in": "query", "required": false, "schema": { "type": "integer" } },
+                        { "name": "source", "in": "query", "required": false, "schema": { "type": "string" }, "description": "Comma-separated engine source allowlist (alnum, underscore, hyphen)" }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "XLSX file download",
+                            "content": { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {} }
+                        }
+                    }
+                }
+            },
+            "/api/board-pack": {
+                "get": {
+                    "summary": "Live board-pack KPIs and grid preview from tenant findings (no fabricated rows)",
+                    "tags": ["Reports"],
+                    "parameters": [
+                        { "name": "client_id", "in": "query", "required": false, "schema": { "type": "integer" } },
+                        { "name": "source", "in": "query", "required": false, "schema": { "type": "string" }, "description": "Comma-separated engine source allowlist (alnum, underscore, hyphen)" }
+                    ],
+                    "responses": {
+                        "200": { "description": "Board pack JSON with totals, scope, and grid preview" }
+                    }
+                }
+            },
             "/api/findings/{id}/status": {
                 "patch": {
                     "summary": "Update finding workflow status",
@@ -1326,37 +1188,51 @@ async fn api_openapi_spec() -> Response {
             },
             "/api/clients/{id}/export/xlsx": {
                 "get": {
-                    "summary": "Export findings for a specific client as an OOXML workbook",
-                    "tags": ["Clients","Findings"],
+                    "summary": "Export a true OOXML board workbook for a client",
+                    "tags": ["Clients","Reports"],
                     "parameters": [
-                        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+                        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } },
+                        { "name": "source", "in": "query", "required": false, "schema": { "type": "string" }, "description": "Comma-separated engine source allowlist (alnum, underscore, hyphen)" }
                     ],
                     "responses": {
-                        "200": { "description": "XLSX file download", "content": { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {} } }
+                        "200": {
+                            "description": "XLSX file download",
+                            "content": { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {} }
+                        }
                     }
                 }
             },
-            "/api/clients/{id}/adversary-mirror/xlsx": {
+            "/api/export/xlsx": {
                 "get": {
-                    "summary": "Adversary Gap Mirror Excel pack for a client (leak-intel sources only)",
-                    "tags": ["Clients","Reports"],
-                    "parameters": [
-                        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
-                    ],
+                    "summary": "Alias for GET /api/findings/export/xlsx",
+                    "tags": ["Reports"],
                     "responses": {
-                        "200": { "description": "XLSX file download", "content": { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {} } }
+                        "200": {
+                            "description": "XLSX file download",
+                            "content": { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {} }
+                        }
                     }
                 }
             },
-            "/api/clients/{id}/adversary-mirror/pdf": {
+            "/api/export/excel": {
                 "get": {
-                    "summary": "Adversary Gap Mirror board PDF (signal findings only)",
-                    "tags": ["Clients","Reports"],
-                    "parameters": [
-                        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
-                    ],
+                    "summary": "Alias for GET /api/findings/export/xlsx (true OOXML, not CSV)",
+                    "tags": ["Reports"],
                     "responses": {
-                        "200": { "description": "PDF file", "content": { "application/pdf": {} } }
+                        "200": {
+                            "description": "XLSX file download",
+                            "content": { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {} }
+                        }
+                    }
+                },
+                "post": {
+                    "summary": "Alias for GET /api/findings/export/xlsx (legacy Excel export)",
+                    "tags": ["Reports"],
+                    "responses": {
+                        "200": {
+                            "description": "XLSX file download",
+                            "content": { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {} }
+                        }
                     }
                 }
             },

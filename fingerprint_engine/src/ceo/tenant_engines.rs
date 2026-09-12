@@ -132,6 +132,7 @@ fn engine_catalog_label(id: &str) -> &'static str {
         "asm" => "ASM",
         "supply_chain" => "Supply chain",
         "leak_hunter" => "Leak hunter",
+        "adversary_exposure_delta" => "Adversary exposure delta",
         "bola_idor" => "BOLA / IDOR",
         "llm_path_fuzz" => "LLM path fuzz",
         "semantic_ai_fuzz" => "Semantic AI fuzz",
@@ -143,7 +144,7 @@ fn engine_catalog_label(id: &str) -> &'static str {
 
 fn engine_catalog_category(id: &str) -> &'static str {
     match id {
-        "osint" | "leak_hunter" => "network",
+        "osint" | "leak_hunter" | "adversary_exposure_delta" => "network",
         "asm" | "microsecond_timing" => "web",
         "supply_chain" => "supply-chain",
         "bola_idor" => "api",

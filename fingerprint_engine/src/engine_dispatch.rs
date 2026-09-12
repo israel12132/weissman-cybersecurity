@@ -1004,6 +1004,9 @@ async fn dispatch_engine_match(
         // ── Advanced Recon engines (new live probes) ───────────────────────────
         "satellite_recon" => crate::advanced_recon_engines::run_satellite_recon_result(target).await,
         "darkweb_intel" => crate::advanced_recon_engines::run_darkweb_intel_result(target).await,
+        "adversary_exposure_delta" => {
+            crate::adversary_exposure_delta::run_adversary_exposure_delta_result(target, ctx).await
+        },
         "financial_osint" => crate::advanced_recon_engines::run_financial_osint_result(target).await,
         "blockchain_trace" => crate::advanced_recon_engines::run_blockchain_trace_result(target).await,
         "metadata_harvest" => crate::advanced_recon_engines::run_metadata_harvest_result(target).await,

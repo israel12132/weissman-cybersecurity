@@ -12,6 +12,7 @@ const DISPATCH_SOURCES: &[&str] = &[
     include_str!("../src/engine_dispatch_agent.rs"),
     include_str!("../src/critical_infra/engines.rs"),
     include_str!("../src/agent_remote_surface.rs"),
+    include_str!("../../backend/weissman-core/src/models/engine_agent.rs"),
 ];
 
 /// Drift guard: every id in `PRODUCTION_ENGINE_IDS` must appear as a string literal in one of
@@ -47,8 +48,7 @@ fn synthesis_and_sovereign_engines_wired_in_dispatch() {
         "chronos",
         "liquid_matrix",
         "cognitive_starvation",
-        "ot_passive_active_safety",
-        "ot_crown_jewel_path",
+        "adversary_exposure_delta",
     ];
     for engine_id in required {
         assert!(
