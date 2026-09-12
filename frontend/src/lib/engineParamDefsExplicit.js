@@ -35,7 +35,6 @@ export const EXPLICIT_PARAM_DEFS = {
                    { key:'subdomain_wordlist',label:'Custom Subdomain Wordlist',   type:'textarea', placeholder:'api, admin, staging, vpn', defaultVal:'' }],
   recon:           [{ key:'depth',        label:'Recon Depth',                     type:'select',   options:['1','2','3','4','5'], defaultVal:'3' }],
   leak_hunter:     [{ key:'github_token', label:'GitHub Token (optional)',         type:'password', placeholder:'ghp_...', defaultVal:'' }],
-  adversary_exposure_delta: [{ key:'max_findings', label:'Max Findings', type:'number', placeholder:'50', defaultVal:'50', min:1, max:50 }],
   discovery_engine:[{ key:'depth',        label:'Spider Depth',                    type:'select',   options:['1','2','3','4','5'], defaultVal:'3' },
                    { key:'ports',        label:'Port Hints',                       type:'text',     placeholder:'80,443,8080', defaultVal:'80,443' }],
   bola_idor:       [{ key:'auth_header',  label:'Auth Header',                     type:'text',     placeholder:'Bearer eyJ...', defaultVal:'' },
@@ -805,9 +804,20 @@ export const EXPLICIT_PARAM_DEFS = {
   first_seen_osv_nvd: [
     { key: 'intensity', label: 'Scan Intensity', type: 'select', options: ['light', 'normal', 'aggressive'], defaultVal: 'normal' },
   ],
-  adversary_underground_delta: [
-    { key: 'chain_leak_hunter', label: 'Enqueue leak_hunter on new high/critical hits', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
-    { key: 'intensity', label: 'Scan Intensity', type: 'select', options: ['light', 'normal', 'aggressive'], defaultVal: 'normal' },
+  ot_passive_active_safety: [
+    { key: 'probe_mode', label: 'OT Probe Mode', type: 'select', options: ['passive', 'safe_read', 'active_validation'], defaultVal: 'safe_read' },
+    { key: 'ot_job_hmac', label: 'Active-validation HMAC (hex of job_id)', type: 'password', placeholder: 'required for active_validation', defaultVal: '' },
+    { key: 'protocol_strict', label: 'OT Protocol Strict', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'timeout_ms', label: 'OT I/O Timeout (ms)', type: 'number', defaultVal: '900', min: 200, max: 8000 },
+    { key: 'ot_watchdog_ms', label: 'OT Watchdog (ms)', type: 'number', defaultVal: '2000', min: 50, max: 10000 },
+    { key: 'max_read_quantity', label: 'Max Read Quantity', type: 'number', defaultVal: '16', min: 1, max: 125 },
+    { key: 'modbus_unit_id', label: 'Modbus Unit ID', type: 'number', defaultVal: '1', min: 1, max: 247 },
+  ],
+  ot_crown_jewel_path: [
+    { key: 'probe_mode', label: 'OT Probe Mode', type: 'select', options: ['passive', 'safe_read', 'active_validation'], defaultVal: 'safe_read' },
+    { key: 'ot_job_hmac', label: 'Active-validation HMAC (hex of job_id)', type: 'password', placeholder: 'required for active_validation', defaultVal: '' },
+    { key: 'protocol_strict', label: 'OT Protocol Strict', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'timeout_ms', label: 'OT I/O Timeout (ms)', type: 'number', defaultVal: '900', min: 200, max: 8000 },
   ],
 }
 

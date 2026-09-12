@@ -892,38 +892,38 @@ async fn ot_ics_safety_payload(
     pool: &sqlx::PgPool,
     tenant_id: i64,
     client_id: Option<i64>,
-) -> Value {
-    let mut events: Vec<Value> = Vec::new();
-    if let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await {
-        let rows = if let Some(cid) = client_id {
-            sqlx::query(
-                r#"SELECT id, client_id, host, protocol, event_kind, severity, z_score, detail,
-                          binary_signature, soar_action, created_at
-                   FROM ot_ics_safety_events
-                   WHERE tenant_id = $1 AND client_id = $2
-                   ORDER BY created_at DESC LIMIT 100"#,
-            )
-            .bind(tenant_id)
-            .bind(cid)
-            .fetch_all(&mut *tx)
-            .await
-            .unwrap_or_default()
-        } else {
-            sqlx::query(
-                r#"SELECT id, client_id, host, protocol, event_kind, severity, z_score, detail,
-                          binary_signature, soar_action, created_at
-                   FROM ot_ics_safety_events
-                   WHERE tenant_id = $1
-                   ORDER BY created_at DESC LIMIT 100"#,
-            )
-            .bind(tenant_id)
-            .fetch_all(&mut *tx)
-            .await
-            .unwrap_or_default()
-        };
-        let _ = tx.commit().await;
-        events = rows.iter().map(ot_ics_safety_event_from_row).collect();
-    }
+) -> Result<Value, String> {
+    let mut tx = db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("tenant transaction failed: {e}"))?;
+    let rows = if let Some(cid) = client_id {
+        sqlx::query(
+            r#"SELECT id, client_id, host, protocol, event_kind, severity, z_score, detail,
+                      binary_signature, soar_action, created_at
+               FROM ot_ics_safety_events
+               WHERE tenant_id = $1 AND client_id = $2
+               ORDER BY created_at DESC LIMIT 100"#,
+        )
+        .bind(tenant_id)
+        .bind(cid)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| format!("safety events query failed: {e}"))?
+    } else {
+        sqlx::query(
+            r#"SELECT id, client_id, host, protocol, event_kind, severity, z_score, detail,
+                      binary_signature, soar_action, created_at
+               FROM ot_ics_safety_events
+               WHERE tenant_id = $1
+               ORDER BY created_at DESC LIMIT 100"#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| format!("safety events query failed: {e}"))?
+    };
+    let _ = tx.commit().await;
+    let events: Vec<Value> = rows.iter().map(ot_ics_safety_event_from_row).collect();
     let fair = if let Some(cid) = client_id {
         crate::financial_risk::latest_snapshot(pool, tenant_id, cid)
             .await
@@ -933,7 +933,7 @@ async fn ot_ics_safety_payload(
     } else {
         None
     };
-    crate::ot_ics_hardening::safety_api_document(events, fair)
+    Ok(crate::ot_ics_hardening::safety_api_document(events, fair))
 }
 
 /// GET /api/ot-ics/safety — compiled ROE interlock + live safety events.
@@ -942,12 +942,30 @@ async fn api_ot_ics_safety(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
-    let client_id = q.get("client_id").and_then(|s| s.parse::<i64>().ok());
-    (
-        StatusCode::OK,
-        Json(ot_ics_safety_payload(&state.app_pool, auth.tenant_id, client_id).await),
-    )
-        .into_response()
+    let client_id = match crate::ot_ics_hardening::parse_ot_ics_client_id_query(
+        q.get("client_id").map(String::as_str),
+    ) {
+        Ok(v) => v,
+        Err(detail) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "live": false,
+                    "error": "invalid_client_id",
+                    "detail": detail,
+                })),
+            )
+                .into_response();
+        }
+    };
+    match ot_ics_safety_payload(&state.app_pool, auth.tenant_id, client_id).await {
+        Ok(doc) => (StatusCode::OK, Json(doc)).into_response(),
+        Err(detail) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::ot_ics_hardening::safety_api_unavailable(&detail)),
+        )
+            .into_response(),
+    }
 }
 
 /// GET /api/clients/:id/ot-ics/safety — client-scoped events + FAIR snapshot.
@@ -956,11 +974,25 @@ async fn api_client_ot_ics_safety(
     Extension(auth): Extension<AuthContext>,
     Path(client_id): Path<i64>,
 ) -> Response {
-    (
-        StatusCode::OK,
-        Json(ot_ics_safety_payload(&state.app_pool, auth.tenant_id, Some(client_id)).await),
-    )
-        .into_response()
+    if client_id <= 0 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "live": false,
+                "error": "invalid_client_id",
+                "detail": "client_id must be a positive integer",
+            })),
+        )
+            .into_response();
+    }
+    match ot_ics_safety_payload(&state.app_pool, auth.tenant_id, Some(client_id)).await {
+        Ok(doc) => (StatusCode::OK, Json(doc)).into_response(),
+        Err(detail) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::ot_ics_hardening::safety_api_unavailable(&detail)),
+        )
+            .into_response(),
+    }
 }
 
 /// GET /api/mobile-security/apps — mobile-related findings grouped as apps.

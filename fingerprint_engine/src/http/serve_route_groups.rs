@@ -16,14 +16,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/findings", get(api_findings))
         .route("/api/findings/clusters", get(api_findings_clusters))
         .route("/api/findings/export/csv", get(api_findings_export_csv))
-        .route("/api/findings/export/xlsx", get(api_findings_export_xlsx))
         .route("/api/export/findings", get(api_findings_export_csv))
-        .route("/api/export/xlsx", get(api_findings_export_xlsx))
-        .route(
-            "/api/export/excel",
-            get(api_export_excel_alias).post(api_export_excel_alias),
-        )
-        .route("/api/board-pack", get(api_board_pack))
         .route(
             "/api/findings/:id/status",
             patch(api_findings_update_status),
@@ -390,25 +383,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/clients/:id/findings", get(api_client_findings_all))
         .route("/api/clients/:id/export/csv", get(api_client_export_csv))
-        .route("/api/clients/:id/export/xlsx", get(api_client_export_xlsx))
         .route("/api/clients/:id/report/pdf", get(api_client_report_pdf))
-        .route("/api/clients/:id/board-pack", get(api_client_board_pack))
-        .route(
-            "/api/clients/:id/board-pack/pdf",
-            get(api_client_board_pack_pdf),
-        )
-        .route(
-            "/api/clients/:id/board-pack/xlsx",
-            get(api_client_board_pack_xlsx),
-        )
-        .route(
-            "/api/clients/:id/adversary-mirror/pdf",
-            get(api_client_adversary_mirror_pdf),
-        )
-        .route(
-            "/api/clients/:id/adversary-mirror/xlsx",
-            get(api_client_adversary_mirror_xlsx),
-        )
         .route(
             "/api/clients/:id/report/crypto-proof",
             get(api_client_report_crypto_proof),
@@ -420,14 +395,6 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route(
             "/api/clients/:id/surface-diff",
             get(api_client_surface_diff),
-        )
-        .route(
-            "/api/clients/:id/underground-exposure",
-            get(api_client_underground_exposure),
-        )
-        .route(
-            "/api/clients/:id/underground-exposure.xls",
-            get(api_client_underground_exposure_xls),
         )
         .route("/api/first-mover/nerve", get(api_first_mover_nerve))
         .route(
@@ -536,7 +503,6 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/poe-scan/run", post(api_poe_scan_run))
         .route("/api/jobs", get(api_async_jobs_list))
         .route("/api/jobs/:job_id", get(api_async_job_status))
-        .route("/api/scan-finding-spine", get(api_scan_finding_spine))
         .route("/api/poe-scan/status/:job_id", get(api_poe_scan_status))
         .route("/api/poe-scan/stream/:job_id", get(api_poe_scan_stream))
         .route(
@@ -684,10 +650,6 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/integrations/:id", delete(api_integrations_delete))
         .route("/api/ot-ics/devices", get(api_ot_ics_devices))
         .route("/api/ot-ics/safety", get(api_ot_ics_safety))
-        .route(
-            "/api/clients/:id/ot-ics/safety",
-            get(api_client_ot_ics_safety),
-        )
         .route("/api/mobile-security/apps", get(api_mobile_security_apps))
         .route("/api/soc/incidents", get(api_soc_incidents))
         .route(
@@ -798,68 +760,8 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             get(api_client_ot_ics_fingerprints),
         )
         .route(
-            "/api/elite-hardening/status",
-            get(api_elite_hardening_status),
-        )
-        .route("/api/cem-dago/status", get(api_cem_dago_status))
-        .route("/api/cem-dago/manifests", get(api_cem_dago_manifests))
-        .route("/api/cem-dago/waves", get(api_cem_dago_waves))
-        .route("/api/cem-dago/blackboard", get(api_cem_dago_blackboard))
-        .route(
-            "/api/sovereign/operator/chat",
-            post(api_sovereign_operator_chat),
-        )
-        .route(
-            "/api/sovereign/operator/session",
-            get(api_sovereign_operator_session_get),
-        )
-        .route(
-            "/api/sovereign/operator/knowledge",
-            get(api_sovereign_operator_knowledge_get),
-        )
-        .route(
-            "/api/sovereign/operator/logs",
-            get(api_sovereign_operator_logs_get),
-        )
-        .route(
-            "/api/sovereign/operator/windows",
-            get(api_sovereign_operator_windows_get),
-        )
-        .route(
-            "/api/sovereign/operator/tools",
-            post(api_sovereign_operator_tools_post),
-        )
-        .route(
-            "/api/sovereign/operator/tune",
-            post(api_sovereign_operator_tune_post),
-        )
-        .route(
-            "/api/sovereign/operator/race",
-            post(api_sovereign_operator_race_post),
-        )
-        .route(
-            "/api/sovereign/operator/stream-ticket",
-            post(api_sovereign_operator_stream_ticket),
-        )
-        .route(
-            "/api/sovereign/operator/stream",
-            get(api_sovereign_operator_stream),
-        )
-        .route(
-            "/api/sovereign/operator/memory",
-            get(api_sovereign_operator_memory_get),
-        )
-        .route(
-            "/api/sovereign/operator/forge",
-            get(api_sovereign_operator_forge_get),
-        )
-        .route(
-            "/api/sovereign/operator/scripts",
-            get(api_sovereign_operator_scripts_get),
-        )
-        .route(
-            "/api/competitive-delta",
-            get(crate::competitive_delta::api_competitive_delta),
+            "/api/clients/:id/ot-ics/safety",
+            get(api_client_ot_ics_safety),
         )
         .route(
             "/api/ceo/council/sessions/:job_id/stream",

@@ -119,6 +119,21 @@ pub async fn run_ot_passive_active_safety_result(
     policy.tenant_id = ctx.tenant_id;
     policy.client_id = ctx.client_id;
 
+    if OtSafetyPolicy::requested_probe_mode(&params) == ProbeMode::ActiveValidation
+        && policy.hmac_required_for_active
+        && !policy.hmac_ok
+        && !OtSafetyPolicy::active_validation_env_override()
+    {
+        persist_roe_denied(ctx, &host, "active_validation_hmac_required").await;
+        return EngineResult::error(
+            "RoE VIOLATION: active_validation denied — HMAC (ot_job_hmac) required. Probe blocked (not a successful SafeRead).",
+        );
+    }
+    if let Err(reason) = industrial_ot_authorized(ctx).await {
+        persist_roe_denied(ctx, &host, &reason).await;
+        return EngineResult::error(reason);
+    }
+
     let mut findings: Vec<Value> = Vec::new();
     findings.push(finding(
         ENGINE_SAFETY,
@@ -444,6 +459,126 @@ async fn persist_safety_events(
     let _ = tx.commit().await;
 }
 
+async fn persist_roe_denied(ctx: &EngineRunContext, host: &str, reason: &str) {
+    let Some(pool) = ctx.app_pool.as_ref() else {
+        return;
+    };
+    let Some(tenant) = ctx.tenant_id else {
+        return;
+    };
+    let Ok(mut tx) = crate::db::begin_tenant_tx(pool.as_ref(), tenant).await else {
+        return;
+    };
+    let _ = sqlx::query(
+        r#"INSERT INTO ot_ics_safety_events
+           (tenant_id, client_id, host, protocol, event_kind, severity, detail, binary_signature)
+           VALUES ($1, $2, $3, 'ot_kernel', 'roe_denied', 'high', $4, '')"#,
+    )
+    .bind(tenant)
+    .bind(ctx.client_id)
+    .bind(host)
+    .bind(json!({ "reason": reason, "writes": false }))
+    .execute(&mut *tx)
+    .await;
+    let _ = tx.commit().await;
+}
+
+/// Tenant jobs require `industrial_ot_enabled`. CLI (no tenant/client) may still
+/// run SafeRead. Database failures fail closed — never an empty successful scan.
+async fn industrial_ot_authorized(ctx: &EngineRunContext) -> Result<(), String> {
+    let (Some(tenant), Some(client)) = (ctx.tenant_id, ctx.client_id) else {
+        return Ok(());
+    };
+    if tenant <= 0 || client <= 0 {
+        return Err("RoE VIOLATION: tenant_id and client_id required for OT/ICS scanning".into());
+    }
+    if let Some(flag) = ctx
+        .job_params
+        .get("industrial_ot_enabled")
+        .and_then(policy::json_truthy)
+    {
+        if !flag {
+            return Err(
+                "RoE VIOLATION: industrial_ot_enabled is false — OT/ICS probing not authorized for client"
+                    .into(),
+            );
+        }
+        if ctx.app_pool.is_none() {
+            return Ok(());
+        }
+    }
+    let Some(pool) = ctx.app_pool.as_ref() else {
+        return Err(
+            "RoE VIOLATION: industrial_ot_enabled is false — OT/ICS probing not authorized for client"
+                .into(),
+        );
+    };
+    match load_industrial_ot_enabled(pool.as_ref(), tenant, client).await {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(
+            "RoE VIOLATION: industrial_ot_enabled is false — OT/ICS probing not authorized for client"
+                .into(),
+        ),
+        Err(e) => Err(format!(
+            "RoE VIOLATION: OT authorization unavailable ({e}) — probe blocked"
+        )),
+    }
+}
+
+async fn load_industrial_ot_enabled(
+    pool: &sqlx::PgPool,
+    tenant_id: i64,
+    client_id: i64,
+) -> Result<bool, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let row = sqlx::query(
+        "SELECT COALESCE(NULLIF(trim(client_configs), ''), '{}') AS client_configs \
+         FROM clients WHERE id = $1 AND tenant_id = $2",
+    )
+    .bind(client_id)
+    .bind(tenant_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let _ = tx.commit().await;
+    let Some(r) = row else {
+        return Ok(false);
+    };
+    use sqlx::Row;
+    let raw: String = r
+        .try_get("client_configs")
+        .unwrap_or_else(|_| "{}".to_string());
+    let v: Value = serde_json::from_str(&raw).unwrap_or_else(|_| json!({}));
+    Ok(v.get("industrial_ot_enabled")
+        .and_then(Value::as_bool)
+        .unwrap_or(false))
+}
+
+/// Parse `?client_id=` for GET /api/ot-ics/safety.
+/// Empty / absent → `Ok(None)`. Present but invalid → `Err` (HTTP 400).
+pub fn parse_ot_ics_client_id_query(raw: Option<&str>) -> Result<Option<i64>, &'static str> {
+    let Some(s) = raw.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Ok(None);
+    };
+    match s.parse::<i64>() {
+        Ok(id) if id > 0 => Ok(Some(id)),
+        _ => Err("client_id must be a positive integer"),
+    }
+}
+
+/// Compiled policy with `live: false` — never an ARMED empty event list on DB outage.
+pub fn safety_api_unavailable(detail: &str) -> Value {
+    let mut doc = safety_api_document(vec![], None);
+    if let Some(obj) = doc.as_object_mut() {
+        obj.insert("live".into(), json!(false));
+        obj.insert("armed".into(), json!(false));
+        obj.insert("error".into(), json!("database_unavailable"));
+        obj.insert("detail".into(), json!(detail));
+        obj.insert("events".into(), Value::Null);
+        obj.insert("fair".into(), Value::Null);
+    }
+    doc
+}
+
 pub fn safety_api_document(events: Vec<Value>, fair: Option<Value>) -> Value {
     json!({
         "policy": {
@@ -540,5 +675,69 @@ mod tests {
     async fn empty_target_errors() {
         let r = run_ot_passive_active_safety_result("", &EngineRunContext::default()).await;
         assert!(!r.success);
+    }
+
+    #[tokio::test]
+    async fn industrial_ot_disabled_blocks_not_empty_ok() {
+        let ctx = EngineRunContext {
+            tenant_id: Some(1),
+            client_id: Some(2),
+            job_params: json!({"industrial_ot_enabled": false}),
+            ..EngineRunContext::default()
+        };
+        let r = run_ot_passive_active_safety_result("10.0.0.8", &ctx).await;
+        assert!(
+            !r.success,
+            "RoE denial must not look like a successful scan"
+        );
+        assert!(r.findings.is_empty());
+        assert!(r.message.contains("RoE VIOLATION"));
+        assert!(r.message.contains("industrial_ot_enabled"));
+    }
+
+    #[tokio::test]
+    async fn active_validation_without_hmac_is_blocked() {
+        let ctx = EngineRunContext {
+            job_params: json!({"probe_mode": "active_validation"}),
+            ..EngineRunContext::default()
+        };
+        let r = run_ot_passive_active_safety_result("10.0.0.8", &ctx).await;
+        assert!(!r.success);
+        assert!(r.findings.is_empty());
+        assert!(r.message.contains("HMAC"));
+    }
+
+    #[tokio::test]
+    async fn crown_jewel_inherits_roe_block() {
+        let ctx = EngineRunContext {
+            tenant_id: Some(9),
+            client_id: Some(9),
+            job_params: json!({"industrial_ot_enabled": false}),
+            ..EngineRunContext::default()
+        };
+        let r = run_ot_crown_jewel_path_result("10.0.0.8", &ctx).await;
+        assert!(!r.success);
+        assert!(r.findings.is_empty());
+    }
+
+    #[test]
+    fn invalid_client_id_query_is_rejected() {
+        assert_eq!(parse_ot_ics_client_id_query(None).unwrap(), None);
+        assert_eq!(parse_ot_ics_client_id_query(Some("")).unwrap(), None);
+        assert_eq!(parse_ot_ics_client_id_query(Some("  ")).unwrap(), None);
+        assert_eq!(parse_ot_ics_client_id_query(Some("42")).unwrap(), Some(42));
+        assert!(parse_ot_ics_client_id_query(Some("not-an-id")).is_err());
+        assert!(parse_ot_ics_client_id_query(Some("0")).is_err());
+        assert!(parse_ot_ics_client_id_query(Some("-3")).is_err());
+    }
+
+    #[test]
+    fn unavailable_document_is_not_live_or_armed() {
+        let doc = safety_api_unavailable("db down");
+        assert_eq!(doc["live"], json!(false));
+        assert_eq!(doc["armed"], json!(false));
+        assert_eq!(doc["events"], json!(null));
+        assert_eq!(doc["error"], json!("database_unavailable"));
+        assert_eq!(doc["policy"]["write_blocked"], json!(true));
     }
 }
