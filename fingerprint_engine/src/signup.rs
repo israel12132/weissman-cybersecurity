@@ -546,7 +546,8 @@ fn workspace_display_name(workspace: &str) -> String {
 
 /// Send a transactional email via SMTP. Returns Ok(()) when SMTP is not configured
 /// (so signup still succeeds on local-dev without an SMTP) but logs at debug level.
-async fn send_signup_email(to: &str, subject: &str, body: &str) -> Result<(), String> {
+/// `pub(crate)` so the public contact lead path can notify sales without duplicating SMTP.
+pub(crate) async fn send_signup_email(to: &str, subject: &str, body: &str) -> Result<(), String> {
     let enabled = matches!(
         std::env::var("WEISSMAN_SMTP_ENABLED").as_deref(),
         Ok("true") | Ok("1") | Ok("yes")

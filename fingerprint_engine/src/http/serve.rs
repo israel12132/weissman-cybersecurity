@@ -2061,6 +2061,15 @@ mod public_route_guard_tests {
             &Method::GET,
             "/api/sovereign/operator/session"
         ));
+        assert!(!is_public_route(&Method::GET, "/api/soar/executions"));
+        assert!(!is_public_route(
+            &Method::POST,
+            "/api/soar/executions/00000000-0000-0000-0000-000000000001/hitl/approve"
+        ));
+        assert!(!is_public_route(
+            &Method::POST,
+            "/api/soar/executions/00000000-0000-0000-0000-000000000001/hitl/deny"
+        ));
         // Correct public path but wrong method is not public.
         assert!(!is_public_route(&Method::GET, "/api/logout"));
         assert!(!is_public_route(&Method::POST, "/api/health"));

@@ -131,7 +131,7 @@ export default function CompetitiveWinRoom() {
             {data?.thesis}
           </p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <ExecutiveWidget label={t(`${NS}.kpi_engines`)} value={data?.engines_total ?? 0} />
+            <ExecutiveWidget label={t(`${NS}.kpi_engines`)} value={data?.engines_total ?? '—'} />
             <ExecutiveWidget label={t(`${NS}.kpi_fabric`)} value={fabric.length} />
             <ExecutiveWidget label={t(`${NS}.kpi_lanes`)} value={`${data?.moat?.lanes_covered ?? 0}/${data?.moat?.lanes_total ?? 0}`} />
             <ExecutiveWidget
