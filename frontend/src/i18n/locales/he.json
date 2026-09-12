@@ -5872,7 +5872,16 @@
       "eligible": "מוכח",
       "ineligible": "אין הוכחה",
       "blind_spot": "נקודה עיוורת ב-XSIAM",
-      "xdr_had": "XDR כבר ראה"
+      "xdr_had": "XDR כבר ראה",
+      "run_coverage": "הרצת מנוע כיסוי",
+      "scan_queued": "משימת כיסוי {{id}} בתור",
+      "scan_failed": "שיגור מנוע הכיסוי נכשל",
+      "need_client": "בחר לקוח לפני שיגור מנוע הכיסוי",
+      "filter_all": "הכל",
+      "filter_proven": "מוכחים",
+      "filter_blind": "נקודות עיוורות",
+      "filter_pushed": "נשלחו",
+      "open_finding": "פתח בממצאים"
     },
     "itdrCommandCenter": {
       "title": "ITDR",

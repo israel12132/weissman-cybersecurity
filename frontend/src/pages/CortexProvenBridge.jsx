@@ -14,6 +14,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import Button from '../components/ui/Button'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../utils/apiFetch'
+import { launchEngineScan } from '../lib/launchEngineScan'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 import { SEV_COLOR } from '../lib/severity'
 import { useClient } from '../context/ClientContext'
@@ -28,9 +29,12 @@ export default function CortexProvenBridge() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [filter, setFilter] = useState('all')
   const [flushing, setFlushing] = useState(false)
   const [comparing, setComparing] = useState(false)
+  const [scanning, setScanning] = useState(false)
   const [flushMsg, setFlushMsg] = useState('')
+  const [scanMsg, setScanMsg] = useState('')
 
   const qs = useMemo(() => {
     const p = new URLSearchParams()
@@ -39,8 +43,8 @@ export default function CortexProvenBridge() {
     return p.toString()
   }, [selectedClientId])
 
-  const load = useCallback(async (compareXdr = false) => {
-    setLoading(true)
+  const load = useCallback(async (compareXdr = false, { quiet } = {}) => {
+    if (!quiet) setLoading(true)
     setError('')
     try {
       const extra = compareXdr ? '&compare_xdr=true' : ''
@@ -49,7 +53,7 @@ export default function CortexProvenBridge() {
       setData(d)
     } catch (e) {
       setError(e.message || t(`${NS}.load_failed`))
-      setData(null)
+      if (!quiet) setData(null)
     } finally {
       setLoading(false)
     }
@@ -62,13 +66,16 @@ export default function CortexProvenBridge() {
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
-    if (!q) return items
-    return items.filter((f) =>
-      `${f.title} ${f.source} ${f.engine_id} ${f.target} ${f.gate} ${f.cve || ''} ${f.proof_kind || ''}`
+    return items.filter((f) => {
+      if (filter === 'proven' && !f.eligible) return false
+      if (filter === 'blind' && !(f.xdr_had_matching_alert === false && f.eligible)) return false
+      if (filter === 'pushed' && f.cortex_status !== 'pushed') return false
+      if (!q) return true
+      return `${f.title} ${f.source} ${f.engine_id} ${f.target} ${f.gate} ${f.cve || ''} ${f.proof_kind || ''}`
         .toLowerCase()
-        .includes(q),
-    )
-  }, [items, searchQuery])
+        .includes(q)
+    })
+  }, [items, searchQuery, filter])
 
   const exportCsv = useCallback(() => {
     downloadCsv(
@@ -100,7 +107,7 @@ export default function CortexProvenBridge() {
       })
       if (d?.ok === false) throw new Error(d.detail || t(`${NS}.flush_failed`))
       setFlushMsg(t(`${NS}.flush_ok`, { n: d.pushed ?? 0 }))
-      await load(false)
+      await load(false, { quiet: true })
     } catch (e) {
       setFlushMsg(e.message || t(`${NS}.flush_failed`))
     } finally {
@@ -111,11 +118,37 @@ export default function CortexProvenBridge() {
   const compareLive = async () => {
     setComparing(true)
     try {
-      await load(true)
+      await load(true, { quiet: true })
     } finally {
       setComparing(false)
     }
   }
+
+  const runCoverage = async () => {
+    if (!selectedClientId) {
+      setScanMsg(t(`${NS}.need_client`))
+      return
+    }
+    setScanning(true)
+    setScanMsg('')
+    try {
+      const r = await launchEngineScan({
+        engineId: ENGINE,
+        clientId: selectedClientId,
+        target: '',
+      })
+      if (!r.ok) {
+        throw new Error(r.data?.detail || r.data?.error || t(`${NS}.scan_failed`))
+      }
+      setScanMsg(t(`${NS}.scan_queued`, { id: r.data?.job_id || r.data?.id || 'queued' }))
+    } catch (e) {
+      setScanMsg(e.message || t(`${NS}.scan_failed`))
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  const showSkeleton = loading && !data
 
   return (
     <PageShell
@@ -124,6 +157,15 @@ export default function CortexProvenBridge() {
       icon={<Radio />}
       actions={(
         <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="unstyled"
+            type="button"
+            onClick={runCoverage}
+            disabled={scanning}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-500/35 text-[11px] font-mono text-cyan-200 hover:bg-cyan-500/10 disabled:opacity-40"
+          >
+            {t(`${NS}.run_coverage`)}
+          </Button>
           <Button
             variant="unstyled"
             type="button"
@@ -137,7 +179,7 @@ export default function CortexProvenBridge() {
             variant="unstyled"
             type="button"
             onClick={flushProven}
-            disabled={loading || flushing || !counts.proven_eligible}
+            disabled={flushing || !counts.proven_eligible}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-orange-500/35 bg-orange-500/10 text-[11px] font-mono text-orange-100 hover:bg-orange-500/20 disabled:opacity-40"
           >
             {t(`${NS}.flush`)}
@@ -152,10 +194,19 @@ export default function CortexProvenBridge() {
       )}
     >
       <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
-      {loading ? <SkeletonWidgetGrid count={4} /> : error ? (
+      {flushMsg && (
+        <p role="status" className="text-[11px] font-mono text-orange-200/90">{flushMsg}</p>
+      )}
+      {scanMsg && (
+        <p className="text-[11px] font-mono text-cyan-200/90">{scanMsg}</p>
+      )}
+      {showSkeleton ? <SkeletonWidgetGrid count={4} /> : error && !data ? (
         <EmptyState title={t(`${NS}.load_failed`)} body={error} />
       ) : (
         <div className="space-y-4">
+          {error && (
+            <p role="alert" className="text-[11px] font-mono text-rose-300">{error}</p>
+          )}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <ExecutiveWidget label={t(`${NS}.kpi_mapped`)} value={counts.mapped ?? 0} hint={t(`${NS}.kpi_mapped_hint`)} />
             <ExecutiveWidget label={t(`${NS}.kpi_proven`)} value={counts.proven_eligible ?? 0} hint={t(`${NS}.kpi_proven_hint`)} accent="#f97316" />
@@ -177,9 +228,23 @@ export default function CortexProvenBridge() {
               </Link>
             </p>
           )}
-          {flushMsg && (
-            <p role="status" className="text-[11px] font-mono text-orange-200/90">{flushMsg}</p>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {['all', 'proven', 'blind', 'pushed'].map((id) => (
+              <Button
+                key={id}
+                variant="unstyled"
+                type="button"
+                onClick={() => setFilter(id)}
+                className={`px-2.5 py-1 rounded-md text-[10px] font-mono border ${
+                  filter === id
+                    ? 'border-orange-400/60 text-orange-100 bg-orange-500/15'
+                    : 'border-white/10 text-white/50 hover:border-white/25'
+                }`}
+              >
+                {t(`${NS}.filter_${id}`)}
+              </Button>
+            ))}
+          </div>
           <div className="relative max-w-sm">
             <Search className="w-3.5 h-3.5 text-white/30 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
@@ -199,6 +264,7 @@ export default function CortexProvenBridge() {
                 const s = (f.severity || 'info').toLowerCase()
                 const c = SEV_COLOR[s] || SEV_COLOR.info
                 const blind = f.xdr_had_matching_alert === false && f.eligible
+                const q = encodeURIComponent(f.finding_id || f.title || '')
                 return (
                   <li
                     key={f.id || f.finding_id}
@@ -226,6 +292,10 @@ export default function CortexProvenBridge() {
                     <div className="text-sm text-white mt-1">{f.title}</div>
                     <div className="text-[10px] font-mono text-white/40 mt-1">
                       {f.target || '—'} · run {f.report_run_id ?? '—'} · {f.cortex_status}
+                      {' · '}
+                      <Link to={`/findings?q=${q}`} className="underline text-orange-200/80">
+                        {t(`${NS}.open_finding`)}
+                      </Link>
                     </div>
                   </li>
                 )

@@ -20,14 +20,21 @@ fn live_verdict(raw: &Value) -> Option<String> {
         .map(|s| s.trim().to_ascii_uppercase())
 }
 
-fn proof_artifact(raw: &Value) -> Option<&'static str> {
-    if raw
-        .pointer("/attestation/receipt")
-        .and_then(Value::as_str)
-        .is_some_and(|s| !s.is_empty())
-    {
-        return Some("attestation");
+/// Live vulnerability proof — **not** the persist-time attestation receipt.
+/// Attestation only proves the row was not tampered with in Postgres.
+pub(crate) fn proof_artifact(raw: &Value) -> Option<&'static str> {
+    if let Some(kind) = proof_artifact_in(raw) {
+        return Some(kind);
     }
+    if let Some(nested) = raw.get("raw") {
+        if let Some(kind) = proof_artifact_in(nested) {
+            return Some(kind);
+        }
+    }
+    None
+}
+
+fn proof_artifact_in(src: &Value) -> Option<&'static str> {
     for key in [
         "proof",
         "poc",
@@ -35,16 +42,30 @@ fn proof_artifact(raw: &Value) -> Option<&'static str> {
         "oast",
         "oast_callback",
         "http_status",
-        "evidence",
         "http_evidence",
     ] {
-        match raw.get(key) {
+        match src.get(key) {
             Some(Value::String(s)) if !s.trim().is_empty() => return Some(key),
             Some(Value::Number(_)) => return Some(key),
             Some(Value::Object(o)) if !o.is_empty() => return Some(key),
             Some(Value::Bool(true)) => return Some(key),
             _ => {}
         }
+    }
+    match src.get("evidence") {
+        Some(Value::String(s)) if !s.trim().is_empty() => return Some("evidence"),
+        Some(Value::Object(o)) => {
+            if o.get("proof")
+                .and_then(Value::as_str)
+                .is_some_and(|s| !s.trim().is_empty())
+            {
+                return Some("evidence.proof");
+            }
+            if !o.is_empty() {
+                return Some("evidence");
+            }
+        }
+        _ => {}
     }
     None
 }
@@ -117,6 +138,50 @@ async fn persist_push(
     .map_err(|e| format!("db: {e}"))?;
     tx.commit().await.map_err(|e| format!("db: {e}"))?;
     Ok(())
+}
+
+/// Best-effort durable map update so Command Center scan→finding board
+/// sees drawer pushes. Missing table must not fail the Cortex ingest.
+async fn persist_bridge_push(
+    pool: &PgPool,
+    tenant_id: i64,
+    finding_pk: i64,
+    external_ref: Option<&str>,
+    xdr_had: Option<bool>,
+) -> Result<(), String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("db: {e}"))?;
+    let res = sqlx::query(
+        r#"UPDATE scan_finding_bridge
+              SET cortex_status = 'pushed',
+                  cortex_external_ref = COALESCE($3, cortex_external_ref),
+                  cortex_pushed_at = now(),
+                  xdr_had_matching_alert = COALESCE($4, xdr_had_matching_alert),
+                  updated_at = now()
+            WHERE tenant_id = $1 AND finding_pk = $2"#,
+    )
+    .bind(tenant_id)
+    .bind(finding_pk)
+    .bind(external_ref)
+    .bind(xdr_had)
+    .execute(&mut *tx)
+    .await;
+    match res {
+        Ok(_) => {
+            tx.commit().await.map_err(|e| format!("db: {e}"))?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = tx.rollback().await;
+            let msg = e.to_string();
+            if msg.contains("scan_finding_bridge") {
+                Ok(())
+            } else {
+                Err(format!("scan_finding_bridge: {e}"))
+            }
+        }
+    }
 }
 
 pub async fn push_finding_to_cortex(
@@ -207,6 +272,14 @@ pub async fn push_finding_to_cortex(
     });
     if !dry_run {
         let _ = persist_push(pool, tenant_id, row.id, &record).await;
+        let _ = persist_bridge_push(
+            pool,
+            tenant_id,
+            row.id,
+            outcome.external_ref.as_deref(),
+            xdr_had,
+        )
+        .await;
     }
 
     Ok(json!({
@@ -271,5 +344,34 @@ mod tests {
     #[test]
     fn rejects_empty_proof() {
         assert!(push_eligibility(&row(None, json!({}))).is_err());
+    }
+
+    #[test]
+    fn rejects_attestation_only() {
+        assert!(push_eligibility(&row(
+            None,
+            json!({"attestation": {"receipt": "not-a-vuln-proof"}})
+        ))
+        .is_err());
+    }
+
+    #[test]
+    fn accepts_nested_engine_payload_oast() {
+        let ok = push_eligibility(&row(
+            None,
+            json!({"raw": {"oast_callback": "https://oast.example/id"}}),
+        ))
+        .unwrap();
+        assert!(ok.contains("oast"));
+    }
+
+    #[test]
+    fn accepts_evidence_proof_object() {
+        let ok = push_eligibility(&row(
+            None,
+            json!({"evidence": {"proof": "XSIAM get_alerts HTTP 2xx returned no match"}}),
+        ))
+        .unwrap();
+        assert!(ok.contains("evidence"));
     }
 }

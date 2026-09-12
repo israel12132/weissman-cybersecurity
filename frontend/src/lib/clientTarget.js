@@ -43,6 +43,7 @@ export function engineRunsWithoutTarget(engineId) {
     'ble_rf',
     'edr_evasion',
     'antiforensics',
+    'cortex_proven_finding_bridge',
   ])
   return TARGETLESS.has(engineId)
 }

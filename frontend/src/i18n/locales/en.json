@@ -5872,7 +5872,16 @@
       "eligible": "Proven",
       "ineligible": "No proof",
       "blind_spot": "XSIAM blind spot",
-      "xdr_had": "XDR already had"
+      "xdr_had": "XDR already had",
+      "run_coverage": "Run coverage engine",
+      "scan_queued": "Coverage job {{id}} queued",
+      "scan_failed": "Coverage engine dispatch failed",
+      "need_client": "Select a client before dispatching the coverage engine",
+      "filter_all": "All",
+      "filter_proven": "Proven",
+      "filter_blind": "Blind spots",
+      "filter_pushed": "Pushed",
+      "open_finding": "Open in findings"
     },
     "itdrCommandCenter": {
       "title": "ITDR",

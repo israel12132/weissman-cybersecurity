@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (k, d) => {
       if (d && typeof d === 'object' && 'n' in d) return `${k}:${d.n}`
+      if (d && typeof d === 'object' && 'id' in d) return `${k}:${d.id}`
       return typeof d === 'string' ? d : k
     },
     i18n: { language: 'en' },
@@ -17,6 +18,11 @@ vi.mock('react-i18next', () => ({
 const apiFetch = vi.fn()
 vi.mock('../utils/apiFetch', () => ({
   apiFetch: (...args) => apiFetch(...args),
+}))
+
+const launchEngineScan = vi.fn()
+vi.mock('../lib/launchEngineScan', () => ({
+  launchEngineScan: (...args) => launchEngineScan(...args),
 }))
 
 vi.mock('./PageShell', () => ({
@@ -41,9 +47,38 @@ vi.mock('../context/ClientContext', () => ({
 
 import CortexProvenBridge from './CortexProvenBridge.jsx'
 
+function mappedPayload(extra = {}) {
+  return {
+    ok: true,
+    cortex_configured: true,
+    cortex_mode: 'Xsiam',
+    counts: {
+      mapped: 1,
+      proven_eligible: 1,
+      already_pushed: 0,
+      xdr_blind_spots: 0,
+      xdr_already_had: 0,
+    },
+    items: [{
+      id: 1,
+      finding_id: 'redis-1',
+      title: 'Open Redis',
+      severity: 'high',
+      engine_id: 'redis_security',
+      source: 'redis_security',
+      eligible: true,
+      cortex_status: 'mapped',
+      proof_kind: 'oast_callback',
+      target: '10.0.0.8',
+    }],
+    ...extra,
+  }
+}
+
 describe('CortexProvenBridge', () => {
   beforeEach(() => {
     apiFetch.mockReset()
+    launchEngineScan.mockReset()
   })
   afterEach(cleanup)
 
@@ -105,20 +140,12 @@ describe('CortexProvenBridge', () => {
   })
 
   it('flushes proven findings through the live batch API', async () => {
-    apiFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        cortex_configured: true,
-        counts: { mapped: 1, proven_eligible: 1, already_pushed: 0, xdr_blind_spots: 0, xdr_already_had: 0 },
-        items: [{ id: 1, title: 'Open Redis', severity: 'high', engine_id: 'redis_security', eligible: true, cortex_status: 'mapped' }],
-      })
-      .mockResolvedValueOnce({ ok: true, pushed: 1, skipped: 0 })
-      .mockResolvedValueOnce({
-        ok: true,
-        cortex_configured: true,
-        counts: { mapped: 1, proven_eligible: 1, already_pushed: 1, xdr_blind_spots: 0, xdr_already_had: 0 },
-        items: [{ id: 1, title: 'Open Redis', severity: 'high', engine_id: 'redis_security', eligible: true, cortex_status: 'pushed' }],
-      })
+    apiFetch.mockImplementation((url) => {
+      if (typeof url === 'string' && url.includes('/flush')) {
+        return Promise.resolve({ ok: true, pushed: 1, skipped: 0, failed: 0 })
+      }
+      return Promise.resolve(mappedPayload())
+    })
     render(
       <MemoryRouter>
         <CortexProvenBridge />
@@ -127,8 +154,27 @@ describe('CortexProvenBridge', () => {
     expect(await screen.findByText('Open Redis')).toBeInTheDocument()
     fireEvent.click(screen.getByText('pages.cortexProvenBridge.flush'))
     expect(await screen.findByText('pages.cortexProvenBridge.flush_ok:1')).toBeInTheDocument()
-    expect(apiFetch).toHaveBeenCalledWith('/api/findings/scan-cortex-bridge/flush', expect.objectContaining({
-      method: 'POST',
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalledWith('/api/findings/scan-cortex-bridge/flush', expect.objectContaining({
+        method: 'POST',
+      }))
+    })
+  })
+
+  it('queues the live coverage engine without inventing findings', async () => {
+    apiFetch.mockResolvedValue(mappedPayload())
+    launchEngineScan.mockResolvedValue({ ok: true, status: 202, data: { job_id: 'job-9' } })
+    render(
+      <MemoryRouter>
+        <CortexProvenBridge />
+      </MemoryRouter>,
+    )
+    expect(await screen.findByText('Open Redis')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('pages.cortexProvenBridge.run_coverage'))
+    expect(await screen.findByText('pages.cortexProvenBridge.scan_queued:job-9')).toBeInTheDocument()
+    expect(launchEngineScan).toHaveBeenCalledWith(expect.objectContaining({
+      engineId: 'cortex_proven_finding_bridge',
+      clientId: 7,
     }))
   })
 })

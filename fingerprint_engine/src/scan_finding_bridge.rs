@@ -6,29 +6,18 @@
 //! compares proven findings against live `get_alerts` so Command Center can
 //! show XDR blind spots. Missing Cortex config fails visibly — never a fake hit.
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
 use tokio::sync::Semaphore;
 
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_result::EngineResult;
-use crate::finding_cortex_push::{push_eligibility, push_finding_to_cortex};
+use crate::finding_cortex_push::{proof_artifact, push_eligibility, push_finding_to_cortex};
 use crate::finding_live_verify::FindingRow;
-use crate::soar::adapters::cortex_xsiam::{CortexMode, xsiam_has_matching_alert};
-use crate::soar::integrations::{IntegrationRecord, load_integrations};
+use crate::soar::adapters::cortex_xsiam::{xsiam_has_matching_alert, CortexMode};
+use crate::soar::integrations::{load_integrations, IntegrationRecord};
 
 pub const ENGINE_ID: &str = "cortex_proven_finding_bridge";
-
-const PROOF_KEYS: &[&str] = &[
-    "proof",
-    "poc",
-    "poc_exploit",
-    "oast",
-    "oast_callback",
-    "http_status",
-    "evidence",
-    "http_evidence",
-];
 
 const MAX_LIST: i64 = 500;
 const MAX_FLUSH: usize = 25;
@@ -67,37 +56,21 @@ fn nested_raw(raw: &Value) -> &Value {
 }
 
 /// Proof artifact kind on a persisted `raw_data` blob (and nested `raw`).
+/// Tamper-evident attestation is not a vulnerability proof.
 pub fn proof_kind_from_raw(raw: &Value) -> Option<String> {
-    if raw
-        .pointer("/attestation/receipt")
-        .and_then(Value::as_str)
-        .is_some_and(|s| !s.is_empty())
-    {
-        return Some("attestation".into());
+    proof_artifact(raw).map(|s| s.to_string())
+}
+
+fn merge_sql_proof(raw: &mut Value, sql_proof: Option<String>) {
+    let Some(p) = sql_proof.filter(|s| !s.trim().is_empty()) else {
+        return;
+    };
+    if proof_artifact(raw).is_some() {
+        return;
     }
-    let nested = nested_raw(raw);
-    for src in [raw, nested] {
-        for key in PROOF_KEYS {
-            match src.get(*key) {
-                Some(Value::String(s)) if !s.trim().is_empty() => return Some((*key).into()),
-                Some(Value::Number(_)) => return Some((*key).into()),
-                Some(Value::Object(o)) if !o.is_empty() => return Some((*key).into()),
-                Some(Value::Bool(true)) => return Some((*key).into()),
-                _ => {}
-            }
-        }
-        if let Some(proof) = src
-            .get("evidence")
-            .and_then(|e| e.get("proof"))
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            let _ = proof;
-            return Some("evidence.proof".into());
-        }
+    if let Value::Object(o) = raw {
+        o.insert("poc".into(), json!(p));
     }
-    None
 }
 
 /// `raw_data.scan_bridge` stamped at persist time.
@@ -252,7 +225,9 @@ fn classify(row: &BridgeRow) -> (bool, String, String) {
 }
 
 fn map_sql_row(r: sqlx::postgres::PgRow) -> BridgeRow {
-    let raw_data = r.try_get::<Value, _>("raw_data").unwrap_or(Value::Null);
+    let mut raw_data = r.try_get::<Value, _>("raw_data").unwrap_or(Value::Null);
+    let sql_proof = r.try_get::<Option<String>, _>("sql_proof").ok().flatten();
+    merge_sql_proof(&mut raw_data, sql_proof);
     let engine_id = r
         .try_get::<Option<String>, _>("bridge_engine")
         .ok()
@@ -315,6 +290,7 @@ const LIST_SQL: &str = r#"
 SELECT v.id, v.finding_id, v.title, v.severity, v.source, v.status,
        COALESCE(v.raw_data->>'target', '') AS target,
        COALESCE(v.raw_data, '{}'::jsonb) AS raw_data,
+       COALESCE(v.proof, '') AS sql_proof,
        COALESCE(v.discovered_at::text, '') AS discovered_at,
        COALESCE(v.signature_hash, '') AS signature_hash,
        v.client_id, v.run_id,
@@ -333,6 +309,7 @@ const LIST_SQL_FALLBACK: &str = r#"
 SELECT v.id, v.finding_id, v.title, v.severity, v.source, v.status,
        COALESCE(v.raw_data->>'target', '') AS target,
        COALESCE(v.raw_data, '{}'::jsonb) AS raw_data,
+       COALESCE(v.proof, '') AS sql_proof,
        COALESCE(v.discovered_at::text, '') AS discovered_at,
        COALESCE(v.signature_hash, '') AS signature_hash,
        v.client_id, v.run_id,
@@ -526,6 +503,13 @@ pub async fn flush(
     let rows = load_rows(pool, tenant_id, client_id, MAX_LIST)
         .await
         .map_err(|e| (500, e))?;
+    let integrations = load_integrations(pool, tenant_id).await;
+    if pick_cortex(&integrations).is_none() {
+        return Err((
+            409,
+            "Cortex XSIAM/XSOAR is not configured — add it under Integrations (api_url, api_key, api_key_id)".into(),
+        ));
+    }
     let wanted: Option<std::collections::HashSet<String>> = if ids.is_empty() {
         None
     } else {
@@ -534,6 +518,7 @@ pub async fn flush(
     let mut results = Vec::new();
     let mut pushed = 0usize;
     let mut skipped = 0usize;
+    let mut failed = 0usize;
     for b in rows {
         if let Some(ref set) = wanted {
             let id_s = b.id.to_string();
@@ -567,6 +552,7 @@ pub async fn flush(
                 results.push(v);
             }
             Err((code, detail)) => {
+                failed += 1;
                 results.push(json!({
                     "id": b.id,
                     "finding_id": b.finding_id,
@@ -582,6 +568,7 @@ pub async fn flush(
         "dry_run": dry_run,
         "pushed": pushed,
         "skipped": skipped,
+        "failed": failed,
         "results": results,
         "cap": MAX_FLUSH,
     }))
@@ -619,6 +606,45 @@ pub async fn maybe_auto_push(pool: &PgPool, tenant_id: i64, finding_pk: i64, sev
     }
 }
 
+async fn backfill_mapped_rows(pool: &PgPool, tenant_id: i64, rows: &[BridgeRow]) {
+    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
+        return;
+    };
+    for b in rows {
+        let engine = if b.engine_id.is_empty() {
+            b.source.as_str()
+        } else {
+            b.engine_id.as_str()
+        };
+        let kind = b
+            .proof_kind
+            .clone()
+            .or_else(|| proof_kind_from_raw(&b.raw_data));
+        if let Err(e) = upsert_mapped_row(
+            &mut tx,
+            tenant_id,
+            b.id,
+            &b.finding_id,
+            b.report_run_id.unwrap_or(0),
+            engine,
+            &b.target,
+            kind.as_deref(),
+            &b.signature_hash,
+        )
+        .await
+        {
+            tracing::warn!(
+                target: "scan_finding_bridge",
+                tenant_id,
+                finding_pk = b.id,
+                error = %e,
+                "historical scan_finding_bridge backfill skipped"
+            );
+        }
+    }
+    let _ = tx.commit().await;
+}
+
 fn host_matches(target: &str, finding_target: &str) -> bool {
     let t = target.trim().to_ascii_lowercase();
     if t.is_empty() || t == "https://example.com" {
@@ -654,6 +680,7 @@ pub async fn run_cortex_proven_finding_bridge_result(
         Ok(r) => r,
         Err(e) => return EngineResult::error(format!("scan→finding map failed: {e}")),
     };
+    backfill_mapped_rows(pool, tenant_id, &rows).await;
     let filtered: Vec<&BridgeRow> = rows
         .iter()
         .filter(|b| host_matches(target, &b.target))
@@ -775,15 +802,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn proof_kind_prefers_attestation() {
+    fn proof_kind_ignores_attestation() {
         let raw = json!({"attestation": {"receipt": "abc"}, "oast": "https://oast"});
-        assert_eq!(proof_kind_from_raw(&raw).as_deref(), Some("attestation"));
+        assert_eq!(proof_kind_from_raw(&raw).as_deref(), Some("oast"));
+        assert!(proof_kind_from_raw(&json!({"attestation": {"receipt": "abc"}})).is_none());
     }
 
     #[test]
     fn proof_kind_nested_oast() {
         let raw = json!({"raw": {"oast_callback": "https://oast.example/id"}});
         assert_eq!(proof_kind_from_raw(&raw).as_deref(), Some("oast_callback"));
+    }
+
+    #[test]
+    fn proof_kind_sql_poc_merge() {
+        let mut raw = json!({"title": "x"});
+        merge_sql_proof(&mut raw, Some("AUTH bypass replay".into()));
+        assert_eq!(proof_kind_from_raw(&raw).as_deref(), Some("poc"));
     }
 
     #[test]
