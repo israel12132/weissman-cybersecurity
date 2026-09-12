@@ -109,7 +109,7 @@ export default function CasbDlpCenter() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <ExecutiveWidget label={t(`${NS}.kpi_findings`)} value={findings.length} />
-            <ExecutiveWidget label={t(`${NS}.kpi_engines`)} value={liveEngineCount} />
+            <ExecutiveWidget label={t(`${NS}.kpi_engines`)} value={findings.length ? liveEngineCount : '—'} />
           </div>
           <Button type="button" onClick={refreshGraph} disabled={refreshing}>
             {refreshing ? t(`${NS}.refreshing`) : t(`${NS}.refresh_graph`)}

@@ -436,11 +436,23 @@ pub async fn google_dlp_findings(target: &str, token: &str) -> Vec<Value> {
                             Ok(msg) if msg.status().is_success() => {
                                 match msg.json::<Value>().await {
                                     Ok(j) => {
-                                        scanned += 1;
-                                        if let Some(snip) = j.get("snippet").and_then(Value::as_str)
-                                        {
-                                            hay.push_str(snip);
-                                            hay.push('\n');
+                                        match j.get("snippet").and_then(Value::as_str) {
+                                            Some(snip) => {
+                                                scanned += 1;
+                                                hay.push_str(snip);
+                                                hay.push('\n');
+                                            }
+                                            None => {
+                                                unread += 1;
+                                                out.push(finding(
+                                                    "dlp_content_scan",
+                                                    "Gmail DLP message had no snippet",
+                                                    "medium",
+                                                    "T1114",
+                                                    &format!("GET messages/{id} returned HTTP 200 without a snippet. Content is not confirmed empty."),
+                                                    target,
+                                                ));
+                                            }
                                         }
                                     }
                                     Err(_) => {
@@ -667,6 +679,7 @@ mod tests {
         let src = include_str!("casb_dlp_api.rs");
         assert!(src.contains("Gmail DLP list body unreadable"));
         assert!(src.contains("Gmail DLP message body unreadable"));
+        assert!(src.contains("Gmail DLP message had no snippet"));
         assert!(src.contains("unread == 0 && hits.is_empty()"));
     }
 }

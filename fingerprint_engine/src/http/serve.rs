@@ -456,7 +456,9 @@ async fn poe_job_from_db(
     let Some(row) = row else {
         return Ok(None);
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err(());
+    }
     let findings_json: String = row.try_get("findings_json").map_err(|_| ())?;
     let findings_count = parse_poe_findings_count(&findings_json)?;
     Ok(Some(PoEJobState {
@@ -974,7 +976,10 @@ async fn handle_ws_command_center(
         .await
         .unwrap_or(0);
     let score: i64 = if assigned_client_id.is_some() {
-        live_security_score_from_vulns(&mut tx).await
+        match live_security_score_from_vulns(&mut tx).await {
+            Ok(s) => s,
+            Err(_) => return,
+        }
     } else {
         sqlx::query_scalar::<_, String>(
             "SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1",

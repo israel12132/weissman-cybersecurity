@@ -564,7 +564,9 @@ async fn enqueue_clients_with_sbom(
     .fetch_all(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+    tx.commit()
+        .await
+        .map_err(|_| "database unavailable".to_string())?;
     let mut n = 0usize;
     let mut failed = 0usize;
     for r in rows {
@@ -715,5 +717,11 @@ mod tests {
         );
         assert!(src.contains("payload->>'engine'"));
         assert!(src.contains("first-seen enqueue failed for every SBOM client"));
+        assert!(
+            src.contains(
+                "tx.commit()\n        .await\n        .map_err(|_| \"database unavailable\".to_string())?;"
+            ),
+            "commit failure must fail the worker tick, not enqueue from a rolled-back read"
+        );
     }
 }

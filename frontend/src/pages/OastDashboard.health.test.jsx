@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -97,10 +100,15 @@ describe('OastHealthStrip', () => {
           last_callback_at: '2026-09-11T12:00:00Z',
           callback_count: null,
         }}
-        fallbackCount={12}
       />,
     )
     expect(screen.getByText(/health_count:—/)).toBeTruthy()
     expect(screen.queryByText(/health_count:12/)).toBeNull()
+  })
+
+  it('does not substitute callback list length into health.callback_count', () => {
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'OastDashboard.jsx'), 'utf8')
+    expect(src).not.toMatch(/callback_count \?\? list\.length/)
+    expect(src).not.toMatch(/fallbackCount/)
   })
 })

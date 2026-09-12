@@ -8,23 +8,12 @@ async fn api_metrics_dashboard(
         .await
         .is_ok();
 
-    let empty_sev = json!({
-        "critical": 0,
-        "high": 0,
-        "medium": 0,
-        "low": 0,
-        "info": 0,
-    });
-
     if !postgres_ok {
         return (
-            StatusCode::OK,
-            Json(json!({
-                "postgres_ok": false,
-                "active_scans": 0,
-                "findings_by_severity": empty_sev,
-                "jobs": { "completed_24h": 0, "failed_24h": 0 },
-            })),
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::metrics_dashboard_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     }
@@ -32,12 +21,9 @@ async fn api_metrics_dashboard(
     let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({
-                "postgres_ok": false,
-                "active_scans": 0,
-                "findings_by_severity": empty_sev,
-                "jobs": { "completed_24h": 0, "failed_24h": 0 },
-            })),
+            Json(crate::http_unavailable::metrics_dashboard_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
@@ -60,12 +46,9 @@ async fn api_metrics_dashboard(
             tracing::error!(target: "metrics", tenant_id = auth.tenant_id, error = %e, "severity aggregate failed");
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({
-                    "postgres_ok": false,
-                    "active_scans": 0,
-                    "findings_by_severity": empty_sev,
-                    "jobs": { "completed_24h": 0, "failed_24h": 0 },
-                })),
+                Json(crate::http_unavailable::metrics_dashboard_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
             )
                 .into_response();
         }
@@ -78,16 +61,27 @@ async fn api_metrics_dashboard(
             .unwrap_or(0)
     };
 
-    let active_scans: i64 = sqlx::query_scalar(
+    let active_scans: i64 = match sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM weissman_async_jobs
           WHERE tenant_id = $1 AND status = 'running'",
     )
     .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::metrics_dashboard_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
 
-    let jobs_completed_24h: i64 = sqlx::query_scalar(
+    let jobs_completed_24h: i64 = match sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM weissman_async_jobs
           WHERE tenant_id = $1 AND status = 'completed'
             AND updated_at > now() - interval '24 hours'",
@@ -95,9 +89,20 @@ async fn api_metrics_dashboard(
     .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::metrics_dashboard_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
 
-    let jobs_failed_24h: i64 = sqlx::query_scalar(
+    let jobs_failed_24h: i64 = match sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM weissman_async_jobs
           WHERE tenant_id = $1 AND status IN ('failed','dead')
             AND updated_at > now() - interval '24 hours'",
@@ -105,9 +110,28 @@ async fn api_metrics_dashboard(
     .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::metrics_dashboard_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
 
-    let _ = tx.commit().await;
+    if let Err(e) = tx.commit().await {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::metrics_dashboard_unavailable_json(
+                scrub_internal_error(&e),
+            )),
+        )
+            .into_response();
+    }
 
     let orchestrator_cycles = crate::orchestrator::active_tenant_scan_count() as i64;
     let active_scans = active_scans.max(orchestrator_cycles);
@@ -134,17 +158,17 @@ async fn api_metrics_dashboard(
 }
 
 /// Live FAIR-style score from RLS-visible vulnerabilities (portal-safe).
+/// Query failure is store-down — never a perfect 100 from an empty default.
 async fn live_security_score_from_vulns(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-) -> i64 {
+) -> Result<i64, sqlx::Error> {
     let rows = sqlx::query(
         r#"SELECT lower(trim(severity)) AS sev, COUNT(*)::bigint AS n
            FROM vulnerabilities
            GROUP BY 1"#,
     )
     .fetch_all(&mut **tx)
-    .await
-    .unwrap_or_default();
+    .await?;
     let mut crit = 0i64;
     let mut high = 0i64;
     let mut med = 0i64;
@@ -158,40 +182,117 @@ async fn live_security_score_from_vulns(
             _ => {}
         }
     }
-    (100i64 - crit * 25 - high * 15 - med * 5).max(0)
+    Ok((100i64 - crit * 25 - high * 15 - med * 5).max(0))
 }
 
 async fn api_dashboard_stats(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"total_vulnerabilities":0,"active_scans":0,"security_score":0,"assets_monitored":0,"threats_mitigated":0}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::dashboard_stats_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let vuln_count: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
-        .fetch_one(&mut *tx).await.unwrap_or(0);
-    let client_count: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients")
-        .fetch_one(&mut *tx).await.unwrap_or(0);
+    let vuln_count: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
+        .fetch_one(&mut *tx)
+        .await
+    {
+        Ok(n) => n,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::dashboard_stats_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    let client_count: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients")
+        .fetch_one(&mut *tx)
+        .await
+    {
+        Ok(n) => n,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::dashboard_stats_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     // Portal sessions must not read tenant-wide report_runs (no client_id column).
     let score: i64 = if auth.assigned_client_id.is_some() {
-        live_security_score_from_vulns(&mut tx).await
+        match live_security_score_from_vulns(&mut tx).await {
+            Ok(s) => s,
+            Err(e) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::dashboard_stats_unavailable_json(
+                        scrub_internal_error(&e),
+                    )),
+                )
+                    .into_response();
+            }
+        }
     } else {
-        sqlx::query_scalar::<_, String>("SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1")
-            .fetch_optional(&mut *tx).await.ok().flatten()
-            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-            .and_then(|j| {
-                let by = j.get("by_severity")?.as_object()?;
-                let crit = by.get("critical").and_then(Value::as_i64).unwrap_or(0);
-                let high = by.get("high").and_then(Value::as_i64).unwrap_or(0);
-                let med = by.get("medium").and_then(Value::as_i64).unwrap_or(0);
-                Some((100i64 - crit * 25 - high * 15 - med * 5).max(0))
-            }).unwrap_or(0)
+        match sqlx::query_scalar::<_, String>("SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1")
+            .fetch_optional(&mut *tx)
+            .await
+        {
+            Ok(opt) => opt
+                .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                .and_then(|j| {
+                    let by = j.get("by_severity")?.as_object()?;
+                    let crit = by.get("critical").and_then(Value::as_i64).unwrap_or(0);
+                    let high = by.get("high").and_then(Value::as_i64).unwrap_or(0);
+                    let med = by.get("medium").and_then(Value::as_i64).unwrap_or(0);
+                    Some((100i64 - crit * 25 - high * 15 - med * 5).max(0))
+                })
+                .unwrap_or(0),
+            Err(e) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::dashboard_stats_unavailable_json(
+                        scrub_internal_error(&e),
+                    )),
+                )
+                    .into_response();
+            }
+        }
     };
     let summary_json: Option<Value> = if auth.assigned_client_id.is_some() {
         None
     } else {
-        sqlx::query_scalar::<_, String>("SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1")
-            .fetch_optional(&mut *tx).await.ok().flatten()
-            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+        match sqlx::query_scalar::<_, String>("SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1")
+            .fetch_optional(&mut *tx)
+            .await
+        {
+            Ok(opt) => opt.and_then(|s| serde_json::from_str::<Value>(&s).ok()),
+            Err(e) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::dashboard_stats_unavailable_json(
+                        scrub_internal_error(&e),
+                    )),
+                )
+                    .into_response();
+            }
+        }
     };
-    let _ = tx.commit().await;
+    if let Err(e) = tx.commit().await {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::dashboard_stats_unavailable_json(
+                scrub_internal_error(&e),
+            )),
+        )
+            .into_response();
+    }
     let active = crate::orchestrator::is_scanning_active();
     let attack_surface_targets = summary_json.as_ref().and_then(|j| j.get("attack_surface_targets")).and_then(Value::as_u64).unwrap_or(0) as i64;
     let attack_surface_paths = summary_json.as_ref().and_then(|j| j.get("attack_surface_paths")).and_then(Value::as_u64).unwrap_or(0) as i64;
@@ -214,13 +315,6 @@ fn exec_kpis_query_unavailable(e: &sqlx::Error) -> Response {
         )),
     )
         .into_response()
-}
-
-fn sql_undefined_relation(err: &sqlx::Error) -> bool {
-    matches!(
-        err,
-        sqlx::Error::Database(db) if db.code().as_deref() == Some("42P01")
-    )
 }
 
 macro_rules! exec_kpi_ok {
@@ -353,31 +447,25 @@ async fn api_dashboard_exec_kpis(
     );
 
     // ── Endpoint agent state (registered / online / stale) ─────────────────────────
-    // Tolerate the endpoint_agents table being absent on very old schemas (42P01).
-    // Any other error is store-down — never paint 0 registered / 0 online.
-    let agents_registered: i64 = match sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM endpoint_agents WHERE tenant_id = $1",
-    )
-    .bind(auth.tenant_id)
-    .fetch_one(&mut *tx)
-    .await
-    {
-        Ok(n) => n,
-        Err(e) if sql_undefined_relation(&e) => 0,
-        Err(e) => return exec_kpis_query_unavailable(&e),
-    };
-    let agents_online: i64 = match sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM endpoint_agents
-          WHERE tenant_id = $1 AND last_seen_at > now() - interval '90 seconds'",
-    )
-    .bind(auth.tenant_id)
-    .fetch_one(&mut *tx)
-    .await
-    {
-        Ok(n) => n,
-        Err(e) if sql_undefined_relation(&e) => 0,
-        Err(e) => return exec_kpis_query_unavailable(&e),
-    };
+    // endpoint_agents is a required table. Missing-relation (42P01) is schema drift /
+    // store-down — never mix live findings with a painted-empty fleet.
+    let agents_registered: i64 = exec_kpi_ok!(
+        sqlx::query_scalar(
+            "SELECT COUNT(*)::bigint FROM endpoint_agents WHERE tenant_id = $1",
+        )
+        .bind(auth.tenant_id)
+        .fetch_one(&mut *tx)
+        .await
+    );
+    let agents_online: i64 = exec_kpi_ok!(
+        sqlx::query_scalar(
+            "SELECT COUNT(*)::bigint FROM endpoint_agents
+              WHERE tenant_id = $1 AND last_seen_at > now() - interval '90 seconds'",
+        )
+        .bind(auth.tenant_id)
+        .fetch_one(&mut *tx)
+        .await
+    );
 
     // ── Job pipeline (pending / running / 24h completed / 24h failed) ──────────────
     // weissman_async_jobs is intentionally RLS-free (cross-tenant worker dequeue), so begin_tenant_tx

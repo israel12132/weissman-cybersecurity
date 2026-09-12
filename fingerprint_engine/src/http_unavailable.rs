@@ -379,6 +379,33 @@ pub fn rate_limits_analytics_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// `GET /api/dashboard/stats` when the store cannot be read
+pub fn dashboard_stats_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "total_vulnerabilities": Value::Null,
+        "active_scans": Value::Null,
+        "security_score": Value::Null,
+        "assets_monitored": Value::Null,
+        "threats_mitigated": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/metrics/dashboard` when postgres or tenant aggregates fail
+pub fn metrics_dashboard_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "postgres_ok": false,
+        "active_scans": Value::Null,
+        "findings_by_severity": Value::Null,
+        "jobs": Value::Null,
+        "detail": detail,
+    })
+}
+
 /// `GET /api/dashboard/exec-kpis` when a severity/trend/side-KPI query fails
 pub fn exec_kpis_unavailable_json(detail: &str) -> Value {
     json!({
@@ -736,6 +763,27 @@ mod tests {
         assert_ne!(v["trend"], json!([]));
         assert_ne!(v["assets"], json!({"total_clients": 0, "with_findings": 0}));
         assert_ne!(v["jobs"], json!({"pending": 0, "running": 0}));
+    }
+
+    #[test]
+    fn dashboard_stats_store_down_is_never_zeroed_score() {
+        let v = dashboard_stats_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["security_score"].is_null());
+        assert!(v["total_vulnerabilities"].is_null());
+        assert_ne!(v["security_score"], json!(0));
+        assert_ne!(v["security_score"], json!(100));
+    }
+
+    #[test]
+    fn metrics_dashboard_store_down_is_never_zeroed_severity() {
+        let v = metrics_dashboard_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["postgres_ok"], false);
+        assert!(v["findings_by_severity"].is_null());
+        assert!(v["jobs"].is_null());
+        assert_ne!(v["findings_by_severity"], json!({"critical": 0, "high": 0}));
     }
 
     #[test]
