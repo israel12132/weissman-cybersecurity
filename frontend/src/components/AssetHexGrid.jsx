@@ -23,22 +23,33 @@ export default function AssetHexGrid({ clientId: clientIdProp = null }) {
   const [nodes, setNodes] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
 
   useEffect(() => {
     if (clientIdProp) {
       setClientId(clientIdProp)
+      setClientsUnavailable(false)
       return
     }
     let cancelled = false
     apiFetch('/api/clients')
       .then((data) => {
         if (cancelled) return
+        if (data?.ok === false || data?.unavailable) {
+          setClientsUnavailable(true)
+          setClientId(null)
+          return
+        }
         const list = Array.isArray(data) ? data : (data?.clients ?? [])
         const first = list[0]
+        setClientsUnavailable(false)
         setClientId(first?.id ?? null)
       })
       .catch(() => {
-        if (!cancelled) setClientId(null)
+        if (!cancelled) {
+          setClientsUnavailable(true)
+          setClientId(null)
+        }
       })
     return () => { cancelled = true }
   }, [clientIdProp])
@@ -54,12 +65,15 @@ export default function AssetHexGrid({ clientId: clientIdProp = null }) {
     apiFetch(`/api/clients/${clientId}/attack-surface-graph`)
       .then((data) => {
         if (cancelled) return
+        if (data?.ok === false || data?.unavailable) {
+          throw new Error(data.detail || t(`${NS}.error`))
+        }
         setNodes(Array.isArray(data?.nodes) ? data.nodes : [])
       })
       .catch((e) => {
         if (!cancelled) {
           setNodes([])
-          setError(e.message || 'load failed')
+          setError(e.message || t(`${NS}.error`))
         }
       })
       .finally(() => {
@@ -74,7 +88,17 @@ export default function AssetHexGrid({ clientId: clientIdProp = null }) {
         {t(`${NS}.title`)}
       </div>
 
-      {!clientId && !loading && (
+      {clientsUnavailable && (
+        <p
+          className="text-[10px] text-rose-400/80 font-mono"
+          data-testid="asset-hex-clients-unavailable"
+          role="alert"
+        >
+          {t(`${NS}.unavailable`)}
+        </p>
+      )}
+
+      {!clientId && !loading && !clientsUnavailable && (
         <p className="text-[10px] text-white/40 font-mono">{t(`${NS}.select_client`)}</p>
       )}
 

@@ -108,6 +108,11 @@ pub fn cognitive_sessions_unavailable_json(detail: &str) -> Value {
     list_envelope("sessions", detail)
 }
 
+/// `GET /api/clients/:id/heal-requests`
+pub fn heal_requests_unavailable_json(detail: &str) -> Value {
+    list_envelope("requests", detail)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -214,5 +219,10 @@ mod tests {
             &cognitive_sessions_unavailable_json("store down"),
             "sessions",
         );
+    }
+
+    #[test]
+    fn heal_requests_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&heal_requests_unavailable_json("store down"), "requests");
     }
 }

@@ -2265,9 +2265,15 @@ async fn api_heal_requests_list(
     Path(id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!([]))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_requests_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, finding_id, branch_name, pr_url, pr_number, diff_summary, verification_status, verification_job_id, created_at,
                   COALESCE(verdict,'') AS verdict, COALESCE(channel,'') AS channel, COALESCE(attempts,1) AS attempts,
                   (COALESCE(verification_receipt,'') <> '') AS attested
@@ -2276,7 +2282,18 @@ async fn api_heal_requests_list(
     .bind(id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_requests_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let out: Vec<Value> = rows
         .into_iter()

@@ -6305,6 +6305,7 @@
         "loading": "Loading assets…",
         "error": "Failed to load assets",
         "empty": "No assets discovered",
+        "unavailable": "Client or asset-graph API unavailable — empty is not confirmed.",
         "title": "Asset Grid"
       },
       "killChainVisualizer": {
@@ -6554,6 +6555,7 @@
         "refresh": "Refresh",
         "loading": "Loading…",
         "noRequests": "No heal requests yet. Trigger one above.",
+        "unavailable": "Heal-requests API unavailable — empty is not confirmed.",
         "verifyJobPrefix": "verify job: {{id}}",
         "openPr": "Open PR / Approve & merge"
       },

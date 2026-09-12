@@ -55,7 +55,7 @@ export default function ComplianceDashboardTab() {
         setPostureError(e?.message || t(`${NS}.unavailable`))
       })
       .finally(() => setPostureLoading(false))
-  }, [selectedClientId, t])
+  }, [selectedClientId])
 
   useEffect(() => {
     loadPosture()

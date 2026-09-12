@@ -23,6 +23,7 @@ export default function AutoHealTab() {
   const { selectedClientId } = useClient()
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState(null)
   const [healing, setHealing] = useState(null)
   const [verifyJobId, setVerifyJobId] = useState(null)
   const [verifySteps, setVerifySteps] = useState([])
@@ -40,19 +41,20 @@ export default function AutoHealTab() {
   const fetchRequests = useCallback(async () => {
     if (!selectedClientId) {
       setRequests([])
+      setLoadError(null)
       return
     }
     setLoading(true)
+    setLoadError(null)
     try {
       const d = await apiFetch(`/api/clients/${selectedClientId}/heal-requests`)
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || t(`${NS}.unavailable`))
+      }
       const list = Array.isArray(d) ? d : (d.requests ?? [])
       setRequests(list)
     } catch (e) {
-      // Before migration a non-OK HTTP response left the list unchanged (the
-      // `if (r.ok)` guard simply skipped setRequests); only a network/parse
-      // failure hit the catch and cleared it. utils/apiFetch throws on non-OK,
-      // so restrict clearing to network errors (no e.status) to preserve that.
-      if (e?.status == null) setRequests([])
+      setLoadError(e?.message || t(`${NS}.unavailable`))
     } finally {
       setLoading(false)
     }
@@ -271,6 +273,14 @@ export default function AutoHealTab() {
         </div>
         {loading ? (
           <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.loading`)}</div>
+        ) : loadError ? (
+          <div
+            className="p-6 text-center text-red-300 text-sm"
+            data-testid="auto-heal-unavailable"
+            role="alert"
+          >
+            {t(`${NS}.unavailable`)}
+          </div>
         ) : requests.length === 0 ? (
           <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.noRequests`)}</div>
         ) : (
