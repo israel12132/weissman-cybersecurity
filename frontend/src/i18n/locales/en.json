@@ -4013,6 +4013,7 @@
       "close_confirm": "Close engagement \"{{name}}\"?",
       "load_client_failed": "Failed to load client (HTTP {{status}})",
       "load_failed": "Failed to load engagements (HTTP {{status}}) {{detail}}",
+      "unavailable": "Engagements API unavailable — empty is not confirmed.",
       "create_failed": "Create failed",
       "close_failed": "Close failed",
       "network_error": "Network error",
@@ -4059,6 +4060,7 @@
       "delete_failed": "Delete failed",
       "load_client_failed": "Failed to load client (HTTP {{status}})",
       "load_failed": "Failed to load evidence (HTTP {{status}}) {{detail}}",
+      "unavailable": "Evidence vault API unavailable — empty is not confirmed.",
       "network_error": "Network error",
       "delete_success": "Evidence deleted",
       "delete_title": "Delete evidence"
@@ -6208,6 +6210,7 @@
         "refresh": "Refresh",
         "manifest": "Crate: {{crate}} · target: {{target}} · build: {{build}}",
         "loadFailed": "Failed to load edge swarm",
+        "unavailable": "Edge swarm API unavailable — quiet is not an empty fleet.",
         "noNodes": "No edge nodes registered. From a worker, POST",
         "noNodesSuffix": "optional lat/lng and",
         "popFallback": "POP",
@@ -6723,6 +6726,7 @@
         "postureTitle": "Compliance posture",
         "loadingPosture": "Loading posture…",
         "noFrameworkData": "No framework data (run migrations and ensure compliance_mappings is seeded).",
+        "unavailable": "Compliance posture API unavailable — mapped controls are not confirmed.",
         "frameworks": {
           "SOC2": "SOC 2",
           "ISO27001": "ISO 27001",

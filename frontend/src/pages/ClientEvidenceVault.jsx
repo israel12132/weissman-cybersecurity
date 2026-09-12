@@ -89,10 +89,17 @@ export default function ClientEvidenceVault() {
       if (evidenceR.error) {
         const detail = evidenceR.error.response ? await evidenceR.error.response.text().catch(() => '') : ''
         setError(t('pages.clientEvidenceVault.load_failed', { status: evidenceR.error.status, detail }))
+        setEvidence([])
         setLoading(false)
         return
       }
       const data = evidenceR.data
+      if (data?.ok === false || data?.unavailable) {
+        setError(data.detail || t('pages.clientEvidenceVault.unavailable'))
+        setEvidence([])
+        setLoading(false)
+        return
+      }
       setEvidence(Array.isArray(data.evidence) ? data.evidence : [])
     } catch (e) {
       setError(e?.message || t('pages.clientEvidenceVault.network_error'))
@@ -313,7 +320,11 @@ export default function ClientEvidenceVault() {
         </div>
 
         {error && (
-          <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-300">
+          <div
+            className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-300"
+            data-testid="evidence-unavailable"
+            role="alert"
+          >
             {error}
           </div>
         )}
@@ -394,10 +405,16 @@ export default function ClientEvidenceVault() {
         <div className="p-6 bg-[var(--bg-3)]/40 border border-[var(--border-default)] rounded-xl">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white">{t('pages.clientEvidenceVault.items_heading')}</h2>
-            <span className="text-xs text-[var(--text-muted)]">{t('pages.clientEvidenceVault.total', { count: evidence.length })}</span>
+            {!error && (
+              <span className="text-xs text-[var(--text-muted)]">{t('pages.clientEvidenceVault.total', { count: evidence.length })}</span>
+            )}
           </div>
 
-          {evidence.length === 0 ? (
+          {error ? (
+            <div className="mt-4 text-sm text-red-300/80" data-testid="evidence-empty-suppressed">
+              {t('pages.clientEvidenceVault.unavailable')}
+            </div>
+          ) : evidence.length === 0 ? (
             <div className="mt-4 text-sm text-[var(--text-tertiary)]">{t('pages.clientEvidenceVault.empty')}</div>
           ) : (
             <>

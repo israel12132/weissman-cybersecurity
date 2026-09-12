@@ -4013,6 +4013,7 @@
       "close_confirm": "לסגור את המעורבות \"{{name}}\"?",
       "load_client_failed": "טעינת הלקוח נכשלה (HTTP {{status}})",
       "load_failed": "טעינת המעורבויות נכשלה (HTTP {{status}}) {{detail}}",
+      "unavailable": "API המעורבויות אינו זמין — ריק אינו מאושר.",
       "create_failed": "היצירה נכשלה",
       "close_failed": "הסגירה נכשלה",
       "network_error": "שגיאת רשת",
@@ -4059,6 +4060,7 @@
       "delete_failed": "המחיקה נכשלה",
       "load_client_failed": "טעינת הלקוח נכשלה (HTTP {{status}})",
       "load_failed": "טעינת הראיות נכשלה (HTTP {{status}}) {{detail}}",
+      "unavailable": "API כספת הראיות אינו זמין — ריק אינו מאושר.",
       "network_error": "שגיאת רשת",
       "delete_success": "הראיה נמחקה",
       "delete_title": "מחיקת ראיה"
@@ -6208,6 +6210,7 @@
         "refresh": "רענן",
         "manifest": "Crate: {{crate}} · יעד: {{target}} · build: {{build}}",
         "loadFailed": "טעינת edge swarm נכשלה",
+        "unavailable": "API של edge swarm אינו זמין — שקט אינו צי לא ריק.",
         "noNodes": "אין צמתי edge רשומים. מ-worker, שלח POST",
         "noNodesSuffix": "lat/lng אופציונלי ו-",
         "popFallback": "POP",
@@ -6723,6 +6726,7 @@
         "postureTitle": "מצב ציות",
         "loadingPosture": "טוען מצב…",
         "noFrameworkData": "אין נתוני framework (הרץ migrations וודא ש-compliance_mappings מאוכלס).",
+        "unavailable": "API מצב הציות אינו זמין — בקרות ממופות אינן מאושרות.",
         "frameworks": {
           "SOC2": "SOC 2",
           "ISO27001": "ISO 27001",

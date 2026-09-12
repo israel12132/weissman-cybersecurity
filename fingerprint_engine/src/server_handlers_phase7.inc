@@ -21,9 +21,15 @@ async fn api_edge_swarm_nodes(
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"nodes": []}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::edge_swarm_nodes_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, region_code, pop_label, latitude, longitude, wasm_revision, provider,
                   last_heartbeat, active_jobs, metadata
            FROM edge_swarm_nodes WHERE tenant_id = $1 ORDER BY region_code, pop_label"#,
@@ -31,7 +37,18 @@ async fn api_edge_swarm_nodes(
     .bind(auth.tenant_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::edge_swarm_nodes_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let mut nodes = Vec::new();
     for r in rows {
@@ -108,9 +125,15 @@ async fn api_client_ot_ics_fingerprints(
     Path(client_id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"fingerprints": []}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::ot_ics_fingerprints_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, host, port, protocol, vendor_hint, confidence, raw_excerpt_hex, metadata, created_at
            FROM ot_ics_fingerprints WHERE tenant_id = $1 AND client_id = $2 ORDER BY id"#,
     )
@@ -118,7 +141,18 @@ async fn api_client_ot_ics_fingerprints(
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::ot_ics_fingerprints_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let mut fingerprints = Vec::new();
     for r in rows {

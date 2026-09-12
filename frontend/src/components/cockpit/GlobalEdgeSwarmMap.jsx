@@ -30,24 +30,20 @@ export default function GlobalEdgeSwarmMap() {
     setLoading(true)
     setError(null)
     try {
-      // Each endpoint is independently tolerant so one failing with an HTTP
-      // error still lets the other populate (preserves the original per-response
-      // `.ok` checks). A tolerated HTTP failure resolves to null; network
-      // failures (no `.status`) are re-thrown so they still surface the error
-      // banner via the outer catch, exactly as before.
-      const tolerateHttpError = (e) => {
-        if (e?.status != null) return null
-        throw e
-      }
       const [nodesData, manifestData] = await Promise.all([
-        apiFetch('/api/edge-swarm/nodes').catch(tolerateHttpError),
-        apiFetch('/api/edge-fuzz/manifest').catch(tolerateHttpError),
+        apiFetch('/api/edge-swarm/nodes'),
+        apiFetch('/api/edge-fuzz/manifest').catch((e) => {
+          if (e?.status != null) return null
+          throw e
+        }),
       ])
-      const nd = nodesData != null ? nodesData : { nodes: [] }
-      setNodes(Array.isArray(nd.nodes) ? nd.nodes : [])
+      if (nodesData?.ok === false || nodesData?.unavailable) {
+        throw new Error(nodesData.detail || t(`${NS}.unavailable`))
+      }
+      setNodes(Array.isArray(nodesData?.nodes) ? nodesData.nodes : [])
       setManifest(manifestData != null ? manifestData : null)
     } catch (e) {
-      setError(t(`${NS}.loadFailed`))
+      setError(e?.message || t(`${NS}.unavailable`))
       setNodes([])
     } finally {
       setLoading(false)
@@ -94,7 +90,15 @@ export default function GlobalEdgeSwarmMap() {
         </div>
       )}
 
-      {error && <div className="text-sm text-red-400">{error}</div>}
+      {error && (
+        <div
+          className="text-sm text-red-400"
+          data-testid="edge-swarm-unavailable"
+          role="alert"
+        >
+          {error}
+        </div>
+      )}
 
       <div className="flex-1 rounded-2xl border border-white/10 bg-[var(--bg-0)]/90 overflow-hidden min-h-[320px]">
         <GeoWorldMap
@@ -123,7 +127,7 @@ export default function GlobalEdgeSwarmMap() {
         </GeoWorldMap>
       </div>
 
-      {nodes.length === 0 && !loading && (
+      {nodes.length === 0 && !loading && !error && (
         <p className="text-sm text-white/45">
           {t(`${NS}.noNodes`)}{' '}
           <code className="text-cyan-300/90">region_code</code>, <code className="text-cyan-300/90">pop_label</code>, {t(`${NS}.noNodesSuffix`)}{' '}

@@ -100,9 +100,15 @@ async fn api_sovereign_defense_chronos_events(
     Path(client_id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = crate::db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!([]))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::chronos_events_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, event_type, pid, parent_pid, process_name, syscall_hint, action_taken, delta_json, created_at
              FROM chronos_events
             WHERE client_id = $1
@@ -111,7 +117,18 @@ async fn api_sovereign_defense_chronos_events(
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::chronos_events_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let out: Vec<Value> = rows
         .into_iter()
@@ -155,9 +172,15 @@ async fn api_sovereign_defense_cognitive_sessions(
     Path(client_id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = crate::db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!([]))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::cognitive_sessions_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, target_url, bot_score, bot_signals, poison_variant, poison_payload_id, response_status, created_at
              FROM cognitive_starvation_sessions
             WHERE client_id = $1
@@ -166,7 +189,18 @@ async fn api_sovereign_defense_cognitive_sessions(
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::cognitive_sessions_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let out: Vec<Value> = rows
         .into_iter()

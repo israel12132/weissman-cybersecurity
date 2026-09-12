@@ -101,16 +101,33 @@ async fn api_llm_fuzz_events(
     Path(client_id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"events": []}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::llm_fuzz_events_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, endpoint_url, attack_vector, request_preview, response_excerpt, leakage_score, hallucination_score, blocked, created_at
            FROM llm_fuzz_events WHERE client_id = $1 ORDER BY id DESC LIMIT 300"#,
     )
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::llm_fuzz_events_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let events: Vec<Value> = rows
         .into_iter()
@@ -137,9 +154,15 @@ async fn api_llm_fuzz_summary(
     Path(client_id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"vectors": []}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::llm_fuzz_summary_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT attack_vector,
                   COALESCE(AVG(leakage_score), 0)::double precision AS avg_leakage,
                   COALESCE(AVG(hallucination_score), 0)::double precision AS avg_hallucination,
@@ -150,7 +173,18 @@ async fn api_llm_fuzz_summary(
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::llm_fuzz_summary_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let vectors: Vec<Value> = rows
         .into_iter()

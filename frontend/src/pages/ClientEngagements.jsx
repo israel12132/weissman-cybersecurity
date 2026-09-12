@@ -67,10 +67,17 @@ export default function ClientEngagements() {
       if (listR.error) {
         const detail = listR.error.response ? await listR.error.response.text().catch(() => '') : ''
         setError(t('pages.clientEngagements.load_failed', { status: listR.error.status, detail }))
+        setEngagements([])
         setLoading(false)
         return
       }
       const listData = listR.data
+      if (listData?.ok === false || listData?.unavailable) {
+        setError(listData.detail || t('pages.clientEngagements.unavailable'))
+        setEngagements([])
+        setLoading(false)
+        return
+      }
       setEngagements(Array.isArray(listData.engagements) ? listData.engagements : [])
     } catch (e) {
       setError(e?.message || t('pages.clientEngagements.network_error'))
@@ -204,7 +211,11 @@ export default function ClientEngagements() {
         </div>
 
         {error && (
-          <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-300">
+          <div
+            className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-300"
+            data-testid="engagements-unavailable"
+            role="alert"
+          >
             {error}
           </div>
         )}
@@ -283,10 +294,16 @@ export default function ClientEngagements() {
         <div className="p-6 bg-[var(--bg-1)]/30 border border-[var(--border-default)] rounded-xl">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white">{t('pages.clientEngagements.history_heading')}</h2>
-            <span className="text-xs text-[var(--text-muted)]">{t('pages.clientEngagements.total', { count: engagements.length })}</span>
+            {!error && (
+              <span className="text-xs text-[var(--text-muted)]">{t('pages.clientEngagements.total', { count: engagements.length })}</span>
+            )}
           </div>
 
-          {engagements.length === 0 ? (
+          {error ? (
+            <div className="text-center py-10 text-red-300/80" data-testid="engagements-empty-suppressed">
+              {t('pages.clientEngagements.unavailable')}
+            </div>
+          ) : engagements.length === 0 ? (
             <div className="text-center py-10 text-[var(--text-muted)]">
               {t('pages.clientEngagements.empty')}
             </div>

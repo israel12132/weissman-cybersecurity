@@ -17,6 +17,7 @@ export default function ComplianceDashboardTab() {
   const [msg, setMsg] = useState(null)
   const [posture, setPosture] = useState(null)
   const [postureLoading, setPostureLoading] = useState(true)
+  const [postureError, setPostureError] = useState(null)
 
   const labelForFramework = (fw) => t(`${NS}.frameworks.${fw}`, fw)
 
@@ -35,16 +36,26 @@ export default function ComplianceDashboardTab() {
   const loadPosture = useCallback(() => {
     if (!selectedClientId) {
       setPosture(null)
+      setPostureError(null)
       setPostureLoading(false)
       return
     }
     setPostureLoading(true)
+    setPostureError(null)
     const q = `?client_id=${encodeURIComponent(selectedClientId)}`
     apiFetch(`/api/compliance/posture${q}`)
-      .then((d) => setPosture(d))
-      .catch(() => setPosture(null))
+      .then((d) => {
+        if (d?.ok === false || d?.unavailable) {
+          throw new Error(d.detail || t(`${NS}.unavailable`))
+        }
+        setPosture(d)
+      })
+      .catch((e) => {
+        setPosture(null)
+        setPostureError(e?.message || t(`${NS}.unavailable`))
+      })
       .finally(() => setPostureLoading(false))
-  }, [selectedClientId])
+  }, [selectedClientId, t])
 
   useEffect(() => {
     loadPosture()
@@ -179,7 +190,12 @@ export default function ComplianceDashboardTab() {
       <section className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md p-6">
         <h3 className="text-sm font-semibold text-[#22d3ee] uppercase tracking-wider mb-4">{t(`${NS}.postureTitle`)}</h3>
         {postureLoading && <p className="text-sm text-white/40">{t(`${NS}.loadingPosture`)}</p>}
-        {!postureLoading && frameworks.length === 0 && (
+        {!postureLoading && postureError && (
+          <p className="text-sm text-red-300" data-testid="compliance-posture-unavailable" role="alert">
+            {t(`${NS}.unavailable`)}
+          </p>
+        )}
+        {!postureLoading && !postureError && frameworks.length === 0 && (
           <p className="text-sm text-white/45">{t(`${NS}.noFrameworkData`)}</p>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

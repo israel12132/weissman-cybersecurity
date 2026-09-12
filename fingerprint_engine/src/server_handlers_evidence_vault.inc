@@ -59,15 +59,32 @@ async fn api_client_evidence_list(
     Path(client_id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"evidence": []}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     // Ensure client exists (better error than silent empty list).
-    let exists: Option<i64> = sqlx::query_scalar("SELECT id FROM clients WHERE id = $1")
+    // Query failure is store-down (503), not "client missing" (404).
+    let exists: Option<i64> = match sqlx::query_scalar("SELECT id FROM clients WHERE id = $1")
         .bind(client_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     if exists.is_none() {
         let _ = tx.rollback().await;
         return (
@@ -77,7 +94,7 @@ async fn api_client_evidence_list(
             .into_response();
     }
 
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, client_id, engagement_id, vulnerability_id, filename, content_type,
                   size_bytes, sha256_hex, label, notes, created_by_user_id, created_at
            FROM evidence_items
@@ -88,7 +105,18 @@ async fn api_client_evidence_list(
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
 
     let evidence: Vec<Value> = rows

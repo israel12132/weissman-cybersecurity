@@ -68,6 +68,46 @@ pub fn oast_callbacks_unavailable_json(detail: &str, health: Value) -> Value {
     })
 }
 
+/// `GET /api/clients/:id/llm-fuzz/events`
+pub fn llm_fuzz_events_unavailable_json(detail: &str) -> Value {
+    list_envelope("events", detail)
+}
+
+/// `GET /api/clients/:id/llm-fuzz/summary`
+pub fn llm_fuzz_summary_unavailable_json(detail: &str) -> Value {
+    list_envelope("vectors", detail)
+}
+
+/// `GET /api/edge-swarm/nodes`
+pub fn edge_swarm_nodes_unavailable_json(detail: &str) -> Value {
+    list_envelope("nodes", detail)
+}
+
+/// `GET /api/clients/:id/ot-ics/fingerprints`
+pub fn ot_ics_fingerprints_unavailable_json(detail: &str) -> Value {
+    list_envelope("fingerprints", detail)
+}
+
+/// `GET /api/clients/:id/engagements`
+pub fn engagements_unavailable_json(detail: &str) -> Value {
+    list_envelope("engagements", detail)
+}
+
+/// `GET /api/clients/:id/evidence`
+pub fn evidence_unavailable_json(detail: &str) -> Value {
+    list_envelope("evidence", detail)
+}
+
+/// `GET /api/sovereign-defense/:id/chronos/events`
+pub fn chronos_events_unavailable_json(detail: &str) -> Value {
+    list_envelope("events", detail)
+}
+
+/// `GET /api/sovereign-defense/:id/cognitive/sessions`
+pub fn cognitive_sessions_unavailable_json(detail: &str) -> Value {
+    list_envelope("sessions", detail)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -128,5 +168,51 @@ mod tests {
         assert_eq!(v["unavailable"], true);
         assert_eq!(v["callbacks"], json!([]));
         assert_eq!(v["health"]["configured"], true);
+    }
+
+    #[test]
+    fn llm_fuzz_events_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&llm_fuzz_events_unavailable_json("store down"), "events");
+    }
+
+    #[test]
+    fn llm_fuzz_summary_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&llm_fuzz_summary_unavailable_json("store down"), "vectors");
+    }
+
+    #[test]
+    fn edge_swarm_nodes_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&edge_swarm_nodes_unavailable_json("store down"), "nodes");
+    }
+
+    #[test]
+    fn ot_ics_fingerprints_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(
+            &ot_ics_fingerprints_unavailable_json("store down"),
+            "fingerprints",
+        );
+    }
+
+    #[test]
+    fn engagements_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&engagements_unavailable_json("store down"), "engagements");
+    }
+
+    #[test]
+    fn evidence_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&evidence_unavailable_json("store down"), "evidence");
+    }
+
+    #[test]
+    fn chronos_events_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&chronos_events_unavailable_json("store down"), "events");
+    }
+
+    #[test]
+    fn cognitive_sessions_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(
+            &cognitive_sessions_unavailable_json("store down"),
+            "sessions",
+        );
     }
 }
