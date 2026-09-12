@@ -179,7 +179,8 @@ async fn probe_target_hints(client: &reqwest::Client, target: &str) -> (String, 
     if let Some(p) = http_get(client, &url).await {
         let server = header_value(&p.headers, "server")
             .or_else(|| header_value(&p.headers, "x-powered-by"))
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .to_string();
         let html: String = p.body.chars().take(8000).collect();
         return (server, html);
     }

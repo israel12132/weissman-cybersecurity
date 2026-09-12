@@ -565,7 +565,7 @@ pub fn build_client_report_pdf(
     let hm_y = b.y - 5.0;
     let cell_w = 52.0;
     let cell_h = 36.0;
-    let live_cells: [(u32, f64, f64, f64); 4] = [
+    let live_cells: [(i64, f64, f64, f64); 4] = [
         (critical, 0.90, 0.22, 0.22),
         (high, 0.95, 0.55, 0.15),
         (medium, 0.90, 0.82, 0.20),
