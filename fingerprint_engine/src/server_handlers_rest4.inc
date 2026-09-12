@@ -2544,7 +2544,13 @@ async fn api_deception_generate(
     let use_llm_decoy = body.use_llm_decoy.unwrap_or(true);
 
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"inserted": 0}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::deception_generate_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     let llm_base: String = sqlx::query_scalar::<_, String>(
         "SELECT COALESCE(trim(value),'') FROM system_configs WHERE tenant_id = $1 AND key = 'llm_base_url'",
@@ -2565,7 +2571,13 @@ async fn api_deception_generate(
     .flatten()
     .unwrap_or_default();
     if tx.commit().await.is_err() {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"inserted": 0}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::deception_generate_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     }
 
     let records: Vec<deception_engine::DeceptionAssetRecord> =
@@ -2645,7 +2657,13 @@ async fn api_deception_generate(
     }
 
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"inserted": 0}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::deception_generate_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     let mut inserted = 0u32;
     for row in to_insert {
@@ -3419,7 +3437,7 @@ async fn api_oast_callbacks(
             StatusCode::SERVICE_UNAVAILABLE,
             Json(crate::http_unavailable::oast_callbacks_unavailable_json(
                 "database unavailable",
-                oast_health(None, 0),
+                crate::http_unavailable::oast_callbacks_store_down_health(),
             )),
         )
             .into_response();
@@ -3442,9 +3460,9 @@ async fn api_oast_callbacks(
         Err(e) => {
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(crate::http_unavailable::oast_callbacks_unavailable_json(
+                    Json(crate::http_unavailable::oast_callbacks_unavailable_json(
                     scrub_internal_error(&e),
-                    oast_health(None, 0),
+                    crate::http_unavailable::oast_callbacks_store_down_health(),
                 )),
             )
                 .into_response();

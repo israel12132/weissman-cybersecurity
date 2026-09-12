@@ -289,8 +289,9 @@ export function FirstMoverDeltaPanel({
   const cs = nerve?.certstream || {}
   const oast = nerve?.oast || {}
   const nvd = nerve?.nvd || {}
-  const nerveDown = !nerve || nerve.unavailable === true || nerve.ok === false
-  const nerveChips = nerveDown
+  const nervePending = nerve == null
+  const nerveDown = !nervePending && (nerve.unavailable === true || nerve.ok === false)
+  const nerveChips = nerveDown || nervePending
     ? []
     : [
         [
@@ -383,6 +384,10 @@ export function FirstMoverDeltaPanel({
           ))
         )}
       </div>
+      {diff?.unavailable && (
+        <p className="text-[12px] font-mono text-amber-200/80">{t('pages.attackSurfaceManagement.first_mover_unavailable')}</p>
+      )}
+      {!diff?.unavailable && (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
         {[
           [t('pages.attackSurfaceManagement.first_mover_added'), added.length, '#22d3ee'],
@@ -396,14 +401,12 @@ export function FirstMoverDeltaPanel({
           </div>
         ))}
       </div>
+      )}
       {diff?.current_at && (
         <p className="text-[10px] font-mono text-[var(--text-muted)] mb-2">
           {t('pages.attackSurfaceManagement.first_mover_last_snapshot')}: {diff.current_at}
           {diff.baseline_only ? ` · ${t('pages.attackSurfaceManagement.first_mover_baseline')}` : ''}
         </p>
-      )}
-      {diff?.unavailable && (
-        <p className="text-[12px] font-mono text-amber-200/80">{t('pages.attackSurfaceManagement.first_mover_unavailable')}</p>
       )}
       {loading && !diff && (
         <p className="text-[12px] font-mono text-[var(--text-muted)]">{t('pages.attackSurfaceManagement.empty_running')}</p>
@@ -565,7 +568,7 @@ export default function AttackSurfaceManagement() {
       if (import.meta.env.DEV) {
         console.debug('surface-diff skipped', err)
       }
-      setSurfaceDiff(null)
+      setSurfaceDiff({ unavailable: true })
     } finally {
       setDeltaLoading(false)
     }

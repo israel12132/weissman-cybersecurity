@@ -2577,6 +2577,8 @@
       "running": "Running emulation…",
       "refresh": "Refresh",
       "load_failed": "Failed to load emulation findings",
+      "unavailable": "Emulation APIs unavailable — empty findings are not a clean surface.",
+      "clients_unavailable": "Clients API unavailable — missing client is not confirmed.",
       "run_complete": "Emulation job {{status}} — findings refreshed",
       "engine_notice": "One POST /api/command-center/scan with engine threat_emulation executes all 7 backend APT scenarios against your authorized target. Cards show per-group results parsed from real findings — empty means that path returned no signal (honest absence, not a pass).",
       "select_client_warning_title": "Select a client",
@@ -4421,6 +4423,7 @@
       "live_callbacks": "Live Callbacks",
       "polling_every": "Polling every 5s",
       "callbacks_empty": "No callbacks received yet. Launch a probe to generate OOB traffic.",
+      "callbacks_unavailable": "Callback API unavailable — empty callbacks are not confirmed.",
       "structured_tokens": "Structured Probe Tokens",
       "structured_body": "Mint a UUID-correlated OAST token for a specific target. Poll to confirm OOB callback hit (zero-false-positive verification). No shells generated.",
       "mint_new": "Mint new token",
@@ -6155,7 +6158,8 @@
         "criticalOpen": "{{count}} critical open",
         "cvesTitle": "Top CVEs",
         "cvesFooter": "most frequent across assets",
-        "cvesEmpty": "No CVE-correlated findings yet"
+        "cvesEmpty": "No CVE-correlated findings yet",
+        "unavailable": "Executive KPI API unavailable — empty movers are not confirmed."
       },
       "engineCard": {
         "run": "Run",

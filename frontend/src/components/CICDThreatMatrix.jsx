@@ -42,11 +42,11 @@ export default function CICDThreatMatrix() {
     apiName: key.charAt(0).toUpperCase() + key.slice(1),
   }))
 
-  const fetchFindings = useCallback(() => {
+  const fetchFindings = useCallback((requestInit = {}) => {
     if (!clientId) return
     setLoading(true)
     setFindingsError('')
-    apiFetch(`/api/clients/${clientId}/cicd-findings`)
+    apiFetch(`/api/clients/${clientId}/cicd-findings`, requestInit)
       .then((data) => {
         if (data?.ok === false || data?.unavailable) {
           throw new Error(data.detail || t(`${NS}.fetch_failed`))
@@ -54,19 +54,26 @@ export default function CICDThreatMatrix() {
         setFindings(data?.findings ?? [])
       })
       .catch((e) => {
+        if (e?.name === 'AbortError') return
+        setFindings([])
         setFindingsError(e?.message || t(`${NS}.fetch_failed`))
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (!requestInit?.signal?.aborted) setLoading(false)
+      })
   }, [clientId])
 
   useEffect(() => {
-    fetchFindings()
+    const ac = new AbortController()
+    fetchFindings({ signal: ac.signal })
+    return () => ac.abort()
   }, [fetchFindings])
 
   useEffect(() => {
-    if (!clientId) return
+    if (!clientId) return undefined
+    const ac = new AbortController()
     setClientsError('')
-    apiFetch('/api/clients')
+    apiFetch('/api/clients', { signal: ac.signal })
       .then((list) => {
         if (list?.ok === false || list?.unavailable) {
           throw new Error(list.detail || t(`${NS}.unavailable`))
@@ -75,9 +82,12 @@ export default function CICDThreatMatrix() {
         setClient(c || null)
       })
       .catch((e) => {
+        if (e?.name === 'AbortError') return
         setClient(null)
         setClientsError(e?.message || t(`${NS}.unavailable`))
       })
+    return () => ac.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId])
 
   const findingsByStage = STAGES.reduce((acc, stage) => {
@@ -124,15 +134,19 @@ export default function CICDThreatMatrix() {
           <div className="flex flex-wrap items-center justify-between gap-4">
             {STAGES.map((stage, idx) => {
               const count = (findingsByStage[stage.apiName] || []).length
-              const isRed = count > 0
+              const unconfirmed = Boolean(findingsError)
+              const isRed = !unconfirmed && count > 0
               return (
                 <div key={stage.key} className="flex items-center gap-2">
                   <Button variant="unstyled"
                     type="button"
                     onClick={() => count > 0 && setModalFinding(findingsByStage[stage.apiName][0])}
                     title={count > 0 ? t(`${NS}.view_findings`, { count }) : ''}
+                    data-testid={unconfirmed ? 'cicd-stage-unconfirmed' : undefined}
                     className={`rounded-xl px-6 py-4 font-bold text-sm transition-all ${
-                      isRed
+                      unconfirmed
+                        ? 'bg-amber-500/20 border-2 border-amber-500/50 text-amber-200'
+                        : isRed
                         ? 'bg-red-500/30 border-2 border-red-500 text-red-200 hover:bg-red-500/50'
                         : 'bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]'
                     }`}

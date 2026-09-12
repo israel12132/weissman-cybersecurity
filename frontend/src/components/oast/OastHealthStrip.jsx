@@ -33,9 +33,11 @@ export default function OastHealthStrip({ health, fallbackCount = 0 }) {
         {t('pages.oastDashboard.health_last')}: {health.last_callback_at
           || t('pages.oastDashboard.health_none')}
       </span>
+      {!unavailable && (
       <span>
         {t('pages.oastDashboard.health_count', { count: health.callback_count ?? fallbackCount })}
       </span>
+      )}
     </div>
   )
 }

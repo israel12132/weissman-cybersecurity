@@ -186,12 +186,22 @@ async fn api_client_evidence_upload(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
 
-    let client_exists: Option<i64> = sqlx::query_scalar("SELECT id FROM clients WHERE id = $1")
+    let client_exists: Option<i64> = match sqlx::query_scalar("SELECT id FROM clients WHERE id = $1")
         .bind(client_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     if client_exists.is_none() {
         let _ = tx.rollback().await;
         return (
@@ -203,13 +213,23 @@ async fn api_client_evidence_upload(
 
     // If engagement_id provided, validate it belongs to this client.
     if let Some(eid) = body.engagement_id {
-        let ok: Option<i64> = sqlx::query_scalar("SELECT id FROM engagements WHERE id = $1 AND client_id = $2")
+        let ok: Option<i64> = match sqlx::query_scalar("SELECT id FROM engagements WHERE id = $1 AND client_id = $2")
             .bind(eid)
             .bind(client_id)
             .fetch_optional(&mut *tx)
             .await
-            .ok()
-            .flatten();
+        {
+            Ok(v) => v,
+            Err(e) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::evidence_unavailable_json(
+                        scrub_internal_error(&e),
+                    )),
+                )
+                    .into_response();
+            }
+        };
         if ok.is_none() {
             let _ = tx.rollback().await;
             return (
@@ -221,15 +241,25 @@ async fn api_client_evidence_upload(
     }
     // If vulnerability_id provided, validate it belongs to this client.
     if let Some(vid) = body.vulnerability_id {
-        let ok: Option<i64> = sqlx::query_scalar(
+        let ok: Option<i64> = match sqlx::query_scalar(
             "SELECT id FROM vulnerabilities WHERE id = $1 AND client_id = $2",
         )
         .bind(vid)
         .bind(client_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
+        {
+            Ok(v) => v,
+            Err(e) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::evidence_unavailable_json(
+                        scrub_internal_error(&e),
+                    )),
+                )
+                    .into_response();
+            }
+        };
         if ok.is_none() {
             let _ = tx.rollback().await;
             return (
@@ -393,25 +423,44 @@ async fn api_evidence_delete(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
 
-    let row = sqlx::query("SELECT client_id FROM evidence_items WHERE id = $1")
+    let row = match sqlx::query("SELECT client_id FROM evidence_items WHERE id = $1")
         .bind(evidence_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let Some(r) = row else {
         let _ = tx.commit().await;
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "not found"}))).into_response();
     };
     let client_id = r.try_get::<i64, _>("client_id").unwrap_or(0);
 
-    let deleted = sqlx::query("DELETE FROM evidence_items WHERE id = $1")
+    let deleted = match sqlx::query("DELETE FROM evidence_items WHERE id = $1")
         .bind(evidence_id)
         .execute(&mut *tx)
         .await
-        .ok()
-        .map(|r| r.rows_affected())
-        .unwrap_or(0);
+    {
+        Ok(r) => r.rows_affected(),
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     if deleted == 0 {
         let _ = tx.rollback().await;
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false}))).into_response();

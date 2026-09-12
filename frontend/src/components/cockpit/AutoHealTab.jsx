@@ -30,6 +30,8 @@ export default function AutoHealTab() {
   const [verifyJobId, setVerifyJobId] = useState(null)
   const [verifySteps, setVerifySteps] = useState([])
   const pollRef = useRef(null)
+  const clientIdRef = useRef(selectedClientId)
+  clientIdRef.current = selectedClientId
   const [healForm, setHealForm] = useState({
     finding_id: '',
     git_token: '',
@@ -67,6 +69,9 @@ export default function AutoHealTab() {
   }, [selectedClientId])
 
   useEffect(() => {
+    stopPoll()
+    setVerifyJobId(null)
+    setVerifySteps([])
     fetchRequests()
   }, [fetchRequests])
 
@@ -89,11 +94,13 @@ export default function AutoHealTab() {
     setVerifySteps([])
     const tick = async () => {
       if (typeof document !== 'undefined' && document.hidden) return
+      const owner = clientIdRef.current
       try {
         const d = await apiFetch(`/api/heal-verify/${encodeURIComponent(jobId)}/steps`)
         if (d?.ok === false || d?.unavailable) {
           throw new Error(d.detail || t(`${NS}.verifyPollFailed`))
         }
+        if (clientIdRef.current !== owner) return
         const steps = d.steps || []
         setVerifySteps(steps)
         const last = steps[steps.length - 1]
@@ -103,6 +110,7 @@ export default function AutoHealTab() {
           await fetchRequests()
         }
       } catch (e) {
+        if (clientIdRef.current !== owner) return
         stopPoll()
         setVerifyJobId(null)
         setActionError(e?.message || t(`${NS}.verifyPollFailed`))

@@ -57,6 +57,17 @@ pub fn pipeline_state_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// `GET /api/oast/callbacks` health object when the hit table cannot be read.
+/// `callback_count` stays null — never a live `0` on store-down.
+pub fn oast_callbacks_store_down_health() -> Value {
+    json!({
+        "configured": crate::fuzz_oob::oast_correlation_enabled(),
+        "domain": crate::fuzz_oob::oast_hook_domain().unwrap_or_default(),
+        "last_callback_at": Value::Null,
+        "callback_count": Value::Null,
+    })
+}
+
 /// `GET /api/oast/callbacks`
 pub fn oast_callbacks_unavailable_json(detail: &str, health: Value) -> Value {
     json!({
@@ -288,6 +299,16 @@ pub fn deception_assets_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// `POST /api/clients/:id/deception/generate`
+pub fn deception_generate_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "inserted": Value::Null,
+        "detail": detail,
+    })
+}
+
 /// `GET /api/clients/:id/first-seen-hits` — never advertise zero pre-NVD counts on store-down
 pub fn first_seen_hits_unavailable_json(client_id: i64, detail: &str) -> Value {
     json!({
@@ -390,11 +411,12 @@ mod tests {
 
     #[test]
     fn oast_callbacks_store_down_is_never_ok_empty_success() {
-        let v = oast_callbacks_unavailable_json("store down", json!({"configured": true}));
+        let v = oast_callbacks_unavailable_json("store down", oast_callbacks_store_down_health());
         assert_eq!(v["ok"], false);
         assert_eq!(v["unavailable"], true);
         assert_eq!(v["callbacks"], json!([]));
-        assert_eq!(v["health"]["configured"], true);
+        assert!(v["health"]["callback_count"].is_null());
+        assert_ne!(v["health"]["callback_count"], json!(0));
     }
 
     #[test]
@@ -584,6 +606,15 @@ mod tests {
     #[test]
     fn deception_assets_store_down_is_never_ok_empty_success() {
         never_ok_empty_success(&deception_assets_unavailable_json("store down"), "assets");
+    }
+
+    #[test]
+    fn deception_generate_store_down_is_never_inserted_zero_success() {
+        let v = deception_generate_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["inserted"].is_null());
+        assert_ne!(v["inserted"], json!(0));
     }
 
     #[test]

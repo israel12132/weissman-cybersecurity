@@ -23,10 +23,12 @@ export default function ReportView() {
     let cancelled = false
     setLoading(true)
     setError('')
+    setClient(null)
+    const ac = new AbortController()
     Promise.all([
-      apiFetch('/api/clients'),
-      apiFetch('/api/findings'),
-      apiFetch(`/api/clients/${clientId}/report/crypto-proof`),
+      apiFetch('/api/clients', { signal: ac.signal }),
+      apiFetch('/api/findings', { signal: ac.signal }),
+      apiFetch(`/api/clients/${clientId}/report/crypto-proof`, { signal: ac.signal }),
     ])
       .then(([clients, findingsList, proof]) => {
         if (cancelled) return
@@ -45,15 +47,19 @@ export default function ReportView() {
         setCryptoProof(proof?.audit_root_hash ? proof : null)
       })
       .catch((e) => {
-        if (cancelled) return
+        if (cancelled || e?.name === 'AbortError') return
         setError(e?.message || t('components.reportView.unavailable'))
+        setClient(null)
         setFindings([])
         setCryptoProof(null)
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!cancelled && !ac.signal.aborted) setLoading(false)
       })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      ac.abort()
+    }
   }, [clientId])
 
   if (loading) {

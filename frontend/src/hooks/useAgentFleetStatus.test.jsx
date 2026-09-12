@@ -88,7 +88,7 @@ describe('useAgentFleetStatus', () => {
   })
 
   it('treats an ok:false JSON body as unavailable, not zero agents', async () => {
-    apiFetch.mockResolvedValue({ ok: false, unavailable: true, agents: [], online_count: 0, detail: 'store down' })
+    apiFetch.mockResolvedValue({ ok: false, unavailable: true, agents: [], online_count: null, detail: 'store down' })
     render(<Probe />)
     await waitFor(() => expect(screen.getByTestId('fleet').getAttribute('data-unavailable')).toBe('true'))
     expect(screen.getByTestId('fleet').getAttribute('data-has-online')).toBe('false')

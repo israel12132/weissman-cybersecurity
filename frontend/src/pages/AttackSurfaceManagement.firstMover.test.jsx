@@ -141,6 +141,7 @@ describe('FirstMoverDeltaPanel', () => {
     )
     expect(screen.getByText('pages.attackSurfaceManagement.first_mover_unavailable')).toBeTruthy()
     expect(screen.queryByText('pages.attackSurfaceManagement.first_mover_empty')).toBeNull()
+    expect(screen.queryByText('pages.attackSurfaceManagement.first_mover_added')).toBeNull()
   })
 
   it('shows empty baseline copy when no snapshot exists', () => {
@@ -154,6 +155,7 @@ describe('FirstMoverDeltaPanel', () => {
       />,
     )
     expect(screen.getByText('pages.attackSurfaceManagement.first_mover_empty')).toBeTruthy()
+    expect(screen.queryByTestId('first-mover-nerve-unavailable')).toBeNull()
   })
 
   it('does not paint nerve_off when the first-mover nerve API is unavailable', () => {

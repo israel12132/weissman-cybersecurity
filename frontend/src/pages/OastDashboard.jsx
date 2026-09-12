@@ -93,10 +93,12 @@ export default function OastDashboard() {
         setClientsError(null)
       })
       .catch((e) => {
+        if (e?.name === 'AbortError') return
         setClients([])
         setClientsError(e?.message || t('pages.oastDashboard.clients_unavailable'))
       })
-  }, [t])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useClientTargetPrefill(selectedClientId, clients, setMintTarget)
 
@@ -120,21 +122,24 @@ export default function OastDashboard() {
           callback_count: Number(d.health.callback_count ?? list.length) || 0,
         })
       } else {
+        setCallbacks([])
         setOastHealth({
           configured: false,
           unavailable: true,
           domain: '',
           last_callback_at: null,
-          callback_count: list.length,
+          callback_count: null,
         })
       }
-    } catch {
+    } catch (e) {
+      if (e?.name === 'AbortError') return
+      setCallbacks([])
       setOastHealth({
         configured: false,
         unavailable: true,
         domain: '',
         last_callback_at: null,
-        callback_count: 0,
+        callback_count: null,
       })
     }
     finally {
@@ -303,6 +308,15 @@ export default function OastDashboard() {
         </div>
 
         <div className="space-y-4">
+          {oastHealth?.unavailable ? (
+            <p
+              className="text-sm text-amber-200/90"
+              data-testid="oast-callbacks-unavailable"
+              role="alert"
+            >
+              {t('pages.oastDashboard.callbacks_unavailable')}
+            </p>
+          ) : (
           <WeissmanFindingsPanel
             findings={listFindings}
             filteredFindings={filteredFindings}
@@ -315,6 +329,7 @@ export default function OastDashboard() {
             loading={callbacksInitialLoading && !listFindings.length}
             accent="#22d3ee"
           />
+          )}
         </div>
       </div>
 

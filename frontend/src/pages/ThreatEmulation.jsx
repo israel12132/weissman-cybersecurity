@@ -218,6 +218,7 @@ function AptCard({ group, result, t }) {
 export default function ThreatEmulation() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
+  const [clientsError, setClientsError] = useState('')
   const [selectedClientId, setSelectedClientId] = useState(null)
   const { postScan } = useCommandCenterScan(selectedClientId)
   const [emulationFindings, setEmulationFindings] = useState([])
@@ -240,27 +241,41 @@ export default function ThreatEmulation() {
     try {
       const q = clientId ? `?client_id=${clientId}&limit=1000` : '?limit=1000'
       const [findingsData, histData] = await Promise.all([
-        apiFetch(`/api/findings${q}`).catch(() => null),
-        apiFetch('/api/engines/history/threat_emulation?limit=20').catch(() => null),
+        apiFetch(`/api/findings${q}`),
+        apiFetch('/api/engines/history/threat_emulation?limit=20'),
       ])
-      if (findingsData) {
-        setEmulationFindings(parseFindingsList(findingsData).filter(isThreatEmulationFinding))
+      if (findingsData?.ok === false || findingsData?.unavailable) {
+        throw new Error(findingsData.detail || t('pages.threatEmulation.load_failed'))
       }
-      if (histData) {
-        setHistory(Array.isArray(histData?.jobs) ? histData.jobs : [])
+      if (histData?.ok === false || histData?.unavailable) {
+        throw new Error(histData.detail || t('pages.threatEmulation.load_failed'))
       }
+      setEmulationFindings(parseFindingsList(findingsData).filter(isThreatEmulationFinding))
+      setHistory(Array.isArray(histData?.jobs) ? histData.jobs : [])
     } catch (e) {
       setError(e?.message || t('pages.threatEmulation.load_failed'))
+      setEmulationFindings([])
+      setHistory([])
     } finally {
       setLoading(false)
     }
-  }, [t])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        if (d?.ok === false || d?.unavailable) {
+          throw new Error(d.detail || t('pages.threatEmulation.clients_unavailable'))
+        }
+        if (Array.isArray(d)) setClients(d)
+        setClientsError('')
+      })
+      .catch((e) => {
+        setClients([])
+        setClientsError(e?.message || t('pages.threatEmulation.clients_unavailable'))
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -414,6 +429,17 @@ export default function ThreatEmulation() {
         </div>
       )}
 
+      {clientsError && (
+        <p className="text-sm text-amber-200/90 mb-4" data-testid="threat-emulation-clients-unavailable" role="alert">
+          {t('pages.threatEmulation.clients_unavailable')}
+        </p>
+      )}
+      {error && (
+        <p className="text-sm text-amber-200/90 mb-4" data-testid="threat-emulation-unavailable" role="alert">
+          {t('pages.threatEmulation.unavailable')}
+        </p>
+      )}
+
       {!selectedClientId && (
         <EmptyState
           icon={<Target className="w-8 h-8 text-[var(--text-disabled)]" />}
@@ -422,9 +448,9 @@ export default function ThreatEmulation() {
         />
       )}
 
-      {loading && selectedClientId ? (
+      {loading && selectedClientId && !error ? (
         <SkeletonWidgetGrid count={4} />
-      ) : selectedClientId && (
+      ) : selectedClientId && !error && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
@@ -479,7 +505,7 @@ export default function ThreatEmulation() {
             jobId={activeJobId || undefined}
             accent="#ef4444"
             className="mb-8"
-            showEmptyReady={!running && !activeJobId && !emulationFindings.length}
+            showEmptyReady={!error && !running && !activeJobId && !emulationFindings.length}
             emptyReadyTitle={t('pages.threatEmulation.select_client_warning_title')}
             emptyReadyBody={t('pages.threatEmulation.no_data')}
             renderFinding={renderEmulationFinding}

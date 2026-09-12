@@ -56,5 +56,6 @@ describe('CICDThreatMatrix', () => {
     render(<CICDThreatMatrix />)
     expect(await screen.findByTestId('cicd-lab-unavailable')).toBeTruthy()
     expect(screen.queryByText('components.tools.cicdThreatMatrix.no_findings')).toBeNull()
+    expect(screen.getAllByTestId('cicd-stage-unconfirmed').length).toBe(4)
   })
 })

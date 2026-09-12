@@ -38,7 +38,7 @@ pub fn agent_fleet_unavailable_json(detail: &'static str) -> Value {
         "ok": false,
         "unavailable": true,
         "agents": [],
-        "online_count": 0,
+        "online_count": Value::Null,
         "detail": detail,
     })
 }
@@ -1386,7 +1386,8 @@ mod tests {
         assert_eq!(v["ok"], false);
         assert_eq!(v["unavailable"], true);
         assert_eq!(v["agents"], json!([]));
-        assert_eq!(v["online_count"], 0);
+        assert!(v["online_count"].is_null());
+        assert_ne!(v["online_count"], json!(0));
         assert_eq!(v["detail"], "internal error");
     }
 

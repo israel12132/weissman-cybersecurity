@@ -63,8 +63,8 @@ describe('FirstSeenHitsPanel', () => {
       ok: false,
       unavailable: true,
       hits: [],
-      first_seen_count: 0,
-      listed_count: 0,
+      first_seen_count: null,
+      listed_count: null,
       detail: 'service unavailable',
     })
     render(<FirstSeenHitsPanel clientId={3} />)

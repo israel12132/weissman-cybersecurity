@@ -115,11 +115,11 @@ export default function MemoryForensicsLab() {
   // Close the self-healing PoE SSE stream on unmount so it does not reconnect forever.
   useEffect(() => () => { esRef.current?.close() }, [])
 
-  const fetchFindings = useCallback(() => {
+  const fetchFindings = useCallback((requestInit = {}) => {
     if (!clientId) return
     setLoading(true)
     setFindingsError('')
-    apiFetch(`/api/clients/${clientId}/poe-findings`)
+    apiFetch(`/api/clients/${clientId}/poe-findings`, requestInit)
       .then((data) => {
         if (data?.ok === false || data?.unavailable) {
           throw new Error(data.detail || t(`${NS}.fetch_failed`))
@@ -127,19 +127,25 @@ export default function MemoryForensicsLab() {
         setFindings(data?.findings ?? [])
       })
       .catch((e) => {
+        if (e?.name === 'AbortError') return
         setFindingsError(e?.message || t(`${NS}.fetch_failed`))
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (!requestInit?.signal?.aborted) setLoading(false)
+      })
   }, [clientId])
 
   useEffect(() => {
-    fetchFindings()
+    const ac = new AbortController()
+    fetchFindings({ signal: ac.signal })
+    return () => ac.abort()
   }, [fetchFindings])
 
   useEffect(() => {
-    if (!clientId) return
+    if (!clientId) return undefined
+    const ac = new AbortController()
     setClientsError('')
-    apiFetch('/api/clients')
+    apiFetch('/api/clients', { signal: ac.signal })
       .then((list) => {
         if (list?.ok === false || list?.unavailable) {
           throw new Error(list.detail || t(`${NS}.unavailable`))
@@ -155,9 +161,11 @@ export default function MemoryForensicsLab() {
         }
       })
       .catch((e) => {
+        if (e?.name === 'AbortError') return
         setClient(null)
         setClientsError(e?.message || t(`${NS}.unavailable`))
       })
+    return () => ac.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId])
 

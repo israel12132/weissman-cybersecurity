@@ -2577,6 +2577,8 @@
       "running": "מריץ סימולציה…",
       "refresh": "רענן",
       "load_failed": "טעינת ממצאי סימולציה נכשלה",
+      "unavailable": "ממשקי הסימולציה אינם זמינים — ממצאים ריקים אינם משטח נקי.",
+      "clients_unavailable": "API הלקוחות אינו זמין — לקוח חסר אינו מאושר.",
       "run_complete": "משימת סימולציה {{status}} — הממצאים רועננו",
       "engine_notice": "POST /api/command-center/scan אחד עם engine threat_emulation מריץ את כל 7 תרחישי ה-APT של ה-backend מול היעד המורשה. הכרטיסים מציגים תוצאות לפי קבוצה מממצאים אמיתיים — ריק = אין אות (היעדר אמיתי, לא מעבר).",
       "select_client_warning_title": "בחר לקוח",
@@ -4421,6 +4423,7 @@
       "live_callbacks": "Callbacks חיים",
       "polling_every": "בדיקה כל 5 שניות",
       "callbacks_empty": "לא התקבלו callbacks עדיין. הפעל בדיקה כדי לייצר תעבורת OOB.",
+      "callbacks_unavailable": "API הקולבים אינו זמין — callbacks ריקים אינם מאושרים.",
       "structured_tokens": "טוקני בדיקה מובנים",
       "structured_body": "הנפק טוקן OAST מקושר ל-UUID ליעד ספציפי. בדוק לאישור פגיעת callback (אימות ללא false positive). לא נוצרים shells.",
       "mint_new": "הנפק טוקן חדש",
@@ -6155,7 +6158,8 @@
         "criticalOpen": "{{count}} קריטי פתוח",
         "cvesTitle": "CVE מובילים",
         "cvesFooter": "התדירות הגבוהה ביותר בנכסים",
-        "cvesEmpty": "אין ממצאים מקושרי CVE עדיין"
+        "cvesEmpty": "אין ממצאים מקושרי CVE עדיין",
+        "unavailable": "API מדדי ה-KPI אינו זמין — מזיזים ריקים אינם מאושרים."
       },
       "engineCard": {
         "run": "הפעל",
