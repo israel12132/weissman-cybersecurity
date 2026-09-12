@@ -91,7 +91,11 @@ export default function IntegrationManager() {
   const testConnection = async (integrationId) => {
     try {
       setTestingConnection(integrationId);
-      const result = await api.post(`/api/integrations/${integrationId}/test`, { dry_run: dryRunTests });
+      const result = await api.post(`/api/integrations/${integrationId}/test`, {
+        dry_run: integrationId === 'cortex_xsiam' || integrationId === 'cortex_xsoar' || integrationId === 'cortex'
+          ? false
+          : dryRunTests,
+      });
 
       // Update integration status
       setIntegrations((prev) =>
@@ -455,11 +459,18 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
     try {
       setSaving(true);
       setSaveResult(null);
+      const isMasked = (v) => {
+        const t = String(v ?? '').trim()
+        return t === '••••••••' || (/^[•*]+$/.test(t) && t.length >= 4)
+      }
+      const config = Object.fromEntries(
+        Object.entries(formData.config || {}).filter(([, v]) => !isMasked(v)),
+      )
       const payload = {
         id: formData.type,
         name: formData.name,
         category: existing?.category || integration?.category || 'Custom',
-        config: formData.config,
+        config,
       };
       const result = await api.post('/api/integrations', payload);
       onSave(result);

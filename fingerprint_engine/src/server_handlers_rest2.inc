@@ -626,7 +626,13 @@ async fn api_findings_push_cortex(
     if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
-    let dry_run = body.as_ref().and_then(|b| b.0.dry_run).unwrap_or(false);
+    if body.as_ref().and_then(|b| b.0.dry_run).unwrap_or(false) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "push-cortex is live-only; dry_run is not allowed"})),
+        )
+            .into_response();
+    }
     let id_token = id.trim().to_string();
     if id_token.is_empty() {
         return (
@@ -639,7 +645,7 @@ async fn api_findings_push_cortex(
         state.app_pool.as_ref(),
         auth.tenant_id,
         &id_token,
-        dry_run,
+        false,
     )
     .await
     {

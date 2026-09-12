@@ -234,13 +234,7 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
             "splunk",
             "sentinel",
         ],
-        "create_incident" => vec![
-            "cortex_xsiam",
-            "cortex_xsoar",
-            "cortex",
-            "servicenow",
-            "jira",
-        ],
+        "create_incident" => vec!["cortex_xsoar", "servicenow", "jira"],
         _ => vec![],
     };
     let integration = match pick_provider(&integrations, &prefer) {

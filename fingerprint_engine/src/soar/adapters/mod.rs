@@ -225,9 +225,13 @@ pub async fn verify_probe(
             "opsgenie" => OpsGenieAdapter.verify_delivery(target, payload).await,
             _ => PagerDutyAdapter.verify_delivery(target, payload).await,
         },
-        "incident_exists" | "create_incident" => {
-            ServiceNowAdapter.verify_incident(target, payload).await
-        }
+        "incident_exists" | "create_incident" => match p.as_str() {
+            "jira" => JiraAdapter.verify_incident(target, payload).await,
+            "cortex_xsiam" | "cortex_xsoar" | "cortex" => {
+                CortexXsiamAdapter.verify_incident(target, payload).await
+            }
+            _ => ServiceNowAdapter.verify_incident(target, payload).await,
+        },
         other => Err(AdapterError::Config(format!("unknown probe type {other}"))),
     }
 }

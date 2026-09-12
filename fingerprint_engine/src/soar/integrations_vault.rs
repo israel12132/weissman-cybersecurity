@@ -279,6 +279,49 @@ pub fn decrypt_config(config: &Value) -> Value {
     Value::Object(out)
 }
 
+/// True when the UI echoed a redaction placeholder instead of a real secret.
+#[must_use]
+pub fn is_masked_placeholder(s: &str) -> bool {
+    let t = s.trim();
+    if t.is_empty() {
+        return false;
+    }
+    t == "••••••••"
+        || (t.chars().all(|c| c == '•' || c == '*') && t.chars().count() >= 4)
+}
+
+/// Merge an operator update onto the stored (possibly encrypted) config.
+/// Redacted placeholders keep the previous secret instead of overwriting it.
+pub fn merge_config_preserving_secrets(incoming: &Value, stored: &Value) -> Value {
+    let stored_plain = decrypt_config(stored);
+    let Some(inc) = incoming.as_object() else {
+        return incoming.clone();
+    };
+    let mut out = Map::new();
+    for (k, v) in inc {
+        if let Some(s) = v.as_str() {
+            if is_masked_placeholder(s) {
+                if let Some(prev) = stored_plain.get(k) {
+                    out.insert(k.clone(), prev.clone());
+                }
+                continue;
+            }
+        }
+        out.insert(k.clone(), v.clone());
+    }
+    if let Some(st) = stored_plain.as_object() {
+        for (k, v) in st {
+            if out.contains_key(k) {
+                continue;
+            }
+            if is_secret_field(k) {
+                out.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    Value::Object(out)
+}
+
 /// Redact secrets for API list responses (never echo credentials to UI).
 pub fn redact_config(config: &Value) -> Value {
     let Some(obj) = config.as_object() else {
@@ -462,5 +505,14 @@ mod tests {
             "integrations vault env must be wiped after boot"
         );
         assert!(dedicated_key_configured());
+    }
+
+    #[test]
+    fn merge_keeps_stored_secret_when_ui_sends_placeholder() {
+        let stored = json!({"api_key": "real-cortex-key", "mode": "xsiam"});
+        let incoming = json!({"api_key": "••••••••", "mode": "xsoar"});
+        let merged = merge_config_preserving_secrets(&incoming, &stored);
+        assert_eq!(merged["api_key"], "real-cortex-key");
+        assert_eq!(merged["mode"], "xsoar");
     }
 }

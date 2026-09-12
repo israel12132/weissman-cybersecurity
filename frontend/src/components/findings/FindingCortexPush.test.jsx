@@ -30,6 +30,19 @@ describe('canPushFindingToCortex', () => {
     expect(canPushFindingToCortex({ raw: { oast_callback: 'https://oast.example/x' } })).toBe(true)
   })
 
+  it('blocks workflow false-positives even with proof', () => {
+    expect(
+      canPushFindingToCortex({
+        live_verdict: 'CONFIRMED',
+        status: 'FALSE_POSITIVE',
+      }),
+    ).toBe(false)
+  })
+
+  it('does not treat attestation as proof', () => {
+    expect(canPushFindingToCortex({ raw: { attestation: { receipt: 'wzat1:x' } } })).toBe(false)
+  })
+
   it('rejects empty findings', () => {
     expect(canPushFindingToCortex({})).toBe(false)
     expect(canPushFindingToCortex(null)).toBe(false)

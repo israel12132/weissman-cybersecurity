@@ -8,17 +8,23 @@ import { findingVerifyId, liveVerdictFromFinding } from './FindingLiveVerify'
 export function canPushFindingToCortex(finding) {
   const verdict = String(liveVerdictFromFinding(finding) || '').toUpperCase()
   if (verdict === 'NOISE' || verdict === 'FALSE_POSITIVE') return false
+  const status = String(finding?.status || finding?.raw?.status || '').toUpperCase()
+  if (['FALSE_POSITIVE', 'REJECTED', 'SUPPRESSED', 'NOISE'].includes(status)) return false
   if (verdict === 'CONFIRMED' || verdict === 'LIKELY_VALID') return true
   const raw = finding?.raw && typeof finding.raw === 'object' ? finding.raw : finding || {}
   const keys = ['proof', 'poc', 'poc_exploit', 'oast', 'oast_callback', 'http_status', 'evidence', 'http_evidence']
-  return keys.some((k) => {
-    const v = raw[k]
+  const isProof = (v) => {
     if (v === true) return true
-    if (typeof v === 'number') return true
-    if (typeof v === 'string' && v.trim()) return true
+    if (typeof v === 'number') return v !== 0
+    if (typeof v === 'string') {
+      const t = v.trim()
+      return Boolean(t) && !t.includes('[SEALED') && t !== '••••••••'
+    }
     if (v && typeof v === 'object' && Object.keys(v).length) return true
     return false
-  })
+  }
+  const scan = (obj) => Boolean(obj && typeof obj === 'object' && keys.some((k) => isProof(obj[k])))
+  return scan(raw) || scan(raw.raw) || scan(raw.evidence)
 }
 
 export default function FindingCortexPush({ finding }) {
@@ -35,6 +41,7 @@ export default function FindingCortexPush({ finding }) {
     if (!rawId || loading || !eligible) return
     setLoading(true)
     setError('')
+    setResult(null)
     try {
       const data = await apiFetch(`/api/findings/${encodeURIComponent(rawId)}/push-cortex`, {
         method: 'POST',

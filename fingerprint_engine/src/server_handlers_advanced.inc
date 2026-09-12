@@ -167,6 +167,9 @@ async fn api_risk_node_flags_patch(
     Path(node_id): Path<i64>,
     Json(body): Json<RiskNodeFlagsBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };

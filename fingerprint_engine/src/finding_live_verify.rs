@@ -54,6 +54,9 @@ pub(crate) struct FindingRow {
     pub raw_data: Value,
     pub discovered_at: String,
     pub signature_hash: String,
+    pub status: String,
+    pub proof: String,
+    pub poc_exploit: String,
 }
 
 fn push_check(
@@ -364,7 +367,10 @@ const LOAD_FINDING_SQL: &str = r#"SELECT id, finding_id, title, severity, source
                   COALESCE(raw_data->>'target', '') AS target,
                   client_id, COALESCE(raw_data, '{}'::jsonb) AS raw_data,
                   COALESCE(to_char(discovered_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), '') AS discovered_at,
-                  COALESCE(signature_hash, '') AS signature_hash
+                  COALESCE(signature_hash, '') AS signature_hash,
+                  COALESCE(status, 'OPEN') AS status,
+                  COALESCE(proof, '') AS proof,
+                  COALESCE(poc_exploit, '') AS poc_exploit
              FROM vulnerabilities
             WHERE tenant_id = $1
               AND (
@@ -399,6 +405,9 @@ fn map_finding_row(row: sqlx::postgres::PgRow) -> FindingRow {
         raw_data,
         discovered_at: row.try_get("discovered_at").unwrap_or_default(),
         signature_hash: row.try_get("signature_hash").unwrap_or_default(),
+        status: row.try_get("status").unwrap_or_else(|_| "OPEN".into()),
+        proof: row.try_get("proof").unwrap_or_default(),
+        poc_exploit: row.try_get("poc_exploit").unwrap_or_default(),
     }
 }
 
