@@ -173,4 +173,18 @@ describe('FirstMoverDeltaPanel', () => {
     expect(screen.queryByText(/pages.attackSurfaceManagement.nerve_off/)).toBeNull()
     expect(screen.queryByText(/pages.attackSurfaceManagement.nerve_live/)).toBeNull()
   })
+
+  it('dashes live assets when current_count is missing instead of painting 0', () => {
+    render(
+      <FirstMoverDeltaPanel
+        diff={{ added: [{ fqdn: 'shop.example.com', evidence: 'new' }], removed: [], changed: [] }}
+        loading={false}
+        hunting={false}
+        onHunt={() => {}}
+        huntDisabled
+      />,
+    )
+    expect(screen.getByTestId('first-mover-asset-count').textContent).toBe('—')
+    expect(screen.getByText('shop.example.com')).toBeTruthy()
+  })
 })

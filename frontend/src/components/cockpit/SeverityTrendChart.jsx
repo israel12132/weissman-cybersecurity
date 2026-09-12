@@ -53,6 +53,7 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
       setUnavailable(false)
     } catch (e) {
       if (e?.name === 'AbortError' || ac.signal.aborted) return
+      setData(null)
       setUnavailable(true)
     } finally {
       inflightRef.current = abortRef.current !== ac

@@ -1,11 +1,12 @@
 import { useTranslation } from 'react-i18next'
 
-export default function OastHealthStrip({ health, fallbackCount = 0 }) {
+export default function OastHealthStrip({ health }) {
   const { t } = useTranslation()
   if (!health) return null
   const observed = Boolean(health.last_callback_at)
   const unavailable = Boolean(health.unavailable)
   const live = !unavailable && Boolean(health.configured) && observed
+  const countKnown = health.callback_count != null && Number.isFinite(Number(health.callback_count))
   return (
     <div
       data-testid="oast-health-strip"
@@ -36,7 +37,7 @@ export default function OastHealthStrip({ health, fallbackCount = 0 }) {
       </span>
       {!unavailable && (
       <span>
-        {t('pages.oastDashboard.health_count', { count: health.callback_count ?? fallbackCount })}
+        {t('pages.oastDashboard.health_count', { count: countKnown ? Number(health.callback_count) : '—' })}
       </span>
       )}
     </div>

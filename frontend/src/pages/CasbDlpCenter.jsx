@@ -1,9 +1,9 @@
 /**
  * CASB / DLP / continuous CNAPP — live findings + CNAPP graph refresh.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Cloud, Search } from 'lucide-react'
+import { Cloud } from 'lucide-react'
 import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
@@ -27,33 +27,45 @@ export default function CasbDlpCenter() {
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  const abortRef = useRef(null)
 
   const load = useCallback(async () => {
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
     setLoading(true)
     setError('')
     try {
-      const d = await apiFetch('/api/findings?limit=500')
+      const d = await apiFetch('/api/findings?limit=500', { signal: ac.signal })
       if (d?.ok === false || d?.unavailable) {
         throw new Error(d.detail || 'findings unavailable')
       }
       const all = Array.isArray(d) ? d : (Array.isArray(d.findings) ? d.findings : [])
       setFindings(all.filter((f) => ENGINES.includes(f.source || f.type || f.engine)))
     } catch (e) {
-      if (e?.name === 'AbortError') return
+      if (e?.name === 'AbortError' || ac.signal.aborted) return
       setFindings([])
       setError(e.message || 'load failed')
     } finally {
-      setLoading(false)
+      if (abortRef.current === ac && !ac.signal.aborted) setLoading(false)
     }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    return () => abortRef.current?.abort()
+  }, [load])
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return findings
     return findings.filter((f) => `${f.title} ${f.source} ${f.description}`.toLowerCase().includes(q))
   }, [findings, searchQuery])
+
+  const liveEngineCount = useMemo(
+    () => new Set(findings.map((f) => f.source || f.engine || f.type).filter(Boolean)).size,
+    [findings],
+  )
 
   const exportCsv = useCallback(() => {
     downloadCsv(
@@ -97,7 +109,7 @@ export default function CasbDlpCenter() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <ExecutiveWidget label={t(`${NS}.kpi_findings`)} value={findings.length} />
-            <ExecutiveWidget label={t(`${NS}.kpi_engines`)} value={ENGINES.length} />
+            <ExecutiveWidget label={t(`${NS}.kpi_engines`)} value={liveEngineCount} />
           </div>
           <Button type="button" onClick={refreshGraph} disabled={refreshing}>
             {refreshing ? t(`${NS}.refreshing`) : t(`${NS}.refresh_graph`)}

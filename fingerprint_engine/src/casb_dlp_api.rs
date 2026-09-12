@@ -410,55 +410,108 @@ pub async fn google_dlp_findings(target: &str, token: &str) -> Vec<Value> {
         .await;
     match list {
         Ok(r) if r.status().is_success() => {
-            if let Ok(body) = r.json::<Value>().await {
-                let ids: Vec<String> = body
-                    .get("messages")
-                    .and_then(Value::as_array)
-                    .map(|a| {
-                        a.iter()
-                            .filter_map(|m| m.get("id").and_then(Value::as_str).map(str::to_string))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                let mut hay = String::new();
-                for id in ids.iter().take(5) {
-                    if let Ok(msg) = client
-                        .get(format!(
-                            "https://gmail.googleapis.com/gmail/v1/users/me/messages/{id}?format=metadata&metadataHeaders=Subject"
-                        ))
-                        .bearer_auth(token)
-                        .send()
-                        .await
-                    {
-                        if let Ok(j) = msg.json::<Value>().await {
-                            if let Some(snip) = j.get("snippet").and_then(Value::as_str) {
-                                hay.push_str(snip);
-                                hay.push('\n');
+            match r.json::<Value>().await {
+                Ok(body) => {
+                    let ids: Vec<String> = body
+                        .get("messages")
+                        .and_then(Value::as_array)
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|m| m.get("id").and_then(Value::as_str).map(str::to_string))
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    let mut hay = String::new();
+                    let mut scanned = 0usize;
+                    let mut unread = 0usize;
+                    for id in ids.iter().take(5) {
+                        match client
+                            .get(format!(
+                                "https://gmail.googleapis.com/gmail/v1/users/me/messages/{id}?format=metadata&metadataHeaders=Subject"
+                            ))
+                            .bearer_auth(token)
+                            .send()
+                            .await
+                        {
+                            Ok(msg) if msg.status().is_success() => {
+                                match msg.json::<Value>().await {
+                                    Ok(j) => {
+                                        scanned += 1;
+                                        if let Some(snip) = j.get("snippet").and_then(Value::as_str)
+                                        {
+                                            hay.push_str(snip);
+                                            hay.push('\n');
+                                        }
+                                    }
+                                    Err(_) => {
+                                        unread += 1;
+                                        out.push(finding(
+                                            "dlp_content_scan",
+                                            "Gmail DLP message body unreadable",
+                                            "medium",
+                                            "T1114",
+                                            &format!("GET messages/{id} returned HTTP 200 but JSON could not be parsed. Snippet is not confirmed empty."),
+                                            target,
+                                        ));
+                                    }
+                                }
+                            }
+                            Ok(msg) => {
+                                unread += 1;
+                                out.push(finding(
+                                    "dlp_content_scan",
+                                    "Gmail DLP message query failed",
+                                    "medium",
+                                    "T1114",
+                                    &format!("GET messages/{id} HTTP {}", msg.status()),
+                                    target,
+                                ));
+                            }
+                            Err(e) => {
+                                unread += 1;
+                                out.push(finding(
+                                    "dlp_content_scan",
+                                    "Gmail DLP message unreachable",
+                                    "medium",
+                                    "T1114",
+                                    &format!("GET messages/{id}: {e}"),
+                                    target,
+                                ));
                             }
                         }
                     }
-                }
-                let hits = dlp_hits(&hay);
-                if hits.is_empty() {
-                    out.push(finding(
-                        "dlp_content_scan",
-                        &format!("Gmail snippets scanned ({} messages, no DLP pattern)", ids.len()),
-                        "info",
-                        "T1114",
-                        "Gmail API snippets did not match PAN/SSN/secret regexes.",
-                        target,
-                    ));
-                } else {
-                    for h in hits {
+                    let hits = dlp_hits(&hay);
+                    if unread == 0 && hits.is_empty() {
                         out.push(finding(
                             "dlp_content_scan",
-                            &format!("DLP pattern in Gmail snippet: {h}"),
-                            "high",
-                            "T1530",
-                            "Live Gmail API snippet matched a sensitive-data pattern.",
+                            &format!("Gmail snippets scanned ({scanned} messages, no DLP pattern)"),
+                            "info",
+                            "T1114",
+                            "Gmail API snippets did not match PAN/SSN/secret regexes.",
                             target,
                         ));
+                    } else {
+                        for h in hits {
+                            out.push(finding(
+                                "dlp_content_scan",
+                                &format!("DLP pattern in Gmail snippet: {h}"),
+                                "high",
+                                "T1530",
+                                "Live Gmail API snippet matched a sensitive-data pattern.",
+                                target,
+                            ));
+                        }
                     }
+                }
+                Err(_) => {
+                    out.push(finding(
+                        "dlp_content_scan",
+                        "Gmail DLP list body unreadable",
+                        "medium",
+                        "T1114",
+                        "GET users/me/messages returned HTTP 200 but JSON could not be parsed. Mailbox DLP is not a clean empty scan.",
+                        target,
+                    ));
                 }
             }
         }
@@ -607,5 +660,13 @@ mod tests {
             .expect("store-down");
         assert!(f["title"].as_str().unwrap().contains("DLP"));
         assert!(!f["title"].as_str().unwrap().contains("CASB"));
+    }
+
+    #[test]
+    fn gmail_dlp_unreadable_bodies_are_medium_not_empty_ok() {
+        let src = include_str!("casb_dlp_api.rs");
+        assert!(src.contains("Gmail DLP list body unreadable"));
+        assert!(src.contains("Gmail DLP message body unreadable"));
+        assert!(src.contains("unread == 0 && hits.is_empty()"));
     }
 }

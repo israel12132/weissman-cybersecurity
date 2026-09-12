@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { apiFetch } from '../../utils/apiFetch'
@@ -68,26 +68,36 @@ export default function TopMoversPanel({ className = '' }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [unavailable, setUnavailable] = useState(false)
+  const abortRef = useRef(null)
+  const inflightRef = useRef(false)
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    if (inflightRef.current) return
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
+    inflightRef.current = true
     try {
-      const d = await apiFetch('/api/dashboard/exec-kpis')
+      const d = await apiFetch('/api/dashboard/exec-kpis', { signal: ac.signal })
       if (d?.ok === false || d?.unavailable) {
-        throw new Error(d.detail || t(`${NS}.unavailable`))
+        throw new Error(d.detail || 'unavailable')
       }
       setData(d)
       setUnavailable(false)
-    } catch (_) {
+    } catch (e) {
+      if (e?.name === 'AbortError' || ac.signal.aborted) return
+      setData(null)
       setUnavailable(true)
     } finally {
-      setLoading(false)
+      if (abortRef.current === ac) inflightRef.current = false
+      if (abortRef.current === ac && !ac.signal.aborted) setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    return () => abortRef.current?.abort()
+  }, [load])
   useVisiblePolling(load, 30_000)
 
   if (loading && !data) {

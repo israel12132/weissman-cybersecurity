@@ -398,11 +398,11 @@ export function FirstMoverDeltaPanel({
           [t('pages.attackSurfaceManagement.first_mover_added'), added.length, '#22d3ee'],
           [t('pages.attackSurfaceManagement.first_mover_changed'), changed.length, '#fbbf24'],
           [t('pages.attackSurfaceManagement.first_mover_removed'), removed.length, '#94a3b8'],
-          [t('pages.attackSurfaceManagement.first_mover_assets'), Number(diff?.current_count ?? 0), '#34d399'],
-        ].map(([label, value, color]) => (
+          [t('pages.attackSurfaceManagement.first_mover_assets'), metricOrDash(diff?.current_count), '#34d399', 'first-mover-asset-count'],
+        ].map(([label, value, color, testId]) => (
           <div key={label} className="rounded-lg border border-white/[0.07] bg-black/30 px-3 py-2">
             <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)] truncate">{label}</p>
-            <p className="text-xl font-bold tabular-nums" style={{ color }}>{value}</p>
+            <p className="text-xl font-bold tabular-nums" style={{ color }} data-testid={testId}>{value}</p>
           </div>
         ))}
       </div>

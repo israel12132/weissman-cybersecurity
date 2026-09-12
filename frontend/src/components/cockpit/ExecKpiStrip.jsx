@@ -132,20 +132,29 @@ export default function ExecKpiStrip() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
   const cancelRef = useRef(false)
+  const abortRef = useRef(null)
 
   const refresh = async () => {
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
     try {
-      const d = await apiFetch('/api/dashboard/exec-kpis')
+      const d = await apiFetch('/api/dashboard/exec-kpis', { signal: ac.signal })
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || t('components.cockpitTabs.execKpiStrip.fetch_failed'))
+      }
       if (!cancelRef.current) {
         setKpis(d)
         setErr(null)
       }
     } catch (e) {
+      if (e?.name === 'AbortError' || ac.signal.aborted) return
       if (!cancelRef.current) {
         setErr(e?.message || t('components.cockpitTabs.execKpiStrip.fetch_failed'))
+        setKpis(null)
       }
     } finally {
-      if (!cancelRef.current) setLoading(false)
+      if (!cancelRef.current && abortRef.current === ac && !ac.signal.aborted) setLoading(false)
     }
   }
 
@@ -157,6 +166,7 @@ export default function ExecKpiStrip() {
     window.addEventListener('focus', onFocus)
     return () => {
       cancelRef.current = true
+      abortRef.current?.abort()
       clearInterval(timer)
       window.removeEventListener('focus', onFocus)
     }
@@ -178,7 +188,11 @@ export default function ExecKpiStrip() {
 
   if (err && !kpis) {
     return (
-      <div className="px-4 py-2.5 border-b border-rose-500/25 bg-rose-950/25 text-[11px] font-mono text-rose-200">
+      <div
+        className="px-4 py-2.5 border-b border-rose-500/25 bg-rose-950/25 text-[11px] font-mono text-rose-200"
+        data-testid="exec-kpi-unavailable"
+        role="alert"
+      >
         {t('components.cockpitTabs.execKpiStrip.load_error', { err })}
       </div>
     )
@@ -186,8 +200,10 @@ export default function ExecKpiStrip() {
 
   const sev = kpis?.severity || {}
   const delta = kpis?.severity_delta_24h || {}
-  const score = kpis?.security_score ?? 0
-  const scoreColor = score >= 80 ? '#22c55e' : score >= 60 ? '#fbbf24' : score >= 40 ? '#f97316' : '#ef4444'
+  const score = kpis?.security_score
+  const scoreColor = score == null
+    ? '#94a3b8'
+    : score >= 80 ? '#22c55e' : score >= 60 ? '#fbbf24' : score >= 40 ? '#f97316' : '#ef4444'
   const agents = kpis?.agents || {}
   const jobs = kpis?.jobs || {}
   const assets = kpis?.assets || {}

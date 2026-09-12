@@ -458,9 +458,7 @@ async fn poe_job_from_db(
     };
     let _ = tx.commit().await;
     let findings_json: String = row.try_get("findings_json").map_err(|_| ())?;
-    let findings_count = serde_json::from_str::<Vec<Value>>(&findings_json)
-        .map(|v| v.len())
-        .unwrap_or(0);
+    let findings_count = parse_poe_findings_count(&findings_json)?;
     Ok(Some(PoEJobState {
         job_id: row.try_get("job_id").map_err(|_| ())?,
         status: row.try_get("status").map_err(|_| ())?,
@@ -469,6 +467,13 @@ async fn poe_job_from_db(
         message: row.try_get::<Option<String>, _>("message").unwrap_or(None),
         error: row.try_get::<Option<String>, _>("error").unwrap_or(None),
     }))
+}
+
+/// Confirmed empty array is 0. Corrupt JSON is store-down — never `Some(0)`.
+fn parse_poe_findings_count(findings_json: &str) -> Result<usize, ()> {
+    serde_json::from_str::<Vec<Value>>(findings_json)
+        .map(|v| v.len())
+        .map_err(|_| ())
 }
 
 fn escape_html(s: &str) -> String {
@@ -2006,6 +2011,31 @@ async fn shutdown_signal() {
         () = terminate => {},
     }
     eprintln!("[Weissman] Shutdown signal received — draining connections…");
+}
+
+#[cfg(test)]
+mod poe_job_honesty_tests {
+    use super::parse_poe_findings_count;
+
+    #[test]
+    fn empty_array_is_confirmed_zero() {
+        assert_eq!(parse_poe_findings_count("[]"), Ok(0));
+    }
+
+    #[test]
+    fn two_findings_are_counted() {
+        assert_eq!(parse_poe_findings_count("[{\"a\":1},{}]"), Ok(2));
+    }
+
+    #[test]
+    fn object_json_is_corrupt_not_zero() {
+        assert_eq!(parse_poe_findings_count("{}"), Err(()));
+    }
+
+    #[test]
+    fn garbage_json_is_corrupt_not_zero() {
+        assert_eq!(parse_poe_findings_count("not-json"), Err(()));
+    }
 }
 
 #[cfg(test)]

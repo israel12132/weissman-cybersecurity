@@ -379,13 +379,18 @@ pub fn rate_limits_analytics_unavailable_json(detail: &str) -> Value {
     })
 }
 
-/// `GET /api/dashboard/exec-kpis` when a severity/trend query fails
+/// `GET /api/dashboard/exec-kpis` when a severity/trend/side-KPI query fails
 pub fn exec_kpis_unavailable_json(detail: &str) -> Value {
     json!({
         "ok": false,
         "unavailable": true,
         "trend": Value::Null,
         "security_score": Value::Null,
+        "severity": Value::Null,
+        "assets": Value::Null,
+        "agents": Value::Null,
+        "jobs": Value::Null,
+        "mttr_hours": Value::Null,
         "detail": detail,
     })
 }
@@ -722,8 +727,15 @@ mod tests {
         assert_eq!(v["unavailable"], true);
         assert_eq!(v["trend"], Value::Null);
         assert_eq!(v["security_score"], Value::Null);
+        assert!(v["severity"].is_null());
+        assert!(v["assets"].is_null());
+        assert!(v["agents"].is_null());
+        assert!(v["jobs"].is_null());
+        assert!(v["mttr_hours"].is_null());
         assert_ne!(v["security_score"], json!(100));
         assert_ne!(v["trend"], json!([]));
+        assert_ne!(v["assets"], json!({"total_clients": 0, "with_findings": 0}));
+        assert_ne!(v["jobs"], json!({"pending": 0, "running": 0}));
     }
 
     #[test]

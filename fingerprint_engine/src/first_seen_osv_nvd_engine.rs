@@ -548,14 +548,25 @@ async fn enqueue_clients_with_sbom(
         r#"SELECT DISTINCT c.id, COALESCE(c.domains, '[]') AS domains
            FROM clients c
            INNER JOIN client_sbom_components s ON s.client_id = c.id AND s.tenant_id = c.tenant_id
+           WHERE NOT EXISTS (
+               SELECT 1 FROM weissman_async_jobs j
+                WHERE j.tenant_id = $1
+                  AND j.kind = 'command_center_engine'
+                  AND j.status IN ('pending', 'running')
+                  AND COALESCE(j.payload->>'engine', '') = $2
+                  AND (j.payload->>'client_id')::bigint = c.id
+           )
            ORDER BY c.id
            LIMIT 20"#,
     )
+    .bind(tenant_id)
+    .bind(ENGINE_ID)
     .fetch_all(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
     let _ = tx.commit().await;
     let mut n = 0usize;
+    let mut failed = 0usize;
     for r in rows {
         let id: i64 = r.try_get("id").unwrap_or(0);
         if id <= 0 {
@@ -575,12 +586,24 @@ async fn enqueue_clients_with_sbom(
             "client_id": id,
             "trigger": "first_seen_worker",
         });
-        if crate::async_jobs::enqueue(app_pool, tenant_id, "command_center_engine", payload, None)
+        match crate::async_jobs::enqueue(app_pool, tenant_id, "command_center_engine", payload, None)
             .await
-            .is_ok()
         {
-            n += 1;
+            Ok(_) => n += 1,
+            Err(e) => {
+                failed += 1;
+                tracing::error!(
+                    target: "first_seen",
+                    tenant_id,
+                    client_id = id,
+                    error = %e,
+                    "first-seen enqueue failed"
+                );
+            }
         }
+    }
+    if n == 0 && failed > 0 {
+        return Err("first-seen enqueue failed for every SBOM client".into());
     }
     Ok(n)
 }
@@ -681,5 +704,16 @@ mod tests {
         assert_eq!(map_ecosystem("npm"), Some("npm"));
         assert_eq!(map_ecosystem("PyPI"), Some("PyPI"));
         assert_eq!(map_ecosystem("unknown-eco"), None);
+    }
+
+    #[test]
+    fn worker_skips_in_flight_hunts_instead_of_requeueing() {
+        let src = include_str!("first_seen_osv_nvd_engine.rs");
+        assert!(
+            src.contains("NOT EXISTS"),
+            "in-flight first-seen jobs must be skipped, not blindly re-enqueued"
+        );
+        assert!(src.contains("payload->>'engine'"));
+        assert!(src.contains("first-seen enqueue failed for every SBOM client"));
     }
 }

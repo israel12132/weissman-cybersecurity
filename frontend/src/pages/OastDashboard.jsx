@@ -119,7 +119,11 @@ export default function OastDashboard() {
           unavailable: false,
           domain: d.health.domain || '',
           last_callback_at: d.health.last_callback_at || null,
-          callback_count: Number(d.health.callback_count ?? list.length) || 0,
+          callback_count: d.health.callback_count == null
+            ? null
+            : (Number.isFinite(Number(d.health.callback_count))
+              ? Number(d.health.callback_count)
+              : null),
         })
       } else {
         setCallbacks([])
@@ -266,7 +270,7 @@ export default function OastDashboard() {
         {t('pages.oastDashboard.verification_banner')}
       </div>
 
-      <OastHealthStrip health={oastHealth} fallbackCount={callbacks.length} />
+      <OastHealthStrip health={oastHealth} />
 
       <div className="flex items-center gap-2 mb-8">
         <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.oastDashboard.client')}</span>

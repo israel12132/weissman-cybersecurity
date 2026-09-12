@@ -87,4 +87,20 @@ describe('OastHealthStrip', () => {
     const { container } = render(<OastHealthStrip health={null} />)
     expect(container.firstChild).toBeNull()
   })
+
+  it('does not substitute a fallback count when callback_count is null', () => {
+    render(
+      <OastHealthStrip
+        health={{
+          configured: true,
+          domain: 'oast.example.test',
+          last_callback_at: '2026-09-11T12:00:00Z',
+          callback_count: null,
+        }}
+        fallbackCount={12}
+      />,
+    )
+    expect(screen.getByText(/health_count:—/)).toBeTruthy()
+    expect(screen.queryByText(/health_count:12/)).toBeNull()
+  })
 })

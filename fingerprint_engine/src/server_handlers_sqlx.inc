@@ -206,6 +206,32 @@ async fn api_dashboard_stats(State(state): State<Arc<AppState>>, Extension(auth)
     }))).into_response()
 }
 
+fn exec_kpis_query_unavailable(e: &sqlx::Error) -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(crate::http_unavailable::exec_kpis_unavailable_json(
+            scrub_internal_error(e),
+        )),
+    )
+        .into_response()
+}
+
+fn sql_undefined_relation(err: &sqlx::Error) -> bool {
+    matches!(
+        err,
+        sqlx::Error::Database(db) if db.code().as_deref() == Some("42P01")
+    )
+}
+
+macro_rules! exec_kpi_ok {
+    ($query:expr) => {
+        match $query {
+            Ok(v) => v,
+            Err(e) => return exec_kpis_query_unavailable(&e),
+        }
+    };
+}
+
 /// `GET /api/dashboard/exec-kpis` — Single aggregated payload for the executive dashboard.
 ///
 /// Returns counts, trends, top-N rankings, MITRE coverage, severity-over-time sparkline
@@ -275,16 +301,17 @@ async fn api_dashboard_exec_kpis(
         }
     };
 
-    let prev_sev: Vec<(String, i64)> = sqlx::query_as::<_, (String, i64)>(
-        "SELECT COALESCE(lower(severity),'info') AS s, COUNT(*)::bigint
-           FROM vulnerabilities
-          WHERE discovered_at < now() - interval '24 hours'
-            AND COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
-          GROUP BY s",
-    )
-    .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
+    let prev_sev: Vec<(String, i64)> = exec_kpi_ok!(
+        sqlx::query_as::<_, (String, i64)>(
+            "SELECT COALESCE(lower(severity),'info') AS s, COUNT(*)::bigint
+               FROM vulnerabilities
+              WHERE discovered_at < now() - interval '24 hours'
+                AND COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
+              GROUP BY s",
+        )
+        .fetch_all(&mut *tx)
+        .await
+    );
 
     let to_map = |rows: Vec<(String, i64)>| {
         let mut m: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
@@ -300,106 +327,122 @@ async fn api_dashboard_exec_kpis(
     };
 
     // ── Status workflow breakdown ──────────────────────────────────────────────────
-    let status_rows: Vec<(String, i64)> = sqlx::query_as::<_, (String, i64)>(
-        "SELECT COALESCE(upper(status),'OPEN'), COUNT(*)::bigint
-           FROM vulnerabilities GROUP BY 1",
-    )
-    .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
+    let status_rows: Vec<(String, i64)> = exec_kpi_ok!(
+        sqlx::query_as::<_, (String, i64)>(
+            "SELECT COALESCE(upper(status),'OPEN'), COUNT(*)::bigint
+               FROM vulnerabilities GROUP BY 1",
+        )
+        .fetch_all(&mut *tx)
+        .await
+    );
     let status_map = to_map(status_rows);
 
     // ── Asset / client counts ──────────────────────────────────────────────────────
-    let total_clients: i64 =
+    let total_clients: i64 = exec_kpi_ok!(
         sqlx::query_scalar("SELECT COUNT(*)::bigint FROM clients")
             .fetch_one(&mut *tx)
             .await
-            .unwrap_or(0);
-    let clients_with_findings: i64 = sqlx::query_scalar(
-        "SELECT COUNT(DISTINCT client_id)::bigint FROM vulnerabilities
-          WHERE COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')",
-    )
-    .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
+    );
+    let clients_with_findings: i64 = exec_kpi_ok!(
+        sqlx::query_scalar(
+            "SELECT COUNT(DISTINCT client_id)::bigint FROM vulnerabilities
+              WHERE COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')",
+        )
+        .fetch_one(&mut *tx)
+        .await
+    );
 
     // ── Endpoint agent state (registered / online / stale) ─────────────────────────
-    // Tolerate the endpoint_agents table being absent on very old schemas.
-    let agents_registered: i64 = sqlx::query_scalar(
+    // Tolerate the endpoint_agents table being absent on very old schemas (42P01).
+    // Any other error is store-down — never paint 0 registered / 0 online.
+    let agents_registered: i64 = match sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM endpoint_agents WHERE tenant_id = $1",
     )
     .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
-    let agents_online: i64 = sqlx::query_scalar(
+    {
+        Ok(n) => n,
+        Err(e) if sql_undefined_relation(&e) => 0,
+        Err(e) => return exec_kpis_query_unavailable(&e),
+    };
+    let agents_online: i64 = match sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM endpoint_agents
           WHERE tenant_id = $1 AND last_seen_at > now() - interval '90 seconds'",
     )
     .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(e) if sql_undefined_relation(&e) => 0,
+        Err(e) => return exec_kpis_query_unavailable(&e),
+    };
 
     // ── Job pipeline (pending / running / 24h completed / 24h failed) ──────────────
     // weissman_async_jobs is intentionally RLS-free (cross-tenant worker dequeue), so begin_tenant_tx
     // does NOT scope it — every query below must carry an explicit `tenant_id = $1` filter or it would
     // aggregate every tenant's jobs (mirrors the correct api_metrics_dashboard sibling above).
-    let jobs_pending: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE status = 'pending' AND tenant_id = $1",
-    )
-    .bind(auth.tenant_id)
-    .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
-    let jobs_running: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE status = 'running' AND tenant_id = $1",
-    )
-    .bind(auth.tenant_id)
-    .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
-    let jobs_completed_24h: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM weissman_async_jobs
-          WHERE status = 'completed' AND updated_at > now() - interval '24 hours' AND tenant_id = $1",
-    )
-    .bind(auth.tenant_id)
-    .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
-    let jobs_failed_24h: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM weissman_async_jobs
-          WHERE status IN ('failed','dead') AND updated_at > now() - interval '24 hours' AND tenant_id = $1",
-    )
-    .bind(auth.tenant_id)
-    .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
+    let jobs_pending: i64 = exec_kpi_ok!(
+        sqlx::query_scalar(
+            "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE status = 'pending' AND tenant_id = $1",
+        )
+        .bind(auth.tenant_id)
+        .fetch_one(&mut *tx)
+        .await
+    );
+    let jobs_running: i64 = exec_kpi_ok!(
+        sqlx::query_scalar(
+            "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE status = 'running' AND tenant_id = $1",
+        )
+        .bind(auth.tenant_id)
+        .fetch_one(&mut *tx)
+        .await
+    );
+    let jobs_completed_24h: i64 = exec_kpi_ok!(
+        sqlx::query_scalar(
+            "SELECT COUNT(*)::bigint FROM weissman_async_jobs
+              WHERE status = 'completed' AND updated_at > now() - interval '24 hours' AND tenant_id = $1",
+        )
+        .bind(auth.tenant_id)
+        .fetch_one(&mut *tx)
+        .await
+    );
+    let jobs_failed_24h: i64 = exec_kpi_ok!(
+        sqlx::query_scalar(
+            "SELECT COUNT(*)::bigint FROM weissman_async_jobs
+              WHERE status IN ('failed','dead') AND updated_at > now() - interval '24 hours' AND tenant_id = $1",
+        )
+        .bind(auth.tenant_id)
+        .fetch_one(&mut *tx)
+        .await
+    );
 
     // ── Average scan duration over the last 24h ────────────────────────────────────
-    let avg_scan_secs: f64 = sqlx::query_scalar::<_, Option<f64>>(
-        "SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at)))::float8
-           FROM weissman_async_jobs
-          WHERE status = 'completed' AND updated_at > now() - interval '24 hours' AND tenant_id = $1",
+    // NULL AVG (no completed jobs) is a confirmed 0.0. Query failure is store-down.
+    let avg_scan_secs: f64 = exec_kpi_ok!(
+        sqlx::query_scalar::<_, Option<f64>>(
+            "SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at)))::float8
+               FROM weissman_async_jobs
+              WHERE status = 'completed' AND updated_at > now() - interval '24 hours' AND tenant_id = $1",
+        )
+        .bind(auth.tenant_id)
+        .fetch_one(&mut *tx)
+        .await
     )
-    .bind(auth.tenant_id)
-    .fetch_one(&mut *tx)
-    .await
-    .ok()
-    .flatten()
     .unwrap_or(0.0);
 
     // ── MTTR (open → fixed, last 30 days) ──────────────────────────────────────────
-    let mttr_hours: f64 = sqlx::query_scalar::<_, Option<f64>>(
-        "SELECT AVG(EXTRACT(EPOCH FROM (updated_at - discovered_at)) / 3600.0)::float8
-           FROM vulnerabilities
-          WHERE upper(status) = 'FIXED'
-            AND updated_at > now() - interval '30 days'",
+    let mttr_hours: f64 = exec_kpi_ok!(
+        sqlx::query_scalar::<_, Option<f64>>(
+            "SELECT AVG(EXTRACT(EPOCH FROM (updated_at - discovered_at)) / 3600.0)::float8
+               FROM vulnerabilities
+              WHERE upper(status) = 'FIXED'
+                AND updated_at > now() - interval '30 days'",
+        )
+        .fetch_one(&mut *tx)
+        .await
     )
-    .fetch_one(&mut *tx)
-    .await
-    .ok()
-    .flatten()
     .unwrap_or(0.0);
 
     // ── 24-hour bucket trend (discovered vs resolved) ──────────────────────────────
@@ -458,21 +501,22 @@ async fn api_dashboard_exec_kpis(
     }
 
     // ── Top-N rankings ─────────────────────────────────────────────────────────────
-    let engines_top: Vec<(String, i64, i64)> = sqlx::query_as::<_, (String, i64, i64)>(
-        "SELECT source AS engine,
-                COUNT(*)::bigint                              AS hits,
-                COUNT(*) FILTER (WHERE lower(severity)='critical')::bigint AS crit
-           FROM vulnerabilities
-          WHERE COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
-          GROUP BY source
-          ORDER BY hits DESC
-          LIMIT 8",
-    )
-    .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
+    let engines_top: Vec<(String, i64, i64)> = exec_kpi_ok!(
+        sqlx::query_as::<_, (String, i64, i64)>(
+            "SELECT source AS engine,
+                    COUNT(*)::bigint                              AS hits,
+                    COUNT(*) FILTER (WHERE lower(severity)='critical')::bigint AS crit
+               FROM vulnerabilities
+              WHERE COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
+              GROUP BY source
+              ORDER BY hits DESC
+              LIMIT 8",
+        )
+        .fetch_all(&mut *tx)
+        .await
+    );
 
-    let clients_top: Vec<(i64, String, i64, i64)> =
+    let clients_top: Vec<(i64, String, i64, i64)> = exec_kpi_ok!(
         sqlx::query_as::<_, (i64, String, i64, i64)>(
             "SELECT c.id, c.name,
                     COUNT(v.id) FILTER (WHERE lower(v.severity)='critical')::bigint AS open_crit,
@@ -487,41 +531,45 @@ async fn api_dashboard_exec_kpis(
         )
         .fetch_all(&mut *tx)
         .await
-        .unwrap_or_default();
+    );
 
     // CVE roll-up — pull from raw_data.cve / raw_data.raw.cve.
-    let cve_rows: Vec<(String, String, i64)> = sqlx::query_as::<_, (String, String, i64)>(
-        "SELECT COALESCE(NULLIF(raw_data->>'cve',''),
-                          NULLIF(raw_data->'raw'->>'cve','')) AS cve,
-                MIN(severity)        AS severity,
-                COUNT(*)::bigint     AS hits
-           FROM vulnerabilities
-          WHERE (raw_data->>'cve' IS NOT NULL OR raw_data->'raw'->>'cve' IS NOT NULL)
-            AND COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
-          GROUP BY 1
-          HAVING COALESCE(NULLIF(raw_data->>'cve',''),
-                          NULLIF(raw_data->'raw'->>'cve','')) IS NOT NULL
-          ORDER BY hits DESC
-          LIMIT 8",
-    )
-    .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
+    let cve_rows: Vec<(String, String, i64)> = exec_kpi_ok!(
+        sqlx::query_as::<_, (String, String, i64)>(
+            "SELECT COALESCE(NULLIF(raw_data->>'cve',''),
+                              NULLIF(raw_data->'raw'->>'cve','')) AS cve,
+                    MIN(severity)        AS severity,
+                    COUNT(*)::bigint     AS hits
+               FROM vulnerabilities
+              WHERE (raw_data->>'cve' IS NOT NULL OR raw_data->'raw'->>'cve' IS NOT NULL)
+                AND COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
+              GROUP BY 1
+              HAVING COALESCE(NULLIF(raw_data->>'cve',''),
+                              NULLIF(raw_data->'raw'->>'cve','')) IS NOT NULL
+              ORDER BY hits DESC
+              LIMIT 8",
+        )
+        .fetch_all(&mut *tx)
+        .await
+    );
 
     // MITRE roll-up — `raw_data.mitre_attack` is the ATT&CK technique id (e.g. T1190).
-    let mitre_rows: Vec<(String, i64)> = sqlx::query_as::<_, (String, i64)>(
-        "SELECT raw_data->>'mitre_attack' AS technique, COUNT(*)::bigint
-           FROM vulnerabilities
-          WHERE COALESCE(raw_data->>'mitre_attack','') <> ''
-            AND COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
-          GROUP BY technique
-          ORDER BY count DESC
-          LIMIT 12",
-    )
-    .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    let mitre_rows: Vec<(String, i64)> = exec_kpi_ok!(
+        sqlx::query_as::<_, (String, i64)>(
+            "SELECT raw_data->>'mitre_attack' AS technique, COUNT(*)::bigint
+               FROM vulnerabilities
+              WHERE COALESCE(raw_data->>'mitre_attack','') <> ''
+                AND COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
+              GROUP BY technique
+              ORDER BY count DESC
+              LIMIT 12",
+        )
+        .fetch_all(&mut *tx)
+        .await
+    );
+    if let Err(e) = tx.commit().await {
+        return exec_kpis_query_unavailable(&e);
+    }
 
     // ── Security score (weighted, clamped 0..100) ──────────────────────────────────
     let score = {

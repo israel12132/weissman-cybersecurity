@@ -61,6 +61,7 @@ export default function RateLimitStatus({ compact = false }) {
     } catch (error) {
       if (error?.name === 'AbortError' || ac.signal.aborted) return;
       setUnavailable(true);
+      setLimits(null);
     } finally {
       if (abortRef.current === ac) inflightRef.current = false;
       if (abortRef.current === ac && !ac.signal.aborted) setLoading(false);

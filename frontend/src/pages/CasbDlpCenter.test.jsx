@@ -50,4 +50,16 @@ describe('CasbDlpCenter honesty', () => {
     expect(screen.queryByText('pages.casbDlpCenter.empty_title')).toBeNull()
     expect(screen.queryByText(/pages.casbDlpCenter.kpi_findings/)).toBeNull()
   })
+
+  it('counts live engines from findings, not the catalog length', async () => {
+    apiFetch.mockResolvedValue({
+      findings: [
+        { id: 1, source: 'casb_saas_posture', title: 'a', severity: 'info' },
+        { id: 2, source: 'casb_saas_posture', title: 'b', severity: 'info' },
+      ],
+    })
+    render(<CasbDlpCenter />)
+    expect(await screen.findByText('pages.casbDlpCenter.kpi_engines:1')).toBeTruthy()
+    expect(screen.queryByText('pages.casbDlpCenter.kpi_engines:4')).toBeNull()
+  })
 })
