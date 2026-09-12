@@ -13,6 +13,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::{PgPool, Postgres, Row, Transaction};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::auth_jwt::AuthContext;
@@ -26,6 +27,7 @@ const PATCH_SCHEMA: &str = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 const WEISSMAN_EXT: &str = "urn:ietf:params:scim:schemas:extension:weissman:2.0:User";
 const TOKEN_PREFIX: &str = "wsm_scim_";
 const MAX_PAGE: i64 = 200;
+const MAX_MEMBERS: i64 = 200;
 
 struct ScimCtx {
     tenant_id: i64,
@@ -289,6 +291,7 @@ fn extract_user_fields(body: &Value) -> Result<(String, bool, String, Option<Str
     Ok((user_name, active, role, external_id, password))
 }
 
+/// bcrypt cost 12 (`bcrypt::DEFAULT_COST`). CPU-bound — never call while a tenant TX is open.
 fn hash_optional_password(password: Option<&str>) -> Result<String, Response> {
     match password {
         None | Some("") => Ok(String::new()),
@@ -303,6 +306,70 @@ fn hash_optional_password(password: Option<&str>) -> Result<String, Response> {
         Some(p) => bcrypt::hash(p, bcrypt::DEFAULT_COST)
             .map_err(|_| scim_error(StatusCode::INTERNAL_SERVER_ERROR, "password hash failed")),
     }
+}
+
+async fn hash_optional_password_async(password: Option<String>) -> Result<String, Response> {
+    match password {
+        None => Ok(String::new()),
+        Some(p) if p.is_empty() => Ok(String::new()),
+        Some(p) if p.len() < 8 => Err(scim_error(
+            StatusCode::BAD_REQUEST,
+            "password must be at least 8 characters",
+        )),
+        Some(p) if p.as_bytes().len() > 72 => Err(scim_error(
+            StatusCode::BAD_REQUEST,
+            "password must be at most 72 bytes",
+        )),
+        Some(p) => tokio::task::spawn_blocking(move || bcrypt::hash(p, bcrypt::DEFAULT_COST))
+            .await
+            .map_err(|_| scim_error(StatusCode::INTERNAL_SERVER_ERROR, "password hash failed"))?
+            .map_err(|_| scim_error(StatusCode::INTERNAL_SERVER_ERROR, "password hash failed")),
+    }
+}
+
+fn last_patch_password(body: &ScimPatchBody) -> Option<String> {
+    let mut found = None;
+    for op in patch_ops(body) {
+        let verb = op.op.trim().to_ascii_lowercase();
+        let path = op.path.as_deref().unwrap_or("").trim().trim_start_matches('/');
+        if matches!(verb.as_str(), "replace" | "add") && path.eq_ignore_ascii_case("password") {
+            found = op.value.as_str().map(str::to_string);
+        }
+    }
+    found
+}
+
+fn member_ids_from_values(values: &[Value]) -> Vec<i64> {
+    values
+        .iter()
+        .filter_map(|m| {
+            m.get("value")
+                .and_then(|v| v.as_str().and_then(|s| s.parse::<i64>().ok()).or_else(|| v.as_i64()))
+        })
+        .collect()
+}
+
+async fn insert_group_members(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: i64,
+    group_id: i64,
+    uids: &[i64],
+) -> Result<(), sqlx::Error> {
+    if uids.is_empty() {
+        return Ok(());
+    }
+    sqlx::query(
+        r#"INSERT INTO scim_group_members (tenant_id, group_id, user_id)
+           SELECT $1, $2, u.id FROM users u
+            WHERE u.tenant_id = $1 AND u.id = ANY($3)
+           ON CONFLICT DO NOTHING"#,
+    )
+    .bind(tenant_id)
+    .bind(group_id)
+    .bind(uids)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 fn patch_ops(body: &ScimPatchBody) -> Vec<&ScimPatchOp> {
@@ -358,7 +425,11 @@ pub async fn scim_users_list(
         Err(r) => return r,
     };
     stamp_token_used(&mut tx, ctx.token_id).await;
-    let email_eq = q.filter.as_deref().and_then(|f| parse_eq_filter(f, "userName"));
+    let email_eq = q
+        .filter
+        .as_deref()
+        .and_then(|f| parse_eq_filter(f, "userName"))
+        .map(|s| s.to_ascii_lowercase());
     let ext_eq = q.filter.as_deref().and_then(|f| parse_eq_filter(f, "externalId"));
     let (start, count) = page_bounds(&q);
     let offset = start - 1;
@@ -367,7 +438,7 @@ pub async fn scim_users_list(
                   COALESCE(is_active, true) AS is_active, scim_external_id
              FROM users
             WHERE tenant_id = $1
-              AND ($2::text IS NULL OR lower(email) = lower($2))
+              AND ($2::text IS NULL OR lower(email) = $2)
               AND ($3::text IS NULL OR scim_external_id = $3)
             ORDER BY id
             OFFSET $4 LIMIT $5"#,
@@ -378,12 +449,19 @@ pub async fn scim_users_list(
     .bind(offset)
     .bind(count)
     .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
-    let total: i64 = sqlx::query_scalar(
+    .await;
+    let rows = match rows {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "scim", error = %e, "users list failed");
+            let _ = tx.rollback().await;
+            return scim_error(StatusCode::SERVICE_UNAVAILABLE, "list failed");
+        }
+    };
+    let total: i64 = match sqlx::query_scalar(
         r#"SELECT count(*) FROM users
             WHERE tenant_id = $1
-              AND ($2::text IS NULL OR lower(email) = lower($2))
+              AND ($2::text IS NULL OR lower(email) = $2)
               AND ($3::text IS NULL OR scim_external_id = $3)"#,
     )
     .bind(ctx.tenant_id)
@@ -391,7 +469,14 @@ pub async fn scim_users_list(
     .bind(ext_eq.as_deref())
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::error!(target: "scim", error = %e, "users count failed");
+            let _ = tx.rollback().await;
+            return scim_error(StatusCode::SERVICE_UNAVAILABLE, "list failed");
+        }
+    };
     let resources: Vec<Value> = rows
         .iter()
         .map(|r| {
@@ -482,7 +567,7 @@ pub async fn scim_users_create(
         Ok(v) => v,
         Err(d) => return scim_error(StatusCode::BAD_REQUEST, d),
     };
-    let hash = match hash_optional_password(password.as_deref()) {
+    let hash = match hash_optional_password_async(password).await {
         Ok(h) => h,
         Err(r) => return r,
     };
@@ -614,7 +699,7 @@ pub async fn scim_users_put(
         Ok(v) => v,
         Err(d) => return scim_error(StatusCode::BAD_REQUEST, d),
     };
-    let hash = match hash_optional_password(password.as_deref()) {
+    let hash = match hash_optional_password_async(password).await {
         Ok(h) => h,
         Err(r) => return r,
     };
@@ -667,6 +752,10 @@ pub async fn scim_users_patch(
         Ok(c) => c,
         Err(r) => return r,
     };
+    let pre_hash = match hash_optional_password_async(last_patch_password(&body)).await {
+        Ok(h) => h,
+        Err(r) => return r,
+    };
     let mut tx = match begin_scim(state.app_pool.as_ref(), &ctx).await {
         Ok(t) => t,
         Err(r) => return r,
@@ -697,7 +786,6 @@ pub async fn scim_users_patch(
     let mut role: String = r.try_get("role").unwrap_or_else(|_| "viewer".into());
     let mut active: bool = r.try_get("is_active").unwrap_or(true);
     let mut external_id: Option<String> = r.try_get("scim_external_id").ok().flatten();
-    let mut new_password: Option<String> = None;
     for op in patch_ops(&body) {
         let verb = op.op.trim().to_ascii_lowercase();
         let path = op.path.as_deref().unwrap_or("").trim().trim_start_matches('/');
@@ -715,9 +803,7 @@ pub async fn scim_users_patch(
             ("replace" | "add", "externalid" | "externalId") => {
                 external_id = op.value.as_str().map(|s| s.to_string());
             }
-            ("replace" | "add", "password") => {
-                new_password = op.value.as_str().map(str::to_string);
-            }
+            ("replace" | "add", "password") => {}
             ("replace" | "add", p) if p.contains("role") => {
                 match scim_role(op.value.as_str().unwrap_or("viewer")) {
                     Ok(rr) => role = rr,
@@ -730,14 +816,7 @@ pub async fn scim_users_patch(
             _ => {}
         }
     }
-    let hash = match hash_optional_password(new_password.as_deref()) {
-        Ok(h) => h,
-        Err(r) => {
-            let _ = tx.rollback().await;
-            return r;
-        }
-    };
-    let pwd = if hash.is_empty() { None } else { Some(hash.as_str()) };
+    let pwd = if pre_hash.is_empty() { None } else { Some(pre_hash.as_str()) };
     match write_user_update(
         &mut tx,
         ctx.tenant_id,
@@ -812,30 +891,51 @@ pub async fn scim_users_delete(
     StatusCode::NO_CONTENT.into_response()
 }
 
+async fn load_members_by_group_ids(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: i64,
+    group_ids: &[i64],
+) -> Result<HashMap<i64, Vec<(i64, String)>>, sqlx::Error> {
+    let mut map: HashMap<i64, Vec<(i64, String)>> = HashMap::new();
+    if group_ids.is_empty() {
+        return Ok(map);
+    }
+    let rows = sqlx::query(
+        r#"SELECT group_id, id, email FROM (
+                SELECT m.group_id, u.id, u.email,
+                       row_number() OVER (PARTITION BY m.group_id ORDER BY u.id) AS rn
+                  FROM scim_group_members m
+                  JOIN users u ON u.id = m.user_id
+                 WHERE m.tenant_id = $1 AND m.group_id = ANY($2)
+           ) ranked
+           WHERE rn <= $3
+           ORDER BY group_id, id"#,
+    )
+    .bind(tenant_id)
+    .bind(group_ids)
+    .bind(MAX_MEMBERS)
+    .fetch_all(&mut **tx)
+    .await?;
+    for r in rows {
+        let gid: i64 = r.try_get("group_id").unwrap_or(0);
+        map.entry(gid).or_default().push((
+            r.try_get("id").unwrap_or(0),
+            r.try_get::<String, _>("email").unwrap_or_default(),
+        ));
+    }
+    Ok(map)
+}
+
 async fn load_group_members(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: i64,
     group_id: i64,
 ) -> Vec<(i64, String)> {
-    sqlx::query(
-        r#"SELECT u.id, u.email FROM scim_group_members m
-             JOIN users u ON u.id = m.user_id
-            WHERE m.tenant_id = $1 AND m.group_id = $2
-            ORDER BY u.id"#,
-    )
-    .bind(tenant_id)
-    .bind(group_id)
-    .fetch_all(&mut **tx)
-    .await
-    .unwrap_or_default()
-    .into_iter()
-    .map(|r| {
-        (
-            r.try_get("id").unwrap_or(0),
-            r.try_get::<String, _>("email").unwrap_or_default(),
-        )
-    })
-    .collect()
+    load_members_by_group_ids(tx, tenant_id, &[group_id])
+        .await
+        .ok()
+        .and_then(|mut m| m.remove(&group_id))
+        .unwrap_or_default()
 }
 
 /// GET /api/scim/v2/Groups
@@ -858,7 +958,7 @@ pub async fn scim_groups_list(
         .as_deref()
         .and_then(|f| parse_eq_filter(f, "displayName"));
     let (start, count) = page_bounds(&q);
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, display_name, external_id FROM scim_groups
             WHERE tenant_id = $1 AND ($2::text IS NULL OR display_name = $2)
             ORDER BY id OFFSET $3 LIMIT $4"#,
@@ -869,8 +969,15 @@ pub async fn scim_groups_list(
     .bind(count)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let total: i64 = sqlx::query_scalar(
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "scim", error = %e, "groups list failed");
+            let _ = tx.rollback().await;
+            return scim_error(StatusCode::SERVICE_UNAVAILABLE, "list failed");
+        }
+    };
+    let total: i64 = match sqlx::query_scalar(
         r#"SELECT count(*) FROM scim_groups
             WHERE tenant_id = $1 AND ($2::text IS NULL OR display_name = $2)"#,
     )
@@ -878,11 +985,27 @@ pub async fn scim_groups_list(
     .bind(name_eq.as_deref())
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::error!(target: "scim", error = %e, "groups count failed");
+            let _ = tx.rollback().await;
+            return scim_error(StatusCode::SERVICE_UNAVAILABLE, "list failed");
+        }
+    };
+    let ids: Vec<i64> = rows.iter().map(|r| r.try_get("id").unwrap_or(0)).collect();
+    let members_by_group = match load_members_by_group_ids(&mut tx, ctx.tenant_id, &ids).await {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::error!(target: "scim", error = %e, "group members list failed");
+            let _ = tx.rollback().await;
+            return scim_error(StatusCode::SERVICE_UNAVAILABLE, "list failed");
+        }
+    };
     let mut resources = Vec::new();
     for r in rows {
         let id: i64 = r.try_get("id").unwrap_or(0);
-        let members = load_group_members(&mut tx, ctx.tenant_id, id).await;
+        let members = members_by_group.get(&id).cloned().unwrap_or_default();
         resources.push(group_resource(
             id,
             &r.try_get::<String, _>("display_name").unwrap_or_default(),
@@ -993,23 +1116,8 @@ pub async fn scim_groups_create(
         Ok(row) => {
             let id: i64 = row.try_get("id").unwrap_or(0);
             if let Some(members) = body.get("members").and_then(Value::as_array) {
-                for m in members {
-                    if let Some(uid) = m
-                        .get("value")
-                        .and_then(|v| v.as_str().and_then(|s| s.parse::<i64>().ok()).or_else(|| v.as_i64()))
-                    {
-                        let _ = sqlx::query(
-                            r#"INSERT INTO scim_group_members (tenant_id, group_id, user_id)
-                               SELECT $1, $2, id FROM users WHERE id = $3 AND tenant_id = $1
-                               ON CONFLICT DO NOTHING"#,
-                        )
-                        .bind(ctx.tenant_id)
-                        .bind(id)
-                        .bind(uid)
-                        .execute(&mut *tx)
-                        .await;
-                    }
-                }
+                let uids = member_ids_from_values(members);
+                let _ = insert_group_members(&mut tx, ctx.tenant_id, id, &uids).await;
             }
             let loaded = load_group_members(&mut tx, ctx.tenant_id, id).await;
             audit_scim(&mut tx, &ctx, "POST", "/api/scim/v2/Groups", 201, "created").await;
@@ -1071,7 +1179,7 @@ pub async fn scim_groups_patch(
             }
         }
         if path.contains("members") || path.is_empty() {
-            let values = if op.value.is_array() {
+            let values: Vec<Value> = if op.value.is_array() {
                 op.value.as_array().cloned().unwrap_or_default()
             } else {
                 op.value
@@ -1080,45 +1188,29 @@ pub async fn scim_groups_patch(
                     .cloned()
                     .unwrap_or_default()
             };
-            if verb == "replace" && (path.contains("members") || path.is_empty()) {
-                if path.contains("members") {
-                    let _ = sqlx::query(
-                        "DELETE FROM scim_group_members WHERE group_id = $1 AND tenant_id = $2",
-                    )
-                    .bind(id)
-                    .bind(ctx.tenant_id)
-                    .execute(&mut *tx)
-                    .await;
-                }
+            let uids = member_ids_from_values(&values);
+            if verb == "replace" && path.contains("members") {
+                let _ = sqlx::query(
+                    "DELETE FROM scim_group_members WHERE group_id = $1 AND tenant_id = $2",
+                )
+                .bind(id)
+                .bind(ctx.tenant_id)
+                .execute(&mut *tx)
+                .await;
             }
-            for m in values {
-                let Some(uid) = m
-                    .get("value")
-                    .and_then(|v| v.as_str().and_then(|s| s.parse::<i64>().ok()).or_else(|| v.as_i64()))
-                else {
-                    continue;
-                };
-                if verb == "remove" {
+            if verb == "remove" {
+                if !uids.is_empty() {
                     let _ = sqlx::query(
-                        "DELETE FROM scim_group_members WHERE group_id = $1 AND user_id = $2 AND tenant_id = $3",
+                        "DELETE FROM scim_group_members WHERE group_id = $1 AND tenant_id = $2 AND user_id = ANY($3)",
                     )
                     .bind(id)
-                    .bind(uid)
                     .bind(ctx.tenant_id)
-                    .execute(&mut *tx)
-                    .await;
-                } else {
-                    let _ = sqlx::query(
-                        r#"INSERT INTO scim_group_members (tenant_id, group_id, user_id)
-                           SELECT $1, $2, id FROM users WHERE id = $3 AND tenant_id = $1
-                           ON CONFLICT DO NOTHING"#,
-                    )
-                    .bind(ctx.tenant_id)
-                    .bind(id)
-                    .bind(uid)
+                    .bind(&uids)
                     .execute(&mut *tx)
                     .await;
                 }
+            } else {
+                let _ = insert_group_members(&mut tx, ctx.tenant_id, id, &uids).await;
             }
         }
     }
@@ -1203,14 +1295,25 @@ pub async fn api_admin_scim_tokens_list(
                 .into_response();
         }
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, name, token_prefix, last_used_at, revoked_at, created_at
-             FROM scim_tokens WHERE tenant_id = $1 ORDER BY id DESC"#,
+             FROM scim_tokens WHERE tenant_id = $1 ORDER BY id DESC LIMIT 200"#,
     )
     .bind(auth.tenant_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "scim", error = %e, "token list failed");
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false})),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let tokens: Vec<Value> = rows
         .into_iter()
@@ -1387,7 +1490,7 @@ pub async fn api_admin_scim_audit(
                 .into_response();
         }
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, method, path, status, detail, created_at
              FROM scim_audit_events WHERE tenant_id = $1
              ORDER BY id DESC LIMIT 200"#,
@@ -1395,7 +1498,18 @@ pub async fn api_admin_scim_audit(
     .bind(auth.tenant_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "scim", error = %e, "audit list failed");
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false})),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let events: Vec<Value> = rows
         .into_iter()
@@ -1486,5 +1600,20 @@ mod tests {
         assert!(v.get("WEISSMAN_EXT").is_none());
         assert_eq!(v[WEISSMAN_EXT]["role"], "operator");
         assert_eq!(v["userName"], "ops@weissman.io");
+    }
+
+    #[test]
+    fn last_patch_password_reads_rfc_operations() {
+        let body = ScimPatchBody {
+            operations: vec![ScimPatchOp {
+                op: "replace".into(),
+                path: Some("password".into()),
+                value: json!("correct-horse"),
+            }],
+            operations_alt: vec![],
+        };
+        assert_eq!(last_patch_password(&body).as_deref(), Some("correct-horse"));
+        assert!(hash_optional_password(None).unwrap().is_empty());
+        assert!(hash_optional_password(Some("short")).is_err());
     }
 }

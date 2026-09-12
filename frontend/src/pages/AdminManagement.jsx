@@ -658,7 +658,7 @@ export default function AdminManagement() {
               onClick={() => navigate('/scim-provisioning')}
               className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
-              🪪 SCIM Provisioning
+              🪪 {t('nav.scim_provisioning')}
             </Button>
             <Button variant="unstyled"
               id="adminmgmt-system-settings-btn"

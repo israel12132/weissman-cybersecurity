@@ -135,5 +135,8 @@ $$;
 REVOKE ALL ON FUNCTION public.lookup_scim_token(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.lookup_scim_token(TEXT) TO weissman_app;
 
+CREATE INDEX IF NOT EXISTS ix_users_tenant_lower_email
+    ON users (tenant_id, lower(email));
+
 COMMENT ON FUNCTION public.lookup_scim_token IS
     'Resolve a SHA-256 SCIM bearer hash to tenant_id for /api/scim/v2 (no plaintext).';

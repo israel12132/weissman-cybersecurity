@@ -177,6 +177,14 @@ async fn api_risk_node_flags_patch(
         )
             .into_response();
     }
+    if body.asset_value.is_some_and(|v| !v.is_finite()) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "asset_value must be a finite number"})),
+        )
+            .into_response();
+    }
+    let asset_value = body.asset_value.map(|v| v.clamp(0.01, 100.0));
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
@@ -191,7 +199,7 @@ async fn api_risk_node_flags_patch(
     )
     .bind(body.internet_exposed)
     .bind(body.crown_jewel)
-    .bind(body.asset_value)
+    .bind(asset_value)
     .bind(node_id)
     .bind(auth.tenant_id)
     .bind(auth.assigned_client_id)
@@ -201,7 +209,8 @@ async fn api_risk_node_flags_patch(
         Ok(Some(r)) => {
             let client_id: i64 = r.try_get("client_id").unwrap_or(0);
             let _ = tx.commit().await;
-            if client_id > 0 {
+            let dirty = client_id > 0;
+            if dirty {
                 crate::attack_path::mark_graph_dirty(auth.tenant_id, client_id);
             }
             (
@@ -212,8 +221,8 @@ async fn api_risk_node_flags_patch(
                     "client_id": client_id,
                     "internet_exposed": r.try_get::<bool,_>("internet_exposed").unwrap_or(false),
                     "crown_jewel": r.try_get::<bool,_>("crown_jewel").unwrap_or(false),
-                    "asset_value": r.try_get::<f32,_>("asset_value").unwrap_or(0.0),
-                    "graph_dirty": true,
+                    "asset_value": r.try_get::<f32,_>("asset_value").unwrap_or(1.0),
+                    "graph_dirty": dirty,
                 })),
             )
                 .into_response()

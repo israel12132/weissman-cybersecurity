@@ -79,7 +79,7 @@ export default function ScimProvisioning() {
     setMinted('')
     try {
       const res = await api.post('/api/admin/scim/tokens', { name })
-      if (res?.ok === false) throw new Error(res.detail || 'mint failed')
+      if (res?.ok === false) throw new Error(res.detail || t(`${NS}.mint_failed`))
       setMinted(res.token || '')
       await load()
     } catch (e) {
