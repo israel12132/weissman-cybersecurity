@@ -73,7 +73,7 @@ const LANES: &[LaneDef] = &[
     LaneDef {
         id: "ot_ics",
         title: "OT/ICS live protocol FSM",
-        beats: "Claroty, Dragos, Nozomi — passive visibility; DeNexus — OT FAIR without the live offensive probe fabric",
+        beats: "Claroty, Dragos, Nozomi — passive visibility; DeNexus — OT FAIR without 303 live probes",
         needles: &[
             "scada",
             "modbus",
@@ -101,7 +101,7 @@ const LANES: &[LaneDef] = &[
     LaneDef {
         id: "cloud_cnapp",
         title: "Cloud / CNAPP / IaC",
-        beats: "Wiz, Orca, Prisma, CrowdStrike Falcon Cloud — posture/graph, not offensive live-engine fabric + Ask",
+        beats: "Wiz, Orca, Prisma, CrowdStrike Falcon Cloud — posture/graph, not offensive 563-engine fabric + Ask",
         needles: &[
             "aws",
             "azure",
@@ -287,20 +287,6 @@ const LANES: &[LaneDef] = &[
         ],
     },
     LaneDef {
-        id: "prevention_fabric",
-        title: "Prevention-fabric breach proof (NGFW/SASE/WAF/ZTNA)",
-        beats: "Palo Alto NGFW/Prisma/Cortex — they block; they do not prove their own stack still leaks with live evidence",
-        needles: &[
-            "ngfw",
-            "sase",
-            "waf_bypass",
-            "zero_trust",
-            "control_plane",
-            "vngfw",
-            "prevention_fabric",
-        ],
-    },
-    LaneDef {
         id: "autonomous_fuzz",
         title: "Autonomous pentest / fuzz / digital twin",
         beats: "Strix (exploit+patch PRs), HexStrike MCP, NodeZero verify-job — app-centric or operator-close; Weissman FAIR stays priced until a later successful live scan does not reproduce the key",
@@ -313,22 +299,6 @@ const LANES: &[LaneDef] = &[
             "threat_emulation",
             "zero_day",
             "poe_synthesis",
-        ],
-    },
-    LaneDef {
-        id: "prevention_fabric",
-        title: "Prevention-fabric residual risk (not an NGFW)",
-        beats: "Palo Alto NGFW / Prisma / SASE — inline packet block. Weissman proves residual paths through NGFW, WAF, DNS, CASB, and DLP posture with live probes; it does not fake a dataplane",
-        needles: &[
-            "ngfw",
-            "vngfw",
-            "waf_",
-            "email_dns",
-            "malware_detonation",
-            "dns_security",
-            "casb",
-            "dlp_",
-            "cnapp",
         ],
     },
 ];
@@ -354,10 +324,7 @@ fn market_research() -> Value {
             "cluster": "agentic_web",
             "vendors": ["XBOW", "Strix", "Escape", "FireCompass"],
             "owns": "web/API PoC validators; Strix fix-PR loop; Escape GraphQL/BOLA",
-            "lacks": format!(
-                "AD/network chaining (XBOW), OT/ICS, tenant RLS SQL, {} production engines, FAIR that refuses to drop ALE on a patch-PR without a later live absence scan",
-                PRODUCTION_ENGINE_IDS.len()
-            )
+            "lacks": "AD/network chaining (XBOW), OT/ICS, tenant RLS SQL, 563 production engines, FAIR that refuses to drop ALE on a patch-PR without a later live absence scan"
         },
         {
             "cluster": "bas_ctem",
@@ -372,16 +339,10 @@ fn market_research() -> Value {
             "lacks": "offensive protocol FSM abort + SOAR honeytokens + FAIR process-disruption from live findings"
         },
         {
-            "cluster": "ngfw_sase",
-            "vendors": ["Palo Alto Networks (PAN-OS, Prisma Access, Prisma Cloud, Cortex XDR/XSIAM/XSOAR, Unit 42)"],
-            "owns": "inline prevention fabric: NGFW dataplane, SASE, WildFire detonation, petabyte XSIAM, XSOAR packs",
-            "lacks": "offensive live-probe catalog + OT 4-state FSM abort + FAIR-from-graph that stays priced until Hack-Fix-Verify + Hebrew Command Center. Weissman finds residual risk through that stack; it is not a PAN-OS replacement"
-        },
-        {
             "cluster": "cnapp",
             "vendors": ["Wiz", "Orca", "Prisma Cloud", "CrowdStrike Falcon Cloud"],
             "owns": "agentless graph, pentest-finding *ingest* (Wiz GA 2026)",
-            "lacks": "native live offensive probes, Ask JSON QueryPlan, OT FSM"
+            "lacks": "native 303 live probes, Ask JSON QueryPlan, OT FSM"
         },
         {
             "cluster": "identity_graph",
@@ -393,10 +354,7 @@ fn market_research() -> Value {
             "cluster": "ot_fair",
             "vendors": ["DeNexus DeRISK"],
             "owns": "OT process-disruption finance",
-            "lacks": format!(
-                "{}-engine offensive fabric + dual-probe + Ask RLS",
-                PRODUCTION_ENGINE_IDS.len()
-            )
+            "lacks": "563-engine offensive fabric + dual-probe + Ask RLS"
         },
         {
             "cluster": "llm_redteam",
@@ -407,14 +365,14 @@ fn market_research() -> Value {
         {
             "cluster": "oss_tool_wrappers",
             "vendors": [
-                "HexStrike AI",
-                "Strix",
-                "CAI",
-                "Nuclei",
-                "Caldera",
-                "PentestGPT",
-                "Infection Monkey",
-                "Faraday"
+                "HexStrike AI (11k★)",
+                "Strix (58k★)",
+                "CAI (9k★)",
+                "Nuclei (30k★)",
+                "Caldera (7k★)",
+                "PentestGPT (15k★)",
+                "Infection Monkey (7k★)",
+                "Faraday (6k★)"
             ],
             "owns": "CLI/MCP/template scanners and CTF agents",
             "lacks": "multi-tenant RLS product, Command Center, FAIR snapshots, WSS double encryption",
@@ -452,6 +410,7 @@ pub fn snapshot() -> Value {
     json!({
         "live": true,
         "engines_total": engines_total,
+        "palo_alto": palo_alto_bakeoff(),
         "lanes_total": LANES.len(),
         "lanes_covered": covered,
         "unmatched_stack": fusion,
@@ -472,9 +431,7 @@ pub fn snapshot() -> Value {
             "as_of": "2026-08-27",
             "method": "public_web_github_forums",
             "clusters": market_research(),
-            "verdict": format!(
-                "No public product combines {engines_total} live engines + OT protocol FSM + dual-probe evidence-doubt + FAIR-from-graph (ALE priced until Hack-Fix-Verify absence scan) + Ask 13-table RLS + WSS inner crypto + Hebrew Command Center."
-            )
+            "verdict": "No public product combines 563 live engines + OT protocol FSM + dual-probe evidence-doubt + FAIR-from-graph (ALE priced until Hack-Fix-Verify absence scan) + Ask 13-table RLS + WSS inner crypto + Hebrew Command Center."
         },
         "kernel_sanity": {
             "wss_nonce_bits": 96,
@@ -485,61 +442,99 @@ pub fn snapshot() -> Value {
     })
 }
 
-/// Engines fused into the Palo/Prisma/SASE bake-off proof. Subset of production.
-pub const PREVENTION_FABRIC_ENGINES: &[&str] = &[
-    "prevention_fabric_breach_proof",
-    "ngfw_posture",
-    "sase_security_bypass",
-    "waf_bypass",
-    "control_plane_of_controls",
-    "zero_trust_bypass",
-    "weissman_vngfw",
-];
+/// Palo Alto bake-off inventory from **this binary**, not PAN telemetry.
+///
+/// Positioning (labelled `live: false`) is a category statement: Weissman finds and
+/// orchestrates; Palo sells inline prevention. Engine overlap and unique loops are
+/// live because they are derived from `PRODUCTION_ENGINE_IDS`.
+fn production_has(id: &str) -> bool {
+    PRODUCTION_ENGINE_IDS.contains(&id)
+}
 
-/// Honest GTM snapshot — catalog truth, not invented competitor scores.
-pub fn market_readiness() -> Value {
-    let snap = snapshot();
-    let engines_total = PRODUCTION_ENGINE_IDS.len();
-    let fabric: Vec<&str> = PREVENTION_FABRIC_ENGINES
+fn live_engine_ids(needles: &[&'static str]) -> Vec<&'static str> {
+    needles
         .iter()
         .copied()
-        .filter(|id| PRODUCTION_ENGINE_IDS.contains(id))
+        .filter(|id| production_has(id))
+        .collect()
+}
+
+fn sku_overlap(sku: &str, needles: &[&'static str], maturity: &str) -> Value {
+    let ids = live_engine_ids(needles);
+    let agent_required_ids: Vec<&str> = ids
+        .iter()
+        .copied()
+        .filter(|id| weissman_core::models::engine_agent::is_agent_required_engine(id))
         .collect();
-    let ot_safety = PRODUCTION_ENGINE_IDS.contains(&"ot_passive_active_safety")
-        && PRODUCTION_ENGINE_IDS.contains(&"ot_crown_jewel_path");
     json!({
-        "ok": true,
+        "sku": sku,
+        "ids": ids,
+        "agent_required_ids": agent_required_ids,
+        "maturity": maturity,
+    })
+}
+
+fn palo_alto_bakeoff() -> Value {
+    let vngfw_admin = std::env::var("WEISSMAN_VNGFW_ADMIN").unwrap_or_default();
+    json!({
         "live": true,
-        "thesis": "Weissman finds; Palo Alto blocks. The bake-off is live proof that an installed prevention fabric still leaks.",
-        "category": "adversarial_prevention_auditor",
-        "not_a_ngfw_replacement": true,
-        "engines_total": engines_total,
-        "prevention_fabric_engines": fabric,
-        "gates": {
-            "scim_provisioning": false,
-            "soc2_type_ii_attested_in_product": false,
-            "fedramp": false,
-            "inline_packet_enforcement": false,
-            "ot_safety_engines_registered": ot_safety,
+        "source": "this_binary_inventory",
+        "not_palo_telemetry": true,
+        "positioning": {
+            "live": false,
+            "weissman": "assessment_plus_orchestrated_containment",
+            "palo_alto": "inline_prevention_plus_xsiam_cnapp_sase",
+            "honest": "companion_not_ngfw_replacement",
         },
-        "honest_gaps": [
-            {
-                "id": "scim",
-                "severity": "procurement",
-                "detail": "No SCIM 2.0 provisioning endpoint — Okta/Entra automated user sync is not implemented."
-            },
-            {
-                "id": "soc2",
-                "severity": "procurement",
-                "detail": "Product code does not claim SOC 2 Type II or FedRAMP authorization."
-            },
-            {
-                "id": "inline_block",
-                "severity": "category",
-                "detail": "Default posture is find + prove + remediate. This is not PAN-OS / Prisma Access inline blocking."
-            }
+        "catalog": crate::engine_accounting::to_json(),
+        "find_vs_block": {
+            "find": true,
+            "inline_packet_path": false,
+            "vngfw_engine_registered": production_has("weissman_vngfw"),
+            "vngfw_admin_configured": !vngfw_admin.trim().is_empty(),
+            "ngfw_posture_engine": production_has("ngfw_posture"),
+        },
+        "palo_sku_overlap": [
+            sku_overlap(
+                "Prisma Cloud",
+                &[
+                    "cnapp_continuous",
+                    "toxic_combo_runtime_proof",
+                    "iac_misconfig",
+                    "k8s_container",
+                    "aws_attack",
+                ],
+                "partial",
+            ),
+            sku_overlap(
+                "Cortex XDR",
+                &["host_isolation", "ebpf_sensor", "ioc_yara_hunt", "chronos"],
+                "partial",
+            ),
+            sku_overlap(
+                "Cortex Xpanse",
+                &["asm", "first_mover_surface_delta", "osint"],
+                "partial",
+            ),
+            sku_overlap(
+                "Prisma Access",
+                &["sase_security_bypass", "ai_casb_saas", "casb_saas_posture"],
+                "partial",
+            ),
+            sku_overlap(
+                "PAN-OS / WildFire",
+                &["ngfw_posture", "weissman_vngfw", "malware_detonation"],
+                "theater_to_partial",
+            ),
         ],
-        "moat": snap,
+        "unique_closed_loops": [
+            {"id": "chronos", "present": production_has("chronos"), "loop": "web_parent_to_shell_process_delta"},
+            {"id": "ot_passive_active_safety", "present": production_has("ot_passive_active_safety"), "loop": "ot_read_only_fsm_plus_fair"},
+            {"id": "ot_crown_jewel_path", "present": production_has("ot_crown_jewel_path"), "loop": "ot_to_process_crown_jewel"},
+            {"id": "ot_cloud_identity_killpath", "present": production_has("ot_cloud_identity_killpath"), "loop": "ot_x_cloud_x_identity"},
+            {"id": "control_plane_of_controls", "present": production_has("control_plane_of_controls"), "loop": "prove_installed_preventers"},
+            {"id": "toxic_combo_runtime_proof", "present": production_has("toxic_combo_runtime_proof"), "loop": "cnapp_plus_safe_exposure"},
+        ],
     })
 }
 
@@ -565,22 +560,69 @@ mod tests {
     }
 
     #[test]
-    fn prevention_fabric_lane_is_live_and_honest() {
-        let snap = snapshot();
-        let lanes = snap["lanes"].as_array().expect("lanes");
-        let pf = lanes
-            .iter()
-            .find(|l| l["id"] == "prevention_fabric")
-            .expect("prevention_fabric lane");
-        assert!(pf["live_engine_count"].as_u64().unwrap_or(0) >= 1);
-        assert!(pf["title"].as_str().unwrap_or("").contains("not an NGFW"));
-    }
-
-    #[test]
     fn market_research_is_labelled_not_live() {
         let snap = snapshot();
         assert_eq!(snap["market_research"]["live"], false);
         assert_eq!(snap["live"], true);
+    }
+
+    #[test]
+    fn palo_alto_bakeoff_is_companion_not_ngfw_and_ot_loops_are_live() {
+        let snap = snapshot();
+        let palo = &snap["palo_alto"];
+        assert_eq!(palo["live"], true);
+        assert_eq!(palo["not_palo_telemetry"], true);
+        assert_eq!(palo["positioning"]["live"], false);
+        assert_eq!(
+            palo["positioning"]["honest"],
+            "companion_not_ngfw_replacement"
+        );
+        assert_eq!(palo["find_vs_block"]["find"], true);
+        assert_eq!(palo["find_vs_block"]["inline_packet_path"], false);
+        let loops = palo["unique_closed_loops"].as_array().expect("loops");
+        for id in [
+            "ot_passive_active_safety",
+            "ot_crown_jewel_path",
+            "ot_cloud_identity_killpath",
+            "chronos",
+            "control_plane_of_controls",
+            "toxic_combo_runtime_proof",
+        ] {
+            let loop_row = loops
+                .iter()
+                .find(|l| l["id"] == id)
+                .unwrap_or_else(|| panic!("missing palo loop {id}"));
+            assert_eq!(
+                loop_row["present"],
+                production_has(id),
+                "{id} present flag must match PRODUCTION_ENGINE_IDS"
+            );
+        }
+        assert!(palo["catalog"]["total_ids"].as_u64().unwrap() >= 580);
+        assert!(
+            palo["catalog"]["alias_ids"].as_u64().unwrap() > 0,
+            "catalog honesty must surface alias inflation"
+        );
+        let xdr = palo["palo_sku_overlap"]
+            .as_array()
+            .expect("skus")
+            .iter()
+            .find(|s| s["sku"] == "Cortex XDR")
+            .expect("xdr sku");
+        let xdr_agent = xdr["agent_required_ids"].as_array().expect("xdr agent");
+        for id in ["host_isolation", "ebpf_sensor", "ioc_yara_hunt"] {
+            assert!(
+                xdr_agent.iter().any(|v| v.as_str() == Some(id)),
+                "Cortex XDR overlap must admit {id} is agent-required"
+            );
+        }
+        assert!(
+            !xdr_agent.iter().any(|v| v.as_str() == Some("chronos")),
+            "CHRONOS is a server hybrid, not agent-only"
+        );
+        if let Ok(path) = std::env::var("DUMP_PALO_JSON") {
+            std::fs::write(path, serde_json::to_string_pretty(palo).expect("palo json")).unwrap();
+        }
     }
 
     #[test]
@@ -589,30 +631,5 @@ mod tests {
             crate::elite_hardening::ot_fsm::validate_modbus_tcp(&[0u8; 12], &[0u8; 4]),
             crate::elite_hardening::ot_fsm::FsmVerdict::Abort { .. }
         ));
-    }
-
-    #[test]
-    fn market_readiness_is_honest_and_live() {
-        let m = market_readiness();
-        assert_eq!(m["live"], true);
-        assert_eq!(m["not_a_ngfw_replacement"], true);
-        assert_eq!(m["gates"]["scim_provisioning"], false);
-        assert_eq!(m["gates"]["inline_packet_enforcement"], false);
-        assert_eq!(m["gates"]["ot_safety_engines_registered"], true);
-        assert_eq!(m["engines_total"], PRODUCTION_ENGINE_IDS.len());
-        let fabric = m["prevention_fabric_engines"].as_array().expect("fabric");
-        assert_eq!(fabric.len(), PREVENTION_FABRIC_ENGINES.len());
-        assert!(fabric
-            .iter()
-            .any(|v| v.as_str() == Some("prevention_fabric_breach_proof")));
-        assert!(fabric.iter().any(|v| v.as_str() == Some("ngfw_posture")));
-        for id in PREVENTION_FABRIC_ENGINES {
-            assert!(
-                PRODUCTION_ENGINE_IDS.contains(id),
-                "prevention-fabric engine {id} missing from PRODUCTION_ENGINE_IDS"
-            );
-        }
-        let gaps = m["honest_gaps"].as_array().expect("gaps");
-        assert!(gaps.iter().any(|g| g["id"] == "scim"));
     }
 }

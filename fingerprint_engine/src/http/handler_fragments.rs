@@ -108,6 +108,10 @@ include!(concat!(
 ));
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_elite_hardening.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
     "/src/server_handlers_supreme.inc"
 ));
 include!(concat!(

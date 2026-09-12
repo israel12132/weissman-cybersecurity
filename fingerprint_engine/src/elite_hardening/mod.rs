@@ -34,6 +34,7 @@ use serde_json::{json, Value};
 
 /// Snapshot consumed by `GET /api/elite-hardening/status` and the Command Center UI.
 pub fn status_snapshot() -> Value {
+    let catalog = crate::engine_accounting::compute();
     let controls: Vec<Value> = CONTROLS
         .iter()
         .map(|c| {
@@ -58,8 +59,9 @@ pub fn status_snapshot() -> Value {
         "controls_total": CONTROLS.len(),
         "controls_enforced": enforced,
         "mitre_attack": "v19.1",
-        "live_probes_target": 303,
-        "unique_implementations_target": 295,
+        "live_probes_target": catalog.remotely_detecting,
+        "unique_implementations_target": catalog.distinct_canonical,
+        "catalog": crate::engine_accounting::to_json(),
         "ask_allowlist_tables": crate::nl_query::allowed_table_count(),
         "evidence_confidence_floor": evidence_doubt::CONFIDENCE_ADMIT,
         "jitter_percent": {"min": stealth_ops::JITTER_PCT_MIN, "max": stealth_ops::JITTER_PCT_MAX},

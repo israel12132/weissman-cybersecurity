@@ -383,7 +383,6 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/clients/:id/findings", get(api_client_findings_all))
         .route("/api/clients/:id/export/csv", get(api_client_export_csv))
-        .route("/api/clients/:id/export/xlsx", get(api_client_export_xlsx))
         .route("/api/clients/:id/report/pdf", get(api_client_report_pdf))
         .route(
             "/api/clients/:id/report/crypto-proof",
@@ -650,7 +649,6 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/integrations/:id/test", post(api_integrations_test))
         .route("/api/integrations/:id", delete(api_integrations_delete))
         .route("/api/ot-ics/devices", get(api_ot_ics_devices))
-        .route("/api/ot-ics/safety", get(api_ot_ics_safety))
         .route(
             "/api/elite-hardening/status",
             get(api_elite_hardening_status),
@@ -763,10 +761,6 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route(
             "/api/clients/:id/ot-ics/fingerprints",
             get(api_client_ot_ics_fingerprints),
-        )
-        .route(
-            "/api/clients/:id/ot-ics/safety",
-            get(api_client_ot_ics_safety),
         )
         .route(
             "/api/ceo/council/sessions/:job_id/stream",
