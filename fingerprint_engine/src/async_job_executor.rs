@@ -2159,7 +2159,9 @@ async fn execute_job_unscoped(
                 crate::llm_fuzzer_engine::run_and_persist(&mut tx, tid, client_id, &llm_cfg)
                     .await
                     .map_err(|e| e.to_string())?;
-            let _ = tx.commit().await;
+            if tx.commit().await.is_err() {
+                return Err("store_down".into());
+            }
             Ok(json!({"ok": true, "summary": summary}))
         }
         "cloud_scan_run" => {
@@ -2200,13 +2202,14 @@ async fn execute_job_unscoped(
             let mut tx = db::begin_tenant_tx(app_pool.as_ref(), tid)
                 .await
                 .map_err(|e| e.to_string())?;
-            let _ = sqlx::query("DELETE FROM cloud_scan_findings WHERE client_id = $1")
+            sqlx::query("DELETE FROM cloud_scan_findings WHERE client_id = $1")
                 .bind(client_id)
                 .execute(&mut *tx)
-                .await;
+                .await
+                .map_err(|_| "store_down".to_string())?;
             for f in &findings {
                 let detail = serde_json::to_string(&f.detail).unwrap_or_else(|_| "{}".to_string());
-                let _ = sqlx::query(
+                sqlx::query(
                     r#"INSERT INTO cloud_scan_findings (tenant_id, client_id, resource_type, resource_id, region, rule_id, severity, title, detail_json)
                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#,
                 )
@@ -2220,9 +2223,12 @@ async fn execute_job_unscoped(
                 .bind(&f.title)
                 .bind(&detail)
                 .execute(&mut *tx)
-                .await;
+                .await
+                .map_err(|_| "store_down".to_string())?;
             }
-            let _ = tx.commit().await;
+            if tx.commit().await.is_err() {
+                return Err("store_down".into());
+            }
             Ok(json!({"ok": true, "findings_count": findings.len()}))
         }
         "payload_sync" => {

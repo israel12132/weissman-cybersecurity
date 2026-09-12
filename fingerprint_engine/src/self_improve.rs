@@ -419,11 +419,9 @@ pub async fn reject(
 // ─── Analysis cycle ─────────────────────────────────────────────────────────────
 
 /// Gather deterministic, always-available signals for one tenant.
-async fn gather_signals(pool: &PgPool, tenant_id: i64) -> Vec<(String, i64)> {
+async fn gather_signals(pool: &PgPool, tenant_id: i64) -> Result<Vec<(String, i64)>, sqlx::Error> {
     let mut sig = Vec::new();
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return sig;
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
 
     let open_critical: i64 = sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM vulnerabilities WHERE tenant_id = $1 \
@@ -431,8 +429,7 @@ async fn gather_signals(pool: &PgPool, tenant_id: i64) -> Vec<(String, i64)> {
     )
     .bind(tenant_id)
     .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
+    .await?;
     sig.push(("open_critical_high".to_string(), open_critical));
 
     let dead_jobs: i64 = sqlx::query_scalar(
@@ -440,8 +437,7 @@ async fn gather_signals(pool: &PgPool, tenant_id: i64) -> Vec<(String, i64)> {
     )
     .bind(tenant_id)
     .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
+    .await?;
     sig.push(("dead_jobs".to_string(), dead_jobs));
 
     let false_positives: i64 = sqlx::query_scalar(
@@ -449,12 +445,11 @@ async fn gather_signals(pool: &PgPool, tenant_id: i64) -> Vec<(String, i64)> {
     )
     .bind(tenant_id)
     .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
+    .await?;
     sig.push(("false_positives".to_string(), false_positives));
 
-    let _ = tx.commit().await;
-    sig
+    tx.commit().await?;
+    Ok(sig)
 }
 
 /// Deterministic proposals derived purely from live signals (no LLM needed).
@@ -506,7 +501,9 @@ pub async fn run_cycle(
     tenant_id: i64,
 ) -> Result<u64, String> {
     let cycle_id = Uuid::new_v4();
-    let signals = gather_signals(pool, tenant_id).await;
+    let signals = gather_signals(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let mut proposals = deterministic_proposals(&signals);
 
     // LLM augmentation (optional — cycle still produces deterministic proposals without it).

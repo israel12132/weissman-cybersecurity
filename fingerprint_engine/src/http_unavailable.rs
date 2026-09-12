@@ -3050,4 +3050,60 @@ mod tests {
         assert!(!count_src.contains("unwrap_or(0)"));
         assert!(count_src.contains(".await?"));
     }
+
+    #[test]
+    fn chronos_cognitive_insert_commit_is_store_down() {
+        let src = include_str!("sovereign_defense_store.rs");
+        for sig in [
+            "pub async fn insert_chronos_event",
+            "pub async fn insert_cognitive_session",
+        ] {
+            let start = src.find(sig).unwrap_or_else(|| panic!("missing {sig}"));
+            let rest = &src[start..];
+            let next = rest.find("\npub async fn ").unwrap_or(rest.len());
+            let fn_src = &rest[..next];
+            assert!(!fn_src.contains("e.to_string()"), "{sig}");
+            assert!(!fn_src.contains("tenant tx:"));
+            assert!(fn_src.contains("tx.commit().await.is_err()"), "{sig}");
+            assert!(!fn_src.contains("let _ = tx.commit()"), "{sig}");
+        }
+    }
+
+    #[test]
+    fn self_improve_gather_signals_and_run_now_are_not_zero_success() {
+        let src = include_str!("self_improve.rs");
+        let start = src.find("async fn gather_signals").expect("gather");
+        let rest = &src[start..];
+        let next = rest
+            .find("\nfn deterministic_proposals")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("Result<Vec<(String, i64)>"));
+        assert!(!fn_src.contains("unwrap_or(0)"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "async fn api_self_improve_run_now",
+        );
+        assert!(handler.contains("self_improve_unavailable_json"));
+        assert!(!handler.contains("\"error\": e"));
+    }
+
+    #[test]
+    fn llm_fuzz_and_cloud_scan_persist_commit_is_not_ok_true() {
+        let src = include_str!("async_job_executor.rs");
+        let fuzz = src.find("\"llm_fuzz_run\"").expect("fuzz");
+        let cloud = src.find("\"cloud_scan_run\"").expect("cloud");
+        let payload = src.find("\"payload_sync\"").expect("payload");
+        let fuzz_src = &src[fuzz..cloud];
+        assert!(fuzz_src.contains("tx.commit().await.is_err()"));
+        assert!(!fuzz_src.contains("let _ = tx.commit()"));
+        let cloud_src = &src[cloud..payload];
+        assert!(cloud_src.contains("tx.commit().await.is_err()"));
+        assert!(!cloud_src.contains("let _ = sqlx::query(\"DELETE FROM cloud_scan_findings"));
+        let persist_commit = cloud_src
+            .rfind("tx.commit().await.is_err()")
+            .expect("persist commit");
+        let ok_true = cloud_src.find("\"ok\": true").expect("ok");
+        assert!(persist_commit < ok_true);
+    }
 }

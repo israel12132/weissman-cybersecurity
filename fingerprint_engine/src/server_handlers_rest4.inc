@@ -3649,11 +3649,20 @@ async fn api_self_improve_run_now(
             Json(json!({"ok": true, "proposals_generated": n})),
         )
             .into_response(),
+        Err(e) if e == "store_down" => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::self_improve_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response(),
         Err(e) => {
             tracing::error!(target: "self_improve", "run_cycle failed: {}", e);
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": e})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::self_improve_unavailable_json(
+                    "database unavailable",
+                )),
             )
                 .into_response()
         }

@@ -206,7 +206,7 @@ pub async fn insert_chronos_event(
 ) -> Result<i64, String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|e| format!("tenant tx: {e}"))?;
+        .map_err(|_| "store_down".to_string())?;
     let id: i64 = sqlx::query_scalar(
         r#"INSERT INTO chronos_events
            (tenant_id, client_id, event_type, pid, parent_pid, process_name, syscall_hint, action_taken, delta_json, metadata)
@@ -225,8 +225,10 @@ pub async fn insert_chronos_event(
     .bind(metadata)
     .fetch_one(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
+    }
     Ok(id)
 }
 
@@ -245,7 +247,7 @@ pub async fn insert_cognitive_session(
     let signals = json!(bot_signals);
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|e| format!("tenant tx: {e}"))?;
+        .map_err(|_| "store_down".to_string())?;
     let id: i64 = sqlx::query_scalar(
         r#"INSERT INTO cognitive_starvation_sessions
            (tenant_id, client_id, target_url, bot_score, bot_signals, poison_variant, poison_payload_id, response_status, metadata)
@@ -263,8 +265,10 @@ pub async fn insert_cognitive_session(
     .bind(metadata)
     .fetch_one(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
+    }
     Ok(id)
 }
 
