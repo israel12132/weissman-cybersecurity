@@ -41,6 +41,7 @@ export default function IntegrationManager() {
     { id: 'splunk', name: 'Splunk HEC', category: 'SIEM', icon: '📊', color: 'green', fields: ['hec_url', 'hec_token'] },
     { id: 'sentinel', name: 'Microsoft Sentinel', category: 'SIEM', icon: '🛡️', color: 'cyan', fields: ['ingest_url', 'access_token'] },
     { id: 'jira', name: 'Jira Cloud', category: 'Ticketing', icon: '📝', color: 'blue', fields: ['base_url', 'email', 'api_token', 'project_key'] },
+    { id: 'cortex_xsiam', name: 'Cortex XSIAM / XSOAR', category: 'SIEM', icon: '🔥', color: 'orange', fields: ['api_url', 'api_key', 'api_key_id', 'mode'] },
     { id: 'teams', name: 'Microsoft Teams', category: 'Communication', icon: '💬', color: 'indigo', fields: ['webhook_url'] },
     { id: 'weissman_agent', name: 'Weissman Agent Isolate', category: 'SOAR', icon: '🛡', color: 'cyan', fields: ['client_id'] },
   ];

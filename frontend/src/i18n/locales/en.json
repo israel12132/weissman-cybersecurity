@@ -881,6 +881,15 @@
       "verdict_INCONCLUSIVE": "Inconclusive",
       "verdict_NOISE": "Noise",
       "verdict_FALSE_POSITIVE": "False positive"
+    },
+    "cortexPush": {
+      "button": "Push to Cortex",
+      "hint": "POST /api/findings/:id/push-cortex — live XSIAM/XSOAR ingest of this proven finding",
+      "need_proof": "Verify the finding or attach live proof before pushing to Cortex",
+      "failed": "Cortex push failed",
+      "ok": "Cortex accepted the finding",
+      "blind_spot": "Pushed — XDR had no matching alert (blind spot)",
+      "xdr_already": "Pushed — XDR already had a matching alert"
     }
   },
   "vuln_intel": {
@@ -1430,7 +1439,29 @@
       "no_choke_title": "No choke-points",
       "no_choke_body": "No shared choke-points across the computed paths.",
       "no_paths_title": "No attack paths",
-      "no_paths_body": "No internet → crown-jewel path was found in the current graph."
+      "no_paths_body": "No internet → crown-jewel path was found in the current graph.",
+      "score": "Score",
+      "root_cause": "Root cause",
+      "path_ale": "Path ALE {{value}}",
+      "kpi_top_score": "Top score",
+      "kpi_top_score_hint": "Highest ranked path score",
+      "kpi_path_ale": "Path ALE",
+      "kpi_path_ale_hint": "Annualized loss expectancy on ranked paths",
+      "what_if_smb": "What-if: block SMB (445)",
+      "what_if_run": "Run what-if",
+      "what_if_clear": "Clear what-if",
+      "what_if_done": "What-if snapshot computed",
+      "no_jewels_banner": "No crown jewels are flagged — attack paths stay empty until an operator marks them.",
+      "no_jewels_hint": "Use the board below. Dijkstra only walks internet-exposed → crown-jewel.",
+      "jewel_board": "Crown jewels",
+      "jewel_board_hint": "PATCH /api/risk-graph/nodes/:id/flags — live operator truth, not a guessed inventory.",
+      "jewel_on": "Crown jewel",
+      "jewel_off": "Mark jewel",
+      "jewel_toggled": "Crown-jewel flag saved",
+      "jewel_toggle_failed": "Could not update crown-jewel flag.",
+      "no_graph_title": "No graph nodes",
+      "no_graph_body": "Build or refresh the risk graph for this client, then flag crown jewels here.",
+      "entry_flag": "internet-exposed"
     },
     "attackCoverage": {
       "title": "ATT&CK Coverage Matrix",

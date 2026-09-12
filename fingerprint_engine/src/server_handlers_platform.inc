@@ -514,7 +514,7 @@ async fn integration_live_test(
             "opsgenie" | "pagerduty" => "page_oncall",
             "teams" | "splunk" | "sentinel" => "slack_notify",
             "jira" => "create_incident",
-            _ => "page_oncall",
+            "cortex_xsiam" | "cortex_xsoar" | "cortex" => "siem_ingest",
             _ => "page_oncall",
         },
         tenant_id,
@@ -525,6 +525,42 @@ async fn integration_live_test(
         evidence,
         dry_run,
     );
+
+    if matches!(
+        provider.as_str(),
+        "cortex_xsiam" | "cortex_xsoar" | "cortex"
+    ) {
+        match crate::soar::adapters::cortex_xsiam::probe_connection(&record.config, dry_run).await
+        {
+            Ok(detail) => {
+                return (
+                    StatusCode::OK,
+                    Json(json!({
+                        "ok": true,
+                        "success": true,
+                        "status": "connected",
+                        "provider": provider,
+                        "detail": detail,
+                        "dry_run": dry_run,
+                    })),
+                )
+                    .into_response();
+            }
+            Err(e) => {
+                return (
+                    StatusCode::OK,
+                    Json(json!({
+                        "ok": true,
+                        "success": false,
+                        "status": "error",
+                        "provider": provider,
+                        "detail": e.to_string(),
+                    })),
+                )
+                    .into_response();
+            }
+        }
+    }
 
     if provider == "alert_webhook" || item.get("category").and_then(Value::as_str) == Some("Communication") {
         if let Some(url) = record.config.get("url").and_then(Value::as_str) {

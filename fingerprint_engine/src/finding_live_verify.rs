@@ -43,17 +43,17 @@ pub struct LiveVerifyResult {
     pub rescan_finding_count: Option<usize>,
 }
 
-struct FindingRow {
-    id: i64,
-    finding_id: String,
-    title: String,
-    severity: String,
-    source: String,
-    target: String,
-    client_id: Option<i64>,
-    raw_data: Value,
-    discovered_at: String,
-    signature_hash: String,
+pub(crate) struct FindingRow {
+    pub id: i64,
+    pub finding_id: String,
+    pub title: String,
+    pub severity: String,
+    pub source: String,
+    pub target: String,
+    pub client_id: Option<i64>,
+    pub raw_data: Value,
+    pub discovered_at: String,
+    pub signature_hash: String,
 }
 
 fn push_check(
@@ -402,7 +402,7 @@ fn map_finding_row(row: sqlx::postgres::PgRow) -> FindingRow {
     }
 }
 
-async fn load_finding(pool: &PgPool, tenant_id: i64, id_token: &str) -> Result<FindingRow, String> {
+pub(crate) async fn load_finding(pool: &PgPool, tenant_id: i64, id_token: &str) -> Result<FindingRow, String> {
     let token = id_token.trim();
     if token.is_empty() {
         return Err("finding not found".to_string());

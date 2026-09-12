@@ -610,6 +610,48 @@ async fn api_findings_verify_live(
     }
 }
 
+#[derive(serde::Deserialize, Default)]
+struct FindingCortexPushBody {
+    #[serde(default)]
+    dry_run: Option<bool>,
+}
+
+/// POST /api/findings/:id/push-cortex — ingest a proven finding into Cortex XSIAM/XSOAR.
+async fn api_findings_push_cortex(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<String>,
+    body: Option<Json<FindingCortexPushBody>>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    let dry_run = body.as_ref().and_then(|b| b.0.dry_run).unwrap_or(false);
+    let id_token = id.trim().to_string();
+    if id_token.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "finding id required"})),
+        )
+            .into_response();
+    }
+    match crate::finding_cortex_push::push_finding_to_cortex(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        &id_token,
+        dry_run,
+    )
+    .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err((code, detail)) => (
+            StatusCode::from_u16(code).unwrap_or(StatusCode::BAD_REQUEST),
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response(),
+    }
+}
+
 /// GET /api/findings/export/csv — export all findings for the current tenant as CSV.
 async fn api_findings_export_csv(
     State(state): State<Arc<AppState>>,
@@ -836,6 +878,32 @@ async fn api_openapi_spec() -> Response {
                         "200": { "description": "Verification verdict and checks" },
                         "404": { "description": "Finding not found in this tenant" },
                         "504": { "description": "Verification timed out" }
+                    }
+                }
+            },
+            "/api/findings/{id}/push-cortex": {
+                "post": {
+                    "summary": "Push an evidence-backed finding into Cortex XSIAM/XSOAR",
+                    "description": "Requires a configured cortex_xsiam integration. Refuses noise/false-positive verdicts and findings with no proof artifact. Live HTTP to Palo Alto APIs; missing config returns 409.",
+                    "tags": ["Findings", "SOAR"],
+                    "parameters": [
+                        { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+                    ],
+                    "requestBody": {
+                        "required": false,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": { "dry_run": { "type": "boolean" } }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": { "description": "Cortex accepted the proven finding" },
+                        "409": { "description": "Not configured, or finding not eligible" },
+                        "502": { "description": "Cortex API error" }
                     }
                 }
             },
