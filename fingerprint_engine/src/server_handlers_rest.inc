@@ -1551,7 +1551,15 @@ async fn api_client_config_patch(
                             Value::String("weaponized_god_mode".to_string()),
                         );
                     } else {
-                        let _ = tx.commit().await;
+                        if tx.commit().await.is_err() {
+                            return (
+                                StatusCode::SERVICE_UNAVAILABLE,
+                                Json(crate::http_unavailable::roe_override_requests_unavailable_json(
+                                    "database unavailable",
+                                )),
+                            )
+                                .into_response();
+                        }
                         return (
                             StatusCode::CONFLICT,
                             Json(json!({
@@ -1608,7 +1616,15 @@ async fn api_client_config_patch(
                         &ip,
                     )
                     .await;
-                    let _ = tx.commit().await;
+                    if tx.commit().await.is_err() {
+                        return (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(crate::http_unavailable::roe_override_requests_unavailable_json(
+                                "database unavailable",
+                            )),
+                        )
+                            .into_response();
+                    }
                     return (
                         StatusCode::CONFLICT,
                         Json(json!({

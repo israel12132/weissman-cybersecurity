@@ -495,8 +495,12 @@ async fn api_sovereign_operator_stream(
                         }
                     }
                 }
-                Err(e) => {
-                    let err = json!({ "type": "error", "message": e.to_string() });
+                Err(_) => {
+                    let err = json!({
+                        "type": "error",
+                        "unavailable": true,
+                        "message": "database unavailable",
+                    });
                     yield Ok::<axum::response::sse::Event, std::convert::Infallible>(axum::response::sse::Event::default().event("error").data(err.to_string()));
                 }
             }

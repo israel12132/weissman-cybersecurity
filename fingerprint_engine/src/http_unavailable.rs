@@ -268,6 +268,17 @@ pub fn isolate_agents_unavailable_json(detail: &str) -> Value {
     list_envelope("agents", detail)
 }
 
+/// `POST /api/agents/isolate` when the isolate task cannot be persisted
+pub fn agents_isolate_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "task_id": Value::Null,
+        "live_dispatched": Value::Null,
+        "detail": detail,
+    })
+}
+
 /// `GET /api/heal/stats` tenant aggregates
 pub fn heal_stats_unavailable_json(detail: &str) -> Value {
     json!({
@@ -367,6 +378,17 @@ pub fn deception_generate_unavailable_json(detail: &str) -> Value {
         "ok": false,
         "unavailable": true,
         "inserted": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `POST /api/clients/:id/deception/deploy-cloud` when the deployment row cannot be confirmed
+pub fn deception_deploy_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "deployment_id": Value::Null,
+        "job_id": Value::Null,
         "detail": detail,
     })
 }
@@ -2582,5 +2604,89 @@ mod tests {
             assert!(fn_src.contains("store_down"), "{sig}");
             assert!(fn_src.contains("billing_store_down"), "{sig}");
         }
+    }
+
+    #[test]
+    fn deception_deploy_store_down_is_never_ok_queued() {
+        let v = deception_deploy_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["deployment_id"].is_null());
+        assert!(v["job_id"].is_null());
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn agents_isolate_store_down_is_never_ok_task() {
+        let v = agents_isolate_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["task_id"].is_null());
+        assert!(v["live_dispatched"].is_null());
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn deception_deploy_cloud_insert_commit_is_503_not_ok_true() {
+        let src = include_str!("server_handlers_phase4.inc");
+        let fn_src = named_fn_src(src, "async fn api_deception_deploy_cloud");
+        let ins = fn_src
+            .find("INSERT INTO deception_cloud_deployments")
+            .expect("insert");
+        let after = &fn_src[ins..];
+        assert!(after.contains("deception_deploy_unavailable_json"));
+        let commit = after.find("tx.commit().await.is_err()").expect("commit");
+        let ok_true = after.find("\"ok\": true").expect("accepted");
+        assert!(commit < ok_true);
+    }
+
+    #[test]
+    fn client_config_patch_roe_create_commit_is_503_not_created() {
+        let src = include_str!("server_handlers_rest.inc");
+        let fn_src = named_fn_src(src, "async fn api_client_config_patch");
+        let created = fn_src.find("A request was created").expect("created");
+        let insert = fn_src[..created]
+            .rfind("INSERT INTO roe_override_requests")
+            .expect("insert");
+        let create_src = &fn_src[insert..created];
+        assert!(create_src.contains("tx.commit().await.is_err()"));
+        assert!(create_src.contains("roe_override_requests_unavailable_json"));
+        assert!(!create_src.contains("let _ = tx.commit()"));
+    }
+
+    #[test]
+    fn agents_isolate_err_is_503_not_sql_leak() {
+        let src = include_str!("server_handlers_supreme.inc");
+        let fn_src = named_fn_src(src, "async fn api_agents_isolate");
+        assert!(fn_src.contains("agents_isolate_unavailable_json"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn war_room_sse_err_is_not_sql_leak() {
+        let src = include_str!("ceo/war_room.rs");
+        let start = src.find("pub fn sse_war_room_stream").expect("sse");
+        let rest = &src[start..];
+        let next = rest.find("\nasync fn fetch_events_since").unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("database unavailable"));
+        assert!(fn_src.contains("unavailable"));
+        assert!(!fn_src.contains("e.to_string()"));
+    }
+
+    #[test]
+    fn sovereign_sse_err_is_not_sql_leak() {
+        let src = include_str!("server_handlers_sovereign_operator.inc");
+        let start = src
+            .find("async fn api_sovereign_operator_stream(")
+            .expect("stream");
+        let rest = &src[start..];
+        let next = rest
+            .find("\nasync fn api_sovereign_operator_memory")
+            .or_else(|| rest.find("\nasync fn api_sovereign_operator_forge"))
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("database unavailable"));
+        assert!(!fn_src.contains("e.to_string()"));
     }
 }

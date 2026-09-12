@@ -352,9 +352,11 @@ async fn api_agents_isolate(
             Json(json!({"ok": true, "task_id": task, "live_dispatched": live, "action": action})),
         )
             .into_response(),
-        Err(e) => (
-            StatusCode::BAD_GATEWAY,
-            Json(json!({"ok": false, "detail": e.to_string()})),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::agents_isolate_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }

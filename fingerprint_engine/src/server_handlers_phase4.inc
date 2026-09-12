@@ -1327,7 +1327,13 @@ async fn api_deception_deploy_cloud(
     };
 
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::deception_deploy_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     let ins = sqlx::query(
         r#"INSERT INTO deception_cloud_deployments (id, tenant_id, client_id, status, request_json)
@@ -1342,8 +1348,10 @@ async fn api_deception_deploy_cloud(
     if ins.is_err() {
         let _ = tx.rollback().await;
         return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": "failed to record deployment"})),
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::deception_deploy_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     }
@@ -1360,7 +1368,15 @@ async fn api_deception_deploy_cloud(
         .await;
         let _ = tx2.commit().await;
     }
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::deception_deploy_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     let queue_payload = json!({ "deployment_id": deployment_id.to_string() });
     match crate::async_jobs::enqueue(
