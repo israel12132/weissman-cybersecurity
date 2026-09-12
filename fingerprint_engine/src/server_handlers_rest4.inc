@@ -1308,6 +1308,7 @@ async fn api_risk_graph_build(
     match risk_graph::build_risk_graph_for_client(&mut tx, auth.tenant_id, id).await {
         Ok((n, e)) => {
             let _ = tx.commit().await;
+            crate::attack_path::mark_graph_dirty(auth.tenant_id, id);
             let fusion = risk_graph::fusion_ot_it_graph_edges_llm(
                 state.app_pool.as_ref(),
                 auth.tenant_id,

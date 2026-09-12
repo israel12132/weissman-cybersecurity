@@ -8,7 +8,7 @@
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
     dns_a, dns_txt, empty_ok, extract_host, finding_with_probe_depth, fingerprint_stack,
-    has_header, header_value, http_client, http_get, http_get_with_headers, join_url,
+    header_value, http_client, http_get, join_url,
     normalize_url, probe_matched_token, probe_paths_concurrent, status_indicates_presence,
     tcp_banner, tcp_open, tcp_scan, udp_probe_response, DEFAULT_PROBE_CONCURRENCY,
 };
@@ -116,6 +116,16 @@ pub async fn run_remote_surface_probe(
         "tpm_firmware_attack" => probe_tpm_surface(engine_id, target).await,
         "cold_boot_attack" => probe_cold_boot_surface(engine_id, target).await,
         "infostealer_emulation" => probe_infostealer_surface(engine_id, target).await,
+        "sandbox_evasion" => probe_sandbox_evasion_surface(engine_id, target).await,
+        "rop_chain_engine" => probe_rop_chain_surface(engine_id, target).await,
+        "heap_exploitation" => probe_heap_exploitation_surface(engine_id, target).await,
+        "jit_spray" => probe_jit_spray_surface(engine_id, target).await,
+        "com_hijacking" => probe_com_hijack_surface(engine_id, target).await,
+        "parent_pid_spoof" => probe_ppid_spoof_surface(engine_id, target).await,
+        "host_isolation" => probe_host_isolation_surface(engine_id, target).await,
+        "host_privilege_escalation" => probe_host_privesc_surface(engine_id, target).await,
+        "ebpf_sensor" => probe_ebpf_sensor_surface(engine_id, target).await,
+        "ioc_yara_hunt" => probe_yara_hunt_surface(engine_id, target).await,
         other => empty_ok(other, target),
     }
 }
@@ -1506,6 +1516,296 @@ async fn probe_infostealer_surface(engine_id: &str, target: &str) -> EngineResul
     collect(engine_id, target, findings)
 }
 
+async fn probe_http_first_hit(
+    engine_id: &str,
+    target: &str,
+    paths: &[&str],
+    title: &str,
+    severity: &str,
+    mitre: &str,
+    reason: &str,
+) -> Vec<Value> {
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
+    let mut findings = Vec::new();
+    for p in probes {
+        if !status_indicates_presence(p.status) {
+            continue;
+        }
+        findings.push(remote_finding(
+            engine_id,
+            title,
+            severity,
+            mitre,
+            &format!("{} returned {} — {reason}", p.final_url, p.status),
+            target,
+        ));
+        break;
+    }
+    findings
+}
+
+async fn probe_sandbox_evasion_surface(engine_id: &str, target: &str) -> EngineResult {
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let mut findings = Vec::new();
+    if let Some(p) = http_get(&client, &base).await {
+        let blob = headers_blob(&p).to_ascii_lowercase();
+        let body = p.body.to_ascii_lowercase();
+        for (sig, label) in [
+            ("cf-ray", "Cloudflare"),
+            ("x-sucuri", "Sucuri"),
+            ("x-akamai", "Akamai"),
+            ("captcha", "CAPTCHA"),
+            ("recaptcha", "reCAPTCHA"),
+            ("bot-management", "bot management"),
+        ] {
+            if blob.contains(sig) || body.contains(sig) {
+                findings.push(remote_finding(
+                    engine_id,
+                    &format!("Sandbox/bot-defense signal: {label}"),
+                    "info",
+                    "T1497",
+                    &format!(
+                        "{} advertises {label} — malware sandbox-evasion often fingerprints WAF/bot stacks; agent validates host VM/guest-tool artifacts.",
+                        p.final_url
+                    ),
+                    target,
+                ));
+                break;
+            }
+        }
+    }
+    collect(engine_id, target, findings)
+}
+
+async fn probe_rop_chain_surface(engine_id: &str, target: &str) -> EngineResult {
+    let mut findings = probe_http_first_hit(
+        engine_id,
+        target,
+        &["/cgi-bin/", "/debug/coredump", "/core", "/.exe", "/downloads/"],
+        "Native/CGI crash-dump surface exposed",
+        "medium",
+        "T1055",
+        "ROP/JOP gadget chains execute in-process; exposed CGI/native artifacts are the remote lead, agent inspects CFI/runtime.",
+    )
+    .await;
+    let host = extract_host(target);
+    let open = tcp_scan(&host, &[21, 445], 8).await;
+    if open.contains(&21) || open.contains(&445) {
+        findings.push(remote_finding(
+            engine_id,
+            "File-share/FTP reachable — native binary delivery surface",
+            "medium",
+            "T1055",
+            &format!(
+                "Host {host} accepts {:?} — native binaries on shares are the typical ROP exploit delivery path; agent validates host CFI.",
+                open
+            ),
+            target,
+        ));
+    }
+    collect(engine_id, target, findings)
+}
+
+async fn probe_heap_exploitation_surface(engine_id: &str, target: &str) -> EngineResult {
+    collect(
+        engine_id,
+        target,
+        probe_http_first_hit(
+            engine_id,
+            target,
+            &["/upload", "/api/upload", "/upload.php", "/fileupload", "/api/files"],
+            "Upload endpoint exposed (heap-grooming surface)",
+            "medium",
+            "T1055",
+            "Large uploads and parser bugs are the remote heap-grooming lead; agent instruments allocator telemetry.",
+        )
+        .await,
+    )
+}
+
+async fn probe_jit_spray_surface(engine_id: &str, target: &str) -> EngineResult {
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let mut findings = Vec::new();
+    let probes = probe_paths_concurrent(
+        &client,
+        &base,
+        &["/", "/index.wasm", "/app.wasm", "/static/js/", "/wasm/"],
+        DEFAULT_PROBE_CONCURRENCY,
+    )
+    .await;
+    for p in probes {
+        if !status_indicates_presence(p.status) {
+            continue;
+        }
+        let ct = header_value(&p.headers, "content-type").unwrap_or_default();
+        let ct_l = ct.to_ascii_lowercase();
+        if ct_l.contains("wasm")
+            || p.final_url.ends_with(".wasm")
+            || ct_l.contains("javascript")
+            || p.body.contains("WebAssembly")
+        {
+            findings.push(remote_finding(
+                engine_id,
+                "WASM/JS JIT surface exposed",
+                "info",
+                "T1055",
+                &format!(
+                    "{} ({ct}) — JIT/RWX spray is host-resident; agent inventories interpreter processes.",
+                    p.final_url
+                ),
+                target,
+            ));
+            break;
+        }
+    }
+    collect(engine_id, target, findings)
+}
+
+async fn probe_com_hijack_surface(engine_id: &str, target: &str) -> EngineResult {
+    collect(
+        engine_id,
+        target,
+        probe_http_first_hit(
+            engine_id,
+            target,
+            &[
+                "/webdav/",
+                "/clickonce/",
+                "/setup.application",
+                "/install.application",
+                "/activex/",
+            ],
+            "COM/ClickOnce/WebDAV delivery surface",
+            "medium",
+            "T1546.015",
+            "COM hijacking is Windows host-resident; exposed ClickOnce/WebDAV is the remote lead.",
+        )
+        .await,
+    )
+}
+
+async fn probe_ppid_spoof_surface(engine_id: &str, target: &str) -> EngineResult {
+    collect(
+        engine_id,
+        target,
+        probe_http_first_hit(
+            engine_id,
+            target,
+            &[
+                "/downloads/",
+                "/files/macro.docm",
+                "/templates/",
+                "/outlook/",
+                "/owa/",
+            ],
+            "Office/macro download surface (PPID-spoof parent)",
+            "medium",
+            "T1134.004",
+            "Office→shell parent spoof starts from a delivered document; agent inspects process tree.",
+        )
+        .await,
+    )
+}
+
+async fn probe_host_isolation_surface(engine_id: &str, target: &str) -> EngineResult {
+    collect(
+        engine_id,
+        target,
+        probe_http_first_hit(
+            engine_id,
+            target,
+            &[
+                "/api/isolate",
+                "/edr/",
+                "/crowdstrike/",
+                "/sentinel/",
+                "/api/containment",
+            ],
+            "EDR/isolation control-plane endpoint exposed",
+            "high",
+            "T1489",
+            "Host isolation is agent-enforced; an exposed EDR/containment API is the remote blast-radius signal.",
+        )
+        .await,
+    )
+}
+
+async fn probe_host_privesc_surface(engine_id: &str, target: &str) -> EngineResult {
+    let mut findings = probe_http_first_hit(
+        engine_id,
+        target,
+        &[
+            "/actuator/env",
+            "/debug/pprof",
+            "/var/run/docker.sock",
+            "/docker/",
+            "/api/v1/namespaces",
+        ],
+        "Privilege-escalation control/debug surface",
+        "high",
+        "T1068",
+        "Debug/docker/k8s endpoints are the remote priv-esc lead; agent inventories sudoers/SUID/UID 0.",
+    )
+    .await;
+    let host = extract_host(target);
+    let open = tcp_scan(&host, &[2375, 2376, 6443, 10250], 8).await;
+    if !open.is_empty() {
+        findings.push(remote_finding(
+            engine_id,
+            &format!("Container/K8s control ports open: {open:?}"),
+            "high",
+            "T1068",
+            &format!(
+                "Host {host} accepts {open:?} — unauthenticated docker/k8s APIs are classic priv-esc; agent confirms host identity."
+            ),
+            target,
+        ));
+    }
+    collect(engine_id, target, findings)
+}
+
+async fn probe_ebpf_sensor_surface(engine_id: &str, target: &str) -> EngineResult {
+    let host = extract_host(target);
+    let mut findings = Vec::new();
+    if tcp_open(&host, 22).await {
+        if let Some(banner) = tcp_banner(&host, 22).await {
+            findings.push(remote_finding(
+                engine_id,
+                "SSH reachable — eBPF/kernel telemetry requires host agent",
+                "info",
+                "T1055",
+                &format!(
+                    "SSH banner on {host}:22 ({}) — eBPF sensors attach on the endpoint; agent reports BTF/bpftrace availability.",
+                    banner.chars().take(80).collect::<String>()
+                ),
+                target,
+            ));
+        }
+    }
+    collect(engine_id, target, findings)
+}
+
+async fn probe_yara_hunt_surface(engine_id: &str, target: &str) -> EngineResult {
+    collect(
+        engine_id,
+        target,
+        probe_http_first_hit(
+            engine_id,
+            target,
+            &["/samples/", "/malware/", "/ioc/", "/hashes/", "/api/ioc"],
+            "Sample/IOC listing endpoint exposed",
+            "medium",
+            "T1588.001",
+            "YARA/IOC hunts run on disk via the agent; a public sample/hash listing is the remote lead.",
+        )
+        .await,
+    )
+}
+
 fn headers_blob(probe: &crate::engine_probes::HttpProbe) -> String {
     probe
         .headers
@@ -1575,6 +1875,23 @@ mod tests {
         let r = collect("eng", "tgt", findings);
         assert_eq!(r.findings.len(), 2);
         assert!(r.message.contains("2 remote surface finding(s)"));
+    }
+
+    #[test]
+    fn every_agent_required_engine_is_in_remote_surface_match() {
+        use weissman_core::models::engine_agent::AGENT_REQUIRED_ENGINES;
+        let src = include_str!("agent_remote_surface.rs");
+        let start = src
+            .find("match engine_id {")
+            .expect("match engine_id in run_remote_surface_probe");
+        let other = src[start..].find("other => empty_ok").expect("other arm");
+        let chunk = &src[start..start + other];
+        for id in AGENT_REQUIRED_ENGINES {
+            assert!(
+                chunk.contains(&format!("\"{id}\"")),
+                "agent-required engine {id} has no remote-surface match arm"
+            );
+        }
     }
 
     #[test]

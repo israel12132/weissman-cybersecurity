@@ -1430,7 +1430,9 @@
       "no_choke_title": "No choke-points",
       "no_choke_body": "No shared choke-points across the computed paths.",
       "no_paths_title": "No attack paths",
-      "no_paths_body": "No internet → crown-jewel path was found in the current graph."
+      "no_paths_body": "No internet → crown-jewel path was found in the current graph.",
+      "no_jewels_banner": "Zero crown jewels — Dijkstra has no sinks. Recompute auto-tags identity/cloud/OT/high-risk nodes so paths can form.",
+      "no_jewels_recompute": "Auto-tag jewels and recompute"
     },
     "attackCoverage": {
       "title": "ATT&CK Coverage Matrix",
@@ -1446,7 +1448,16 @@
       "search_placeholder": "Filter by technique, ID, or engine…",
       "showing": "{{techniques}} techniques across {{tactics}} tactics",
       "no_match_title": "No matches",
-      "no_match_body": "No technique or engine matches your filter."
+      "no_match_body": "No technique or engine matches your filter.",
+      "readiness_title": "Attack / breach readiness",
+      "readiness_hint": "Honest operational gates — not a MITRE checklist. Live from GET /api/attack-coverage.",
+      "roe": "Default RoE",
+      "apt_scenarios": "APT emulation scenarios",
+      "cron_engines": "Scheduled red-team engines",
+      "agent_required": "Agent-required engines",
+      "gaps_heading": "Where offense is still not ready",
+      "jewel_auto": "Crown jewels auto-tagged",
+      "weaponized": "Weaponized mode is dual-control"
     },
     "securityPosture": {
       "title": "Platform Security Posture",
