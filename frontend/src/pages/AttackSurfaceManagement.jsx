@@ -290,6 +290,40 @@ export function FirstMoverDeltaPanel({
   const oast = nerve?.oast || {}
   const nvd = nerve?.nvd || {}
   const nerveDown = !nerve || nerve.unavailable === true || nerve.ok === false
+  const nerveChips = nerveDown
+    ? []
+    : [
+        [
+          t('pages.attackSurfaceManagement.nerve_certstream'),
+          cs.connected
+            ? t('pages.attackSurfaceManagement.nerve_live')
+            : (cs.enabled ? t('pages.attackSurfaceManagement.nerve_reconnect') : t('pages.attackSurfaceManagement.nerve_off')),
+          cs.connected ? '#34d399' : '#fbbf24',
+        ],
+        [
+          t('pages.attackSurfaceManagement.nerve_oast'),
+          oast.configured && oast.last_callback_at
+            ? t('pages.attackSurfaceManagement.nerve_live')
+            : oast.configured
+              ? t('pages.attackSurfaceManagement.nerve_oast_idle')
+              : t('pages.attackSurfaceManagement.nerve_off'),
+          oast.configured && oast.last_callback_at ? '#34d399' : '#f97316',
+        ],
+        [
+          t('pages.attackSurfaceManagement.nerve_nvd'),
+          nvd.api_key_configured
+            ? t('pages.attackSurfaceManagement.nerve_live')
+            : t('pages.attackSurfaceManagement.nerve_nvd_osv_only'),
+          nvd.api_key_configured ? '#34d399' : '#22d3ee',
+        ],
+        [
+          t('pages.attackSurfaceManagement.nerve_oast_last'),
+          oast.last_callback_at
+            ? oast.last_callback_at
+            : t('pages.attackSurfaceManagement.nerve_oast_none'),
+          oast.last_callback_at ? '#34d399' : '#f97316',
+        ],
+      ]
 
   return (
     <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-950/40 via-black/40 to-cyan-950/30 p-4 mb-5">
@@ -338,46 +372,15 @@ export function FirstMoverDeltaPanel({
             {t('pages.attackSurfaceManagement.nerve_unavailable')}
           </span>
         ) : (
-        {[
-          [
-            t('pages.attackSurfaceManagement.nerve_certstream'),
-            cs.connected
-              ? t('pages.attackSurfaceManagement.nerve_live')
-              : (cs.enabled ? t('pages.attackSurfaceManagement.nerve_reconnect') : t('pages.attackSurfaceManagement.nerve_off')),
-            cs.connected ? '#34d399' : '#fbbf24',
-          ],
-          [
-            t('pages.attackSurfaceManagement.nerve_oast'),
-            oast.configured && oast.last_callback_at
-              ? t('pages.attackSurfaceManagement.nerve_live')
-              : oast.configured
-                ? t('pages.attackSurfaceManagement.nerve_oast_idle')
-                : t('pages.attackSurfaceManagement.nerve_off'),
-            oast.configured && oast.last_callback_at ? '#34d399' : '#f97316',
-          ],
-          [
-            t('pages.attackSurfaceManagement.nerve_nvd'),
-            nvd.api_key_configured
-              ? t('pages.attackSurfaceManagement.nerve_live')
-              : t('pages.attackSurfaceManagement.nerve_nvd_osv_only'),
-            nvd.api_key_configured ? '#34d399' : '#22d3ee',
-          ],
-          [
-            t('pages.attackSurfaceManagement.nerve_oast_last'),
-            oast.last_callback_at
-              ? oast.last_callback_at
-              : t('pages.attackSurfaceManagement.nerve_oast_none'),
-            oast.last_callback_at ? '#34d399' : '#f97316',
-          ],
-        ].map(([label, value, color]) => (
-          <span
-            key={label}
-            className="text-[10px] font-mono px-2 py-1 rounded-lg border border-white/[0.08] bg-black/30"
-            style={{ color }}
-          >
-            {label}: {value}
-          </span>
-        ))
+          nerveChips.map(([label, value, color]) => (
+            <span
+              key={label}
+              className="text-[10px] font-mono px-2 py-1 rounded-lg border border-white/[0.08] bg-black/30"
+              style={{ color }}
+            >
+              {label}: {value}
+            </span>
+          ))
         )}
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
