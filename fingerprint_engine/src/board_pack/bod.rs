@@ -22,14 +22,11 @@ const INTERNET_SOURCES: &[&str] = &[
     "asm",
     "first_mover_surface_delta",
     "first_mover_delta_fusion",
-    "leak_hunter",
     "subdomain_takeover",
     "external_exposure_supreme",
     "osint",
     "recon",
     "discovery_engine",
-    "dark_web_monitor",
-    "typosquatting_monitor",
     "attack_surface_quantify",
     "email_dns_posture",
     "pki_tls",
@@ -166,6 +163,13 @@ mod tests {
         // kev + automatable(from kev) = 2 → P2
         assert!(f.kev && f.automatable);
         assert_eq!(f.tier(), BodTier::P2);
+    }
+
+    #[test]
+    fn leak_engine_is_not_public_asset_exposure() {
+        let f = classify("leak_hunter", false, false, None, false, "high", None);
+        assert!(!f.public_exposed);
+        assert_eq!(f.tier(), BodTier::P3); // total_impact only
     }
 
     #[test]

@@ -300,9 +300,12 @@ pub async fn compose(
         });
     }
 
-    let techniques = attack_exposure::load_exposure(pool, tenant_id, client_id, 2000)
-        .await
-        .unwrap_or_default();
+    let techniques = match attack_exposure::load_exposure(pool, tenant_id, client_id, 2000).await {
+        Ok(t) => t,
+        Err(e) => {
+            return Err(format!("ATT&CK exposure unavailable: {e}"));
+        }
+    };
     // Touch catalog so unmapped tactics stay honest.
     let _ = attack_coverage::lookup("T1190");
 
@@ -392,41 +395,44 @@ pub async fn compose(
     let mut first_mover_changed = 0usize;
     let mut first_mover_current = 0usize;
     let mut first_mover_previous = 0usize;
-    if let Ok(diff) =
-        first_mover_surface_delta::api_surface_diff_json(pool, tenant_id, client_id).await
-    {
-        if let Some(msg) = diff.get("message").and_then(Value::as_str) {
-            if !msg.is_empty() {
-                first_mover_message = msg.to_string();
+    match first_mover_surface_delta::api_surface_diff_json(pool, tenant_id, client_id).await {
+        Ok(diff) => {
+            if let Some(msg) = diff.get("message").and_then(Value::as_str) {
+                if !msg.is_empty() {
+                    first_mover_message = msg.to_string();
+                }
+            }
+            first_mover_added = diff
+                .get("added")
+                .and_then(Value::as_array)
+                .map(|a| a.len())
+                .unwrap_or(0);
+            first_mover_removed = diff
+                .get("removed")
+                .and_then(Value::as_array)
+                .map(|a| a.len())
+                .unwrap_or(0);
+            first_mover_changed = diff
+                .get("changed")
+                .and_then(Value::as_array)
+                .map(|a| a.len())
+                .unwrap_or(0);
+            first_mover_current = diff
+                .get("current_count")
+                .and_then(Value::as_u64)
+                .unwrap_or(0) as usize;
+            first_mover_previous = diff
+                .get("previous_count")
+                .and_then(Value::as_u64)
+                .unwrap_or(0) as usize;
+            if first_mover_added + first_mover_removed + first_mover_changed > 0 {
+                first_mover_message = format!(
+                    "Live surface delta: +{first_mover_added} / -{first_mover_removed} / ~{first_mover_changed} hosts."
+                );
             }
         }
-        first_mover_added = diff
-            .get("added")
-            .and_then(Value::as_array)
-            .map(|a| a.len())
-            .unwrap_or(0);
-        first_mover_removed = diff
-            .get("removed")
-            .and_then(Value::as_array)
-            .map(|a| a.len())
-            .unwrap_or(0);
-        first_mover_changed = diff
-            .get("changed")
-            .and_then(Value::as_array)
-            .map(|a| a.len())
-            .unwrap_or(0);
-        first_mover_current = diff
-            .get("current_count")
-            .and_then(Value::as_u64)
-            .unwrap_or(0) as usize;
-        first_mover_previous = diff
-            .get("previous_count")
-            .and_then(Value::as_u64)
-            .unwrap_or(0) as usize;
-        if first_mover_added + first_mover_removed + first_mover_changed > 0 {
-            first_mover_message = format!(
-                "Live surface delta: +{first_mover_added} / -{first_mover_removed} / ~{first_mover_changed} hosts."
-            );
+        Err(e) => {
+            first_mover_message = format!("First-mover snapshot unavailable: {e}");
         }
     }
 

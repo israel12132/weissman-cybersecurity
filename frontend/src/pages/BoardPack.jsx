@@ -30,7 +30,7 @@ function fmtUsd(n) {
   return `$${(Number(n) || 0).toLocaleString()}`
 }
 
-async function downloadBinary(path, toast, okKey, failKey, t) {
+async function downloadBinary(path, toast, okKey, t) {
   const r = await apiFetch(path, { raw: true })
   const disposition = r.headers.get('content-disposition') || ''
   const match = disposition.match(/filename="?([^";\s]+)"?/)
@@ -136,13 +136,7 @@ export default function BoardPack() {
     setBusy(kind)
     try {
       const path = `/api/clients/${encodeURIComponent(selectedClientId)}/board-pack/${kind}?lang=${lang}`
-      await downloadBinary(
-        path,
-        toast,
-        `${NS}.download_ok`,
-        `${NS}.download_failed`,
-        t,
-      )
+      await downloadBinary(path, toast, `${NS}.download_ok`, t)
     } catch (e) {
       toast.error(t(`${NS}.download_failed`, { detail: e?.message || '' }))
     } finally {

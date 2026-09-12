@@ -606,6 +606,10 @@ mod tests {
         let body = String::from_utf8_lossy(&bytes);
         assert!(body.contains("Executive") || body.contains("sheet1"));
         assert!(body.contains("BOD 26-04") || body.contains("BOD-26-04"));
+        let dir = std::path::Path::new("/opt/cursor/artifacts");
+        if dir.is_dir() {
+            std::fs::write(dir.join("weissman-tibp-empty.xlsx"), &bytes).ok();
+        }
     }
 
     #[test]

@@ -424,5 +424,9 @@ mod tests {
         assert!(body.contains("/BaseFont /Helvetica"));
         assert!(body.contains("BOD 26-04"));
         assert!(body.contains("honest empty") || body.contains("none yet"));
+        let dir = std::path::Path::new("/opt/cursor/artifacts");
+        if dir.is_dir() {
+            std::fs::write(dir.join("weissman-tibp-empty.pdf"), &bytes).ok();
+        }
     }
 }
