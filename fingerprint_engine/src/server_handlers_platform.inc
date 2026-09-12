@@ -2778,6 +2778,9 @@ fn reshape_risk_graph_for_ui(v: Value) -> Value {
                 "risk_score": risk_score,
                 "severity": risk_score_to_severity(risk_score),
                 "is_choke_point": n.get("is_choke_point").cloned().unwrap_or(Value::Bool(false)),
+                "crown_jewel": n.get("crown_jewel").cloned().unwrap_or(Value::Bool(false)),
+                "internet_exposed": n.get("internet_exposed").cloned().unwrap_or(Value::Bool(false)),
+                "asset_value": n.get("asset_value").cloned().unwrap_or(Value::Null),
                 "metadata": meta_parsed,
                 "description": meta_parsed.get("description").cloned()
                     .or_else(|| meta_parsed.get("summary").cloned())

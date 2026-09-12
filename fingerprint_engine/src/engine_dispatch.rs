@@ -878,6 +878,15 @@ async fn dispatch_engine_match(
         "first_mover_delta_fusion" => {
             crate::first_mover_delta_fusion::run_first_mover_delta_fusion_result(target, ctx).await
         }
+        "identity_surface_delta" => {
+            crate::identity_surface_delta::run_identity_surface_delta_result(target, ctx).await
+        }
+        "dualstack_edge_skip_fusion" => {
+            crate::dualstack_edge_skip::run_dualstack_edge_skip_fusion_result(target).await
+        }
+        "ransomware_preposition_surface" => {
+            crate::ransomware_preposition::run_ransomware_preposition_surface_result(target).await
+        }
         "first_seen_osv_nvd" => {
             crate::first_seen_osv_nvd_engine::run_first_seen_osv_nvd_result(target, ctx).await
         }

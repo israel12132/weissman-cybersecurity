@@ -63,6 +63,30 @@
       "enabled": true
     },
     {
+      "techniqueID": "T1078",
+      "score": 19,
+      "comment": "casb_saas_posture, continuous_auth_evasion, external_exposure_supreme, identity_attack_chain, identity_surface_delta, idor_advanced, itdr, ldap_injection, ldap_injection_engine, mainframe_zos_attack, microsegmentation_bypass, midnight_blizzard_ttps, ntlm_relay, risk_superposition_collapse, smb_netbios, smb_relay, threat_hunting_apt, volt_typhoon_ttps, zero_trust_bypass",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1590.005",
+      "score": 2,
+      "comment": "dualstack_edge_skip_fusion, ipv6_attack",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1021",
+      "score": 6,
+      "comment": "apt_lateral_movement, lateral_movement, lateral_movement_engine, ot_it_lateral_chain, ransomware_preposition_surface, risk_superposition_collapse",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1486",
+      "score": 10,
+      "comment": "blackcat_alphv_ttps, cl0p_techniques, cloud_ransomware, conti_ransomware_ttps, destructive_wiper, lockbit_techniques, ransomware_emulation, ransomware_preposition_surface, ransomware_sim, wizard_spider_ttps",
+      "enabled": true
+    },
+    {
       "techniqueID": "T1595.002",
       "score": 8,
       "comment": "ai_cloud_escalation_chain, digital_twin, first_seen_osv_nvd, kill_chain, mobile_backend_chain, rce_chain, tactic_chain_synthesizer, vuln_chaining",
@@ -261,12 +285,6 @@
       "enabled": true
     },
     {
-      "techniqueID": "T1590.005",
-      "score": 1,
-      "comment": "ipv6_attack",
-      "enabled": true
-    },
-    {
       "techniqueID": "T1021.002",
       "score": 8,
       "comment": "apt_lateral_movement, control_plane_of_controls, lateral_movement, lateral_movement_engine, ntlm_relay, ot_it_lateral_chain, smb_netbios, smb_relay",
@@ -276,12 +294,6 @@
       "techniqueID": "T1053",
       "score": 3,
       "comment": "ntlm_relay, smb_netbios, smb_relay",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1078",
-      "score": 18,
-      "comment": "casb_saas_posture, continuous_auth_evasion, external_exposure_supreme, identity_attack_chain, idor_advanced, itdr, ldap_injection, ldap_injection_engine, mainframe_zos_attack, microsegmentation_bypass, midnight_blizzard_ttps, ntlm_relay, risk_superposition_collapse, smb_netbios, smb_relay, threat_hunting_apt, volt_typhoon_ttps, zero_trust_bypass",
       "enabled": true
     },
     {
@@ -402,18 +414,6 @@
       "techniqueID": "T1071.004",
       "score": 9,
       "comment": "apt_c2_infra, botnet_c2_engine, c2_emulation, c2_rotation_engine, dns_cache_poisoning, dns_security_posture_fusion, dns_tunneling, dns_tunneling_c2, obfuscated_c2",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1486",
-      "score": 9,
-      "comment": "blackcat_alphv_ttps, cl0p_techniques, cloud_ransomware, conti_ransomware_ttps, destructive_wiper, lockbit_techniques, ransomware_emulation, ransomware_sim, wizard_spider_ttps",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1021",
-      "score": 5,
-      "comment": "apt_lateral_movement, lateral_movement, lateral_movement_engine, ot_it_lateral_chain, risk_superposition_collapse",
       "enabled": true
     },
     {

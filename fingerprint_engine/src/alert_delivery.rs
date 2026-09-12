@@ -23,6 +23,7 @@ pub struct AlertFindingInfo {
 struct DeliveryConfig {
     alert_webhook_url: Option<String>,
     slack_webhook_url: Option<String>,
+    teams_webhook_url: Option<String>,
     pagerduty_routing_key: Option<String>,
     integrations: Vec<Value>,
 }
@@ -53,6 +54,9 @@ async fn load_delivery_config(pool: &PgPool, tenant_id: i64) -> DeliveryConfig {
     let slack_webhook_url = config_value(pool, tenant_id, "slack_webhook_url")
         .await
         .or_else(|| non_empty(std::env::var("SLACK_WEBHOOK_URL").ok()));
+    let teams_webhook_url = config_value(pool, tenant_id, "teams_webhook_url")
+        .await
+        .or_else(|| non_empty(std::env::var("WEISSMAN_TEAMS_WEBHOOK_URL").ok()));
     let pagerduty_routing_key = config_value(pool, tenant_id, "pagerduty_routing_key")
         .await
         .or_else(|| non_empty(std::env::var("PAGERDUTY_ROUTING_KEY").ok()));
@@ -65,6 +69,7 @@ async fn load_delivery_config(pool: &PgPool, tenant_id: i64) -> DeliveryConfig {
     DeliveryConfig {
         alert_webhook_url,
         slack_webhook_url,
+        teams_webhook_url,
         pagerduty_routing_key,
         integrations,
     }
@@ -97,6 +102,8 @@ fn resolve_webhook_url(config: &DeliveryConfig, integration_id: &str) -> Option<
                 config.alert_webhook_url.clone()
             } else if integration_id == "slack" {
                 config.slack_webhook_url.clone()
+            } else if integration_id == "teams" {
+                config.teams_webhook_url.clone()
             } else {
                 None
             }
@@ -283,6 +290,59 @@ fn send_smtp_sync(subject: String, body: String) -> Result<(), String> {
     Ok(())
 }
 
+#[must_use]
+pub fn url_looks_like_slack(url: &str) -> bool {
+    let u = url.trim().to_ascii_lowercase();
+    u.contains("hooks.slack.com") || u.contains("slack.com/api/")
+}
+
+#[must_use]
+pub fn teams_adaptive_card(rule: &AlertRuleInfo, finding: &AlertFindingInfo) -> Value {
+    let text = format!(
+        "[Weissman][{}] rule \"{}\" fired on {} finding: {}",
+        finding.severity, rule.name, finding.severity, finding.title
+    );
+    json!({
+        "type": "message",
+        "attachments": [{
+            "contentType": "application/vnd.microsoft.card.adaptive",
+            "contentUrl": null,
+            "content": {
+                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                "type": "AdaptiveCard",
+                "version": "1.4",
+                "body": [
+                    {
+                        "type": "TextBlock",
+                        "weight": "Bolder",
+                        "size": "Medium",
+                        "text": format!("Weissman · {}", finding.severity)
+                    },
+                    {
+                        "type": "TextBlock",
+                        "wrap": true,
+                        "text": format!("Rule: {}", rule.name)
+                    },
+                    {
+                        "type": "TextBlock",
+                        "wrap": true,
+                        "text": format!("{} — {}", finding.title, finding.description)
+                    },
+                    {
+                        "type": "FactSet",
+                        "facts": [
+                            { "title": "Finding", "value": finding.id.to_string() },
+                            { "title": "Source", "value": finding.source },
+                            { "title": "Rule id", "value": rule.id.to_string() }
+                        ]
+                    }
+                ]
+            }
+        }],
+        "text": text,
+    })
+}
+
 async fn deliver_channel(
     client: &Client,
     config: &DeliveryConfig,
@@ -301,18 +361,29 @@ async fn deliver_channel(
             // Slack/Teams/PagerDuty stay on post_json — those are authenticated by their URL secret.
             post_json_signed(client, &url, &alert_payload("webhook", rule, finding)).await
         }
-        "slack" | "teams" => {
+        "slack" => {
             let Some(url) = resolve_webhook_url(config, "slack") else {
                 tracing::warn!(target: "alert_delivery", channel, "no webhook URL configured");
                 return false;
             };
             let payload = json!({
-                "text": alert_payload(channel, rule, finding)
+                "text": alert_payload("slack", rule, finding)
                     .get("text")
                     .and_then(Value::as_str)
                     .unwrap_or("[Weissman] alert"),
             });
             post_json(client, &url, &payload).await
+        }
+        "teams" => {
+            let Some(url) = resolve_webhook_url(config, "teams") else {
+                tracing::warn!(target: "alert_delivery", "teams channel: no Teams webhook URL (refusing Slack fallback)");
+                return false;
+            };
+            if url_looks_like_slack(&url) {
+                tracing::warn!(target: "alert_delivery", "teams channel: URL is Slack — not delivered");
+                return false;
+            }
+            post_json(client, &url, &teams_adaptive_card(rule, finding)).await
         }
         "pagerduty" => {
             let Some(routing_key) = resolve_pagerduty_key(config) else {
@@ -763,5 +834,47 @@ mod signing_tests {
         assert_eq!(d1.len(), 64, "sha256 hex is 64 chars");
         let d3 = crate::crypto_engine::sha256_hex(br#"{"event":"heal_completed","ok":false}"#);
         assert_ne!(d1, d3, "different body -> different digest");
+    }
+}
+
+#[cfg(test)]
+mod teams_honesty_tests {
+    use super::*;
+
+    #[test]
+    fn slack_hooks_are_not_teams() {
+        assert!(url_looks_like_slack(
+            "https://hooks.slack.com/services/T000/B000/xxx"
+        ));
+        assert!(!url_looks_like_slack(
+            "https://prod-00.westus.logic.azure.com/workflows/abc/triggers/manual/paths/invoke"
+        ));
+    }
+
+    #[test]
+    fn teams_card_is_adaptive_not_slack_text() {
+        let rule = AlertRuleInfo {
+            id: 9,
+            name: "crit".into(),
+        };
+        let finding = AlertFindingInfo {
+            id: 3,
+            severity: "critical".into(),
+            title: "SMB open".into(),
+            description: "445 from origin".into(),
+            source: "ransomware_preposition_surface".into(),
+        };
+        let card = teams_adaptive_card(&rule, &finding);
+        assert_eq!(card["type"], "message");
+        assert_eq!(
+            card["attachments"][0]["contentType"],
+            "application/vnd.microsoft.card.adaptive"
+        );
+        assert_eq!(card["attachments"][0]["content"]["type"], "AdaptiveCard");
+        assert!(card
+            .get("text")
+            .and_then(Value::as_str)
+            .unwrap()
+            .contains("SMB open"));
     }
 }

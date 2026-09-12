@@ -1,5 +1,5 @@
 /**
- * Master registry of all 583 production attack engines.
+ * Master registry of all 586 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 583 production engines in registry order */
+/** All 586 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -46,7 +46,31 @@ export const ENGINES_REGISTRY = [
     label: 'First-Mover Delta Fusion',
     group: 'recon',
     mitre: 'T1595',
-    description: 'New host from live surface delta immediately gets subdomain takeover, leak hunter, BOLA, and JWT on that same FQDN — not a separate later hunt.',
+    description: 'New host from live surface delta immediately gets subdomain takeover, leak hunter, BOLA, JWT, OAuth/OIDC, and GraphQL on that same FQDN — not a separate later hunt.',
+    requiresTarget: true,
+  },
+  {
+    id: 'identity_surface_delta',
+    label: 'Identity Surface Delta',
+    group: 'recon',
+    mitre: 'T1078',
+    description: 'New login/SSO/IdP host from live first-mover immediately gets OIDC discovery and SAML metadata on that FQDN — identity protocol proof, not a later hunt.',
+    requiresTarget: true,
+  },
+  {
+    id: 'dualstack_edge_skip_fusion',
+    label: 'Dual-Stack Edge Skip',
+    group: 'network',
+    mitre: 'T1590.005',
+    description: 'Pins Host+SNI to A and AAAA. Emits a finding only when status, WAF, or body diverge — dual-stack DNS alone is not a skip.',
+    requiresTarget: true,
+  },
+  {
+    id: 'ransomware_preposition_surface',
+    label: 'Ransomware Preposition Surface',
+    group: 'malware',
+    mitre: 'T1021',
+    description: 'Live TCP of SMB/RDP/WinRM/Kerberos/LDAP/NFS/NDMP from the scan origin. Evidence is open ports and banners — no encrypt, no wiper.',
     requiresTarget: true,
   },
   {

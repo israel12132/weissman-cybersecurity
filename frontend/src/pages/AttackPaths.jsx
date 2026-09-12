@@ -9,7 +9,7 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
 import { downloadCsv } from '../lib/exportFindingsCsv'
-import { GitBranch, RefreshCw, ChevronRight } from 'lucide-react'
+import { GitBranch, RefreshCw, ChevronRight, Crown } from 'lucide-react'
 import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
@@ -121,6 +121,9 @@ export default function AttackPaths() {
   const [blockSmb, setBlockSmb] = useState(false)
   const [whatIfBusy, setWhatIfBusy] = useState(false)
   const [whatIfSnapshot, setWhatIfSnapshot] = useState(null)
+  const [jewelBusy, setJewelBusy] = useState(null)
+  const [graphNodes, setGraphNodes] = useState([])
+  const [nodeQuery, setNodeQuery] = useState('')
 
   const load = useCallback(
     async (recompute = false) => {
@@ -135,6 +138,12 @@ export default function AttackPaths() {
         setSnapshot(data.snapshot || null)
         setHasSnapshot(Boolean(data.snapshot))
         if (recompute && data.snapshot) toast.success(t(`${NS}.recompute_done`))
+        try {
+          const g = await apiFetch(`/api/clients/${encodeURIComponent(selectedClientId)}/risk-graph`)
+          setGraphNodes(Array.isArray(g?.nodes) ? g.nodes : [])
+        } catch {
+          setGraphNodes([])
+        }
       } catch (e) {
         setError(e.message || t(`${NS}.load_failed`))
       } finally {
@@ -168,9 +177,42 @@ export default function AttackPaths() {
     }
   }, [selectedClientId, blockSmb, t, toast])
 
+  const toggleFlag = useCallback(
+    async (nodeId, field, value) => {
+      setJewelBusy(`${nodeId}:${field}`)
+      setError('')
+      try {
+        const res = await apiFetch(`/api/risk-graph/nodes/${encodeURIComponent(nodeId)}/flags`, {
+          method: 'PATCH',
+          body: { [field]: value },
+        })
+        if (res?.ok === false) throw new Error(res.detail || 'flag failed')
+        toast.success(t(`${NS}.flag_saved`))
+        await load(true)
+      } catch (e) {
+        setError(e.message || t(`${NS}.load_failed`))
+      } finally {
+        setJewelBusy(null)
+      }
+    },
+    [load, t, toast],
+  )
+
+  const flaggedNodes = useMemo(() => {
+    const q = nodeQuery.trim().toLowerCase()
+    return graphNodes.filter((n) => {
+      const label = String(n.label || n.name || n.graph_key || '')
+      if (q && !label.toLowerCase().includes(q) && !String(n.node_type || '').toLowerCase().includes(q)) {
+        return false
+      }
+      return true
+    })
+  }, [graphNodes, nodeQuery])
+
   useEffect(() => {
     setSnapshot(null)
     setWhatIfSnapshot(null)
+    setGraphNodes([])
     if (selectedClientId != null) load(false)
   }, [selectedClientId, load])
 
@@ -303,6 +345,62 @@ export default function AttackPaths() {
           </div>
         )}
 
+        {selectedClientId != null && !loading && (
+          <div className="rounded-xl border border-violet-500/25 bg-[var(--table-surface)] p-4">
+            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+              <h2 className="text-[11px] font-mono uppercase tracking-widest text-violet-200 flex items-center gap-2">
+                <Crown className="w-4 h-4" aria-hidden />
+                {t(`${NS}.jewel_panel`)}
+              </h2>
+              <input
+                type="search"
+                value={nodeQuery}
+                onChange={(e) => setNodeQuery(e.target.value)}
+                placeholder={t(`${NS}.node_search`)}
+                className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] min-w-[12rem]"
+                aria-label={t(`${NS}.node_search`)}
+              />
+            </div>
+            <p className="text-[11px] text-[var(--text-muted)] mb-3">{t(`${NS}.jewel_panel_hint`)}</p>
+            {flaggedNodes.length === 0 ? (
+              <EmptyState icon="shield" title={t(`${NS}.no_nodes_title`)} body={t(`${NS}.no_nodes_body`)} />
+            ) : (
+              <div className="max-h-72 overflow-auto space-y-1">
+                {flaggedNodes.slice(0, 80).map((n) => (
+                  <div
+                    key={n.id}
+                    className="flex items-center justify-between gap-3 px-2 py-1.5 rounded-lg border border-[var(--border-subtle)]"
+                  >
+                    <span className="text-[12px] font-mono truncate text-[var(--text-secondary)]" title={n.label || n.name}>
+                      {n.label || n.name || n.graph_key || `#${n.id}`}
+                    </span>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <label className="flex items-center gap-1 text-[10px] font-mono text-cyan-200">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(n.internet_exposed)}
+                          disabled={jewelBusy != null}
+                          onChange={(e) => toggleFlag(n.id, 'internet_exposed', e.target.checked)}
+                        />
+                        {t(`${NS}.flag_exposed`)}
+                      </label>
+                      <label className="flex items-center gap-1 text-[10px] font-mono text-violet-200">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(n.crown_jewel)}
+                          disabled={jewelBusy != null}
+                          onChange={(e) => toggleFlag(n.id, 'crown_jewel', e.target.checked)}
+                        />
+                        {t(`${NS}.flag_jewel`)}
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {selectedClientId != null && !loading && !error && !hasSnapshot && (
           <EmptyState
             icon="network"
@@ -334,6 +432,12 @@ export default function AttackPaths() {
               <ExecutiveWidget label={t(`${NS}.kpi_path_ale`)} value={`$${(Number(display?.total_path_ale_usd) || 0).toLocaleString()}`} hint={t(`${NS}.kpi_path_ale_hint`)} accent="#f59e0b" />
               <ExecutiveWidget label={t(`${NS}.kpi_top_risk`)} value={topRisk.toFixed(1)} hint={t(`${NS}.kpi_top_risk_hint`)} accent={riskColor(topRisk)} />
             </div>
+
+            {display?.jewel_count === 0 && (
+              <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-950/30 px-4 py-3 text-sm text-amber-100 font-mono">
+                {t(`${NS}.zero_jewel_banner`)}
+              </div>
+            )}
 
             <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--table-surface)] p-4 flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2 text-[12px] text-[var(--text-secondary)]">

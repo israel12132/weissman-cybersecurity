@@ -9,6 +9,13 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Added
 
+- **Identity surface delta, dual-stack Host+SNI skip, ransomware preposition.**
+  New live engines `identity_surface_delta` (OIDC/SAML on first-mover IdP hosts),
+  `dualstack_edge_skip_fusion` (A vs AAAA with Host+SNI; finding only on status/WAF/body skip),
+  and `ransomware_preposition_surface` (TCP of SMB/RDP/WinRM/Kerberos/LDAP/NFS — no encrypt).
+  Teams alert delivery uses Adaptive Cards on `WEISSMAN_TEAMS_WEBHOOK_URL` and refuses Slack URLs.
+  Attack Paths operators can PATCH crown-jewel / internet-exposed flags on the live risk graph.
+
 - **Supreme Brain Part 6 — attack-path inference × FAIR blast radius × pentest RAG.**
   Dijkstra (BinaryHeap milli-cost) over live `risk_graph_nodes` / `risk_graph_edges`
   with CISA KEV / EPSS / CVSS / agent weights, what-if (block SMB/445), choke-points,
