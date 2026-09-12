@@ -81,6 +81,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "first_mover_delta_fusion",
     "first_seen_osv_nvd",
     "leak_hunter",
+    "adversary_gap_mirror",
     "discovery_engine",
     "recon",
     "supply_chain",
@@ -689,6 +690,7 @@ pub const DEFAULT_ORCHESTRATOR_ENGINES: &[&str] = &[
     "asm",
     "first_mover_surface_delta",
     "leak_hunter",
+    "adversary_gap_mirror",
     "email_dns_posture",
     "pki_tls",
     "subdomain_takeover",
@@ -711,6 +713,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "first_mover_delta_fusion",
     "first_seen_osv_nvd",
     "leak_hunter",
+    "adversary_gap_mirror",
     "discovery_engine",
     "recon",
     // Web / API attacks

@@ -26,6 +26,7 @@ const DARK_WEB_SOURCES = new Set([
   'darkweb_intel',
   'dark_web_monitor',
   'typosquatting_monitor',
+  'adversary_gap_mirror',
 ])
 const SEV_KEYS = ['critical', 'high', 'medium', 'low', 'info']
 

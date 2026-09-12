@@ -26,6 +26,7 @@ export const ROUTE_EVIDENCE_SKIP = new Set([
   '/metrics',
   '/jobs',
   '/dark-web',
+  '/adversary-mirror',
   '/verification/oob',
   '/compliance',
   '/baseline-drift',

@@ -1,5 +1,5 @@
 /**
- * Master registry of all 583 production attack engines.
+ * Master registry of all 584 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 583 production engines in registry order */
+/** All 584 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -63,6 +63,14 @@ export const ENGINES_REGISTRY = [
     group: 'recon',
     mitre: 'T1530',
     description: 'Dark web & paste-site credential and data leak detection',
+    requiresTarget: true,
+  },
+  {
+    id: 'adversary_gap_mirror',
+    label: 'Adversary Gap Mirror',
+    group: 'recon',
+    mitre: 'T1597',
+    description: 'Legal clearnet intel (ransomware.live, ThreatFox, URLhaus, HIBP catalog) fused with authorized remote-access port/banner probes and published IAB economics — never Tor, never invented victims',
     requiresTarget: true,
   },
   {

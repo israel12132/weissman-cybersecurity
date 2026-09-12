@@ -862,6 +862,9 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     if engine_id.contains("first_seen") {
         return "Patch or isolate the affected SBOM component. The OSV advisory hit this inventory before (or without) an NVD CVE — do not wait for a weekly scanner or a CVE number.";
     }
+    if engine_id.contains("adversary_gap") || engine_id.contains("darkweb") {
+        return "Assume any listed identity material is in adversary hands: force password reset plus MFA, hunt reuse on VPN/RDP/IdP, run leak_hunter and password_spray only in authorized scope, and open IR if a ransomware leak-site listing is confirmed.";
+    }
     if engine_id.contains("s3") || engine_id.contains("cloud_data_exfil") {
         return "Block public ACLs at the AWS account level (`BlockPublicAccess`), set bucket policy to private, and enable S3 Object Ownership = BucketOwnerEnforced.";
     }

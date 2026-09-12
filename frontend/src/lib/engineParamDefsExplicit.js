@@ -804,5 +804,10 @@ export const EXPLICIT_PARAM_DEFS = {
   first_seen_osv_nvd: [
     { key: 'intensity', label: 'Scan Intensity', type: 'select', options: ['light', 'normal', 'aggressive'], defaultVal: 'normal' },
   ],
+  adversary_gap_mirror: [
+    { key: 'include_ports', label: 'IAB remote-access TCP connect', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'include_http', label: 'HTTP VPN/OWA product tokens', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'intensity', label: 'Scan Intensity', type: 'select', options: ['light', 'normal', 'aggressive'], defaultVal: 'normal' },
+  ],
 }
 

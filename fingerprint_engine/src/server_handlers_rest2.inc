@@ -102,6 +102,197 @@ async fn api_client_export_csv(
     res
 }
 
+const ADVERSARY_MIRROR_SOURCES: &[&str] = &[
+    "adversary_gap_mirror",
+    "darkweb_intel",
+    "dark_web_monitor",
+    "leak_hunter",
+    "typosquatting_monitor",
+];
+
+fn is_adversary_source(src: &str) -> bool {
+    let s = src.to_ascii_lowercase();
+    ADVERSARY_MIRROR_SOURCES.iter().any(|x| s == *x)
+}
+
+async fn api_client_export_xlsx(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+) -> Response {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
+    };
+    let client_name: String = match sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
+    {
+        Some(n) => n,
+        None => {
+            let _ = tx.rollback().await;
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
+        }
+    };
+    let rows = sqlx::query(
+        "SELECT id, title, severity, source, COALESCE(status,''), discovered_at, COALESCE(description,'') FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
+    )
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let _ = tx.commit().await;
+    let tuples: Vec<(i64, String, String, String, String, String, String)> = rows
+        .into_iter()
+        .map(|r| {
+            let disc = r
+                .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
+                .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
+                .unwrap_or_default();
+            (
+                r.try_get::<i64, _>("id").unwrap_or(0),
+                r.try_get::<String, _>("title").unwrap_or_default(),
+                r.try_get::<String, _>("severity").unwrap_or_default(),
+                r.try_get::<String, _>("source").unwrap_or_default(),
+                r.try_get::<String, _>("status").unwrap_or_default(),
+                disc,
+                r.try_get::<String, _>("description").unwrap_or_default(),
+            )
+        })
+        .collect();
+    let bytes = match crate::xlsx_export::build_findings_workbook_from_tuples(
+        "Weissman",
+        &client_name,
+        &tuples,
+    ) {
+        Ok(b) => b,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "XLSX generation failed", "detail": e})),
+            )
+                .into_response();
+        }
+    };
+    let filename = format!("Weissman_findings_client_{}.xlsx", id);
+    let mut res = Response::new(Body::from(bytes));
+    res.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ),
+    );
+    res.headers_mut().insert(
+        CONTENT_DISPOSITION,
+        HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename))
+            .unwrap_or(HeaderValue::from_static("attachment")),
+    );
+    res.headers_mut().insert(
+        axum::http::HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
+    res
+}
+
+async fn api_client_adversary_mirror_pdf(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+) -> Response {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
+    };
+    let client_name: String = match sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
+    {
+        Some(n) => n,
+        None => {
+            let _ = tx.rollback().await;
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
+        }
+    };
+    let rows = sqlx::query(
+        "SELECT title, severity, source, COALESCE(description,'') FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
+    )
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let _ = tx.commit().await;
+    let mut ransom = 0u32;
+    let mut ioc = 0u32;
+    let mut breach = 0u32;
+    let mut iab = 0u32;
+    let mut total = 0u32;
+    let mut headline = String::from("No adversary-intel findings yet. Run adversary_gap_mirror against an authorized domain.");
+    for r in &rows {
+        let src = r.try_get::<String, _>("source").unwrap_or_default();
+        if !is_adversary_source(&src) {
+            continue;
+        }
+        total += 1;
+        let title = r.try_get::<String, _>("title").unwrap_or_default();
+        let blob = format!("{title} {src}").to_ascii_lowercase();
+        if blob.contains("ransomware") {
+            ransom += 1;
+        }
+        if blob.contains("threatfox") || blob.contains("urlhaus") || blob.contains("ioc") {
+            ioc += 1;
+        }
+        if blob.contains("hibp") || blob.contains("breach") {
+            breach += 1;
+        }
+        if blob.contains("iab") || blob.contains("rdp") || blob.contains("vpn") {
+            iab += 1;
+        }
+        if headline.starts_with("No adversary") {
+            headline = title;
+        }
+    }
+    let pdf_bytes = match crate::pdf_report::build_adversary_mirror_pdf(
+        "Weissman",
+        Some(&client_name),
+        ransom,
+        ioc,
+        breach,
+        iab,
+        total,
+        &headline,
+    ) {
+        Ok(b) => b,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "PDF generation failed", "detail": e})),
+            )
+                .into_response();
+        }
+    };
+    let safe_name = client_name
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect::<String>();
+    let filename = format!("Weissman_AdversaryMirror_{}.pdf", safe_name);
+    let mut res = Response::new(Body::from(pdf_bytes));
+    res.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("application/pdf"));
+    res.headers_mut().insert(
+        CONTENT_DISPOSITION,
+        HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename))
+            .unwrap_or(HeaderValue::from_static("attachment")),
+    );
+    res.headers_mut().insert(
+        axum::http::HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
+    res
+}
+
 async fn get_crypto_proof_for_client_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: i64,

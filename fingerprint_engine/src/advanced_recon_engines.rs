@@ -99,25 +99,25 @@ pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
     let host = extract_host(target);
     let key = intelx_api_key();
 
+    // Always run legal clearnet defender feeds (ransomware.live / ThreatFox / URLhaus / HIBP catalog).
+    // IntelX remains optional paid enrichment — never the only path.
+    let mut findings =
+        crate::adversary_gap_mirror::collect_clearnet_intel("darkweb_intel", target).await;
+
     if key.is_empty() {
-        let finding = finding(
+        findings.push(finding(
             "darkweb_intel",
-            "IntelX deep-web lookup requires API key",
+            "IntelX optional — clearnet feeds already queried",
             "info",
             "T1597",
             &format!(
-                "Intelligence X indexes leaks, paste sites, and dark-web mentions. Set INTELX_API_KEY (or WEISSMAN_INTELX_KEY) to query records for '{}'. Without a key, only manual lookup at https://intelx.io/?s={} is available.",
-                host, urlencoding::encode(&host)
-            ),
-            target,
-        );
-        return EngineResult::ok(
-            vec![finding],
-            format!(
-                "darkweb_intel: API key required for live lookup on {}",
+                "INTELX_API_KEY is unset. Live ransomware.live, ThreatFox, URLhaus, and HIBP catalog already ran for '{}'. Set INTELX_API_KEY for additional paid deep-web index hits.",
                 host
             ),
-        );
+            target,
+        ));
+        let n = findings.len();
+        return EngineResult::ok(findings, format!("darkweb_intel: {n} (no IntelX key)"));
     }
 
     let base = intelx_api_base();
@@ -134,7 +134,6 @@ pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
         "media": 0,
         "terminate": []
     });
-    let mut findings: Vec<Value> = Vec::new();
 
     if let Some(p) =
         http_post_json_with_headers(&client, &search_url, &payload, &[("x-key", key.as_str())])
