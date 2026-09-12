@@ -21,6 +21,7 @@ import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../utils/apiFetch'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
+import CrownJewelFlagPanel from '../components/CrownJewelFlagPanel'
 
 const NS = 'pages.attackPaths'
 const columnHelper = createColumnHelper()
@@ -135,6 +136,7 @@ export default function AttackPaths() {
         setSnapshot(data.snapshot || null)
         setHasSnapshot(Boolean(data.snapshot))
         if (recompute && data.snapshot) toast.success(t(`${NS}.recompute_done`))
+        setWhatIfSnapshot(null)
       } catch (e) {
         setError(e.message || t(`${NS}.load_failed`))
       } finally {
@@ -320,6 +322,26 @@ export default function AttackPaths() {
               </Button>
             }
           />
+        )}
+
+        {selectedClientId != null && !loading && !error && (
+          <CrownJewelFlagPanel
+            clientId={selectedClientId}
+            onFlagsChanged={async () => {
+              setWhatIfSnapshot(null)
+              await load(true)
+            }}
+          />
+        )}
+
+        {selectedClientId != null && !loading && !error && hasSnapshot && snapshot && Number(display?.jewel_count || 0) === 0 && (
+          <div
+            role="status"
+            className="rounded-xl border border-amber-500/40 bg-amber-950/20 px-4 py-3 text-sm text-amber-100"
+            data-testid="zero-jewel-banner"
+          >
+            {t(`${NS}.zero_jewel_banner`)}
+          </div>
         )}
 
         {selectedClientId != null && !loading && !error && hasSnapshot && snapshot && (

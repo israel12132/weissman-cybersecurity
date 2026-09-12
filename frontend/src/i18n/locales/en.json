@@ -282,7 +282,8 @@
     "itdr": "ITDR",
     "casb_dlp": "CASB / DLP / CNAPP",
     "ngfw_gate": "Weissman Gate",
-    "endpoint_edr": "Endpoint EDR"
+    "endpoint_edr": "Endpoint EDR",
+    "scim_provisioning": "SCIM Provisioning"
   },
   "ask_weissman": {
     "title": "Ask Weissman",
@@ -1430,7 +1431,31 @@
       "no_choke_title": "No choke-points",
       "no_choke_body": "No shared choke-points across the computed paths.",
       "no_paths_title": "No attack paths",
-      "no_paths_body": "No internet → crown-jewel path was found in the current graph."
+      "no_paths_body": "No internet → crown-jewel path was found in the current graph.",
+      "score": "Score",
+      "path_ale": "ALE {{value}}",
+      "root_cause": "Root cause",
+      "kpi_path_ale": "Path ALE",
+      "kpi_path_ale_hint": "Sum of FAIR ALE on ranked paths",
+      "kpi_top_score": "Top Score",
+      "kpi_top_score_hint": "Highest path score (0–100)",
+      "what_if_smb": "What-if: block SMB 445",
+      "what_if_run": "Run what-if",
+      "what_if_done": "What-if snapshot computed",
+      "what_if_clear": "Clear what-if",
+      "flags_heading": "Mark crown jewels",
+      "flags_body": "Dijkstra needs live internet-exposed entries and crown-jewel targets. Toggle flags here — PATCH /api/risk-graph/nodes/:id/flags, then the graph cache is marked dirty and paths recompute.",
+      "flags_entries_chip": "{{count}} exposed",
+      "flags_jewels_chip": "{{count}} jewels",
+      "flags_search": "Search graph nodes…",
+      "flags_loading": "Loading risk-graph nodes…",
+      "flags_empty_title": "No graph nodes",
+      "flags_empty_body": "Build a risk graph for this client first, then mark entries and jewels.",
+      "flags_load_failed": "Failed to load risk-graph nodes.",
+      "flags_save_failed": "Failed to update node flags.",
+      "flag_exposed": "Exposed",
+      "flag_jewel": "Jewel",
+      "zero_jewel_banner": "Zero crown jewels on this client. Mark at least one jewel above, then recompute so attack paths can form."
     },
     "attackCoverage": {
       "title": "ATT&CK Coverage Matrix",
@@ -3691,7 +3716,9 @@
       "severity_critical": "Critical",
       "severity_high": "High",
       "severity_medium": "Medium",
-      "severity_low": "Low"
+      "severity_low": "Low",
+      "toggle_exposed": "Toggle internet-exposed",
+      "toggle_jewel": "Toggle crown jewel"
     },
     "baselineAndDrift": {
       "title": "Baseline & Drift Detection",
@@ -5888,6 +5915,29 @@
       "search_placeholder": "Filter agents and findings…",
       "empty_title": "No agents or host findings",
       "empty_body": "Install the agent (Linux/macOS/Windows package) and enroll it. Isolation requires CAP_NET_ADMIN / admin on the host."
+    },
+    "scimProvisioning": {
+      "title": "SCIM Provisioning",
+      "subtitle": "Okta / Entra / Google Workspace push users and groups into this tenant",
+      "badge": "SCIM 2.0",
+      "evidence_notice": "Tokens are minted via POST /api/admin/scim/tokens and stored as SHA-256 only. IdPs call /api/scim/v2/Users and /Groups with that bearer. Audit rows come from scim_audit_events — not demo data.",
+      "load_failed": "Failed to load SCIM tokens.",
+      "mint_failed": "Failed to mint a SCIM token.",
+      "revoke_failed": "Failed to revoke the SCIM token.",
+      "mint_heading": "Mint tenant bearer",
+      "mint_hint": "The plaintext token is shown once. Paste it into the IdP SCIM connector. Weissman never stores it.",
+      "token_name": "Token name",
+      "mint": "Mint token",
+      "shown_once": "Shown once — copy now",
+      "base_path": "IdP base URL: /api/scim/v2",
+      "loading": "Loading SCIM tokens…",
+      "empty_title": "No SCIM tokens",
+      "empty_body": "Mint a bearer to connect Okta, Entra ID, or Google Workspace.",
+      "revoked": "revoked",
+      "active": "active",
+      "revoke": "Revoke",
+      "audit_heading": "Provisioning audit",
+      "audit_empty": "No SCIM calls recorded yet."
     }
   },
   "components": {

@@ -11,6 +11,7 @@ import { SkeletonWidgetGrid, SkeletonBar } from '../components/ui/Skeleton'
 import { api } from '../utils/apiFetch';
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 import Button from '../components/ui/Button'
+import CrownJewelFlagPanel from '../components/CrownJewelFlagPanel'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 
 const NS = 'pages.riskGraphVisualization';
@@ -536,6 +537,24 @@ export default function RiskGraphVisualization() {
         </div>
 
         {/* Dijkstra attack paths — internet_exposed → crown_jewel (EPSS/CVSS weighted) */}
+        {clientId != null && (
+          <CrownJewelFlagPanel
+            clientId={clientId}
+            compact
+            onFlagsChanged={async ({ node, field, value }) => {
+              setGraphData((prev) => ({
+                ...prev,
+                nodes: (prev.nodes || []).map((n) =>
+                  String(n.id) === String(node.id) ? { ...n, [field]: value } : n,
+                ),
+              }))
+              setSelectedNode((cur) =>
+                cur && String(cur.id) === String(node.id) ? { ...cur, [field]: value } : cur,
+              )
+              await recomputeAttackPaths()
+            }}
+          />
+        )}
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
           <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
@@ -662,6 +681,64 @@ export default function RiskGraphVisualization() {
                     <span className="text-xs text-[var(--text-tertiary)] block">{t('pages.riskGraphVisualization.choke_point')}</span>
                     <span className="text-white">{selectedNode.is_choke_point ? t('common.yes') : t('common.no')}</span>
                   </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    variant="unstyled"
+                    type="button"
+                    onClick={async () => {
+                      const next = !selectedNode.internet_exposed
+                      try {
+                        await api.patch(`/api/risk-graph/nodes/${encodeURIComponent(selectedNode.id)}/flags`, {
+                          internet_exposed: next,
+                        })
+                        setSelectedNode((n) => (n ? { ...n, internet_exposed: next } : n))
+                        setGraphData((prev) => ({
+                          ...prev,
+                          nodes: (prev.nodes || []).map((n) =>
+                            String(n.id) === String(selectedNode.id) ? { ...n, internet_exposed: next } : n,
+                          ),
+                        }))
+                      } catch (e) {
+                        console.error('flag patch failed', e)
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-mono border ${
+                      selectedNode.internet_exposed
+                        ? 'border-cyan-400/50 bg-cyan-500/15 text-cyan-100'
+                        : 'border-[var(--border-default)] text-[var(--text-muted)]'
+                    }`}
+                  >
+                    {t('pages.riskGraphVisualization.toggle_exposed')}
+                  </Button>
+                  <Button
+                    variant="unstyled"
+                    type="button"
+                    onClick={async () => {
+                      const next = !selectedNode.crown_jewel
+                      try {
+                        await api.patch(`/api/risk-graph/nodes/${encodeURIComponent(selectedNode.id)}/flags`, {
+                          crown_jewel: next,
+                        })
+                        setSelectedNode((n) => (n ? { ...n, crown_jewel: next } : n))
+                        setGraphData((prev) => ({
+                          ...prev,
+                          nodes: (prev.nodes || []).map((n) =>
+                            String(n.id) === String(selectedNode.id) ? { ...n, crown_jewel: next } : n,
+                          ),
+                        }))
+                      } catch (e) {
+                        console.error('flag patch failed', e)
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-mono border ${
+                      selectedNode.crown_jewel
+                        ? 'border-violet-400/50 bg-violet-500/15 text-violet-100'
+                        : 'border-[var(--border-default)] text-[var(--text-muted)]'
+                    }`}
+                  >
+                    {t('pages.riskGraphVisualization.toggle_jewel')}
+                  </Button>
                 </div>
                 {(selectedNode.finding_id || meta.finding_id || meta.vulnerability_id) && (
                   <div className="rounded-lg bg-cyan-500/5 border border-cyan-500/20 p-3">

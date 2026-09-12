@@ -167,28 +167,69 @@ async fn api_risk_node_flags_patch(
     Path(node_id): Path<i64>,
     Json(body): Json<RiskNodeFlagsBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if body.internet_exposed.is_none() && body.crown_jewel.is_none() && body.asset_value.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "no flags provided"})),
+        )
+            .into_response();
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
-    let res = sqlx::query(
+    let row = sqlx::query(
         r#"UPDATE risk_graph_nodes
               SET internet_exposed = COALESCE($1, internet_exposed),
                   crown_jewel      = COALESCE($2, crown_jewel),
                   asset_value      = COALESCE($3, asset_value)
-            WHERE id = $4 AND tenant_id = $5"#,
+            WHERE id = $4 AND tenant_id = $5
+              AND ($6::bigint IS NULL OR client_id = $6)
+          RETURNING id, client_id, internet_exposed, crown_jewel, asset_value"#,
     )
     .bind(body.internet_exposed)
     .bind(body.crown_jewel)
     .bind(body.asset_value)
     .bind(node_id)
     .bind(auth.tenant_id)
-    .execute(&mut *tx)
+    .bind(auth.assigned_client_id)
+    .fetch_optional(&mut *tx)
     .await;
-    let _ = tx.commit().await;
-    match res {
-        Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"ok": true, "id": node_id}))).into_response(),
-        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "node not found"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": scrub_internal_error(&e)}))).into_response(),
+    match row {
+        Ok(Some(r)) => {
+            let client_id: i64 = r.try_get("client_id").unwrap_or(0);
+            let _ = tx.commit().await;
+            if client_id > 0 {
+                crate::attack_path::mark_graph_dirty(auth.tenant_id, client_id);
+            }
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "ok": true,
+                    "id": node_id,
+                    "client_id": client_id,
+                    "internet_exposed": r.try_get::<bool,_>("internet_exposed").unwrap_or(false),
+                    "crown_jewel": r.try_get::<bool,_>("crown_jewel").unwrap_or(false),
+                    "asset_value": r.try_get::<f32,_>("asset_value").unwrap_or(0.0),
+                    "graph_dirty": true,
+                })),
+            )
+                .into_response()
+        }
+        Ok(None) => {
+            let _ = tx.rollback().await;
+            (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "node not found"}))).into_response()
+        }
+        Err(e) => {
+            let _ = tx.rollback().await;
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
+            )
+                .into_response()
+        }
     }
 }
 

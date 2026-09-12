@@ -56,6 +56,8 @@ describe('clientScope policy', () => {
     expect(isPortalBlockedPath('/admin')).toBe(true)
     expect(isPortalBlockedPath('/clients/new')).toBe(true)
     expect(isPortalBlockedPath('/billing')).toBe(true)
+    expect(isPortalBlockedPath('/scim-provisioning')).toBe(true)
+    expect(isPortalBlockedPath('/sso-config')).toBe(true)
     expect(isPortalBlockedPath('/findings')).toBe(false)
     expect(isPortalBlockedPath('/clients')).toBe(false)
     expect(isPortalBlockedPath('/engines')).toBe(false)

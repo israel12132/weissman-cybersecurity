@@ -272,7 +272,8 @@
     "itdr": "ITDR",
     "casb_dlp": "CASB / DLP / CNAPP",
     "ngfw_gate": "שער וייסמן",
-    "endpoint_edr": "EDR בקצה"
+    "endpoint_edr": "EDR בקצה",
+    "scim_provisioning": "הקצאת SCIM"
   },
   "ask_weissman": {
     "title": "שאל את Weissman",
@@ -1430,7 +1431,31 @@
       "no_choke_title": "אין צווארי בקבוק",
       "no_choke_body": "אין צווארי בקבוק משותפים בין הנתיבים שחושבו.",
       "no_paths_title": "אין נתיבי תקיפה",
-      "no_paths_body": "לא נמצא נתיב אינטרנט → נכס כתר בגרף הנוכחי."
+      "no_paths_body": "לא נמצא נתיב אינטרנט → נכס כתר בגרף הנוכחי.",
+      "score": "ציון",
+      "path_ale": "ALE {{value}}",
+      "root_cause": "גורם שורש",
+      "kpi_path_ale": "ALE נתיב",
+      "kpi_path_ale_hint": "סכום ALE FAIR בנתיבים המדורגים",
+      "kpi_top_score": "ציון מוביל",
+      "kpi_top_score_hint": "ציון הנתיב הגבוה ביותר (0–100)",
+      "what_if_smb": "מה אם: חסום SMB 445",
+      "what_if_run": "הרץ מה-אם",
+      "what_if_done": "תמונת מה-אם חושבה",
+      "what_if_clear": "נקה מה-אם",
+      "flags_heading": "סמן נכסי כתר",
+      "flags_body": "Dijkstra זקוק לנקודות כניסה חשופות לאינטרנט וליעדי כתר חיים. סמן כאן — PATCH /api/risk-graph/nodes/:id/flags, המטמון מסומן כdirty והנתיבים מחושבים מחדש.",
+      "flags_entries_chip": "{{count}} חשופים",
+      "flags_jewels_chip": "{{count}} כתרים",
+      "flags_search": "חפש צמתי גרף…",
+      "flags_loading": "טוען צמתי גרף סיכון…",
+      "flags_empty_title": "אין צמתי גרף",
+      "flags_empty_body": "בנה תחילה גרף סיכון ללקוח זה, ואז סמן כניסות וכתרים.",
+      "flags_load_failed": "טעינת צמתי גרף הסיכון נכשלה.",
+      "flags_save_failed": "עדכון דגלי הצומת נכשל.",
+      "flag_exposed": "חשוף",
+      "flag_jewel": "כתר",
+      "zero_jewel_banner": "אין נכסי כתר ללקוח זה. סמן לפחות כתר אחד למעלה ואז חשב מחדש כדי שנתיבי תקיפה יוכלו להיווצר."
     },
     "attackCoverage": {
       "title": "מטריצת כיסוי ATT&CK",
@@ -3691,7 +3716,9 @@
       "severity_critical": "קריטי",
       "severity_high": "גבוה",
       "severity_medium": "בינוני",
-      "severity_low": "נמוך"
+      "severity_low": "נמוך",
+      "toggle_exposed": "החלף חשיפה לאינטרנט",
+      "toggle_jewel": "החלף נכס כתר"
     },
     "baselineAndDrift": {
       "title": "Baseline וזיהוי Drift",
@@ -5888,6 +5915,29 @@
       "search_placeholder": "סינון סוכנים וממצאים…",
       "empty_title": "אין סוכנים או ממצאי מארח",
       "empty_body": "התקינו את הסוכן (חבילת Linux/macOS/Windows) ורשמו אותו. בידוד דורש CAP_NET_ADMIN / מנהל על המארח."
+    },
+    "scimProvisioning": {
+      "title": "הקצאת SCIM",
+      "subtitle": "Okta / Entra / Google Workspace דוחפים משתמשים וקבוצות לטננט זה",
+      "badge": "SCIM 2.0",
+      "evidence_notice": "אסימונים נוצרים ב-POST /api/admin/scim/tokens ונשמרים כ-SHA-256 בלבד. ה-IdP קורא ל-/api/scim/v2/Users ו-/Groups עם ה-bearer. שורות הביקורת מגיעות מ-scim_audit_events — לא נתוני דמו.",
+      "load_failed": "טעינת אסימוני SCIM נכשלה.",
+      "mint_failed": "יצירת אסימון SCIM נכשלה.",
+      "revoke_failed": "ביטול אסימון SCIM נכשל.",
+      "mint_heading": "הנפק bearer לטננט",
+      "mint_hint": "הטוקן הגלוי מוצג פעם אחת. הדבק אותו בקונקטור SCIM של ה-IdP. וייסמן לא שומר אותו.",
+      "token_name": "שם אסימון",
+      "mint": "הנפק אסימון",
+      "shown_once": "מוצג פעם אחת — העתק עכשיו",
+      "base_path": "כתובת בסיס ל-IdP: /api/scim/v2",
+      "loading": "טוען אסימוני SCIM…",
+      "empty_title": "אין אסימוני SCIM",
+      "empty_body": "הנפק bearer כדי לחבר Okta, Entra ID או Google Workspace.",
+      "revoked": "מבוטל",
+      "active": "פעיל",
+      "revoke": "בטל",
+      "audit_heading": "ביקורת הקצאה",
+      "audit_empty": "עדיין אין קריאות SCIM."
     }
   },
   "components": {

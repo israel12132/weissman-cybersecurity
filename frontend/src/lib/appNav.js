@@ -54,6 +54,7 @@ export const INTEL_MAP_QUICKNAV = [
   { to: '/council-queue', labelKey: 'components.intelMap.council', color: 'rgba(251,191,36,0.7)', separatorBefore: true },
   { to: '/soar-hitl', labelKey: 'components.intelMap.soar_hitl', color: 'rgba(251,113,133,0.85)' },
   { to: '/sso-config', labelKey: 'components.intelMap.sso', color: 'rgba(168,85,247,0.7)' },
+  { to: '/scim-provisioning', labelKey: 'nav.scim_provisioning', color: 'rgba(167,139,250,0.85)' },
   { to: '/admin', labelKey: 'components.intelMap.admin', color: 'rgba(251,191,36,0.9)' },
   { to: '/system-core', labelKey: 'components.intelMap.system_core' },
 ]
@@ -192,6 +193,7 @@ export const NAV_GROUPS = [
       { to: '/white-label', labelKey: 'nav.white_label', icon: '🎨', minRole: 'admin' },
       { to: '/identity-context', labelKey: 'nav.identity_context', icon: '👤' },
       { to: '/sso-config', labelKey: 'nav.sso_config', icon: '🔑' },
+      { to: '/scim-provisioning', labelKey: 'nav.scim_provisioning', icon: '🪪', minRole: 'admin' },
       { to: '/engine-management', labelKey: 'nav.engine_management', icon: '⚙' },
       { to: '/system-config', labelKey: 'nav.system_config', icon: '⚙' },
       { to: '/metrics', labelKey: 'nav.metrics', icon: '📈' },

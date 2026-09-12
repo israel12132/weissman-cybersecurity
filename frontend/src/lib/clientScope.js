@@ -62,6 +62,7 @@ export const PORTAL_BLOCKED_PREFIXES = [
   '/supreme-nerve-center',
   '/system-config',
   '/sso-config',
+  '/scim-provisioning',
   '/clients/new',
   '/billing',
   '/engine-management',
