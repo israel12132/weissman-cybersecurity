@@ -14,6 +14,7 @@ import he from '../i18n/locales/he.json'
 const here = dirname(fileURLToPath(import.meta.url))
 const changelog = readFileSync(resolve(here, '../../../CHANGELOG.md'), 'utf8')
 const loginSrc = readFileSync(resolve(here, '../components/cockpit/Login.jsx'), 'utf8')
+const loginGateSrc = readFileSync(resolve(here, '../auth/LoginGate.jsx'), 'utf8')
 const routeChunksSrc = readFileSync(resolve(here, '../routing/routeChunks.js'), 'utf8')
 
 /**
@@ -59,6 +60,9 @@ describe('Command Center login is a single live surface', () => {
     expect(loginSrc).toContain('PLATFORM_RELEASE_NAME')
     expect(loginSrc).toContain('CyberLiveBackdrop')
     expect(loginSrc).not.toMatch(/\b254\b/)
+    expect(loginGateSrc).toContain('PRODUCTION_ENGINE_COUNT')
+    expect(loginGateSrc).toContain("auth.brand_story")
+    expect(loginGateSrc).not.toMatch(/\b254\b/)
   })
 
   it('is the only login page the SPA can route to', () => {

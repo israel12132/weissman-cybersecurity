@@ -130,6 +130,12 @@ async fn api_first_mover_nerve(Extension(_auth): Extension<AuthContext>) -> Resp
         "fusion": {
             "follow_on_engines": crate::first_mover_surface_delta::DELTA_FOLLOW_ON_ENGINES,
             "inline_engine": "first_mover_delta_fusion",
+            "credential_ransomware": {
+                "engine": "credential_ransomware_fusion",
+                "hibp_pro_key": crate::credential_ransomware_fusion::hibp_pro_configured(),
+                "intelx_key": crate::credential_ransomware_fusion::intelx_configured(),
+                "feeds": ["cisa_kev", "hibp_public", "urlhaus", "intelx_counts"],
+            },
         },
         "first_seen_engine": "first_seen_osv_nvd",
     });

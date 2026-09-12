@@ -4773,7 +4773,7 @@ export const ENGINES_REGISTRY = [
     label: 'Credential-to-Ransomware Fusion',
     group: 'recon',
     mitre: 'T1555',
-    description: 'Legal clearnet fusion: CISA KEV ransomware-use × live HTTP Server product match, Have I Been Pwned public/Pro domain counts (no passwords), URLhaus host IOCs. Not Tor, not leak-site victim lists.',
+    description: 'Legal clearnet fusion: CISA KEV ransomware-use × live Server/HTML product match, HIBP public/Pro domain counts (no passwords), URLhaus host IOCs, optional IntelX record counts. Emits a grounded toxic-combo kill-chain when two or more feeds hit. Not Tor, not leak-site victim lists.',
     requiresTarget: true,
   },
 ]

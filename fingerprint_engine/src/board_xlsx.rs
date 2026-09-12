@@ -6,8 +6,7 @@
 
 use sha2::{Digest, Sha256};
 
-const MIME_XLSX: &str =
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const MIME_XLSX: &str = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 #[must_use]
 pub fn xlsx_content_type() -> &'static str {
@@ -86,7 +85,10 @@ pub fn extract_mitre(text: &str) -> String {
             }
             let digits = j - (i + 1);
             if (4..=5).contains(&digits) {
-                if j + 4 <= bytes.len() && bytes[j] == b'.' && bytes[j + 1..j + 4].iter().all(|b| b.is_ascii_digit()) {
+                if j + 4 <= bytes.len()
+                    && bytes[j] == b'.'
+                    && bytes[j + 1..j + 4].iter().all(|b| b.is_ascii_digit())
+                {
                     return upper[i..j + 4].to_string();
                 }
                 return upper[i..j].to_string();
@@ -367,9 +369,8 @@ impl SheetBuf {
             let idx = ss.intern(c);
             let cell = format!("{}{}", col_letter(i), self.row);
             let style = if header { r#" s="1""# } else { "" };
-            self.rows.push_str(&format!(
-                r#"<c r="{cell}" t="s"{style}><v>{idx}</v></c>"#
-            ));
+            self.rows
+                .push_str(&format!(r#"<c r="{cell}" t="s"{style}><v>{idx}</v></c>"#));
         }
         self.rows.push_str("</row>");
         self.row += 1;
@@ -395,7 +396,13 @@ fn sheet_overview(
     ransom_n: u32,
 ) -> String {
     let mut sh = SheetBuf::new();
-    sh.header(ss, &["Weissman Board Pack", "Live evidence only — no fabricated APT names or industry averages"]);
+    sh.header(
+        ss,
+        &[
+            "Weissman Board Pack",
+            "Live evidence only — no fabricated APT names or industry averages",
+        ],
+    );
     sh.row_cells(ss, &["Client", &wb.client_name], false);
     sh.row_cells(ss, &["Generated (Israel time)", &wb.generated_at], false);
     sh.row_cells(ss, &["Integrity hash", &wb.integrity_hash], false);
@@ -405,7 +412,11 @@ fn sheet_overview(
     sh.row_cells(ss, &["Medium", &med.to_string()], false);
     sh.row_cells(ss, &["Low / Info", &low.to_string()], false);
     sh.row_cells(ss, &["KEV-tagged rows", &kev_n.to_string()], false);
-    sh.row_cells(ss, &["Ransomware-signal rows", &ransom_n.to_string()], false);
+    sh.row_cells(
+        ss,
+        &["Ransomware-signal rows", &ransom_n.to_string()],
+        false,
+    );
     sh.row_cells(
         ss,
         &[
@@ -462,16 +473,23 @@ fn sheet_findings(ss: &mut SharedStrings, findings: &[BoardFinding]) -> String {
 
 fn sheet_attack(ss: &mut SharedStrings, findings: &[BoardFinding]) -> String {
     let mut sh = SheetBuf::new();
-    sh.header(ss, &["Technique", "Finding count", "Example finding", "Sources"]);
-    let mut map: std::collections::BTreeMap<String, (u32, String, std::collections::BTreeSet<String>)> =
-        std::collections::BTreeMap::new();
+    sh.header(
+        ss,
+        &["Technique", "Finding count", "Example finding", "Sources"],
+    );
+    let mut map: std::collections::BTreeMap<
+        String,
+        (u32, String, std::collections::BTreeSet<String>),
+    > = std::collections::BTreeMap::new();
     for f in findings {
         let tech = if f.mitre.is_empty() {
             "UNMAPPED".to_string()
         } else {
             f.mitre.clone()
         };
-        let e = map.entry(tech).or_insert((0, f.title.clone(), std::collections::BTreeSet::new()));
+        let e = map
+            .entry(tech)
+            .or_insert((0, f.title.clone(), std::collections::BTreeSet::new()));
         e.0 += 1;
         e.2.insert(f.source.clone());
     }
@@ -485,7 +503,15 @@ fn sheet_attack(ss: &mut SharedStrings, findings: &[BoardFinding]) -> String {
 fn sheet_paths(ss: &mut SharedStrings, findings: &[BoardFinding]) -> String {
     let mut sh = SheetBuf::new();
     sh.header(ss, &["ID", "Source", "Path / hop evidence", "Severity"]);
-    let mut wrote = 0u32;
+    let chain = grounded_kill_chain(findings);
+    if let Some(ref chain) = chain {
+        sh.row_cells(
+            ss,
+            &["CHAIN", "credential_ransomware_fusion", chain, "critical"],
+            false,
+        );
+    }
+    let mut wrote = u32::from(chain.is_some());
     for f in findings {
         let hay = format!("{} {} {}", f.title, f.description, f.proof);
         let is_path = f.source.to_ascii_lowercase().contains("attack_path")
@@ -512,6 +538,41 @@ fn sheet_paths(ss: &mut SharedStrings, findings: &[BoardFinding]) -> String {
         );
     }
     sh.finish()
+}
+
+/// Grounded hop string from live KEV / HIBP / URLhaus / IntelX evidence — never invented actors.
+#[must_use]
+pub fn grounded_kill_chain(findings: &[BoardFinding]) -> Option<String> {
+    let blob = |f: &BoardFinding| {
+        format!("{} {} {} {}", f.title, f.description, f.proof, f.source).to_ascii_lowercase()
+    };
+    let mut hops: Vec<&str> = Vec::new();
+    if findings
+        .iter()
+        .any(|f| f.kev || f.ransomware || blob(f).contains("cisa kev"))
+    {
+        hops.push("CISA KEV ransomware/product");
+    }
+    if findings.iter().any(|f| {
+        let h = blob(f);
+        h.contains("hibp") || h.contains("have i been pwned") || h.contains("haveibeenpwned")
+    }) {
+        hops.push("HIBP credential exposure");
+    }
+    if findings.iter().any(|f| blob(f).contains("urlhaus")) {
+        hops.push("URLhaus malware URLs");
+    }
+    if findings.iter().any(|f| {
+        let h = blob(f);
+        h.contains("intelx") || h.contains("intelligence x")
+    }) {
+        hops.push("IntelX indexed records");
+    }
+    if hops.len() >= 2 {
+        Some(hops.join(" -> "))
+    } else {
+        None
+    }
 }
 
 fn sheet_remediation(ss: &mut SharedStrings, findings: &[BoardFinding]) -> String {
@@ -746,12 +807,40 @@ mod tests {
         assert!(as_str.contains("Remediation"));
         assert!(as_str.contains("Intel"));
         assert!(as_str.contains("sharedStrings"));
-        assert!(as_str.contains("וויסמן") || as_str.contains("&#"), "hebrew client name must survive");
         assert!(
-            as_str.contains("'=HYPERLINK") || as_str.contains("&apos;=HYPERLINK") || as_str.contains("&#39;=HYPERLINK") || as_str.contains("&apos;") || bytes.windows(12).any(|w| w == b"'=HYPERLINK"),
+            as_str.contains("וויסמן") || as_str.contains("&#"),
+            "hebrew client name must survive"
+        );
+        assert!(
+            as_str.contains("'=HYPERLINK")
+                || as_str.contains("&apos;=HYPERLINK")
+                || as_str.contains("&#39;=HYPERLINK")
+                || as_str.contains("&apos;")
+                || bytes.windows(12).any(|w| w == b"'=HYPERLINK"),
             "formula injection must be neutralized"
         );
         assert!(!as_str.contains("APT28"));
         assert!(!as_str.contains("Industry Avg"));
+    }
+
+    #[test]
+    fn grounded_kill_chain_needs_two_live_legs() {
+        let kev = BoardFinding {
+            title: "CISA KEV product match".into(),
+            kev: true,
+            ransomware: true,
+            ..Default::default()
+        };
+        let hibp = BoardFinding {
+            title: "HIBP public catalog lists Adobe".into(),
+            proof: "GET https://haveibeenpwned.com/api/v3/breaches HTTP 200".into(),
+            ..Default::default()
+        };
+        assert!(grounded_kill_chain(&[kev.clone()]).is_none());
+        let chain = grounded_kill_chain(&[kev, hibp]).expect("chain");
+        assert!(chain.contains("->"));
+        assert!(chain.contains("CISA KEV"));
+        assert!(chain.contains("HIBP"));
+        assert!(!chain.contains("APT28"));
     }
 }

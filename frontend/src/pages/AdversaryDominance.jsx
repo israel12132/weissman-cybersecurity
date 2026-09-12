@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { ShieldAlert, Search } from 'lucide-react'
+import { ShieldAlert, Search, Activity } from 'lucide-react'
 import { createColumnHelper } from '@tanstack/react-table'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
@@ -59,6 +59,20 @@ function parseFindings(data) {
     )
 }
 
+function findingBlob(f) {
+  return `${f.title || ''} ${f.description || ''} ${f.proof || ''} ${f.source || ''} ${f.kill_chain || ''}`.toLowerCase()
+}
+
+function feedHits(findings) {
+  const blob = findings.map(findingBlob).join(' ')
+  return {
+    kev: /cisa kev|known exploited/.test(blob),
+    hibp: /hibp|haveibeenpwned|have i been pwned/.test(blob),
+    urlhaus: /urlhaus/.test(blob),
+    intelx: /intelx|intelligence x/.test(blob),
+  }
+}
+
 export default function AdversaryDominance() {
   const { t } = useTranslation()
   const { selectedClientId, selectedClient } = useClient()
@@ -74,6 +88,7 @@ export default function AdversaryDominance() {
   const [jobId, setJobId] = useState(null)
   const [jobStatus, setJobStatus] = useState('')
   const [running, setRunning] = useState(false)
+  const [nerve, setNerve] = useState(null)
 
   const load = useCallback(async () => {
     setError(null)
@@ -93,6 +108,20 @@ export default function AdversaryDominance() {
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    let cancelled = false
+    apiFetch('/api/first-mover/nerve')
+      .then((d) => {
+        if (!cancelled && d && typeof d === 'object') setNerve(d)
+      })
+      .catch(() => {
+        if (!cancelled) setNerve(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useVisiblePolling(load, 60000, { paused: !autoRefresh })
 
@@ -133,6 +162,9 @@ export default function AdversaryDominance() {
     }
     return { ...by, total: findings.length }
   }, [findings])
+
+  const feeds = useMemo(() => feedHits(findings), [findings])
+  const fusionNerve = nerve?.fusion?.credential_ransomware || {}
 
   const { exportCsv: exportWorkbenchCsv } = useFindingsWorkbench(filtered, { csvPrefix: 'adversary-dominance' })
 
@@ -257,6 +289,37 @@ export default function AdversaryDominance() {
                 </div>
               ))}
             </div>
+            <div className="rounded-xl border border-rose-500/20 bg-rose-950/20 px-4 py-3" aria-label={t(`${NS}.feed_legend`)}>
+              <div className="flex items-center gap-2 mb-2 text-[10px] font-mono uppercase tracking-wider text-rose-200/70">
+                <Activity className="w-3.5 h-3.5" aria-hidden />
+                {t(`${NS}.feed_legend`)}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: 'kev', hit: feeds.kev, keyOn: true },
+                  { id: 'hibp', hit: feeds.hibp, keyOn: fusionNerve.hibp_pro_key },
+                  { id: 'urlhaus', hit: feeds.urlhaus, keyOn: true },
+                  { id: 'intelx', hit: feeds.intelx, keyOn: fusionNerve.intelx_key },
+                ].map((f) => (
+                  <span
+                    key={f.id}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono border ${
+                      f.hit
+                        ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-100'
+                        : 'border-white/10 bg-black/40 text-white/45'
+                    }`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${f.hit ? 'bg-emerald-400 animate-pulse' : f.keyOn ? 'bg-amber-400' : 'bg-white/25'}`}
+                      aria-hidden
+                    />
+                    {t(`${NS}.feed_${f.id}`)}
+                    {' · '}
+                    {f.hit ? t(`${NS}.feed_hit`) : f.keyOn ? t(`${NS}.feed_armed`) : t(`${NS}.feed_silent`)}
+                  </span>
+                ))}
+              </div>
+            </div>
             <div className="flex flex-wrap gap-2 items-center">
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-2 top-2.5 w-4 h-4 text-white/30" />
@@ -281,6 +344,14 @@ export default function AdversaryDominance() {
               <Link to="/dark-web" className="text-xs font-mono text-violet-300 hover:underline">
                 {t(`${NS}.open_dark_web`)}
               </Link>
+              {selectedClientId && (
+                <Link
+                  to={`/attack-surface-graph/${selectedClientId}`}
+                  className="text-xs font-mono text-cyan-300 hover:underline"
+                >
+                  {t(`${NS}.open_graph`)}
+                </Link>
+              )}
             </div>
             {filtered.length === 0 ? (
               <EmptyState
