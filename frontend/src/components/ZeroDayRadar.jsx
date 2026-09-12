@@ -26,19 +26,23 @@ export default function ZeroDayRadar() {
   const [exposure, setExposure] = useState(null)
   const [running, setRunning] = useState(false)
   const [loadingFeed, setLoadingFeed] = useState(false)
+  const [feedError, setFeedError] = useState('')
   const wsRef = useRef(null)
   const feedEndRef = useRef(null)
   const synthEndRef = useRef(null)
 
   const loadFeed = useCallback(() => {
     setLoadingFeed(true)
+    setFeedError('')
     apiFetch('/api/threat-intel/feed')
       .then((data) => {
         setFeedItems(data?.items ?? [])
       })
-      .catch(() => setFeedItems([]))
+      .catch((e) => {
+        setFeedError(e?.message || t(`${NS}.feed_unavailable`))
+      })
       .finally(() => setLoadingFeed(false))
-  }, [])
+  }, [t])
 
   useEffect(() => {
     loadFeed()
@@ -156,7 +160,12 @@ export default function ZeroDayRadar() {
               {t(`${NS}.feed_title`)}
             </div>
             <div className="h-96 overflow-y-auto p-4 space-y-3" id="feed-scroll">
-              {feedItems.length === 0 && !loadingFeed && <p className="text-[var(--text-muted)] text-sm">{t(`${NS}.feed_empty`)}</p>}
+              {feedError && !loadingFeed && (
+                <p className="text-amber-200/90 text-sm" data-testid="zero-day-feed-unavailable" data-live="false" role="alert">
+                  {t(`${NS}.feed_unavailable`)}
+                </p>
+              )}
+              {feedItems.length === 0 && !loadingFeed && !feedError && <p className="text-[var(--text-muted)] text-sm">{t(`${NS}.feed_empty`)}</p>}
               {feedItems.map((item, i) => (
                 <div key={i} className="rounded-lg bg-[var(--bg-3)]/60 p-3 border border-[var(--border-default)]/60">
                   <div className="flex items-center gap-2">

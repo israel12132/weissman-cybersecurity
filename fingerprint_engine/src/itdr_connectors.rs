@@ -13,21 +13,21 @@ pub struct ConnectorPull {
     pub detail: String,
 }
 
-pub async fn load_connector_config(pool: &PgPool, tenant_id: i64) -> Value {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return json!({});
-    };
+pub async fn load_connector_config(pool: &PgPool, tenant_id: i64) -> Result<Value, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "database unavailable".to_string())?;
     let raw: Option<String> = sqlx::query_scalar(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'itdr_connectors'",
     )
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    raw.and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| json!({}))
+    .map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(raw
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| json!({})))
 }
 
 pub async fn save_connector_config(

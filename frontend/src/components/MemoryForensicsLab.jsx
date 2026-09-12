@@ -102,6 +102,7 @@ export default function MemoryForensicsLab() {
   const [findings, setFindings] = useState([])
   const [selected, setSelected] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [findingsError, setFindingsError] = useState('')
   const [targetUrl, setTargetUrl] = useState('')
   const [running, setRunning] = useState(false)
   const [jobId, setJobId] = useState(null)
@@ -116,11 +117,14 @@ export default function MemoryForensicsLab() {
   const fetchFindings = useCallback(() => {
     if (!clientId) return
     setLoading(true)
+    setFindingsError('')
     apiFetch(`/api/clients/${clientId}/poe-findings`)
       .then((data) => setFindings(data?.findings ?? []))
-      .catch(() => setFindings([]))
+      .catch((e) => {
+        setFindingsError(e?.message || t(`${NS}.fetch_failed`))
+      })
       .finally(() => setLoading(false))
-  }, [clientId])
+  }, [clientId, t])
 
   useEffect(() => {
     fetchFindings()
@@ -442,10 +446,15 @@ export default function MemoryForensicsLab() {
         <div className="rounded-xl bg-[var(--bg-1)]/80 border border-[var(--border-default)]/60 p-6 mb-6">
           <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-4">{t(`${NS}.poe_findings`)}</h2>
           {loading && <p className="text-[var(--text-muted)]">{t(`${NS}.loading`)}</p>}
-          {!loading && findings.length === 0 && (
+          {!loading && findingsError && (
+            <p className="text-amber-200/90" data-testid="memory-lab-unavailable" data-live="false" role="alert">
+              {t(`${NS}.fetch_failed`)} {findingsError}
+            </p>
+          )}
+          {!loading && !findingsError && findings.length === 0 && (
             <p className="text-[var(--text-muted)]">{t(`${NS}.no_findings`)}</p>
           )}
-          {!loading && findings.length > 0 && (
+          {!loading && !findingsError && findings.length > 0 && (
             <ul className="space-y-2">
               {findings.map((f) => (
                 <li key={f.id}>

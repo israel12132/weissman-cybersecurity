@@ -58,8 +58,19 @@ async fn api_itdr_connectors_get(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
-    let cfg = crate::itdr_connectors::load_connector_config(&state.app_pool, auth.tenant_id).await;
-    (StatusCode::OK, Json(json!({"ok": true, "connectors": cfg}))).into_response()
+    match crate::itdr_connectors::load_connector_config(&state.app_pool, auth.tenant_id).await {
+        Ok(cfg) => (StatusCode::OK, Json(json!({"ok": true, "connectors": cfg}))).into_response(),
+        Err(e) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "ok": false,
+                "unavailable": true,
+                "connectors": {},
+                "detail": scrub_internal_error(&e),
+            })),
+        )
+            .into_response(),
+    }
 }
 
 async fn api_itdr_connectors_put(
@@ -97,7 +108,17 @@ async fn api_itdr_connectors_pull(
     if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
-    let cfg = crate::itdr_connectors::load_connector_config(&state.app_pool, auth.tenant_id).await;
+    let cfg = match crate::itdr_connectors::load_connector_config(&state.app_pool, auth.tenant_id).await
+    {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false, "unavailable": true, "detail": scrub_internal_error(&e)})),
+            )
+                .into_response();
+        }
+    };
     let provider = body.provider.trim();
     let slice = cfg
         .get(provider)
@@ -262,11 +283,11 @@ async fn api_itdr_auth_events_list(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"ok": false, "events": []})),
+            Json(json!({"ok": false, "unavailable": true, "events": []})),
         )
             .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT ts, username, ip, country, success, mfa_prompted
              FROM itdr_auth_events
             WHERE tenant_id = $1
@@ -277,8 +298,24 @@ async fn api_itdr_auth_events_list(
     .bind(limit)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => {
+            let _ = tx.commit().await;
+            r
+        }
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "unavailable": true,
+                    "events": [],
+                    "detail": scrub_internal_error(&e),
+                })),
+            )
+                .into_response();
+        }
+    };
     let events: Vec<Value> = rows
         .iter()
         .map(|r| {

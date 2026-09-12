@@ -18,6 +18,7 @@ export default function CICDThreatMatrix() {
   const { clientId } = useParams()
   const [findings, setFindings] = useState([])
   const [loading, setLoading] = useState(true)
+  const [findingsError, setFindingsError] = useState('')
   const [modalFinding, setModalFinding] = useState(null)
   const [runRepoUrl, setRunRepoUrl] = useState('')
   const [running, setRunning] = useState(false)
@@ -43,11 +44,14 @@ export default function CICDThreatMatrix() {
   const fetchFindings = useCallback(() => {
     if (!clientId) return
     setLoading(true)
+    setFindingsError('')
     apiFetch(`/api/clients/${clientId}/cicd-findings`)
       .then((data) => setFindings(data?.findings ?? []))
-      .catch(() => setFindings([]))
+      .catch((e) => {
+        setFindingsError(e?.message || t(`${NS}.fetch_failed`))
+      })
       .finally(() => setLoading(false))
-  }, [clientId])
+  }, [clientId, t])
 
   useEffect(() => {
     fetchFindings()
@@ -133,7 +137,12 @@ export default function CICDThreatMatrix() {
         </div>
 
         {loading && <p className="text-[var(--text-muted)] mt-4">{t(`${NS}.loading_findings`)}</p>}
-        {!loading && findings.length === 0 && (
+        {!loading && findingsError && (
+          <p className="text-amber-200/90 mt-4" data-testid="cicd-lab-unavailable" data-live="false" role="alert">
+            {t(`${NS}.fetch_failed`)} {findingsError}
+          </p>
+        )}
+        {!loading && !findingsError && findings.length === 0 && (
           <p className="text-[var(--text-muted)] mt-4">{t(`${NS}.no_findings`)}</p>
         )}
 

@@ -4,7 +4,7 @@
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::finding;
 use crate::soar::integrations::config_str;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 pub struct CasbTokens {
     pub graph: Option<String>,
@@ -21,7 +21,9 @@ pub async fn load_tokens(ctx: &EngineRunContext) -> CasbTokens {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
     if let (Some(pool), Some(tenant_id)) = (ctx.app_pool.as_ref(), ctx.tenant_id) {
-        let cfg = crate::itdr_connectors::load_connector_config(pool.as_ref(), tenant_id).await;
+        let cfg = crate::itdr_connectors::load_connector_config(pool.as_ref(), tenant_id)
+            .await
+            .unwrap_or_else(|_| json!({}));
         if graph.is_none() {
             graph = token_from_cfg(&cfg, &["entra", "azuread", "microsoft", "graph"]);
         }

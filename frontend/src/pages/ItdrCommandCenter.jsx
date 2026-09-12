@@ -3,7 +3,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Fingerprint, Search } from 'lucide-react'
+import { Fingerprint } from 'lucide-react'
 import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
@@ -15,9 +15,9 @@ import { apiFetch } from '../utils/apiFetch'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 import { useToast } from '../components/ui/Toaster'
 import { useClient } from '../context/ClientContext'
+import { configuredItdrProviders, ITDR_PROVIDERS } from '../lib/itdrConnectors'
 
 const NS = 'pages.itdrCommandCenter'
-const PROVIDERS = ['entra', 'okta', 'google']
 
 export default function ItdrCommandCenter() {
   const { t } = useTranslation()
@@ -38,8 +38,8 @@ export default function ItdrCommandCenter() {
         apiFetch('/api/itdr/connectors'),
         apiFetch('/api/itdr/auth-events?limit=500'),
       ])
-      if (c?.ok === false) throw new Error(c.detail || 'connectors failed')
-      if (e?.ok === false) throw new Error(e.detail || 'events failed')
+      if (c?.ok === false || c?.unavailable) throw new Error(c.detail || t(`${NS}.load_failed`))
+      if (e?.ok === false || e?.unavailable) throw new Error(e.detail || t(`${NS}.load_failed`))
       setConnectors(c.connectors && typeof c.connectors === 'object' ? c.connectors : {})
       setEvents(Array.isArray(e.events) ? e.events : [])
     } catch (err) {
@@ -67,7 +67,15 @@ export default function ItdrCommandCenter() {
     )
   }, [filtered])
 
+  const fails = events.filter((ev) => ev.success === false).length
+  const armedProviders = useMemo(() => configuredItdrProviders(connectors), [connectors])
+  const unconfigured = armedProviders.length === 0
+
   const pull = async (provider) => {
+    if (!armedProviders.includes(provider)) {
+      toast.error(t(`${NS}.pull_unconfigured`, { provider }))
+      return
+    }
     setPulling(provider)
     try {
       const d = await apiFetch('/api/itdr/connectors/pull', {
@@ -84,8 +92,6 @@ export default function ItdrCommandCenter() {
       setPulling('')
     }
   }
-
-  const fails = events.filter((ev) => ev.success === false).length
 
   return (
     <PageShell
@@ -104,16 +110,28 @@ export default function ItdrCommandCenter() {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <ExecutiveWidget label={t(`${NS}.kpi_events`)} value={events.length} />
             <ExecutiveWidget label={t(`${NS}.kpi_fails`)} value={fails} />
-            <ExecutiveWidget label={t(`${NS}.kpi_providers`)} value={PROVIDERS.length} />
+            <div
+              data-testid="itdr-armed-providers"
+              data-live={unconfigured ? 'false' : 'true'}
+              data-armed={String(armedProviders.length)}
+            >
+              <ExecutiveWidget label={t(`${NS}.kpi_providers`)} value={armedProviders.length} />
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {PROVIDERS.map((p) => (
-              <Button key={p} type="button" variant="ghost" disabled={!!pulling} onClick={() => pull(p)}>
+            {ITDR_PROVIDERS.map((p) => (
+              <Button
+                key={p}
+                type="button"
+                variant="ghost"
+                disabled={!!pulling || !armedProviders.includes(p)}
+                onClick={() => pull(p)}
+              >
                 {pulling === p ? t(`${NS}.pulling`) : t(`${NS}.pull`, { provider: p })}
               </Button>
             ))}
           </div>
-          <p className="text-xs text-white/40 font-mono">{t(`${NS}.connector_hint`)} {JSON.stringify(Object.keys(connectors))}</p>
+          <p className="text-xs text-white/40 font-mono">{t(`${NS}.connector_hint`)} {armedProviders.join(', ') || t(`${NS}.none_armed`)}</p>
           <input
             type="search"
             value={searchQuery}
@@ -123,7 +141,10 @@ export default function ItdrCommandCenter() {
             className="w-full max-w-sm px-3 py-2 rounded-lg text-sm bg-black/40 border border-white/10 text-white"
           />
           {!filtered.length ? (
-            <EmptyState title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
+            <EmptyState
+              title={t(unconfigured ? `${NS}.empty_unconfigured_title` : `${NS}.empty_title`)}
+              body={t(unconfigured ? `${NS}.empty_unconfigured_body` : `${NS}.empty_body`)}
+            />
           ) : (
             <ul className="space-y-1.5 font-mono text-xs">
               {filtered.slice(0, 200).map((ev, i) => (
