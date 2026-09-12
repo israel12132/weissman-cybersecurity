@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import FindingCortexPush, { canPushFindingToCortex } from './FindingCortexPush.jsx'
 
 vi.mock('react-i18next', () => ({
@@ -10,10 +10,6 @@ vi.mock('../ui/Button', () => ({
   default: ({ children, onClick, disabled, ...rest }) => (
     <button type="button" onClick={onClick} disabled={disabled} {...rest}>{children}</button>
   ),
-}))
-vi.mock('lucide-react', () => ({
-  Loader2: () => null,
-  Radio: () => null,
 }))
 
 const apiFetch = vi.fn()
@@ -44,17 +40,18 @@ describe('FindingCortexPush', () => {
   beforeEach(() => {
     apiFetch.mockReset()
   })
+  afterEach(cleanup)
 
   it('does not POST when the finding is noise', () => {
     render(<FindingCortexPush finding={{ raw_id: 9, live_verdict: 'NOISE' }} />)
-    fireEvent.click(screen.getByRole('button'))
+    fireEvent.click(screen.getByTestId('push-cortex'))
     expect(apiFetch).not.toHaveBeenCalled()
   })
 
   it('POSTs /api/findings/:id/push-cortex for a confirmed finding', async () => {
     apiFetch.mockResolvedValue({ ok: true, xdr_had_matching_alert: false })
     render(<FindingCortexPush finding={{ raw_id: 42, live_verdict: 'CONFIRMED' }} />)
-    fireEvent.click(screen.getByRole('button'))
+    fireEvent.click(screen.getByTestId('push-cortex'))
     await waitFor(() => {
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/findings/42/push-cortex',
@@ -67,7 +64,7 @@ describe('FindingCortexPush', () => {
   it('surfaces a live 409 when Cortex is not configured', async () => {
     apiFetch.mockRejectedValue(new Error('cortex_xsiam integration is not configured'))
     render(<FindingCortexPush finding={{ raw_id: 7, live_verdict: 'CONFIRMED' }} />)
-    fireEvent.click(screen.getByRole('button'))
+    fireEvent.click(screen.getByTestId('push-cortex'))
     expect(await screen.findByRole('alert')).toHaveTextContent(/not configured/)
   })
 })

@@ -56,6 +56,7 @@ export default function FindingCortexPush({ finding }) {
         type="button"
         onClick={run}
         disabled={loading || !rawId || !eligible}
+        data-testid="push-cortex"
         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-mono border border-orange-500/35 bg-orange-500/10 text-orange-100 hover:bg-orange-500/20 disabled:opacity-40"
         title={eligible ? t('findings.cortexPush.hint') : t('findings.cortexPush.need_proof')}
       >

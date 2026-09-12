@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import CrownJewelBoard, {
   snapshotHasNoJewels,
   graphNodesFromPayload,
@@ -48,6 +48,8 @@ describe('crown-jewel helpers', () => {
 })
 
 describe('CrownJewelBoard', () => {
+  afterEach(cleanup)
+
   it('lets an operator flag a live graph node as a crown jewel', () => {
     const onToggle = vi.fn()
     render(
