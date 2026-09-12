@@ -31,7 +31,9 @@ describe('MemoryForensicsLab', () => {
 
   it('does not paint an empty-success lab when PoE findings fail to load', async () => {
     apiFetch.mockImplementation((url) => {
-      if (String(url).includes('/poe-findings')) return Promise.reject(new Error('store down'))
+      if (String(url).includes('/poe-findings')) {
+        return Promise.resolve({ ok: false, unavailable: true, findings: [], detail: 'store down' })
+      }
       if (url === '/api/clients') return Promise.resolve([])
       return Promise.resolve({})
     })

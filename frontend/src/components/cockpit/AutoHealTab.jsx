@@ -83,6 +83,7 @@ export default function AutoHealTab() {
     setVerifyJobId(jobId)
     setVerifySteps([])
     const tick = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return
       try {
         const d = await apiFetch(`/api/heal-verify/${encodeURIComponent(jobId)}/steps`)
         if (d?.ok === false || d?.unavailable) {

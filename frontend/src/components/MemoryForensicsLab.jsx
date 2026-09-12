@@ -108,6 +108,7 @@ export default function MemoryForensicsLab() {
   const [jobId, setJobId] = useState(null)
   const [jobStatus, setJobStatus] = useState(null)
   const [client, setClient] = useState(null)
+  const [clientsError, setClientsError] = useState('')
   const [hoveredSlot, setHoveredSlot] = useState(null) // 'Buffer' | 'Padding' | 'RBP' | 'RIP' | 'Shellcode' for hex hover
   const esRef = useRef(null)
 
@@ -129,7 +130,7 @@ export default function MemoryForensicsLab() {
         setFindingsError(e?.message || t(`${NS}.fetch_failed`))
       })
       .finally(() => setLoading(false))
-  }, [clientId, t])
+  }, [clientId])
 
   useEffect(() => {
     fetchFindings()
@@ -137,8 +138,12 @@ export default function MemoryForensicsLab() {
 
   useEffect(() => {
     if (!clientId) return
+    setClientsError('')
     apiFetch('/api/clients')
       .then((list) => {
+        if (list?.ok === false || list?.unavailable) {
+          throw new Error(list.detail || t(`${NS}.unavailable`))
+        }
         const c = Array.isArray(list) ? list.find((x) => String(x.id) === String(clientId)) : null
         setClient(c || null)
         if (c?.domains) {
@@ -149,7 +154,10 @@ export default function MemoryForensicsLab() {
           } catch (_) { /* best-effort; non-fatal */ }
         }
       })
-      .catch(() => setClient(null))
+      .catch((e) => {
+        setClient(null)
+        setClientsError(e?.message || t(`${NS}.unavailable`))
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId])
 
@@ -343,6 +351,11 @@ export default function MemoryForensicsLab() {
       title={t(`${NS}.title`)}
       subtitle={clientId && client ? t(`${NS}.client_meta`, { name: client.name, id: clientId }) : undefined}
     >
+        {clientsError && (
+          <p className="text-amber-200/90 mb-4" data-testid="memory-clients-unavailable" data-live="false" role="alert">
+            {t(`${NS}.unavailable`)}
+          </p>
+        )}
         <div className="mb-6 flex flex-wrap gap-2 items-center">
           <input
             type="text"

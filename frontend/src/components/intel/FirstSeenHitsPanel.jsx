@@ -50,7 +50,7 @@ export default function FirstSeenHitsPanel({ clientId }) {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [clientId, t])
+  }, [clientId])
 
   if (clientId == null) return null
 
@@ -73,9 +73,11 @@ export default function FirstSeenHitsPanel({ clientId }) {
           </p>
         </div>
         <span className="text-[10px] font-mono text-cyan-200/80">
-          {payload?.nvd_api_key_configured
-            ? t(`${NS}.nerve_live`)
-            : t(`${NS}.nerve_nvd_osv_only`)}
+          {!error && payload
+            ? (payload.nvd_api_key_configured
+              ? t(`${NS}.nerve_live`)
+              : t(`${NS}.nerve_nvd_osv_only`))
+            : null}
         </span>
       </div>
 

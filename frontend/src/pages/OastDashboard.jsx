@@ -67,6 +67,7 @@ function probeLabel(id, t) {
 export default function OastDashboard() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
+  const [clientsError, setClientsError] = useState(null)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const { postScan } = useCommandCenterScan(selectedClientId)
   const [callbacks, setCallbacks] = useState([])
@@ -84,10 +85,18 @@ export default function OastDashboard() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
-  }, [])
+      .then((d) => {
+        if (d?.ok === false || d?.unavailable) {
+          throw new Error(d.detail || t('pages.oastDashboard.clients_unavailable'))
+        }
+        if (Array.isArray(d)) setClients(d)
+        setClientsError(null)
+      })
+      .catch((e) => {
+        setClients([])
+        setClientsError(e?.message || t('pages.oastDashboard.clients_unavailable'))
+      })
+  }, [t])
 
   useClientTargetPrefill(selectedClientId, clients, setMintTarget)
 
@@ -95,6 +104,9 @@ export default function OastDashboard() {
     if (!silent) setRefreshLoading(true)
     try {
       const d = await apiFetch('/api/oast/callbacks')
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || 'unavailable')
+      }
       const list = Array.isArray(d?.callbacks)
         ? d.callbacks
         : (Array.isArray(d) ? d : [])
@@ -261,6 +273,11 @@ export default function OastDashboard() {
           <option value="">{t('pages.oastDashboard.select_client')}</option>
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        {clientsError && (
+          <span className="text-[11px] font-mono text-amber-200/90" data-testid="oast-clients-unavailable" role="alert">
+            {t('pages.oastDashboard.clients_unavailable')}
+          </span>
+        )}
       </div>
 
       {toast && (

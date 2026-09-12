@@ -71,5 +71,7 @@ describe('FirstSeenHitsPanel', () => {
     expect(await screen.findByRole('alert')).toBeTruthy()
     expect(screen.queryByText('pages.attackSurfaceManagement.first_seen_empty_title')).toBeNull()
     expect(screen.queryByText('pages.attackSurfaceManagement.first_seen_pre_nvd')).toBeNull()
+    expect(screen.queryByText('pages.attackSurfaceManagement.nerve_live')).toBeNull()
+    expect(screen.queryByText('pages.attackSurfaceManagement.nerve_nvd_osv_only')).toBeNull()
   })
 })

@@ -4452,6 +4452,7 @@
       "health_unavailable": "API הקריאות אינו זמין — אין זו הוכחה שהמאזין כבוי",
       "health_none": "לא נצפה",
       "health_count": "{{count}} קריאות אחרונות",
+      "clients_unavailable": "API הלקוחות אינו זמין — אין זו רשימה ריקה מאושרת.",
       "probes": {
         "log4shell": {
           "label": "Log4Shell",
@@ -5069,6 +5070,7 @@
       "nerve_oast_last": "OAST אחרון",
       "nerve_oast_none": "אין",
       "nerve_oast_idle": "מוגדר, אין קריאה",
+      "nerve_unavailable": "ממשקי העצב אינם זמינים — כבוי אינו מאושר.",
       "first_seen_title": "נראה לראשונה מול NVD",
       "first_seen_subtitle": "SBOM חי מול OSV. טענת לפני-NVD רק כשאין כינוי CVE או שאין שורת קטלוג ב-NIST. פגיעות שכבר בקטלוג מוצגות ולא מכונות נראו-לראשונה.",
       "first_seen_loading": "טוען פגיעות SBOM × OSV…",
@@ -6935,7 +6937,8 @@
       "audit_root_hash_label": "Audit Root Hash (SHA-256):",
       "verify_link": "אימות: {{url}}",
       "no_sealed_run": "אין ריצה חתומה ללקוח זה עדיין. הפעל סריקה ליצירת audit trail.",
-      "client_fallback": "לקוח {{id}}"
+      "client_fallback": "לקוח {{id}}",
+      "unavailable": "ממשקי הדוח אינם זמינים — אפס ממצאים אינו מאושר."
     },
     "tools": {
       "memoryForensicsLab": {
@@ -6970,6 +6973,7 @@
         "poe_findings": "ממצאי PoE",
         "loading": "טוען…",
         "fetch_failed": "API ממצאי PoE אינו זמין — זה אינו מעבדה ריקה.",
+        "unavailable": "API הלקוחות אינו זמין — לקוח חסר אינו מאושר.",
         "no_findings": "אין ממצאי PoE. הפעל סריקת PoE עם URL יעד.",
         "verified": "מאומת",
         "hex_heatmap": "Hex Heatmap (Memory X-Ray)",
@@ -7109,6 +7113,7 @@
         "view_findings": "צפה ב-{{count}} ממצא(ים)",
         "loading_findings": "טוען ממצאים…",
         "fetch_failed": "API ממצאי CI/CD אינו זמין — זו אינה pipeline נקייה.",
+        "unavailable": "API הלקוחות אינו זמין — לקוח חסר אינו מאושר.",
         "no_findings": "אין ממצאי CI/CD. הפעל סריקת pipeline עם URL repo GitHub.",
         "playbook_title": "מדריך התוקף",
         "blast_radius": "Blast radius:",
@@ -7130,7 +7135,8 @@
         "run_label": "ריצה #{{id}}",
         "no_chain": "אין שרשרת תקיפה ללקוח זה עדיין.",
         "no_chain_hint": "הפעל סריקה עם ממצאים ליצירת שרשרת.",
-        "step_fallback": "שלב {{n}}"
+        "step_fallback": "שלב {{n}}",
+        "unavailable": "API שרשרת התקיפה אינו זמין — ריק אינו שרשרת חסרה."
       }
     },
     "systemCore": {
@@ -7493,6 +7499,7 @@
       "placeholder": "חפש הכל... (דפים, מנועים, ממצאים, לקוחות)",
       "searching": "מחפש…",
       "noResults": "לא נמצאו תוצאות עבור \"{{query}}\"",
+      "search_failed": "API החיפוש אינו זמין — ריק אינו חיפוש ריק מאושר.",
       "startTyping": "התחל להקליד לחיפוש…",
       "select": "בחר",
       "quickNav": "ניווט מהיר",

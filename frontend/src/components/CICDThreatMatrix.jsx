@@ -23,6 +23,7 @@ export default function CICDThreatMatrix() {
   const [runRepoUrl, setRunRepoUrl] = useState('')
   const [running, setRunning] = useState(false)
   const [client, setClient] = useState(null)
+  const [clientsError, setClientsError] = useState('')
 
   // Dialog a11y for the Attacker's Playbook modal: focus trap + Escape-to-close.
   const modalRef = useRef(null)
@@ -56,7 +57,7 @@ export default function CICDThreatMatrix() {
         setFindingsError(e?.message || t(`${NS}.fetch_failed`))
       })
       .finally(() => setLoading(false))
-  }, [clientId, t])
+  }, [clientId])
 
   useEffect(() => {
     fetchFindings()
@@ -64,12 +65,19 @@ export default function CICDThreatMatrix() {
 
   useEffect(() => {
     if (!clientId) return
+    setClientsError('')
     apiFetch('/api/clients')
       .then((list) => {
+        if (list?.ok === false || list?.unavailable) {
+          throw new Error(list.detail || t(`${NS}.unavailable`))
+        }
         const c = Array.isArray(list) ? list.find((x) => String(x.id) === String(clientId)) : null
         setClient(c || null)
       })
-      .catch(() => setClient(null))
+      .catch((e) => {
+        setClient(null)
+        setClientsError(e?.message || t(`${NS}.unavailable`))
+      })
   }, [clientId])
 
   const findingsByStage = STAGES.reduce((acc, stage) => {
@@ -141,6 +149,11 @@ export default function CICDThreatMatrix() {
           </div>
         </div>
 
+        {clientsError && (
+          <p className="text-amber-200/90 mt-4" data-testid="cicd-clients-unavailable" data-live="false" role="alert">
+            {t(`${NS}.unavailable`)}
+          </p>
+        )}
         {loading && <p className="text-[var(--text-muted)] mt-4">{t(`${NS}.loading_findings`)}</p>}
         {!loading && findingsError && (
           <p className="text-amber-200/90 mt-4" data-testid="cicd-lab-unavailable" data-live="false" role="alert">

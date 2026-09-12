@@ -116,7 +116,7 @@ export default function LivePipelineMonitor() {
     } finally {
       setLoading(false)
     }
-  }, [selectedClientId, t])
+  }, [selectedClientId])
 
   const fetchDag = useCallback(async () => {
     try {

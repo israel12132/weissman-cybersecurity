@@ -41,6 +41,7 @@ export default function GlobalSearch() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef(null);
   const dialogRef = useRef(null);
@@ -156,18 +157,26 @@ export default function GlobalSearch() {
   useEffect(() => {
     if (!query.trim() || query.trim().length < 2) {
       setResults([]);
+      setSearchError(false);
       return undefined;
     }
     const ctrl = new AbortController();
     const tmr = setTimeout(async () => {
       setLoading(true);
+      setSearchError(false);
       try {
         const d = await apiFetch(`/api/search?q=${encodeURIComponent(query.trim())}`, {
           signal: ctrl.signal,
         });
+        if (d?.ok === false || d?.unavailable) {
+          throw new Error(d.detail || 'unavailable');
+        }
         setResults(Array.isArray(d.results) ? d.results : []);
       } catch {
-        if (!ctrl.signal.aborted) setResults([]);
+        if (!ctrl.signal.aborted) {
+          setResults([]);
+          setSearchError(true);
+        }
       } finally {
         if (!ctrl.signal.aborted) setLoading(false);
       }
@@ -267,8 +276,10 @@ export default function GlobalSearch() {
               loading && query.length >= 2 ? (
                 <div className="p-8 text-center text-[var(--text-muted)]">{t('components.globalSearch.searching')}</div>
               ) : query.length >= 2 ? (
-                <div className="p-8 text-center text-[var(--text-muted)]">
-                  {t('components.globalSearch.noResults', { query })}
+                <div className="p-8 text-center text-[var(--text-muted)]" data-testid={searchError ? 'global-search-unavailable' : undefined} role={searchError ? 'alert' : undefined}>
+                  {searchError
+                    ? t('components.globalSearch.search_failed')
+                    : t('components.globalSearch.noResults', { query })}
                 </div>
               ) : (
                 <div className="p-8 text-center text-[var(--text-muted)]">

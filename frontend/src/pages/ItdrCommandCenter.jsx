@@ -47,7 +47,7 @@ export default function ItdrCommandCenter() {
     } finally {
       setLoading(false)
     }
-  }, [t])
+  }, [])
 
   useEffect(() => { load() }, [load])
 

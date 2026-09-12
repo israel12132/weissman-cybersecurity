@@ -12,6 +12,7 @@ import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
 import FirstSeenHitsPanel from '../components/intel/FirstSeenHitsPanel'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 
 const ENGINE = 'asm'
 const DELTA_ENGINE = 'first_mover_surface_delta'
@@ -288,6 +289,7 @@ export function FirstMoverDeltaPanel({
   const cs = nerve?.certstream || {}
   const oast = nerve?.oast || {}
   const nvd = nerve?.nvd || {}
+  const nerveDown = !nerve || nerve.unavailable === true || nerve.ok === false
 
   return (
     <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-950/40 via-black/40 to-cyan-950/30 p-4 mb-5">
@@ -326,6 +328,16 @@ export function FirstMoverDeltaPanel({
         </div>
       </div>
       <div className="flex flex-wrap gap-2 mb-3">
+        {nerveDown ? (
+          <span
+            className="text-[10px] font-mono px-2 py-1 rounded-lg border border-amber-400/30 bg-amber-950/40 text-amber-200"
+            data-testid="first-mover-nerve-unavailable"
+            data-live="false"
+            role="alert"
+          >
+            {t('pages.attackSurfaceManagement.nerve_unavailable')}
+          </span>
+        ) : (
         {[
           [
             t('pages.attackSurfaceManagement.nerve_certstream'),
@@ -365,7 +377,8 @@ export function FirstMoverDeltaPanel({
           >
             {label}: {value}
           </span>
-        ))}
+        ))
+        )}
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
         {[
@@ -558,11 +571,16 @@ export default function AttackSurfaceManagement() {
   const loadNerve = useCallback(async () => {
     try {
       const d = await apiFetch('/api/first-mover/nerve')
-      if (d && typeof d === 'object') setNerve(d)
+      if (!d || typeof d !== 'object' || d.ok === false || d.unavailable) {
+        setNerve({ unavailable: true })
+        return
+      }
+      setNerve(d)
     } catch (err) {
       if (import.meta.env.DEV) {
         console.debug('first-mover nerve skipped', err)
       }
+      setNerve({ unavailable: true })
     }
   }, [])
 
@@ -582,9 +600,8 @@ export default function AttackSurfaceManagement() {
 
   useEffect(() => {
     loadNerve()
-    const id = setInterval(loadNerve, 20000)
-    return () => clearInterval(id)
   }, [loadNerve])
+  useVisiblePolling(loadNerve, 20000)
 
   useEffect(() => {
     refreshCorpus()

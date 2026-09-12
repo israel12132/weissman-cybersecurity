@@ -38,7 +38,7 @@ export default function RuntimeExecutionFlow({ clientId, findingId }) {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [clientId, findingId, t])
+  }, [clientId, findingId])
 
   if (!clientId) return null
 

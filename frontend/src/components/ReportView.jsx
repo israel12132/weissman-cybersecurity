@@ -19,21 +19,42 @@ export default function ReportView() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!clientId) return
+    if (!clientId) return undefined
+    let cancelled = false
+    setLoading(true)
+    setError('')
     Promise.all([
-      apiFetch('/api/clients').catch(() => []),
-      apiFetch('/api/findings').catch(() => []),
-      apiFetch(`/api/clients/${clientId}/report/crypto-proof`).catch(() => null),
+      apiFetch('/api/clients'),
+      apiFetch('/api/findings'),
+      apiFetch(`/api/clients/${clientId}/report/crypto-proof`),
     ])
       .then(([clients, findingsList, proof]) => {
+        if (cancelled) return
+        if (clients?.ok === false || clients?.unavailable) {
+          throw new Error(clients.detail || t('components.reportView.unavailable'))
+        }
+        if (findingsList?.ok === false || findingsList?.unavailable) {
+          throw new Error(findingsList.detail || t('components.reportView.unavailable'))
+        }
+        if (proof?.ok === false || proof?.unavailable) {
+          throw new Error(proof.detail || t('components.reportView.unavailable'))
+        }
         const c = Array.isArray(clients) ? clients.find((x) => String(x?.id) === String(clientId)) : null
         setClient(c || null)
         setFindings(Array.isArray(findingsList) ? findingsList.filter((f) => String(f.client) === String(clientId)) : [])
         setCryptoProof(proof?.audit_root_hash ? proof : null)
       })
-      .catch((e) => setError(e?.message || t('components.reportView.load_failed')))
-      .finally(() => setLoading(false))
-  }, [clientId, t])
+      .catch((e) => {
+        if (cancelled) return
+        setError(e?.message || t('components.reportView.unavailable'))
+        setFindings([])
+        setCryptoProof(null)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [clientId])
 
   if (loading) {
     return (
@@ -68,11 +89,17 @@ export default function ReportView() {
       )}
     >
       {error && (
-        <div className="mb-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm">
-          {error}
+        <div
+          className="mb-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm"
+          data-testid="report-unavailable"
+          data-live="false"
+          role="alert"
+        >
+          {t('components.reportView.unavailable')}
         </div>
       )}
 
+      {!error && (
       <section className="mb-8">
         <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-2">{t('components.reportView.executive_summary')}</h2>
         <p className="text-[var(--text-tertiary)] text-sm">
@@ -91,8 +118,9 @@ export default function ReportView() {
           </p>
         )}
       </section>
+      )}
 
-      {findings.length > 0 && (
+      {!error && findings.length > 0 && (
         <section className="mb-8 overflow-x-auto">
           <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-2">{t('components.reportView.recent_findings')}</h2>
           <table className="w-full border-collapse border border-[var(--border-strong)]">
@@ -127,7 +155,9 @@ export default function ReportView() {
         <p className="text-[var(--text-tertiary)] text-sm mb-4">
           {t('components.reportView.crypto_sealed_body')}
         </p>
-        {cryptoProof?.audit_root_hash ? (
+        {error ? (
+          <p className="text-[var(--text-muted)] text-sm">{t('components.reportView.unavailable')}</p>
+        ) : cryptoProof?.audit_root_hash ? (
           <div className="flex flex-wrap items-start gap-6">
             {cryptoProof.qr_data_url && (
               <img

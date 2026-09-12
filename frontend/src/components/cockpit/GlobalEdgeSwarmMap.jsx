@@ -4,6 +4,7 @@ import { Radio, RefreshCw } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 import GeoWorldMap, { GeoMarker } from '../ui/GeoWorldMap'
+import { useVisiblePolling } from '../../hooks/useVisiblePolling'
 
 const NS = 'components.cockpitWidgets.globalEdgeSwarmMap'
 
@@ -51,9 +52,8 @@ export default function GlobalEdgeSwarmMap() {
 
   useEffect(() => {
     load()
-    const timer = setInterval(load, 45000)
-    return () => clearInterval(timer)
   }, [load])
+  useVisiblePolling(load, 45000)
 
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6 min-h-[420px]">

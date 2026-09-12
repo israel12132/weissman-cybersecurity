@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../utils/apiFetch'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import EvidenceNotice from './ui/EvidenceNotice'
 import ForensicEngineRealityBadge from '../forensic/ForensicEngineRealityBadge'
 import Button from './ui/Button'
@@ -45,13 +46,12 @@ export default function ZeroDayRadar() {
         setFeedError(e?.message || t(`${NS}.feed_unavailable`))
       })
       .finally(() => setLoadingFeed(false))
-  }, [t])
+  }, [])
 
   useEffect(() => {
     loadFeed()
-    const tInterval = setInterval(loadFeed, 60000)
-    return () => clearInterval(tInterval)
   }, [loadFeed])
+  useVisiblePolling(loadFeed, 60000)
 
   useEffect(() => {
     if (feedEndRef.current) feedEndRef.current.scrollIntoView({ behavior: 'smooth' })

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
 import { useClient } from '../../context/ClientContext'
@@ -25,6 +25,8 @@ export default function IdentityMatrixTab() {
   const [submitting, setSubmitting] = useState(false)
   const [polling, setPolling] = useState(false)
   const [harvestAlert, setHarvestAlert] = useState(false)
+  const clientIdRef = useRef(selectedClientId)
+  clientIdRef.current = selectedClientId
 
   const fetchContexts = useCallback(async () => {
     if (!selectedClientId) return []
@@ -74,11 +76,14 @@ export default function IdentityMatrixTab() {
 
   useVisiblePolling(
     () => {
+      const id = clientIdRef.current
       fetchEvents()
         .then((ev) => {
+          if (id !== clientIdRef.current) return
           setEvents(ev)
         })
         .catch(() => {
+          if (id !== clientIdRef.current) return
           setLoadError(t(`${IM}.unavailable`))
           setPolling(false)
         })
@@ -92,13 +97,17 @@ export default function IdentityMatrixTab() {
     setHarvestAlert(true)
     fetchContexts()
       .then((list) => {
+        if (String(clientIdRef.current) !== String(selectedClientId)) return
         setContexts(list)
         setLastHarvestedToken?.(null)
       })
-      .catch((e) => setLoadError(e?.message || t(`${IM}.unavailable`)))
+      .catch((e) => {
+        if (String(clientIdRef.current) !== String(selectedClientId)) return
+        setLoadError(e?.message || t(`${IM}.unavailable`))
+      })
     const timeout = setTimeout(() => setHarvestAlert(false), 8000)
     return () => clearTimeout(timeout)
-  }, [lastHarvestedToken, selectedClientId, fetchContexts, setLastHarvestedToken, t])
+  }, [lastHarvestedToken, selectedClientId, fetchContexts, setLastHarvestedToken])
 
   const autoHarvest = clientConfig?.auto_harvest !== false
   const toggleAutoHarvest = useCallback(async () => {

@@ -155,4 +155,20 @@ describe('FirstMoverDeltaPanel', () => {
     )
     expect(screen.getByText('pages.attackSurfaceManagement.first_mover_empty')).toBeTruthy()
   })
+
+  it('does not paint nerve_off when the first-mover nerve API is unavailable', () => {
+    render(
+      <FirstMoverDeltaPanel
+        diff={{ current_count: 0, added: [], removed: [], changed: [] }}
+        loading={false}
+        hunting={false}
+        onHunt={() => {}}
+        huntDisabled
+        nerve={{ unavailable: true, ok: false }}
+      />,
+    )
+    expect(screen.getByTestId('first-mover-nerve-unavailable')).toBeTruthy()
+    expect(screen.queryByText(/pages.attackSurfaceManagement.nerve_off/)).toBeNull()
+    expect(screen.queryByText(/pages.attackSurfaceManagement.nerve_live/)).toBeNull()
+  })
 })

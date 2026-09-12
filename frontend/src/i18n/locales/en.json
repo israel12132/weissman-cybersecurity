@@ -4452,6 +4452,7 @@
       "health_unavailable": "callback API unreachable — not proof the listener is off",
       "health_none": "none observed",
       "health_count": "{{count}} recent hits",
+      "clients_unavailable": "Clients API unavailable — the tenant list is not confirmed empty.",
       "probes": {
         "log4shell": {
           "label": "Log4Shell",
@@ -5069,6 +5070,7 @@
       "nerve_oast_last": "Last OAST hit",
       "nerve_oast_none": "none",
       "nerve_oast_idle": "configured, no hit",
+      "nerve_unavailable": "Nerve APIs unavailable — off is not confirmed.",
       "first_seen_title": "First-seen vs NVD",
       "first_seen_subtitle": "Live SBOM queried against OSV. Pre-NVD only when the OSV hit has no CVE alias or NIST has no catalog row. Hits already in NVD are shown and never titled first-seen.",
       "first_seen_loading": "Loading SBOM × OSV hits…",
@@ -6935,7 +6937,8 @@
       "audit_root_hash_label": "Audit Root Hash (SHA-256):",
       "verify_link": "Verify: {{url}}",
       "no_sealed_run": "No sealed run for this client yet. Run a scan to generate the audit trail.",
-      "client_fallback": "Client {{id}}"
+      "client_fallback": "Client {{id}}",
+      "unavailable": "Report APIs unavailable — zero findings is not confirmed."
     },
     "tools": {
       "memoryForensicsLab": {
@@ -6970,6 +6973,7 @@
         "poe_findings": "PoE Findings",
         "loading": "Loading…",
         "fetch_failed": "PoE findings API unavailable — this is not an empty lab.",
+        "unavailable": "Clients API unavailable — missing client is not confirmed.",
         "no_findings": "No PoE findings. Run a PoE scan with a target URL.",
         "verified": "Verified",
         "hex_heatmap": "Hex Heatmap (Memory X-Ray)",
@@ -7109,6 +7113,7 @@
         "view_findings": "View {{count}} finding(s)",
         "loading_findings": "Loading findings…",
         "fetch_failed": "CI/CD findings API unavailable — this is not a clean pipeline.",
+        "unavailable": "Clients API unavailable — missing client is not confirmed.",
         "no_findings": "No CI/CD findings. Run a pipeline scan with a GitHub repo URL.",
         "playbook_title": "Attacker's Playbook",
         "blast_radius": "Blast radius:",
@@ -7130,7 +7135,8 @@
         "run_label": "Run #{{id}}",
         "no_chain": "No attack chain for this client yet.",
         "no_chain_hint": "Run a scan with findings to generate a chain.",
-        "step_fallback": "Step {{n}}"
+        "step_fallback": "Step {{n}}",
+        "unavailable": "Attack-chain API unavailable — empty is not a missing kill chain."
       }
     },
     "systemCore": {
@@ -7493,6 +7499,7 @@
       "placeholder": "Search anything... (pages, engines, findings, clients)",
       "searching": "Searching…",
       "noResults": "No results found for \"{{query}}\"",
+      "search_failed": "Search API unavailable — empty is not a confirmed miss.",
       "startTyping": "Start typing to search…",
       "select": "Select",
       "quickNav": "Quick navigation",
