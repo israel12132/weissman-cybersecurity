@@ -235,21 +235,39 @@ async fn api_client_sbom_list(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(Value::Object(serde_json::Map::from_iter([(
-                "components".to_string(),
-                Value::Array(vec![]),
-            )]))),
+            Json(crate::http_unavailable::sbom_components_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         "SELECT id, package_name, ecosystem, version_spec, source, created_at FROM client_sbom_components WHERE client_id = $1 ORDER BY id DESC",
     )
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::sbom_components_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::sbom_components_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let out: Vec<Value> = rows
         .into_iter()
         .map(|r| {
@@ -292,9 +310,19 @@ async fn api_client_sbom_post(
     .bind(&ver)
     .execute(&mut *tx)
     .await;
-    let _ = tx.commit().await;
     match res {
-        Ok(_) => (StatusCode::OK, Json(json!({"ok": true}))).into_response(),
+        Ok(_) => {
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::sbom_components_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+            (StatusCode::OK, Json(json!({"ok": true}))).into_response()
+        }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"ok": false, "error": e.to_string()})),
@@ -353,7 +381,15 @@ async fn api_containment_rules_list(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::containment_rules_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let out: Vec<Value> = rows
         .into_iter()
         .map(|r| {
@@ -415,9 +451,19 @@ async fn api_containment_rules_post(
     .bind(body.allow_dns_egress.unwrap_or(true))
     .execute(&mut *tx)
     .await;
-    let _ = tx.commit().await;
     match res {
-        Ok(_) => (StatusCode::OK, Json(json!({"ok": true}))).into_response(),
+        Ok(_) => {
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::containment_rules_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+            (StatusCode::OK, Json(json!({"ok": true}))).into_response()
+        }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"ok": false, "error": e.to_string()})),
@@ -528,9 +574,17 @@ async fn api_containment_rules_patch(
     .bind(auth.tenant_id)
     .execute(&mut *tx)
     .await;
-    let _ = tx.commit().await;
     match res {
         Ok(r) if r.rows_affected() > 0 => {
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::containment_rules_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
             (StatusCode::OK, Json(json!({"ok": true, "id": rule_id}))).into_response()
         }
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
@@ -558,9 +612,17 @@ async fn api_containment_rules_delete(
         .bind(auth.tenant_id)
         .execute(&mut *tx)
         .await;
-    let _ = tx.commit().await;
     match res {
         Ok(r) if r.rows_affected() > 0 => {
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::containment_rules_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
             (StatusCode::OK, Json(json!({"ok": true, "id": rule_id}))).into_response()
         }
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),

@@ -90,14 +90,33 @@ async fn api_client_export_csv(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         "SELECT id, title, severity, source, status, discovered_at FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
     )
     .bind(id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let mut csv = String::from("ID,Title,Severity,Source,Status,Discovered\n");
     for r in rows {
         let idv = r.try_get::<i64, _>("id").unwrap_or(0);
@@ -287,15 +306,39 @@ async fn api_verify_audit(
         return (StatusCode::BAD_REQUEST, Json(json!({"verified": false, "error": "hash required"}))).into_response();
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"verified": false, "error": "DB"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::audit_verify_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let row = sqlx::query("SELECT id, created_at, summary FROM report_runs WHERE audit_root_hash = $1 LIMIT 1")
+    let row = match sqlx::query("SELECT id, created_at, summary FROM report_runs WHERE audit_root_hash = $1 LIMIT 1")
         .bind(hash)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::audit_verify_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::audit_verify_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     match row {
         Some(r) => {
             let run_id: i64 = r.try_get("id").unwrap_or(0);
@@ -488,12 +531,18 @@ async fn api_findings_update_status(
         }
     }
 
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
-    // Closed-loop remediation verification: when an analyst marks a finding FIXED,
-    // re-run the same engine against the same target to prove the vector is actually
-    // closed (→ VERIFIED_FIXED) or detect a regression (→ REOPENED).
-    if new_status == "FIXED"
+    if matches!(&affected, Ok(r) if r.rows_affected() > 0)
+        && new_status == "FIXED"
         && !target_url.is_empty()
         && weissman_core::models::engine::is_production_engine_id(&engine)
     {
@@ -646,7 +695,7 @@ async fn api_findings_export_csv(
     // Bounded to avoid pinning a pool connection for the full statement_timeout and materialising
     // the entire tenant's findings (plus the ~2x CSV string) in memory — an unauthenticated-cost
     // DoS from any viewer. 50k mirrors the audit export cap.
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         "SELECT id, finding_id, title, severity, source, status, client_id::text, \
          COALESCE(description,'') AS description, discovered_at, \
          COALESCE(poc_sealed, false) AS poc_sealed \
@@ -654,8 +703,27 @@ async fn api_findings_export_csv(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let mut csv = String::from("ID,Finding ID,Title,Severity,Source,Status,Client,Verified,Discovered,Description\n");
     for r in rows {
         let raw_id = r.try_get::<i64, _>("id").unwrap_or(0);

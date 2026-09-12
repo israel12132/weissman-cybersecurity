@@ -128,7 +128,7 @@ async fn api_roe_override_request_approve(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
 
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT id, client_id, desired_roe_mode, status, expires_at,
                   first_approved_by_user_id, second_approved_by_user_id
            FROM roe_override_requests
@@ -138,8 +138,18 @@ async fn api_roe_override_request_approve(
     .bind(id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::roe_override_requests_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     let Some(r) = row else {
         let _ = tx.rollback().await;
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "request not found"}))).into_response();

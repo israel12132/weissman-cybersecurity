@@ -265,12 +265,14 @@ async fn api_audit_logs(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"ok": false, "detail": "Database unavailable", "entries": [], "total": 0})),
+            Json(crate::http_unavailable::audit_logs_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
 
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id,
                   actor_user_id,
                   COALESCE(user_label, '')  AS user_label,
@@ -292,9 +294,20 @@ async fn api_audit_logs(
     .bind(auth.tenant_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::audit_logs_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
 
-    let total: i64 = sqlx::query_scalar::<_, i64>(
+    let total: i64 = match sqlx::query_scalar::<_, i64>(
         r#"SELECT COUNT(*)::bigint FROM audit_logs
            WHERE tenant_id = $3
              AND ($1::text IS NULL OR action_type ILIKE '%' || $1::text || '%')
@@ -305,8 +318,27 @@ async fn api_audit_logs(
     .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
-    let _ = tx.commit().await;
+    {
+        Ok(n) => n,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::audit_logs_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::audit_logs_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     let entries: Vec<Value> = rows
         .into_iter()
@@ -426,25 +458,58 @@ async fn api_enterprise_settings_get(State(state): State<Arc<AppState>>, Extensi
         return r;
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"global_safe_mode": false, "alert_webhook_url": ""}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::enterprise_settings_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let safe = sqlx::query_scalar::<_, String>("SELECT COALESCE(value,'false') FROM system_configs WHERE tenant_id = $1 AND key = 'global_safe_mode'")
+    let safe = match sqlx::query_scalar::<_, String>("SELECT COALESCE(value,'false') FROM system_configs WHERE tenant_id = $1 AND key = 'global_safe_mode'")
         .bind(auth.tenant_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "false".to_string());
-    let webhook = sqlx::query_scalar::<_, String>("SELECT COALESCE(value,'') FROM system_configs WHERE tenant_id = $1 AND key = 'alert_webhook_url'")
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::enterprise_settings_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let webhook = match sqlx::query_scalar::<_, String>("SELECT COALESCE(value,'') FROM system_configs WHERE tenant_id = $1 AND key = 'alert_webhook_url'")
         .bind(auth.tenant_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten()
-        .unwrap_or_default();
-    let _ = tx.commit().await;
-    let safe_b = safe == "true" || safe == "1";
-    (StatusCode::OK, Json(json!({"global_safe_mode": safe_b, "alert_webhook_url": webhook}))).into_response()
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::enterprise_settings_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::enterprise_settings_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    };
+    let safe_b = matches!(safe.as_deref(), Some("true") | Some("1"));
+    let webhook = webhook.unwrap_or_default();
+    (StatusCode::OK, Json(json!({"ok": true, "global_safe_mode": safe_b, "alert_webhook_url": webhook}))).into_response()
 }
 
 async fn api_enterprise_settings_patch(
@@ -973,7 +1038,15 @@ async fn api_clients_create(
         &ip,
     )
     .await;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::clients_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     eprintln!("[Weissman][API] Client created: id={} name={}", id, name);
     (StatusCode::OK, Json(json!({"ok": true, "id": id}))).into_response()
 }
@@ -999,7 +1072,7 @@ async fn api_clients_update(
         )
             .into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT name,
             COALESCE(domains,'[]') AS domains,
             COALESCE(tech_stack,'[]') AS tech_stack,
@@ -1014,8 +1087,18 @@ async fn api_clients_update(
         .bind(id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::clients_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     let (
         cur_name,
         cur_domains,
@@ -1103,7 +1186,15 @@ async fn api_clients_update(
         &ip,
     )
     .await;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::clients_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     (StatusCode::OK, Json(json!({"ok": true}))).into_response()
 }
 
@@ -1124,12 +1215,22 @@ async fn api_clients_delete(
         )
             .into_response();
     };
-    let row = sqlx::query("SELECT name FROM clients WHERE id = $1")
+    let row = match sqlx::query("SELECT name FROM clients WHERE id = $1")
         .bind(id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::clients_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     let Some(nr) = row else {
         let _ = tx.rollback().await;
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "client not found"}))).into_response();
@@ -1160,7 +1261,19 @@ async fn api_clients_delete(
     .bind(id)
     .execute(&mut *tx)
     .await;
-    let n = sqlx::query("DELETE FROM clients WHERE id = $1").bind(id).execute(&mut *tx).await.map(|r| r.rows_affected()).unwrap_or(0);
+    let n = match sqlx::query("DELETE FROM clients WHERE id = $1").bind(id).execute(&mut *tx).await {
+        Ok(r) => r.rows_affected(),
+        Err(_) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::clients_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     if n == 0 {
         let _ = tx.rollback().await;
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "client not found"}))).into_response();
@@ -1169,7 +1282,15 @@ async fn api_clients_delete(
         .bind(id)
         .execute(&mut *tx)
         .await;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::clients_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     (StatusCode::NO_CONTENT, ()).into_response()
 }
 
@@ -1179,18 +1300,42 @@ async fn api_client_config_get(
     Path(id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(Value::Null)).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_config_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let s: Option<String> = sqlx::query_scalar(
+    let s: Option<String> = match sqlx::query_scalar(
         "SELECT COALESCE(NULLIF(trim(client_configs), ''), $1) FROM clients WHERE id = $2",
     )
     .bind(DEFAULT_CLIENT_CONFIGS_JSON)
     .bind(id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_config_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_config_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let config_str = match s {
         Some(x) => x,
         None => return (StatusCode::NOT_FOUND, Json(Value::Null)).into_response(),
@@ -1219,13 +1364,20 @@ async fn api_client_config_patch(
     .bind(id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten()
     {
-        Some(x) => x,
-        None => {
+        Ok(Some(x)) => x,
+        Ok(None) => {
             let _ = tx.rollback().await;
             return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "client not found"}))).into_response();
+        }
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_config_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
         }
     };
     let mut config: serde_json::Map<String, Value> = match serde_json::from_str(&current) {
@@ -1447,7 +1599,15 @@ async fn api_client_config_patch(
         )
         .await;
     }
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_config_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     (StatusCode::OK, Json(json!({"ok": true, "config": new_json}))).into_response()
 }
 
@@ -2085,28 +2245,66 @@ async fn api_scan_all_engines(
     } else {
         let domains_result: Option<String> = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
             Ok(mut tx) => {
-                let r = sqlx::query_scalar::<_, String>(
+                let r = match sqlx::query_scalar::<_, String>(
                     "SELECT domains FROM clients WHERE id = $1 AND tenant_id = $2",
                 )
                 .bind(body.client_id)
                 .bind(auth.tenant_id)
                 .fetch_optional(&mut *tx)
                 .await
-                .ok()
-                .flatten();
-                let _ = tx.commit().await;
+                {
+                    Ok(v) => v,
+                    Err(_) => {
+                        return (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(json!({
+                                "ok": false,
+                                "unavailable": true,
+                                "detail": "database unavailable",
+                            })),
+                        )
+                            .into_response();
+                    }
+                };
+                if tx.commit().await.is_err() {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(json!({
+                            "ok": false,
+                            "unavailable": true,
+                            "detail": "database unavailable",
+                        })),
+                    )
+                        .into_response();
+                }
                 r
             }
-            Err(_) => None,
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(json!({
+                        "ok": false,
+                        "unavailable": true,
+                        "detail": "database unavailable",
+                    })),
+                )
+                    .into_response();
+            }
         };
 
-        domains_result
-            .and_then(|d| {
-                serde_json::from_str::<Vec<String>>(&d)
-                    .ok()
-                    .and_then(|arr| arr.first().cloned())
-            })
-            .unwrap_or_default()
+        match domains_result {
+            None => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(json!({"ok": false, "detail": "client not found"})),
+                )
+                    .into_response();
+            }
+            Some(d) => serde_json::from_str::<Vec<String>>(&d)
+                .ok()
+                .and_then(|arr| arr.first().cloned())
+                .unwrap_or_default(),
+        }
     };
 
     // A blank target would otherwise enqueue a no-op scan that still consumes quota AND skip the

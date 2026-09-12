@@ -20,6 +20,7 @@ export default function ContainmentRulesBuilder() {
   const { clientId, loading: clientLoading } = useFirstTenantClientId();
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [unavailable, setUnavailable] = useState(false);
   const [createModal, setCreateModal] = useState(false);
   const [editModal, setEditModal] = useState(null);
 
@@ -37,9 +38,17 @@ export default function ContainmentRulesBuilder() {
     try {
       setLoading(true);
       const data = await api.get(withClientId('/api/containment/rules', cid));
-      setRules(data.rules || []);
+      if (data?.ok === false || data?.unavailable) {
+        throw new Error(data.detail || t('pages.containmentRulesBuilder.load_failed'));
+      }
+      if (!Array.isArray(data.rules)) {
+        throw new Error(t('pages.containmentRulesBuilder.load_failed'));
+      }
+      setUnavailable(false);
+      setRules(data.rules);
     } catch (error) {
       console.error('Failed to fetch containment rules:', error);
+      setUnavailable(true);
     } finally {
       setLoading(false);
     }
@@ -198,6 +207,10 @@ export default function ContainmentRulesBuilder() {
             <div className="p-8 text-center text-[var(--text-muted)]">
               <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
               {t('pages.containmentRulesBuilder.loading')}
+            </div>
+          ) : unavailable ? (
+            <div className="p-8 text-center text-red-400" role="alert">
+              {t('pages.containmentRulesBuilder.rules_unavailable')}
             </div>
           ) : rules.length === 0 ? (
             <div className="p-8 text-center text-[var(--text-muted)]">

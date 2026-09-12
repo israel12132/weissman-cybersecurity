@@ -56,6 +56,7 @@ function SettingsAlertsTabInner() {
   const { t } = useTranslation()
   const [webhookUrl, setWebhookUrl] = useState('')
   const [safeMode, setSafeMode] = useState(false)
+  const [settingsUnavailable, setSettingsUnavailable] = useState(false)
   const [destructiveToken, setDestructiveToken] = useState('')
   const [msg, setMsg] = useState(null)
   const [backupMsg, setBackupMsg] = useState(null)
@@ -65,11 +66,20 @@ function SettingsAlertsTabInner() {
     setLoading(true)
     apiFetch('/api/enterprise/settings')
       .then((d) => {
-        if (d == null || typeof d !== 'object') return
+        if (d == null || typeof d !== 'object' || d.ok === false || d.unavailable) {
+          throw new Error(d?.detail || t(`${NS}.loadFailed`))
+        }
+        if (typeof d.global_safe_mode !== 'boolean') {
+          throw new Error(t(`${NS}.loadFailed`))
+        }
+        setSettingsUnavailable(false)
         setWebhookUrl(typeof d.alert_webhook_url === 'string' ? d.alert_webhook_url : '')
-        setSafeMode(!!d.global_safe_mode)
+        setSafeMode(d.global_safe_mode === true)
       })
-      .catch(() => setMsg({ type: 'err', text: t(`${NS}.loadFailed`) }))
+      .catch(() => {
+        setSettingsUnavailable(true)
+        setMsg({ type: 'err', text: t(`${NS}.loadFailed`) })
+      })
       .finally(() => setLoading(false))
   }
 
@@ -121,6 +131,11 @@ function SettingsAlertsTabInner() {
         {t(`${NS}.subtitle`)}
       </p>
       {loading && <p className="text-sm text-white/40">{t(`${NS}.loading`)}</p>}
+      {!loading && settingsUnavailable && (
+        <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400" role="alert">
+          {t(`${NS}.settings_unavailable`)}
+        </div>
+      )}
       {!loading && (
         <div className="space-y-6 rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md p-6">
           <label className="block">
@@ -141,9 +156,11 @@ function SettingsAlertsTabInner() {
           <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
-              checked={safeMode}
+              checked={settingsUnavailable ? false : safeMode}
+              disabled={settingsUnavailable}
+              aria-invalid={settingsUnavailable || undefined}
               onChange={(e) => setSafeMode(e.target.checked)}
-              className="rounded border-white/20 bg-black/50 w-4 h-4 accent-[#22d3ee]"
+              className="rounded border-white/20 bg-black/50 w-4 h-4 accent-[#22d3ee] disabled:opacity-40"
             />
             <span className="text-sm text-white/80">{t(`${NS}.safeModeLabel`)}</span>
           </label>
@@ -174,7 +191,8 @@ function SettingsAlertsTabInner() {
               id="settings-save-btn"
               type="button"
               onClick={save}
-              className="px-4 py-2 rounded-xl text-sm font-medium border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20"
+              disabled={settingsUnavailable}
+              className="px-4 py-2 rounded-xl text-sm font-medium border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20 disabled:opacity-40"
             >
               {t(`${NS}.saveSettings`)}
             </Button>

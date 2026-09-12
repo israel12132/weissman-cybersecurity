@@ -29,6 +29,7 @@ export default function AlertRulesEngine() {
   const { toast } = useToast();
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [unavailable, setUnavailable] = useState(false);
   const [filter, setFilter] = useState('all'); // all, enabled, disabled
   const [createModal, setCreateModal] = useState(false);
   const [editModal, setEditModal] = useState(null);
@@ -42,9 +43,17 @@ export default function AlertRulesEngine() {
     try {
       setLoading(true);
       const data = await api.get('/api/alerts/rules');
-      setRules(data.rules || []);
+      if (data?.ok === false || data?.unavailable) {
+        throw new Error(data.detail || t('pages.alertRulesEngine.load_failed'));
+      }
+      if (!Array.isArray(data.rules)) {
+        throw new Error(t('pages.alertRulesEngine.load_failed'));
+      }
+      setUnavailable(false);
+      setRules(data.rules);
     } catch (error) {
       console.error('Failed to fetch alert rules:', error);
+      setUnavailable(true);
       toast.error(t('pages.alertRulesEngine.load_failed'));
     } finally {
       setLoading(false);
@@ -236,6 +245,12 @@ export default function AlertRulesEngine() {
             <div className="p-8 text-center text-[var(--text-muted)]">
               <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
               Loading rules...
+            </div>
+          ) : unavailable ? (
+            <div className="p-6">
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400" role="alert">
+                {t('pages.alertRulesEngine.rules_unavailable')}
+              </div>
             </div>
           ) : filteredRules.length === 0 ? (
             <div className="p-6">

@@ -124,6 +124,53 @@ pub fn alert_rules_unavailable_json(detail: &str) -> Value {
     list_envelope("rules", detail)
 }
 
+/// `GET /api/enterprise/settings` — never confirm safe-mode off on store-down
+pub fn enterprise_settings_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "global_safe_mode": Value::Null,
+        "alert_webhook_url": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/audit/logs`
+pub fn audit_logs_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "entries": [],
+        "total": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/sbom`
+pub fn sbom_components_unavailable_json(detail: &str) -> Value {
+    list_envelope("components", detail)
+}
+
+/// `GET /api/verify-audit/:hash`
+pub fn audit_verify_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "verified": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/config`
+pub fn client_config_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "config": Value::Null,
+        "detail": detail,
+    })
+}
+
 /// `GET /api/clients/:id/heal-requests`
 pub fn heal_requests_unavailable_json(detail: &str) -> Value {
     list_envelope("requests", detail)
@@ -657,6 +704,64 @@ mod tests {
     #[test]
     fn alert_rules_store_down_is_never_ok_empty_success() {
         never_ok_empty_success(&alert_rules_unavailable_json("store down"), "rules");
+    }
+
+    #[test]
+    fn enterprise_settings_store_down_is_never_safe_mode_off() {
+        let v = enterprise_settings_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["global_safe_mode"].is_null());
+        assert_ne!(v["global_safe_mode"], json!(false));
+    }
+
+    #[test]
+    fn audit_logs_store_down_is_never_ok_empty_trail() {
+        let v = audit_logs_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["entries"], json!([]));
+        assert!(v["total"].is_null());
+        assert_ne!(v["total"], json!(0));
+    }
+
+    #[test]
+    fn sbom_components_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&sbom_components_unavailable_json("store down"), "components");
+    }
+
+    #[test]
+    fn audit_verify_store_down_is_never_verified_false() {
+        let v = audit_verify_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert!(v["verified"].is_null());
+        assert_ne!(v["verified"], json!(false));
+    }
+
+    #[test]
+    fn client_config_store_down_is_never_empty_object() {
+        let v = client_config_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert!(v["config"].is_null());
+    }
+
+    #[test]
+    fn scan_all_engines_target_lookup_is_store_down_503_not_empty_400() {
+        let src = include_str!("server_handlers_rest.inc");
+        let start = src
+            .find("async fn api_scan_all_engines")
+            .expect("api_scan_all_engines");
+        let rest = &src[start..];
+        let end = rest.find("\nasync fn ").unwrap_or(rest.len());
+        let fn_src = &rest[..end];
+        assert!(fn_src.contains("SELECT domains FROM clients"));
+        assert!(fn_src.contains("No scan target resolved for this client"));
+        let domains_idx = fn_src
+            .find("SELECT domains FROM clients")
+            .expect("domains lookup");
+        let after = &fn_src[domains_idx..];
+        assert!(after.contains("SERVICE_UNAVAILABLE"));
+        assert!(!after.contains(".ok().flatten()"));
     }
 
     #[test]
