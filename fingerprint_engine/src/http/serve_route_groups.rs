@@ -111,45 +111,6 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/risk-graph/nodes/:node_id/flags",
             patch(api_risk_node_flags_patch),
         )
-        .route(
-            "/api/scim/v2/ServiceProviderConfig",
-            get(crate::scim::scim_service_provider_config),
-        )
-        .route(
-            "/api/scim/v2/Users",
-            get(crate::scim::scim_users_list).post(crate::scim::scim_users_create),
-        )
-        .route(
-            "/api/scim/v2/Users/:id",
-            get(crate::scim::scim_users_get)
-                .put(crate::scim::scim_users_put)
-                .patch(crate::scim::scim_users_patch)
-                .delete(crate::scim::scim_users_delete),
-        )
-        .route(
-            "/api/scim/v2/Groups",
-            get(crate::scim::scim_groups_list).post(crate::scim::scim_groups_create),
-        )
-        .route(
-            "/api/scim/v2/Groups/:id",
-            get(crate::scim::scim_groups_get)
-                .put(crate::scim::scim_groups_put)
-                .patch(crate::scim::scim_groups_patch)
-                .delete(crate::scim::scim_groups_delete),
-        )
-        .route(
-            "/api/admin/scim/tokens",
-            get(crate::scim::api_admin_scim_tokens_list)
-                .post(crate::scim::api_admin_scim_tokens_create),
-        )
-        .route(
-            "/api/admin/scim/tokens/:id",
-            delete(crate::scim::api_admin_scim_tokens_revoke),
-        )
-        .route(
-            "/api/admin/scim/audit",
-            get(crate::scim::api_admin_scim_audit),
-        )
         // SOAR playbooks (DSL-driven automation; on-event dispatch + run history).
         .route(
             "/api/playbooks",
@@ -161,19 +122,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/playbooks/fire", post(api_playbooks_fire))
         .route("/api/playbooks/:id/runs", get(api_playbook_runs))
-        .route("/api/soar/executions", get(api_soar_executions_list))
         .route("/api/soar/executions/:id", get(api_soar_execution_get))
         .route(
             "/api/soar/executions/:id/revert",
             post(api_soar_execution_revert),
-        )
-        .route(
-            "/api/soar/executions/:id/hitl/approve",
-            post(api_soar_hitl_approve),
-        )
-        .route(
-            "/api/soar/executions/:id/hitl/deny",
-            post(api_soar_hitl_deny),
         )
         // Financial blast-radius
         .route(
@@ -699,86 +651,8 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/ot-ics/devices", get(api_ot_ics_devices))
         .route("/api/ot-ics/safety", get(api_ot_ics_safety))
         .route(
-            "/api/discovery-knowledge/stats",
-            get(api_discovery_knowledge_stats),
-        )
-        .route("/api/supreme-brain/:id", get(api_supreme_brain_for_client))
-        .route(
-            "/api/public/platform-pulse",
-            get(crate::public_site::api_platform_pulse),
-        )
-        .route(
-            "/api/public/engine-catalog",
-            get(crate::public_site::api_engine_catalog),
-        )
-        .route(
-            "/api/public/contact",
-            post(crate::public_site::api_public_contact),
-        )
-        .route(
-            "/api/public/demo-request",
-            post(crate::demo_request::api_demo_request),
-        )
-        .route(
             "/api/elite-hardening/status",
             get(api_elite_hardening_status),
-        )
-        .route("/api/market-readiness", get(api_market_readiness))
-        .route("/api/cem-dago/status", get(api_cem_dago_status))
-        .route("/api/cem-dago/manifests", get(api_cem_dago_manifests))
-        .route("/api/cem-dago/waves", get(api_cem_dago_waves))
-        .route("/api/cem-dago/blackboard", get(api_cem_dago_blackboard))
-        .route(
-            "/api/sovereign/operator/session",
-            get(api_sovereign_operator_session_get),
-        )
-        .route(
-            "/api/sovereign/operator/windows",
-            get(api_sovereign_operator_windows_get),
-        )
-        .route(
-            "/api/sovereign/operator/logs",
-            get(api_sovereign_operator_logs_get),
-        )
-        .route(
-            "/api/sovereign/operator/knowledge",
-            get(api_sovereign_operator_knowledge_get),
-        )
-        .route(
-            "/api/sovereign/operator/memory",
-            get(api_sovereign_operator_memory_get),
-        )
-        .route(
-            "/api/sovereign/operator/forge",
-            get(api_sovereign_operator_forge_get),
-        )
-        .route(
-            "/api/sovereign/operator/scripts",
-            get(api_sovereign_operator_scripts_get),
-        )
-        .route(
-            "/api/sovereign/operator/stream-ticket",
-            post(api_sovereign_operator_stream_ticket),
-        )
-        .route(
-            "/api/sovereign/operator/stream",
-            get(api_sovereign_operator_stream),
-        )
-        .route(
-            "/api/sovereign/operator/chat",
-            post(api_sovereign_operator_chat),
-        )
-        .route(
-            "/api/sovereign/operator/race",
-            post(api_sovereign_operator_race_post),
-        )
-        .route(
-            "/api/sovereign/operator/tune",
-            post(api_sovereign_operator_tune_post),
-        )
-        .route(
-            "/api/sovereign/operator/tools",
-            post(api_sovereign_operator_tools_post),
         )
         .route("/api/mobile-security/apps", get(api_mobile_security_apps))
         .route("/api/soc/incidents", get(api_soc_incidents))

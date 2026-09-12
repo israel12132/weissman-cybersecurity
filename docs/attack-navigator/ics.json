@@ -127,6 +127,12 @@
       "score": 1,
       "comment": "ot_cloud_identity_killpath",
       "enabled": true
+    },
+    {
+      "techniqueID": "T0836",
+      "score": 10,
+      "comment": "coap_attack, hmi_attack, industrial_protocol_fuzz, modbus_attack, modbus_exploit, mqtt_attack, opcua_attack, plc_logic_attack, profinet_attack, satellite_comm_attack",
+      "enabled": true
     }
   ],
   "gradient": {

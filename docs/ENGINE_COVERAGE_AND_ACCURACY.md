@@ -12,13 +12,13 @@ Regenerate: `node scripts/engine_coverage_accuracy_report.mjs` · Gate: `--check
 
 | Class | Count | Share |
 |-------|------:|------:|
-| **Live probes** (real network / host / TLS / DNS I/O) | 324 | 55.3% |
-| Aliases (retag → a live probe, same detection logic) | 204 | 34.8% |
+| **Live probes** (real network / host / TLS / DNS I/O) | 323 | 55.2% |
+| Aliases (retag → a live probe, same detection logic) | 204 | 34.9% |
 | Agent-required (host-level; endpoint agent performs the detection) | 58 | 9.9% |
 | **No execution path** (catalog entries that do nothing) | 0 | 0.0% |
-| **Catalog total** | **586** | 100% |
+| **Catalog total** | **585** | 100% |
 
-- **316 distinct probe implementations** back the 324 live
+- **315 distinct probe implementations** back the 323 live
   probes (delegates that share one implementation are counted once).
 - **0 engines with no execution path** — the catalog headline is fully backed.
 - A companion gate, `engine_reality_audit.mjs`, independently proves the same *depth* invariant.
@@ -46,7 +46,7 @@ is pure-alias "coverage theater".
 | Malware & Ransomware | 15 | 11 | 0 | 4 | 15 |
 | Mobile / Apps | 15 | 12 | 0 | 3 | 10 |
 | Data Exfiltration | 15 | 7 | 0 | 8 | 7 |
-| Active Defense | 8 | 6 | 0 | 2 | 7 |
+| Active Defense | 7 | 5 | 0 | 2 | 6 |
 
 ## 3. Accuracy: findings are discounted and suppressed, not just emitted
 
@@ -64,7 +64,7 @@ False positives are handled by a per-`(tenant, engine, signature_hash)` feedback
 
 ## 4. Why this matters against XSOAR / Splunk SOAR / Torq / Tines / Swimlane
 
-Those platforms orchestrate *other people's* detections. Weissman ships **324 in-house
+Those platforms orchestrate *other people's* detections. Weissman ships **323 in-house
 offensive probes across 15 domains and 200 ATT&CK
 techniques**, each wired to real I/O and each discounted by a live accuracy loop — offensive
 coverage plus in-house threat intelligence in one backend, not a workflow engine bolted onto

@@ -315,6 +315,22 @@ const LANES: &[LaneDef] = &[
             "poe_synthesis",
         ],
     },
+    LaneDef {
+        id: "prevention_fabric",
+        title: "Prevention-fabric residual risk (not an NGFW)",
+        beats: "Palo Alto NGFW / Prisma / SASE — inline packet block. Weissman proves residual paths through NGFW, WAF, DNS, CASB, and DLP posture with live probes; it does not fake a dataplane",
+        needles: &[
+            "ngfw",
+            "vngfw",
+            "waf_",
+            "email_dns",
+            "malware_detonation",
+            "dns_security",
+            "casb",
+            "dlp_",
+            "cnapp",
+        ],
+    },
 ];
 
 fn lane_hits(needles: &[&str]) -> Vec<&'static str> {
@@ -354,6 +370,12 @@ fn market_research() -> Value {
             "vendors": ["Claroty", "Dragos", "Nozomi", "Microsoft Defender for IoT"],
             "owns": "passive SPAN/TAP asset visibility",
             "lacks": "offensive protocol FSM abort + SOAR honeytokens + FAIR process-disruption from live findings"
+        },
+        {
+            "cluster": "ngfw_sase",
+            "vendors": ["Palo Alto Networks (PAN-OS, Prisma Access, Prisma Cloud, Cortex XDR/XSIAM/XSOAR, Unit 42)"],
+            "owns": "inline prevention fabric: NGFW dataplane, SASE, WildFire detonation, petabyte XSIAM, XSOAR packs",
+            "lacks": "offensive live-probe catalog + OT 4-state FSM abort + FAIR-from-graph that stays priced until Hack-Fix-Verify + Hebrew Command Center. Weissman finds residual risk through that stack; it is not a PAN-OS replacement"
         },
         {
             "cluster": "cnapp",
@@ -540,6 +562,18 @@ mod tests {
                 lane["id"]
             );
         }
+    }
+
+    #[test]
+    fn prevention_fabric_lane_is_live_and_honest() {
+        let snap = snapshot();
+        let lanes = snap["lanes"].as_array().expect("lanes");
+        let pf = lanes
+            .iter()
+            .find(|l| l["id"] == "prevention_fabric")
+            .expect("prevention_fabric lane");
+        assert!(pf["live_engine_count"].as_u64().unwrap_or(0) >= 1);
+        assert!(pf["title"].as_str().unwrap_or("").contains("not an NGFW"));
     }
 
     #[test]

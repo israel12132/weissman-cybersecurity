@@ -1,5 +1,5 @@
 /**
- * Master registry of all 586 production attack engines.
+ * Master registry of all 585 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 586 production engines in registry order */
+/** All 585 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -313,6 +313,22 @@ export const ENGINES_REGISTRY = [
     group: 'ot',
     mitre: 'T1692.001',
     description: 'Modbus, DNP3, IEC 61850 protocol fuzzing and unauthorized command detection',
+    requiresTarget: true,
+  },
+  {
+    id: 'ot_passive_active_safety',
+    label: 'OT Passive/Active Safety Interlock',
+    group: 'ot',
+    mitre: 'T0843',
+    description: 'Live read-only Modbus/S7/DNP3/IEC 61850 assessment with destructive opcodes structurally impossible — writes, Direct Operate, CPU stop, and GOOSE inject never leave this worker',
+    requiresTarget: true,
+  },
+  {
+    id: 'ot_crown_jewel_path',
+    label: 'OT Crown-Jewel Path',
+    group: 'ot',
+    mitre: 'T0883',
+    description: 'OT protocol confirmation × FAIR blast-radius × SOAR isolate recommendation on the same live host — evidence only, no invented hops',
     requiresTarget: true,
   },
   {
@@ -4768,98 +4784,7 @@ export const ENGINES_REGISTRY = [
     description: 'Software NGFW control plane. Errors if WEISSMAN_VNGFW_ADMIN dataplane is down — never pretends the firewall is live',
     requiresTarget: true,
   },
-  {
-    id: 'ot_passive_active_safety',
-    label: 'OT Passive/Active Safety Interlock',
-    group: 'ot',
-    mitre: 'T0843',
-    description: 'Read-only Modbus/S7/DNP3/IEC 61850 probes with destructive opcodes structurally blocked',
-    requiresTarget: true,
-  },
-  {
-    id: 'ot_crown_jewel_path',
-    label: 'OT Crown-Jewel Path',
-    group: 'ot',
-    mitre: 'T0883',
-    description: 'Safety-interlock OT fingerprint fused with FAIR crown-jewel path — no PLC writes',
-    requiresTarget: true,
-  },
-  {
-    id: 'prevention_fabric_breach_proof',
-    label: 'Prevention Fabric Breach Proof',
-    group: 'defense',
-    mitre: 'T1595',
-    description: 'Fusion: NGFW + SASE + WAF + control-plane + ZTNA live probes proving the blocking stack still leaks',
-    requiresTarget: true,
-  },
 ]
-
-/** Canonical agent-required IDs — must match backend AGENT_REQUIRED_ENGINES. */
-export const AGENT_REQUIRED_ENGINE_IDS = [
-  'process_hollowing',
-  'dll_hijacking_engine',
-  'process_inventory',
-  'av_bypass_engine',
-  'log_tampering_engine',
-  'timestomping',
-  'anti_debug_evasion',
-  'rootkit_surface_probe',
-  'memory_forensics_evasion',
-  'usb_enumeration',
-  'dns_tunneling_c2',
-  'icmp_covert',
-  'bootkit_uefi',
-  'persistence_mechanism',
-  'polymorphic_engine',
-  'ransomware_emulation',
-  'acoustic_exfil',
-  'em_exfil_engine',
-  'optical_exfil',
-  'keyboard_acoustic',
-  'screen_capture_exfil',
-  'clipboard_hijack',
-  'insider_exfil',
-  'storage_covert_channel',
-  'arp_spoofing_engine',
-  'vlan_hopping_attack',
-  'dhcp_attack_engine',
-  'wifi_attack_engine',
-  'bluetooth_attack_engine',
-  'lte_5g_attack',
-  'wpa3_attack_engine',
-  'packet_injection_engine',
-  'network_tap_advanced',
-  'multicast_attack',
-  'nat_traversal_attack',
-  'sim_swap_engine',
-  'bluetooth_mobile_attack',
-  'nfc_relay_attack',
-  'deepfake_voice_engine',
-  'pretexting_engine',
-  'insider_threat_engine',
-  'physical_social_eng',
-  'lorawan_attack',
-  'lora_attack',
-  'voltage_glitch_attack',
-  'tpm_firmware_attack',
-  'cold_boot_attack',
-  'infostealer_emulation',
-  'sandbox_evasion',
-  'rop_chain_engine',
-  'heap_exploitation',
-  'jit_spray',
-  'com_hijacking',
-  'parent_pid_spoof',
-  'host_isolation',
-  'host_privilege_escalation',
-  'ebpf_sensor',
-  'ioc_yara_hunt',
-]
-
-const AGENT_REQUIRED_SET = new Set(AGENT_REQUIRED_ENGINE_IDS)
-for (const engine of ENGINES_REGISTRY) {
-  engine.requiresAgent = AGENT_REQUIRED_SET.has(engine.id)
-}
 
 /** Engines that do not need a URL target to run (tenant/global scope) */
 export const TARGETLESS_ENGINE_IDS = new Set(

@@ -113,6 +113,8 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "iac_misconfig",
     "serverless_attack",
     "scada_ics",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
     // Critical infrastructure (RoE-gated; `high_risk_engines` compile feature)
     "avionics_adsb_attack",
     "maritime_ais_attack",
@@ -752,6 +754,8 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "serverless_attack",
     // OT / ICS / IoT
     "scada_ics",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
     "avionics_adsb_attack",
     "maritime_ais_attack",
     "ev_charging_ocpp_attack",

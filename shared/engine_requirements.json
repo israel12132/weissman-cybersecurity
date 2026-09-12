@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-09-11T23:58:50.703Z",
-  "production_engine_count": 586,
+  "generated_at": "2026-09-12T00:04:23.000Z",
+  "production_engine_count": 585,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 429
+      "engine_count": 428
     },
     "cloud_aws": {
       "id": "cloud_aws",

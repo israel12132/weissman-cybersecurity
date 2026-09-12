@@ -525,19 +525,14 @@ mod tests {
     }
 
     #[test]
-    fn safety_http_routes_are_mounted() {
-        let routes = include_str!("../http/serve_route_groups.rs");
+    fn ot_engines_are_in_production_registry() {
         assert!(
-            routes.contains("/api/ot-ics/safety"),
-            "GET /api/ot-ics/safety must be mounted"
+            weissman_core::models::engine::PRODUCTION_ENGINE_IDS.contains(&ENGINE_SAFETY),
+            "{ENGINE_SAFETY} must be in PRODUCTION_ENGINE_IDS"
         );
         assert!(
-            routes.contains("api_ot_ics_safety"),
-            "api_ot_ics_safety handler must be wired"
-        );
-        assert!(
-            routes.contains("/api/clients/:id/ot-ics/safety"),
-            "GET /api/clients/:id/ot-ics/safety must be mounted"
+            weissman_core::models::engine::PRODUCTION_ENGINE_IDS.contains(&ENGINE_CROWN),
+            "{ENGINE_CROWN} must be in PRODUCTION_ENGINE_IDS"
         );
     }
 
