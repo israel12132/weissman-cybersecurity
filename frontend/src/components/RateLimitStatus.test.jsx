@@ -41,4 +41,18 @@ describe('RateLimitStatus', () => {
     expect(await screen.findByText('3/24')).toBeTruthy()
     expect(screen.queryByTestId('rate-limit-unavailable')).toBeNull()
   })
+
+  it('does not seed 0/max when a bucket is missing', async () => {
+    apiFetch.mockResolvedValue({
+      ok: true,
+      limits: {
+        scans: { current: 3, max: 24, resetIn: 12 },
+        logins: { current: 1, max: 8, resetIn: 40 },
+      },
+    })
+    render(<RateLimitStatus />)
+    expect(await screen.findByTestId('rate-limit-unavailable')).toBeTruthy()
+    expect(screen.queryByText(/3\/24/)).toBeNull()
+    expect(screen.queryByText(/0\//)).toBeNull()
+  })
 })

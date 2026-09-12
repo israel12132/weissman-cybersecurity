@@ -252,7 +252,7 @@ async fn api_dashboard_exec_kpis(
     };
 
     // ── Severity counts (current + 24h-ago snapshot for trend deltas) ──────────────
-    let now_sev: Vec<(String, i64)> = sqlx::query_as::<_, (String, i64)>(
+    let now_sev: Vec<(String, i64)> = match sqlx::query_as::<_, (String, i64)>(
         "SELECT COALESCE(lower(severity),'info') AS s, COUNT(*)::bigint
            FROM vulnerabilities
           WHERE COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
@@ -260,7 +260,18 @@ async fn api_dashboard_exec_kpis(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::exec_kpis_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
 
     let prev_sev: Vec<(String, i64)> = sqlx::query_as::<_, (String, i64)>(
         "SELECT COALESCE(lower(severity),'info') AS s, COUNT(*)::bigint
@@ -390,7 +401,7 @@ async fn api_dashboard_exec_kpis(
     .unwrap_or(0.0);
 
     // ── 24-hour bucket trend (discovered vs resolved) ──────────────────────────────
-    let trend_disc: Vec<(i32, i64)> = sqlx::query_as::<_, (i32, i64)>(
+    let trend_disc: Vec<(i32, i64)> = match sqlx::query_as::<_, (i32, i64)>(
         "SELECT EXTRACT(HOUR FROM discovered_at)::int AS h, COUNT(*)::bigint
            FROM vulnerabilities
           WHERE discovered_at > now() - interval '24 hours'
@@ -398,8 +409,19 @@ async fn api_dashboard_exec_kpis(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let trend_res: Vec<(i32, i64)> = sqlx::query_as::<_, (i32, i64)>(
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::exec_kpis_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    let trend_res: Vec<(i32, i64)> = match sqlx::query_as::<_, (i32, i64)>(
         "SELECT EXTRACT(HOUR FROM updated_at)::int AS h, COUNT(*)::bigint
            FROM vulnerabilities
           WHERE upper(status) IN ('FIXED','FALSE_POSITIVE')
@@ -408,7 +430,18 @@ async fn api_dashboard_exec_kpis(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::exec_kpis_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let bucket_disc = to_map_i(trend_disc);
     let bucket_res = to_map_i(trend_res);
     let now_hour = chrono::Timelike::hour(&chrono::Utc::now()) as i32;

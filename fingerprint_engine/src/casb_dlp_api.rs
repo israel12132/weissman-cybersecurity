@@ -23,7 +23,11 @@ impl CasbTokens {
         }
         Some(finding(
             engine_id,
-            "CASB connector store unavailable — token inventory not confirmed",
+            if engine_id.contains("dlp") {
+                "DLP connector store unavailable — token inventory not confirmed"
+            } else {
+                "CASB connector store unavailable — token inventory not confirmed"
+            },
             "medium",
             "T1078",
             "ITDR connector config could not be read. Missing Graph/Google tokens are not confirmed. Set WEISSMAN_GRAPH_TOKEN / WEISSMAN_GOOGLE_TOKEN or restore the store. Not faked.",
@@ -38,10 +42,14 @@ impl CasbTokens {
         }
         Some(finding(
             engine_id,
-            "No Graph/Google CASB token — HTTP SaaS discovery only",
+            if engine_id.contains("dlp") {
+                "No Graph/Google DLP token — mailbox DLP did not run"
+            } else {
+                "No Graph/Google CASB token — HTTP SaaS discovery only"
+            },
             "info",
             "T1078",
-            "Set WEISSMAN_GRAPH_TOKEN / WEISSMAN_GOOGLE_TOKEN or persist IdP tokens via PUT /api/itdr/connectors for OAuth-grant inventory. Not faked.",
+            "Set WEISSMAN_GRAPH_TOKEN / WEISSMAN_GOOGLE_TOKEN or persist IdP tokens via PUT /api/itdr/connectors. Not faked.",
             target,
         ))
     }
@@ -80,8 +88,27 @@ pub async fn load_tokens(ctx: &EngineRunContext) -> CasbTokens {
             &mut tokens,
             crate::itdr_connectors::load_connector_config(pool.as_ref(), tenant_id).await,
         );
+    } else {
+        // No pool/tenant means the connector inventory was never consulted.
+        tokens.connector_store_unavailable = true;
     }
     tokens
+}
+
+fn casb_http_client(engine_id: &str, target: &str) -> Result<reqwest::Client, Value> {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|e| {
+            finding(
+                engine_id,
+                "CASB/DLP HTTP client could not be built",
+                "medium",
+                "T1078",
+                &format!("{e}"),
+                target,
+            )
+        })
 }
 
 fn token_from_cfg(cfg: &Value, providers: &[&str]) -> Option<String> {
@@ -101,11 +128,9 @@ fn token_from_cfg(cfg: &Value, providers: &[&str]) -> Option<String> {
 }
 
 pub async fn graph_casb_findings(target: &str, token: &str) -> Vec<Value> {
-    let Ok(client) = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(20))
-        .build()
-    else {
-        return Vec::new();
+    let client = match casb_http_client("casb_saas_posture", target) {
+        Ok(c) => c,
+        Err(f) => return vec![f],
     };
     let mut out = Vec::new();
     let grants = client
@@ -174,8 +199,8 @@ pub async fn graph_casb_findings(target: &str, token: &str) -> Vec<Value> {
         .bearer_auth(token)
         .send()
         .await;
-    if let Ok(r) = sps {
-        if r.status().is_success() {
+    match sps {
+        Ok(r) if r.status().is_success() => {
             if let Ok(body) = r.json::<Value>().await {
                 let names: Vec<String> = body
                     .get("value")
@@ -199,16 +224,34 @@ pub async fn graph_casb_findings(target: &str, token: &str) -> Vec<Value> {
                 }
             }
         }
+        Ok(r) => {
+            out.push(finding(
+                "casb_saas_posture",
+                "Microsoft Graph service-principal query failed",
+                "medium",
+                "T1078",
+                &format!("GET servicePrincipals HTTP {}", r.status()),
+                target,
+            ));
+        }
+        Err(e) => {
+            out.push(finding(
+                "casb_saas_posture",
+                "Microsoft Graph service principals unreachable",
+                "medium",
+                "T1078",
+                &format!("{e}"),
+                target,
+            ));
+        }
     }
     out
 }
 
 pub async fn graph_dlp_findings(target: &str, token: &str) -> Vec<Value> {
-    let Ok(client) = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(20))
-        .build()
-    else {
-        return Vec::new();
+    let client = match casb_http_client("dlp_content_scan", target) {
+        Ok(c) => c,
+        Err(f) => return vec![f],
     };
     let mut out = Vec::new();
     let resp = client
@@ -274,11 +317,9 @@ pub async fn graph_dlp_findings(target: &str, token: &str) -> Vec<Value> {
 }
 
 pub async fn google_casb_findings(target: &str, token: &str) -> Vec<Value> {
-    let Ok(client) = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(20))
-        .build()
-    else {
-        return Vec::new();
+    let client = match casb_http_client("casb_saas_posture", target) {
+        Ok(c) => c,
+        Err(f) => return vec![f],
     };
     let mut out = Vec::new();
     let resp = client
@@ -330,11 +371,9 @@ pub async fn google_casb_findings(target: &str, token: &str) -> Vec<Value> {
 }
 
 pub async fn google_dlp_findings(target: &str, token: &str) -> Vec<Value> {
-    let Ok(client) = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(20))
-        .build()
-    else {
-        return Vec::new();
+    let client = match casb_http_client("dlp_content_scan", target) {
+        Ok(c) => c,
+        Err(f) => return vec![f],
     };
     let mut out = Vec::new();
     let list = client
@@ -475,9 +514,15 @@ mod tests {
             .confirmed_tokenless_finding("casb_saas_posture", "example.com")
             .expect("empty connectors are a confirmed gap");
         assert_eq!(f["severity"], "info");
+        assert!(f["title"].as_str().unwrap().contains("CASB"));
         assert!(tokens
             .store_unavailable_finding("casb_saas_posture", "example.com")
             .is_none());
+        let dlp = tokens
+            .confirmed_tokenless_finding("dlp_content_scan", "example.com")
+            .expect("DLP tokenless must name DLP, not CASB");
+        assert!(dlp["title"].as_str().unwrap().contains("DLP"));
+        assert!(!dlp["title"].as_str().unwrap().contains("CASB"));
     }
 
     #[test]
@@ -510,9 +555,30 @@ mod tests {
         );
         assert_eq!(tokens.graph.as_deref(), Some("graph-from-cfg"));
         assert_eq!(tokens.google.as_deref(), Some("google-from-cfg"));
-        assert!(!tokens.connector_store_unavailable);
+    }
+
+    #[tokio::test]
+    async fn missing_pool_is_store_down_not_tokenless() {
+        let ctx = crate::engine_dispatch::EngineRunContext::default();
+        let tokens = load_tokens(&ctx).await;
+        assert!(tokens.connector_store_unavailable);
         assert!(tokens
             .confirmed_tokenless_finding("casb_saas_posture", "example.com")
             .is_none());
+        let f = tokens
+            .store_unavailable_finding("casb_saas_posture", "example.com")
+            .expect("unconsulted store must not look tokenless");
+        assert_eq!(f["severity"], "medium");
+    }
+
+    #[test]
+    fn dlp_store_down_title_is_not_casb() {
+        let mut tokens = CasbTokens::default();
+        apply_connector_config(&mut tokens, Err("database unavailable".into()));
+        let f = tokens
+            .store_unavailable_finding("dlp_content_scan", "example.com")
+            .expect("store-down");
+        assert!(f["title"].as_str().unwrap().contains("DLP"));
+        assert!(!f["title"].as_str().unwrap().contains("CASB"));
     }
 }

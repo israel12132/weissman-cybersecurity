@@ -30,8 +30,9 @@ export default function OastHealthStrip({ health, fallbackCount = 0 }) {
         {t('pages.oastDashboard.health_domain')}: {health.domain || '—'}
       </span>
       <span>
-        {t('pages.oastDashboard.health_last')}: {health.last_callback_at
-          || t('pages.oastDashboard.health_none')}
+        {t('pages.oastDashboard.health_last')}: {unavailable
+          ? '—'
+          : (health.last_callback_at || t('pages.oastDashboard.health_none'))}
       </span>
       {!unavailable && (
       <span>

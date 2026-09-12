@@ -69,7 +69,7 @@ describe('OastHealthStrip', () => {
           unavailable: true,
           domain: '',
           last_callback_at: null,
-          callback_count: 0,
+          callback_count: null,
         }}
       />,
     )
@@ -78,6 +78,8 @@ describe('OastHealthStrip', () => {
     expect(strip.getAttribute('data-unavailable')).toBe('true')
     expect(strip.textContent).toMatch(/health_unavailable/)
     expect(strip.textContent).not.toMatch(/health_missing/)
+    expect(strip.textContent).not.toMatch(/health_none/)
+    expect(strip.textContent).not.toMatch(/health_count/)
     expect(strip.textContent).not.toMatch(/health_configured/)
   })
 

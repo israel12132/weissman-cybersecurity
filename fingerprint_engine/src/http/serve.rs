@@ -435,35 +435,40 @@ async fn default_tenant_id(auth_pool: &PgPool) -> Option<i64> {
     .flatten()
 }
 
-/// Read PoE job from DB (RLS-scoped). Returns None if not found.
-async fn poe_job_from_db(pool: &PgPool, tenant_id: i64, job_id: &str) -> Option<PoEJobState> {
-    let mut tx = db::begin_tenant_tx(pool, tenant_id).await.ok()?;
-    let row = sqlx::query(
+/// Read PoE job from DB (RLS-scoped).
+/// `Ok(None)` is a confirmed miss. `Err` is store-down — never collapse to 404.
+async fn poe_job_from_db(
+    pool: &PgPool,
+    tenant_id: i64,
+    job_id: &str,
+) -> Result<Option<PoEJobState>, ()> {
+    let mut tx = db::begin_tenant_tx(pool, tenant_id).await.map_err(|_| ())?;
+    let row = match sqlx::query(
         "SELECT job_id, status, run_id, message, error, COALESCE(findings_json,'[]') AS findings_json FROM poe_jobs WHERE job_id = $1",
     )
     .bind(job_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()??;
+    {
+        Ok(row) => row,
+        Err(_) => return Err(()),
+    };
+    let Some(row) = row else {
+        return Ok(None);
+    };
     let _ = tx.commit().await;
-    let findings_json: String = row.try_get("findings_json").ok()?;
+    let findings_json: String = row.try_get("findings_json").map_err(|_| ())?;
     let findings_count = serde_json::from_str::<Vec<Value>>(&findings_json)
         .map(|v| v.len())
         .unwrap_or(0);
-    Some(PoEJobState {
-        job_id: row.try_get("job_id").ok()?,
-        status: row.try_get("status").ok()?,
-        run_id: row.try_get("run_id").ok()?,
+    Ok(Some(PoEJobState {
+        job_id: row.try_get("job_id").map_err(|_| ())?,
+        status: row.try_get("status").map_err(|_| ())?,
+        run_id: row.try_get::<Option<i64>, _>("run_id").unwrap_or(None),
         findings_count: Some(findings_count),
-        message: row.try_get("message").ok()?,
-        error: row.try_get("error").ok()?,
-    })
-}
-
-async fn poe_job_json_from_db(pool: &PgPool, tenant_id: i64, job_id: &str) -> Option<String> {
-    poe_job_from_db(pool, tenant_id, job_id)
-        .await
-        .map(|s| serde_json::to_string(&s).unwrap_or_default())
+        message: row.try_get::<Option<String>, _>("message").unwrap_or(None),
+        error: row.try_get::<Option<String>, _>("error").unwrap_or(None),
+    }))
 }
 
 fn escape_html(s: &str) -> String {

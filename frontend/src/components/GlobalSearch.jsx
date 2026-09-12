@@ -276,11 +276,15 @@ export default function GlobalSearch() {
               loading && query.length >= 2 ? (
                 <div className="p-8 text-center text-[var(--text-muted)]">{t('components.globalSearch.searching')}</div>
               ) : query.length >= 2 ? (
-                <div className="p-8 text-center text-[var(--text-muted)]" data-testid={searchError ? 'global-search-unavailable' : undefined} role={searchError ? 'alert' : undefined}>
-                  {searchError
-                    ? t('components.globalSearch.search_failed')
-                    : t('components.globalSearch.noResults', { query })}
-                </div>
+                searchError ? (
+                  <div className="p-8 text-center text-amber-200/90" data-testid="global-search-unavailable" role="alert">
+                    {t('components.globalSearch.search_failed')}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-[var(--text-muted)]">
+                    {t('components.globalSearch.noResults', { query })}
+                  </div>
+                )
               ) : (
                 <div className="p-8 text-center text-[var(--text-muted)]">
                   <Command className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -288,7 +292,13 @@ export default function GlobalSearch() {
                 </div>
               )
             ) : (
-              <div className="divide-y divide-[var(--border-subtle)]">
+              <>
+                {searchError && (
+                  <div className="px-4 py-2 text-xs text-amber-200/90" data-testid="global-search-unavailable" role="alert">
+                    {t('components.globalSearch.search_failed')}
+                  </div>
+                )}
+                <div className="divide-y divide-[var(--border-subtle)]">
                 {combined.map((result, index) => {
                   const active = index === activeIndex;
                   const isNav = result.type === 'navigate';
@@ -327,6 +337,7 @@ export default function GlobalSearch() {
                   );
                 })}
               </div>
+              </>
             )}
           </div>
 

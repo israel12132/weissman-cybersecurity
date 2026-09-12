@@ -894,8 +894,15 @@ async fn api_poe_scan_status(
     Path(job_id): Path<String>,
 ) -> Response {
     match poe_job_from_db(state.app_pool.as_ref(), auth.tenant_id, &job_id).await {
-        Some(s) => (StatusCode::OK, Json(json!(s))).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(json!({"error": "job not found"}))).into_response(),
+        Ok(Some(s)) => (StatusCode::OK, Json(json!(s))).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "job not found"}))).into_response(),
+        Err(()) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::poe_job_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response(),
     }
 }
 
@@ -908,10 +915,20 @@ async fn api_poe_scan_stream(
     // registered a permanently-orphaned sender under an arbitrary job_id (a slow leak the
     // forwarder can never prune), and — because job_ids are tenant-unique v4 UUIDs — this check
     // also prevents a caller from attaching to another tenant's job stream.
-    let Some(initial) =
-        poe_job_json_from_db(state.app_pool.as_ref(), auth.tenant_id, &job_id).await
-    else {
-        return (StatusCode::NOT_FOUND, Json(json!({"error": "job not found"}))).into_response();
+    let initial = match poe_job_from_db(state.app_pool.as_ref(), auth.tenant_id, &job_id).await {
+        Ok(Some(s)) => serde_json::to_string(&s).unwrap_or_else(|_| "{}".into()),
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "job not found"}))).into_response();
+        }
+        Err(()) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::poe_job_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
     };
     let (tx, rx) = flume::bounded::<String>(128);
     state

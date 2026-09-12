@@ -137,6 +137,10 @@ function Toggle({ checked, onChange, disabled }) {
   )
 }
 
+function metricOrDash(value) {
+  return value == null ? '—' : value
+}
+
 function MetricCard({ label, value, sub, accent = '#22d3ee', icon }) {
   return (
     <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.06] to-black/50 p-4">
@@ -1018,12 +1022,12 @@ export default function AttackSurfaceManagement() {
 
           {/* Metrics */}
           <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-            <MetricCard label={t('pages.attackSurfaceManagement.metric_subdomain_assets')} value={report.subdomain_count ?? 0} accent="#22d3ee" icon="🗂" />
-            <MetricCard label={t('pages.attackSurfaceManagement.metric_exposed_services')} value={report.exposed_services ?? 0} accent="#f97316" icon="🔌" />
-            <MetricCard label={t('pages.attackSurfaceManagement.metric_takeover_risks')} value={report.takeover_risks ?? 0} accent="#ef4444" icon="🎯" />
-            <MetricCard label={t('pages.attackSurfaceManagement.metric_attack_paths')} value={report.attack_paths ?? 0} accent="#f43f5e" icon="⛓" />
-            <MetricCard label={t('pages.attackSurfaceManagement.metric_shadow_it')} value={report.shadow_it_signals ?? 0} accent="#a78bfa" icon="👻" />
-            <MetricCard label={t('pages.attackSurfaceManagement.metric_service_banners')} value={report.service_banners ?? 0} accent="#84cc16" icon="📡" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_subdomain_assets')} value={metricOrDash(report.subdomain_count)} accent="#22d3ee" icon="🗂" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_exposed_services')} value={metricOrDash(report.exposed_services)} accent="#f97316" icon="🔌" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_takeover_risks')} value={metricOrDash(report.takeover_risks)} accent="#ef4444" icon="🎯" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_attack_paths')} value={metricOrDash(report.attack_paths)} accent="#f43f5e" icon="⛓" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_shadow_it')} value={metricOrDash(report.shadow_it_signals)} accent="#a78bfa" icon="👻" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_service_banners')} value={metricOrDash(report.service_banners)} accent="#84cc16" icon="📡" />
           </div>
 
           <AttackPathPanel paths={attackPaths} />

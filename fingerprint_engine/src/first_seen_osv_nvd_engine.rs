@@ -537,10 +537,13 @@ pub async fn run_first_seen_osv_nvd_result(target: &str, ctx: &EngineRunContext)
     )
 }
 
-async fn enqueue_clients_with_sbom(app_pool: &sqlx::PgPool, tenant_id: i64) -> usize {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(app_pool, tenant_id).await else {
-        return 0;
-    };
+async fn enqueue_clients_with_sbom(
+    app_pool: &sqlx::PgPool,
+    tenant_id: i64,
+) -> Result<usize, String> {
+    let mut tx = crate::db::begin_tenant_tx(app_pool, tenant_id)
+        .await
+        .map_err(|_| "database unavailable".to_string())?;
     let rows = sqlx::query(
         r#"SELECT DISTINCT c.id, COALESCE(c.domains, '[]') AS domains
            FROM clients c
@@ -550,7 +553,7 @@ async fn enqueue_clients_with_sbom(app_pool: &sqlx::PgPool, tenant_id: i64) -> u
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    .map_err(|e| e.to_string())?;
     let _ = tx.commit().await;
     let mut n = 0usize;
     for r in rows {
@@ -579,7 +582,7 @@ async fn enqueue_clients_with_sbom(app_pool: &sqlx::PgPool, tenant_id: i64) -> u
             n += 1;
         }
     }
-    n
+    Ok(n)
 }
 
 /// Periodic OSV/NVD first-seen for clients that actually have SBOM rows.
@@ -611,9 +614,19 @@ pub fn spawn_first_seen_worker(app_pool: Arc<sqlx::PgPool>, auth_pool: Arc<sqlx:
                     .await
                     .unwrap_or_default();
             for tid in tenants {
-                let n = enqueue_clients_with_sbom(app_pool.as_ref(), tid).await;
-                if n > 0 {
-                    tracing::info!(target: "first_seen", tenant_id = tid, jobs = n, "queued first-seen hunts");
+                match enqueue_clients_with_sbom(app_pool.as_ref(), tid).await {
+                    Ok(n) if n > 0 => {
+                        tracing::info!(target: "first_seen", tenant_id = tid, jobs = n, "queued first-seen hunts");
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        tracing::error!(
+                            target: "first_seen",
+                            tenant_id = tid,
+                            error = %e,
+                            "SBOM enqueue failed — idle 0 is not confirmed"
+                        );
+                    }
                 }
             }
         }

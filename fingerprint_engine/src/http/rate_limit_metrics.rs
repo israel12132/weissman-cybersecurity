@@ -358,36 +358,24 @@ pub fn status_for(tenant_id: i64, client_ip: &str) -> Value {
 }
 
 /// Like [`status_for`] but reads distributed Redis counters when `REDIS_URL` is set.
-pub async fn status_for_async(tenant_id: i64, client_ip: &str) -> Value {
+/// Redis enabled + any bucket unreadable → `Err` (never blend process-local zeros).
+pub async fn status_for_async(tenant_id: i64, client_ip: &str) -> Result<Value, ()> {
     if !super::rate_limit_redis::is_enabled() {
-        return status_for(tenant_id, client_ip);
+        return Ok(status_for(tenant_id, client_ip));
     }
-    let scan_max = scan_limit_per_minute();
-    let login_max = login_limit_per_minute();
-    let api_max = api_limit_per_sec();
-
-    let (scan_cur, scan_reset) = super::rate_limit_redis::current_tenant_scan(tenant_id)
-        .await
-        .map(|(c, r)| (c as usize, r))
-        .unwrap_or_else(|| {
-            window_count_i64(&store().scan_windows, tenant_id, Duration::from_secs(60))
-        });
-    let (login_cur, login_reset) = super::rate_limit_redis::current_login_ip(client_ip)
-        .await
-        .map(|(c, r)| (c as usize, r))
-        .unwrap_or_else(|| {
-            window_count(&store().login_windows, client_ip, Duration::from_secs(60))
-        });
-    let (api_cur, api_reset) = super::rate_limit_redis::current_api_ip(client_ip)
-        .await
-        .map(|(c, r)| (c as usize, r))
-        .unwrap_or_else(|| window_count(&store().api_windows, client_ip, Duration::from_secs(1)));
-
-    json!({
-        "scans": limit_block(scan_cur, scan_max, scan_reset),
-        "logins": limit_block(login_cur, login_max, login_reset),
-        "api": limit_block(api_cur, api_max, api_reset),
-    })
+    let scan = super::rate_limit_redis::current_tenant_scan(tenant_id).await;
+    let login = super::rate_limit_redis::current_login_ip(client_ip).await;
+    let api = super::rate_limit_redis::current_api_ip(client_ip).await;
+    match (scan, login, api) {
+        (Some((scan_cur, scan_reset)), Some((login_cur, login_reset)), Some((api_cur, api_reset))) => {
+            Ok(json!({
+                "scans": limit_block(scan_cur as usize, scan_limit_per_minute(), scan_reset),
+                "logins": limit_block(login_cur as usize, login_limit_per_minute(), login_reset),
+                "api": limit_block(api_cur as usize, api_limit_per_sec(), api_reset),
+            }))
+        }
+        _ => Err(()),
+    }
 }
 
 fn range_params(range: &str) -> (i64, i64, &'static str) {
@@ -430,8 +418,8 @@ fn aggregate_history(range_secs: i64, bucket_secs: i64, time_fmt: &str) -> Vec<V
     out
 }
 
-pub async fn analytics_for(tenant_id: i64, client_ip: &str, range: &str) -> Value {
-    let status = status_for_async(tenant_id, client_ip).await;
+pub async fn analytics_for(tenant_id: i64, client_ip: &str, range: &str) -> Result<Value, ()> {
+    let status = status_for_async(tenant_id, client_ip).await?;
     let scan_cur = status["scans"]["current"].as_u64().unwrap_or(0) as usize;
     let login_cur = status["logins"]["current"].as_u64().unwrap_or(0) as usize;
     let api_cur = status["api"]["current"].as_u64().unwrap_or(0) as usize;
@@ -519,7 +507,7 @@ pub async fn analytics_for(tenant_id: i64, client_ip: &str, range: &str) -> Valu
         "in_memory"
     };
 
-    json!({
+    Ok(json!({
         "current": {
             "scans": { "current": scan_cur, "max": scan_limit_per_minute() },
             "logins": { "current": login_cur, "max": login_limit_per_minute() },
@@ -530,7 +518,7 @@ pub async fn analytics_for(tenant_id: i64, client_ip: &str, range: &str) -> Valu
         "endpoints": endpoints_json,
         "range": range,
         "source": source,
-    })
+    }))
 }
 
 #[derive(Deserialize)]
@@ -550,7 +538,18 @@ pub async fn api_rate_limits_status(
     headers: HeaderMap,
 ) -> Response {
     let ip = extract_client_ip(&headers, peer);
-    let limits = status_for_async(auth.tenant_id, &ip).await;
+    let limits = match status_for_async(auth.tenant_id, &ip).await {
+        Ok(limits) => limits,
+        Err(()) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::rate_limits_unavailable_json(
+                    "redis unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     let source = if super::rate_limit_redis::is_enabled() {
         "redis"
     } else {
@@ -580,6 +579,14 @@ pub async fn api_rate_limits_analytics(
         return r;
     }
     let ip = extract_client_ip(&headers, peer);
-    let body = analytics_for(auth.tenant_id, &ip, q.range.trim()).await;
-    (StatusCode::OK, Json(body)).into_response()
+    match analytics_for(auth.tenant_id, &ip, q.range.trim()).await {
+        Ok(body) => (StatusCode::OK, Json(body)).into_response(),
+        Err(()) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::rate_limits_analytics_unavailable_json(
+                "redis unavailable",
+            )),
+        )
+            .into_response(),
+    }
 }

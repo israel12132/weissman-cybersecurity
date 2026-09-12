@@ -20,9 +20,6 @@ const toggleThemeSpy = vi.fn()
 vi.mock('../context/ThemeContext', () => ({
   useTheme: () => ({ toggleTheme: toggleThemeSpy, isLight: false }),
 }))
-vi.mock('../lib/apiBase', () => ({
-  apiFetch: vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ results: [] }) })),
-}))
 const apiFetch = vi.fn()
 vi.mock('../utils/apiFetch', () => ({
   apiFetch: (...args) => apiFetch(...args),
@@ -151,5 +148,15 @@ describe('GlobalSearch command palette', () => {
     expect(await screen.findByTestId('global-search-unavailable')).toBeTruthy()
     expect(screen.getByText('components.globalSearch.search_failed')).toBeTruthy()
     expect(screen.queryByText(/noResults/)).toBeNull()
+  })
+
+  it('still shows search_failed when local nav matches the query', async () => {
+    apiFetch.mockResolvedValue({ ok: false, unavailable: true, results: [], detail: 'store down' })
+    render(<GlobalSearch />)
+    open()
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'engine' } })
+    expect(await screen.findByTestId('global-search-unavailable')).toBeTruthy()
+    expect(screen.getByText('components.globalSearch.search_failed')).toBeTruthy()
+    expect(screen.getByText('Engines')).toBeTruthy()
   })
 })

@@ -39,6 +39,15 @@ describe('fetchNodeEvidence', () => {
 })
 
 describe('findingMatchesNode', () => {
+  it('matches live /api/findings raw blob as well as risk_node_id', () => {
+    expect(findingMatchesNode({ raw: { risk_node_id: 'n1' } }, 'n1')).toBe(true)
+    expect(findingMatchesNode({ raw_data: { risk_node_id: 'n1' } }, 'n1')).toBe(true)
+    expect(findingMatchesNode({ risk_node_id: 'n1' }, 'n1')).toBe(true)
+    expect(findingMatchesNode({ title: 'no node' }, 'n1')).toBe(false)
+  })
+})
+
+describe('findingMatchesNode', () => {
   it('matches nested raw_data.risk_node_id', () => {
     expect(findingMatchesNode({ raw_data: { risk_node_id: 12 } }, '12')).toBe(true)
     expect(findingMatchesNode({ raw: { risk_node_id: '12' } }, 12)).toBe(true)

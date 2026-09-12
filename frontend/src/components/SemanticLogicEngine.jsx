@@ -72,7 +72,10 @@ export default function SemanticLogicEngine() {
   const abortRef = useRef(null)
 
   const load = useCallback((opts = {}) => {
-    if (!clientId) return
+    if (!clientId) {
+      setLoading(false)
+      return
+    }
     const silent = opts.silent === true
     abortRef.current?.abort()
     const ac = new AbortController()
@@ -106,6 +109,10 @@ export default function SemanticLogicEngine() {
       .catch((e) => {
         if (e?.name === 'AbortError' || ac.signal.aborted) return
         setError(e?.message || 'unavailable')
+        setReasoning('')
+        setStateMachine({ nodes: [], edges: [], target: '', message: '' })
+        setNodes([])
+        setEdges([])
       })
       .finally(() => {
         if (!ac.signal.aborted) setLoading(false)

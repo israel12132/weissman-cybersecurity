@@ -25,9 +25,17 @@ pub async fn load_connector_config(pool: &PgPool, tenant_id: i64) -> Result<Valu
     .await
     .map_err(|e| e.to_string())?;
     tx.commit().await.map_err(|e| e.to_string())?;
-    Ok(raw
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| json!({})))
+    parse_connector_config_raw(raw.as_deref())
+}
+
+/// Missing key → empty object (confirmed tokenless). Garbage JSON is store-down, not `{}`.
+pub(crate) fn parse_connector_config_raw(raw: Option<&str>) -> Result<Value, String> {
+    match raw {
+        None => Ok(json!({})),
+        Some(s) if s.trim().is_empty() => Ok(json!({})),
+        Some(s) => serde_json::from_str(s)
+            .map_err(|e| format!("invalid itdr_connectors json: {e}")),
+    }
 }
 
 pub async fn save_connector_config(
@@ -290,6 +298,20 @@ pub async fn pull_provider(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn missing_connector_row_is_empty_object() {
+        let v = parse_connector_config_raw(None).expect("missing row is empty config");
+        assert_eq!(v, json!({}));
+    }
+
+    #[test]
+    fn invalid_connector_json_is_not_empty_object() {
+        let err = parse_connector_config_raw(Some("not-json{"))
+            .expect_err("garbage must not look like no connectors");
+        assert!(err.contains("invalid"));
+    }
 
     #[test]
     fn graph_parser_reads_signins() {

@@ -356,6 +356,50 @@ pub fn sovereign_rotate_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// `GET /api/rate-limits/status` when Redis is enabled but unreadable
+pub fn rate_limits_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "limits": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/rate-limits/analytics` when Redis is enabled but unreadable
+pub fn rate_limits_analytics_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "current": Value::Null,
+        "history": [],
+        "violations": [],
+        "endpoints": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/dashboard/exec-kpis` when a severity/trend query fails
+pub fn exec_kpis_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "trend": Value::Null,
+        "security_score": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/poe-scan/:id` when the job row cannot be read
+pub fn poe_job_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "job": Value::Null,
+        "detail": detail,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -652,5 +696,42 @@ mod tests {
         assert_eq!(v["ok"], false);
         assert_eq!(v["unavailable"], true);
         assert_ne!(v["ok"], true);
+    }
+
+    #[test]
+    fn rate_limits_store_down_is_never_ok_zero_counters() {
+        let v = rate_limits_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["limits"], Value::Null);
+        assert!(v.get("scans").is_none());
+    }
+
+    #[test]
+    fn rate_limits_analytics_store_down_is_never_ok_zero_current() {
+        let v = rate_limits_analytics_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["current"], Value::Null);
+        assert_eq!(v["history"], json!([]));
+    }
+
+    #[test]
+    fn exec_kpis_store_down_is_never_perfect_score() {
+        let v = exec_kpis_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["trend"], Value::Null);
+        assert_eq!(v["security_score"], Value::Null);
+        assert_ne!(v["security_score"], json!(100));
+        assert_ne!(v["trend"], json!([]));
+    }
+
+    #[test]
+    fn poe_job_store_down_is_never_not_found() {
+        let v = poe_job_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["job"], Value::Null);
+        assert_ne!(v["detail"], json!("job not found"));
     }
 }

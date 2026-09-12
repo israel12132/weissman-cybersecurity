@@ -14,7 +14,7 @@ import { useFirstTenantClientId } from '../lib/aliasClient'
 
 export default function BattlespaceTopology({ connectionStatus = 'online' }) {
   const { t } = useTranslation()
-  const { clientId, loading: clientLoading } = useFirstTenantClientId()
+  const { clientId, loading: clientLoading, unavailable: clientsUnavailable } = useFirstTenantClientId()
   const containerRef = useRef(null)
   const workerRef = useRef(null)
 
@@ -71,7 +71,16 @@ export default function BattlespaceTopology({ connectionStatus = 'online' }) {
   )
 
   useEffect(() => {
-    if (!clientId) return
+    if (clientsUnavailable) {
+      setLoading(false)
+      setError(null)
+      setTopology(null)
+      return undefined
+    }
+    if (!clientId) {
+      if (!clientLoading) setLoading(false)
+      return undefined
+    }
     let cancelled = false
     const ac = new AbortController()
     setLoading(true)
@@ -93,7 +102,7 @@ export default function BattlespaceTopology({ connectionStatus = 'online' }) {
       cancelled = true
       ac.abort()
     }
-  }, [clientId])
+  }, [clientId, clientLoading, clientsUnavailable])
 
   useEffect(() => {
     if (!nodes.length) return
@@ -126,6 +135,7 @@ export default function BattlespaceTopology({ connectionStatus = 'online' }) {
     setForensicNode(node)
     setShadowNodes([])
     setShadowEdges([])
+    setEvidence([])
     setEvidenceError(false)
     setEvidenceTruncated(false)
     if (clientId && node.id != null) {
@@ -170,7 +180,13 @@ export default function BattlespaceTopology({ connectionStatus = 'online' }) {
     <div ref={containerRef} className="battlespace-topology relative w-full h-full min-h-[420px] bg-[#030508] overflow-hidden">
       <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_80%_60%_at_50%_40%,rgba(34,211,238,0.04),transparent)]" />
 
-      {loading || clientLoading ? (
+      {clientsUnavailable ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center">
+          <p className="text-sm text-amber-200/90" data-testid="battlespace-clients-unavailable" role="alert">
+            {t('battlespace.clients_unavailable')}
+          </p>
+        </div>
+      ) : loading || clientLoading ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-cyan-300/70">
           <Loader2 className="w-8 h-8 animate-spin" />
           <span className="text-[11px] font-mono uppercase tracking-widest">

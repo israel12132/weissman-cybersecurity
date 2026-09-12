@@ -6,6 +6,15 @@ import { useVisiblePolling } from '../hooks/useVisiblePolling';
 
 const NS = 'components.intelWidgets.rateLimitStatus';
 
+function limitBucketOk(bucket) {
+  return Boolean(
+    bucket
+    && Number.isFinite(Number(bucket.current))
+    && Number.isFinite(Number(bucket.max))
+    && Number(bucket.max) > 0,
+  )
+}
+
 /**
  * RateLimitStatus - Real-time rate limit monitoring component
  *
@@ -40,13 +49,13 @@ export default function RateLimitStatus({ compact = false }) {
         throw new Error(data.detail || 'unavailable');
       }
       const next = data.limits || {};
-      if (!next.scans && !next.logins && !next.api) {
+      if (!limitBucketOk(next.scans) || !limitBucketOk(next.logins) || !limitBucketOk(next.api)) {
         throw new Error('unavailable');
       }
       setLimits({
-        scans: next.scans || { current: 0, max: 0, resetIn: 0 },
-        logins: next.logins || { current: 0, max: 0, resetIn: 0 },
-        api: next.api || { current: 0, max: 0, resetIn: 0 },
+        scans: next.scans,
+        logins: next.logins,
+        api: next.api,
       });
       setUnavailable(false);
     } catch (error) {
@@ -107,7 +116,7 @@ export default function RateLimitStatus({ compact = false }) {
     );
   }
 
-  if (unavailable && !limits) {
+  if (unavailable) {
     return (
       <p
         className={compact
@@ -121,14 +130,18 @@ export default function RateLimitStatus({ compact = false }) {
     );
   }
 
+  if (!limits) {
+    return compact ? (
+      <div className="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
+        <Activity className="w-3 h-3 animate-pulse" />
+        <span>{t(`${NS}.loading`)}</span>
+      </div>
+    ) : (
+      <div className="h-32 rounded-xl border border-white/10 bg-black/40 animate-pulse" />
+    );
+  }
+
   if (compact) {
-    if (unavailable) {
-      return (
-        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${getStatusColor('unknown')}`}>
-          <span data-testid="rate-limit-unavailable" role="alert">{t(`${NS}.unavailable`)}</span>
-        </div>
-      )
-    }
     const scanStatus = getStatus(limits.scans.current, limits.scans.max);
     const StatusIcon = getStatusIcon(scanStatus);
 
@@ -154,15 +167,9 @@ export default function RateLimitStatus({ compact = false }) {
         </span>
       </div>
 
-      {unavailable && (
-        <p className="text-xs text-amber-200/90 mb-3" data-testid="rate-limit-unavailable" role="alert">
-          {t(`${NS}.unavailable`)}
-        </p>
-      )}
-
       <div className="space-y-3">
         {Object.entries(limits).map(([key, { current, max, resetIn }]) => {
-          const status = unavailable ? 'unknown' : getStatus(current, max);
+          const status = getStatus(current, max);
           const percentage = max > 0 ? (current / max) * 100 : 0;
           const label = t(`${NS}.labels.${key}`, { defaultValue: key });
 
