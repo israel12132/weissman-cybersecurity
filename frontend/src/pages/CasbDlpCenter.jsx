@@ -33,15 +33,19 @@ export default function CasbDlpCenter() {
     setError('')
     try {
       const d = await apiFetch('/api/findings?limit=500')
-      if (d?.ok === false) throw new Error(d.detail || 'load failed')
-      const all = Array.isArray(d.findings) ? d.findings : []
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || 'findings unavailable')
+      }
+      const all = Array.isArray(d) ? d : (Array.isArray(d.findings) ? d.findings : [])
       setFindings(all.filter((f) => ENGINES.includes(f.source || f.type || f.engine)))
     } catch (e) {
-      setError(e.message || t(`${NS}.load_failed`))
+      if (e?.name === 'AbortError') return
+      setFindings([])
+      setError(e.message || 'load failed')
     } finally {
       setLoading(false)
     }
-  }, [t])
+  }, [])
 
   useEffect(() => { load() }, [load])
 
@@ -63,8 +67,10 @@ export default function CasbDlpCenter() {
     setRefreshing(true)
     try {
       const d = await apiFetch('/api/cnapp/refresh', { method: 'POST' })
-      if (d?.ok === false) throw new Error(d.detail || 'refresh failed')
-      toast.success(t(`${NS}.refreshed`, { n: d.jobs_queued ?? 0 }))
+      if (d?.ok === false || d?.unavailable || d.jobs_queued == null) {
+        throw new Error(d.detail || t(`${NS}.refresh_failed`))
+      }
+      toast.success(t(`${NS}.refreshed`, { n: d.jobs_queued }))
       await load()
     } catch (e) {
       toast.error(e.message || t(`${NS}.refresh_failed`))
@@ -84,7 +90,9 @@ export default function CasbDlpCenter() {
     >
       <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
       {loading ? <SkeletonWidgetGrid count={3} /> : error ? (
-        <EmptyState title={t(`${NS}.load_failed`)} body={error} />
+        <p className="text-sm text-amber-200/90" data-testid="casb-dlp-unavailable" role="alert">
+          {t(`${NS}.unavailable`)}
+        </p>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">

@@ -83,8 +83,9 @@ export default function ItdrCommandCenter() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider, client_id: selectedClientId || undefined }),
       })
-      if (d?.ok === false) throw new Error(d.detail || 'pull failed')
-      toast.success(t(`${NS}.pulled`, { provider, n: d.ingested ?? 0 }))
+      if (d?.ok === false || d?.unavailable) throw new Error(d.detail || 'pull failed')
+      if (d.ingested == null) throw new Error('pull ingested unconfirmed')
+      toast.success(t(`${NS}.pulled`, { provider, n: d.ingested }))
       await load()
     } catch (err) {
       toast.error(err.message || t(`${NS}.pull_failed`))

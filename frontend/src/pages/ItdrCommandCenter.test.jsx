@@ -70,4 +70,24 @@ describe('ItdrCommandCenter', () => {
     expect(kpi.getAttribute('data-live')).toBe('true')
     expect(kpi.getAttribute('data-armed')).toBe('1')
   })
+
+  it('does not treat a down connector store as unconfigured IdPs', async () => {
+    apiFetch.mockImplementation((url) => {
+      if (url === '/api/itdr/connectors') {
+        return Promise.resolve({ ok: false, unavailable: true, connectors: {}, detail: 'store down' })
+      }
+      if (String(url).startsWith('/api/itdr/auth-events')) {
+        return Promise.resolve({ ok: true, events: [] })
+      }
+      return Promise.resolve({})
+    })
+    render(
+      <MemoryRouter>
+        <ItdrCommandCenter />
+      </MemoryRouter>,
+    )
+    expect(await screen.findByText('pages.itdrCommandCenter.load_failed')).toBeTruthy()
+    expect(screen.queryByText('pages.itdrCommandCenter.empty_unconfigured_title')).toBeNull()
+    expect(screen.queryByTestId('itdr-armed-providers')).toBeNull()
+  })
 })

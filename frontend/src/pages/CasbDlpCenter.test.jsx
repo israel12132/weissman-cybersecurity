@@ -1,0 +1,53 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, cleanup } from '@testing-library/react'
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (k) => k, i18n: { language: 'en' } }),
+}))
+
+const apiFetch = vi.fn()
+vi.mock('../utils/apiFetch', () => ({
+  apiFetch: (...args) => apiFetch(...args),
+}))
+
+vi.mock('./PageShell', () => ({
+  __esModule: true,
+  default: ({ children }) => <div>{children}</div>,
+}))
+vi.mock('../components/engine/ShellScanActions', () => ({ __esModule: true, default: () => null }))
+vi.mock('../components/ui/Toaster', () => ({
+  useToast: () => ({ toast: { success: vi.fn(), error: vi.fn() } }),
+}))
+vi.mock('../components/ui/EmptyState', () => ({
+  __esModule: true,
+  default: ({ title, body }) => <div>{title} {body}</div>,
+}))
+vi.mock('../components/ui/EvidenceNotice', () => ({
+  __esModule: true,
+  default: ({ children }) => <div>{children}</div>,
+}))
+vi.mock('../components/ui/ExecutiveWidget', () => ({
+  __esModule: true,
+  default: ({ label, value }) => <div>{label}:{value}</div>,
+}))
+vi.mock('../components/ui/Skeleton', () => ({
+  SkeletonWidgetGrid: () => <div>loading</div>,
+}))
+vi.mock('../components/ui/Button', () => ({
+  default: (p) => <button type="button" {...p} />,
+}))
+
+import CasbDlpCenter from './CasbDlpCenter.jsx'
+
+describe('CasbDlpCenter honesty', () => {
+  beforeEach(() => apiFetch.mockReset())
+  afterEach(cleanup)
+
+  it('does not paint a clean SaaS posture when findings are unavailable', async () => {
+    apiFetch.mockResolvedValue({ ok: false, unavailable: true, findings: [], detail: 'store down' })
+    render(<CasbDlpCenter />)
+    expect(await screen.findByTestId('casb-dlp-unavailable')).toBeTruthy()
+    expect(screen.queryByText('pages.casbDlpCenter.empty_title')).toBeNull()
+    expect(screen.queryByText(/pages.casbDlpCenter.kpi_findings/)).toBeNull()
+  })
+})

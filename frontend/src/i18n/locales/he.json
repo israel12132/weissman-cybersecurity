@@ -5951,7 +5951,8 @@
       "refresh_failed": "רענון CNAPP נכשל.",
       "search_placeholder": "סינון ממצאים…",
       "empty_title": "אין ממצאי CASB/DLP/CNAPP",
-      "empty_body": "הרץ מנועים או רענן גרף. חוסר הרשאות ענן מחזיר empty_ok, לא combos מומצאים."
+      "empty_body": "הרץ מנועים או רענן גרף. חוסר הרשאות ענן מחזיר empty_ok, לא combos מומצאים.",
+      "unavailable": "API של ממצאי CASB/DLP אינו זמין — ריק אינו מצב SaaS נקי מאושר."
     },
     "ngfwGate": {
       "title": "שער וייסמן",

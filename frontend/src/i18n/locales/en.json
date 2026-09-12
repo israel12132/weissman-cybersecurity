@@ -5951,7 +5951,8 @@
       "refresh_failed": "CNAPP refresh failed.",
       "search_placeholder": "Filter findings…",
       "empty_title": "No CASB/DLP/CNAPP findings",
-      "empty_body": "Run the engines or Refresh CNAPP graph. Missing cloud credentials yield empty_ok, not invented toxic combos."
+      "empty_body": "Run the engines or Refresh CNAPP graph. Missing cloud credentials yield empty_ok, not invented toxic combos.",
+      "unavailable": "CASB/DLP findings API unavailable — empty is not a clean SaaS posture."
     },
     "ngfwGate": {
       "title": "Weissman Gate",
