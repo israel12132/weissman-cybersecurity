@@ -7,7 +7,7 @@
 //! Does **not** crawl Tor hidden services or criminal marketplaces.
 
 use crate::engine_probes::{
-    empty_ok, extract_host, finding, http_client, http_get, http_get_with_headers,
+    extract_host, finding, http_client, http_get, http_get_with_headers,
     http_post_bytes_with_headers, http_post_json_with_headers,
 };
 use crate::engine_result::{print_result, EngineResult};
@@ -399,7 +399,18 @@ pub async fn run_adversary_exposure_delta_result(target: &str) -> EngineResult {
     }
     let findings = collect_public_adversary_intel("adversary_exposure_delta", target).await;
     if findings.is_empty() {
-        empty_ok("adversary_exposure_delta", target)
+        let abusech = if abusech_auth_key().is_empty() {
+            "urlhaus+threatfox skipped (no ABUSECH_AUTH_KEY)"
+        } else {
+            "urlhaus+threatfox queried"
+        };
+        EngineResult::ok(
+            vec![],
+            format!(
+                "adversary_exposure_delta: no live signal on {}; feeds: urlscan+hibp+otx; {abusech}",
+                extract_host(target)
+            ),
+        )
     } else {
         EngineResult::ok(
             findings.clone(),

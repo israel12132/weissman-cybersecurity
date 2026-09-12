@@ -69,8 +69,8 @@ pub fn is_adversary_source(source: &str) -> bool {
 #[must_use]
 pub fn neutralize_formula(s: &str) -> String {
     let s = s.trim_start_matches('\u{feff}');
-    let first = s.chars().next();
-    if matches!(first, Some('=' | '+' | '-' | '@' | '\t' | '\r')) {
+    let first = s.trim_start().chars().next();
+    if matches!(first, Some('=' | '+' | '-' | '@' | '\t' | '\r' | '|')) {
         format!("'{s}")
     } else {
         s.to_string()
@@ -158,6 +158,12 @@ fn build_zip(files: &[ZipEntry]) -> Result<Vec<u8>, String> {
         }
         let crc = crc32(&f.data);
         let compressed = deflate_bytes(&f.data)?;
+        if f.data.len() > u32::MAX as usize
+            || compressed.len() > u32::MAX as usize
+            || out.len() > u32::MAX as usize
+        {
+            return Err("zip part exceeds ZIP32 size limit".into());
+        }
         let local_off = out.len() as u32;
         out.extend_from_slice(&0x0403_4b50u32.to_le_bytes());
         out.extend_from_slice(&20u16.to_le_bytes());
@@ -575,6 +581,7 @@ mod tests {
     fn formula_prefix_is_neutralized() {
         assert_eq!(neutralize_formula("=cmd"), "'=cmd");
         assert_eq!(neutralize_formula("+1+1"), "'+1+1");
+        assert_eq!(neutralize_formula(" =HYPERLINK(x)"), "' =HYPERLINK(x)");
         assert_eq!(neutralize_formula("normal"), "normal");
         assert_eq!(neutralize_formula("2026-09-11"), "2026-09-11");
     }
@@ -593,6 +600,11 @@ mod tests {
         assert!(bytes.len() > 200);
         let hash = sha256_hex(&bytes);
         assert_eq!(hash.len(), 64);
+        if let Ok(dir) = std::env::var("WEISSMAN_ARTIFACT_DIR") {
+            let path = std::path::Path::new(&dir).join("weissman_board_sample.xlsx");
+            let _ = std::fs::create_dir_all(&dir);
+            let _ = std::fs::write(path, &bytes);
+        }
     }
 
     #[test]
@@ -617,6 +629,11 @@ mod tests {
         assert!(inflate_contains(&bytes, "Executive"));
         assert!(inflate_contains(&bytes, "'=HYPERLINK"));
         assert!(inflate_contains(&bytes, "T1597"));
+        if let Ok(dir) = std::env::var("WEISSMAN_ARTIFACT_DIR") {
+            let path = std::path::Path::new(&dir).join("weissman_board_formula_sample.xlsx");
+            let _ = std::fs::create_dir_all(&dir);
+            let _ = std::fs::write(path, &bytes);
+        }
         let summary = board_pack_json(
             "Weissman",
             Some(1),

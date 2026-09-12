@@ -66,25 +66,35 @@ async fn api_client_export_csv(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
     };
     let rows = sqlx::query(
-        "SELECT id, title, severity, source, status, discovered_at FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
+        "SELECT id, title, severity, source, status, discovered_at FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC LIMIT 50000",
     )
     .bind(id)
     .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
+    .await;
+    let rows = match rows {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": "DB unavailable", "detail": scrub_internal_error(&e)})),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let mut csv = String::from("ID,Title,Severity,Source,Status,Discovered\n");
     for r in rows {
         let idv = r.try_get::<i64, _>("id").unwrap_or(0);
-        let title = r.try_get::<String, _>("title").unwrap_or_default().replace('"', "\"\"");
-        let sev = r.try_get::<String, _>("severity").unwrap_or_default().replace('"', "\"\"");
-        let src = r.try_get::<String, _>("source").unwrap_or_default().replace('"', "\"\"");
-        let st = r.try_get::<String, _>("status").unwrap_or_default().replace('"', "\"\"");
-        let disc = r
-            .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
-            .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
-            .unwrap_or_default()
-            .replace('"', "\"\"");
+        let title = csv_cell(&r.try_get::<String, _>("title").unwrap_or_default());
+        let sev = csv_cell(&r.try_get::<String, _>("severity").unwrap_or_default());
+        let src = csv_cell(&r.try_get::<String, _>("source").unwrap_or_default());
+        let st = csv_cell(&r.try_get::<String, _>("status").unwrap_or_default());
+        let disc = csv_cell(
+            &r.try_get::<chrono::DateTime<Utc>, _>("discovered_at")
+                .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
+                .unwrap_or_default(),
+        );
         // Quote every field (embedded quotes already doubled above) — RFC 4180, so a comma or
         // newline in a title cannot shift subsequent columns.
         csv.push_str(&format!(
@@ -100,6 +110,10 @@ async fn api_client_export_csv(
         HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename)).unwrap_or(HeaderValue::from_static("attachment")),
     );
     res
+}
+
+fn csv_cell(s: &str) -> String {
+    crate::xlsx_pack::neutralize_formula(s).replace('"', "\"\"")
 }
 
 fn row_to_board_finding(r: &sqlx::postgres::PgRow) -> crate::xlsx_pack::BoardFinding {
@@ -172,11 +186,17 @@ async fn api_client_export_xlsx(
         }
     };
     let sql = format!("{BOARD_FINDINGS_SQL} WHERE v.client_id = $1 ORDER BY v.discovered_at DESC LIMIT 50000");
-    let rows = sqlx::query(&sql)
-        .bind(id)
-        .fetch_all(&mut *tx)
-        .await
-        .unwrap_or_default();
+    let rows = match sqlx::query(&sql).bind(id).fetch_all(&mut *tx).await {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": "DB unavailable", "detail": scrub_internal_error(&e)})),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let findings: Vec<crate::xlsx_pack::BoardFinding> = rows.iter().map(row_to_board_finding).collect();
     match crate::xlsx_pack::build_board_xlsx("Weissman", &client_name, &findings) {
@@ -203,22 +223,18 @@ struct BoardPackQuery {
 async fn load_board_findings_for_scope(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     client_id: Option<i64>,
-) -> Vec<crate::xlsx_pack::BoardFinding> {
+) -> Result<Vec<crate::xlsx_pack::BoardFinding>, sqlx::Error> {
     let rows = if let Some(id) = client_id {
         let sql = format!("{BOARD_FINDINGS_SQL} WHERE v.client_id = $1 ORDER BY v.discovered_at DESC LIMIT 50000");
         sqlx::query(&sql)
             .bind(id)
             .fetch_all(&mut **tx)
-            .await
-            .unwrap_or_default()
+            .await?
     } else {
         let sql = format!("{BOARD_FINDINGS_SQL} ORDER BY v.discovered_at DESC LIMIT 50000");
-        sqlx::query(&sql)
-            .fetch_all(&mut **tx)
-            .await
-            .unwrap_or_default()
+        sqlx::query(&sql).fetch_all(&mut **tx).await?
     };
-    rows.iter().map(row_to_board_finding).collect()
+    Ok(rows.iter().map(row_to_board_finding).collect())
 }
 
 async fn api_findings_export_xlsx(
@@ -230,17 +246,33 @@ async fn api_findings_export_xlsx(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
     };
     let client_label = if let Some(id) = q.client_id {
-        sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
+        match sqlx::query_scalar::<_, String>("SELECT name FROM clients WHERE id = $1")
             .bind(id)
             .fetch_optional(&mut *tx)
             .await
             .ok()
             .flatten()
-            .unwrap_or_else(|| format!("client-{id}"))
+        {
+            Some(n) => n,
+            None => {
+                let _ = tx.rollback().await;
+                return (StatusCode::NOT_FOUND, Json(json!({"error": "client not found"}))).into_response();
+            }
+        }
     } else {
         "All clients".to_string()
     };
-    let findings = load_board_findings_for_scope(&mut tx, q.client_id).await;
+    let findings = match load_board_findings_for_scope(&mut tx, q.client_id).await {
+        Ok(f) => f,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": "DB unavailable", "detail": scrub_internal_error(&e)})),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     match crate::xlsx_pack::build_board_xlsx("Weissman", &client_label, &findings) {
         Ok(b) => {
@@ -280,7 +312,17 @@ async fn api_board_pack(
     } else {
         "All clients".to_string()
     };
-    let findings = load_board_findings_for_scope(&mut tx, q.client_id).await;
+    let findings = match load_board_findings_for_scope(&mut tx, q.client_id).await {
+        Ok(f) => f,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": "DB unavailable", "detail": scrub_internal_error(&e)})),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     Json(crate::xlsx_pack::board_pack_json(
         "Weissman",
@@ -818,7 +860,7 @@ async fn api_findings_export_csv(
     // Bounded to avoid pinning a pool connection for the full statement_timeout and materialising
     // the entire tenant's findings (plus the ~2x CSV string) in memory — an unauthenticated-cost
     // DoS from any viewer. 50k mirrors the audit export cap.
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         "SELECT id, finding_id, title, severity, source, status, client_id::text, \
          COALESCE(description,'') AS description, discovered_at, \
          COALESCE(poc_sealed, false) AS poc_sealed \
@@ -826,24 +868,34 @@ async fn api_findings_export_csv(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": "DB unavailable", "detail": scrub_internal_error(&e)})),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let mut csv = String::from("ID,Finding ID,Title,Severity,Source,Status,Client,Verified,Discovered,Description\n");
     for r in rows {
         let raw_id = r.try_get::<i64, _>("id").unwrap_or(0);
-        let finding_id = r.try_get::<String, _>("finding_id").unwrap_or_default().replace('"', "\"\"");
-        let title = r.try_get::<String, _>("title").unwrap_or_default().replace('"', "\"\"");
-        let sev = r.try_get::<String, _>("severity").unwrap_or_default().replace('"', "\"\"");
-        let src = r.try_get::<String, _>("source").unwrap_or_default().replace('"', "\"\"");
-        let st = r.try_get::<String, _>("status").unwrap_or_default().replace('"', "\"\"");
-        let client = r.try_get::<String, _>("client_id").unwrap_or_default().replace('"', "\"\"");
+        let finding_id = csv_cell(&r.try_get::<String, _>("finding_id").unwrap_or_default());
+        let title = csv_cell(&r.try_get::<String, _>("title").unwrap_or_default());
+        let sev = csv_cell(&r.try_get::<String, _>("severity").unwrap_or_default());
+        let src = csv_cell(&r.try_get::<String, _>("source").unwrap_or_default());
+        let st = csv_cell(&r.try_get::<String, _>("status").unwrap_or_default());
+        let client = csv_cell(&r.try_get::<String, _>("client_id").unwrap_or_default());
         let verified = if r.try_get::<bool, _>("poc_sealed").unwrap_or(false) { "VERIFIED" } else { "POTENTIAL" };
-        let disc = r
-            .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
-            .map(|d| d.format("%Y-%m-%d %H:%M:%S UTC").to_string())
-            .unwrap_or_default()
-            .replace('"', "\"\"");
-        let desc = r.try_get::<String, _>("description").unwrap_or_default().replace('"', "\"\"");
+        let disc = csv_cell(
+            &r.try_get::<chrono::DateTime<Utc>, _>("discovered_at")
+                .map(|d| d.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+                .unwrap_or_default(),
+        );
+        let desc = csv_cell(&r.try_get::<String, _>("description").unwrap_or_default());
         // All fields quoted to handle commas and special characters safely
         csv.push_str(&format!(
             "\"VLN-{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"\n",

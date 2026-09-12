@@ -57,16 +57,16 @@ export default function BoardEvidencePack() {
   const load = useCallback(async () => {
     setError('')
     try {
+      const findingsPath = selectedClientId
+        ? `/api/findings?limit=2000&client_id=${encodeURIComponent(selectedClientId)}`
+        : '/api/findings?limit=2000'
       const [summary, raw] = await Promise.all([
         apiFetch(`/api/board-pack${qs}`),
-        apiFetch('/api/findings?limit=2000'),
+        apiFetch(findingsPath),
       ])
       setPack(summary && typeof summary === 'object' ? summary : null)
       const arr = Array.isArray(raw) ? raw : Array.isArray(raw?.findings) ? raw.findings : []
-      const scoped = selectedClientId
-        ? arr.filter((f) => String(f.client ?? f.client_id) === String(selectedClientId))
-        : arr
-      setFindings(scoped)
+      setFindings(arr)
     } catch (e) {
       setError(e.message || t(`${NS}.load_error`))
       setPack(null)
@@ -94,13 +94,13 @@ export default function BoardEvidencePack() {
     )
   }, [findings, search])
 
-  const xlsxPath = selectedClientId
+  const xlsxPath = pack?.exports?.xlsx || (selectedClientId
     ? `/api/clients/${selectedClientId}/export/xlsx`
-    : '/api/findings/export/xlsx'
-  const csvPath = selectedClientId
+    : '/api/findings/export/xlsx')
+  const csvPath = pack?.exports?.csv || (selectedClientId
     ? `/api/clients/${selectedClientId}/export/csv`
-    : '/api/findings/export/csv'
-  const pdfPath = selectedClientId ? `/api/clients/${selectedClientId}/report/pdf` : null
+    : '/api/findings/export/csv')
+  const pdfPath = pack?.exports?.pdf || (selectedClientId ? `/api/clients/${selectedClientId}/report/pdf` : null)
 
   const download = useCallback(
     async (path, fallback, kind) => {
