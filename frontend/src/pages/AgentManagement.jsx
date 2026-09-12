@@ -113,7 +113,7 @@ export default function AgentManagement() {
     }
     try {
       const cov = await apiFetch('/api/agents/swarm-attach')
-      if (cov && cov.ok !== false) setSwarmCoverage(cov)
+      if (cov?.ok && cov.pack_size != null) setSwarmCoverage(cov)
     } catch {
       /* coverage is additive — roster still renders from /status */
     }

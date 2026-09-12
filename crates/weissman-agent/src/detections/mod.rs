@@ -334,9 +334,13 @@ mod tests {
         );
         let caps: std::collections::HashSet<_> = all_capability_ids().into_iter().collect();
         assert!(caps.contains("ot_plc_decoy"));
+        let match_src = src
+            .split("match engine.as_str()")
+            .nth(1)
+            .expect("run_detection match");
         for id in all_capability_ids() {
             assert!(
-                src.contains(&format!("\"{id}\" =>")),
+                match_src.contains(&format!("\"{id}\"")),
                 "capability {id} has no run_detection match arm"
             );
         }
