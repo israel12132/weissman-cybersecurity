@@ -7,13 +7,13 @@
 
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
-    dns_a, dns_txt, empty_ok, extract_host, finding_with_probe_depth, fingerprint_stack,
-    header_value, http_client, http_get, join_url, normalize_url, probe_matched_token,
-    probe_paths_concurrent, status_indicates_presence, tcp_banner, tcp_open, tcp_scan,
-    udp_probe_response, DEFAULT_PROBE_CONCURRENCY,
+    DEFAULT_PROBE_CONCURRENCY, dns_a, dns_txt, empty_ok, extract_host, finding_with_probe_depth,
+    fingerprint_stack, header_value, http_client, http_get, join_url, normalize_url,
+    probe_matched_token, probe_paths_concurrent, status_indicates_presence, tcp_banner, tcp_open,
+    tcp_scan, udp_probe_response,
 };
 use crate::engine_result::EngineResult;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 const REMOTE_DEPTH: &str = "agent_hybrid_remote_surface";
 
@@ -50,8 +50,7 @@ fn collect(engine_id: &str, target: &str, findings: Vec<Value>) -> EngineResult 
             findings,
             format!(
                 "{}: {} remote surface finding(s) — enroll endpoint agent for host-resident validation",
-                engine_id,
-                count
+                engine_id, count
             ),
         )
     }
@@ -1648,20 +1647,21 @@ async fn probe_jit_spray_surface(engine_id: &str, target: &str) -> EngineResult 
             continue;
         }
         let ct = header_value(&p.headers, "content-type").unwrap_or_default();
-        if p.body.contains("wasm") || ct.contains("wasm") || p.status == 200 {
-            findings.push(remote_finding(
-                engine_id,
-                "WASM/inspector surface exposed",
-                "medium",
-                "T1059.007",
-                &format!(
-                    "{} ({}) content-type={} — JIT spray is host-resident; remote WASM/inspector exposure is the perimeter signal.",
-                    p.final_url, p.status, ct
-                ),
-                target,
-            ));
-            break;
+        if !wasm_or_inspector_evidence(&p.final_url, &p.body, ct) {
+            continue;
         }
+        findings.push(remote_finding(
+            engine_id,
+            "WASM/inspector surface exposed",
+            "medium",
+            "T1059.007",
+            &format!(
+                "{} ({}) content-type={} — JIT spray is host-resident; remote WASM/inspector exposure is the perimeter signal.",
+                p.final_url, p.status, ct
+            ),
+            target,
+        ));
+        break;
     }
     collect(engine_id, target, findings)
 }
@@ -1749,15 +1749,52 @@ async fn probe_host_privesc_surface(engine_id: &str, target: &str) -> EngineResu
     ];
     let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
     for p in probes {
-        if p.status == 200 {
+        let www = header_value(&p.headers, "www-authenticate");
+        let body_l = p.body.to_ascii_lowercase();
+        let apache_status = (p.final_url.contains("server-status")
+            || p.final_url.contains("server-info"))
+            && p.status == 200
+            && www.is_none()
+            && (body_l.contains("server version")
+                || body_l.contains("cpu usage")
+                || body_l.contains("scoreboard"));
+        if apache_status {
             findings.push(remote_finding(
                 engine_id,
-                "Privileged admin surface reachable without auth challenge",
+                "Unauthenticated server-status/info page",
                 "high",
-                "T1068",
+                "T1082",
                 &format!(
-                    "{} returned 200 — host privilege-escalation remains agent-side; this is a live admin-plane exposure.",
+                    "{} returned 200 without WWW-Authenticate and with server-status tokens — live admin-plane leak. Host privesc remains agent-side.",
                     p.final_url
+                ),
+                target,
+            ));
+            break;
+        }
+        if p.status == 200 && www.is_none() && !looks_like_login_page(&p.body) {
+            findings.push(remote_finding(
+                engine_id,
+                "Admin path present without auth challenge",
+                "medium",
+                "T1592",
+                &format!(
+                    "{} returned 200 without WWW-Authenticate and without a login form — inventory only, not a privilege-escalation proof.",
+                    p.final_url
+                ),
+                target,
+            ));
+            break;
+        }
+        if status_indicates_presence(p.status) {
+            findings.push(remote_finding(
+                engine_id,
+                "Admin/login surface observed",
+                "info",
+                "T1592",
+                &format!(
+                    "{} returned HTTP {} — an admin path exists; 200 on a login SPA is not unauthenticated privilege.",
+                    p.final_url, p.status
                 ),
                 target,
             ));
@@ -1839,6 +1876,38 @@ fn headers_blob(probe: &crate::engine_probes::HttpProbe) -> String {
         .join("\n")
 }
 
+fn looks_like_login_page(body: &str) -> bool {
+    let b = body.to_ascii_lowercase();
+    b.contains("type=\"password\"")
+        || b.contains("type='password'")
+        || b.contains("name=\"password\"")
+        || (b.contains("sign in") && b.contains("password"))
+        || (b.contains("log in") && b.contains("password"))
+        || b.contains("wp-login")
+}
+
+fn wasm_or_inspector_evidence(url: &str, body: &str, content_type: &str) -> bool {
+    let url_l = url.to_ascii_lowercase();
+    let body_l = body.to_ascii_lowercase();
+    let ct = content_type.to_ascii_lowercase();
+    if url_l.ends_with(".wasm") || ct.contains("wasm") {
+        return true;
+    }
+    // WASM magic is NUL + "asm" (0x00 0x61 0x73 0x6d).
+    if body.as_bytes().windows(4).any(|w| w == b"\0asm") {
+        return true;
+    }
+    if body_l.contains("wasm")
+        && (url_l.contains("/wasm") || ct.contains("javascript") || ct.contains("wasm"))
+    {
+        return true;
+    }
+    (url_l.contains("/inspector") || url_l.contains("/debug/v8"))
+        && (body_l.contains("devtools")
+            || body_l.contains("inspector")
+            || body_l.contains("chrome-devtools"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1875,9 +1944,10 @@ mod tests {
         let r = collect("dll_hijacking_engine", "tgt.example", vec![]);
         assert_eq!(r.status, "ok");
         assert!(r.findings.is_empty());
-        assert!(r
-            .message
-            .contains("dll_hijacking_engine: no live signal observed on tgt.example"));
+        assert!(
+            r.message
+                .contains("dll_hijacking_engine: no live signal observed on tgt.example")
+        );
     }
 
     #[test]
@@ -1924,6 +1994,34 @@ mod tests {
             final_url: String::new(),
         };
         assert_eq!(headers_blob(&probe), "");
+    }
+
+    #[test]
+    fn login_page_and_wasm_evidence_are_content_gated() {
+        assert!(looks_like_login_page(
+            r#"<form><input type="password" name="pass"></form>"#
+        ));
+        assert!(!looks_like_login_page("<html><h1>Dashboard</h1></html>"));
+        assert!(wasm_or_inspector_evidence(
+            "https://x/app.wasm",
+            "",
+            "application/wasm"
+        ));
+        assert!(!wasm_or_inspector_evidence(
+            "https://x/wasm",
+            "<!doctype html><html></html>",
+            "text/html"
+        ));
+        assert!(wasm_or_inspector_evidence(
+            "https://x/inspector",
+            "chrome-devtools protocol",
+            "text/html"
+        ));
+        assert!(wasm_or_inspector_evidence(
+            "https://x/module",
+            "\0asm\x01\x00\x00\x00",
+            "application/octet-stream"
+        ));
     }
 
     #[test]

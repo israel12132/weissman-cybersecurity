@@ -52,15 +52,20 @@ UPDATE risk_graph_nodes
    )
 "#;
 
-/// Tag likely crown jewels so Dijkstra has sinks. Operator flags stay authoritative;
-/// this only fills empty jewels from business value / high-risk identity-cloud-k8s
-/// nodes. Honey nodes are never tagged.
+/// Tag likely crown jewels so Dijkstra has sinks.
+///
+/// Operator-cleared jewels stay off: we only write nodes that have never been
+/// auto-tagged (`crown_jewel_auto IS NOT TRUE`) and are not currently jewels.
+/// Evidence gate: business value or high-risk identity/cloud/k8s nodes.
+/// Honey nodes are never tagged. No ranking fallback — empty jewel sets stay empty.
 pub const AUTO_TAG_CROWN_JEWEL_SQL: &str = r#"
 UPDATE risk_graph_nodes
-   SET crown_jewel = TRUE
+   SET crown_jewel = TRUE,
+       crown_jewel_auto = TRUE
  WHERE tenant_id = $1
    AND client_id = $2
    AND crown_jewel IS NOT TRUE
+   AND COALESCE(crown_jewel_auto, FALSE) IS NOT TRUE
    AND COALESCE(honey_node, FALSE) IS NOT TRUE
    AND (
         COALESCE(business_value_usd, 0) > 0
@@ -68,27 +73,6 @@ UPDATE risk_graph_nodes
           node_type IN ('identity', 'database', 'k8s', 'k8s_secret', 'domain_controller', 'secret', 'dc')
       AND COALESCE(risk_score, 0) >= 55
         )
-   )
-"#;
-
-/// If a client still has zero jewels after the heuristic, seed the top 3 by
-/// business value then risk so attack-path inference is not vacuously empty.
-pub const AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL: &str = r#"
-UPDATE risk_graph_nodes
-   SET crown_jewel = TRUE
- WHERE tenant_id = $1
-   AND client_id = $2
-   AND id IN (
-        SELECT id FROM risk_graph_nodes
-         WHERE tenant_id = $1
-           AND client_id = $2
-           AND COALESCE(honey_node, FALSE) IS NOT TRUE
-         ORDER BY COALESCE(business_value_usd, 0) DESC, COALESCE(risk_score, 0) DESC
-         LIMIT 3
-   )
-   AND NOT EXISTS (
-        SELECT 1 FROM risk_graph_nodes
-         WHERE tenant_id = $1 AND client_id = $2 AND crown_jewel = TRUE
    )
 "#;
 
@@ -113,9 +97,13 @@ mod tests {
                     .trim_start()
                     .starts_with("UPDATE")
         );
-        for sql in [AUTO_TAG_CROWN_JEWEL_SQL, AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL] {
-            assert!(sql.trim_start().to_ascii_uppercase().starts_with("UPDATE"));
-            assert!(!sql.to_ascii_uppercase().contains("DROP "));
-        }
+        let sql = AUTO_TAG_CROWN_JEWEL_SQL;
+        assert!(sql.trim_start().to_ascii_uppercase().starts_with("UPDATE"));
+        assert!(!sql.to_ascii_uppercase().contains("DROP "));
+        assert!(sql.contains("crown_jewel_auto"));
+        assert!(sql.contains("business_value_usd"));
+        assert!(!sql.to_ascii_uppercase().contains("LIMIT 3"));
+        assert!(!sql.to_ascii_uppercase().contains("FALLBACK"));
+        assert!(sql.contains("COALESCE(crown_jewel_auto, FALSE) IS NOT TRUE"));
     }
 }

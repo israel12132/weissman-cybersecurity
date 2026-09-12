@@ -41,15 +41,19 @@ pub fn spawn_ascension_poe_followup(pool: Arc<PgPool>, tenant_id: i64, target: S
 }
 
 async fn webhook_url_from_db(pool: &PgPool, tenant_id: i64) -> Option<String> {
-    sqlx::query_scalar::<_, String>(
+    // system_configs is FORCE RLS — a raw pool query cannot see tenant rows.
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await.ok()?;
+    let url = sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'alert_webhook_url'",
     )
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await
     .ok()
     .flatten()
-    .filter(|s| !s.trim().is_empty())
+    .filter(|s| !s.trim().is_empty());
+    let _ = tx.commit().await;
+    url
 }
 
 async fn webhook_url_effective(pool: Option<(&PgPool, i64)>) -> Option<String> {
@@ -201,7 +205,7 @@ async fn send_smtp_critical_optional(
         title.chars().take(80).collect::<String>()
     );
     tokio::task::spawn_blocking(move || {
-        use lettre::message::{header::ContentType, Mailbox, Message};
+        use lettre::message::{Mailbox, Message, header::ContentType};
         use lettre::transport::smtp::authentication::Credentials;
         use lettre::{SmtpTransport, Transport};
         let from_m: Mailbox = from
@@ -276,5 +280,24 @@ mod tests {
         assert!(!poc_has_curl(""));
         assert!(!poc_has_curl("wget https://x"));
         assert!(!poc_has_curl("no exploit tooling mentioned here"));
+    }
+
+    #[test]
+    fn tenant_webhook_lookup_uses_tenant_transaction() {
+        let src = include_str!("notifications.rs");
+        let fn_idx = src
+            .find("async fn webhook_url_from_db")
+            .expect("webhook_url_from_db present");
+        let body = &src[fn_idx..];
+        let body = body.split("async fn webhook_url_effective").next().unwrap();
+        assert!(
+            body.contains("begin_tenant_tx"),
+            "system_configs is FORCE RLS — lookup must run inside begin_tenant_tx"
+        );
+        assert!(
+            !body.contains("pool.as_ref())") && !body.contains("fetch_optional(pool)"),
+            "must not query system_configs on the raw pool"
+        );
+        assert!(body.contains("alert_webhook_url"));
     }
 }

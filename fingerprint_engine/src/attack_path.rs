@@ -8,13 +8,13 @@
 //! cockpit can render without rerunning the search.
 
 use crate::supreme_weights::{
-    self, evidence_confidence, is_cross_region, is_identity_edge, is_smb_or_port_edge,
-    path_score_0_100, EdgeWeightInputs, MAX_PATH_DEPTH,
+    self, EdgeWeightInputs, MAX_PATH_DEPTH, evidence_confidence, is_cross_region, is_identity_edge,
+    is_smb_or_port_edge, path_score_0_100,
 };
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sqlx::{PgPool, Row};
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
@@ -301,17 +301,12 @@ async fn auto_tag_crown_jewels(
     client_id: i64,
 ) -> Result<(), sqlx::Error> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
-    let _ = sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_CROWN_JEWEL_SQL)
+    sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_CROWN_JEWEL_SQL)
         .bind(tenant_id)
         .bind(client_id)
         .execute(&mut *tx)
-        .await;
-    let _ = sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL)
-        .bind(tenant_id)
-        .bind(client_id)
-        .execute(&mut *tx)
-        .await;
-    let _ = tx.commit().await;
+        .await?;
+    tx.commit().await?;
     Ok(())
 }
 
@@ -925,7 +920,9 @@ pub async fn compute_and_store(
         .flatten()
         .map(|s| s.paths.len())
         .unwrap_or(0);
-    let _ = auto_tag_crown_jewels(pool, tenant_id, client_id).await;
+    auto_tag_crown_jewels(pool, tenant_id, client_id)
+        .await
+        .map_err(|e| format!("crown-jewel auto-tag failed: {e}"))?;
     mark_graph_dirty(tenant_id, client_id);
     let graph = cached_graph(pool, tenant_id, client_id).await?;
     let infer = tokio::task::spawn_blocking(move || {

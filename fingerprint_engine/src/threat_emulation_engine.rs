@@ -1,9 +1,65 @@
 //! Threat Emulation Engine — runs known APT group TTPs against the target and checks detection.
 
 use crate::engine_probes::{extract_host, tcp_open};
-use crate::engine_result::{print_result, EngineResult};
+use crate::engine_result::{EngineResult, print_result};
 use serde_json::json;
 use std::time::Duration;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AptHttpClass {
+    Blocked,
+    AuthChallenged,
+    Open,
+    Absent,
+}
+
+fn classify_apt_http(status: u16) -> AptHttpClass {
+    if matches!(status, 403 | 406 | 429 | 503) {
+        AptHttpClass::Blocked
+    } else if status == 401 {
+        AptHttpClass::AuthChallenged
+    } else if matches!(status, 200 | 301 | 302) {
+        AptHttpClass::Open
+    } else {
+        AptHttpClass::Absent
+    }
+}
+
+/// (severity, label, blocked, auth_challenged, path_exists)
+fn apt_http_verdict(status: u16) -> Option<(&'static str, &'static str, bool, bool, bool)> {
+    match classify_apt_http(status) {
+        AptHttpClass::Absent => None,
+        AptHttpClass::Blocked => Some((
+            "info",
+            "BLOCKED — security control detected APT-style request",
+            true,
+            false,
+            false,
+        )),
+        AptHttpClass::AuthChallenged => Some((
+            "info",
+            "AUTH CHALLENGED — path exists but the server required credentials (HTTP 401 is not an undetected high-risk hit)",
+            false,
+            true,
+            true,
+        )),
+        AptHttpClass::Open => Some((
+            "high",
+            "NOT BLOCKED — APT-style request reached target without detection",
+            false,
+            false,
+            true,
+        )),
+    }
+}
+
+fn extra_ttp_severity(status: u16) -> Option<&'static str> {
+    match classify_apt_http(status) {
+        AptHttpClass::Absent => None,
+        AptHttpClass::Open if status == 200 => Some("high"),
+        AptHttpClass::Open | AptHttpClass::AuthChallenged | AptHttpClass::Blocked => Some("info"),
+    }
+}
 
 async fn build_client() -> reqwest::Client {
     reqwest::Client::builder()
@@ -128,24 +184,9 @@ pub async fn run_threat_emulation_result(target: &str) -> EngineResult {
         match resp {
             Ok(r) => {
                 let status = r.status().as_u16();
-                let blocked = matches!(status, 403 | 406 | 429 | 503);
-                let found = matches!(status, 200 | 301 | 302 | 401);
-
-                // Evidence-only: a 404/410/5xx-without-block means the primary path is absent —
-                // still probe extra_paths/ports; do not skip the rest of the scenario.
-                if found || blocked {
-                    let (severity, detection_result) = if blocked {
-                        (
-                            "info",
-                            "BLOCKED — security control detected APT-style request",
-                        )
-                    } else {
-                        (
-                            "high",
-                            "NOT BLOCKED — APT-style request reached target without detection",
-                        )
-                    };
-
+                if let Some((severity, detection_result, blocked, auth_challenged, path_exists)) =
+                    apt_http_verdict(status)
+                {
                     findings.push(json!({
                         "type": "threat_emulation",
                         "title": format!("[{}] {} — {}", scenario.group, scenario.technique, detection_result),
@@ -162,7 +203,8 @@ pub async fn run_threat_emulation_result(target: &str) -> EngineResult {
                         "emulated_user_agent": scenario.user_agent,
                         "http_status": status,
                         "blocked": blocked,
-                        "path_exists": found
+                        "auth_challenged": auth_challenged,
+                        "path_exists": path_exists
                     }));
 
                     // Control-gap: same path with a browser UA vs the APT UA.
@@ -209,11 +251,11 @@ pub async fn run_threat_emulation_result(target: &str) -> EngineResult {
                 .await
             {
                 let status = r.status().as_u16();
-                if matches!(status, 200 | 301 | 302 | 401 | 403) {
+                if let Some(severity) = extra_ttp_severity(status) {
                     findings.push(json!({
                         "type": "threat_emulation",
                         "title": format!("[{}] extra TTP path {} — HTTP {}", scenario.group, extra, status),
-                        "severity": if matches!(status, 200 | 401) { "high" } else { "info" },
+                        "severity": severity,
                         "mitre_attack": scenario.mitre,
                         "description": format!(
                             "{} extra path {} returned HTTP {} with the group's UA. Live TTP surface, not a payload.",
@@ -221,6 +263,7 @@ pub async fn run_threat_emulation_result(target: &str) -> EngineResult {
                         ),
                         "apt_group": scenario.group,
                         "http_status": status,
+                        "auth_challenged": classify_apt_http(status) == AptHttpClass::AuthChallenged,
                         "value": extra_url
                     }));
                 }
@@ -249,6 +292,7 @@ pub async fn run_threat_emulation_result(target: &str) -> EngineResult {
         .iter()
         .filter(|f| {
             f.get("blocked").and_then(|b| b.as_bool()) == Some(false)
+                && f.get("auth_challenged").and_then(|b| b.as_bool()) != Some(true)
                 && f.get("path_exists").and_then(|p| p.as_bool()) == Some(true)
         })
         .count();
@@ -309,6 +353,21 @@ mod tests {
         // no empty-guard here: trimmed empty input still gets the scheme prefix
         assert_eq!(normalize_target(""), "https://");
         assert_eq!(normalize_target("   "), "https://");
+    }
+
+    #[test]
+    fn apt_401_is_info_auth_challenge_not_high_undetected() {
+        assert_eq!(classify_apt_http(401), AptHttpClass::AuthChallenged);
+        let v = apt_http_verdict(401).expect("401 is a live surface");
+        assert_eq!(v.0, "info");
+        assert!(!v.2, "401 is not a WAF block");
+        assert!(v.3, "401 is an auth challenge");
+        let open = apt_http_verdict(200).unwrap();
+        assert_eq!(open.0, "high");
+        assert!(apt_http_verdict(404).is_none());
+        assert_eq!(extra_ttp_severity(401), Some("info"));
+        assert_eq!(extra_ttp_severity(200), Some("high"));
+        assert!(extra_ttp_severity(404).is_none());
     }
 
     #[test]
