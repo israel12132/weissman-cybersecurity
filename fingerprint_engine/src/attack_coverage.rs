@@ -531,10 +531,6 @@ mod tests {
             "ICS privilege-escalation must be mapped"
         );
     }
-        assert!(COVERAGE.iter().any(|t| t.id == "T0869"));
-        assert!(COVERAGE.iter().any(|t| t.id == "T1623"));
-        assert!(COVERAGE.iter().any(|t| t.id == "T0890"));
-    }
 
     #[test]
     fn rollup_sums_to_catalog_and_json_shapes() {

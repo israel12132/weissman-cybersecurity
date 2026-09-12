@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { needsCrownJewelSeed, rankJewelCandidates } from './attackPathSeeds'
+import { needsCrownJewelSeed, rankJewelCandidates, nodeFlagsPatch } from './attackPathSeeds'
 
 describe('needsCrownJewelSeed', () => {
   it('is false without a snapshot', () => {
@@ -23,5 +23,14 @@ describe('rankJewelCandidates', () => {
       { id: 4, crown_jewel: false, risk_score: 80, label: 'hot' },
     ])
     expect(ranked.map((n) => n.id)).toEqual([3, 2, 4])
+  })
+})
+
+describe('nodeFlagsPatch', () => {
+  it('PATCHes crown_jewel on the live flags route', () => {
+    expect(nodeFlagsPatch(3, { crown_jewel: true })).toEqual({
+      url: '/api/risk-graph/nodes/3/flags',
+      opts: { method: 'PATCH', body: { crown_jewel: true } },
+    })
   })
 })

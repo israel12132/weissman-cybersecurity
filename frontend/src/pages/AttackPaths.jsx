@@ -21,7 +21,7 @@ import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../utils/apiFetch'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
-import { needsCrownJewelSeed, rankJewelCandidates } from '../lib/attackPathSeeds'
+import { needsCrownJewelSeed, rankJewelCandidates, nodeFlagsPatch } from '../lib/attackPathSeeds'
 
 const NS = 'pages.attackPaths'
 const columnHelper = createColumnHelper()
@@ -163,10 +163,8 @@ export default function AttackPaths() {
       if (selectedClientId == null || nodeId == null) return
       setFlagBusy(nodeId)
       try {
-        const data = await apiFetch(`/api/risk-graph/nodes/${encodeURIComponent(nodeId)}/flags`, {
-          method: 'PATCH',
-          body: flags,
-        })
+        const { url, opts } = nodeFlagsPatch(nodeId, flags)
+        const data = await apiFetch(url, opts)
         if (data?.ok === false) throw new Error(data.detail || 'flag update failed')
         setGraphNodes((prev) =>
           prev.map((n) => (String(n.id) === String(nodeId) ? { ...n, ...flags } : n)),

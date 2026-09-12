@@ -17,3 +17,11 @@ export function rankJewelCandidates(nodes, limit = 25) {
     })
     .slice(0, limit)
 }
+
+/** PATCH /api/risk-graph/nodes/:id/flags — live Dijkstra seed, not a local-only toggle. */
+export function nodeFlagsPatch(nodeId, flags) {
+  return {
+    url: `/api/risk-graph/nodes/${encodeURIComponent(String(nodeId))}/flags`,
+    opts: { method: 'PATCH', body: flags },
+  }
+}
