@@ -17,6 +17,7 @@ import { SEV_COLOR } from '../lib/severity'
 const NS = 'pages.controlPlaneOfControls'
 const ENGINES = [
   'control_plane_of_controls',
+  'prevention_fabric_breach_proof',
   'ot_cloud_identity_killpath',
   'bec_ato_chain',
   'ai_casb_saas',

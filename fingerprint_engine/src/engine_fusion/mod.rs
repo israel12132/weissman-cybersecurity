@@ -24,6 +24,7 @@
 //! | `ai_casb_saas` | LLM agent hijack + OAuth SaaS grants |
 //! | `dns_security_posture_fusion` | DNS exfil + email DNS + ASM |
 //! | `toxic_combo_runtime_proof` | CNAPP + IMDS + S3 + IAM + K8s |
+//! | `prevention_fabric_breach_proof` | NGFW + SASE + WAF + control-plane + ZTNA — live leak proof |
 
 /// Production fusion engine IDs — must remain a subset of `PRODUCTION_ENGINE_IDS`.
 pub const FUSION_ENGINE_IDS: &[&str] = &[
@@ -43,6 +44,7 @@ pub const FUSION_ENGINE_IDS: &[&str] = &[
     "ai_casb_saas",
     "dns_security_posture_fusion",
     "toxic_combo_runtime_proof",
+    "prevention_fabric_breach_proof",
 ];
 
 pub use crate::external_exposure_supreme::{

@@ -52,14 +52,16 @@ pub fn status_snapshot() -> Value {
         .iter()
         .filter(|c| c.get("enforced").and_then(Value::as_bool).unwrap_or(false))
         .count();
+    let accounting = crate::engine_accounting::compute();
     json!({
         "ok": true,
         "spec": "elite-hardening-part2",
         "controls_total": CONTROLS.len(),
         "controls_enforced": enforced,
         "mitre_attack": "v19.1",
-        "live_probes_target": 303,
-        "unique_implementations_target": 295,
+        "live_probes_target": accounting.remotely_detecting,
+        "unique_implementations_target": accounting.distinct_canonical,
+        "engines_total": accounting.total_ids,
         "ask_allowlist_tables": crate::nl_query::allowed_table_count(),
         "evidence_confidence_floor": evidence_doubt::CONFIDENCE_ADMIT,
         "jitter_percent": {"min": stealth_ops::JITTER_PCT_MIN, "max": stealth_ops::JITTER_PCT_MAX},

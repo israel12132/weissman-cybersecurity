@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-09-11T23:51:33.917Z",
-  "production_engine_count": 584,
+  "generated_at": "2026-09-11T23:58:50.703Z",
+  "production_engine_count": 586,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 427
+      "engine_count": 429
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -275,7 +275,7 @@
         "industrial_ot",
         "scope_ips"
       ],
-      "engine_count": 43
+      "engine_count": 45
     },
     "ai_redteam": {
       "id": "ai_redteam",
@@ -6575,6 +6575,16 @@
       "group": "recon",
       "kind": "real_probe",
       "label": "Exposure Schism Fusion",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "prevention_fabric_breach_proof": {
+      "id": "prevention_fabric_breach_proof",
+      "group": "defense",
+      "kind": "real_probe",
+      "label": "Prevention Fabric Breach Proof",
       "requirements": [
         "contact_email",
         "scope_domains"

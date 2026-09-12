@@ -158,6 +158,7 @@ import {
   ItdrCommandCenter,
   CasbDlpCenter,
   NgfwGate,
+  CompetitiveWinRoom,
   EndpointEdr,
 } from './routing/routeChunks'
 
@@ -348,6 +349,7 @@ export default function TacticalApp() {
           <Route path="itdr" element={<ItdrCommandCenter />} />
           <Route path="casb-dlp" element={<CasbDlpCenter />} />
           <Route path="ngfw-gate" element={<NgfwGate />} />
+          <Route path="win-room" element={<CompetitiveWinRoom />} />
           <Route path="endpoint-edr" element={<EndpointEdr />} />
           <Route path="ceo" element={<CeoProtectedRoute><CeoCommandCenter /></CeoProtectedRoute>} />
           <Route path="supreme-nerve-center" element={<RequireRole min="ceo"><SupremeNerveCenter /></RequireRole>} />

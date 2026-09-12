@@ -152,4 +152,5 @@ export const ControlPlaneOfControls = React$lazy(() => import('../pages/ControlP
 export const ItdrCommandCenter = React$lazy(() => import('../pages/ItdrCommandCenter'))
 export const CasbDlpCenter = React$lazy(() => import('../pages/CasbDlpCenter'))
 export const NgfwGate = React$lazy(() => import('../pages/NgfwGate'))
+export const CompetitiveWinRoom = React$lazy(() => import('../pages/CompetitiveWinRoom'))
 export const EndpointEdr = React$lazy(() => import('../pages/EndpointEdr'))

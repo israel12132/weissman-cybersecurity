@@ -1,5 +1,5 @@
 /**
- * Master registry of all 584 production attack engines.
+ * Master registry of all 586 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 584 production engines in registry order */
+/** All 586 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -47,14 +47,6 @@ export const ENGINES_REGISTRY = [
     group: 'recon',
     mitre: 'T1595',
     description: 'New host from live surface delta immediately gets subdomain takeover, leak hunter, BOLA, and JWT on that same FQDN — not a separate later hunt.',
-    requiresTarget: true,
-  },
-  {
-    id: 'exposure_schism_fusion',
-    label: 'Exposure Schism Fusion',
-    group: 'recon',
-    mitre: 'T1190',
-    description: 'New or changed internet host from live surface delta is immediately fracture-tested: HTTP/1.1↔HTTP/2 auth bypass, cache Vary oracle, rewrite-header trust. Kill-chain stages are mapped from those same live HTTP fractures (optional deep crawl). Empty delta is idle — timeouts are never a filler score.',
     requiresTarget: true,
   },
   {
@@ -4774,6 +4766,30 @@ export const ENGINES_REGISTRY = [
     group: 'network',
     mitre: 'T1686',
     description: 'Software NGFW control plane. Errors if WEISSMAN_VNGFW_ADMIN dataplane is down — never pretends the firewall is live',
+    requiresTarget: true,
+  },
+  {
+    id: 'ot_passive_active_safety',
+    label: 'OT Passive/Active Safety Interlock',
+    group: 'ot',
+    mitre: 'T0843',
+    description: 'Read-only Modbus/S7/DNP3/IEC 61850 probes with destructive opcodes structurally blocked',
+    requiresTarget: true,
+  },
+  {
+    id: 'ot_crown_jewel_path',
+    label: 'OT Crown-Jewel Path',
+    group: 'ot',
+    mitre: 'T0883',
+    description: 'Safety-interlock OT fingerprint fused with FAIR crown-jewel path — no PLC writes',
+    requiresTarget: true,
+  },
+  {
+    id: 'prevention_fabric_breach_proof',
+    label: 'Prevention Fabric Breach Proof',
+    group: 'defense',
+    mitre: 'T1595',
+    description: 'Fusion: NGFW + SASE + WAF + control-plane + ZTNA live probes proving the blocking stack still leaks',
     requiresTarget: true,
   },
 ]

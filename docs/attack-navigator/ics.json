@@ -34,8 +34,8 @@
     },
     {
       "techniqueID": "T0883",
-      "score": 4,
-      "comment": "hospital_hl7_attack, ot_cloud_identity_killpath, satellite_attack, satellite_comm_attack",
+      "score": 5,
+      "comment": "hospital_hl7_attack, ot_cloud_identity_killpath, ot_crown_jewel_path, satellite_attack, satellite_comm_attack",
       "enabled": true
     },
     {

@@ -20,6 +20,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../utils/apiFetch'
 import { downloadCsv } from '../lib/exportFindingsCsv'
+import { PRODUCTION_ENGINE_COUNT } from '../lib/platformScale'
 import Button from '../components/ui/Button'
 
 const NS = 'pages.cemDago'
@@ -49,7 +50,7 @@ export default function CemDagoMesh() {
     try {
       const [st, man, wv] = await Promise.all([
         apiFetch('/api/cem-dago/status'),
-        apiFetch('/api/cem-dago/manifests?limit=563'),
+        apiFetch(`/api/cem-dago/manifests?limit=${PRODUCTION_ENGINE_COUNT}`),
         apiFetch('/api/cem-dago/waves?signals=internet_exposed,web_port_active'),
       ])
       setStatus(st)
