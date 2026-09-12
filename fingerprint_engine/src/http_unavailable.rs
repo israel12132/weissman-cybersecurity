@@ -765,6 +765,26 @@ mod tests {
     }
 
     #[test]
+    fn clients_scan_run_all_domains_lookup_is_store_down_503_not_404() {
+        let src = include_str!("server_handlers_rest.inc");
+        let start = src
+            .find("async fn api_clients_scan_run_all")
+            .expect("api_clients_scan_run_all");
+        let rest = &src[start..];
+        let end = rest.find("\nasync fn ").unwrap_or(rest.len());
+        let fn_src = &rest[..end];
+        assert!(fn_src.contains("SELECT domains FROM clients"));
+        assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(fn_src.contains("Client not found"));
+        assert!(fn_src.contains("no_domains"));
+        let domains_idx = fn_src
+            .find("SELECT domains FROM clients")
+            .expect("domains lookup");
+        let after = &fn_src[domains_idx..];
+        assert!(!after.contains(".ok().flatten()"));
+    }
+
+    #[test]
     fn mfa_status_handler_is_store_down_503_not_ok_flatten() {
         let src = include_str!("server_handlers_mfa.inc");
         let start = src

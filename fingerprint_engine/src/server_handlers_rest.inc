@@ -718,15 +718,39 @@ async fn api_clients_scan_run_all(
         )
             .into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         "SELECT domains FROM clients WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "unavailable": true,
+                    "detail": "database unavailable",
+                    "code": "db_unavailable",
+                })),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "ok": false,
+                "unavailable": true,
+                "detail": "database unavailable",
+                "code": "db_unavailable",
+            })),
+        )
+            .into_response();
+    }
 
     let domains_raw: String = match row {
         Some(r) => r.try_get::<String, _>("domains").unwrap_or_default(),
