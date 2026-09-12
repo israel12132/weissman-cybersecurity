@@ -280,6 +280,7 @@ pub async fn oidc_begin(
         .add_scope(Scope::new("openid".to_string()))
         .add_scope(Scope::new("email".to_string()))
         .add_scope(Scope::new("profile".to_string()))
+        .add_scope(Scope::new("groups".to_string()))
         .set_pkce_challenge(pkce_challenge)
         .url();
     Ok(Redirect::temporary(auth_url.as_str()))
@@ -388,22 +389,20 @@ pub async fn oidc_callback(
         })?;
     let nonce = Nonce::new(state_data.nonce.clone());
     let id_token_verifier = client.id_token_verifier();
-    let id_token_claims = token_res
-        .extra_fields()
-        .id_token()
-        .ok_or_else(|| {
-            (
-                StatusCode::BAD_GATEWAY,
-                Json(json!({"ok": false, "detail": "no id_token"})),
-            )
-        })?
-        .claims(&id_token_verifier, &nonce)
-        .map_err(|e| {
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(json!({"ok": false, "detail": format!("id_token: {}", e)})),
-            )
-        })?;
+    let id_token = token_res.extra_fields().id_token().ok_or_else(|| {
+        (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({"ok": false, "detail": "no id_token"})),
+        )
+    })?;
+    let id_token_compact = id_token.to_string();
+    let id_token_claims = id_token.claims(&id_token_verifier, &nonce).map_err(|e| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"ok": false, "detail": format!("id_token: {}", e)})),
+        )
+    })?;
+    let claim_groups = crate::scim::groups_from_verified_jwt(&id_token_compact);
     let email = match id_token_claims.email() {
         Some(e) if !e.is_empty() => e.to_string(),
         _ => id_token_claims
@@ -428,30 +427,14 @@ pub async fn oidc_callback(
                 Json(json!({"ok": false, "detail": format!("auth audit: {}", e)})),
             )
         })?;
-    let user_id: i64 = if let Some(uid) = sqlx::query_scalar::<_, i64>(
-        "SELECT id FROM auth.v_user_lookup WHERE tenant_id = $1 AND lower(trim(email)) = lower(trim($2)) AND is_active = true",
+    let user_id = crate::scim::resolve_sso_user(
+        auth,
+        state.app_pool.as_ref(),
+        state_data.tenant_id,
+        &email,
+        &claim_groups,
     )
-    .bind(state_data.tenant_id)
-    .bind(&email)
-    .fetch_optional(auth)
-    .await
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": format!("{}", e)})),
-        )
-    })? {
-        uid
-    } else {
-        weissman_db::auth_access::insert_user_auth(auth, state_data.tenant_id, &email, None, "viewer")
-            .await
-            .map_err(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"ok": false, "detail": format!("provision: {}", e)})),
-                )
-            })?
-    };
+    .await?;
     let ip = crate::http::extract_client_ip(&headers, addr);
     if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, state_data.tenant_id).await {
         let _ = audit_log::insert_audit(

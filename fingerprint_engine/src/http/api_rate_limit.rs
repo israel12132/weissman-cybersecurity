@@ -54,7 +54,7 @@ fn degraded_limiter() -> Arc<RateLimiter<String, DefaultKeyedStateStore<String>,
 
 #[must_use]
 fn is_api_path(path: &str) -> bool {
-    path.starts_with("/api/") && path != "/api/health"
+    (path.starts_with("/api/") && path != "/api/health") || path.starts_with("/scim/")
 }
 
 /// Login / refresh already sit in the dedicated unauth login bucket (8/min).
@@ -164,6 +164,8 @@ mod tests {
         assert!(counts_toward_api_bucket(&Method::GET, "/api/clients"));
         assert!(counts_toward_api_bucket(&Method::GET, "/api/billing/usage"));
         assert!(!counts_toward_api_bucket(&Method::GET, "/api/health"));
+        assert!(counts_toward_api_bucket(&Method::GET, "/scim/v2/Users"));
+        assert!(counts_toward_api_bucket(&Method::POST, "/scim/v2/Users"));
     }
 
     #[test]

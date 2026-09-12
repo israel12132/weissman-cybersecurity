@@ -304,6 +304,10 @@ async fn auth_guard(
     if is_public_route(method, path) {
         return next.run(request).await;
     }
+    // SCIM is authenticated by a tenant bearer token hashed at rest — not a user JWT.
+    if path.starts_with("/scim/") {
+        return next.run(request).await;
+    }
     if path.starts_with("/api/") || path.starts_with("/ws/") {
         let extracted = extract_token_from_request(&request, path);
         if let Some((t, source)) = extracted {
@@ -2044,6 +2048,9 @@ mod public_route_guard_tests {
         assert!(!is_public_route(&Method::GET, "/api/findings"));
         assert!(!is_public_route(&Method::POST, "/api/command-center/scan"));
         assert!(!is_public_route(&Method::DELETE, "/api/clients/1"));
+        // SCIM is bearer-token authenticated in-handler, not a JWT public route.
+        assert!(!is_public_route(&Method::GET, "/scim/v2/Users"));
+        assert!(!is_public_route(&Method::POST, "/scim/v2/Users"));
         // Correct public path but wrong method is not public.
         assert!(!is_public_route(&Method::GET, "/api/logout"));
         assert!(!is_public_route(&Method::POST, "/api/health"));

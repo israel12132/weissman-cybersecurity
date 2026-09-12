@@ -483,6 +483,50 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/sso/idps/:id/toggle",
             post(crate::sso_management::api_sso_idp_toggle),
         )
+        .route("/api/sso/scim/status", get(crate::scim::api_scim_status))
+        .route(
+            "/api/sso/scim/tokens",
+            get(crate::scim::api_scim_tokens_list).post(crate::scim::api_scim_token_mint),
+        )
+        .route(
+            "/api/sso/scim/tokens/:id",
+            delete(crate::scim::api_scim_token_revoke),
+        )
+        .route(
+            "/api/sso/scim/group-maps",
+            get(crate::scim::api_scim_group_maps_get).put(crate::scim::api_scim_group_maps_put),
+        )
+        .route("/api/sso/scim/events", get(crate::scim::api_scim_events))
+        .route(
+            "/scim/v2/ServiceProviderConfig",
+            get(crate::scim::scim_service_provider_config),
+        )
+        .route(
+            "/scim/v2/ResourceTypes",
+            get(crate::scim::scim_resource_types),
+        )
+        .route(
+            "/scim/v2/Users",
+            get(crate::scim::scim_users_list).post(crate::scim::scim_users_create),
+        )
+        .route(
+            "/scim/v2/Users/:id",
+            get(crate::scim::scim_users_get)
+                .put(crate::scim::scim_users_put)
+                .patch(crate::scim::scim_users_patch)
+                .delete(crate::scim::scim_users_delete),
+        )
+        .route(
+            "/scim/v2/Groups",
+            get(crate::scim::scim_groups_list).post(crate::scim::scim_groups_create),
+        )
+        .route(
+            "/scim/v2/Groups/:id",
+            get(crate::scim::scim_groups_get)
+                .put(crate::scim::scim_groups_put)
+                .patch(crate::scim::scim_groups_patch)
+                .delete(crate::scim::scim_groups_delete),
+        )
         .route("/api/general/ascension", post(api_general_ascension))
         .route("/api/general/self-audit", post(api_general_self_audit))
         .route("/api/timing-scan/run", post(api_timing_scan_run))
