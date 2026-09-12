@@ -1012,7 +1012,9 @@
     "time_hours": "{{count}}h ago",
     "time_days": "{{count}}d ago",
     "no_filter_title": "No agents match filter",
-    "no_filter_body": "Try a different status filter."
+    "no_filter_body": "Try a different status filter.",
+    "status_unavailable_title": "Agent fleet status unavailable",
+    "status_unavailable_body": "The Command Center could not reach GET /api/agents/status. This is not an empty fleet — retry before treating hosts as unenrolled."
   },
   "system_config": {
     "title": "System Configuration",
@@ -1208,7 +1210,11 @@
     "empty_body": "You must install the Weissman Agent on your endpoint to view this data. Remote scans cannot observe host-local signals for this engine.",
     "install_cta": "Open Agent Management",
     "install_hint": "Generate an enrollment token in Agent Management, run the install script on the target host, then refresh once the agent connects.",
-    "engine_id": "Engine"
+    "engine_id": "Engine",
+    "unavailable_title": "Agent fleet status unknown",
+    "unavailable_body": "The Command Center could not reach the endpoint-agent API. This is not proof that no agents are enrolled — agent-required engines stay paused until status is confirmed.",
+    "unavailable_cta": "Retry fleet status",
+    "unavailable_hint": "If this persists, check weissman-server and GET /api/agents/status."
   },
   "weissmanFindings": {
     "title": "Findings",

@@ -99,15 +99,21 @@ describe('AgentManagement', () => {
     })
     renderPage()
     expect(await screen.findByText('backend exploded')).toBeInTheDocument()
+    expect(await screen.findByTestId('agent-fleet-unavailable')).toBeInTheDocument()
+    expect(screen.queryByText('agents.no_agents_title')).not.toBeInTheDocument()
+    expect(screen.queryByText('agents.kpi_registered')).not.toBeInTheDocument()
   })
 
-  it('treats a 404 status endpoint as an empty fleet, not an error', async () => {
+  it('does not paint an empty-success fleet when the status endpoint is missing', async () => {
     apiFetch.mockImplementation((url) => {
-      if (url === '/api/agents/status') return Promise.resolve(resp({ status: 404 }))
+      if (url === '/api/agents/status') return Promise.resolve(resp({ ok: false, status: 404 }))
       if (url === '/api/clients') return Promise.resolve(resp({ text: async () => '[]' }))
       return Promise.resolve(resp())
     })
     renderPage()
-    expect(await screen.findByText('agents.no_agents_title')).toBeInTheDocument()
+    expect(await screen.findByTestId('agent-fleet-unavailable')).toBeInTheDocument()
+    expect(screen.getByText('agents.status_unavailable_title')).toBeInTheDocument()
+    expect(screen.queryByText('agents.no_agents_title')).not.toBeInTheDocument()
+    expect(screen.queryByText('agents.kpi_registered')).not.toBeInTheDocument()
   })
 })

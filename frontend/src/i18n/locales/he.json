@@ -942,7 +942,9 @@
     "time_hours": "לפני {{count}}שע׳",
     "time_days": "לפני {{count}}י",
     "no_filter_title": "אין סוכנים תואמים",
-    "no_filter_body": "נסה מסנן סטטוס אחר."
+    "no_filter_body": "נסה מסנן סטטוס אחר.",
+    "status_unavailable_title": "סטטוס צי הסוכנים אינו זמין",
+    "status_unavailable_body": "מרכז הפיקוד לא הצליח להגיע אל GET /api/agents/status. זה אינו צי ריק — נסה שוב לפני שמתייחסים למארחים כלא-רשומים."
   },
   "system_config": {
     "title": "הגדרות מערכת",
@@ -1207,8 +1209,12 @@
     "empty_title": "נדרש סוכן קצה",
     "empty_body": "יש להתקין את Weissman Agent על נקודת הקצה כדי לצפות בנתונים אלה. סריקות מרוחקות לא יכולות לצפות באותות מקומיים של מנוע זה.",
     "install_cta": "פתח ניהול סוכנים",
-    "install_hint": "צור enrollment token בניהול סוכנים, הרץ את סקרipt ההתקנה על המארח, ורענן לאחר שהסוכן מתחבר.",
-    "engine_id": "מנוע"
+    "install_hint": "צור enrollment token בניהול סוכנים, הרץ את סקריפט ההתקנה על המארח, ורענן לאחר שהסוכן מתחבר.",
+    "engine_id": "מנוע",
+    "unavailable_title": "סטטוס צי הסוכנים אינו ידוע",
+    "unavailable_body": "מרכז הפיקוד לא הצליח להגיע ל-API של סוכני הקצה. זה אינו הוכחה שאין סוכנים רשומים — מנועים שדורשים סוכן נשארים מושהים עד שהסטטוס מאושר.",
+    "unavailable_cta": "נסה שוב את סטטוס הצי",
+    "unavailable_hint": "אם זה נמשך, בדוק את weissman-server ואת GET /api/agents/status."
   },
   "weissmanFindings": {
     "title": "ממצאים",

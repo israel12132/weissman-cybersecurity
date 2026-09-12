@@ -13,20 +13,39 @@ function fleetCacheValid() {
   return cachedPayload != null && Date.now() - cachedAt < CACHE_TTL_MS
 }
 
+function markUnavailable(err, fallbackMessage) {
+  const wrapped = err instanceof Error ? err : new Error(fallbackMessage)
+  wrapped.unavailable = true
+  return wrapped
+}
+
 async function fetchAgentStatus(force = false) {
   if (!force && fleetCacheValid()) return cachedPayload
   if (!fetchPromise || force) {
     fetchPromise = apiFetch('/api/agents/status')
       .then((data) => {
-        cachedPayload = data || { agents: [], online_count: 0 }
+        if (data instanceof Response) {
+          throw markUnavailable(new Error('agent fleet status was not JSON'), 'agent fleet status was not JSON')
+        }
+        if (data?.unavailable === true || data?.ok === false) {
+          throw markUnavailable(
+            new Error(data?.detail || data?.message || 'agent fleet unavailable'),
+            'agent fleet unavailable',
+          )
+        }
+        const agents = Array.isArray(data?.agents) ? data.agents : []
+        const onlineCount =
+          typeof data?.online_count === 'number'
+            ? data.online_count
+            : agents.filter((a) => a?.online).length
+        cachedPayload = { agents, online_count: onlineCount }
         cachedAt = Date.now()
         return cachedPayload
       })
-      .catch(() => {
-        // Do NOT cache the empty fallback: a single transient boot failure must
-        // not pin an empty fleet (and thus block agent surfaces) for the session.
-        // Leave the cache untouched so the next load retries.
-        return cachedPayload || { agents: [], online_count: 0 }
+      .catch((err) => {
+        // Do NOT cache a failure as an empty fleet. A transport/5xx/404 miss
+        // must not look like "zero agents enrolled" and block 58 engines.
+        throw markUnavailable(err, 'Failed to load agent fleet status')
       })
       .finally(() => {
         fetchPromise = null
@@ -46,21 +65,28 @@ export function useAgentFleetStatus() {
   const [payload, setPayload] = useState(cachedPayload)
   const [loading, setLoading] = useState(!cachedPayload)
   const [error, setError] = useState(null)
+  const [unavailable, setUnavailable] = useState(false)
 
   const load = useCallback(async (force = false) => {
     if (!force && fleetCacheValid()) {
       setPayload(cachedPayload)
       setLoading(false)
+      setUnavailable(false)
+      setError(null)
       return cachedPayload
     }
     setLoading(true)
     setError(null)
     try {
       const data = await fetchAgentStatus(force)
+      setUnavailable(false)
       setPayload(data)
       return data
     } catch (e) {
       setError(e?.message || 'Failed to load agent fleet status')
+      setUnavailable(true)
+      // Keep the last *successful* snapshot if we have one; never replace it
+      // with a synthetic empty fleet.
       return cachedPayload
     } finally {
       setLoading(false)
@@ -83,6 +109,7 @@ export function useAgentFleetStatus() {
     hasOnlineAgent: onlineCount > 0,
     loading,
     error,
+    unavailable,
     refresh: () => load(true),
   }
 }
