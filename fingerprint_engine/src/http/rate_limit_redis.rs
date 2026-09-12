@@ -197,38 +197,32 @@ pub async fn incr_endpoint_hit(tenant_id: i64, path: &str) {
     }
 }
 
-/// Recent violations for analytics (newest first).
-pub async fn list_violations(tenant_id: i64, limit: usize) -> Vec<serde_json::Value> {
-    let Some(rl) = shared() else {
-        return Vec::new();
-    };
+/// Recent violations for analytics (newest first). `None` = Redis unreadable.
+pub async fn list_violations(tenant_id: i64, limit: usize) -> Option<Vec<serde_json::Value>> {
+    let rl = shared()?;
+    let mut conn = rl.conn().await.ok()?;
     let key = format!("weissman:rl:violations:{tenant_id}");
-    let Ok(mut conn) = rl.conn().await else {
-        return Vec::new();
-    };
     let rows: Vec<String> = conn
         .lrange(&key, 0, limit as isize - 1)
         .await
-        .unwrap_or_default();
-    rows.into_iter()
-        .filter_map(|s| serde_json::from_str(&s).ok())
-        .collect()
+        .ok()?;
+    Some(
+        rows.into_iter()
+            .filter_map(|s| serde_json::from_str(&s).ok())
+            .collect(),
+    )
 }
 
-/// Top endpoint hits for tenant.
-pub async fn top_endpoints(tenant_id: i64, cap: usize) -> Vec<(String, u32)> {
-    let Some(rl) = shared() else {
-        return Vec::new();
-    };
+/// Top endpoint hits for tenant. `None` = Redis unreadable.
+pub async fn top_endpoints(tenant_id: i64, cap: usize) -> Option<Vec<(String, u32)>> {
+    let rl = shared()?;
+    let mut conn = rl.conn().await.ok()?;
     let key = format!("weissman:rl:endpoints:{tenant_id}");
-    let Ok(mut conn) = rl.conn().await else {
-        return Vec::new();
-    };
-    let map: std::collections::HashMap<String, i64> = conn.hgetall(&key).await.unwrap_or_default();
+    let map: std::collections::HashMap<String, i64> = conn.hgetall(&key).await.ok()?;
     let mut out: Vec<(String, u32)> = map.into_iter().map(|(k, v)| (k, v.max(0) as u32)).collect();
     out.sort_by(|a, b| b.1.cmp(&a.1));
     out.truncate(cap);
-    out
+    Some(out)
 }
 
 // ── Distributed login lockout (keyed by tenant + normalized email) ─────────────

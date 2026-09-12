@@ -609,10 +609,20 @@ pub fn spawn_first_seen_worker(app_pool: Arc<sqlx::PgPool>, auth_pool: Arc<sqlx:
         loop {
             ticker.tick().await;
             let tenants: Vec<i64> =
-                sqlx::query_scalar("SELECT id FROM tenants WHERE active = true")
+                match sqlx::query_scalar("SELECT id FROM tenants WHERE active = true")
                     .fetch_all(auth_pool.as_ref())
                     .await
-                    .unwrap_or_default();
+                {
+                    Ok(t) => t,
+                    Err(e) => {
+                        tracing::error!(
+                            target: "first_seen",
+                            error = %e,
+                            "tenant list unreadable — idle is not confirmed"
+                        );
+                        continue;
+                    }
+                };
             for tid in tenants {
                 match enqueue_clients_with_sbom(app_pool.as_ref(), tid).await {
                     Ok(n) if n > 0 => {

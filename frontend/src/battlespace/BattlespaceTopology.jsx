@@ -31,8 +31,17 @@ export default function BattlespaceTopology({ connectionStatus = 'online' }) {
   const [shadowEdges, setShadowEdges] = useState([])
   const [wargaming, setWargaming] = useState(false)
   const evidenceAbortRef = useRef(null)
+  const wargameAbortRef = useRef(null)
+  const findingsPageRef = useRef(null)
 
-  useEffect(() => () => evidenceAbortRef.current?.abort(), [])
+  useEffect(() => () => {
+    evidenceAbortRef.current?.abort()
+    wargameAbortRef.current?.abort()
+  }, [])
+
+  useEffect(() => {
+    findingsPageRef.current = null
+  }, [clientId])
 
   const nodes = useMemo(() => topology?.graph?.nodes || [], [topology])
   const edges = useMemo(() => topology?.graph?.edges || [], [topology])
@@ -147,6 +156,7 @@ export default function BattlespaceTopology({ connectionStatus = 'online' }) {
         const ev = await fetchNodeEvidence(clientId, node.id, {
           signal: ac.signal,
           cachedFindings: cached,
+          pageCache: findingsPageRef,
         })
         if (ac.signal.aborted) return
         setEvidence(ev)
@@ -162,15 +172,20 @@ export default function BattlespaceTopology({ connectionStatus = 'online' }) {
 
   const handleWargame = useCallback(async () => {
     if (!clientId) return
+    wargameAbortRef.current?.abort()
+    const ac = new AbortController()
+    wargameAbortRef.current = ac
     setWargaming(true)
     try {
-      const data = await fetchShadowPreview({ clientId })
+      const data = await fetchShadowPreview({ clientId, signal: ac.signal })
+      if (ac.signal.aborted) return
       setShadowNodes(data.shadow_nodes || [])
       setShadowEdges(data.shadow_edges || [])
     } catch (e) {
+      if (e?.name === 'AbortError' || ac.signal.aborted) return
       setError(e.message)
     } finally {
-      setWargaming(false)
+      if (!ac.signal.aborted) setWargaming(false)
     }
   }, [clientId])
 

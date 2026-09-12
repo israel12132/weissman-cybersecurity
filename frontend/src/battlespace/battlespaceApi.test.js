@@ -36,6 +36,22 @@ describe('fetchNodeEvidence', () => {
     expect(ev).toEqual([{ id: 9, risk_node_id: 42, title: 'from topology' }])
     expect(apiFetch).not.toHaveBeenCalled()
   })
+
+  it('reuses a findings page cache across node picks', async () => {
+    apiFetch.mockResolvedValue({
+      findings: [
+        { id: 1, risk_node_id: 'n1', title: 'a' },
+        { id: 2, risk_node_id: 'n2', title: 'b' },
+      ],
+    })
+    const pageCache = { current: null }
+    const first = await fetchNodeEvidence(7, 'n1', { pageCache })
+    expect(first).toHaveLength(1)
+    expect(apiFetch).toHaveBeenCalledTimes(1)
+    const second = await fetchNodeEvidence(7, 'n2', { pageCache })
+    expect(second[0].title).toBe('b')
+    expect(apiFetch).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('findingMatchesNode', () => {

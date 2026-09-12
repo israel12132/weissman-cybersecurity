@@ -5150,6 +5150,7 @@
       "score_ring_tooltip": "ציון משטח התקפה {{score}}/100",
       "toast_select_client": "בחר לקוח תחילה",
       "clients_unavailable": "API הלקוחות אינו זמין — אין זו רשימה ריקה מאושרת.",
+      "corpus_unavailable": "API מאגר הגילוי אינו זמין — ספירות מאוחסנות אינן אפס מאושר.",
       "toast_enter_target": "הזן דומיין או IP יעד",
       "toast_scan_failed": "הסריקה נכשלה ({{status}})",
       "toast_scan_queued": "סריקת משטח התקפה נוספה לתור (משימה {{jid}})",

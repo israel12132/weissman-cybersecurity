@@ -70,16 +70,25 @@ export default function SemanticLogicEngine() {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const abortRef = useRef(null)
+  const inflightRef = useRef(false)
 
   const load = useCallback((opts = {}) => {
     if (!clientId) {
+      abortRef.current?.abort()
       setLoading(false)
+      setError('')
+      setReasoning('')
+      setStateMachine({ nodes: [], edges: [], target: '', message: '' })
+      setNodes([])
+      setEdges([])
       return
     }
     const silent = opts.silent === true
+    if (silent && inflightRef.current) return
     abortRef.current?.abort()
     const ac = new AbortController()
     abortRef.current = ac
+    inflightRef.current = true
     if (!silent) setLoading(true)
     Promise.all([
       apiFetch(`/api/clients/${clientId}/semantic-state-machine`, { signal: ac.signal }),
@@ -115,6 +124,7 @@ export default function SemanticLogicEngine() {
         setEdges([])
       })
       .finally(() => {
+        if (abortRef.current === ac) inflightRef.current = false
         if (!ac.signal.aborted) setLoading(false)
       })
   }, [clientId, setNodes, setEdges])
@@ -138,7 +148,7 @@ export default function SemanticLogicEngine() {
       title={t(`${NS}.title`)}
       subtitle={stateMachine.target ? t(`${NS}.target_label`, { target: stateMachine.target }) : undefined}
       actions={(
-        <Button variant="unstyled" type="button" onClick={load} className="text-sm text-[var(--text-tertiary)] hover:text-cyan-400">
+        <Button variant="unstyled" type="button" onClick={() => load({ silent: false })} className="text-sm text-[var(--text-tertiary)] hover:text-cyan-400">
           {t(`${NS}.refresh`)}
         </Button>
       )}

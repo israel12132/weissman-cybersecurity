@@ -14,6 +14,7 @@ describe('aliasClient deep', () => {
     apiFetch.mockResolvedValue([{ id: 42 }])
     const id = await fetchFirstTenantClientId()
     expect(id).toBe(42)
+    expect(apiFetch).toHaveBeenCalledWith('/api/clients?limit=1', expect.anything())
   })
 
   it('does not treat a store-down clients list as an empty tenant', async () => {

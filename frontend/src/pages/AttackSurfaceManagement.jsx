@@ -1,7 +1,7 @@
 import { firstClientTarget } from '../lib/clientTarget'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
@@ -159,17 +159,18 @@ function MetricCard({ label, value, sub, accent = '#22d3ee', icon }) {
 
 function ScoreRing({ score, grade }) {
   const { t } = useTranslation()
-  const color = gradeColor(grade)
-  const deg = Math.round((Math.max(0, Math.min(100, score)) / 100) * 360)
+  const missing = score == null || Number.isNaN(Number(score))
+  const color = missing ? '#6b7280' : gradeColor(grade)
+  const deg = missing ? 0 : Math.round((Math.max(0, Math.min(100, Number(score))) / 100) * 360)
   return (
-    <div className="relative w-36 h-36 shrink-0" title={t('pages.attackSurfaceManagement.score_ring_tooltip', { score })}>
+    <div className="relative w-36 h-36 shrink-0" title={missing ? '—' : t('pages.attackSurfaceManagement.score_ring_tooltip', { score })}>
       <div
         className="absolute inset-0 rounded-full"
         style={{ background: `conic-gradient(${color} ${deg}deg, rgba(255,255,255,0.06) ${deg}deg)` }}
       />
       <div className="absolute inset-[10px] rounded-full bg-[#0a0f1c] border border-[var(--border-default)] flex flex-col items-center justify-center">
-        <span className="text-4xl font-black" style={{ color }}>{grade}</span>
-        <span className="text-[11px] font-mono text-[var(--text-tertiary)]">{score}/100</span>
+        <span className="text-4xl font-black" style={{ color }}>{missing ? '—' : grade}</span>
+        <span className="text-[11px] font-mono text-[var(--text-tertiary)]">{missing ? '—' : `${score}/100`}</span>
       </div>
     </div>
   )
@@ -510,17 +511,29 @@ export default function AttackSurfaceManagement() {
   const [findings, setFindings] = useState([])
   const [toast, setToast] = useState(null)
   const [corpus, setCorpus] = useState(null)
+  const [corpusUnavailable, setCorpusUnavailable] = useState(false)
   const [assetFilter, setAssetFilter] = useState('all')
   const [surfaceDiff, setSurfaceDiff] = useState(null)
   const [deltaLoading, setDeltaLoading] = useState(false)
   const [deltaJobId, setDeltaJobId] = useState(null)
   const [fusionJobId, setFusionJobId] = useState(null)
   const [nerve, setNerve] = useState(null)
+  const nerveAbortRef = useRef(null)
 
   const refreshCorpus = useCallback(() => {
     apiFetch('/api/discovery-knowledge/stats')
-      .then((d) => { if (d && typeof d === 'object') setCorpus(d) })
+      .then((d) => {
+        if (d?.ok === false || d?.unavailable) {
+          throw new Error(d.detail || 'corpus unavailable')
+        }
+        if (d && typeof d === 'object') {
+          setCorpus(d)
+          setCorpusUnavailable(false)
+        }
+      })
       .catch((err) => {
+        if (err?.name === 'AbortError') return
+        setCorpusUnavailable(true)
         if (import.meta.env.DEV) {
           console.debug('discovery-knowledge stats skipped', err)
         }
@@ -582,14 +595,19 @@ export default function AttackSurfaceManagement() {
   }, [])
 
   const loadNerve = useCallback(async () => {
+    nerveAbortRef.current?.abort()
+    const ac = new AbortController()
+    nerveAbortRef.current = ac
     try {
-      const d = await apiFetch('/api/first-mover/nerve')
+      const d = await apiFetch('/api/first-mover/nerve', { signal: ac.signal })
+      if (ac.signal.aborted) return
       if (!d || typeof d !== 'object' || d.ok === false || d.unavailable) {
         setNerve({ unavailable: true })
         return
       }
       setNerve(d)
     } catch (err) {
+      if (err?.name === 'AbortError' || ac.signal.aborted) return
       if (import.meta.env.DEV) {
         console.debug('first-mover nerve skipped', err)
       }
@@ -600,7 +618,8 @@ export default function AttackSurfaceManagement() {
   const handleRefresh = useCallback(async () => {
     const run = await refreshFromHistory()
     applyHistoryFindings(run, setFindings, { setLastUpdated, setJobId: setLastJobId })
-    await loadSurfaceDiff(selectedClientId)
+    const ac = new AbortController()
+    await loadSurfaceDiff(selectedClientId, { signal: ac.signal })
   }, [refreshFromHistory, setLastUpdated, setLastJobId, loadSurfaceDiff, selectedClientId])
 
   useEffect(() => {
@@ -633,6 +652,7 @@ export default function AttackSurfaceManagement() {
 
   useEffect(() => {
     loadNerve()
+    return () => nerveAbortRef.current?.abort()
   }, [loadNerve])
   useVisiblePolling(loadNerve, 20000)
 
@@ -880,7 +900,12 @@ export default function AttackSurfaceManagement() {
           </span>
         </div>
 
-        {corpus && (
+        {corpusUnavailable && (
+          <p className="mt-4 text-sm text-amber-200/90" data-testid="asm-corpus-unavailable" role="alert">
+            {t('pages.attackSurfaceManagement.corpus_unavailable')}
+          </p>
+        )}
+        {corpus && !corpusUnavailable && (
           <div className="mt-4 rounded-xl border border-cyan-500/20 bg-gradient-to-br from-cyan-950/30 to-black/40 p-3">
             <div className="flex items-center justify-between gap-2 mb-2">
               <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-cyan-300/80">{t('pages.attackSurfaceManagement.corpus_title')}</p>
@@ -897,7 +922,7 @@ export default function AttackSurfaceManagement() {
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg border border-white/[0.06] bg-black/30 px-2.5 py-2">
                   <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)] truncate">{label}</p>
-                  <p className="text-lg font-bold text-white tabular-nums">{Number(value ?? 0).toLocaleString()}</p>
+                  <p className="text-lg font-bold text-white tabular-nums">{metricOrDash(value)}</p>
                 </div>
               ))}
             </div>
@@ -1009,7 +1034,7 @@ export default function AttackSurfaceManagement() {
           {/* Hero */}
           <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.06] via-black/40 to-black/60 p-6">
             <div className="flex flex-col md:flex-row items-center gap-6">
-              <ScoreRing score={score ?? 0} grade={grade} />
+              <ScoreRing score={score} grade={grade} />
               <div className="flex-1 w-full space-y-3">
                 <div>
                   <h2 className="text-lg font-bold text-white">{t('pages.attackSurfaceManagement.hero_score_title')} — {report.host}</h2>

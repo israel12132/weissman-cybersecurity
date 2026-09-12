@@ -161,17 +161,26 @@ pub async fn graph_casb_findings(target: &str, token: &str) -> Vec<Value> {
                     })
                     .unwrap_or(0);
                 out.push(finding(
-                    "casb_saas_posture",
-                    &format!("Entra OAuth grants inventoried ({n})"),
-                    if high_priv > 0 { "high" } else { "info" },
-                    "T1528",
-                    &format!(
-                        "Graph oauth2PermissionGrants returned {n} grants; {high_priv} include Mail.Read / Files.ReadWrite.All / Directory.ReadWrite."
-                    ),
-                    target,
-                ));
+                "casb_saas_posture",
+                &format!("Entra OAuth grants inventoried ({n})"),
+                if high_priv > 0 { "high" } else { "info" },
+                "T1528",
+                &format!(
+                    "Graph oauth2PermissionGrants returned {n} grants; {high_priv} include Mail.Read / Files.ReadWrite.All / Directory.ReadWrite."
+                ),
+                target,
+            ));
+                } else {
+                    out.push(finding(
+                        "casb_saas_posture",
+                        "Microsoft Graph OAuth-grant body unreadable",
+                        "medium",
+                        "T1528",
+                        "GET oauth2PermissionGrants returned HTTP 200 but JSON could not be parsed. Inventory is not a clean empty grant list.",
+                        target,
+                    ));
+                }
             }
-        }
         Ok(r) => {
             out.push(finding(
                 "casb_saas_posture",
@@ -290,13 +299,22 @@ pub async fn graph_dlp_findings(target: &str, token: &str) -> Vec<Value> {
                         ));
                     }
                 }
+            } else {
+                out.push(finding(
+                    "dlp_content_scan",
+                    "Graph mail DLP body unreadable",
+                    "medium",
+                    "T1114",
+                    "GET /me/messages returned HTTP 200 but JSON could not be parsed. Mailbox DLP is not a clean empty scan.",
+                    target,
+                ));
             }
         }
         Ok(r) => {
             out.push(finding(
                 "dlp_content_scan",
                 "Graph mail DLP query failed (token may lack Mail.Read)",
-                "info",
+                "medium",
                 "T1114",
                 &format!("GET /me/messages HTTP {}", r.status()),
                 target,
@@ -342,6 +360,15 @@ pub async fn google_casb_findings(target: &str, token: &str) -> Vec<Value> {
                     },
                     "T1528",
                     &format!("tokeninfo aud={aud} scope={scope}"),
+                    target,
+                ));
+            } else {
+                out.push(finding(
+                    "casb_saas_posture",
+                    "Google tokeninfo body unreadable",
+                    "medium",
+                    "T1528",
+                    "tokeninfo returned HTTP 200 but JSON could not be parsed. Scopes are not confirmed empty.",
                     target,
                 ));
             }
@@ -439,7 +466,7 @@ pub async fn google_dlp_findings(target: &str, token: &str) -> Vec<Value> {
             out.push(finding(
                 "dlp_content_scan",
                 "Gmail DLP query failed (token may lack gmail.readonly)",
-                "info",
+                "medium",
                 "T1114",
                 &format!("HTTP {}", r.status()),
                 target,

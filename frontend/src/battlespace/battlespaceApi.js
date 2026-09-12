@@ -34,13 +34,18 @@ export function evidenceFromCache(cachedFindings, nodeId) {
   return cachedFindings.filter((f) => findingMatchesNode(f, nodeId))
 }
 
-export async function fetchNodeEvidence(clientId, nodeId, { signal, cachedFindings } = {}) {
-  const cached = evidenceFromCache(cachedFindings, nodeId)
-  if (cached) return cached
+export async function fetchNodeEvidence(clientId, nodeId, { signal, cachedFindings, pageCache } = {}) {
+  if (Array.isArray(cachedFindings)) {
+    return evidenceFromCache(cachedFindings, nodeId)
+  }
+  if (Array.isArray(pageCache?.current)) {
+    return pageCache.current.filter((f) => findingMatchesNode(f, nodeId))
+  }
   const data = await apiFetch(`/api/findings?client_id=${clientId}&limit=500`, { signal })
   if (data?.ok === false || data?.unavailable) {
     throw new Error(data.detail || 'findings unavailable')
   }
   const list = Array.isArray(data) ? data : data?.findings || []
+  if (pageCache) pageCache.current = list
   return list.filter((f) => findingMatchesNode(f, nodeId))
 }

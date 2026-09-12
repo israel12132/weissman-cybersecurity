@@ -5150,6 +5150,7 @@
       "score_ring_tooltip": "Attack Surface Score {{score}}/100",
       "toast_select_client": "Select a client first",
       "clients_unavailable": "Clients API unavailable — the tenant list is not confirmed empty.",
+      "corpus_unavailable": "Discovery corpus API unavailable — stored counts are not confirmed zero.",
       "toast_enter_target": "Enter a target domain or IP",
       "toast_scan_failed": "Scan failed ({{status}})",
       "toast_scan_queued": "Attack-surface scan queued (job {{jid}})",

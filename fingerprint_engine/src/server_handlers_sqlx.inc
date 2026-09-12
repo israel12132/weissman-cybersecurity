@@ -246,7 +246,9 @@ async fn api_dashboard_exec_kpis(
     let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({ "ok": false, "detail": "Database unavailable" })),
+            Json(crate::http_unavailable::exec_kpis_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };

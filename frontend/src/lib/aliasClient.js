@@ -15,8 +15,8 @@ function clientsUnavailableError(detail) {
 }
 
 /** First client in tenant (ORDER BY id), matching backend alias resolution. */
-export async function fetchFirstTenantClientId() {
-  const data = await apiFetch('/api/clients')
+export async function fetchFirstTenantClientId({ signal } = {}) {
+  const data = await apiFetch('/api/clients?limit=1', { signal })
   if (data?.ok === false || data?.unavailable) {
     throw clientsUnavailableError(data.detail)
   }
@@ -34,7 +34,8 @@ export function useFirstTenantClientId() {
 
   useEffect(() => {
     let cancelled = false
-    fetchFirstTenantClientId()
+    const ac = new AbortController()
+    fetchFirstTenantClientId({ signal: ac.signal })
       .then((id) => {
         if (!cancelled) {
           setClientId(id)
@@ -42,15 +43,15 @@ export function useFirstTenantClientId() {
           setLoading(false)
         }
       })
-      .catch(() => {
-        if (!cancelled) {
-          setClientId(null)
-          setUnavailable(true)
-          setLoading(false)
-        }
+      .catch((e) => {
+        if (e?.name === 'AbortError' || ac.signal.aborted || cancelled) return
+        setClientId(null)
+        setUnavailable(true)
+        setLoading(false)
       })
     return () => {
       cancelled = true
+      ac.abort()
     }
   }, [])
 

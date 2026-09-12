@@ -363,15 +363,21 @@ pub async fn status_for_async(tenant_id: i64, client_ip: &str) -> Result<Value, 
     if !super::rate_limit_redis::is_enabled() {
         return Ok(status_for(tenant_id, client_ip));
     }
-    let scan = super::rate_limit_redis::current_tenant_scan(tenant_id).await;
-    let login = super::rate_limit_redis::current_login_ip(client_ip).await;
-    let api = super::rate_limit_redis::current_api_ip(client_ip).await;
+    let scan_max = scan_limit_per_minute();
+    let login_max = login_limit_per_minute();
+    let api_max = api_limit_per_sec();
+
+    let (scan, login, api) = tokio::join!(
+        super::rate_limit_redis::current_tenant_scan(tenant_id),
+        super::rate_limit_redis::current_login_ip(client_ip),
+        super::rate_limit_redis::current_api_ip(client_ip),
+    );
     match (scan, login, api) {
         (Some((scan_cur, scan_reset)), Some((login_cur, login_reset)), Some((api_cur, api_reset))) => {
             Ok(json!({
-                "scans": limit_block(scan_cur as usize, scan_limit_per_minute(), scan_reset),
-                "logins": limit_block(login_cur as usize, login_limit_per_minute(), login_reset),
-                "api": limit_block(api_cur as usize, api_limit_per_sec(), api_reset),
+                "scans": limit_block(scan_cur as usize, scan_max, scan_reset),
+                "logins": limit_block(login_cur as usize, login_max, login_reset),
+                "api": limit_block(api_cur as usize, api_max, api_reset),
             }))
         }
         _ => Err(()),
@@ -429,27 +435,9 @@ pub async fn analytics_for(tenant_id: i64, client_ip: &str, range: &str) -> Resu
 
     let prefix = format!("{tenant_id}:");
     let violations: Vec<Value> = if super::rate_limit_redis::is_enabled() {
-        let mut rows = super::rate_limit_redis::list_violations(tenant_id, 50).await;
-        if rows.is_empty() {
-            rows = store()
-                .violations
-                .lock()
-                .expect("violations lock")
-                .iter()
-                .rev()
-                .filter(|v| v.tenant_id == Some(tenant_id) || v.tenant_id.is_none())
-                .take(50)
-                .map(|v| {
-                    json!({
-                        "type": v.kind,
-                        "endpoint": v.endpoint,
-                        "time": v.at.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
-                        "attempts": v.attempts,
-                    })
-                })
-                .collect();
-        }
-        rows
+        super::rate_limit_redis::list_violations(tenant_id, 50)
+            .await
+            .ok_or(())?
     } else {
         store()
             .violations
@@ -470,21 +458,12 @@ pub async fn analytics_for(tenant_id: i64, client_ip: &str, range: &str) -> Resu
             .collect()
     };
 
-    let mut endpoints: Vec<(String, u32)> = if super::rate_limit_redis::is_enabled() {
-        super::rate_limit_redis::top_endpoints(tenant_id, ENDPOINT_CAP).await
+    let endpoints: Vec<(String, u32)> = if super::rate_limit_redis::is_enabled() {
+        super::rate_limit_redis::top_endpoints(tenant_id, ENDPOINT_CAP)
+            .await
+            .ok_or(())?
     } else {
-        store()
-            .endpoint_hits
-            .iter()
-            .filter_map(|e| {
-                let k = e.key();
-                k.strip_prefix(&prefix)
-                    .map(|path| (path.to_string(), *e.value()))
-            })
-            .collect()
-    };
-    if endpoints.is_empty() {
-        endpoints = store()
+        let mut endpoints: Vec<(String, u32)> = store()
             .endpoint_hits
             .iter()
             .filter_map(|e| {
@@ -495,7 +474,8 @@ pub async fn analytics_for(tenant_id: i64, client_ip: &str, range: &str) -> Resu
             .collect();
         endpoints.sort_by(|a, b| b.1.cmp(&a.1));
         endpoints.truncate(ENDPOINT_CAP);
-    }
+        endpoints
+    };
     let endpoints_json: Vec<Value> = endpoints
         .into_iter()
         .map(|(endpoint, count)| json!({ "endpoint": endpoint, "count": count }))
@@ -518,6 +498,7 @@ pub async fn analytics_for(tenant_id: i64, client_ip: &str, range: &str) -> Resu
         "endpoints": endpoints_json,
         "range": range,
         "source": source,
+        "history_source": "in_memory",
     }))
 }
 
