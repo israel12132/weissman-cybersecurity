@@ -17,7 +17,6 @@ import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import { SkeletonWidgetGrid, SkeletonCard } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../utils/apiFetch'
-import { readinessGaps } from '../lib/attackReadiness'
 
 const NS = 'pages.attackCoverage'
 
@@ -29,6 +28,11 @@ const TACTIC_COLORS = [
 ]
 function tacticColor(i) {
   return TACTIC_COLORS[i % TACTIC_COLORS.length]
+}
+
+export function readinessGaps(readiness) {
+  if (!readiness || !Array.isArray(readiness.gaps)) return []
+  return readiness.gaps.filter((g) => String(g || '').trim())
 }
 
 function AttackReadinessPanel({ readiness, t }) {
@@ -72,22 +76,19 @@ function AttackReadinessPanel({ readiness, t }) {
           accent="#22d3ee"
         />
       </div>
-      <div className="flex flex-wrap gap-2 mb-4" data-testid="attack-readiness-gates">
-        {readiness.alert_rules_gate_kev_epss_cvss_jewel && (
-          <span className="text-[10px] font-mono px-2 py-1 rounded border border-amber-500/30 bg-amber-500/10 text-amber-200">
-            {t(`${NS}.alert_gates`)}
-          </span>
-        )}
-        {readiness.scan_cron_https_and_defer_empty && (
-          <span className="text-[10px] font-mono px-2 py-1 rounded border border-cyan-500/30 bg-cyan-500/10 text-cyan-200">
-            {t(`${NS}.scan_https`)}
-          </span>
-        )}
-        {readiness.ct_squirt_inline_fusion && (
-          <span className="text-[10px] font-mono px-2 py-1 rounded border border-violet-500/30 bg-violet-500/10 text-violet-200">
-            {t(`${NS}.ct_fusion`)}
-          </span>
-        )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <ExecutiveWidget
+          label={t(`${NS}.ct_squirt`)}
+          value={readiness.ct_squirt_engine || 'first_mover_delta_fusion'}
+          hint={(readiness.delta_follow_on_engines || []).join(' · ') || '—'}
+          accent="#fbbf24"
+        />
+        <ExecutiveWidget
+          label={t(`${NS}.oast_alerts`)}
+          value={readiness.oast_gated_alerts ? 'on' : 'off'}
+          hint={(readiness.oast_follow_on_engines || []).join(' · ') || '—'}
+          accent="#34d399"
+        />
       </div>
       {gaps.length > 0 && (
         <>

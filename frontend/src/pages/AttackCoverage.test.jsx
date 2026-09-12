@@ -23,8 +23,7 @@ vi.mock('./PageShell', () => ({
 }))
 vi.mock('../components/engine/ShellScanActions', () => ({ __esModule: true, default: () => null }))
 
-import AttackCoverage from './AttackCoverage.jsx'
-import { readinessGaps } from '../lib/attackReadiness'
+import AttackCoverage, { readinessGaps } from './AttackCoverage.jsx'
 
 describe('AttackCoverage', () => {
   beforeEach(() => {
@@ -47,9 +46,10 @@ describe('AttackCoverage', () => {
         threat_emulation_apt_scenarios: 7,
         agent_required_count: 58,
         redteam_cron_engines: ['ai_adversarial_redteam', 'kill_chain', 'autonomous_pentest'],
-        alert_rules_gate_kev_epss_cvss_jewel: true,
-        scan_cron_https_and_defer_empty: true,
-        ct_squirt_inline_fusion: true,
+        ct_squirt_engine: 'first_mover_delta_fusion',
+        oast_gated_alerts: true,
+        delta_follow_on_engines: ['subdomain_takeover', 'jwt_attack'],
+        oast_follow_on_engines: ['oast_oob', 'ssrf_advanced'],
         gaps: ['Mobile ATT&CK coverage is sparse'],
       },
     })
@@ -59,7 +59,6 @@ describe('AttackCoverage', () => {
       </MemoryRouter>,
     )
     expect(await screen.findByTestId('attack-readiness')).toBeInTheDocument()
-    expect(screen.getByTestId('attack-readiness-gates')).toBeInTheDocument()
     expect(screen.getByText('Mobile ATT&CK coverage is sparse')).toBeInTheDocument()
     expect(apiFetch).toHaveBeenCalledWith('/api/attack-coverage')
   })

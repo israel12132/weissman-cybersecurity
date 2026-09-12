@@ -93,7 +93,7 @@ fn live_status(id: u16) -> ControlStatus {
         }
         8 => ControlStatus::ok("MITRE ATT&CK v19.1 currency gate in CI"),
         9 => ControlStatus::ok(
-            "OSINT/ASM nodes auto-tagged internet_exposed; identity/cloud/OT/valued assets auto-tagged crown_jewel (top-5 fallback)",
+            "OSINT/ASM nodes auto-tagged internet_exposed; identity/cloud/OT/high-risk nodes auto-tagged crown_jewel",
         ),
         10 => ControlStatus::ok("Mobile surface included in core scan engine set"),
         11 => ControlStatus::ok("HTTPS beacon jitter 15–30%"),

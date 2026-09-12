@@ -330,21 +330,30 @@ async fn count_findings_matching_condition(
                 .collect()
         })
         .unwrap_or_default();
-    let min_epss: Option<f64> = condition
-        .get("min_epss")
-        .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())));
+
+    let require_oast = condition
+        .get("require_oast_confirmed")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let require_proof = condition
+        .get("require_live_proof")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     let kev_only = condition
         .get("kev_only")
         .or_else(|| condition.get("kev"))
-        .and_then(Value::as_bool)
+        .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    let min_epss: Option<f64> = condition
+        .get("min_epss")
+        .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())));
     let min_cvss: Option<f64> = condition
         .get("min_cvss")
         .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())));
-    let crown_jewel_only = condition
+    let crown_jewel = condition
         .get("crown_jewel")
         .or_else(|| condition.get("crown_jewel_on_path"))
-        .and_then(Value::as_bool)
+        .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
     let count: i64 = sqlx::query_scalar(
@@ -358,32 +367,44 @@ async fn count_findings_matching_condition(
                     OR COALESCE(v.raw_data, '{}'::jsonb)::text ILIKE $2
                   )
               AND ($3::text[] IS NULL OR cardinality($3::text[]) = 0 OR v.source = ANY($3))
-              AND ($4::float8 IS NULL OR COALESCE(v.epss_score, 0) >= $4)
-              AND (NOT $5 OR COALESCE(v.kev_listed, false))
               AND (
-                    $6::float8 IS NULL
-                    OR COALESCE(
-                         CASE WHEN (v.raw_data->>'cvss_score') ~ '^[0-9]+(\\.[0-9]+)?$'
-                              THEN (v.raw_data->>'cvss_score')::float8 END,
-                         CASE WHEN (v.raw_data->>'cvss') ~ '^[0-9]+(\\.[0-9]+)?$'
-                              THEN (v.raw_data->>'cvss')::float8 END,
-                         0
-                       ) >= $6
+                    $4::boolean IS NOT TRUE
+                    OR COALESCE(v.raw_data->>'oast_confirmed','') = 'true'
+                    OR (
+                         COALESCE(v.raw_data->>'verified','') = 'true'
+                         AND COALESCE(v.raw_data->>'verification_method','') = 'oob_oast_callback'
+                       )
                   )
               AND (
-                    NOT $7
+                    $5::boolean IS NOT TRUE
+                    OR COALESCE(NULLIF(v.proof, ''), v.raw_data #>> '{evidence,proof}', '') <> ''
+                  )
+              AND ($6::boolean IS NOT TRUE OR COALESCE(v.kev_listed, false) = TRUE)
+              AND ($7::float8 IS NULL OR COALESCE(v.epss_score, 0) >= $7)
+              AND (
+                    $8::float8 IS NULL
+                    OR COALESCE(
+                         CASE
+                           WHEN COALESCE(v.raw_data->>'cvss_score','') ~ '^[0-9]+(\\.[0-9]+)?$'
+                           THEN (v.raw_data->>'cvss_score')::float8
+                           ELSE 0
+                         END,
+                         0
+                       ) >= $8
+                  )
+              AND (
+                    $9::boolean IS NOT TRUE
                     OR EXISTS (
                          SELECT 1 FROM risk_graph_nodes n
                           WHERE n.tenant_id = v.tenant_id
                             AND n.client_id = v.client_id
                             AND n.crown_jewel = TRUE
                             AND COALESCE(n.honey_node, FALSE) IS NOT TRUE
-                            AND char_length(COALESCE(n.label, '')) >= 3
+                            AND NULLIF(n.label, '') IS NOT NULL
                             AND (
                                  COALESCE(v.raw_data->>'target','') ILIKE '%' || n.label || '%'
                               OR COALESCE(v.raw_data->>'host','') ILIKE '%' || n.label || '%'
                               OR v.title ILIKE '%' || n.label || '%'
-                              OR COALESCE(v.proof, '') ILIKE '%' || n.label || '%'
                             )
                        )
                   )"#,
@@ -399,10 +420,12 @@ async fn count_findings_matching_condition(
     } else {
         Some(engines)
     })
-    .bind(min_epss)
+    .bind(require_oast)
+    .bind(require_proof)
     .bind(kev_only)
+    .bind(min_epss)
     .bind(min_cvss)
-    .bind(crown_jewel_only)
+    .bind(crown_jewel)
     .fetch_one(&mut **tx)
     .await?;
 

@@ -26,6 +26,9 @@ pub struct AlertFindingInfo {
     pub proof: String,
     pub target: String,
     pub crown_jewel: bool,
+    pub oast_confirmed: bool,
+    pub path_hops: Option<u32>,
+    pub path_jewel: String,
     pub deep_link: String,
 }
 
@@ -158,11 +161,14 @@ fn finding_evidence(finding: &AlertFindingInfo) -> Value {
         "proof": finding.proof,
         "target": finding.target,
         "crown_jewel": finding.crown_jewel,
+        "oast_confirmed": finding.oast_confirmed,
+        "path_hops": finding.path_hops,
+        "path_jewel": finding.path_jewel,
         "deep_link": finding.deep_link,
     })
 }
 
-fn alert_payload(channel: &str, rule: &AlertRuleInfo, finding: &AlertFindingInfo) -> Value {
+fn alert_flags(finding: &AlertFindingInfo) -> Vec<&'static str> {
     let mut flags = Vec::new();
     if finding.kev {
         flags.push("KEV");
@@ -170,9 +176,17 @@ fn alert_payload(channel: &str, rule: &AlertRuleInfo, finding: &AlertFindingInfo
     if finding.crown_jewel {
         flags.push("CROWN_JEWEL");
     }
+    if finding.oast_confirmed {
+        flags.push("OAST");
+    }
     if finding.epss >= 0.7 {
         flags.push("HIGH_EPSS");
     }
+    flags
+}
+
+fn alert_payload(channel: &str, rule: &AlertRuleInfo, finding: &AlertFindingInfo) -> Value {
+    let flags = alert_flags(finding);
     json!({
         "channel": channel,
         "event": "alert_rule_fired",
@@ -183,11 +197,12 @@ fn alert_payload(channel: &str, rule: &AlertRuleInfo, finding: &AlertFindingInfo
         "finding": finding_evidence(finding),
         "flags": flags,
         "text": format!(
-            "[Weissman][{}] rule \"{}\" fired on {} finding{}: {}{}",
+            "[Weissman][{}] rule \"{}\" fired on {} finding{}{}: {}{}",
             channel,
             rule.name,
             finding.severity,
             if finding.kev { " (KEV)" } else { "" },
+            if finding.oast_confirmed { " OAST" } else { "" },
             finding.title,
             if finding.deep_link.is_empty() {
                 String::new()
@@ -222,6 +237,7 @@ fn teams_adaptive_card(rule: &AlertRuleInfo, finding: &AlertFindingInfo) -> Valu
                         {"title": "CVE", "value": if finding.cve.is_empty() { "—".into() } else { finding.cve.clone() }},
                         {"title": "EPSS", "value": format!("{:.3}", finding.epss)},
                         {"title": "KEV", "value": if finding.kev { "yes" } else { "no" }},
+                        {"title": "OAST", "value": if finding.oast_confirmed { "yes" } else { "no" }},
                         {"title": "Crown jewel", "value": if finding.crown_jewel { "yes" } else { "no" }},
                     ]}
                 ],
@@ -347,13 +363,14 @@ async fn deliver_email(
         return false;
     };
     let subject = format!(
-        "[Weissman] {}{} — {}",
+        "[Weissman] {}{}{} — {}",
         finding.severity,
         if finding.kev { " KEV" } else { "" },
+        if finding.oast_confirmed { " OAST" } else { "" },
         finding.title.chars().take(80).collect::<String>()
     );
     let body = format!(
-        "Alert rule \"{}\" fired.\n\nFinding #{}\nSeverity: {}\nSource: {}\nCVE: {}\nEPSS: {:.3}\nKEV: {}\nCVSS: {:.1}\nCrown jewel: {}\nTarget: {}\nProof: {}\nLink: {}\nTitle: {}\n\n{}",
+        "Alert rule \"{}\" fired.\n\nFinding #{}\nSeverity: {}\nSource: {}\nCVE: {}\nEPSS: {:.3}\nKEV: {}\nCVSS: {:.1}\nOAST: {}\nCrown jewel: {}\nPath hops: {}\nTarget: {}\nProof: {}\nLink: {}\nTitle: {}\n\n{}",
         rule.name,
         finding.id,
         finding.severity,
@@ -362,7 +379,9 @@ async fn deliver_email(
         finding.epss,
         finding.kev,
         finding.cvss,
+        finding.oast_confirmed,
         finding.crown_jewel,
+        finding.path_hops.map(|n| n.to_string()).unwrap_or_else(|| "—".into()),
         finding.target,
         finding.proof,
         finding.deep_link,
@@ -465,9 +484,10 @@ async fn deliver_channel(
                 "dedup_key": format!("weissman:rule:{}:finding:{}", rule.id, finding.id),
                 "payload": {
                     "summary": format!(
-                        "[pagerduty] {}{} — {}",
+                        "[pagerduty] {}{}{} — {}",
                         finding.severity,
                         if finding.kev { " KEV" } else { "" },
+                        if finding.oast_confirmed { " OAST" } else { "" },
                         finding.title
                     ).chars().take(1024).collect::<String>(),
                     "severity": pagerduty_severity(&finding.severity),
@@ -597,26 +617,7 @@ pub async fn notify_correlation_incident(pool: &PgPool, tenant_id: i64, payload:
         delivered |= post_json(&client, url, payload).await;
     }
     if let Some(url) = config.teams_webhook_url.as_deref() {
-        let text = payload
-            .get("text")
-            .and_then(Value::as_str)
-            .unwrap_or("[Weissman] correlation incident");
-        let card = json!({
-            "type": "message",
-            "attachments": [{
-                "contentType": "application/vnd.microsoft.card.adaptive",
-                "content": {
-                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                    "type": "AdaptiveCard",
-                    "version": "1.4",
-                    "body": [
-                        {"type": "TextBlock", "weight": "Bolder", "size": "Medium", "text": "Weissman correlation incident"},
-                        {"type": "TextBlock", "wrap": true, "text": text}
-                    ]
-                }
-            }]
-        });
-        delivered |= post_json(&client, url, &card).await;
+        delivered |= post_json(&client, url, payload).await;
     }
     if let Some(key) = resolve_pagerduty_key(&config) {
         let summary = payload
@@ -698,7 +699,7 @@ pub async fn notify_heal_completed(
             delivered |= post_json_signed(&client, url, &payload).await;
         }
     }
-    if (!ok || verdict == "broke_app") {
+    if !ok || verdict == "broke_app" {
         if let Some(key) = resolve_pagerduty_key(&config) {
             let pd = json!({
                 "routing_key": key,
@@ -992,12 +993,15 @@ mod evidence_tests {
             proof: "HTTP 200 /actuator/env".into(),
             target: "https://app.example".into(),
             crown_jewel: true,
+            oast_confirmed: true,
+            path_hops: Some(2),
+            path_jewel: "vault.internal".into(),
             deep_link: "https://weissman.example/command-center/findings?id=42".into(),
         }
     }
 
     #[test]
-    fn payload_includes_epss_kev_proof_and_deep_link() {
+    fn payload_includes_epss_kev_oast_proof_and_deep_link() {
         let rule = AlertRuleInfo {
             id: 1,
             name: "KEV critical".into(),
@@ -1007,13 +1011,14 @@ mod evidence_tests {
         assert_eq!(p["finding"]["kev"], true);
         assert_eq!(p["finding"]["epss"], 0.91);
         assert_eq!(p["finding"]["crown_jewel"], true);
+        assert_eq!(p["finding"]["oast_confirmed"], true);
+        assert_eq!(p["finding"]["path_hops"], 2);
         assert!(p["text"].as_str().unwrap().contains("KEV"));
+        assert!(p["text"].as_str().unwrap().contains("OAST"));
         assert!(p["text"].as_str().unwrap().contains("findings?id=42"));
-        assert!(p["flags"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|f| f.as_str() == Some("KEV")));
+        let flags = p["flags"].as_array().unwrap();
+        assert!(flags.iter().any(|f| f.as_str() == Some("KEV")));
+        assert!(flags.iter().any(|f| f.as_str() == Some("OAST")));
     }
 
     #[test]

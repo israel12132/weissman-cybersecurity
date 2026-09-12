@@ -1,9 +1,6 @@
-import { afterEach, describe, it, expect, vi } from 'vitest'
-import { render, screen, cleanup, within } from '@testing-library/react'
-import { FirstMoverDeltaPanel, extraHostsFromSurfaceDiff, isSchismPanelFinding, schismScanBody } from './AttackSurfaceManagement.jsx'
-
-// vitest runs with globals:false, so RTL's automatic afterEach cleanup isn't registered.
-afterEach(cleanup)
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import { FirstMoverDeltaPanel, ctKillChain } from './AttackSurfaceManagement.jsx'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k) => k, i18n: { language: 'en' } }),
@@ -50,6 +47,22 @@ vi.mock('../lib/useJobPoll', () => ({
 vi.mock('../lib/clientTarget', () => ({ firstClientTarget: () => '' }))
 
 describe('FirstMoverDeltaPanel', () => {
+  it('ctKillChain reads CT fusion + OAST follow-on from nerve', () => {
+    const chain = ctKillChain({
+      certstream: { hunts_enqueued: 4 },
+      oast: { configured: true },
+      fusion: {
+        ct_enqueue_engine: 'first_mover_delta_fusion',
+        follow_on_engines: ['subdomain_takeover', 'jwt_attack'],
+        oast_follow_on_engines: ['oast_oob', 'ssrf_advanced'],
+      },
+    })
+    expect(chain.ctEngine).toBe('first_mover_delta_fusion')
+    expect(chain.hunts).toBe(4)
+    expect(chain.oastLive).toBe(true)
+    expect(chain.followOn).toContain('jwt_attack')
+    expect(chain.oastFollowOn).toContain('oast_oob')
+  })
   it('renders added/changed/removed hosts from live surface-diff payload', () => {
     const diff = {
       current_count: 3,
@@ -65,12 +78,19 @@ describe('FirstMoverDeltaPanel', () => {
         loading={false}
         hunting={false}
         fusionHunting={false}
-        schismHunting={false}
         onHunt={() => {}}
         onFusion={() => {}}
-        onSchism={() => {}}
         huntDisabled={false}
-        nerve={{ certstream: { connected: true, enabled: true }, oast: { configured: true }, nvd: { api_key_configured: false } }}
+        nerve={{
+          certstream: { connected: true, enabled: true, hunts_enqueued: 2 },
+          oast: { configured: true },
+          nvd: { api_key_configured: false },
+          fusion: {
+            ct_enqueue_engine: 'first_mover_delta_fusion',
+            follow_on_engines: ['subdomain_takeover', 'jwt_attack'],
+            oast_follow_on_engines: ['oast_oob'],
+          },
+        }}
       />,
     )
     expect(screen.getByText('shop.example.com')).toBeTruthy()
@@ -78,8 +98,8 @@ describe('FirstMoverDeltaPanel', () => {
     expect(screen.getByText('old.example.com')).toBeTruthy()
     expect(screen.getByText('pages.attackSurfaceManagement.first_mover_title')).toBeTruthy()
     expect(screen.getByText(/pages.attackSurfaceManagement.first_mover_fusion/)).toBeTruthy()
-    expect(screen.getByText(/pages.attackSurfaceManagement.first_mover_schism/)).toBeTruthy()
     expect(screen.getByText(/pages.attackSurfaceManagement.nerve_certstream/)).toBeTruthy()
+    expect(screen.getByTestId('ct-kill-chain')).toBeTruthy()
   })
 
   it('shows unavailable copy when the store is down without treating it as empty', () => {
@@ -114,146 +134,5 @@ describe('FirstMoverDeltaPanel', () => {
       />,
     )
     expect(screen.getByText('pages.attackSurfaceManagement.first_mover_empty')).toBeTruthy()
-  })
-
-  it('renders fused schism findings and hides first-mover inventory rows', () => {
-    render(
-      <FirstMoverDeltaPanel
-        diff={{ current_count: 1, added: [{ fqdn: 'shop.example.com', evidence: 'new host' }], changed: [], removed: [] }}
-        loading={false}
-        hunting={false}
-        fusionHunting={false}
-        schismHunting={false}
-        onHunt={() => {}}
-        onFusion={() => {}}
-        onSchism={() => {}}
-        huntDisabled={false}
-        schismFindings={[
-          { title: 'New internet-facing host shop.example.com', severity: 'medium', category: 'added', type: 'first_mover_surface_delta' },
-          {
-            title: 'HTTP/1.1↔HTTP/2 schism auth bypass',
-            severity: 'critical',
-            fusion: 'exposure_schism_fusion',
-            fusion_engine: 'liminal_boundary',
-            category: 'boundary_protocol_bypass',
-            type: 'exposure_schism_fusion',
-          },
-        ]}
-      />,
-    )
-    expect(screen.getByText('HTTP/1.1↔HTTP/2 schism auth bypass')).toBeTruthy()
-    expect(screen.queryByText('New internet-facing host shop.example.com')).toBeNull()
-  })
-
-  it('extracts extra_hosts from live surface-diff added+changed only', () => {
-    expect(extraHostsFromSurfaceDiff({
-      added: [{ fqdn: 'shop.example.com' }],
-      changed: [{ fqdn: 'www.example.com' }],
-      removed: [{ fqdn: 'old.example.com' }],
-    })).toEqual(['shop.example.com', 'www.example.com'])
-    expect(extraHostsFromSurfaceDiff({ unavailable: true, added: [{ fqdn: 'shop.example.com' }] })).toEqual([])
-    expect(isSchismPanelFinding({ type: 'first_mover_surface_delta', category: 'added' })).toBe(false)
-    expect(isSchismPanelFinding({ fusion: 'exposure_schism_fusion', title: 'idle' })).toBe(true)
-  })
-
-  it('disables sibling first-mover buttons while hunt, fusion, schism, or pending is in flight', () => {
-    const view = (extra) => (
-      <FirstMoverDeltaPanel
-        diff={{ current_count: 0, added: [], changed: [], removed: [] }}
-        loading={false}
-        hunting={false}
-        fusionHunting={false}
-        schismHunting={false}
-        pending={false}
-        onHunt={() => {}}
-        onFusion={() => {}}
-        onSchism={() => {}}
-        huntDisabled={false}
-        {...extra}
-      />
-    )
-    const { rerender, container } = render(view({ hunting: true }))
-    const named = () => {
-      const root = within(container)
-      return {
-        hunt: root.getByRole('button', { name: /first_mover_hunting|first_mover_hunt/ }),
-        fusion: root.getByRole('button', { name: /first_mover_fusion|first_mover_fusing/ }),
-        schism: root.getByRole('button', { name: /first_mover_schism/ }),
-      }
-    }
-    let btns = named()
-    expect(btns.hunt).toBeDisabled()
-    expect(btns.fusion).toBeDisabled()
-    expect(btns.schism).toBeDisabled()
-
-    rerender(view({ fusionHunting: true }))
-    btns = named()
-    expect(btns.hunt).toBeDisabled()
-    expect(btns.fusion).toBeDisabled()
-    expect(btns.schism).toBeDisabled()
-
-    rerender(view({ schismHunting: true }))
-    btns = named()
-    expect(btns.hunt).toBeDisabled()
-    expect(btns.fusion).toBeDisabled()
-    expect(btns.schism).toBeDisabled()
-
-    rerender(view({ pending: true }))
-    btns = named()
-    expect(btns.hunt).toBeDisabled()
-    expect(btns.fusion).toBeDisabled()
-    expect(btns.schism).toBeDisabled()
-  })
-
-  it('posts extra_hosts from surface-diff added+changed on the schism scan body', () => {
-    expect(schismScanBody({
-      clientId: 7,
-      target: 'acme.test',
-      surfaceDiff: {
-        added: [{ fqdn: 'shop.example.com' }],
-        changed: [{ fqdn: 'www.example.com' }],
-        removed: [{ fqdn: 'old.example.com' }],
-      },
-    })).toEqual({
-      engine: 'exposure_schism_fusion',
-      client_id: 7,
-      target: 'acme.test',
-      include_ct: true,
-      include_http: true,
-      chain_web_engines: false,
-      extra_hosts: 'shop.example.com,www.example.com',
-    })
-    expect(schismScanBody({
-      clientId: 7,
-      target: 'acme.test',
-      surfaceDiff: { unavailable: true, added: [{ fqdn: 'shop.example.com' }] },
-    }).extra_hosts).toBeUndefined()
-  })
-
-  it('shows schism evidence and an overflow cue beyond eight live fractures', () => {
-    const schismFindings = Array.from({ length: 9 }, (_, i) => ({
-      title: `HTTP/2 schism ${i}`,
-      severity: 'high',
-      fusion: 'exposure_schism_fusion',
-      evidence: i === 0 ? 'ALPN h2 vs HTTP/1.1 WWW-Authenticate mismatch' : '',
-    }))
-    render(
-      <FirstMoverDeltaPanel
-        diff={{ current_count: 0, added: [], changed: [], removed: [] }}
-        loading={false}
-        hunting={false}
-        fusionHunting={false}
-        schismHunting={false}
-        onHunt={() => {}}
-        onFusion={() => {}}
-        onSchism={() => {}}
-        huntDisabled={false}
-        schismFindings={schismFindings}
-      />,
-    )
-    expect(screen.getByText('HTTP/2 schism 0')).toBeTruthy()
-    expect(screen.getByText('ALPN h2 vs HTTP/1.1 WWW-Authenticate mismatch')).toBeTruthy()
-    expect(screen.queryByText('HTTP/2 schism 8')).toBeNull()
-    expect(screen.getByText('pages.attackSurfaceManagement.first_mover_schism_more')).toBeTruthy()
   })
 })

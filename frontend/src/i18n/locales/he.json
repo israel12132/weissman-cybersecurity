@@ -1529,7 +1529,7 @@
       "no_choke_body": "אין צווארי בקבוק משותפים בין הנתיבים שחושבו.",
       "no_paths_title": "אין נתיבי תקיפה",
       "no_paths_body": "לא נמצא נתיב אינטרנט → נכס כתר בגרף הנוכחי.",
-      "no_jewels_banner": "אין נכסי כתר — לדייקסטרה אין יעדים. חישוב מחדש מתייג זהות/ענן/OT/נכסים בעלי ערך (ואז 5 המובילים). או סמן נכסי כתר למטה.",
+      "no_jewels_banner": "אין נכסי כתר — לדייקסטרה אין יעדים. חישוב מחדש מתייג אוטומטית צמתי זהות/ענן/OT/סיכון-גבוה כדי שנתיבים יוכלו להיווצר.",
       "no_jewels_recompute": "תייג נכסי כתר וחשב מחדש",
       "score": "ציון",
       "root_cause": "גורם שורש",
@@ -1599,7 +1599,9 @@
       "weaponized": "מצב מחומש דורש בקרה כפולה",
       "alert_gates": "שערי KEV / EPSS / CVSS / כתר",
       "scan_https": "סריקות cron ב-HTTPS",
-      "ct_fusion": "CT squirt → fusion מובנה"
+      "ct_fusion": "CT squirt → fusion מובנה",
+      "ct_squirt": "מנוע CT squirt",
+      "oast_alerts": "התראות עם שער OAST"
     },
     "securityPosture": {
       "title": "מצב אבטחת הפלטפורמה",
@@ -2279,8 +2281,21 @@
       "cond_epss": "EPSS מינימלי",
       "cond_cvss": "CVSS מינימלי",
       "cond_jewel": "נוגע בנכס כתר",
-      "template_kev": "KEV על כתר",
-      "template_kev_body": "התראה כשממצא KEV נוגע בנכס כתר"
+      "template_kev": "KEV על crown jewel",
+      "template_kev_body": "התראה כשממצא KEV נוגע בנכס כתר",
+      "require_oast": "דרוש callback OAST מאושר",
+      "require_oast_hint": "אל תתריע עד שהקולקטור ראה פגיעה out-of-band.",
+      "require_proof": "דרוש טקסט הוכחה חי",
+      "require_proof_hint": "דלג על ממצאים בלי proof / evidence.",
+      "template_oast": "קריטי מוכח-OAST",
+      "template_oast_hint": "קריטי/גבוה רק אחרי callback OAST חי.",
+      "template_kev_hint": "CISA KEV + EPSS ≥ 0.7 על נכס crown-jewel.",
+      "kev_only": "CISA KEV בלבד",
+      "kev_only_hint": "התראה רק כש-kev_listed אמת בממצא.",
+      "crown_jewel": "נוגע ב-crown jewel",
+      "crown_jewel_hint": "המארח/כותרת חייבים להתאים לצומת crown-jewel.",
+      "min_epss": "EPSS מינימלי",
+      "min_epss_hint": "דלג אלא אם ציון FIRST.org EPSS הוא לפחות הערך (0–1)."
     },
     "adminManagement": {
       "search_users": "חיפוש משתמשים…",
@@ -3877,12 +3892,12 @@
       "severity_high": "גבוה",
       "severity_medium": "בינוני",
       "severity_low": "נמוך",
-      "mark_jewel": "סמן נכס כתר",
-      "jewel_on": "נכס כתר",
-      "mark_entry": "סמן חשוף לאינטרנט",
-      "entry_on": "חשוף לאינטרנט",
+      "mark_jewel": "סמן כ-crown jewel",
+      "jewel_on": "Crown jewel",
+      "mark_entry": "סמן ככניסה מהאינטרנט",
+      "entry_on": "כניסה מהאינטרנט",
       "flag_saved": "דגלי הצומת נשמרו",
-      "flag_failed": "עדכון דגלי הצומת נכשל.",
+      "flag_failed": "עדכון דגלי הצומת נכשל",
       "toggle_exposed": "החלף חשיפה לאינטרנט",
       "toggle_jewel": "החלף נכס כתר"
     },
@@ -5244,7 +5259,10 @@
       "first_mover_schism": "הוכח שבר פרוטוקול",
       "first_mover_schism_running": "בודק שברים…",
       "first_mover_schism_live": "ראיות schism + kill-chain חיות",
-      "first_mover_schism_more": "+{{count}} שברים חיים נוספים בעבודה"
+      "first_mover_schism_more": "+{{count}} שברים חיים נוספים בעבודה",
+      "nerve_kill_chain": "CT → fusion → OAST",
+      "nerve_hunts": "{{count}} ציד",
+      "nerve_follow_on": "המשך: {{engines}}"
     },
     "dnsDomainPosture": {
       "evidence_notice": "DNS, SPF, DMARC ו-posture תת-דומיינים מ-POST /api/command-center/scan (מנועי email_dns_posture / dns). רשומות נפתרות חי מול resolvers ציבוריים לדומיינים מורשים.",

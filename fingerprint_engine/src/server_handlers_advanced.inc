@@ -170,75 +170,50 @@ async fn api_risk_node_flags_patch(
     if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
-    if body.internet_exposed.is_none() && body.crown_jewel.is_none() && body.asset_value.is_none() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"ok": false, "detail": "no flags provided"})),
-        )
-            .into_response();
-    }
-    if body.asset_value.is_some_and(|v| !v.is_finite()) {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"ok": false, "detail": "asset_value must be a finite number"})),
-        )
-            .into_response();
-    }
-    let asset_value = body.asset_value.map(|v| v.clamp(0.01, 100.0));
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
-    let row = sqlx::query(
+    let client_id: Option<i64> = sqlx::query_scalar(
+        "SELECT client_id FROM risk_graph_nodes WHERE id = $1 AND tenant_id = $2",
+    )
+    .bind(node_id)
+    .bind(auth.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let res = sqlx::query(
         r#"UPDATE risk_graph_nodes
               SET internet_exposed = COALESCE($1, internet_exposed),
                   crown_jewel      = COALESCE($2, crown_jewel),
                   asset_value      = COALESCE($3, asset_value)
-            WHERE id = $4 AND tenant_id = $5
-              AND ($6::bigint IS NULL OR client_id = $6)
-          RETURNING id, client_id, internet_exposed, crown_jewel, asset_value"#,
+            WHERE id = $4 AND tenant_id = $5"#,
     )
     .bind(body.internet_exposed)
     .bind(body.crown_jewel)
-    .bind(asset_value)
+    .bind(body.asset_value)
     .bind(node_id)
     .bind(auth.tenant_id)
-    .bind(auth.assigned_client_id)
-    .fetch_optional(&mut *tx)
+    .execute(&mut *tx)
     .await;
-    match row {
-        Ok(Some(r)) => {
-            let client_id: i64 = r.try_get("client_id").unwrap_or(0);
-            let _ = tx.commit().await;
-            let dirty = client_id > 0;
-            if dirty {
-                crate::attack_path::mark_graph_dirty(auth.tenant_id, client_id);
+    let _ = tx.commit().await;
+    match res {
+        Ok(r) if r.rows_affected() > 0 => {
+            if let Some(cid) = client_id {
+                crate::attack_path::mark_graph_dirty(auth.tenant_id, cid);
             }
-            (
-                StatusCode::OK,
-                Json(json!({
-                    "ok": true,
-                    "id": node_id,
-                    "client_id": client_id,
-                    "internet_exposed": r.try_get::<bool,_>("internet_exposed").unwrap_or(false),
-                    "crown_jewel": r.try_get::<bool,_>("crown_jewel").unwrap_or(false),
-                    "asset_value": r.try_get::<f32,_>("asset_value").unwrap_or(1.0),
-                    "graph_dirty": dirty,
-                })),
-            )
-                .into_response()
+            (StatusCode::OK, Json(json!({"ok": true, "id": node_id}))).into_response()
         }
-        Ok(None) => {
-            let _ = tx.rollback().await;
-            (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "node not found"}))).into_response()
-        }
-        Err(e) => {
-            let _ = tx.rollback().await;
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
-            )
-                .into_response()
-        }
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "detail": "node not found"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
+        )
+            .into_response(),
     }
 }
 
@@ -776,7 +751,7 @@ async fn api_threat_analysis_for_client(
             &crate::correlation_rules::default_rules(),
             &events,
         );
-        persisted_incidents = crate::correlation_rules::persist_incidents(
+        persisted_incidents = crate::correlation_rules::persist_and_alert(
             &state.app_pool,
             auth.tenant_id,
             Some(client_id),

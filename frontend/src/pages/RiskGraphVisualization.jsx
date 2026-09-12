@@ -11,8 +11,8 @@ import { SkeletonWidgetGrid, SkeletonBar } from '../components/ui/Skeleton'
 import { api } from '../utils/apiFetch';
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 import Button from '../components/ui/Button'
-import CrownJewelFlagPanel from '../components/CrownJewelFlagPanel'
 import { downloadCsv } from '../lib/exportFindingsCsv'
+import { useToast } from '../components/ui/Toaster'
 
 const NS = 'pages.riskGraphVisualization';
 
@@ -33,7 +33,7 @@ function severityLabel(severity, t) {
 }
 
 function exportNodesCsv(nodes) {
-  const header = ['id', 'name', 'severity', 'risk_score', 'node_type', 'is_choke_point'];
+  const header = ['id', 'name', 'severity', 'risk_score', 'node_type', 'is_choke_point', 'crown_jewel', 'internet_exposed'];
   const rows = nodes.map((n) => [
     n.id ?? '',
     n.name || n.label || '',
@@ -41,8 +41,35 @@ function exportNodesCsv(nodes) {
     n.risk_score ?? '',
     n.node_type ?? '',
     n.is_choke_point ? 'yes' : 'no',
+    n.crown_jewel ? 'yes' : 'no',
+    n.internet_exposed ? 'yes' : 'no',
   ]);
   downloadCsv(rows, header, 'risk-graph-nodes');
+}
+
+export function severityFromRisk(score) {
+  const n = Number(score) || 0
+  if (n >= 80) return 'critical'
+  if (n >= 60) return 'high'
+  if (n >= 30) return 'medium'
+  return 'low'
+}
+
+export function normalizeRiskGraph(payload) {
+  const nodes = (payload?.nodes || []).map((n) => ({
+    ...n,
+    name: n.name || n.label,
+    crown_jewel: Boolean(n.crown_jewel),
+    internet_exposed: Boolean(n.internet_exposed),
+    honey_node: Boolean(n.honey_node),
+    severity: n.severity || severityFromRisk(n.risk_score),
+  }))
+  const edges = (payload?.edges || []).map((e) => ({
+    ...e,
+    source: e.source ?? e.from_node_id,
+    target: e.target ?? e.to_node_id,
+  }))
+  return { nodes, edges }
 }
 
 /** Simple force-directed layout (no external deps). */
@@ -158,6 +185,7 @@ const FILTER_KEYS = {
  */
 export default function RiskGraphVisualization() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const { clientId, loading: clientLoading } = useFirstTenantClientId();
   const [graphData, setGraphData] = useState({ nodes: [], edges: [] });
   const [attackPaths, setAttackPaths] = useState(null);
@@ -237,7 +265,7 @@ export default function RiskGraphVisualization() {
         api.get(withClientId('/api/risk/graph', cid)),
         api.get(`/api/attack-paths/${cid}`).catch(() => null),
       ]);
-      setGraphData(graphRes);
+      setGraphData(normalizeRiskGraph(graphRes));
       setSelectedNode(null);
       if (pathsRes?.snapshot) {
         setAttackPaths(pathsRes.snapshot);
@@ -316,8 +344,8 @@ export default function RiskGraphVisualization() {
       ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI);
       ctx.fillStyle = color;
       ctx.fill();
-      ctx.strokeStyle = isSelected ? '#ffffff' : '#ffffff40';
-      ctx.lineWidth = isSelected ? 3 : 2;
+      ctx.strokeStyle = isSelected ? '#ffffff' : node.crown_jewel ? '#fbbf24' : node.internet_exposed ? '#22d3ee' : '#ffffff40';
+      ctx.lineWidth = isSelected || node.crown_jewel ? 3 : 2;
       ctx.stroke();
 
       ctx.fillStyle = '#fff';
@@ -383,6 +411,27 @@ export default function RiskGraphVisualization() {
   const meta = selectedNode?.metadata && typeof selectedNode.metadata === 'object'
     ? selectedNode.metadata
     : {};
+
+  const patchNodeFlags = async (flags) => {
+    if (!selectedNode?.id) return;
+    try {
+      const data = await api.patch(`/api/risk-graph/nodes/${selectedNode.id}/flags`, flags);
+      if (data?.ok === false) throw new Error(data.detail || 'flag update failed');
+      setSelectedNode((prev) => (prev ? { ...prev, ...flags } : prev));
+      setGraphData((prev) => ({
+        ...prev,
+        nodes: prev.nodes.map((n) => (String(n.id) === String(selectedNode.id) ? { ...n, ...flags } : n)),
+      }));
+      toast.success(t(`${NS}.flag_saved`));
+      if (clientId != null) {
+        const res = await api.get(`/api/attack-paths/${clientId}?recompute=1`);
+        setAttackPaths(res?.snapshot ?? null);
+      }
+    } catch (e) {
+      console.error('Flag patch failed:', e);
+      toast.error(t(`${NS}.flag_failed`));
+    }
+  };
 
   const reloadGraph = () => {
     if (clientId) fetchGraphData(clientId)
@@ -537,24 +586,6 @@ export default function RiskGraphVisualization() {
         </div>
 
         {/* Dijkstra attack paths — internet_exposed → crown_jewel (EPSS/CVSS weighted) */}
-        {clientId != null && (
-          <CrownJewelFlagPanel
-            clientId={clientId}
-            compact
-            onFlagsChanged={async ({ node, field, value }) => {
-              setGraphData((prev) => ({
-                ...prev,
-                nodes: (prev.nodes || []).map((n) =>
-                  String(n.id) === String(node.id) ? { ...n, [field]: value } : n,
-                ),
-              }))
-              setSelectedNode((cur) =>
-                cur && String(cur.id) === String(node.id) ? { ...cur, [field]: value } : cur,
-              )
-              await recomputeAttackPaths()
-            }}
-          />
-        )}
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
           <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
@@ -682,66 +713,32 @@ export default function RiskGraphVisualization() {
                     <span className="text-white">{selectedNode.is_choke_point ? t('common.yes') : t('common.no')}</span>
                   </div>
                 </div>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     variant="unstyled"
                     type="button"
-                    aria-pressed={Boolean(selectedNode.internet_exposed)}
-                    onClick={async () => {
-                      const next = !selectedNode.internet_exposed
-                      try {
-                        await api.patch(`/api/risk-graph/nodes/${encodeURIComponent(selectedNode.id)}/flags`, {
-                          internet_exposed: next,
-                        })
-                        setSelectedNode((n) => (n ? { ...n, internet_exposed: next } : n))
-                        setGraphData((prev) => ({
-                          ...prev,
-                          nodes: (prev.nodes || []).map((n) =>
-                            String(n.id) === String(selectedNode.id) ? { ...n, internet_exposed: next } : n,
-                          ),
-                        }))
-                        await recomputeAttackPaths()
-                      } catch (e) {
-                        console.error('flag patch failed', e)
-                      }
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-mono border ${
+                    data-testid="risk-graph-toggle-entry"
+                    onClick={() => patchNodeFlags({ internet_exposed: !selectedNode.internet_exposed })}
+                    className={`text-[11px] font-mono px-2.5 py-1.5 rounded-lg border ${
                       selectedNode.internet_exposed
-                        ? 'border-cyan-400/50 bg-cyan-500/15 text-cyan-100'
+                        ? 'border-cyan-500/40 bg-cyan-500/15 text-cyan-100'
                         : 'border-[var(--border-default)] text-[var(--text-muted)]'
                     }`}
                   >
-                    {t('pages.riskGraphVisualization.toggle_exposed')}
+                    {selectedNode.internet_exposed ? t(`${NS}.entry_on`) : t(`${NS}.mark_entry`)}
                   </Button>
                   <Button
                     variant="unstyled"
                     type="button"
-                    aria-pressed={Boolean(selectedNode.crown_jewel)}
-                    onClick={async () => {
-                      const next = !selectedNode.crown_jewel
-                      try {
-                        await api.patch(`/api/risk-graph/nodes/${encodeURIComponent(selectedNode.id)}/flags`, {
-                          crown_jewel: next,
-                        })
-                        setSelectedNode((n) => (n ? { ...n, crown_jewel: next } : n))
-                        setGraphData((prev) => ({
-                          ...prev,
-                          nodes: (prev.nodes || []).map((n) =>
-                            String(n.id) === String(selectedNode.id) ? { ...n, crown_jewel: next } : n,
-                          ),
-                        }))
-                        await recomputeAttackPaths()
-                      } catch (e) {
-                        console.error('flag patch failed', e)
-                      }
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-mono border ${
+                    data-testid="risk-graph-toggle-jewel"
+                    onClick={() => patchNodeFlags({ crown_jewel: !selectedNode.crown_jewel })}
+                    className={`text-[11px] font-mono px-2.5 py-1.5 rounded-lg border ${
                       selectedNode.crown_jewel
-                        ? 'border-violet-400/50 bg-violet-500/15 text-violet-100'
+                        ? 'border-amber-500/40 bg-amber-500/15 text-amber-100'
                         : 'border-[var(--border-default)] text-[var(--text-muted)]'
                     }`}
                   >
-                    {t('pages.riskGraphVisualization.toggle_jewel')}
+                    {selectedNode.crown_jewel ? t(`${NS}.jewel_on`) : t(`${NS}.mark_jewel`)}
                   </Button>
                 </div>
                 {(selectedNode.finding_id || meta.finding_id || meta.vulnerability_id) && (

@@ -24,8 +24,8 @@
 //! | `dns_security_posture_fusion` | DNS exfil + email DNS + ASM |
 //! | `toxic_combo_runtime_proof` | CNAPP + IMDS + S3 + IAM + K8s |
 //!
-//! `correlate_finding_to_paths` maps a live finding onto Dijkstra snapshots
-//! (shortest hop + jewel). Honest miss → None.
+//! Alert evaluator also calls `correlate_finding_to_paths` so webhook fires
+//! include the shortest matching Dijkstra hop + jewel (honest miss → omit).
 
 /// Production fusion engine IDs — must remain a subset of `PRODUCTION_ENGINE_IDS`.
 pub const FUSION_ENGINE_IDS: &[&str] = &[
@@ -47,17 +47,21 @@ pub const FUSION_ENGINE_IDS: &[&str] = &[
 ];
 
 /// Correlate a live finding to Dijkstra attack-path snapshots (alert fusion).
-/// Matches finding title/source against path step labels. Honest miss → None.
+/// Matches finding title/source/target against path step labels. Honest miss → None.
+/// Labels shorter than 4 chars are ignored to avoid false positives on tokens like "db".
 pub fn correlate_finding_to_paths(
     title: &str,
     source: &str,
+    extra: &str,
     paths_json: &serde_json::Value,
 ) -> Option<(u32, String)> {
-    let hay = format!("{title} {source}").to_ascii_lowercase();
+    let hay = format!("{title} {source} {extra}").to_ascii_lowercase();
     if hay.trim().is_empty() {
         return None;
     }
-    let paths = paths_json.as_array()?;
+    let paths = paths_json
+        .as_array()
+        .or_else(|| paths_json.get("paths").and_then(|v| v.as_array()))?;
     let mut best: Option<(u32, String)> = None;
     for p in paths {
         let hops = p.get("hops").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
@@ -65,7 +69,12 @@ pub fn correlate_finding_to_paths(
             .get("steps")
             .and_then(|s| s.as_array())
             .and_then(|steps| steps.last())
-            .and_then(|s| s.get("label").and_then(|v| v.as_str()))
+            .and_then(|s| {
+                s.get("label")
+                    .and_then(|v| v.as_str())
+                    .filter(|l| !l.is_empty())
+                    .or_else(|| s.get("graph_key").and_then(|v| v.as_str()))
+            })
             .unwrap_or("")
             .to_string();
         let hit = p
@@ -84,8 +93,9 @@ pub fn correlate_finding_to_paths(
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_ascii_lowercase();
-                (!label.is_empty() && hay.contains(&label))
-                    || (!key.is_empty() && hay.contains(&key))
+                let label_hit = label.len() >= 4 && hay.contains(&label);
+                let key_hit = key.len() >= 4 && hay.contains(&key);
+                label_hit || key_hit
             });
         if hit {
             match &best {
@@ -152,10 +162,14 @@ mod tests {
                 ]
             }
         ]);
-        let hit = correlate_finding_to_paths("SQLi on vault.internal", "sqli_advanced", &paths);
+        let hit = correlate_finding_to_paths("SQLi on vault.internal", "sqli_advanced", "", &paths);
         assert_eq!(hit.as_ref().map(|h| h.0), Some(2));
         assert_eq!(hit.as_ref().map(|h| h.1.as_str()), Some("vault.internal"));
-        assert!(correlate_finding_to_paths("unrelated", "osint", &paths).is_none());
-        assert!(correlate_finding_to_paths("x", "y", &serde_json::json!([])).is_none());
+        assert!(correlate_finding_to_paths("unrelated", "osint", "", &paths).is_none());
+        assert!(correlate_finding_to_paths("x", "y", "", &serde_json::json!([])).is_none());
+        assert!(
+            correlate_finding_to_paths("db dump", "osint", "", &paths).is_none(),
+            "short tokens must not match"
+        );
     }
 }

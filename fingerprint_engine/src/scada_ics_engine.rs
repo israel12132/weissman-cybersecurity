@@ -128,7 +128,6 @@ pub async fn run_scada_ics_result(target: &str) -> EngineResult {
             break;
         }
     }
-
     EngineResult::ok(
         findings.clone(),
         format!("SCADA/ICS: {} findings", findings.len()),
@@ -169,12 +168,12 @@ mod tests {
     }
 
     #[test]
-    fn ics_c2_and_priv_esc_are_evidence_only() {
+    fn ics_c2_and_priv_esc_are_live_surface_not_writes() {
         let src = include_str!("scada_ics_engine.rs");
         assert!(src.contains("T0869"));
         assert!(src.contains("T0885"));
         assert!(src.contains("T0890"));
         assert!(src.contains("no industrial write"));
-        assert!(src.contains("no write to process I/O"));
+        assert!(src.contains("tcp_scan"));
     }
 }

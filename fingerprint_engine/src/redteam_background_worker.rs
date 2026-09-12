@@ -8,15 +8,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Sender;
 
-/// Live offense + discovery engines the scheduled red-team loop actually runs.
-/// Not LLM-only: kill-chain and autonomous pentest observe the live target;
-/// discovery_engine crawls the same surface so new assets enter the next cycle.
-pub const REDTEAM_CRON_ENGINES: &[&str] = &[
-    "ai_adversarial_redteam",
-    "kill_chain",
-    "autonomous_pentest",
-    "discovery_engine",
-];
+/// Live offense engines the scheduled red-team loop actually runs — not LLM-only.
+pub const REDTEAM_CRON_ENGINES: &[&str] =
+    &["ai_adversarial_redteam", "kill_chain", "autonomous_pentest"];
 
 fn interval_secs() -> u64 {
     std::env::var("WEISSMAN_REDTEAM_INTERVAL_SECS")
@@ -103,7 +97,6 @@ mod tests {
         assert!(REDTEAM_CRON_ENGINES.contains(&"ai_adversarial_redteam"));
         assert!(REDTEAM_CRON_ENGINES.contains(&"kill_chain"));
         assert!(REDTEAM_CRON_ENGINES.contains(&"autonomous_pentest"));
-        assert!(REDTEAM_CRON_ENGINES.contains(&"discovery_engine"));
-        assert_eq!(REDTEAM_CRON_ENGINES.len(), 4);
+        assert_eq!(REDTEAM_CRON_ENGINES.len(), 3);
     }
 }

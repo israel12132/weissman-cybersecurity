@@ -42,6 +42,11 @@ function chokeCsv(rows) {
   downloadCsv(data, header, 'weissman-attack-paths')
 }
 
+export function needsCrownJewelSeed(snapshot) {
+  if (!snapshot) return false
+  return Number(snapshot.jewel_count) === 0
+}
+
 function PathCard({ path, t }) {
   const color = riskColor(path.risk)
   const score = Number(path.path_score) || 0
@@ -352,6 +357,24 @@ export default function AttackPaths() {
               <ExecutiveWidget label={t(`${NS}.kpi_paths`)} value={paths.length} hint={t(`${NS}.kpi_paths_hint`)} accent="#f97316" />
               <ExecutiveWidget label={t(`${NS}.kpi_top_score`)} value={topScore} hint={t(`${NS}.kpi_top_score_hint`)} accent={riskColor(topRisk)} />
             </div>
+            {needsCrownJewelSeed(display) && (
+              <div
+                role="status"
+                data-testid="no-jewels-banner"
+                className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+              >
+                <p className="text-sm text-amber-100">{t(`${NS}.no_jewels_banner`)}</p>
+                <Button
+                  variant="unstyled"
+                  type="button"
+                  onClick={() => load(true)}
+                  disabled={recomputing}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 text-amber-100 text-xs font-medium hover:bg-amber-500/25 disabled:opacity-40"
+                >
+                  {t(`${NS}.no_jewels_recompute`)}
+                </Button>
+              </div>
+            )}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <ExecutiveWidget label={t(`${NS}.kpi_path_ale`)} value={`$${(Number(display?.total_path_ale_usd) || 0).toLocaleString()}`} hint={t(`${NS}.kpi_path_ale_hint`)} accent="#f59e0b" />
               <ExecutiveWidget label={t(`${NS}.kpi_top_risk`)} value={topRisk.toFixed(1)} hint={t(`${NS}.kpi_top_risk_hint`)} accent={riskColor(topRisk)} />

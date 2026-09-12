@@ -1529,7 +1529,7 @@
       "no_choke_body": "No shared choke-points across the computed paths.",
       "no_paths_title": "No attack paths",
       "no_paths_body": "No internet → crown-jewel path was found in the current graph.",
-      "no_jewels_banner": "Zero crown jewels — Dijkstra has no sinks. Recompute auto-tags identity/cloud/OT/valued assets (then top-5 fallback). Or mark jewels below.",
+      "no_jewels_banner": "Zero crown jewels — Dijkstra has no sinks. Recompute auto-tags identity/cloud/OT/high-risk nodes so paths can form.",
       "no_jewels_recompute": "Auto-tag jewels and recompute",
       "score": "Score",
       "root_cause": "Root cause",
@@ -1599,7 +1599,9 @@
       "weaponized": "Weaponized mode is dual-control",
       "alert_gates": "KEV / EPSS / CVSS / jewel gates",
       "scan_https": "Scan cron defaults to HTTPS",
-      "ct_fusion": "CT squirt → inline fusion"
+      "ct_fusion": "CT squirt → inline fusion",
+      "ct_squirt": "CT squirt engine",
+      "oast_alerts": "OAST-gated alerts"
     },
     "securityPosture": {
       "title": "Platform Security Posture",
@@ -2280,7 +2282,20 @@
       "cond_cvss": "Min CVSS",
       "cond_jewel": "Touches crown jewel",
       "template_kev": "KEV on crown jewel",
-      "template_kev_body": "Page when a KEV finding touches a crown-jewel asset"
+      "template_kev_body": "Page when a KEV finding touches a crown-jewel asset",
+      "require_oast": "Require confirmed OAST callback",
+      "require_oast_hint": "Do not page until the collector saw an out-of-band hit.",
+      "require_proof": "Require live proof text",
+      "require_proof_hint": "Skip findings with empty proof / evidence.",
+      "template_oast": "OAST-proven critical",
+      "template_oast_hint": "Critical/high only after a live OAST callback.",
+      "template_kev_hint": "CISA KEV + EPSS ≥ 0.7 on a tagged crown-jewel asset.",
+      "kev_only": "CISA KEV only",
+      "kev_only_hint": "Fire only when kev_listed is true on the finding.",
+      "crown_jewel": "Touches a crown jewel",
+      "crown_jewel_hint": "Finding host/title must match a tagged crown-jewel node.",
+      "min_epss": "Minimum EPSS",
+      "min_epss_hint": "Skip unless FIRST.org EPSS is at least this score (0–1)."
     },
     "adminManagement": {
       "search_users": "Search users…",
@@ -3879,10 +3894,10 @@
       "severity_low": "Low",
       "mark_jewel": "Mark crown jewel",
       "jewel_on": "Crown jewel",
-      "mark_entry": "Mark internet-exposed",
-      "entry_on": "Internet-exposed",
+      "mark_entry": "Mark internet entry",
+      "entry_on": "Internet entry",
       "flag_saved": "Node flags saved",
-      "flag_failed": "Failed to update node flags.",
+      "flag_failed": "Failed to update node flags",
       "toggle_exposed": "Toggle internet-exposed",
       "toggle_jewel": "Toggle crown jewel"
     },
@@ -5244,7 +5259,10 @@
       "first_mover_schism": "Prove protocol schism",
       "first_mover_schism_running": "Fracture-testing…",
       "first_mover_schism_live": "Live schism + kill-chain evidence",
-      "first_mover_schism_more": "+{{count}} more live fractures in the job"
+      "first_mover_schism_more": "+{{count}} more live fractures in the job",
+      "nerve_kill_chain": "CT → fusion → OAST",
+      "nerve_hunts": "{{count}} hunts",
+      "nerve_follow_on": "Follow-on: {{engines}}"
     },
     "dnsDomainPosture": {
       "evidence_notice": "DNS, SPF, DMARC, and subdomain posture from POST /api/command-center/scan (email_dns_posture / dns engines). Records are resolved live against public resolvers for authorized domains.",

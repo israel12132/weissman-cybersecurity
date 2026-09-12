@@ -482,19 +482,17 @@ pub async fn run_mdm_bypass_engine_result(t: &str) -> EngineResult {
             if p.status == 404 || p.status >= 500 {
                 continue;
             }
-            if p.status < 500 {
-                findings.push(mobile_finding(
-                    "mdm_bypass_engine",
-                    &format!("{} reachable", label),
-                    if p.status == 200 { "high" } else { "medium" },
-                    mitre,
-                    &format!(
-                        "{} returned HTTP {} — live MDM lifecycle surface ({}); no wipe/lock is executed.",
-                        p.final_url, p.status, label
-                    ),
-                    t,
-                ));
-            }
+            findings.push(mobile_finding(
+                "mdm_bypass_engine",
+                &format!("{label} reachable"),
+                if p.status == 200 { "high" } else { "medium" },
+                mitre,
+                &format!(
+                    "{} returned HTTP {} — live MDM lifecycle surface ({}); no wipe/lock is executed.",
+                    p.final_url, p.status, label
+                ),
+                t,
+            ));
         }
     }
     if findings.is_empty() {

@@ -129,35 +129,15 @@ async fn api_first_mover_nerve(Extension(_auth): Extension<AuthContext>) -> Resp
         },
         "fusion": {
             "follow_on_engines": crate::first_mover_surface_delta::live_delta_follow_on_engines(),
+            "core_follow_on_engines": crate::first_mover_surface_delta::DELTA_FOLLOW_ON_ENGINES,
+            "oast_follow_on_engines": crate::first_mover_surface_delta::DELTA_OAST_FOLLOW_ON_ENGINES,
             "inline_engine": "first_mover_delta_fusion",
-            "schism_engine": "exposure_schism_fusion",
+            "ct_enqueue_engine": "first_mover_delta_fusion",
+            "oast_gated": crate::fuzz_oob::oast_correlation_enabled(),
         },
         "first_seen_engine": "first_seen_osv_nvd",
     });
     (StatusCode::OK, Json(body)).into_response()
-}
-
-#[derive(Deserialize)]
-struct PanwDisplacementQuery {
-    client_id: Option<i64>,
-}
-
-async fn api_panw_displacement(
-    State(state): State<Arc<AppState>>,
-    Extension(auth): Extension<AuthContext>,
-    Query(q): Query<PanwDisplacementQuery>,
-) -> Response {
-    let signals = crate::panw_displacement::load_live_signals(
-        &state.app_pool,
-        auth.tenant_id,
-        q.client_id,
-    )
-    .await;
-    (
-        StatusCode::OK,
-        Json(crate::panw_displacement::displacement_json(&signals)),
-    )
-        .into_response()
 }
 
 async fn api_client_semantic_state_machine(

@@ -42,7 +42,7 @@ async fn run_due_schedule(
         .await
         .map_err(|e| e.to_string())?;
     let row = sqlx::query(
-        r#"SELECT id, client_id, name, engines, enabled
+        r#"SELECT id, client_id, name, schedule_type, engines, enabled
            FROM weissman_scan_schedules WHERE id = $1"#,
     )
     .bind(schedule_id)
@@ -59,6 +59,9 @@ async fn run_due_schedule(
     let client_id: i64 = row
         .try_get("client_id")
         .map_err(|_| "no client_id".to_string())?;
+    let _schedule_type: String = row
+        .try_get("schedule_type")
+        .unwrap_or_else(|_| "daily".into());
     let engines: Vec<String> = row
         .try_get::<Value, _>("engines")
         .ok()

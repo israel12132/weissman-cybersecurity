@@ -394,7 +394,14 @@ pub fn classify_stage(mitre: &str, kind: &str, title: &str) -> &'static str {
     if m.starts_with("T1059") || m.starts_with("T1203") {
         return "execution";
     }
-    if m.starts_with("T1068") || m.starts_with("T1548") {
+    if m.starts_with("T1071")
+        || m.starts_with("T1090")
+        || m.starts_with("T0869")
+        || m.starts_with("T0885")
+    {
+        return "command_and_control";
+    }
+    if m.starts_with("T0890") || m.starts_with("T1068") || m.starts_with("T1548") {
         return "privilege_escalation";
     }
     if m.starts_with("T1021") || m.starts_with("T1210") {
@@ -464,18 +471,40 @@ fn str_field(v: &serde_json::Value, key: &str) -> String {
 
 /// A default rule pack. Extend per-tenant via stored rules.
 pub fn default_rules() -> Vec<CorrelationRule> {
-    vec![CorrelationRule {
-        id: "intrusion_progression".to_string(),
-        name: "Intrusion progression (recon → access → priv-esc → exfil)".to_string(),
-        severity: "critical".to_string(),
-        window_secs: 3600,
-        stages: vec![
-            StageMatch::new("recon", &["recon"]),
-            StageMatch::new("access", &["initial_access", "execution"]),
-            StageMatch::new("priv_esc", &["privilege_escalation"]),
-            StageMatch::new("exfil", &["exfiltration", "impact"]),
-        ],
-    }]
+    vec![
+        CorrelationRule {
+            id: "intrusion_progression".to_string(),
+            name: "Intrusion progression (recon → access → priv-esc → exfil)".to_string(),
+            severity: "critical".to_string(),
+            window_secs: 3600,
+            stages: vec![
+                StageMatch::new("recon", &["recon"]),
+                StageMatch::new("access", &["initial_access", "execution"]),
+                StageMatch::new("priv_esc", &["privilege_escalation"]),
+                StageMatch::new("exfil", &["exfiltration", "impact"]),
+            ],
+        },
+        CorrelationRule {
+            id: "recon_to_access".to_string(),
+            name: "Recon followed by initial access".to_string(),
+            severity: "high".to_string(),
+            window_secs: 3600,
+            stages: vec![
+                StageMatch::new("recon", &["recon"]),
+                StageMatch::new("access", &["initial_access", "execution"]),
+            ],
+        },
+        CorrelationRule {
+            id: "access_to_c2".to_string(),
+            name: "Initial access followed by C2 channel".to_string(),
+            severity: "high".to_string(),
+            window_secs: 3600,
+            stages: vec![
+                StageMatch::new("access", &["initial_access", "execution"]),
+                StageMatch::new("c2", &["command_and_control"]),
+            ],
+        },
+    ]
 }
 
 #[cfg(test)]
@@ -577,9 +606,16 @@ mod tests {
         // Monotonic timestamps 60s apart → within the 3600s window.
         let evs = events_from_findings(&findings, |i, _| 1000 + (i as i64) * 60);
         let hits = evaluate_all(&default_rules(), &evs);
-        assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].rule_id, "intrusion_progression");
-        assert_eq!(hits[0].matched.len(), 4);
+        assert!(
+            hits.iter().any(|h| h.rule_id == "intrusion_progression"),
+            "full kill-chain must still fire intrusion_progression"
+        );
+        assert!(hits.iter().any(|h| h.rule_id == "recon_to_access"));
+        let full = hits
+            .iter()
+            .find(|h| h.rule_id == "intrusion_progression")
+            .unwrap();
+        assert_eq!(full.matched.len(), 4);
     }
 
     #[test]
@@ -634,5 +670,12 @@ mod tests {
         assert_eq!(p["stage_count"], 2);
         assert_eq!(p["incident_key"], hit.incident_key());
         assert!(p["text"].as_str().unwrap().contains("app.example.com"));
+    }
+
+    #[test]
+    fn classify_stage_maps_ics_c2_and_priv_esc() {
+        assert_eq!(classify_stage("T0869", "", ""), "command_and_control");
+        assert_eq!(classify_stage("T0885", "", ""), "command_and_control");
+        assert_eq!(classify_stage("T0890", "", ""), "privilege_escalation");
     }
 }
