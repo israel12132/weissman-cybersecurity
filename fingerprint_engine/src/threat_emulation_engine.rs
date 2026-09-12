@@ -90,6 +90,9 @@ const APT_SCENARIOS: &[AptScenario] = &[
     },
 ];
 
+/// Number of live APT TTP emulation scenarios (safe HTTP GETs, no payloads).
+pub const APT_SCENARIO_COUNT: usize = APT_SCENARIOS.len();
+
 pub async fn run_threat_emulation_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");

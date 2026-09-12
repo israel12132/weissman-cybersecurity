@@ -1430,7 +1430,28 @@
       "no_choke_title": "אין צווארי בקבוק",
       "no_choke_body": "אין צווארי בקבוק משותפים בין הנתיבים שחושבו.",
       "no_paths_title": "אין נתיבי תקיפה",
-      "no_paths_body": "לא נמצא נתיב אינטרנט → נכס כתר בגרף הנוכחי."
+      "no_paths_body": "לא נמצא נתיב אינטרנט → נכס כתר בגרף הנוכחי.",
+      "score": "ציון",
+      "path_ale": "ALE {{value}}",
+      "root_cause": "שורש הבעיה",
+      "kpi_top_score": "ציון הנתיב המוביל",
+      "kpi_top_score_hint": "ציון הנתיב הגבוה ביותר (0–100)",
+      "kpi_path_ale": "ALE נתיבים",
+      "kpi_path_ale_hint": "הפסד שנתי צפוי על הנתיבים המדורגים",
+      "what_if_smb": "מה-אם: חסום SMB/445",
+      "what_if_run": "הרץ מה-אם",
+      "what_if_clear": "נקה שכבה",
+      "what_if_done": "תמונת מה-אם חושבה",
+      "jewels_heading": "נכסי כתר",
+      "jewels_hint": "{{jewels}} כתרים · {{entries}} חשופים לאינטרנט",
+      "jewels_body": "סמן יעדים ונקודות כניסה חשופות. Dijkstra מדרג רק נתיבים מנקודות חשופות לכתרים. חישוב מחדש מתייג אוטומטית נכסים בעלי ערך אם אין סימון.",
+      "toggle_entry": "חשוף לאינטרנט",
+      "toggle_jewel": "נכס כתר",
+      "entry": "כניסה",
+      "jewel": "כתר",
+      "flag_saved": "דגלי הנכס נשמרו — הנתיבים חושבו מחדש",
+      "flag_failed": "עדכון דגלי הנכס נכשל.",
+      "zero_jewel_banner": "אין נכסי כתר בתמונה זו. סמן כתרים למטה או חשב מחדש לתיוג אוטומטי של נכסים בעלי ערך."
     },
     "attackCoverage": {
       "title": "מטריצת כיסוי ATT&CK",
@@ -1446,7 +1467,16 @@
       "search_placeholder": "סינון לפי טכניקה, מזהה או מנוע…",
       "showing": "{{techniques}} טכניקות ב-{{tactics}} טקטיקות",
       "no_match_title": "אין התאמות",
-      "no_match_body": "אף טכניקה או מנוע לא תואמים לסינון."
+      "no_match_body": "אף טכניקה או מנוע לא תואמים לסינון.",
+      "readiness_title": "מוכנות תקיפה",
+      "readiness_hint": "פערים כנים שנותרו — מנועים חיים בלבד",
+      "roe": "RoE ברירת מחדל",
+      "weaponized": "נשק מחייב בקרה כפולה",
+      "apt_scenarios": "תרחישי APT",
+      "cron_engines": "מנועי קרון צוות אדום",
+      "agent_required": "מנועים שדורשים סוכן",
+      "jewel_auto": "נכסי כתר מתויגים אוטומטית",
+      "gaps_heading": "פערים כנים שנותרו"
     },
     "securityPosture": {
       "title": "מצב אבטחת הפלטפורמה",
@@ -2121,7 +2151,13 @@
       "save_updated": "הכלל עודכן",
       "save_failed": "שמירת הכלל נכשלה",
       "test_error": "בדיקת הכלל נכשלה",
-      "toggle_failed": "שינוי מצב הכלל נכשל"
+      "toggle_failed": "שינוי מצב הכלל נכשל",
+      "cond_kev": "KEV בלבד",
+      "cond_epss": "EPSS מינימלי",
+      "cond_cvss": "CVSS מינימלי",
+      "cond_jewel": "נכס כתר",
+      "template_kev": "KEV / נכס כתר",
+      "template_kev_body": "התראה על ממצאי KEV שנוגעים בנכס כתר"
     },
     "adminManagement": {
       "search_users": "חיפוש משתמשים…",

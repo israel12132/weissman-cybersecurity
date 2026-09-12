@@ -1430,7 +1430,28 @@
       "no_choke_title": "No choke-points",
       "no_choke_body": "No shared choke-points across the computed paths.",
       "no_paths_title": "No attack paths",
-      "no_paths_body": "No internet → crown-jewel path was found in the current graph."
+      "no_paths_body": "No internet → crown-jewel path was found in the current graph.",
+      "score": "Score",
+      "path_ale": "ALE {{value}}",
+      "root_cause": "Root cause",
+      "kpi_top_score": "Top Path Score",
+      "kpi_top_score_hint": "Highest path score (0–100)",
+      "kpi_path_ale": "Path ALE",
+      "kpi_path_ale_hint": "Annual loss expectancy on ranked paths",
+      "what_if_smb": "What-if: block SMB/445",
+      "what_if_run": "Run what-if",
+      "what_if_clear": "Clear overlay",
+      "what_if_done": "What-if snapshot computed",
+      "jewels_heading": "Crown jewels",
+      "jewels_hint": "{{jewels}} jewels · {{entries}} internet-exposed",
+      "jewels_body": "Mark sinks and internet-exposed entries. Dijkstra only ranks paths from exposed nodes to jewels. Recompute auto-tags high-value nodes if none are flagged.",
+      "toggle_entry": "Internet exposed",
+      "toggle_jewel": "Crown jewel",
+      "entry": "Entry",
+      "jewel": "Jewel",
+      "flag_saved": "Asset flags saved — paths recomputed",
+      "flag_failed": "Failed to update asset flags.",
+      "zero_jewel_banner": "No crown jewels in this snapshot. Toggle jewels below or recompute to auto-tag high-value assets."
     },
     "attackCoverage": {
       "title": "ATT&CK Coverage Matrix",
@@ -1446,7 +1467,16 @@
       "search_placeholder": "Filter by technique, ID, or engine…",
       "showing": "{{techniques}} techniques across {{tactics}} tactics",
       "no_match_title": "No matches",
-      "no_match_body": "No technique or engine matches your filter."
+      "no_match_body": "No technique or engine matches your filter.",
+      "readiness_title": "Attack readiness",
+      "readiness_hint": "Honest remaining gaps — live engines only",
+      "roe": "Default RoE",
+      "weaponized": "Weaponized needs dual control",
+      "apt_scenarios": "APT scenarios",
+      "cron_engines": "Red-team cron engines",
+      "agent_required": "Agent-required engines",
+      "jewel_auto": "Crown jewels auto-tagged",
+      "gaps_heading": "Remaining honest gaps"
     },
     "securityPosture": {
       "title": "Platform Security Posture",
@@ -2121,7 +2151,13 @@
       "save_updated": "Rule updated",
       "save_failed": "Failed to save rule",
       "test_error": "Failed to test rule",
-      "toggle_failed": "Failed to toggle rule"
+      "toggle_failed": "Failed to toggle rule",
+      "cond_kev": "KEV only",
+      "cond_epss": "Min EPSS",
+      "cond_cvss": "Min CVSS",
+      "cond_jewel": "Crown jewel",
+      "template_kev": "KEV / crown-jewel",
+      "template_kev_body": "Alert on KEV-listed findings that touch a crown jewel"
     },
     "adminManagement": {
       "search_users": "Search users…",

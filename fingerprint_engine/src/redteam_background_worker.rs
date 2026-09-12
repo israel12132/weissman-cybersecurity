@@ -8,6 +8,14 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Sender;
 
+/// Production engines the scheduled red-team actually enqueues. LLM-only was a
+/// coverage hole — kill_chain and autonomous_pentest run live probes under RoE.
+pub const REDTEAM_CRON_ENGINES: &[&str] = &[
+    "ai_adversarial_redteam",
+    "kill_chain",
+    "autonomous_pentest",
+];
+
 fn interval_secs() -> u64 {
     std::env::var("WEISSMAN_REDTEAM_INTERVAL_SECS")
         .ok()
@@ -69,15 +77,30 @@ async fn dispatch_redteam_jobs(app_pool: &PgPool, tenant_id: i64) -> Result<(), 
         if client_id == 0 || target.is_empty() {
             continue;
         }
-        let payload = serde_json::json!({
-            "engine": "ai_adversarial_redteam",
-            "target": target,
-            "client_id": client_id,
-            "trigger": "redteam_cron",
-        });
-        crate::async_jobs::enqueue(app_pool, tenant_id, "command_center_engine", payload, None)
-            .await
-            .map_err(|e| e.to_string())?;
+        for engine in REDTEAM_CRON_ENGINES {
+            let payload = serde_json::json!({
+                "engine": engine,
+                "target": target,
+                "client_id": client_id,
+                "trigger": "redteam_cron",
+            });
+            crate::async_jobs::enqueue(app_pool, tenant_id, "command_center_engine", payload, None)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cron_enqueues_kill_chain_and_autonomous_pentest() {
+        assert!(REDTEAM_CRON_ENGINES.contains(&"ai_adversarial_redteam"));
+        assert!(REDTEAM_CRON_ENGINES.contains(&"kill_chain"));
+        assert!(REDTEAM_CRON_ENGINES.contains(&"autonomous_pentest"));
+        assert_eq!(REDTEAM_CRON_ENGINES.len(), 3);
+    }
 }

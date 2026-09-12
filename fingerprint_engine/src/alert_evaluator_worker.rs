@@ -60,7 +60,93 @@ fn engine_matches(condition: &Value, source: &str) -> bool {
     })
 }
 
-fn cve_matches(condition: &Value, title: &str, desc: &str) -> bool {
+fn epss_matches(condition: &Value, epss: f64) -> bool {
+    let Some(min) = condition
+        .get("min_epss")
+        .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+    else {
+        return true;
+    };
+    epss + f64::EPSILON >= min
+}
+
+fn kev_matches(condition: &Value, kev: bool) -> bool {
+    match condition.get("kev_only").or_else(|| condition.get("kev")) {
+        Some(Value::Bool(true)) => kev,
+        Some(Value::String(s)) if s.eq_ignore_ascii_case("true") || s == "1" => kev,
+        _ => true,
+    }
+}
+
+fn cvss_matches(condition: &Value, cvss: f64) -> bool {
+    let Some(min) = condition
+        .get("min_cvss")
+        .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+    else {
+        return true;
+    };
+    cvss + f64::EPSILON >= min
+}
+
+fn crown_jewel_matches(condition: &Value, touches: bool) -> bool {
+    match condition
+        .get("crown_jewel")
+        .or_else(|| condition.get("crown_jewel_on_path"))
+    {
+        Some(Value::Bool(true)) => touches,
+        Some(Value::String(s)) if s.eq_ignore_ascii_case("true") || s == "1" => touches,
+        _ => true,
+    }
+}
+
+fn cvss_from_raw(raw: &Value) -> f64 {
+    for key in ["cvss_score", "cvss", "cvssScore", "score"] {
+        if let Some(n) = raw.get(key).and_then(Value::as_f64) {
+            return n;
+        }
+        if let Some(s) = raw.get(key).and_then(Value::as_str) {
+            if let Ok(n) = s.parse::<f64>() {
+                return n;
+            }
+        }
+    }
+    0.0
+}
+
+fn cve_from_raw(raw: &Value, title: &str, desc: &str) -> String {
+    for key in ["cve", "cve_id", "cveId"] {
+        if let Some(s) = raw.get(key).and_then(Value::as_str) {
+            let t = s.trim();
+            if t.to_ascii_uppercase().starts_with("CVE-") {
+                return t.to_string();
+            }
+        }
+    }
+    let hay = format!("{title} {desc}");
+    if let Some(idx) = hay.to_ascii_uppercase().find("CVE-") {
+        let slice = &hay[idx..];
+        let cve: String = slice
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '-')
+            .collect();
+        if cve.len() >= 8 {
+            return cve;
+        }
+    }
+    String::new()
+}
+
+fn target_from_raw(raw: &Value) -> String {
+    raw.get("target")
+        .or_else(|| raw.get("host"))
+        .or_else(|| raw.get("url"))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string()
+}
+
+fn cve_matches(condition: &Value, title: &str, desc: &str, cve: &str) -> bool {
     let pattern = condition
         .get("cve_pattern")
         .or_else(|| condition.get("cve"))
@@ -69,8 +155,12 @@ fn cve_matches(condition: &Value, title: &str, desc: &str) -> bool {
     if pattern.is_empty() {
         return true;
     }
-    let hay = format!("{title} {desc}").to_ascii_lowercase();
-    hay.contains(&pattern.to_ascii_lowercase())
+    let needle = pattern.replace('*', "").to_ascii_lowercase();
+    if needle.is_empty() {
+        return true;
+    }
+    let hay = format!("{title} {desc} {cve}").to_ascii_lowercase();
+    hay.contains(&needle)
 }
 
 async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, String> {
@@ -89,11 +179,29 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
     }
 
     let findings = sqlx::query(
-        r#"SELECT id, severity, title, description, source
-           FROM vulnerabilities
-           WHERE created_at >= now() - interval '5 minutes'
-           ORDER BY id DESC
-           LIMIT 200"#,
+        r#"SELECT v.id, v.severity, v.title, v.description, v.source, v.client_id,
+                  COALESCE(v.epss_score, 0)::float8 AS epss_score,
+                  COALESCE(v.kev_listed, false) AS kev_listed,
+                  COALESCE(v.proof, '') AS proof,
+                  COALESCE(v.raw_data, '{}'::jsonb) AS raw_data,
+                  EXISTS (
+                    SELECT 1 FROM risk_graph_nodes n
+                     WHERE n.tenant_id = v.tenant_id
+                       AND n.client_id = v.client_id
+                       AND n.crown_jewel = TRUE
+                       AND COALESCE(n.honey_node, FALSE) IS NOT TRUE
+                       AND NULLIF(n.label, '') IS NOT NULL
+                       AND (
+                            COALESCE(v.raw_data->>'target','') ILIKE '%' || n.label || '%'
+                         OR COALESCE(v.raw_data->>'host','') ILIKE '%' || n.label || '%'
+                         OR v.title ILIKE '%' || n.label || '%'
+                       )
+                  ) AS crown_jewel_touch
+           FROM vulnerabilities v
+           WHERE v.created_at >= now() - interval '15 minutes'
+             AND COALESCE(v.status, 'OPEN') NOT IN ('FALSE_POSITIVE', 'FP')
+           ORDER BY v.id DESC
+           LIMIT 500"#,
     )
     .fetch_all(&mut *tx)
     .await
@@ -106,6 +214,15 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
         let title: String = finding.try_get("title").unwrap_or_default();
         let description: String = finding.try_get("description").unwrap_or_default();
         let source: String = finding.try_get("source").unwrap_or_default();
+        let client_id: i64 = finding.try_get("client_id").unwrap_or(0);
+        let epss: f64 = finding.try_get("epss_score").unwrap_or(0.0);
+        let kev: bool = finding.try_get("kev_listed").unwrap_or(false);
+        let proof: String = finding.try_get("proof").unwrap_or_default();
+        let raw: Value = finding.try_get("raw_data").unwrap_or(json!({}));
+        let crown_jewel: bool = finding.try_get("crown_jewel_touch").unwrap_or(false);
+        let cvss = cvss_from_raw(&raw);
+        let cve = cve_from_raw(&raw, &title, &description);
+        let target = target_from_raw(&raw);
 
         for rule in &rules {
             let rule_id: i64 = rule.try_get("id").unwrap_or(0);
@@ -118,7 +235,19 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
             if !engine_matches(&condition, &source) {
                 continue;
             }
-            if !cve_matches(&condition, &title, &description) {
+            if !cve_matches(&condition, &title, &description, &cve) {
+                continue;
+            }
+            if !epss_matches(&condition, epss) {
+                continue;
+            }
+            if !kev_matches(&condition, kev) {
+                continue;
+            }
+            if !cvss_matches(&condition, cvss) {
+                continue;
+            }
+            if !crown_jewel_matches(&condition, crown_jewel) {
                 continue;
             }
 
@@ -143,6 +272,15 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
                 title: title.clone(),
                 description: description.clone(),
                 source: source.clone(),
+                cve: cve.clone(),
+                epss,
+                kev,
+                cvss,
+                client_id,
+                proof: proof.clone(),
+                target: target.clone(),
+                crown_jewel,
+                deep_link: crate::alert_delivery::finding_deep_link(fid),
             };
 
             // The INSERT itself is the dedup gate: the (rule_id, finding_id) unique index makes a
@@ -274,26 +412,61 @@ mod tests {
 
     #[test]
     fn cve_matches_empty_pattern_is_true() {
-        assert!(cve_matches(&json!({}), "any title", "any desc"));
-        assert!(cve_matches(&json!({ "cve_pattern": "" }), "t", "d"));
+        assert!(cve_matches(&json!({}), "any title", "any desc", ""));
+        assert!(cve_matches(&json!({ "cve_pattern": "" }), "t", "d", ""));
     }
 
     #[test]
     fn cve_matches_searches_title_and_description() {
         let cond = json!({ "cve_pattern": "CVE-2021-44228" });
-        assert!(cve_matches(&cond, "Log4Shell cve-2021-44228", "unrelated"));
+        assert!(cve_matches(&cond, "Log4Shell cve-2021-44228", "unrelated", ""));
         assert!(cve_matches(
             &cond,
             "unrelated",
-            "affected by CVE-2021-44228 here"
+            "affected by CVE-2021-44228 here",
+            ""
         ));
-        assert!(!cve_matches(&cond, "nothing", "here"));
+        assert!(cve_matches(&cond, "nothing", "here", "CVE-2021-44228"));
+        assert!(!cve_matches(&cond, "nothing", "here", ""));
     }
 
     #[test]
     fn cve_matches_falls_back_to_singular_cve_key() {
         let cond = json!({ "cve": "log4j" });
-        assert!(cve_matches(&cond, "Apache Log4J RCE", "d"));
-        assert!(!cve_matches(&cond, "nginx", "d"));
+        assert!(cve_matches(&cond, "Apache Log4J RCE", "d", ""));
+        assert!(!cve_matches(&cond, "nginx", "d", ""));
+    }
+
+    #[test]
+    fn epss_kev_cvss_crown_jewel_gates() {
+        let epss = json!({ "min_epss": 0.7 });
+        assert!(epss_matches(&epss, 0.91));
+        assert!(!epss_matches(&epss, 0.1));
+        assert!(epss_matches(&json!({}), 0.0));
+
+        let kev = json!({ "kev_only": true });
+        assert!(kev_matches(&kev, true));
+        assert!(!kev_matches(&kev, false));
+        assert!(kev_matches(&json!({}), false));
+
+        let cvss = json!({ "min_cvss": 9.0 });
+        assert!(cvss_matches(&cvss, 9.8));
+        assert!(!cvss_matches(&cvss, 4.0));
+
+        let jewel = json!({ "crown_jewel": true });
+        assert!(crown_jewel_matches(&jewel, true));
+        assert!(!crown_jewel_matches(&jewel, false));
+    }
+
+    #[test]
+    fn cvss_and_cve_from_raw_data() {
+        let raw = json!({ "cvss_score": 9.8, "cve": "CVE-2024-1234", "target": "https://app.example" });
+        assert!((cvss_from_raw(&raw) - 9.8).abs() < f64::EPSILON);
+        assert_eq!(cve_from_raw(&raw, "", ""), "CVE-2024-1234");
+        assert_eq!(target_from_raw(&raw), "https://app.example");
+        assert_eq!(
+            cve_from_raw(&json!({}), "Log4Shell CVE-2021-44228", ""),
+            "CVE-2021-44228"
+        );
     }
 }

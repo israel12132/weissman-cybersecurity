@@ -121,6 +121,19 @@ export default function AttackPaths() {
   const [blockSmb, setBlockSmb] = useState(false)
   const [whatIfBusy, setWhatIfBusy] = useState(false)
   const [whatIfSnapshot, setWhatIfSnapshot] = useState(null)
+  const [graphNodes, setGraphNodes] = useState([])
+  const [flagBusy, setFlagBusy] = useState(null)
+
+  const loadGraph = useCallback(async () => {
+    if (selectedClientId == null) return
+    try {
+      const data = await apiFetch(`/api/clients/${encodeURIComponent(selectedClientId)}/risk-graph`)
+      const nodes = Array.isArray(data?.nodes) ? data.nodes : []
+      setGraphNodes(nodes)
+    } catch {
+      setGraphNodes([])
+    }
+  }, [selectedClientId])
 
   const load = useCallback(
     async (recompute = false) => {
@@ -135,6 +148,7 @@ export default function AttackPaths() {
         setSnapshot(data.snapshot || null)
         setHasSnapshot(Boolean(data.snapshot))
         if (recompute && data.snapshot) toast.success(t(`${NS}.recompute_done`))
+        await loadGraph()
       } catch (e) {
         setError(e.message || t(`${NS}.load_failed`))
       } finally {
@@ -142,7 +156,29 @@ export default function AttackPaths() {
         setRecomputing(false)
       }
     },
-    [selectedClientId, t, toast],
+    [selectedClientId, t, toast, loadGraph],
+  )
+
+  const patchNodeFlag = useCallback(
+    async (nodeId, patch) => {
+      if (selectedClientId == null) return
+      setFlagBusy(nodeId)
+      setError('')
+      try {
+        const data = await apiFetch(`/api/risk-graph/nodes/${encodeURIComponent(nodeId)}/flags`, {
+          method: 'PATCH',
+          body: patch,
+        })
+        if (data?.ok === false) throw new Error(data.detail || 'flag update failed')
+        toast.success(t(`${NS}.flag_saved`))
+        await load(true)
+      } catch (e) {
+        setError(e.message || t(`${NS}.flag_failed`))
+      } finally {
+        setFlagBusy(null)
+      }
+    },
+    [selectedClientId, t, toast, load],
   )
 
   const runWhatIf = useCallback(async () => {
@@ -190,6 +226,15 @@ export default function AttackPaths() {
   const topScore = useMemo(
     () => (paths.length ? Math.max(...paths.map((p) => Number(p.path_score) || 0)) : 0),
     [paths],
+  )
+
+  const jewelNodes = useMemo(
+    () => graphNodes.filter((n) => n.crown_jewel),
+    [graphNodes],
+  )
+  const entryNodes = useMemo(
+    () => graphNodes.filter((n) => n.internet_exposed),
+    [graphNodes],
   )
 
   const columns = useMemo(
@@ -303,6 +348,63 @@ export default function AttackPaths() {
           </div>
         )}
 
+        {selectedClientId != null && graphNodes.length > 0 && (
+          <section
+            className="rounded-2xl border border-violet-500/25 bg-[var(--table-surface)] p-4"
+            data-testid="crown-jewel-panel"
+          >
+            <div className="flex items-baseline justify-between gap-3 mb-2 flex-wrap">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-violet-300">
+                {t(`${NS}.jewels_heading`)}
+              </h2>
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                {t(`${NS}.jewels_hint`, { jewels: jewelNodes.length, entries: entryNodes.length })}
+              </span>
+            </div>
+            <p className="text-[12px] text-[var(--text-secondary)] mb-3">{t(`${NS}.jewels_body`)}</p>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {graphNodes.slice(0, 40).map((node) => (
+                <div
+                  key={node.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border-subtle)] px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <div className="text-[12px] text-[var(--text-primary)] truncate" title={node.label || node.graph_key}>
+                      {node.label || node.graph_key || `#${node.id}`}
+                    </div>
+                    <div className="text-[10px] font-mono text-[var(--text-muted)]">
+                      {node.node_type || 'asset'} · {t(`${NS}.risk`)} {Number(node.risk_score) || 0}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <label className="flex items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(node.internet_exposed)}
+                        disabled={flagBusy === node.id}
+                        onChange={(e) => patchNodeFlag(node.id, { internet_exposed: e.target.checked })}
+                        aria-label={t(`${NS}.toggle_entry`)}
+                      />
+                      {t(`${NS}.entry`)}
+                    </label>
+                    <label className="flex items-center gap-1.5 text-[11px] text-violet-200">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(node.crown_jewel)}
+                        disabled={flagBusy === node.id}
+                        onChange={(e) => patchNodeFlag(node.id, { crown_jewel: e.target.checked })}
+                        aria-label={t(`${NS}.toggle_jewel`)}
+                        data-testid={`crown-jewel-toggle-${node.id}`}
+                      />
+                      {t(`${NS}.jewel`)}
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {selectedClientId != null && !loading && !error && !hasSnapshot && (
           <EmptyState
             icon="network"
@@ -334,6 +436,16 @@ export default function AttackPaths() {
               <ExecutiveWidget label={t(`${NS}.kpi_path_ale`)} value={`$${(Number(display?.total_path_ale_usd) || 0).toLocaleString()}`} hint={t(`${NS}.kpi_path_ale_hint`)} accent="#f59e0b" />
               <ExecutiveWidget label={t(`${NS}.kpi_top_risk`)} value={topRisk.toFixed(1)} hint={t(`${NS}.kpi_top_risk_hint`)} accent={riskColor(topRisk)} />
             </div>
+
+            {Number(display?.jewel_count) === 0 && (
+              <div
+                role="status"
+                data-testid="zero-jewel-banner"
+                className="rounded-xl border border-violet-500/30 bg-violet-950/20 px-4 py-3 text-sm text-violet-200"
+              >
+                {t(`${NS}.zero_jewel_banner`)}
+              </div>
+            )}
 
             <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--table-surface)] p-4 flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2 text-[12px] text-[var(--text-secondary)]">
