@@ -862,11 +862,8 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     if engine_id.contains("first_seen") {
         return "Patch or isolate the affected SBOM component. The OSV advisory hit this inventory before (or without) an NVD CVE — do not wait for a weekly scanner or a CVE number.";
     }
-    if engine_id.contains("adversary_exposure")
-        || engine_id.contains("darkweb")
-        || engine_id.contains("threat_intel_fusion")
-    {
-        return "Treat indexed URLs/IOCs as attacker-visible. Rotate any credentials mentioned, block listed hosts at the perimeter, and confirm the listing is not a third-party brand mention. Do not browse criminal marketplaces from corporate networks.";
+    if engine_id.contains("adversary_path") {
+        return "Close the observed entry point (auth, admin, SCM, GraphQL) and the WAF/UA control-gap on that same path. Re-run adversary_path_prover after the change — STRIPS will only emit a chain from remaining live facts.";
     }
     if engine_id.contains("s3") || engine_id.contains("cloud_data_exfil") {
         return "Block public ACLs at the AWS account level (`BlockPublicAccess`), set bucket policy to private, and enable S3 Object Ownership = BucketOwnerEnforced.";
@@ -950,13 +947,6 @@ pub fn default_compliance(engine_id: &str) -> Vec<&'static str> {
     }
     if engine_id.contains("supply_chain") || engine_id.contains("sbom") {
         tags.extend_from_slice(&["NIS2:Art.21(2)(d)", "SOC2:CC7.1"]);
-    }
-    if engine_id.contains("leak")
-        || engine_id.contains("adversary")
-        || engine_id.contains("darkweb")
-        || engine_id.contains("threat_intel_fusion")
-    {
-        tags.extend_from_slice(&["ISO27001:A.16", "SOC2:CC7.2", "NIS2:Art.23"]);
     }
     if engine_id.contains("gdpr") || engine_id.contains("personal") || engine_id.contains("pii") {
         tags.push("GDPR:Art.32");

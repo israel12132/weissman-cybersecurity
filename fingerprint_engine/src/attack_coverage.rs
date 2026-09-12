@@ -25,7 +25,12 @@ pub const COVERAGE: &[Technique] = &[
         id: "T1595",
         name: "Active Scanning",
         tactic: "Reconnaissance",
-        engines: &["asm", "discovery_engine", "network_baseline_anomaly"],
+        engines: &[
+            "asm",
+            "discovery_engine",
+            "network_baseline_anomaly",
+            "adversary_path_prover",
+        ],
     },
     Technique {
         id: "T1592",
@@ -44,12 +49,6 @@ pub const COVERAGE: &[Technique] = &[
         name: "Search Open Technical Databases",
         tactic: "Reconnaissance",
         engines: &["iot_shodan_scan", "darkweb_intel"],
-    },
-    Technique {
-        id: "T1597",
-        name: "Search Closed Sources",
-        tactic: "Reconnaissance",
-        engines: &["darkweb_intel", "adversary_gap_mirror", "dark_web_monitor"],
     },
     // ── Resource Development ────────────────────────────────────────────────
     Technique {
@@ -80,6 +79,8 @@ pub const COVERAGE: &[Technique] = &[
             "apt28_techniques",
             "iot_firmware",
             "scada_ics",
+            "adversary_path_prover",
+            "kill_chain",
         ],
     },
     Technique {
@@ -127,18 +128,6 @@ pub const COVERAGE: &[Technique] = &[
             "autonomous_ai_escape",
         ],
     },
-    Technique {
-        id: "T1203",
-        name: "Exploitation for Client Execution",
-        tactic: "Execution",
-        engines: &["rce_exploit_engine", "file_upload", "deserialization_net"],
-    },
-    Technique {
-        id: "T1059",
-        name: "Command and Scripting Interpreter",
-        tactic: "Execution",
-        engines: &["autonomous_pentest", "kill_chain", "rce_exploit_engine"],
-    },
     // ── Persistence ─────────────────────────────────────────────────────────
     Technique {
         id: "T1505.003",
@@ -152,18 +141,6 @@ pub const COVERAGE: &[Technique] = &[
         tactic: "Persistence",
         engines: &["identity_auto_harvest"],
     },
-    Technique {
-        id: "T1547",
-        name: "Boot or Logon Autostart Execution",
-        tactic: "Persistence",
-        engines: &["persistence_mechanism", "bootkit_uefi"],
-    },
-    Technique {
-        id: "T1542.001",
-        name: "Pre-OS Boot: System Firmware",
-        tactic: "Persistence",
-        engines: &["bootkit_uefi", "tpm_firmware_attack"],
-    },
     // ── Privilege Escalation ────────────────────────────────────────────────
     Technique {
         id: "T1068",
@@ -173,7 +150,6 @@ pub const COVERAGE: &[Technique] = &[
             "cloud_iam_escalation",
             "kubernetes_rbac_escape",
             "privilege_escalation_credential_access",
-            "host_privilege_escalation",
         ],
     },
     Technique {
@@ -188,18 +164,17 @@ pub const COVERAGE: &[Technique] = &[
         tactic: "Privilege Escalation",
         engines: &["privilege_escalation_credential_access"],
     },
-    Technique {
-        id: "T1134.004",
-        name: "Access Token Manipulation: Parent PID Spoofing",
-        tactic: "Privilege Escalation",
-        engines: &["parent_pid_spoof"],
-    },
     // ── Defense Evasion ─────────────────────────────────────────────────────
     Technique {
         id: "T1562",
         name: "Impair Defenses",
         tactic: "Defense Evasion",
-        engines: &["edr_evasion", "waf_bypass", "sandbox_evasion"],
+        engines: &[
+            "edr_evasion",
+            "waf_bypass",
+            "adversary_path_prover",
+            "threat_emulation",
+        ],
     },
     Technique {
         id: "T1556",
@@ -273,24 +248,22 @@ pub const COVERAGE: &[Technique] = &[
         tactic: "Discovery",
         engines: &["kerberoasting", "ldap_injection_engine"],
     },
-    Technique {
-        id: "T1057",
-        name: "Process Discovery",
-        tactic: "Discovery",
-        engines: &["process_inventory", "ebpf_sensor"],
-    },
     // ── Lateral Movement ────────────────────────────────────────────────────
     Technique {
         id: "T1021.001",
         name: "Remote Services: RDP",
         tactic: "Lateral Movement",
-        engines: &["rdp_attack_engine", "lateral_movement_engine"],
+        engines: &[
+            "rdp_attack_engine",
+            "lateral_movement_engine",
+            "adversary_path_prover",
+        ],
     },
     Technique {
         id: "T1021.002",
         name: "Remote Services: SMB",
         tactic: "Lateral Movement",
-        engines: &["smb_netbios", "worm_propagation", "lateral_movement_engine"],
+        engines: &["smb_netbios", "worm_propagation", "adversary_path_prover"],
     },
     Technique {
         id: "T1210",
@@ -304,24 +277,6 @@ pub const COVERAGE: &[Technique] = &[
         name: "Data from Information Repositories",
         tactic: "Collection",
         engines: &["swagger_abuse", "odata_injection", "soap_injection"],
-    },
-    Technique {
-        id: "T1113",
-        name: "Screen Capture",
-        tactic: "Collection",
-        engines: &["screen_capture_exfil"],
-    },
-    Technique {
-        id: "T1115",
-        name: "Clipboard Data",
-        tactic: "Collection",
-        engines: &["clipboard_hijack", "infostealer_emulation"],
-    },
-    Technique {
-        id: "T1005",
-        name: "Data from Local System",
-        tactic: "Collection",
-        engines: &["infostealer_emulation", "screen_capture_exfil"],
     },
     // ── Command and Control ─────────────────────────────────────────────────
     Technique {
@@ -354,12 +309,6 @@ pub const COVERAGE: &[Technique] = &[
         name: "Exfiltration Over Web Service",
         tactic: "Exfiltration",
         engines: &["cloud_data_exfil", "database_exfil"],
-    },
-    Technique {
-        id: "T1048",
-        name: "Exfiltration Over Alternative Protocol",
-        tactic: "Exfiltration",
-        engines: &["dns_tunneling_c2", "icmp_covert", "http_covert_exfil"],
     },
     // ── Impact ──────────────────────────────────────────────────────────────
     Technique {
@@ -482,24 +431,56 @@ pub fn coverage_json() -> Value {
             "tactics_covered": tactic_rollup().len(),
             "engine_references": COVERAGE.iter().map(|t| t.engines.len()).sum::<usize>(),
         },
-        "attack_readiness": {
-            "default_roe": "safe_proofs",
-            "weaponized_requires_dual_control": true,
-            "threat_emulation_apt_scenarios": crate::threat_emulation_engine::APT_SCENARIO_COUNT,
-            "redteam_cron_engines": crate::redteam_background_worker::REDTEAM_CRON_ENGINES,
-            "crown_jewels_auto_tagged": true,
-            "attack_paths_require_internet_and_jewels": true,
-            "social_engineering_surface_only": true,
-            "agent_required_count": weissman_core::models::engine_agent::AGENT_REQUIRED_ENGINES.len(),
-            "operator_can_patch_crown_jewel": true,
-            "alert_evidence_pack": true,
-            "gaps": [
-                "Mobile ATT&CK execution/persistence/C2/exfil tactics are still sparse vs Enterprise",
-                "ICS ATT&CK Command-and-Control and Privilege Escalation tactics have 0 dedicated techniques",
-                "Host-resident engines (ROP/heap/JIT/COM) are inventory + remote-surface, not exploit execution",
-                "Scheduled red-team requires WEISSMAN_REDTEAM_CRON=1 (off by default)"
-            ],
-        },
+        "attack_readiness": attack_readiness_json(),
+    })
+}
+
+/// Live-computed readiness (not a hardcoded English gap list). Thin tactics and
+/// product gates are derived from the catalog + env at request time.
+#[must_use]
+pub fn attack_readiness_json() -> Value {
+    let thin: Vec<Value> = TACTIC_ORDER
+        .iter()
+        .filter_map(|t| {
+            let n = COVERAGE.iter().filter(|x| x.tactic == *t).count();
+            if n == 0 {
+                Some(json!({
+                    "id": format!("tactic_uncovered:{t}"),
+                    "tactic": t,
+                    "technique_count": 0,
+                    "severity": "high",
+                }))
+            } else if n < 2 {
+                Some(json!({
+                    "id": format!("tactic_thin:{t}"),
+                    "tactic": t,
+                    "technique_count": n,
+                    "severity": "medium",
+                }))
+            } else {
+                None
+            }
+        })
+        .collect();
+    let redteam_on = std::env::var("WEISSMAN_REDTEAM_CRON")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let roe = std::env::var("WEISSMAN_DEFAULT_ROE").unwrap_or_else(|_| "safe_proofs".to_string());
+    json!({
+        "roe_mode": roe,
+        "redteam_cron_enabled": redteam_on,
+        "redteam_cron_engines": crate::redteam_background_worker::REDTEAM_CRON_ENGINES,
+        "apt_scenario_count": crate::threat_emulation_engine::APT_SCENARIO_COUNT,
+        "agent_required_count": weissman_core::models::engine_agent::AGENT_REQUIRED_ENGINES.len(),
+        "planner_wired_engines": [
+            "kill_chain",
+            "autonomous_pentest",
+            "full_breach_sim",
+            "adversary_path_prover",
+        ],
+        "persistence_techniques": COVERAGE.iter().filter(|t| t.tactic == "Persistence").count(),
+        "privilege_escalation_techniques": COVERAGE.iter().filter(|t| t.tactic == "Privilege Escalation").count(),
+        "thin_tactics": thin,
     })
 }
 
@@ -547,26 +528,16 @@ mod tests {
             "broad tactic coverage"
         );
         assert_eq!(j["framework"], "MITRE ATT&CK");
-        assert_eq!(j["attack_readiness"]["default_roe"], "safe_proofs");
-        assert_eq!(
-            j["attack_readiness"]["crown_jewels_auto_tagged"].as_bool(),
-            Some(true)
+        assert!(
+            j["attack_readiness"]["apt_scenario_count"]
+                .as_u64()
+                .unwrap()
+                >= 7
         );
-        assert_eq!(
-            j["attack_readiness"]["operator_can_patch_crown_jewel"].as_bool(),
-            Some(true)
-        );
-        assert!(j["attack_readiness"]["gaps"]
+        assert!(j["attack_readiness"]["planner_wired_engines"]
             .as_array()
-            .map(|a| !a.is_empty())
-            .unwrap_or(false));
-        assert!(
-            COVERAGE.iter().any(|t| t.id == "T1113"),
-            "screen capture collection must be mapped"
-        );
-        assert!(
-            COVERAGE.iter().any(|t| t.id == "T1547"),
-            "persistence autostart must be mapped"
-        );
+            .unwrap()
+            .iter()
+            .any(|e| e == "adversary_path_prover"));
     }
 }

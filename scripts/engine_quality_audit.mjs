@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 /**
- * Engine quality depth audit — agent hybrid engines must not use empty remote stubs
- * and every AGENT_REQUIRED id must have a dedicated remote-surface match arm.
+ * Engine quality depth audit — agent hybrid engines must not use empty remote stubs.
  *
  * Usage: node scripts/engine_quality_audit.mjs
  */
@@ -14,7 +13,7 @@ const remoteRs = fs.readFileSync(
   path.join(ROOT, 'fingerprint_engine/src/agent_remote_surface.rs'),
   'utf8',
 )
-const agentAgentRs = fs.readFileSync(
+const agentRs = fs.readFileSync(
   path.join(ROOT, 'backend/weissman-core/src/models/engine_agent.rs'),
   'utf8',
 )
@@ -25,15 +24,15 @@ function extractArray(name, text) {
   return [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1])
 }
 
+const agentRequired = extractArray('AGENT_REQUIRED_ENGINES', agentRs)
 const matchStart = remoteRs.indexOf('match engine_id {')
-const otherIdx = remoteRs.indexOf('other => empty_ok', matchStart)
-if (matchStart < 0 || otherIdx < 0) {
-  throw new Error('Could not locate run_remote_surface_probe match')
+const matchEnd = remoteRs.indexOf('other => empty_ok', matchStart)
+if (matchStart < 0 || matchEnd < 0) {
+  console.error('Could not locate agent_remote_surface match')
+  process.exit(1)
 }
-const matchChunk = remoteRs.slice(matchStart, otherIdx)
-const wiredIds = new Set([...matchChunk.matchAll(/"([^"]+)"/g)].map((m) => m[1]))
-const agentRequired = extractArray('AGENT_REQUIRED_ENGINES', agentAgentRs)
-const missingRemoteArms = agentRequired.filter((id) => !wiredIds.has(id))
+const matchChunk = remoteRs.slice(matchStart, matchEnd)
+const missingMatchArms = agentRequired.filter((id) => !matchChunk.includes(`"${id}"`))
 
 const stubEngineIds = []
 for (const m of remoteRs.matchAll(
@@ -47,7 +46,6 @@ for (const m of remoteRs.matchAll(
     fnBody &&
     fnBody.includes('collect(engine_id, target, vec![])') &&
     !fnBody.includes('probe_paths_concurrent') &&
-    !fnBody.includes('probe_http_hits') &&
     !fnBody.includes('tcp_scan') &&
     !fnBody.includes('tcp_open') &&
     !fnBody.includes('dns_')
@@ -56,15 +54,14 @@ for (const m of remoteRs.matchAll(
   }
 }
 
-const ok = stubEngineIds.length === 0 && missingRemoteArms.length === 0
+const ok = stubEngineIds.length === 0 && missingMatchArms.length === 0
 const summary = {
   ok,
   agent_stub_remote: stubEngineIds,
   agent_stub_remote_count: stubEngineIds.length,
-  agent_required_missing_remote_arm: missingRemoteArms,
-  agent_required_missing_remote_arm_count: missingRemoteArms.length,
-  policy:
-    'agent_required hybrid engines must emit live remote-surface findings before agent guidance',
+  agent_required_missing_match_arm: missingMatchArms,
+  agent_required_missing_match_arm_count: missingMatchArms.length,
+  policy: 'every AGENT_REQUIRED engine must have a live remote-surface match arm (HTTP/TCP/DNS)',
   checked_at: new Date().toISOString(),
 }
 

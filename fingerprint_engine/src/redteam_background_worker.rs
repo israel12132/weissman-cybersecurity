@@ -25,6 +25,14 @@ fn interval_secs() -> u64 {
 }
 
 /// Enable with `WEISSMAN_REDTEAM_CRON=1`.
+pub const REDTEAM_CRON_ENGINES: &[&str] = &[
+    "ai_adversarial_redteam",
+    "kill_chain",
+    "autonomous_pentest",
+    "adversary_path_prover",
+    "threat_emulation",
+];
+
 pub fn spawn_cron_worker(
     app_pool: Arc<PgPool>,
     auth_pool: Arc<PgPool>,

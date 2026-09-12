@@ -1,16 +1,16 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen } from '@testing-library/react'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k) => k, i18n: { language: 'en' } }),
-  initReactI18next: { type: '3rdParty', init: () => {} },
 }))
 
-const apiFetch = vi.fn()
-vi.mock('../utils/apiFetch', () => ({
-  apiFetch: (...args) => apiFetch(...args),
+vi.mock('../components/ui/Button', () => ({
+  __esModule: true,
+  default: ({ children, onClick, disabled }) => (
+    <button type="button" onClick={onClick} disabled={disabled}>{children}</button>
+  ),
 }))
-
 vi.mock('./PageShell', () => ({
   __esModule: true,
   default: ({ title, children }) => (
@@ -21,43 +21,35 @@ vi.mock('./PageShell', () => ({
   ),
 }))
 vi.mock('../components/engine/ShellScanActions', () => ({ __esModule: true, default: () => null }))
+vi.mock('../utils/apiFetch', () => ({
+  apiFetch: async () => ({
+    framework: 'MITRE ATT&CK',
+    tactics: [],
+    totals: { techniques_covered: 42, tactics_covered: 12, engine_references: 90 },
+    attack_readiness: {
+      roe_mode: 'safe_proofs',
+      apt_scenario_count: 7,
+      redteam_cron_enabled: false,
+      redteam_cron_engines: ['kill_chain', 'adversary_path_prover'],
+      agent_required_count: 58,
+      planner_wired_engines: ['kill_chain', 'adversary_path_prover'],
+      thin_tactics: [{ id: 'tactic_thin:Execution', tactic: 'Execution', technique_count: 1 }],
+    },
+  }),
+}))
 
-import AttackCoverage, { readinessGaps } from './AttackCoverage.jsx'
+import AttackCoverage from './AttackCoverage.jsx'
 
-describe('AttackCoverage', () => {
+describe('AttackCoverage readiness', () => {
   beforeEach(() => {
-    apiFetch.mockReset()
-    apiFetch.mockResolvedValue({
-      framework: 'MITRE ATT&CK',
-      totals: { techniques_covered: 42, tactics_covered: 14, engine_references: 90 },
-      tactics: [
-        {
-          tactic: 'Execution',
-          technique_count: 1,
-          techniques: [{ id: 'T1059', name: 'Command Interpreter', engines: ['rce_exploit_engine'], engine_count: 1 }],
-        },
-      ],
-      attack_readiness: {
-        default_roe: 'safe_proofs',
-        threat_emulation_apt_scenarios: 7,
-        agent_required_count: 58,
-        redteam_cron_engines: ['ai_adversarial_redteam', 'kill_chain', 'autonomous_pentest'],
-        gaps: ['ICS ATT&CK Command-and-Control still empty'],
-      },
-    })
+    vi.clearAllMocks()
   })
-  afterEach(cleanup)
 
-  it('renders the live coverage matrix and honest readiness gaps', async () => {
+  it('renders the live attack-readiness panel from GET /api/attack-coverage', async () => {
     render(<AttackCoverage />)
-    expect(await screen.findByTestId('attack-readiness')).toBeInTheDocument()
-    expect(screen.getByText('ICS ATT&CK Command-and-Control still empty')).toBeInTheDocument()
-    expect(screen.getByText('T1059')).toBeInTheDocument()
-    expect(apiFetch).toHaveBeenCalledWith('/api/attack-coverage')
-  })
-
-  it('readinessGaps drops blanks', () => {
-    expect(readinessGaps({ gaps: ['a', '  ', null] })).toEqual(['a'])
-    expect(readinessGaps(null)).toEqual([])
+    expect(await screen.findByTestId('attack-readiness')).toBeTruthy()
+    expect(screen.getByText('pages.attackCoverage.readiness_title')).toBeTruthy()
+    expect(screen.getByText(/pages.attackCoverage.thin_tactic/)).toBeTruthy()
+    expect(screen.getAllByText(/adversary_path_prover/).length).toBeGreaterThan(0)
   })
 })

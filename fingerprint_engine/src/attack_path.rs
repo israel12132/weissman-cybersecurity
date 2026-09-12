@@ -8,13 +8,13 @@
 //! cockpit can render without rerunning the search.
 
 use crate::supreme_weights::{
-    self, evidence_confidence, is_cross_region, is_identity_edge, is_smb_or_port_edge,
-    path_score_0_100, EdgeWeightInputs, MAX_PATH_DEPTH,
+    self, EdgeWeightInputs, MAX_PATH_DEPTH, evidence_confidence, is_cross_region, is_identity_edge,
+    is_smb_or_port_edge, path_score_0_100,
 };
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sqlx::{PgPool, Row};
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
@@ -293,6 +293,21 @@ async fn cached_graph(
         })),
     );
     Ok(loaded)
+}
+
+async fn auto_tag_crown_jewels(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+) -> Result<(), sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    sqlx::query(crate::elite_hardening::risk_sql::AUTO_TAG_CROWN_JEWEL_SQL)
+        .bind(tenant_id)
+        .bind(client_id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(())
 }
 
 /// Mark the in-memory graph dirty so the next inference reloads from Postgres.
@@ -961,6 +976,16 @@ pub async fn compute_and_store(
             }
         }
     }
+    let prev_path_count = latest_snapshot(pool, tenant_id, client_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|s| s.paths.len())
+        .unwrap_or(0);
+    auto_tag_crown_jewels(pool, tenant_id, client_id)
+        .await
+        .map_err(|e| format!("crown-jewel auto-tag failed: {e}"))?;
+    mark_graph_dirty(tenant_id, client_id);
     let graph = cached_graph(pool, tenant_id, client_id).await?;
     let infer = tokio::task::spawn_blocking(move || {
         infer_paths(&graph.nodes, &graph.adjacency, &graph.mitre, top_k, None)
@@ -972,6 +997,17 @@ pub async fn compute_and_store(
 
     let snapshot = build_snapshot(paths, choke, entries, jewels, false);
     persist_snapshot(pool, tenant_id, client_id, &snapshot).await?;
+    if !snapshot.paths.is_empty() && snapshot.paths.len() > prev_path_count {
+        crate::notifications::spawn_internet_jewel_path_alert(
+            Arc::new(pool.clone()),
+            tenant_id,
+            client_id,
+            snapshot.paths.len(),
+            snapshot.jewel_count,
+            snapshot.max_path_score,
+            snapshot.total_path_ale_usd,
+        );
+    }
     Ok(snapshot)
 }
 

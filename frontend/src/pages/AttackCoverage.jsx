@@ -30,73 +30,6 @@ function tacticColor(i) {
   return TACTIC_COLORS[i % TACTIC_COLORS.length]
 }
 
-export function readinessGaps(readiness) {
-  if (!readiness || !Array.isArray(readiness.gaps)) return []
-  return readiness.gaps.filter((g) => String(g || '').trim())
-}
-
-function AttackReadinessPanel({ readiness, t }) {
-  if (!readiness) return null
-  const gaps = readinessGaps(readiness)
-  const cron = Array.isArray(readiness.redteam_cron_engines) ? readiness.redteam_cron_engines : []
-  return (
-    <section
-      className="rounded-2xl border border-rose-500/25 bg-[var(--table-surface)] p-4"
-      data-testid="attack-readiness"
-    >
-      <div className="flex items-baseline justify-between gap-3 mb-3 flex-wrap">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-rose-300">
-          {t(`${NS}.readiness_title`)}
-        </h2>
-        <span className="text-[10px] font-mono text-[var(--text-muted)]">{t(`${NS}.readiness_hint`)}</span>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <ExecutiveWidget
-          label={t(`${NS}.roe`)}
-          value={readiness.default_roe || 'safe_proofs'}
-          hint={t(`${NS}.weaponized`)}
-          accent="#f43f5e"
-        />
-        <ExecutiveWidget
-          label={t(`${NS}.apt_scenarios`)}
-          value={readiness.threat_emulation_apt_scenarios ?? 0}
-          hint={t(`${NS}.cron_engines`)}
-          accent="#f97316"
-        />
-        <ExecutiveWidget
-          label={t(`${NS}.agent_required`)}
-          value={readiness.agent_required_count ?? 0}
-          hint={t(`${NS}.jewel_auto`)}
-          accent="#a78bfa"
-        />
-        <ExecutiveWidget
-          label={t(`${NS}.cron_engines`)}
-          value={cron.length}
-          hint={cron.join(' · ') || '—'}
-          accent="#22d3ee"
-        />
-      </div>
-      {gaps.length > 0 && (
-        <>
-          <h3 className="text-[11px] font-mono uppercase tracking-widest text-rose-200/80 mb-2">
-            {t(`${NS}.gaps_heading`)}
-          </h3>
-          <ul className="space-y-1.5">
-            {gaps.map((g) => (
-              <li
-                key={g}
-                className="text-[12px] text-[var(--text-secondary)] rounded-lg border border-rose-500/15 bg-rose-950/10 px-3 py-2"
-              >
-                {g}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </section>
-  )
-}
-
 function coverageCsv(tactics) {
   const header = ['tactic', 'technique_id', 'technique_name', 'engine_count', 'engines']
   const rows = []
@@ -134,6 +67,9 @@ export default function AttackCoverage() {
 
   const tactics = useMemo(() => (Array.isArray(data?.tactics) ? data.tactics : []), [data])
   const totals = data?.totals || {}
+  const readiness = data?.attack_readiness || {}
+  const thinTactics = Array.isArray(readiness.thin_tactics) ? readiness.thin_tactics : []
+  const plannerEngines = Array.isArray(readiness.planner_wired_engines) ? readiness.planner_wired_engines : []
 
   const filteredTactics = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -189,7 +125,40 @@ export default function AttackCoverage() {
               <ExecutiveWidget label={t(`${NS}.kpi_engine_refs`)} value={totals.engine_references ?? 0} hint={t(`${NS}.kpi_engine_refs_hint`)} accent="#22d3ee" />
             </div>
 
-            <AttackReadinessPanel readiness={data?.attack_readiness} t={t} />
+            <section
+              className="rounded-2xl border border-rose-500/25 bg-[var(--table-surface)] p-4 space-y-3"
+              data-testid="attack-readiness"
+            >
+              <h2 className="text-[11px] font-mono uppercase tracking-widest text-rose-300">
+                {t(`${NS}.readiness_title`)}
+              </h2>
+              <p className="text-[12px] text-[var(--text-muted)]">{t(`${NS}.readiness_body`)}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <ExecutiveWidget label={t(`${NS}.kpi_roe`)} value={readiness.roe_mode || 'safe_proofs'} hint={t(`${NS}.kpi_roe_hint`)} accent="#f97316" />
+                <ExecutiveWidget label={t(`${NS}.kpi_apt`)} value={readiness.apt_scenario_count ?? 0} hint={t(`${NS}.kpi_apt_hint`)} accent="#a78bfa" />
+                <ExecutiveWidget
+                  label={t(`${NS}.kpi_cron`)}
+                  value={readiness.redteam_cron_enabled ? t(`${NS}.cron_on`) : t(`${NS}.cron_off`)}
+                  hint={(readiness.redteam_cron_engines || []).join(', ')}
+                  accent={readiness.redteam_cron_enabled ? '#4ade80' : '#f43f5e'}
+                />
+                <ExecutiveWidget label={t(`${NS}.kpi_agent_required`)} value={readiness.agent_required_count ?? 0} hint={t(`${NS}.kpi_agent_required_hint`)} accent="#22d3ee" />
+              </div>
+              {plannerEngines.length > 0 && (
+                <p className="text-[11px] font-mono text-[var(--text-secondary)]">
+                  {t(`${NS}.planner_wired`)}: {plannerEngines.join(' · ')}
+                </p>
+              )}
+              {thinTactics.length > 0 && (
+                <ul className="space-y-1">
+                  {thinTactics.map((g) => (
+                    <li key={g.id || g.tactic} className="text-[12px] text-amber-200 font-mono">
+                      {t(`${NS}.thin_tactic`, { tactic: g.tactic, count: g.technique_count ?? 0 })}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
 
             <div className="relative max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)] pointer-events-none" />

@@ -423,6 +423,26 @@ export default function AttackPaths() {
               <ExecutiveWidget label={t(`${NS}.kpi_paths`)} value={paths.length} hint={t(`${NS}.kpi_paths_hint`)} accent="#f97316" />
               <ExecutiveWidget label={t(`${NS}.kpi_top_score`)} value={topScore} hint={t(`${NS}.kpi_top_score_hint`)} accent={riskColor(topRisk)} />
             </div>
+            {Number(display?.jewel_count) === 0 && (
+              <div
+                role="status"
+                data-testid="jewel-auto-tag-banner"
+                className="rounded-xl border border-amber-500/35 bg-amber-950/20 px-4 py-3 text-sm text-amber-100"
+              >
+                <p className="font-medium">{t(`${NS}.zero_jewel_title`)}</p>
+                <p className="text-[12px] text-amber-200/80 mt-1">{t(`${NS}.zero_jewel_body`)}</p>
+                <Button
+                  variant="unstyled"
+                  type="button"
+                  onClick={() => load(true)}
+                  disabled={recomputing}
+                  className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-100 text-xs font-medium hover:bg-amber-500/20 disabled:opacity-40"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${recomputing ? 'animate-spin' : ''}`} />
+                  {t(`${NS}.recompute`)}
+                </Button>
+              </div>
+            )}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <ExecutiveWidget label={t(`${NS}.kpi_path_ale`)} value={`$${(Number(display?.total_path_ale_usd) || 0).toLocaleString()}`} hint={t(`${NS}.kpi_path_ale_hint`)} accent="#f59e0b" />
               <ExecutiveWidget label={t(`${NS}.kpi_top_risk`)} value={topRisk.toFixed(1)} hint={t(`${NS}.kpi_top_risk_hint`)} accent={riskColor(topRisk)} />

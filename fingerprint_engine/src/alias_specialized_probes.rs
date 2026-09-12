@@ -204,18 +204,8 @@ pub async fn run_specialized_probe(
         "zero_click_exploit" | "zero_day_chain" => {
             probe_zero_click_alias(engine_id, canonical, target).await
         }
-
-        // ── Thin aliases that previously fell through to empty_ok ──────────
-        "azure_ad_attack" => probe_azure_ad_attack(engine_id, canonical, target).await,
-        "gitops_attack" => probe_gitops_attack(engine_id, canonical, target).await,
-        "api_gateway_attack" => probe_api_gateway_attack(engine_id, canonical, target).await,
-        "data_exfiltration" => probe_data_exfiltration(engine_id, canonical, target).await,
-        "dns_tunneling" => probe_dns_tunneling(engine_id, canonical, target).await,
-        "apt_lateral_movement" => probe_apt_lateral(engine_id, canonical, target).await,
-        "supply_chain_apt" => probe_supply_chain_apt(engine_id, canonical, target).await,
-        "cloud_lateral" | "multi_cloud_pivot" | "cross_account_pivot" => {
-            probe_cloud_lateral(engine_id, canonical, target).await
-        }
+        "full_breach_sim" => probe_full_breach_sim(engine_id, canonical, target).await,
+        "post_exploitation" => probe_post_exploitation(engine_id, canonical, target).await,
 
         // ── Default: no specialized remote signal for this alias id ──────────
         _ => empty_ok(engine_id, target),
@@ -1257,12 +1247,20 @@ async fn probe_edr_evasion_alias(engine_id: &str, canonical: &str, target: &str)
                     "info",
                     "T1562.001",
                     &format!(
-                        "{} sits behind {} — EDR/AMSI bypass tradecraft must evade this stack; agent validates host controls.",
-                        p.final_url, sig
+                        "{} sits behind {} — {} is a perimeter WAF/CDN signal, not host syscall unhooking/Hell's Gate. Agent validates EDR on the endpoint.",
+                        p.final_url, sig, engine_id
                     ),
                     target,
                     canonical,
                 ));
+                if let Some(obj) = findings.last_mut().and_then(|f| f.as_object_mut()) {
+                    if engine_id == "syscall_evasion" {
+                        obj.insert(
+                            "probe_fidelity".to_string(),
+                            json!("perimeter_waf_not_host_syscall"),
+                        );
+                    }
+                }
                 break;
             }
         }
@@ -1590,275 +1588,49 @@ async fn probe_zero_click_alias(engine_id: &str, canonical: &str, target: &str) 
     collect(engine_id, target, canonical, findings)
 }
 
-async fn probe_azure_ad_attack(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
+async fn probe_full_breach_sim(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     let host = extract_host(target);
-    let client = http_client().await;
-    let mut findings = Vec::new();
-    let urls = [
-        format!("https://{host}/.well-known/openid-configuration"),
-        format!("https://{host}/v2.0/.well-known/openid-configuration"),
-        "https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration".into(),
-        format!("https://{host}/FederationMetadata/2007-06/FederationMetadata.xml"),
-    ];
-    for url in urls {
-        let Some(p) = http_get(&client, &url).await else {
-            continue;
-        };
-        if p.status >= 400 {
-            continue;
-        }
-        let low = p.body.to_ascii_lowercase();
-        if low.contains("\"issuer\"") && (low.contains("microsoftonline") || low.contains("login."))
-        {
-            findings.push(alias_finding(
-                engine_id,
-                "Entra ID / Azure AD OpenID metadata is live",
-                "medium",
-                "T1078.004",
-                &format!(
-                    "{} HTTP {} — Entra/OIDC issuer metadata observed. Check guest invites, app registrations, and Conditional Access — this is not a password spray.",
-                    p.final_url, p.status
-                ),
-                target,
-                canonical,
-            ));
-            break;
-        }
-        if low.contains("entitydescriptor") {
-            findings.push(alias_finding(
-                engine_id,
-                "Azure AD federation metadata exposed",
-                "medium",
-                "T1550.001",
-                &format!(
-                    "{} HTTP {} returned SAML EntityDescriptor.",
-                    p.final_url, p.status
-                ),
-                target,
-                canonical,
-            ));
-            break;
-        }
-    }
-    collect(engine_id, target, canonical, findings)
-}
-
-async fn probe_gitops_attack(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
     let mut findings = Vec::new();
-    let paths = [
-        "/.git/HEAD",
-        "/.git/config",
-        "/argocd/",
-        "/api/v1/session",
-        "/flux/v1/",
-        "/.github/workflows/",
-    ];
-    let probes = probe_paths_concurrent(&client, &base, &paths, DEFAULT_PROBE_CONCURRENCY).await;
-    for p in probes {
-        let low = p.body.to_ascii_lowercase();
-        if p.final_url.contains(".git/HEAD") && (low.contains("ref: refs/") || p.status == 200) {
-            findings.push(alias_finding(
-                engine_id,
-                "Git directory exposed (GitOps source leak)",
-                "high",
-                "T1195.001",
-                &format!(
-                    "{} HTTP {} — working tree metadata is public.",
-                    p.final_url, p.status
-                ),
-                target,
-                canonical,
-            ));
-        }
-        if low.contains("argocd") || low.contains("\"applications\"") {
-            findings.push(alias_finding(
-                engine_id,
-                "GitOps control plane HTTP surface",
-                "high",
-                "T1609",
-                &format!(
-                    "{} HTTP {} — Argo/Flux-style API or UI responded.",
-                    p.final_url, p.status
-                ),
-                target,
-                canonical,
-            ));
-        }
-    }
-    collect(engine_id, target, canonical, findings)
-}
-
-async fn probe_api_gateway_attack(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
-    let client = http_client().await;
-    let base = normalize_url(target);
-    let mut findings = Vec::new();
-    let host = extract_host(target);
-    let origin = http_get(&client, &base).await;
-    let alt = http_get_with_headers(
-        &client,
-        &base,
-        &[("X-Forwarded-For", "127.0.0.1"), ("X-Original-Host", &host)],
-    )
-    .await;
-    if let (Some(a), Some(b)) = (origin.as_ref(), alt.as_ref()) {
-        if a.status != b.status || a.is_waf_block() != b.is_waf_block() {
-            findings.push(alias_finding(
-                engine_id,
-                "API gateway skip via forwarded-host headers",
-                "high",
-                "T1090",
-                &format!(
-                    "Baseline HTTP {} waf={} vs X-Forwarded-For/X-Original-Host HTTP {} waf={}.",
-                    a.status,
-                    a.is_waf_block(),
-                    b.status,
-                    b.is_waf_block()
-                ),
-                target,
-                canonical,
-            ));
-        }
-    }
-    let paths = [
-        "/swagger.json",
-        "/openapi.json",
-        "/graphql",
-        "/actuator/health",
-    ];
-    let probes = probe_paths_concurrent(&client, &base, &paths, DEFAULT_PROBE_CONCURRENCY).await;
-    for p in probes {
-        if status_indicates_presence(p.status)
-            && (p.body.contains("openapi")
-                || p.body.contains("swagger")
-                || p.body.contains("graphql")
-                || p.body.contains("UP"))
-        {
-            findings.push(alias_finding(
-                engine_id,
-                "API gateway schema/health surface",
-                "medium",
-                "T1190",
-                &format!(
-                    "{} HTTP {} — schema or actuator is public.",
-                    p.final_url, p.status
-                ),
-                target,
-                canonical,
-            ));
-        }
-    }
-    collect(engine_id, target, canonical, findings)
-}
-
-async fn probe_data_exfiltration(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
-    let host = extract_host(target);
-    let mut findings = Vec::new();
-    let txt = dns_txt(&host).await;
-    let long_txt = txt.iter().any(|t| t.len() > 400);
-    if long_txt {
+    let open = tcp_scan(&host, &[22, 80, 443, 445, 3389, 5985, 8080], 8).await;
+    if !open.is_empty() {
         findings.push(alias_finding(
             engine_id,
-            "Oversized DNS TXT — possible covert channel",
-            "medium",
-            "T1048.003",
-            &format!("TXT on {host} exceeds 400 bytes ({:?}).", txt),
-            target,
-            canonical,
-        ));
-    }
-    let open = tcp_scan(&host, &[53, 123, 853], 4).await;
-    if open.contains(&53) || open.contains(&853) {
-        findings.push(alias_finding(
-            engine_id,
-            "DNS resolver reachable from scan origin",
-            "medium",
-            "T1071.004",
+            &format!("Breach-sim perimeter ports: {open:?}"),
+            if open.iter().any(|p| matches!(p, 445 | 3389 | 5985)) {
+                "high"
+            } else {
+                "medium"
+            },
+            "T1190",
             &format!(
-                "Open {:?} on {host} — DoH/DoT/DNS can be an exfil path.",
-                open
+                "Host {host} accepts {open:?} — full_breach_sim is a live surface + STRIPS plan, not a weaponized breach."
             ),
             target,
             canonical,
         ));
     }
-    collect(engine_id, target, canonical, findings)
-}
-
-async fn probe_dns_tunneling(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
-    let host = extract_host(target);
-    let mut findings = Vec::new();
-    let txt = dns_txt(&host).await;
-    if txt.iter().any(|t| t.len() > 255) {
-        findings.push(alias_finding(
-            engine_id,
-            "Long TXT RDATA (DNS tunneling indicator)",
-            "medium",
-            "T1071.004",
-            &format!("TXT answers on {host}: {:?}", txt),
-            target,
-            canonical,
-        ));
-    }
-    let labels: Vec<&str> = host.split('.').collect();
-    if labels.iter().any(|l| l.len() > 40) {
-        findings.push(alias_finding(
-            engine_id,
-            "Unusually long DNS label",
-            "low",
-            "T1071.004",
-            &format!("{host} has a label >40 chars — common in encoding tunnels."),
-            target,
-            canonical,
-        ));
-    }
-    collect(engine_id, target, canonical, findings)
-}
-
-async fn probe_apt_lateral(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
-    let host = extract_host(target);
-    let open = tcp_scan(&host, &[445, 3389, 5985, 5986, 22, 88], 6).await;
-    let mut findings = Vec::new();
-    for port in &open {
-        findings.push(alias_finding(
-            engine_id,
-            &format!("Lateral protocol {port} open from scan origin"),
-            if matches!(port, 445 | 3389 | 5985 | 88) {
-                "high"
-            } else {
-                "medium"
-            },
-            "T1021",
-            &format!("TCP connect to {host}:{port} succeeded — APT lateral preposition, not a simulated hop."),
-            target,
-            canonical,
-        ));
-    }
-    collect(engine_id, target, canonical, findings)
-}
-
-async fn probe_supply_chain_apt(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
-    let client = http_client().await;
-    let base = normalize_url(target);
-    let mut findings = Vec::new();
-    let paths = [
-        "/package.json",
-        "/package-lock.json",
-        "/.npmrc",
-        "/.github/workflows/ci.yml",
-        "/Dockerfile",
+    let paths = &[
+        "/login",
+        "/admin",
+        "/upload",
+        "/.git/HEAD",
+        "/actuator/health",
+        "/graphql",
+        "/api",
+        "/wp-login.php",
     ];
-    let probes = probe_paths_concurrent(&client, &base, &paths, DEFAULT_PROBE_CONCURRENCY).await;
+    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
     for p in probes {
         if status_indicates_presence(p.status) {
             findings.push(alias_finding(
                 engine_id,
-                "Build/supply-chain artifact publicly readable",
-                "high",
-                "T1195",
+                &format!("Breach-sim entry {} ({})", p.final_url, p.status),
+                if p.status == 200 { "medium" } else { "info" },
+                "T1190",
                 &format!(
-                    "{} HTTP {} — CI/package metadata is on the internet.",
+                    "Live GET {} returned {} — evidence for the STRIPS planner, not an exploit chain.",
                     p.final_url, p.status
                 ),
                 target,
@@ -1866,39 +1638,60 @@ async fn probe_supply_chain_apt(engine_id: &str, canonical: &str, target: &str) 
             ));
         }
     }
+    if let Some(chain) = crate::attack_chain_planner::strips_chain_finding(
+        engine_id,
+        target,
+        &findings,
+        "impact:objective",
+    ) {
+        findings.push(chain);
+    }
     collect(engine_id, target, canonical, findings)
 }
 
-async fn probe_cloud_lateral(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
-    let client = http_client().await;
+async fn probe_post_exploitation(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     let host = extract_host(target);
+    let client = http_client().await;
+    let base = normalize_url(target);
     let mut findings = Vec::new();
-    let urls = [
-        format!("https://{host}/.well-known/openid-configuration"),
-        format!("https://{host}/.well-known/oauth-authorization-server"),
+    let paths = &[
+        "/admin",
+        "/debug",
+        "/server-status",
+        "/phpinfo.php",
+        "/actuator/env",
+        "/.git/config",
     ];
-    for url in urls {
-        let Some(p) = http_get(&client, &url).await else {
-            continue;
-        };
-        if p.status >= 400 {
-            continue;
-        }
-        if p.body.contains("\"issuer\"") {
+    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if status_indicates_presence(p.status) {
             findings.push(alias_finding(
                 engine_id,
-                "OIDC issuer on target — federated cloud trust surface",
-                "medium",
-                "T1078.004",
+                &format!("Post-ex admin/debug path {} ({})", p.final_url, p.status),
+                if p.status == 200 { "high" } else { "medium" },
+                "T1082",
                 &format!(
-                    "{} HTTP {} — cross-account/WIF/federated roles bind to this issuer. This is a live metadata GET, not a simulated assume-role.",
+                    "{} ({}) — post-exploitation inventory of admin/debug surfaces. No shell is spawned.",
                     p.final_url, p.status
                 ),
                 target,
                 canonical,
             ));
-            break;
         }
+    }
+    let lateral = tcp_scan(&host, &[445, 3389, 5985, 22], 8).await;
+    if !lateral.is_empty() {
+        findings.push(alias_finding(
+            engine_id,
+            &format!("Post-ex lateral ports: {lateral:?}"),
+            "high",
+            "T1021",
+            &format!(
+                "Host {host} accepts {lateral:?} — observed post-foothold adjacency, not a lateral exploit."
+            ),
+            target,
+            canonical,
+        ));
     }
     collect(engine_id, target, canonical, findings)
 }

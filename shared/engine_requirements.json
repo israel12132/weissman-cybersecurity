@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-09-12T00:39:42.748Z",
+  "generated_at": "2026-09-12T00:12:06.543Z",
   "production_engine_count": 584,
   "requirements": {
     "msa_acknowledged": {
@@ -6667,6 +6667,16 @@
       "group": "recon",
       "kind": "real_probe",
       "label": "Adversary Underground Delta",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "adversary_path_prover": {
+      "id": "adversary_path_prover",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Adversary Path Prover",
       "requirements": [
         "contact_email",
         "scope_domains"

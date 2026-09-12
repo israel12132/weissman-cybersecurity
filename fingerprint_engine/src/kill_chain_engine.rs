@@ -956,6 +956,15 @@ pub async fn run_kill_chain_result(target: &str) -> EngineResult {
         ),
     }));
 
+    if let Some(chain) = crate::attack_chain_planner::strips_chain_finding(
+        ENGINE_ID,
+        target,
+        &findings,
+        "impact:objective",
+    ) {
+        findings.push(chain);
+    }
+
     let finding_count = findings.len();
     EngineResult::ok(
         findings,

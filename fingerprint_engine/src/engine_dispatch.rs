@@ -600,6 +600,9 @@ async fn dispatch_engine_match(
             crate::typosquatting_monitor_engine::run_typosquatting_monitor_result_ctx(target, ctx).await
         }
         "kill_chain" => crate::kill_chain_engine::run_kill_chain_result(target).await,
+        "adversary_path_prover" => {
+            crate::adversary_path_prover::run_adversary_path_prover_result(target, ctx).await
+        }
         "oast_oob" => crate::oast_oob_engine::run_oast_oob_result(target).await,
         "deception_honeypot" => {
             crate::deception_honeypot_engine::run_deception_honeypot_result(target).await

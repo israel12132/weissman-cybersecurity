@@ -33,7 +33,7 @@ is pure-alias "coverage theater".
 | Attack domain | Engines | Live probes | Aliases | Agent | MITRE techniques |
 |---------------|--------:|------------:|--------:|------:|-----------------:|
 | Web / API | 71 | 48 | 23 | 0 | 21 |
-| APT / Top-Tier | 65 | 31 | 30 | 4 | 31 |
+| APT / Top-Tier | 66 | 32 | 30 | 4 | 31 |
 | Network / Protocol | 59 | 25 | 23 | 11 | 32 |
 | Stealth / Evasion | 53 | 11 | 25 | 17 | 35 |
 | Cloud / Infra | 51 | 28 | 23 | 0 | 24 |

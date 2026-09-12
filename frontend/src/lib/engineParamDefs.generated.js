@@ -1063,124 +1063,6 @@ export const GENERATED_PARAM_DEFS = {
       "max": 5000
     }
   ],
-  "ot_passive_active_safety": [
-    {
-      "key": "protocol_strict",
-      "label": "OT Protocol Strict",
-      "type": "select",
-      "defaultVal": "true",
-      "options": [
-        "true",
-        "false"
-      ]
-    },
-    {
-      "key": "ports",
-      "label": "Ports / Port Range",
-      "type": "text",
-      "defaultVal": "top",
-      "placeholder": "top | 80,443,8080"
-    },
-    {
-      "key": "probe_mode",
-      "label": "OT Probe Mode",
-      "type": "select",
-      "defaultVal": "safe_read",
-      "options": [
-        "passive",
-        "safe_read",
-        "active_validation"
-      ]
-    },
-    {
-      "key": "depth",
-      "label": "Probe Depth",
-      "type": "select",
-      "defaultVal": "3",
-      "options": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "5"
-      ]
-    },
-    {
-      "key": "timeout_ms",
-      "label": "Probe Timeout (ms)",
-      "type": "number",
-      "defaultVal": "8000",
-      "min": 500,
-      "max": 60000
-    },
-    {
-      "key": "max_findings",
-      "label": "Max Findings",
-      "type": "number",
-      "defaultVal": "200",
-      "min": 1,
-      "max": 5000
-    }
-  ],
-  "ot_crown_jewel_path": [
-    {
-      "key": "protocol_strict",
-      "label": "OT Protocol Strict",
-      "type": "select",
-      "defaultVal": "true",
-      "options": [
-        "true",
-        "false"
-      ]
-    },
-    {
-      "key": "ports",
-      "label": "Ports / Port Range",
-      "type": "text",
-      "defaultVal": "top",
-      "placeholder": "top | 80,443,8080"
-    },
-    {
-      "key": "probe_mode",
-      "label": "OT Probe Mode",
-      "type": "select",
-      "defaultVal": "safe_read",
-      "options": [
-        "passive",
-        "safe_read",
-        "active_validation"
-      ]
-    },
-    {
-      "key": "depth",
-      "label": "Probe Depth",
-      "type": "select",
-      "defaultVal": "3",
-      "options": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "5"
-      ]
-    },
-    {
-      "key": "timeout_ms",
-      "label": "Probe Timeout (ms)",
-      "type": "number",
-      "defaultVal": "8000",
-      "min": 500,
-      "max": 60000
-    },
-    {
-      "key": "max_findings",
-      "label": "Max Findings",
-      "type": "number",
-      "defaultVal": "200",
-      "min": 1,
-      "max": 5000
-    }
-  ],
   "iot_firmware": [
     {
       "key": "protocol_strict",
@@ -25076,43 +24958,24 @@ export const GENERATED_PARAM_DEFS = {
       "max": 5000
     }
   ],
-  "credential_ransomware_fusion": [
+  "adversary_path_prover": [
     {
-      "key": "safe_mode",
-      "label": "Safe Mode (no destructive exec)",
+      "key": "intensity",
+      "label": "Scan Intensity",
       "type": "select",
-      "defaultVal": "true",
+      "defaultVal": "normal",
       "options": [
-        "true",
-        "false"
+        "light",
+        "normal",
+        "aggressive"
       ]
     },
     {
-      "key": "depth",
-      "label": "Probe Depth",
-      "type": "select",
-      "defaultVal": "3",
-      "options": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "5"
-      ]
-    },
-    {
-      "key": "ports",
-      "label": "Ports / Port Range",
+      "key": "campaign_name",
+      "label": "Campaign Name",
       "type": "text",
-      "defaultVal": "top",
-      "placeholder": "top | 80,443,8080"
-    },
-    {
-      "key": "github_token",
-      "label": "GitHub Token (optional)",
-      "type": "password",
       "defaultVal": "",
-      "placeholder": "ghp_..."
+      "placeholder": "Red Team Q2"
     },
     {
       "key": "stealth_mode",
@@ -25132,6 +24995,17 @@ export const GENERATED_PARAM_DEFS = {
       "defaultVal": "200",
       "min": 1,
       "max": 5000
+    },
+    {
+      "key": "evidence_mode",
+      "label": "Evidence Mode",
+      "type": "select",
+      "defaultVal": "standard",
+      "options": [
+        "standard",
+        "strict",
+        "forensic"
+      ]
     }
   ]
 }
