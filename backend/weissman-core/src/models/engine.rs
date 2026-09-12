@@ -79,12 +79,9 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "asm",
     "first_mover_surface_delta",
     "first_mover_delta_fusion",
-    "identity_surface_delta",
-    "dualstack_edge_skip_fusion",
-    "ransomware_preposition_surface",
     "first_seen_osv_nvd",
     "leak_hunter",
-    "adversary_gap_mirror",
+    "adversary_underground_delta",
     "discovery_engine",
     "recon",
     "supply_chain",
@@ -125,8 +122,6 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "building_automation_attack",
     "robotics_ros2_attack",
     "ot_sis_triton_attack",
-    "ot_passive_active_safety",
-    "ot_crown_jewel_path",
     "iot_firmware",
     "ble_rf",
     "edr_evasion",
@@ -313,7 +308,6 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "attack_surface_quantify",
     "external_exposure_supreme",
     "fair_exposure_fusion",
-    "supreme_path_fair_rag",
     "identity_attack_chain",
     "pipeline_to_runtime_risk",
     "risk_superposition_collapse",
@@ -685,7 +679,6 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "ngfw_posture",
     "malware_detonation",
     "weissman_vngfw",
-    "dominion_fusion",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -697,7 +690,7 @@ pub const DEFAULT_ORCHESTRATOR_ENGINES: &[&str] = &[
     "asm",
     "first_mover_surface_delta",
     "leak_hunter",
-    "adversary_gap_mirror",
+    "adversary_underground_delta",
     "email_dns_posture",
     "pki_tls",
     "subdomain_takeover",
@@ -708,8 +701,6 @@ pub const DEFAULT_ORCHESTRATOR_ENGINES: &[&str] = &[
     "oauth_oidc",
     "external_exposure_supreme",
     "microsecond_timing",
-    "ransomware_preposition_surface",
-    "dualstack_edge_skip_fusion",
 ];
 
 /// Full ordered registry of all production engines in proper execution order.
@@ -720,12 +711,9 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "asm",
     "first_mover_surface_delta",
     "first_mover_delta_fusion",
-    "identity_surface_delta",
-    "dualstack_edge_skip_fusion",
-    "ransomware_preposition_surface",
     "first_seen_osv_nvd",
     "leak_hunter",
-    "adversary_gap_mirror",
+    "adversary_underground_delta",
     "discovery_engine",
     "recon",
     // Web / API attacks
@@ -768,8 +756,6 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "building_automation_attack",
     "robotics_ros2_attack",
     "ot_sis_triton_attack",
-    "ot_passive_active_safety",
-    "ot_crown_jewel_path",
     "iot_firmware",
     "ble_rf",
     // Stealth / Evasion
@@ -1033,7 +1019,6 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "attack_surface_quantify",
     "external_exposure_supreme",
     "fair_exposure_fusion",
-    "supreme_path_fair_rag",
     "identity_attack_chain",
     "pipeline_to_runtime_risk",
     "risk_superposition_collapse",
@@ -1316,7 +1301,6 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "ngfw_posture",
     "malware_detonation",
     "weissman_vngfw",
-    "dominion_fusion",
 ];
 
 /// Map catalog-only registry IDs to a production engine implementation.
@@ -1623,10 +1607,10 @@ mod production_registry_tests {
         assert_eq!(
             PRODUCTION_ENGINE_IDS.len(),
             seen.len(),
-            "PRODUCTION_ENGINE_IDS must be the canonical live registry (workspace is 584; a 563 count is a stale binary, not extra IDs to delete)"
+            "PRODUCTION_ENGINE_IDS must be the canonical live registry (workspace is 580; a 563 count is a stale binary, not extra IDs to delete)"
         );
         assert!(
-            PRODUCTION_ENGINE_IDS.len() >= 584,
+            PRODUCTION_ENGINE_IDS.len() >= 580,
             "do not shrink the registry to match an old container image"
         );
     }
@@ -1642,10 +1626,8 @@ mod production_registry_tests {
         assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"asm"));
         assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_mover_surface_delta"));
         assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_seen_osv_nvd"));
+        assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"adversary_underground_delta"));
         assert!(!DEFAULT_ORCHESTRATOR_ENGINES.contains(&"first_mover_delta_fusion"));
-        assert!(!DEFAULT_ORCHESTRATOR_ENGINES.contains(&"identity_surface_delta"));
-        assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"ransomware_preposition_surface"));
-        assert!(DEFAULT_ORCHESTRATOR_ENGINES.contains(&"dualstack_edge_skip_fusion"));
         assert!(
             !DEFAULT_ORCHESTRATOR_ENGINES
                 .iter()

@@ -10,10 +10,10 @@
 
 | Metric | Value | Verification command |
 |--------|-------|----------------------|
-| Production engines | **586** | `node scripts/verify_engine_wiring.mjs` |
+| Production engines | **584** | `node scripts/verify_engine_wiring.mjs` |
 | Command Center routes | **130** | `node scripts/weissman-ui-audit.mjs` |
 | UI pages audited | **111/111** | `node scripts/weissman-ui-audit.mjs` |
-| Real probes | **324** | `node scripts/engine_reality_audit.mjs` |
+| Real probes | **318** | `node scripts/engine_reality_audit.mjs` |
 | Agent-required surfaces | **58** | same |
 | JWT secret minimum (production) | **48 characters** | `fingerprint_engine/src/security_startup.rs` |
 | Destructive / metrics / job-bus secrets | **≥32 characters** | `PRODUCTION.env.template` |
@@ -120,7 +120,7 @@ node scripts/engine_reality_audit.mjs      # 0 no_path
 node scripts/weissman-ui-audit.mjs         # 130 routes, 111 pages
 ```
 
-Explain taxonomy: **324 real_probe**, **204 alias**, **58 agent_required** — no fake findings.
+Explain taxonomy: **322 real_probe**, **204 alias**, **58 agent_required** — no fake findings.
 
 ### Minutes 20–26 — SDLC, CI, and audit gates
 

@@ -801,26 +801,11 @@ export const EXPLICIT_PARAM_DEFS = {
     { key: 'include_http', label: 'Live HTTP/TLS probe on hosts', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
     { key: 'intensity', label: 'Scan Intensity', type: 'select', options: ['light', 'normal', 'aggressive'], defaultVal: 'normal' },
   ],
-  identity_surface_delta: [
-    { key: 'include_ct', label: 'Certificate Transparency (crt.sh)', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
-    { key: 'include_http', label: 'Live HTTP/TLS probe on hosts', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
-    { key: 'extra_hosts', label: 'Extra in-scope IdP hosts', type: 'text', placeholder: 'login.example.com', defaultVal: '' },
-    { key: 'intensity', label: 'Scan Intensity', type: 'select', options: ['light', 'normal', 'aggressive'], defaultVal: 'normal' },
-  ],
-  dualstack_edge_skip_fusion: [
-    { key: 'timeout_ms', label: 'Probe Timeout (ms)', type: 'number', defaultVal: '8000', min: 500, max: 60000 },
-    { key: 'intensity', label: 'Scan Intensity', type: 'select', options: ['light', 'normal', 'aggressive'], defaultVal: 'normal' },
-  ],
-  ransomware_preposition_surface: [
-    { key: 'safe_mode', label: 'Safe Mode (TCP connect only, no encrypt)', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
-    { key: 'intensity', label: 'Scan Intensity', type: 'select', options: ['light', 'normal', 'aggressive'], defaultVal: 'normal' },
-  ],
   first_seen_osv_nvd: [
     { key: 'intensity', label: 'Scan Intensity', type: 'select', options: ['light', 'normal', 'aggressive'], defaultVal: 'normal' },
   ],
-  adversary_gap_mirror: [
-    { key: 'include_ports', label: 'IAB remote-access TCP connect', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
-    { key: 'include_http', label: 'HTTP VPN/OWA product tokens', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+  adversary_underground_delta: [
+    { key: 'chain_leak_hunter', label: 'Enqueue leak_hunter on new high/critical hits', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
     { key: 'intensity', label: 'Scan Intensity', type: 'select', options: ['light', 'normal', 'aggressive'], defaultVal: 'normal' },
   ],
 }

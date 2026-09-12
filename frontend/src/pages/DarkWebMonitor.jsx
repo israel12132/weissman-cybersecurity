@@ -1,11 +1,15 @@
 /**
- * Dark Web Monitor — tenant-scoped intelligence from live `/api/findings` only.
- * Sources: leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor, adversary_gap_mirror.
+ * Dark Web Monitor — live criminal-index war room.
+ * Findings: GET /api/findings (leak_hunter, darkweb_intel, dark_web_monitor,
+ * typosquatting_monitor, adversary_underground_delta).
+ * Delta + source catalog: GET /api/clients/:id/underground-exposure
+ * Hunt: POST /api/command-center/scan engine=adversary_underground_delta
+ * Board Excel: GET /api/clients/:id/underground-exposure.xls
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { Eye, Search, ShieldAlert, Radio, Filter } from 'lucide-react'
+import { Crosshair, Eye, Search, ShieldAlert, Radio, Filter } from 'lucide-react'
 import { createColumnHelper } from '@tanstack/react-table'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
@@ -17,8 +21,14 @@ import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../utils/apiFetch'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import Button from '../components/ui/Button'
+import { useClient } from '../context/ClientContext'
+import { firstClientTarget } from '../lib/clientTarget'
+import { launchEngineScan } from '../lib/launchEngineScan'
+import { useJobPoll } from '../lib/useJobPoll'
 
 const columnHelper = createColumnHelper()
+
+const ENGINE = 'adversary_underground_delta'
 
 const SEVERITY_ORDER = { critical: 4, high: 3, medium: 2, low: 1, info: 0 }
 const DARK_WEB_SOURCES = new Set([
@@ -26,8 +36,204 @@ const DARK_WEB_SOURCES = new Set([
   'darkweb_intel',
   'dark_web_monitor',
   'typosquatting_monitor',
-  'adversary_gap_mirror',
+  'adversary_underground_delta',
 ])
+
+/** Typical criminal next-steps vs engines that prove them on this tenant. */
+export const ADVERSARY_PLAYBOOK = [
+  { mitre: 'T1597', labelKey: 'pages.darkWebMonitor.play_t1597', engines: ['adversary_underground_delta', 'darkweb_intel'] },
+  { mitre: 'T1552', labelKey: 'pages.darkWebMonitor.play_t1552', engines: ['leak_hunter'] },
+  { mitre: 'T1583.001', labelKey: 'pages.darkWebMonitor.play_t1583', engines: ['business_email_compromise'] },
+  { mitre: 'T1078', labelKey: 'pages.darkWebMonitor.play_t1078', engines: ['credential_stuffing', 'password_spray'] },
+  { mitre: 'T1190', labelKey: 'pages.darkWebMonitor.play_t1190', engines: ['bola_idor', 'jwt_attack'] },
+  { mitre: 'T1486', labelKey: 'pages.darkWebMonitor.play_t1486', engines: ['threat_emulation'] },
+]
+
+export function clientApex(client) {
+  const t = firstClientTarget(client)
+  if (!t) return ''
+  try {
+    const host = (t.includes('://') ? new URL(t) : new URL(`https://${t}`)).hostname
+    return host.replace(/^www\./i, '').replace(/\.$/, '').toLowerCase()
+  } catch {
+    return String(t)
+      .replace(/^https?:\/\//i, '')
+      .split('/')[0]
+      .replace(/^www\./i, '')
+      .toLowerCase()
+  }
+}
+
+export function parseUndergroundPayload(data) {
+  if (!data || typeof data !== 'object') {
+    return {
+      added: [],
+      removed: [],
+      hits: [],
+      findings: [],
+      sources: [],
+      health: [],
+      current_count: 0,
+      previous_count: 0,
+      baseline_only: false,
+      message: '',
+      unavailable: false,
+    }
+  }
+  return {
+    added: Array.isArray(data.added) ? data.added : [],
+    removed: Array.isArray(data.removed) ? data.removed : [],
+    hits: Array.isArray(data.hits) ? data.hits : [],
+    findings: Array.isArray(data.findings) ? data.findings : [],
+    sources: Array.isArray(data.sources) ? data.sources : [],
+    health: Array.isArray(data.health) ? data.health : [],
+    current_count: Number(data.current_count) || 0,
+    previous_count: Number(data.previous_count) || 0,
+    baseline_only: !!data.baseline_only,
+    message: data.message || '',
+    unavailable: !!data.unavailable,
+    current_at: data.current_at || null,
+    apex: data.apex || '',
+  }
+}
+
+/** hit | quiet | failed | unknown — unknown means this hunt never recorded source health. */
+export function sourceChipState(id, parsed) {
+  const rows = parsed.health || []
+  if (!rows.length) return 'unknown'
+  const health = rows.find((h) => String(h.id || '').toLowerCase() === id)
+  if (!health) return 'unknown'
+  if (!health.ok) return 'failed'
+  if (Number(health.hit_count) > 0) return 'hit'
+  return 'quiet'
+}
+
+export function UndergroundWarRoom({
+  exposure,
+  loading,
+  hunting,
+  onHunt,
+  huntDisabled,
+  playbookCoverage,
+}) {
+  const { t } = useTranslation()
+  const parsed = parseUndergroundPayload(exposure)
+  const SOURCE_IDS = ['hibp', 'ransomware_live', 'threatfox', 'urlhaus', 'urlscan', 'hudson_rock']
+  return (
+    <div className="rounded-2xl border border-rose-500/25 bg-gradient-to-br from-rose-950/40 via-black/40 to-violet-950/30 p-4 mb-5">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-rose-300/80">
+            {t('pages.darkWebMonitor.war_title')}
+          </p>
+          <p className="text-[12px] text-[var(--text-tertiary)] font-mono mt-1 max-w-2xl">
+            {t('pages.darkWebMonitor.war_subtitle')}
+          </p>
+          {parsed.message ? (
+            <p className="text-[11px] text-rose-100/70 mt-2 font-mono">{parsed.message}</p>
+          ) : null}
+          {huntDisabled ? (
+            <p className="text-[11px] text-amber-200/80 mt-2 font-mono">{t('pages.darkWebMonitor.select_client')}</p>
+          ) : null}
+          {parsed.unavailable ? (
+            <p className="text-[11px] text-rose-300 mt-2 font-mono">{t('pages.darkWebMonitor.unavailable')}</p>
+          ) : null}
+        </div>
+        <Button
+          variant="unstyled"
+          type="button"
+          onClick={onHunt}
+          disabled={huntDisabled || hunting}
+          className="px-4 py-2 rounded-lg text-sm font-mono font-semibold bg-rose-500/20 border border-rose-400/40 text-rose-100 hover:bg-rose-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+        >
+          <Crosshair className={`w-3.5 h-3.5 inline mr-1 ${hunting ? 'animate-spin' : ''}`} />
+          {hunting ? t('pages.darkWebMonitor.hunting') : t('pages.darkWebMonitor.hunt')}
+        </Button>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
+        {SOURCE_IDS.map((id) => {
+          const state = sourceChipState(id, parsed)
+          const health = (parsed.health || []).find((h) => String(h.id || '').toLowerCase() === id)
+          const color =
+            state === 'hit'
+              ? 'text-emerald-300'
+              : state === 'failed'
+                ? 'text-rose-300'
+                : state === 'unknown'
+                  ? 'text-[var(--text-muted)]'
+                  : 'text-[var(--text-tertiary)]'
+          const label =
+            state === 'hit'
+              ? t('pages.darkWebMonitor.source_hit')
+              : state === 'failed'
+                ? t('pages.darkWebMonitor.source_failed')
+                : state === 'unknown'
+                  ? t('pages.darkWebMonitor.source_unknown')
+                  : t('pages.darkWebMonitor.source_quiet')
+          const extra = state === 'hit' && health?.hit_count != null ? ` ${health.hit_count}` : ''
+          return (
+            <div
+              key={id}
+              className="rounded-xl border border-[var(--border-default)] bg-black/30 px-3 py-2"
+              title={health?.message || ''}
+            >
+              <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{id}</div>
+              <div className={`text-sm font-semibold ${color}`}>
+                {loading ? '…' : `${label}${extra}`}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {parsed.current_at ? (
+        <p className="text-[10px] font-mono text-[var(--text-muted)] mb-3">
+          {t('pages.darkWebMonitor.last_hunt', { time: new Date(parsed.current_at).toLocaleString() })}
+        </p>
+      ) : null}
+      {parsed.added.length > 0 ? (
+        <div className="mb-4">
+          <h3 className="text-[10px] font-mono uppercase tracking-widest text-rose-300/80 mb-2">
+            {t('pages.darkWebMonitor.delta_list_title')}
+          </h3>
+          <ul className="space-y-1">
+            {parsed.added.slice(0, 8).map((h) => (
+              <li key={h.fingerprint || h.title} className="text-xs text-rose-100/80 font-mono truncate">
+                {(h.source || '').toUpperCase()} — {h.title}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <KpiCard label={t('pages.darkWebMonitor.current_index')} value={parsed.current_count} />
+        <KpiCard label={t('pages.darkWebMonitor.previous_index')} value={parsed.previous_count} />
+        <KpiCard label={t('pages.darkWebMonitor.delta_new')} value={parsed.added.length} accent="text-rose-300" />
+        <KpiCard label={t('pages.darkWebMonitor.delta_gone')} value={parsed.removed.length} accent="text-[var(--text-secondary)]" />
+      </div>
+      <div>
+        <h3 className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+          {t('pages.darkWebMonitor.playbook_title')}
+        </h3>
+        <div className="grid md:grid-cols-2 gap-2">
+          {ADVERSARY_PLAYBOOK.map((row) => {
+            const covered = playbookCoverage?.[row.mitre]
+            return (
+              <div key={row.mitre} className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border-default)] px-3 py-2">
+                <div>
+                  <span className="text-[10px] font-mono text-rose-300/80">{row.mitre}</span>
+                  <p className="text-xs text-[var(--text-secondary)]">{t(row.labelKey)}</p>
+                </div>
+                <span className={`text-[10px] font-mono uppercase ${covered ? 'text-emerald-300' : 'text-[var(--text-muted)]'}`}>
+                  {covered ? t('pages.darkWebMonitor.play_proven') : t('pages.darkWebMonitor.play_gap')}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
 const SEV_KEYS = ['critical', 'high', 'medium', 'low', 'info']
 
 function severityBadgeClass(sev) {
@@ -55,15 +261,22 @@ function parseFindings(data) {
 
 export default function DarkWebMonitor() {
   const { t } = useTranslation()
+  const { selectedClientId, selectedClient } = useClient()
   const [findings, setFindings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [actionError, setActionError] = useState(null)
   const [search, setSearch] = useState('')
   const [severityFilter, setSeverityFilter] = useState('all')
   const [sourceFilter, setSourceFilter] = useState('all')
   const [selected, setSelected] = useState(null)
   const [lastRefresh, setLastRefresh] = useState(null)
   const [autoRefresh, setAutoRefresh] = useState(false)
+  const [exposure, setExposure] = useState(null)
+  const [exposureLoading, setExposureLoading] = useState(false)
+  const [hunting, setHunting] = useState(false)
+  const [huntJobId, setHuntJobId] = useState(null)
+  const [playbookCoverage, setPlaybookCoverage] = useState({})
 
   const load = useCallback(async () => {
     setError(null)
@@ -79,12 +292,84 @@ export default function DarkWebMonitor() {
     }
   }, [t])
 
+  const loadExposure = useCallback(async (clientId, client) => {
+    if (!clientId) {
+      setExposure(null)
+      return
+    }
+    setExposureLoading(true)
+    try {
+      const apex = clientApex(client)
+      const q = apex ? `?apex=${encodeURIComponent(apex)}` : ''
+      const d = await apiFetch(`/api/clients/${clientId}/underground-exposure${q}`)
+      if (d && typeof d === 'object') setExposure(d)
+    } catch (err) {
+      if (import.meta.env.DEV) console.debug('underground-exposure skipped', err)
+      setExposure({
+        unavailable: true,
+        message: err.message || t('pages.darkWebMonitor.unavailable'),
+        health: [],
+        added: [],
+        removed: [],
+        hits: [],
+        sources: [],
+        current_count: 0,
+        previous_count: 0,
+      })
+    } finally {
+      setExposureLoading(false)
+    }
+  }, [t])
+
+  const loadPlaybook = useCallback(async (clientId) => {
+    if (!clientId) {
+      setPlaybookCoverage({})
+      return
+    }
+    try {
+      const d = await apiFetch(`/api/attack-exposure/${clientId}`)
+      const techniques = Array.isArray(d?.techniques) ? d.techniques : []
+      const map = {}
+      for (const row of ADVERSARY_PLAYBOOK) {
+        map[row.mitre] = techniques.some((x) => {
+          const id = String(x.id || x.technique || x.technique_id || '').toUpperCase()
+          return id === row.mitre || id.startsWith(`${row.mitre}.`)
+        })
+      }
+      setPlaybookCoverage(map)
+    } catch {
+      setPlaybookCoverage({})
+    }
+  }, [])
+
   useEffect(() => {
     load()
   }, [load])
 
+  useEffect(() => {
+    loadExposure(selectedClientId, selectedClient)
+    loadPlaybook(selectedClientId)
+  }, [selectedClientId, selectedClient, loadExposure, loadPlaybook])
+
   // Auto-refresh every 60s, skipping ticks while the tab is hidden.
-  useVisiblePolling(load, 60000, { paused: !autoRefresh })
+  const pollAll = useCallback(() => {
+    load()
+    loadExposure(selectedClientId, selectedClient)
+  }, [load, loadExposure, selectedClientId, selectedClient])
+  useVisiblePolling(pollAll, 60000, { paused: !autoRefresh })
+
+  useJobPoll(huntJobId, {
+    enabled: Boolean(huntJobId),
+    onComplete: async (job) => {
+      setHuntJobId(null)
+      setHunting(false)
+      const status = String(job?.status || '').toLowerCase()
+      if (status === 'failed' || status === 'dead' || status === 'cancelled') {
+        setActionError(job?.error || job?.message || t('pages.darkWebMonitor.hunt_failed'))
+      }
+      await Promise.all([load(), loadExposure(selectedClientId, selectedClient), loadPlaybook(selectedClientId)])
+    },
+  })
 
   const sources = useMemo(
     () => [...new Set(findings.map((f) => (f.source || f.engine || '').toLowerCase()).filter(Boolean))].sort(),
@@ -120,6 +405,61 @@ export default function DarkWebMonitor() {
 
   const exportCsv = () => {
     if (filtered.length) exportWorkbenchCsv()
+  }
+
+  const exportExcel = async () => {
+    if (!selectedClientId) return
+    try {
+      const apex = clientApex(selectedClient)
+      const q = apex ? `?apex=${encodeURIComponent(apex)}` : ''
+      const r = await apiFetch(`/api/clients/${selectedClientId}/underground-exposure.xls${q}`, { raw: true })
+      if (!r.ok) {
+        setActionError(t('pages.darkWebMonitor.export_failed', { status: r.status }))
+        return
+      }
+      const blob = await r.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Weissman_underground_exposure_client_${selectedClientId}.xls`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setActionError(err.message || t('pages.darkWebMonitor.export_failed', { status: '' }))
+    }
+  }
+
+  const handleHunt = async () => {
+    const target = firstClientTarget(selectedClient)
+    if (!selectedClientId || !target) return
+    setHunting(true)
+    setActionError(null)
+    try {
+      const { ok, data, status } = await launchEngineScan({
+        engineId: ENGINE,
+        clientId: selectedClientId,
+        target,
+      })
+      if (!ok) {
+        setActionError(data?.detail || data?.error || t('pages.darkWebMonitor.hunt_failed_http', { status }))
+        setHunting(false)
+        return
+      }
+      const jid = data?.job_id || data?.jobId || ''
+      if (jid) {
+        setHuntJobId(String(jid))
+        return
+      }
+      await Promise.all([load(), loadExposure(selectedClientId, selectedClient), loadPlaybook(selectedClientId)])
+      setHunting(false)
+    } catch (err) {
+      setActionError(err.message || t('pages.darkWebMonitor.hunt_failed'))
+      setHunting(false)
+    }
+  }
+
+  const handleRefresh = async () => {
+    await Promise.all([load(), loadExposure(selectedClientId, selectedClient), loadPlaybook(selectedClientId)])
   }
 
   const columns = useMemo(
@@ -191,15 +531,31 @@ export default function DarkWebMonitor() {
             {autoRefresh ? t('pages.darkWebMonitor.auto_on') : t('pages.darkWebMonitor.auto_off')}
           </Button>
           <ShellScanActions
-            onRefresh={load}
+            onRefresh={handleRefresh}
             onExport={exportCsv}
             refreshLoading={loading}
             exportDisabled={filtered.length === 0}
           />
+          <Button variant="unstyled"
+            type="button"
+            onClick={exportExcel}
+            disabled={!selectedClientId}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/35 text-[11px] font-mono text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-40"
+          >
+            {t('pages.darkWebMonitor.export_excel')}
+          </Button>
         </div>
       )}
     >
       <div className="space-y-6">
+        <UndergroundWarRoom
+          exposure={exposure}
+          loading={exposureLoading}
+          hunting={hunting}
+          onHunt={handleHunt}
+          huntDisabled={!selectedClientId || !firstClientTarget(selectedClient)}
+          playbookCoverage={playbookCoverage}
+        />
         <div className="rounded-xl border border-rose-500/20 bg-rose-950/20 px-4 py-3 flex items-start gap-3">
           <ShieldAlert className="w-4 h-4 text-rose-400 mt-0.5 shrink-0" />
           <p className="text-xs text-rose-100/70 leading-relaxed">{t('pages.darkWebMonitor.evidence_notice')}</p>
@@ -252,6 +608,11 @@ export default function DarkWebMonitor() {
         {error && (
           <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm">
             {t('pages.darkWebMonitor.load_error', { error })}
+          </div>
+        )}
+        {actionError && (
+          <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-900/20 text-amber-200 text-sm font-mono">
+            {actionError}
           </div>
         )}
 

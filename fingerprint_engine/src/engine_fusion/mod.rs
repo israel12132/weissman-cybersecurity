@@ -10,49 +10,39 @@
 //! |-----------|---------------|
 //! | `first_mover_surface_delta` | Live DNS/HTTP/CT vs last snapshot — new/changed hosts before weekly scanners |
 //! | `first_mover_delta_fusion` | New host → immediate takeover/leak/BOLA/JWT on that same FQDN |
-//! | `identity_surface_delta` | New host that is login/SSO/IdP → live OIDC/SAML on that FQDN |
-//! | `dualstack_edge_skip_fusion` | A vs AAAA with Host+SNI — finding only on WAF/status/body skip |
-//! | `ransomware_preposition_surface` | Live SMB/RDP/WinRM/Kerberos/backup TCP preposition |
 //! | `first_seen_osv_nvd` | Live SBOM × OSV, proven before NVD when nvd_status is absent_cve/unpublished |
-//! | `adversary_gap_mirror` | Clearnet ransomware/RansomLook/IOC/HIBP/urlscan + authorized IAB-port/HTTP tokens |
+//! | `adversary_underground_delta` | HIBP + ransomware.live exact-domain + ThreatFox/URLhaus/urlscan/Hudson Rock counts vs last snapshot — new criminal-index hits then leak_hunter |
 //! | `external_exposure_supreme` | ASM + email/DNS + cloud posture |
 //! | `identity_attack_chain` | Kerberos + spray + ITDR auth events |
 //! | `pipeline_to_runtime_risk` | IaC + supply chain + CI/CD |
 //! | `risk_superposition_collapse` | Multi-engine Bayesian belief + STRIPS + FAIR |
 //! | `sovereign_active_defense_fusion` | MTD + cognitive starvation + deception + CHRONOS |
 //! | `fair_exposure_fusion` | External exposure grade + FAIR ALE/SLE roll-up |
-//! | `supreme_path_fair_rag` | Dijkstra crown-jewel paths × FAIR $ × pentest-memory RAG |
 //! | `control_plane_of_controls` | EDR/WAF/email-DNS/cloud control proof |
 //! | `ot_cloud_identity_killpath` | OT + cloud + identity kill path |
 //! | `bec_ato_chain` | Email DNS + BEC + OAuth + ITDR |
 //! | `ai_casb_saas` | LLM agent hijack + OAuth SaaS grants |
 //! | `dns_security_posture_fusion` | DNS exfil + email DNS + ASM |
 //! | `toxic_combo_runtime_proof` | CNAPP + IMDS + S3 + IAM + K8s |
-//! | `credential_ransomware_fusion` | CISA KEV ransomware-use × live Server/HTML product × HIBP counts × URLhaus × IntelX counts |
 
 /// Production fusion engine IDs — must remain a subset of `PRODUCTION_ENGINE_IDS`.
 pub const FUSION_ENGINE_IDS: &[&str] = &[
     "first_mover_surface_delta",
     "first_mover_delta_fusion",
-    "identity_surface_delta",
-    "dualstack_edge_skip_fusion",
-    "ransomware_preposition_surface",
     "first_seen_osv_nvd",
-    "adversary_gap_mirror",
+    "adversary_underground_delta",
     "external_exposure_supreme",
     "identity_attack_chain",
     "pipeline_to_runtime_risk",
     "risk_superposition_collapse",
     "sovereign_active_defense_fusion",
     "fair_exposure_fusion",
-    "supreme_path_fair_rag",
     "control_plane_of_controls",
     "ot_cloud_identity_killpath",
     "bec_ato_chain",
     "ai_casb_saas",
     "dns_security_posture_fusion",
     "toxic_combo_runtime_proof",
-    "credential_ransomware_fusion",
 ];
 
 pub use crate::external_exposure_supreme::{

@@ -875,6 +875,10 @@ async fn dispatch_engine_match(
         "first_mover_surface_delta" => {
             crate::first_mover_surface_delta::run_first_mover_surface_delta_result(target, ctx).await
         }
+        "adversary_underground_delta" => {
+            crate::adversary_underground_delta::run_adversary_underground_delta_result(target, ctx)
+                .await
+        }
         "first_mover_delta_fusion" => {
             crate::first_mover_delta_fusion::run_first_mover_delta_fusion_result(target, ctx).await
         }

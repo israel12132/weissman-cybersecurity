@@ -895,6 +895,12 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     if engine_id.contains("first_mover") {
         return "Investigate new or changed internet-facing DNS/HTTP assets immediately: claim or remove dangling CNAMEs, confirm ownership of new hosts, and restrict accidental exposure. Re-run first_mover_surface_delta after DNS changes.";
     }
+    if engine_id.contains("underground")
+        || engine_id.contains("darkweb")
+        || engine_id.contains("dark_web")
+    {
+        return "Treat index hits as confirmed exposure signals: force password resets for affected identities, rotate leaked API keys, hunt infostealer leftovers, and re-run adversary_underground_delta plus leak_hunter after containment.";
+    }
     if engine_id.contains("first_seen") {
         return "Patch or isolate the affected SBOM component. The OSV advisory hit this inventory before (or without) an NVD CVE — do not wait for a weekly scanner or a CVE number.";
     }

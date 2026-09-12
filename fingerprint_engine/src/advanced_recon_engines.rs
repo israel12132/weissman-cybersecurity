@@ -2,8 +2,7 @@
 
 use crate::engine_probes::{
     dns_a, dns_mx, dns_txt, empty_ok, extract_host, finding, header_value, http_client, http_get,
-    http_get_with_headers, http_post_bytes_with_headers, http_post_json_with_headers,
-    normalize_url, tcp_scan,
+    http_get_with_headers, http_post_json_with_headers, normalize_url, tcp_scan,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
@@ -96,31 +95,37 @@ pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
-    let client = http_client().await;
     let host = extract_host(target);
     let key = intelx_api_key();
 
-    // Always run legal clearnet defender feeds (ransomware.live / RansomLook / ThreatFox / URLhaus / HIBP / urlscan).
-    // IntelX remains optional paid enrichment — never the only path.
-    let mut findings =
-        crate::adversary_gap_mirror::collect_clearnet_intel("darkweb_intel", target).await;
+    // Public criminal-index OSINT always runs (HIBP, ransomware.live, ThreatFox,
+    // URLhaus, urlscan). IntelX is an optional paid overlay — never the only path.
+    let mut public =
+        crate::adversary_underground_delta::run_public_osint_result("darkweb_intel", target).await;
 
     if key.is_empty() {
-        findings.push(finding(
+        if public.status != "ok" && public.findings.is_empty() {
+            return public;
+        }
+        public.findings.push(finding(
             "darkweb_intel",
-            "IntelX optional — clearnet feeds already queried",
+            "IntelX paid index not configured",
             "info",
             "T1597",
             &format!(
-                "INTELX_API_KEY is unset. Live ransomware.live, RansomLook, ThreatFox, URLhaus, HIBP catalog, and urlscan.io already ran for '{}'. Set INTELX_API_KEY for additional paid deep-web index hits.",
-                host
+                "Public OSINT completed for '{}'. Set INTELX_API_KEY (or WEISSMAN_INTELX_KEY) to add Intelligence X leak/paste records. Manual UI: https://intelx.io/?s={}",
+                host, urlencoding::encode(&host)
             ),
             target,
         ));
-        let n = findings.len();
-        return EngineResult::ok(findings, format!("darkweb_intel: {n} (no IntelX key)"));
+        public.message = format!(
+            "darkweb_intel: public OSINT {} finding(s); IntelX skipped (no key)",
+            public.findings.len()
+        );
+        return public;
     }
 
+    let client = http_client().await;
     let base = intelx_api_base();
     let search_url = format!("{}/intelligent/search", base);
     let payload = serde_json::json!({
@@ -135,7 +140,9 @@ pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
         "media": 0,
         "terminate": []
     });
-
+    let public_ok = public.status == "ok";
+    let public_msg = public.message.clone();
+    let mut findings = public.findings;
     if let Some(p) =
         http_post_json_with_headers(&client, &search_url, &payload, &[("x-key", key.as_str())])
             .await
@@ -160,46 +167,120 @@ pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
                         http_get_with_headers(&client, &result_url, &[("x-key", key.as_str())])
                             .await
                     {
-                        let record_count = rp
-                            .body
-                            .matches("\"record\"")
-                            .count()
-                            .max(rp.body.matches("\"name\"").count());
-                        let status =
-                            rp.body.contains("\"status\":0") || rp.body.contains("\"status\": 0");
-                        if status && record_count > 0 {
-                            findings.push(finding(
-                                "darkweb_intel",
-                                &format!("IntelX returned {} candidate record(s) for {}", record_count, host),
-                                "medium",
-                                "T1597",
-                                &format!(
-                                    "Intelligence X search id {} returned {} hits referencing '{}'. Review for leaked credentials and breach exposure.",
-                                    search_id, record_count, host
-                                ),
-                                target,
-                            ));
-                        } else if status {
-                            findings.push(finding(
-                                "darkweb_intel",
-                                "IntelX search completed — no indexed records",
-                                "info",
-                                "T1597",
-                                &format!(
-                                    "Intelligence X query for '{}' completed with zero indexed records in configured buckets.",
-                                    host
-                                ),
-                                target,
-                            ));
+                        match serde_json::from_str::<Value>(&rp.body) {
+                            Ok(rv) => {
+                                let status_ok = rv.get("status").and_then(Value::as_i64) == Some(0);
+                                let record_count = rv
+                                    .get("records")
+                                    .and_then(Value::as_array)
+                                    .map(|a| a.len())
+                                    .or_else(|| {
+                                        rv.get("selectors")
+                                            .and_then(Value::as_array)
+                                            .map(|a| a.len())
+                                    })
+                                    .unwrap_or(0);
+                                if status_ok && record_count > 0 {
+                                    findings.push(finding(
+                                        "darkweb_intel",
+                                        &format!("IntelX returned {record_count} typed record(s) for {host}"),
+                                        "medium",
+                                        "T1597",
+                                        &format!(
+                                            "Intelligence X search id {search_id} returned {record_count} JSON records for '{host}'. Review in IntelX UI — identities are not copied here."
+                                        ),
+                                        target,
+                                    ));
+                                } else if status_ok {
+                                    findings.push(finding(
+                                        "darkweb_intel",
+                                        "IntelX search completed — no typed records",
+                                        "info",
+                                        "T1597",
+                                        &format!(
+                                            "Intelligence X query for '{host}' completed with zero records array."
+                                        ),
+                                        target,
+                                    ));
+                                } else {
+                                    findings.push(finding(
+                                        "darkweb_intel",
+                                        "IntelX search result not yet complete",
+                                        "info",
+                                        "T1597",
+                                        &format!(
+                                            "Intelligence X search id {search_id} HTTP {} status field is not 0 (pending or rejected).",
+                                            rp.status
+                                        ),
+                                        target,
+                                    ));
+                                }
+                            }
+                            Err(_) => {
+                                findings.push(finding(
+                                    "darkweb_intel",
+                                    "IntelX result was not JSON",
+                                    "info",
+                                    "T1597",
+                                    &format!(
+                                        "Intelligence X search id {search_id} returned HTTP {} without a typed JSON body.",
+                                        rp.status
+                                    ),
+                                    target,
+                                ));
+                            }
                         }
+                    } else {
+                        findings.push(finding(
+                            "darkweb_intel",
+                            "IntelX result fetch unreachable",
+                            "low",
+                            "T1597",
+                            "GET /intelligent/search/result did not complete. Public OSINT findings above still stand.",
+                            target,
+                        ));
                     }
                 }
             }
+        } else {
+            findings.push(finding(
+                "darkweb_intel",
+                &format!("IntelX search HTTP {}", p.status),
+                "info",
+                "T1597",
+                &format!(
+                    "IntelX POST /intelligent/search returned HTTP {}.",
+                    p.status
+                ),
+                target,
+            ));
         }
+    } else {
+        findings.push(finding(
+            "darkweb_intel",
+            "IntelX search unreachable",
+            "low",
+            "T1597",
+            "POST /intelligent/search did not complete. Public OSINT findings above still stand.",
+            target,
+        ));
     }
 
     if findings.is_empty() {
-        empty_ok("darkweb_intel", target)
+        if !public_ok {
+            return EngineResult::error(public_msg);
+        }
+        EngineResult::ok(
+            vec![finding(
+                "darkweb_intel",
+                "Public OSINT and IntelX overlay produced no typed findings",
+                "info",
+                "T1597",
+                "This is not an invented all-clear: source health is attached when collectors answered.",
+                target,
+            )],
+            "darkweb_intel: no typed findings",
+        )
     } else {
         EngineResult::ok(
             findings.clone(),
@@ -870,69 +951,34 @@ pub async fn run_threat_intel_fusion_result(target: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let host = extract_host(target);
-    let apex = crate::adversary_gap_mirror::registrable_apex(&host);
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
-    let key = crate::adversary_gap_mirror::abusech_auth_key();
-    // Real URLhaus host API is POST /v1/host/ with Auth-Key. The old GET
-    // urlhaus.abuse.ch/api/v1/hostinfo/{}/ path does not exist.
-    if !key.is_empty() {
-        let uh_api = "https://urlhaus-api.abuse.ch/v1/host/";
-        let form = format!("host={}", urlencoding::encode(&apex));
-        if let Some(p) = http_post_bytes_with_headers(
-            &client,
-            uh_api,
-            form.as_bytes(),
-            &[
-                ("Content-Type", "application/x-www-form-urlencoded"),
-                ("Auth-Key", key.as_str()),
-            ],
-        )
-        .await
-        {
-            if p.status == 200 {
-                let url_count = crate::adversary_gap_mirror::parse_urlhaus_host(&p.body);
-                if url_count > 0 {
+    let url = format!(
+        "https://urlhaus.abuse.ch/api/v1/hostinfo/{}/",
+        urlencoding::encode(&host)
+    );
+    if let Some(p) = http_get(&client, &url).await {
+        if p.status == 200 {
+            if let Ok(v) = serde_json::from_str::<Value>(&p.body) {
+                let listed = v
+                    .get("query_status")
+                    .and_then(Value::as_str)
+                    .map(|s| s.eq_ignore_ascii_case("ok"))
+                    .unwrap_or(false);
+                let url_count = v
+                    .get("urls")
+                    .and_then(Value::as_array)
+                    .map(|a| a.len())
+                    .unwrap_or(0);
+                if listed && url_count > 0 {
                     findings.push(finding(
                         "threat_intel_fusion",
                         &format!("URLhaus lists {} malicious URL(s) for host", url_count),
                         "high",
                         "T1597",
                         &format!(
-                            "Abuse.ch URLhaus host query returned {} URL(s) for {} — cross-check for malware delivery or C2.",
+                            "Abuse.ch URLhaus hostinfo returned {} URL(s) for {} — cross-check for malware delivery or C2.",
                             url_count, host
-                        ),
-                        target,
-                    ));
-                }
-                if let Some(dbl) = crate::adversary_gap_mirror::parse_urlhaus_abused_legit(&p.body)
-                {
-                    findings.push(finding(
-                        "threat_intel_fusion",
-                        &format!("URLhaus Spamhaus DBL: {apex} is {dbl}"),
-                        "high",
-                        "T1597",
-                        &format!(
-                            "Abuse.ch URLhaus reports Spamhaus DBL '{dbl}' for '{apex}' (abused legitimate site)."
-                        ),
-                        target,
-                    ));
-                }
-            }
-        }
-    } else {
-        let uh_export = "https://urlhaus.abuse.ch/downloads/hostfile/";
-        if let Some(p) = http_get(&client, uh_export).await {
-            if p.status == 200 {
-                let n = crate::adversary_gap_mirror::parse_urlhaus_hostfile(&p.body, &host);
-                if n > 0 {
-                    findings.push(finding(
-                        "threat_intel_fusion",
-                        &format!("URLhaus hostfile lists {n} malicious host(s) for {apex}"),
-                        "high",
-                        "T1597",
-                        &format!(
-                            "Live URLhaus hostfile matched {n} row(s) for '{apex}'. Set ABUSECH_AUTH_KEY for full URL rows."
                         ),
                         target,
                     ));

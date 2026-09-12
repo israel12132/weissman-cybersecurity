@@ -414,6 +414,14 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/clients/:id/surface-diff",
             get(api_client_surface_diff),
         )
+        .route(
+            "/api/clients/:id/underground-exposure",
+            get(api_client_underground_exposure),
+        )
+        .route(
+            "/api/clients/:id/underground-exposure.xls",
+            get(api_client_underground_exposure_xls),
+        )
         .route("/api/first-mover/nerve", get(api_first_mover_nerve))
         .route(
             "/api/clients/:id/semantic-state-machine",

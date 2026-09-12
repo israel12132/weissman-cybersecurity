@@ -113,6 +113,75 @@ async fn api_client_surface_diff(
     }
 }
 
+#[derive(Deserialize, Default)]
+struct UndergroundExposureQuery {
+    #[serde(default)]
+    apex: Option<String>,
+}
+
+async fn api_client_underground_exposure(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+    Query(q): Query<UndergroundExposureQuery>,
+) -> Response {
+    let apex_q = q.apex.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    match crate::adversary_underground_delta::api_underground_exposure_json(
+        &state.app_pool,
+        auth.tenant_id,
+        id,
+        apex_q,
+    )
+    .await
+    {
+        Ok(body) => (StatusCode::OK, Json(body)).into_response(),
+        Err(e) => {
+            tracing::warn!(target: "underground_delta", client_id = id, error = %e, "underground-exposure read failed");
+            (
+                StatusCode::OK,
+                Json(crate::adversary_underground_delta::underground_unavailable_json(id)),
+            )
+                .into_response()
+        }
+    }
+}
+
+async fn api_client_underground_exposure_xls(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+    Query(q): Query<UndergroundExposureQuery>,
+) -> Response {
+    let apex_q = q.apex.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    let payload = match crate::adversary_underground_delta::api_underground_exposure_json(
+        &state.app_pool,
+        auth.tenant_id,
+        id,
+        apex_q,
+    )
+    .await
+    {
+        Ok(body) => body,
+        Err(e) => {
+            tracing::warn!(target: "underground_delta", client_id = id, error = %e, "underground-exposure xls read failed");
+            crate::adversary_underground_delta::underground_unavailable_json(id)
+        }
+    };
+    let xml = crate::adversary_underground_delta::build_underground_excel_xml(&payload);
+    let filename = format!("Weissman_underground_exposure_client_{}.xls", id);
+    let mut res = Response::new(Body::from(xml));
+    res.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("application/vnd.ms-excel; charset=utf-8"),
+    );
+    res.headers_mut().insert(
+        CONTENT_DISPOSITION,
+        HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename))
+            .unwrap_or(HeaderValue::from_static("attachment")),
+    );
+    res
+}
+
 async fn api_first_mover_nerve(Extension(_auth): Extension<AuthContext>) -> Response {
     let oast_domain = crate::fuzz_oob::oast_hook_domain().unwrap_or_default();
     let body = json!({
