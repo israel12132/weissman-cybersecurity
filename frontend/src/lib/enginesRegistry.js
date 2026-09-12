@@ -1,5 +1,5 @@
 /**
- * Master registry of all 583 production attack engines.
+ * Master registry of all production attack engines (CI-verified count).
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 583 production engines in registry order */
+/** Production engines in registry order (must match PRODUCTION_ENGINE_IDS). */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -63,6 +63,14 @@ export const ENGINES_REGISTRY = [
     group: 'recon',
     mitre: 'T1530',
     description: 'Dark web & paste-site credential and data leak detection',
+    requiresTarget: true,
+  },
+  {
+    id: 'adversary_underground_delta',
+    label: 'Adversary Underground Delta',
+    group: 'recon',
+    mitre: 'T1597',
+    description: 'First-mover for criminal indexes: HIBP domain breaches, ransomware.live exact-domain leak-site victims, ThreatFox, URLhaus, urlscan malicious verdicts — snapshot vs last run, emit only new hits, then auto-chain leak_hunter. Public legal OSINT; no Tor markets.',
     requiresTarget: true,
   },
   {
@@ -1338,7 +1346,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark / Deep Web Intelligence',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Automated dark-web intelligence gathering: Tor hidden service enumeration, paste-site credential monitoring, ransomware leak site tracking, threat actor profiling',
+    description: 'Alias of dark_web_monitor: public criminal-index OSINT against the authorized apex (HIBP, ransomware.live, ThreatFox, URLhaus, urlscan; IntelX optional). No Tor hidden-service crawl.',
     requiresTarget: false,
   },
   {
@@ -2244,7 +2252,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark Web Intelligence',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Comprehensive dark web monitoring: Tor hidden service enumeration, paste site scraping, underground forum credential leak correlation, ransomware leak site monitoring, threat actor attribution',
+    description: 'Public criminal-index OSINT (HIBP domain catalog, ransomware.live exact-domain victims, ThreatFox, URLhaus, urlscan) plus optional IntelX when INTELX_API_KEY is set. No Tor markets. Failures are reported, never simulated.',
     requiresTarget: true,
   },
   {
@@ -4043,7 +4051,7 @@ export const ENGINES_REGISTRY = [
     label: 'Dark Web Brand Monitor',
     group: 'recon',
     mitre: 'T1597',
-    description: 'Comprehensive dark web brand monitoring: Tor marketplace credential listing detection, ransomware leak site monitoring, corporate data paste detection, threat actor chatter monitoring, underground forum API key listing alerts, dark web search engine integration',
+    description: 'Brand-tagged public criminal-index hunt (same live sources as darkweb_intel): HIBP, ransomware.live exact-domain, ThreatFox, URLhaus, urlscan, optional IntelX. Legal OSINT only.',
     requiresTarget: true,
   },
   {

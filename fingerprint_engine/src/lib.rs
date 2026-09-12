@@ -198,6 +198,7 @@ pub mod advanced_stealth_engines;
 pub mod advanced_supply_chain_engines;
 pub mod advanced_web_engines;
 pub mod adversarial_ml_engine;
+pub mod adversary_underground_delta;
 pub mod agent_registry_sync;
 pub mod alert_delivery;
 pub mod alert_evaluator_worker;

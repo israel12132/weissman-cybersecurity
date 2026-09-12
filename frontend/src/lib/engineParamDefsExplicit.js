@@ -804,5 +804,9 @@ export const EXPLICIT_PARAM_DEFS = {
   first_seen_osv_nvd: [
     { key: 'intensity', label: 'Scan Intensity', type: 'select', options: ['light', 'normal', 'aggressive'], defaultVal: 'normal' },
   ],
+  adversary_underground_delta: [
+    { key: 'chain_leak_hunter', label: 'Enqueue leak_hunter on new high/critical hits', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'intensity', label: 'Scan Intensity', type: 'select', options: ['light', 'normal', 'aggressive'], defaultVal: 'normal' },
+  ],
 }
 

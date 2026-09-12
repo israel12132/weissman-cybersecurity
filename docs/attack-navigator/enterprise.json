@@ -75,6 +75,12 @@
       "enabled": true
     },
     {
+      "techniqueID": "T1597",
+      "score": 6,
+      "comment": "adversary_underground_delta, dark_web_monitor, darkweb_intel, deepweb_intel, threat_hunting_apt, threat_intel_fusion",
+      "enabled": true
+    },
+    {
       "techniqueID": "T1046",
       "score": 10,
       "comment": "discovery_engine, graphql_attack, graphql_batching, graphql_injection, network_baseline_anomaly, ntlm_relay, smb_netbios, smb_relay, snmp_attack, snmp_exploitation",
@@ -618,12 +624,6 @@
       "techniqueID": "T1556",
       "score": 12,
       "comment": "behavioral_biometric_attack, biometric_spoofing, continuous_auth_evasion, graphene_os_bypass, hash_extension_attack, mdm_bypass_engine, mfa_bypass_engine, padding_oracle_attack, radius_nac_bypass, ssl_pinning_bypass, totp_bruteforce, webauthn_fido2_bypass",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1597",
-      "score": 5,
-      "comment": "dark_web_monitor, darkweb_intel, deepweb_intel, threat_hunting_apt, threat_intel_fusion",
       "enabled": true
     },
     {
