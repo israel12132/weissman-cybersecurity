@@ -53,8 +53,11 @@ UPDATE risk_graph_nodes
 "#;
 
 /// Heuristic crown-jewel seeds when the operator has not flagged any.
-/// Identity / cloud / k8s / OT nodes, valued assets, and high-risk nodes become
-/// Dijkstra sinks. Operator-set `crown_jewel = TRUE` rows are never overwritten.
+/// Identity / cloud / k8s / OT nodes and valued assets become Dijkstra sinks.
+/// High risk_score alone is **not** a jewel — that turned half the graph into
+/// sinks and made paths meaningless. Operator-set `crown_jewel = TRUE` rows
+/// are never overwritten. If this still yields zero jewels, the fallback tags
+/// the top-5 highest-risk non-honeypot nodes.
 pub const AUTO_TAG_CROWN_JEWEL_SQL: &str = r#"
 UPDATE risk_graph_nodes
    SET crown_jewel = TRUE
@@ -65,7 +68,6 @@ UPDATE risk_graph_nodes
    AND (
         node_type IN ('identity', 'cloud_resource', 'k8s_cluster', 'physical_asset')
      OR COALESCE(business_value_usd, 0) > 0
-     OR COALESCE(risk_score, 0) >= 70
    )
 "#;
 
@@ -130,5 +132,9 @@ mod tests {
             assert!(!u.contains("DELETE "));
         }
         assert!(AUTO_TAG_CROWN_JEWEL_FALLBACK_SQL.contains("LIMIT 5"));
+        assert!(
+            !AUTO_TAG_CROWN_JEWEL_SQL.contains("risk_score"),
+            "primary jewel heuristic must not treat raw risk_score as a sink"
+        );
     }
 }

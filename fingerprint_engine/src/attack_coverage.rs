@@ -331,6 +331,54 @@ pub const COVERAGE: &[Technique] = &[
         tactic: "Credential Access",
         engines: &["mobile_banking_trojan"],
     },
+    Technique {
+        id: "T1623",
+        name: "Command and Scripting Interpreter (Mobile MDM)",
+        tactic: "Execution",
+        engines: &["mdm_bypass_engine"],
+    },
+    Technique {
+        id: "T1603",
+        name: "Scheduled Task/Job (Mobile MDM profiles)",
+        tactic: "Persistence",
+        engines: &["mdm_bypass_engine"],
+    },
+    Technique {
+        id: "T1639",
+        name: "Exfiltration Over Other Network Medium (Mobile backup/sync)",
+        tactic: "Exfiltration",
+        engines: &["mdm_bypass_engine"],
+    },
+    Technique {
+        id: "T1640",
+        name: "Account Access Removal (Mobile MDM wipe/lock)",
+        tactic: "Impact",
+        engines: &["mdm_bypass_engine"],
+    },
+    Technique {
+        id: "T1428",
+        name: "Exploitation of Remote Services (Mobile fleet API)",
+        tactic: "Lateral Movement",
+        engines: &["mdm_bypass_engine"],
+    },
+    Technique {
+        id: "T0869",
+        name: "Standard Application Layer Protocol (ICS C2)",
+        tactic: "Command and Control",
+        engines: &["scada_ics", "ot_cloud_identity_killpath"],
+    },
+    Technique {
+        id: "T0885",
+        name: "Commonly Used Port (ICS C2)",
+        tactic: "Command and Control",
+        engines: &["scada_ics"],
+    },
+    Technique {
+        id: "T0890",
+        name: "Exploitation for Privilege Escalation (ICS engineering panel)",
+        tactic: "Privilege Escalation",
+        engines: &["scada_ics", "ot_cloud_identity_killpath"],
+    },
 ];
 
 /// Canonical ATT&CK Enterprise tactic order (for stable matrix rendering).
@@ -421,15 +469,22 @@ pub fn coverage_json() -> Value {
             "threat_emulation_apt_scenarios": crate::threat_emulation_engine::APT_SCENARIO_COUNT,
             "redteam_cron_engines": crate::redteam_background_worker::REDTEAM_CRON_ENGINES,
             "crown_jewels_auto_tagged": true,
+            "operator_can_patch_crown_jewel": true,
+            "graph_api_exposes_path_flags": true,
+            "correlation_alerts_on_new_incidents": true,
             "attack_paths_require_internet_and_jewels": true,
             "social_engineering_surface_only": true,
+            "alert_rules_gate_kev_epss_cvss_jewel": true,
+            "scan_cron_https_and_defer_empty": true,
+            "ct_squirt_inline_fusion": true,
+            "oast_follow_on_when_collector_live": true,
             "agent_required_count": weissman_core::models::engine_agent::AGENT_REQUIRED_ENGINES.len(),
             "gaps": [
-                "Persistence / privilege-escalation ATT&CK tactics are thinly mapped vs Initial Access",
-                "Mobile ATT&CK coverage is sparse (execution/persistence/C2/exfil still empty)",
-                "ICS ATT&CK Command-and-Control and Privilege Escalation tactics have 0 mapped techniques",
+                "Persistence ATT&CK tactics remain thinner than Initial Access",
+                "Mobile ATT&CK collection and C2 are still unmapped (MDM now covers execution/persistence/exfil/impact)",
                 "Host-resident engines (ROP/heap/JIT/COM) are inventory + remote-surface, not exploit execution",
-                "Scheduled red-team requires WEISSMAN_REDTEAM_CRON=1 (off by default)"
+                "Scheduled red-team requires WEISSMAN_REDTEAM_CRON=1 (off by default)",
+                "Correlation alerts fire only for newly inserted high/critical multi-stage incidents"
             ],
         },
     })
@@ -463,6 +518,18 @@ mod tests {
                 t.tactic
             );
         }
+        assert!(
+            COVERAGE.iter().any(|t| t.id == "T0869"),
+            "ICS C2 must be mapped"
+        );
+        assert!(
+            COVERAGE.iter().any(|t| t.id == "T1623"),
+            "Mobile MDM execution must be mapped"
+        );
+        assert!(
+            COVERAGE.iter().any(|t| t.id == "T0890"),
+            "ICS privilege-escalation must be mapped"
+        );
     }
 
     #[test]
@@ -482,6 +549,22 @@ mod tests {
         assert_eq!(j["attack_readiness"]["default_roe"], "safe_proofs");
         assert_eq!(
             j["attack_readiness"]["crown_jewels_auto_tagged"].as_bool(),
+            Some(true)
+        );
+        assert_eq!(
+            j["attack_readiness"]["operator_can_patch_crown_jewel"].as_bool(),
+            Some(true)
+        );
+        assert_eq!(
+            j["attack_readiness"]["correlation_alerts_on_new_incidents"].as_bool(),
+            Some(true)
+        );
+        assert_eq!(
+            j["attack_readiness"]["alert_rules_gate_kev_epss_cvss_jewel"].as_bool(),
+            Some(true)
+        );
+        assert_eq!(
+            j["attack_readiness"]["ct_squirt_inline_fusion"].as_bool(),
             Some(true)
         );
         assert!(j["attack_readiness"]["gaps"]

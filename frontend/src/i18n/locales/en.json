@@ -540,9 +540,9 @@
     "sso_saml": "Sign in with SAML",
     "enterprise_sso": "Enterprise SSO",
     "brand_tagline": "Unified offensive security for enterprise teams",
-    "brand_story": "Correlate findings across {{engines}} attack engines, orchestrate SOAR playbooks, and prove compliance — from a single command center.",
+    "brand_story": "Correlate findings across 254 attack engines, orchestrate SOAR playbooks, and prove compliance — from a single command center.",
     "brand_release": "{{name}} · {{release}}",
-    "trust_engines": "{{engines}} engines",
+    "trust_engines": "254 engines",
     "trust_soc2": "SOC2-ready",
     "trust_region": "EU-West",
     "trust_label": "Platform trust indicators",
@@ -1493,8 +1493,8 @@
     "attackPaths": {
       "title": "Attack Paths",
       "subtitle": "Choke-points and ranked internet → crown-jewel paths",
-      "badge": "BFS",
-      "evidence_notice": "Paths and choke-points come from GET /api/attack-paths/:client_id — a BFS over the live risk graph weighted by CVSS+EPSS+KEV. Recompute regenerates from the current graph; not a static diagram.",
+      "badge": "Dijkstra",
+      "evidence_notice": "Paths and choke-points come from GET /api/attack-paths/:client_id — Dijkstra over the live risk graph weighted by CVSS+EPSS+KEV. Recompute regenerates from the current graph; mark crown jewels with PATCH /api/risk-graph/nodes/:id/flags.",
       "select_client": "Select client",
       "recompute": "Recompute",
       "recompute_done": "Attack-path snapshot recomputed",
@@ -1528,7 +1528,7 @@
       "no_choke_body": "No shared choke-points across the computed paths.",
       "no_paths_title": "No attack paths",
       "no_paths_body": "No internet → crown-jewel path was found in the current graph.",
-      "no_jewels_banner": "No crown jewels are flagged — attack paths stay empty until an operator marks them.",
+      "no_jewels_banner": "Zero crown jewels — Dijkstra has no sinks. Recompute auto-tags identity/cloud/OT/valued assets (then top-5 fallback). Or mark jewels below.",
       "no_jewels_recompute": "Auto-tag jewels and recompute",
       "score": "Score",
       "root_cause": "Root cause",
@@ -1544,13 +1544,20 @@
       "no_jewels_hint": "Use the board below. Dijkstra only walks internet-exposed → crown-jewel.",
       "jewel_board": "Crown jewels",
       "jewel_board_hint": "PATCH /api/risk-graph/nodes/:id/flags — live operator truth, not a guessed inventory.",
-      "jewel_on": "Crown jewel",
+      "jewel_on": "Jewel",
       "jewel_off": "Mark jewel",
       "jewel_toggled": "Crown-jewel flag saved",
       "jewel_toggle_failed": "Could not update crown-jewel flag.",
       "no_graph_title": "No graph nodes",
       "no_graph_body": "Build or refresh the risk graph for this client, then flag crown jewels here.",
-      "entry_flag": "internet-exposed"
+      "entry_flag": "internet-exposed",
+      "jewel_panel_title": "Crown jewels & internet entry",
+      "jewel_panel_hint": "Toggle live flags on risk-graph nodes. PATCH /api/risk-graph/nodes/:id/flags invalidates the Dijkstra cache.",
+      "mark_jewel": "Mark jewel",
+      "mark_entry": "Mark entry",
+      "entry_on": "Exposed",
+      "flag_saved": "Node flags saved — paths recomputed",
+      "flag_failed": "Failed to update node flags."
     },
     "attackCoverage": {
       "title": "ATT&CK Coverage Matrix",
@@ -1575,7 +1582,10 @@
       "agent_required": "Agent-required engines",
       "gaps_heading": "Where offense is still not ready",
       "jewel_auto": "Crown jewels auto-tagged",
-      "weaponized": "Weaponized mode is dual-control"
+      "weaponized": "Weaponized mode is dual-control",
+      "alert_gates": "KEV / EPSS / CVSS / jewel gates",
+      "scan_https": "Scan cron defaults to HTTPS",
+      "ct_fusion": "CT squirt → inline fusion"
     },
     "securityPosture": {
       "title": "Platform Security Posture",
@@ -2250,7 +2260,13 @@
       "save_updated": "Rule updated",
       "save_failed": "Failed to save rule",
       "test_error": "Failed to test rule",
-      "toggle_failed": "Failed to toggle rule"
+      "toggle_failed": "Failed to toggle rule",
+      "cond_kev": "CISA KEV only",
+      "cond_epss": "Min EPSS",
+      "cond_cvss": "Min CVSS",
+      "cond_jewel": "Touches crown jewel",
+      "template_kev": "KEV on crown jewel",
+      "template_kev_body": "Page when a KEV finding touches a crown-jewel asset"
     },
     "adminManagement": {
       "search_users": "Search users…",
@@ -3846,7 +3862,13 @@
       "severity_critical": "Critical",
       "severity_high": "High",
       "severity_medium": "Medium",
-      "severity_low": "Low"
+      "severity_low": "Low",
+      "mark_jewel": "Mark crown jewel",
+      "jewel_on": "Crown jewel",
+      "mark_entry": "Mark internet-exposed",
+      "entry_on": "Internet-exposed",
+      "flag_saved": "Node flags saved",
+      "flag_failed": "Failed to update node flags."
     },
     "baselineAndDrift": {
       "title": "Baseline & Drift Detection",
@@ -5961,14 +5983,14 @@
     "controlPlaneOfControls": {
       "title": "Control plane of controls",
       "subtitle": "Prove installed EDR, WAF, email DNS and cloud controls from live fusion engines",
-      "evidence_notice": "Rows are live GET /api/findings filtered to control_plane_of_controls, prevention_fabric_breach_proof, OT×cloud×identity, BEC→ATO, AI CASB, DNS fusion and toxic-combo engines. Launch those engines from the Engine Matrix to populate this board.",
+      "evidence_notice": "Rows are live GET /api/findings filtered to control_plane_of_controls, OT×cloud×identity, BEC→ATO, AI CASB, DNS fusion and toxic-combo engines. Launch those engines from the Engine Matrix to populate this board.",
       "load_failed": "Failed to load control-plane findings.",
       "kpi_findings": "Findings",
       "kpi_crit": "Critical / high",
       "kpi_engines": "Fusion engines",
       "search_placeholder": "Filter findings…",
       "empty_title": "No control-plane findings yet",
-      "empty_body": "Queue control_plane_of_controls, prevention_fabric_breach_proof, and sibling fusion engines against an authorized target. This page never invents Palo Alto or Falcon coverage."
+      "empty_body": "Queue control_plane_of_controls (and sibling fusion engines) against an authorized target. This page never invents Palo Alto or Falcon coverage."
     },
     "itdrCommandCenter": {
       "title": "ITDR",

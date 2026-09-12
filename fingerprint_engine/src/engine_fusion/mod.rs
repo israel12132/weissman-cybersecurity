@@ -10,7 +10,6 @@
 //! |-----------|---------------|
 //! | `first_mover_surface_delta` | Live DNS/HTTP/CT vs last snapshot — new/changed hosts before weekly scanners |
 //! | `first_mover_delta_fusion` | New host → immediate takeover/leak/BOLA/JWT on that same FQDN |
-//! | `exposure_schism_fusion` | New/changed host → liminal HTTP/1.1↔HTTP/2 / Vary / rewrite schism; kill-chain mapped from that HTTP evidence |
 //! | `first_seen_osv_nvd` | Live SBOM × OSV, proven before NVD when nvd_status is absent_cve/unpublished |
 //! | `external_exposure_supreme` | ASM + email/DNS + cloud posture |
 //! | `identity_attack_chain` | Kerberos + spray + ITDR auth events |
@@ -24,13 +23,14 @@
 //! | `ai_casb_saas` | LLM agent hijack + OAuth SaaS grants |
 //! | `dns_security_posture_fusion` | DNS exfil + email DNS + ASM |
 //! | `toxic_combo_runtime_proof` | CNAPP + IMDS + S3 + IAM + K8s |
-//! | `prevention_fabric_breach_proof` | NGFW + SASE + WAF + control-plane + ZTNA — live leak proof |
+//!
+//! `correlate_finding_to_paths` maps a live finding onto Dijkstra snapshots
+//! (shortest hop + jewel). Honest miss → None.
 
 /// Production fusion engine IDs — must remain a subset of `PRODUCTION_ENGINE_IDS`.
 pub const FUSION_ENGINE_IDS: &[&str] = &[
     "first_mover_surface_delta",
     "first_mover_delta_fusion",
-    "exposure_schism_fusion",
     "first_seen_osv_nvd",
     "external_exposure_supreme",
     "identity_attack_chain",
@@ -44,8 +44,59 @@ pub const FUSION_ENGINE_IDS: &[&str] = &[
     "ai_casb_saas",
     "dns_security_posture_fusion",
     "toxic_combo_runtime_proof",
-    "prevention_fabric_breach_proof",
 ];
+
+/// Correlate a live finding to Dijkstra attack-path snapshots (alert fusion).
+/// Matches finding title/source against path step labels. Honest miss → None.
+pub fn correlate_finding_to_paths(
+    title: &str,
+    source: &str,
+    paths_json: &serde_json::Value,
+) -> Option<(u32, String)> {
+    let hay = format!("{title} {source}").to_ascii_lowercase();
+    if hay.trim().is_empty() {
+        return None;
+    }
+    let paths = paths_json.as_array()?;
+    let mut best: Option<(u32, String)> = None;
+    for p in paths {
+        let hops = p.get("hops").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+        let jewel = p
+            .get("steps")
+            .and_then(|s| s.as_array())
+            .and_then(|steps| steps.last())
+            .and_then(|s| s.get("label").and_then(|v| v.as_str()))
+            .unwrap_or("")
+            .to_string();
+        let hit = p
+            .get("steps")
+            .and_then(|v| v.as_array())
+            .into_iter()
+            .flatten()
+            .any(|s| {
+                let label = s
+                    .get("label")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_ascii_lowercase();
+                let key = s
+                    .get("graph_key")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_ascii_lowercase();
+                (!label.is_empty() && hay.contains(&label))
+                    || (!key.is_empty() && hay.contains(&key))
+            });
+        if hit {
+            match &best {
+                None => best = Some((hops, jewel)),
+                Some((h, _)) if hops < *h => best = Some((hops, jewel)),
+                _ => {}
+            }
+        }
+    }
+    best
+}
 
 pub use crate::external_exposure_supreme::{
     run_external_exposure_supreme, run_external_exposure_supreme_result,
@@ -81,5 +132,30 @@ mod tests {
                 "fusion engine {id} missing from PRODUCTION_ENGINE_IDS"
             );
         }
+    }
+
+    #[test]
+    fn correlate_finding_to_paths_picks_shortest_hit() {
+        let paths = serde_json::json!([
+            {
+                "hops": 4,
+                "steps": [
+                    {"label": "edge.example", "graph_key": "asm:edge"},
+                    {"label": "vault.internal", "graph_key": "identity:vault"}
+                ]
+            },
+            {
+                "hops": 2,
+                "steps": [
+                    {"label": "www.example", "graph_key": "asm:www"},
+                    {"label": "vault.internal", "graph_key": "identity:vault"}
+                ]
+            }
+        ]);
+        let hit = correlate_finding_to_paths("SQLi on vault.internal", "sqli_advanced", &paths);
+        assert_eq!(hit.as_ref().map(|h| h.0), Some(2));
+        assert_eq!(hit.as_ref().map(|h| h.1.as_str()), Some("vault.internal"));
+        assert!(correlate_finding_to_paths("unrelated", "osint", &paths).is_none());
+        assert!(correlate_finding_to_paths("x", "y", &serde_json::json!([])).is_none());
     }
 }

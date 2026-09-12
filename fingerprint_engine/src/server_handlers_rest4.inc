@@ -1216,11 +1216,11 @@ async fn api_risk_graph_get(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"nodes":[],"edges":[]}))).into_response();
     };
     let nodes = sqlx::query(
-        r#"SELECT id, graph_key, node_type, label, external_id, metadata, risk_score, is_choke_point,
-                  COALESCE(internet_exposed, FALSE) AS internet_exposed,
-                  COALESCE(crown_jewel, FALSE) AS crown_jewel,
-                  COALESCE(asset_value, 0) AS asset_value,
-                  COALESCE(business_value_usd, 0) AS business_value_usd
+        r#"SELECT id, graph_key, node_type, label, external_id, metadata, risk_score,
+                  is_choke_point, internet_exposed, crown_jewel,
+                  COALESCE(honey_node, FALSE) AS honey_node,
+                  COALESCE(business_value_usd, 0) AS business_value_usd,
+                  COALESCE(asset_value, 0) AS asset_value
            FROM risk_graph_nodes WHERE client_id = $1 ORDER BY id"#,
     )
     .bind(id)
@@ -1238,29 +1238,38 @@ async fn api_risk_graph_get(
     let nodes_j: Vec<Value> = nodes
         .into_iter()
         .map(|r| {
+            let label = r.try_get::<String, _>("label").unwrap_or_default();
+            let risk_score = r.try_get::<i32, _>("risk_score").unwrap_or(0);
             json!({
                 "id": r.try_get::<i64,_>("id").unwrap_or(0),
                 "graph_key": r.try_get::<String,_>("graph_key").unwrap_or_default(),
                 "node_type": r.try_get::<String,_>("node_type").unwrap_or_default(),
-                "label": r.try_get::<String,_>("label").unwrap_or_default(),
+                "label": label,
+                "name": label,
                 "external_id": r.try_get::<Option<String>,_>("external_id").ok().flatten(),
                 "metadata": r.try_get::<String,_>("metadata").unwrap_or_else(|_| "{}".into()),
-                "risk_score": r.try_get::<i32,_>("risk_score").unwrap_or(0),
+                "risk_score": risk_score,
+                "severity": crate::risk_graph::severity_from_risk_score(risk_score),
                 "is_choke_point": r.try_get::<bool,_>("is_choke_point").unwrap_or(false),
                 "internet_exposed": r.try_get::<bool,_>("internet_exposed").unwrap_or(false),
                 "crown_jewel": r.try_get::<bool,_>("crown_jewel").unwrap_or(false),
-                "asset_value": r.try_get::<f32,_>("asset_value").unwrap_or(0.0),
+                "honey_node": r.try_get::<bool,_>("honey_node").unwrap_or(false),
                 "business_value_usd": r.try_get::<i64,_>("business_value_usd").unwrap_or(0),
+                "asset_value": r.try_get::<f32,_>("asset_value").unwrap_or(0.0),
             })
         })
         .collect();
     let edges_j: Vec<Value> = edges
         .into_iter()
         .map(|r| {
+            let from = r.try_get::<i64,_>("from_node_id").unwrap_or(0);
+            let to = r.try_get::<i64,_>("to_node_id").unwrap_or(0);
             json!({
                 "id": r.try_get::<i64,_>("id").unwrap_or(0),
-                "from_node_id": r.try_get::<i64,_>("from_node_id").unwrap_or(0),
-                "to_node_id": r.try_get::<i64,_>("to_node_id").unwrap_or(0),
+                "from_node_id": from,
+                "to_node_id": to,
+                "source": from,
+                "target": to,
                 "edge_type": r.try_get::<String,_>("edge_type").unwrap_or_default(),
                 "metadata": r.try_get::<String,_>("metadata").unwrap_or_else(|_| "{}".into()),
             })

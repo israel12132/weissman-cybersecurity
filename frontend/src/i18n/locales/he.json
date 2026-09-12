@@ -530,9 +530,9 @@
     "sso_saml": "התחבר עם SAML",
     "enterprise_sso": "כניסת ארגון (SSO)",
     "brand_tagline": "אבטחה התקפית מאוחדת לצוותי ארגון",
-    "brand_story": "קשר ממצאים מ-{{engines}} מנועי תקיפה, תזמר מדריכי SOAR והוכח עמידה ברגולציה — ממרכז פיקוד אחד.",
+    "brand_story": "קשר ממצאים מ-254 מנועי תקיפה, תזמר מדריכי SOAR והוכח עמידה ברגולציה — ממרכז פיקוד אחד.",
     "brand_release": "{{name}} · {{release}}",
-    "trust_engines": "{{engines}} מנועים",
+    "trust_engines": "254 מנועים",
     "trust_soc2": "מוכן ל-SOC2",
     "trust_region": "EU-West",
     "trust_label": "אינדיקטורי אמון בפלטפורמה",
@@ -1493,8 +1493,8 @@
     "attackPaths": {
       "title": "נתיבי תקיפה",
       "subtitle": "צווארי בקבוק ונתיבי אינטרנט → נכסי כתר מדורגים",
-      "badge": "BFS",
-      "evidence_notice": "הנתיבים וצווארי הבקבוק מגיעים מ-GET /api/attack-paths/:client_id — סריקת BFS על גרף הסיכון החי משוקללת ב-CVSS+EPSS+KEV. חישוב מחדש מפיק מהגרף הנוכחי; לא דיאגרמה סטטית.",
+      "badge": "דייקסטרה",
+      "evidence_notice": "הנתיבים וצווארי הבקבוק מגיעים מ-GET /api/attack-paths/:client_id — דייקסטרה על גרף הסיכון החי משוקללת ב-CVSS+EPSS+KEV. חישוב מחדש מפיק מהגרף הנוכחי; סמן נכסי כתר ב-PATCH /api/risk-graph/nodes/:id/flags.",
       "select_client": "בחר לקוח",
       "recompute": "חשב מחדש",
       "recompute_done": "תמונת נתיבי התקיפה חושבה מחדש",
@@ -1528,7 +1528,7 @@
       "no_choke_body": "אין צווארי בקבוק משותפים בין הנתיבים שחושבו.",
       "no_paths_title": "אין נתיבי תקיפה",
       "no_paths_body": "לא נמצא נתיב אינטרנט → נכס כתר בגרף הנוכחי.",
-      "no_jewels_banner": "אין נכסי כתר מסומנים — נתיבי התקיפה נשארים ריקים עד שמסמנים אותם.",
+      "no_jewels_banner": "אין נכסי כתר — לדייקסטרה אין יעדים. חישוב מחדש מתייג זהות/ענן/OT/נכסים בעלי ערך (ואז 5 המובילים). או סמן נכסי כתר למטה.",
       "no_jewels_recompute": "תייג נכסי כתר וחשב מחדש",
       "score": "ציון",
       "root_cause": "שורש בעיה",
@@ -1544,13 +1544,20 @@
       "no_jewels_hint": "השתמש בלוח למטה. Dijkstra הולך רק מאינטרנט חשוף אל נכס כתר.",
       "jewel_board": "נכסי כתר",
       "jewel_board_hint": "PATCH /api/risk-graph/nodes/:id/flags — אמת מפעיל חיה, לא מלאי מנוחש.",
-      "jewel_on": "נכס כתר",
+      "jewel_on": "כתר",
       "jewel_off": "סמן כתר",
       "jewel_toggled": "דגל נכס הכתר נשמר",
       "jewel_toggle_failed": "עדכון דגל נכס הכתר נכשל.",
       "no_graph_title": "אין צמתי גרף",
       "no_graph_body": "בנה או רענן את גרף הסיכון ללקוח, ואז סמן כאן נכסי כתר.",
-      "entry_flag": "חשוף לאינטרנט"
+      "entry_flag": "חשוף לאינטרנט",
+      "jewel_panel_title": "נכסי כתר וכניסת אינטרנט",
+      "jewel_panel_hint": "החלף דגלים חיים על צמתי גרף הסיכון. PATCH /api/risk-graph/nodes/:id/flags מבטל את מטמון דייקסטרה.",
+      "mark_jewel": "סמן כתר",
+      "mark_entry": "סמן כניסה",
+      "entry_on": "חשוף",
+      "flag_saved": "דגלי הצומת נשמרו — הנתיבים חושבו מחדש",
+      "flag_failed": "עדכון דגלי הצומת נכשל."
     },
     "attackCoverage": {
       "title": "מטריצת כיסוי ATT&CK",
@@ -1575,7 +1582,10 @@
       "agent_required": "מנועים שדורשים סוכן",
       "gaps_heading": "איפה התקיפה עדיין לא מוכנה",
       "jewel_auto": "נכסי כתר מתויגים אוטומטית",
-      "weaponized": "מצב מחומש דורש בקרה כפולה"
+      "weaponized": "מצב מחומש דורש בקרה כפולה",
+      "alert_gates": "שערי KEV / EPSS / CVSS / כתר",
+      "scan_https": "סריקות cron ב-HTTPS",
+      "ct_fusion": "CT squirt → fusion מובנה"
     },
     "securityPosture": {
       "title": "מצב אבטחת הפלטפורמה",
@@ -2250,7 +2260,13 @@
       "save_updated": "הכלל עודכן",
       "save_failed": "שמירת הכלל נכשלה",
       "test_error": "בדיקת הכלל נכשלה",
-      "toggle_failed": "שינוי מצב הכלל נכשל"
+      "toggle_failed": "שינוי מצב הכלל נכשל",
+      "cond_kev": "CISA KEV בלבד",
+      "cond_epss": "EPSS מינימלי",
+      "cond_cvss": "CVSS מינימלי",
+      "cond_jewel": "נוגע בנכס כתר",
+      "template_kev": "KEV על כתר",
+      "template_kev_body": "התראה כשממצא KEV נוגע בנכס כתר"
     },
     "adminManagement": {
       "search_users": "חיפוש משתמשים…",
@@ -3846,7 +3862,13 @@
       "severity_critical": "קריטי",
       "severity_high": "גבוה",
       "severity_medium": "בינוני",
-      "severity_low": "נמוך"
+      "severity_low": "נמוך",
+      "mark_jewel": "סמן נכס כתר",
+      "jewel_on": "נכס כתר",
+      "mark_entry": "סמן חשוף לאינטרנט",
+      "entry_on": "חשוף לאינטרנט",
+      "flag_saved": "דגלי הצומת נשמרו",
+      "flag_failed": "עדכון דגלי הצומת נכשל."
     },
     "baselineAndDrift": {
       "title": "Baseline וזיהוי Drift",
@@ -5961,14 +5983,14 @@
     "controlPlaneOfControls": {
       "title": "מרחב בקרה של בקרות",
       "subtitle": "הוכחה חיה ש-EDR, WAF, DNS של דואר וענן מותקנים ומדולפים",
-      "evidence_notice": "השורות מ-GET /api/findings מסוננות למנועי הסינתזה control_plane_of_controls, prevention_fabric_breach_proof, OT×ענן×זהות, BEC→ATO, AI CASB, DNS ו-toxic combo. הרץ אותם ממטריצת המנועים כדי למלא את הלוח.",
+      "evidence_notice": "השורות מ-GET /api/findings מסוננות למנועי הסינתזה control_plane_of_controls, OT×ענן×זהות, BEC→ATO, AI CASB, DNS ו-toxic combo. הרץ אותם ממטריצת המנועים כדי למלא את הלוח.",
       "load_failed": "טעינת ממצאי מרחב הבקרה נכשלה.",
       "kpi_findings": "ממצאים",
       "kpi_crit": "קריטי / גבוה",
       "kpi_engines": "מנועי סינתזה",
       "search_placeholder": "סינון ממצאים…",
       "empty_title": "עדיין אין ממצאי מרחב בקרה",
-      "empty_body": "תור את control_plane_of_controls, prevention_fabric_breach_proof, ואת מנועי האחים מול יעד מורשה. העמוד לא ממציא כיסוי של פאלו או פלקון."
+      "empty_body": "תור את control_plane_of_controls (ואת מנועי האחים) מול יעד מורשה. העמוד לא ממציא כיסוי של פאלו או פלקון."
     },
     "itdrCommandCenter": {
       "title": "ITDR",

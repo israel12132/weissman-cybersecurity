@@ -306,6 +306,26 @@ export default function AlertRulesEngine() {
                               CVE: {rule.conditions.cve_pattern}
                             </span>
                           )}
+                          {rule.conditions?.kev_only && (
+                            <span className="text-xs px-2 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded">
+                              {t('pages.alertRulesEngine.cond_kev')}
+                            </span>
+                          )}
+                          {rule.conditions?.min_epss != null && (
+                            <span className="text-xs px-2 py-1 bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded">
+                              {t('pages.alertRulesEngine.cond_epss')} ≥ {rule.conditions.min_epss}
+                            </span>
+                          )}
+                          {rule.conditions?.min_cvss != null && (
+                            <span className="text-xs px-2 py-1 bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded">
+                              {t('pages.alertRulesEngine.cond_cvss')} ≥ {rule.conditions.min_cvss}
+                            </span>
+                          )}
+                          {(rule.conditions?.crown_jewel || rule.conditions?.crown_jewel_on_path) && (
+                            <span className="text-xs px-2 py-1 bg-violet-500/10 text-violet-300 border border-violet-500/20 rounded">
+                              {t('pages.alertRulesEngine.cond_jewel')}
+                            </span>
+                          )}
                           {rule.conditions?.engines && (
                             <span className="text-xs px-2 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded">
                               {rule.conditions.engines.length} engines
@@ -390,6 +410,19 @@ export default function AlertRulesEngine() {
             >
               <div className="text-sm font-medium text-white mb-1">New CVE Detection</div>
               <div className="text-xs text-[var(--text-tertiary)]">Alert on newly published CVEs</div>
+            </Button>
+            <Button variant="unstyled"
+              onClick={() =>
+                setCreateModal({
+                  template: 'kev-jewel',
+                  name: t('pages.alertRulesEngine.template_kev'),
+                  conditions: { kev_only: true, crown_jewel: true, min_severity: 'high' },
+                })
+              }
+              className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
+            >
+              <div className="text-sm font-medium text-white mb-1">{t('pages.alertRulesEngine.template_kev')}</div>
+              <div className="text-xs text-[var(--text-tertiary)]">{t('pages.alertRulesEngine.template_kev_body')}</div>
             </Button>
             <Button variant="unstyled"
               onClick={() =>
@@ -542,6 +575,81 @@ function RuleModal({ rule, template, onClose, onSave }) {
                 <option value="enabled">Enabled</option>
                 <option value="disabled">Disabled</option>
               </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+              <input
+                type="checkbox"
+                checked={Boolean(formData.conditions?.kev_only)}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    conditions: { ...formData.conditions, kev_only: e.target.checked },
+                  })
+                }
+              />
+              {t('pages.alertRulesEngine.cond_kev')}
+            </label>
+            <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+              <input
+                type="checkbox"
+                checked={Boolean(formData.conditions?.crown_jewel)}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    conditions: { ...formData.conditions, crown_jewel: e.target.checked },
+                  })
+                }
+              />
+              {t('pages.alertRulesEngine.cond_jewel')}
+            </label>
+            <div>
+              <label htmlFor="alert-min-epss" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+                {t('pages.alertRulesEngine.cond_epss')}
+              </label>
+              <input
+                id="alert-min-epss"
+                type="number"
+                min="0"
+                max="1"
+                step="0.05"
+                value={formData.conditions?.min_epss ?? ''}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    conditions: {
+                      ...formData.conditions,
+                      min_epss: e.target.value === '' ? undefined : Number(e.target.value),
+                    },
+                  })
+                }
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              />
+            </div>
+            <div>
+              <label htmlFor="alert-min-cvss" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+                {t('pages.alertRulesEngine.cond_cvss')}
+              </label>
+              <input
+                id="alert-min-cvss"
+                type="number"
+                min="0"
+                max="10"
+                step="0.1"
+                value={formData.conditions?.min_cvss ?? ''}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    conditions: {
+                      ...formData.conditions,
+                      min_cvss: e.target.value === '' ? undefined : Number(e.target.value),
+                    },
+                  })
+                }
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              />
             </div>
           </div>
 

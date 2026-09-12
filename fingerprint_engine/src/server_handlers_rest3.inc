@@ -128,7 +128,7 @@ async fn api_first_mover_nerve(Extension(_auth): Extension<AuthContext>) -> Resp
             "enroll_baseline_engines": crate::endpoint_agents::ENROLL_BASELINE_ENGINES,
         },
         "fusion": {
-            "follow_on_engines": crate::first_mover_surface_delta::DELTA_FOLLOW_ON_ENGINES,
+            "follow_on_engines": crate::first_mover_surface_delta::live_delta_follow_on_engines(),
             "inline_engine": "first_mover_delta_fusion",
             "schism_engine": "exposure_schism_fusion",
         },

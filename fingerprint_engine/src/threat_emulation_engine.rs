@@ -91,7 +91,7 @@ const APT_SCENARIOS: &[AptScenario] = &[
 ];
 
 /// Count of APT HTTP-emulation scenarios (safe GET + distinctive UA). Not a kill-chain.
-pub const APT_SCENARIO_COUNT: usize = 7;
+pub const APT_SCENARIO_COUNT: usize = APT_SCENARIOS.len();
 
 pub async fn run_threat_emulation_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {

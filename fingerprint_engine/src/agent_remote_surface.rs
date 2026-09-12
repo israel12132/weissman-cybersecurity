@@ -8,9 +8,9 @@
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
     dns_a, dns_txt, empty_ok, extract_host, finding_with_probe_depth, fingerprint_stack,
-    header_value, http_client, http_get, join_url,
-    normalize_url, probe_matched_token, probe_paths_concurrent, status_indicates_presence,
-    tcp_banner, tcp_open, tcp_scan, udp_probe_response, DEFAULT_PROBE_CONCURRENCY,
+    header_value, http_client, http_get, join_url, normalize_url, probe_matched_token,
+    probe_paths_concurrent, status_indicates_presence, tcp_banner, tcp_open, tcp_scan,
+    udp_probe_response, DEFAULT_PROBE_CONCURRENCY,
 };
 use crate::engine_result::EngineResult;
 use serde_json::{json, Value};

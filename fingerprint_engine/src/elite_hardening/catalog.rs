@@ -167,7 +167,7 @@ pub const CONTROLS: &[Control] = &[
     c!(64, 7, "CISA KEV maximum priority"),
     c!(65, 7, "Choke-point identification"),
     c!(66, 7, "attack_path_snapshots for trend"),
-    c!(67, 7, "Auto internet-exposed entry tagging"),
+    c!(67, 7, "Auto internet-exposed + crown-jewel tagging"),
     c!(68, 7, "Post-breach next-hop simulation"),
     c!(69, 7, "Graph memory discipline on the worker"),
     c!(70, 7, "Path speed enables pre-emptive block"),

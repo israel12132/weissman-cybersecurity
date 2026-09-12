@@ -330,18 +330,63 @@ async fn count_findings_matching_condition(
                 .collect()
         })
         .unwrap_or_default();
+    let min_epss: Option<f64> = condition
+        .get("min_epss")
+        .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())));
+    let kev_only = condition
+        .get("kev_only")
+        .or_else(|| condition.get("kev"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let min_cvss: Option<f64> = condition
+        .get("min_cvss")
+        .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())));
+    let crown_jewel_only = condition
+        .get("crown_jewel")
+        .or_else(|| condition.get("crown_jewel_on_path"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
     let count: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint
-             FROM vulnerabilities
-            WHERE ($1::text[] IS NULL OR cardinality($1::text[]) = 0 OR lower(severity) = ANY($1))
+             FROM vulnerabilities v
+            WHERE ($1::text[] IS NULL OR cardinality($1::text[]) = 0 OR lower(v.severity) = ANY($1))
               AND (
                     $2::text IS NULL
-                    OR title ILIKE $2
-                    OR description ILIKE $2
-                    OR COALESCE(raw_data, '{}'::jsonb)::text ILIKE $2
+                    OR v.title ILIKE $2
+                    OR v.description ILIKE $2
+                    OR COALESCE(v.raw_data, '{}'::jsonb)::text ILIKE $2
                   )
-              AND ($3::text[] IS NULL OR cardinality($3::text[]) = 0 OR source = ANY($3))"#,
+              AND ($3::text[] IS NULL OR cardinality($3::text[]) = 0 OR v.source = ANY($3))
+              AND ($4::float8 IS NULL OR COALESCE(v.epss_score, 0) >= $4)
+              AND (NOT $5 OR COALESCE(v.kev_listed, false))
+              AND (
+                    $6::float8 IS NULL
+                    OR COALESCE(
+                         CASE WHEN (v.raw_data->>'cvss_score') ~ '^[0-9]+(\\.[0-9]+)?$'
+                              THEN (v.raw_data->>'cvss_score')::float8 END,
+                         CASE WHEN (v.raw_data->>'cvss') ~ '^[0-9]+(\\.[0-9]+)?$'
+                              THEN (v.raw_data->>'cvss')::float8 END,
+                         0
+                       ) >= $6
+                  )
+              AND (
+                    NOT $7
+                    OR EXISTS (
+                         SELECT 1 FROM risk_graph_nodes n
+                          WHERE n.tenant_id = v.tenant_id
+                            AND n.client_id = v.client_id
+                            AND n.crown_jewel = TRUE
+                            AND COALESCE(n.honey_node, FALSE) IS NOT TRUE
+                            AND char_length(COALESCE(n.label, '')) >= 3
+                            AND (
+                                 COALESCE(v.raw_data->>'target','') ILIKE '%' || n.label || '%'
+                              OR COALESCE(v.raw_data->>'host','') ILIKE '%' || n.label || '%'
+                              OR v.title ILIKE '%' || n.label || '%'
+                              OR COALESCE(v.proof, '') ILIKE '%' || n.label || '%'
+                            )
+                       )
+                  )"#,
     )
     .bind(if severities.is_empty() {
         None::<Vec<String>>
@@ -354,6 +399,10 @@ async fn count_findings_matching_condition(
     } else {
         Some(engines)
     })
+    .bind(min_epss)
+    .bind(kev_only)
+    .bind(min_cvss)
+    .bind(crown_jewel_only)
     .fetch_one(&mut **tx)
     .await?;
 

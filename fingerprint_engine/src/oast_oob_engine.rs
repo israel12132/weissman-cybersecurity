@@ -89,10 +89,21 @@ fn oast_finding(
         "oast_token": token,
         "verification_method": if verified { "oob_oast_callback" } else { "oob_probe_planted" },
         "verified": verified,
+        "oast_confirmed": verified,
+        "evidence": {
+            "proof": if verified {
+                format!("oob_oast_callback token={token} channel={channel}")
+            } else {
+                format!("oob_probe_planted token={token} channel={channel}")
+            }
+        },
     });
     if let Some(obj) = f.as_object_mut() {
         if let Some(map) = extra.as_object() {
             for (k, v) in map {
+                if k == "evidence" {
+                    continue;
+                }
                 obj.insert(k.clone(), v.clone());
             }
         }
@@ -436,7 +447,6 @@ pub async fn run_oast_oob_result(target: &str) -> EngineResult {
                 true,
                 json!({
                     "embed_url": probe.embed,
-                    "evidence": format!("oob_hit token={}", probe.token),
                     "remediation": "Block outbound egress from app tier; patch Log4j/XXE/SSRF sinks; validate all URL fetches server-side.",
                 }),
             ));
@@ -498,6 +508,28 @@ mod tests {
         let m = channel_meta("blind_ssrf");
         assert_eq!(m.id, "blind_ssrf");
         assert_eq!(m.confirmed_sev, "critical");
+    }
+
+    #[test]
+    fn confirmed_finding_carries_oast_confirmed_and_proof() {
+        let f = oast_finding(
+            "CONFIRMED: Blind SSRF",
+            "critical",
+            "T1090",
+            "callback received",
+            "https://x.test",
+            "blind_ssrf",
+            "tok-1",
+            true,
+            json!({}),
+        );
+        assert_eq!(f["oast_confirmed"], true);
+        assert_eq!(f["verified"], true);
+        assert_eq!(f["verification_method"], "oob_oast_callback");
+        assert_eq!(
+            f["evidence"]["proof"],
+            "oob_oast_callback token=tok-1 channel=blind_ssrf"
+        );
     }
 
     #[test]

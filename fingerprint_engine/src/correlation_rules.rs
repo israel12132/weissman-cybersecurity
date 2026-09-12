@@ -191,11 +191,23 @@ pub async fn persist_incidents(
     client_id: Option<i64>,
     hits: &[CorrelationHit],
 ) -> Result<usize, sqlx::Error> {
+    Ok(persist_new_incidents(pool, tenant_id, client_id, hits)
+        .await?
+        .len())
+}
+
+/// Same as [`persist_incidents`] but returns the newly inserted hits (skipped duplicates omitted).
+pub async fn persist_new_incidents(
+    pool: &sqlx::PgPool,
+    tenant_id: i64,
+    client_id: Option<i64>,
+    hits: &[CorrelationHit],
+) -> Result<Vec<CorrelationHit>, sqlx::Error> {
     if hits.is_empty() {
-        return Ok(0);
+        return Ok(Vec::new());
     }
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
-    let mut inserted = 0usize;
+    let mut inserted = Vec::new();
     for h in hits {
         let stages_json = serde_json::to_string(
             &h.matched
@@ -230,10 +242,138 @@ pub async fn persist_incidents(
         .bind(stages_json)
         .execute(&mut *tx)
         .await?;
-        inserted += res.rows_affected() as usize;
+        if res.rows_affected() > 0 {
+            inserted.push(h.clone());
+        }
     }
     tx.commit().await?;
     Ok(inserted)
+}
+
+/// True when a correlation hit should page SOC (high/critical only — info chains stay in-app).
+#[must_use]
+pub fn correlation_hit_is_alertable(severity: &str) -> bool {
+    matches!(
+        severity.trim().to_ascii_lowercase().as_str(),
+        "high" | "critical"
+    )
+}
+
+/// Live webhook/Slack/PagerDuty payload for a newly persisted correlation incident.
+pub fn correlation_alert_payload(
+    tenant_id: i64,
+    client_id: Option<i64>,
+    hit: &CorrelationHit,
+) -> serde_json::Value {
+    serde_json::json!({
+        "event": "correlation_incident",
+        "tenant_id": tenant_id,
+        "client_id": client_id,
+        "rule_id": hit.rule_id,
+        "rule_name": hit.rule_name,
+        "severity": hit.severity,
+        "target": hit.target,
+        "span_secs": hit.span_secs,
+        "stage_count": hit.matched.len(),
+        "incident_key": hit.incident_key(),
+        "text": format!(
+            "[Weissman][{}] {} on {} ({} stages, {}s)",
+            hit.severity,
+            hit.rule_name,
+            hit.target,
+            hit.matched.len(),
+            hit.span_secs
+        ),
+    })
+}
+
+/// Persist new incidents and fire tenant alert channels for high/critical ones.
+pub async fn persist_and_alert(
+    pool: &sqlx::PgPool,
+    tenant_id: i64,
+    client_id: Option<i64>,
+    hits: &[CorrelationHit],
+) -> Result<usize, sqlx::Error> {
+    let new_hits = persist_new_incidents(pool, tenant_id, client_id, hits).await?;
+    let n = new_hits.len();
+    for hit in &new_hits {
+        if correlation_hit_is_alertable(&hit.severity) {
+            let payload = correlation_alert_payload(tenant_id, client_id, hit);
+            crate::alert_delivery::notify_correlation_incident(pool, tenant_id, &payload).await;
+        }
+    }
+    Ok(n)
+}
+
+/// After a scan persists findings: evaluate default kill-chain rules over recent live
+/// vulnerabilities and alert on newly inserted incidents. Best-effort; never fails the scan.
+pub async fn correlate_recent_and_alert(
+    pool: &sqlx::PgPool,
+    tenant_id: i64,
+    client_id: i64,
+) -> Result<usize, String> {
+    let findings = load_recent_findings(pool, tenant_id, client_id, 500)
+        .await
+        .map_err(|e| e.to_string())?;
+    if findings.len() < 2 {
+        return Ok(0);
+    }
+    let events = events_from_findings(&findings, |i, f| {
+        f.get("ts")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(1000 + (i as i64) * 60)
+    });
+    let hits = evaluate_all(&default_rules(), &events);
+    persist_and_alert(pool, tenant_id, Some(client_id), &hits)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+async fn load_recent_findings(
+    pool: &sqlx::PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    limit: i64,
+) -> Result<Vec<serde_json::Value>, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let rows = sqlx::query(
+        r#"SELECT COALESCE(raw_data, '{}'::jsonb)                       AS rd,
+                  COALESCE(title, '')                                   AS title,
+                  COALESCE(severity, '')                                AS severity,
+                  COALESCE(EXTRACT(EPOCH FROM discovered_at)::bigint, 0) AS ts
+             FROM vulnerabilities
+            WHERE tenant_id = $1 AND client_id = $2
+            ORDER BY discovered_at DESC
+            LIMIT $3"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(limit)
+    .fetch_all(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    let mut findings: Vec<serde_json::Value> = Vec::with_capacity(rows.len());
+    for r in rows.iter().rev() {
+        use sqlx::Row;
+        let mut v: serde_json::Value = r.try_get("rd").unwrap_or_else(|_| serde_json::json!({}));
+        if !v.is_object() {
+            v = serde_json::json!({});
+        }
+        if let Some(obj) = v.as_object_mut() {
+            obj.entry("title").or_insert_with(|| {
+                serde_json::json!(r.try_get::<String, _>("title").unwrap_or_default())
+            });
+            obj.entry("severity").or_insert_with(|| {
+                serde_json::json!(r.try_get::<String, _>("severity").unwrap_or_default())
+            });
+            obj.insert(
+                "ts".to_string(),
+                serde_json::json!(r.try_get::<i64, _>("ts").unwrap_or(0)),
+            );
+        }
+        findings.push(v);
+    }
+    Ok(findings)
 }
 
 /// Classify a finding into a kill-chain stage from its MITRE technique / type / title.
@@ -460,5 +600,39 @@ mod tests {
         assert_eq!(base.incident_key(), same.incident_key());
         assert_ne!(base.incident_key(), diff.incident_key());
         assert_eq!(base.incident_key().len(), 64);
+    }
+
+    #[test]
+    fn correlation_hit_is_alertable_high_critical_only() {
+        assert!(correlation_hit_is_alertable("critical"));
+        assert!(correlation_hit_is_alertable("HIGH"));
+        assert!(!correlation_hit_is_alertable("medium"));
+        assert!(!correlation_hit_is_alertable("info"));
+        assert!(!correlation_hit_is_alertable(""));
+    }
+
+    #[test]
+    fn correlation_alert_payload_is_live_event() {
+        let hit = CorrelationHit {
+            rule_id: "intrusion_progression".into(),
+            rule_name: "Intrusion progression".into(),
+            severity: "critical".into(),
+            target: "app.example.com".into(),
+            started_ts: 100,
+            ended_ts: 400,
+            span_secs: 200,
+            matched: vec![
+                CorrEvent::new(100, "app.example.com", "recon", "scan", "info"),
+                CorrEvent::new(200, "app.example.com", "initial_access", "rce", "high"),
+            ],
+        };
+        let p = correlation_alert_payload(9, Some(3), &hit);
+        assert_eq!(p["event"], "correlation_incident");
+        assert_eq!(p["tenant_id"], 9);
+        assert_eq!(p["client_id"], 3);
+        assert_eq!(p["target"], "app.example.com");
+        assert_eq!(p["stage_count"], 2);
+        assert_eq!(p["incident_key"], hit.incident_key());
+        assert!(p["text"].as_str().unwrap().contains("app.example.com"));
     }
 }

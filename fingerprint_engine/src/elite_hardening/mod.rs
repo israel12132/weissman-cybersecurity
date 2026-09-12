@@ -52,16 +52,14 @@ pub fn status_snapshot() -> Value {
         .iter()
         .filter(|c| c.get("enforced").and_then(Value::as_bool).unwrap_or(false))
         .count();
-    let accounting = crate::engine_accounting::compute();
     json!({
         "ok": true,
         "spec": "elite-hardening-part2",
         "controls_total": CONTROLS.len(),
         "controls_enforced": enforced,
         "mitre_attack": "v19.1",
-        "live_probes_target": accounting.remotely_detecting,
-        "unique_implementations_target": accounting.distinct_canonical,
-        "engines_total": accounting.total_ids,
+        "live_probes_target": 303,
+        "unique_implementations_target": 295,
         "ask_allowlist_tables": crate::nl_query::allowed_table_count(),
         "evidence_confidence_floor": evidence_doubt::CONFIDENCE_ADMIT,
         "jitter_percent": {"min": stealth_ops::JITTER_PCT_MIN, "max": stealth_ops::JITTER_PCT_MAX},
@@ -95,7 +93,7 @@ fn live_status(id: u16) -> ControlStatus {
         }
         8 => ControlStatus::ok("MITRE ATT&CK v19.1 currency gate in CI"),
         9 => ControlStatus::ok(
-            "OSINT/ASM nodes auto-tagged internet_exposed; identity/cloud/OT/high-risk nodes auto-tagged crown_jewel",
+            "OSINT/ASM nodes auto-tagged internet_exposed; identity/cloud/OT/valued assets auto-tagged crown_jewel (top-5 fallback)",
         ),
         10 => ControlStatus::ok("Mobile surface included in core scan engine set"),
         11 => ControlStatus::ok("HTTPS beacon jitter 15–30%"),
