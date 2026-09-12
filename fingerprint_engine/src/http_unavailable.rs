@@ -396,6 +396,16 @@ pub fn client_readiness_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// `GET /api/tenant/brand` when tenant_brand cannot be read
+pub fn tenant_brand_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "brand": Value::Null,
+        "detail": detail,
+    })
+}
+
 /// `GET /api/clients/:id/vulnerabilities/:id/sealed-poc`
 pub fn sealed_poc_unavailable_json(detail: &str) -> Value {
     json!({
@@ -757,6 +767,15 @@ mod tests {
         assert_eq!(v["unavailable"], true);
         assert!(v["readiness"].is_null());
         assert!(v["tenant"].is_null());
+    }
+
+    #[test]
+    fn tenant_brand_store_down_is_never_empty_brand_success() {
+        let v = tenant_brand_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["brand"].is_null());
+        assert_ne!(v["brand"], json!({}));
     }
 
     #[test]

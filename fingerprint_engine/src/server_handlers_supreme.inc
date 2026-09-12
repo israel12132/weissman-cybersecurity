@@ -5,20 +5,57 @@ async fn api_tenant_brand_get(
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::tenant_brand_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let raw: Option<String> = sqlx::query_scalar(
+    let raw: Option<String> = match sqlx::query_scalar(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'tenant_brand'",
     )
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    let brand: Value = raw
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| json!({}));
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(target: "brand", tenant_id = auth.tenant_id, error = %e, "tenant brand query failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::tenant_brand_unavailable_json(
+                    "tenant brand query failed",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::tenant_brand_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
+    let brand: Value = match raw {
+        None => json!({}),
+        Some(s) => match serde_json::from_str(&s) {
+            Ok(v) => v,
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::tenant_brand_unavailable_json(
+                        "tenant brand JSON corrupt",
+                    )),
+                )
+                    .into_response();
+            }
+        },
+    };
     (StatusCode::OK, Json(json!({"ok": true, "brand": brand}))).into_response()
 }
 
@@ -32,7 +69,13 @@ async fn api_tenant_brand_put(
     }
     let brand = body.get("brand").cloned().unwrap_or(body);
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::tenant_brand_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     let res = sqlx::query(
         r#"INSERT INTO system_configs (tenant_id, key, value, description)
@@ -45,12 +88,22 @@ async fn api_tenant_brand_put(
     .await;
     if res.is_err() {
         return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": "persist failed"})),
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::tenant_brand_unavailable_json(
+                "tenant brand persist failed",
+            )),
         )
             .into_response();
     }
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::tenant_brand_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     (StatusCode::OK, Json(json!({"ok": true, "brand": brand}))).into_response()
 }
 
@@ -519,7 +572,15 @@ async fn api_cnapp_status(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::cnapp_jobs_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let jobs: Vec<Value> = rows
         .into_iter()
         .map(|r| {
