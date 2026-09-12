@@ -495,17 +495,11 @@ pub async fn collect_clearnet_intel(engine_id: &str, target: &str) -> Vec<Value>
     let mut findings = Vec::new();
     let headers = [("User-Agent", UA), ("Accept", "application/json")];
 
-    // ransomware.live — try v2 then v1 keyword search.
-    let rl_urls = [
-        format!(
-            "https://api.ransomware.live/v2/searchvictims/{}",
-            urlencoding::encode(&apex)
-        ),
-        format!(
-            "https://api.ransomware.live/v1/search?q={}",
-            urlencoding::encode(&apex)
-        ),
-    ];
+    // ransomware.live v2 only — v1 redirects to marketing HTML.
+    let rl_urls = [format!(
+        "https://api.ransomware.live/v2/searchvictims/{}",
+        urlencoding::encode(&apex)
+    )];
     let mut rl_queried = false;
     let mut rl_status = 0u16;
     let mut rl_ok = false;
@@ -815,9 +809,12 @@ pub async fn collect_clearnet_intel(engine_id: &str, target: &str) -> Vec<Value>
         ));
     }
 
-    // HIBP public catalog (no API key).
-    let hibp_url = "https://haveibeenpwned.com/api/v3/breaches";
-    if let Some(p) = http_get_with_headers(&client, hibp_url, &headers).await {
+    // HIBP public catalog filtered by Domain (no API key). Named-incident only — not employee exposure.
+    let hibp_url = format!(
+        "https://haveibeenpwned.com/api/v3/breaches?Domain={}",
+        urlencoding::encode(&apex)
+    );
+    if let Some(p) = http_get_with_headers(&client, &hibp_url, &headers).await {
         if p.status == 200 {
             let hits = parse_hibp_breaches(&p.body, &host);
             if hits.is_empty() {
@@ -829,7 +826,7 @@ pub async fn collect_clearnet_intel(engine_id: &str, target: &str) -> Vec<Value>
                         "Live GET {hibp_url} (no API key) listed public breaches; none had Domain matching '{apex}'."
                     ),
                     target,
-                    json!({"source":"hibp_breaches","url":hibp_url,"http_status":p.status,"matches":0}),
+                    json!({"source":"hibp_breaches","url":hibp_url,"http_status":p.status,"matches":0,"attribution":"Have I Been Pwned"}),
                 ));
             } else {
                 for hit in &hits {
@@ -853,6 +850,7 @@ pub async fn collect_clearnet_intel(engine_id: &str, target: &str) -> Vec<Value>
                             "domain": hit.domain,
                             "breach_date": hit.breach_date,
                             "pwn_count": hit.pwn_count,
+                            "attribution": "Have I Been Pwned",
                         }),
                     ));
                 }
