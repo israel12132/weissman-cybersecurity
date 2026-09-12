@@ -67,6 +67,7 @@ export default function AgentManagement() {
   const [fleetBusy, setFleetBusy] = useState(false)
   const [swarmBusy, setSwarmBusy] = useState(false)
   const [swarmResult, setSwarmResult] = useState(null)
+  const [swarmCoverage, setSwarmCoverage] = useState(null)
   const [loading, setLoading] = useState(true)
   // Server-state via the shared TanStack Query hook (dedup + cache + retry) instead of a
   // hand-rolled useEffect fetch — reference for migrating the other dashboards.
@@ -99,17 +100,22 @@ export default function AgentManagement() {
       if (e?.status === 404) {
         setAgents([])
         setErr(null)
-        return
-      }
-      if (e?.status != null) {
+      } else if (e?.status != null) {
         const b = e?.response ? await e.response.json().catch(() => ({})) : {}
         setErr(b.detail || t('agents.load_failed', { status: e.status }))
+        setAgents([])
       } else {
         setErr(e.message || String(e))
+        setAgents([])
       }
-      setAgents([])
     } finally {
       setLoading(false)
+    }
+    try {
+      const cov = await apiFetch('/api/agents/swarm-attach')
+      if (cov && cov.ok !== false) setSwarmCoverage(cov)
+    } catch {
+      /* coverage is additive — roster still renders from /status */
     }
   }, [t])
 
@@ -197,6 +203,7 @@ export default function AgentManagement() {
       if (cid) body.client_id = cid
       const d = await apiFetch('/api/agents/swarm-attach', { method: 'POST', body })
       setSwarmResult(d)
+      if (d?.coverage) setSwarmCoverage(d.coverage)
       await refresh()
     } catch (e) {
       setActionErr(e.message)
@@ -223,6 +230,11 @@ export default function AgentManagement() {
     const capsTotal = agents.reduce((s, a) => s + (a.capabilities?.length || 0), 0)
     return { total: agents.length, online, offline: agents.length - online, clientsSeen, capsTotal }
   }, [agents])
+
+  const selectedAttach = useMemo(() => {
+    if (!selectedAgent?.agent_id || !swarmCoverage?.per_agent) return null
+    return swarmCoverage.per_agent.find((p) => p.agent_id === selectedAgent.agent_id) || null
+  }, [selectedAgent, swarmCoverage])
 
   const filteredAgents = useMemo(() => {
     if (statusFilter === 'online') return agents.filter((a) => a.online)
@@ -330,13 +342,22 @@ export default function AgentManagement() {
     >
       <div className="space-y-6">
         {loading && agents.length === 0 ? (
-          <SkeletonWidgetGrid count={4} />
+          <SkeletonWidgetGrid count={5} />
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <Kpi label={t('agents.kpi_registered')} value={metrics.total} color="#22d3ee" />
             <Kpi label={t('agents.kpi_online')} value={metrics.online} color="#34d399" />
             <Kpi label={t('agents.kpi_offline')} value={metrics.offline} color="#f87171" />
             <Kpi label={t('agents.kpi_capabilities')} value={metrics.capsTotal} color="#a78bfa" sub={t('agents.kpi_clients', { count: metrics.clientsSeen })} />
+            <Kpi
+              label={t('agents.kpi_swarm_coverage')}
+              value={swarmCoverage?.coverage_pct != null ? `${swarmCoverage.coverage_pct}%` : '—'}
+              color={swarmCoverage?.zero_gap ? '#34d399' : '#fbbf24'}
+              sub={t('agents.kpi_swarm_pack', {
+                tasked: swarmCoverage?.engines_tasked_24h ?? 0,
+                pack: swarmCoverage?.pack_size ?? 0,
+              })}
+            />
           </div>
         )}
 
@@ -399,6 +420,45 @@ export default function AgentManagement() {
                 live: swarmResult.tasks_live ?? 0,
                 skipped: swarmResult.skipped_recent ?? 0,
               })}
+            </div>
+          )}
+
+          {swarmCoverage && (
+            <div className="border border-amber-500/20 bg-amber-500/5 rounded-lg px-3 py-3 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-[10px] font-mono uppercase tracking-widest text-amber-200/80">
+                  {t('agents.swarm_leftover_heading')}
+                </p>
+                <Link
+                  to="/findings?engine=agent.swarm_attach"
+                  className="text-[11px] font-mono text-amber-200/90 hover:text-amber-100 underline"
+                >
+                  {t('agents.swarm_open_findings')}
+                </Link>
+              </div>
+              <p className="text-[11px] text-[var(--text-muted)]">
+                {t('agents.swarm_coverage_detail', {
+                  pct: swarmCoverage.coverage_pct ?? 0,
+                  leftover: (swarmCoverage.leftover_engines || []).length,
+                  pack: swarmCoverage.pack_size ?? 0,
+                })}
+              </p>
+              {(swarmCoverage.leftover_engines || []).length === 0 ? (
+                <p className="text-[11px] font-mono text-emerald-300">{t('agents.swarm_zero_gap')}</p>
+              ) : (
+                <div className="flex flex-wrap gap-1">
+                  {(swarmCoverage.leftover_engines || []).slice(0, 24).map((eng) => (
+                    <span key={eng} className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/25 text-amber-200/90">
+                      {eng}
+                    </span>
+                  ))}
+                  {(swarmCoverage.leftover_engines || []).length > 24 && (
+                    <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                      {t('agents.swarm_leftover_more', { count: swarmCoverage.leftover_engines.length - 24 })}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -504,6 +564,28 @@ export default function AgentManagement() {
                 <Link to="/baseline-drift" className="text-xs text-violet-300/80 hover:text-violet-200 underline">
                   {t('agents.open_baseline')}
                 </Link>
+                {selectedAttach && (
+                  <div>
+                    <div className="text-[10px] font-mono uppercase text-amber-200/70 mb-2">{t('agents.swarm_agent_leftover')}</div>
+                    <p className="text-[11px] font-mono text-[var(--text-muted)] mb-2">
+                      {t('agents.swarm_agent_coverage', {
+                        pct: selectedAttach.coverage_pct ?? 0,
+                        tasked: selectedAttach.tasked_24h ?? 0,
+                      })}
+                    </p>
+                    {(selectedAttach.leftover || []).length === 0 ? (
+                      <p className="text-[11px] font-mono text-emerald-300">{t('agents.swarm_zero_gap')}</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {(selectedAttach.leftover || []).slice(0, 16).map((eng) => (
+                          <span key={eng} className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/25 text-amber-200/80">
+                            {eng}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="pt-3 border-t border-[var(--border-default)] space-y-3">
                   <p className="text-[10px] font-mono uppercase text-rose-300/80">{t('agents.kill_heading')}</p>
                   <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">{t('agents.kill_hint')}</p>

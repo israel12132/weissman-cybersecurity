@@ -148,6 +148,11 @@ async function main() {
   const agents = await req('GET', '/api/agents/status', auth)
   agents.status === 200 ? ok('agents_status') : fail('agents_status', `HTTP ${agents.status}`)
 
+  const swarm = await req('GET', '/api/agents/swarm-attach', auth)
+  swarm.status === 200 && swarm.data?.ok && Array.isArray(swarm.data?.pack)
+    ? ok('agents_swarm_attach', `pack ${swarm.data.pack_size} leftover ${Array.isArray(swarm.data.leftover_engines) ? swarm.data.leftover_engines.length : '?'}`)
+    : fail('agents_swarm_attach', `HTTP ${swarm.status}`)
+
   // ── Threat intel ──
   const ti = await req('GET', '/api/threat-intel/feeds', auth)
   ti.status === 200 || ti.status === 404

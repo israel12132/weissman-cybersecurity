@@ -244,7 +244,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/agents/session", post(api_agents_session))
         .route("/api/agents/status", get(api_agents_status))
         .route("/api/agents/dispatch", post(api_agents_dispatch_task))
-        .route("/api/agents/swarm-attach", post(api_agents_swarm_attach))
+        .route(
+            "/api/agents/swarm-attach",
+            post(api_agents_swarm_attach).get(api_agents_swarm_status),
+        )
         .route(
             "/api/agents/isolate",
             post(api_agents_isolate).get(api_agents_isolate_status),

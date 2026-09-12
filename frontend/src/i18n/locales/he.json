@@ -908,6 +908,16 @@
     "swarm_attach": "הצמד עוזרים לכל סוכן מחובר",
     "swarm_attaching": "מצמיד עוזרים…",
     "swarm_result": "הוצמדו {{agents}}/{{seen}} סוכנים חיים · {{tasks}} משימות ({{live}} בשידור חי, {{skipped}} כבר רצות)",
+    "kpi_swarm_coverage": "כיסוי עוזרים",
+    "kpi_swarm_pack": "{{tasked}}/{{pack}} מנועים (24ש)",
+    "swarm_leftover_heading": "חבילת פער-אפס שנותרה",
+    "swarm_open_findings": "פתח ממצאי יומן הצמדה →",
+    "swarm_coverage_detail": "{{pct}}% מחבילת {{pack}} המנועים הוצמדו ב-24ש · {{leftover}} נותרו",
+    "swarm_zero_gap": "אין פער — כל מנוע מארח שנותר הוצמד",
+    "swarm_leftover_more": "+{{count}} נוספים",
+    "swarm_agent_leftover": "מנועים שנותרו לסוכן זה",
+    "swarm_agent_coverage": "{{pct}}% הוצמד ({{tasked}} מנועים / 24ש)",
+    "select_client_first": "בחר לקוח תחילה",
     "select_client_first": "בחר לקוח תחילה",
     "load_failed": "טעינת סוכנים נכשלה (HTTP {{status}})",
     "refresh": "רענן",
@@ -5674,7 +5684,7 @@
       "engine_queued": "המנוע נכנס לתור (משימה: {{jobId}})"
     },
     "agentManagement": {
-      "evidence_notice": "roster agents ו-heartbeat מ-GET /api/agents/status. POST /api/agents/swarm-attach מצמיד משימות תקיפה/סריקה/ממצאים לכל סוכן חי ב-WebSocket — agents offline מציגים timestamps last-seen כנים."
+      "evidence_notice": "roster agents ו-heartbeat מ-GET /api/agents/status. GET /api/agents/swarm-attach מדווח כיסוי חבילת פער-אפס; POST /api/agents/swarm-attach מצמיד כל משימת תקיפה/סריקה/ממצאים שנותרה לכל סוכן חי ב-WebSocket (בידוד/כופרה נשארים תחת dual-control). agents offline מציגים timestamps last-seen כנים. ממצאי יומן: /findings?engine=agent.swarm_attach."
     },
     "zeroDayRadar": {
       "evidence_notice": "correlation אות zero-day מ-GET /api/threat-intel/feed מול GET /api/findings ל-stack החשוף שלך — מדגיש CVEs מתפתחים מול fingerprints נכסים חיים."

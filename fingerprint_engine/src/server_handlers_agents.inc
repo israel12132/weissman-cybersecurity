@@ -160,6 +160,7 @@ async fn install_agent_binary_sha256(
 //   GET  /api/agents/status                  → list of agents per tenant
 //   POST /api/agents/dispatch                → analyst queues detection task (fleet round-robin)
 //   POST /api/agents/swarm-attach           → attach leftover attack/scan/findings pack to every live agent
+//   GET  /api/agents/swarm-attach           → live pack coverage, leftover engines, per-agent attach state
 //   GET  /ws/agent                           → WebSocket session (agent JWT only)
 //       Auth: prefer `Authorization: Bearer <session_jwt>`; `?token=<session_jwt>` is allowed for
 //       agents that cannot set WS headers. Human user access JWTs are rejected from query strings.
@@ -466,6 +467,13 @@ async fn api_agents_status(
         }
         Err(_) => Vec::new(),
     };
+    let swarm = crate::agent_swarm_attach::swarm_attach_live_status(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        None,
+        &online,
+    )
+    .await;
     let out: Vec<Value> = rows
         .into_iter()
         .map(|r| {
@@ -494,6 +502,7 @@ async fn api_agents_status(
             "agents": out,
             "online_count": online.len(),
             "fleet_max": crate::endpoint_agents::FLEET_MAX_AGENTS,
+            "swarm_attach": crate::agent_swarm_attach::swarm_attach_status_summary(&swarm),
         })),
     )
         .into_response()
@@ -623,7 +632,52 @@ async fn api_agents_swarm_attach(
         client_id,
     )
     .await;
-    (StatusCode::OK, Json(report.to_json())).into_response()
+    let mut body = report.to_json();
+    let online: std::collections::HashSet<String> = state
+        .endpoint_agents
+        .online_agents()
+        .await
+        .into_iter()
+        .collect();
+    body["coverage"] = crate::agent_swarm_attach::swarm_attach_live_status(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        client_id,
+        &online,
+    )
+    .await;
+    (StatusCode::OK, Json(body)).into_response()
+}
+
+#[derive(serde::Deserialize, Default)]
+struct SwarmAttachQuery {
+    #[serde(default)]
+    client_id: Option<i64>,
+}
+
+async fn api_agents_swarm_status(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<SwarmAttachQuery>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+    let client_id = q.client_id.filter(|c| *c > 0);
+    let online: std::collections::HashSet<String> = state
+        .endpoint_agents
+        .online_agents()
+        .await
+        .into_iter()
+        .collect();
+    let status = crate::agent_swarm_attach::swarm_attach_live_status(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        client_id,
+        &online,
+    )
+    .await;
+    (StatusCode::OK, Json(status)).into_response()
 }
 
 #[derive(serde::Deserialize)]

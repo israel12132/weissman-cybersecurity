@@ -271,8 +271,8 @@ const ENTRIES = [
   },
   {
     key: 'pages.agentManagement.evidence_notice',
-    en: 'Endpoint agent roster and heartbeat from GET /api/agents/status. POST /api/agents/swarm-attach attaches leftover attack/scan/findings detections to every WebSocket-live agent — offline hosts keep honest last-seen timestamps.',
-    he: 'roster agents ו-heartbeat מ-GET /api/agents/status. POST /api/agents/swarm-attach מצמיד משימות תקיפה/סריקה/ממצאים לכל סוכן חי ב-WebSocket — agents offline מציגים timestamps last-seen כנים.',
+    en: 'Endpoint agent roster and heartbeat from GET /api/agents/status. GET /api/agents/swarm-attach reports live leftover-pack coverage; POST /api/agents/swarm-attach attaches every leftover attack/scan/findings detection to every WebSocket-live agent (dual-control isolation/ransomware stay skipped). Offline hosts keep honest last-seen timestamps. Attach ledger findings: /findings?engine=agent.swarm_attach.',
+    he: 'roster agents ו-heartbeat מ-GET /api/agents/status. GET /api/agents/swarm-attach מדווח כיסוי חבילת פער-אפס; POST /api/agents/swarm-attach מצמיד כל משימת תקיפה/סריקה/ממצאים שנותרה לכל סוכן חי ב-WebSocket (בידוד/כופרה נשארים תחת dual-control). agents offline מציגים timestamps last-seen כנים. ממצאי יומן: /findings?engine=agent.swarm_attach.',
   },
   {
     key: 'pages.roeApprovals.evidence_notice',

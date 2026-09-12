@@ -106,6 +106,7 @@ pub fn all_capability_ids() -> Vec<&'static str> {
         "host_privilege_escalation",
         "ebpf_sensor",
         "ioc_yara_hunt",
+        "ot_plc_decoy",
     ]
 }
 
@@ -301,6 +302,7 @@ mod tests {
         "host_privilege_escalation",
         "ebpf_sensor",
         "ioc_yara_hunt",
+        "ot_plc_decoy",
     ];
 
     #[test]
@@ -330,6 +332,14 @@ mod tests {
             src.contains("ot_plc_decoy::run"),
             "OT decoy status must be taskable, not spawn-only"
         );
+        let caps: std::collections::HashSet<_> = all_capability_ids().into_iter().collect();
+        assert!(caps.contains("ot_plc_decoy"));
+        for id in all_capability_ids() {
+            assert!(
+                src.contains(&format!("\"{id}\" =>")),
+                "capability {id} has no run_detection match arm"
+            );
+        }
     }
 }
 

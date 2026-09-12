@@ -119,22 +119,45 @@ describe('AgentManagement', () => {
         return Promise.resolve(resp({ text: async () => JSON.stringify({ agents: [] }) }))
       }
       if (url === '/api/clients') return Promise.resolve(resp({ text: async () => '[]' }))
-      if (url === '/api/agents/swarm-attach') {
+      if (url === '/api/agents/swarm-attach' && opts?.method === 'POST') {
         return Promise.resolve(resp({
           text: async () => JSON.stringify({
             ok: true,
             swarm_attach: true,
             agents_attached: 2,
             agents_seen: 2,
-            tasks_enqueued: 18,
-            tasks_live: 18,
+            tasks_enqueued: 56,
+            tasks_live: 56,
             skipped_recent: 0,
+            pack_size: 58,
+            coverage: {
+              ok: true,
+              coverage_pct: 100,
+              pack_size: 58,
+              leftover_engines: [],
+              zero_gap: true,
+              engines_tasked_24h: 58,
+            },
+          }),
+        }))
+      }
+      if (url === '/api/agents/swarm-attach') {
+        return Promise.resolve(resp({
+          text: async () => JSON.stringify({
+            ok: true,
+            coverage_pct: 12.5,
+            pack_size: 58,
+            engines_tasked_24h: 7,
+            leftover_engines: ['process_hollowing', 'chronos'],
+            zero_gap: false,
           }),
         }))
       }
       return Promise.resolve(resp())
     })
     renderPage()
+    expect(await screen.findByText('agents.swarm_leftover_heading')).toBeInTheDocument()
+    expect(await screen.findByText('process_hollowing')).toBeInTheDocument()
     fireEvent.click(await screen.findByText('agents.swarm_attach'))
     await waitFor(() => {
       expect(calls.some(([u, o]) => u === '/api/agents/swarm-attach' && o?.method === 'POST')).toBe(true)

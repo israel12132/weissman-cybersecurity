@@ -978,6 +978,16 @@
     "swarm_attach": "Attach helpers to every live agent",
     "swarm_attaching": "Attaching helpers…",
     "swarm_result": "Attached {{agents}}/{{seen}} live agents · {{tasks}} tasks ({{live}} live, {{skipped}} already running)",
+    "kpi_swarm_coverage": "Helper coverage",
+    "kpi_swarm_pack": "{{tasked}}/{{pack}} engines (24h)",
+    "swarm_leftover_heading": "Zero-gap leftover pack",
+    "swarm_open_findings": "Open attach ledger findings →",
+    "swarm_coverage_detail": "{{pct}}% of the {{pack}}-engine pack tasked in 24h · {{leftover}} leftover",
+    "swarm_zero_gap": "Zero leftover — every leftover host engine is tasked",
+    "swarm_leftover_more": "+{{count}} more",
+    "swarm_agent_leftover": "This agent leftover engines",
+    "swarm_agent_coverage": "{{pct}}% attached ({{tasked}} engines / 24h)",
+    "select_client_first": "Select a client first",
     "select_client_first": "Select a client first",
     "load_failed": "Couldn't load agents (HTTP {{status}})",
     "refresh": "Refresh",
@@ -5674,7 +5684,7 @@
       "engine_queued": "Engine queued (Job: {{jobId}})"
     },
     "agentManagement": {
-      "evidence_notice": "Endpoint agent roster and heartbeat from GET /api/agents/status. POST /api/agents/swarm-attach attaches leftover attack/scan/findings detections to every WebSocket-live agent — offline hosts keep honest last-seen timestamps."
+      "evidence_notice": "Endpoint agent roster and heartbeat from GET /api/agents/status. GET /api/agents/swarm-attach reports live leftover-pack coverage; POST /api/agents/swarm-attach attaches every leftover attack/scan/findings detection to every WebSocket-live agent (dual-control isolation/ransomware stay skipped). Offline hosts keep honest last-seen timestamps. Attach ledger findings: /findings?engine=agent.swarm_attach."
     },
     "zeroDayRadar": {
       "evidence_notice": "Zero-day signal correlation from GET /api/threat-intel/feed cross-matched to GET /api/findings for your exposed stack — highlights emergent CVEs against live asset fingerprints."

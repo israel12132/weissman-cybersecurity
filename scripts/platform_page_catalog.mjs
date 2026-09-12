@@ -758,7 +758,7 @@ export const EXTRA_SURFACES = [
     howMuch: '1 connection per host',
     who: 'Agent binary',
     output: 'findings + fleet status',
-    apis: 'WS agent protocol · POST /api/agents/dispatch · POST /api/agents/swarm-attach',
+    apis: 'WS agent protocol · POST /api/agents/dispatch · GET+POST /api/agents/swarm-attach',
   },
   {
     id: 'paddle-webhook',
