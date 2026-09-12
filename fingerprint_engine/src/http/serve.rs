@@ -95,7 +95,7 @@ pub struct AppState {
     poe_job_registry: PoeJobRegistry,
     poe_job_updates_tx: flume::Sender<(String, String)>,
     /// Global error telemetry: broadcast to all connected Cockpit clients for Toast. Payload: JSON { engine, message, severity }.
-    telemetry_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
+    pub telemetry_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
     /// Sequenced Command Center telemetry: raw telemetry tagged with a monotonic `_seq` by the
     /// replay recorder; consumed by `/ws/command-center` so a live client can track its position.
     cc_sequenced_tx: Arc<tokio::sync::broadcast::Sender<String>>,
@@ -1562,6 +1562,10 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>, job_control_pool: Arc<
     crate::sovereign_operator::forge::spawn_forge_janitor();
     crate::nl_query::spawn_audit_worker(app_pool.clone());
     crate::endpoint_agents::spawn_pending_task_pusher(
+        app_pool.clone(),
+        state.endpoint_agents.clone(),
+    );
+    crate::agent_swarm_attach::spawn_swarm_attach_scheduler(
         app_pool.clone(),
         state.endpoint_agents.clone(),
     );

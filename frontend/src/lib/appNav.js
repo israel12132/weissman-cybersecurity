@@ -96,6 +96,12 @@ export const NAV_GROUPS = [
     labelKey: 'nav.groups.operations',
     items: [
       { to: '/threat-emulation', labelKey: 'nav.threat_emulation', icon: '◈' },
+      { to: '/campaigns', labelKey: 'nav.campaigns', icon: '⚔' },
+      { to: '/discovery-lab', labelKey: 'nav.discovery_lab', icon: '🧪' },
+      { to: '/honey-routing', labelKey: 'nav.honey_routing', icon: '🕷' },
+      { to: '/llm-ultra-guard', labelKey: 'nav.llm_ultra_guard', icon: '🛡' },
+      { to: '/c2-covert-exfil', labelKey: 'nav.c2_covert_exfil', icon: '📡' },
+      { to: '/stealthy-persistence', labelKey: 'nav.stealthy_persistence', icon: '👻' },
       { to: '/kill-chain', labelKey: 'nav.kill_chain', icon: '⛓' },
       { to: '/cem-dago', labelKey: 'nav.cem_dago', icon: '🧠' },
       { to: '/attack-paths', labelKey: 'nav.attack_paths', icon: '🕸' },

@@ -75,6 +75,17 @@ pub fn run_end(job_id: &str) {
     live_runs().remove(job_id);
 }
 
+/// Live engine phase + seconds since last phase update. `None` if this job is not in-flight.
+#[must_use]
+pub fn live_run_phase(job_id: &str) -> Option<(String, i64)> {
+    let e = live_runs().get(job_id)?;
+    let idle = Utc::now()
+        .signed_duration_since(e.last_phase_at)
+        .num_seconds()
+        .max(0);
+    Some((e.phase.clone(), idle))
+}
+
 /// RAII guard — removes the in-flight run when the job arm returns (Ok or Err).
 pub struct RunGuard {
     job_id: String,

@@ -34,15 +34,21 @@ pub async fn run_agent_required_engine(
     let f = serde_json::json!({
         "type": engine_id,
         "category": "agent_required",
-        "title": format!("{} requires an enrolled endpoint agent", engine_id),
+        "title": format!("{} waiting for an enrolled endpoint agent", engine_id),
         "severity": "info",
         "mitre_attack": "",
-        "description": "This detection runs on the host. Enrol the Weissman Endpoint Agent on this client and re-run the engine.",
+        "description": "This detection runs on the host. The job is parked as waiting_for_agent until the Weissman Endpoint Agent enrolls and reports evidence. No host finding is invented.",
         "target": target,
         "remediation": "Go to Dashboard → Agents → Generate token → run the install command on the affected host.",
         "agent_required": true,
+        "waiting_for_agent": true,
     });
-    EngineResult::ok(vec![f], format!("{}: requires endpoint agent", engine_id))
+    let mut r = EngineResult::waiting_for_agent(format!(
+        "{}: waiting for endpoint agent (no invented host findings)",
+        engine_id
+    ));
+    r.findings = vec![f];
+    r
 }
 
 /// Merge remote-surface findings with agent dispatch / guidance for hybrid engines.
@@ -128,34 +134,22 @@ async fn dispatch_to_agent(
     {
         Ok(pair) => pair,
         Err(e) => {
-            return EngineResult::ok(
-                vec![],
-                format!("agent task enqueue failed for {}: {}", engine, e),
-            );
+            return EngineResult::error(format!(
+                "agent task enqueue failed for {}: {}",
+                engine, e
+            ));
         }
     };
-    let f = serde_json::json!({
-        "type": engine,
-        "category": "agent_dispatched",
-        "title": if live_dispatched {
-            format!("{}: task dispatched to online agent", engine)
+    EngineResult::waiting_for_agent(format!(
+        "{}: task {} {} — waiting for host evidence (no invented host findings)",
+        engine,
+        task,
+        if live_dispatched {
+            "dispatched to online agent"
         } else {
-            format!("{}: task queued for next online agent", engine)
-        },
-        "severity": "info",
-        "mitre_attack": "",
-        "description": format!(
-            "Detection task {} routed to {} agent for client {}. Findings will stream to the dashboard as the agent reports them.",
-            task,
-            if live_dispatched { "live" } else { "next" },
-            client_id
-        ),
-        "target": target,
-        "task_id": task.to_string(),
-        "live_dispatched": live_dispatched,
-        "remediation": "View streaming findings under Dashboard → Findings, filtered by source = agent.",
-    });
-    EngineResult::ok(vec![f], format!("{}: task {} dispatched", engine, task))
+            "queued for next online agent"
+        }
+    ))
 }
 
 #[cfg(test)]

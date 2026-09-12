@@ -514,6 +514,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/poe-scan/run", post(api_poe_scan_run))
         .route("/api/jobs", get(api_async_jobs_list))
         .route("/api/jobs/:job_id", get(api_async_job_status))
+        .route(
+            "/api/jobs/:job_id/diagnostics",
+            get(api_async_job_diagnostics),
+        )
         .route("/api/poe-scan/status/:job_id", get(api_poe_scan_status))
         .route("/api/poe-scan/stream/:job_id", get(api_poe_scan_stream))
         .route(
@@ -669,6 +673,86 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/soc/hunts", get(api_soc_hunts))
         .route("/api/soc/iocs", get(api_soc_iocs))
         .route("/api/soc/kill-chains", get(api_soc_kill_chains))
+        .route(
+            "/api/campaigns",
+            get(api_campaigns_list).post(api_campaigns_create),
+        )
+        .route("/api/campaigns/profiles", get(api_campaigns_profiles))
+        .route("/api/campaigns/:id", get(api_campaigns_get))
+        .route("/api/campaigns/:id/start", post(api_campaigns_start))
+        .route("/api/campaigns/:id/pause", post(api_campaigns_pause))
+        .route("/api/campaigns/:id/plan", get(api_campaigns_plan))
+        .route("/api/campaigns/:id/steps", get(api_campaigns_steps))
+        .route("/api/campaigns/:id/events", get(api_campaigns_events))
+        .route(
+            "/api/campaigns/:id/steps/:step_id/proof",
+            post(api_campaigns_step_proof),
+        )
+        .route(
+            "/api/campaigns/:id/remediate",
+            post(api_campaigns_remediate),
+        )
+        .route("/api/discovery-lab/runs", get(api_discovery_lab_runs_list).post(api_discovery_lab_run_create))
+        .route("/api/discovery-lab/runs/:id", get(api_discovery_lab_run_get))
+        .route("/api/discovery-lab/candidates", get(api_discovery_lab_candidates_list))
+        .route("/api/discovery-lab/candidates/:id", get(api_discovery_lab_candidate_get).patch(api_discovery_lab_candidate_action))
+        .route(
+            "/api/discovery-lab/candidates/:id/disclosure",
+            post(api_discovery_lab_disclosure_create),
+        )
+        .route("/api/discovery-lab/disclosures", get(api_discovery_lab_disclosures_list))
+        .route(
+            "/api/discovery-lab/disclosures/:id",
+            get(api_discovery_lab_disclosure_get).patch(api_discovery_lab_disclosure_update),
+        )
+        .route(
+            "/api/discovery-lab/disclosures/:id/events",
+            get(api_discovery_lab_disclosure_events),
+        )
+        .route(
+            "/api/discovery-lab/disclosures/:id/export",
+            get(api_discovery_lab_disclosure_export),
+        )
+        .route(
+            "/api/honey-routing/:client_id/dashboard",
+            get(api_honey_routing_dashboard),
+        )
+        .route(
+            "/api/honey-routing/:client_id/sessions/:session_id",
+            get(api_honey_routing_session),
+        )
+        .route(
+            "/api/honey-routing/:client_id/sessions/:session_id/isolate-request",
+            post(api_honey_routing_isolate_request),
+        )
+        .route(
+            "/api/honey-routing/:client_id/sessions/:session_id/isolate-approve",
+            post(api_honey_routing_isolate_approve),
+        )
+        .route("/api/llm-ultra-guard/inspect", post(api_llm_ultra_guard_inspect))
+        .route("/api/llm-ultra-guard/status", get(api_llm_ultra_guard_status))
+        .route("/api/llm-ultra-guard/events", get(api_llm_ultra_guard_events))
+        .route("/api/llm-ultra-guard/rag-integrity", get(api_llm_ultra_guard_rag))
+        .route(
+            "/api/stealthy-persistence-evasion/catalog",
+            get(api_stealthy_persistence_catalog),
+        )
+        .route(
+            "/api/stealthy-persistence-evasion/status",
+            get(api_stealthy_persistence_status),
+        )
+        .route(
+            "/api/stealthy-persistence-evasion/fail-safe",
+            post(api_stealthy_persistence_fail_safe),
+        )
+        .route(
+            "/api/stealthy-persistence-evasion/auto-remediate",
+            post(api_stealthy_persistence_auto_remediate),
+        )
+        .route(
+            "/api/stealthy-persistence-evasion/plant-deception",
+            post(api_stealthy_persistence_plant_deception),
+        )
         .route("/api/soc/exploit-lab", get(api_soc_exploit_lab))
         .route("/api/soc/ai-patterns", get(api_soc_ai_patterns))
         .route(

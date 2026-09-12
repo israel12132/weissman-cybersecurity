@@ -635,9 +635,9 @@ fn validate_requires(
         match r {
             Requires::NonEmptyTarget => {
                 if ctx.target.is_empty() {
-                    return Err(RouteError::BadRequest(format!(
-                        "target required for {engine_label}"
-                    )));
+                    return Err(RouteError::BadRequest(
+                        crate::engine_target_contract::missing_target_detail(engine_label),
+                    ));
                 }
             }
             Requires::ClientId => {
@@ -998,6 +998,43 @@ pub async fn route_scan_job(
     }
     if let Ok(secrets) = load_tenant_scan_secrets(pool, tenant_id).await {
         hydrate_extras_from_tenant(&mut ctx.extras, &secrets);
+    }
+
+    let client_domains = if let Some(cid) = client_id {
+        match crate::db::begin_tenant_tx(pool, tenant_id).await {
+            Ok(mut tx) => {
+                let raw: Option<String> = sqlx::query_scalar(
+                    "SELECT COALESCE(domains, '') FROM clients WHERE id = $1 AND tenant_id = $2",
+                )
+                .bind(cid)
+                .bind(tenant_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .ok()
+                .flatten();
+                let _ = tx.commit().await;
+                crate::engine_target_contract::parse_client_domain_list(
+                    raw.as_deref().unwrap_or(""),
+                )
+            }
+            Err(_) => Vec::new(),
+        }
+    } else {
+        Vec::new()
+    };
+    match crate::engine_target_contract::resolve_enqueue_target(
+        engine,
+        &ctx.target,
+        &client_domains,
+    ) {
+        Ok(Some(bound)) => ctx.target = bound,
+        Ok(None) => ctx.target.clear(),
+        Err(detail) => {
+            let has_repo = ctx.repo_url.as_ref().is_some_and(|s| !s.is_empty());
+            if !has_repo {
+                return Err(RouteError::BadRequest(detail));
+            }
+        }
     }
 
     // ── BLOCKER #1: Strict scope validation ──────────────────────────────────

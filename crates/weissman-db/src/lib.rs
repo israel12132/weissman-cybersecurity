@@ -12,6 +12,9 @@ pub mod auth_rotation;
 pub mod env_bootstrap;
 pub mod job_queue;
 pub mod llm_usage;
+pub mod bulk_copy;
+pub mod pg_binary_copy;
+pub mod secret;
 pub mod no_tx_migrations;
 pub mod role_guard;
 
