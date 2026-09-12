@@ -21,6 +21,7 @@ import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../utils/apiFetch'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
+import { filterGraphNodes } from './attackPathsGraph'
 
 const NS = 'pages.attackPaths'
 const columnHelper = createColumnHelper()
@@ -198,16 +199,10 @@ export default function AttackPaths() {
     [load, t, toast],
   )
 
-  const flaggedNodes = useMemo(() => {
-    const q = nodeQuery.trim().toLowerCase()
-    return graphNodes.filter((n) => {
-      const label = String(n.label || n.name || n.graph_key || '')
-      if (q && !label.toLowerCase().includes(q) && !String(n.node_type || '').toLowerCase().includes(q)) {
-        return false
-      }
-      return true
-    })
-  }, [graphNodes, nodeQuery])
+  const flaggedNodes = useMemo(
+    () => filterGraphNodes(graphNodes, nodeQuery),
+    [graphNodes, nodeQuery],
+  )
 
   useEffect(() => {
     setSnapshot(null)

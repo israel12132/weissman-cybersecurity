@@ -562,7 +562,7 @@ pub async fn notify_heal_completed(
             delivered |= post_json_signed(&client, url, &payload).await;
         }
     }
-    if (!ok || verdict == "broke_app") {
+    if !ok || verdict == "broke_app" {
         if let Some(key) = resolve_pagerduty_key(&config) {
             let pd = json!({
                 "routing_key": key,
