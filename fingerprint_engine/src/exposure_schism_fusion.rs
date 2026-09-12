@@ -19,19 +19,24 @@
 //!   `probe_error`, not an empty fracture set.
 
 use crate::engine_dispatch::EngineRunContext;
-use crate::engine_probes::{empty_ok, extract_host, finding, tcp_open};
+use crate::engine_probes::{empty_ok, extract_host, finding, http_client, http_get};
 use crate::engine_result::EngineResult;
 use crate::first_mover_surface_delta::{self, in_authorized_scope};
 use futures::stream::{self, StreamExt};
 use serde_json::{json, Value};
 use std::net::IpAddr;
 use std::time::Duration;
+use tokio::net::TcpStream;
 
 pub const ENGINE_ID: &str = "exposure_schism_fusion";
 const MITRE: &str = "T1190";
 const MAX_HOSTS: usize = 4;
 const LIMINAL_TIMEOUT: Duration = Duration::from_secs(50);
-const KILL_CHAIN_TIMEOUT: Duration = Duration::from_secs(25);
+/// `kill_chain` does a base GET plus ~16 COMMON_PATHS plus robots.txt. 25s cannot
+/// cover that on the process 10s client; 90s is the honest budget for the opt-in crawl.
+const KILL_CHAIN_TIMEOUT: Duration = Duration::from_secs(90);
+const HTTP_ALIVE_TIMEOUT: Duration = Duration::from_millis(6_000);
+const TCP_CONNECT_TIMEOUT: Duration = Duration::from_millis(1_500);
 const HOST_CONCURRENCY: usize = 2;
 const LIMINAL_PATH_CONCURRENCY: usize = 2;
 const LIMINAL_PATHS: [&str; 2] = ["/", "/api"];
@@ -260,11 +265,54 @@ fn schism_summary_title(
         format!(
             "Exposure schism incomplete on {host_n} host(s) — {timeout_n} timed out, {error_n} probe error(s); not a clean bill"
         )
+    } else if timeout_n > 0 || error_n > 0 {
+        format!(
+            "Exposure schism on {host_n} host(s) — {schism_n} boundary fracture(s), {chain_n} kill-chain stage(s); {timeout_n} timed out, {error_n} probe error(s)"
+        )
     } else {
         format!(
             "Exposure schism on {host_n} host(s) — {schism_n} boundary fracture(s), {chain_n} kill-chain stage(s)"
         )
     }
+}
+
+fn outcome_flags(findings: &[Value]) -> (bool, bool) {
+    let mut timed_out = false;
+    let mut errored = false;
+    for f in findings {
+        match f.get("category").and_then(Value::as_str) {
+            Some("probe_timeout") => timed_out = true,
+            Some("probe_error") => errored = true,
+            _ => {}
+        }
+    }
+    (timed_out, errored)
+}
+
+/// `tcp_open` formats `{host}:{port}` which breaks IPv6 literals.
+fn tcp_socket_addr(host: &str, port: u16) -> String {
+    let h = host.trim().trim_matches(|c| c == '[' || c == ']');
+    if h.parse::<std::net::Ipv6Addr>().is_ok() {
+        format!("[{h}]:{port}")
+    } else {
+        format!("{h}:{port}")
+    }
+}
+
+async fn origin_port_open(host: &str, port: u16) -> bool {
+    let addr = tcp_socket_addr(host, port);
+    matches!(
+        tokio::time::timeout(TCP_CONNECT_TIMEOUT, TcpStream::connect(addr)).await,
+        Ok(Ok(_))
+    )
+}
+
+async fn http_alive(url: &str) -> bool {
+    let client = http_client().await;
+    matches!(
+        tokio::time::timeout(HTTP_ALIVE_TIMEOUT, http_get(&client, url)).await,
+        Ok(Some(_))
+    )
 }
 
 fn worst_severity(findings: &[Value]) -> &'static str {
@@ -490,9 +538,25 @@ async fn probe_host(
     deep_kill_chain: bool,
 ) -> HostOutcome {
     let inner = liminal_inner_ctx(&host.fqdn, &ctx);
-    let (https_open, http_open) = tokio::join!(tcp_open(&host.fqdn, 443), tcp_open(&host.fqdn, 80));
+    let (https_open, http_open) = tokio::join!(
+        origin_port_open(&host.fqdn, 443),
+        origin_port_open(&host.fqdn, 80)
+    );
     let Some(primary) = pick_origin_url(&host.fqdn, https_open, http_open) else {
         return origin_unreachable(&host.fqdn);
+    };
+
+    // TCP-open is not HTTP-alive. A filtered TLS stack must not be scored as 0 fractures.
+    let primary = if http_alive(&primary).await {
+        primary
+    } else if let Some(http_url) = http_fallback_url(&host.fqdn, &primary, http_open) {
+        if http_alive(&http_url).await {
+            http_url
+        } else {
+            return origin_probe_failed(&host.fqdn, false);
+        }
+    } else {
+        return origin_probe_failed(&host.fqdn, false);
     };
 
     let (used_url, liminal) = match run_liminal(&primary, &inner).await {
@@ -574,10 +638,11 @@ async fn probe_host(
         }
     }
 
+    let (timed_out, errored) = outcome_flags(&out);
     HostOutcome {
         findings: out,
-        timed_out: false,
-        errored: false,
+        timed_out,
+        errored,
     }
 }
 
@@ -869,6 +934,33 @@ mod tests {
         let live_schism = schism_summary_title(1, 3, 1, 0, 0);
         assert!(live_schism.contains("3 boundary fracture(s)"));
         assert!(!live_schism.contains("not a clean bill"));
+        let mixed = schism_summary_title(1, 3, 1, 1, 0);
+        assert!(mixed.contains("3 boundary fracture(s)"));
+        assert!(mixed.contains("1 timed out"));
+        assert!(!mixed.contains("not a clean bill"));
+    }
+
+    #[test]
+    fn deep_kill_chain_timeout_is_counted_on_the_host_outcome() {
+        let findings = vec![
+            json!({"category": "boundary_protocol_bypass", "severity": "critical"}),
+            json!({"category": "probe_timeout"}),
+        ];
+        let (timed_out, errored) = outcome_flags(&findings);
+        assert!(timed_out);
+        assert!(!errored);
+        let err_only = vec![json!({"category": "probe_error"})];
+        let (timed_out, errored) = outcome_flags(&err_only);
+        assert!(!timed_out);
+        assert!(errored);
+        assert!(KILL_CHAIN_TIMEOUT >= Duration::from_secs(90));
+    }
+
+    #[test]
+    fn ipv6_literals_use_bracketed_tcp_addrs() {
+        assert_eq!(tcp_socket_addr("2001:db8::1", 443), "[2001:db8::1]:443");
+        assert_eq!(tcp_socket_addr("[2001:db8::1]", 80), "[2001:db8::1]:80");
+        assert_eq!(tcp_socket_addr("shop.acme.test", 443), "shop.acme.test:443");
     }
 
     #[test]
@@ -907,6 +999,7 @@ mod tests {
         assert_eq!(inner.job_params["check_attack_paths"], false);
         assert_eq!(inner.job_params["check_posture_score"], false);
         assert_eq!(inner.job_params["check_fingerprint"], false);
+        assert_eq!(inner.job_params["timeout_ms"], json!(6_000));
     }
 
     #[test]
