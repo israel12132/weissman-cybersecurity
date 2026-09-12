@@ -201,6 +201,34 @@ fn engine_rows(ids: &[&str]) -> Vec<EngineKindRow> {
         .collect()
 }
 
+/// Structured Prisma Cloud honesty — AWS AssumeRole CSPM only.
+/// Azure/GCP onboarding flags are attack-engine dual-planes, never a Prisma-class CNAPP.
+fn prisma_cloud_honesty(s: &LiveSignals) -> Value {
+    let verdict = verdict_for("prisma_cloud", s);
+    let scope = if s.aws_role_configured {
+        "aws_assumerole_only"
+    } else {
+        "no_aws_assumerole"
+    };
+    json!({
+        "sku_id": "prisma_cloud",
+        "cspm_plane": "aws_assumerole",
+        "cspm_engine": "cloud_posture",
+        "cspm_refuses_without_role": true,
+        "aws_role_configured": s.aws_role_configured,
+        "azure_configured": s.azure_configured,
+        "gcp_project_configured": s.gcp_project_configured,
+        "azure_is_cnapp_connector": false,
+        "gcp_is_cnapp_connector": false,
+        "continuous_multi_cloud_cnapp": false,
+        "cnapp_continuous_is_fusion_tag": true,
+        "cloud_iam_escalation_is_aws_attack_alias": true,
+        "replacement_claim": false,
+        "scope": scope,
+        "verdict": verdict,
+    })
+}
+
 pub fn verdict_for(sku_id: &str, s: &LiveSignals) -> &'static str {
     match sku_id {
         "prisma_access" | "wildfire" => "non_goal",
@@ -310,6 +338,7 @@ pub fn displacement_json(s: &LiveSignals) -> Value {
             },
         },
         "code_absences": CODE_ABSENCES,
+        "prisma_cloud_honesty": prisma_cloud_honesty(s),
         "unique_moat": {
             "engine_id": "exposure_schism_fusion",
             "why_panw_cannot_copy": "Xpanse inventories. Prisma postures accounts. Cortex detects endpoints. \
@@ -510,6 +539,40 @@ mod tests {
         assert_eq!(verdict_for("prisma_cloud", &s), "unproven_connector");
         s.aws_role_configured = true;
         assert_eq!(verdict_for("prisma_cloud", &s), "live_partial");
+    }
+
+    #[test]
+    fn prisma_cloud_honesty_is_assumerole_only_even_when_azure_gcp_onboarded() {
+        let mut s = LiveSignals {
+            client_id: Some(4),
+            client_found: true,
+            azure_configured: true,
+            gcp_project_configured: true,
+            ..LiveSignals::default()
+        };
+        let body = displacement_json(&s);
+        let h = &body["prisma_cloud_honesty"];
+        assert_eq!(h["sku_id"], "prisma_cloud");
+        assert_eq!(h["cspm_plane"], "aws_assumerole");
+        assert_eq!(h["cspm_engine"], "cloud_posture");
+        assert_eq!(h["cspm_refuses_without_role"], true);
+        assert_eq!(h["scope"], "no_aws_assumerole");
+        assert_eq!(h["verdict"], "unproven_connector");
+        assert_eq!(h["azure_configured"], true);
+        assert_eq!(h["gcp_project_configured"], true);
+        assert_eq!(h["azure_is_cnapp_connector"], false);
+        assert_eq!(h["gcp_is_cnapp_connector"], false);
+        assert_eq!(h["continuous_multi_cloud_cnapp"], false);
+        assert_eq!(h["replacement_claim"], false);
+        assert_eq!(h["cnapp_continuous_is_fusion_tag"], true);
+
+        s.aws_role_configured = true;
+        let h = &displacement_json(&s)["prisma_cloud_honesty"];
+        assert_eq!(h["scope"], "aws_assumerole_only");
+        assert_eq!(h["verdict"], "live_partial");
+        assert_eq!(h["continuous_multi_cloud_cnapp"], false);
+        assert_eq!(h["replacement_claim"], false);
+        assert_eq!(h["azure_is_cnapp_connector"], false);
     }
 
     #[test]

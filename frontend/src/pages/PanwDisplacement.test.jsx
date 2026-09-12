@@ -82,7 +82,7 @@ import PanwDisplacement from './PanwDisplacement.jsx'
 const PAYLOAD = {
   category_truth: 'Weissman is live-evidence assessment',
   unique_moat: { engine_id: 'exposure_schism_fusion', why_panw_cannot_copy: 'Xpanse inventories' },
-  code_absences: ['scim', 'chronicle_siem_adapter'],
+  code_absences: ['scim', 'chronicle_siem_adapter', 'continuous_multi_cloud_cnapp_connector'],
   counts: { live_win: 1, live_partial: 1, live_gap: 1, unproven: 1 },
   live_connectors: {
     aws_role_configured: true,
@@ -94,6 +94,20 @@ const PAYLOAD = {
     soar_providers: ['jira'],
     surface: { snapshot_count: 2, baseline_only: false, added: 1 },
     first_mover_nerve: { certstream_connected: true, certstream_enabled: true, oast_configured: true },
+  },
+  prisma_cloud_honesty: {
+    sku_id: 'prisma_cloud',
+    cspm_plane: 'aws_assumerole',
+    cspm_engine: 'cloud_posture',
+    aws_role_configured: true,
+    azure_configured: false,
+    gcp_project_configured: false,
+    azure_is_cnapp_connector: false,
+    gcp_is_cnapp_connector: false,
+    continuous_multi_cloud_cnapp: false,
+    replacement_claim: false,
+    scope: 'aws_assumerole_only',
+    verdict: 'live_partial',
   },
   skus: [
     { id: 'prisma_cloud', panw_sku: 'Prisma Cloud', role: 'overlap', verdict: 'live_partial', weissman_engines: [{ id: 'cloud_posture' }], honest_gap: 'AWS only' },
@@ -125,6 +139,13 @@ describe('PanwDisplacement', () => {
     expect(screen.getByText('scim')).toBeTruthy()
     expect(screen.getByText('exposure_schism_fusion')).toBeTruthy()
     expect(screen.getByText('Weissman is live-evidence assessment')).toBeTruthy()
+    expect(screen.getByTestId('prisma-cloud-honesty')).toBeTruthy()
+    expect(screen.getByTestId('prisma-cloud-scope').textContent).toContain('prisma_scope_aws_assumerole_only')
+    expect(screen.getByTestId('prisma-cloud-verdict').textContent).toContain('verdict_live_partial')
+    expect(screen.getByTestId('prisma-plane-aws').getAttribute('data-cnapp')).toBe('yes')
+    expect(screen.getByTestId('prisma-plane-aws').getAttribute('data-live')).toBe('on')
+    expect(screen.getByTestId('prisma-plane-azure').getAttribute('data-cnapp')).toBe('no')
+    expect(screen.getByTestId('prisma-cloud-not-replacement').textContent).toContain('prisma_not_replacement')
   })
 
   it('filters SKUs by search', async () => {
@@ -141,5 +162,49 @@ describe('PanwDisplacement', () => {
     })
     expect(screen.getByTestId('sku-row-prisma_access')).toBeTruthy()
     expect(screen.getByText('Prisma Access / NGFW')).toBeTruthy()
+  })
+
+  it('does not treat Azure/GCP onboarding as Prisma-class CNAPP', async () => {
+    apiFetch.mockResolvedValue({
+      ...PAYLOAD,
+      live_connectors: {
+        ...PAYLOAD.live_connectors,
+        aws_role_configured: false,
+        azure_configured: true,
+        gcp_project_configured: true,
+      },
+      prisma_cloud_honesty: {
+        ...PAYLOAD.prisma_cloud_honesty,
+        aws_role_configured: false,
+        azure_configured: true,
+        gcp_project_configured: true,
+        azure_is_cnapp_connector: false,
+        gcp_is_cnapp_connector: false,
+        continuous_multi_cloud_cnapp: false,
+        replacement_claim: false,
+        scope: 'no_aws_assumerole',
+        verdict: 'unproven_connector',
+      },
+      skus: [
+        { id: 'prisma_cloud', panw_sku: 'Prisma Cloud', role: 'overlap', verdict: 'unproven_connector', weissman_engines: [{ id: 'cloud_posture' }], honest_gap: 'AWS only' },
+        { id: 'prisma_access', panw_sku: 'Prisma Access / NGFW', role: 'non_goal', verdict: 'non_goal', weissman_engines: [], honest_gap: 'not a firewall' },
+      ],
+    })
+    render(
+      <MemoryRouter>
+        <PanwDisplacement />
+      </MemoryRouter>,
+    )
+    await screen.findByTestId('prisma-cloud-honesty')
+    expect(screen.getByTestId('prisma-cloud-scope').textContent).toContain('prisma_scope_no_aws_assumerole')
+    expect(screen.getByTestId('prisma-cloud-verdict').textContent).toContain('verdict_unproven_connector')
+    expect(screen.getByTestId('prisma-plane-aws').getAttribute('data-live')).toBe('off')
+    expect(screen.getByTestId('prisma-plane-azure').getAttribute('data-live')).toBe('on')
+    expect(screen.getByTestId('prisma-plane-azure').getAttribute('data-cnapp')).toBe('no')
+    expect(screen.getByTestId('prisma-plane-gcp').getAttribute('data-live')).toBe('on')
+    expect(screen.getByTestId('prisma-plane-gcp').getAttribute('data-cnapp')).toBe('no')
+    expect(screen.getByText('unproven_connector')).toBeTruthy()
+    expect(screen.queryByText('live_win')).toBeNull()
+    expect(screen.getByTestId('prisma-cloud-not-multicloud').textContent).toContain('prisma_azure_gcp_not_cnapp')
   })
 })

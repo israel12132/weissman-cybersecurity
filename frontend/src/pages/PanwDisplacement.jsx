@@ -55,6 +55,120 @@ function skuCsv(rows) {
   downloadCsv(data, header, 'weissman-panw-displacement')
 }
 
+/** Live Prisma Cloud honesty from the displacement payload — never invent a CNAPP win. */
+function prismaCloudHonesty(report) {
+  const live = report?.prisma_cloud_honesty
+  const c = report?.live_connectors || {}
+  const aws = typeof live?.aws_role_configured === 'boolean' ? live.aws_role_configured : !!c.aws_role_configured
+  const azure = typeof live?.azure_configured === 'boolean' ? live.azure_configured : !!c.azure_configured
+  const gcp = typeof live?.gcp_project_configured === 'boolean' ? live.gcp_project_configured : !!c.gcp_project_configured
+  const skuVerdict = (report?.skus || []).find((s) => s.id === 'prisma_cloud')?.verdict
+  return {
+    aws_role_configured: aws,
+    azure_configured: azure,
+    gcp_project_configured: gcp,
+    azure_is_cnapp_connector: false,
+    gcp_is_cnapp_connector: false,
+    continuous_multi_cloud_cnapp: false,
+    replacement_claim: false,
+    cspm_plane: live?.cspm_plane || 'aws_assumerole',
+    cspm_engine: live?.cspm_engine || 'cloud_posture',
+    scope: live?.scope || (aws ? 'aws_assumerole_only' : 'no_aws_assumerole'),
+    verdict: live?.verdict || skuVerdict || '',
+  }
+}
+
+function PrismaCloudHonestyCard({ honesty, t }) {
+  const aws = !!honesty.aws_role_configured
+  const azure = !!honesty.azure_configured
+  const gcp = !!honesty.gcp_project_configured
+  const planes = [
+    {
+      id: 'aws',
+      live: aws,
+      cnapp: true,
+      label: t(`${NS}.prisma_plane_aws`),
+      hint: t(`${NS}.prisma_plane_aws_hint`),
+      status: aws ? t(`${NS}.prisma_cnapp_live`) : t(`${NS}.prisma_cnapp_off`),
+    },
+    {
+      id: 'azure',
+      live: azure,
+      cnapp: false,
+      label: t(`${NS}.prisma_plane_azure`),
+      hint: t(`${NS}.prisma_plane_azure_hint`),
+      status: azure ? t(`${NS}.prisma_attack_on`) : t(`${NS}.prisma_attack_off`),
+    },
+    {
+      id: 'gcp',
+      live: gcp,
+      cnapp: false,
+      label: t(`${NS}.prisma_plane_gcp`),
+      hint: t(`${NS}.prisma_plane_gcp_hint`),
+      status: gcp ? t(`${NS}.prisma_attack_on`) : t(`${NS}.prisma_attack_off`),
+    },
+  ]
+
+  return (
+    <section
+      data-testid="prisma-cloud-honesty"
+      className="relative overflow-hidden rounded-2xl border border-amber-500/35 p-5"
+      style={{
+        background: 'linear-gradient(145deg, rgba(245,158,11,0.10) 0%, rgba(0,0,0,0.38) 55%, rgba(0,0,0,0.55) 100%)',
+        boxShadow: 'inset 0 1px 0 rgba(245,158,11,0.18), 0 4px 24px rgba(0,0,0,0.25)',
+      }}
+    >
+      <div
+        className="absolute inset-x-0 top-0 h-px opacity-70"
+        style={{ background: 'linear-gradient(90deg, transparent, rgba(251,191,36,0.7), transparent)' }}
+        aria-hidden="true"
+      />
+      <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t(`${NS}.prisma_honesty_title`)}</h2>
+        <div className="flex items-center gap-2 flex-wrap">
+          {honesty.verdict ? (
+            <span data-testid="prisma-cloud-verdict" className="font-mono text-[11px] text-cyan-200/90">
+              {t(`${NS}.verdict_${honesty.verdict}`, honesty.verdict)}
+            </span>
+          ) : null}
+          <span
+            data-testid="prisma-cloud-scope"
+            className="font-mono text-[11px] font-semibold px-2 py-1 rounded-md border border-amber-400/40 bg-amber-500/10 text-amber-100"
+          >
+            {t(`${NS}.prisma_scope_${honesty.scope}`, honesty.scope)}
+          </span>
+        </div>
+      </div>
+      <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed max-w-4xl mb-3">
+        {t(`${NS}.prisma_honesty_body`)}
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {planes.map((p) => (
+          <div
+            key={p.id}
+            data-testid={`prisma-plane-${p.id}`}
+            data-cnapp={p.cnapp ? 'yes' : 'no'}
+            data-live={p.live ? 'on' : 'off'}
+            className="rounded-xl border border-[var(--border-default)] bg-black/25 px-3 py-3"
+          >
+            <div className="text-[10px] font-mono uppercase tracking-[0.12em] text-amber-200/80">{p.label}</div>
+            <div className={`text-[12px] font-semibold mt-1 ${p.live ? 'text-emerald-300' : 'text-slate-400'}`}>
+              {p.status}
+            </div>
+            <div className="text-[11px] text-[var(--text-tertiary)] mt-1 leading-snug">{p.hint}</div>
+          </div>
+        ))}
+      </div>
+      <p data-testid="prisma-cloud-not-multicloud" className="text-[12px] text-amber-100/90 mt-3 leading-relaxed">
+        {t(`${NS}.prisma_azure_gcp_not_cnapp`)}
+      </p>
+      <p data-testid="prisma-cloud-not-replacement" className="text-[12px] font-mono text-cyan-200/80 mt-1">
+        {t(`${NS}.prisma_not_replacement`)}
+      </p>
+    </section>
+  )
+}
+
 export default function PanwDisplacement() {
   const { t } = useTranslation()
   const { clients, selectedClientId, setSelectedClientId } = useClient()
@@ -290,6 +404,8 @@ export default function PanwDisplacement() {
               <span>added {surface.added ?? 0}</span>
               <span>soar {(c.soar_providers || []).join(',') || 'none'}</span>
             </div>
+
+            <PrismaCloudHonestyCard honesty={prismaCloudHonesty(report)} t={t} />
 
             <div>
               <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-2">{t(`${NS}.moat_title`)}</h2>
