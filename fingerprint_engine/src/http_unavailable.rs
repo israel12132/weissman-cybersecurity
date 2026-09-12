@@ -220,6 +220,98 @@ pub fn evidence_download_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// `GET /api/clients/:id/attack-chain`
+pub fn attack_chain_unavailable_json(detail: &str) -> Value {
+    list_envelope("steps", detail)
+}
+
+/// `GET /api/clients/:id/attack-surface` graph
+pub fn asm_graph_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "nodes": [],
+        "edges": [],
+        "run_id": Value::Null,
+        "vuln_findings": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/first-mover/nerve` when OAST hit aggregates cannot be read
+pub fn first_mover_nerve_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "detail": detail,
+        "oast": {
+            "configured": Value::Null,
+            "domain": Value::Null,
+            "last_callback_at": Value::Null,
+            "recent_callback_count": Value::Null,
+        },
+    })
+}
+
+/// `GET /api/clients/:id/semantic/state-machine`
+pub fn semantic_logs_unavailable_json(detail: &str) -> Value {
+    list_envelope("logs", detail)
+}
+
+/// `GET /api/clients/:id/semantic/reasoning`
+pub fn semantic_reasoning_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "reasoning_text": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/system/configs`
+pub fn system_configs_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "configs": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/deception`
+pub fn deception_assets_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "assets": [],
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/first-seen-hits` — never advertise zero pre-NVD counts on store-down
+pub fn first_seen_hits_unavailable_json(client_id: i64, detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "client_id": client_id,
+        "hits": [],
+        "first_seen_count": Value::Null,
+        "listed_count": Value::Null,
+        "skipped_count": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `POST /api/system/configs` when the store cannot take writes
+pub fn system_configs_write_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "updated": Value::Null,
+        "detail": detail,
+    })
+}
+
 /// `GET /api/clients/:id/cicd-findings` and `GET /api/clients/:id/poe-findings`
 pub fn findings_unavailable_json(detail: &str) -> Value {
     list_envelope("findings", detail)
@@ -445,6 +537,71 @@ mod tests {
     #[test]
     fn findings_store_down_is_never_ok_empty_success() {
         never_ok_empty_success(&findings_unavailable_json("store down"), "findings");
+    }
+
+    #[test]
+    fn attack_chain_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&attack_chain_unavailable_json("store down"), "steps");
+    }
+
+    #[test]
+    fn asm_graph_store_down_is_never_empty_surface_success() {
+        let v = asm_graph_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["nodes"], json!([]));
+        assert_ne!(v["message"], json!("No ASM graph yet."));
+    }
+
+    #[test]
+    fn first_mover_nerve_store_down_is_never_zero_callback_success() {
+        let v = first_mover_nerve_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["oast"]["recent_callback_count"].is_null());
+        assert_ne!(v["oast"]["recent_callback_count"], json!(0));
+    }
+
+    #[test]
+    fn semantic_logs_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&semantic_logs_unavailable_json("store down"), "logs");
+    }
+
+    #[test]
+    fn semantic_reasoning_store_down_is_never_empty_text_success() {
+        let v = semantic_reasoning_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert!(v["reasoning_text"].is_null());
+    }
+
+    #[test]
+    fn system_configs_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&system_configs_unavailable_json("store down"), "configs");
+    }
+
+    #[test]
+    fn deception_assets_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&deception_assets_unavailable_json("store down"), "assets");
+    }
+
+    #[test]
+    fn first_seen_hits_store_down_is_never_zero_pre_nvd_success() {
+        let v = first_seen_hits_unavailable_json(3, "store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["hits"], json!([]));
+        assert!(v["first_seen_count"].is_null());
+        assert_ne!(v["first_seen_count"], json!(0));
+        assert!(v["listed_count"].is_null());
+    }
+
+    #[test]
+    fn system_configs_write_store_down_is_never_updated_zero_success() {
+        let v = system_configs_write_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["updated"].is_null());
+        assert_ne!(v["updated"], json!(0));
     }
 
     #[test]

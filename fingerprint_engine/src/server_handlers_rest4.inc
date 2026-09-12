@@ -610,7 +610,7 @@ async fn api_client_cicd_findings(
         r#"SELECT id, finding_id, title, severity, source, COALESCE(description,''), COALESCE(poc_exploit,'')
            FROM vulnerabilities WHERE client_id = $1
            AND (lower(source) LIKE '%cicd%' OR lower(source) LIKE '%pipeline%')
-           ORDER BY discovered_at DESC"#,
+           ORDER BY discovered_at DESC LIMIT 200"#,
     )
     .bind(id)
     .fetch_all(&mut *tx)
@@ -940,7 +940,7 @@ async fn api_client_poe_findings(
             .into_response();
     };
     let rows = match sqlx::query(
-        "SELECT id, finding_id, title, severity, description, poc_exploit, discovered_at FROM vulnerabilities WHERE client_id = $1 AND source = 'poe_synthesis' ORDER BY discovered_at DESC",
+        "SELECT id, finding_id, title, severity, description, poc_exploit, discovered_at FROM vulnerabilities WHERE client_id = $1 AND source = 'poe_synthesis' ORDER BY discovered_at DESC LIMIT 200",
     )
     .bind(id)
     .fetch_all(&mut *tx)
@@ -981,23 +981,50 @@ async fn api_client_attack_chain(
     Path(id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"steps": []}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::attack_chain_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let max_run: Option<i64> = sqlx::query_scalar("SELECT MAX(run_id) FROM attack_chain WHERE client_id = $1")
+    let max_run: Option<i64> = match sqlx::query_scalar("SELECT MAX(run_id) FROM attack_chain WHERE client_id = $1")
         .bind(id)
-        .fetch_optional(&mut *tx)
+        .fetch_one(&mut *tx)
         .await
-        .ok()
-        .flatten();
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::attack_chain_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let steps: Vec<Value> = if let Some(rid) = max_run {
-        let rows = sqlx::query(
-            "SELECT step_order, step_label, finding_ref, payload_or_action FROM attack_chain WHERE client_id = $1 AND run_id = $2 ORDER BY step_order",
+        let rows = match sqlx::query(
+            "SELECT step_order, step_label, finding_ref, payload_or_action FROM attack_chain WHERE client_id = $1 AND run_id = $2 ORDER BY step_order LIMIT 200",
         )
         .bind(id)
         .bind(rid)
         .fetch_all(&mut *tx)
         .await
-        .unwrap_or_default();
+        {
+            Ok(r) => r,
+            Err(e) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::attack_chain_unavailable_json(
+                        scrub_internal_error(&e),
+                    )),
+                )
+                    .into_response();
+            }
+        };
         rows.into_iter()
             .map(|r| {
                 json!({
@@ -1955,9 +1982,15 @@ async fn api_heal_stats(
     Path(id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_stats_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let agg = sqlx::query(
+    let agg = match sqlx::query(
         r#"SELECT
              count(*)::bigint AS total,
              count(*) FILTER (WHERE verdict = 'fixed')::bigint AS fixed,
@@ -1972,15 +2005,36 @@ async fn api_heal_stats(
     .bind(id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let channels = sqlx::query(
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_stats_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    let channels = match sqlx::query(
         "SELECT COALESCE(channel,'unknown') AS channel, count(*)::bigint AS n FROM heal_requests WHERE client_id = $1 GROUP BY 1 ORDER BY 2 DESC",
     )
     .bind(id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::heal_stats_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
 
     let (total, fixed) = agg
@@ -2395,15 +2449,32 @@ async fn api_deception_list(
     Path(id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!([]))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::deception_assets_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
-        "SELECT id, asset_type, token_value, deployment_location, cloud_injection_uri, COALESCE(canary_access_key_id,'') AS canary_access_key_id, COALESCE(oast_canary_hook,'') AS oast_canary_hook, status, created_at FROM deception_assets WHERE client_id = $1 ORDER BY id DESC",
+    let rows = match sqlx::query(
+        "SELECT id, asset_type, token_value, deployment_location, cloud_injection_uri, COALESCE(canary_access_key_id,'') AS canary_access_key_id, COALESCE(oast_canary_hook,'') AS oast_canary_hook, status, created_at FROM deception_assets WHERE client_id = $1 ORDER BY id DESC LIMIT 200",
     )
     .bind(id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::deception_assets_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let out: Vec<Value> = rows
         .into_iter()

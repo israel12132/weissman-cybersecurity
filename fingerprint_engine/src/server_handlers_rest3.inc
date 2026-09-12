@@ -7,14 +7,30 @@ async fn api_client_attack_surface_graph(
     Path(id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error":"DB"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::asm_graph_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let run_id: Option<i64> = sqlx::query_scalar("SELECT run_id FROM asm_graph_nodes WHERE client_id = $1 ORDER BY run_id DESC LIMIT 1")
+    let run_id: Option<i64> = match sqlx::query_scalar("SELECT run_id FROM asm_graph_nodes WHERE client_id = $1 ORDER BY run_id DESC LIMIT 1")
         .bind(id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::asm_graph_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let Some(run_id) = run_id else {
         let _ = tx.commit().await;
         return (StatusCode::OK, Json(json!({ "nodes": [], "edges": [], "run_id": null, "message": "No ASM graph yet." }))).into_response();
@@ -30,7 +46,13 @@ async fn api_client_attack_surface_graph(
         Ok(r) => r,
         Err(e) => {
             tracing::warn!(target: "asm_graph", client_id = id, error = %e, "asm graph nodes read failed");
-            return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"nodes": [], "edges": [], "run_id": run_id, "partial": true, "message": "graph data temporarily unavailable"}))).into_response();
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::asm_graph_unavailable_json(
+                    "graph data temporarily unavailable",
+                )),
+            )
+                .into_response();
         }
     };
     let edges_rows = match sqlx::query("SELECT from_id, to_id, edge_type FROM asm_graph_edges WHERE run_id = $1 AND client_id = $2 ORDER BY id")
@@ -42,14 +64,31 @@ async fn api_client_attack_surface_graph(
         Ok(r) => r,
         Err(e) => {
             tracing::warn!(target: "asm_graph", client_id = id, error = %e, "asm graph edges read failed");
-            return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"nodes": [], "edges": [], "run_id": run_id, "partial": true, "message": "graph data temporarily unavailable"}))).into_response();
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::asm_graph_unavailable_json(
+                    "graph data temporarily unavailable",
+                )),
+            )
+                .into_response();
         }
     };
-    let vuln_rows = sqlx::query("SELECT finding_id, title, severity FROM vulnerabilities WHERE client_id = $1 AND source = 'semantic_ai_fuzz' ORDER BY id DESC LIMIT 50")
+    let vuln_rows = match sqlx::query("SELECT finding_id, title, severity FROM vulnerabilities WHERE client_id = $1 AND source = 'semantic_ai_fuzz' ORDER BY id DESC LIMIT 50")
         .bind(id)
         .fetch_all(&mut *tx)
         .await
-        .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::asm_graph_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let mut nodes: Vec<Value> = Vec::new();
     for r in nodes_rows {
@@ -118,28 +157,43 @@ async fn api_first_mover_nerve(
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
     let oast_domain = crate::fuzz_oob::oast_hook_domain().unwrap_or_default();
-    let mut last_callback_at: Option<String> = None;
-    let mut recent_callback_count: i64 = 0;
-    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-        if let Ok(row) = sqlx::query(
-            r#"SELECT MAX(h.created_at) AS last_at, COUNT(*)::bigint AS n
-               FROM oast_interaction_hits h
-               INNER JOIN oast_probe_tokens p
-                       ON p.token = h.interaction_token AND p.tenant_id = $1"#,
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::first_mover_nerve_unavailable_json(
+                "database unavailable",
+            )),
         )
-        .bind(auth.tenant_id)
-        .fetch_one(&mut *tx)
-        .await
-        {
-            recent_callback_count = row.try_get("n").unwrap_or(0);
-            last_callback_at = row
-                .try_get::<Option<chrono::DateTime<chrono::Utc>>, _>("last_at")
-                .ok()
-                .flatten()
-                .map(|d| d.to_rfc3339());
+            .into_response();
+    };
+    let row = match sqlx::query(
+        r#"SELECT MAX(h.created_at) AS last_at, COUNT(*)::bigint AS n
+           FROM oast_interaction_hits h
+           INNER JOIN oast_probe_tokens p
+                   ON p.token = h.interaction_token AND p.tenant_id = $1"#,
+    )
+    .bind(auth.tenant_id)
+    .fetch_one(&mut *tx)
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::first_mover_nerve_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
         }
-        let _ = tx.commit().await;
-    }
+    };
+    let recent_callback_count: i64 = row.try_get("n").unwrap_or(0);
+    let last_callback_at = row
+        .try_get::<Option<chrono::DateTime<chrono::Utc>>, _>("last_at")
+        .ok()
+        .flatten()
+        .map(|d| d.to_rfc3339());
+    let _ = tx.commit().await;
     let body = json!({
         "certstream": crate::certstream_watcher::watcher_status_json(),
         "oast": {
@@ -175,15 +229,10 @@ async fn api_client_first_seen_hits(
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
         Err(e) => (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({
-                "ok": false,
-                "client_id": id,
-                "hits": [],
-                "first_seen_count": 0,
-                "listed_count": 0,
-                "unavailable": true,
-                "detail": scrub_internal_error(&e),
-            })),
+            Json(crate::http_unavailable::first_seen_hits_unavailable_json(
+                id,
+                scrub_internal_error(&e),
+            )),
         )
             .into_response(),
     }
@@ -195,13 +244,30 @@ async fn api_client_semantic_state_machine(
     Path(id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error":"DB"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::semantic_logs_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query("SELECT id, log_text, created_at FROM semantic_fuzz_log WHERE client_id = $1 ORDER BY id DESC LIMIT 200")
+    let rows = match sqlx::query("SELECT id, log_text, created_at FROM semantic_fuzz_log WHERE client_id = $1 ORDER BY id DESC LIMIT 200")
         .bind(id)
         .fetch_all(&mut *tx)
         .await
-        .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::semantic_logs_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let logs: Vec<Value> = rows
         .into_iter()
@@ -222,13 +288,30 @@ async fn api_client_semantic_reasoning(
     Path(id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error":"DB"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::semantic_reasoning_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query("SELECT log_text FROM semantic_fuzz_log WHERE client_id = $1 ORDER BY id DESC LIMIT 30")
+    let rows = match sqlx::query("SELECT log_text FROM semantic_fuzz_log WHERE client_id = $1 ORDER BY id DESC LIMIT 30")
         .bind(id)
         .fetch_all(&mut *tx)
         .await
-        .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::semantic_reasoning_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let joined: String = rows
         .into_iter()
@@ -263,12 +346,29 @@ async fn api_system_configs_get(State(state): State<Arc<AppState>>, Extension(au
         value.to_string()
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!([]))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::system_configs_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query("SELECT key, value, description FROM system_configs ORDER BY key")
+    let rows = match sqlx::query("SELECT key, value, description FROM system_configs ORDER BY key")
         .fetch_all(&mut *tx)
         .await
-        .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::system_configs_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let _ = tx.commit().await;
     let out: Vec<Value> = rows
         .into_iter()
@@ -315,7 +415,13 @@ async fn api_system_configs_post(
         }
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"updated":0}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::system_configs_write_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     let mut updated = 0u32;
     for (key, value) in pairs {
