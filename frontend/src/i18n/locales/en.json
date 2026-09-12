@@ -3771,6 +3771,7 @@
       "never": "Never",
       "refresh": "Refresh",
       "load_failed": "Failed to load baseline data",
+      "unavailable": "Baseline APIs unavailable — empty drift is not confirmed.",
       "evidence_notice": "Drift scores and anomalies are computed from live agent_metric_baselines and agent_anomalies in your tenant database — not synthetic charts.",
       "drift_over_time": "Drift Over Time",
       "anomaly_volume": "Anomaly Volume",
@@ -6531,7 +6532,8 @@
         "build_request_failed": "Build request failed",
         "loading_graph": "Loading graph…",
         "no_graph_data": "No graph data. Run scans (ASM, findings, identity contexts) then click Build.",
-        "build_graph": "Build graph"
+        "build_graph": "Build graph",
+        "unavailable": "Risk graph API unavailable — empty is not confirmed."
       },
       "autoHeal": {
         "selectClient": "Select a client to use Auto-Heal.",

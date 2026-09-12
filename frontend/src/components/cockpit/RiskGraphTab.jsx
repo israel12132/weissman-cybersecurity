@@ -78,25 +78,25 @@ export default function RiskGraphTab() {
     if (!selectedClientId) {
       setNodes([])
       setEdges([])
+      setError(null)
       return
     }
     setLoading(true)
     setError(null)
     try {
       const d = await apiFetch(`/api/clients/${selectedClientId}/risk-graph`)
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || t('components.cockpitTabs.riskGraph.unavailable'))
+      }
       const { nodes: n, edges: e } = layoutFromApi(d.nodes || [], d.edges || [])
       setNodes(n)
       setEdges(e)
     } catch (err) {
-      setError(
-        err?.status
-          ? t('components.cockpitTabs.riskGraph.load_failed')
-          : t('components.cockpitTabs.riskGraph.network_error'),
-      )
+      setError(err?.message || t('components.cockpitTabs.riskGraph.unavailable'))
     } finally {
       setLoading(false)
     }
-  }, [selectedClientId, setNodes, setEdges, t])
+  }, [selectedClientId, setNodes, setEdges])
 
   useEffect(() => {
     fetchGraph()
@@ -152,15 +152,23 @@ export default function RiskGraphTab() {
         </Button>
       </div>
       {error && (
-        <div className="flex items-center gap-2 mb-4 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+        <div
+          className="flex items-center gap-2 mb-4 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
+          data-testid="risk-graph-unavailable"
+          role="alert"
+        >
           <AlertCircle className="w-4 h-4 shrink-0" />
-          {error}
+          {t('components.cockpitTabs.riskGraph.unavailable')}
         </div>
       )}
       <div className="flex-1 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 overflow-hidden min-h-[400px]">
         {loading ? (
           <div className="flex items-center justify-center h-full text-white/50">
             {t('components.cockpitTabs.riskGraph.loading_graph')}
+          </div>
+        ) : error && nodes.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-red-300/80 text-sm px-6 text-center">
+            {t('components.cockpitTabs.riskGraph.unavailable')}
           </div>
         ) : nodes.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-white/50 gap-2">

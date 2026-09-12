@@ -3771,6 +3771,7 @@
       "never": "אף פעם",
       "refresh": "רענן",
       "load_failed": "טעינת נתוני baseline נכשלה",
+      "unavailable": "APIs של baseline אינם זמינים — drift ריק אינו מאושר.",
       "evidence_notice": "ציוני drift וחריגות מחושבים מ-agent_metric_baselines ו-agent_anomalies חיים במסד הטננט — לא גרפים סינתטיים.",
       "drift_over_time": "Drift לאורך זמן",
       "anomaly_volume": "נפח חריגות",
@@ -6531,7 +6532,8 @@
         "build_request_failed": "בקשת הבנייה נכשלה",
         "loading_graph": "טוען גרף…",
         "no_graph_data": "אין נתוני גרף. הפעל סריקות (ASM, ממצאים, הקשרי זהות) ואז לחץ בנה.",
-        "build_graph": "בנה גרף"
+        "build_graph": "בנה גרף",
+        "unavailable": "API גרף הסיכון אינו זמין — ריק אינו מאושר."
       },
       "autoHeal": {
         "selectClient": "בחר לקוח לשימוש בריפוי אוטומטי.",
