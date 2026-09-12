@@ -220,6 +220,29 @@ pub fn evidence_download_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// `GET /api/clients/:id/cicd-findings` and `GET /api/clients/:id/poe-findings`
+pub fn findings_unavailable_json(detail: &str) -> Value {
+    list_envelope("findings", detail)
+}
+
+/// `GET /api/clients/:id/vulnerabilities/:id/sealed-poc`
+pub fn sealed_poc_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "detail": detail,
+    })
+}
+
+/// `POST /api/sovereign-defense/:id/liquid-matrix/rotate` when the pool UPDATE fails
+pub fn sovereign_rotate_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "detail": detail,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -417,5 +440,27 @@ mod tests {
         assert_eq!(v["ok"], false);
         assert_eq!(v["unavailable"], true);
         assert!(v.get("blob").is_none());
+    }
+
+    #[test]
+    fn findings_store_down_is_never_ok_empty_success() {
+        never_ok_empty_success(&findings_unavailable_json("store down"), "findings");
+    }
+
+    #[test]
+    fn sealed_poc_store_down_is_never_not_found() {
+        let v = sealed_poc_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v.get("poc").is_none());
+        assert_ne!(v["detail"], json!("finding not found"));
+    }
+
+    #[test]
+    fn sovereign_rotate_store_down_is_never_ok_true() {
+        let v = sovereign_rotate_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_ne!(v["ok"], true);
     }
 }

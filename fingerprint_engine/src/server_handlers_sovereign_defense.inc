@@ -5,7 +5,6 @@ struct SovereignConfigBody {
     rotation_step_secs: Option<i32>,
     port_pool_min: Option<i32>,
     port_pool_max: Option<i32>,
-    #[allow(dead_code)] // accepted in JSON body; not yet consumed
     active: Option<bool>,
 }
 
@@ -39,30 +38,64 @@ async fn api_sovereign_defense_rotate(
     let step = body.rotation_step_secs.unwrap_or(3).clamp(1, 60);
     if let (Some(min), Some(max)) = (body.port_pool_min, body.port_pool_max) {
         // `liquid_matrix_routing_tokens` is tenant-scoped; on a bare pool RLS silently matches no
-        // rows and the operator's port pool is dropped while the endpoint reports success.
-        if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-            match sqlx::query(
-                r#"UPDATE liquid_matrix_routing_tokens
-                      SET rotation_step_secs = $3, port_pool_min = $4, port_pool_max = $5, updated_at = now()
-                    WHERE tenant_id = $1 AND client_id = $2"#,
+        // rows. Never report ok:true when the operator's port pool was not applied.
+        let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::sovereign_rotate_unavailable_json(
+                    "database unavailable",
+                )),
             )
-            .bind(auth.tenant_id)
-            .bind(client_id)
-            .bind(step)
-            .bind(min)
-            .bind(max)
-            .execute(&mut *tx)
-            .await
-            {
-                Ok(r) if r.rows_affected() == 0 => {
-                    tracing::warn!(target: "sovereign_defense", tenant_id = auth.tenant_id, client_id, "liquid-matrix port pool update matched no existing token");
-                }
-                Ok(_) => {}
-                Err(e) => {
-                    tracing::error!(target: "sovereign_defense", tenant_id = auth.tenant_id, error = %e, "liquid-matrix port pool update failed");
+                .into_response();
+        };
+        match sqlx::query(
+            r#"UPDATE liquid_matrix_routing_tokens
+                  SET rotation_step_secs = $3, port_pool_min = $4, port_pool_max = $5,
+                      active = COALESCE($6, active), updated_at = now()
+                WHERE tenant_id = $1 AND client_id = $2"#,
+        )
+        .bind(auth.tenant_id)
+        .bind(client_id)
+        .bind(step)
+        .bind(min)
+        .bind(max)
+        .bind(body.active)
+        .execute(&mut *tx)
+        .await
+        {
+            Ok(r) if r.rows_affected() == 0 => {
+                let _ = tx.rollback().await;
+                return (
+                    StatusCode::CONFLICT,
+                    Json(json!({
+                        "ok": false,
+                        "detail": "liquid-matrix port pool matched no existing token",
+                    })),
+                )
+                    .into_response();
+            }
+            Ok(_) => {
+                if tx.commit().await.is_err() {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::sovereign_rotate_unavailable_json(
+                            "database unavailable",
+                        )),
+                    )
+                        .into_response();
                 }
             }
-            let _ = tx.commit().await;
+            Err(e) => {
+                let _ = tx.rollback().await;
+                tracing::error!(target: "sovereign_defense", tenant_id = auth.tenant_id, error = %e, "liquid-matrix port pool update failed");
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::sovereign_rotate_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
         }
     }
     match crate::sovereign_defense_store::rotate_liquid_matrix(

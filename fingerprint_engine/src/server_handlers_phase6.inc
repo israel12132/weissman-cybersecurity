@@ -232,9 +232,15 @@ async fn api_decrypt_sealed_poc(
             .into_response();
     };
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::sealed_poc_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT finding_id, poc_sealed, poc_ciphertext_b64, poc_nonce_b64, poc_commitment_sha256, poc_zkp_hmac
            FROM vulnerabilities WHERE id = $1 AND client_id = $2 AND tenant_id = $3"#,
     )
@@ -243,8 +249,19 @@ async fn api_decrypt_sealed_poc(
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(r) => r,
+        Err(_) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::sealed_poc_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     let Some(r) = row else {
         let _ = tx.rollback().await;
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "finding not found"}))).into_response();
