@@ -22,5 +22,6 @@ describe('OobVerification live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(callbacksUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{callbacksUnavailable \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/setCallbacksUnavailable\(true\)\n      const body = e\?\.response/)
+    expect(src).toMatch(/!callbacksUnavailable && \(\n                <div className="grid grid-cols-2 gap-3">/)
   })
 })

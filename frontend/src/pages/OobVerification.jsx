@@ -315,7 +315,8 @@ export default function OobVerification() {
                 compact
               />
             ) : (
-              <div className="space-y-4">
+                <div className="space-y-4">
+                {!callbacksUnavailable && (
                 <div className="grid grid-cols-2 gap-3">
                   <StatBox
                     label={t('pages.oobVerification.status')}
@@ -328,6 +329,7 @@ export default function OobVerification() {
                     confirmed={probe.hit_count > 0}
                   />
                 </div>
+                )}
 
                 <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-4 space-y-3">
                   <FieldRow label={t('pages.oobVerification.token_label')} value={probe.token} copy />
