@@ -35,5 +35,6 @@ describe('EngineDetail live-only truth', () => {
     expect(src).toMatch(/historyUnavailable \? undefined : \(findings\.length > 0/)
     expect(src).toMatch(/historyUnavailable \? null : \(runHistory\.length > 0/)
     expect(src).toMatch(/historyUnavailable\s*\n\s*\? \(jobId \? `Job \$\{jobId\}` : undefined\)/)
+    expect(src).toMatch(/run_history: historyUnavailable \? null : runHistory/)
   })
 })

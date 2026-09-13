@@ -35,5 +35,6 @@ describe('TopTierEngineProfile live-only truth', () => {
     expect(src).toMatch(/!historyUnavailable &&[\s\S]{0,2000}LineChart accessibilityLayer data=\{findingsTrendData\}/)
     expect(src).toMatch(/!historyUnavailable && jobs\.length > 0/)
     expect(src).toMatch(/if \(historyUnavailable\) \{[\s\S]{0,200}history_unavailable/)
+    expect(src).toMatch(/if \(auditUnavailable\) \{[\s\S]{0,200}audit_unavailable/)
   })
 })

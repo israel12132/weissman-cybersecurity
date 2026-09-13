@@ -630,12 +630,12 @@ export default function EngineDetail() {
       job_id: jobId,
       last_run_status: lastRunStatus,
       findings,
-      run_history: runHistory,
+      run_history: historyUnavailable ? null : runHistory,
     }
     const bytes = new TextEncoder().encode(JSON.stringify(payload, null, 2))
     downloadBytes(bytes, `${engineId}-export.json`, 'application/json')
     showToast('info', 'Export downloaded')
-  }, [engineId, engine?.label, jobId, lastRunStatus, findings, runHistory, showToast])
+  }, [engineId, engine?.label, jobId, lastRunStatus, findings, runHistory, historyUnavailable, showToast])
 
   const exportFindingsCsv = useCallback(() => {
     if (!findings.length) return

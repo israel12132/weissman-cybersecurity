@@ -286,9 +286,13 @@ export default function TopTierEngineProfile() {
     const lines = []
     lines.push(`Top-Tier Engine Profile: ${profile.label} (${profile.id})`)
     lines.push(`Generated: ${new Date().toISOString()}`)
-    lines.push(`Execution path: ${audit?.execution_path || '-'}`)
-    lines.push(`Canonical: ${audit?.canonical_engine || '-'}`)
-    lines.push(`Production runnable: ${audit?.is_production_runnable ? 'yes' : 'no'}`)
+    if (auditUnavailable) {
+      lines.push(t('pages.topTierEngineProfile.audit_unavailable'))
+    } else {
+      lines.push(`Execution path: ${audit?.execution_path || '-'}`)
+      lines.push(`Canonical: ${audit?.canonical_engine || '-'}`)
+      lines.push(`Production runnable: ${audit?.is_production_runnable ? 'yes' : 'no'}`)
+    }
     lines.push('')
     lines.push('Mission')
     lines.push(profile.mission)
