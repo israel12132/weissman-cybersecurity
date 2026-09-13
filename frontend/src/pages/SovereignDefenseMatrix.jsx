@@ -132,6 +132,7 @@ export default function SovereignDefenseMatrix() {
     filteredFindings,
     refreshFromHistory,
     historyLoading,
+    historyUnavailable,
   } = useWeissmanEnginePage(engineId, findings, {
     csvPrefix: 'weissman-sovereign-defense',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.severity}`,
@@ -571,12 +572,20 @@ export default function SovereignDefenseMatrix() {
             </div>
           )}
 
+          {historyUnavailable && (
+            <p data-testid="sovereign-defense-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+              {t('pages.sovereignDefense.history_unavailable')}
+            </p>
+          )}
           <WeissmanFindingsPanel
             findings={filteredFindings}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             title={t('pages.sovereignDefense.findings', { engine: engine?.label || engineId })}
             emptyMessage={t('pages.sovereignDefense.no_findings')}
+            unavailable={historyUnavailable}
+            unavailableTitle={t('pages.sovereignDefense.history_unavailable')}
+            unavailableBody={t('pages.sovereignDefense.history_unavailable')}
           />
         </div>
       </div>

@@ -29,4 +29,10 @@ describe('SovereignDefenseMatrix live-only truth', () => {
     expect(src).toMatch(/setChronosUnavailable\(true\)/)
     expect(src).toMatch(/setCognitiveUnavailable\(true\)/)
   })
+
+  it('does not paint configure-and-run when GET /api/engines/history fails', () => {
+    expect(src).toMatch(/data-testid="sovereign-defense-history-unavailable"/)
+    expect(src).toMatch(/history_unavailable/)
+    expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
+  })
 })

@@ -4767,6 +4767,7 @@
       "cognitive_feed": "Bot starvation sessions",
       "findings": "{{engine}} findings",
       "no_findings": "No findings yet — configure and run",
+      "history_unavailable": "Engine history API unavailable — configure-and-run is not a quiet defense trail.",
       "auto_freeze": "Auto-freeze on critical signal",
       "chronos_observation_window": "Observation window (ms)",
       "chronos_sample_interval": "Sample interval (ms)",

@@ -4767,6 +4767,7 @@
       "cognitive_feed": "סשני הרעלת בוטים",
       "findings": "ממצאי {{engine}}",
       "no_findings": "אין ממצאים — הגדר והרץ",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-להרצה אינו שביל הגנה שקט.",
       "auto_freeze": "הקפאה אוטומטית באות קריטי",
       "chronos_observation_window": "חלון תצפית (ms)",
       "chronos_sample_interval": "מרווח דגימה (ms)",
