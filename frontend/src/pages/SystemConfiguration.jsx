@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Settings, Database, Shield, Zap, Globe, Lock, AlertTriangle, Save, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
 import PageShell from './PageShell';
@@ -170,6 +170,11 @@ export default function SystemConfiguration() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (configUnavailable) return
+    exportCsv()
+  }, [configUnavailable, exportCsv])
+
   return (
     <PageShell
       title={t(`${NS}.title`)}
@@ -178,9 +183,9 @@ export default function SystemConfiguration() {
       actions={(
         <ShellScanActions
           onRefresh={fetchConfig}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={configUnavailable || !filteredFindings.length}
         />
       )}
     >

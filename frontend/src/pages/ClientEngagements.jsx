@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 import PageShell from './PageShell'
@@ -168,6 +168,11 @@ export default function ClientEngagements() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
+
   const visibleEngagements = useMemo(() => {
     if (!searchQuery.trim()) return engagements
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
@@ -194,9 +199,9 @@ export default function ClientEngagements() {
       actions={(
         <ShellScanActions
           onRefresh={loadAll}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >
