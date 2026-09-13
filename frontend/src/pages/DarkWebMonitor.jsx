@@ -290,7 +290,7 @@ export default function DarkWebMonitor() {
               </Button>
             ))}
           </div>
-          {sources.length > 1 && (
+          {sources.length > 1 && !error && (
             <select
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}

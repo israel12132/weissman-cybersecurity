@@ -24,4 +24,9 @@ describe('DarkWebMonitor live-only truth', () => {
     expect(src).toMatch(/if \(error \|\| !filtered\.length\) return/)
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| filtered\.length === 0\}/)
   })
+
+  it('does not paint leftover leftover-source options after a failed findings GET', () => {
+    expect(src).toMatch(/\{sources\.length > 1 && !error && \(/)
+    expect(src).not.toMatch(/setFindings\(\[\]\)/)
+  })
 })
