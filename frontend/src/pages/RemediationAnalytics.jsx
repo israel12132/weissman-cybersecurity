@@ -214,7 +214,9 @@ export default function RemediationAnalytics() {
 
         <HealReadinessPanel />
 
-        {!error && <HealTrendSparkline clientIds={clientIds} days={30} />}
+        <div hidden={!!error}>
+          <HealTrendSparkline clientIds={clientIds} days={30} />
+        </div>
 
         {error && (
           <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm flex items-center gap-2">
