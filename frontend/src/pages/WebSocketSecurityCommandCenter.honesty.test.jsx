@@ -22,4 +22,10 @@ describe('WebSocketSecurityCommandCenter live-only truth', () => {
     expect(src).not.toMatch(/\?\? 100/)
     expect(src).not.toMatch(/\?\? 'A'/)
   })
+
+  it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
+  })
+
 })

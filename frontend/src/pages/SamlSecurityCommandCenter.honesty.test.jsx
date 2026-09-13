@@ -21,4 +21,10 @@ describe('SamlSecurityCommandCenter live-only truth', () => {
     expect(src).toMatch(/!historyUnavailable && paths\.length > 0/)
     expect(src).not.toMatch(/Number\(categoryScores\[k\] \?\? 0\)/)
   })
+
+  it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
+  })
+
 })
