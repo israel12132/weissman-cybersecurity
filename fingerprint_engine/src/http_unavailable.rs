@@ -4247,5 +4247,84 @@ mod tests {
             "pub async fn store_finding_for_task",
         );
         assert!(compact_src(persist).contains("task_scan_job_id(pool,tenant_id,tid).await?"));
+        assert!(
+            compact_src(persist).contains("persist_engine_findings("),
+            "agent finding persist must run"
+        );
+        assert!(
+            !persist.contains("if let Err(e) = crate::findings_persist::persist_engine_findings"),
+            "persist_engine_findings store-down must not log-and-Ok(())"
+        );
+        assert!(
+            compact_src(persist).contains(".await.map_err(|e|{"),
+            "persist_engine_findings Err must map_err into the Result"
+        );
+        assert!(
+            persist.contains("sqlx::Error::Protocol(e)"),
+            "persist_engine_findings String Err must become Protocol, not Ok(())"
+        );
+    }
+
+    #[test]
+    fn agent_enqueue_store_down_is_not_ok_empty() {
+        let src = include_str!("engine_dispatch_agent.rs");
+        let dispatch = named_fn_src(src, "async fn dispatch_to_agent");
+        assert!(
+            dispatch.contains("EngineResult::error(\"store_down\")"),
+            "agent enqueue store-down must be EngineResult::error, not ok empty"
+        );
+        assert!(
+            !dispatch.contains("agent task enqueue failed"),
+            "enqueue fail must not stay an ok empty-findings message"
+        );
+        let merge = named_fn_src(src, "pub(crate) fn merge_agent_hybrid");
+        assert!(
+            merge.contains("agent.status != \"ok\""),
+            "hybrid merge must fail-closed when agent dispatch is not ok"
+        );
+        assert!(
+            merge.contains("EngineResult::error(\"store_down\")"),
+            "hybrid merge must not ok-wrap remote findings over agent store-down"
+        );
+    }
+
+    #[test]
+    fn enqueue_capable_store_down_is_not_all_fleet() {
+        let src = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub async fn enqueue_and_dispatch_fleet",
+        );
+        assert!(
+            src.contains("Err(e) => return Err(e)"),
+            "capable-agent lookup store-down must not fall through as empty-capable"
+        );
+        assert!(
+            !compact_src(src).contains("Ok(capable)if!capable.is_empty()=>capable,_=>agent_uuids_for_client"),
+            "store-down on capable SELECT must not widen dispatch to the whole fleet"
+        );
+    }
+
+    #[test]
+    fn nexus_bridge_store_down_is_not_zero_agents() {
+        let bridge = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub async fn bridge_nssi_fleet",
+        );
+        assert!(
+            bridge.contains("Result<u32, sqlx::Error>"),
+            "NSSI bridge must return Result so store-down is not a live 0"
+        );
+        assert!(!bridge.contains("let Ok(agents)"));
+        assert!(bridge.contains(".await?"));
+        let nexus = include_str!("nexus_sovereign_swarm_engine.rs");
+        let run = named_fn_src(nexus, "pub async fn run_nexus_sovereign_swarm_result");
+        assert!(
+            run.contains("Err(_) => return EngineResult::error(\"store_down\")"),
+            "NSSI endpoint bridge store-down must fail the swarm, not count 0 agents"
+        );
+        assert!(
+            compact_src(run).contains("bridge_nssi_fleet("),
+            "run_nexus must still call bridge_nssi_fleet"
+        );
     }
 }

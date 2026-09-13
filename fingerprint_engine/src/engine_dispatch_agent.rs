@@ -46,11 +46,15 @@ pub async fn run_agent_required_engine(
 }
 
 /// Merge remote-surface findings with agent dispatch / guidance for hybrid engines.
+/// Agent store-down must not look like a successful hybrid probe (remote findings + `ok`).
 pub(crate) fn merge_agent_hybrid(
     remote: EngineResult,
     agent: EngineResult,
     engine_id: &str,
 ) -> EngineResult {
+    if agent.status != "ok" {
+        return EngineResult::error("store_down");
+    }
     let mut findings = remote.findings;
     for f in agent.findings {
         let dup = findings.iter().any(|existing| {
@@ -127,12 +131,7 @@ async fn dispatch_to_agent(
     .await
     {
         Ok(pair) => pair,
-        Err(e) => {
-            return EngineResult::ok(
-                vec![],
-                format!("agent task enqueue failed for {}: {}", engine, e),
-            );
-        }
+        Err(_) => return EngineResult::error("store_down"),
     };
     let f = serde_json::json!({
         "type": engine,
@@ -199,5 +198,16 @@ mod tests {
             .message
             .contains("endpoint agent recommended for host-resident validation"));
         assert!(merged.message.starts_with("ENG: 1 finding(s)"));
+    }
+
+    #[test]
+    fn merge_agent_store_down_is_not_ok_with_remote_findings() {
+        let remote = EngineResult::ok(vec![json!({"title": "A"})], "r");
+        let agent = EngineResult::error("store_down");
+        let merged = merge_agent_hybrid(remote, agent, "ENG");
+        assert_eq!(merged.status, "error");
+        assert!(!merged.success);
+        assert_eq!(merged.message, "store_down");
+        assert!(merged.findings.is_empty());
     }
 }

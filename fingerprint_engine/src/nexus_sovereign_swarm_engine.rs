@@ -3199,14 +3199,18 @@ pub async fn run_nexus_sovereign_swarm_result(
         ) {
             let surface_urls: Vec<String> =
                 surface.iter().map(|(b, p)| format!("{b}{p}")).collect();
-            let bridged = crate::endpoint_agents::bridge_nssi_fleet(
+            let bridged = match crate::endpoint_agents::bridge_nssi_fleet(
                 pool,
                 registry,
                 tenant_id,
                 client_id,
                 &surface_urls,
             )
-            .await;
+            .await
+            {
+                Ok(n) => n,
+                Err(_) => return EngineResult::error("store_down"),
+            };
             endpoint_agents = endpoint_agents.max(bridged);
         }
     }

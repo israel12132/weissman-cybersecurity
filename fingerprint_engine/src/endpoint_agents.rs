@@ -522,7 +522,8 @@ pub async fn enqueue_and_dispatch_fleet(
             .await
         {
             Ok(capable) if !capable.is_empty() => capable,
-            _ => agent_uuids_for_client(pool, tenant_id, client_id, FLEET_MAX_AGENTS).await?,
+            Ok(_) => agent_uuids_for_client(pool, tenant_id, client_id, FLEET_MAX_AGENTS).await?,
+            Err(e) => return Err(e),
         };
     let start = registry.dispatch_cursor.fetch_add(1, Ordering::Relaxed);
     let mut live = false;
@@ -557,13 +558,10 @@ pub async fn bridge_nssi_fleet(
     tenant_id: i64,
     client_id: i64,
     targets: &[String],
-) -> u32 {
-    let Ok(agents) = agent_uuids_for_client(pool, tenant_id, client_id, FLEET_MAX_AGENTS).await
-    else {
-        return 0;
-    };
+) -> Result<u32, sqlx::Error> {
+    let agents = agent_uuids_for_client(pool, tenant_id, client_id, FLEET_MAX_AGENTS).await?;
     if agents.is_empty() {
-        return 0;
+        return Ok(0);
     }
     let mut bridged = 0u32;
     let mod_targets = targets.len().max(1);
@@ -576,16 +574,11 @@ pub async fn bridge_nssi_fleet(
             "fleet_slot": i + 1,
             "fleet_size": agents.len(),
         });
-        if enqueue_and_dispatch_fleet(
-            pool, registry, tenant_id, client_id, engine, target, &params,
-        )
-        .await
-        .is_ok()
-        {
-            bridged += 1;
-        }
+        enqueue_and_dispatch_fleet(pool, registry, tenant_id, client_id, engine, target, &params)
+            .await?;
+        bridged += 1;
     }
-    bridged
+    Ok(bridged)
 }
 
 /// After enroll: queue the host baseline hunt. Tasks sit in `endpoint_agent_tasks` until the
@@ -1112,7 +1105,7 @@ pub async fn store_finding_for_task(
         .and_then(Value::as_str)
         .unwrap_or("endpoint");
     let source = format!("agent.{engine}");
-    if let Err(e) = crate::findings_persist::persist_engine_findings(
+    crate::findings_persist::persist_engine_findings(
         pool,
         tenant_id,
         Some(client_id),
@@ -1121,7 +1114,7 @@ pub async fn store_finding_for_task(
         std::slice::from_ref(&enriched),
     )
     .await
-    {
+    .map_err(|e| {
         tracing::error!(
             target: "endpoint_agents",
             tenant_id,
@@ -1130,7 +1123,9 @@ pub async fn store_finding_for_task(
             error = %e,
             "findings_persist failed for agent finding"
         );
-    } else if let Some(jid) = scan_job_id {
+        sqlx::Error::Protocol(e)
+    })?;
+    if let Some(jid) = scan_job_id {
         let title = enriched
             .get("title")
             .and_then(Value::as_str)
