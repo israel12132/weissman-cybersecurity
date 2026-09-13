@@ -65,7 +65,10 @@ export default function SocialEngineering() {
       setLoading(true);
       setError('');
       const data = await apiFetch('/api/soc/social-engineering');
-      setCampaigns(data.campaigns || []);
+      if (!Array.isArray(data.campaigns)) {
+        throw new Error(t('pages.socialEngineering.load_failed'));
+      }
+      setCampaigns(data.campaigns);
       setStats(data.stats || null);
     } catch (err) {
       setError(err?.message || t('pages.socialEngineering.load_failed'));
@@ -78,9 +81,13 @@ export default function SocialEngineering() {
     fetchSocialEngineering();
     apiFetch('/api/clients')
       .then((data) => {
-        const list = Array.isArray(data) ? data : data?.clients || [];
-        setClients(list);
-        setClientsUnavailable(false);
+        const list = Array.isArray(data) ? data : Array.isArray(data?.clients) ? data.clients : null
+        if (!list) {
+          setClientsUnavailable(true)
+          return
+        }
+        setClientsUnavailable(false)
+        setClients(list)
         if (list.length > 0) {
           const id = String(list[0].id);
           setCreateClientId(id);

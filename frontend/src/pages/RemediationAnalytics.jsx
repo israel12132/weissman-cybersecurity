@@ -62,7 +62,9 @@ export default function RemediationAnalytics() {
     setLoading(true); setError(null)
     try {
       const d = await apiFetch('/api/findings?limit=2000')
-      setFindings(Array.isArray(d) ? d : Array.isArray(d?.findings) ? d.findings : [])
+      const list = Array.isArray(d) ? d : Array.isArray(d?.findings) ? d.findings : null
+      if (!list) throw new Error('Failed to load findings')
+      setFindings(list)
     } catch (e) {
       setError(e.message || 'Failed to load findings')
     } finally {
