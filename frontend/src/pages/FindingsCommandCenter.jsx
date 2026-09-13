@@ -538,6 +538,7 @@ export default function FindingsCommandCenter() {
   }, [bulkStatus, selectedRows, toast, t])
 
   const handleExportCsv = useCallback(() => {
+    if (error) return
     apiFetch('/api/findings/export/csv', { raw: true })
       .then((r) => {
         const disposition = r.headers.get('content-disposition') || ''
@@ -555,7 +556,7 @@ export default function FindingsCommandCenter() {
         toast.success(t('findings.toast_export_ok', { filename }))
       })
       .catch((e) => toast.error(t('findings.toast_export_failed', { detail: e?.message || t('findings.network_error') })))
-  }, [toast, t])
+  }, [error, toast, t])
 
   const handleVerifyComplete = useCallback((rawId, verification) => {
     const patch = (f) => (
@@ -732,12 +733,12 @@ export default function FindingsCommandCenter() {
           subtitle={t('findings.command_center_subtitle')}
           badge={t('findings.live_badge')}
           badgeColor="#ef4444"
-          count={totalFiltered}
+          count={error ? null : totalFiltered}
           countLabel={t('findings.title')}
-          lastUpdated={lastUpdated}
+          lastUpdated={error ? null : lastUpdated}
           loading={loading}
           onRefresh={loadFindings}
-          onExport={handleExportCsv}
+          onExport={error ? undefined : handleExportCsv}
           exportLabel={t('common.export_csv')}
           refreshLabel={t('common.refresh')}
         >
@@ -919,7 +920,7 @@ export default function FindingsCommandCenter() {
           />
         )}
 
-        {selectedRows.length > 0 && (
+        {selectedRows.length > 0 && !error && (
           <div className="sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-cyan-500/30 bg-[var(--bg-elevated)] px-4 py-2.5 shadow-lg">
             <span className="text-[12px] font-mono text-cyan-300">
               {t('findings.bulk_selected', { count: selectedRows.length })}
@@ -957,7 +958,7 @@ export default function FindingsCommandCenter() {
           </div>
         )}
 
-        {(tableData.length > 0 || loading) && (
+        {!error && (tableData.length > 0 || loading) && (
           <DataTable
             id="findings-command-table"
             columns={columns}

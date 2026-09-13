@@ -14,4 +14,11 @@ describe('VulnIntelDashboard live-only truth', () => {
     expect(src).toMatch(/loading \|\| error \? '—'/)
     expect(src).toMatch(/!error && \(/)
   })
+
+  it('does not paint leftover leftover-last-updated after a failed findings GET', () => {
+    expect(src).toMatch(/lastUpdated=\{error \? null : lastUpdated\}/)
+    expect(src).toMatch(/count=\{error \? null : filtered\.length\}/)
+    expect(src).toMatch(/if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filtered\.length\}/)
+  })
 })

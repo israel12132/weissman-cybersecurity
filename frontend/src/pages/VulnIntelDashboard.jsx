@@ -201,6 +201,7 @@ export default function VulnIntelDashboard() {
   const kevCount = useMemo(() => findings.filter(isKevListed).length, [findings])
 
   const exportCsv = useCallback(() => {
+    if (error) return
     const header = ['severity', 'cve', 'title', 'source', 'status', 'discovered_at', 'id']
     const rows = filtered.map((f) => [
       f.severity || '',
@@ -212,7 +213,7 @@ export default function VulnIntelDashboard() {
       f.id || f.raw_id || f.finding_id || '',
     ])
     downloadCsv(rows, header, 'vuln-intel-findings')
-  }, [filtered])
+  }, [error, filtered])
 
   const selectedRowId = selected?.raw_id ?? selected?.id
 
@@ -227,7 +228,7 @@ export default function VulnIntelDashboard() {
           onRefresh={() => load()}
           onExport={exportCsv}
           refreshLoading={loading}
-          exportDisabled={!filtered.length}
+          exportDisabled={!!error || !filtered.length}
         />
       )}
     >
@@ -239,9 +240,9 @@ export default function VulnIntelDashboard() {
           subtitle={t('vuln_intel.subtitle')}
           badge={t('vuln_intel.live_badge')}
           badgeColor="#f97316"
-          count={filtered.length}
+          count={error ? null : filtered.length}
           countLabel={t('findings.title')}
-          lastUpdated={lastUpdated}
+          lastUpdated={error ? null : lastUpdated}
           loading={loading}
           onRefresh={() => load()}
           refreshLabel={t('common.refresh')}
@@ -249,7 +250,7 @@ export default function VulnIntelDashboard() {
           <Button variant="unstyled"
             type="button"
             onClick={exportCsv}
-            disabled={filtered.length === 0}
+            disabled={!!error || filtered.length === 0}
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-40 transition-all"
           >
             <Download className="h-3.5 w-3.5" />

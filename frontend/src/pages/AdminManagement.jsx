@@ -205,6 +205,11 @@ export default function AdminManagement() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (usersUnavailable) return
+    exportCsv()
+  }, [usersUnavailable, exportCsv])
+
   const visibleUsers = useMemo(() => {
     if (!searchQuery.trim()) return users
     const emails = new Set(filteredFindings.map((f) => f.title))
@@ -337,9 +342,9 @@ export default function AdminManagement() {
       actions={(
         <ShellScanActions
           onRefresh={loadUsers}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={usersUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -498,15 +503,15 @@ export default function AdminManagement() {
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               searchPlaceholder={t('pages.adminManagement.search_placeholder')}
-              lastUpdated={lastUpdated}
-              resultCount={visibleUsers.length}
-              totalCount={users.length}
+              lastUpdated={usersUnavailable ? null : lastUpdated}
+              resultCount={usersUnavailable ? undefined : visibleUsers.length}
+              totalCount={usersUnavailable ? undefined : users.length}
             />
           </div>
 
           {loading && users.length === 0 ? (
             <div className="text-center py-8 text-[var(--text-muted)]">{t('pages.adminManagement.loading')}</div>
-          ) : usersUnavailable && users.length === 0 ? (
+          ) : usersUnavailable ? (
             <div
               data-testid="admin-users-unavailable"
               className="text-center py-8 text-amber-300/90"

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import PageShell from './PageShell'
@@ -202,6 +202,11 @@ export default function Clients() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
+
   const visibleClients = useMemo(() => {
     if (!searchQuery.trim()) return clients
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
@@ -215,21 +220,21 @@ export default function Clients() {
       actions={(
         <ShellScanActions
           onRefresh={loadClients}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >
       <div className="space-y-6">
         <PremiumPageHeader
           title={t('clients_page.clients_heading')}
-          subtitle={countLabel}
+          subtitle={error ? undefined : countLabel}
           badge={t('findings.live_badge')}
           badgeColor="#8b5cf6"
-          count={clients.length}
+          count={error ? null : clients.length}
           countLabel={t('clients.title')}
-          lastUpdated={lastUpdated}
+          lastUpdated={error ? null : lastUpdated}
           loading={loading}
           onRefresh={loadClients}
           refreshLabel={t('common.refresh')}
@@ -253,7 +258,7 @@ export default function Clients() {
 
         {loading && clients.length === 0 ? (
           <SkeletonWidgetGrid count={4} />
-        ) : clients.length > 0 ? (
+        ) : !error && clients.length > 0 ? (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <ExecutiveWidget
               label={t('clients_page.worst_case_loss')}
