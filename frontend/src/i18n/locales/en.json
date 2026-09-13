@@ -3228,6 +3228,8 @@
       "source_redis": "Redis (distributed)",
       "source_in_memory": "In-memory (single node)",
       "load_error": "Couldn't load rate-limit analytics.",
+      "unavailable_title": "Rate-limit analytics unavailable",
+      "unavailable_body": "Live usage, throttling events, and endpoint pressure could not be confirmed. Retry to refresh.",
       "history_empty_title": "No usage recorded yet",
       "history_empty_body": "Request activity for the selected range will plot here as traffic flows through the API.",
       "endpoints_empty_title": "No endpoint pressure yet",
