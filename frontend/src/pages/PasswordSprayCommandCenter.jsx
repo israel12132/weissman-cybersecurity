@@ -292,15 +292,17 @@ function CategoryScoresPanel({ scores, L }) {
       <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-3">{L.categoryScores}</p>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {axes.map(([k, label]) => {
-          const v = Number(scores[k] ?? 0)
+          const raw = scores[k]
+          const hasScore = raw != null && Number.isFinite(Number(raw))
+          const v = hasScore ? Number(raw) : 0
           return (
             <div key={k}>
               <div className="flex justify-between text-[10px] font-mono text-[var(--text-muted)] mb-1">
                 <span>{label}</span>
-                <span style={{ color: v >= 80 ? '#4ade80' : v >= 50 ? '#fbbf24' : '#f87171' }}>{v}</span>
+                <span style={{ color: !hasScore ? 'rgba(255,255,255,0.12)' : v >= 80 ? '#4ade80' : v >= 50 ? '#fbbf24' : '#f87171' }}>{hasScore ? v : '—'}</span>
               </div>
               <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
-                <div className="h-full rounded-full transition-all" style={{ width: `${v}%`, backgroundColor: v >= 80 ? '#4ade80' : v >= 50 ? '#fbbf24' : '#f87171' }} />
+                <div className="h-full rounded-full transition-all" style={{ width: hasScore ? `${v}%` : '0%', backgroundColor: !hasScore ? 'rgba(255,255,255,0.12)' : v >= 80 ? '#4ade80' : v >= 50 ? '#fbbf24' : '#f87171' }} />
               </div>
             </div>
           )
@@ -736,11 +738,11 @@ export default function PasswordSprayCommandCenter() {
         <p className="text-sm font-mono text-[var(--text-muted)] text-center py-12">{L.runToPopulate}</p>
       )}
 
-      {posture && <PostureCard finding={posture} L={L} pathCount={paths.length} />}
-      {posture && <PostureRadarWrap finding={posture} L={L} />}
-      {categoryScores && <CategoryScoresPanel scores={categoryScores} L={L} />}
+      {posture && !historyUnavailable && <PostureCard finding={posture} L={L} pathCount={paths.length} />}
+      {posture && !historyUnavailable && <PostureRadarWrap finding={posture} L={L} />}
+      {categoryScores && !historyUnavailable && <CategoryScoresPanel scores={categoryScores} L={L} />}
 
-      {toxic && (
+      {toxic && !historyUnavailable && (
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
           className="rounded-2xl border border-red-500/50 bg-red-950/25 p-5 mb-6">
           <p className="text-[10px] font-mono text-red-300/80 uppercase tracking-widest mb-2">{L.toxicTitle}</p>
@@ -756,7 +758,7 @@ export default function PasswordSprayCommandCenter() {
         </motion.div>
       )}
 
-      {roadmap && (
+      {roadmap && !historyUnavailable && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-950/15 p-4 mb-4">
           <p className="text-[10px] font-mono text-amber-300/70 uppercase mb-2">{L.roadmapTitle}</p>
           {Array.isArray(roadmap.evidence?.roadmap) && (
@@ -773,7 +775,7 @@ export default function PasswordSprayCommandCenter() {
         </div>
       )}
 
-      {agentGaps.length > 0 && (
+      {!historyUnavailable && agentGaps.length > 0 && (
         <div className="rounded-xl border border-violet-500/25 bg-violet-950/10 p-4 mb-4">
           <p className="text-[10px] font-mono text-violet-300/70 uppercase mb-2">{L.agentGapTitle}</p>
           <ul className="space-y-1">
@@ -784,7 +786,7 @@ export default function PasswordSprayCommandCenter() {
         </div>
       )}
 
-      {entra.length > 0 && (
+      {!historyUnavailable && entra.length > 0 && (
         <div className="rounded-xl border border-violet-500/35 bg-violet-950/15 p-4 mb-4">
           <p className="text-[10px] font-mono text-violet-300/70 uppercase mb-2">{L.entra}</p>
           {entra.map((f, i) => (
@@ -793,7 +795,7 @@ export default function PasswordSprayCommandCenter() {
         </div>
       )}
 
-      {subdomains.length > 0 && (
+      {!historyUnavailable && subdomains.length > 0 && (
         <div className="rounded-xl border border-sky-500/25 bg-sky-950/10 p-4 mb-4">
           <p className="text-[10px] font-mono text-sky-300/70 uppercase mb-2">{L.subdomains} ({subdomains.length})</p>
           <div className="flex flex-wrap gap-2">
@@ -804,7 +806,7 @@ export default function PasswordSprayCommandCenter() {
         </div>
       )}
 
-      {remediation && (
+      {remediation && !historyUnavailable && (
         <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/10 p-4 mb-4">
           <p className="text-[10px] font-mono text-emerald-300/70 uppercase mb-2">{L.remediation}</p>
           <p className="text-xs font-mono text-[var(--text-tertiary)]">{remediation.description}</p>
@@ -820,13 +822,13 @@ export default function PasswordSprayCommandCenter() {
         </div>
       )}
 
-      {ropc.length > 0 && (
+      {!historyUnavailable && ropc.length > 0 && (
         <div className="rounded-xl border border-red-500/40 bg-red-950/20 p-4 mb-4 text-sm font-mono text-red-200">
           <strong>ROPC:</strong> {ropc[0].title}
         </div>
       )}
 
-      {m365.length > 0 && (
+      {!historyUnavailable && m365.length > 0 && (
         <div className="rounded-xl border border-sky-500/30 bg-sky-950/15 p-4 mb-4">
           <p className="text-[10px] font-mono text-sky-300/70 uppercase mb-2">{L.m365Title}</p>
           <p className="text-sm font-mono text-[var(--text-secondary)]">{m365[0].title}</p>
@@ -834,7 +836,7 @@ export default function PasswordSprayCommandCenter() {
         </div>
       )}
 
-      {lockoutCurves.length > 0 && (
+      {!historyUnavailable && lockoutCurves.length > 0 && (
         <div className="rounded-xl border border-amber-500/25 bg-amber-950/10 p-4 mb-4">
           <p className="text-[10px] font-mono text-amber-300/70 uppercase mb-2">{L.lockoutTitle}</p>
           <div className="flex flex-wrap gap-2">
@@ -845,7 +847,7 @@ export default function PasswordSprayCommandCenter() {
         </div>
       )}
 
-      {paths.length > 0 && (
+      {!historyUnavailable && paths.length > 0 && (
         <div className="mb-6">
           <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-2">{L.pathsTitle}</p>
           <div className="space-y-2">

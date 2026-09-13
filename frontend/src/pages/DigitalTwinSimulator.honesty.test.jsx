@@ -22,4 +22,11 @@ describe('DigitalTwinSimulator live-only truth', () => {
     expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
     expect(src).toMatch(/!historyUnavailable/)
   })
+
+  it('does not paint leftover leftover-scorecard after a failed history GET', () => {
+    expect(src).toMatch(/!historyUnavailable && summary && <Scorecard/)
+    expect(src).toMatch(/!historyUnavailable && summary/)
+    expect(src).not.toMatch(/summary\.score \?\? 0/)
+    expect(src).not.toMatch(/Number\(value\) \|\| 0/)
+  })
 })

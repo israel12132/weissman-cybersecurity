@@ -28,4 +28,12 @@ describe('IacSecurityCenter live-only truth', () => {
     expect(src).not.toMatch(/<SeverityBars bySeverity=\{summary\?\.by_severity\} \/>/)
     expect(src).toMatch(/const liveSummary = historyUnavailable \? null : summary/)
   })
+
+  it('does not paint leftover leftover-compliance theatre from raw summary after a failed history GET', () => {
+    expect(src).toMatch(/const livePolicyFindings = historyUnavailable \? \[\] : policyFindings/)
+    expect(src).toMatch(/WaiversPanel waivers=\{liveSummary\?\.policy_waivers_applied\}/)
+    expect(src).toMatch(/historyUnavailable \? '—' : `\$\{shownFindings\.length\}\/\$\{policyFindings\.length\}`/)
+    expect(src).toMatch(/historyUnavailable\s*\n\s*\? t\('iacSecurity\.history_unavailable'\)/)
+    expect(src).not.toMatch(/WaiversPanel waivers=\{summary\?\.policy_waivers_applied\}/)
+  })
 })

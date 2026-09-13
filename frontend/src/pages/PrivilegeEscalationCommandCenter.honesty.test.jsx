@@ -15,4 +15,11 @@ describe('PrivilegeEscalationCommandCenter live-only truth', () => {
     expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
     expect(src).toMatch(/!historyUnavailable/)
   })
+
+  it('does not paint leftover leftover-posture above the unavailable banner', () => {
+    expect(src).toMatch(/posture && !historyUnavailable/)
+    expect(src).not.toMatch(/ev\.score \?\? 0/)
+    expect(src).not.toMatch(/ds\.score \?\? 0/)
+    expect(src).not.toMatch(/n \?\? 0/)
+  })
 })

@@ -265,7 +265,9 @@ export default function PrivilegeEscalationCommandCenter() {
   })
 
   const ev = posture?.evidence || {}
-  const score = Number(ev.score ?? 0)
+  const rawScore = ev.score
+  const hasScore = rawScore != null && Number.isFinite(Number(rawScore))
+  const score = hasScore ? Number(rawScore) : 0
   const grade = ev.grade || '—'
   const covCounts = ev.counts || {}
   const domainScores = ev.domain_scores || {}
@@ -357,12 +359,12 @@ export default function PrivilegeEscalationCommandCenter() {
         </div>
       </div>
 
-      {posture && (
+      {posture && !historyUnavailable && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
           <div className="rounded-2xl border border-rose-500/25 bg-[var(--bg-2)] p-5 flex flex-col items-center justify-center">
             <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-disabled)] mb-2">{L.posture}</div>
-            <div className="text-5xl font-black" style={{ color: score >= 80 ? ACCENT2 : ACCENT }}>{grade}</div>
-            <div className="text-sm font-mono text-[var(--text-secondary)] mt-1">{score}/100</div>
+            <div className="text-5xl font-black" style={{ color: hasScore ? (score >= 80 ? ACCENT2 : ACCENT) : 'rgba(255,255,255,0.12)' }}>{hasScore ? grade : '—'}</div>
+            <div className="text-sm font-mono text-[var(--text-secondary)] mt-1">{hasScore ? `${score}/100` : '—'}</div>
             <div className="text-[10px] font-mono text-[var(--text-muted)] mt-2">{L.host}: {host.hostname || '—'} · {L.kernel}: {host.kernel || '—'}</div>
             {lastRun && <div className="text-[10px] font-mono text-[var(--text-disabled)] mt-1">{L.lastRun} {lastRun}</div>}
           </div>
@@ -376,7 +378,7 @@ export default function PrivilegeEscalationCommandCenter() {
                 [L.notObserved, covCounts.not_observed, '#64748b'],
               ].map(([lab, n, col]) => (
                 <div key={lab} className="rounded-lg border border-[var(--border-subtle)] px-2 py-2">
-                  <div className="text-lg font-mono font-bold" style={{ color: col }}>{n ?? 0}</div>
+                  <div className="text-lg font-mono font-bold" style={{ color: col }}>{n != null ? n : '—'}</div>
                   <div className="text-[10px] font-mono text-[var(--text-muted)]">{lab}</div>
                 </div>
               ))}
@@ -384,14 +386,16 @@ export default function PrivilegeEscalationCommandCenter() {
             <div className="space-y-1.5">
               {DOMAINS.map((d) => {
                 const ds = domainScores[d.slug] || {}
-                const sc = Number(ds.score ?? 0)
+                const raw = ds.score
+                const hasDomainScore = raw != null && Number.isFinite(Number(raw))
+                const sc = hasDomainScore ? Number(raw) : 0
                 return (
                   <div key={d.slug} className="flex items-center gap-2 text-[10px] font-mono">
                     <span className="w-40 truncate text-[var(--text-tertiary)]">{he ? d.he : d.en}</span>
                     <div className="flex-1 h-1.5 rounded-full bg-[var(--bg-3)] overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${sc}%`, backgroundColor: sc >= 80 ? ACCENT2 : ACCENT }} />
+                      <div className="h-full rounded-full" style={{ width: hasDomainScore ? `${sc}%` : '0%', backgroundColor: hasDomainScore ? (sc >= 80 ? ACCENT2 : ACCENT) : 'rgba(255,255,255,0.12)' }} />
                     </div>
-                    <span className="w-16 text-right text-[var(--text-muted)]">{ds.fail ?? 0} fail</span>
+                    <span className="w-16 text-right text-[var(--text-muted)]">{hasDomainScore ? `${ds.fail ?? 0} fail` : '—'}</span>
                   </div>
                 )
               })}

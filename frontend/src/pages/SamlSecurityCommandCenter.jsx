@@ -398,7 +398,7 @@ export default function SamlSecurityCommandCenter() {
         <p className="text-sm font-mono text-[var(--text-muted)] text-center py-12">{L.runToPopulate}</p>
       )}
 
-      {posture && (
+      {posture && !historyUnavailable && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
           className="rounded-2xl border border-amber-500/30 bg-amber-950/15 p-5 mb-6">
           <p className="text-[10px] font-mono text-amber-300/70 uppercase mb-1">{L.posture}</p>
@@ -407,16 +407,18 @@ export default function SamlSecurityCommandCenter() {
         </motion.div>
       )}
 
-      {categoryScores && (
+      {categoryScores && !historyUnavailable && (
         <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4 mb-4">
           <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase mb-3">{L.categoryScores}</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {SCORE_AXES.map(([k, label]) => {
-              const v = Number(categoryScores[k] ?? 0)
+              const raw = categoryScores[k]
+              const hasScore = raw != null && Number.isFinite(Number(raw))
+              const v = hasScore ? Number(raw) : 0
               return (
                 <div key={k}>
-                  <div className="flex justify-between text-[10px] font-mono text-[var(--text-muted)] mb-1"><span>{label}</span><span>{v}</span></div>
-                  <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)]"><div className="h-full rounded-full bg-amber-500/70" style={{ width: `${v}%` }} /></div>
+                  <div className="flex justify-between text-[10px] font-mono text-[var(--text-muted)] mb-1"><span>{label}</span><span>{hasScore ? v : '—'}</span></div>
+                  <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)]"><div className="h-full rounded-full bg-amber-500/70" style={{ width: hasScore ? `${v}%` : '0%' }} /></div>
                 </div>
               )
             })}
@@ -424,7 +426,7 @@ export default function SamlSecurityCommandCenter() {
         </div>
       )}
 
-      {toxic && (
+      {toxic && !historyUnavailable && (
         <div className="rounded-2xl border border-red-500/50 bg-red-950/25 p-5 mb-6">
           <p className="text-[10px] font-mono text-red-300/80 uppercase mb-2">{L.toxicTitle}</p>
           <p className="text-sm font-mono text-red-100 font-semibold">{toxic.title}</p>
@@ -432,7 +434,7 @@ export default function SamlSecurityCommandCenter() {
         </div>
       )}
 
-      {roadmap?.evidence?.roadmap && (
+      {roadmap?.evidence?.roadmap && !historyUnavailable && (
         <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/10 p-4 mb-4">
           <p className="text-[10px] font-mono text-emerald-300/70 uppercase mb-2">{L.roadmapTitle}</p>
           <ul className="space-y-1">
@@ -443,14 +445,14 @@ export default function SamlSecurityCommandCenter() {
         </div>
       )}
 
-      {agentGaps.length > 0 && (
+      {!historyUnavailable && agentGaps.length > 0 && (
         <div className="rounded-xl border border-violet-500/25 bg-violet-950/10 p-4 mb-4">
           <p className="text-[10px] font-mono text-violet-300/70 uppercase mb-2">{L.agentGapTitle}</p>
           {agentGaps.map((f, i) => <p key={i} className="text-[11px] font-mono text-[var(--text-tertiary)]">{f.title}</p>)}
         </div>
       )}
 
-      {paths.length > 0 && (
+      {!historyUnavailable && paths.length > 0 && (
         <div className="mb-6">
           <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase mb-2">{L.pathsTitle}</p>
           {paths.map((f, i) => <div key={i} className="rounded-lg border border-red-500/25 bg-red-950/10 px-3 py-2 text-xs font-mono text-red-200 mb-2">{f.title}</div>)}

@@ -1800,12 +1800,13 @@ export default function IacSecurityCenter() {
   }, [canRun, params, selectedClientId, effectiveTarget, paramCount, appendLine])
 
   const liveSummary = historyUnavailable ? null : summary
+  const policyFindings = useMemo(() => findings.filter((f) => f.category !== 'iac_attack_chain'), [findings])
+  const livePolicyFindings = historyUnavailable ? [] : policyFindings
   const remediationQueue = useMemo(() => liveSummary?.remediation_queue || [], [liveSummary])
   const policyCatalog = useMemo(() => (Array.isArray(liveSummary?.policy_catalog) ? liveSummary.policy_catalog : []), [liveSummary])
   const attackChains = useMemo(() => liveSummary?.attack_chains || [], [liveSummary])
-  const policyFindings = useMemo(() => findings.filter((f) => f.category !== 'iac_attack_chain'), [findings])
   const shownFindings = useMemo(() => {
-    let list = policyFindings
+    let list = livePolicyFindings
     if (sevFilter !== 'all') list = list.filter((f) => f.severity === sevFilter)
     const q = findingSearch.trim().toLowerCase()
     if (q) {
@@ -1814,7 +1815,7 @@ export default function IacSecurityCenter() {
       )
     }
     return list
-  }, [policyFindings, sevFilter, findingSearch])
+  }, [livePolicyFindings, sevFilter, findingSearch])
 
   const exportFixBundle = useCallback(() => {
     const bundle = summary?.fix_bundle
@@ -1941,7 +1942,7 @@ export default function IacSecurityCenter() {
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-cyan-400/40 text-cyan-300 bg-cyan-500/10 uppercase tracking-widest">CNAPP · IaC Scanning</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-emerald-400/30 text-emerald-300 bg-emerald-500/10 uppercase tracking-widest">{paramCount} {t('iacSecurity.live_params', 'live parameters')}</span>
-                {summary && <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-[var(--border-strong)] text-[var(--text-tertiary)]">{summary.policies_available} policies</span>}
+                {liveSummary && <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-[var(--border-strong)] text-[var(--text-tertiary)]">{liveSummary.policies_available} policies</span>}
               </div>
               <h1 className="text-2xl font-bold text-white tracking-tight">{engine?.label ? `${engine.label} — Security Center` : 'IaC Security Center'}</h1>
               <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-2xl leading-relaxed">{t('iacSecurity.hero_desc', 'Deterministic, agentless static analysis of your infrastructure code with deep policy coverage, secret detection, compliance posture and code-level remediation — inspired by Wiz, Checkov & tfsec.')}</p>
@@ -2144,38 +2145,38 @@ export default function IacSecurityCenter() {
                   <span className="text-[9px] font-mono text-[var(--text-muted)]">{attackChains.length} {t('iacSecurity.chains_detected', 'chains from correlated policies')}</span>
                 </div>
                 <InteractiveAttackGraph chains={attackChains} />
-                <AttackPathMermaid source={summary?.attack_path_mermaid} chains={attackChains} />
+                <AttackPathMermaid source={liveSummary?.attack_path_mermaid} chains={attackChains} />
                 <div className="grid gap-2">
                   {attackChains.map((c) => <AttackPathCard key={c.id} chain={c} />)}
                 </div>
               </div>
             )}
 
-            <WaiversPanel waivers={summary?.policy_waivers_applied} />
-            <DriftPanel findings={policyFindings} count={summary?.drift_findings} />
-            <ReconcilePanel findings={policyFindings} count={summary?.plan_reconcile_findings} />
-            {summary?.soc2_report && <Soc2ReportPanel report={summary.soc2_report} />}
-            {summary?.pci_report && <PciReportPanel report={summary.pci_report} />}
-            {summary?.hipaa_report && <HipaaReportPanel report={summary.hipaa_report} />}
-            {summary?.nist_report && <NistReportPanel report={summary.nist_report} />}
-            {summary?.iso27001_report && <Iso27001ReportPanel report={summary.iso27001_report} />}
-            {summary?.fedramp_report && <FedRampReportPanel report={summary.fedramp_report} />}
-            {summary?.live_blast && (
+            <WaiversPanel waivers={liveSummary?.policy_waivers_applied} />
+            <DriftPanel findings={livePolicyFindings} count={liveSummary?.drift_findings} />
+            <ReconcilePanel findings={livePolicyFindings} count={liveSummary?.plan_reconcile_findings} />
+            {liveSummary?.soc2_report && <Soc2ReportPanel report={liveSummary.soc2_report} />}
+            {liveSummary?.pci_report && <PciReportPanel report={liveSummary.pci_report} />}
+            {liveSummary?.hipaa_report && <HipaaReportPanel report={liveSummary.hipaa_report} />}
+            {liveSummary?.nist_report && <NistReportPanel report={liveSummary.nist_report} />}
+            {liveSummary?.iso27001_report && <Iso27001ReportPanel report={liveSummary.iso27001_report} />}
+            {liveSummary?.fedramp_report && <FedRampReportPanel report={liveSummary.fedramp_report} />}
+            {liveSummary?.live_blast && (
               <LiveBlastPanel
-                liveBlast={summary.live_blast}
-                realLiveRisk={summary.real_live_risk_score}
-                staticRisk={summary.static_risk_score}
+                liveBlast={liveSummary.live_blast}
+                realLiveRisk={liveSummary.real_live_risk_score}
+                staticRisk={liveSummary.static_risk_score}
               />
             )}
-            {summary?.audit_packet && <AuditPacketPanel packet={summary.audit_packet} />}
-            {summary?.gate_evidence && <GateEvidencePanel evidence={summary.gate_evidence} />}
-            <SupplyChainPanel findings={policyFindings} count={summary?.supply_chain_findings} />
-            {summary?.compliance_playbooks?.length > 0 && <CompliancePlaybooks playbooks={summary.compliance_playbooks} />}
+            {liveSummary?.audit_packet && <AuditPacketPanel packet={liveSummary.audit_packet} />}
+            {liveSummary?.gate_evidence && <GateEvidencePanel evidence={liveSummary.gate_evidence} />}
+            <SupplyChainPanel findings={livePolicyFindings} count={liveSummary?.supply_chain_findings} />
+            {liveSummary?.compliance_playbooks?.length > 0 && <CompliancePlaybooks playbooks={liveSummary.compliance_playbooks} />}
 
-            {summary?.framework_coverage && (
+            {liveSummary?.framework_coverage && (
               <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">{t('iacSecurity.framework_coverage', 'Framework Policy Coverage')}</p>
-                <FrameworkCoverage coverage={summary.framework_coverage} />
+                <FrameworkCoverage coverage={liveSummary.framework_coverage} />
               </div>
             )}
 
@@ -2204,18 +2205,18 @@ export default function IacSecurityCenter() {
               </div>
             )}
 
-            {summary?.mitre_rollup?.length > 0 && (
+            {liveSummary?.mitre_rollup?.length > 0 && (
               <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">{t('iacSecurity.mitre_rollup', 'MITRE ATT&CK Rollup')}</p>
-                <MitreRollup rows={summary.mitre_rollup} />
+                <MitreRollup rows={liveSummary.mitre_rollup} />
               </div>
             )}
 
-            {summary?.compliance && summary.compliance.length > 0 && (
+            {liveSummary?.compliance && liveSummary.compliance.length > 0 && (
               <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">{t('iacSecurity.compliance_posture', 'Compliance Posture')}</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {summary.compliance.map((p) => <ComplianceCard key={p.pack} pack={p} />)}
+                  {liveSummary.compliance.map((p) => <ComplianceCard key={p.pack} pack={p} />)}
                 </div>
               </div>
             )}
@@ -2230,7 +2231,7 @@ export default function IacSecurityCenter() {
             <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                  {shownFindings.length}/{policyFindings.length} {t('iacSecurity.findings', 'Findings')}
+                  {historyUnavailable ? '—' : `${shownFindings.length}/${policyFindings.length}`} {t('iacSecurity.findings', 'Findings')}
                 </p>
                 <div className="relative min-w-[200px] flex-1 max-w-xs">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-disabled)]" />
@@ -2244,7 +2245,7 @@ export default function IacSecurityCenter() {
                   />
                 </div>
                 <div className="flex gap-1 items-center flex-wrap">
-                  {summary && (
+                  {liveSummary && (
                     <>
                       <Button variant="unstyled" type="button" onClick={exportBundle} className="text-[9px] font-mono px-2 py-0.5 rounded border border-emerald-400/30 text-emerald-300/80 hover:bg-emerald-500/10">
                         {t('iacSecurity.export_bundle', 'Export remediation bundle')}
@@ -2285,11 +2286,13 @@ export default function IacSecurityCenter() {
                   </motion.div>
                 ) : (
                   <p className="text-[11px] text-[var(--text-disabled)] font-mono py-6 text-center">
-                    {running
-                      ? t('iacSecurity.running_note', 'Analyzing infrastructure code…')
-                      : findingSearch.trim()
-                        ? t('iacSecurity.no_findings_filtered', 'No findings match the current search and severity filters.')
-                        : t('iacSecurity.no_findings', 'No findings yet — configure a scan and run.')}
+                    {historyUnavailable
+                      ? t('iacSecurity.history_unavailable')
+                      : running
+                        ? t('iacSecurity.running_note', 'Analyzing infrastructure code…')
+                        : findingSearch.trim()
+                          ? t('iacSecurity.no_findings_filtered', 'No findings match the current search and severity filters.')
+                          : t('iacSecurity.no_findings', 'No findings yet — configure a scan and run.')}
                   </p>
                 )}
               </AnimatePresence>

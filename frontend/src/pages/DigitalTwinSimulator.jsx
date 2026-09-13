@@ -76,16 +76,17 @@ const STATE_META = {
 }
 
 function SubScoreBar({ label, value }) {
-  const v = Math.max(0, Math.min(100, Number(value) || 0))
-  const color = v >= 85 ? '#34d399' : v >= 60 ? '#a3e635' : v >= 40 ? '#fbbf24' : '#fb7185'
+  const hasScore = value != null && Number.isFinite(Number(value))
+  const v = hasScore ? Math.max(0, Math.min(100, Number(value))) : 0
+  const color = !hasScore ? 'rgba(255,255,255,0.12)' : v >= 85 ? '#34d399' : v >= 60 ? '#a3e635' : v >= 40 ? '#fbbf24' : '#fb7185'
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
         <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{label}</span>
-        <span className="text-[10px] font-mono" style={{ color }}>{v}</span>
+        <span className="text-[10px] font-mono" style={{ color }}>{hasScore ? v : '—'}</span>
       </div>
       <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${v}%`, backgroundColor: color }} />
+        <div className="h-full rounded-full transition-all duration-500" style={{ width: hasScore ? `${v}%` : '0%', backgroundColor: color }} />
       </div>
     </div>
   )
@@ -93,9 +94,11 @@ function SubScoreBar({ label, value }) {
 
 function Scorecard({ summary, t }) {
   if (!summary) return null
-  const score = summary.score ?? 0
+  const raw = summary.score
+  const hasScore = raw != null && Number.isFinite(Number(raw))
+  const score = hasScore ? Number(raw) : 0
   const grade = summary.grade || '—'
-  const color = gradeColor(grade)
+  const color = hasScore ? gradeColor(grade) : 'rgba(255,255,255,0.12)'
   const exploit = EXPLOIT_STYLE[summary.exploitability] || EXPLOIT_STYLE.hardening_gaps
   const subscores = summary.subscores || {}
   const roadmap = Array.isArray(summary.roadmap) ? summary.roadmap : []
@@ -110,11 +113,11 @@ function Scorecard({ summary, t }) {
             <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
               <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
               <circle cx="50" cy="50" r="42" fill="none" stroke={color} strokeWidth="8"
-                strokeDasharray={`${(score / 100) * 264} 264`} strokeLinecap="round" />
+                strokeDasharray={hasScore ? `${(score / 100) * 264} 264` : '0 264'} strokeLinecap="round" />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-2xl font-bold" style={{ color }}>{grade}</span>
-              <span className="text-[10px] font-mono text-[var(--text-muted)]">{score}/100</span>
+              <span className="text-2xl font-bold" style={{ color }}>{hasScore ? grade : '—'}</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">{hasScore ? `${score}/100` : '—'}</span>
             </div>
           </div>
           <div>
@@ -512,7 +515,7 @@ export default function DigitalTwinSimulator() {
       running: vals.filter((r) => r.pending).length,
     }
   }, [results])
-  const hasAnyResult = Object.keys(results).length > 0 || summary
+  const hasAnyResult = Object.keys(results).length > 0 || (!historyUnavailable && summary)
   const isScanning = Object.values(pendingJobs).some(Boolean) || !!runningId
 
   return (
@@ -618,7 +621,7 @@ export default function DigitalTwinSimulator() {
         </AnimatePresence>
       </div>
 
-      {summary && <Scorecard summary={summary} t={t} />}
+      {!historyUnavailable && summary && <Scorecard summary={summary} t={t} />}
 
       <div className="flex flex-wrap items-center justify-end gap-2 mb-8">
         {hasAnyResult && (

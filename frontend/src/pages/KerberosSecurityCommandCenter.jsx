@@ -255,16 +255,18 @@ function CategoryScoresPanel({ scores, L }) {
       <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">{L.categoryScores}</div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {CATEGORY_META.map(({ key, label, color }) => {
-          const v = Number(scores[key] ?? 0)
-          const c = v >= 85 ? '#22c55e' : v >= 60 ? '#eab308' : v >= 40 ? '#f97316' : '#ef4444'
+          const raw = scores[key]
+          const hasScore = raw != null && Number.isFinite(Number(raw))
+          const v = hasScore ? Number(raw) : 0
+          const c = !hasScore ? 'rgba(255,255,255,0.12)' : v >= 85 ? '#22c55e' : v >= 60 ? '#eab308' : v >= 40 ? '#f97316' : '#ef4444'
           return (
             <div key={key} className="rounded-lg border border-[var(--border-subtle)] p-2">
               <div className="flex justify-between text-[10px] font-mono mb-1">
                 <span style={{ color }}>{label}</span>
-                <span className="text-[var(--text-secondary)]">{v}</span>
+                <span className="text-[var(--text-secondary)]">{hasScore ? v : '—'}</span>
               </div>
               <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
-                <div className="h-full rounded-full" style={{ width: `${v}%`, backgroundColor: c }} />
+                <div className="h-full rounded-full" style={{ width: hasScore ? `${v}%` : '0%', backgroundColor: c }} />
               </div>
             </div>
           )
@@ -322,15 +324,16 @@ function SeverityPill({ sev }) {
   )
 }
 
-function PostureGauge({ score = 0 }) {
-  const pct = Math.max(0, Math.min(100, Number(score) || 0))
-  const c = pct >= 85 ? '#22c55e' : pct >= 60 ? '#eab308' : pct >= 40 ? '#f97316' : '#ef4444'
+function PostureGauge({ score }) {
+  const hasScore = score != null && Number.isFinite(Number(score))
+  const pct = hasScore ? Math.max(0, Math.min(100, Number(score))) : 0
+  const c = !hasScore ? 'rgba(255,255,255,0.12)' : pct >= 85 ? '#22c55e' : pct >= 60 ? '#eab308' : pct >= 40 ? '#f97316' : '#ef4444'
   return (
     <div className="flex items-center gap-3">
-      <div className="text-4xl font-bold font-mono tabular-nums" style={{ color: c }}>{pct}</div>
+      <div className="text-4xl font-bold font-mono tabular-nums" style={{ color: c }}>{hasScore ? pct : '—'}</div>
       <div className="flex-1">
         <div className="h-2.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
-          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: c }} />
+          <div className="h-full rounded-full transition-all duration-700" style={{ width: hasScore ? `${pct}%` : '0%', backgroundColor: c }} />
         </div>
         <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1">100 = no observed external AD weakness</p>
       </div>
@@ -912,22 +915,22 @@ export default function KerberosSecurityCommandCenter() {
         <p className="text-sm font-mono text-[var(--text-muted)] text-center py-12">{L.runToPopulate}</p>
       )}
 
-      {toxic && <ToxicBanner finding={toxic} L={L} />}
+      {toxic && !historyUnavailable && <ToxicBanner finding={toxic} L={L} />}
 
-      {posture && <PostureCard finding={posture} L={L} pathCount={paths.length} />}
+      {posture && !historyUnavailable && <PostureCard finding={posture} L={L} pathCount={paths.length} />}
 
-      {categoryScores && <CategoryScoresPanel scores={categoryScores} L={L} />}
+      {categoryScores && !historyUnavailable && <CategoryScoresPanel scores={categoryScores} L={L} />}
 
-      {roadmap && <RoadmapCard finding={roadmap} L={L} />}
+      {roadmap && !historyUnavailable && <RoadmapCard finding={roadmap} L={L} />}
 
-      {categories.length > 0 && (
+      {!historyUnavailable && categories.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-4">
           <span className="text-[10px] font-mono text-[var(--text-muted)]">{L.categories}:</span>
           {categories.map((c) => <Chip key={c} color={ACCENT}>{c}</Chip>)}
         </div>
       )}
 
-      {agentGaps.length > 0 && (
+      {!historyUnavailable && agentGaps.length > 0 && (
         <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/10 p-4 mb-6">
           <div className="text-[10px] font-mono uppercase tracking-widest text-cyan-300/60 mb-2">{L.agentGapTitle}</div>
           <div className="space-y-1">
@@ -938,7 +941,7 @@ export default function KerberosSecurityCommandCenter() {
         </div>
       )}
 
-      {paths.length > 0 && (
+      {!historyUnavailable && paths.length > 0 && (
         <div className="space-y-3 mb-6">
           <h3 className="text-sm font-bold text-rose-300 flex items-center gap-2">{L.pathsTitle} <Chip color="#fb7185">{paths.length}</Chip></h3>
           {paths.map((p, i) => <AttackPathCard key={i} finding={p} />)}
