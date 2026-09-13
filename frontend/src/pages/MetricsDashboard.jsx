@@ -107,6 +107,11 @@ export default function MetricsDashboard() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
+
   return (
     <PageShell
       title={t('pages.metricsDashboard.title')}
@@ -125,9 +130,9 @@ export default function MetricsDashboard() {
           </label>
           <ShellScanActions
             onRefresh={() => fetchMetrics()}
-            onExport={exportCsv}
+            onExport={handleExportCsv}
             refreshLoading={refreshing}
-            exportDisabled={!filteredFindings.length}
+            exportDisabled={!!error || !filteredFindings.length}
           />
         </>
       }
@@ -137,7 +142,7 @@ export default function MetricsDashboard() {
           {t('pages.metricsDashboard.evidence_notice')}
         </div>
 
-        {lastUpdated && (
+        {lastUpdated && !error && (
           <p className="text-[11px] font-mono text-[var(--text-muted)]">
             {t('pages.metricsDashboard.last_updated', {
               time: lastUpdated.toLocaleTimeString(i18n.language),
@@ -157,7 +162,7 @@ export default function MetricsDashboard() {
             <SkeletonWidgetGrid count={4} />
             <SkeletonBar className="h-64" />
           </>
-        ) : !metrics ? (
+        ) : error || !metrics ? (
           <EmptyState
             icon="📊"
             title={t('pages.metricsDashboard.counters_unavailable_title')}
