@@ -17,9 +17,14 @@ describe('ClientCockpit live-only truth', () => {
   })
 
   it('does not launch poe-scan after run-all store-down', () => {
-    expect(src).not.toMatch(/poe-scan still runs even if it fails/)
-    expect(src).not.toMatch(/catch \(_\) \{/)
-    expect(src).toMatch(/\/api\/scan\/run-all/)
-    expect(src).toMatch(/\/api\/poe-scan\/run/)
+    const run = src.slice(
+      src.indexOf('const runFullScan'),
+      src.indexOf('if (!selectedClientId)'),
+    )
+    expect(run).not.toMatch(/poe-scan still runs even if it fails/)
+    expect(run).not.toMatch(/catch \(_\)/)
+    expect(run).toMatch(/\/api\/scan\/run-all/)
+    expect(run).toMatch(/\/api\/poe-scan\/run/)
+    expect(run).toMatch(/engage_failed/)
   })
 })

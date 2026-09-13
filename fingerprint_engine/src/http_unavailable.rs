@@ -5233,7 +5233,7 @@ mod tests {
         assert!(!compact_src(src).contains("let_=audit_log::insert_audit"));
         assert!(!compact_src(src).contains("let_=persist_operator_audit"));
         let window = persist_window(src, "\"ok\": true");
-        assert!(window.contains(".await.is_err()"));
+        assert!(compact_src(window).contains(".await.is_err()"));
         let v = backup_unavailable_json("store down", Some("/tmp/weissman.dump"));
         assert_eq!(v["ok"], false);
         assert_eq!(v["unavailable"], true);
@@ -5262,7 +5262,7 @@ mod tests {
             assert!(!compact_src(fn_src).contains("let_=audit_log::insert_audit"), "{sig}");
             assert!(!compact_src(fn_src).contains("let_=persist_operator_audit"), "{sig}");
             let window = persist_window(fn_src, "StatusCode::ACCEPTED");
-            assert!(window.contains(".await.is_err()"), "{sig}");
+            assert!(compact_src(window).contains(".await.is_err()"), "{sig}");
             let enq = fn_src
                 .find("crate::async_jobs::enqueue")
                 .unwrap_or_else(|| panic!("{sig} enqueue"));
@@ -5289,7 +5289,7 @@ mod tests {
         let empty = src.find("target required").expect("empty target");
         assert!(empty < persist);
         let window = persist_window(src, "run_auto_discovery");
-        assert!(window.contains(".await.is_err()"));
+        assert!(compact_src(window).contains(".await.is_err()"));
         let v = discovery_domains_unavailable_json("store down");
         assert_eq!(v["ok"], false);
         assert_eq!(v["unavailable"], true);
@@ -5308,7 +5308,7 @@ mod tests {
         assert!(!compact_src(src).contains("let_=tx.commit().await;"));
         assert!(!compact_src(src).contains("let_=persist_operator_audit"));
         let window = persist_window(src, "saas_idp_discovery::discover");
-        assert!(window.contains(".await.is_err()"));
+        assert!(compact_src(window).contains(".await.is_err()"));
         let hunt = src.find("saas_idp_discovery::discover").expect("hunt");
         let ok_true = src.find("\"ok\": true").expect("ok true");
         assert!(hunt < ok_true);
@@ -5486,8 +5486,11 @@ mod tests {
             include_str!("server_handlers_evidence_vault.inc"),
             "async fn api_evidence_delete",
         );
-        let hit = src.find("evidence_deleted").expect("hit action");
-        let after = &src[hit..];
+        let action = src.find("\"evidence_deleted\"").expect("hit action");
+        let insert = src[..action]
+            .rfind("audit_log::insert_audit")
+            .expect("insert before action");
+        let after = &src[insert..];
         assert!(!compact_src(after).contains("let_=audit_log::insert_audit"));
         assert!(compact_src(after).contains("audit_log::insert_audit"));
         assert!(after.contains("evidence_unavailable_json"));
@@ -5513,7 +5516,7 @@ mod tests {
         let skip = src.find("WEISSMAN_AUTOHEAL_SKIP_SANDBOX").expect("skip");
         assert!(persist < skip);
         let window = persist_window(src, "WEISSMAN_AUTOHEAL_SKIP_SANDBOX");
-        assert!(window.contains(".await.is_err()"));
+        assert!(compact_src(window).contains(".await.is_err()"));
         assert!(!compact_src(src).contains("let_=persist_operator_audit"));
         let audit = &src[persist.saturating_sub(200)..skip];
         assert!(audit.contains("destructive_auto_heal_initiated"));
@@ -5533,7 +5536,7 @@ mod tests {
         assert!(src.contains("heal_batch_unavailable_json"));
         assert!(!compact_src(src).contains("let_=persist_operator_audit"));
         let window = persist_window(src, "StatusCode::ACCEPTED");
-        assert!(window.contains(".await.is_err()"));
+        assert!(compact_src(window).contains(".await.is_err()"));
         assert!(window.contains("destructive_heal_batch"));
         assert!(!compact_src(window).contains("ifletOk(muttx)="));
         assert!(!compact_src(window).contains("let_=tx.commit().await;"));
@@ -5653,7 +5656,7 @@ mod tests {
         assert!(!compact.contains("fetch_all(&mut*tx).await.unwrap_or"));
         let dispatch = named_fn_src(include_str!("engine_dispatch.rs"), "pub async fn run_engine");
         assert!(compact_src(dispatch).contains(
-            "matchcrate::sovereign_operator::memory::hydrate(pool.as_ref(),tid,engine_id,target,).await{Ok(s)=>s,Err(_)=>returnEngineResult::error(\"store_down\")}"
+            "matchcrate::sovereign_operator::memory::hydrate(pool.as_ref(),tid,engine_id,target,).await{Ok(s)=>s,Err(_)=>returnEngineResult::error(\"store_down\"),}"
         ));
     }
 
@@ -5715,7 +5718,7 @@ mod tests {
             "pub async fn run_exploit_synthesis_async",
         );
         assert!(compact_src(run).contains(
-            "letgadget_chains=matchextend_gadget_chains_with_ephemeral_and_hunt_async(config,&fingerprint).await{Ok(m)=>m,Err(_)=>returnEngineResult::error(\"store_down\")}"
+            "letgadget_chains=matchextend_gadget_chains_with_ephemeral_and_hunt_async(config,&fingerprint).await{Ok(m)=>m,Err(_)=>returnEngineResult::error(\"store_down\"),}"
         ));
     }
 
