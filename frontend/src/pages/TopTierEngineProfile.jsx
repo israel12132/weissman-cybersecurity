@@ -58,6 +58,8 @@ export default function TopTierEngineProfile() {
   const [liveJob, setLiveJob] = useState(null)
   const [clientIntegrations, setClientIntegrations] = useState(null)
   const [integrationsUnavailable, setIntegrationsUnavailable] = useState(false)
+  const [historyUnavailable, setHistoryUnavailable] = useState(false)
+  const [auditUnavailable, setAuditUnavailable] = useState(false)
   const { schema: paramSchema, extraParams, setParam } = useEngineScanParams(engineId, clientIntegrations)
   useSyncHubScanParams(engineId, extraParams)
   const { postScan } = useCommandCenterScan(clientId)
@@ -75,10 +77,23 @@ export default function TopTierEngineProfile() {
       ])
       if (auditRes.status === 'fulfilled' && Array.isArray(auditRes.value?.engines)) {
         const row = auditRes.value.engines.find((x) => x.engine_id === engineId) || null
+        setAuditUnavailable(false)
         setAudit(row)
+      } else {
+        setAuditUnavailable(true)
       }
       if (historyRes.status === 'fulfilled') {
-        setHistory(historyRes.value instanceof Response ? null : historyRes.value)
+        const v = historyRes.value instanceof Response ? null : historyRes.value
+        if (!v || v.ok === false || v.unavailable) {
+          setHistoryUnavailable(true)
+        } else if (v.jobs != null && !Array.isArray(v.jobs)) {
+          setHistoryUnavailable(true)
+        } else {
+          setHistoryUnavailable(false)
+          setHistory(v)
+        }
+      } else {
+        setHistoryUnavailable(true)
       }
     } finally {
       setHistoryLoading(false)
@@ -363,12 +378,12 @@ export default function TopTierEngineProfile() {
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
             <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.reality_status')}</h2>
             <div className="space-y-2 text-[12px] font-mono text-[var(--text-tertiary)]">
-              <div>{t('pages.topTierEngineProfile.catalog', { value: audit?.known_in_catalog ? t('pages.topTierEngineProfile.connected') : t('pages.topTierEngineProfile.missing') })}</div>
-              <div>{t('pages.topTierEngineProfile.canonical', { value: audit?.canonical_engine || '-' })}</div>
-              <div>{t('pages.topTierEngineProfile.execution_path', { value: audit?.execution_path || '-' })}</div>
-              <div>{t('pages.topTierEngineProfile.production_runnable', { value: audit?.is_production_runnable ? t('pages.topTierEngineProfile.yes') : t('pages.topTierEngineProfile.no') })}</div>
-              <div>{t('pages.topTierEngineProfile.jobs_tracked', { count: jobs.length })}</div>
-              <div>{t('pages.topTierEngineProfile.findings_tracked', { count: findings.length })}</div>
+              <div>{t('pages.topTierEngineProfile.catalog', { value: auditUnavailable ? '—' : (audit?.known_in_catalog ? t('pages.topTierEngineProfile.connected') : t('pages.topTierEngineProfile.missing')) })}</div>
+              <div>{t('pages.topTierEngineProfile.canonical', { value: auditUnavailable ? '—' : (audit?.canonical_engine || '-') })}</div>
+              <div>{t('pages.topTierEngineProfile.execution_path', { value: auditUnavailable ? '—' : (audit?.execution_path || '-') })}</div>
+              <div>{t('pages.topTierEngineProfile.production_runnable', { value: auditUnavailable ? '—' : (audit?.is_production_runnable ? t('pages.topTierEngineProfile.yes') : t('pages.topTierEngineProfile.no')) })}</div>
+              <div>{historyUnavailable ? t('pages.topTierEngineProfile.history_unavailable') : t('pages.topTierEngineProfile.jobs_tracked', { count: jobs.length })}</div>
+              <div>{historyUnavailable ? t('pages.topTierEngineProfile.history_unavailable') : t('pages.topTierEngineProfile.findings_tracked', { count: findings.length })}</div>
             </div>
           </article>
         </section>
@@ -516,6 +531,10 @@ export default function TopTierEngineProfile() {
           )}
           {historyLoading ? (
             <SkeletonTable rows={8} cols={5} />
+          ) : historyUnavailable ? (
+            <p data-testid="top-tier-engine-profile-history-unavailable" className="text-xs text-amber-300/80 font-mono">
+              {t('pages.topTierEngineProfile.history_unavailable')}
+            </p>
           ) : jobs.length === 0 ? (
             <EmptyState
               icon="inbox"

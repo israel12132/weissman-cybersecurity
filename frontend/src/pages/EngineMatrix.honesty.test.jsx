@@ -17,4 +17,12 @@ describe('EngineMatrix live-only truth', () => {
     expect(src).toMatch(/known \?\? \{ color: '#6b7280'/)
     expect(src).not.toMatch(/map\[status\] \?\? map\.idle/)
   })
+
+  it('does not paint zero enabled engines when client config cannot be confirmed', () => {
+    expect(src).toMatch(/data-testid="engine-matrix-config-unavailable"/)
+    expect(src).toMatch(/config_unavailable/)
+    expect(src).toMatch(/setConfigUnavailable\(true\)/)
+    expect(src).toMatch(/data-testid="engine-matrix-integrations-unavailable"/)
+    expect(src).not.toMatch(/apiFetch\(`\/api\/clients\/\$\{selectedClientId\}\/config`\)\.catch\(\(\) => null\)/)
+  })
 })

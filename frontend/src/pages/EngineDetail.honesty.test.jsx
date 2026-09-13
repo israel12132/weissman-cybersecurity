@@ -15,4 +15,18 @@ describe('EngineDetail live-only truth', () => {
     expect(src).toMatch(/setClientsUnavailable\(true\)/)
     expect(src).not.toMatch(/\.then\(\(d\) => \{ if \(Array\.isArray\(d\)\) setClients\(d\) \}\)/)
   })
+
+  it('does not treat a failed integrations fetch as unconfigured scan prefill', () => {
+    expect(src).toMatch(/data-testid="engine-detail-integrations-unavailable"/)
+    expect(src).toMatch(/integrations_unavailable/)
+    expect(src).toMatch(/setIntegrationsUnavailable\(true\)/)
+    expect(src).not.toMatch(/\.catch\(\(\) => \{ if \(!cancelled\) setClientIntegrations\(null\) \}\)/)
+  })
+
+  it('does not paint never-run when GET /api/engines/history fails', () => {
+    expect(src).toMatch(/data-testid="engine-detail-history-unavailable"/)
+    expect(src).toMatch(/history_unavailable/)
+    expect(src).toMatch(/setHistoryUnavailable\(true\)/)
+    expect(src).not.toMatch(/fall through to localStorage/)
+  })
 })

@@ -424,6 +424,8 @@ export default function EngineMatrix() {
   const [clientConfig, setClientConfig] = useState(null)
   const [clientIntegrations, setClientIntegrations] = useState(null)
   const [configLoading, setConfigLoading] = useState(false)
+  const [configUnavailable, setConfigUnavailable] = useState(false)
+  const [integrationsUnavailable, setIntegrationsUnavailable] = useState(false)
   const [engineStates, setEngineStates] = useState({})
   const [historyUnavailable, setHistoryUnavailable] = useState(true)
   const [toast, setToast] = useState(null)
@@ -454,20 +456,30 @@ export default function EngineMatrix() {
     if (selectedClientId == null) {
       setClientConfig(null)
       setClientIntegrations(null)
+      setConfigUnavailable(false)
+      setIntegrationsUnavailable(false)
       return
     }
     setConfigLoading(true)
-    Promise.all([
-      apiFetch(`/api/clients/${selectedClientId}/config`).catch(() => null),
-      apiFetch(`/api/clients/${selectedClientId}/integrations`).catch(() => null),
+    Promise.allSettled([
+      apiFetch(`/api/clients/${selectedClientId}/config`),
+      apiFetch(`/api/clients/${selectedClientId}/integrations`),
     ])
-      .then(([cfg, int]) => {
-        if (cfg) setClientConfig(cfg)
-        if (int) setClientIntegrations(normalizeIntegrations(int))
-        else setClientIntegrations(null)
+      .then(([cfgRes, intRes]) => {
+        if (cfgRes.status !== 'fulfilled' || !cfgRes.value || cfgRes.value.ok === false || cfgRes.value.unavailable) {
+          setConfigUnavailable(true)
+        } else {
+          setConfigUnavailable(false)
+          setClientConfig(cfgRes.value)
+        }
+        if (intRes.status !== 'fulfilled' || !intRes.value || intRes.value.ok === false || intRes.value.unavailable) {
+          setIntegrationsUnavailable(true)
+          setClientIntegrations(null)
+        } else {
+          setIntegrationsUnavailable(false)
+          setClientIntegrations(normalizeIntegrations(intRes.value))
+        }
       })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
       .finally(() => setConfigLoading(false))
   }, [selectedClientId])
 
@@ -765,10 +777,20 @@ export default function EngineMatrix() {
               {(configLoading || productionLoading) && (
                 <div className="w-3.5 h-3.5 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
               )}
-              {selectedClientId && (
+              {selectedClientId && !configUnavailable && (
                 <span className="text-[10px] font-mono text-[var(--text-muted)]">
                   {t('engines.enabled_short', { count: totalEnabled })}
                 </span>
+              )}
+              {configUnavailable && (
+                <p data-testid="engine-matrix-config-unavailable" className="text-xs text-amber-300/80 font-mono">
+                  {t('engines.config_unavailable')}
+                </p>
+              )}
+              {integrationsUnavailable && (
+                <p data-testid="engine-matrix-integrations-unavailable" className="text-xs text-amber-300/80 font-mono">
+                  {t('engines.integrations_unavailable')}
+                </p>
               )}
               <Button variant="unstyled"
                 type="button"

@@ -83,6 +83,8 @@ export default function OsintEngineProfile() {
   const [history, setHistory] = useState(null)
   const [historyLoading, setHistoryLoading] = useState(true)
   const [clientIntegrations, setClientIntegrations] = useState(null)
+  const [integrationsUnavailable, setIntegrationsUnavailable] = useState(false)
+  const [historyUnavailable, setHistoryUnavailable] = useState(false)
   const eventSourceRef = useRef(null)
   const { schema: paramSchema, extraParams, setParam } = useEngineScanParams(ENGINE_ID, clientIntegrations)
   useRegisterHubClient(selectedClientId)
@@ -125,8 +127,19 @@ export default function OsintEngineProfile() {
     setHistoryLoading(true)
     try {
       const d = await apiFetch(`/api/engines/history/${ENGINE_ID}?limit=100`)
+      if (d?.ok === false || d?.unavailable || !d || typeof d !== 'object') {
+        setHistoryUnavailable(true)
+        return
+      }
+      if (!Array.isArray(d.jobs) && d.jobs != null) {
+        setHistoryUnavailable(true)
+        return
+      }
+      setHistoryUnavailable(false)
       setHistory(d)
-    } catch { /* keep prior history on transient failure */ } finally {
+    } catch {
+      setHistoryUnavailable(true)
+    } finally {
       setHistoryLoading(false)
     }
   }, [])
@@ -150,12 +163,27 @@ export default function OsintEngineProfile() {
   useEffect(() => {
     if (!selectedClientId) {
       setClientIntegrations(null)
+      setIntegrationsUnavailable(false)
       return
     }
     let cancelled = false
     apiFetch(`/api/clients/${selectedClientId}/integrations`)
-      .then((d) => { if (!cancelled) setClientIntegrations(normalizeIntegrations(d)) })
-      .catch(() => { if (!cancelled) setClientIntegrations(null) })
+      .then((d) => {
+        if (cancelled) return
+        if (!d || d.ok === false || d.unavailable) {
+          setIntegrationsUnavailable(true)
+          setClientIntegrations(null)
+          return
+        }
+        setIntegrationsUnavailable(false)
+        setClientIntegrations(normalizeIntegrations(d))
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setIntegrationsUnavailable(true)
+          setClientIntegrations(null)
+        }
+      })
     return () => { cancelled = true }
   }, [selectedClientId])
 
@@ -341,22 +369,22 @@ export default function OsintEngineProfile() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <ExecutiveWidget
           label={t('pages.osintEngineProfile.kpi_jobs')}
-          value={historyLoading ? '—' : kpi.jobs.toLocaleString()}
+          value={historyLoading || historyUnavailable ? '—' : kpi.jobs.toLocaleString()}
           accent="#22d3ee"
         />
         <ExecutiveWidget
           label={t('pages.osintEngineProfile.kpi_completed')}
-          value={historyLoading ? '—' : kpi.completed.toLocaleString()}
+          value={historyLoading || historyUnavailable ? '—' : kpi.completed.toLocaleString()}
           accent="#34d399"
         />
         <ExecutiveWidget
           label={t('pages.osintEngineProfile.kpi_running')}
-          value={historyLoading ? '—' : kpi.running.toLocaleString()}
+          value={historyLoading || historyUnavailable ? '—' : kpi.running.toLocaleString()}
           accent="#f59e0b"
         />
         <ExecutiveWidget
           label={t('pages.osintEngineProfile.kpi_findings')}
-          value={historyLoading ? '—' : kpi.findings.toLocaleString()}
+          value={historyLoading || historyUnavailable ? '—' : kpi.findings.toLocaleString()}
           accent="#a78bfa"
         />
       </div>
@@ -431,6 +459,16 @@ export default function OsintEngineProfile() {
               {clientsUnavailable && (
                 <p data-testid="osint-engine-profile-clients-unavailable" className="text-xs text-amber-300/80 font-mono mt-1">
                   {t('pages.osintEngineProfile.clients_unavailable')}
+                </p>
+              )}
+              {integrationsUnavailable && (
+                <p data-testid="osint-engine-profile-integrations-unavailable" className="text-xs text-amber-300/80 font-mono mt-1">
+                  {t('pages.osintEngineProfile.integrations_unavailable')}
+                </p>
+              )}
+              {historyUnavailable && (
+                <p data-testid="osint-engine-profile-history-unavailable" className="text-xs text-amber-300/80 font-mono mt-1">
+                  {t('pages.osintEngineProfile.history_unavailable')}
                 </p>
               )}
               <div className="text-[10px] text-[var(--text-muted)] font-mono mt-1">{t('pages.osintEngineProfile.active_client', { name: selectedClientName })}</div>

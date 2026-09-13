@@ -83,6 +83,7 @@ export default function BusinessEngineProfile() {
   const [liveJob, setLiveJob] = useState(null)
   const [clientIntegrations, setClientIntegrations] = useState(null)
   const [integrationsUnavailable, setIntegrationsUnavailable] = useState(false)
+  const [historyUnavailable, setHistoryUnavailable] = useState(false)
   const { schema: paramSchema, extraParams, setParam } = useEngineScanParams(engineId, clientIntegrations)
   useSyncHubScanParams(engineId, extraParams)
   const { postScan } = useCommandCenterScan(clientId)
@@ -100,9 +101,18 @@ export default function BusinessEngineProfile() {
     setProfileLoading(true)
     try {
       const d = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=100`)
+      if (d?.ok === false || d?.unavailable || !d || typeof d !== 'object') {
+        setHistoryUnavailable(true)
+        return
+      }
+      if (!Array.isArray(d.jobs) && d.jobs != null) {
+        setHistoryUnavailable(true)
+        return
+      }
+      setHistoryUnavailable(false)
       setHistory(d)
     } catch {
-      // history load failed — keep prior state
+      setHistoryUnavailable(true)
     } finally {
       setProfileLoading(false)
     }
@@ -346,11 +356,16 @@ export default function BusinessEngineProfile() {
         />
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_jobs')} value={kpi.jobs.toLocaleString()} accent="#22d3ee" />
-          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_findings')} value={kpi.findings.toLocaleString()} accent="#a78bfa" />
-          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_completed')} value={kpi.completed.toLocaleString()} accent="#34d399" />
-          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_failed')} value={kpi.failed.toLocaleString()} accent="#f87171" />
+          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_jobs')} value={profileLoading || historyUnavailable ? '—' : kpi.jobs.toLocaleString()} accent="#22d3ee" />
+          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_findings')} value={profileLoading || historyUnavailable ? '—' : kpi.findings.toLocaleString()} accent="#a78bfa" />
+          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_completed')} value={profileLoading || historyUnavailable ? '—' : kpi.completed.toLocaleString()} accent="#34d399" />
+          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_failed')} value={profileLoading || historyUnavailable ? '—' : kpi.failed.toLocaleString()} accent="#f87171" />
         </div>
+        {historyUnavailable && (
+          <p data-testid="business-engine-profile-history-unavailable" className="text-xs text-amber-300/80 font-mono">
+            {t('pages.businessEngineProfile.history_unavailable')}
+          </p>
+        )}
 
         <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-5 space-y-3">
           <div className="flex flex-wrap items-center gap-2">

@@ -15,4 +15,17 @@ describe('OsintEngineProfile live-only truth', () => {
     expect(src).toMatch(/setClientsUnavailable\(true\)/)
     expect(src).not.toMatch(/\[OsintEngineProfile\] clients load failed/)
   })
+
+  it('does not treat a failed integrations fetch as unconfigured scan prefill', () => {
+    expect(src).toMatch(/data-testid="osint-engine-profile-integrations-unavailable"/)
+    expect(src).toMatch(/integrations_unavailable/)
+    expect(src).toMatch(/setIntegrationsUnavailable\(true\)/)
+  })
+
+  it('does not paint KPI zeros when GET /api/engines/history/osint fails', () => {
+    expect(src).toMatch(/data-testid="osint-engine-profile-history-unavailable"/)
+    expect(src).toMatch(/history_unavailable/)
+    expect(src).toMatch(/setHistoryUnavailable\(true\)/)
+    expect(src).toMatch(/historyLoading \|\| historyUnavailable/)
+  })
 })

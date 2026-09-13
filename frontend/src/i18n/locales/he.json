@@ -657,6 +657,8 @@
     "select_client": "— Select client —",
     "select_client_warning": "Select a client above to enable toggle controls and run engines. Browse is available without a client.",
     "enabled_short": "{{count}} enabled",
+    "config_unavailable": "API תצורת המנועים ללקוח אינו זמין — אפס מופעלים אינו tenant לא מוגדר.",
+    "integrations_unavailable": "API האינטגרציות אינו זמין — מילוי ריק אינו tenant לא מוגדר.",
     "run_all_engines": "Run All Engines ({{count}})",
     "run_group": "Run Group",
     "enable_engine_first": "Enable engine first",
@@ -688,6 +690,7 @@
     "detail_health_live": "Operational",
     "detail_health_catalog": "Catalog only",
     "detail_never_run": "Never",
+    "detail_history_unavailable": "—",
     "detail_run_config": "Run Configuration",
     "detail_clear": "Clear",
     "detail_no_findings": "No structured findings yet — run the engine to collect results.",
@@ -3082,6 +3085,7 @@
       "kpi_findings": "תמונת ממצאים",
       "kpi_completed": "ריצות שהושלמו",
       "kpi_failed": "נכשלו / dead",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — אפסי KPI אינם שביל ריצה שקט.",
       "engines": {
         "osint": {
           "title": "דף פיקוד OSINT",
@@ -4442,6 +4446,7 @@
       "title": "מרכז בקרה Top-Tier",
       "auditing": "בודק...",
       "connected": "{{connected}}/{{total}} מחוברים",
+      "audit_unavailable": "API ביקורת Top-Tier אינו זמין — 0 מחוברים אינו צי מנותק.",
       "reality_heading": "בדיקת מציאות חיבור",
       "reality_body": "הדף בודק כל מנוע Top-Tier מול קטלוג, רזולוציה קנונית ונתיב הרצה. מנועים ירוקים ניתנים להרצה מ-Command Center.",
       "client_optional": "לקוח (אופציונלי)",
@@ -4613,6 +4618,7 @@
       "client_label": "לקוח",
       "select_client": "— בחר לקוח —",
       "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר.",
+      "integrations_unavailable": "API האינטגרציות אינו זמין — מילוי ריק אינו tenant לא מוגדר.",
       "active_client": "פעיל: {{name}}",
       "no_client_selected": "לא נבחר לקוח",
       "target_label": "URL / דומיין יעד",
@@ -4633,6 +4639,7 @@
       "kpi_completed": "הושלמו",
       "kpi_running": "רצות",
       "kpi_findings": "ממצאים",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — אפסי KPI אינם שביל OSINT שקט.",
       "empty_client_title": "בחר לקוח להרצת OSINT",
       "empty_client_body": "בחר לקוח מלוח ההרצה כדי להגביל סיור לדומיינים מורשים.",
       "col_discovered": "התגלה",
@@ -4812,6 +4819,7 @@
       "evidence_notice": "ביקורת, היסטוריה וייצוא מ-GET /api/engines/top-tier/* ו-POST /api/command-center/scan — ראיות מנוע חיות בלבד.",
       "empty_jobs_title": "אין משימות במעקב עדיין",
       "empty_jobs_body": "הכנס סריקה לתור מלוח ההרצה כדי למלא היסטוריית משימות למנוע Top-Tier זה.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — משימות ריקות אינן שביל שקט.",
       "command_center": "מרכז בקרה"
     },
     "ssoDashboard": {
@@ -4937,7 +4945,9 @@
     },
     "engineDetail": {
       "evidence_notice": "היסטוריית ריצות מ-GET /api/engines/history/:engineId. סריקות חיות ב-POST /api/command-center/scan עם פרמטרים לפי מנוע. התקדמות בזמן אמת: GET /api/telemetry/stream?job_id=… — ממצאים נשמרים רק ב-tenant שלך.",
-      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר."
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר.",
+      "integrations_unavailable": "API האינטגרציות אינו זמין — מילוי ריק אינו tenant לא מוגדר.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — never-run אינו מאושר."
     },
     "clientDetail": {
       "evidence_notice": "רשומת לקוח, scope ונתוני engagement מ-GET /api/clients/:id ו-endpoints קשורים. חבילות סריקה ו-vault הוכחות הם רשומות DB חיות — ללא פרופילי דמו."

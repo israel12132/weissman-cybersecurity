@@ -22,4 +22,11 @@ describe('TopTierEngineProfile live-only truth', () => {
     expect(src).toMatch(/setIntegrationsUnavailable\(true\)/)
     expect(src).not.toMatch(/apiFetch\(`\/api\/clients\/\$\{clientId\}\/integrations`\)\.catch\(\(\) => null\)/)
   })
+
+  it('does not paint empty_jobs when top-tier history cannot be confirmed', () => {
+    expect(src).toMatch(/data-testid="top-tier-engine-profile-history-unavailable"/)
+    expect(src).toMatch(/history_unavailable/)
+    expect(src).toMatch(/setHistoryUnavailable\(true\)/)
+    expect(src).not.toMatch(/if \(historyRes\.status === 'fulfilled'\) \{\s*setHistory\(/)
+  })
 })

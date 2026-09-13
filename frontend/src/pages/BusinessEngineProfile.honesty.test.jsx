@@ -22,4 +22,11 @@ describe('BusinessEngineProfile live-only truth', () => {
     expect(src).toMatch(/setIntegrationsUnavailable\(true\)/)
     expect(src).not.toMatch(/apiFetch\(`\/api\/clients\/\$\{clientId\}\/integrations`\)\.catch\(\(\) => null\)/)
   })
+
+  it('does not paint KPI zeros when GET /api/engines/history fails', () => {
+    expect(src).toMatch(/data-testid="business-engine-profile-history-unavailable"/)
+    expect(src).toMatch(/history_unavailable/)
+    expect(src).toMatch(/setHistoryUnavailable\(true\)/)
+    expect(src).toMatch(/profileLoading \|\| historyUnavailable/)
+  })
 })

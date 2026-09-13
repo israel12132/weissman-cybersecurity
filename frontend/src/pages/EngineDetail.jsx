@@ -255,29 +255,44 @@ function mapServerHistoryJob(job) {
 }
 
 function RunHistoryPanel({ engineId, emptyLabel }) {
+  const { t } = useTranslation()
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
   const [fromServer, setFromServer] = useState(false)
+  const [unavailable, setUnavailable] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     async function load() {
       setLoading(true)
+      setUnavailable(false)
       try {
         const data = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=20`)
-        if (!cancelled && Array.isArray(data?.jobs) && data.jobs.length > 0) {
-          setHistory(data.jobs.map(mapServerHistoryJob))
-          setFromServer(true)
+        if (cancelled) return
+        if (data?.ok === false || data?.unavailable || !data || typeof data !== 'object' || Array.isArray(data)) {
+          setUnavailable(true)
           setLoading(false)
           return
         }
+        if (Array.isArray(data?.jobs) && data.jobs.length > 0) {
+          setHistory(data.jobs.map(mapServerHistoryJob))
+          setFromServer(true)
+          setUnavailable(false)
+          setLoading(false)
+          return
+        }
+        if (Array.isArray(data?.jobs)) {
+          setHistory(loadHistory(engineId))
+          setFromServer(false)
+          setUnavailable(false)
+          setLoading(false)
+          return
+        }
+        setUnavailable(true)
       } catch {
-        /* fall through to localStorage */
-      }
-      if (!cancelled) {
-        setHistory(loadHistory(engineId))
-        setFromServer(false)
-        setLoading(false)
+        if (!cancelled) setUnavailable(true)
+      } finally {
+        if (!cancelled) setLoading(false)
       }
     }
     load()
@@ -285,6 +300,13 @@ function RunHistoryPanel({ engineId, emptyLabel }) {
   }, [engineId])
 
   if (loading) return <p className="text-[11px] font-mono text-[var(--text-disabled)]">Loading run history…</p>
+  if (unavailable) {
+    return (
+      <p data-testid="engine-detail-history-unavailable" className="text-xs text-amber-300/80 font-mono">
+        {t('pages.engineDetail.history_unavailable')}
+      </p>
+    )
+  }
   if (!history.length) return <p className="text-[11px] font-mono text-[var(--text-disabled)]">{emptyLabel}</p>
   return (
     <div className="space-y-2">
@@ -415,6 +437,8 @@ export default function EngineDetail() {
   const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [clientIntegrations, setClientIntegrations] = useState(null)
+  const [integrationsUnavailable, setIntegrationsUnavailable] = useState(false)
+  const [historyUnavailable, setHistoryUnavailable] = useState(false)
   const { extraParams, setParam: setExtraParam } = useEngineScanParams(engineId, clientIntegrations)
   useSyncHubScanParams(engineId, extraParams)
   useRegisterHubClient(selectedClientId)
@@ -443,13 +467,23 @@ export default function EngineDetail() {
     setHistoryLoading(true)
     try {
       const data = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=20`)
+      if (data?.ok === false || data?.unavailable) {
+        setHistoryUnavailable(true)
+        return
+      }
       if (Array.isArray(data?.jobs) && data.jobs.length > 0) {
+        setHistoryUnavailable(false)
         setRunHistory(data.jobs.map(mapServerHistoryJob))
         return
       }
-      setRunHistory(loadHistory(engineId))
+      if (Array.isArray(data?.jobs)) {
+        setHistoryUnavailable(false)
+        setRunHistory(loadHistory(engineId))
+        return
+      }
+      setHistoryUnavailable(true)
     } catch {
-      setRunHistory(loadHistory(engineId))
+      setHistoryUnavailable(true)
     } finally {
       setHistoryLoading(false)
     }
@@ -462,12 +496,27 @@ export default function EngineDetail() {
   useEffect(() => {
     if (!selectedClientId) {
       setClientIntegrations(null)
+      setIntegrationsUnavailable(false)
       return
     }
     let cancelled = false
     apiFetch(`/api/clients/${selectedClientId}/integrations`)
-      .then((d) => { if (!cancelled && d) setClientIntegrations(normalizeIntegrations(d)) })
-      .catch(() => { if (!cancelled) setClientIntegrations(null) })
+      .then((d) => {
+        if (cancelled) return
+        if (!d || d.ok === false || d.unavailable) {
+          setIntegrationsUnavailable(true)
+          setClientIntegrations(null)
+          return
+        }
+        setIntegrationsUnavailable(false)
+        setClientIntegrations(normalizeIntegrations(d))
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setIntegrationsUnavailable(true)
+          setClientIntegrations(null)
+        }
+      })
     return () => { cancelled = true }
   }, [selectedClientId])
 
@@ -607,7 +656,9 @@ export default function EngineDetail() {
     ? t('engines.detail_health_live')
     : t('engines.detail_health_catalog')
   const healthAccent = isProduction(engineId) ? '#4ade80' : '#9ca3af'
-  const lastRunDisplay = lastHistoryRun
+  const lastRunDisplay = historyUnavailable
+    ? '—'
+    : lastHistoryRun
     ? new Date(lastHistoryRun.ts).toLocaleString()
     : t('engines.detail_never_run')
   const totalFindings = findings.length || (lastHistoryRun?.findingsCount ?? 0)
@@ -837,6 +888,16 @@ export default function EngineDetail() {
             {clientsUnavailable && (
               <p data-testid="engine-detail-clients-unavailable" className="text-xs text-amber-300/80 font-mono mt-1">
                 {t('pages.engineDetail.clients_unavailable')}
+              </p>
+            )}
+            {integrationsUnavailable && (
+              <p data-testid="engine-detail-integrations-unavailable" className="text-xs text-amber-300/80 font-mono mt-1">
+                {t('pages.engineDetail.integrations_unavailable')}
+              </p>
+            )}
+            {historyUnavailable && (
+              <p data-testid="engine-detail-history-stat-unavailable" className="text-xs text-amber-300/80 font-mono mt-1">
+                {t('pages.engineDetail.history_unavailable')}
               </p>
             )}
           </div>
