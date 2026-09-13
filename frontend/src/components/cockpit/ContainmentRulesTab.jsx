@@ -76,6 +76,7 @@ export default function ContainmentRulesTab() {
 
   const execute = async () => {
     if (!selectedClientId) return
+    if (loadError) return
     const rid = parseInt(exec.rule_id, 10)
     if (!Number.isFinite(rid)) {
       setMsg({ ok: false, text: t(`${NS}.selectRuleId`) })
@@ -226,7 +227,7 @@ export default function ContainmentRulesTab() {
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm"
           >
             <option value="">{t(`${NS}.rulePlaceholder`)}</option>
-            {rules.map(r => (
+            {(!loadError ? rules : []).map(r => (
               <option key={r.id} value={r.id}>
                 #{r.id} {r.name} {r.pre_approved ? '✓' : '—'}
               </option>
@@ -249,7 +250,8 @@ export default function ContainmentRulesTab() {
           <Button variant="unstyled"
             type="button"
             onClick={execute}
-            className="px-4 py-2 rounded-xl bg-red-600/80 text-white text-sm hover:bg-red-600"
+            disabled={!!loadError}
+            className="px-4 py-2 rounded-xl bg-red-600/80 text-white text-sm hover:bg-red-600 disabled:opacity-40"
           >
             {t(`${NS}.executeQuarantine`)}
           </Button>
