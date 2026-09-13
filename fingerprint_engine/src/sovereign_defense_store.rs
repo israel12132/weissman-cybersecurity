@@ -282,7 +282,7 @@ pub async fn load_poison_library(pool: &PgPool, limit: i64) -> Result<Vec<Value>
     .bind(limit)
     .fetch_all(pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     Ok(rows
         .into_iter()
         .map(|r| {

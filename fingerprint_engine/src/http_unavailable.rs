@@ -1004,6 +1004,44 @@ pub fn sovereign_operator_logs_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// `GET /api/sovereign-defense/:id/cognitive/poison-library` when the library cannot be read
+pub fn poison_library_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "items": [],
+        "detail": detail,
+    })
+}
+
+/// Sovereign Operator memory / forge / scripts lists when the store cannot be read
+pub fn sovereign_operator_memory_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "memory": [],
+        "detail": detail,
+    })
+}
+
+pub fn sovereign_operator_forge_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "forge": [],
+        "detail": detail,
+    })
+}
+
+pub fn sovereign_operator_scripts_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "scripts": [],
+        "detail": detail,
+    })
+}
+
 /// `GET /api/sovereign-defense/.../operator/windows` when live windows cannot be read
 pub fn sovereign_operator_windows_unavailable_json(detail: &str) -> Value {
     json!({
@@ -3105,5 +3143,52 @@ mod tests {
             .expect("persist commit");
         let ok_true = cloud_src.find("\"ok\": true").expect("ok");
         assert!(persist_commit < ok_true);
+    }
+
+    #[test]
+    fn poison_library_and_operator_lists_are_503_not_sql() {
+        let poison = named_fn_src(
+            include_str!("server_handlers_sovereign_defense.inc"),
+            "async fn api_sovereign_defense_poison_library",
+        );
+        assert!(poison.contains("poison_library_unavailable_json"));
+        assert!(!poison.contains("\"error\": e"));
+        let src = include_str!("sovereign_defense_store.rs");
+        let start = src.find("pub async fn load_poison_library").expect("poison");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn dashboard_snapshot")
+            .unwrap_or(rest.len());
+        assert!(!&rest[..next].contains("e.to_string()"));
+        let op = include_str!("server_handlers_sovereign_operator.inc");
+        for (sig, ctor) in [
+            (
+                "async fn api_sovereign_operator_memory_get",
+                "sovereign_operator_memory_unavailable_json",
+            ),
+            (
+                "async fn api_sovereign_operator_forge_get",
+                "sovereign_operator_forge_unavailable_json",
+            ),
+            (
+                "async fn api_sovereign_operator_scripts_get",
+                "sovereign_operator_scripts_unavailable_json",
+            ),
+        ] {
+            let fn_src = named_fn_src(op, sig);
+            assert!(fn_src.contains(ctor), "{sig}");
+            assert!(!fn_src.contains("\"detail\": e"), "{sig}");
+        }
+        let exec = include_str!("async_job_executor.rs");
+        for needle in ["\"swarm_run\" =>", "\"feedback_fuzz\" =>"] {
+            let start = exec.find(needle).unwrap_or_else(|| panic!("missing {needle}"));
+            let slice = &exec[start..start + 1800.min(exec.len() - start)];
+            let exists = slice.find("SELECT EXISTS").expect("exists");
+            assert!(
+                !&slice[exists..exists + 350].contains("unwrap_or(false)"),
+                "{needle}"
+            );
+            assert!(&slice[exists..exists + 350].contains("store_down"), "{needle}");
+        }
     }
 }

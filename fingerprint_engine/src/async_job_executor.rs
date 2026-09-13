@@ -1977,7 +1977,7 @@ async fn execute_job_unscoped(
             .bind(tid)
             .fetch_one(&mut *tx)
             .await
-            .unwrap_or(false);
+            .map_err(|_| "store_down".to_string())?;
             let _ = tx.commit().await;
             if !ok {
                 return Err("client not found".into());
@@ -2267,7 +2267,7 @@ async fn execute_job_unscoped(
             .bind(tid)
             .fetch_one(&mut *tx)
             .await
-            .unwrap_or(false);
+            .map_err(|_| "store_down".to_string())?;
             let _ = tx.commit().await;
             if !ok {
                 return Err("client not found".into());

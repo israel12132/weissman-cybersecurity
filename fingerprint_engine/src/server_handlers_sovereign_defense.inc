@@ -197,9 +197,11 @@ async fn api_sovereign_defense_poison_library(
     }
     match crate::sovereign_defense_store::load_poison_library(&state.app_pool, 50).await {
         Ok(v) => (StatusCode::OK, Json(Value::Array(v))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": e })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::poison_library_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }

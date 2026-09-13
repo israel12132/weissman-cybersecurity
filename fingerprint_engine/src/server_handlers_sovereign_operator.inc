@@ -526,9 +526,13 @@ async fn api_sovereign_operator_memory_get(
     .await
     {
         Ok(rows) => (StatusCode::OK, Json(json!({ "ok": true, "memory": rows }))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(
+                crate::http_unavailable::sovereign_operator_memory_unavailable_json(
+                    "database unavailable",
+                ),
+            ),
         )
             .into_response(),
     }
@@ -543,9 +547,13 @@ async fn api_sovereign_operator_forge_get(
         .await
     {
         Ok(rows) => (StatusCode::OK, Json(json!({ "ok": true, "forge": rows }))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(
+                crate::http_unavailable::sovereign_operator_forge_unavailable_json(
+                    "database unavailable",
+                ),
+            ),
         )
             .into_response(),
     }
@@ -560,9 +568,13 @@ async fn api_sovereign_operator_scripts_get(
         .await
     {
         Ok(rows) => (StatusCode::OK, Json(json!({ "ok": true, "scripts": rows }))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(
+                crate::http_unavailable::sovereign_operator_scripts_unavailable_json(
+                    "database unavailable",
+                ),
+            ),
         )
             .into_response(),
     }
