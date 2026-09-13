@@ -218,14 +218,14 @@ export default function SupplyChainHub() {
     exportCsv,
     total,
   } = useFindingsWorkbench(aggregatedFindings, {
+    csvPrefix: 'supply-chain-hub',
+    haystackFn: (f) => `${f.title || ''} ${f.type || ''} ${f.target || ''} ${f.engine || ''} ${f.description || ''}`,
+  })
 
   const handleExportCsv = useCallback(() => {
     if (historyUnavailable) return
     exportCsv()
   }, [historyUnavailable, exportCsv])
-    csvPrefix: 'supply-chain-hub',
-    haystackFn: (f) => `${f.title || ''} ${f.type || ''} ${f.target || ''} ${f.engine || ''} ${f.description || ''}`,
-  })
 
   const handleRefresh = useCallback(async () => {
     setRefreshLoading(true)

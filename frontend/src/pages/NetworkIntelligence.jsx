@@ -394,6 +394,11 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
     historyUnavailable,
   } = useWeissmanEnginePage(FLAGSHIP_ID, sorted)
 
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
+
   useEffect(() => {
     refreshFromHistory().then((run) => {
       if (run?.findings?.length) {
@@ -410,12 +415,12 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
   useEffect(() => {
     onShellReady?.({
       onRefresh: handleRefresh,
-      onExport: exportCsv,
+      onExport: handleExportCsv,
       refreshLoading: historyLoading,
       refreshDisabled: scanning,
-      exportDisabled: !filteredFindings.length,
+      exportDisabled: historyUnavailable || !filteredFindings.length,
     })
-  }, [onShellReady, handleRefresh, exportCsv, historyLoading, scanning, filteredFindings.length])
+  }, [onShellReady, handleRefresh, handleExportCsv, historyLoading, scanning, filteredFindings.length, historyUnavailable])
 
   useJobPoll(pendingJobId, {
     enabled: Boolean(pendingJobId),

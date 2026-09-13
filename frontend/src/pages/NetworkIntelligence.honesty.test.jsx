@@ -30,4 +30,9 @@ describe('NetworkIntelligence live-only truth', () => {
     expect(src).not.toMatch(/Number\(summary\.hijack_resistance_score \?\? 0\)/)
     expect(src).toMatch(/summary && !historyUnavailable \?/)
   })
+
+  it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled: historyUnavailable \|\| !filteredFindings\.length/)
+  })
 })
