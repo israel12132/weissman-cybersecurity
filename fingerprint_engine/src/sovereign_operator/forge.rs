@@ -108,32 +108,44 @@ pub async fn forge_draft(
     .bind(&compile_log)
     .fetch_one(&mut *tx)
     .await;
-    let _ = tx.commit().await;
     match inserted {
-        Ok(fid) => ToolOutcome {
-            ok: true,
-            name: "forge".into(),
-            detail: format!(
-                "local worktree {} status={status} compile_ok={compile_ok} — GitHub blocked until live_proof",
-                dir.display()
-            ),
-            payload: json!({
-                "forge_id": fid,
-                "engine_id": engine_id,
-                "status": status,
-                "compile_ok": compile_ok,
-                "compile_log": compile_log.chars().take(4000).collect::<String>(),
-                "worktree": dir.to_string_lossy(),
-                "worktree_purged": true,
-                "in_production_catalog": is_production_engine_id(&engine_id),
-            }),
-        },
-        Err(e) => ToolOutcome {
-            ok: false,
-            name: "forge".into(),
-            detail: e.to_string(),
-            payload: json!({ "compile_log": compile_log }),
-        },
+        Ok(fid) => {
+            if tx.commit().await.is_err() {
+                return ToolOutcome {
+                    ok: false,
+                    name: "forge".into(),
+                    detail: "store_down".into(),
+                    payload: json!({}),
+                };
+            }
+            ToolOutcome {
+                ok: true,
+                name: "forge".into(),
+                detail: format!(
+                    "local worktree {} status={status} compile_ok={compile_ok} — GitHub blocked until live_proof",
+                    dir.display()
+                ),
+                payload: json!({
+                    "forge_id": fid,
+                    "engine_id": engine_id,
+                    "status": status,
+                    "compile_ok": compile_ok,
+                    "compile_log": compile_log.chars().take(4000).collect::<String>(),
+                    "worktree": dir.to_string_lossy(),
+                    "worktree_purged": true,
+                    "in_production_catalog": is_production_engine_id(&engine_id),
+                }),
+            }
+        }
+        Err(e) => {
+            let _ = tx.rollback().await;
+            ToolOutcome {
+                ok: false,
+                name: "forge".into(),
+                detail: e.to_string(),
+                payload: json!({ "compile_log": compile_log }),
+            }
+        }
     }
 }
 
@@ -168,7 +180,14 @@ pub async fn forge_prove(
     .bind(forge_id)
     .fetch_optional(&mut *tx)
     .await;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return ToolOutcome {
+            ok: false,
+            name: "forge_prove".into(),
+            detail: "store_down".into(),
+            payload: json!({}),
+        };
+    }
     let row = match row {
         Ok(Some(r)) => r,
         Ok(None) => {
@@ -309,15 +328,24 @@ pub async fn forge_prove(
             };
         }
     };
-    let _ = sqlx::query(
+    if sqlx::query(
         "UPDATE weissman_sovereign_forge SET status=$2, live_finding=$3, updated_at=now() WHERE id=$1",
     )
     .bind(forge_id)
     .bind(&status)
     .bind(&proof)
     .execute(&mut *tx)
-    .await;
-    let _ = tx.commit().await;
+    .await
+    .is_err()
+        || tx.commit().await.is_err()
+    {
+        return ToolOutcome {
+            ok: false,
+            name: "forge_prove".into(),
+            detail: "store_down".into(),
+            payload: proof,
+        };
+    }
     let pending = status == "proof_pending";
     ToolOutcome {
         ok: proved || pending,

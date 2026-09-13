@@ -125,7 +125,7 @@ pub async fn run_findings_intel_backfill(
         sqlx::query_scalar("SELECT id FROM tenants WHERE active = true ORDER BY id")
             .fetch_all(auth_pool)
             .await
-            .unwrap_or_default();
+            .map_err(|_| "store_down".to_string())?;
 
     let mut cve_updates = 0usize;
     let mut intel_updates = 0usize;

@@ -93,8 +93,27 @@ pub async fn run_script(
     .bind(verdict.verified)
     .fetch_one(&mut *tx)
     .await;
-    let _ = tx.commit().await;
-    let script_id = id.ok();
+    let id = match id {
+        Ok(i) => i,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return ToolOutcome {
+                ok: false,
+                name: "script".into(),
+                detail: e.to_string(),
+                payload: verdict_json,
+            };
+        }
+    };
+    if tx.commit().await.is_err() {
+        return ToolOutcome {
+            ok: false,
+            name: "script".into(),
+            detail: "store_down".into(),
+            payload: verdict_json,
+        };
+    }
+    let script_id = Some(id);
     let _ = memory::remember(
         pool,
         tenant_id,

@@ -95,24 +95,33 @@ pub async fn compute_platform_posture(pool: &PgPool) -> SecurityPostureScore {
         },
     });
 
-    let revoked_table_ok = sqlx::query_scalar::<_, bool>(
+    match sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'weissman_revoked_tokens')",
     )
     .fetch_one(pool)
     .await
-    .unwrap_or(false);
-    checks.push(PostureCheck {
-        id: "jwt_revocation_table",
-        passed: revoked_table_ok,
-        weight: 10,
-        detail: if revoked_table_ok {
-            "Token revocation table present".into()
-        } else {
-            "weissman_revoked_tokens missing".into()
-        },
-    });
+    {
+        Ok(true) => checks.push(PostureCheck {
+            id: "jwt_revocation_table",
+            passed: true,
+            weight: 10,
+            detail: "Token revocation table present".into(),
+        }),
+        Ok(false) => checks.push(PostureCheck {
+            id: "jwt_revocation_table",
+            passed: false,
+            weight: 10,
+            detail: "weissman_revoked_tokens missing".into(),
+        }),
+        Err(_) => checks.push(PostureCheck {
+            id: "jwt_revocation_table",
+            passed: false,
+            weight: 10,
+            detail: "store_down".into(),
+        }),
+    }
 
-    let rls_ok = sqlx::query_scalar::<_, bool>(
+    match sqlx::query_scalar::<_, bool>(
         r#"SELECT EXISTS (
             SELECT 1 FROM pg_tables t
             JOIN pg_class c ON c.relname = t.tablename
@@ -121,19 +130,28 @@ pub async fn compute_platform_posture(pool: &PgPool) -> SecurityPostureScore {
     )
     .fetch_one(pool)
     .await
-    .unwrap_or(false);
-    checks.push(PostureCheck {
-        id: "findings_rls",
-        passed: rls_ok,
-        weight: 15,
-        detail: if rls_ok {
-            "vulnerabilities table has RLS enabled".into()
-        } else {
-            "RLS not enabled on vulnerabilities".into()
-        },
-    });
+    {
+        Ok(true) => checks.push(PostureCheck {
+            id: "findings_rls",
+            passed: true,
+            weight: 15,
+            detail: "vulnerabilities table has RLS enabled".into(),
+        }),
+        Ok(false) => checks.push(PostureCheck {
+            id: "findings_rls",
+            passed: false,
+            weight: 15,
+            detail: "RLS not enabled on vulnerabilities".into(),
+        }),
+        Err(_) => checks.push(PostureCheck {
+            id: "findings_rls",
+            passed: false,
+            weight: 15,
+            detail: "store_down".into(),
+        }),
+    }
 
-    let enrollment_hashed = sqlx::query_scalar::<_, bool>(
+    match sqlx::query_scalar::<_, bool>(
         r#"SELECT EXISTS (
             SELECT 1 FROM information_schema.columns
             WHERE table_name = 'endpoint_agent_enrollment_tokens'
@@ -142,17 +160,26 @@ pub async fn compute_platform_posture(pool: &PgPool) -> SecurityPostureScore {
     )
     .fetch_one(pool)
     .await
-    .unwrap_or(false);
-    checks.push(PostureCheck {
-        id: "agent_enrollment_hardening",
-        passed: enrollment_hashed,
-        weight: 10,
-        detail: if enrollment_hashed {
-            "Enrollment tokens stored hashed".into()
-        } else {
-            "token_hash column missing on enrollment tokens".into()
-        },
-    });
+    {
+        Ok(true) => checks.push(PostureCheck {
+            id: "agent_enrollment_hardening",
+            passed: true,
+            weight: 10,
+            detail: "Enrollment tokens stored hashed".into(),
+        }),
+        Ok(false) => checks.push(PostureCheck {
+            id: "agent_enrollment_hardening",
+            passed: false,
+            weight: 10,
+            detail: "token_hash column missing on enrollment tokens".into(),
+        }),
+        Err(_) => checks.push(PostureCheck {
+            id: "agent_enrollment_hardening",
+            passed: false,
+            weight: 10,
+            detail: "store_down".into(),
+        }),
+    }
 
     let openapi_blocked = is_production_environment();
     checks.push(PostureCheck {

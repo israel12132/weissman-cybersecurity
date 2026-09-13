@@ -1036,16 +1036,20 @@ pub async fn run_auto_heal_job(
 
     // Persist the winning patch so the DiffDownload artifact and receipt reflect what actually passed.
     if attempt > 1 {
-        if let Ok(mut tx) = db::begin_tenant_tx(app_pool.as_ref(), tenant_id).await {
-            let _ = sqlx::query(
-                "UPDATE auto_heal_job_specs SET patch_text = $3, updated_at = now() WHERE id = $1 AND tenant_id = $2",
-            )
-            .bind(spec_id)
-            .bind(tenant_id)
-            .bind(&patch_text)
-            .execute(&mut *tx)
-            .await;
-            let _ = tx.commit().await;
+        let mut tx = db::begin_tenant_tx(app_pool.as_ref(), tenant_id)
+            .await
+            .map_err(|_| "store_down".to_string())?;
+        sqlx::query(
+            "UPDATE auto_heal_job_specs SET patch_text = $3, updated_at = now() WHERE id = $1 AND tenant_id = $2",
+        )
+        .bind(spec_id)
+        .bind(tenant_id)
+        .bind(&patch_text)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| "store_down".to_string())?;
+        if tx.commit().await.is_err() {
+            return Err("store_down".to_string());
         }
     }
 

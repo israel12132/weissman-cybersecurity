@@ -73,15 +73,16 @@ pub async fn execute_revert(
     let steps: Value = r.try_get("steps").unwrap_or(json!([]));
     let _ = tx.commit().await;
 
-    let steps_vec: Vec<RevertStep> = serde_json::from_value(steps).unwrap_or_default();
+    let steps_vec: Vec<RevertStep> = serde_json::from_value(steps)
+        .map_err(|_| "store_down".to_string())?;
     let integrations = load_integrations(pool, tenant_id).await?;
     let mut details = Vec::new();
     for step in &steps_vec {
-        details.push(format!(
-            "{}: {}",
-            step.operation,
-            apply_revert_step(pool, tenant_id, &integrations, step).await
-        ));
+        let msg = apply_revert_step(pool, tenant_id, &integrations, step).await;
+        if msg == "store_down" {
+            return Err("store_down".into());
+        }
+        details.push(format!("{}: {}", step.operation, msg));
     }
 
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
@@ -539,7 +540,7 @@ async fn close_github_pr(payload: &Value) -> String {
     if spec_id.is_empty() {
         return "missing spec_id for GitHub PR close".into();
     }
-    format!("queued: close PR spec {spec_id} — worker uses auto-heal pipeline")
+    "store_down".into()
 }
 
 async fn azure_access_token(

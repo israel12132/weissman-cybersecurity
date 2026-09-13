@@ -194,8 +194,14 @@ pub async fn load_enabled(pool: &PgPool, tenant_id: i64) -> Result<Vec<Playbook>
     for r in rows {
         let trig: Value = r.try_get("trigger_dsl").unwrap_or(json!({}));
         let acts: Value = r.try_get("actions_dsl").unwrap_or(json!([]));
-        let trigger: PlaybookTrigger = serde_json::from_value(trig).unwrap_or_default();
-        let actions: Vec<PlaybookAction> = serde_json::from_value(acts).unwrap_or_default();
+        let trigger: PlaybookTrigger = match serde_json::from_value(trig) {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        let actions: Vec<PlaybookAction> = match serde_json::from_value(acts) {
+            Ok(a) => a,
+            Err(_) => continue,
+        };
         out.push(Playbook {
             id: r.try_get("id").unwrap_or(0),
             tenant_id,

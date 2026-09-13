@@ -202,7 +202,13 @@ async fn api_async_job_status(
     .bind(&jid)
     .fetch_optional(&mut *tx)
     .await;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::poe_job_unavailable_json("store_down")),
+        )
+            .into_response();
+    }
     match row {
         Ok(Some(r)) => {
             let findings_json: String = r.try_get("findings_json").unwrap_or_else(|_| "[]".into());

@@ -448,7 +448,9 @@ pub async fn agent_uuids_capable_for_client(
     .bind(cap)
     .fetch_all(&mut *tx)
     .await?;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err(sqlx::Error::Protocol("store_down".into()));
+    }
     Ok(rows)
 }
 
@@ -474,7 +476,9 @@ pub async fn agent_uuids_for_client(
     .bind(limit)
     .fetch_all(&mut *tx)
     .await?;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err(sqlx::Error::Protocol("store_down".into()));
+    }
     Ok(rows)
 }
 
@@ -726,7 +730,9 @@ pub async fn registered_client_id(
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await?;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err(sqlx::Error::Protocol("store_down".into()));
+    }
     Ok(cid)
 }
 
@@ -743,7 +749,9 @@ pub async fn client_exists(
     .bind(tenant_id)
     .fetch_one(&mut *tx)
     .await?;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err(sqlx::Error::Protocol("store_down".into()));
+    }
     Ok(ok)
 }
 

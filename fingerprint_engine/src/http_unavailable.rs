@@ -3642,6 +3642,13 @@ mod tests {
         assert!(load.contains("Result<Vec<IntegrationRecord>, String>"));
         assert!(load.contains("store_down"));
         assert!(!compact_src(load).contains(".ok().flatten()"));
+        assert!(
+            !compact_src(load).contains("letOk(arr)=serde_json::from_str"),
+            "corrupt integrations JSON must not empty-ok as no integrations"
+        );
+        assert!(compact_src(load).contains(
+            "from_str::<Vec<Value>>(&s).map_err(|_|\"store_down\".to_string())?"
+        ));
     }
 
     #[test]
@@ -4122,6 +4129,7 @@ mod tests {
         let src = named_fn_src(include_str!("async_job_executor.rs"), "async fn cfg_string_tx");
         assert!(src.contains("Result<Option<String>, String>"));
         assert!(!src.contains(".ok().flatten()"));
+        assert!(!compact_src(src).contains(".ok().flatten()"));
         assert!(src.contains("store_down"));
     }
 
@@ -4133,6 +4141,7 @@ mod tests {
         );
         assert!(src.contains("store_down"));
         assert!(!src.contains(".ok().flatten()"));
+        assert!(!compact_src(src).contains(".ok().flatten()"));
         assert!(src.contains("tx.commit().await.is_err()"));
     }
 
@@ -4143,6 +4152,7 @@ mod tests {
             "pub async fn run_verification",
         );
         assert!(!src.contains(".ok().flatten().unwrap_or_else(|| \"OPEN\""));
+        assert!(!compact_src(src).contains(".ok().flatten()"));
         assert!(src.contains("map_err(|_| \"store_down\".to_string())?"));
         assert!(src.contains("unwrap_or_else(|| \"OPEN\".to_string())"));
     }
@@ -4209,6 +4219,7 @@ mod tests {
         assert!(src.contains("async_jobs_list_unavailable_json"));
         assert!(!compact_src(src).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
         assert!(!src.contains("fetch_one(&mut *tx)\n    .await\n    .unwrap_or(0)"));
+        assert!(!compact_src(src).contains("fetch_one(&mut*tx).await.unwrap_or(0)"));
         assert!(src.contains("tx.commit().await.is_err()"));
         assert!(!src.contains("let _ = tx.commit()"));
     }
@@ -4225,6 +4236,7 @@ mod tests {
         assert!(!compact_src(collect).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
         assert!(!collect.contains("let _ = tx.commit()"));
         assert!(!collect.contains("return Vec::new()"));
+        assert!(collect.contains("store_down"));
         let attach = named_fn_src(src, "async fn attach_steps");
         assert!(attach.contains("verified = false"));
         assert!(attach.contains("store_down"));
@@ -4325,6 +4337,131 @@ mod tests {
         assert!(
             compact_src(run).contains("bridge_nssi_fleet("),
             "run_nexus must still call bridge_nssi_fleet"
+        );
+    }
+
+    #[test]
+    fn forge_draft_prove_commit_store_down_is_not_ok_true() {
+        let src = include_str!("sovereign_operator/forge.rs");
+        let draft = named_fn_src(src, "pub async fn forge_draft");
+        assert!(!draft.contains("let _ = tx.commit()"));
+        assert!(draft.contains("detail: \"store_down\".into()"));
+        let prove = named_fn_src(src, "pub async fn forge_prove");
+        assert!(prove.contains("detail: \"store_down\".into()"));
+        assert!(
+            compact_src(prove).contains("live_finding=$3"),
+            "forge_prove must persist live_finding"
+        );
+        assert!(
+            !compact_src(prove).contains("let_=sqlx::query(\"UPDATEweissman_sovereign_forgeSETstatus=$2,live_finding=$3"),
+            "live-proof UPDATE execute must not be ignored"
+        );
+    }
+
+    #[test]
+    fn intel_backfill_tenant_fetch_store_down_is_not_complete_zero() {
+        let src = named_fn_src(
+            include_str!("intel_findings_backfill.rs"),
+            "pub async fn run_findings_intel_backfill",
+        );
+        assert!(!compact_src(src).contains("fetch_all(auth_pool).await.unwrap_or_default()"));
+        assert!(src.contains("map_err(|_| \"store_down\".to_string())?"));
+    }
+
+    #[test]
+    fn script_persist_store_down_is_not_durable_id() {
+        let src = named_fn_src(
+            include_str!("sovereign_operator/scripts.rs"),
+            "pub async fn run_script",
+        );
+        assert!(!src.contains("let script_id = id.ok()"));
+        assert!(src.contains("detail: \"store_down\".into()"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;letscript_id=id.ok()"));
+    }
+
+    #[test]
+    fn poe_job_status_commit_store_down_is_not_200() {
+        let src = named_fn_src(
+            include_str!("server_handlers_jobs.inc"),
+            "async fn api_async_job_status",
+        );
+        assert!(!src.contains("let _ = tx.commit()"));
+        assert!(src.contains("poe_job_unavailable_json"));
+        assert!(src.contains("SERVICE_UNAVAILABLE"));
+    }
+
+    #[test]
+    fn auto_heal_winning_patch_persist_store_down_is_not_verified() {
+        let src = named_fn_src(include_str!("auto_heal_job.rs"), "pub async fn run_auto_heal_job");
+        assert!(
+            !src.contains("if let Ok(mut tx) = db::begin_tenant_tx(app_pool.as_ref(), tenant_id).await"),
+            "winning patch persist must not skip begin fail"
+        );
+        assert!(src.contains("SET patch_text = $3"));
+        assert!(
+            compact_src(src).contains("execute(&mut*tx).await.map_err(|_|\"store_down\".to_string())?"),
+            "winning patch UPDATE execute fail must be store_down"
+        );
+    }
+
+    #[test]
+    fn playbook_corrupt_trigger_is_not_match_all() {
+        let src = named_fn_src(include_str!("soar_playbook.rs"), "pub async fn load_enabled");
+        assert!(!src.contains("serde_json::from_value(trig).unwrap_or_default()"));
+        assert!(!src.contains("serde_json::from_value(acts).unwrap_or_default()"));
+        assert!(src.contains("Err(_) => continue"));
+    }
+
+    #[test]
+    fn revert_corrupt_steps_and_fake_pr_close_are_store_down() {
+        let src = named_fn_src(include_str!("soar/revert.rs"), "pub async fn execute_revert");
+        assert!(!src.contains("serde_json::from_value(steps).unwrap_or_default()"));
+        assert!(src.contains("serde_json::from_value(steps)"));
+        assert!(src.contains("if msg == \"store_down\""));
+        let close = named_fn_src(include_str!("soar/revert.rs"), "async fn close_github_pr");
+        assert!(!close.contains("queued: close PR"));
+        assert!(close.contains("store_down"));
+    }
+
+    #[test]
+    fn deception_asset_fetch_store_down_is_not_not_found() {
+        let src = named_fn_src(
+            include_str!("deception_cloud_deploy_job.rs"),
+            "pub async fn run_deception_cloud_deploy",
+        );
+        assert!(!compact_src(src).contains("fetch_optional(&mut*tx).await.ok().flatten()"));
+        assert!(!src.contains("let _ = sqlx::query(\n                    r#\"UPDATE deception_assets"));
+        assert!(src.contains("deployed += 1"));
+        assert!(compact_src(src).contains("execute(&mut*tx).await.map_err(|e|e.to_string())?"));
+    }
+
+    #[test]
+    fn agent_uuid_list_commit_store_down_is_not_ok_rows() {
+        let capable = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub async fn agent_uuids_capable_for_client",
+        );
+        assert!(!capable.contains("let _ = tx.commit()"));
+        assert!(capable.contains("sqlx::Error::Protocol(\"store_down\""));
+        let all = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub async fn agent_uuids_for_client",
+        );
+        assert!(!all.contains("let _ = tx.commit()"));
+        assert!(all.contains("sqlx::Error::Protocol(\"store_down\""));
+    }
+
+    #[test]
+    fn platform_posture_sql_store_down_is_not_invented_fail() {
+        let src = named_fn_src(
+            include_str!("security_posture.rs"),
+            "pub async fn compute_platform_posture",
+        );
+        assert!(!src.contains(".unwrap_or(false);\n    checks.push(PostureCheck {\n        id: \"jwt_revocation_table\""));
+        assert!(src.contains("detail: \"store_down\".into()"));
+        assert!(
+            compact_src(src).matches("detail:\"store_down\".into()").count() >= 3,
+            "catalog/RLS/enrollment EXISTS Err must be store_down, not invented missing"
         );
     }
 }

@@ -27,9 +27,7 @@ pub async fn load_integrations(pool: &PgPool, tenant_id: i64) -> Result<Vec<Inte
     let Some(s) = raw.filter(|x| !x.trim().is_empty()) else {
         return Ok(Vec::new());
     };
-    let Ok(arr) = serde_json::from_str::<Vec<Value>>(&s) else {
-        return Ok(Vec::new());
-    };
+    let arr = serde_json::from_str::<Vec<Value>>(&s).map_err(|_| "store_down".to_string())?;
     let out = arr
         .into_iter()
         .filter_map(|item| {

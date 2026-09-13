@@ -179,8 +179,7 @@ pub async fn run_deception_cloud_deploy(
         .bind(client_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
+        .map_err(|e| e.to_string())?;
         let Some(rec) = rec else {
             errors.push(format!("asset {} not found", aid));
             continue;
@@ -193,14 +192,15 @@ pub async fn run_deception_cloud_deploy(
         .await
         {
             Ok(out) => {
-                let _ = sqlx::query(
+                sqlx::query(
                     r#"UPDATE deception_assets SET deployment_location = $1, cloud_injection_uri = $2, status = 'deployed' WHERE id = $3"#,
                 )
                 .bind(&out.detail)
                 .bind(&out.uri)
                 .bind(aid)
                 .execute(&mut *tx)
-                .await;
+                .await
+                .map_err(|e| e.to_string())?;
                 deployed += 1;
             }
             Err(e) => errors.push(format!("asset {}: {}", aid, e)),
