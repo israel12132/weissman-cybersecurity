@@ -664,7 +664,7 @@ export default function ComplianceFrameworks() {
           ) : (
             frameworks.map((fw) => {
               const isSelected = selectedFramework?.id === fw.id;
-              const scoreLabel = isSelected && controls.length > 0
+              const scoreLabel = isSelected && !controlsUnavailable && controls.length > 0
                 ? t('pages.complianceFrameworks.framework_score', { score: stats.score })
                 : fw.scope;
 
