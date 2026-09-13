@@ -301,19 +301,47 @@ async fn api_onboarding_register(
     {
         Ok((tenant_id, user_id)) => {
             let ip = extract_client_ip(&headers, addr);
-            if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, tenant_id).await {
-                let actor = body.email.trim();
-                let _ = audit_log::insert_audit(
-                    &mut tx,
-                    tenant_id,
-                    Some(user_id),
-                    actor,
-                    "onboarding_register",
-                    "self-serve tenant provisioned",
-                    &ip,
+            let mut tx = match db::begin_tenant_tx(&state.app_pool, tenant_id).await {
+                Ok(t) => t,
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                            "tenant created but login audit unavailable; sign in manually",
+                        )),
+                    )
+                        .into_response();
+                }
+            };
+            let actor = body.email.trim();
+            if audit_log::insert_audit(
+                &mut tx,
+                tenant_id,
+                Some(user_id),
+                actor,
+                "onboarding_register",
+                "self-serve tenant provisioned",
+                &ip,
+            )
+            .await
+            .is_err()
+            {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "tenant created but login audit unavailable; sign in manually",
+                    )),
                 )
-                .await;
-                let _ = tx.commit().await;
+                    .into_response();
+            }
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "tenant created but login audit unavailable; sign in manually",
+                    )),
+                )
+                    .into_response();
             }
 
             let binding = crate::auth_jwt::StreamBinding::from_http(&headers, addr);

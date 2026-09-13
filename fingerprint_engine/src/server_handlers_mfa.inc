@@ -137,7 +137,7 @@ async fn api_auth_mfa_verify(
                 .into_response();
         }
     };
-    let _ = audit_log::insert_audit(
+    if audit_log::insert_audit(
         &mut tx,
         ctx.tenant_id,
         Some(ctx.user_id),
@@ -146,8 +146,30 @@ async fn api_auth_mfa_verify(
         "TOTP verified",
         &ip,
     )
-    .await;
-    let _ = tx.commit().await;
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "ok": false,
+                "detail": "Authentication service temporarily unavailable",
+                "code": "auth_degraded"
+            })),
+        )
+            .into_response();
+    }
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "ok": false,
+                "detail": "Authentication service temporarily unavailable",
+                "code": "auth_degraded"
+            })),
+        )
+            .into_response();
+    }
     let binding = crate::auth_jwt::StreamBinding::from_http(&headers, addr);
     let (access_jwt, access_cookie, refresh_cookie) =
         match crate::auth_refresh::build_session_cookie_headers(

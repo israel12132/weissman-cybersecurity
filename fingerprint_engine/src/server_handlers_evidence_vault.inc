@@ -417,7 +417,7 @@ async fn api_evidence_download(
 
     let ip = extract_client_ip(&headers, addr);
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-    let _ = audit_log::insert_audit(
+    if audit_log::insert_audit(
         &mut tx,
         auth.tenant_id,
         Some(auth.user_id),
@@ -426,8 +426,26 @@ async fn api_evidence_download(
         &format!("client_id={} evidence_id={}", client_id, evidence_id),
         &ip,
     )
-    .await;
-    let _ = tx.commit().await;
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_download_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_download_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     let mut res = Response::new(Body::from(blob));
     res.headers_mut().insert(

@@ -455,19 +455,21 @@ pub async fn saml_acs(
             .map_err(|_| auth_store_down())?
     };
     let ip = crate::http::extract_client_ip(&headers, addr);
-    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, r.tenant_id).await {
-        let _ = audit_log::insert_audit(
-            &mut tx,
-            r.tenant_id,
-            Some(user_id),
-            email.as_str(),
-            "login",
-            "SAML session created",
-            &ip,
-        )
-        .await;
-        let _ = tx.commit().await;
-    }
+    let mut tx = db::begin_tenant_tx(&state.app_pool, r.tenant_id)
+        .await
+        .map_err(|_| auth_store_down())?;
+    audit_log::insert_audit(
+        &mut tx,
+        r.tenant_id,
+        Some(user_id),
+        email.as_str(),
+        "login",
+        "SAML session created",
+        &ip,
+    )
+    .await
+    .map_err(|_| auth_store_down())?;
+    tx.commit().await.map_err(|_| auth_store_down())?;
     let binding = crate::auth_jwt::StreamBinding::from_http(&headers, addr);
     let (_access_jwt, access_line, refresh_line) =
         crate::auth_refresh::build_session_cookie_headers(auth, user_id, r.tenant_id, &binding)

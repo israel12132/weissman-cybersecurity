@@ -3220,9 +3220,47 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
                 )
                     .into_response();
             }
-            let mut tx = match db::begin_tenant_tx(&state.app_pool, tenant_id).await { Ok(t) => t, Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response() };
-            let _ = audit_log::insert_audit(&mut tx, tenant_id, Some(user_id), email, "login", "session created", &ip).await;
-            let _ = tx.commit().await;
+            let mut tx = match db::begin_tenant_tx(&state.app_pool, tenant_id).await {
+                Ok(t) => t,
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                            "database unavailable",
+                        )),
+                    )
+                        .into_response();
+                }
+            };
+            if audit_log::insert_audit(
+                &mut tx,
+                tenant_id,
+                Some(user_id),
+                email,
+                "login",
+                "session created",
+                &ip,
+            )
+            .await
+            .is_err()
+            {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
             let binding = crate::auth_jwt::StreamBinding::from_http(&headers, addr);
             let (access_jwt, access_cookie, refresh_cookie) = match crate::auth_refresh::build_session_cookie_headers(state.auth_pool.as_ref(), user_id, tenant_id, &binding).await {
                 Ok(p) => p,

@@ -946,6 +946,19 @@ fn stream_lag_notice(dropped: u64) -> String {
     .to_string()
 }
 
+/// Finding-ticker poll failed. Must not look like "no new finding" on a live socket.
+fn cc_ticker_store_down() -> String {
+    json!({
+        "kind": "store_down",
+        "payload": {
+            "message": "Command Center finding ticker unavailable",
+            "severity": "critical",
+        },
+        "ts": chrono::Utc::now().timestamp_millis(),
+    })
+    .to_string()
+}
+
 /// Read the monotonic `_seq` the replay recorder stamped onto a sequenced telemetry event.
 fn cc_extract_seq(raw: &str) -> Option<u64> {
     serde_json::from_str::<Value>(raw)
@@ -1188,20 +1201,53 @@ async fn handle_ws_command_center(
                 }
             }
             _ = ticker.tick() => {
-                let Ok(mut tx) = weissman_db::begin_tenant_tx_scoped(
+                let mut tx = match weissman_db::begin_tenant_tx_scoped(
                     pool.as_ref(),
                     tenant_id,
                     assigned_client_id,
                 )
-                .await else { continue; };
-                let row = sqlx::query(
+                .await
+                {
+                    Ok(t) => t,
+                    Err(_) => {
+                        if socket
+                            .send(Message::Text(cc_ticker_store_down()))
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                        continue;
+                    }
+                };
+                let row = match sqlx::query(
                     "SELECT id, title, severity, client_id::text AS client_id FROM vulnerabilities ORDER BY discovered_at DESC LIMIT 1",
                 )
                 .fetch_optional(&mut *tx)
                 .await
-                .ok()
-                .flatten();
-                let _ = tx.commit().await;
+                {
+                    Ok(r) => r,
+                    Err(_) => {
+                        if socket
+                            .send(Message::Text(cc_ticker_store_down()))
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                        continue;
+                    }
+                };
+                if tx.commit().await.is_err() {
+                    if socket
+                        .send(Message::Text(cc_ticker_store_down()))
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                    continue;
+                }
                 if let Some(r) = row {
                     let title: String = r.try_get("title").unwrap_or_default();
                     let severity: String = r.try_get("severity").unwrap_or_else(|_| "info".into());

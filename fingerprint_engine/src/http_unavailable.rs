@@ -176,6 +176,18 @@ pub fn heal_requests_unavailable_json(detail: &str) -> Value {
     list_envelope("requests", detail)
 }
 
+/// `POST /api/clients/:id/heal-revert` after the remote PR/MR already closed but
+/// `heal_requests` / forensic audit did not persist. Never `reverted: true`.
+pub fn heal_revert_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "reverted": Value::Null,
+        "remote_closed": true,
+        "detail": detail,
+    })
+}
+
 /// `GET /api/clients/:id/risk-graph`
 pub fn risk_graph_unavailable_json(detail: &str) -> Value {
     json!({
@@ -1290,6 +1302,16 @@ mod tests {
     #[test]
     fn heal_requests_store_down_is_never_ok_empty_success() {
         never_ok_empty_success(&heal_requests_unavailable_json("store down"), "requests");
+    }
+
+    #[test]
+    fn heal_revert_store_down_is_never_reverted_true() {
+        let v = heal_revert_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["reverted"].is_null());
+        assert_eq!(v["remote_closed"], true);
+        assert_ne!(v["reverted"], json!(true));
     }
 
     #[test]
@@ -4993,5 +5015,143 @@ mod tests {
             "ok/verifying must not skip forensic persist"
         );
         assert!(!armored.contains("audit::log_execution"));
+    }
+
+    #[test]
+    fn ws_ticker_store_down_is_not_silent_no_finding() {
+        let src = include_str!("http/serve.rs");
+        let helper = named_fn_src(src, "fn cc_ticker_store_down");
+        assert!(helper.contains("\"store_down\""));
+        assert!(!helper.contains("\"type\": \"refresh\""));
+        let ws = named_fn_src(src, "async fn handle_ws_command_center");
+        let tick_at = ws.find("_ = ticker.tick()").expect("ticker");
+        let tick = &ws[tick_at..];
+        assert!(tick.contains("cc_ticker_store_down()"));
+        assert!(!compact_src(tick).contains(".ok().flatten()"));
+        assert!(!compact_src(tick).contains("let_=tx.commit().await;"));
+        assert!(!tick.contains("else { continue; }"));
+    }
+
+    #[test]
+    fn login_session_audit_store_down_is_not_ok_true() {
+        let src = include_str!("server_handlers_sqlx.inc");
+        let login = named_fn_src(src, "async fn api_login");
+        let session_at = login.find("\"session created\"").expect("session audit");
+        let session = &login[session_at..];
+        assert!(session.contains("auth_degraded_unavailable_json"));
+        assert!(!compact_src(session).contains("let_=audit_log::insert_audit"));
+        assert!(!compact_src(session).contains("let_=tx.commit().await;"));
+        let commit = session.find("tx.commit().await.is_err()").expect("commit");
+        let ok_true = session.find("\"ok\": true").expect("ok true");
+        assert!(commit < ok_true);
+    }
+
+    #[test]
+    fn mfa_verify_audit_store_down_is_not_ok_true() {
+        let src = include_str!("server_handlers_mfa.inc");
+        let verify = named_fn_src(src, "async fn api_auth_mfa_verify");
+        let audit_at = verify.find("\"mfa_verify\"").expect("mfa audit");
+        let audit = &verify[audit_at..];
+        assert!(audit.contains("auth_degraded"));
+        assert!(!compact_src(audit).contains("let_=audit_log::insert_audit"));
+        assert!(!compact_src(audit).contains("let_=tx.commit().await;"));
+        let commit = audit.find("tx.commit().await.is_err()").expect("commit");
+        let ok_true = audit.find("\"ok\": true").expect("ok true");
+        assert!(commit < ok_true);
+    }
+
+    #[test]
+    fn saml_acs_audit_store_down_is_not_redirect_ok() {
+        let src = include_str!("saml_auth.rs");
+        let acs = named_fn_src(src, "pub async fn saml_acs");
+        let audit_at = acs.find("SAML session created").expect("saml audit");
+        let audit = &acs[audit_at..];
+        assert!(audit.contains("auth_store_down"));
+        assert!(!compact_src(audit).contains("ifletOk(muttx)="));
+        assert!(!compact_src(audit).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(audit).contains("let_=audit_log::insert_audit"));
+        let commit = audit.find("tx.commit().await.map_err").expect("commit");
+        let redirect = audit.find("Redirect::to").expect("redirect");
+        assert!(commit < redirect);
+    }
+
+    #[test]
+    fn oidc_callback_audit_store_down_is_not_redirect_ok() {
+        let src = include_str!("oidc_auth.rs");
+        let cb = named_fn_src(src, "pub async fn oidc_callback");
+        let audit_at = cb.find("OIDC session created").expect("oidc audit");
+        let audit = &cb[audit_at..];
+        assert!(audit.contains("auth_store_down"));
+        assert!(!compact_src(audit).contains("ifletOk(muttx)="));
+        assert!(!compact_src(audit).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(audit).contains("let_=audit_log::insert_audit"));
+        let commit = audit.find("tx.commit().await.map_err").expect("commit");
+        let redirect = audit.find("Redirect::to").expect("redirect");
+        assert!(commit < redirect);
+    }
+
+    #[test]
+    fn onboarding_register_audit_store_down_is_not_session_ok() {
+        let src = include_str!("server_handlers_onboarding_billing.inc");
+        let register = named_fn_src(src, "async fn api_onboarding_register");
+        let audit_at = register
+            .find("self-serve tenant provisioned")
+            .expect("onboarding audit");
+        let audit = &register[audit_at..];
+        assert!(audit.contains("auth_degraded_unavailable_json"));
+        assert!(!compact_src(audit).contains("ifletOk(muttx)="));
+        assert!(!compact_src(audit).contains("let_=tx.commit().await;"));
+        let commit = audit.find("tx.commit().await.is_err()").expect("commit");
+        let created = audit.find("StatusCode::CREATED").expect("created");
+        assert!(commit < created);
+    }
+
+    #[test]
+    fn evidence_download_audit_store_down_is_not_200_blob() {
+        let src = include_str!("server_handlers_evidence_vault.inc");
+        let dl = named_fn_src(src, "async fn api_evidence_download");
+        let audit_at = dl.find("evidence_downloaded").expect("download audit");
+        let audit = &dl[audit_at..];
+        assert!(audit.contains("evidence_download_unavailable_json"));
+        assert!(!compact_src(audit).contains("let_=audit_log::insert_audit"));
+        assert!(!compact_src(audit).contains("let_=tx.commit().await;"));
+        let commit = audit.find("tx.commit().await.is_err()").expect("commit");
+        let blob = audit.find("Body::from(blob)").expect("blob");
+        assert!(commit < blob);
+    }
+
+    #[test]
+    fn scan_start_stop_audit_store_down_is_not_in_memory_ok() {
+        let src = include_str!("server_handlers_rest.inc");
+        let start = named_fn_src(src, "async fn api_scan_start");
+        assert!(start.contains("scan_status_unavailable_json"));
+        assert!(!compact_src(start).contains("ifletOk(muttx)="));
+        assert!(!compact_src(start).contains("let_=tx.commit().await;"));
+        let start_commit = start.find("tx.commit().await.is_err()").expect("start commit");
+        let start_toggle = start.find("set_scanning_active(true)").expect("start toggle");
+        assert!(start_commit < start_toggle);
+        let stop = named_fn_src(src, "async fn api_scan_stop");
+        assert!(stop.contains("scan_status_unavailable_json"));
+        assert!(!compact_src(stop).contains("ifletOk(muttx)="));
+        assert!(!compact_src(stop).contains("let_=tx.commit().await;"));
+        let stop_commit = stop.find("tx.commit().await.is_err()").expect("stop commit");
+        let stop_toggle = stop.find("set_scanning_active(false)").expect("stop toggle");
+        assert!(stop_commit < stop_toggle);
+    }
+
+    #[test]
+    fn heal_revert_persist_store_down_is_not_ok_reverted() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let revert = named_fn_src(src, "async fn api_heal_revert");
+        let persist_at = revert.find("match result").expect("adapter result");
+        let persist = &revert[persist_at..];
+        assert!(persist.contains("heal_revert_unavailable_json"));
+        assert!(!compact_src(persist).contains("ifletOk(muttx)="));
+        assert!(!compact_src(persist).contains("let_=sqlx::query("));
+        assert!(!compact_src(persist).contains("let_=audit_log::insert_audit"));
+        assert!(!compact_src(persist).contains("let_=tx.commit().await;"));
+        let commit = persist.find("tx.commit().await.is_err()").expect("commit");
+        let ok_true = persist.find("\"ok\": true").expect("ok true");
+        assert!(commit < ok_true);
     }
 }

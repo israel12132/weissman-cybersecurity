@@ -2420,8 +2420,19 @@ async fn api_heal_revert(
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
     match result {
         Ok(()) => {
-            if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-                let _ = sqlx::query(
+            let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+                Ok(t) => t,
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::heal_revert_unavailable_json(
+                            "database unavailable",
+                        )),
+                    )
+                        .into_response();
+                }
+            };
+            if sqlx::query(
                     r#"INSERT INTO heal_requests (tenant_id, client_id, finding_id, branch_name, pr_number, verification_status, verification_job_id, channel)
                        VALUES ($1, $2, $3, $4, $5, 'reverted', '', $6)"#,
                 )
@@ -2432,18 +2443,45 @@ async fn api_heal_revert(
                 .bind(pr_number as i32)
                 .bind(channel.id())
                 .execute(&mut *tx)
-                .await;
-                let _ = audit_log::insert_audit(
-                    &mut tx,
-                    auth.tenant_id,
-                    Some(auth.user_id),
-                    &actor,
-                    "heal_reverted",
-                    &format!("finding={} repo={} pr={} channel={}", body.finding_id, repo, pr_number, channel.id()),
-                    &ip,
+                .await
+                .is_err()
+            {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::heal_revert_unavailable_json(
+                        "database unavailable",
+                    )),
                 )
-                .await;
-                let _ = tx.commit().await;
+                    .into_response();
+            }
+            if audit_log::insert_audit(
+                &mut tx,
+                auth.tenant_id,
+                Some(auth.user_id),
+                &actor,
+                "heal_reverted",
+                &format!("finding={} repo={} pr={} channel={}", body.finding_id, repo, pr_number, channel.id()),
+                &ip,
+            )
+            .await
+            .is_err()
+            {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::heal_revert_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::heal_revert_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
             }
             (StatusCode::OK, Json(json!({"ok": true, "reverted": true, "pr_number": pr_number, "channel": channel.id()}))).into_response()
         }

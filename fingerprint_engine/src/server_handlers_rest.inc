@@ -1746,10 +1746,47 @@ async fn api_scan_start(
         return r;
     }
     let ip = extract_client_ip(&headers, addr);
-    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-        let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-        let _ = audit_log::insert_audit(&mut tx, auth.tenant_id, Some(auth.user_id), &u, "scan_initiated", "continuous scanning started", &ip).await;
-        let _ = tx.commit().await;
+    let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        Ok(t) => t,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::scan_status_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
+    if audit_log::insert_audit(
+        &mut tx,
+        auth.tenant_id,
+        Some(auth.user_id),
+        &u,
+        "scan_initiated",
+        "continuous scanning started",
+        &ip,
+    )
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::scan_status_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::scan_status_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     }
     crate::orchestrator::set_scanning_active(true);
     (StatusCode::OK, Json(json!({"ok": true, "message": "Continuous scanning started"}))).into_response()
@@ -1766,10 +1803,47 @@ async fn api_scan_stop(
         return r;
     }
     let ip = extract_client_ip(&headers, addr);
-    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-        let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-        let _ = audit_log::insert_audit(&mut tx, auth.tenant_id, Some(auth.user_id), &u, "scan_stopped", "continuous scanning stopped", &ip).await;
-        let _ = tx.commit().await;
+    let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        Ok(t) => t,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::scan_status_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
+    if audit_log::insert_audit(
+        &mut tx,
+        auth.tenant_id,
+        Some(auth.user_id),
+        &u,
+        "scan_stopped",
+        "continuous scanning stopped",
+        &ip,
+    )
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::scan_status_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::scan_status_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     }
     crate::orchestrator::set_scanning_active(false);
     (StatusCode::OK, Json(json!({"ok": true, "message": "Scanning stopped"}))).into_response()
