@@ -247,14 +247,23 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
         };
     }
 
-    let _ = update_status(
+    if update_status(
         pool,
         cmd.tenant_id,
         execution_id,
         ExecutionStatus::Executing,
         "dispatching adapter",
     )
-    .await;
+    .await
+    .is_err()
+    {
+        audit::log_execution(pool, &cmd, "failed", "store_down", Some(execution_id)).await;
+        return ActionOutcome {
+            status: "failed".into(),
+            detail: "store_down".into(),
+            execution_id: Some(execution_id),
+        };
+    }
 
     let integrations = match load_integrations(pool, cmd.tenant_id).await {
         Ok(i) => i,
@@ -326,14 +335,23 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
             for step in &mut outcome.revert_steps {
                 step.payload = super::integrations_vault::encrypt_config(&step.payload);
             }
-            let _ = update_execution_result(
+            if update_execution_result(
                 pool,
                 cmd.tenant_id,
                 execution_id,
                 &outcome,
                 ExecutionStatus::Verifying,
             )
-            .await;
+            .await
+            .is_err()
+            {
+                audit::log_execution(pool, &cmd, "failed", "store_down", Some(execution_id)).await;
+                return ActionOutcome {
+                    status: "failed".into(),
+                    detail: "store_down".into(),
+                    execution_id: Some(execution_id),
+                };
+            }
             let steps = if outcome.revert_steps.is_empty() {
                 vec![]
             } else {
@@ -488,9 +506,9 @@ async fn update_status(
     status: ExecutionStatus,
     detail: &str,
 ) -> Result<(), String> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Err("tenant tx".into());
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let resolved = if status == ExecutionStatus::Resolved {
         Some(chrono::Utc::now())
     } else {
@@ -509,8 +527,10 @@ async fn update_status(
     .bind(resolved)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
     Ok(())
 }
 
@@ -521,9 +541,9 @@ async fn update_execution_result(
     outcome: &super::types::AdapterOutcome,
     status: ExecutionStatus,
 ) -> Result<(), String> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Err("tenant tx".into());
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     sqlx::query(
         r#"UPDATE soar_action_executions
            SET status = $3, provider = $4, result_detail = $5,
@@ -540,8 +560,10 @@ async fn update_execution_result(
     .bind(outcome.payload.clone())
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
     Ok(())
 }
 

@@ -72,12 +72,7 @@ impl IsolateHostAdapter for WeissmanAgentIsolateAdapter {
         _payload: &serde_json::Value,
     ) -> Result<bool, AdapterError> {
         let host = crate::engine_probes::extract_host(target);
-        for p in ports {
-            if crate::engine_probes::tcp_open(&host, *p).await {
-                return Ok(false);
-            }
-        }
-        Ok(true)
+        super::aws_ec2::tcp_probe_unreachable_batch(&host, ports).await
     }
 
     fn revert_steps(&self, outcome: &AdapterOutcome) -> Vec<RevertStep> {

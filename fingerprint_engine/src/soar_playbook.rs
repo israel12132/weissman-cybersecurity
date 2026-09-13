@@ -118,7 +118,7 @@ pub struct ActionResult {
 pub struct PlaybookRunResult {
     pub playbook_id: i64,
     pub playbook_name: String,
-    pub status: String, // success | partial | failed | dry_run | skipped_dedup
+    pub status: String, // success | partial | failed | dry_run | skipped_dedup | skipped_store_down
     pub actions: Vec<ActionResult>,
 }
 
@@ -186,8 +186,10 @@ pub async fn load_enabled(pool: &PgPool, tenant_id: i64) -> Result<Vec<Playbook>
     )
     .fetch_all(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
     let mut out = Vec::with_capacity(rows.len());
     for r in rows {
         let trig: Value = r.try_get("trigger_dsl").unwrap_or(json!({}));
@@ -226,8 +228,9 @@ pub async fn dispatch_event(
         );
         return Vec::new();
     }
-    let Ok(books) = load_enabled(pool, event.tenant_id).await else {
-        return Vec::new();
+    let books = match load_enabled(pool, event.tenant_id).await {
+        Ok(b) => b,
+        Err(_) => return Vec::new(),
     };
     let mut results = Vec::with_capacity(books.len());
     for pb in books {
@@ -238,8 +241,8 @@ pub async fn dispatch_event(
         // Safety default: when a playbook omits `cooldown_seconds`, fall back to 1h so
         // destructive/notify actions (isolate_host, page_oncall, webhook, open_pr) do NOT
         // re-fire on every rescan of the same finding. Authors can opt out explicitly with 0.
-        if !dry_run
-            && in_cooldown(
+        if !dry_run {
+            match in_cooldown(
                 pool,
                 pb.id,
                 event.tenant_id,
@@ -247,19 +250,32 @@ pub async fn dispatch_event(
                 pb.trigger.cooldown_seconds.unwrap_or(3600),
             )
             .await
-        {
-            results.push(PlaybookRunResult {
-                playbook_id: pb.id,
-                playbook_name: pb.name.clone(),
-                status: "skipped_dedup".to_string(),
-                actions: vec![],
-            });
-            continue;
+            {
+                Ok(true) => {
+                    results.push(PlaybookRunResult {
+                        playbook_id: pb.id,
+                        playbook_name: pb.name.clone(),
+                        status: "skipped_dedup".to_string(),
+                        actions: vec![],
+                    });
+                    continue;
+                }
+                Err(_) => {
+                    results.push(PlaybookRunResult {
+                        playbook_id: pb.id,
+                        playbook_name: pb.name.clone(),
+                        status: "skipped_store_down".to_string(),
+                        actions: vec![],
+                    });
+                    continue;
+                }
+                Ok(false) => {}
+            }
         }
         let actions = run_actions(pool, &pb, &event, dry_run).await;
         let succeeded = actions.iter().filter(|a| a.status == "ok").count();
         let failed = actions.iter().filter(|a| a.status == "failed").count();
-        let status = if dry_run {
+        let mut status = if dry_run {
             "dry_run".to_string()
         } else if failed == 0 {
             "success".to_string()
@@ -270,8 +286,8 @@ pub async fn dispatch_event(
         };
 
         // Audit row + counters.
-        if !dry_run {
-            record_run(pool, &pb, &event, &dedup, &actions, &status).await;
+        if !dry_run && record_run(pool, &pb, &event, &dedup, &actions, &status).await.is_err() {
+            status = "failed".to_string();
         }
         results.push(PlaybookRunResult {
             playbook_id: pb.id,
@@ -303,13 +319,13 @@ async fn in_cooldown(
     tenant_id: i64,
     dedup: &str,
     cooldown_secs: i64,
-) -> bool {
+) -> Result<bool, String> {
     if cooldown_secs <= 0 {
-        return false;
+        return Ok(false);
     }
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return false;
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let row: Option<(i64,)> = sqlx::query_as(
         r#"SELECT id FROM weissman_playbook_runs
             WHERE tenant_id = $1 AND playbook_id = $2 AND run_dedup_key = $3
@@ -322,10 +338,11 @@ async fn in_cooldown(
     .bind(cooldown_secs)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    row.is_some()
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
+    Ok(row.is_some())
 }
 
 async fn run_actions(
@@ -566,15 +583,15 @@ async fn record_run(
     dedup: &str,
     actions: &[ActionResult],
     status: &str,
-) {
+) -> Result<(), String> {
     let succeeded = actions.iter().filter(|a| a.status == "ok").count() as i32;
     let failed = actions.iter().filter(|a| a.status == "failed").count() as i32;
     let event_json = serde_json::to_value(ev).unwrap_or(json!({}));
     let actions_json = serde_json::to_value(actions).unwrap_or(json!([]));
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, ev.tenant_id).await else {
-        return;
-    };
-    let _ = sqlx::query(
+    let mut tx = crate::db::begin_tenant_tx(pool, ev.tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
+    sqlx::query(
         r#"INSERT INTO weissman_playbook_runs
             (tenant_id, playbook_id, triggered_at, trigger_kind, trigger_event,
              run_dedup_key, actions_total, actions_succeeded, actions_failed,
@@ -592,8 +609,9 @@ async fn record_run(
     .bind(&actions_json)
     .bind(status)
     .execute(&mut *tx)
-    .await;
-    let _ = sqlx::query(
+    .await
+    .map_err(|_| "store_down".to_string())?;
+    sqlx::query(
         r#"UPDATE weissman_playbooks
               SET last_run_at = now(),
                   last_run_status = $2,
@@ -605,8 +623,12 @@ async fn record_run(
     .bind(pb.id)
     .bind(status)
     .execute(&mut *tx)
-    .await;
-    let _ = tx.commit().await;
+    .await
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
+    Ok(())
 }
 
 // ─── Template rendering ──────────────────────────────────────────────────────

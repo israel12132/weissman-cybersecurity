@@ -3733,4 +3733,67 @@ mod tests {
             "load_finding_context(app_pool.as_ref(), tenant_id, client_id, &finding_id).await?"
         ));
     }
+
+    #[test]
+    fn soar_playbook_github_status_isolate_verify_are_not_ok_on_store_down() {
+        let pb = include_str!("soar_playbook.rs");
+        let cool = named_fn_src(pb, "async fn in_cooldown");
+        assert!(cool.contains("Result<bool, String>"));
+        assert!(!compact_src(cool).contains(".ok().flatten()"));
+        assert!(cool.contains("store_down"));
+        let rec = named_fn_src(pb, "async fn record_run");
+        assert!(rec.contains("Result<(), String>"));
+        assert!(!rec.contains("let _ = tx.commit()"));
+        assert!(rec.contains("store_down"));
+        let dispatch = named_fn_src(pb, "pub async fn dispatch_event");
+        assert!(dispatch.contains("skipped_store_down"));
+        assert!(dispatch.contains("record_run(pool, &pb, &event, &dedup, &actions, &status).await.is_err()"));
+
+        let gh = include_str!("soar/adapters/github.rs");
+        let open = named_fn_src(gh, "async fn open_pr");
+        assert!(open.contains("if tx.commit().await.is_err()"));
+        assert!(!compact_src(open).contains("let_=tx.commit().await"));
+        let enqueue = open.find("enqueue_with_max_attempts").expect("enqueue after commit");
+        let commit = open.find("if tx.commit().await.is_err()").expect("commit checked");
+        assert!(commit < enqueue, "must not enqueue until spec commit succeeds");
+
+        let engine = include_str!("soar/engine.rs");
+        let upd = named_fn_src(engine, "async fn update_status");
+        assert!(!upd.contains("let _ = tx.commit()"));
+        assert!(upd.contains("store_down"));
+        let ures = named_fn_src(engine, "async fn update_execution_result");
+        assert!(!ures.contains("let _ = tx.commit()"));
+        assert!(ures.contains("store_down"));
+        let exec = named_fn_src(engine, "pub async fn execute_armored_action");
+        assert!(!compact_src(exec).contains(
+            "let_=update_status(pool,cmd.tenant_id,execution_id,ExecutionStatus::Executing"
+        ));
+        assert!(!compact_src(exec).contains("let_=update_execution_result"));
+        let persist = exec
+            .find("if update_execution_result")
+            .expect("result persist checked");
+        assert!(
+            exec[persist..].contains("status: \"ok\".into()"),
+            "ok only after execution result persist is checked"
+        );
+
+        let aws = include_str!("soar/adapters/aws_ec2.rs");
+        let probe_start = aws
+            .find("async fn tcp_probe_unreachable(")
+            .expect("tcp_probe");
+        let probe_rest = &aws[probe_start..];
+        let probe_next = probe_rest
+            .find("\npub async fn tcp_probe_unreachable_batch")
+            .unwrap_or(probe_rest.len());
+        let probe = &probe_rest[..probe_next];
+        assert!(probe.contains("Result<bool, super::AdapterError>"));
+        assert!(probe.contains("isolate probe timeout — not confirmed"));
+        assert!(!probe.contains("return true;"));
+        let agent = named_fn_src(
+            include_str!("soar/adapters/weissman_agent.rs"),
+            "async fn verify_isolated",
+        );
+        assert!(agent.contains("tcp_probe_unreachable_batch"));
+        assert!(!agent.contains("tcp_open"));
+    }
 }
