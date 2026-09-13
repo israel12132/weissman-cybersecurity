@@ -3836,5 +3836,119 @@ mod tests {
 
         let merge = named_fn_src(include_str!("auto_heal_job.rs"), "async fn maybe_auto_merge_pr");
         assert!(!compact_src(merge).contains(".ok().flatten().unwrap_or_default()"));
+
+        let persist_rb = named_fn_src(include_str!("soar/revert.rs"), "pub async fn persist_runbook");
+        assert!(persist_rb.contains("Result<Uuid, String>"));
+        assert!(!persist_rb.contains("let _ = tx.commit()"));
+        assert!(persist_rb.contains("store_down"));
+
+        assert!(!compact_src(exec).contains("let_=persist_runbook"));
+        let persist_idx = exec
+            .find("persist_runbook(")
+            .expect("execute_armored_action must persist a runbook");
+        let ok_idx = exec[persist_idx..]
+            .find("status: \"ok\".into()")
+            .expect("success arm should still exist after persist");
+        assert!(
+            exec[persist_idx..persist_idx + ok_idx].contains("store_down"),
+            "persist_runbook Err must become failed/store_down before returning ok"
+        );
+    }
+
+    #[test]
+    fn execute_revert_commit_fail_is_store_down() {
+        let src = named_fn_src(include_str!("soar/revert.rs"), "pub async fn execute_revert");
+        assert!(src.contains("Result<String, String>"));
+        let last = src
+            .rfind("tx.commit()")
+            .expect("execute_revert must commit the reverted UPDATE");
+        assert!(
+            src[last.saturating_sub(80)..].contains("is_err()"),
+            "final revert commit fail must be checked"
+        );
+        assert!(
+            src.contains("store_down"),
+            "execute_revert commit fail must be store_down, not Ok(details)"
+        );
+    }
+
+    #[test]
+    fn claim_due_schedule_ids_store_down_not_empty_ok() {
+        let src = named_fn_src(
+            include_str!("scan_schedule_worker.rs"),
+            "async fn claim_due_schedule_ids",
+        );
+        assert!(
+            src.contains("Result<Vec<i64>, String>"),
+            "claim_due_schedule_ids must return Result so tick cannot treat store-down as no due scans"
+        );
+        assert!(
+            !src.contains("return Vec::new()"),
+            "claim_due_schedule_ids must not empty-ok begin fail as a bare empty vec"
+        );
+        assert!(
+            !compact_src(src).contains("fetch_all(&mut*tx).await.unwrap_or_default()"),
+            "claim_due_schedule_ids must not unwrap_or_default a due-id SELECT as empty"
+        );
+        assert!(
+            src.contains("store_down"),
+            "claim_due_schedule_ids begin/fetch/commit fail must be store_down"
+        );
+        let tick = named_fn_src(include_str!("scan_schedule_worker.rs"), "async fn tick");
+        assert!(
+            !tick.contains("for schedule_id in claim_due_schedule_ids("),
+            "tick must not iterate claim_due_schedule_ids as if it were Vec"
+        );
+        assert!(
+            tick.contains("match claim_due_schedule_ids("),
+            "tick must match claim_due_schedule_ids Err instead of treating it as no due work"
+        );
+    }
+
+    #[test]
+    fn stale_soar_begin_fail_is_store_down_not_ok_zero() {
+        let exec = named_fn_src(
+            include_str!("soar/stale.rs"),
+            "async fn alert_stale_executions",
+        );
+        let ver = named_fn_src(
+            include_str!("soar/stale.rs"),
+            "async fn alert_stale_verifications",
+        );
+        for (name, src) in [
+            ("alert_stale_executions", exec),
+            ("alert_stale_verifications", ver),
+        ] {
+            assert!(
+                !src.contains("return Ok(0)"),
+                "{name} must not empty-ok begin fail as zero stale work"
+            );
+            assert!(
+                src.contains("store_down"),
+                "{name} begin/commit fail must be store_down"
+            );
+        }
+    }
+
+    #[test]
+    fn pentest_memory_prior_winners_store_down_not_empty_ok() {
+        let src = named_fn_src(include_str!("pentest_memory.rs"), "pub async fn prior_winners");
+        assert!(
+            src.contains("Result<Vec<WinningPath>, String>"),
+            "prior_winners must return Result so store-down is not an empty winner list"
+        );
+        assert!(
+            !compact_src(src).contains("fetch_all(&mut*tx).await.unwrap_or_default()"),
+            "prior_winners must not unwrap_or_default a winner SELECT as empty"
+        );
+        assert!(
+            src.contains("store_down"),
+            "prior_winners begin/fetch/commit fail must be store_down"
+        );
+        let live = include_str!("engine_dispatch.rs");
+        assert!(
+            live.contains("EngineResult::error(\"store_down\")"),
+            "live engine dispatch must fail closed when pentest memory store is down"
+        );
     }
 }

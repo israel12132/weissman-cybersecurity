@@ -17,9 +17,9 @@ pub async fn persist_runbook(
     action_kind: &str,
     steps: &[RevertStep],
 ) -> Result<Uuid, String> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Err("tenant tx".into());
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let id = Uuid::new_v4();
     let steps_json = serde_json::to_value(steps).unwrap_or(json!([]));
     sqlx::query(
@@ -34,8 +34,10 @@ pub async fn persist_runbook(
     .bind(steps_json)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
     Ok(id)
 }
 
@@ -44,9 +46,9 @@ pub async fn execute_revert(
     tenant_id: i64,
     execution_id: Uuid,
 ) -> Result<String, String> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Err("tenant tx".into());
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let row = sqlx::query(
         r#"SELECT r.steps, r.status
            FROM soar_revert_runbooks r
@@ -78,9 +80,9 @@ pub async fn execute_revert(
         ));
     }
 
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Err("tenant tx".into());
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     sqlx::query(
         r#"UPDATE soar_revert_runbooks SET status = 'reverted', reverted_at = now()
            WHERE execution_id = $1 AND tenant_id = $2"#,
@@ -89,7 +91,7 @@ pub async fn execute_revert(
     .bind(tenant_id)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     let _ = crate::audit_log::insert_audit(
         &mut tx,
         tenant_id,
@@ -100,7 +102,9 @@ pub async fn execute_revert(
         "0.0.0.0",
     )
     .await;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
     Ok(details.join("; "))
 }
 

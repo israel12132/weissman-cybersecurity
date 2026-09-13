@@ -314,14 +314,18 @@ async fn run_engine_inner(engine_id: &str, target: &str, ctx: &EngineRunContext)
     let mut ctx = ctx.clone();
     if crate::pentest_memory::is_http_offensive_engine(canonical) {
         if let (Some(pool), Some(tid)) = (ctx.app_pool.as_ref(), ctx.tenant_id) {
-            let winners = crate::pentest_memory::load_memory_for_engine(
+            let winners = match crate::pentest_memory::load_memory_for_engine(
                 pool.as_ref(),
                 tid,
                 canonical,
                 target,
                 12,
             )
-            .await;
+            .await
+            {
+                Ok(w) => w,
+                Err(_) => return EngineResult::error("store_down"),
+            };
             ctx.memory_path_ids = winners.iter().map(|w| w.id).collect();
             let winner_payloads: Vec<String> = winners.into_iter().map(|w| w.payload).collect();
             ctx.memory_payloads = crate::live_knowledge_bus::merge_live_first(

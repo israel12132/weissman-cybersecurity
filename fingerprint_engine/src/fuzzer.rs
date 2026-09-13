@@ -622,14 +622,18 @@ async fn execute_legacy_feedback_fuzz(
     if let (Some(pool), Some(tid)) = (app_pool, tenant_id) {
         let host = pentest_memory::target_host_for_memory(target_url);
         if !host.is_empty() {
-            let winners = pentest_memory::load_memory_for_engine(
+            let winners = match pentest_memory::load_memory_for_engine(
                 pool,
                 tid,
                 "http_feedback_fuzz",
                 target_url,
                 12,
             )
-            .await;
+            .await
+            {
+                Ok(w) => w,
+                Err(_) => Vec::new(),
+            };
             pentest_memory::prepend_memory_payloads(
                 &mut guided,
                 &winners.into_iter().map(|w| w.payload).collect::<Vec<_>>(),
@@ -778,14 +782,18 @@ async fn execute_generative_feedback_fuzz(
     if let (Some(pool), Some(tid)) = (app_pool, llm_tenant_id) {
         let host = pentest_memory::target_host_for_memory(target_url);
         if !host.is_empty() {
-            let winners = pentest_memory::load_memory_for_engine(
+            let winners = match pentest_memory::load_memory_for_engine(
                 pool,
                 tid,
                 "http_feedback_fuzz",
                 target_url,
                 8,
             )
-            .await;
+            .await
+            {
+                Ok(w) => w,
+                Err(_) => Vec::new(),
+            };
             if !winners.is_empty() {
                 let hints: Vec<String> = winners
                     .iter()
