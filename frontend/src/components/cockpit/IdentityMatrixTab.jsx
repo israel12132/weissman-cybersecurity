@@ -350,7 +350,7 @@ export default function IdentityMatrixTab() {
               ? t(`${IM}.unavailable`)
               : t('components.cockpitTabs.identityMatrix.session_contexts', { count: contexts.length })}
           </span>
-          {contexts.length >= 2 && (
+          {!loadError && contexts.length >= 2 && (
             <Button variant="unstyled"
               type="button"
               onClick={() => setPolling((p) => !p)}
@@ -362,7 +362,7 @@ export default function IdentityMatrixTab() {
             </Button>
           )}
         </div>
-        {loadError && contexts.length === 0 ? null : (
+        {loadError ? null : (
         <DataTable
           id="identity-matrix-contexts-table"
           columns={contextColumns}
