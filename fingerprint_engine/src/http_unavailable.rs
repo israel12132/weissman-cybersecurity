@@ -253,6 +253,13 @@ pub fn cnapp_jobs_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// `GET /api/jobs` Jobs dashboard
+pub fn async_jobs_list_unavailable_json(detail: &str) -> Value {
+    let mut v = list_envelope("jobs", detail);
+    v["total"] = Value::Null;
+    v
+}
+
 /// `GET /api/soar` execution index
 pub fn soar_executions_unavailable_json(detail: &str) -> Value {
     json!({
@@ -1350,6 +1357,16 @@ mod tests {
         assert_eq!(v["unavailable"], true);
         assert_eq!(v["jobs"], json!([]));
         assert!(v["running"].is_null());
+    }
+
+    #[test]
+    fn async_jobs_list_store_down_is_never_ok_empty_success() {
+        let v = async_jobs_list_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["jobs"], json!([]));
+        assert!(v["total"].is_null());
+        assert_ne!(v["total"], json!(0));
     }
 
     #[test]
@@ -4181,5 +4198,54 @@ mod tests {
         assert!(src.contains("counts_live"));
         assert!(src.contains("postgres_up: pg_up && counts_live"));
         assert!(src.contains("self-heal agent/backlog counts store_down"));
+    }
+
+    #[test]
+    fn async_jobs_list_query_store_down_is_not_ok_empty() {
+        let src = named_fn_src(
+            include_str!("server_handlers_jobs.inc"),
+            "async fn api_async_jobs_list",
+        );
+        assert!(src.contains("async_jobs_list_unavailable_json"));
+        assert!(!compact_src(src).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(!src.contains("fetch_one(&mut *tx)\n    .await\n    .unwrap_or(0)"));
+        assert!(src.contains("tx.commit().await.is_err()"));
+        assert!(!src.contains("let _ = tx.commit()"));
+    }
+
+    #[test]
+    fn verification_step_persist_store_down_is_not_fixed_empty_trail() {
+        let src = include_str!("verification_sandbox.rs");
+        let push = named_fn_src(src, "async fn push_step");
+        assert!(push.contains("Result<(), String>"));
+        assert!(push.contains("store_down"));
+        assert!(!push.contains("heal_verification_steps insert"));
+        let collect = named_fn_src(src, "async fn collect_steps_only");
+        assert!(collect.contains("Result<Vec<VerificationStep>, String>"));
+        assert!(!compact_src(collect).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(!collect.contains("let _ = tx.commit()"));
+        assert!(!collect.contains("return Vec::new()"));
+        let attach = named_fn_src(src, "async fn attach_steps");
+        assert!(attach.contains("verified = false"));
+        assert!(attach.contains("store_down"));
+        let rec = named_fn_src(src, "pub async fn record_step");
+        assert!(rec.contains("Result<(), String>"));
+    }
+
+    #[test]
+    fn task_scan_job_id_store_down_is_not_missing_parent() {
+        let src = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub async fn task_scan_job_id",
+        );
+        assert!(src.contains("Result<Option<String>, sqlx::Error>"));
+        assert!(!compact_src(src).contains(".await.ok()?"));
+        assert!(!compact_src(src).contains(".ok().flatten()"));
+        assert!(src.contains("store_down"));
+        let persist = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub async fn store_finding_for_task",
+        );
+        assert!(compact_src(persist).contains("task_scan_job_id(pool,tenant_id,tid).await?"));
     }
 }

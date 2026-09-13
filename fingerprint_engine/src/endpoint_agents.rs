@@ -1092,7 +1092,7 @@ pub async fn store_finding_for_task(
         return Ok(());
     }
     let scan_job_id = if let Some(tid) = task_id {
-        task_scan_job_id(pool, tenant_id, tid).await
+        task_scan_job_id(pool, tenant_id, tid).await?
     } else {
         None
     };
@@ -1150,11 +1150,15 @@ pub async fn store_finding_for_task(
 }
 
 /// Resolve the parent scan job id stored on an agent task (if any).
-pub async fn task_scan_job_id(pool: &PgPool, tenant_id: i64, task_uuid: &str) -> Option<String> {
+pub async fn task_scan_job_id(
+    pool: &PgPool,
+    tenant_id: i64,
+    task_uuid: &str,
+) -> Result<Option<String>, sqlx::Error> {
     let Ok(uuid) = Uuid::parse_str(task_uuid) else {
-        return None;
+        return Ok(None);
     };
-    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await.ok()?;
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
     let scan_job_id = sqlx::query_scalar::<_, Option<String>>(
         r#"SELECT params->>'scan_job_id' FROM endpoint_agent_tasks
             WHERE task_uuid = $1 AND tenant_id = $2"#,
@@ -1162,13 +1166,13 @@ pub async fn task_scan_job_id(pool: &PgPool, tenant_id: i64, task_uuid: &str) ->
     .bind(uuid)
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
-    .await
-    .ok()
-    .flatten()
+    .await?
     .flatten()
     .filter(|s| !s.trim().is_empty());
-    tx.commit().await.ok()?;
-    scan_job_id
+    if tx.commit().await.is_err() {
+        return Err(sqlx::Error::Protocol("store_down".into()));
+    }
+    Ok(scan_job_id)
 }
 
 /// Periodic UEBA baseline sampling for every online endpoint agent (leader-only).

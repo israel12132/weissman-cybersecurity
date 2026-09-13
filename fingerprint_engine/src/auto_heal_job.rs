@@ -702,7 +702,7 @@ pub async fn run_auto_heal_job(
                 tournament_size
             )),
         )
-        .await;
+        .await?;
 
         // Candidate 0 is the pre-generated seed patch; 1..size are LLM candidates by strategy.
         let mut candidates: Vec<(String, String)> = vec![("seed".to_string(), patch_text.clone())];
@@ -731,7 +731,7 @@ pub async fn run_auto_heal_job(
                             &format!("tournament_candidate_{}_skipped", i + 1),
                             Some(e),
                         )
-                        .await;
+                        .await?;
                     }
                 }
             }
@@ -806,7 +806,7 @@ pub async fn run_auto_heal_job(
                     sc.2
                 )),
             )
-            .await;
+            .await?;
             if best.as_ref().map(|(_, _, bs)| sc > *bs).unwrap_or(true) {
                 best = Some((cand, cvr, sc));
             }
@@ -822,7 +822,7 @@ pub async fn run_auto_heal_job(
                 candidate_count
             )),
         )
-        .await;
+        .await?;
         patch_text = best_patch;
         // NOTE: `candidate_count` is reported in the `tournament_winner` step above only. It
         // must NOT seed the sequential self-repair counter or the persisted attempt count.
@@ -862,7 +862,7 @@ pub async fn run_auto_heal_job(
                 reason
             )),
         )
-        .await;
+        .await?;
 
         if finding_ctx.is_none() {
             finding_ctx =
@@ -876,7 +876,7 @@ pub async fn run_auto_heal_job(
                     "self_repair_aborted",
                     Some(format!("llm config: {e}")),
                 )
-                .await;
+                .await?;
                 break;
             }
         };
@@ -903,7 +903,7 @@ pub async fn run_auto_heal_job(
                         "self_repair_rejected",
                         Some(format!("regenerated patch rejected: {e}")),
                     )
-                    .await;
+                    .await?;
                     break;
                 }
                 patch_text = new_patch;
@@ -924,7 +924,7 @@ pub async fn run_auto_heal_job(
                 .await;
             }
             Err(e) => {
-                record_step(&step_sink, "self_repair_failed", Some(e)).await;
+                record_step(&step_sink, "self_repair_failed", Some(e)).await?;
                 break;
             }
         }
@@ -992,7 +992,7 @@ pub async fn run_auto_heal_job(
                 "blocked: verified patch embeds secret(s): {}",
                 leaked.join("; ")
             );
-            record_step(&step_sink, "secret_gate_blocked", Some(msg.clone())).await;
+            record_step(&step_sink, "secret_gate_blocked", Some(msg.clone())).await?;
             insert_heal_request_row(
                 app_pool.as_ref(),
                 tenant_id,
@@ -1058,7 +1058,7 @@ pub async fn run_auto_heal_job(
             "heal_attested",
             Some("signed tamper-evident verification receipt".into()),
         )
-        .await;
+        .await?;
     }
     let attempts_i32 = attempt as i32;
 
@@ -1075,7 +1075,7 @@ pub async fn run_auto_heal_job(
                     existing_url
                 )),
             )
-            .await;
+            .await?;
             insert_heal_request_row(
                 app_pool.as_ref(),
                 tenant_id,
