@@ -511,7 +511,7 @@ export default function OsintEngineProfile() {
         </div>
       </section>
 
-      {findings.length > 0 && (
+      {!historyUnavailable && findings.length > 0 && (
         <section className="mt-6 rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6 space-y-4">
           <WeissmanListToolbar
             searchQuery={searchQuery}

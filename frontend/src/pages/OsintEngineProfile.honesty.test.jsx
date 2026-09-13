@@ -28,4 +28,8 @@ describe('OsintEngineProfile live-only truth', () => {
     expect(src).toMatch(/setHistoryUnavailable\(true\)/)
     expect(src).toMatch(/historyLoading \|\| historyUnavailable/)
   })
+
+  it('does not paint leftover leftover-history findings after a failed history GET', () => {
+    expect(src).toMatch(/!historyUnavailable && findings\.length > 0/)
+  })
 })
