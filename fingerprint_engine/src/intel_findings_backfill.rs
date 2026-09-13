@@ -158,7 +158,7 @@ pub async fn run_findings_intel_backfill(
             if let Value::Object(obj) = &mut patched {
                 obj.insert("cve".into(), Value::String(cve.clone()));
             }
-            let res = sqlx::query(
+            sqlx::query(
                 r#"UPDATE vulnerabilities
                       SET raw_data = $2::jsonb,
                           intel_enriched_at = COALESCE(intel_enriched_at, now())
@@ -167,10 +167,9 @@ pub async fn run_findings_intel_backfill(
             .bind(id)
             .bind(&patched)
             .execute(&mut *tx)
-            .await;
-            if res.is_ok() {
-                cve_updates += 1;
-            }
+            .await
+            .map_err(|e| e.to_string())?;
+            cve_updates += 1;
         }
 
         // Refresh EPSS mirror for all distinct non-empty CVEs in this tenant's findings.
@@ -222,7 +221,7 @@ pub async fn run_findings_intel_backfill(
         // finding LEARNED to be known-exploited would stay frozen at its CVSS-only priority forever.
         // The KEV floor is idempotent (GREATEST) and the WHERE only touches rows still below it, so
         // this can't double-count and won't churn already-ranked rows.
-        let _ = sqlx::query(
+        sqlx::query(
             r#"UPDATE vulnerabilities v
                   SET effective_risk = CASE WHEN v.kev_known_ransomware THEN 9.5 ELSE 8.5 END
                 WHERE v.kev_listed
@@ -230,7 +229,8 @@ pub async fn run_findings_intel_backfill(
                       < CASE WHEN v.kev_known_ransomware THEN 9.5 ELSE 8.5 END"#,
         )
         .execute(&mut *tx)
-        .await;
+        .await
+        .map_err(|e| e.to_string())?;
 
         intel_updates += epss_res.rows_affected() as usize + kev_res.rows_affected() as usize;
 

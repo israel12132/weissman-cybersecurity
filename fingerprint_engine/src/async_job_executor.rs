@@ -245,15 +245,15 @@ async fn persist_findings_best_effort(
     engine: &str,
     target: &str,
     findings: &[Value],
-) -> u64 {
+) -> Result<u64, String> {
     if findings.is_empty() || client_id.is_none() {
-        return 0;
+        return Ok(0);
     }
     crate::findings_persist::persist_engine_findings(
         app_pool, tenant_id, client_id, engine, target, findings,
     )
     .await
-    .unwrap_or_else(|e| {
+    .map_err(|e| {
         tracing::error!(
             target: "findings_persist",
             tenant_id,
@@ -261,7 +261,7 @@ async fn persist_findings_best_effort(
             error = %e,
             "failed to persist findings"
         );
-        0
+        "store_down".to_string()
     })
 }
 
@@ -271,7 +271,7 @@ async fn persist_findings_grouped_by_client_field(
     engine: &str,
     default_target: &str,
     findings: &[Value],
-) -> u64 {
+) -> Result<u64, String> {
     use std::collections::HashMap;
     let mut groups: HashMap<i64, Vec<Value>> = HashMap::new();
     for f in findings {
@@ -291,9 +291,9 @@ async fn persist_findings_grouped_by_client_field(
             .unwrap_or(default_target);
         total +=
             persist_findings_best_effort(app_pool, tenant_id, Some(cid), engine, target, &group)
-                .await;
+                .await?;
     }
-    total
+    Ok(total)
 }
 
 fn feedback_fuzz_anomaly_to_finding(v: &fuzz_core::ValidatedAnomaly) -> Value {
@@ -599,7 +599,7 @@ async fn execute_job_unscoped(
                 target,
                 &result.findings,
             )
-            .await;
+            .await?;
 
             if crate::engine_resilience::should_retry_status(&result.status) {
                 let failure_ctx = json!({
@@ -1041,7 +1041,7 @@ async fn execute_job_unscoped(
                     "resilience": telem.to_json(),
                 }));
 
-                let _ = persist_findings_best_effort(
+                persist_findings_best_effort(
                     app.as_ref(),
                     tid,
                     Some(client_id),
@@ -1049,7 +1049,7 @@ async fn execute_job_unscoped(
                     &target,
                     &result.findings,
                 )
-                .await;
+                .await?;
 
                 completed_engines.push(engine_id.clone());
                 let progress = json!({
@@ -1077,14 +1077,14 @@ async fn execute_job_unscoped(
             let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Scan-all-engines completed: {}/{} succeeded","status":"completed"}}"#, job.id, succeeded, ordered_engines.len()));
 
             if !target.trim().is_empty() {
-                let _ = crate::superposition_followup::enqueue_after_batch(
+                crate::superposition_followup::enqueue_after_batch(
                     app.as_ref(),
                     tid,
                     client_id,
                     &target,
                     "scan_all_engines",
                 )
-                .await;
+                .await?;
             }
 
             Ok(json!({
@@ -1174,7 +1174,7 @@ async fn execute_job_unscoped(
 
                     total_findings += result.findings.len();
 
-                    let _ = persist_findings_best_effort(
+                    persist_findings_best_effort(
                         app.as_ref(),
                         tid,
                         Some(client_id),
@@ -1182,7 +1182,7 @@ async fn execute_job_unscoped(
                         &target,
                         &result.findings,
                     )
-                    .await;
+                    .await?;
                 }
             }
 
@@ -1517,7 +1517,7 @@ async fn execute_job_unscoped(
                 &target,
                 &fuzzy.result.findings,
             )
-            .await;
+            .await?;
             Ok(json!({
                 "status": fuzzy.result.status,
                 "findings": fuzzy.result.findings,
@@ -1729,7 +1729,7 @@ async fn execute_job_unscoped(
                 &target,
                 &result.findings,
             )
-            .await;
+            .await?;
             Ok(json!({
                 "status": result.status,
                 "findings": result.findings,
@@ -1807,7 +1807,7 @@ async fn execute_job_unscoped(
                 &target,
                 &result.findings,
             )
-            .await;
+            .await?;
             Ok(json!({
                 "status": result.status,
                 "findings": result.findings,
@@ -1890,7 +1890,7 @@ async fn execute_job_unscoped(
                 "tenant-wide radar scan",
                 &result.findings,
             )
-            .await;
+            .await?;
             Ok(json!({
                 "status": result.status,
                 "findings": result.findings,
@@ -1944,7 +1944,7 @@ async fn execute_job_unscoped(
                 repo,
                 &res.findings,
             )
-            .await;
+            .await?;
             Ok(json!({
                 "status": res.status,
                 "findings": res.findings,
@@ -2095,7 +2095,7 @@ async fn execute_job_unscoped(
                 &target,
                 &res.findings,
             )
-            .await;
+            .await?;
             Ok(json!({
                 "status": res.status,
                 "findings": res.findings,
@@ -2297,7 +2297,7 @@ async fn execute_job_unscoped(
                 &target,
                 &finding_values,
             )
-            .await;
+            .await?;
 
             if findings.iter().any(|v| v.llm_user_prompt.is_some()) {
                 if let Ok(mut tx2) = db::begin_tenant_tx(app_pool.as_ref(), tid).await {

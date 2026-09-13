@@ -92,8 +92,7 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
                     execution_id: Some(existing.id),
                 };
             }
-            if existing.status == ExecutionStatus::Acquired.as_str()
-                || existing.status == ExecutionStatus::Executing.as_str()
+            if existing.status == ExecutionStatus::Executing.as_str()
                 || existing.status == ExecutionStatus::Verifying.as_str()
             {
                 return ActionOutcome {
@@ -224,24 +223,37 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
         };
     }
     if blast.blocked {
+        let store_down = blast.block_reason == "database unavailable";
         let _ = update_status(
             pool,
             cmd.tenant_id,
             execution_id,
-            ExecutionStatus::BlockedBlastRadius,
+            if store_down {
+                ExecutionStatus::Failed
+            } else {
+                ExecutionStatus::BlockedBlastRadius
+            },
             &blast.block_reason,
         )
         .await;
         audit::log_execution(
             pool,
             &cmd,
-            "blocked_blast_radius",
+            if store_down {
+                "failed"
+            } else {
+                "blocked_blast_radius"
+            },
             &blast.block_reason,
             Some(execution_id),
         )
         .await;
         return ActionOutcome {
-            status: "skipped".into(),
+            status: if store_down {
+                "failed".into()
+            } else {
+                "skipped".into()
+            },
             detail: blast.block_reason,
             execution_id: Some(execution_id),
         };
@@ -520,8 +532,7 @@ async fn insert_execution(
         };
         let existing: Uuid = r.try_get("id").unwrap_or_else(|_| Uuid::nil());
         let status: String = r.try_get("status").unwrap_or_default();
-        if status == ExecutionStatus::Acquired.as_str()
-            || status == ExecutionStatus::Executing.as_str()
+        if status == ExecutionStatus::Executing.as_str()
             || status == ExecutionStatus::Verifying.as_str()
             || status == ExecutionStatus::Resolved.as_str()
             || status == ExecutionStatus::DuplicateSkipped.as_str()
@@ -682,20 +693,8 @@ pub async fn approve_hitl(
     }
     tx.commit().await.map_err(|e| e.to_string())?;
 
-    let ev: ThreatEvidence = serde_json::from_value(evidence).unwrap_or(ThreatEvidence {
-        finding_id: None,
-        title: String::new(),
-        severity: String::new(),
-        source: String::new(),
-        target: target_id.clone(),
-        cve: None,
-        signature_hash: None,
-        cvss: None,
-        epss: None,
-        kev: false,
-        internet_exposed: false,
-        trigger_kind: "hitl_approve".into(),
-    });
+    let ev: ThreatEvidence = serde_json::from_value(evidence)
+        .map_err(|_| "store_down".to_string())?;
     let cmd = ExecuteActionCommand {
         action_kind,
         tenant_id,

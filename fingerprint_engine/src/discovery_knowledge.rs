@@ -472,12 +472,22 @@ pub async fn seed_public_knowledge(pool: &PgPool) {
         SEED_DONE.store(true, Ordering::SeqCst);
         return;
     }
-    let existing: i64 = sqlx::query_scalar(
+    let existing: i64 = match sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM intel.discovery_knowledge WHERE source = 'seed'",
     )
     .fetch_one(pool)
     .await
-    .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::warn!(
+                target: "discovery_knowledge",
+                error = %e,
+                "seed count store_down"
+            );
+            return;
+        }
+    };
     if existing > 1_000 {
         SEED_DONE.store(true, Ordering::SeqCst);
         redis_flag_mark(REDIS_SEEDED).await;
@@ -486,16 +496,24 @@ pub async fn seed_public_knowledge(pool: &PgPool) {
     if redis_set_nx(REDIS_SEED_LOCK, 600).await == Some(false) {
         return;
     }
-    seed_kind_chunks(pool, KIND_PATH, all_http_paths()).await;
-    seed_kind_chunks(pool, KIND_SUB, all_subdomain_prefixes()).await;
+    if seed_kind_chunks(pool, KIND_PATH, all_http_paths())
+        .await
+        .is_err()
+        || seed_kind_chunks(pool, KIND_SUB, all_subdomain_prefixes())
+            .await
+            .is_err()
+    {
+        tracing::warn!(target: "discovery_knowledge", "seed chunk store_down");
+        return;
+    }
     SEED_DONE.store(true, Ordering::SeqCst);
     redis_flag_mark(REDIS_SEEDED).await;
 }
 
-async fn seed_kind_chunks(pool: &PgPool, kind: &str, values: &[String]) {
+async fn seed_kind_chunks(pool: &PgPool, kind: &str, values: &[String]) -> Result<(), sqlx::Error> {
     for chunk in values.chunks(400) {
         let vals: Vec<String> = chunk.to_vec();
-        if let Err(e) = sqlx::query(
+        sqlx::query(
             r#"INSERT INTO intel.discovery_knowledge (kind, value, tech_hint, source)
                SELECT $1, x, '', 'seed' FROM UNNEST($2::text[]) AS x
                ON CONFLICT (kind, value_key, tech_hint) DO NOTHING"#,
@@ -503,11 +521,9 @@ async fn seed_kind_chunks(pool: &PgPool, kind: &str, values: &[String]) {
         .bind(kind)
         .bind(&vals)
         .execute(pool)
-        .await
-        {
-            tracing::debug!(target: "discovery_knowledge", error = %e, kind, "seed chunk skipped");
-        }
+        .await?;
     }
+    Ok(())
 }
 
 /// Merge seed ∪ stored ∪ extra without dropping anything.

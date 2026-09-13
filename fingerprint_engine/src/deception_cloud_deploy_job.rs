@@ -45,7 +45,9 @@ pub async fn run_deception_cloud_deploy(
         row.try_get("request_json").map_err(|e| e.to_string())?;
 
     if status == "active" {
-        let _ = tx.commit().await;
+        if tx.commit().await.is_err() {
+            return Err("store_down".to_string());
+        }
         return Ok(json!({
             "ok": true,
             "message": "deployment already active",

@@ -2349,6 +2349,13 @@ mod tests {
         assert!(fn_src.contains("tx.commit().await.is_err()"));
         assert!(!fn_src.contains(".ok().flatten()"));
         assert!(!fn_src.contains("if let Ok(mut tx)"));
+        assert!(
+            !compact_src(fn_src).contains("from_str::<Vec<Value>>(&s).ok()"),
+            "corrupt integrations JSON must not look empty and fall back to env"
+        );
+        assert!(compact_src(fn_src).contains(
+            "from_str::<Vec<Value>>(&s).map_err(|_|\"store_down\")?"
+        ));
     }
 
     #[test]
@@ -3622,6 +3629,28 @@ mod tests {
         assert!(exec.contains("duplicate_skipped: in-flight execution"));
         assert!(exec.contains("duplicate_in_flight"));
         assert!(exec.contains("match load_integrations"));
+        assert!(
+            !compact_src(exec).contains(
+                "ifexisting.status==ExecutionStatus::Acquired.as_str()||existing.status==ExecutionStatus::Executing"
+            ),
+            "stuck Acquired must resume to Executing, not ok-skip as in-flight"
+        );
+        assert!(
+            !compact_src(insert).contains(
+                "ifstatus==ExecutionStatus::Acquired.as_str()||status==ExecutionStatus::Executing"
+            ),
+            "ON CONFLICT Acquired must return Ok(existing), not duplicate_in_flight"
+        );
+        let blocked = exec.find("if blast.blocked").expect("blast.blocked");
+        let blast_slice = &exec[blocked..(blocked + 2000).min(exec.len())];
+        assert!(
+            blast_slice.contains("database unavailable"),
+            "unavailable_blast must not look like a live blast skip"
+        );
+        assert!(
+            blast_slice.contains("status: if store_down"),
+            "database unavailable blast must return failed, not skipped"
+        );
         let lock = named_fn_src(
             include_str!("soar/idempotency.rs"),
             "pub async fn try_acquire_lock",
@@ -3778,6 +3807,27 @@ mod tests {
         let dispatch = named_fn_src(pb, "pub async fn dispatch_event");
         assert!(dispatch.contains("skipped_store_down"));
         assert!(dispatch.contains("record_run(pool, &pb, &event, &dedup, &actions, &status).await.is_err()"));
+        let soar_meta = include_str!("soar/dispatch_record.rs");
+        let merge = named_fn_src(soar_meta, "async fn merge_soar_metadata");
+        assert!(
+            merge.contains("skipped_store_down"),
+            "cooldown store-down must not land as soar_dispatch.status ok"
+        );
+        assert!(compact_src(merge).contains("status==\"skipped_store_down\""));
+        let record = named_fn_src(soar_meta, "pub async fn record_post_persist_dispatch");
+        assert!(
+            compact_src(record).contains("r.status==\"skipped_store_down\""),
+            "skipped_store_down must notify, not only failed/partial"
+        );
+        let hitl = named_fn_src(
+            include_str!("soar/engine.rs"),
+            "pub async fn approve_hitl",
+        );
+        assert!(
+            !compact_src(hitl).contains("from_value(evidence).unwrap_or("),
+            "corrupt HITL evidence must not become empty ThreatEvidence"
+        );
+        assert!(hitl.contains("map_err(|_| \"store_down\".to_string())?"));
 
         let gh = include_str!("soar/adapters/github.rs");
         let open = named_fn_src(gh, "async fn open_pr");
@@ -4222,6 +4272,7 @@ mod tests {
         assert!(!compact_src(src).contains("fetch_one(&mut*tx).await.unwrap_or(0)"));
         assert!(src.contains("tx.commit().await.is_err()"));
         assert!(!src.contains("let _ = tx.commit()"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
     }
 
     #[test]
@@ -4230,11 +4281,19 @@ mod tests {
         let push = named_fn_src(src, "async fn push_step");
         assert!(push.contains("Result<(), String>"));
         assert!(push.contains("store_down"));
-        assert!(!push.contains("heal_verification_steps insert"));
+        assert!(
+            push.contains("INSERT INTO heal_verification_steps"),
+            "step trail INSERT must be present"
+        );
+        assert!(
+            !compact_src(push).contains("let_=sqlx::query("),
+            "heal_verification_steps INSERT execute must not be ignored"
+        );
         let collect = named_fn_src(src, "async fn collect_steps_only");
         assert!(collect.contains("Result<Vec<VerificationStep>, String>"));
         assert!(!compact_src(collect).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
         assert!(!collect.contains("let _ = tx.commit()"));
+        assert!(!compact_src(collect).contains("let_=tx.commit().await;"));
         assert!(!collect.contains("return Vec::new()"));
         assert!(collect.contains("store_down"));
         let attach = named_fn_src(src, "async fn attach_steps");
@@ -4280,9 +4339,14 @@ mod tests {
     #[test]
     fn agent_enqueue_store_down_is_not_ok_empty() {
         let src = include_str!("engine_dispatch_agent.rs");
-        let dispatch = named_fn_src(src, "async fn dispatch_to_agent");
+        let start = src
+            .find("async fn dispatch_to_agent")
+            .expect("dispatch_to_agent");
+        let rest = &src[start..];
+        let tests = rest.find("\n#[cfg(test)]").unwrap_or(rest.len());
+        let dispatch = &rest[..tests];
         assert!(
-            dispatch.contains("EngineResult::error(\"store_down\")"),
+            dispatch.contains("Err(_) => return EngineResult::error(\"store_down\")"),
             "agent enqueue store-down must be EngineResult::error, not ok empty"
         );
         assert!(
@@ -4330,13 +4394,13 @@ mod tests {
         assert!(bridge.contains(".await?"));
         let nexus = include_str!("nexus_sovereign_swarm_engine.rs");
         let run = named_fn_src(nexus, "pub async fn run_nexus_sovereign_swarm_result");
+        let call = run
+            .find("bridge_nssi_fleet(")
+            .expect("run_nexus must still call bridge_nssi_fleet");
+        let bridge_arm = &run[call..(call + 420).min(run.len())];
         assert!(
-            run.contains("Err(_) => return EngineResult::error(\"store_down\")"),
+            bridge_arm.contains("Err(_) => return EngineResult::error(\"store_down\")"),
             "NSSI endpoint bridge store-down must fail the swarm, not count 0 agents"
-        );
-        assert!(
-            compact_src(run).contains("bridge_nssi_fleet("),
-            "run_nexus must still call bridge_nssi_fleet"
         );
     }
 
@@ -4356,6 +4420,24 @@ mod tests {
             !compact_src(prove).contains("let_=sqlx::query(\"UPDATEweissman_sovereign_forgeSETstatus=$2,live_finding=$3"),
             "live-proof UPDATE execute must not be ignored"
         );
+        assert!(
+            !compact_src(prove).contains("let_=sqlx::query(\"UPDATEweissman_sovereign_forgeSETstatus='rejected'"),
+            "rejected live-proof UPDATE execute must not be ignored"
+        );
+        assert!(
+            !compact_src(prove).contains("let_=tx.commit().await;"),
+            "forge_prove commit must not be ignored"
+        );
+        let github = named_fn_src(src, "pub async fn forge_github");
+        assert!(github.contains("detail: \"store_down\".into()"));
+        assert!(
+            !compact_src(github).contains("let_=tx.commit().await;"),
+            "forge_github SELECT/github_queued commit must not be ignored"
+        );
+        assert!(
+            !compact_src(github).contains("ifletOk(muttx)="),
+            "github_queued persist must not skip begin fail and still ok:true"
+        );
     }
 
     #[test]
@@ -4366,6 +4448,11 @@ mod tests {
         );
         assert!(!compact_src(src).contains("fetch_all(auth_pool).await.unwrap_or_default()"));
         assert!(src.contains("map_err(|_| \"store_down\".to_string())?"));
+        assert!(
+            !compact_src(src).contains("let_=sqlx::query("),
+            "KEV floor / CVE UPDATE execute must not be ignored"
+        );
+        assert!(!src.contains("if res.is_ok()"));
     }
 
     #[test]
@@ -4386,6 +4473,7 @@ mod tests {
             "async fn api_async_job_status",
         );
         assert!(!src.contains("let _ = tx.commit()"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
         assert!(src.contains("poe_job_unavailable_json"));
         assert!(src.contains("SERVICE_UNAVAILABLE"));
     }
@@ -4402,6 +4490,10 @@ mod tests {
             compact_src(src).contains("execute(&mut*tx).await.map_err(|_|\"store_down\".to_string())?"),
             "winning patch UPDATE execute fail must be store_down"
         );
+        assert!(
+            !compact_src(src).contains("let_=tx.commit().await;"),
+            "already-completed / already-failed / concurrent-skip commit must not be ignored"
+        );
     }
 
     #[test]
@@ -4409,6 +4501,8 @@ mod tests {
         let src = named_fn_src(include_str!("soar_playbook.rs"), "pub async fn load_enabled");
         assert!(!src.contains("serde_json::from_value(trig).unwrap_or_default()"));
         assert!(!src.contains("serde_json::from_value(acts).unwrap_or_default()"));
+        assert!(!compact_src(src).contains("from_value(trig).unwrap_or_default()"));
+        assert!(!compact_src(src).contains("from_value(acts).unwrap_or_default()"));
         assert!(src.contains("Err(_) => continue"));
     }
 
@@ -4431,8 +4525,16 @@ mod tests {
         );
         assert!(!compact_src(src).contains("fetch_optional(&mut*tx).await.ok().flatten()"));
         assert!(!src.contains("let _ = sqlx::query(\n                    r#\"UPDATE deception_assets"));
+        assert!(
+            !compact_src(src).contains("let_=sqlx::query(r#\"UPDATEdeception_assets"),
+            "deception_assets UPDATE execute must not be ignored regardless of wrapping"
+        );
         assert!(src.contains("deployed += 1"));
         assert!(compact_src(src).contains("execute(&mut*tx).await.map_err(|e|e.to_string())?"));
+        assert!(
+            !compact_src(src).contains("let_=tx.commit().await;"),
+            "already-active commit must not be ignored"
+        );
     }
 
     #[test]
@@ -4442,12 +4544,14 @@ mod tests {
             "pub async fn agent_uuids_capable_for_client",
         );
         assert!(!capable.contains("let _ = tx.commit()"));
+        assert!(!compact_src(capable).contains("let_=tx.commit().await;"));
         assert!(capable.contains("sqlx::Error::Protocol(\"store_down\""));
         let all = named_fn_src(
             include_str!("endpoint_agents.rs"),
             "pub async fn agent_uuids_for_client",
         );
         assert!(!all.contains("let _ = tx.commit()"));
+        assert!(!compact_src(all).contains("let_=tx.commit().await;"));
         assert!(all.contains("sqlx::Error::Protocol(\"store_down\""));
     }
 
@@ -4463,5 +4567,60 @@ mod tests {
             compact_src(src).matches("detail:\"store_down\".into()").count() >= 3,
             "catalog/RLS/enrollment EXISTS Err must be store_down, not invented missing"
         );
+    }
+
+    #[test]
+    fn persist_findings_store_down_is_not_ok_zero() {
+        let exec = include_str!("async_job_executor.rs");
+        let persist = named_fn_src(exec, "async fn persist_findings_best_effort");
+        assert!(persist.contains("Result<u64, String>"));
+        assert!(
+            !compact_src(persist).contains("unwrap_or_else"),
+            "persist_engine_findings Err must not become findings_persisted: 0"
+        );
+        assert!(persist.contains("\"store_down\".to_string()"));
+        assert!(!exec.contains("let _ = persist_findings_best_effort"));
+        assert!(!exec.contains("let _ = crate::superposition_followup::enqueue_after_batch"));
+    }
+
+    #[test]
+    fn seed_public_knowledge_count_store_down_is_not_seeded() {
+        let src = named_fn_src(
+            include_str!("discovery_knowledge.rs"),
+            "pub async fn seed_public_knowledge",
+        );
+        assert!(!compact_src(src).contains("fetch_one(pool).await.unwrap_or(0)"));
+        assert!(src.contains("seed count store_down"));
+        assert!(src.contains("seed chunk store_down"));
+        assert!(!src.contains("seed chunk skipped"));
+        assert!(
+            !compact_src(src).contains(
+                "seed_kind_chunks(pool,KIND_PATH,all_http_paths()).await;seed_kind_chunks"
+            ),
+            "failed seed chunk must not continue into SEED_DONE"
+        );
+        assert!(src.contains(".is_err()"));
+    }
+
+    #[test]
+    fn superposition_count_commit_store_down_is_not_coalesced_skip() {
+        let src = named_fn_src(
+            include_str!("superposition_followup.rs"),
+            "async fn maybe_enqueue",
+        );
+        assert!(
+            !compact_src(src).contains("let_=tx.commit().await;returnOk(None)"),
+            "cluster COUNT commit fail must not look like not-enough-clusters"
+        );
+        assert!(
+            !compact_src(src).contains("let_=tx.commit().await;ifinflight>0"),
+            "dedup COUNT commit fail must not look like already-inflight skip"
+        );
+        let spawn = named_fn_src(
+            include_str!("superposition_followup.rs"),
+            "pub fn spawn_after_persist",
+        );
+        assert!(!spawn.contains("\"skip\""));
+        assert!(spawn.contains("store_down"));
     }
 }

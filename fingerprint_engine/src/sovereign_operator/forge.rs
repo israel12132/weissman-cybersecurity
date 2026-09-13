@@ -299,14 +299,23 @@ pub async fn forge_prove(
                     };
                 }
             };
-            let _ = sqlx::query(
+            if sqlx::query(
                 "UPDATE weissman_sovereign_forge SET status='rejected', live_finding=$2, updated_at=now() WHERE id=$1",
             )
             .bind(forge_id)
             .bind(&proof)
             .execute(&mut *tx)
-            .await;
-            let _ = tx.commit().await;
+            .await
+            .is_err()
+                || tx.commit().await.is_err()
+            {
+                return ToolOutcome {
+                    ok: false,
+                    name: "forge_prove".into(),
+                    detail: "store_down".into(),
+                    payload: proof,
+                };
+            }
             return ToolOutcome {
                 ok: false,
                 name: "forge_prove".into(),
@@ -382,23 +391,14 @@ pub async fn forge_github(pool: &PgPool, tenant_id: i64, args: &Value) -> ToolOu
             };
         }
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         "SELECT engine_id, title, status, rust_source, live_finding FROM weissman_sovereign_forge WHERE id = $1",
     )
     .bind(forge_id)
     .fetch_optional(&mut *tx)
-    .await;
-    let _ = tx.commit().await;
-    let row = match row {
-        Ok(Some(r)) => r,
-        Ok(None) => {
-            return ToolOutcome {
-                ok: false,
-                name: "forge_github".into(),
-                detail: "forge draft not found".into(),
-                payload: json!({}),
-            };
-        }
+    .await
+    {
+        Ok(r) => r,
         Err(e) => {
             return ToolOutcome {
                 ok: false,
@@ -407,6 +407,22 @@ pub async fn forge_github(pool: &PgPool, tenant_id: i64, args: &Value) -> ToolOu
                 payload: json!({}),
             };
         }
+    };
+    if tx.commit().await.is_err() {
+        return ToolOutcome {
+            ok: false,
+            name: "forge_github".into(),
+            detail: "store_down".into(),
+            payload: json!({}),
+        };
+    }
+    let Some(row) = row else {
+        return ToolOutcome {
+            ok: false,
+            name: "forge_github".into(),
+            detail: "forge draft not found".into(),
+            payload: json!({}),
+        };
     };
     let status: String = row.try_get("status").unwrap_or_default();
     if !github_allowed(&status) {
@@ -441,15 +457,41 @@ pub async fn forge_github(pool: &PgPool, tenant_id: i64, args: &Value) -> ToolOu
     let cycle_id = Uuid::new_v4();
     match crate::self_improve::insert_proposals(pool, tenant_id, cycle_id, &[proposal]).await {
         Ok(n) => {
-            if let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await {
-                let _ = sqlx::query(
-                    "UPDATE weissman_sovereign_forge SET status='github_queued', proposal_cycle_id=$2, updated_at=now() WHERE id=$1",
-                )
-                .bind(forge_id)
-                .bind(cycle_id)
-                .execute(&mut *tx)
-                .await;
-                let _ = tx.commit().await;
+            let mut tx = match crate::db::begin_tenant_tx(pool, tenant_id).await {
+                Ok(t) => t,
+                Err(_) => {
+                    return ToolOutcome {
+                        ok: false,
+                        name: "forge_github".into(),
+                        detail: "store_down".into(),
+                        payload: json!({
+                            "forge_id": forge_id,
+                            "cycle_id": cycle_id,
+                            "inserted": n,
+                        }),
+                    };
+                }
+            };
+            if sqlx::query(
+                "UPDATE weissman_sovereign_forge SET status='github_queued', proposal_cycle_id=$2, updated_at=now() WHERE id=$1",
+            )
+            .bind(forge_id)
+            .bind(cycle_id)
+            .execute(&mut *tx)
+            .await
+            .is_err()
+                || tx.commit().await.is_err()
+            {
+                return ToolOutcome {
+                    ok: false,
+                    name: "forge_github".into(),
+                    detail: "store_down".into(),
+                    payload: json!({
+                        "forge_id": forge_id,
+                        "cycle_id": cycle_id,
+                        "inserted": n,
+                    }),
+                };
             }
             ToolOutcome {
                 ok: true,

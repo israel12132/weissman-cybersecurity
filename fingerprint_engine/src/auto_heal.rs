@@ -645,7 +645,11 @@ pub async fn github_token_for_tenant(
     if tx.commit().await.is_err() {
         return Err("store_down");
     }
-    if let Some(items) = raw.and_then(|s| serde_json::from_str::<Vec<Value>>(&s).ok()) {
+    let items = match raw {
+        None => None,
+        Some(s) => Some(serde_json::from_str::<Vec<Value>>(&s).map_err(|_| "store_down")?),
+    };
+    if let Some(items) = items {
         for item in &items {
             let id = item.get("id").and_then(Value::as_str).unwrap_or("");
             let category = item.get("category").and_then(Value::as_str).unwrap_or("");

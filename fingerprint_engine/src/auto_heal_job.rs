@@ -513,7 +513,9 @@ pub async fn run_auto_heal_job(
     let git_token: String = row.try_get("git_token").unwrap_or_default();
 
     if status == "completed" {
-        let _ = tx.commit().await;
+        if tx.commit().await.is_err() {
+            return Err("store_down".to_string());
+        }
         return Ok(json!({
             "ok": true,
             "message": "auto_heal already completed",
@@ -521,7 +523,9 @@ pub async fn run_auto_heal_job(
         }));
     }
     if status == "failed" && git_token.trim().is_empty() {
-        let _ = tx.commit().await;
+        if tx.commit().await.is_err() {
+            return Err("store_down".to_string());
+        }
         return Ok(json!({
             "ok": true,
             "message": "auto_heal already failed",
@@ -609,22 +613,17 @@ pub async fn run_auto_heal_job(
         // 'skipped' raised a constraint violation that aborted the transaction (leaking the token
         // and turning the commit into a rollback). Leaving status at its current 'pending' value
         // keeps the finding re-healable once the other run finishes.
-        if let Err(e) = sqlx::query(
+        sqlx::query(
             "UPDATE auto_heal_job_specs SET git_token = '', updated_at = now() WHERE id = $1 AND tenant_id = $2",
         )
         .bind(spec_id)
         .bind(tenant_id)
         .execute(&mut *tx)
         .await
-        {
-            tracing::error!(
-                target: "auto_heal",
-                spec_id = %spec_id,
-                error = %e,
-                "failed to clear git_token on concurrent-heal skip"
-            );
+        .map_err(|_| "store_down".to_string())?;
+        if tx.commit().await.is_err() {
+            return Err("store_down".to_string());
         }
-        let _ = tx.commit().await;
         return Ok(json!({
             "ok": true,
             "skipped": true,
