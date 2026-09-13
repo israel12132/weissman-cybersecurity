@@ -859,6 +859,11 @@ export default function OtIcsSecurity() {
           )}
         </div>
 
+        {scanHistoryUnavailable && (
+          <p data-testid="ot-ics-scan-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+            {t('pages.otIcsSecurity.scan_history_unavailable')}
+          </p>
+        )}
         <WeissmanFindingsPanel
           findings={aggregatedScanFindings}
           filteredFindings={filteredScanFindings}
@@ -876,7 +881,6 @@ export default function OtIcsSecurity() {
           emptyTitle={t('pages.otIcsSecurity.scan_findings_empty_title')}
           emptyBody={t('pages.otIcsSecurity.scan_findings_empty_body')}
           unavailable={scanHistoryUnavailable}
-          unavailableTestId="ot-ics-scan-history-unavailable"
           unavailableTitle={t('pages.otIcsSecurity.scan_history_unavailable')}
           unavailableBody={t('pages.otIcsSecurity.scan_history_unavailable')}
           showEmptyReady={!scanHistoryUnavailable}

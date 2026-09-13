@@ -915,6 +915,11 @@ export default function EmailDnsPosture() {
 
       <Scorecard summary={summary} />
 
+      {historyUnavailable && (
+        <p data-testid="email-dns-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {t('pages.emailDnsPosture.history_unavailable')}
+        </p>
+      )}
       <WeissmanFindingsPanel
         findings={issues}
         filteredFindings={filteredFindings}
@@ -930,7 +935,6 @@ export default function EmailDnsPosture() {
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
         unavailable={historyUnavailable}
-        unavailableTestId="email-dns-history-unavailable"
         unavailableTitle={t('pages.emailDnsPosture.history_unavailable')}
         unavailableBody={t('pages.emailDnsPosture.history_unavailable')}
         showEmptyReady={status !== 'running' && issues.length === 0 && !historyUnavailable}

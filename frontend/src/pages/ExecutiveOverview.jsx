@@ -315,6 +315,17 @@ export default function ExecutiveOverview() {
               {t(`${NS}.no_matches`)}
             </div>
           ) : (
+            <div className="space-y-3">
+              {client.financialUnavailable && (
+                <p data-testid="executive-overview-financial-unavailable" className="text-xs text-amber-300/80 font-mono">
+                  {t(`${NS}.financial_unavailable`)}
+                </p>
+              )}
+              {client.attackUnavailable && (
+                <p data-testid="executive-overview-attack-unavailable" className="text-xs text-amber-300/80 font-mono">
+                  {t(`${NS}.attack_unavailable`)}
+                </p>
+              )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {showAle && (
               <Tile
@@ -324,7 +335,6 @@ export default function ExecutiveOverview() {
                 sub={client.financialUnavailable ? t(`${NS}.financial_unavailable`) : fin ? t(`${NS}.ale_sub`, { sle: fmtUsd(fin.sle_worst_usd) }) : t(`${NS}.recompute_hint`)}
                 accent="#ef4444"
                 linkLabel={t(`${NS}.open_financial`)}
-                testId={client.financialUnavailable ? 'executive-overview-financial-unavailable' : undefined}
               />
               )}
               {showPaths && (
@@ -335,7 +345,6 @@ export default function ExecutiveOverview() {
                 sub={client.attackUnavailable ? t(`${NS}.attack_unavailable`) : atk ? t(`${NS}.paths_sub`, { entries: atk.entry_count ?? 0, jewels: atk.jewel_count ?? 0 }) : t(`${NS}.recompute_hint`)}
                 accent="#f97316"
                 linkLabel={t(`${NS}.open_paths`)}
-                testId={client.attackUnavailable ? 'executive-overview-attack-unavailable' : undefined}
               />
               )}
               {showTopRisk && (
@@ -348,6 +357,7 @@ export default function ExecutiveOverview() {
                 linkLabel={t(`${NS}.open_paths`)}
               />
               )}
+            </div>
             </div>
           )}
         </div>

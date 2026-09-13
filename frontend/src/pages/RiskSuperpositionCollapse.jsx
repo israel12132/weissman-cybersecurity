@@ -718,6 +718,11 @@ export default function RiskSuperpositionCollapse() {
             </div>
           )}
 
+          {historyUnavailable && (
+            <p data-testid="risk-superposition-history-unavailable" className="text-xs text-amber-300/80 font-mono">
+              {t('pages.superpositionCollapse.history_unavailable')}
+            </p>
+          )}
           <WeissmanFindingsPanel
             findings={otherFindings}
             searchQuery={searchQuery}
@@ -726,7 +731,6 @@ export default function RiskSuperpositionCollapse() {
             emptyTitle={t('pages.superpositionCollapse.no_findings')}
             emptyBody={t('pages.superpositionCollapse.no_findings')}
             unavailable={historyUnavailable}
-            unavailableTestId="risk-superposition-history-unavailable"
             unavailableTitle={t('pages.superpositionCollapse.history_unavailable')}
             unavailableBody={t('pages.superpositionCollapse.history_unavailable')}
           />

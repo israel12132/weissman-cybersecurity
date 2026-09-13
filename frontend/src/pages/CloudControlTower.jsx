@@ -328,6 +328,11 @@ export default function CloudControlTower() {
         />
       )}
 
+      {historyUnavailable && (
+        <p data-testid="cloud-control-tower-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3 mt-6">
+          {t('pages.cloudControlTower.history_unavailable')}
+        </p>
+      )}
       <WeissmanFindingsPanel
         className="mt-6"
         findings={allFindings}
@@ -344,7 +349,6 @@ export default function CloudControlTower() {
         jobId={lastJobId}
         accent={activeTabDef.color}
         unavailable={historyUnavailable}
-        unavailableTestId="cloud-control-tower-history-unavailable"
         unavailableTitle={t('pages.cloudControlTower.history_unavailable')}
         unavailableBody={t('pages.cloudControlTower.history_unavailable')}
         showEmptyReady={!historyUnavailable && !activeRunning && !allFindings.length}

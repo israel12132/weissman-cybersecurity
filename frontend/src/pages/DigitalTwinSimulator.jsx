@@ -687,6 +687,11 @@ export default function DigitalTwinSimulator() {
         </div>
       </div>
 
+      {historyUnavailable && (
+        <p data-testid="digital-twin-history-unavailable" className="text-xs text-amber-300/80 font-mono mt-8 mb-3">
+          {t('pages.digitalTwinSimulator.history_unavailable')}
+        </p>
+      )}
       <WeissmanFindingsPanel
         findings={detailFindings}
         filteredFindings={filteredFindings}
@@ -702,7 +707,6 @@ export default function DigitalTwinSimulator() {
         jobId={lastJobId}
         accent="#8b5cf6"
         unavailable={historyUnavailable}
-        unavailableTestId="digital-twin-history-unavailable"
         unavailableTitle={t('pages.digitalTwinSimulator.history_unavailable')}
         unavailableBody={t('pages.digitalTwinSimulator.history_unavailable')}
         showEmptyReady={!isScanning && !historyUnavailable && detailFindings.length === 0}
