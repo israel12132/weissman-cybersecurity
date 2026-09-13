@@ -168,6 +168,25 @@ pub async fn ingest_sample(
 
     let summary = analyze_sample_in_tx(&mut tx, tenant_id, sample_id, &p).await?;
     tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+
+    // ── SOAR playbook dispatch (fire-and-forget, off the ingest tx) ────────
+    // UEBA anomalies used to only land in `agent_anomalies`; they now also reach
+    // the SOAR trigger bus so behavioural detections can drive automated response.
+    // Mirrors findings_persist: build the event with the data in hand and spawn
+    // the dispatch (which opens its own tenant tx) after the row is committed, on
+    // the shared background-DB semaphore. Cooldown/idempotency is enforced inside
+    // dispatch_event via the tenant-salted signature_hash. Non-actionable severities
+    // map to `None` so no dispatch is fabricated.
+    for anom in &summary.anomalies {
+        if let Some(event) = ueba_anomaly_playbook_event(tenant_id, &p, anom) {
+            let pool_for_dispatch: PgPool = (*pool).clone();
+            crate::findings_persist::spawn_bounded_db_task(async move {
+                let _ =
+                    crate::soar_playbook::dispatch_event(&pool_for_dispatch, event, false).await;
+            });
+        }
+    }
+
     Ok(summary)
 }
 
@@ -764,6 +783,50 @@ async fn check_new_categorical(
     .await
     .map_err(|e| format!("insert categorical anomaly: {e}"))?;
     Ok(Some(rec))
+}
+
+/// Map a medium/high UEBA anomaly onto a SOAR [`crate::soar_playbook::PlaybookEvent`]
+/// so behavioural detections reach the playbook trigger bus. Returns `None` for any
+/// non-actionable severity so a dispatch is never fabricated. The producing engine is
+/// `ueba` and the target is the reporting host/agent. The UEBA payload always carries
+/// a `client_id`, so it is forwarded as-is (no fabricated tenant/client).
+fn ueba_anomaly_playbook_event(
+    tenant_id: i64,
+    p: &UebaIngestPayload,
+    anom: &AnomalyRecord,
+) -> Option<crate::soar_playbook::PlaybookEvent> {
+    let severity = anom.severity.trim().to_ascii_lowercase();
+    if severity != "medium" && severity != "high" {
+        return None;
+    }
+    // Stable, tenant-salted idempotency key over (agent, metric) — the same
+    // `signature_hash` shape findings_persist feeds SOAR — so a re-detected anomaly
+    // reuses the cooldown window instead of re-firing response actions every sample.
+    let signature_hash = crate::finding_identity::build_cluster_key(
+        tenant_id,
+        &p.agent_id,
+        &format!("ueba:{}", anom.metric),
+        "",
+    );
+    Some(crate::soar_playbook::PlaybookEvent {
+        kind: "ueba_anomaly".to_string(),
+        tenant_id,
+        client_id: Some(p.client_id),
+        finding_id: None,
+        cluster_id: None,
+        title: format!("UEBA anomaly: {}", anom.detail),
+        severity,
+        source: "ueba".to_string(),
+        target: p.agent_id.clone(),
+        status: "OPEN".to_string(),
+        cvss: None,
+        epss: None,
+        kev: false,
+        kev_known_ransomware: false,
+        cve: None,
+        signature_hash: Some(signature_hash),
+        internet_exposed: false,
+    })
 }
 
 /// Long-running worker that purges samples older than 14 days and emits the

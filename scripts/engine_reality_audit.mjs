@@ -1,5 +1,8 @@
 // Engine reality audit — derives, directly from source, exactly what each catalog engine ID is:
-//   real_probe       : canonical engine with a live dispatch arm (real network/host I/O)
+//   real_probe       : canonical engine with a live dispatch arm reaching real network/host I/O
+//   advisory_only    : canonical dispatch arm that performs NO live network I/O (analyses ingested
+//                      telemetry / correlates findings / returns agent-required guidance) — proven
+//                      by static call-graph reachability, so it never inflates the live-probe count
 //   alias            : retag that resolves to another canonical engine (same detection logic)
 //   agent_required   : remote-impossible; returns an info finding pointing to the endpoint agent
 //   special          : poe_synthesis (routed via the async job path, not the dispatch match)
@@ -45,6 +48,7 @@ const out = {
     total: productionIds.length,
     real_probe: prod.real_probe.length,
     distinct_real_implementations: distinctImpls,
+    advisory_only: prod.advisory_only.length,
     alias: prod.alias.length,
     agent_required: prod.agent_required.length,
     special: prod.special.length,
@@ -53,6 +57,7 @@ const out = {
   frontend_catalog: {
     total: frontendIds.length,
     real_probe: fe.real_probe.length,
+    advisory_only: fe.advisory_only.length,
     alias: fe.alias.length,
     agent_required: fe.agent_required.length,
     special: fe.special.length,
@@ -62,6 +67,7 @@ const out = {
   delegate_id_count: sharedImpls.reduce((s, [, n]) => s + (n - 1), 0),
   top_alias_absorbers: topAliasCanonicals.map(([canon, n]) => ({ canonical: canon, aliases: n })),
   agent_required_ids: [...reality.agentRequired].filter((id) => productionIds.includes(id)).sort(),
+  advisory_only_ids: prod.advisory_only.slice().sort(),
   no_path_ids: prod.no_path,
 }
 

@@ -247,21 +247,56 @@ async fn persist_findings_best_effort(
     target: &str,
     findings: &[Value],
 ) -> u64 {
-    if findings.is_empty() || client_id.is_none() {
+    // A genuinely empty scan persists nothing — the one case where "0 persisted" is honest
+    // and can stay silent.
+    if findings.is_empty() {
         return 0;
     }
+    // Findings WERE produced but there is no client to attribute them to. `persist_engine_findings`
+    // is client-scoped, so it cannot store them — and silently returning 0 here makes a
+    // real-but-dropped result indistinguishable from a clean empty scan. Never fabricate a
+    // client_id; instead make the loss LOUD (error log) and observable (metric) so it is triaged.
+    if client_id.is_none() {
+        let dropped = findings.len() as u64;
+        tracing::error!(
+            target: "findings_persist",
+            tenant_id,
+            engine = %engine,
+            target = %target,
+            findings_dropped = dropped,
+            "findings produced but no client_id — NOT persisted (would be lost); refusing to fabricate a client_id"
+        );
+        metrics::counter!(
+            "weissman_findings_dropped_no_client_total",
+            "engine" => engine.to_string()
+        )
+        .increment(dropped);
+        return 0;
+    }
+    let attempted = findings.len() as u64;
     let persisted = crate::findings_persist::persist_engine_findings(
         app_pool, tenant_id, client_id, engine, target, findings,
     )
     .await
     .unwrap_or_else(|e| {
+        // A persistence DB error must never look like a "clean empty scan": log the real error
+        // server-side at error level (with the attempted count) and emit a metric. Callers still
+        // receive 0 as the persisted count, but the failure is now distinguishable and observable.
         tracing::error!(
             target: "findings_persist",
             tenant_id,
             engine = %engine,
+            target = %target,
+            attempted,
+            persisted = 0u64,
             error = %e,
-            "failed to persist findings"
+            "failed to persist findings (DB error) — attempted findings NOT persisted"
         );
+        metrics::counter!(
+            "weissman_findings_persist_errors_total",
+            "engine" => engine.to_string()
+        )
+        .increment(1);
         0
     });
     if persisted > 0 {
