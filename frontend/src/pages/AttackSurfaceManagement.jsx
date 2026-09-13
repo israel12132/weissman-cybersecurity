@@ -1030,7 +1030,7 @@ export default function AttackSurfaceManagement() {
         </div>
       )}
 
-      {report && (
+      {report && !historyUnavailable && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
           <div className="flex justify-end">
             <Button variant="unstyled"

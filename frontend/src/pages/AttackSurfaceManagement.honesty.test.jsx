@@ -15,4 +15,8 @@ describe('AttackSurfaceManagement live-only truth', () => {
     expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
     expect(src).toMatch(/!historyUnavailable/)
   })
+
+  it('does not paint leftover leftover-hero after a failed history GET', () => {
+    expect(src).toMatch(/report && !historyUnavailable &&/)
+  })
 })

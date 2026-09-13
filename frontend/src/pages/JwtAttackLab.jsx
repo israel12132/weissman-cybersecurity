@@ -546,8 +546,8 @@ export default function JwtAttackLab() {
             </div>
           )}
 
-          {scanResult && !scanResult.pending && (
-            <KpiStrip
+          {scanResult && !scanResult.pending && !historyUnavailable && (
+            <KpiStrip>
               counts={counts}
               total={sortedFindings.length}
               jobId={scanResult.job_id}
@@ -564,9 +564,9 @@ export default function JwtAttackLab() {
             </div>
           )}
 
-          {scanResult && !scanResult.pending && (
+          {scanResult && !scanResult.pending && !historyUnavailable && (
             <>
-              <SupremeIntelligencePanels
+              <SupremeIntelligencePanels>
                 findings={scanResult.findings}
                 labels={supremeLabels}
                 categoryAxes={JWT_CATEGORY_AXES}
@@ -621,7 +621,7 @@ export default function JwtAttackLab() {
             </>
           )}
 
-          {!scanResult && !historyLoading && historyUnavailable && (
+          {!historyLoading && historyUnavailable && (
             <div data-testid="jwt-attack-lab-history-unavailable">
               <EmptyState
                 title={t('pages.jwtLab.history_unavailable_title')}

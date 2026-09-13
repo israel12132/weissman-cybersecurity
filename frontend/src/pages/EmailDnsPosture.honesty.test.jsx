@@ -15,4 +15,11 @@ describe('EmailDnsPosture live-only truth', () => {
     expect(src).toMatch(/historyUnavailable/)
     expect(src).toMatch(/!historyUnavailable/)
   })
+
+  it('does not coerce missing axes to 0-clean or paint leftover leftover-scorecards', () => {
+    expect(src).toMatch(/!historyUnavailable && <Scorecard/)
+    expect(src).toMatch(/const hasScore = raw != null && Number\.isFinite\(Number\(raw\)\)/)
+    expect(src).not.toMatch(/summary\.score \?\? 0/)
+    expect(src).not.toMatch(/Number\(value\) \|\| 0/)
+  })
 })

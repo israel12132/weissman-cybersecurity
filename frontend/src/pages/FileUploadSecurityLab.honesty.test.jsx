@@ -15,4 +15,11 @@ describe('FileUploadSecurityLab live-only truth', () => {
     expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
     expect(src).toMatch(/!historyUnavailable/)
   })
+
+  it('does not coerce missing posture to 100/A or paint leftover leftover-scorecards', () => {
+    expect(src).toMatch(/!historyUnavailable && <Scorecard/)
+    expect(src).toMatch(/const hasScore = raw != null && Number\.isFinite\(Number\(raw\)\)/)
+    expect(src).not.toMatch(/\?\? 100/)
+    expect(src).not.toMatch(/\?\? 'A'/)
+  })
 })

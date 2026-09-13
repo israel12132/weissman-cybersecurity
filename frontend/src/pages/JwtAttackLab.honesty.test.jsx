@@ -17,4 +17,10 @@ describe('JwtAttackLab live-only truth', () => {
     expect(src).toMatch(/!historyUnavailable &&/)
     expect(src).not.toMatch(/honest empty — no seeded history/)
   })
+
+  it('leftover leftover-KPIs do not hide the history-unavailable banner', () => {
+    expect(src).toMatch(/scanResult && !scanResult\.pending && !historyUnavailable/)
+    expect(src).toMatch(/!historyLoading && historyUnavailable &&/)
+    expect(src).not.toMatch(/!scanResult && !historyLoading && historyUnavailable/)
+  })
 })

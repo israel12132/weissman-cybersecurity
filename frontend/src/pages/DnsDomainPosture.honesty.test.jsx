@@ -15,4 +15,10 @@ describe('DnsDomainPosture live-only truth', () => {
     expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
     expect(src).toMatch(/!historyUnavailable/)
   })
+
+  it('does not coerce missing hijack-resistance to 0 or paint leftover leftover-scorecards', () => {
+    expect(src).toMatch(/!historyUnavailable && <Scorecard/)
+    expect(src).toMatch(/const hasScore = raw != null && Number\.isFinite\(Number\(raw\)\)/)
+    expect(src).not.toMatch(/hijack_resistance_score \?\? summary\.posture_score \?\? 0/)
+  })
 })

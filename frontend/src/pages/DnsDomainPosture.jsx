@@ -234,9 +234,11 @@ function FindingCard({ f }) {
 
 function Scorecard({ summary, t }) {
   if (!summary) return null
-  const score = summary.hijack_resistance_score ?? summary.posture_score ?? 0
-  const grade = gradeFromScore(score)
-  const color = gradeColor(grade)
+  const raw = summary.hijack_resistance_score ?? summary.posture_score
+  const hasScore = raw != null && Number.isFinite(Number(raw))
+  const score = hasScore ? Number(raw) : 0
+  const grade = hasScore ? gradeFromScore(score) : '—'
+  const color = hasScore ? gradeColor(grade) : 'rgba(255,255,255,0.12)'
   const ev = summary.evidence || {}
   const planes = summary.threat_planes || ev.threat_planes || {}
   const roadmap = Array.isArray(summary.roadmap) ? summary.roadmap : (summary.roadmap ? [summary.roadmap] : [])
@@ -247,16 +249,16 @@ function Scorecard({ summary, t }) {
           <div className="relative w-28 h-28 shrink-0">
             <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
               <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
-              <circle cx="50" cy="50" r="44" fill="none" stroke={color} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${(score / 100) * 276.46} 276.46`} />
+              <circle cx="50" cy="50" r="44" fill="none" stroke={color} strokeWidth="8" strokeLinecap="round" strokeDasharray={hasScore ? `${(score / 100) * 276.46} 276.46` : '0 276.46'} />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-bold" style={{ color }}>{score}</span>
+              <span className="text-3xl font-bold" style={{ color }}>{hasScore ? score : '—'}</span>
               <span className="text-[10px] font-mono text-[var(--text-muted)]">/ 100</span>
             </div>
           </div>
           <div>
             <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('pages.dnsDomainPosture.hijack_resistance', 'Hijack-Resistance')}</div>
-            <div className="text-5xl font-black leading-none" style={{ color }}>{grade}</div>
+            <div className="text-5xl font-black leading-none" style={{ color }}>{hasScore ? grade : '—'}</div>
             <div className="text-[11px] font-mono text-[var(--text-muted)] mt-1">{summary.domain || summary.value || summary.target}</div>
             {summary.engine_version && <div className="text-[9px] font-mono text-cyan-500/50 mt-0.5">engine v{summary.engine_version}</div>}
           </div>
@@ -685,7 +687,7 @@ export default function DnsDomainPosture() {
         </div>
       )}
 
-      <Scorecard summary={summary} t={t} />
+      {!historyUnavailable && <Scorecard summary={summary} t={t} />}
 
       {historyUnavailable && (
         <p data-testid="dns-domain-posture-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">

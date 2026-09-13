@@ -437,16 +437,17 @@ function TlsRptPanel({ data }) {
 }
 
 function SubScoreBar({ label, value }) {
-  const v = Math.max(0, Math.min(100, Number(value) || 0))
-  const color = v >= 85 ? '#34d399' : v >= 60 ? '#a3e635' : v >= 40 ? '#fbbf24' : '#fb7185'
+  const hasScore = value != null && Number.isFinite(Number(value))
+  const v = hasScore ? Math.max(0, Math.min(100, Number(value))) : 0
+  const color = !hasScore ? 'rgba(255,255,255,0.12)' : v >= 85 ? '#34d399' : v >= 60 ? '#a3e635' : v >= 40 ? '#fbbf24' : '#fb7185'
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
         <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{label}</span>
-        <span className="text-[10px] font-mono" style={{ color }}>{v}</span>
+        <span className="text-[10px] font-mono" style={{ color }}>{hasScore ? v : '—'}</span>
       </div>
       <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${v}%`, backgroundColor: color }} />
+        <div className="h-full rounded-full transition-all duration-500" style={{ width: hasScore ? `${v}%` : '0%', backgroundColor: color }} />
       </div>
     </div>
   )
@@ -455,9 +456,11 @@ function SubScoreBar({ label, value }) {
 function Scorecard({ summary }) {
   const { t } = useTranslation()
   if (!summary) return null
-  const score = summary.score ?? 0
+  const raw = summary.score
+  const hasScore = raw != null && Number.isFinite(Number(raw))
+  const score = hasScore ? Number(raw) : 0
   const grade = summary.grade || '—'
-  const color = gradeColor(grade)
+  const color = hasScore ? gradeColor(grade) : 'rgba(255,255,255,0.12)'
   const spoof = SPOOF_STYLE[summary.spoofability] || SPOOF_STYLE.spoofable
   const subscores = summary.subscores || {}
   const details = summary.details || {}
@@ -485,10 +488,10 @@ function Scorecard({ summary }) {
           <div className="relative w-28 h-28 shrink-0">
             <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
               <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
-              <circle cx="50" cy="50" r="44" fill="none" stroke={color} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${(score / 100) * 276.46} 276.46`} />
+              <circle cx="50" cy="50" r="44" fill="none" stroke={color} strokeWidth="8" strokeLinecap="round" strokeDasharray={hasScore ? `${(score / 100) * 276.46} 276.46` : '0 276.46'} />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-bold" style={{ color }}>{score}</span>
+              <span className="text-3xl font-bold" style={{ color }}>{hasScore ? score : '—'}</span>
               <span className="text-[10px] font-mono text-[var(--text-muted)]">/ 100</span>
             </div>
           </div>
@@ -913,7 +916,7 @@ export default function EmailDnsPosture() {
         </div>
       )}
 
-      <Scorecard summary={summary} />
+      {!historyUnavailable && <Scorecard summary={summary} />}
 
       {historyUnavailable && (
         <p data-testid="email-dns-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
