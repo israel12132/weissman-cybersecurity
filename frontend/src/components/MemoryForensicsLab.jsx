@@ -418,7 +418,7 @@ export default function MemoryForensicsLab() {
                 </div>
               ))}
             </div>
-            {selected && (
+            {selected && !findingsError && (
               <div className="mt-4 p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-200 text-xs">
                 {t(`${NS}.payload_overwrite`)}
               </div>
@@ -435,7 +435,7 @@ export default function MemoryForensicsLab() {
             <p className="text-sm text-[var(--text-tertiary)] mb-4">
               {t(`${NS}.weaponization_body`)}
             </p>
-            {selected ? (
+            {selected && !findingsError ? (
               <div className="space-y-4 text-sm">
                 {isMemoryLeakFinding && (
                   <>
@@ -510,7 +510,7 @@ export default function MemoryForensicsLab() {
           )}
         </div>
 
-        {selected && (
+        {selected && !findingsError && (
           <div className="rounded-xl bg-[var(--bg-1)]/80 border border-[var(--border-default)]/60 p-6">
             <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-2">
               {hasEntropyMap || bleedStartOffset != null ? t(`${NS}.hex_heatmap`) : t(`${NS}.hex_viewer`)} {t(`${NS}.hex_stack_hint`)}
