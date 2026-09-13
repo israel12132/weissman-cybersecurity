@@ -661,7 +661,9 @@ export default function EngineDetail() {
     : lastHistoryRun
     ? new Date(lastHistoryRun.ts).toLocaleString()
     : t('engines.detail_never_run')
-  const totalFindings = findings.length || (lastHistoryRun?.findingsCount ?? 0)
+  const totalFindings = historyUnavailable
+    ? '—'
+    : (findings.length || (lastHistoryRun?.findingsCount ?? 0))
 
   if (!engine) {
     return (
@@ -842,14 +844,16 @@ export default function EngineDetail() {
             <StatCard
               label={t('engines.detail_stat_last_run')}
               value={lastRunDisplay}
-              sub={lastHistoryRun?.status ? String(lastHistoryRun.status) : (jobId ? `Job ${jobId}` : undefined)}
+              sub={historyUnavailable
+                ? (jobId ? `Job ${jobId}` : undefined)
+                : (lastHistoryRun?.status ? String(lastHistoryRun.status) : (jobId ? `Job ${jobId}` : undefined))}
               accent="#a78bfa"
               icon="⏱"
             />
             <StatCard
               label={t('engines.detail_stat_findings')}
               value={String(totalFindings)}
-              sub={findings.length > 0 ? `${findings.length} this session` : undefined}
+              sub={historyUnavailable ? undefined : (findings.length > 0 ? `${findings.length} this session` : undefined)}
               accent="#f59e0b"
               icon="⚠"
             />
@@ -973,7 +977,7 @@ export default function EngineDetail() {
             {[
               { id:'output',   label: t('engines.live_output'),  badge: lines.length > 0 ? lines.length : null },
               { id:'findings', label: t('engines.findings_tab'), badge: findings.length > 0 ? findings.length : null },
-              { id:'history',  label: t('engines.run_history'),  badge: runHistory.length > 0 ? runHistory.length : null },
+              { id:'history',  label: t('engines.run_history'),  badge: historyUnavailable ? null : (runHistory.length > 0 ? runHistory.length : null) },
               { id:'contract', label: t('engines.contract_tab'), badge: null },
             ].map((tab) => (
               <Button variant="unstyled" key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}

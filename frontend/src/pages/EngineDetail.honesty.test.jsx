@@ -29,4 +29,11 @@ describe('EngineDetail live-only truth', () => {
     expect(src).toMatch(/setHistoryUnavailable\(true\)/)
     expect(src).not.toMatch(/fall through to localStorage/)
   })
+
+  it('does not paint leftover leftover-finding counts after a failed history GET', () => {
+    expect(src).toMatch(/historyUnavailable\s*\n\s*\? '—'\s*\n\s*: \(findings\.length \|\| \(lastHistoryRun\?\.findingsCount \?\? 0\)\)/)
+    expect(src).toMatch(/historyUnavailable \? undefined : \(findings\.length > 0/)
+    expect(src).toMatch(/historyUnavailable \? null : \(runHistory\.length > 0/)
+    expect(src).toMatch(/historyUnavailable\s*\n\s*\? \(jobId \? `Job \$\{jobId\}` : undefined\)/)
+  })
 })

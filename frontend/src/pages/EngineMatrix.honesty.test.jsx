@@ -18,6 +18,10 @@ describe('EngineMatrix live-only truth', () => {
     expect(src).not.toMatch(/map\[status\] \?\? map\.idle/)
   })
 
+  it('does not paint leftover leftover-findings-delta after a failed history-summary GET', () => {
+    expect(src).toMatch(/historyKnown && findingsDelta > 0/)
+  })
+
   it('does not paint zero enabled engines when client config cannot be confirmed', () => {
     expect(src).toMatch(/data-testid="engine-matrix-config-unavailable"/)
     expect(src).toMatch(/config_unavailable/)

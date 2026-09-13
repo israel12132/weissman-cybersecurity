@@ -283,7 +283,7 @@ function EngineMatrixCard({
               ? t('engines.never_run')
               : '—'}
         </span>
-        {findingsDelta > 0 && (
+        {historyKnown && findingsDelta > 0 && (
           <span
             className="text-[10px] font-mono px-1.5 py-0.5 rounded-md"
             style={{ backgroundColor: `${severityColor('high')}18`, color: severityColor('high') }}
