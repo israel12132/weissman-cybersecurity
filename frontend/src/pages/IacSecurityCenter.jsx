@@ -1914,16 +1914,17 @@ export default function IacSecurityCenter() {
   }, [appendLine])
 
   const exportFindingsCsv = useCallback(() => {
+    if (historyUnavailable) return
     if (!shownFindings.length) return
     exportPolicyFindingsCsv(shownFindings, 'weissman-iac-findings')
-  }, [shownFindings])
+  }, [historyUnavailable, shownFindings])
 
   const shellActions = (
     <ShellScanActions
       onRefresh={loadLastScan}
       onExport={exportFindingsCsv}
       refreshLoading={running}
-      exportDisabled={!shownFindings.length}
+      exportDisabled={historyUnavailable || !shownFindings.length}
     />
   )
 
