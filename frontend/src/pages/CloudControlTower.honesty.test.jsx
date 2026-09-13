@@ -22,4 +22,10 @@ describe('CloudControlTower live-only truth', () => {
     expect(src).toMatch(/run\?\.unavailable/)
     expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
   })
+
+  it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
+  })
+
 })

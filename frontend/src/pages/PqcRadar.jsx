@@ -330,6 +330,11 @@ export default function PqcRadar() {
     historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, detailFindings)
 
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
+
   useEffect(() => {
     refreshFromHistory().then((run) => {
       if (run?.findings?.length) {
@@ -421,10 +426,10 @@ export default function PqcRadar() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={scanning}
-          exportDisabled={!sortedFindings.length}
+          exportDisabled={historyUnavailable || !sortedFindings.length}
         />
       )}
     >

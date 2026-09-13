@@ -23,4 +23,10 @@ describe('SupplyChainHub live-only truth', () => {
     expect(src).toMatch(/showEmptyReady=\{!historyUnavailable\}/)
     expect(src).not.toMatch(/Array\.isArray\(d\?\.runs\) \? d\.runs : \[\]/)
   })
+
+  it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
+  })
+
 })

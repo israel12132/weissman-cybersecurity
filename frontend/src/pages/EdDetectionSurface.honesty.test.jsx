@@ -18,4 +18,10 @@ describe('EdDetectionSurface live-only truth', () => {
     expect(src).toMatch(/\(historyUnavailable \|\| score == null\) \? 'rgba\(255,255,255,0\.35\)' : scoreColor\(score\)/)
     expect(src).toMatch(/\{\(historyUnavailable \|\| score == null\) \? '—' : score\}/)
   })
+
+  it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
+  })
+
 })

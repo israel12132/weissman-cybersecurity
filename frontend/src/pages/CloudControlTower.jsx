@@ -208,6 +208,11 @@ export default function CloudControlTower() {
 
   const { loadLastRun, historyLoading, lastUpdated, lastJobId, historyUnavailable } = useEngineHistory(activeTabDef.engine)
 
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
+
   const handleRefresh = useCallback(async () => {
     const run = await loadLastRun()
     if (run?.unavailable) return
@@ -233,10 +238,10 @@ export default function CloudControlTower() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={activeRunning}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >

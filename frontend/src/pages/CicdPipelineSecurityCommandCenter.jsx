@@ -462,6 +462,11 @@ export default function CicdPipelineSecurityCommandCenter() {
     setLastJobId,
     historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, realFindings)
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
   const liveMetrics = historyUnavailable ? null : metrics
 
   useEffect(() => {
@@ -567,10 +572,10 @@ export default function CicdPipelineSecurityCommandCenter() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={running}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >

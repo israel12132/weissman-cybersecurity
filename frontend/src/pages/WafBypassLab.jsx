@@ -138,6 +138,11 @@ export default function WafBypassLab() {
     historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, detailFindings)
 
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
+
   useJobPoll(pendingJobId, {
     enabled: Boolean(pendingJobId),
     onComplete: async (job) => {
@@ -215,10 +220,10 @@ export default function WafBypassLab() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={scanning}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >

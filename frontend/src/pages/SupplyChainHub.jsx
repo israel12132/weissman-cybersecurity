@@ -218,6 +218,11 @@ export default function SupplyChainHub() {
     exportCsv,
     total,
   } = useFindingsWorkbench(aggregatedFindings, {
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
     csvPrefix: 'supply-chain-hub',
     haystackFn: (f) => `${f.title || ''} ${f.type || ''} ${f.target || ''} ${f.engine || ''} ${f.description || ''}`,
   })
@@ -262,9 +267,9 @@ export default function SupplyChainHub() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={refreshLoading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >
