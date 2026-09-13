@@ -483,7 +483,7 @@ export default function BusinessEngineProfile() {
                   <div className="text-[var(--text-muted)]">kind={j.kind || '-'} source={j.source || '-'}</div>
                 </div>
               ))}
-              {!jobs.length && <div className="text-xs text-[var(--text-muted)]">{t('pages.businessEngineProfile.no_jobs')}</div>}
+              {!historyUnavailable && !jobs.length && <div className="text-xs text-[var(--text-muted)]">{t('pages.businessEngineProfile.no_jobs')}</div>}
               {jobs.length > 0 && !visibleJobs.length && searchQuery.trim() && (
                 <div className="text-xs text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
               )}
@@ -498,7 +498,7 @@ export default function BusinessEngineProfile() {
                   <div className="font-mono text-[var(--text-muted)]">{f.discovered_at || '-'} | {f.severity || '-'} | {f.source || '-'}</div>
                 </div>
               ))}
-              {!findings.length && <div className="text-xs text-[var(--text-muted)]">{t('pages.businessEngineProfile.no_findings')}</div>}
+              {!historyUnavailable && !findings.length && <div className="text-xs text-[var(--text-muted)]">{t('pages.businessEngineProfile.no_findings')}</div>}
               {findings.length > 0 && !visibleFindings.length && searchQuery.trim() && (
                 <div className="text-xs text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
               )}

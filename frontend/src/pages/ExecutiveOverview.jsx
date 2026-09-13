@@ -42,10 +42,11 @@ async function getJson(path) {
 }
 
 /** A metric tile linking to its detail page. */
-function Tile({ to, label, value, sub, accent = '#22d3ee', linkLabel, loading }) {
+function Tile({ to, label, value, sub, accent = '#22d3ee', linkLabel, loading, testId }) {
   return (
     <Link
       to={to}
+      data-testid={testId}
       className="group relative overflow-hidden rounded-2xl border p-5 backdrop-blur-md transition-all hover:border-[var(--border-strong)] block"
       style={{
         borderColor: `${accent}30`,
@@ -75,7 +76,7 @@ export default function ExecutiveOverview() {
   const { clients, selectedClientId, setSelectedClientId } = useClient()
 
   const [global, setGlobal] = useState({ loading: true, error: false, posture: null, coverage: null, iocs: null, intel: null, ueba: null, crypto: null })
-  const [client, setClient] = useState({ loading: false, financial: null, attack: null })
+  const [client, setClient] = useState({ loading: false, financial: null, attack: null, financialUnavailable: false, attackUnavailable: false })
   const [searchQuery, setSearchQuery] = useState('')
 
   // Live tile filter — narrows the signal wall to matching labels/subtitles.
@@ -104,15 +105,25 @@ export default function ExecutiveOverview() {
 
   const loadClient = useCallback(async (cid) => {
     if (cid == null) {
-      setClient({ loading: false, financial: null, attack: null })
+      setClient({ loading: false, financial: null, attack: null, financialUnavailable: false, attackUnavailable: false })
       return
     }
     setClient((c) => ({ ...c, loading: true }))
-    const [financial, attack] = await Promise.all([
-      getJson(`/api/financial-risk/${encodeURIComponent(cid)}`).catch(() => null),
-      getJson(`/api/attack-paths/${encodeURIComponent(cid)}`).catch(() => null),
+    const results = await Promise.allSettled([
+      getJson(`/api/financial-risk/${encodeURIComponent(cid)}`),
+      getJson(`/api/attack-paths/${encodeURIComponent(cid)}`),
     ])
-    setClient({ loading: false, financial, attack })
+    const financial = results[0].status === 'fulfilled' ? results[0].value : null
+    const attack = results[1].status === 'fulfilled' ? results[1].value : null
+    const financialUnavailable = results[0].status === 'rejected'
+      || financial?.ok === false
+      || financial?.unavailable
+      || (results[0].status === 'fulfilled' && (financial == null || typeof financial !== 'object'))
+    const attackUnavailable = results[1].status === 'rejected'
+      || attack?.ok === false
+      || attack?.unavailable
+      || (results[1].status === 'fulfilled' && (attack == null || typeof attack !== 'object'))
+    setClient({ loading: false, financial, attack, financialUnavailable, attackUnavailable })
   }, [])
 
   useEffect(() => {
@@ -309,27 +320,29 @@ export default function ExecutiveOverview() {
               <Tile
                 to="/financial-risk"
                 label={t(`${NS}.ale`)}
-                value={fin ? fmtUsd(fin.ale_annualised_usd) : t(`${NS}.no_snapshot`)}
-                sub={fin ? t(`${NS}.ale_sub`, { sle: fmtUsd(fin.sle_worst_usd) }) : t(`${NS}.recompute_hint`)}
+                value={client.financialUnavailable ? t(`${NS}.financial_unavailable`) : fin ? fmtUsd(fin.ale_annualised_usd) : t(`${NS}.no_snapshot`)}
+                sub={client.financialUnavailable ? t(`${NS}.financial_unavailable`) : fin ? t(`${NS}.ale_sub`, { sle: fmtUsd(fin.sle_worst_usd) }) : t(`${NS}.recompute_hint`)}
                 accent="#ef4444"
                 linkLabel={t(`${NS}.open_financial`)}
+                testId={client.financialUnavailable ? 'executive-overview-financial-unavailable' : undefined}
               />
               )}
               {showPaths && (
               <Tile
                 to="/attack-paths"
                 label={t(`${NS}.paths`)}
-                value={atk ? paths.length : t(`${NS}.no_snapshot`)}
-                sub={atk ? t(`${NS}.paths_sub`, { entries: atk.entry_count ?? 0, jewels: atk.jewel_count ?? 0 }) : t(`${NS}.recompute_hint`)}
+                value={client.attackUnavailable ? t(`${NS}.attack_unavailable`) : atk ? paths.length : t(`${NS}.no_snapshot`)}
+                sub={client.attackUnavailable ? t(`${NS}.attack_unavailable`) : atk ? t(`${NS}.paths_sub`, { entries: atk.entry_count ?? 0, jewels: atk.jewel_count ?? 0 }) : t(`${NS}.recompute_hint`)}
                 accent="#f97316"
                 linkLabel={t(`${NS}.open_paths`)}
+                testId={client.attackUnavailable ? 'executive-overview-attack-unavailable' : undefined}
               />
               )}
               {showTopRisk && (
               <Tile
                 to="/attack-paths"
                 label={t(`${NS}.top_risk`)}
-                value={topRisk != null ? <span style={{ color: riskColor(topRisk) }}>{topRisk.toFixed(1)}<span className="text-sm text-[var(--text-muted)]"> / 10</span></span> : t(`${NS}.no_snapshot`)}
+                value={client.attackUnavailable ? t(`${NS}.attack_unavailable`) : topRisk != null ? <span style={{ color: riskColor(topRisk) }}>{topRisk.toFixed(1)}<span className="text-sm text-[var(--text-muted)]"> / 10</span></span> : t(`${NS}.no_snapshot`)}
                 sub={t(`${NS}.top_risk_sub`)}
                 accent={riskColor(topRisk)}
                 linkLabel={t(`${NS}.open_paths`)}

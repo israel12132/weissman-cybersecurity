@@ -9,6 +9,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../utils/apiFetch'
+import { classifyEngineHistory } from '../hooks/useEngineHistory'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import Button from '../components/ui/Button'
 
@@ -241,6 +242,8 @@ export default function RiskSuperpositionCollapse() {
     filteredFindings,
     refreshFromHistory,
     historyLoading,
+    historyUnavailable,
+    setHistoryUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, findings, {
     csvPrefix: 'weissman-superposition-collapse',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.severity}`,
@@ -349,14 +352,8 @@ export default function RiskSuperpositionCollapse() {
   }, [autoRunEnabled, readiness.ready, clustersLoading, runState.running, runCollapse])
 
   useEffect(() => {
-    refreshFromHistory().then(async (run) => {
-      if (applyHistoryFindings(run, setFindings, { setLastUpdated, setJobId })) return
-      try {
-        const hist = await apiFetch(`/api/engines/history/${ENGINE_ID}?limit=1`)
-        if (Array.isArray(hist?.findings) && hist.findings.length) {
-          setFindings(hist.findings)
-        }
-      } catch { /* no history fallback available */ }
+    refreshFromHistory().then((run) => {
+      applyHistoryFindings(run, setFindings, { setLastUpdated, setJobId })
     })
   }, [refreshFromHistory])
 
@@ -387,14 +384,23 @@ export default function RiskSuperpositionCollapse() {
           const raw = d.result_json || d.result || {}
           const jobFindings = Array.isArray(raw.findings) ? raw.findings : []
           if (jobFindings.length > 0) {
+            setHistoryUnavailable(false)
             setFindings(jobFindings)
           } else {
-            let hist = {}
             try {
-              hist = await apiFetch(`/api/engines/history/${ENGINE_ID}?limit=1`)
-            } catch { hist = {} }
-            if (cancelled) return
-            setFindings(Array.isArray(hist?.findings) ? hist.findings : [])
+              const hist = await apiFetch(`/api/engines/history/${ENGINE_ID}?limit=1`)
+              if (cancelled) return
+              const classified = classifyEngineHistory(hist)
+              if (classified.kind === 'unavailable') {
+                setHistoryUnavailable(true)
+              } else {
+                setHistoryUnavailable(false)
+                setFindings(classified.findings)
+              }
+            } catch {
+              if (cancelled) return
+              setHistoryUnavailable(true)
+            }
           }
           setLastUpdated(new Date().toISOString())
           setRunState({ running: false, msg: t('pages.superpositionCollapse.complete') })
@@ -430,7 +436,10 @@ export default function RiskSuperpositionCollapse() {
         <ShellScanActions
           running={runState.running}
           onRun={() => runCollapse(false)}
-          onRefresh={refreshFromHistory}
+          onRefresh={async () => {
+            const run = await refreshFromHistory()
+            applyHistoryFindings(run, setFindings, { setLastUpdated, setJobId })
+          }}
           refreshLoading={historyLoading}
           runLabel={t('pages.superpositionCollapse.run')}
         />
@@ -643,10 +652,10 @@ export default function RiskSuperpositionCollapse() {
                   {t('pages.superpositionCollapse.posture_label')}
                 </p>
                 <div className="flex items-baseline gap-3 mt-1">
-                  <span className="text-5xl font-bold font-mono" style={{ color: gradeColor }}>
-                    {posture.grade !== '—' ? posture.grade : '…'}
+                  <span className="text-5xl font-bold font-mono" style={{ color: historyUnavailable ? '#fbbf24' : gradeColor }}>
+                    {historyUnavailable ? '—' : posture.grade !== '—' ? posture.grade : '…'}
                   </span>
-                  <span className="text-2xl font-mono text-[var(--text-tertiary)]">{posture.score}/100</span>
+                  <span className="text-2xl font-mono text-[var(--text-tertiary)]">{historyUnavailable ? '—' : `${posture.score}/100`}</span>
                 </div>
                 <p className="text-xs text-[var(--text-muted)] mt-2 font-mono">
                   {t('pages.superpositionCollapse.posture_meta', {
@@ -714,7 +723,12 @@ export default function RiskSuperpositionCollapse() {
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             title={t('pages.superpositionCollapse.all_findings')}
-            emptyMessage={t('pages.superpositionCollapse.no_findings')}
+            emptyTitle={t('pages.superpositionCollapse.no_findings')}
+            emptyBody={t('pages.superpositionCollapse.no_findings')}
+            unavailable={historyUnavailable}
+            unavailableTestId="risk-superposition-history-unavailable"
+            unavailableTitle={t('pages.superpositionCollapse.history_unavailable')}
+            unavailableBody={t('pages.superpositionCollapse.history_unavailable')}
           />
         </div>
       </div>

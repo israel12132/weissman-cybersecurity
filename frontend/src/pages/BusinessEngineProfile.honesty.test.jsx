@@ -28,5 +28,7 @@ describe('BusinessEngineProfile live-only truth', () => {
     expect(src).toMatch(/history_unavailable/)
     expect(src).toMatch(/setHistoryUnavailable\(true\)/)
     expect(src).toMatch(/profileLoading \|\| historyUnavailable/)
+    expect(src).toMatch(/!historyUnavailable && !jobs\.length/)
+    expect(src).toMatch(/!historyUnavailable && !findings\.length/)
   })
 })

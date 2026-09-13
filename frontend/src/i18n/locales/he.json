@@ -1217,7 +1217,8 @@
     "export_csv": "ייצוא CSV",
     "last_scan": "סריקה אחרונה",
     "findings_search": "חיפוש מדיניות, קובץ, משאב…",
-    "no_findings_filtered": "אין ממצאים התואמים לחיפוש ולסינון החומרה הנוכחיים."
+    "no_findings_filtered": "אין ממצאים התואמים לחיפוש ולסינון החומרה הנוכחיים.",
+    "history_unavailable": "API היסטוריית המנוע אינו זמין — מד סיכון 0 ירוק אינו שביל IaC שקט."
   },
   "agentRequired": {
     "empty_title": "נדרש סוכן קצה",
@@ -1247,6 +1248,8 @@
     "ready_body": "הגדר יעד ופרמטרים, ואז הפעל את ההערכה.",
     "filtered_title": "אין התאמות",
     "filtered_body": "אין ממצאים התואמים לחיפוש או לסינון החומרה הנוכחיים.",
+    "unavailable_title": "היסטוריית המנוע אינה זמינה",
+    "unavailable_body": "GET /api/engines/history לא אושר. מוכן-לסריקה אינו שביל ריק שקט.",
     "confidence": "ביטחון סיכון ×{{value}}",
     "export_json": "ייצוא JSON"
   },
@@ -1310,6 +1313,8 @@
       "na": "לא זמין",
       "no_snapshot": "אין תמונה",
       "recompute_hint": "פתח לחישוב",
+      "financial_unavailable": "תמונת סיכון פיננסי אינה זמינה",
+      "attack_unavailable": "תמונת נתיבי תקיפה אינה זמינה",
       "posture": "מצב הפלטפורמה",
       "posture_sub": "ציון/דירוג ביקורת עצמית",
       "open_posture": "פתח מצב אבטחה",
@@ -2750,6 +2755,7 @@
       "scan_findings_empty_body": "הפעל סריקת מנוע OT/ICS למעלה. ממצאים מצטברים כאן מ-SCADA, Modbus, BACnet ו-OPC-UA.",
       "scan_findings_ready_title": "מוכן לסריקה",
       "scan_findings_ready_body": "בחר לקוח והפעל מנוע OT/ICS. ממצאים חיים ממשימות שהושלמו יופיעו כאן עם חיפוש, סינון חומרה וייצוא CSV.",
+      "scan_history_unavailable": "היסטוריית סריקת המנוע אינה זמינה — מוכן-לסריקה אינו שביל ממצאי OT שקט.",
       "evidence_notice": "probes פרוטוקול OT/ICS ב-POST /api/command-center/scan (ot_ics) על טווחי IP ת industrial מורשים. מצב ריק = אין PLCs/RTUs נגישים ב-scope — לא תעבורת Modbus מדומה.",
       "engine_safety": "אינטרלוק בטיחות OT פסיבי/אקטיבי",
       "engine_safety_desc": "אינטרלוק סגור-לכישלון: כתיבות, Direct Operate, עצירת CPU, הזרקת GOOSE והעברת קבצים בלתי אפשריות מבנית",
@@ -2907,6 +2913,7 @@
       "last_completed": "הושלם לאחרונה: {{time}}",
       "no_findings_clean": "לא הוחזרו ממצאים — הסביבה נראית נקייה עבור מנוע זה.",
       "run_to_populate": "הפעל את המנוע כדי לאכלס ממצאים.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — run-to-populate אינו שביל ריק שקט.",
       "select_client_first": "בחר לקוח תחילה",
       "scan_failed": "הסריקה נכשלה",
       "queued": "{{label}}: בתור {{jobId}}",
@@ -3620,6 +3627,7 @@
       "status_pending": "רץ",
       "rerun": "הרץ שוב",
       "not_run_hint": "הרץ בדיקות חיות כדי למפות נתיבי תקיפה אמיתיים מתצפיות HTTP.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — never-run אינו מאושר.",
       "pending_status": "בדיקה חיה רצה — תוצאה בהמתנה",
       "job_ref": "משימה {{jobId}}",
       "clear_results": "נקה תוצאות",
@@ -4693,6 +4701,7 @@
       "collapse_chains": "שרשראות תקיפה מקורסות",
       "all_findings": "כל ממצאי הסינתזה",
       "no_findings": "אין ממצאים עדיין — הגדר פרמטרים והרץ",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — ממצאי קריסה ריקים אינם סריקה שהושלמה בשקט.",
       "restored_history": "שוחזר מהרצה אחרונה",
       "security_notice": "סינתזה חיה בלבד: קורא clusters וממצאים מ-DB של הטננט. קריסה אוטומטית ב-backend אחרי סריקות כשיש ≥2 clusters פתוחים (כיבוי: WEISSMAN_AUTO_SUPERPOSITION_COLLAPSE=false). הרצה אוטומטית ב-UI לסשן הנוכחי בלבד.",
       "readiness_title": "דרישות מקדימות",
@@ -5029,6 +5038,8 @@
       "empty_no_client": "בחר לקוח ויעד כדי להתחיל הערכת JWT.",
       "empty_ready_title": "מוכן להערכה",
       "empty_ready": "הדבק token או תן למנוע לאסוף אחד, ואז הרץ.",
+      "history_unavailable_title": "היסטוריית JWT אינה זמינה",
+      "history_unavailable": "GET /api/engines/history/jwt_attack לא אושר. מוכן-להערכה אינו שביל ריק שקט.",
       "attack_reference": "ייחוס התקפות",
       "remediation": "תיקון",
       "attack_ref": {
@@ -5564,7 +5575,8 @@
       "last_completed": "הושלם לאחרונה: {{time}}",
       "select_client_prompt": "בחר לקוח בהיקף ודומיין יעד להרצת סריקת מצב אמון-הדואר.",
       "empty_ready_title": "הרץ סריקת מצב כדי להעריך SPF, DKIM, DMARC, BIMI, MTA-STS, DNSSEC, DANE ו-SMTP TLS.",
-      "empty_ready_body": "לא הוחזרו חשיפות — מצב אמון-הדואר נראה חזק."
+      "empty_ready_body": "לא הוחזרו חשיפות — מצב אמון-הדואר נראה חזק.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — מצב אמון-דואר חזק אינו מאושר."
     },
     "transportSecurityCommandCenter": {
       "evidence_notice": "posture transport-security ברמה עולמית (mtls_grpc): 38+ מודולי probe חיים — מטריצת TLS/crypto, gRPC/mTLS/gRPC-Web, CRIME, Must-Staple, chain trust, HSTS/CSP, attack-path synthesis, scorecard מנהלי ב-8 ממדים. כל ממצא מ-handshakes ו-HTTP probes אמיתיים ב-POST /api/command-center/scan (mtls_grpc). מרכז פיקוד: /transport-security."

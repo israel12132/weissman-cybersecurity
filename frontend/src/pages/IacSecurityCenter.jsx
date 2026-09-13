@@ -10,6 +10,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import { isHttpUrl } from '../utils/safeUrl'
 import { SkeletonBar, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../utils/apiFetch'
+import { classifyEngineHistory } from '../hooks/useEngineHistory'
 import { openSseStream } from '../lib/sseStream'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useClientIntegrations } from '../hooks/useClientIntegrations'
@@ -987,18 +988,19 @@ function Chips({ options, selected, onToggle, render }) {
 // ─── Result visualization ────────────────────────────────────────────────────
 
 function ScoreGauge({ score, grade, blast }) {
-  const pct = Math.min(100, Math.max(0, score ?? 0))
-  const color = pct >= 75 ? '#ef4444' : pct >= 50 ? '#f97316' : pct >= 25 ? '#f59e0b' : '#10b981'
+  const hasScore = score != null && Number.isFinite(Number(score))
+  const pct = hasScore ? Math.min(100, Math.max(0, Number(score))) : 0
+  const color = !hasScore ? 'rgba(255,255,255,0.12)' : pct >= 75 ? '#ef4444' : pct >= 50 ? '#f97316' : pct >= 25 ? '#f59e0b' : '#10b981'
   return (
     <div className="relative w-36 h-36 mx-auto">
       <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
         <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
-        <circle cx="50" cy="50" r="42" fill="none" stroke={color} strokeWidth="8" strokeDasharray={`${pct * 2.64} 264`} strokeLinecap="round" style={{ filter: `drop-shadow(0 0 8px ${color}80)` }} />
+        <circle cx="50" cy="50" r="42" fill="none" stroke={color} strokeWidth="8" strokeDasharray={hasScore ? `${pct * 2.64} 264` : '0 264'} strokeLinecap="round" style={{ filter: hasScore ? `drop-shadow(0 0 8px ${color}80)` : undefined }} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-3xl font-bold text-white">{grade ?? '—'}</span>
-        <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">risk {pct}</span>
-        {blast > 1 && <span className="text-[8px] font-mono text-rose-300/80 mt-0.5">×{blast.toFixed(2)} blast</span>}
+        <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{hasScore ? `risk ${pct}` : 'risk —'}</span>
+        {hasScore && blast > 1 && <span className="text-[8px] font-mono text-rose-300/80 mt-0.5">×{blast.toFixed(2)} blast</span>}
       </div>
     </div>
   )
@@ -1660,6 +1662,7 @@ export default function IacSecurityCenter() {
   const [sevFilter, setSevFilter] = useState('all')
   const [findingSearch, setFindingSearch] = useState('')
   const [lastScanAt, setLastScanAt] = useState(null)
+  const [historyUnavailable, setHistoryUnavailable] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [policyQuery, setPolicyQuery] = useState('')
   const esRef = useRef(null)
@@ -1881,10 +1884,15 @@ export default function IacSecurityCenter() {
   const loadLastScan = useCallback(async () => {
     try {
       const d = await apiFetch('/api/engines/history/iac_misconfig?limit=1')
-      const runs = Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : []
-      const last = runs[0]
+      const classified = classifyEngineHistory(d)
+      if (classified.kind === 'unavailable') {
+        setHistoryUnavailable(true)
+        return
+      }
+      setHistoryUnavailable(false)
+      const last = classified.last
       if (!last) return
-      const all = Array.isArray(last.findings) ? last.findings : []
+      const all = classified.findings
       const sum = all.find((x) => x.category === 'iac_summary')
       const viol = all.filter((x) => x.category !== 'iac_summary')
       if (sum?.iac_summary || viol.length) {
@@ -1894,7 +1902,7 @@ export default function IacSecurityCenter() {
         appendLine(`[IaC] Loaded last run — ${viol.length} findings`)
       }
     } catch {
-      /* no fabricated history */
+      setHistoryUnavailable(true)
     }
   }, [appendLine])
 
@@ -2094,6 +2102,11 @@ export default function IacSecurityCenter() {
                 <p className="text-sm font-semibold text-rose-200">{t('iacSecurity.toxic_alert', 'Toxic combination detected')} — {attackChains.length} {t('iacSecurity.attack_paths', 'attack paths')}</p>
                 <span className="text-[10px] font-mono text-rose-300/70">{t('iacSecurity.toxic_hint', 'Correlated policies indicate exploitable breach chains — prioritize remediation queue')}</span>
               </div>
+            )}
+            {historyUnavailable && (
+              <p data-testid="iac-security-history-unavailable" className="text-xs text-amber-300/80 font-mono">
+                {t('iacSecurity.history_unavailable')}
+              </p>
             )}
             <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
               <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5 text-center">

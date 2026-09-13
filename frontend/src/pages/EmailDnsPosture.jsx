@@ -694,6 +694,7 @@ export default function EmailDnsPosture() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, issues)
 
   useEffect(() => {
@@ -928,7 +929,11 @@ export default function EmailDnsPosture() {
         lastUpdated={lastUpdated}
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
-        showEmptyReady={status !== 'running' && issues.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTestId="email-dns-history-unavailable"
+        unavailableTitle={t('pages.emailDnsPosture.history_unavailable')}
+        unavailableBody={t('pages.emailDnsPosture.history_unavailable')}
+        showEmptyReady={status !== 'running' && issues.length === 0 && !historyUnavailable}
         emptyReadyTitle={t('pages.emailDnsPosture.empty_ready_title')}
         emptyReadyBody={t('pages.emailDnsPosture.empty_ready_body')}
         renderFinding={(f, i) => <FindingCard key={i} f={f} />}

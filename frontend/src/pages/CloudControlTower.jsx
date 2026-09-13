@@ -206,10 +206,11 @@ export default function CloudControlTower() {
     haystackFn: (f) => `${f.title || ''} ${f.type || ''} ${f.description || ''} ${f.engine || ''} ${f.category || ''}`,
   })
 
-  const { loadLastRun, historyLoading, lastUpdated, lastJobId } = useEngineHistory(activeTabDef.engine)
+  const { loadLastRun, historyLoading, lastUpdated, lastJobId, historyUnavailable } = useEngineHistory(activeTabDef.engine)
 
   const handleRefresh = useCallback(async () => {
     const run = await loadLastRun()
+    if (run?.unavailable) return
     if (run) {
       handleFindingsUpdate(activeTabDef.engine, run.findings ?? [])
     }
@@ -342,7 +343,11 @@ export default function CloudControlTower() {
         lastUpdated={lastUpdated}
         jobId={lastJobId}
         accent={activeTabDef.color}
-        showEmptyReady={!activeRunning && !allFindings.length}
+        unavailable={historyUnavailable}
+        unavailableTestId="cloud-control-tower-history-unavailable"
+        unavailableTitle={t('pages.cloudControlTower.history_unavailable')}
+        unavailableBody={t('pages.cloudControlTower.history_unavailable')}
+        showEmptyReady={!historyUnavailable && !activeRunning && !allFindings.length}
         emptyReadyTitle={t('pages.cloudControlTower.run_to_populate')}
         emptyReadyBody={t('pages.cloudControlTower.run_to_populate')}
         emptyTitle={t('pages.cloudControlTower.no_findings_clean')}

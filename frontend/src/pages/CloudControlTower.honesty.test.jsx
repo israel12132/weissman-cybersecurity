@@ -15,4 +15,11 @@ describe('CloudControlTower live-only truth', () => {
     expect(src).toMatch(/setClientsUnavailable\(true\)/)
     expect(src).not.toMatch(/\.catch\(\(\) => \{\}\)/)
   })
+
+  it('does not paint run_to_populate when GET /api/engines/history fails', () => {
+    expect(src).toMatch(/data-testid="cloud-control-tower-history-unavailable"/)
+    expect(src).toMatch(/history_unavailable/)
+    expect(src).toMatch(/run\?\.unavailable/)
+    expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
+  })
 })

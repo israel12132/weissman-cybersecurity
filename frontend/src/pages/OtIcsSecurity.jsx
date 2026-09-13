@@ -14,6 +14,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EmptyState from '../components/ui/EmptyState';
 import { SkeletonTable } from '../components/ui/Skeleton';
 import { apiFetch } from '../utils/apiFetch';
+import { classifyEngineHistory } from '../hooks/useEngineHistory';
 import { clientPrimaryTargetUrl } from '../lib/clientTarget';
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll';
 import Button from '../components/ui/Button'
@@ -256,6 +257,7 @@ export default function OtIcsSecurity() {
   const [safety, setSafety] = useState(null);
   const [devicesUnavailable, setDevicesUnavailable] = useState(false);
   const [fingerprintsUnavailable, setFingerprintsUnavailable] = useState(false);
+  const [scanHistoryUnavailable, setScanHistoryUnavailable] = useState(false);
 
   const fetchOtDevices = useCallback(async () => {
     try {
@@ -371,15 +373,19 @@ export default function OtIcsSecurity() {
     try {
       try {
         const d = await apiFetch('/api/engines/history/scada_ics?limit=1');
-        const runs = Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : [];
-        const last = runs[0];
-        if (last) {
-          const historyFindings = Array.isArray(last.findings) ? last.findings : [];
-          setEngineFindingsMap((prev) => ({ ...prev, scada_ics: historyFindings }));
-          setLastUpdated(last.completed_at || last.updated_at || last.created_at || null);
-          setLastJobId(last.job_id ?? last.id ?? null);
+        const classified = classifyEngineHistory(d);
+        if (classified.kind === 'unavailable') {
+          setScanHistoryUnavailable(true);
+        } else {
+          setScanHistoryUnavailable(false);
+          const last = classified.last;
+          if (last) {
+            setEngineFindingsMap((prev) => ({ ...prev, scada_ics: classified.findings }));
+            setLastUpdated(last.completed_at || last.updated_at || last.created_at || null);
+            setLastJobId(last.job_id ?? last.id ?? null);
+          }
         }
-      } catch { /* history unavailable — still refresh the device inventory below */ }
+      } catch { setScanHistoryUnavailable(true) }
       await fetchOtDevices();
       await fetchSafety(selectedClientId);
     } finally {
@@ -869,7 +875,11 @@ export default function OtIcsSecurity() {
           title={t('pages.otIcsSecurity.scan_findings_title')}
           emptyTitle={t('pages.otIcsSecurity.scan_findings_empty_title')}
           emptyBody={t('pages.otIcsSecurity.scan_findings_empty_body')}
-          showEmptyReady
+          unavailable={scanHistoryUnavailable}
+          unavailableTestId="ot-ics-scan-history-unavailable"
+          unavailableTitle={t('pages.otIcsSecurity.scan_history_unavailable')}
+          unavailableBody={t('pages.otIcsSecurity.scan_history_unavailable')}
+          showEmptyReady={!scanHistoryUnavailable}
           emptyReadyTitle={t('pages.otIcsSecurity.scan_findings_ready_title')}
           emptyReadyBody={t('pages.otIcsSecurity.scan_findings_ready_body')}
           renderFinding={renderOtFinding}

@@ -18,4 +18,12 @@ describe('RiskSuperpositionCollapse live-only truth', () => {
     expect(src).toMatch(/setClientsUnavailable\(true\)/)
     expect(src).not.toMatch(/\.catch\(\(\) => \{\}\)/)
   })
+
+  it('does not paint empty collapse findings when job-complete history fails', () => {
+    expect(src).toMatch(/data-testid="risk-superposition-history-unavailable"/)
+    expect(src).toMatch(/history_unavailable/)
+    expect(src).toMatch(/setHistoryUnavailable\(true\)/)
+    expect(src).toMatch(/classifyEngineHistory/)
+    expect(src).not.toMatch(/hist = \{\}/)
+  })
 })

@@ -1217,7 +1217,8 @@
     "export_csv": "Export CSV",
     "last_scan": "Last scan",
     "findings_search": "Search policy, file, resource…",
-    "no_findings_filtered": "No findings match the current search and severity filters."
+    "no_findings_filtered": "No findings match the current search and severity filters.",
+    "history_unavailable": "Engine history API unavailable — a green risk-0 gauge is not a quiet IaC trail."
   },
   "agentRequired": {
     "empty_title": "Endpoint agent required",
@@ -1247,6 +1248,8 @@
     "ready_body": "Configure target and parameters, then launch the assessment.",
     "filtered_title": "No matches",
     "filtered_body": "No findings match the current search or severity filter.",
+    "unavailable_title": "Engine history unavailable",
+    "unavailable_body": "GET /api/engines/history could not be confirmed. Ready-to-scan is not a quiet empty trail.",
     "confidence": "Risk confidence ×{{value}}",
     "export_json": "Export JSON"
   },
@@ -1310,6 +1313,8 @@
       "na": "N/A",
       "no_snapshot": "No snapshot",
       "recompute_hint": "Open to compute",
+      "financial_unavailable": "Financial-risk snapshot unavailable",
+      "attack_unavailable": "Attack-path snapshot unavailable",
       "posture": "Platform Posture",
       "posture_sub": "Self-audit score / grade",
       "open_posture": "Open posture",
@@ -2807,6 +2812,7 @@
       "last_completed": "Last completed: {{time}}",
       "no_findings_clean": "No findings returned — environment appears clean for this engine.",
       "run_to_populate": "Run the engine to populate findings.",
+      "history_unavailable": "Engine history API unavailable — run-to-populate is not a quiet empty trail.",
       "select_client_first": "Select a client first",
       "scan_failed": "Scan failed",
       "queued": "{{label}}: queued {{jobId}}",
@@ -3520,6 +3526,7 @@
       "status_pending": "Running",
       "rerun": "Re-run",
       "not_run_hint": "Run live probes to map real attack paths from HTTP observations.",
+      "history_unavailable": "Engine history API unavailable — not-run is not confirmed.",
       "pending_status": "Live probe running — result pending",
       "job_ref": "Job {{jobId}}",
       "clear_results": "Clear results",
@@ -3720,6 +3727,7 @@
       "scan_findings_empty_body": "Run an OT/ICS engine scan above. Findings aggregate here across SCADA, Modbus, BACnet, and OPC-UA probes.",
       "scan_findings_ready_title": "Ready to scan",
       "scan_findings_ready_body": "Select a client and run any OT/ICS engine. Live findings from completed jobs appear here with search, severity filters, and CSV export.",
+      "scan_history_unavailable": "Engine scan history unavailable — ready-to-scan is not a quiet OT findings trail.",
       "evidence_notice": "OT/ICS protocol probes via POST /api/command-center/scan (ot_ics) against authorized industrial IP ranges. Empty state means no reachable PLCs/RTUs in scope — not simulated Modbus traffic.",
       "engine_safety": "OT Passive/Active Safety",
       "engine_safety_desc": "Fail-closed interlock: writes, Direct Operate, CPU stop, GOOSE inject, and file-transfer are structurally impossible",
@@ -4693,6 +4701,7 @@
       "collapse_chains": "Collapsed attack chains",
       "all_findings": "All synthesis findings",
       "no_findings": "No collapse findings yet — configure parameters and run",
+      "history_unavailable": "Engine history API unavailable — empty collapse findings are not a quiet completed scan.",
       "restored_history": "Restored from last run",
       "security_notice": "Live-only synthesis: reads your tenant DB clusters and findings. Backend auto-collapse runs after engine scans when ≥2 open clusters exist (disable: WEISSMAN_AUTO_SUPERPOSITION_COLLAPSE=false). UI auto-run is session-scoped only.",
       "readiness_title": "Prerequisites",
@@ -5029,6 +5038,8 @@
       "empty_no_client": "Select a client and target to begin a JWT assessment.",
       "empty_ready_title": "Ready to assess",
       "empty_ready": "Paste a token or let the engine harvest one, then run.",
+      "history_unavailable_title": "JWT history unavailable",
+      "history_unavailable": "GET /api/engines/history/jwt_attack could not be confirmed. Ready-to-assess is not a quiet empty trail.",
       "attack_reference": "Attack reference",
       "remediation": "Remediation",
       "attack_ref": {
@@ -5564,7 +5575,8 @@
       "last_completed": "Last completed: {{time}}",
       "select_client_prompt": "Select an in-scope client and target domain to run the email-trust posture scan.",
       "empty_ready_title": "Run a posture scan to assess SPF, DKIM, DMARC, BIMI, MTA-STS, DNSSEC, DANE & SMTP TLS.",
-      "empty_ready_body": "No exposures returned — email-trust posture appears strong."
+      "empty_ready_body": "No exposures returned — email-trust posture appears strong.",
+      "history_unavailable": "Engine history API unavailable — strong email-trust posture is not confirmed."
     },
     "transportSecurityCommandCenter": {
       "evidence_notice": "World-class transport-security posture (mtls_grpc): 38+ live probe modules — TLS/crypto matrix, gRPC/mTLS/gRPC-Web, weak-cipher CRIME, Must-Staple, chain trust, HSTS/CSP, attack-path synthesis, 8-dimension executive scorecard. Every finding from real handshakes and HTTP probes via POST /api/command-center/scan (mtls_grpc). Command Center: /transport-security."

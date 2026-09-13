@@ -321,6 +321,7 @@ export default function DigitalTwinSimulator() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, detailFindings)
 
   useEffect(() => {
@@ -700,7 +701,11 @@ export default function DigitalTwinSimulator() {
         lastUpdated={lastUpdated}
         jobId={lastJobId}
         accent="#8b5cf6"
-        showEmptyReady={!isScanning && detailFindings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTestId="digital-twin-history-unavailable"
+        unavailableTitle={t('pages.digitalTwinSimulator.history_unavailable')}
+        unavailableBody={t('pages.digitalTwinSimulator.history_unavailable')}
+        showEmptyReady={!isScanning && !historyUnavailable && detailFindings.length === 0}
         emptyReadyTitle={t('pages.digitalTwinSimulator.not_run_hint')}
         emptyReadyBody={t('pages.digitalTwinSimulator.subtitle')}
         className="mt-8"
