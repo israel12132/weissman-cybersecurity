@@ -114,9 +114,14 @@ export default function CeoIntegratedCommandDeck() {
     }
   }, [loadTelemetry, loadGodSnapshot])
 
-  const safeModeKnown = typeof tel?.global_safe_mode === 'boolean'
-  const globalSafe = tel?.global_safe_mode === true
-  const eff = tel?.strategy?.effective || {}
+  // Overlay mute: leftover tel/god stay in React state after a failed poll.
+  // Display and control derivation must not treat them as confirmed live.
+  const liveTel = telErr ? null : tel
+  const liveGod = godErr ? null : god
+
+  const safeModeKnown = typeof liveTel?.global_safe_mode === 'boolean'
+  const globalSafe = liveTel?.global_safe_mode === true
+  const eff = liveTel?.strategy?.effective || {}
   const genesisKill = !!eff.genesis_kill_switch
 
   const toggleGlobalSafe = async () => {
@@ -186,10 +191,10 @@ export default function CeoIntegratedCommandDeck() {
     setIntervalSaving(false)
   }
 
-  const rssKb = tel?.server_process_rss_kb
+  const rssKb = liveTel?.server_process_rss_kb
   const rssMb = rssKb != null ? (Number(rssKb) / 1024).toFixed(1) : '—'
-  const scanFromGod = god?.scanning_active
-  const scanFromTel = tel?.scanning_active
+  const scanFromGod = liveGod?.scanning_active
+  const scanFromTel = liveTel?.scanning_active
   const scanningKnown = typeof scanFromGod === 'boolean' || typeof scanFromTel === 'boolean'
   const scanningActive = scanFromGod ?? scanFromTel
 
@@ -242,20 +247,20 @@ export default function CeoIntegratedCommandDeck() {
         <div className="relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
           <MetricCard
             label={t('components.ceo.integratedCommandDeck.serverUptime')}
-            value={tel ? formatUptime(tel.uptime_secs, t) : '—'}
+            value={liveTel ? formatUptime(liveTel.uptime_secs, t) : '—'}
             accent="border-cyan-500/25"
           />
           <MetricCard
             label={t('components.ceo.integratedCommandDeck.processRss')}
-            value={tel ? `${rssMb} MB` : '—'}
+            value={liveTel ? `${rssMb} MB` : '—'}
             sub={t('components.ceo.integratedCommandDeck.processRssSub')}
             accent="border-violet-500/25"
           />
           <MetricCard
             label={t('components.ceo.integratedCommandDeck.workerIds')}
             value={
-              tel != null && tel.distinct_worker_ids_on_tenant_jobs != null
-                ? String(tel.distinct_worker_ids_on_tenant_jobs)
+              liveTel != null && liveTel.distinct_worker_ids_on_tenant_jobs != null
+                ? String(liveTel.distinct_worker_ids_on_tenant_jobs)
                 : '—'
             }
             accent="border-emerald-500/25"
@@ -263,10 +268,10 @@ export default function CeoIntegratedCommandDeck() {
           <MetricCard
             label={t('components.ceo.integratedCommandDeck.jobsTenant')}
             value={
-              tel != null && tel.tenant_jobs_running != null && tel.tenant_jobs_pending != null
+              liveTel != null && liveTel.tenant_jobs_running != null && liveTel.tenant_jobs_pending != null
                 ? t('components.ceo.integratedCommandDeck.jobsRunningPending', {
-                    running: tel.tenant_jobs_running,
-                    pending: tel.tenant_jobs_pending,
+                    running: liveTel.tenant_jobs_running,
+                    pending: liveTel.tenant_jobs_pending,
                   })
                 : '—'
             }
@@ -275,10 +280,10 @@ export default function CeoIntegratedCommandDeck() {
           <MetricCard
             label={t('components.ceo.integratedCommandDeck.queueGlobal')}
             value={
-              tel != null && tel.queue_global_running != null && tel.queue_global_pending != null
+              liveTel != null && liveTel.queue_global_running != null && liveTel.queue_global_pending != null
                 ? t('components.ceo.integratedCommandDeck.jobsRunningPending', {
-                    running: tel.queue_global_running,
-                    pending: tel.queue_global_pending,
+                    running: liveTel.queue_global_running,
+                    pending: liveTel.queue_global_pending,
                   })
                 : '—'
             }
@@ -312,7 +317,7 @@ export default function CeoIntegratedCommandDeck() {
             </p>
             <Button variant="unstyled"
               type="button"
-              disabled={safeSaving || !tel || !safeModeKnown}
+              disabled={safeSaving || !liveTel || !safeModeKnown}
               onClick={toggleGlobalSafe}
               className={`w-full py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest border ${
                 !safeModeKnown
@@ -377,7 +382,7 @@ export default function CeoIntegratedCommandDeck() {
             </p>
             <Button variant="unstyled"
               type="button"
-              disabled={killSaving || !tel}
+              disabled={killSaving || !liveTel}
               onClick={toggleGenesisKill}
               className={`w-full py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest border ${
                 genesisKill
