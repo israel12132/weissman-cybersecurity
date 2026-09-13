@@ -318,7 +318,7 @@ async fn run_one_cycle(pool: &PgPool) -> Result<(), String> {
 
     // After refresh, materialise scores onto vulnerabilities (back-fill rows that
     // were persisted *before* the score was known).
-    let _ = sqlx::query(
+    sqlx::query(
         r#"UPDATE vulnerabilities v
               SET epss_score      = e.score,
                   epss_percentile = e.percentile,
@@ -330,7 +330,8 @@ async fn run_one_cycle(pool: &PgPool) -> Result<(), String> {
                 OR v.epss_percentile IS DISTINCT FROM e.percentile)"#,
     )
     .execute(pool)
-    .await;
+    .await
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 

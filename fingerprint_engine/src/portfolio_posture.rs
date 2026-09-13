@@ -110,7 +110,7 @@ pub async fn load_portfolio(
     .fetch_all(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+    tx.commit().await.map_err(|e| e.to_string())?;
 
     let client_rows: Vec<(i64, String)> = rows
         .iter()

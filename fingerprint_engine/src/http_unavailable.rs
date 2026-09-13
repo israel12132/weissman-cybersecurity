@@ -1772,7 +1772,6 @@ mod tests {
         assert!(fn_src.contains("audit_logs_unavailable_json"));
         assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
         assert!(!fn_src.contains("INTERNAL_SERVER_ERROR"));
-        assert!(!fn_src.contains("let _ = tx.commit()"));
         assert!(!compact_src(fn_src).contains("let_=tx.commit().await;"));
     }
 
@@ -1783,7 +1782,6 @@ mod tests {
         assert!(fn_src.contains("roe_store_down()"));
         assert!(fn_src.contains("request not found"));
         assert!(!fn_src.contains(".ok().flatten()"));
-        assert!(!fn_src.contains("let _ = tx.commit()"));
         assert!(!compact_src(fn_src).contains("let_=tx.commit().await;"));
         let helper = named_fn_src(src, "fn roe_store_down");
         assert!(helper.contains("SERVICE_UNAVAILABLE"));
@@ -2019,7 +2017,6 @@ mod tests {
         assert!(fn_src.contains("engagements_unavailable_json"));
         assert!(fn_src.contains("engagement not found"));
         assert!(!fn_src.contains(".ok().flatten()"));
-        assert!(!fn_src.contains("let _ = tx.commit()"));
         assert!(!compact_src(fn_src).contains("let_=tx.commit().await;"));
     }
 
@@ -3861,7 +3858,6 @@ mod tests {
         );
         let rec = named_fn_src(pb, "async fn record_run");
         assert!(rec.contains("Result<(), String>"));
-        assert!(!rec.contains("let _ = tx.commit()"));
         assert!(!compact_src(rec).contains("let_=tx.commit().await;"));
         assert!(rec.contains("store_down"));
         let dispatch = named_fn_src(pb, "pub async fn dispatch_event");
@@ -3904,11 +3900,9 @@ mod tests {
 
         let engine = include_str!("soar/engine.rs");
         let upd = named_fn_src(engine, "async fn update_status");
-        assert!(!upd.contains("let _ = tx.commit()"));
         assert!(!compact_src(upd).contains("let_=tx.commit().await;"));
         assert!(upd.contains("store_down"));
         let ures = named_fn_src(engine, "async fn update_execution_result");
-        assert!(!ures.contains("let _ = tx.commit()"));
         assert!(!compact_src(ures).contains("let_=tx.commit().await;"));
         assert!(ures.contains("store_down"));
         let exec = named_fn_src(engine, "pub async fn execute_armored_action");
@@ -3980,7 +3974,6 @@ mod tests {
 
         let persist_rb = named_fn_src(include_str!("soar/revert.rs"), "pub async fn persist_runbook");
         assert!(persist_rb.contains("Result<Uuid, String>"));
-        assert!(!persist_rb.contains("let _ = tx.commit()"));
         assert!(!compact_src(persist_rb).contains("let_=tx.commit().await;"));
         assert!(persist_rb.contains("store_down"));
         assert!(persist_rb.contains("serde_json::to_value(steps).map_err"));
@@ -4123,10 +4116,6 @@ mod tests {
         assert!(
             !compact_src(src).contains(".ok().flatten()"),
             "fire INSERT store-down must not look like ON CONFLICT skip (missed alert)"
-        );
-        assert!(
-            !src.contains("let _ = tx.commit()"),
-            "evaluate_tenant must not empty-ok a commit fail then return Ok(fired)"
         );
         assert!(
             !compact_src(src).contains("let_=tx.commit().await;"),
@@ -4911,6 +4900,9 @@ mod tests {
         assert!(db.contains("store_down"));
         let eff = named_fn_src(src, "async fn webhook_url_effective");
         assert!(eff.contains("Result<Option<String>, String>"));
+        assert!(compact_src(eff).contains("Err(e)=>returnErr(e)"));
+        assert!(compact_src(eff).contains("Ok(None)=>{}"));
+        assert!(!compact_src(eff).contains("Err(_)=>{}"));
         let spawn = named_fn_src(src, "pub fn spawn_critical_poe_alert");
         assert!(spawn.contains("critical PoE webhook store_down"));
     }
@@ -4991,11 +4983,27 @@ mod tests {
         assert!(down.contains("StatusCode::SERVICE_UNAVAILABLE"));
         assert!(!down.contains("StatusCode::OK"));
         assert!(src.contains("cicd_store_down(blocked, &findings)"));
-        assert!(
-            !src.contains("log_cicd_event(\n        pool.as_deref(),")
-                || src.contains("cicd_store_down(blocked, &findings)"),
-            "CI gate must not ok after persist fail"
-        );
+        for sig in [
+            "pub async fn github_push_hook",
+            "pub async fn gitlab_push_hook",
+            "pub async fn bitbucket_push_hook",
+            "pub async fn generic_cicd_scan",
+        ] {
+            let hook = named_fn_src(src, sig);
+            let persist_at = hook.find("log_cicd_event").expect("log_cicd_event");
+            let persist = &hook[persist_at..];
+            let gate = persist.find("gate_response").expect("gate_response");
+            let before_gate = &persist[..gate];
+            assert!(
+                before_gate.contains(".await\n    .is_err()")
+                    || compact_src(before_gate).contains(".await.is_err()"),
+                "{sig} must fail closed before gate_response"
+            );
+            assert!(
+                before_gate.contains("cicd_store_down(blocked, &findings)"),
+                "{sig} persist fail must not reach gate_response"
+            );
+        }
     }
 
     #[test]
@@ -5011,9 +5019,11 @@ mod tests {
         let engine = include_str!("soar/engine.rs");
         let armored = named_fn_src(engine, "pub async fn execute_armored_action");
         assert!(
-            compact_src(armored).contains("forensic_log(pool,&cmd,\"verifying\""),
+            compact_src(armored).contains("ifletSome(o)=forensic_log(pool,&cmd,\"verifying\""),
             "ok/verifying must not skip forensic persist"
         );
+        assert!(compact_src(armored).contains("returno;"));
+        assert!(!compact_src(armored).contains("let_=forensic_log"));
         assert!(!armored.contains("audit::log_execution"));
     }
 
@@ -5153,5 +5163,78 @@ mod tests {
         let commit = persist.find("tx.commit().await.is_err()").expect("commit");
         let ok_true = persist.find("\"ok\": true").expect("ok true");
         assert!(commit < ok_true);
+    }
+
+    #[test]
+    fn heal_stats_commit_store_down_is_not_zero_success_rate() {
+        let src = include_str!("server_handlers_rest4.inc");
+        let stats = named_fn_src(src, "async fn api_heal_stats");
+        assert!(stats.contains("heal_stats_unavailable_json"));
+        assert!(stats.contains("tx.commit().await.is_err()"));
+        assert!(!compact_src(stats).contains("let_=tx.commit().await;"));
+        assert!(!stats.contains("unwrap_or((0, 0))"));
+        assert!(stats.contains("heal stats aggregate missing"));
+    }
+
+    #[test]
+    fn kev_materialize_update_store_down_is_not_ok_count() {
+        let src = include_str!("intel_kev.rs");
+        let refresh = named_fn_src(src, "pub async fn refresh_kev_catalog");
+        let mat_at = refresh.find("Materialise kev flags").expect("materialise");
+        let mat = &refresh[mat_at..];
+        assert!(mat.contains("map_err(|e| e.to_string())?"));
+        assert!(!compact_src(mat).contains("let_=sqlx::query("));
+    }
+
+    #[test]
+    fn epss_materialize_update_store_down_is_not_ok_cycle() {
+        let src = include_str!("intel_epss.rs");
+        let cycle = named_fn_src(src, "async fn run_one_cycle");
+        let mat_at = cycle.find("materialise scores").expect("materialise");
+        let mat = &cycle[mat_at..];
+        assert!(mat.contains("map_err(|e| e.to_string())?"));
+        assert!(!compact_src(mat).contains("let_=sqlx::query("));
+    }
+
+    #[test]
+    fn portfolio_posture_commit_store_down_is_not_complete_rollup() {
+        let src = named_fn_src(
+            include_str!("portfolio_posture.rs"),
+            "pub async fn load_portfolio",
+        );
+        assert!(src.contains("tx.commit().await.map_err"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+    }
+
+    #[test]
+    fn hourly_last_hour_failures_commit_store_down_is_not_idle_ok() {
+        let src = named_fn_src(
+            include_str!("sovereign_operator/tools.rs"),
+            "pub async fn last_hour_failures",
+        );
+        assert!(src.contains("tx.commit().await?"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+    }
+
+    #[test]
+    fn discovery_knowledge_load_store_down_is_not_empty_skip() {
+        let src = include_str!("discovery_knowledge.rs");
+        let load = named_fn_src(src, "pub async fn load(");
+        assert!(load.contains("Result<Vec<String>, String>"));
+        assert!(!load.contains("load skipped"));
+        assert!(load.contains("store_down"));
+        let learned = named_fn_src(src, "pub async fn load_learned");
+        assert!(learned.contains("Result<Vec<String>, String>"));
+        assert!(!learned.contains("load_learned skipped"));
+        let asm = named_fn_src(
+            include_str!("asm_engine.rs"),
+            "pub async fn run_asm_result_ctx",
+        );
+        assert!(asm.contains("EngineResult::error(\"store_down\")"));
+        assert!(
+            compact_src(asm).contains("load_learned_paths(pool).await"),
+            "ASM learned paths must not ignore store-down"
+        );
+        assert!(!compact_src(asm).contains("load_learned_paths(pool).await;"));
     }
 }

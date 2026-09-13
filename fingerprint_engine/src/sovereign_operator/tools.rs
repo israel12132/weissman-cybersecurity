@@ -658,7 +658,7 @@ pub async fn last_hour_failures(
     )
     .fetch_all(&mut *tx)
     .await?;
-    let _ = tx.commit().await;
+    tx.commit().await?;
     Ok(rows
         .into_iter()
         .filter_map(|r| {

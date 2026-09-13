@@ -383,7 +383,7 @@ fn normalize_value(kind: &str, raw: &str) -> Option<String> {
 }
 
 /// Load stored values for a kind, confirmed hits first. No row cap — the corpus is unbounded.
-pub async fn load(pool: &PgPool, kind: &str) -> Vec<String> {
+pub async fn load(pool: &PgPool, kind: &str) -> Result<Vec<String>, String> {
     let rows = sqlx::query(
         r#"SELECT value FROM intel.discovery_knowledge
            WHERE kind = $1
@@ -391,31 +391,26 @@ pub async fn load(pool: &PgPool, kind: &str) -> Vec<String> {
     )
     .bind(kind)
     .fetch_all(pool)
-    .await;
-    match rows {
-        Ok(rows) => rows
-            .into_iter()
-            .filter_map(|r| r.try_get::<String, _>("value").ok())
-            .collect(),
-        Err(e) => {
-            tracing::debug!(target: "discovery_knowledge", error = %e, kind, "load skipped");
-            vec![]
-        }
-    }
+    .await
+    .map_err(|_| "store_down".to_string())?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|r| r.try_get::<String, _>("value").ok())
+        .collect())
 }
 
-pub async fn load_paths(pool: &PgPool) -> Vec<String> {
+pub async fn load_paths(pool: &PgPool) -> Result<Vec<String>, String> {
     load(pool, KIND_PATH).await
 }
 
-pub async fn load_subdomain_prefixes(pool: &PgPool) -> Vec<String> {
+pub async fn load_subdomain_prefixes(pool: &PgPool) -> Result<Vec<String>, String> {
     load(pool, KIND_SUB).await
 }
 
 /// Learned + confirmed values only (excludes unconfirmed public seed rows).
 /// Use this when feeding HTTP engines so the 40k+ combinator seed is not dumped
 /// into every fuzzer as `discovered_paths`.
-pub async fn load_learned(pool: &PgPool, kind: &str) -> Vec<String> {
+pub async fn load_learned(pool: &PgPool, kind: &str) -> Result<Vec<String>, String> {
     let rows = sqlx::query(
         r#"SELECT value FROM intel.discovery_knowledge
            WHERE kind = $1 AND (source <> 'seed' OR confirmed)
@@ -423,20 +418,15 @@ pub async fn load_learned(pool: &PgPool, kind: &str) -> Vec<String> {
     )
     .bind(kind)
     .fetch_all(pool)
-    .await;
-    match rows {
-        Ok(rows) => rows
-            .into_iter()
-            .filter_map(|r| r.try_get::<String, _>("value").ok())
-            .collect(),
-        Err(e) => {
-            tracing::debug!(target: "discovery_knowledge", error = %e, kind, "load_learned skipped");
-            vec![]
-        }
-    }
+    .await
+    .map_err(|_| "store_down".to_string())?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|r| r.try_get::<String, _>("value").ok())
+        .collect())
 }
 
-pub async fn load_learned_paths(pool: &PgPool) -> Vec<String> {
+pub async fn load_learned_paths(pool: &PgPool) -> Result<Vec<String>, String> {
     load_learned(pool, KIND_PATH).await
 }
 
