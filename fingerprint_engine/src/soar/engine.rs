@@ -389,9 +389,9 @@ async fn insert_execution(
     idem: &str,
     blast: &super::types::BlastRadiusReport,
 ) -> Result<Uuid, String> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, cmd.tenant_id).await else {
-        return Err("tenant tx".into());
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, cmd.tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let id = Uuid::new_v4();
     let evidence = serde_json::to_value(&cmd.evidence).unwrap_or(json!({}));
     let res = sqlx::query(
@@ -414,7 +414,7 @@ async fn insert_execution(
     .bind(&cmd.params)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     if res.rows_affected() == 0 {
         let existing: Option<Uuid> = sqlx::query_scalar(
             "SELECT id FROM soar_action_executions WHERE tenant_id = $1 AND idempotency_key = $2",
@@ -423,11 +423,15 @@ async fn insert_execution(
         .bind(idem)
         .fetch_optional(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
-        let _ = tx.commit().await;
+        .map_err(|_| "store_down".to_string())?;
+        if tx.commit().await.is_err() {
+            return Err("store_down".to_string());
+        }
         return existing.ok_or_else(|| "conflict without row".into());
     }
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
     Ok(id)
 }
 

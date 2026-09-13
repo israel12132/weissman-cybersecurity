@@ -237,16 +237,18 @@ async fn recent_open_pr(
     tenant_id: i64,
     client_id: i64,
     finding_id: &str,
-) -> Option<(String, Option<i64>, String)> {
+) -> Result<Option<(String, Option<i64>, String)>, String> {
     let hours: i32 = std::env::var("WEISSMAN_HEAL_DEDUP_HOURS")
         .ok()
         .and_then(|s| s.parse().ok())
         .filter(|n: &i32| *n >= 0 && *n <= 720)
         .unwrap_or(24);
     if hours == 0 {
-        return None; // dedup disabled
+        return Ok(None); // dedup disabled
     }
-    let mut tx = db::begin_tenant_tx(pool, tenant_id).await.ok()?;
+    let mut tx = db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let row = sqlx::query(
         r#"SELECT pr_url, pr_number, COALESCE(branch_name,'') AS branch_name
            FROM heal_requests
@@ -261,18 +263,24 @@ async fn recent_open_pr(
     .bind(hours)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    let r = row?;
-    let url: String = r.try_get::<Option<String>, _>("pr_url").ok().flatten()?;
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
+    let Some(r) = row else {
+        return Ok(None);
+    };
+    let url: String = match r.try_get::<Option<String>, _>("pr_url").ok().flatten() {
+        Some(u) if !u.is_empty() => u,
+        _ => return Ok(None),
+    };
     let num: Option<i64> = r
         .try_get::<Option<i32>, _>("pr_number")
         .ok()
         .flatten()
         .map(|n| n as i64);
     let branch: String = r.try_get("branch_name").unwrap_or_default();
-    Some((url, num, branch))
+    Ok(Some((url, num, branch)))
 }
 
 /// Load a finding's title/description/severity for patch regeneration (empty tuple if absent).
@@ -1038,9 +1046,9 @@ pub async fn run_auto_heal_job(
 
     // Idempotency: for repo channels, reuse an existing recent heal PR/MR instead of opening a duplicate.
     if channel.touches_repo() {
-        if let Some((existing_url, existing_num, existing_branch)) =
-            recent_open_pr(app_pool.as_ref(), tenant_id, client_id, &finding_id).await
-        {
+        match recent_open_pr(app_pool.as_ref(), tenant_id, client_id, &finding_id).await {
+            Err(_) => return Err("store_down".to_string()),
+            Ok(Some((existing_url, existing_num, existing_branch))) => {
             record_step(
                 &step_sink,
                 "dedup_existing_pr",
@@ -1091,6 +1099,8 @@ pub async fn run_auto_heal_job(
                 "deduped": true,
                 "spec_id": spec_id,
             }));
+            }
+            Ok(None) => {}
         }
     }
 

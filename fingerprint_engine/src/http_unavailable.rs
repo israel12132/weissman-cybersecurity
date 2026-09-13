@@ -3548,11 +3548,23 @@ mod tests {
         let apply_idx = eval.find("apply_blast_decision").expect("apply after live rows");
         let unavail = eval.find("unavailable_blast").expect("fail closed");
         assert!(unavail < apply_idx);
+        let ublast_start = blast.find("fn unavailable_blast()").expect("unavailable_blast");
+        let ublast_rest = &blast[ublast_start..];
+        let ublast_next = ublast_rest
+            .find("\npub fn apply_blast_decision")
+            .unwrap_or(ublast_rest.len());
+        let unavail_fn = &ublast_rest[..ublast_next];
+        assert!(unavail_fn.contains("report.blocked = true"));
+        assert!(!unavail_fn.contains("force_approved"));
         let engine = include_str!("soar/engine.rs");
         let find = named_fn_src(engine, "async fn find_existing_execution");
         assert!(find.contains("Result<Option<ExistingExecution>, String>"));
         assert!(!compact_src(find).contains(".ok().flatten()"));
         assert!(engine.contains("detail: \"database unavailable\".into()"));
+        let insert = named_fn_src(engine, "async fn insert_execution");
+        assert!(!insert.contains("let _ = tx.commit()"));
+        assert!(insert.contains("tx.commit().await.is_err()"));
+        assert!(insert.contains("store_down"));
         let integ = include_str!("soar/integrations.rs");
         let load = named_fn_src(integ, "pub async fn load_integrations");
         assert!(load.contains("Result<Vec<IntegrationRecord>, String>"));
@@ -3570,5 +3582,16 @@ mod tests {
         assert!(src.contains(
             "pipeline_get_state(&mut tx, tenant_id, run_id, &cid).await?"
         ));
+    }
+
+    #[test]
+    fn heal_recent_open_pr_store_down_is_not_confirmed_miss() {
+        let src = include_str!("auto_heal_job.rs");
+        let recent = named_fn_src(src, "async fn recent_open_pr");
+        assert!(recent.contains("Result<Option<(String, Option<i64>, String)>, String>"));
+        assert!(recent.contains("store_down"));
+        assert!(!compact_src(recent).contains("begin_tenant_tx(pool, tenant_id).await.ok()?"));
+        assert!(!compact_src(recent).contains("fetch_optional(&mut*tx).await.ok().flatten()"));
+        assert!(src.contains("Err(_) => return Err(\"store_down\".to_string())"));
     }
 }

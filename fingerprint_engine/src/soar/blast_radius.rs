@@ -36,7 +36,7 @@ pub async fn evaluate(pool: &PgPool, input: &BlastRadiusInput) -> BlastRadiusRep
     };
 
     let Ok(mut tx) = crate::db::begin_tenant_tx(pool, input.tenant_id).await else {
-        return unavailable_blast(input.force_approved);
+        return unavailable_blast();
     };
 
     let target_norm = input.target_id.trim().to_lowercase();
@@ -57,7 +57,7 @@ pub async fn evaluate(pool: &PgPool, input: &BlastRadiusInput) -> BlastRadiusRep
     .await
     {
         Ok(r) => r,
-        Err(_) => return unavailable_blast(input.force_approved),
+        Err(_) => return unavailable_blast(),
     };
 
     for r in &rows {
@@ -94,7 +94,7 @@ pub async fn evaluate(pool: &PgPool, input: &BlastRadiusInput) -> BlastRadiusRep
     .await
     {
         Ok(r) => r,
-        Err(_) => return unavailable_blast(input.force_approved),
+        Err(_) => return unavailable_blast(),
     };
 
     report.neighbor_count = neighbor_rows.len() as u32;
@@ -106,7 +106,7 @@ pub async fn evaluate(pool: &PgPool, input: &BlastRadiusInput) -> BlastRadiusRep
         }
     }
     if tx.commit().await.is_err() {
-        return unavailable_blast(input.force_approved);
+        return unavailable_blast();
     }
 
     let total = report
@@ -124,10 +124,10 @@ pub async fn evaluate(pool: &PgPool, input: &BlastRadiusInput) -> BlastRadiusRep
     report
 }
 
-fn unavailable_blast(force_approved: bool) -> BlastRadiusReport {
+fn unavailable_blast() -> BlastRadiusReport {
     let mut report = BlastRadiusReport::default();
     report.block_reason = "database unavailable".into();
-    report.blocked = !force_approved;
+    report.blocked = true;
     report
 }
 
@@ -224,13 +224,11 @@ mod tests {
 
     #[test]
     fn store_down_does_not_unblock_on_zero_dollar_graph() {
-        let r = unavailable_blast(false);
+        let r = unavailable_blast();
         assert!(r.blocked);
+        assert!(!r.requires_hitl);
         assert_eq!(r.block_reason, "database unavailable");
         assert_eq!(r.target_asset_value_usd, 0);
         assert_eq!(r.neighbor_count, 0);
-        let forced = unavailable_blast(true);
-        assert!(!forced.blocked);
-        assert_eq!(forced.block_reason, "database unavailable");
     }
 }
