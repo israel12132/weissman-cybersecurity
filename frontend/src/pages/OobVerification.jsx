@@ -337,7 +337,7 @@ export default function OobVerification() {
                   {probe.callback_url && (
                     <FieldRow label={t('pages.oobVerification.callback_url')} value={probe.callback_url} copy />
                   )}
-                  {probe.first_hit_at && (
+                  {!callbacksUnavailable && probe.first_hit_at && (
                     <div className="text-[10px] text-green-400/70">
                       {t('pages.oobVerification.first_hit', { time: new Date(probe.first_hit_at).toLocaleString() })}
                     </div>
