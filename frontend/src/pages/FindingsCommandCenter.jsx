@@ -722,7 +722,7 @@ export default function FindingsCommandCenter() {
       <main id="main-content" tabIndex={-1} className="max-w-screen-2xl mx-auto px-4 py-6 space-y-5 outline-none">
         <EvidenceNotice>{t('findings.evidence_notice')}</EvidenceNotice>
 
-        {serverTotal > rawFindings.length && (
+        {!error && serverTotal > rawFindings.length && (
           <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-200">
             {t('findings.shown_of_total', { shown: rawFindings.length, total: serverTotal })}
           </div>
@@ -988,7 +988,7 @@ export default function FindingsCommandCenter() {
       </main>
 
       <FindingDrawer
-        finding={selectedFinding}
+        finding={error ? null : selectedFinding}
         onClose={handleCloseDrawer}
         onStatusUpdate={handleStatusUpdate}
         onVerifyComplete={handleVerifyComplete}

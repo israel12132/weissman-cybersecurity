@@ -17,4 +17,12 @@ describe('FindingsCommandCenter live-only truth', () => {
     expect(src).toMatch(/!error && \(tableData\.length > 0 \|\| loading\)/)
     expect(src).toMatch(/filtersExpanded && !error &&/)
   })
+
+  it('mutes leftover truncation banner and drawer after a failed findings GET', () => {
+    expect(src).toMatch(/\{!error && serverTotal > rawFindings\.length && \(/)
+    expect(src).toMatch(/finding=\{error \? null : selectedFinding\}/)
+    expect(src).toMatch(/\.catch\(\(e\) => setError\(e\?\.message \|\| t\('findings\.load_error'\)\)\)/)
+    expect(src).not.toMatch(/\.catch\(\(e\) => setSelectedFinding\(null\)/)
+    expect(src).not.toMatch(/\.catch\(\(e\) => \{\s*setRawFindings\(\[\]\)/)
+  })
 })
