@@ -240,6 +240,11 @@ export default function PrivilegeEscalationCommandCenter() {
     downloadBytes(new TextEncoder().encode(JSON.stringify(payload, null, 2)), `pac500-${Date.now()}.json`, 'application/json')
   }, [target, params, findings, historyUnavailable])
 
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
+
   useEffect(() => {
     refreshFromHistory().then((run) => {
       if (run?.findings?.length) {
@@ -285,10 +290,10 @@ export default function PrivilegeEscalationCommandCenter() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={status === 'running'}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >

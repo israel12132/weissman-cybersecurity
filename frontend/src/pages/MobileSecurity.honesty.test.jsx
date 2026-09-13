@@ -29,4 +29,9 @@ describe('MobileSecurity live-only truth', () => {
     expect(src).toMatch(/!historyUnavailable && app\.max_severity/)
     expect(src).toMatch(/historyUnavailable \? '—' : t\('pages\.mobileSecurity\.findings_count_badge'/)
   })
+
+  it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
+  })
 })

@@ -766,6 +766,11 @@ export default function SmbNetbiosCommandCenter() {
     downloadBytes(blob, `smb-netbios-${target.replace(/[^a-z0-9.-]/gi, '_')}.json`)
   }, [target, findings, historyUnavailable])
 
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
+
   useEffect(() => {
     refreshFromHistory().then((run) => {
       if (run?.findings?.length) {
@@ -810,10 +815,10 @@ export default function SmbNetbiosCommandCenter() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={status === 'running'}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >

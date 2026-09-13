@@ -106,6 +106,11 @@ export default function MobileSecurity() {
     historyUnavailable,
   } = useWeissmanEnginePage(MOBILE_ENGINE, platformFindings);
 
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
+
   useEffect(() => {
     refreshFromHistory().then((run) => {
       if (run?.findings?.length) {
@@ -201,10 +206,10 @@ export default function MobileSecurity() {
   const refreshAction = (
     <ShellScanActions
       onRefresh={handleRefresh}
-      onExport={exportCsv}
+      onExport={handleExportCsv}
       refreshLoading={historyLoading || loading}
       refreshDisabled={Boolean(pendingJobId)}
-      exportDisabled={!filteredFindings.length}
+      exportDisabled={historyUnavailable || !filteredFindings.length}
     />
   );
 
