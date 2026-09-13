@@ -130,7 +130,7 @@ export default function SatelliteDroneMap() {
     ? t(`${NS}.patrolMode`)
     : zoomPhase === 'zooming'
       ? t(`${NS}.zooming`)
-      : mapZoomComplete
+      : mapZoomComplete && !findingsUnavailable
         ? t(`${NS}.markersActive`)
         : t(`${NS}.satellite`)
 
@@ -196,7 +196,7 @@ export default function SatelliteDroneMap() {
               </GeoMarker>
             )}
           </AnimatePresence>
-          {mapZoomComplete && vulnMarkers.length > 0 && (
+          {mapZoomComplete && !findingsUnavailable && vulnMarkers.length > 0 && (
             <>
               {vulnMarkers.map((m, i) => {
                 const dataGlitch = lastLatencyMs != null && lastLatencyMs > 500

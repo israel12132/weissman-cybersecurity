@@ -15,4 +15,12 @@ describe('SatelliteDroneMap live-only truth', () => {
     expect(src).toMatch(/setFindingsUnavailable\(true\)/)
     expect(src).not.toMatch(/\.catch\(\(\) => \{\}\)/)
   })
+
+  it('mutes leftover vuln markers after a failed findings GET', () => {
+    expect(src).toMatch(/\{mapZoomComplete && !findingsUnavailable && vulnMarkers\.length > 0 && \(/)
+    expect(src).toMatch(/: mapZoomComplete && !findingsUnavailable\n        \? t\(`\$\{NS\}\.markersActive`\)/)
+    expect(src).toMatch(/\.catch\(\(\) => setFindingsUnavailable\(true\)\)/)
+    expect(src).not.toMatch(/\.catch\(\(\) => setVulnMarkers\(\[\]\)/)
+    expect(src).not.toMatch(/\.catch\(\(\) => \{\s*setVulnMarkers\(\[\]\)/)
+  })
 })
