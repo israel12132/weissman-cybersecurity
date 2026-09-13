@@ -10,7 +10,7 @@ const src = readFileSync(
 
 describe('RiskGraphTab live-only truth', () => {
   it('does not paint leftover leftover-graph after a failed risk-graph GET', () => {
-    expect(src).toMatch(/\} : error \? \(\n          <div className="flex items-center justify-center h-full text-red-300\/80 text-sm px-6 text-center">/)
+    expect(src).toMatch(/\) : error \? \(\n          <div className="flex items-center justify-center h-full text-red-300\/80 text-sm px-6 text-center">/)
     expect(src).not.toMatch(/error && nodes\.length === 0/)
     expect(src).toMatch(/data-testid="risk-graph-unavailable"/)
     expect(src).toMatch(/setError\(err\?\.message \|\| t\('components\.cockpitTabs\.riskGraph\.unavailable'\)\)/)
