@@ -110,6 +110,11 @@ export default function FinancialRisk() {
     [snapshot],
   )
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    contributorsCsv(contributors)
+  }, [error, contributors])
+
   const columns = useMemo(
     () => [
       columnHelper.accessor('label', {
@@ -220,9 +225,9 @@ export default function FinancialRisk() {
           </Button>
           <ShellScanActions
             onRefresh={() => load(false)}
-            onExport={() => contributorsCsv(contributors)}
+            onExport={handleExportCsv}
             refreshLoading={loading}
-            exportDisabled={!contributors.length}
+            exportDisabled={!!error || !contributors.length}
           />
         </div>
       }
