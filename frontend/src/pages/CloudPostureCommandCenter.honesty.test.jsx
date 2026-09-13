@@ -20,4 +20,10 @@ describe('CloudPostureCommandCenter live-only truth', () => {
     expect(src).toMatch(/<Scorecard summary=\{historyUnavailable \? null : summary\} \/>/)
     expect(src).toMatch(/!historyUnavailable && attackPaths\.length > 0/)
   })
+
+  it('does not coerce missing cloud posture axes to 0-clean', () => {
+    expect(src).toMatch(/const hasScore = raw != null && Number\.isFinite\(Number\(raw\)\)/)
+    expect(src).not.toMatch(/summary\.posture_score \?\? summary\.score \?\? 0/)
+    expect(src).not.toMatch(/Number\(value\) \|\| 0/)
+  })
 })

@@ -144,16 +144,17 @@ function isAttackPath(f) {
 }
 
 function SubScoreBar({ label, value }) {
-  const v = Math.max(0, Math.min(100, Number(value) || 0))
-  const color = v >= 85 ? '#34d399' : v >= 60 ? '#a3e635' : v >= 40 ? '#fbbf24' : '#fb7185'
+  const hasScore = value != null && Number.isFinite(Number(value))
+  const v = hasScore ? Math.max(0, Math.min(100, Number(value))) : 0
+  const color = !hasScore ? 'rgba(255,255,255,0.12)' : v >= 85 ? '#34d399' : v >= 60 ? '#a3e635' : v >= 40 ? '#fbbf24' : '#fb7185'
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
         <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{label}</span>
-        <span className="text-[10px] font-mono" style={{ color }}>{v}</span>
+        <span className="text-[10px] font-mono" style={{ color }}>{hasScore ? v : '—'}</span>
       </div>
       <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${v}%`, backgroundColor: color }} />
+        <div className="h-full rounded-full transition-all duration-500" style={{ width: hasScore ? `${v}%` : '0%', backgroundColor: color }} />
       </div>
     </div>
   )
@@ -184,9 +185,11 @@ function Scorecard({ summary }) {
     }),
   ], [t])
   if (!summary) return null
-  const score = summary.posture_score ?? summary.score ?? 0
+  const raw = summary.posture_score ?? summary.score
+  const hasScore = raw != null && Number.isFinite(Number(raw))
+  const score = hasScore ? Number(raw) : 0
   const grade = summary.grade || '—'
-  const color = gradeColor(grade)
+  const color = hasScore ? gradeColor(grade) : 'rgba(255,255,255,0.12)'
   const subscores = summary.subscores || {}
   const counts = summary.severity_counts || {}
   const compliance = summary.compliance_scores || {}
@@ -209,11 +212,11 @@ function Scorecard({ summary }) {
             <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
               <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
               <circle cx="50" cy="50" r="42" fill="none" stroke={color} strokeWidth="8"
-                strokeDasharray={`${(score / 100) * 264} 264`} strokeLinecap="round" />
+                strokeDasharray={hasScore ? `${(score / 100) * 264} 264` : '0 264'} strokeLinecap="round" />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-2xl font-bold" style={{ color }}>{grade}</span>
-              <span className="text-[10px] font-mono text-[var(--text-muted)]">{score}/100</span>
+              <span className="text-2xl font-bold" style={{ color }}>{hasScore ? grade : '—'}</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">{hasScore ? `${score}/100` : '—'}</span>
             </div>
           </div>
           <div>

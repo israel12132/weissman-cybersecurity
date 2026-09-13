@@ -464,8 +464,8 @@ export default function TransportSecurityCommandCenter() {
         {lastRun && <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-3">Last: {lastRun}</p>}
       </div>
 
-      {findings.length > 0 && <Scorecard score={score} grade={grade} dimensions={dimensions} t={t} />}
-      {detailFindings.length > 0 && <CategoryBreakdown findings={detailFindings} />}
+      {findings.length > 0 && !historyUnavailable && <Scorecard score={score} grade={grade} dimensions={dimensions} t={t} />}
+      {detailFindings.length > 0 && !historyUnavailable && <CategoryBreakdown findings={detailFindings} />}
 
       {historyUnavailable && (
         <p data-testid="transport-security-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">

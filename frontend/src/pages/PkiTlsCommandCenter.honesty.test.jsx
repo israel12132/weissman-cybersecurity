@@ -15,4 +15,10 @@ describe('PkiTlsCommandCenter live-only truth', () => {
     expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
     expect(src).toMatch(/!historyUnavailable/)
   })
+
+  it('does not paint leftover leftover-scorecards after a failed history GET', () => {
+    expect(src).toMatch(/findings\.length > 0 && !historyUnavailable && <Scorecard/)
+    expect(src).toMatch(/detailFindings\.length > 0 && !historyUnavailable && <CategoryBreakdown/)
+    expect(src).not.toMatch(/posture_score \?\? summary\.evidence\?\.posture_score \?\? 0/)
+  })
 })
