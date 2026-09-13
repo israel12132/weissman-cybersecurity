@@ -234,6 +234,11 @@ export default function UebaAnomalies() {
     [t, clientName],
   )
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    anomaliesCsv(filtered)
+  }, [error, filtered])
+
   return (
     <PageShell
       title={t(`${NS}.title`)}
@@ -244,9 +249,9 @@ export default function UebaAnomalies() {
       actions={
         <ShellScanActions
           onRefresh={load}
-          onExport={() => anomaliesCsv(filtered)}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filtered.length}
+          exportDisabled={!!error || !filtered.length}
         />
       }
     >

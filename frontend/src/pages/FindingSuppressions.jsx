@@ -216,6 +216,11 @@ export default function FindingSuppressions() {
     [t, canManage, handleDelete, deletingId],
   )
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    suppressionsCsv(filtered)
+  }, [error, filtered])
+
   return (
     <PageShell
       title={t(`${NS}.title`)}
@@ -226,9 +231,9 @@ export default function FindingSuppressions() {
       actions={
         <ShellScanActions
           onRefresh={load}
-          onExport={() => suppressionsCsv(filtered)}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filtered.length}
+          exportDisabled={!!error || !filtered.length}
         />
       }
     >

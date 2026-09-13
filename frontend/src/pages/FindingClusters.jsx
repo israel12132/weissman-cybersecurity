@@ -197,6 +197,11 @@ export default function FindingClusters() {
     [t],
   )
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    downloadCsv(clustersCsv(filtered), CLUSTERS_CSV_HEADER, 'weissman-finding-clusters')
+  }, [error, filtered])
+
   return (
     <PageShell
       title={t(`${NS}.title`)}
@@ -207,9 +212,9 @@ export default function FindingClusters() {
       actions={
         <ShellScanActions
           onRefresh={load}
-          onExport={() => downloadCsv(clustersCsv(filtered), CLUSTERS_CSV_HEADER, 'weissman-finding-clusters')}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filtered.length}
+          exportDisabled={!!error || !filtered.length}
         />
       }
     >

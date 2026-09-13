@@ -96,6 +96,11 @@ export default function IocFeed() {
     [types, typeFilter, t],
   )
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    iocCsv(filtered)
+  }, [error, filtered])
+
   const columns = useMemo(
     () => [
       columnHelper.accessor((i) => (i.type || '').toLowerCase(), {
@@ -178,9 +183,9 @@ export default function IocFeed() {
       actions={
         <ShellScanActions
           onRefresh={load}
-          onExport={() => iocCsv(filtered)}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filtered.length}
+          exportDisabled={!!error || !filtered.length}
         />
       }
     >

@@ -140,6 +140,7 @@ export default function EliteHardeningCommandCenter() {
 
   const exportRows = () => eliteControlRows(filtered)
   const doExport = (kind) => {
+    if (error) return
     const rows = exportRows()
     if (kind === 'pdf') {
       exportRowsPdf(t(`${NS}.title`), ELITE_CSV_HEADER, rows, 'weissman-elite-hardening')
@@ -161,7 +162,7 @@ export default function EliteHardeningCommandCenter() {
           onRefresh={load}
           onExport={() => doExport('csv')}
           refreshLoading={loading}
-          exportDisabled={!filtered.length}
+          exportDisabled={!!error || !filtered.length}
         />
       }
     >
