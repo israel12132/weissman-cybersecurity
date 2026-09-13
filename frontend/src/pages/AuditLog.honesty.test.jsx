@@ -14,4 +14,13 @@ describe('AuditLog live-only truth', () => {
     expect(src).toMatch(/unavailable_title/)
     expect(src).toMatch(/loading \|\| error \? '—'/)
   })
+
+  it('does not paint leftover leftover-audit rows after a failed audit-logs GET', () => {
+    expect(src).toMatch(/data=\{error \? \[\] : filteredEntries\}/)
+    expect(src).toMatch(/shown: error \? '—' : filteredEntries\.length/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| filteredEntries\.length === 0\}/)
+    expect(src).toMatch(/!error && total > 0 && \(/)
+    expect(src).not.toMatch(/setEntries\(\[\]\)/)
+  })
 })

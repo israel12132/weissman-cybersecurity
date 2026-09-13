@@ -241,6 +241,11 @@ export default function AuditLog() {
 
   const hasFilters = actionFilter || actor.trim() || dateFrom || dateTo
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv(filteredEntries)
+  }, [error, filteredEntries])
+
   const pageKpi = useMemo(() => {
     const denied = filteredEntries.filter((e) => {
       const a = (e.action || '').toLowerCase()
@@ -348,9 +353,9 @@ export default function AuditLog() {
             </Button>
             <ShellScanActions
               onRefresh={load}
-              onExport={() => exportCsv(filteredEntries)}
+              onExport={handleExportCsv}
               refreshLoading={loading}
-              exportDisabled={filteredEntries.length === 0}
+              exportDisabled={!!error || filteredEntries.length === 0}
             />
           </div>
         </div>
@@ -521,10 +526,10 @@ export default function AuditLog() {
           <Search className="h-3.5 w-3.5" />
           <span>
             {t('audit.summary', {
-              shown: filteredEntries.length,
-              total,
-              page: currentPage,
-              pages: totalPages,
+              shown: error ? '—' : filteredEntries.length,
+              total: error ? '—' : total,
+              page: error ? '—' : currentPage,
+              pages: error ? '—' : totalPages,
             })}
           </span>
         </div>
@@ -536,7 +541,7 @@ export default function AuditLog() {
         )}
         <DataTable
           columns={columns}
-          data={filteredEntries}
+          data={error ? [] : filteredEntries}
           loading={loading}
           hidePagination
           densityToggle
@@ -551,7 +556,7 @@ export default function AuditLog() {
             : { icon: 'list', title: t('audit.empty_title'), body: t('audit.empty_body') }}
         />
 
-        {total > 0 && (
+        {!error && total > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-4 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)]">
             <div className="flex items-center gap-3 text-[11px] font-mono text-[var(--text-muted)]">
               <span>{t('audit.rows_per_page')}</span>
