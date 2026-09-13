@@ -35,6 +35,7 @@ export default function SatelliteDroneMap() {
   const [zoomPhase, setZoomPhase] = useState('idle')
   const [patrolMode, setPatrolMode] = useState(false)
   const [targetCoordsList, setTargetCoordsList] = useState([])
+  const [findingsUnavailable, setFindingsUnavailable] = useState(false)
   const lastTargetTimeRef = useRef(0)
   const patrolOffsetRef = useRef(0)
 
@@ -105,17 +106,24 @@ export default function SatelliteDroneMap() {
 
   useEffect(() => {
     if (zoomPhase !== 'done' || !selectedClientId || !targetCoord) return
+    setFindingsUnavailable(false)
     apiFetch(`/api/clients/${selectedClientId}/findings`)
       .then((data) => {
-        const list = data?.findings ?? (Array.isArray(data) ? data : [])
-        const arr = Array.isArray(list) ? list : []
-        const count = Math.min(arr.length, 8)
+        if (data?.ok === false || data?.unavailable) {
+          setFindingsUnavailable(true)
+          return
+        }
+        const list = Array.isArray(data?.findings) ? data.findings : Array.isArray(data) ? data : null
+        if (!list) {
+          setFindingsUnavailable(true)
+          return
+        }
+        const count = Math.min(list.length, 8)
         setVulnMarkers(Array.from({ length: count }, (_, i) => ({
           coord: [targetCoord[0] + (i - count / 2) * 0.08, targetCoord[1]], // [lng, lat]
         })))
       })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .catch(() => setFindingsUnavailable(true))
   }, [zoomPhase, selectedClientId, targetCoord, setVulnMarkers])
 
   const statusLabel = patrolMode
@@ -220,6 +228,11 @@ export default function SatelliteDroneMap() {
       <div className="absolute bottom-2 left-2 text-[10px] font-mono text-white/50 uppercase tracking-wider">
         {statusLabel}
       </div>
+      {findingsUnavailable && (
+        <p data-testid="satellite-drone-map-findings-unavailable" className="absolute top-2 left-2 right-2 text-xs text-amber-300/80 font-mono">
+          {t(`${NS}.findings_unavailable`)}
+        </p>
+      )}
     </motion.div>
   )
 }

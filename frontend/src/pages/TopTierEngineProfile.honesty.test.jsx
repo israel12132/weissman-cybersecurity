@@ -15,4 +15,11 @@ describe('TopTierEngineProfile live-only truth', () => {
     expect(src).toMatch(/setClientsUnavailable\(true\)/)
     expect(src).not.toMatch(/apiFetch\('\/api\/clients'\)\.catch\(\(\) => null\)/)
   })
+
+  it('does not treat a failed integrations fetch as unconfigured scan prefill', () => {
+    expect(src).toMatch(/data-testid="top-tier-engine-profile-integrations-unavailable"/)
+    expect(src).toMatch(/integrations_unavailable/)
+    expect(src).toMatch(/setIntegrationsUnavailable\(true\)/)
+    expect(src).not.toMatch(/apiFetch\(`\/api\/clients\/\$\{clientId\}\/integrations`\)\.catch\(\(\) => null\)/)
+  })
 })

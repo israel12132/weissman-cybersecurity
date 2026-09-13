@@ -22,6 +22,14 @@ const ENGINES = {
 
 const TABS = ['chronos', 'liquid', 'cognitive']
 
+function asJsonArray(v) {
+  if (Array.isArray(v)) return v
+  if (Array.isArray(v?.items)) return v.items
+  if (Array.isArray(v?.events)) return v.events
+  if (Array.isArray(v?.sessions)) return v.sessions
+  return null
+}
+
 const DEFAULT_PARAMS = {
   chronos: {
     sample_interval_ms: '5',
@@ -100,6 +108,9 @@ export default function SovereignDefenseMatrix() {
   const [chronosEvents, setChronosEvents] = useState([])
   const [cognitiveSessions, setCognitiveSessions] = useState([])
   const [poisonLib, setPoisonLib] = useState([])
+  const [poisonLibUnavailable, setPoisonLibUnavailable] = useState(false)
+  const [chronosUnavailable, setChronosUnavailable] = useState(false)
+  const [cognitiveUnavailable, setCognitiveUnavailable] = useState(false)
   const [runState, setRunState] = useState({ running: false, msg: '' })
   const [jobId, setJobId] = useState('')
   const [lastUpdated, setLastUpdated] = useState(null)
@@ -140,14 +151,50 @@ export default function SovereignDefenseMatrix() {
       apiFetch(`/api/sovereign-defense/${clientId}/chronos/events`),
       apiFetch(`/api/sovereign-defense/${clientId}/cognitive/sessions`),
     ])
-    if (dash.status === 'fulfilled' && dash.value) setDashboard(dash.value)
-    if (ce.status === 'fulfilled' && ce.value) setChronosEvents(ce.value)
-    if (cs.status === 'fulfilled' && cs.value) setCognitiveSessions(cs.value)
+    if (dash.status === 'fulfilled' && dash.value && dash.value.ok !== false && !dash.value.unavailable) {
+      setDashboard(dash.value)
+    }
+    if (ce.status === 'fulfilled') {
+      const list = asJsonArray(ce.value)
+      if (list && ce.value?.ok !== false && !ce.value?.unavailable) {
+        setChronosUnavailable(false)
+        setChronosEvents(list)
+      } else {
+        setChronosUnavailable(true)
+      }
+    } else {
+      setChronosUnavailable(true)
+    }
+    if (cs.status === 'fulfilled') {
+      const list = asJsonArray(cs.value)
+      if (list && cs.value?.ok !== false && !cs.value?.unavailable) {
+        setCognitiveUnavailable(false)
+        setCognitiveSessions(list)
+      } else {
+        setCognitiveUnavailable(true)
+      }
+    } else {
+      setCognitiveUnavailable(true)
+    }
   }, [clientId])
 
   const loadPoisonLib = useCallback(async () => {
-    const lib = await apiFetch('/api/sovereign-defense/poison-library').catch(() => null)
-    if (lib) setPoisonLib(lib)
+    try {
+      const lib = await apiFetch('/api/sovereign-defense/poison-library')
+      if (lib?.ok === false || lib?.unavailable) {
+        setPoisonLibUnavailable(true)
+        return
+      }
+      const list = Array.isArray(lib) ? lib : Array.isArray(lib?.items) ? lib.items : null
+      if (!list) {
+        setPoisonLibUnavailable(true)
+        return
+      }
+      setPoisonLibUnavailable(false)
+      setPoisonLib(list)
+    } catch {
+      setPoisonLibUnavailable(true)
+    }
   }, [])
 
   useEffect(() => {
@@ -477,10 +524,14 @@ export default function SovereignDefenseMatrix() {
         </div>
 
         <div className="xl:col-span-8 space-y-6">
-          {tab === 'chronos' && chronosEvents.length > 0 && (
+          {tab === 'chronos' && (chronosUnavailable || chronosEvents.length > 0) && (
             <div className="rounded-2xl border border-violet-500/20 bg-[var(--table-surface)] p-4 max-h-56 overflow-auto">
               <h3 className="text-sm font-semibold text-violet-200 mb-2">{t('pages.sovereignDefense.chronos_feed')}</h3>
-              {chronosEvents.slice(0, 15).map((e) => (
+              {chronosUnavailable ? (
+                <p data-testid="sovereign-defense-chronos-unavailable" className="text-xs text-amber-300/80 font-mono">
+                  {t('pages.sovereignDefense.chronos_unavailable')}
+                </p>
+              ) : chronosEvents.slice(0, 15).map((e) => (
                 <div key={e.id} className="text-[11px] font-mono py-1 border-b border-[var(--border-subtle)] flex justify-between">
                   <span className="text-[var(--text-secondary)]">{e.event_type} · {e.process_name || '—'}</span>
                   <span className="text-violet-300">{e.action_taken || ''}</span>
@@ -493,7 +544,11 @@ export default function SovereignDefenseMatrix() {
             <div className="grid md:grid-cols-2 gap-3">
               <div className="rounded-2xl border border-amber-500/20 bg-[var(--table-surface)] p-4 max-h-64 overflow-auto">
                 <h3 className="text-sm font-semibold text-amber-200 mb-2">{t('pages.sovereignDefense.poison_lib')}</h3>
-                {poisonLib.map((p) => (
+                {poisonLibUnavailable ? (
+                  <p data-testid="sovereign-defense-poison-unavailable" className="text-xs text-amber-300/80 font-mono">
+                    {t('pages.sovereignDefense.poison_unavailable')}
+                  </p>
+                ) : poisonLib.map((p) => (
                   <div key={p.id} className="text-[10px] font-mono py-2 border-b border-[var(--border-subtle)]">
                     <span className="text-amber-300">{p.variant}</span>
                     <span className="text-[var(--text-disabled)] ml-2">{p.id}</span>
@@ -502,7 +557,11 @@ export default function SovereignDefenseMatrix() {
               </div>
               <div className="rounded-2xl border border-amber-500/20 bg-[var(--table-surface)] p-4 max-h-64 overflow-auto">
                 <h3 className="text-sm font-semibold text-amber-200 mb-2">{t('pages.sovereignDefense.cognitive_feed')}</h3>
-                {cognitiveSessions.slice(0, 12).map((s) => (
+                {cognitiveUnavailable ? (
+                  <p data-testid="sovereign-defense-cognitive-unavailable" className="text-xs text-amber-300/80 font-mono">
+                    {t('pages.sovereignDefense.cognitive_unavailable')}
+                  </p>
+                ) : cognitiveSessions.slice(0, 12).map((s) => (
                   <div key={s.id} className="text-[10px] font-mono py-1 border-b border-[var(--border-subtle)] flex justify-between">
                     <span>{Math.round((s.bot_score || 0) * 100)}% · {s.poison_variant}</span>
                     <span className="text-[var(--text-muted)]">{s.response_status}</span>

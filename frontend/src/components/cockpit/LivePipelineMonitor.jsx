@@ -11,6 +11,7 @@ import { useWarRoom } from '../../context/WarRoomContext'
 import { Layers, Pause, Play, Radio, GitBranch } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
+import EmptyState from '../ui/EmptyState'
 
 const NS = 'components.cockpitTabs.livePipelineMonitor'
 
@@ -86,6 +87,7 @@ export default function LivePipelineMonitor() {
   const [apiStageLabels, setApiStageLabels] = useState(null)
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState(null)
+  const [dagUnavailable, setDagUnavailable] = useState(false)
   const [patching, setPatching] = useState(false)
   const [dagNodes, setDagNodes, onDagNodesChange] = useNodesState([])
   const [dagEdges, setDagEdges, onDagEdgesChange] = useEdgesState([])
@@ -121,8 +123,15 @@ export default function LivePipelineMonitor() {
   const fetchDag = useCallback(async () => {
     try {
       const d = await apiFetch('/api/dag')
+      if (d?.ok === false || d?.unavailable || !d || typeof d !== 'object' || !Array.isArray(d.nodes)) {
+        setDagUnavailable(true)
+        setDag(null)
+        return
+      }
+      setDagUnavailable(false)
       setDag(d)
-    } catch (_) {
+    } catch {
+      setDagUnavailable(true)
       setDag(null)
     }
   }, [])
@@ -216,6 +225,16 @@ export default function LivePipelineMonitor() {
       </div>
       <div className="p-4 space-y-4">
         {viewMode === 'dag' && (
+          dagUnavailable ? (
+            <div data-testid="live-pipeline-dag-unavailable">
+              <EmptyState
+                compact
+                icon="alert"
+                title={t(`${NS}.dag_unavailable`)}
+                body={t(`${NS}.dag_unavailable_body`)}
+              />
+            </div>
+          ) : (
           <div className="rounded-xl border border-white/10 bg-black/30 overflow-hidden" style={{ height: 340 }}>
             <ReactFlow
               nodes={dagNodes}
@@ -235,6 +254,7 @@ export default function LivePipelineMonitor() {
               .react-flow__node.dag-node-pending { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); }
             `}</style>
           </div>
+          )
         )}
         {loadError ? (
           <p

@@ -21,6 +21,7 @@ export default function AIModelRiskTab() {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
   const [endpoints, setEndpoints] = useState([{ url: '', model: '', authorization: '' }])
+  const [endpointsUnavailable, setEndpointsUnavailable] = useState(false)
 
   const vectorLabel = (key) => t(`${NS}.vectors.${key}`, key)
 
@@ -63,21 +64,25 @@ export default function AIModelRiskTab() {
 
   const loadEndpoints = useCallback(async () => {
     if (!selectedClientId) return
-    let d
+    setEndpointsUnavailable(false)
     try {
-      d = await apiFetch(`/api/clients/${selectedClientId}/integrations`)
-    } catch (e) {
-      if (e?.status) return
-      throw e
+      const d = await apiFetch(`/api/clients/${selectedClientId}/integrations`)
+      if (d?.ok === false || d?.unavailable || !d || typeof d !== 'object' || Array.isArray(d)) {
+        setEndpointsUnavailable(true)
+        return
+      }
+      const eps = Array.isArray(d.llm_secops_endpoints) && d.llm_secops_endpoints.length
+        ? d.llm_secops_endpoints.map((e) => ({
+            url: e.url || '',
+            model: e.model || '',
+            authorization: e.authorization?.configured ? '••••••••' : '',
+          }))
+        : [{ url: '', model: '', authorization: '' }]
+      setEndpointsUnavailable(false)
+      setEndpoints(eps)
+    } catch {
+      setEndpointsUnavailable(true)
     }
-    const eps = Array.isArray(d.llm_secops_endpoints) && d.llm_secops_endpoints.length
-      ? d.llm_secops_endpoints.map((e) => ({
-          url: e.url || '',
-          model: e.model || '',
-          authorization: e.authorization?.configured ? '••••••••' : '',
-        }))
-      : [{ url: '', model: '', authorization: '' }]
-    setEndpoints(eps)
   }, [selectedClientId])
 
   const load = useCallback(async () => {
@@ -174,7 +179,13 @@ export default function AIModelRiskTab() {
         <p className="text-sm text-white/60 mb-4">{t(`${NS}.descriptionSecure`)}</p>
 
         <div className="space-y-3 mb-4">
-          {endpoints.map((ep, i) => (
+          {endpointsUnavailable ? (
+            <p data-testid="ai-model-risk-endpoints-unavailable" className="text-xs text-amber-300/80 font-mono">
+              {t(`${NS}.endpoints_unavailable`)}
+            </p>
+          ) : (
+            <>
+              {endpoints.map((ep, i) => (
             <div key={i} className="grid md:grid-cols-12 gap-2 p-3 rounded-xl border border-white/10 bg-black/40">
               <input
                 className="md:col-span-5 px-3 py-2 rounded-lg bg-black/50 border border-white/10 text-sm text-white font-mono"
@@ -209,21 +220,23 @@ export default function AIModelRiskTab() {
                 }}
               />
             </div>
-          ))}
-          <div className="flex flex-wrap gap-2">
-            <Button variant="unstyled" type="button" className="text-xs text-violet-300" onClick={() => setEndpoints([...endpoints, { url: '', model: '', authorization: '' }])}>
-              + {t(`${NS}.addEndpoint`)}
-            </Button>
-            <Link to={`/clients/${selectedClientId}/integrations`} className="text-xs text-cyan-400">
-              {t(`${NS}.fullIntegrations`)}
-            </Link>
-          </div>
+              ))}
+              <div className="flex flex-wrap gap-2">
+                <Button variant="unstyled" type="button" className="text-xs text-violet-300" onClick={() => setEndpoints([...endpoints, { url: '', model: '', authorization: '' }])}>
+                  + {t(`${NS}.addEndpoint`)}
+                </Button>
+              </div>
+            </>
+          )}
+          <Link to={`/clients/${selectedClientId}/integrations`} className="text-xs text-cyan-400">
+            {t(`${NS}.fullIntegrations`)}
+          </Link>
         </div>
 
         <div className="flex flex-wrap gap-3">
           <Button variant="unstyled"
             type="button"
-            disabled={saving}
+            disabled={saving || endpointsUnavailable}
             onClick={saveEndpoints}
             className="px-4 py-2 rounded-xl text-sm font-semibold border border-violet-500/40 bg-violet-600/20 text-violet-100 hover:bg-violet-600/30 disabled:opacity-40"
           >

@@ -15,4 +15,18 @@ describe('SovereignDefenseMatrix live-only truth', () => {
     expect(src).toMatch(/setClientsUnavailable\(true\)/)
     expect(src).not.toMatch(/\.catch\(\(\) => \{\}\)/)
   })
+
+  it('does not paint a quiet-empty poison library when the feed fails', () => {
+    expect(src).toMatch(/data-testid="sovereign-defense-poison-unavailable"/)
+    expect(src).toMatch(/poison_unavailable/)
+    expect(src).toMatch(/setPoisonLibUnavailable\(true\)/)
+    expect(src).not.toMatch(/apiFetch\('\/api\/sovereign-defense\/poison-library'\)\.catch\(\(\) => null\)/)
+  })
+
+  it('does not hide chronos or cognitive trails when allSettled rejects', () => {
+    expect(src).toMatch(/data-testid="sovereign-defense-chronos-unavailable"/)
+    expect(src).toMatch(/data-testid="sovereign-defense-cognitive-unavailable"/)
+    expect(src).toMatch(/setChronosUnavailable\(true\)/)
+    expect(src).toMatch(/setCognitiveUnavailable\(true\)/)
+  })
 })

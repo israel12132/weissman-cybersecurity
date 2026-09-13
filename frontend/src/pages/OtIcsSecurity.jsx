@@ -254,15 +254,27 @@ export default function OtIcsSecurity() {
   const [fingerprints, setFingerprints] = useState([]);
   const [fpLoading, setFpLoading] = useState(false);
   const [safety, setSafety] = useState(null);
+  const [devicesUnavailable, setDevicesUnavailable] = useState(false);
+  const [fingerprintsUnavailable, setFingerprintsUnavailable] = useState(false);
 
   const fetchOtDevices = useCallback(async () => {
     try {
       const data = await apiFetch('/api/ot-ics/devices');
-      setDevices(data.devices || []);
-      setProtocols(data.protocols || []);
-      setFindings(data.findings || []);
-    } catch (error) {
-      console.error('Failed to fetch OT devices:', error);
+      if (data?.ok === false || data?.unavailable) {
+        setDevicesUnavailable(true);
+        return;
+      }
+      const list = Array.isArray(data?.devices) ? data.devices : null;
+      if (!list) {
+        setDevicesUnavailable(true);
+        return;
+      }
+      setDevicesUnavailable(false);
+      setDevices(list);
+      setProtocols(Array.isArray(data.protocols) ? data.protocols : []);
+      setFindings(Array.isArray(data.findings) ? data.findings : []);
+    } catch {
+      setDevicesUnavailable(true);
     } finally {
       setLoading(false);
     }
@@ -286,14 +298,26 @@ export default function OtIcsSecurity() {
   const fetchFingerprints = useCallback(async (cid) => {
     if (cid == null || cid === '') {
       setFingerprints([]);
+      setFingerprintsUnavailable(false);
       return;
     }
     setFpLoading(true);
+    setFingerprintsUnavailable(false);
     try {
       const d = await apiFetch(`/api/clients/${encodeURIComponent(cid)}/ot-ics/fingerprints`);
-      setFingerprints(Array.isArray(d.fingerprints) ? d.fingerprints : []);
+      if (d?.ok === false || d?.unavailable) {
+        setFingerprintsUnavailable(true);
+        return;
+      }
+      const list = Array.isArray(d?.fingerprints) ? d.fingerprints : null;
+      if (!list) {
+        setFingerprintsUnavailable(true);
+        return;
+      }
+      setFingerprintsUnavailable(false);
+      setFingerprints(list);
     } catch {
-      setFingerprints([]);
+      setFingerprintsUnavailable(true);
     } finally {
       setFpLoading(false);
     }
@@ -448,7 +472,7 @@ export default function OtIcsSecurity() {
                     {t(`pages.otIcsSecurity.${key}`)}
                   </div>
                   <div className="text-2xl font-bold mt-1 tabular-nums" style={{ color }}>
-                    {loading ? '—' : value}
+                    {loading || devicesUnavailable ? '—' : value}
                   </div>
                 </div>
                 <Icon className="w-4 h-4 shrink-0" style={{ color }} />
@@ -600,24 +624,28 @@ export default function OtIcsSecurity() {
                   <span className="text-sm text-[var(--text-tertiary)]">{t(labelKey)}</span>
                   <Icon className="w-4 h-4" style={{ color }} />
                 </div>
-                <div className="text-2xl font-bold text-white">{count}</div>
+                <div className="text-2xl font-bold text-white">{devicesUnavailable ? '—' : count}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {selectedClientId != null && (fpLoading || fingerprints.length > 0) && (
+        {selectedClientId != null && (fpLoading || fingerprintsUnavailable || fingerprints.length > 0) && (
           <div>
             <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
               <Fingerprint className="w-4 h-4 text-cyan-400" />
               {t('pages.otIcsSecurity.fingerprints_heading')}
-              {!fpLoading && (
+              {!fpLoading && !fingerprintsUnavailable && (
                 <span className="text-[10px] font-mono text-[var(--text-muted)]">({fingerprints.length})</span>
               )}
             </h3>
             <p className="text-[11px] text-[var(--text-muted)] mb-3">{t('pages.otIcsSecurity.fingerprints_hint')}</p>
             {fpLoading ? (
               <SkeletonTable rows={3} cols={4} />
+            ) : fingerprintsUnavailable ? (
+              <p data-testid="ot-ics-fingerprints-unavailable" className="text-xs text-amber-300/80 font-mono">
+                {t('pages.otIcsSecurity.fingerprints_unavailable')}
+              </p>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 {fingerprints.map((fp) => {
@@ -694,6 +722,15 @@ export default function OtIcsSecurity() {
           </h3>
           {loading ? (
             <SkeletonTable rows={2} cols={3} />
+          ) : devicesUnavailable ? (
+            <div data-testid="ot-ics-protocols-unavailable">
+              <EmptyState
+                compact
+                icon="alert"
+                title={t('pages.otIcsSecurity.unavailable_title')}
+                body={t('pages.otIcsSecurity.unavailable_body')}
+              />
+            </div>
           ) : protocols.length === 0 ? (
             <EmptyState
               compact
@@ -747,6 +784,15 @@ export default function OtIcsSecurity() {
           {loading ? (
             <div className="p-4">
               <SkeletonTable rows={5} cols={4} />
+            </div>
+          ) : devicesUnavailable ? (
+            <div className="p-4" data-testid="ot-ics-devices-unavailable">
+              <EmptyState
+                compact
+                icon="alert"
+                title={t('pages.otIcsSecurity.unavailable_title')}
+                body={t('pages.otIcsSecurity.unavailable_body')}
+              />
             </div>
           ) : filteredDevices.length === 0 ? (
             <div className="p-4">

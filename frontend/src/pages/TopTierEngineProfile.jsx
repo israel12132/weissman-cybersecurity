@@ -57,6 +57,7 @@ export default function TopTierEngineProfile() {
   const [activeJobId, setActiveJobId] = useState('')
   const [liveJob, setLiveJob] = useState(null)
   const [clientIntegrations, setClientIntegrations] = useState(null)
+  const [integrationsUnavailable, setIntegrationsUnavailable] = useState(false)
   const { schema: paramSchema, extraParams, setParam } = useEngineScanParams(engineId, clientIntegrations)
   useSyncHubScanParams(engineId, extraParams)
   const { postScan } = useCommandCenterScan(clientId)
@@ -111,13 +112,27 @@ export default function TopTierEngineProfile() {
   useEffect(() => {
     if (!clientId) {
       setClientIntegrations(null)
+      setIntegrationsUnavailable(false)
       return
     }
     let cancelled = false
     ;(async () => {
-      const d = await apiFetch(`/api/clients/${clientId}/integrations`).catch(() => null)
-      if (cancelled) return
-      setClientIntegrations(normalizeIntegrations(d))
+      try {
+        const d = await apiFetch(`/api/clients/${clientId}/integrations`)
+        if (cancelled) return
+        if (!d || d.ok === false || d.unavailable) {
+          setIntegrationsUnavailable(true)
+          setClientIntegrations(null)
+          return
+        }
+        setIntegrationsUnavailable(false)
+        setClientIntegrations(normalizeIntegrations(d))
+      } catch {
+        if (!cancelled) {
+          setIntegrationsUnavailable(true)
+          setClientIntegrations(null)
+        }
+      }
     })()
     return () => { cancelled = true }
   }, [clientId])
@@ -374,6 +389,11 @@ export default function TopTierEngineProfile() {
             {clientsUnavailable && (
               <p data-testid="top-tier-engine-profile-clients-unavailable" className="text-xs text-amber-300/80 font-mono md:col-span-3">
                 {t('pages.topTierEngineProfile.clients_unavailable')}
+              </p>
+            )}
+            {integrationsUnavailable && (
+              <p data-testid="top-tier-engine-profile-integrations-unavailable" className="text-xs text-amber-300/80 font-mono md:col-span-3">
+                {t('pages.topTierEngineProfile.integrations_unavailable')}
               </p>
             )}
             <input

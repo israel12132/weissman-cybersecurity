@@ -82,6 +82,7 @@ export default function BusinessEngineProfile() {
   const [activeJobId, setActiveJobId] = useState('')
   const [liveJob, setLiveJob] = useState(null)
   const [clientIntegrations, setClientIntegrations] = useState(null)
+  const [integrationsUnavailable, setIntegrationsUnavailable] = useState(false)
   const { schema: paramSchema, extraParams, setParam } = useEngineScanParams(engineId, clientIntegrations)
   useSyncHubScanParams(engineId, extraParams)
   const { postScan } = useCommandCenterScan(clientId)
@@ -132,13 +133,27 @@ export default function BusinessEngineProfile() {
   useEffect(() => {
     if (!clientId) {
       setClientIntegrations(null)
+      setIntegrationsUnavailable(false)
       return
     }
     let cancelled = false
     ;(async () => {
-      const d = await apiFetch(`/api/clients/${clientId}/integrations`).catch(() => null)
-      if (cancelled) return
-      setClientIntegrations(normalizeIntegrations(d))
+      try {
+        const d = await apiFetch(`/api/clients/${clientId}/integrations`)
+        if (cancelled) return
+        if (!d || d.ok === false || d.unavailable) {
+          setIntegrationsUnavailable(true)
+          setClientIntegrations(null)
+          return
+        }
+        setIntegrationsUnavailable(false)
+        setClientIntegrations(normalizeIntegrations(d))
+      } catch {
+        if (!cancelled) {
+          setIntegrationsUnavailable(true)
+          setClientIntegrations(null)
+        }
+      }
     })()
     return () => { cancelled = true }
   }, [clientId])
@@ -363,6 +378,11 @@ export default function BusinessEngineProfile() {
             {clientsUnavailable && (
               <p data-testid="business-engine-profile-clients-unavailable" className="text-xs text-amber-300/80 font-mono md:col-span-3">
                 {t('pages.businessEngineProfile.clients_unavailable')}
+              </p>
+            )}
+            {integrationsUnavailable && (
+              <p data-testid="business-engine-profile-integrations-unavailable" className="text-xs text-amber-300/80 font-mono md:col-span-3">
+                {t('pages.businessEngineProfile.integrations_unavailable')}
               </p>
             )}
             <input
