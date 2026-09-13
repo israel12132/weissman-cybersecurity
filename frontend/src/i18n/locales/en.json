@@ -1123,7 +1123,8 @@
     "telemetry": "Scan Telemetry",
     "awaiting": "Awaiting assessment…",
     "findings": "Findings",
-    "no_findings": "No findings yet — configure target and run scan."
+    "no_findings": "No findings yet — configure target and run scan.",
+    "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet CI/CD trail."
   },
   "iacSecurity": {
     "title": "IaC Security Center",
@@ -5397,6 +5398,7 @@
       "risk_matrix": "Risk matrix (category × severity)",
       "run_scan": "▶ Run Posture Scan",
       "run_to_populate": "Run a posture scan to assess cache-key security, unkeyed-input poisoning and web cache deception.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet cache-posture trail.",
       "sealed": "SEALED",
       "select_client_warning": "Select an in-scope client and target URL to run the posture scan.",
       "shared_cache_no": "No shared cache observed",
@@ -5434,6 +5436,7 @@
       "queued": "Desync scan queued ({{jobId}})",
       "run_scan": "▶ Run Desync Scan",
       "run_to_populate": "Run a desync scan to assess CL.TE/TE.CL confusion, TE obfuscation, pipeline behaviour and protocol-boundary fractures.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet desync trail.",
       "select_client_warning": "Select an in-scope client and target URL to run the desync posture scan.",
       "timeout_ms": "Per-probe timeout (ms)",
       "worst": "Worst: {{sev}}"
@@ -5916,7 +5919,8 @@
       "total_runs": "Total Runs"
     },
     "nexusSovereignSwarm": {
-      "evidence_notice": "Swarm deployments queue via POST /api/command-center/scan (nexus_sovereign_swarm). Live agent fleet status from GET /api/agents/status. WebSocket telemetry streams real worker events — never scripted hive animations."
+      "evidence_notice": "Swarm deployments queue via POST /api/command-center/scan (nexus_sovereign_swarm). Live agent fleet status from GET /api/agents/status. WebSocket telemetry streams real worker events — never scripted hive animations.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet swarm trail."
     },
     "engineClientCatalog": {
       "evidence_notice": "Scan profile templates launch real engine bundles via POST /api/command-center/scan and POST /api/scan/all-engines. Profile cards are RoE presets — telemetry from GET /api/engines/telemetry.",
@@ -5968,6 +5972,7 @@
       "bypass_matrix": "Bypass matrix",
       "canary_token": "Canary token",
       "empty_ready": "Run an upload scan to assess bypass resistance.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet upload trail.",
       "extra_endpoints": "Extra endpoints",
       "field_names": "Field names",
       "no_findings": "No upload vulnerabilities verified — posture is strong or endpoints not reachable.",
@@ -6004,6 +6009,7 @@
       "queued": "TLS scan queued ({{jobId}})",
       "run_scan": "▶ Run TLS Assessment",
       "run_to_populate": "Run a TLS assessment to map protocols, ciphers, certificates, and transport hardening with live handshakes.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet TLS trail.",
       "select_client_warning": "Select an in-scope client and target to run the TLS assessment.",
       "sni": "SNI override",
       "starttls": "STARTTLS",
@@ -6024,6 +6030,7 @@
       "profile": "Profile",
       "queued": "Transport scan queued ({{id}})",
       "run_hint": "Run a scan to assess TLS, mTLS, gRPC and HTTP hardening.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet transport trail.",
       "score": "Transport posture",
       "select_client": "Select a client first",
       "select_client_opt": "— Select —",
@@ -7898,6 +7905,7 @@
     "output": "Output & Synthesis",
     "run": "Run Serverless Scan",
     "no_findings": "No findings yet — configure target and run scan.",
+    "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet serverless trail.",
     "telemetry": "Live Telemetry",
     "reference": "Attack Reference"
   }

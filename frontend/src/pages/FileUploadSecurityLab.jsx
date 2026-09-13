@@ -491,6 +491,7 @@ export default function FileUploadSecurityLab() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, detailFindings)
 
   useEffect(() => {
@@ -753,6 +754,11 @@ export default function FileUploadSecurityLab() {
         </div>
         <div className="lg:col-span-3">
           <Scorecard summary={summary} t={t} />
+          {historyUnavailable && (
+            <p data-testid="file-upload-lab-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+              {t('pages.fileUploadLab.history_unavailable')}
+            </p>
+          )}
           <WeissmanFindingsPanel
             findings={detailFindings}
             filteredFindings={filteredFindings}
@@ -767,7 +773,10 @@ export default function FileUploadSecurityLab() {
             lastUpdated={lastUpdated}
             jobId={pendingJobId || lastJobId}
             accent={ACCENT}
-            showEmptyReady={status !== 'running' && detailFindings.length === 0}
+            unavailable={historyUnavailable}
+            unavailableTitle={t('pages.fileUploadLab.history_unavailable')}
+            unavailableBody={t('pages.fileUploadLab.history_unavailable')}
+            showEmptyReady={status !== 'running' && detailFindings.length === 0 && !historyUnavailable}
             emptyReadyTitle={t('pages.fileUploadLab.empty_ready', 'Run an upload scan to assess bypass resistance.')}
             emptyReadyBody={t('pages.fileUploadLab.no_findings', 'No upload vulnerabilities verified — posture is strong or endpoints not reachable.')}
             renderFinding={(f, i) => <FindingCard key={i} f={f} />}

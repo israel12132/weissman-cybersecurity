@@ -596,6 +596,7 @@ export default function WebCachePosture() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, detailFindings)
 
   useEffect(() => {
@@ -843,6 +844,11 @@ export default function WebCachePosture() {
 
       <Scorecard summary={summary} t={t} />
 
+      {historyUnavailable && (
+        <p data-testid="web-cache-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {t('pages.webCachePosture.history_unavailable')}
+        </p>
+      )}
       <WeissmanFindingsPanel
         findings={detailFindings}
         filteredFindings={filteredFindings}
@@ -857,7 +863,10 @@ export default function WebCachePosture() {
         lastUpdated={lastUpdated}
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
-        showEmptyReady={status !== 'running' && detailFindings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={t('pages.webCachePosture.history_unavailable')}
+        unavailableBody={t('pages.webCachePosture.history_unavailable')}
+        showEmptyReady={status !== 'running' && detailFindings.length === 0 && !historyUnavailable}
         emptyReadyTitle={t('pages.webCachePosture.run_to_populate', 'Run a posture scan to assess cache-key security, unkeyed-input poisoning and web cache deception.')}
         emptyReadyBody={t('pages.webCachePosture.no_findings', 'No cache-poisoning or deception primitive observed — cache-key hygiene looks strong.')}
         renderFinding={(f, i) => <FindingCard key={i} f={f} />}

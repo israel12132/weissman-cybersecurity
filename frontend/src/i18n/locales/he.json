@@ -1123,7 +1123,8 @@
     "telemetry": "טלמטריית סריקה",
     "awaiting": "ממתין להערכה…",
     "findings": "ממצאים",
-    "no_findings": "עדיין אין ממצאים — הגדר יעד והרץ סריקה."
+    "no_findings": "עדיין אין ממצאים — הגדר יעד והרץ סריקה.",
+    "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-לסריקה אינו שביל CI/CD שקט."
   },
   "iacSecurity": {
     "title": "מרכז אבטחת תשתית-כקוד (IaC)",
@@ -5397,6 +5398,7 @@
       "risk_matrix": "מטריצת סיכון (קטגוריה × חומרה)",
       "run_scan": "▶ הרץ סריקת Posture",
       "run_to_populate": "הרץ סריקת posture כדי להעריך אבטחת cache-key, הרעלת קלט לא-מפתחי ו-web cache deception.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-לסריקה אינו שביל cache-posture שקט.",
       "sealed": "SEALED",
       "select_client_warning": "בחר לקוח וכתובת URL יעד ב-scope כדי להריץ את סריקת ה-posture.",
       "shared_cache_no": "לא נצפה cache משותף",
@@ -5434,6 +5436,7 @@
       "queued": "סריקת desync בתור ({{jobId}})",
       "run_scan": "▶ הרץ סריקת Desync",
       "run_to_populate": "הרץ סריקת desync כדי להעריך בלבול CL.TE/TE.CL, ערפול TE, התנהגות pipeline ושברי גבול-פרוטוקול.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-לסריקה אינו שביל desync שקט.",
       "select_client_warning": "בחר לקוח וכתובת URL יעד ב-scope כדי להריץ את סריקת ה-desync.",
       "timeout_ms": "Timeout לכל בדיקה (ms)",
       "worst": "הגרוע ביותר: {{sev}}"
@@ -5916,7 +5919,8 @@
       "total_runs": "סה״כ הרצות"
     },
     "nexusSovereignSwarm": {
-      "evidence_notice": "פריסות swarm נשלחות לתור ב-POST /api/command-center/scan (nexus_sovereign_swarm). סטטוס fleet agents חי מ-GET /api/agents/status. טלמטריה WebSocket משדרת אירועי worker אמיתיים — לא אנימציות hive מסקריפט."
+      "evidence_notice": "פריסות swarm נשלחות לתור ב-POST /api/command-center/scan (nexus_sovereign_swarm). סטטוס fleet agents חי מ-GET /api/agents/status. טלמטריה WebSocket משדרת אירועי worker אמיתיים — לא אנימציות hive מסקריפט.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-לסריקה אינו שביל swarm שקט."
     },
     "engineClientCatalog": {
       "evidence_notice": "תבניות פרופיל סריקה מפעילות חבילות מנועים אמיתיות ב-POST /api/command-center/scan ו-POST /api/scan/all-engines. כרטיסי פרופיל הם presets של RoE — טלמטריה מ-GET /api/engines/telemetry.",
@@ -5968,6 +5972,7 @@
       "bypass_matrix": "מטריצת עקיפה",
       "canary_token": "Canary token",
       "empty_ready": "הרץ סריקת העלאה כדי להעריך עמידות לעקיפה.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-לסריקה אינו שביל העלאה שקט.",
       "extra_endpoints": "Endpoints נוספים",
       "field_names": "שמות שדות",
       "no_findings": "לא אומתו חולשות העלאה — ה-posture חזק או שה-endpoints אינם נגישים.",
@@ -6004,6 +6009,7 @@
       "queued": "סריקת TLS בתור ({{jobId}})",
       "run_scan": "▶ הרץ הערכת TLS",
       "run_to_populate": "הרץ הערכת TLS כדי למפות פרוטוקולים, ciphers, תעודות ו-hardening של תעבורה עם handshakes חיים.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-לסריקה אינו שביל TLS שקט.",
       "select_client_warning": "בחר לקוח ויעד ב-scope כדי להריץ את הערכת ה-TLS.",
       "sni": "override ל-SNI",
       "starttls": "STARTTLS",
@@ -6024,6 +6030,7 @@
       "profile": "פרופיל",
       "queued": "סריקת תעבורה בתור ({{id}})",
       "run_hint": "הרץ סריקה כדי להעריך hardening של TLS, mTLS, gRPC ו-HTTP.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-לסריקה אינו שביל תעבורה שקט.",
       "score": "Posture של תעבורה",
       "select_client": "בחר לקוח תחילה",
       "select_client_opt": "— בחר —",
@@ -7898,6 +7905,7 @@
     "output": "פלט וסינתזה",
     "run": "הרץ סריקת Serverless",
     "no_findings": "אין ממצאים עדיין — הגדר יעד והרץ סריקה.",
+    "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-לסריקה אינו שביל serverless שקט.",
     "telemetry": "טלמטריה חיה",
     "reference": "מדריך תקיפה"
   }

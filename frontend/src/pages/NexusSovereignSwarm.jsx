@@ -1276,6 +1276,7 @@ export default function NexusSovereignSwarm() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, realFindings)
 
   useEffect(() => {
@@ -2008,6 +2009,11 @@ export default function NexusSovereignSwarm() {
                 </Button>
               </div>
             )}
+            {historyUnavailable && (
+              <p data-testid="nexus-sovereign-swarm-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+                {t('pages.nexusSovereignSwarm.history_unavailable')}
+              </p>
+            )}
             <WeissmanFindingsPanel
               findings={realFindings}
               filteredFindings={filteredFindings}
@@ -2022,7 +2028,10 @@ export default function NexusSovereignSwarm() {
               lastUpdated={lastUpdated}
               jobId={lastJobId}
               accent="#a855f7"
-              showEmptyReady={!running && realFindings.length === 0}
+              unavailable={historyUnavailable}
+              unavailableTitle={t('pages.nexusSovereignSwarm.history_unavailable')}
+              unavailableBody={t('pages.nexusSovereignSwarm.history_unavailable')}
+              showEmptyReady={!running && realFindings.length === 0 && !historyUnavailable}
               renderFinding={(f, i) => <FindingRow key={`${f.title}-${i}`} finding={f} />}
             />
           </div>

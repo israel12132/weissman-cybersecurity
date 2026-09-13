@@ -459,6 +459,7 @@ export default function CicdPipelineSecurityCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, realFindings)
 
   useEffect(() => {
@@ -841,6 +842,11 @@ export default function CicdPipelineSecurityCommandCenter() {
               </pre>
             </div>
 
+            {historyUnavailable && (
+              <p data-testid="cicd-pipeline-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+                {t('cicdSec.history_unavailable')}
+              </p>
+            )}
             <WeissmanFindingsPanel
               findings={realFindings}
               filteredFindings={filteredFindings}
@@ -855,7 +861,10 @@ export default function CicdPipelineSecurityCommandCenter() {
               lastUpdated={lastUpdated}
               jobId={lastJobId}
               accent="#84cc16"
-              showEmptyReady={!running && realFindings.length === 0}
+              unavailable={historyUnavailable}
+              unavailableTitle={t('cicdSec.history_unavailable')}
+              unavailableBody={t('cicdSec.history_unavailable')}
+              showEmptyReady={!running && realFindings.length === 0 && !historyUnavailable}
               emptyReadyTitle={t('cicdSec.no_findings', 'No findings yet — configure target and run scan.')}
               emptyReadyBody={t('cicdSec.awaiting', 'Awaiting assessment…')}
               renderFinding={(f, i) => (

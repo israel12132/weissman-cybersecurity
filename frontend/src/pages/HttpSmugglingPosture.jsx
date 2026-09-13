@@ -219,6 +219,7 @@ export default function HttpSmugglingPosture() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, detailFindings)
 
   useEffect(() => {
@@ -423,6 +424,11 @@ export default function HttpSmugglingPosture() {
 
       {findings.length > 0 && <Scorecard summary={summary} t={t} />}
 
+      {historyUnavailable && (
+        <p data-testid="http-smuggling-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {t('pages.httpSmugglingPosture.history_unavailable')}
+        </p>
+      )}
       <WeissmanFindingsPanel
         findings={detailFindings}
         filteredFindings={filteredFindings}
@@ -437,7 +443,10 @@ export default function HttpSmugglingPosture() {
         lastUpdated={lastUpdated}
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
-        showEmptyReady={status !== 'running' && detailFindings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={t('pages.httpSmugglingPosture.history_unavailable')}
+        unavailableBody={t('pages.httpSmugglingPosture.history_unavailable')}
+        showEmptyReady={status !== 'running' && detailFindings.length === 0 && !historyUnavailable}
         emptyReadyTitle={t('pages.httpSmugglingPosture.run_to_populate', 'Run a desync scan to assess CL.TE/TE.CL confusion, TE obfuscation, pipeline behaviour and protocol-boundary fractures.')}
         emptyReadyBody={t('pages.httpSmugglingPosture.no_findings', 'No HTTP desync indicators observed — front/back-end parsing appears consistent.')}
         renderFinding={(f, i) => <FindingCard key={i} f={f} />}

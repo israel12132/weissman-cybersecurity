@@ -369,6 +369,7 @@ export default function PkiTlsCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, detailFindings)
 
   useEffect(() => {
@@ -568,6 +569,11 @@ export default function PkiTlsCommandCenter() {
       {findings.length > 0 && <CipherPanel gradeFindings={gradeFindings} />}
       {detailFindings.length > 0 && <CategoryBreakdown findings={detailFindings} />}
 
+      {historyUnavailable && (
+        <p data-testid="pki-tls-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {t('pages.pkiTlsPosture.history_unavailable')}
+        </p>
+      )}
       <WeissmanFindingsPanel
         findings={detailFindings}
         filteredFindings={filteredFindings}
@@ -582,7 +588,10 @@ export default function PkiTlsCommandCenter() {
         lastUpdated={lastUpdated}
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
-        showEmptyReady={status !== 'running' && detailFindings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={t('pages.pkiTlsPosture.history_unavailable')}
+        unavailableBody={t('pages.pkiTlsPosture.history_unavailable')}
+        showEmptyReady={status !== 'running' && detailFindings.length === 0 && !historyUnavailable}
         emptyReadyTitle={t('pages.pkiTlsPosture.run_to_populate', 'Run a TLS assessment to map protocols, ciphers, certificates, and transport hardening with live handshakes.')}
         emptyReadyBody={t('pages.pkiTlsPosture.run_to_populate', 'Run a TLS assessment to map protocols, ciphers, certificates, and transport hardening with live handshakes.')}
         emptyTitle={t('pages.pkiTlsPosture.no_findings', 'No TLS endpoints reachable on the selected ports.')}

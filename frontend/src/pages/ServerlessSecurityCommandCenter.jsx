@@ -266,6 +266,7 @@ export default function ServerlessSecurityCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, realFindings)
 
   useEffect(() => {
@@ -518,6 +519,11 @@ export default function ServerlessSecurityCommandCenter() {
               </div>
             )}
 
+            {historyUnavailable && (
+              <p data-testid="serverless-security-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+                {t('serverlessSec.history_unavailable')}
+              </p>
+            )}
             <WeissmanFindingsPanel
               findings={realFindings}
               filteredFindings={filteredFindings}
@@ -532,7 +538,10 @@ export default function ServerlessSecurityCommandCenter() {
               lastUpdated={lastUpdated}
               jobId={lastJobId}
               accent={ACCENT}
-              showEmptyReady={!running && realFindings.length === 0}
+              unavailable={historyUnavailable}
+              unavailableTitle={t('serverlessSec.history_unavailable')}
+              unavailableBody={t('serverlessSec.history_unavailable')}
+              showEmptyReady={!running && realFindings.length === 0 && !historyUnavailable}
               emptyReadyTitle={t('serverlessSec.no_findings', 'No findings yet — configure target and run scan.')}
               renderFinding={(f, i) => <FindingRow key={i} f={f} />}
             />
