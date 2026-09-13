@@ -148,6 +148,7 @@ export default function CloudControlTower() {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('aws')
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   // Registers this client with the engine hub (side effect); this view has no scan button.
   useCommandCenterScan(selectedClientId)
@@ -157,9 +158,15 @@ export default function CloudControlTower() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        if (!Array.isArray(d)) {
+          setClientsUnavailable(true)
+          return
+        }
+        setClientsUnavailable(false)
+        setClients(d)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   const showToast = useCallback((sev, msg) => {
@@ -243,6 +250,11 @@ export default function CloudControlTower() {
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
+      {clientsUnavailable && (
+        <p data-testid="cloud-control-tower-clients-unavailable" className="text-xs text-amber-300/80 font-mono mb-6">
+          {t('pages.cloudControlTower.clients_unavailable')}
+        </p>
+      )}
 
       {toast && (
         <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-blue-500/30 text-blue-200'}`}>

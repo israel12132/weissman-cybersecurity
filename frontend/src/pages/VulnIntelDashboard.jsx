@@ -264,35 +264,37 @@ export default function VulnIntelDashboard() {
           </Button>
         </PremiumPageHeader>
 
+        {!error && (
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <ExecutiveWidget
             label={t('vuln_intel.critical')}
-            value={loading ? '—' : summary.by.critical.toLocaleString()}
+            value={loading || error ? '—' : summary.by.critical.toLocaleString()}
             accent="#ef4444"
           />
           <ExecutiveWidget
             label={t('vuln_intel.high')}
-            value={loading ? '—' : summary.by.high.toLocaleString()}
+            value={loading || error ? '—' : summary.by.high.toLocaleString()}
             accent="#f97316"
           />
           <ExecutiveWidget
             label={t('vuln_intel.medium')}
-            value={loading ? '—' : summary.by.medium.toLocaleString()}
+            value={loading || error ? '—' : summary.by.medium.toLocaleString()}
             accent="#f59e0b"
           />
           <ExecutiveWidget
             label={t('vuln_intel.low')}
-            value={loading ? '—' : summary.by.low.toLocaleString()}
+            value={loading || error ? '—' : summary.by.low.toLocaleString()}
             accent="#22d3ee"
           />
           <ExecutiveWidget
             label={t('vuln_intel.distinct_cves')}
-            value={loading ? '—' : summary.cves.toLocaleString()}
+            value={loading || error ? '—' : summary.cves.toLocaleString()}
             hint={t('vuln_intel.distinct_cves_hint')}
             accent="#a78bfa"
             className="col-span-2 lg:col-span-1"
           />
         </div>
+        )}
 
         {filtersExpanded && (
           <div className="glass-panel rounded-2xl p-4 sm:p-5 space-y-4">
@@ -390,12 +392,14 @@ export default function VulnIntelDashboard() {
         )}
 
         {error ? (
+          <div data-testid="vuln-intel-unavailable">
           <EmptyState
             icon="alert"
             title={t('vuln_intel.failed_title')}
             body={error}
             cta={{ label: t('common.retry'), onClick: load }}
           />
+          </div>
         ) : !loading && findings.length === 0 ? (
           <EmptyState
             icon="shield"

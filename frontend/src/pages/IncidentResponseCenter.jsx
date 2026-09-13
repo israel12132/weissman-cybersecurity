@@ -383,7 +383,10 @@ export default function IncidentResponseCenter() {
     setError(null)
     try {
       const data = await apiFetch('/api/soc/incidents')
-      const list = (data?.incidents ?? []).map((raw) => normalizeIncident(raw, t))
+      if (!Array.isArray(data?.incidents)) {
+        throw new Error(t('pages.incidentResponseCenter.load_failed'))
+      }
+      const list = data.incidents.map((raw) => normalizeIncident(raw, t))
       setIncidents(list)
       setSelectedId((prev) => prev ?? list[0]?.id ?? null)
     } catch (e) {
@@ -526,6 +529,14 @@ export default function IncidentResponseCenter() {
             <SkeletonCard lines={8} />
           </div>
         </>
+      ) : error ? (
+        <div data-testid="incident-response-unavailable" className="mb-8">
+          <EmptyState
+            icon="alert"
+            title={t(`${NS}.unavailable_title`)}
+            body={t(`${NS}.unavailable_body`)}
+          />
+        </div>
       ) : (
         <>
       {/* ── Metrics ──────────────────────────────────────────────────────── */}

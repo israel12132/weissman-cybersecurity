@@ -208,6 +208,7 @@ export default function RiskSuperpositionCollapse() {
   const [findings, setFindings] = useState([])
   const [clusters, setClusters] = useState([])
   const [clustersLoading, setClustersLoading] = useState(false)
+  const [clustersUnavailable, setClustersUnavailable] = useState(false)
   const [runState, setRunState] = useState({ running: false, msg: '' })
   const [jobId, setJobId] = useState('')
   const [lastUpdated, setLastUpdated] = useState(null)
@@ -322,8 +323,9 @@ export default function RiskSuperpositionCollapse() {
       if (Array.isArray(d?.clusters)) setClusters(d.clusters)
       else if (Array.isArray(d?.items)) setClusters(d.items)
       else setClusters([])
+      setClustersUnavailable(false)
     } catch {
-      setClusters([])
+      setClustersUnavailable(true)
     } finally {
       setClustersLoading(false)
     }
@@ -645,7 +647,7 @@ export default function RiskSuperpositionCollapse() {
               </div>
               <div className="flex gap-4 text-center">
                 <div className="px-4 py-2 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)]">
-                  <p className="text-2xl font-mono text-cyan-300">{clusters.length}</p>
+                  <p className="text-2xl font-mono text-cyan-300">{clustersUnavailable ? '—' : clusters.length}</p>
                   <p className="text-[10px] text-[var(--text-muted)] uppercase">{t('pages.superpositionCollapse.live_clusters')}</p>
                 </div>
                 <div className="px-4 py-2 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)]">
@@ -664,7 +666,11 @@ export default function RiskSuperpositionCollapse() {
                 {clustersLoading ? '…' : t('pages.superpositionCollapse.refresh_clusters')}
               </Button>
             </div>
-            {clusters.length === 0 ? (
+            {clustersUnavailable ? (
+              <p data-testid="risk-superposition-clusters-unavailable" className="text-xs text-amber-300/80 font-mono">
+                {t('pages.superpositionCollapse.clusters_unavailable')}
+              </p>
+            ) : clusters.length === 0 ? (
               <p className="text-xs text-[var(--text-muted)] font-mono">{t('pages.superpositionCollapse.no_clusters')}</p>
             ) : (
               <div className="max-h-48 overflow-auto space-y-1.5">

@@ -693,6 +693,7 @@ export default function NetworkIntelligence() {
   const { t } = useTranslation()
   const tt = useCallback((key, def) => t(`pages.networkIntelligence.${key}`, { defaultValue: def }), [t])
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [focusedEngineId, setFocusedEngineId] = useState(FLAGSHIP_ID)
   const [target, setTarget] = useState('')
@@ -702,9 +703,15 @@ export default function NetworkIntelligence() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        if (!Array.isArray(d)) {
+          setClientsUnavailable(true)
+          return
+        }
+        setClientsUnavailable(false)
+        setClients(d)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   useClientTargetPrefill(selectedClientId, clients, setTarget, { respectTouched: true, targetTouched })
@@ -749,6 +756,11 @@ export default function NetworkIntelligence() {
             className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#f97316]/40 min-w-[260px]" />
         </label>
       </div>
+      {clientsUnavailable && (
+        <p data-testid="network-intelligence-clients-unavailable" className="text-xs text-amber-300/80 font-mono mb-6">
+          {t('pages.networkIntelligence.clients_unavailable')}
+        </p>
+      )}
 
       {toast && (
         <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#f97316]/30 text-[#f97316]'}`}>

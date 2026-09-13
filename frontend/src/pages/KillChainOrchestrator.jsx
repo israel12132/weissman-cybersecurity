@@ -499,6 +499,15 @@ export default function KillChainOrchestrator() {
         </div>
       )}
 
+      {error ? (
+        <div data-testid="kill-chain-unavailable" className="mb-8">
+          <EmptyState
+            icon="alert"
+            title={t('pages.killChainOrchestrator.unavailable_title')}
+            body={t('pages.killChainOrchestrator.unavailable_body')}
+          />
+        </div>
+      ) : (
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         {[
           { label: t('pages.killChainOrchestrator.kpi_active_chains'), value: isLoading ? '…' : chains.length, color: '#22d3ee' },
@@ -512,12 +521,13 @@ export default function KillChainOrchestrator() {
           </div>
         ))}
       </div>
+      )}
 
       {isLoading ? (
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-8 text-center text-sm text-[var(--text-muted)]">
           {t('pages.killChainOrchestrator.loading')}
         </div>
-      ) : chains.length === 0 ? (
+      ) : error ? null : chains.length === 0 ? (
         <EmptyState
           icon="radar"
           title={t('pages.killChainOrchestrator.no_findings_title')}

@@ -164,7 +164,15 @@ export default function AlertRulesEngine() {
       )}
     >
       <div className="space-y-6">
-        {/* Stats */}
+        {unavailable ? (
+          <div data-testid="alert-rules-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.alertRulesEngine.unavailable_title')}
+              body={t('pages.alertRulesEngine.unavailable_body')}
+            />
+          </div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
@@ -198,6 +206,7 @@ export default function AlertRulesEngine() {
             <div className="text-2xl font-bold text-purple-400">{stats.triggered}</div>
           </div>
         </div>
+        )}
 
         {/* Controls */}
         <div className="flex items-center justify-between">

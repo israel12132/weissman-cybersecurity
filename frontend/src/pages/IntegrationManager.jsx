@@ -9,6 +9,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
+import EmptyState from '../components/ui/EmptyState'
 import Button from '../components/ui/Button'
 
 /**
@@ -51,7 +52,10 @@ export default function IntegrationManager() {
       setLoading(true);
       setLoadError(false);
       const data = await api.get('/api/integrations');
-      setIntegrations(data.integrations || []);
+      if (!Array.isArray(data.integrations)) {
+        throw new Error(t('pages.integrationManager.load_failed'));
+      }
+      setIntegrations(data.integrations);
       setVaultEnabled(Boolean(data.vault_enabled));
     } catch (error) {
       console.error('Failed to fetch integrations:', error);
@@ -60,7 +64,7 @@ export default function IntegrationManager() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchIntegrations();
@@ -199,7 +203,15 @@ export default function IntegrationManager() {
             Vault encryption active — integration secrets stored encrypted at rest (AES-256-GCM).
           </div>
         )}
-        {/* Stats */}
+        {loadError ? (
+          <div data-testid="integrations-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.integrationManager.unavailable_title')}
+              body={t('pages.integrationManager.unavailable_body')}
+            />
+          </div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
@@ -233,6 +245,7 @@ export default function IntegrationManager() {
             <div className="text-2xl font-bold text-purple-400">{stats.categories}</div>
           </div>
         </div>
+        )}
 
         {/* Add Integration Button */}
         <div className="flex justify-end items-center gap-4">
@@ -254,7 +267,7 @@ export default function IntegrationManager() {
           </Button>
         </div>
 
-        {/* Active Integrations */}
+        {!loadError && (
         <WeissmanFindingsPanel
           findings={integrationFindings}
           filteredFindings={filteredFindings}
@@ -360,6 +373,7 @@ export default function IntegrationManager() {
             );
           }}
         />
+        )}
 
         {/* Available Integrations */}
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
