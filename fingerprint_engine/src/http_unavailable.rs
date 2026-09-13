@@ -3951,4 +3951,28 @@ mod tests {
             "live engine dispatch must fail closed when pentest memory store is down"
         );
     }
+
+    #[test]
+    fn alert_evaluator_fire_insert_store_down_is_not_duplicate_skip() {
+        let src = named_fn_src(
+            include_str!("alert_evaluator_worker.rs"),
+            "async fn evaluate_tenant",
+        );
+        assert!(
+            !compact_src(src).contains(".ok().flatten()"),
+            "fire INSERT store-down must not look like ON CONFLICT skip (missed alert)"
+        );
+        assert!(
+            !src.contains("let _ = tx.commit()"),
+            "evaluate_tenant must not empty-ok a commit fail then return Ok(fired)"
+        );
+        assert!(
+            src.contains("store_down"),
+            "evaluate_tenant begin/fetch/insert/commit fail must be store_down"
+        );
+        assert!(
+            src.contains("RETURNING id"),
+            "dedup still uses INSERT ... RETURNING so None after Ok is a real conflict skip"
+        );
+    }
 }
