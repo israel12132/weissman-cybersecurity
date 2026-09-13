@@ -15,4 +15,10 @@ describe('IncidentResponseCenter live-only truth', () => {
     expect(src).toMatch(/!Array\.isArray\(data\?\.incidents\)/)
     expect(src).toMatch(/error \? \(/)
   })
+
+  it('does not paint leftover leftover-incident counts after a failed incidents GET', () => {
+    expect(src).toMatch(/count: error \? '—' : incidents\.length/)
+    expect(src).toMatch(/if \(error\) return; exportIncidentsCsv\(incidents\)/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+  })
 })

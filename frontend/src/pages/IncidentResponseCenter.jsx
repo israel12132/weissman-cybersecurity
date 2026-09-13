@@ -505,15 +505,15 @@ export default function IncidentResponseCenter() {
   return (
     <PageShell
       title={t('pages.incidentResponseCenter.title')}
-      subtitle={t('pages.incidentResponseCenter.subtitle', { count: incidents.length })}
+      subtitle={t('pages.incidentResponseCenter.subtitle', { count: error ? '—' : incidents.length })}
       badge={t(`${NS}.badge`)}
       badgeColor="#ef4444"
       actions={(
         <ShellScanActions
           onRefresh={loadIncidents}
-          onExport={() => exportIncidentsCsv(incidents)}
+          onExport={() => { if (error) return; exportIncidentsCsv(incidents) }}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >
