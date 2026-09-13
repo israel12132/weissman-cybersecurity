@@ -194,7 +194,7 @@ export default function LivePipelineMonitor() {
         <div className="flex items-center gap-2">
           <Layers className="w-5 h-5 text-[#22d3ee]" />
           <span className="font-semibold text-white">{t(`${NS}.title`)}</span>
-          {runId != null && (
+          {runId != null && !loadError && (
             <span className="text-xs text-white/50 font-mono">{t(`${NS}.runPrefix`, { id: runId })}</span>
           )}
           <div className="flex rounded-lg border border-white/10 overflow-hidden">

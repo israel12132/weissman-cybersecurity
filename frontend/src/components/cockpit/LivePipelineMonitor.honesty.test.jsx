@@ -15,4 +15,10 @@ describe('LivePipelineMonitor live-only truth', () => {
     expect(src).toMatch(/setDagUnavailable\(true\)/)
     expect(src).toMatch(/!Array\.isArray\(d\.nodes\)/)
   })
+
+  it('does not paint leftover leftover-run chrome after a failed pipeline-state GET', () => {
+    expect(src).toMatch(/\{runId != null && !loadError && \(/)
+    expect(src).toMatch(/setLoadError\(e\?\.message \|\| t\(`\$\{NS\}\.unavailable`\)\)/)
+    expect(src).not.toMatch(/setRunId\(null\)/)
+  })
 })
