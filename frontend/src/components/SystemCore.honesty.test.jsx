@@ -16,4 +16,13 @@ describe('SystemCore live-only truth', () => {
     expect(src).not.toMatch(/live_payloads_count \?\? 0/)
     expect(src).not.toMatch(/active_ephemeral_count \?\? 0/)
   })
+
+  it('does not paint no_payloads when GET /api/payload-sync/payloads is unconfirmed', () => {
+    expect(src).toMatch(/const \[recentPayloads, setRecentPayloads\] = useState\(null\)/)
+    expect(src).toMatch(/function payloadsFrom\(/)
+    expect(src).toMatch(/data-testid="system-core-payloads-unavailable"/)
+    expect(src).toMatch(/payloads_unavailable/)
+    expect(src).not.toMatch(/\.catch\(\(\) => \(\{ payloads: \[\] \}\)\)/)
+    expect(src).not.toMatch(/Array\.isArray\(data\?\.payloads\) \? data\.payloads : \[\]/)
+  })
 })

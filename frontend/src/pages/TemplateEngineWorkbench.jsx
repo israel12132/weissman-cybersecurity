@@ -47,7 +47,8 @@ function TemplateEngineWorkbenchBody() {
   const { t } = useTranslation()
   const { selectedClient } = useClient()
   const [templates, setTemplates] = useState([])
-  const [selectedId, setSelectedId] = useState('http_baseline')
+  const [templatesUnavailable, setTemplatesUnavailable] = useState(false)
+  const [selectedId, setSelectedId] = useState('')
   const [targetUrl, setTargetUrl] = useState('')
   const [yaml, setYaml] = useState('')
   const [runResult, setRunResult] = useState(null)
@@ -63,18 +64,15 @@ function TemplateEngineWorkbenchBody() {
     : 0
 
   useEffect(() => {
-    apiFetch('/api/template-engine/templates')
-      .then((d) => { if (Array.isArray(d)) setTemplates(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
-  }, [])
-
-  useEffect(() => {
     const url = clientPrimaryTargetUrl(selectedClient)
     if (url) setTargetUrl((prev) => prev || url)
   }, [selectedClient])
 
   useEffect(() => {
+    if (!selectedId) {
+      setLoadingYaml(false)
+      return
+    }
     setLoadingYaml(true)
     setError('')
     apiFetch(`/api/template-engine/templates/${encodeURIComponent(selectedId)}`)
@@ -110,10 +108,24 @@ function TemplateEngineWorkbenchBody() {
 
   const loadTemplates = useCallback(() => {
     apiFetch('/api/template-engine/templates')
-      .then((d) => { if (Array.isArray(d)) setTemplates(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        if (!Array.isArray(d)) {
+          setTemplatesUnavailable(true)
+          return
+        }
+        setTemplatesUnavailable(false)
+        setTemplates(d)
+        setSelectedId((prev) => {
+          if (prev && d.some((tpl) => tpl.id === prev)) return prev
+          return d[0]?.id || ''
+        })
+      })
+      .catch(() => setTemplatesUnavailable(true))
   }, [])
+
+  useEffect(() => {
+    loadTemplates()
+  }, [loadTemplates])
 
   const listFindings = useMemo(() => [
     ...templates.map((tpl) => ({
@@ -179,6 +191,15 @@ function TemplateEngineWorkbenchBody() {
               totalCount={listFindings.length}
             />
           )}
+          {templatesUnavailable && (
+            <div data-testid="template-engine-templates-unavailable">
+              <EmptyState
+                icon="alert"
+                title={t(`${NS}.templates_unavailable`)}
+                body={t(`${NS}.templates_unavailable_body`)}
+              />
+            </div>
+          )}
           <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-3">
             <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">
               {t(`${NS}.runner`)}
@@ -201,7 +222,9 @@ function TemplateEngineWorkbenchBody() {
                 {visibleTemplates.length === 0 && templates.length > 0 && (
                   <option value="" disabled>{t('weissmanFindings.filtered_title')}</option>
                 )}
-                {templates.length === 0 && <option value="http_baseline">http_baseline</option>}
+                {templatesUnavailable && (
+                  <option value="" disabled>{t(`${NS}.templates_unavailable`)}</option>
+                )}
               </select>
               <Button variant="unstyled"
                 type="button"

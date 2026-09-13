@@ -11,6 +11,12 @@ import AppShell from './layout/AppShell'
 import LabForensicEvidence from './ui/LabForensicEvidence'
 import Button from './ui/Button'
 
+function payloadsFrom(data) {
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data?.payloads)) return data.payloads
+  return null
+}
+
 export default function SystemCore() {
   const { t } = useTranslation()
   const [loading, setLoading] = useState(true)
@@ -60,7 +66,7 @@ export default function SystemCore() {
   const [payloadSyncRunning, setPayloadSyncRunning] = useState(false)
   const [livePayloadsCount, setLivePayloadsCount] = useState(null)
   const [activeEphemeralCount, setActiveEphemeralCount] = useState(null)
-  const [recentPayloads, setRecentPayloads] = useState([])
+  const [recentPayloads, setRecentPayloads] = useState(null)
 
   useEffect(() => {
     apiFetch(`/api/system/configs`)
@@ -139,9 +145,8 @@ export default function SystemCore() {
             setActiveEphemeralCount(null)
           })
         apiFetch(`/api/payload-sync/payloads`)
-          .then((data) => setRecentPayloads(Array.isArray(data?.payloads) ? data.payloads : []))
-          // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-          .catch(() => {})
+          .then((data) => setRecentPayloads(payloadsFrom(data)))
+          .catch(() => setRecentPayloads(null))
       })
       .catch(() => setError(t('components.systemCore.load_failed')))
       .finally(() => setLoading(false))
@@ -868,12 +873,16 @@ export default function SystemCore() {
                     setError(t('components.systemCore.sync_failed'))
                   } finally {
                     setPayloadSyncRunning(false)
-                    const st = await apiFetch(`/api/payload-sync/status`).catch(() => ({}))
-                    if (st.last_synced) setPayloadSyncLastAt(st.last_synced)
-                    if (typeof st.live_payloads_count === 'number') setLivePayloadsCount(st.live_payloads_count)
-                    if (typeof st.active_ephemeral_count === 'number') setActiveEphemeralCount(st.active_ephemeral_count)
-                    const pl = await apiFetch(`/api/payload-sync/payloads`).catch(() => ({ payloads: [] }))
-                    if (Array.isArray(pl.payloads)) setRecentPayloads(pl.payloads)
+                    const st = await apiFetch(`/api/payload-sync/status`).catch(() => null)
+                    if (st && typeof st === 'object') {
+                      if (typeof st.auto_sync_active === 'boolean') setPayloadSyncActive(st.auto_sync_active)
+                      if (st.last_synced) setPayloadSyncLastAt(st.last_synced)
+                      if (typeof st.live_payloads_count === 'number') setLivePayloadsCount(st.live_payloads_count)
+                      if (typeof st.active_ephemeral_count === 'number') setActiveEphemeralCount(st.active_ephemeral_count)
+                    }
+                    const pl = await apiFetch(`/api/payload-sync/payloads`).catch(() => null)
+                    const list = payloadsFrom(pl)
+                    if (list) setRecentPayloads(list)
                   }
                 }}
                 className="ml-auto px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium"
@@ -886,11 +895,18 @@ export default function SystemCore() {
               {t('components.systemCore.engine_hint')}
             </p>
             <div className="max-h-48 overflow-y-auto rounded border border-[var(--border-strong)]/60 bg-[var(--bg-1)]/60 divide-y divide-[var(--border-default)]/60">
-              {recentPayloads.length === 0 ? (
+              {recentPayloads == null ? (
+                <div
+                  data-testid="system-core-payloads-unavailable"
+                  className="py-4 px-3 text-xs text-amber-300/80 text-center"
+                >
+                  {t('components.systemCore.payloads_unavailable')}
+                </div>
+              ) : recentPayloads.length === 0 ? (
                 <div className="py-4 px-3 text-xs text-[var(--text-muted)] text-center">{t('components.systemCore.no_payloads')}</div>
               ) : (
-                recentPayloads.map((p) => (
-                  <div key={p.id} className="py-2 px-3 text-left">
+                recentPayloads.map((p, i) => (
+                  <div key={`${p.target_library || ''}-${p.source || ''}-${p.added_at || ''}-${i}`} className="py-2 px-3 text-left">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs text-amber-400">{p.target_library}</span>
                       <span className="text-xs text-[var(--text-muted)]">{p.source}</span>

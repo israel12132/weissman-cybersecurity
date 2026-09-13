@@ -96,9 +96,10 @@ function StatusDot({ status }) {
     error: { color: '#ef4444', pulse: false },
     idle: { color: '#4b5563', pulse: false },
   }
-  const { color, pulse } = map[status] ?? map.idle
+  const known = map[status]
+  const { color, pulse } = known ?? { color: '#6b7280', pulse: false }
   return (
-    <span className="relative inline-flex items-center justify-center w-2.5 h-2.5 shrink-0" title={status}>
+    <span className="relative inline-flex items-center justify-center w-2.5 h-2.5 shrink-0" title={status || '—'}>
       {pulse && (
         <span
           className="absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping"
@@ -169,6 +170,7 @@ function EngineMatrixCard({
   status,
   lastRun,
   findingsDelta,
+  historyKnown,
   onToggle,
   onRun,
   loading,
@@ -275,7 +277,11 @@ function EngineMatrixCard({
 
       <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-white/[0.06]">
         <span className="text-[10px] font-mono text-[var(--text-disabled)]">
-          {lastRun ? t('engines.last_run_label', { time: lastRun }) : t('engines.never_run')}
+          {lastRun
+            ? t('engines.last_run_label', { time: lastRun })
+            : historyKnown
+              ? t('engines.never_run')
+              : '—'}
         </span>
         {findingsDelta > 0 && (
           <span
@@ -296,6 +302,7 @@ function GroupSection({
   engineStates,
   enabledSet,
   loading,
+  historyKnown,
   onToggle,
   onRun,
   onEnableAll,
@@ -368,9 +375,10 @@ function GroupSection({
                 engine={engine}
                 enabled={enabledSet.has(engine.id)}
                 runnable={enabledSet.has(engine.id) && isProduction(engine.id)}
-                status={state.status ?? 'idle'}
+                status={state.status ?? (historyKnown ? 'idle' : null)}
                 lastRun={state.lastRun ?? null}
                 findingsDelta={state.findingsDelta ?? 0}
+                historyKnown={historyKnown}
                 onToggle={onToggle}
                 onRun={onRun}
                 loading={loading}
@@ -417,6 +425,7 @@ export default function EngineMatrix() {
   const [clientIntegrations, setClientIntegrations] = useState(null)
   const [configLoading, setConfigLoading] = useState(false)
   const [engineStates, setEngineStates] = useState({})
+  const [historyUnavailable, setHistoryUnavailable] = useState(false)
   const [toast, setToast] = useState(null)
   const [runAllLoading, setRunAllLoading] = useState(false)
 
@@ -631,7 +640,12 @@ export default function EngineMatrix() {
 
     async function loadHistorySummary() {
       const summary = await fetchEngineHistorySummary({ force: historyReloadKey > 0 })
-      if (cancelled || !summary) return
+      if (cancelled) return
+      if (!summary) {
+        setHistoryUnavailable(true)
+        return
+      }
+      setHistoryUnavailable(false)
       setEngineStates((prev) => {
         const next = { ...prev }
         for (const [id, job] of Object.entries(summary)) {
@@ -907,6 +921,7 @@ export default function EngineMatrix() {
                   engineStates={engineStates}
                   enabledSet={enabledSet}
                   loading={configLoading || !selectedClientId}
+                  historyKnown={!historyUnavailable}
                   onToggle={handleToggle}
                   onRun={handleRun}
                   onEnableAll={handleEnableAll}

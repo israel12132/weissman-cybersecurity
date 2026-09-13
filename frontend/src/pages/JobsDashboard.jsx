@@ -85,6 +85,9 @@ export default function JobsDashboard() {
         data = await apiFetch('/api/ceo/jobs/live')
       }
 
+      if (data && typeof data === 'object' && !Array.isArray(data) && (data.ok === false || data.unavailable === true)) {
+        throw Object.assign(new Error(data.detail || 'jobs unavailable'), { unavailable: true })
+      }
       const jobsList = Array.isArray(data) ? data : (data.jobs || data.items || [])
       setJobs(jobsList)
       setTotal(data.total ?? jobsList.length)
@@ -299,6 +302,14 @@ export default function JobsDashboard() {
             <SkeletonWidgetGrid count={5} />
             <SkeletonTable rows={8} cols={6} />
           </>
+        ) : error && !hasLoadedRef.current ? (
+          <div data-testid="jobs-dashboard-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.jobsDashboard.unavailable_title')}
+              body={t('pages.jobsDashboard.unavailable_body')}
+            />
+          </div>
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
