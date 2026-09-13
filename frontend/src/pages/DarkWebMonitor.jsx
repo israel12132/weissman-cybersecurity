@@ -203,7 +203,7 @@ export default function DarkWebMonitor() {
           <p className="text-xs text-rose-100/70 leading-relaxed">{t('pages.darkWebMonitor.evidence_notice')}</p>
         </div>
 
-        {lastRefresh && (
+        {lastRefresh && !error && (
           <p className="text-[10px] font-mono text-[var(--text-disabled)]">
             {t('pages.darkWebMonitor.last_updated', { time: lastRefresh.toLocaleTimeString() })}
           </p>

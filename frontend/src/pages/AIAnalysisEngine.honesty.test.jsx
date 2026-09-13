@@ -17,4 +17,8 @@ describe('AIAnalysisEngine live-only truth', () => {
     expect(src).toMatch(/!loading && !error && filtered\.length === 0/)
     expect(src).not.toMatch(/if \(fd\) \{\s*findingsOk = true/)
   })
+
+  it('does not paint leftover leftover-last-updated after a failed intel GET', () => {
+    expect(src).toMatch(/\{lastUpdated && !error && \(/)
+  })
 })

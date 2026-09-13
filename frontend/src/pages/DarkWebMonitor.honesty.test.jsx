@@ -14,4 +14,8 @@ describe('DarkWebMonitor live-only truth', () => {
     expect(src).toMatch(/unavailable_title/)
     expect(src).not.toMatch(/setFindings\(\[\]\)/)
   })
+
+  it('does not paint leftover leftover-last-updated after a failed findings GET', () => {
+    expect(src).toMatch(/\{lastRefresh && !error && \(/)
+  })
 })

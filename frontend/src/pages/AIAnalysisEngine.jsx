@@ -382,7 +382,7 @@ export default function AIAnalysisEngine() {
         {evidenceNotice}
       </div>
 
-      {lastUpdated && (
+      {lastUpdated && !error && (
         <p className="text-[11px] font-mono text-[var(--text-muted)] mb-6">
           {t('pages.aiAnalysisEngine.last_updated', { time: lastUpdated.toLocaleTimeString(i18n.language) })}
         </p>
