@@ -1726,6 +1726,27 @@ mod tests {
         s.chars().filter(|c| !c.is_whitespace()).collect()
     }
 
+    fn persist_window<'a>(fn_src: &'a str, side_effect: &str) -> &'a str {
+        let persist = fn_src
+            .find("persist_operator_audit")
+            .unwrap_or_else(|| panic!("missing persist_operator_audit before {side_effect}"));
+        let effect = fn_src
+            .find(side_effect)
+            .unwrap_or_else(|| panic!("missing {side_effect}"));
+        assert!(
+            persist < effect,
+            "persist_operator_audit must precede {side_effect}"
+        );
+        &fn_src[persist..effect]
+    }
+
+    fn named_fn_src_until_cfg_test<'a>(src: &'a str, sig: &str) -> &'a str {
+        let start = src.find(sig).unwrap_or_else(|| panic!("missing {sig}"));
+        let rest = &src[start..];
+        let next = rest.find("\n#[cfg(test)]").unwrap_or(rest.len());
+        &rest[..next]
+    }
+
     #[test]
     fn client_lookup_store_down_is_never_not_found() {
         let v = client_lookup_unavailable_json("store down");
@@ -5188,11 +5209,15 @@ mod tests {
             include_str!("server_handlers_rest.inc"),
             "async fn persist_operator_audit",
         );
+        let compact = compact_src(src);
         assert!(src.contains("Result<(), ()>"));
+        assert!(src.contains("audit_log::insert_audit"));
         assert!(src.contains("tx.commit().await.is_err()"));
-        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
-        assert!(!compact_src(src).contains("let_=audit_log::insert_audit"));
-        assert!(!compact_src(src).contains("ifletOk(muttx)="));
+        assert!(compact.contains("begin_tenant_tx(app_pool,tenant_id).await.map_err(|_|())?"));
+        assert!(!compact.contains("let_=tx.commit().await;"));
+        assert!(!compact.contains("let_=audit_log::insert_audit"));
+        assert!(!compact.contains("ifletOk(muttx)="));
+        assert!(!compact.contains("letOk(muttx)="));
     }
 
     #[test]
@@ -5206,9 +5231,9 @@ mod tests {
         assert!(!compact_src(src).contains("ifletOk(muttx)="));
         assert!(!compact_src(src).contains("let_=tx.commit().await;"));
         assert!(!compact_src(src).contains("let_=audit_log::insert_audit"));
-        let persist = src.find("persist_operator_audit").expect("audit");
-        let ok_true = src.find("\"ok\": true").expect("ok true");
-        assert!(persist < ok_true);
+        assert!(!compact_src(src).contains("let_=persist_operator_audit"));
+        let window = persist_window(src, "\"ok\": true");
+        assert!(window.contains(".await.is_err()"));
         let v = backup_unavailable_json("store down", Some("/tmp/weissman.dump"));
         assert_eq!(v["ok"], false);
         assert_eq!(v["unavailable"], true);
@@ -5228,13 +5253,23 @@ mod tests {
         ] {
             let fn_src = named_fn_src(src, sig);
             assert!(fn_src.contains("persist_operator_audit"), "{sig}");
-            assert!(fn_src.contains("scan_status_unavailable_json"), "{sig}");
+            assert!(
+                fn_src.matches("scan_status_unavailable_json").count() >= 2,
+                "{sig} persist + enqueue must both emit scan_status_unavailable_json"
+            );
             assert!(!compact_src(fn_src).contains("ifletOk(muttx)="), "{sig}");
             assert!(!compact_src(fn_src).contains("let_=tx.commit().await;"), "{sig}");
             assert!(!compact_src(fn_src).contains("let_=audit_log::insert_audit"), "{sig}");
-            let persist = fn_src.find("persist_operator_audit").expect(sig);
-            let accepted = fn_src.find("StatusCode::ACCEPTED").expect(sig);
-            assert!(persist < accepted, "{sig}");
+            assert!(!compact_src(fn_src).contains("let_=persist_operator_audit"), "{sig}");
+            let window = persist_window(fn_src, "StatusCode::ACCEPTED");
+            assert!(window.contains(".await.is_err()"), "{sig}");
+            let enq = fn_src
+                .find("crate::async_jobs::enqueue")
+                .unwrap_or_else(|| panic!("{sig} enqueue"));
+            assert!(
+                fn_src[enq..].contains("scan_status_unavailable_json"),
+                "{sig} enqueue Err must be 503 not 202 empty"
+            );
             assert!(!fn_src.contains("StatusCode::INTERNAL_SERVER_ERROR"), "{sig}");
         }
     }
@@ -5249,11 +5284,12 @@ mod tests {
         assert!(src.contains("discovery_domains_unavailable_json"));
         assert!(!compact_src(src).contains("ifletOk(muttx)="));
         assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(src).contains("let_=persist_operator_audit"));
         let persist = src.find("persist_operator_audit").expect("audit");
-        let hunt = src.find("run_auto_discovery").expect("hunt");
         let empty = src.find("target required").expect("empty target");
         assert!(empty < persist);
-        assert!(persist < hunt);
+        let window = persist_window(src, "run_auto_discovery");
+        assert!(window.contains(".await.is_err()"));
         let v = discovery_domains_unavailable_json("store down");
         assert_eq!(v["ok"], false);
         assert_eq!(v["unavailable"], true);
@@ -5270,10 +5306,11 @@ mod tests {
         assert!(src.contains("saas_idp_unavailable_json"));
         assert!(!compact_src(src).contains("ifletOk(muttx)="));
         assert!(!compact_src(src).contains("let_=tx.commit().await;"));
-        let persist = src.find("persist_operator_audit").expect("audit");
+        assert!(!compact_src(src).contains("let_=persist_operator_audit"));
+        let window = persist_window(src, "saas_idp_discovery::discover");
+        assert!(window.contains(".await.is_err()"));
         let hunt = src.find("saas_idp_discovery::discover").expect("hunt");
         let ok_true = src.find("\"ok\": true").expect("ok true");
-        assert!(persist < hunt);
         assert!(hunt < ok_true);
         let v = saas_idp_unavailable_json("store down");
         assert_eq!(v["ok"], false);
@@ -5444,6 +5481,23 @@ mod tests {
     }
 
     #[test]
+    fn evidence_delete_hit_audit_store_down_is_not_ok_true() {
+        let src = named_fn_src(
+            include_str!("server_handlers_evidence_vault.inc"),
+            "async fn api_evidence_delete",
+        );
+        let hit = src.find("evidence_deleted").expect("hit action");
+        let after = &src[hit..];
+        assert!(!compact_src(after).contains("let_=audit_log::insert_audit"));
+        assert!(compact_src(after).contains("audit_log::insert_audit"));
+        assert!(after.contains("evidence_unavailable_json"));
+        let unavail = after.find("evidence_unavailable_json").expect("503");
+        let ok_true = after.find("\"ok\": true").expect("ok true");
+        assert!(unavail < ok_true);
+        assert!(after.contains("tx.commit().await.is_err()"));
+    }
+
+    #[test]
     fn auto_heal_audit_store_down_is_not_remote_ok() {
         let src = named_fn_src(
             include_str!("server_handlers_rest4.inc"),
@@ -5458,6 +5512,9 @@ mod tests {
         let persist = src.find("persist_operator_audit").expect("audit");
         let skip = src.find("WEISSMAN_AUTOHEAL_SKIP_SANDBOX").expect("skip");
         assert!(persist < skip);
+        let window = persist_window(src, "WEISSMAN_AUTOHEAL_SKIP_SANDBOX");
+        assert!(window.contains(".await.is_err()"));
+        assert!(!compact_src(src).contains("let_=persist_operator_audit"));
         let audit = &src[persist.saturating_sub(200)..skip];
         assert!(audit.contains("destructive_auto_heal_initiated"));
         assert!(audit.contains("heal_requests_unavailable_json"));
@@ -5474,14 +5531,13 @@ mod tests {
         );
         assert!(src.contains("persist_operator_audit"));
         assert!(src.contains("heal_batch_unavailable_json"));
-        let persist = src.find("persist_operator_audit").expect("audit");
-        let accepted = src.find("StatusCode::ACCEPTED").expect("202");
-        assert!(persist < accepted);
-        let audit = &src[persist..accepted];
-        assert!(audit.contains("destructive_heal_batch"));
-        assert!(!compact_src(audit).contains("ifletOk(muttx)="));
-        assert!(!compact_src(audit).contains("let_=tx.commit().await;"));
-        assert!(!compact_src(audit).contains("let_=audit_log::insert_audit"));
+        assert!(!compact_src(src).contains("let_=persist_operator_audit"));
+        let window = persist_window(src, "StatusCode::ACCEPTED");
+        assert!(window.contains(".await.is_err()"));
+        assert!(window.contains("destructive_heal_batch"));
+        assert!(!compact_src(window).contains("ifletOk(muttx)="));
+        assert!(!compact_src(window).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(window).contains("let_=audit_log::insert_audit"));
     }
 
     #[test]
@@ -5579,20 +5635,26 @@ mod tests {
             include_str!("sovereign_operator/memory.rs"),
             "pub async fn hydrate",
         );
+        let compact = compact_src(src);
         assert!(src.contains("Result<LiveSlice, String>"));
         assert!(src.contains("store_down"));
         assert!(!src.contains("LiveSlice::default()"));
-        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        assert!(!compact.contains("let_=tx.commit().await;"));
+        assert!(!compact.contains("letOk(muttx)="));
+        assert!(!compact.contains("ifletOk(muttx)="));
+        assert!(!compact.contains("fetch_all(&mut*tx).await.ok()"));
         assert!(src.contains("tx.commit().await.is_err()"));
-        assert!(compact_src(src).contains(
+        assert!(compact.contains(
+            "crate::db::begin_tenant_tx(pool,tenant_id).await.map_err(|_|\"store_down\".to_string())?"
+        ));
+        assert!(compact.contains(
             "fetch_all(&mut*tx).await.map_err(|_|\"store_down\".to_string())?"
         ));
-        assert!(!compact_src(src).contains("fetch_all(&mut*tx).await.unwrap_or"));
+        assert!(!compact.contains("fetch_all(&mut*tx).await.unwrap_or"));
         let dispatch = named_fn_src(include_str!("engine_dispatch.rs"), "pub async fn run_engine");
         assert!(compact_src(dispatch).contains(
-            "Err(_)=>returnEngineResult::error(\"store_down\")"
+            "matchcrate::sovereign_operator::memory::hydrate(pool.as_ref(),tid,engine_id,target,).await{Ok(s)=>s,Err(_)=>returnEngineResult::error(\"store_down\")}"
         ));
-        assert!(dispatch.contains("sovereign_operator::memory::hydrate"));
     }
 
     #[test]
@@ -5623,8 +5685,9 @@ mod tests {
             include_str!("council.rs"),
             "pub async fn run_supreme_council_debate",
         );
-        assert!(debate.contains("LlmError::Unreachable(\"store_down\""));
-        assert!(debate.contains("fetch_supreme_memory_context"));
+        assert!(compact_src(debate).contains(
+            "fetch_supreme_memory_context(pool,cfg,&client,tenant_id,target_brief).await.map_err(|_|LlmError::Unreachable(\"store_down\".into()))?"
+        ));
     }
 
     #[test]
@@ -5637,6 +5700,8 @@ mod tests {
         assert!(get.contains("\"store_down\".to_string()"));
         assert!(!get.contains(".ok().flatten()"));
         assert!(!compact_src(get).contains("unwrap_or(None)"));
+        assert!(!compact_src(get).contains("unwrap_or_else"));
+        assert!(!compact_src(get).contains("unwrap_or_default()"));
         assert!(compact_src(get).contains("map_err(|_|\"store_down\".to_string())"));
         let extend = named_fn_src(
             include_str!("exploit_synthesis_engine.rs"),
@@ -5645,12 +5710,13 @@ mod tests {
         assert!(extend.contains("Result<HashMap<String, String>, String>"));
         assert!(!compact_src(extend).contains("ifletSome(payload)=get_ephemeral"));
         assert!(compact_src(extend).contains("Err(e)=>returnErr(e)"));
-        let run = named_fn_src(
+        let run = named_fn_src_until_cfg_test(
             include_str!("exploit_synthesis_engine.rs"),
             "pub async fn run_exploit_synthesis_async",
         );
-        assert!(run.contains("EngineResult::error(\"store_down\")"));
-        assert!(run.contains("extend_gadget_chains_with_ephemeral_and_hunt_async"));
+        assert!(compact_src(run).contains(
+            "letgadget_chains=matchextend_gadget_chains_with_ephemeral_and_hunt_async(config,&fingerprint).await{Ok(m)=>m,Err(_)=>returnEngineResult::error(\"store_down\")}"
+        ));
     }
 
     #[test]
@@ -5717,8 +5783,18 @@ mod tests {
         assert!(cycle_c.contains(
             "get_config_tx_strict(&muttx,tenant_id,\"github_token\").await?"
         ));
+        assert!(
+            cycle_c
+                .matches("get_config_tx_strict(&muttx,tenant_id,\"github_token\").await?")
+                .count()
+                >= 2
+        );
         assert!(!cycle.contains("get_config_tx(&mut tx, tenant_id, \"github_token\")"));
         let http = named_fn_src(src, "pub async fn load_poe_config_http");
+        assert!(compact_src(http).contains(
+            "begin_tenant_tx(app_pool,tenant_id).await?"
+        ));
+        assert!(compact_src(http).contains("tx.commit().await?"));
         assert!(compact_src(http).contains(
             "load_poe_config(&muttx,tenant_id,intel_pool).await?"
         ));
@@ -5805,5 +5881,71 @@ mod tests {
         assert!(src.contains("rate_limit_redis::ping_ok()"));
         assert!(src.contains("redis_up"));
         assert!(!compact_src(src).contains("ifredis_enabled{\"healthy\"}"));
+    }
+
+    #[test]
+    fn dashboard_scan_pill_store_down_is_not_stopped() {
+        let src = named_fn_src(include_str!("http/serve.rs"), "async fn dashboard_page");
+        assert!(src.contains("el.textContent = 'Unavailable'"));
+        assert!(src.contains("setStatus(null)"));
+        assert!(src.contains("d.scanning_active === null"));
+        assert!(src.contains(".catch(function() {{ setStatus(null); }})"));
+        assert!(!src.contains(".catch(function() {{ setStatus(false)"));
+    }
+
+    #[test]
+    fn api_ready_redis_is_ping_not_configured_ok() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest.inc"),
+            "async fn api_ready",
+        );
+        let compact = compact_src(src);
+        assert!(src.contains("rate_limit_redis::ping_ok()"));
+        assert!(!compact.contains("letredis_ok=!redis_required||"));
+        assert!(src.contains("redis_required || redis_enabled"));
+    }
+
+    #[test]
+    fn platform_posture_redis_is_ping_not_configured_ok() {
+        let src = named_fn_src(
+            include_str!("security_posture.rs"),
+            "pub async fn compute_platform_posture",
+        );
+        assert!(compact_src(src).contains("ping_ok().await"));
+        assert!(src.contains("REDIS_URL set but Redis PING failed"));
+    }
+
+    #[test]
+    fn onboarding_launch_scan_store_down_is_not_202_empty_jobs() {
+        let src = named_fn_src(
+            include_str!("server_handlers_platform.inc"),
+            "async fn api_onboarding_launch_scan",
+        );
+        assert!(src.contains("scan_status_unavailable_json"));
+        assert!(src.contains("job_ids.is_empty()"));
+        let unavail = src
+            .find("StatusCode::SERVICE_UNAVAILABLE")
+            .expect("503");
+        let accepted = src.find("StatusCode::ACCEPTED").expect("202");
+        assert!(unavail < accepted);
+    }
+
+    #[test]
+    fn poe_spawn_config_store_down_is_not_running_ok() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "fn poe_spawn_job",
+        );
+        let cfg = src.find("load_poe_config_http").expect("cfg load");
+        let run = src
+            .find("run_exploit_synthesis_async")
+            .expect("run after cfg");
+        assert!(cfg < run);
+        let window = &src[cfg..run];
+        assert!(window.contains("\"store_down\""));
+        assert!(window.contains("\"failed\""));
+        assert!(!compact_src(window).contains("ifletOk(muttx)="));
+        assert!(!compact_src(window).contains("let_=sqlx"));
+        assert!(!compact_src(window).contains("let_=tx.commit().await;"));
     }
 }

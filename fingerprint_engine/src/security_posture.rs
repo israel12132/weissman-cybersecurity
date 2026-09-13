@@ -53,20 +53,28 @@ pub async fn compute_platform_posture(pool: &PgPool) -> SecurityPostureScore {
         },
     });
 
-    let redis_ok = std::env::var("REDIS_URL")
+    let redis_configured = std::env::var("REDIS_URL")
         .map(|s| !s.trim().is_empty())
-        .unwrap_or(false)
-        || is_production_environment()
-            && crate::security_startup::env_truthy_pub("WEISSMAN_ALLOW_SINGLE_NODE");
+        .unwrap_or(false);
+    let single_node_ack = is_production_environment()
+        && crate::security_startup::env_truthy_pub("WEISSMAN_ALLOW_SINGLE_NODE");
+    let redis_live = crate::http::rate_limit_redis::ping_ok().await;
+    let (redis_passed, redis_detail) = if redis_configured {
+        if redis_live {
+            (true, "Redis PING ok")
+        } else {
+            (false, "REDIS_URL set but Redis PING failed")
+        }
+    } else if single_node_ack {
+        (true, "Redis unset; explicit single-node ack")
+    } else {
+        (false, "REDIS_URL unset — rate limits degrade per-replica")
+    };
     checks.push(PostureCheck {
         id: "redis_distributed",
-        passed: redis_ok,
+        passed: redis_passed,
         weight: 12,
-        detail: if redis_ok {
-            "Redis or explicit single-node ack".into()
-        } else {
-            "REDIS_URL unset — rate limits degrade per-replica".into()
-        },
+        detail: redis_detail.into(),
     });
 
     let cookie_ok = !is_production_environment() || crate::auth_jwt::cookie_use_secure();

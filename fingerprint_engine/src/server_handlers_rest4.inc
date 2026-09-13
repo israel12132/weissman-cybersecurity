@@ -679,17 +679,24 @@ fn poe_spawn_job(
         });
         let cfg = match crate::orchestrator::load_poe_config_http(app.as_ref(), tenant_id, intel.clone()).await {
             Ok(c) => c,
-            Err(e) => {
-                if let Ok(mut tx) = db::begin_tenant_tx(app.as_ref(), tenant_id).await {
-                    let _ = sqlx::query(
-                        "UPDATE poe_jobs SET status = $1, error = $2, updated_at = now() WHERE job_id = $3",
-                    )
-                    .bind("failed")
-                    .bind(e.to_string())
-                    .bind(&job_id)
-                    .execute(&mut *tx)
-                    .await;
-                    let _ = tx.commit().await;
+            Err(_) => {
+                let Ok(mut tx) = db::begin_tenant_tx(app.as_ref(), tenant_id).await else {
+                    return;
+                };
+                if sqlx::query(
+                    "UPDATE poe_jobs SET status = $1, error = $2, updated_at = now() WHERE job_id = $3",
+                )
+                .bind("failed")
+                .bind("store_down")
+                .bind(&job_id)
+                .execute(&mut *tx)
+                .await
+                .is_err()
+                {
+                    return;
+                }
+                if tx.commit().await.is_err() {
+                    return;
                 }
                 return;
             }

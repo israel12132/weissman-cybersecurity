@@ -820,20 +820,37 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
     (function() {{
       function setStatus(active) {{
         var el = document.getElementById('scanStatus');
+        if (active === null || typeof active === 'undefined') {{
+          el.textContent = 'Unavailable';
+          el.className = 'status unknown';
+          return;
+        }}
         el.textContent = active ? 'Scanning active' : 'Stopped';
         el.className = 'status ' + (active ? 'active' : 'inactive');
       }}
-      fetch('/api/scan/status').then(function(r) {{ return r.json(); }}).then(function(d) {{ setStatus(d.scanning_active); }}).catch(function() {{ setStatus(false); }});
+      function applyScanPayload(r, d, onOk) {{
+        if (!r.ok || !d || d.ok === false || d.unavailable || d.scanning_active === null) {{
+          setStatus(null);
+          return;
+        }}
+        onOk(d);
+      }}
+      fetch('/api/scan/status').then(function(r) {{ return r.json().then(function(d) {{ applyScanPayload(r, d, function(d) {{ setStatus(d.scanning_active); }}); }}); }}).catch(function() {{ setStatus(null); }});
       document.getElementById('scanStart').onclick = function() {{
-        fetch('/api/scan/start', {{ method: 'POST' }}).then(function() {{ setStatus(true); }});
+        fetch('/api/scan/start', {{ method: 'POST' }}).then(function(r) {{ return r.json().then(function(d) {{ applyScanPayload(r, d, function() {{ setStatus(true); }}); }}); }}).catch(function() {{ setStatus(null); }});
       }};
       document.getElementById('scanStop').onclick = function() {{
-        fetch('/api/scan/stop', {{ method: 'POST' }}).then(function() {{ setStatus(false); }});
+        fetch('/api/scan/stop', {{ method: 'POST' }}).then(function(r) {{ return r.json().then(function(d) {{ applyScanPayload(r, d, function() {{ setStatus(false); }}); }}); }}).catch(function() {{ setStatus(null); }});
       }};
       document.getElementById('scanRunAll').onclick = function() {{
         var btn = this;
         btn.disabled = true;
-        fetch('/api/scan/run-all', {{ method: 'POST' }}).then(function(r) {{ return r.json(); }}).then(function() {{ btn.disabled = false; setStatus(true); setTimeout(function() {{ location.reload(); }}, 3000); }}).catch(function() {{ btn.disabled = false; }});
+        fetch('/api/scan/run-all', {{ method: 'POST' }}).then(function(r) {{ return r.json().then(function(d) {{
+          btn.disabled = false;
+          if (!r.ok || !d || d.ok === false || d.unavailable) {{ setStatus(null); return; }}
+          setStatus(true);
+          setTimeout(function() {{ location.reload(); }}, 3000);
+        }}); }}).catch(function() {{ btn.disabled = false; setStatus(null); }});
       }};
       document.getElementById('addClientForm').onsubmit = function(e) {{
         e.preventDefault();

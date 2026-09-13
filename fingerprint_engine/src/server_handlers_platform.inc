@@ -119,6 +119,15 @@ async fn api_onboarding_launch_scan(
                     axum::extract::Json(scan_body),
                 )
                 .await;
+                if resp.status() == StatusCode::SERVICE_UNAVAILABLE {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::scan_status_unavailable_json(
+                            "store_down",
+                        )),
+                    )
+                        .into_response();
+                }
                 if resp.status() == StatusCode::ACCEPTED {
                     if let Ok(bytes) = axum::body::to_bytes(resp.into_body(), 1_048_576).await {
                         if let Ok(v) = serde_json::from_slice::<Value>(&bytes) {
@@ -128,6 +137,15 @@ async fn api_onboarding_launch_scan(
                         }
                     }
                 }
+            }
+            if job_ids.is_empty() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::scan_status_unavailable_json(
+                        "store_down",
+                    )),
+                )
+                    .into_response();
             }
             return (
                 StatusCode::ACCEPTED,

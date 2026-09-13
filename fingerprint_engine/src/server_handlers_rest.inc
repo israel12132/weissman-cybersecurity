@@ -46,8 +46,14 @@ async fn persist_operator_audit(
 async fn api_ready(State(state): State<Arc<AppState>>) -> Response {
     let postgres_ok = db_ping_ok(state.app_pool.as_ref()).await;
     let redis_required = crate::http::rate_limit_redis::distributed_state_required();
-    let redis_ok = !redis_required || crate::http::rate_limit_redis::ping_ok().await;
-    let ready = postgres_ok && redis_ok;
+    let redis_enabled = crate::http::rate_limit_redis::is_enabled();
+    let redis_live = crate::http::rate_limit_redis::ping_ok().await;
+    let redis_ok = if redis_required || redis_enabled {
+        redis_live
+    } else {
+        true
+    };
+    let ready = postgres_ok && (!redis_required || redis_live);
     let status = if ready {
         StatusCode::OK
     } else {
