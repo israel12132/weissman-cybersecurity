@@ -4225,7 +4225,8 @@
       "not_verified": "לא אומת",
       "run_failed": "ההרצה נכשלה",
       "evidence_notice": "אימות closed-loop מריץ מחדש ממצאים שטופלו ב-POST /api/command-center/scan ומשווה ל-history ב-GET /api/findings — מאשר תיקונים על יעדים חיים.",
-      "select_client": "— בחר לקוח —"
+      "select_client": "— בחר לקוח —",
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר."
     },
     "mobileSecurity": {
       "title": "אבטחת מובייל ואפליקציות",

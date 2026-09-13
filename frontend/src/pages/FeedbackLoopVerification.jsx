@@ -17,6 +17,7 @@ const DEFAULT_TEMPLATE = 'multi_step_state_chain'
 export default function FeedbackLoopVerification() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   useCommandCenterScan(selectedClientId)
   const [templates, setTemplates] = useState([])
@@ -36,9 +37,15 @@ export default function FeedbackLoopVerification() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        if (!Array.isArray(d)) {
+          setClientsUnavailable(true)
+          return
+        }
+        setClientsUnavailable(false)
+        setClients(d)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   useClientTargetPrefill(selectedClientId, clients, setTargetUrl)
@@ -153,7 +160,11 @@ export default function FeedbackLoopVerification() {
             {t('pages.feedbackLoopVerification.chain_runner')}
           </h3>
 
-          {clients.length > 0 && (
+          {clientsUnavailable ? (
+            <p data-testid="feedback-loop-clients-unavailable" className="text-[11px] text-amber-300/80 font-mono">
+              {t('pages.feedbackLoopVerification.clients_unavailable')}
+            </p>
+          ) : clients.length > 0 && (
             <select
               value={selectedClientId ?? ''}
               onChange={(e) => setSelectedClientId(e.target.value || null)}

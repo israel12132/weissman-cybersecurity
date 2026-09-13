@@ -8,6 +8,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
+import { api } from '../utils/apiFetch';
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 import Button from '../components/ui/Button'
 
@@ -53,7 +54,10 @@ export default function IdentityContextManager() {
       setLoading(true);
       setError(null);
       const data = await api.get(withClientId('/api/identity/contexts', cid));
-      setIdentities(data.identities || []);
+      if (!Array.isArray(data.identities)) {
+        throw new Error(t('pages.identityContextManager.load_error'));
+      }
+      setIdentities(data.identities);
     } catch (err) {
       console.error('Failed to fetch identities:', err);
       setError(t('pages.identityContextManager.load_error'));

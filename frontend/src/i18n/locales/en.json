@@ -4225,7 +4225,8 @@
       "not_verified": "NOT VERIFIED",
       "run_failed": "Run failed",
       "evidence_notice": "Closed-loop verification re-runs remediated findings via POST /api/command-center/scan and compares against GET /api/findings history — confirms fixes on live targets.",
-      "select_client": "— Select client —"
+      "select_client": "— Select client —",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant."
     },
     "mobileSecurity": {
       "title": "Mobile & App Security",

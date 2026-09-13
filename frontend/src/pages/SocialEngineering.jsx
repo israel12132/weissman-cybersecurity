@@ -296,7 +296,7 @@ export default function SocialEngineering() {
           </p>
         )}
 
-        {campaigns.length > 0 && (
+        {!error && campaigns.length > 0 && (
           <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
             <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase mb-2">{t('pages.socialEngineering.severity_distribution')}</div>
             <div className="flex h-2 rounded-full overflow-hidden">
@@ -353,6 +353,7 @@ export default function SocialEngineering() {
           </Link>
         </div>
 
+        {!error && (
         <WeissmanFindingsPanel
           findings={campaignFindings}
           filteredFindings={filteredFindings}
@@ -405,6 +406,7 @@ export default function SocialEngineering() {
             );
           }}
         />
+        )}
 
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-1">{t('pages.socialEngineering.templates_heading')}</h3>

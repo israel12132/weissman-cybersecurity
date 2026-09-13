@@ -15,5 +15,7 @@ describe('IdentityContextManager live-only truth', () => {
     expect(src).toMatch(/clientsUnavailable/)
     expect(src).toMatch(/error \? '—'/)
     expect(src).toMatch(/error \? null : \(/)
+    expect(src).toMatch(/import \{ api \} from '\.\.\/utils\/apiFetch'/)
+    expect(src).toMatch(/!Array\.isArray\(data\.identities\)/)
   })
 })

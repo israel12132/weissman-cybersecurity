@@ -16,5 +16,8 @@ describe('FeedbackLoopVerification live-only truth', () => {
     expect(src).not.toMatch(/<option value=\{DEFAULT_TEMPLATE\}>\{DEFAULT_TEMPLATE\}<\/option>/)
     expect(src).toMatch(/!selectedId \|\| templatesUnavailable/)
     expect(src).toMatch(/useState\(''\)/)
+    expect(src).toMatch(/data-testid="feedback-loop-clients-unavailable"/)
+    expect(src).toMatch(/setClientsUnavailable\(true\)/)
+    expect(src).not.toMatch(/\.catch\(\(\) => \{\}\)/)
   })
 })

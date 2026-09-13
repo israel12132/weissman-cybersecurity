@@ -15,6 +15,7 @@ describe('RemediationAnalytics live-only truth', () => {
     expect(src).toMatch(/results\.some\(\(x\) => x\.status === 'rejected'\)/)
     expect(src).toMatch(/setHealStats\(null\)/)
     expect(src).toMatch(/heals == null/)
+    expect(src).toMatch(/error \|\| partial/)
     expect(src).not.toMatch(/\.catch\(\(\) => null\)/)
   })
 })

@@ -221,16 +221,14 @@ export default function RemediationAnalytics() {
           </div>
         )}
 
-        {(bounded || partial) && !loading && !statsLoading && (
+        {bounded && !loading && !statsLoading && healStats && (
           <div className="text-[11px] text-amber-300/70 font-mono flex items-center gap-2">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-            {partial
-              ? t('pages.remediationAnalytics.partial')
-              : t('pages.remediationAnalytics.bounded')}
+            {t('pages.remediationAnalytics.bounded')}
           </div>
         )}
 
-        {error ? (
+        {error || partial ? (
           <div data-testid="remediation-analytics-unavailable">
             <EmptyState
               compact

@@ -14,6 +14,7 @@ describe('SocialEngineering live-only truth', () => {
     expect(src).toMatch(/data-testid="social-engineering-clients-unavailable"/)
     expect(src).toMatch(/unavailable_title/)
     expect(src).toMatch(/loading \|\| error \? '—'/)
+    expect(src).toMatch(/!error && \(/)
     expect(src).not.toMatch(/\.catch\(\(\) => \{\}\)/)
   })
 })
