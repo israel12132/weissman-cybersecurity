@@ -109,6 +109,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "azure_attack",
     "gcp_attack",
     "k8s_container",
+    "admission_signature_enforcement",
     "iac_misconfig",
     "serverless_attack",
     "scada_ics",
@@ -750,6 +751,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "azure_attack",
     "gcp_attack",
     "k8s_container",
+    "admission_signature_enforcement",
     "iac_misconfig",
     "serverless_attack",
     // OT / ICS / IoT

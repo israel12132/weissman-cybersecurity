@@ -14,7 +14,7 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 ## Headline
 
 - **239 distinct ATT&CK techniques** covered by
-  **592 mapped engines** (102 of them sub-techniques).
+  **593 mapped engines** (102 of them sub-techniques).
 - That is **200 primary** engine mappings plus **39
   code-grounded secondary** techniques — the extra ATT&CK T-codes each engine's own implementation
   tags on the findings it emits (`mitre: "Txxxx"` / kill-chain `mitre_path`). Secondary techniques
@@ -35,7 +35,7 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 | Reconnaissance | 21 / 46 | 46% | 76 |
 | Resource Development | 15 / 50 | 30% | 35 |
 | Initial Access | 19 / 22 | 86% | 171 |
-| Execution | 15 / 64 | 23% | 61 |
+| Execution | 15 / 64 | 23% | 62 |
 | Persistence | 15 / 113 | 13% | 57 |
 | Privilege Escalation | 14 / 96 | 15% | 57 |
 | Stealth | 26 / 148 | 18% | 71 |

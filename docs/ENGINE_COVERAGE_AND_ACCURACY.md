@@ -12,13 +12,13 @@ Regenerate: `node scripts/engine_coverage_accuracy_report.mjs` · Gate: `--check
 
 | Class | Count | Share |
 |-------|------:|------:|
-| **Live probes** (real network / host / TLS / DNS I/O) | 330 | 55.7% |
-| Aliases (retag → a live probe, same detection logic) | 204 | 34.5% |
+| **Live probes** (real network / host / TLS / DNS I/O) | 331 | 55.8% |
+| Aliases (retag → a live probe, same detection logic) | 204 | 34.4% |
 | Agent-required (host-level; endpoint agent performs the detection) | 58 | 9.8% |
 | **No execution path** (catalog entries that do nothing) | 0 | 0.0% |
-| **Catalog total** | **592** | 100% |
+| **Catalog total** | **593** | 100% |
 
-- **322 distinct probe implementations** back the 330 live
+- **323 distinct probe implementations** back the 331 live
   probes (delegates that share one implementation are counted once).
 - **0 engines with no execution path** — the catalog headline is fully backed.
 - A companion gate, `engine_reality_audit.mjs`, independently proves the same *depth* invariant.
@@ -26,7 +26,7 @@ Regenerate: `node scripts/engine_coverage_accuracy_report.mjs` · Gate: `--check
 ## 2. Breadth spans every attack domain
 
 The catalog covers **15 attack domains** and maps to
-**201 distinct MITRE ATT&CK techniques**, with
+**200 distinct MITRE ATT&CK techniques**, with
 **0 engines unmapped**. Every domain carries live probes — no domain
 is pure-alias "coverage theater".
 
@@ -35,8 +35,8 @@ is pure-alias "coverage theater".
 | Web / API | 72 | 49 | 23 | 0 | 21 |
 | APT / Top-Tier | 67 | 33 | 30 | 4 | 32 |
 | Network / Protocol | 59 | 25 | 23 | 11 | 32 |
+| Cloud / Infra | 53 | 30 | 23 | 0 | 24 |
 | Stealth / Evasion | 53 | 11 | 25 | 17 | 35 |
-| Cloud / Infra | 52 | 29 | 23 | 0 | 24 |
 | Recon & OSINT | 49 | 28 | 21 | 0 | 28 |
 | AI / LLM | 47 | 29 | 18 | 0 | 23 |
 | OT / ICS / IoT | 45 | 33 | 10 | 2 | 21 |
@@ -64,8 +64,8 @@ False positives are handled by a per-`(tenant, engine, signature_hash)` feedback
 
 ## 4. Why this matters against XSOAR / Splunk SOAR / Torq / Tines / Swimlane
 
-Those platforms orchestrate *other people's* detections. Weissman ships **330 in-house
-offensive probes across 15 domains and 201 ATT&CK
+Those platforms orchestrate *other people's* detections. Weissman ships **331 in-house
+offensive probes across 15 domains and 200 ATT&CK
 techniques**, each wired to real I/O and each discounted by a live accuracy loop — offensive
 coverage plus in-house threat intelligence in one backend, not a workflow engine bolted onto
 third-party feeds.
