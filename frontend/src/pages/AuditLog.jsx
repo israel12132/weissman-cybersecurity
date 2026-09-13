@@ -361,17 +361,17 @@ export default function AuditLog() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <ExecutiveWidget
             label={t('audit.kpi_shown')}
-            value={loading ? '—' : pageKpi.shown.toLocaleString()}
+            value={loading || error ? '—' : pageKpi.shown.toLocaleString()}
             accent="#22d3ee"
           />
           <ExecutiveWidget
             label={t('audit.kpi_denied')}
-            value={loading ? '—' : pageKpi.denied.toLocaleString()}
+            value={loading || error ? '—' : pageKpi.denied.toLocaleString()}
             accent="#f87171"
           />
           <ExecutiveWidget
             label={t('audit.kpi_total')}
-            value={loading ? '—' : total.toLocaleString()}
+            value={loading || error ? '—' : total.toLocaleString()}
             accent="#a78bfa"
             className="col-span-2 lg:col-span-1"
           />
@@ -532,7 +532,7 @@ export default function AuditLog() {
 
       <section className="max-w-7xl mx-auto space-y-3">
         {error && (
-          <div className="text-sm text-rose-300 font-mono">{error}</div>
+          <div data-testid="audit-log-unavailable" className="text-sm text-rose-300 font-mono">{error}</div>
         )}
         <DataTable
           columns={columns}
@@ -546,7 +546,9 @@ export default function AuditLog() {
           getRowCanExpand={(row) => Boolean(row.original.details)}
           expandLabel={t('audit.expand_payload')}
           collapseLabel={t('audit.collapse_payload')}
-          emptyState={{ icon: 'list', title: t('audit.empty_title'), body: t('audit.empty_body') }}
+          emptyState={error
+            ? { icon: 'alert', title: t('audit.unavailable_title'), body: t('audit.unavailable_body') }
+            : { icon: 'list', title: t('audit.empty_title'), body: t('audit.empty_body') }}
         />
 
         {total > 0 && (

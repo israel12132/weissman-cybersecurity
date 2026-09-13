@@ -153,8 +153,9 @@ export default function SBOMBrowser() {
   };
 
   const showClientEmpty = !clientLoading && clientId == null;
-  const showDataEmpty = !loading && !showClientEmpty && components.length === 0;
-  const showFilterEmpty = !loading && !showClientEmpty && components.length > 0 && visibleComponents.length === 0;
+  const showUnavailable = !loading && !showClientEmpty && !!error;
+  const showDataEmpty = !loading && !showClientEmpty && !error && components.length === 0;
+  const showFilterEmpty = !loading && !showClientEmpty && !error && components.length > 0 && visibleComponents.length === 0;
 
   return (
     <PageShell
@@ -183,6 +184,14 @@ export default function SBOMBrowser() {
             title={t('pages.sbomBrowser.no_client_title')}
             description={t('pages.sbomBrowser.no_client')}
           />
+        ) : showUnavailable ? (
+          <div data-testid="sbom-browser-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.sbomBrowser.unavailable_title')}
+              description={t('pages.sbomBrowser.unavailable_body')}
+            />
+          </div>
         ) : loading && components.length === 0 ? (
           <SkeletonWidgetGrid count={5} />
         ) : (
@@ -303,7 +312,13 @@ export default function SBOMBrowser() {
               </h3>
             </div>
 
-            {showDataEmpty ? (
+            {showUnavailable ? (
+              <EmptyState
+                icon="alert"
+                title={t('pages.sbomBrowser.unavailable_title')}
+                description={t('pages.sbomBrowser.unavailable_body')}
+              />
+            ) : showDataEmpty ? (
               <EmptyState
                 icon={<Package className="w-8 h-8 text-[var(--text-disabled)]" />}
                 title={t('pages.sbomBrowser.empty_data_title')}

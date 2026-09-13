@@ -56,7 +56,8 @@ export default function MobileSecurity() {
   const [searchTerm, setSearchTerm] = useState('');
   const [scanningAppId, setScanningAppId] = useState(null);
   const [pendingJobId, setPendingJobId] = useState(null);
-  const [scanError, setScanError] = useState(null);
+  const [appsUnavailable, setAppsUnavailable] = useState(false)
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
 
   const fetchMobileApps = useCallback(async () => {
     setLoading(true);
@@ -64,8 +65,9 @@ export default function MobileSecurity() {
       const data = await apiFetch('/api/mobile-security/apps');
       setApps(Array.isArray(data.apps) ? data.apps : []);
       setFindings(Array.isArray(data.findings) ? data.findings : []);
+      setAppsUnavailable(false);
     } catch {
-      // non-critical: list stays empty and the empty-state explains next steps
+      setAppsUnavailable(true);
     } finally {
       setLoading(false);
     }
@@ -79,7 +81,7 @@ export default function MobileSecurity() {
         setClients(d)
         if (d.length) setSelectedClientId(String(d[0].id))
       })
-      .catch(() => setClients([]));
+      .catch(() => setClientsUnavailable(true));
   }, [fetchMobileApps]);
 
   const platformFindings = useMemo(
@@ -215,6 +217,11 @@ export default function MobileSecurity() {
       actions={refreshAction}
     >
       <div className="space-y-6">
+        {clientsUnavailable && (
+          <p data-testid="mobile-security-clients-unavailable" className="text-xs text-amber-300/80 font-mono">
+            {t('pages.mobileSecurity.clients_unavailable')}
+          </p>
+        )}
         {clients.length > 0 && (
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.mobileSecurity.client_label')}</span>
@@ -235,7 +242,15 @@ export default function MobileSecurity() {
           </div>
         )}
 
-        {/* KPIs — all derived from the real API response */}
+        {appsUnavailable ? (
+          <div data-testid="mobile-security-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.mobileSecurity.unavailable_title')}
+              body={t('pages.mobileSecurity.unavailable_body')}
+            />
+          </div>
+        ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             { key: 'stat_total_apps', value: apps.length, color: '#22d3ee', Icon: Smartphone },
@@ -258,6 +273,7 @@ export default function MobileSecurity() {
             </div>
           ))}
         </div>
+        )}
 
         {/* Severity distribution from the real findings list */}
         {findings.length > 0 && (
@@ -316,6 +332,15 @@ export default function MobileSecurity() {
 
           {loading ? (
             <div className="p-4"><SkeletonTable rows={4} cols={4} /></div>
+          ) : appsUnavailable ? (
+            <div className="p-4">
+              <EmptyState
+                compact
+                icon="alert"
+                title={t('pages.mobileSecurity.unavailable_title')}
+                body={t('pages.mobileSecurity.unavailable_body')}
+              />
+            </div>
           ) : filteredApps.length === 0 ? (
             <div className="p-4">
               <EmptyState

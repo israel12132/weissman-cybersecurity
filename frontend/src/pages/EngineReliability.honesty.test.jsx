@@ -15,6 +15,7 @@ describe('EngineReliability live-only truth', () => {
     expect(src).toMatch(/telemUnavailable \? '—'/)
     expect(src).toMatch(/recoveryRate == null \? '—'/)
     expect(src).toMatch(/pages\.engineReliability\.unconfirmed/)
+    expect(src).toMatch(/telemUnavailable \? t\('pages\.engineReliability\.unconfirmed'\)/)
     expect(src).not.toMatch(/telem\.total_runs \?\? 0/)
     expect(src).not.toMatch(/telem\.engines_observed \?\? 0/)
   })

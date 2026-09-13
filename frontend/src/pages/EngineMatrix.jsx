@@ -425,7 +425,7 @@ export default function EngineMatrix() {
   const [clientIntegrations, setClientIntegrations] = useState(null)
   const [configLoading, setConfigLoading] = useState(false)
   const [engineStates, setEngineStates] = useState({})
-  const [historyUnavailable, setHistoryUnavailable] = useState(false)
+  const [historyUnavailable, setHistoryUnavailable] = useState(true)
   const [toast, setToast] = useState(null)
   const [runAllLoading, setRunAllLoading] = useState(false)
 

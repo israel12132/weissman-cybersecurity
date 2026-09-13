@@ -384,7 +384,9 @@ export default function EngineReliability() {
                             <span className="text-[9px] font-mono text-[var(--text-muted)]">{formatTs(h.updated_ts)}</span>
                           </div>
                         ) : (
-                          <span className="text-xs text-[var(--text-muted)]">{t('pages.engineReliability.never_run')}</span>
+                          <span className="text-xs text-[var(--text-muted)]">
+                            {telemUnavailable ? t('pages.engineReliability.unconfirmed') : t('pages.engineReliability.never_run')}
+                          </span>
                         )}
                       </div>
                     </div>

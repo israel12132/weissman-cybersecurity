@@ -72,7 +72,6 @@ export default function DarkWebMonitor() {
       setLastRefresh(new Date())
     } catch (e) {
       setError(e.message || t('pages.darkWebMonitor.load_error', { error: '' }))
-      setFindings([])
     } finally {
       setLoading(false)
     }
@@ -212,6 +211,14 @@ export default function DarkWebMonitor() {
 
         {loading && findings.length === 0 ? (
           <SkeletonWidgetGrid count={5} />
+        ) : error ? (
+          <div data-testid="dark-web-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.darkWebMonitor.unavailable_title')}
+              body={t('pages.darkWebMonitor.unavailable_body')}
+            />
+          </div>
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -310,6 +317,14 @@ export default function DarkWebMonitor() {
 
           {loading && findings.length === 0 ? (
             <div className="p-6"><SkeletonTable rows={6} cols={5} /></div>
+          ) : error ? (
+            <div className="p-8">
+              <EmptyState
+                icon="alert"
+                title={t('pages.darkWebMonitor.unavailable_title')}
+                body={t('pages.darkWebMonitor.unavailable_body')}
+              />
+            </div>
           ) : findings.length === 0 ? (
             <div className="p-8">
               <EmptyState

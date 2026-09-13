@@ -11,6 +11,7 @@ const src = readFileSync(
 describe('EngineMatrix live-only truth', () => {
   it('does not paint idle last-run history when history-summary is unconfirmed', () => {
     expect(src).toMatch(/historyKnown=\{!historyUnavailable\}/)
+    expect(src).toMatch(/setHistoryUnavailable\] = useState\(true\)/)
     expect(src).toMatch(/state\.status \?\? \(historyKnown \? 'idle' : null\)/)
     expect(src).toMatch(/historyKnown\s*\?\s*t\('engines\.never_run'\)\s*:\s*'—'/)
     expect(src).toMatch(/known \?\? \{ color: '#6b7280'/)

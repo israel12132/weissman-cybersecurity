@@ -60,7 +60,10 @@ export default function FeedbackLoopVerification() {
   }, [])
 
   useEffect(() => {
-    if (!selectedId) return
+    if (!selectedId || templatesUnavailable) {
+      if (templatesUnavailable) setLoadingYaml(false)
+      return
+    }
     setLoadingYaml(true)
     setError('')
     apiFetch(`/api/template-engine/templates/${encodeURIComponent(selectedId)}`)
@@ -69,7 +72,7 @@ export default function FeedbackLoopVerification() {
       })
       .catch((e) => setError(e?.message || t('pages.feedbackLoopVerification.load_failed')))
       .finally(() => setLoadingYaml(false))
-  }, [selectedId, t])
+  }, [selectedId, templatesUnavailable, t])
 
   const run = useCallback(async () => {
     if (!canRun) return

@@ -1025,6 +1025,8 @@
     "last_page": "Last page",
     "empty_title": "No audit entries",
     "empty_body": "No matching audit entries. Try a different filter, or perform an action (login, create client) and refresh.",
+    "unavailable_title": "יומן הביקורת אינו זמין",
+    "unavailable_body": "לא ניתן לאשר את GET /api/audit-logs. אפסים אינם שביל שקט.",
     "load_error": "Failed to load audit log",
     "evidence_notice": "שורות audit append-only מ-GET /api/audit-logs — מוגבל ל-tenant, ללא אירועי אבטחה סינתטיים.",
     "kpi_shown": "מוצגים (עמוד זה)",
@@ -1965,6 +1967,8 @@
       "col_discovered": "התגלה",
       "empty_title": "אין מודיעין רשת אפלה עדיין לארגון זה.",
       "empty_body": "הפעל Leak Hunter או darkweb_intel על דומיין מורשה. ממצאים יופיעו כאן אוטומטית מ-GET /api/findings.",
+      "unavailable_title": "ממצאי רשת אפלה אינם זמינים",
+      "unavailable_body": "לא ניתן לאשר את GET /api/findings. אפס פגיעות אינו משטח נקי.",
       "empty_step_scan_link": "הפעל סריקת בסיס",
       "empty_step_scan_after": "(Leak Hunter כלול בחבילה).",
       "empty_step_keys": "לפידים עשירים יותר, הגדר HIBP_API_KEY / OTX_API_KEY בהגדרות המערכת; המנוע מחובר אך מתדרדר בחן ללא מפתחות.",
@@ -2006,6 +2010,8 @@
       "title": "מרכז תיקון",
       "intro": "לוח זרימת עבודה נגזר מ-/api/findings בזמן אמת. כל שורה מקבצת ממצאים חיים לפי משפחת תיקון.",
       "load_error": "לא ניתן לטעון ממצאים: {{error}}.",
+      "unavailable_title": "תור התיקונים אינו זמין",
+      "unavailable_body": "לא ניתן לאשר את GET /api/findings. אפס ממתינים אינו backlog נקי.",
       "total_findings": "סה״כ ממצאים",
       "pending_fix": "ממתין לתיקון",
       "in_progress": "בתהליך",
@@ -2351,7 +2357,9 @@
       "llm_client": "נקודות קצה LLM / chat API של הלקוח",
       "add_endpoint": "הוסף endpoint",
       "tenant_settings": "הגדרות tenant →",
-      "back_client": "חזרה ללקוח"
+      "back_client": "חזרה ללקוח",
+      "unavailable_title": "אינטגרציות אינן זמינות",
+      "unavailable_body": "לא ניתן לאשר את GET /api/clients/:id/integrations. שדות ריקים אינם tenant לא מוגדר — Save נעול."
     },
     "clientOnboarding": {
       "subtitle": "קליטה מלאה — כל דרישות המנועים והמערכת לפני סריקה ראשונה",
@@ -3852,6 +3860,8 @@
       "empty_filter_hint": "נסה לנקות את החיפוש או את המסננים.",
       "empty_data_title": "אין רכיבי SBOM",
       "empty_data": "אין רכיבי SBOM שמורים ללקוח זה עדיין. הרץ סריקת supply-chain או SBOM ingest כדי למלא את התצוגה.",
+      "unavailable_title": "SBOM אינו זמין",
+      "unavailable_body": "לא ניתן לאשר את GET /api/sbom/components. אפס רכיבים אינו bill of materials נקי.",
       "no_client_title": "בחר לקוח",
       "no_client": "בחר לקוח טננט כדי לטעון רכיבי SBOM חיים מהמסד.",
       "load_failed": "טעינת רכיבי SBOM נכשלה",
@@ -4168,6 +4178,10 @@
       "search_placeholder": "חפש לפי מזהה, יעד, לקוח או חומרה…",
       "export_csv": "ייצוא CSV"
     },
+    "soarHitlQueue": {
+      "unavailable_title": "תור HITL אינו זמין",
+      "unavailable_body": "לא ניתן לאשר את GET /api/soar/executions. תור ריק אינו dual-control פנוי."
+    },
     "feedbackLoopVerification": {
       "title": "אימות לולאת משוב",
       "badge": "STATE",
@@ -4222,6 +4236,9 @@
       "apps_heading": "אפליקציות שהתגלו",
       "apps_empty_title": "לא התגלו אפליקציות מובייל",
       "apps_empty_body": "אפליקציות יופיעו כאן לאחר שסריקת מובייל תזהה ממצאי iOS/Android בהיקף שלך. בחר לקוח והפעל סריקה כדי להתחיל.",
+      "unavailable_title": "מלאי המובייל אינו זמין",
+      "unavailable_body": "לא ניתן לאשר את GET /api/mobile-security/apps. אפס אפליקציות אינו מלאי ריק.",
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר.",
       "platform_ios": "iOS",
       "platform_android": "Android",
       "platform_unknown": "לא ידוע",
@@ -6241,6 +6258,7 @@
         "zeroDayTitle": "חשיפת Zero-Day Radar",
         "loading": "טוען…",
         "noZeroDay": "אין ממצאי zero-day",
+        "findings_unavailable": "API הממצאים אינו זמין — all-clear אינו מאושר.",
         "findingFallback": "ממצא",
         "moreCount": "+{{count}} נוספים"
       },

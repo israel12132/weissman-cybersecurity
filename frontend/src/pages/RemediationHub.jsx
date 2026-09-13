@@ -150,8 +150,13 @@ export default function RemediationHub() {
       ids.map((id) => apiFetch(`/api/clients/${id}/heal-stats`).catch(() => null)),
     ).then((list) => {
       if (cancelled) return
+      const ok = list.filter(Boolean)
+      if (ok.length !== list.length) {
+        setHealStats(null)
+        return
+      }
       const channelMap = {}
-      const agg = list.filter(Boolean).reduce(
+      const agg = ok.reduce(
         (a, s) => {
           for (const c of s.by_channel || []) channelMap[c.channel] = (channelMap[c.channel] || 0) + (c.count || 0)
           return {
@@ -233,19 +238,22 @@ export default function RemediationHub() {
         <FixFirstProgram />
 
         {error && (
-          <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            {t('pages.remediationHub.load_error', { error })}
+          <div data-testid="remediation-hub-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.remediationHub.unavailable_title')}
+              body={t('pages.remediationHub.unavailable_body')}
+            />
           </div>
         )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <StatCard label={t('pages.remediationHub.total_findings')} value={totals.total} icon={<ShieldCheck className="w-4 h-4 text-cyan-400" />} loading={loading} />
-          <StatCard label={t('pages.remediationHub.crit_high')} value={totals.critHigh} icon={<AlertTriangle className="w-4 h-4 text-rose-400" />} color="#f43f5e" loading={loading} />
-          <StatCard label={t('pages.remediationHub.pending_fix')} value={totals.pending} icon={<AlertTriangle className="w-4 h-4 text-yellow-400" />} loading={loading} />
-          <StatCard label={t('pages.remediationHub.in_progress')} value={totals.running} icon={<Clock className="w-4 h-4 text-orange-400" />} loading={loading} />
-          <StatCard label={t('pages.remediationHub.resolved')} value={totals.completed} icon={<CheckCircle className="w-4 h-4 text-green-400" />} loading={loading} />
+          <StatCard label={t('pages.remediationHub.total_findings')} value={totals.total} icon={<ShieldCheck className="w-4 h-4 text-cyan-400" />} loading={loading || !!error} />
+          <StatCard label={t('pages.remediationHub.crit_high')} value={totals.critHigh} icon={<AlertTriangle className="w-4 h-4 text-rose-400" />} color="#f43f5e" loading={loading || !!error} />
+          <StatCard label={t('pages.remediationHub.pending_fix')} value={totals.pending} icon={<AlertTriangle className="w-4 h-4 text-yellow-400" />} loading={loading || !!error} />
+          <StatCard label={t('pages.remediationHub.in_progress')} value={totals.running} icon={<Clock className="w-4 h-4 text-orange-400" />} loading={loading || !!error} />
+          <StatCard label={t('pages.remediationHub.resolved')} value={totals.completed} icon={<CheckCircle className="w-4 h-4 text-green-400" />} loading={loading || !!error} />
         </div>
 
         {/* Auto-heal analytics strip */}
@@ -326,6 +334,15 @@ export default function RemediationHub() {
           <div className="divide-y divide-white/5">
             {loading ? (
               <div className="p-4"><SkeletonTable rows={5} cols={3} /></div>
+            ) : error ? (
+              <div className="p-4">
+                <EmptyState
+                  compact
+                  icon="alert"
+                  title={t('pages.remediationHub.unavailable_title')}
+                  body={t('pages.remediationHub.unavailable_body')}
+                />
+              </div>
             ) : workflows.length === 0 ? (
               <div className="p-4">
                 <EmptyState

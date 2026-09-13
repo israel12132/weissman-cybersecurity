@@ -45,7 +45,8 @@ function CopyableTag({ value }) {
 export default function TargetScopePanel({ ceoIntegrated = false }) {
   const { t } = useTranslation()
   const { selectedClient, selectedClientId, clientConfig, patchConfig, configLoading } = useClient()
-  const [zeroDayFindings, setZeroDayFindings] = useState([])
+  const [zeroDayFindings, setZeroDayFindings] = useState(null)
+  const [zeroDayUnavailable, setZeroDayUnavailable] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const domains = parseJsonArray(selectedClient?.domains)
@@ -54,16 +55,21 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
 
   useEffect(() => {
     if (!selectedClientId) {
-      setZeroDayFindings([])
+      setZeroDayFindings(null)
+      setZeroDayUnavailable(false)
       return
     }
     setLoading(true)
+    setZeroDayUnavailable(false)
     apiFetch(`/api/clients/${selectedClientId}/findings`)
       .then((d) => {
         const list = Array.isArray(d.findings) ? d.findings : []
         setZeroDayFindings(list.filter((f) => (f.source || '').toLowerCase().includes('zero_day') || (f.source || '').toLowerCase().includes('zero-day')))
       })
-      .catch(() => setZeroDayFindings([]))
+      .catch(() => {
+        setZeroDayFindings(null)
+        setZeroDayUnavailable(true)
+      })
       .finally(() => setLoading(false))
   }, [selectedClientId])
 
@@ -149,6 +155,8 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
           <h3 className="text-[10px] uppercase tracking-widest text-[var(--text-tertiary)] font-medium mb-2">{t(`${NS}.zeroDayTitle`)}</h3>
           {loading ? (
             <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.loading`)}</p>
+          ) : zeroDayUnavailable || zeroDayFindings == null ? (
+            <p data-testid="target-scope-zeroday-unavailable" className="text-xs text-amber-300/80">{t(`${NS}.findings_unavailable`)}</p>
           ) : zeroDayFindings.length === 0 ? (
             <p className="text-xs text-[#4ade80]/90">{t(`${NS}.noZeroDay`)}</p>
           ) : (

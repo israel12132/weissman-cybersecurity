@@ -671,8 +671,10 @@
     "prev_page": "Previous page",
     "next_page": "Next page",
     "last_page": "Last page",
-    "empty_title": "No audit entries",
-    "empty_body": "No matching audit entries. Try a different filter, or perform an action (login, create client) and refresh.",
+      "empty_title": "No audit entries",
+      "empty_body": "No matching audit entries. Try a different filter, or perform an action (login, create client) and refresh.",
+      "unavailable_title": "Audit log unavailable",
+      "unavailable_body": "GET /api/audit-logs could not be confirmed. Zeros are not a quiet trail.",
     "load_error": "Failed to load audit log",
     "evidence_notice": "Append-only audit rows from GET /api/audit-logs — tenant-scoped, no synthetic security events.",
     "kpi_shown": "Shown (this page)",
@@ -1965,6 +1967,8 @@
       "col_discovered": "Discovered",
       "empty_title": "No dark-web intelligence yet for this tenant.",
       "empty_body": "Run Leak Hunter or darkweb_intel against an authorized domain. Findings appear here automatically from GET /api/findings.",
+      "unavailable_title": "Dark-web findings unavailable",
+      "unavailable_body": "GET /api/findings could not be confirmed. Zero hits are not a clean surface.",
       "empty_step_scan_link": "run the baseline scan",
       "empty_step_scan_after": "(Leak Hunter is included in the bundle).",
       "empty_step_keys": "For richer breach feeds, set HIBP_API_KEY / OTX_API_KEY in System Configuration; the engine is wired but degrades gracefully without keys.",
@@ -2006,6 +2010,8 @@
       "title": "Remediation Hub",
       "intro": "Workflow board derived from /api/findings in real time. Each row groups live findings by remediation family so you can drive fixes from where the vulnerabilities actually live.",
       "load_error": "Couldn't load findings: {{error}}.",
+      "unavailable_title": "Remediation backlog unavailable",
+      "unavailable_body": "GET /api/findings could not be confirmed. Zero pending is not a clean backlog.",
       "total_findings": "Total findings",
       "pending_fix": "Pending fix",
       "in_progress": "In progress",
@@ -2351,7 +2357,9 @@
       "llm_client": "Client LLM / chat API endpoints",
       "add_endpoint": "Add endpoint",
       "tenant_settings": "Tenant settings →",
-      "back_client": "Back to client"
+      "back_client": "Back to client",
+      "unavailable_title": "Integrations unavailable",
+      "unavailable_body": "GET /api/clients/:id/integrations could not be confirmed. Blank fields are not an unconfigured tenant — Save is locked."
     },
     "clientOnboarding": {
       "subtitle": "Full onboarding — every engine and platform requirement before first scan",
@@ -3852,6 +3860,8 @@
       "empty_filter_hint": "Try clearing search or filter criteria.",
       "empty_data_title": "No SBOM components",
       "empty_data": "No SBOM components are stored for this client yet. Run a supply-chain or SBOM ingest scan to populate this view.",
+      "unavailable_title": "SBOM unavailable",
+      "unavailable_body": "GET /api/sbom/components could not be confirmed. Zero components is not a clean bill of materials.",
       "no_client_title": "Select a client",
       "no_client": "Choose a tenant client to load live SBOM components from the database.",
       "load_failed": "Failed to load SBOM components",
@@ -4168,6 +4178,10 @@
       "search_placeholder": "Search by ID, target, client, or severity…",
       "export_csv": "Export CSV"
     },
+    "soarHitlQueue": {
+      "unavailable_title": "HITL queue unavailable",
+      "unavailable_body": "GET /api/soar/executions could not be confirmed. An empty queue is not idle dual-control."
+    },
     "feedbackLoopVerification": {
       "title": "Feedback Loop Verification",
       "badge": "STATE",
@@ -4222,6 +4236,9 @@
       "apps_heading": "Discovered Apps",
       "apps_empty_title": "No mobile apps discovered",
       "apps_empty_body": "Apps appear here once a mobile scan fingerprints iOS/Android findings in your scope. Pick a client and run a scan to begin.",
+      "unavailable_title": "Mobile inventory unavailable",
+      "unavailable_body": "GET /api/mobile-security/apps could not be confirmed. Zero apps is not an empty inventory.",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
       "platform_ios": "iOS",
       "platform_android": "Android",
       "platform_unknown": "Unknown",
@@ -6241,6 +6258,7 @@
         "zeroDayTitle": "Zero-Day Radar Exposure",
         "loading": "Loading…",
         "noZeroDay": "No zero-day findings",
+        "findings_unavailable": "Findings API unavailable — all-clear is not confirmed.",
         "findingFallback": "Finding",
         "moreCount": "+{{count}} more"
       },

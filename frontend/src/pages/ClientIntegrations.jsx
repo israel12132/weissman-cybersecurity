@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import {
@@ -17,6 +17,7 @@ import { apiFetch } from '../utils/apiFetch'
 import ClientReadinessBanner from '../components/clients/ClientReadinessBanner'
 import { useEngineRequirements, computeLocalReadiness } from '../hooks/useEngineRequirements'
 import Button from '../components/ui/Button'
+import EmptyState from '../components/ui/EmptyState'
 
 const AGENT_PLATFORMS = ['linux', 'windows', 'macos']
 const inputCls =
@@ -56,6 +57,8 @@ export default function ClientIntegrations() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [unavailable, setUnavailable] = useState(false)
+  const hasLoadedRef = useRef(false)
   const [saved, setSaved] = useState(false)
   const [awsExtIdMask, setAwsExtIdMask] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -110,8 +113,11 @@ export default function ClientIntegrations() {
         llm_endpoints: llm,
         engagement_modules: Array.isArray(d.engagement_modules) ? d.engagement_modules : [],
       })
+      hasLoadedRef.current = true
+      setUnavailable(false)
     } catch (e) {
       setError(e.message || 'Failed to load')
+      if (!hasLoadedRef.current) setUnavailable(true)
     } finally {
       setLoading(false)
     }
@@ -247,7 +253,15 @@ export default function ClientIntegrations() {
         </div>
       )}
 
-      {loading ? (
+      {unavailable ? (
+        <div data-testid="client-integrations-unavailable">
+          <EmptyState
+            icon="alert"
+            title={t('pages.clientIntegrations.unavailable_title')}
+            body={t('pages.clientIntegrations.unavailable_body')}
+          />
+        </div>
+      ) : loading ? (
         <p className="text-[var(--text-tertiary)] text-sm animate-pulse">{t('common.loading')}</p>
       ) : (
         <div className="grid gap-6 lg:grid-cols-3">
@@ -341,7 +355,7 @@ export default function ClientIntegrations() {
               </Button>
             </Section>
 
-            <Button variant="unstyled" type="button" disabled={saving} onClick={save}
+            <Button variant="unstyled" type="button" disabled={saving || unavailable} onClick={save}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium text-sm">
               <Save className="w-4 h-4" />
               {saving ? t('common.saving') : t('common.save')}
