@@ -197,6 +197,11 @@ export default function SocialEngineering() {
     total,
   } = useFindingsWorkbench(campaignFindings, { csvPrefix: 'weissman-social-engineering' });
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
+
   const severityDistribution = useMemo(() => {
     const dist = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
     for (const c of campaigns) {
@@ -239,9 +244,9 @@ export default function SocialEngineering() {
       actions={(
         <ShellScanActions
           onRefresh={fetchSocialEngineering}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >

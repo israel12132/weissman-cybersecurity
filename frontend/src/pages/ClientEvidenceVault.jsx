@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 import { createColumnHelper } from '@tanstack/react-table'
@@ -223,6 +223,11 @@ export default function ClientEvidenceVault() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
+
   const visibleEvidence = useMemo(() => {
     if (!searchQuery.trim()) return evidence
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
@@ -330,9 +335,9 @@ export default function ClientEvidenceVault() {
       actions={(
         <ShellScanActions
           onRefresh={loadAll}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >

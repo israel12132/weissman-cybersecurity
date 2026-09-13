@@ -19,4 +19,9 @@ describe('SocialEngineering live-only truth', () => {
     expect(src).toMatch(/Array\.isArray\(data\?\.clients\)/)
     expect(src).not.toMatch(/\.catch\(\(\) => \{\}\)/)
   })
+
+  it('does not dump leftover leftover-campaigns CSV after a failed assessments GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+  })
 })

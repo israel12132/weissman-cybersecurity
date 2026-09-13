@@ -18,4 +18,11 @@ describe('ComplianceFrameworks live-only truth', () => {
     expect(src).toMatch(/setControlsUnavailable\(true\)/)
     expect(src).not.toMatch(/setControls\(\[\]\)/)
   })
+
+  it('does not dump leftover leftover-controls after a failed frameworks GET', () => {
+    expect(src).toMatch(/selectedFramework && !error && \(/)
+    expect(src).toMatch(/controlsUnavailable \? '—' : filteredControls\.length/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error \|\| controlsUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| controlsUnavailable \|\| !filteredFindings\.length\}/)
+  })
 })

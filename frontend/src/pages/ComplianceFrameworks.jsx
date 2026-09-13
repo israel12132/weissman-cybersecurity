@@ -344,6 +344,11 @@ export default function ComplianceFrameworks() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error || controlsUnavailable) return
+    exportCsv()
+  }, [error, controlsUnavailable, exportCsv])
+
   return (
     <PageShell
       title={t('pages.complianceFrameworks.title')}
@@ -352,9 +357,9 @@ export default function ComplianceFrameworks() {
       actions={(
         <ShellScanActions
           onRefresh={fetchFrameworks}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loadingFrameworks}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || controlsUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -686,7 +691,7 @@ export default function ComplianceFrameworks() {
           )}
         </div>
 
-        {selectedFramework && (
+        {selectedFramework && !error && (
           <>
             {loadingControls && controls.length === 0 ? (
               <SkeletonWidgetGrid count={5} />
@@ -794,7 +799,7 @@ export default function ComplianceFrameworks() {
                   <FileText className="w-4 h-4 text-cyan-400" />
                   {t('pages.complianceFrameworks.controls_heading')} — {selectedFramework.name}
                   {' '}
-                  ({filteredControls.length})
+                  ({controlsUnavailable ? '—' : filteredControls.length})
                 </h3>
               </div>
 

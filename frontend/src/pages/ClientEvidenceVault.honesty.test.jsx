@@ -15,4 +15,9 @@ describe('ClientEvidenceVault live-only truth', () => {
     expect(src).toMatch(/\/api\/evidence\/\$\{item\.id\}\/download/)
     expect(src).toMatch(/download_failed/)
   })
+
+  it('does not dump leftover leftover-evidence CSV after a failed evidence GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+  })
 })
