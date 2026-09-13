@@ -39,4 +39,9 @@ describe('GraphqlSecurityCommandCenter live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
   })
 
+  it('does not dump leftover GraphQL posture JSON or executive PDF after a failed history GET', () => {
+    expect(src).toMatch(/const exportPostureJson = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/const exportExecutivePdf = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+  })
+
 })

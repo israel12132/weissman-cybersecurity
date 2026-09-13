@@ -807,55 +807,6 @@ export default function GraphqlSecurityCommandCenter() {
     [findings],
   )
 
-  const exportPostureJson = useCallback(() => {
-    const payload = {
-      engine: ENGINE_ID,
-      target,
-      generated_at: new Date().toISOString(),
-      metrics,
-      executive_summary: metrics?.executive_summary,
-      compliance_scorecard: metrics?.compliance_scorecard,
-      remediation_priorities: metrics?.remediation_priorities,
-      owasp_posture: metrics?.owasp_posture,
-      findings: realFindings,
-      attack_paths: attackPaths,
-    }
-    downloadBytes(
-      new TextEncoder().encode(JSON.stringify(payload, null, 2)),
-      `graphql-posture-${Date.now()}.json`,
-      'application/json',
-    )
-  }, [target, metrics, realFindings, attackPaths])
-
-  const exportExecutivePdf = useCallback(() => {
-    const ex = metrics?.executive_summary
-    const card = metrics?.compliance_scorecard
-    const lines = [
-      'Weissman GraphQL & API Security — Executive Report',
-      `Generated: ${new Date().toISOString()}`,
-      `Target: ${target || '—'}`,
-      '',
-      ex?.headline || 'No executive summary yet',
-      `Risk tier: ${ex?.risk_tier || '—'}`,
-      `Exposure score: ${metrics?.exposure_score ?? '—'}/100`,
-      `OWASP grade: ${card?.overall_grade || ex?.owasp_grade || '—'}`,
-      `Components probed: ${ex?.components_probed ?? metrics?.components_probed ?? '—'}`,
-      '',
-      'Recommended first action:',
-      ex?.recommended_first_action || '—',
-      '',
-      'Top remediations:',
-    ]
-    for (const r of (metrics?.remediation_priorities || []).slice(0, 8)) {
-      lines.push(`- [${r.severity}] ${r.title}: ${r.remediation || ''}`)
-    }
-    lines.push('', 'OWASP API categories:')
-    for (const c of card?.categories || []) {
-      lines.push(`- ${c.category} ${c.grade} (${c.score}) — ${c.label}`)
-    }
-    downloadBytes(buildSimpleTextPdf(lines), `graphql-executive-${Date.now()}.pdf`, 'application/pdf')
-  }, [target, metrics])
-
   const {
     filteredFindings,
     counts,
@@ -878,6 +829,43 @@ export default function GraphqlSecurityCommandCenter() {
     exportCsv()
   }, [historyUnavailable, exportCsv])
   const liveMetrics = historyUnavailable ? null : metrics
+
+  const exportPostureJson = useCallback(() => {
+    if (historyUnavailable) return
+    const payload = {
+      generated_at: new Date().toISOString(),
+      target,
+      metrics,
+      findings: realFindings,
+      attack_paths: attackPaths,
+    }
+    downloadBytes(
+      `weissman-graphql-posture-${(target || 'scan').replace(/[^a-zA-Z0-9._-]+/g, '-')}.json`,
+      'application/json',
+      JSON.stringify(payload, null, 2),
+    )
+  }, [historyUnavailable, target, metrics, realFindings, attackPaths])
+
+  const exportExecutivePdf = useCallback(() => {
+    if (historyUnavailable) return
+    const lines = [
+      'WEISSMAN GRAPHQL EXECUTIVE BRIEF',
+      `Generated: ${new Date().toISOString()}`,
+      `Target: ${target || 'n/a'}`,
+      `Score: ${metrics?.score ?? 'n/a'}`,
+      `Grade: ${metrics?.grade ?? 'n/a'}`,
+      `Findings: ${metrics?.findings_count ?? 0}`,
+      `Critical: ${metrics?.critical ?? 0}`,
+      `High: ${metrics?.high ?? 0}`,
+      `OWASP GraphQL coverage: ${metrics?.owasp_coverage ?? 'n/a'}%`,
+    ]
+    downloadBytes(
+      `weissman-graphql-executive-${(target || 'scan').replace(/[^a-zA-Z0-9._-]+/g, '-')}.txt`,
+      'text/plain',
+      `${lines.join('\n')}\n`,
+    )
+  }, [historyUnavailable, target, metrics])
+
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
