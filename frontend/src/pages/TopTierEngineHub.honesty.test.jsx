@@ -22,4 +22,9 @@ describe('TopTierEngineHub live-only truth', () => {
     expect(src).toMatch(/setAuditUnavailable\(true\)/)
     expect(src).toMatch(/auditUnavailable\s*\?\s*t\('pages\.topTierEngineHub\.audit_unavailable'\)/)
   })
+
+  it('does not dump leftover leftover-audit CSV after a failed top-tier audit GET', () => {
+    expect(src).toMatch(/function exportAuditCsv\(\) \{\n    if \(auditUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{loading \|\| auditUnavailable \|\| !audit\?\.engines\?\.length\}/)
+  })
 })

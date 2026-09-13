@@ -1385,6 +1385,7 @@ export default function NexusSovereignSwarm() {
   }, [params, target])
 
   const handleExportReport = useCallback(() => {
+    if (historyUnavailable) return
     if (!metrics && !findings.length) return
     const blob = new Blob([JSON.stringify({
       metrics,
@@ -1400,7 +1401,7 @@ export default function NexusSovereignSwarm() {
     a.download = `nssi-intelligence-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-  }, [metrics, findings, oracleSynth])
+  }, [metrics, findings, oracleSynth, historyUnavailable])
 
   const handleImportConfig = useCallback(() => {
     importRef.current?.click()
@@ -2001,7 +2002,7 @@ export default function NexusSovereignSwarm() {
             </div>
 
             {/* Findings */}
-            {(metrics || realFindings.length > 0) && (
+            {!historyUnavailable && (metrics || realFindings.length > 0) && (
               <div className="flex justify-end">
                 <Button variant="unstyled"
                   type="button"

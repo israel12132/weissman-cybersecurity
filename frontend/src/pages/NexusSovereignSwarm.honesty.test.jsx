@@ -26,4 +26,9 @@ describe('NexusSovereignSwarm live-only truth', () => {
     expect(src).toMatch(/liveMetrics\?\.endpoint_agents_bridged != null \? liveMetrics\.endpoint_agents_bridged : '—'/)
     expect(src).not.toMatch(/metrics\?\.endpoint_agents_bridged \?\? fleetOnline/)
   })
+
+  it('does not dump leftover leftover-intelligence JSON after a failed history GET', () => {
+    expect(src).toMatch(/const handleExportReport = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/!historyUnavailable && \(metrics \|\| realFindings\.length > 0\)/)
+  })
 })

@@ -177,6 +177,7 @@ export default function TopTierEngineHub() {
   }, [engineSearch, auditById])
 
   function exportAuditCsv() {
+    if (auditUnavailable) return
     const rows = Array.isArray(audit?.engines) ? audit.engines : []
     const header = ['engine_id', 'label', 'execution_path', 'canonical_engine', 'is_production_runnable', 'known_in_catalog']
     const csvRows = rows.map((r) => {
@@ -214,7 +215,7 @@ export default function TopTierEngineHub() {
               onRefresh={reloadAudit}
               onExport={exportAuditCsv}
               refreshLoading={loading}
-              exportDisabled={loading || !audit?.engines?.length}
+              exportDisabled={loading || auditUnavailable || !audit?.engines?.length}
             />
             <div className="text-[11px] font-mono text-[var(--text-tertiary)]">
             {loading
