@@ -5295,6 +5295,123 @@ mod tests {
     }
 
     #[test]
+    fn llm_fuzz_run_commit_and_enqueue_store_down_is_not_404_or_202() {
+        let src = named_fn_src(
+            include_str!("server_handlers_phase6.inc"),
+            "async fn api_llm_fuzz_run",
+        );
+        assert!(src.contains("scan_status_unavailable_json"));
+        assert!(src.contains("tx.commit().await.is_err()"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        assert!(!src.contains("StatusCode::INTERNAL_SERVER_ERROR"));
+        let commit = src.find("tx.commit().await.is_err()").expect("commit");
+        let miss = src.find("client not found").expect("404");
+        let accepted = src.find("StatusCode::ACCEPTED").expect("202");
+        assert!(commit < miss);
+        assert!(commit < accepted);
+    }
+
+    #[test]
+    fn listing_commit_store_down_is_not_empty_ok() {
+        for (src, sig, envelope, body) in [
+            (
+                include_str!("server_handlers_phase6.inc"),
+                "async fn api_llm_fuzz_events",
+                "llm_fuzz_events_unavailable_json",
+                "\"events\": events",
+            ),
+            (
+                include_str!("server_handlers_phase6.inc"),
+                "async fn api_llm_fuzz_summary",
+                "llm_fuzz_summary_unavailable_json",
+                "\"vectors\": vectors",
+            ),
+            (
+                include_str!("server_handlers_engagements.inc"),
+                "async fn api_client_engagements_list",
+                "engagements_unavailable_json",
+                "\"engagements\": engagements",
+            ),
+            (
+                include_str!("server_handlers_phase7.inc"),
+                "async fn api_edge_swarm_nodes",
+                "edge_swarm_nodes_unavailable_json",
+                "\"nodes\": nodes",
+            ),
+            (
+                include_str!("server_handlers_phase7.inc"),
+                "async fn api_client_ot_ics_fingerprints",
+                "ot_ics_fingerprints_unavailable_json",
+                "\"fingerprints\": fingerprints",
+            ),
+            (
+                include_str!("server_handlers_roe_approvals.inc"),
+                "async fn api_roe_override_requests_list",
+                "roe_override_requests_unavailable_json",
+                "\"requests\": requests",
+            ),
+            (
+                include_str!("server_handlers_sovereign_defense.inc"),
+                "async fn api_sovereign_defense_chronos_events",
+                "chronos_events_unavailable_json",
+                "Value::Array(out)",
+            ),
+            (
+                include_str!("server_handlers_sovereign_defense.inc"),
+                "async fn api_sovereign_defense_cognitive_sessions",
+                "cognitive_sessions_unavailable_json",
+                "Value::Array(out)",
+            ),
+        ] {
+            let fn_src = named_fn_src(src, sig);
+            assert!(fn_src.contains(envelope), "{sig}");
+            assert!(fn_src.contains("tx.commit().await.is_err()"), "{sig}");
+            assert!(!compact_src(fn_src).contains("let_=tx.commit().await;"), "{sig}");
+            let commit = fn_src.find("tx.commit().await.is_err()").expect(sig);
+            let body_at = fn_src.find(body).unwrap_or_else(|| panic!("missing body in {sig}"));
+            assert!(commit < body_at, "{sig}");
+        }
+    }
+
+    #[test]
+    fn engagement_get_commit_store_down_is_not_404() {
+        let src = named_fn_src(
+            include_str!("server_handlers_engagements.inc"),
+            "async fn api_engagement_get",
+        );
+        assert!(src.contains("engagements_unavailable_json"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        let commit = src.find("tx.commit().await.is_err()").expect("commit");
+        let miss = src.find("StatusCode::NOT_FOUND").expect("404");
+        assert!(commit < miss);
+    }
+
+    #[test]
+    fn roe_override_list_expire_store_down_is_not_empty_ok() {
+        let src = named_fn_src(
+            include_str!("server_handlers_roe_approvals.inc"),
+            "async fn api_roe_override_requests_list",
+        );
+        assert!(compact_src(src).contains("execute(&mut*tx).await.is_err()"));
+        assert!(!compact_src(src).contains("let_=sqlx::query(\"UPDATEroe_override_requests"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+    }
+
+    #[test]
+    fn findings_status_verify_enqueue_store_down_is_not_ok_true() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest2.inc"),
+            "async fn api_findings_update_status",
+        );
+        let enq = src.find("remediation_verify").expect("verify job");
+        let after = &src[enq..];
+        assert!(after.contains("findings_unavailable_json"));
+        let unavail = after.find("findings_unavailable_json").expect("503");
+        let ok_true = after.find("\"ok\": true").expect("ok true");
+        assert!(unavail < ok_true);
+    }
+
+    #[test]
     fn evidence_download_miss_commit_store_down_is_not_404() {
         let src = named_fn_src(
             include_str!("server_handlers_evidence_vault.inc"),

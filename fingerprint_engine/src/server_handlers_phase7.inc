@@ -49,7 +49,15 @@ async fn api_edge_swarm_nodes(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::edge_swarm_nodes_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
     let mut nodes = Vec::new();
     for r in rows {
         nodes.push(json!({
@@ -153,7 +161,15 @@ async fn api_client_ot_ics_fingerprints(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::ot_ics_fingerprints_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
     let mut fingerprints = Vec::new();
     for r in rows {
         fingerprints.push(json!({

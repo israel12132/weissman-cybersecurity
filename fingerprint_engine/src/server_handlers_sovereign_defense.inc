@@ -168,7 +168,15 @@ async fn api_sovereign_defense_chronos_events(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::chronos_events_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
     let out: Vec<Value> = rows
         .into_iter()
         .map(|r| {
@@ -242,7 +250,15 @@ async fn api_sovereign_defense_cognitive_sessions(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::cognitive_sessions_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
     let out: Vec<Value> = rows
         .into_iter()
         .map(|r| {

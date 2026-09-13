@@ -35,11 +35,21 @@ async fn api_roe_override_requests_list(
             .into_response();
     };
     // Expire old pending requests opportunistically.
-    let _ = sqlx::query(
+    if sqlx::query(
         "UPDATE roe_override_requests SET status = 'expired', updated_at = now() WHERE status = 'pending' AND expires_at <= now()",
     )
     .execute(&mut *tx)
-    .await;
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::roe_override_requests_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
 
     let status = q.status.as_deref().and_then(normalize_roe_request_status);
     let client_id = q.client_id;
@@ -74,7 +84,15 @@ async fn api_roe_override_requests_list(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::roe_override_requests_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
 
     let requests: Vec<Value> = rows
         .into_iter()

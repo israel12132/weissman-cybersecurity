@@ -635,6 +635,13 @@ async fn api_findings_update_status(
         .await
         {
             tracing::warn!(target: "remediation_verify", error = %e, "enqueue verify job failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_unavailable_json(
+                    "store_down",
+                )),
+            )
+                .into_response();
         }
     }
 

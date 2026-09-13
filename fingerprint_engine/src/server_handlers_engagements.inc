@@ -88,7 +88,15 @@ async fn api_client_engagements_list(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::engagements_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
 
     let engagements: Vec<Value> = rows
         .into_iter()
@@ -290,7 +298,15 @@ async fn api_engagement_get(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::engagements_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
     let Some(r) = row else {
         return (StatusCode::NOT_FOUND, Json(Value::Null)).into_response();
     };

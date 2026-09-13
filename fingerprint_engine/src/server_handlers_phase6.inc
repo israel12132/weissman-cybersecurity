@@ -70,7 +70,15 @@ async fn api_llm_fuzz_run(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::scan_status_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
     if !exists {
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "client not found"}))).into_response();
     }
@@ -96,8 +104,10 @@ async fn api_llm_fuzz_run(
         Err(e) => {
             tracing::error!(target: "async_jobs", error = %e, "enqueue llm_fuzz_run failed");
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::scan_status_unavailable_json(
+                    "store_down",
+                )),
             )
                 .into_response()
         }
@@ -137,7 +147,15 @@ async fn api_llm_fuzz_events(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::llm_fuzz_events_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
     let events: Vec<Value> = rows
         .into_iter()
         .map(|r| {
@@ -194,7 +212,15 @@ async fn api_llm_fuzz_summary(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::llm_fuzz_summary_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
     let vectors: Vec<Value> = rows
         .into_iter()
         .map(|r| {
