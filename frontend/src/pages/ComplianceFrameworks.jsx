@@ -79,7 +79,6 @@ export default function ComplianceFrameworks() {
     } catch (err) {
       console.error('Failed to fetch frameworks:', err);
       setError(err?.message || t('pages.complianceFrameworks.load_failed'));
-      setFrameworks([]);
     } finally {
       setLoadingFrameworks(false);
     }
@@ -641,6 +640,13 @@ export default function ComplianceFrameworks() {
         <div className="flex items-center gap-3 overflow-x-auto pb-2">
           {loadingFrameworks && frameworks.length === 0 ? (
             <div className="text-sm text-[var(--text-muted)] px-4 py-3">{t('pages.complianceFrameworks.loading')}</div>
+          ) : error ? (
+            <div data-testid="compliance-frameworks-unavailable">
+              <EmptyState
+                title={t('pages.complianceFrameworks.unavailable_title')}
+                description={t('pages.complianceFrameworks.unavailable_body')}
+              />
+            </div>
           ) : frameworks.length === 0 ? (
             <EmptyState
               title={t('pages.complianceFrameworks.no_frameworks_title')}

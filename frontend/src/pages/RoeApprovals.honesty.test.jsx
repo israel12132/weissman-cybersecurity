@@ -1,0 +1,19 @@
+import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const src = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'RoeApprovals.jsx'),
+  'utf8',
+)
+
+describe('RoeApprovals live-only truth', () => {
+  it('does not paint a clear dual-control queue when GET /api/roe/override-requests fails', () => {
+    expect(src).toMatch(/data-testid="roe-approvals-unavailable"/)
+    expect(src).toMatch(/unavailable_title/)
+    expect(src).toMatch(/error \? t\('pages\.roeApprovals\.pending', \{ count: '—' \}\)/)
+    expect(src).toMatch(/error \? null : \(/)
+    expect(src).not.toMatch(/setRequests\(\[\]\)/)
+  })
+})

@@ -14,6 +14,7 @@ import { apiFetch } from '../utils/apiFetch';
 import { clientPrimaryTargetUrl } from '../lib/clientTarget';
 import { useJobPoll } from '../lib/useJobPoll';
 import Button from '../components/ui/Button'
+import EmptyState from '../components/ui/EmptyState'
 
 const TEMPLATES = [
   'Password Reset',
@@ -42,6 +43,7 @@ export default function SocialEngineering() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [clients, setClients] = useState([]);
+  const [clientsUnavailable, setClientsUnavailable] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const createModalRef = useRef(null);
   useFocusTrap(createModalRef, createOpen);
@@ -78,14 +80,14 @@ export default function SocialEngineering() {
       .then((data) => {
         const list = Array.isArray(data) ? data : data?.clients || [];
         setClients(list);
+        setClientsUnavailable(false);
         if (list.length > 0) {
           const id = String(list[0].id);
           setCreateClientId(id);
           setScanClientId(id);
         }
       })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {});
+      .catch(() => setClientsUnavailable(true));
   }, [fetchSocialEngineering]);
 
   useJobPoll(scanJobId, {
@@ -247,6 +249,15 @@ export default function SocialEngineering() {
           </div>
         )}
 
+        {error ? (
+          <div data-testid="social-engineering-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.socialEngineering.unavailable_title')}
+              body={t('pages.socialEngineering.unavailable_body')}
+            />
+          </div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
@@ -274,9 +285,16 @@ export default function SocialEngineering() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.socialEngineering.assessments_loaded')}</span>
               <Shield className="w-4 h-4 text-emerald-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{loading ? '…' : campaigns.length}</div>
+            <div className="text-2xl font-bold text-white">{loading || error ? '—' : campaigns.length}</div>
           </div>
         </div>
+        )}
+
+        {clientsUnavailable && (
+          <p data-testid="social-engineering-clients-unavailable" className="text-xs text-amber-300/80 font-mono">
+            {t('pages.socialEngineering.clients_unavailable')}
+          </p>
+        )}
 
         {campaigns.length > 0 && (
           <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">

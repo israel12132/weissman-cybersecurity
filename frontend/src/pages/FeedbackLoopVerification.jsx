@@ -21,7 +21,7 @@ export default function FeedbackLoopVerification() {
   useCommandCenterScan(selectedClientId)
   const [templates, setTemplates] = useState([])
   const [templatesUnavailable, setTemplatesUnavailable] = useState(false)
-  const [selectedId, setSelectedId] = useState(DEFAULT_TEMPLATE)
+  const [selectedId, setSelectedId] = useState('')
   const [targetUrl, setTargetUrl] = useState('')
   const [yaml, setYaml] = useState('')
   const [loadingYaml, setLoadingYaml] = useState(false)

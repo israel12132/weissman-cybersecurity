@@ -15,5 +15,6 @@ describe('FeedbackLoopVerification live-only truth', () => {
     expect(src).toMatch(/templates_unavailable/)
     expect(src).not.toMatch(/<option value=\{DEFAULT_TEMPLATE\}>\{DEFAULT_TEMPLATE\}<\/option>/)
     expect(src).toMatch(/!selectedId \|\| templatesUnavailable/)
+    expect(src).toMatch(/useState\(''\)/)
   })
 })

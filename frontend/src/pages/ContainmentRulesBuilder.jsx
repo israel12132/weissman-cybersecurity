@@ -8,8 +8,7 @@ import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
 import { confirmDialog } from '../utils/confirmDialog';
-
-
+import EmptyState from '../components/ui/EmptyState'
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 import Button from '../components/ui/Button'
 import { useToast } from '../components/ui/Toaster'
@@ -17,7 +16,7 @@ import { useToast } from '../components/ui/Toaster'
 export default function ContainmentRulesBuilder() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { clientId, loading: clientLoading } = useFirstTenantClientId();
+  const { clientId, loading: clientLoading, unavailable: clientsUnavailable } = useFirstTenantClientId();
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
@@ -26,13 +25,19 @@ export default function ContainmentRulesBuilder() {
 
   useEffect(() => {
     if (clientLoading) return;
+    if (clientsUnavailable) {
+      setUnavailable(true);
+      setLoading(false);
+      return;
+    }
     if (clientId == null) {
       setRules([]);
+      setUnavailable(false);
       setLoading(false);
       return;
     }
     fetchRules(clientId);
-  }, [clientId, clientLoading]);
+  }, [clientId, clientLoading, clientsUnavailable]);
 
   const fetchRules = async (cid) => {
     try {
@@ -145,6 +150,17 @@ export default function ContainmentRulesBuilder() {
       )}
     >
       <div className="space-y-6">
+        {unavailable && !loading && (
+          <div data-testid="containment-rules-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.containmentRulesBuilder.unavailable_title')}
+              body={t('pages.containmentRulesBuilder.unavailable_body')}
+            />
+          </div>
+        )}
+        {!unavailable && (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
@@ -207,10 +223,6 @@ export default function ContainmentRulesBuilder() {
             <div className="p-8 text-center text-[var(--text-muted)]">
               <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
               {t('pages.containmentRulesBuilder.loading')}
-            </div>
-          ) : unavailable ? (
-            <div className="p-8 text-center text-red-400" role="alert">
-              {t('pages.containmentRulesBuilder.rules_unavailable')}
             </div>
           ) : rules.length === 0 ? (
             <div className="p-8 text-center text-[var(--text-muted)]">
@@ -326,6 +338,8 @@ export default function ContainmentRulesBuilder() {
             </Button>
           </div>
         </div>
+        </>
+        )}
       </div>
 
       {(createModal || editModal) && (

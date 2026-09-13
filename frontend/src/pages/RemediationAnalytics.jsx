@@ -94,7 +94,13 @@ export default function RemediationAnalytics() {
       clientIds.map((id) => apiFetch(`/api/clients/${id}/heal-stats`)),
     ).then((results) => {
       if (cancelled) return
-      setPartial(results.some((x) => x.status === 'rejected'))
+      if (results.some((x) => x.status === 'rejected')) {
+        setHealStats(null)
+        setPartial(true)
+        setStatsLoading(false)
+        return
+      }
+      setPartial(false)
       const list = results.filter((x) => x.status === 'fulfilled' && x.value).map((x) => x.value)
       const channelMap = {}
       const agg = list.reduce(
@@ -128,7 +134,6 @@ export default function RemediationAnalytics() {
     Promise.all(
       clientIds.map((id) =>
         apiFetch(`/api/clients/${id}/heal-requests`)
-          .catch(() => null)
           .then((d) => {
             const list = Array.isArray(d) ? d : Array.isArray(d?.requests) ? d.requests : []
             return list.map((x) => ({ ...x, client_id: id }))
@@ -138,6 +143,8 @@ export default function RemediationAnalytics() {
       const merged = lists.flat().filter(Boolean)
       merged.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
       setHeals(merged.slice(0, 50))
+    }).catch(() => {
+      if (!cancelled) setHeals(null)
     })
     return () => { cancelled = true }
   }, [clientIds])
@@ -145,7 +152,7 @@ export default function RemediationAnalytics() {
   // Client-side filter over the already-loaded heals feed (a bounded, tenant-scoped
   // rollup — no server round-trip needed to search it).
   const filteredHeals = useMemo(
-    () => heals.filter((h) => rowMatchesQuery(searchQuery, [h?.finding_id, h?.verdict, h?.channel])),
+    () => (heals ?? []).filter((h) => rowMatchesQuery(searchQuery, [h?.finding_id, h?.verdict, h?.channel])),
     [heals, searchQuery],
   )
 
@@ -223,7 +230,16 @@ export default function RemediationAnalytics() {
           </div>
         )}
 
-        {loading || statsLoading ? (
+        {error ? (
+          <div data-testid="remediation-analytics-unavailable">
+            <EmptyState
+              compact
+              icon="alert"
+              title={t('pages.remediationAnalytics.unavailable_title')}
+              body={t('pages.remediationAnalytics.unavailable_body')}
+            />
+          </div>
+        ) : loading || statsLoading ? (
           <SkeletonTable rows={4} cols={3} />
         ) : healStats ? (
           <RemediationAnalyticsPanel stats={healStats} />
@@ -257,6 +273,8 @@ export default function RemediationAnalytics() {
           </div>
           {loading ? (
             <SkeletonTable rows={5} cols={4} />
+          ) : heals == null ? (
+            <p className="text-xs text-amber-300/80 font-mono">{t('pages.remediationAnalytics.unavailable_body')}</p>
           ) : filteredHeals.length === 0 ? (
             <div className="text-xs text-white/30 font-mono">—</div>
           ) : (
