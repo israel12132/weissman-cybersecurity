@@ -165,11 +165,15 @@ export default function AttackSurfaceGraph() {
   return (
     <StandaloneLabShell
       title={t(`${NS}.title`)}
-      subtitle={graph.run_id != null ? t(`${NS}.run_id`, { id: graph.run_id }) : undefined}
+      subtitle={error || graph.run_id == null ? undefined : t(`${NS}.run_id`, { id: graph.run_id })}
       contentClassName="p-0"
     >
       {error && (
-        <div className="mx-6 mt-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm">
+        <div
+          className="mx-6 mt-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm"
+          data-testid="asm-graph-unavailable"
+          role="alert"
+        >
           {error}
         </div>
       )}
@@ -182,11 +186,13 @@ export default function AttackSurfaceGraph() {
           {t(`${NS}.truncated`)}
         </div>
       )}
-      {graph.message && !graph.nodes?.length && (
+      {!error && graph.message && !graph.nodes?.length && (
         <div className="mx-6 mt-4 p-4 rounded bg-[var(--bg-3)]/80 border border-[var(--border-strong)] text-[var(--text-tertiary)] text-sm">
           {graph.message}
         </div>
       )}
+      {/* Leftover graph stays in React state; mute paint on failed attack-surface-graph GET */}
+      {!error && (
       <div className="flex-1 flex" style={{ minHeight: 'calc(100vh - 120px)' }}>
         <div className="flex-1 relative">
           <ReactFlow
@@ -233,6 +239,7 @@ export default function AttackSurfaceGraph() {
           </aside>
         )}
       </div>
+      )}
       <style>{`
         .asm-node-inner {
           padding: 8px 14px;
