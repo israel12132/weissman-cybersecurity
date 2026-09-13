@@ -95,34 +95,28 @@ async fn api_sovereign_operator_chat(
     .await
     {
         Ok(r) => {
-            let mut tx = match db::begin_tenant_tx(state.app_pool.as_ref(), auth.tenant_id).await {
-                Ok(t) => t,
-                Err(_) => {
-                    return (
-                        StatusCode::OK,
-                        Json(json!({
-                            "ok": true,
-                            "session_id": r.session_id,
-                            "thought": r.thought,
-                            "reply": r.reply,
-                            "tools": r.tools.iter().map(|t| json!({"name": t.name, "ok": t.ok, "detail": t.detail, "payload": t.payload})).collect::<Vec<_>>(),
-                        })),
-                    )
-                        .into_response();
-                }
-            };
-            let actor = crate::audit_log::user_email_for_id(state.auth_pool.as_ref(), auth.user_id).await;
-            let _ = crate::audit_log::insert_audit(
-                &mut tx,
+            if persist_operator_audit(
+                state.app_pool.as_ref(),
+                state.auth_pool.as_ref(),
                 auth.tenant_id,
-                Some(auth.user_id),
-                &actor,
+                auth.user_id,
                 "sovereign_operator_chat",
                 &format!("session={} tools={}", r.session_id, r.tools.len()),
                 &ip,
             )
-            .await;
-            let _ = tx.commit().await;
+            .await
+            .is_err()
+            {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(
+                        crate::http_unavailable::sovereign_operator_chat_unavailable_json(
+                            "store_down",
+                        ),
+                    ),
+                )
+                    .into_response();
+            }
             (
                 StatusCode::OK,
                 Json(json!({
@@ -300,22 +294,28 @@ async fn api_sovereign_operator_tools_post(
     )
     .await;
     let ip = crate::http::extract_client_ip(&headers, addr);
-    if let Ok(mut tx) = db::begin_tenant_tx(state.app_pool.as_ref(), auth.tenant_id).await {
-        let actor = crate::audit_log::user_email_for_id(state.auth_pool.as_ref(), auth.user_id).await;
-        let _ = crate::audit_log::insert_audit(
-            &mut tx,
-            auth.tenant_id,
-            Some(auth.user_id),
-            &actor,
-            "sovereign_operator_tool",
-            &format!("tool={} ok={} {}", out.name, out.ok, out.detail),
-            &ip,
+    if persist_operator_audit(
+        state.app_pool.as_ref(),
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        auth.user_id,
+        "sovereign_operator_tool",
+        &format!("tool={} ok={} {}", out.name, out.ok, out.detail),
+        &ip,
+    )
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(
+                crate::http_unavailable::sovereign_operator_tool_unavailable_json("store_down"),
+            ),
         )
-        .await;
-        let _ = tx.commit().await;
+            .into_response();
     }
     if let Some(sid) = body.session_id {
-        let _ = sov_chat::insert_message(
+        if sov_chat::insert_message(
             state.app_pool.as_ref(),
             auth.tenant_id,
             sid,
@@ -325,7 +325,17 @@ async fn api_sovereign_operator_tools_post(
             Some(&out.name),
             out.payload.clone(),
         )
-        .await;
+        .await
+        .is_err()
+        {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(
+                    crate::http_unavailable::sovereign_operator_tool_unavailable_json("store_down"),
+                ),
+            )
+                .into_response();
+        }
     }
     let code = if out.ok {
         StatusCode::OK
@@ -362,19 +372,25 @@ async fn api_sovereign_operator_tune_post(
     )
     .await;
     let ip = crate::http::extract_client_ip(&headers, addr);
-    if let Ok(mut tx) = db::begin_tenant_tx(state.app_pool.as_ref(), auth.tenant_id).await {
-        let actor = crate::audit_log::user_email_for_id(state.auth_pool.as_ref(), auth.user_id).await;
-        let _ = crate::audit_log::insert_audit(
-            &mut tx,
-            auth.tenant_id,
-            Some(auth.user_id),
-            &actor,
-            "sovereign_operator_tune",
-            &out.detail,
-            &ip,
+    if persist_operator_audit(
+        state.app_pool.as_ref(),
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        auth.user_id,
+        "sovereign_operator_tune",
+        &out.detail,
+        &ip,
+    )
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(
+                crate::http_unavailable::sovereign_operator_tool_unavailable_json("store_down"),
+            ),
         )
-        .await;
-        let _ = tx.commit().await;
+            .into_response();
     }
     let code = if out.ok {
         StatusCode::OK
@@ -410,19 +426,25 @@ async fn api_sovereign_operator_race_post(
     )
     .await;
     let ip = crate::http::extract_client_ip(&headers, addr);
-    if let Ok(mut tx) = db::begin_tenant_tx(state.app_pool.as_ref(), auth.tenant_id).await {
-        let actor = crate::audit_log::user_email_for_id(state.auth_pool.as_ref(), auth.user_id).await;
-        let _ = crate::audit_log::insert_audit(
-            &mut tx,
-            auth.tenant_id,
-            Some(auth.user_id),
-            &actor,
-            "sovereign_operator_race",
-            &out.detail,
-            &ip,
+    if persist_operator_audit(
+        state.app_pool.as_ref(),
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        auth.user_id,
+        "sovereign_operator_race",
+        &out.detail,
+        &ip,
+    )
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(
+                crate::http_unavailable::sovereign_operator_tool_unavailable_json("store_down"),
+            ),
         )
-        .await;
-        let _ = tx.commit().await;
+            .into_response();
     }
     let code = if out.ok {
         StatusCode::OK

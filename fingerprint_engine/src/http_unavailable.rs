@@ -521,6 +521,17 @@ pub fn sovereign_operator_chat_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// Sovereign Operator tool / tune / race when the audit (or session message) cannot persist
+pub fn sovereign_operator_tool_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "name": Value::Null,
+        "payload": Value::Null,
+        "detail": detail,
+    })
+}
+
 /// `GET /api/oast/verify/:token` when hit counts cannot be confirmed
 pub fn oast_verify_unavailable_json(detail: &str) -> Value {
     json!({
@@ -2656,6 +2667,16 @@ mod tests {
     }
 
     #[test]
+    fn tool_store_down_is_never_ok_true() {
+        let v = sovereign_operator_tool_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["name"].is_null());
+        assert!(v["payload"].is_null());
+        assert_ne!(v["ok"], true);
+    }
+
+    #[test]
     fn oast_verify_store_down_is_never_zero_hits() {
         let v = oast_verify_unavailable_json("store down");
         assert_eq!(v["ok"], false);
@@ -2851,6 +2872,88 @@ mod tests {
         );
         assert!(handler.contains("sovereign_operator_chat_unavailable_json"));
         assert!(handler.contains("e == \"store_down\""));
+    }
+
+    #[test]
+    fn sovereign_operator_chat_audit_store_down_is_not_ok_true() {
+        let src = named_fn_src(
+            include_str!("server_handlers_sovereign_operator.inc"),
+            "async fn api_sovereign_operator_chat",
+        );
+        assert!(src.contains("persist_operator_audit"));
+        assert!(src.contains("sovereign_operator_chat_unavailable_json"));
+        let compact = compact_src(src);
+        assert!(!compact.contains("ifletOk(muttx)="));
+        assert!(!compact.contains("let_=tx.commit().await;"));
+        assert!(!compact.contains("let_=audit_log::insert_audit"));
+        assert!(!compact.contains("let_=persist_operator_audit"));
+        let window = persist_window(src, "\"ok\": true");
+        persist_first_await_is_err(window);
+        let unavail = src
+            .find("sovereign_operator_chat_unavailable_json")
+            .expect("chat 503");
+        let ok_true = src.find("\"ok\": true").expect("ok true");
+        assert!(unavail < ok_true);
+    }
+
+    #[test]
+    fn sovereign_operator_tool_tune_race_audit_store_down_is_not_ok() {
+        let src = include_str!("server_handlers_sovereign_operator.inc");
+        for (sig, action) in [
+            (
+                "async fn api_sovereign_operator_tools_post",
+                "sovereign_operator_tool",
+            ),
+            (
+                "async fn api_sovereign_operator_tune_post",
+                "sovereign_operator_tune",
+            ),
+            (
+                "async fn api_sovereign_operator_race_post",
+                "sovereign_operator_race",
+            ),
+        ] {
+            let fn_src = named_fn_src(src, sig);
+            assert!(fn_src.contains("persist_operator_audit"), "{sig}");
+            assert!(fn_src.contains(action), "{sig}");
+            assert!(
+                fn_src.contains("sovereign_operator_tool_unavailable_json"),
+                "{sig}"
+            );
+            let compact = compact_src(fn_src);
+            assert!(!compact.contains("ifletOk(muttx)="), "{sig}");
+            assert!(!compact.contains("let_=tx.commit().await;"), "{sig}");
+            assert!(!compact.contains("let_=audit_log::insert_audit"), "{sig}");
+            assert!(!compact.contains("let_=persist_operator_audit"), "{sig}");
+            let window = persist_window(fn_src, "\"ok\": out.ok");
+            persist_first_await_is_err(window);
+        }
+        let tools = named_fn_src(src, "async fn api_sovereign_operator_tools_post");
+        let compact_tools = compact_src(tools);
+        assert!(!compact_tools.contains("let_=sov_chat::insert_message"));
+        let ins = compact_tools
+            .find("sov_chat::insert_message")
+            .expect("insert_message");
+        let after_ins = &compact_tools[ins..];
+        let await_at = after_ins.find(".await").expect("insert await");
+        assert!(
+            after_ins[await_at..]
+                .starts_with(".await.is_err(){return(StatusCode::SERVICE_UNAVAILABLE"),
+            "insert_message must .await.is_err() return 503, not swallow"
+        );
+    }
+
+    #[test]
+    fn sovereign_operator_routes_are_wired() {
+        let fragments = include_str!("http/handler_fragments.rs");
+        assert!(fragments.contains("server_handlers_sovereign_operator.inc"));
+        let routes = include_str!("http/serve_route_groups.rs");
+        assert!(routes.contains("/api/sovereign/operator/chat"));
+        assert!(routes.contains("api_sovereign_operator_chat"));
+        assert!(routes.contains("/api/sovereign/operator/tools"));
+        assert!(routes.contains("/api/sovereign/operator/tune"));
+        assert!(routes.contains("/api/sovereign/operator/race"));
+        assert!(routes.contains("/api/sovereign/operator/stream"));
     }
 
     #[test]
