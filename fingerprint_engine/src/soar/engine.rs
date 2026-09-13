@@ -28,6 +28,23 @@ pub fn is_armored_action(kind: &str) -> bool {
     ARMORED_KINDS.contains(&kind.trim().to_ascii_lowercase().as_str())
 }
 
+async fn forensic_log(
+    pool: &PgPool,
+    cmd: &ExecuteActionCommand,
+    status: &str,
+    detail: &str,
+    execution_id: Option<Uuid>,
+) -> Option<ActionOutcome> {
+    match audit::log_execution(pool, cmd, status, detail, execution_id).await {
+        Ok(()) => None,
+        Err(_) => Some(ActionOutcome {
+            status: "failed".into(),
+            detail: "store_down".into(),
+            execution_id,
+        }),
+    }
+}
+
 /// Build command from playbook action dispatch.
 #[must_use]
 pub fn build_command(
@@ -59,7 +76,9 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
 
     match find_existing_execution(pool, cmd.tenant_id, &idem).await {
         Err(_) => {
-            audit::log_execution(pool, &cmd, "failed", "database unavailable", None).await;
+            if let Some(o) = forensic_log(pool, &cmd, "failed", "database unavailable", None).await {
+                return o;
+            }
             return ActionOutcome {
                 status: "failed".into(),
                 detail: "database unavailable".into(),
@@ -118,7 +137,9 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
         match idempotency::try_acquire_isolate_lock(&idem).await {
             Ok(g) => g,
             Err(e) => {
-                audit::log_execution(pool, &cmd, "failed", &e, None).await;
+                if let Some(o) = forensic_log(pool, &cmd, "failed", &e, None).await {
+                return o;
+            }
                 return ActionOutcome {
                     status: "failed".into(),
                     detail: e,
@@ -130,14 +151,15 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
         match idempotency::try_acquire_lock(&idem).await {
             Ok(Some(g)) => g,
             Ok(None) => {
-                audit::log_execution(
+                if let Some(o) = forensic_log(
                     pool,
                     &cmd,
                     "duplicate_skipped",
                     "redis lock held or done marker",
                     None,
-                )
-                .await;
+                ).await {
+                return o;
+            }
                 return ActionOutcome {
                     status: "ok".into(),
                     detail: "duplicate_skipped: action already in-flight or completed".into(),
@@ -145,7 +167,9 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
                 };
             }
             Err(_) => {
-                audit::log_execution(pool, &cmd, "failed", "database unavailable", None).await;
+                if let Some(o) = forensic_log(pool, &cmd, "failed", "database unavailable", None).await {
+                return o;
+            }
                 return ActionOutcome {
                     status: "failed".into(),
                     detail: "database unavailable".into(),
@@ -213,14 +237,15 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
 
     if blast.requires_hitl {
         let _ = mark_pending_hitl(pool, cmd.tenant_id, execution_id, &blast.block_reason).await;
-        audit::log_execution(
+        if let Some(o) = forensic_log(
             pool,
             &cmd,
             "pending_hitl",
             &blast.block_reason,
             Some(execution_id),
-        )
-        .await;
+        ).await {
+                return o;
+            }
         return ActionOutcome {
             status: "pending_hitl".into(),
             detail: blast.block_reason,
@@ -241,7 +266,7 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
             &blast.block_reason,
         )
         .await;
-        audit::log_execution(
+        if let Some(o) = forensic_log(
             pool,
             &cmd,
             if store_down {
@@ -251,8 +276,9 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
             },
             &blast.block_reason,
             Some(execution_id),
-        )
-        .await;
+        ).await {
+                return o;
+            }
         return ActionOutcome {
             status: if store_down {
                 "failed".into()
@@ -274,7 +300,9 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
     .await
     .is_err()
     {
-        audit::log_execution(pool, &cmd, "failed", "store_down", Some(execution_id)).await;
+        if let Some(o) = forensic_log(pool, &cmd, "failed", "store_down", Some(execution_id)).await {
+                return o;
+            }
         return ActionOutcome {
             status: "failed".into(),
             detail: "store_down".into(),
@@ -293,8 +321,9 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
                 "database unavailable",
             )
             .await;
-            audit::log_execution(pool, &cmd, "failed", "database unavailable", Some(execution_id))
-                .await;
+            if let Some(o) = forensic_log(pool, &cmd, "failed", "database unavailable", Some(execution_id)).await {
+                return o;
+            }
             return ActionOutcome {
                 status: "failed".into(),
                 detail: "database unavailable".into(),
@@ -331,7 +360,9 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
                 &msg,
             )
             .await;
-            audit::log_execution(pool, &cmd, "failed", &msg, Some(execution_id)).await;
+            if let Some(o) = forensic_log(pool, &cmd, "failed", &msg, Some(execution_id)).await {
+                return o;
+            }
             return ActionOutcome {
                 status: "skipped".into(),
                 detail: msg,
@@ -362,7 +393,9 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
             .await
             .is_err()
             {
-                audit::log_execution(pool, &cmd, "failed", "store_down", Some(execution_id)).await;
+                if let Some(o) = forensic_log(pool, &cmd, "failed", "store_down", Some(execution_id)).await {
+                return o;
+            }
                 return ActionOutcome {
                     status: "failed".into(),
                     detail: "store_down".into(),
@@ -387,8 +420,9 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
                         "store_down",
                     )
                     .await;
-                    audit::log_execution(pool, &cmd, "failed", "store_down", Some(execution_id))
-                        .await;
+                    if let Some(o) = forensic_log(pool, &cmd, "failed", "store_down", Some(execution_id)).await {
+                return o;
+            }
                     return ActionOutcome {
                         status: "failed".into(),
                         detail: "store_down".into(),
@@ -409,8 +443,9 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
                         "store_down",
                     )
                     .await;
-                    audit::log_execution(pool, &cmd, "failed", "store_down", Some(execution_id))
-                        .await;
+                    if let Some(o) = forensic_log(pool, &cmd, "failed", "store_down", Some(execution_id)).await {
+                return o;
+            }
                     return ActionOutcome {
                         status: "failed".into(),
                         detail: "store_down".into(),
@@ -428,8 +463,9 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
                 .await;
             }
             mark_completed(&idem, Duration::from_secs(86_400)).await;
-            audit::log_execution(pool, &cmd, "verifying", &outcome.detail, Some(execution_id))
-                .await;
+            if let Some(o) = forensic_log(pool, &cmd, "verifying", &outcome.detail, Some(execution_id)).await {
+                return o;
+            }
             ActionOutcome {
                 status: "ok".into(),
                 detail: outcome.detail,
@@ -446,7 +482,9 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
             };
             let status_str = if terminal { "skipped" } else { "failed" };
             let _ = update_status(pool, cmd.tenant_id, execution_id, exec_status, &msg).await;
-            audit::log_execution(pool, &cmd, status_str, &msg, Some(execution_id)).await;
+            if let Some(o) = forensic_log(pool, &cmd, status_str, &msg, Some(execution_id)).await {
+                return o;
+            }
             ActionOutcome {
                 status: status_str.into(),
                 detail: msg,
@@ -484,7 +522,9 @@ async fn resume_store_down_after_adapter(
             .await
             .is_err()
         {
-            audit::log_execution(pool, cmd, "failed", "store_down", Some(existing.id)).await;
+            if let Some(o) = forensic_log(pool, cmd, "failed", "store_down", Some(existing.id)).await {
+                return o;
+            }
             return ActionOutcome {
                 status: "failed".into(),
                 detail: "store_down".into(),
@@ -501,7 +541,9 @@ async fn resume_store_down_after_adapter(
     .await
     .is_err()
     {
-        audit::log_execution(pool, cmd, "failed", "store_down", Some(existing.id)).await;
+        if let Some(o) = forensic_log(pool, cmd, "failed", "store_down", Some(existing.id)).await {
+                return o;
+            }
         return ActionOutcome {
             status: "failed".into(),
             detail: "store_down".into(),
@@ -509,14 +551,15 @@ async fn resume_store_down_after_adapter(
         };
     }
     mark_completed(idem, Duration::from_secs(86_400)).await;
-    audit::log_execution(
+    if let Some(o) = forensic_log(
         pool,
         cmd,
         "verifying",
         "verification resumed after store_down",
         Some(existing.id),
-    )
-    .await;
+    ).await {
+                return o;
+            }
     ActionOutcome {
         status: "ok".into(),
         detail: "verification resumed after store_down".into(),

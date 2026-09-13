@@ -432,10 +432,10 @@ pub async fn fleet_consensus_hit(
     metric: &str,
     item: &str,
     grace_secs: i64,
-) -> bool {
+) -> Result<bool, String> {
     let n = norm_item(item);
     if n.is_empty() {
-        return false;
+        return Ok(false);
     }
     sqlx::query_scalar::<_, bool>(
         r#"SELECT EXISTS(
@@ -459,7 +459,7 @@ pub async fn fleet_consensus_hit(
     .bind(grace_secs)
     .fetch_one(&mut **tx)
     .await
-    .unwrap_or(false)
+    .map_err(|_| "store_down".to_string())
 }
 
 #[cfg(test)]

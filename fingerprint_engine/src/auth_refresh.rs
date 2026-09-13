@@ -262,48 +262,47 @@ pub async fn rotate_refresh_token(
         // confirmed theft signal. Revoke the whole token family for that user and every access
         // token minted from it, so the attacker's freshly-rotated descendant is killed too (the
         // previous behaviour let it keep rotating for the full 30-day window, undetected).
-        if let Ok(Some(reused)) = sqlx::query(
+        let reused = sqlx::query(
             r#"SELECT user_id, tenant_id FROM user_refresh_tokens
                WHERE token_hash = $1 AND revoked_at IS NOT NULL
                LIMIT 1"#,
         )
         .bind(&th)
         .fetch_optional(&mut *tx)
-        .await
-        {
-            let ru: i64 = reused.try_get("user_id").unwrap_or(0);
-            let rt: i64 = reused.try_get("tenant_id").unwrap_or(0);
-            if ru > 0 {
-                let jtis: Vec<String> = sqlx::query_scalar(
-                    r#"SELECT access_jti FROM user_refresh_tokens
+        .await?;
+        let Some(reused) = reused else {
+            return Err(RefreshTokenError::InvalidOrRevoked);
+        };
+        let ru: i64 = reused.try_get("user_id").unwrap_or(0);
+        let rt: i64 = reused.try_get("tenant_id").unwrap_or(0);
+        if ru > 0 {
+            let jtis: Vec<String> = sqlx::query_scalar(
+                r#"SELECT access_jti FROM user_refresh_tokens
                        WHERE user_id = $1 AND access_jti IS NOT NULL AND expires_at > now()"#,
-                )
-                .bind(ru)
-                .fetch_all(&mut *tx)
-                .await
-                .unwrap_or_default();
-                let _ = sqlx::query(
-                    r#"UPDATE user_refresh_tokens SET revoked_at = now()
+            )
+            .bind(ru)
+            .fetch_all(&mut *tx)
+            .await?;
+            sqlx::query(
+                r#"UPDATE user_refresh_tokens SET revoked_at = now()
                        WHERE user_id = $1 AND revoked_at IS NULL"#,
-                )
-                .bind(ru)
-                .execute(&mut *tx)
-                .await;
-                let _ = tx.commit().await;
-                // Best-effort: revoke every access JWT bound to the family until its natural expiry.
-                let expiry = chrono::Utc::now() + chrono::Duration::hours(6);
-                for jti in jtis {
-                    let _ = revoke_access_jti(pool, &jti, expiry).await;
-                }
-                metrics::counter!("weissman_refresh_reuse_total").increment(1);
-                tracing::warn!(
-                    target: "auth",
-                    user_id = ru,
-                    tenant_id = rt,
-                    "refresh token reuse detected; revoked entire token family"
-                );
-                return Err(RefreshTokenError::InvalidOrRevoked);
+            )
+            .bind(ru)
+            .execute(&mut *tx)
+            .await?;
+            tx.commit().await?;
+            // Best-effort: revoke every access JWT bound to the family until its natural expiry.
+            let expiry = chrono::Utc::now() + chrono::Duration::hours(6);
+            for jti in jtis {
+                let _ = revoke_access_jti(pool, &jti, expiry).await;
             }
+            metrics::counter!("weissman_refresh_reuse_total").increment(1);
+            tracing::warn!(
+                target: "auth",
+                user_id = ru,
+                tenant_id = rt,
+                "refresh token reuse detected; revoked entire token family"
+            );
         }
         return Err(RefreshTokenError::InvalidOrRevoked);
     };

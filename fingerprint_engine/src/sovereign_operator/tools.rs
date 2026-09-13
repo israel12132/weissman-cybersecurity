@@ -715,16 +715,10 @@ pub async fn hourly_tune_cycle(pool: &PgPool, tenant_id: i64) -> Result<Value, S
     }
     let logs = log_stream::list_recent(pool, tenant_id, 30)
         .await
-        .unwrap_or_default();
-    let memory = super::memory::list_recent(pool, tenant_id, None, 20)
-        .await
-        .unwrap_or_default();
-    let forge = super::forge::list_forge(pool, tenant_id, 10)
-        .await
-        .unwrap_or_default();
-    let scripts = super::scripts::list_scripts(pool, tenant_id, 10)
-        .await
-        .unwrap_or_default();
+        .map_err(|e| e.to_string())?;
+    let memory = super::memory::list_recent(pool, tenant_id, None, 20).await?;
+    let forge = super::forge::list_forge(pool, tenant_id, 10).await?;
+    let scripts = super::scripts::list_scripts(pool, tenant_id, 10).await?;
     Ok(json!({
         "tuned_jobs": jobs,
         "log_sample_count": logs.len(),

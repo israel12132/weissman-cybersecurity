@@ -87,32 +87,34 @@ pub fn apply_ghost_escalation(stealth: &mut Option<StealthConfig>) {
 pub async fn load_tenant_oast_configs(
     pool: &sqlx::PgPool,
     tenant_id: i64,
-) -> (Option<String>, Option<String>, Option<String>) {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return (None, None, None);
-    };
+) -> Result<(Option<String>, Option<String>, Option<String>), String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     async fn cfg(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         tenant_id: i64,
         key: &str,
-    ) -> Option<String> {
-        sqlx::query_scalar::<_, String>(
+    ) -> Result<Option<String>, String> {
+        let val = sqlx::query_scalar::<_, String>(
             "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
         )
         .bind(tenant_id)
         .bind(key)
         .fetch_optional(&mut **tx)
         .await
-        .ok()
-        .flatten()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
+        .map_err(|_| "store_down".to_string())?;
+        Ok(val
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()))
     }
-    let listener = cfg(&mut tx, tenant_id, "oast_listener_url").await;
-    let domain = cfg(&mut tx, tenant_id, "oast_domain").await;
-    let api_key = cfg(&mut tx, tenant_id, "oast_api_key").await;
-    let _ = tx.commit().await;
-    (listener, domain, api_key)
+    let listener = cfg(&mut tx, tenant_id, "oast_listener_url").await?;
+    let domain = cfg(&mut tx, tenant_id, "oast_domain").await?;
+    let api_key = cfg(&mut tx, tenant_id, "oast_api_key").await?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
+    Ok((listener, domain, api_key))
 }
 
 pub fn production_ids_json() -> Vec<serde_json::Value> {

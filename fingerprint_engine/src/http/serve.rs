@@ -425,14 +425,13 @@ struct LoginBody {
     tenant_slug: String,
 }
 
-async fn default_tenant_id(auth_pool: &PgPool) -> Option<i64> {
+async fn default_tenant_id(auth_pool: &PgPool) -> Result<Option<i64>, String> {
     sqlx::query_scalar::<_, i64>(
         "SELECT id FROM tenants WHERE slug = 'default' AND active = true LIMIT 1",
     )
     .fetch_optional(auth_pool)
     .await
-    .ok()
-    .flatten()
+    .map_err(|_| "store_down".to_string())
 }
 
 /// Read PoE job from DB (RLS-scoped).
@@ -555,7 +554,8 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
     )
     .await
     {
-        Some(tid) => match db::begin_tenant_tx(state.read_pool(), tid).await {
+        Err(_) => return dashboard_store_down_html(),
+        Ok(Some(tid)) => match db::begin_tenant_tx(state.read_pool(), tid).await {
             Ok(mut tx) => {
                 let v: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
                     .fetch_one(&mut *tx)
@@ -698,7 +698,7 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
                 return dashboard_store_down_html();
             }
         },
-        None => (
+        Ok(None) => (
             0,
             0,
             0,

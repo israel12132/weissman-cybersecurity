@@ -1751,6 +1751,7 @@ mod tests {
         assert!(fn_src.contains("SERVICE_UNAVAILABLE"));
         assert!(!fn_src.contains("INTERNAL_SERVER_ERROR"));
         assert!(!fn_src.contains("let _ = tx.commit()"));
+        assert!(!compact_src(fn_src).contains("let_=tx.commit().await;"));
     }
 
     #[test]
@@ -1761,6 +1762,7 @@ mod tests {
         assert!(fn_src.contains("request not found"));
         assert!(!fn_src.contains(".ok().flatten()"));
         assert!(!fn_src.contains("let _ = tx.commit()"));
+        assert!(!compact_src(fn_src).contains("let_=tx.commit().await;"));
         let helper = named_fn_src(src, "fn roe_store_down");
         assert!(helper.contains("SERVICE_UNAVAILABLE"));
         assert!(helper.contains("roe_override_requests_unavailable_json"));
@@ -1996,6 +1998,7 @@ mod tests {
         assert!(fn_src.contains("engagement not found"));
         assert!(!fn_src.contains(".ok().flatten()"));
         assert!(!fn_src.contains("let _ = tx.commit()"));
+        assert!(!compact_src(fn_src).contains("let_=tx.commit().await;"));
     }
 
     #[test]
@@ -3837,6 +3840,7 @@ mod tests {
         let rec = named_fn_src(pb, "async fn record_run");
         assert!(rec.contains("Result<(), String>"));
         assert!(!rec.contains("let _ = tx.commit()"));
+        assert!(!compact_src(rec).contains("let_=tx.commit().await;"));
         assert!(rec.contains("store_down"));
         let dispatch = named_fn_src(pb, "pub async fn dispatch_event");
         assert!(dispatch.contains("skipped_store_down"));
@@ -3871,7 +3875,7 @@ mod tests {
         let gh = include_str!("soar/adapters/github.rs");
         let open = named_fn_src(gh, "async fn open_pr");
         assert!(open.contains("if tx.commit().await.is_err()"));
-        assert!(!compact_src(open).contains("let_=tx.commit().await"));
+        assert!(!compact_src(open).contains("let_=tx.commit().await;"));
         let enqueue = open.find("enqueue_with_max_attempts").expect("enqueue after commit");
         let commit = open.find("if tx.commit().await.is_err()").expect("commit checked");
         assert!(commit < enqueue, "must not enqueue until spec commit succeeds");
@@ -3879,9 +3883,11 @@ mod tests {
         let engine = include_str!("soar/engine.rs");
         let upd = named_fn_src(engine, "async fn update_status");
         assert!(!upd.contains("let _ = tx.commit()"));
+        assert!(!compact_src(upd).contains("let_=tx.commit().await;"));
         assert!(upd.contains("store_down"));
         let ures = named_fn_src(engine, "async fn update_execution_result");
         assert!(!ures.contains("let _ = tx.commit()"));
+        assert!(!compact_src(ures).contains("let_=tx.commit().await;"));
         assert!(ures.contains("store_down"));
         let exec = named_fn_src(engine, "pub async fn execute_armored_action");
         assert!(!compact_src(exec).contains(
@@ -3953,6 +3959,7 @@ mod tests {
         let persist_rb = named_fn_src(include_str!("soar/revert.rs"), "pub async fn persist_runbook");
         assert!(persist_rb.contains("Result<Uuid, String>"));
         assert!(!persist_rb.contains("let _ = tx.commit()"));
+        assert!(!compact_src(persist_rb).contains("let_=tx.commit().await;"));
         assert!(persist_rb.contains("store_down"));
         assert!(persist_rb.contains("serde_json::to_value(steps).map_err"));
         assert!(
@@ -4098,6 +4105,10 @@ mod tests {
         assert!(
             !src.contains("let _ = tx.commit()"),
             "evaluate_tenant must not empty-ok a commit fail then return Ok(fired)"
+        );
+        assert!(
+            !compact_src(src).contains("let_=tx.commit().await;"),
+            "evaluate_tenant commit must not be ignored even if rustfmt line-breaks it"
         );
         assert!(
             src.contains("store_down"),
@@ -4866,5 +4877,115 @@ mod tests {
             "dispatch must not wrap store-down as a RoE policy violation"
         );
         assert!(compact_src(inner).contains("EngineResult::error(\"store_down\")"));
+    }
+
+    #[test]
+    fn poe_webhook_store_down_is_not_unconfigured() {
+        let src = include_str!("notifications.rs");
+        let db = named_fn_src(src, "async fn webhook_url_from_db");
+        assert!(db.contains("Result<Option<String>, String>"));
+        assert!(!compact_src(db).contains(".ok().flatten()"));
+        assert!(!compact_src(db).contains("let_=tx.commit().await;"));
+        assert!(db.contains("store_down"));
+        let eff = named_fn_src(src, "async fn webhook_url_effective");
+        assert!(eff.contains("Result<Option<String>, String>"));
+        let spawn = named_fn_src(src, "pub fn spawn_critical_poe_alert");
+        assert!(spawn.contains("critical PoE webhook store_down"));
+    }
+
+    #[test]
+    fn tenant_oast_config_store_down_is_not_unconfigured() {
+        let src = named_fn_src(
+            include_str!("engine_dispatch.rs"),
+            "pub async fn load_tenant_oast_configs",
+        );
+        assert!(src.contains("Result<(Option<String>, Option<String>, Option<String>), String>"));
+        assert!(!compact_src(src).contains(".ok().flatten()"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        assert!(src.contains("store_down"));
+    }
+
+    #[test]
+    fn refresh_reuse_revoke_store_down_is_not_family_revoked() {
+        let src = include_str!("auth_refresh.rs");
+        let start = src
+            .find("Reuse detection (OAuth 2.0 Security BCP")
+            .expect("reuse");
+        let rest = &src[start..];
+        let end = rest.find("let old_id:").unwrap_or(rest.len());
+        let reuse = &rest[..end];
+        assert!(!compact_src(reuse).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(!compact_src(reuse).contains("let_=sqlx::query("));
+        assert!(!compact_src(reuse).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(reuse).contains("ifletOk(Some(reused))="));
+        assert!(reuse.contains("revoked entire token family"));
+    }
+
+    #[test]
+    fn hourly_tune_list_store_down_is_not_idle_zero() {
+        let src = named_fn_src(
+            include_str!("sovereign_operator/tools.rs"),
+            "pub async fn hourly_tune_cycle",
+        );
+        assert!(!compact_src(src).contains("unwrap_or_default()"));
+        assert!(src.contains(".await?"));
+    }
+
+    #[test]
+    fn fleet_consensus_hit_store_down_is_not_confirmed_miss() {
+        let src = named_fn_src(
+            include_str!("ueba_onboarding.rs"),
+            "pub async fn fleet_consensus_hit",
+        );
+        assert!(src.contains("Result<bool, String>"));
+        assert!(!compact_src(src).contains("fetch_one(&mut**tx).await.unwrap_or(false)"));
+        assert!(src.contains("store_down"));
+    }
+
+    #[test]
+    fn dashboard_default_tenant_store_down_is_not_empty_ok() {
+        let src = include_str!("http/serve.rs");
+        let tid = named_fn_src(src, "async fn default_tenant_id");
+        assert!(tid.contains("Result<Option<i64>, String>"));
+        assert!(!compact_src(tid).contains(".ok().flatten()"));
+        let dash = named_fn_src(src, "async fn dashboard_page");
+        assert!(dash.contains("Err(_) => return dashboard_store_down_html()"));
+        assert!(dash.contains("Ok(None)"));
+        assert!(dash.contains("No default tenant"));
+    }
+
+    #[test]
+    fn cicd_event_persist_store_down_is_not_gate_ok() {
+        let src = include_str!("cicd_interceptor.rs");
+        let log = named_fn_src(src, "async fn log_cicd_event");
+        assert!(log.contains("Result<(), String>"));
+        assert!(!compact_src(log).contains("let_=sqlx::query("));
+        assert!(!compact_src(log).contains("let_=tx.commit().await;"));
+        assert!(log.contains("store_down"));
+        assert!(src.contains("cicd_store_down()"));
+        assert!(
+            !src.contains("log_cicd_event(\n        pool.as_deref(),")
+                || src.contains("cicd_store_down()"),
+            "CI gate must not ok after persist fail"
+        );
+    }
+
+    #[test]
+    fn soar_forensic_log_store_down_is_not_ok_unaudited() {
+        let audit = include_str!("soar/audit.rs");
+        let dec = named_fn_src(audit, "pub async fn log_decision");
+        assert!(dec.contains("Result<(), String>"));
+        assert!(!compact_src(dec).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(dec).contains("ifletOk(muttx)="));
+        assert!(dec.contains("store_down"));
+        let exec = named_fn_src(audit, "pub async fn log_execution");
+        assert!(exec.contains("Result<(), String>"));
+        let engine = include_str!("soar/engine.rs");
+        let armored = named_fn_src(engine, "pub async fn execute_armored_action");
+        assert!(
+            compact_src(armored).contains("forensic_log(pool,&cmd,\"verifying\""),
+            "ok/verifying must not skip forensic persist"
+        );
+        assert!(!armored.contains("audit::log_execution"));
     }
 }

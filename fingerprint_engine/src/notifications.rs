@@ -40,27 +40,34 @@ pub fn spawn_ascension_poe_followup(pool: Arc<PgPool>, tenant_id: i64, target: S
     });
 }
 
-async fn webhook_url_from_db(pool: &PgPool, tenant_id: i64) -> Option<String> {
-    sqlx::query_scalar::<_, String>(
+async fn webhook_url_from_db(pool: &PgPool, tenant_id: i64) -> Result<Option<String>, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
+    let val = sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'alert_webhook_url'",
     )
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten()
-    .filter(|s| !s.trim().is_empty())
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
+    Ok(val.filter(|s| !s.trim().is_empty()))
 }
 
-async fn webhook_url_effective(pool: Option<(&PgPool, i64)>) -> Option<String> {
+async fn webhook_url_effective(pool: Option<(&PgPool, i64)>) -> Result<Option<String>, String> {
     if let Some((p, tid)) = pool {
-        if let Some(u) = webhook_url_from_db(p, tid).await {
-            return Some(u);
+        match webhook_url_from_db(p, tid).await {
+            Ok(Some(u)) => return Ok(Some(u)),
+            Ok(None) => {}
+            Err(e) => return Err(e),
         }
     }
-    std::env::var("WEISSMAN_ALERT_WEBHOOK_URL")
+    Ok(std::env::var("WEISSMAN_ALERT_WEBHOOK_URL")
         .ok()
-        .filter(|s| !s.trim().is_empty())
+        .filter(|s| !s.trim().is_empty()))
 }
 
 fn poc_has_curl(poc: &str) -> bool {
@@ -89,7 +96,17 @@ pub fn spawn_critical_poe_alert(
     let title = title.to_string();
     let poc = poc_exploit.to_string();
     tokio::spawn(async move {
-        let webhook = webhook_url_effective(Some((pool.as_ref(), tenant_id))).await;
+        let webhook = match webhook_url_effective(Some((pool.as_ref(), tenant_id))).await {
+            Ok(u) => u,
+            Err(_) => {
+                tracing::warn!(
+                    target: "notifications",
+                    tenant_id,
+                    "critical PoE webhook store_down"
+                );
+                return;
+            }
+        };
         let Some(url) = webhook else {
             return;
         };

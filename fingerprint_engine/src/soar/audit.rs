@@ -12,17 +12,17 @@ pub async fn log_decision(
     detail: &str,
     evidence: &ThreatEvidence,
     payload: &Value,
-) {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return;
-    };
+) -> Result<(), String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let body = json!({
         "action": action,
         "detail": detail,
         "evidence": evidence,
         "payload": payload,
     });
-    let _ = crate::audit_log::insert_audit(
+    crate::audit_log::insert_audit(
         &mut tx,
         tenant_id,
         None,
@@ -31,8 +31,12 @@ pub async fn log_decision(
         &body.to_string(),
         "0.0.0.0",
     )
-    .await;
-    let _ = tx.commit().await;
+    .await
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
+    Ok(())
 }
 
 pub async fn log_execution(
@@ -41,7 +45,7 @@ pub async fn log_execution(
     status: &str,
     detail: &str,
     execution_id: Option<uuid::Uuid>,
-) {
+) -> Result<(), String> {
     let payload = json!({
         "execution_id": execution_id,
         "action_kind": cmd.action_kind,
@@ -59,5 +63,5 @@ pub async fn log_execution(
         &cmd.evidence,
         &payload,
     )
-    .await;
+    .await
 }
