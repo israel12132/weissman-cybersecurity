@@ -105,8 +105,11 @@ export default function SelfImprovementConsole() {
         api.get('/api/self-improve/status'),
         api.get(`/api/self-improve/queue${qs}`),
       ])
+      if (!Array.isArray(q?.items)) {
+        throw new Error('Failed to load')
+      }
       setStatus(st)
-      setItems(Array.isArray(q?.items) ? q.items : [])
+      setItems(q.items)
     } catch (e) {
       setError(e?.message || 'Failed to load')
     } finally {
@@ -249,6 +252,14 @@ export default function SelfImprovementConsole() {
 
       {loading ? (
         <SkeletonWidgetGrid />
+      ) : error ? (
+        <div data-testid="self-improvement-unavailable">
+          <EmptyState
+            icon="alert"
+            title="Self-improvement queue unavailable"
+            description="GET /api/self-improve/status could not be confirmed. Zero proposals is not a quiet engine."
+          />
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">

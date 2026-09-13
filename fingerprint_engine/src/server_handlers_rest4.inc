@@ -307,6 +307,11 @@ async fn api_general_self_audit(
     .await
     {
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) if e == "store_down" => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "unavailable": true, "error": "store_down"})),
+        )
+            .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": e})),

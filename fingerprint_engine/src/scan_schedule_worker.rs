@@ -208,10 +208,20 @@ async fn claim_due_schedule_ids(app_pool: &PgPool, tenant_id: i64) -> Result<Vec
 }
 
 async fn tick(app_pool: &PgPool, auth_pool: &PgPool) {
-    let tenants: Vec<i64> = sqlx::query_scalar("SELECT id FROM tenants WHERE active = true")
+    let tenants: Vec<i64> = match sqlx::query_scalar("SELECT id FROM tenants WHERE active = true")
         .fetch_all(auth_pool)
         .await
-        .unwrap_or_default();
+    {
+        Ok(ids) => ids,
+        Err(e) => {
+            tracing::warn!(
+                target: "scan_schedule_worker",
+                error = %e,
+                "tenant list store_down"
+            );
+            return;
+        }
+    };
 
     for tenant_id in tenants {
         let due = match claim_due_schedule_ids(app_pool, tenant_id).await {

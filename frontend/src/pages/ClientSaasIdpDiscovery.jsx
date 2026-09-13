@@ -162,12 +162,16 @@ export default function ClientSaasIdpDiscovery() {
           </Button>
         </div>
 
-        {error && (
-          <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-300">
-            {error}
+        {error ? (
+          <div data-testid="saas-idp-discovery-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.clientSaasIdpDiscovery.unavailable_title')}
+              body={t('pages.clientSaasIdpDiscovery.unavailable_body')}
+            />
           </div>
-        )}
-
+        ) : (
+        <>
         <div className="p-6 bg-[var(--bg-3)]/40 border border-[var(--border-default)] rounded-xl">
           <h2 className="text-lg font-semibold text-white">{t('pages.clientSaasIdpDiscovery.domains_heading')}</h2>
           <div className="mt-2 text-sm text-[var(--text-secondary)]">
@@ -300,6 +304,8 @@ export default function ClientSaasIdpDiscovery() {
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
     </PageShell>
   )

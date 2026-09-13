@@ -2284,6 +2284,8 @@
       "no_frameworks_title": "No frameworks",
       "unavailable_title": "Compliance frameworks unavailable",
       "unavailable_body": "GET /api/compliance/frameworks could not be confirmed. Zero frameworks is not an unmapped tenant.",
+      "controls_unavailable_title": "Compliance controls unavailable",
+      "controls_unavailable_body": "GET /api/compliance/frameworks/:id/controls could not be confirmed. Zero controls is not an empty framework.",
       "status_compliant": "Compliant",
       "status_non_compliant": "Non-compliant",
       "status_partial": "Partial",
@@ -4461,6 +4463,11 @@
       "showing_count": "{{count}} of {{total}} engines",
       "no_search_results": "No engines match your search."
     },
+    "cemDago": {
+      "unavailable_title": "CEM-DAGO mesh unavailable",
+      "unavailable_body": "GET /api/cem-dago/status could not be confirmed. Empty waves are not an idle mesh.",
+      "load_failed": "Failed to load CEM-DAGO mesh"
+    },
     "clientSaasIdpDiscovery": {
       "title": "SaaS / IdP Discovery",
       "subtitle": "Passive signals for IdP and SaaS footprint from client domains",
@@ -4476,6 +4483,8 @@
       "saas_heading": "SaaS signals",
       "empty_idp": "No IdP candidates detected.",
       "empty_saas": "No SaaS signals detected.",
+      "unavailable_title": "SaaS / IdP discovery unavailable",
+      "unavailable_body": "GET /api/clients/:id/discovery/saas-idp could not be confirmed. Empty domains is not a quiet tenant.",
       "confidence": "Confidence: {{pct}}",
       "copy_issuer": "Copy Issuer URL",
       "copy_host": "Copy Host",

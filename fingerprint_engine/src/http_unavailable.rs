@@ -4213,6 +4213,14 @@ mod tests {
             tick.contains("match claim_due_schedule_ids("),
             "tick must match claim_due_schedule_ids Err instead of treating it as no due work"
         );
+        assert!(
+            !compact_src(tick).contains("fetch_all(auth_pool).await.unwrap_or_default()"),
+            "scan schedule tenant list store-down must not look like an idle tick"
+        );
+        assert!(
+            tick.contains("tenant list store_down"),
+            "scan schedule tick must warn tenant list store_down instead of empty-ok"
+        );
     }
 
     #[test]
@@ -6123,5 +6131,50 @@ mod tests {
         assert!(!compact.contains("ifletOk(muttx)="));
         assert!(!compact.contains("let_=sqlx"));
         assert!(!compact.contains("let_=tx.commit().await;"));
+    }
+
+    #[test]
+    fn deception_canary_lookup_store_down_is_not_zero_triggers() {
+        let src = named_fn_src_until_cfg_test(
+            include_str!("deception_eventbridge.rs"),
+            "pub async fn handle_aws_canary_eventbridge",
+        );
+        assert!(
+            !compact_src(src).contains("fetch_all(app_pool).await.unwrap_or_default()"),
+            "canary lookup store-down must not look like zero triggers"
+        );
+        assert!(src.contains("SERVICE_UNAVAILABLE"));
+        assert!(src.contains("store_down"));
+    }
+
+    #[test]
+    fn self_defense_audit_security_events_store_down_is_not_empty_trail() {
+        let src = named_fn_src_until_cfg_test(
+            include_str!("strategy_engine.rs"),
+            "pub async fn run_self_defense_audit",
+        );
+        assert!(
+            !compact_src(src).contains("fetch_all(pool).await.unwrap_or_default()"),
+            "security_events store-down must not look like a confirmed-empty audit trail"
+        );
+        assert!(src.contains("security_events store_down"));
+        let handler = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "async fn api_general_self_audit",
+        );
+        assert!(handler.contains("SERVICE_UNAVAILABLE"));
+        assert!(handler.contains("store_down"));
+    }
+
+    #[test]
+    fn cem_dago_present_signals_store_down_is_not_empty_ready_wave() {
+        let src = include_str!("cem_dago/mesh.rs");
+        assert!(
+            !compact_src(src).contains("present_signals().await.unwrap_or_default()"),
+            "present_signals store-down must not look like an empty signal set"
+        );
+        let exec = named_fn_src(src, "pub async fn execute_mesh");
+        assert!(exec.contains("present_signals store_down"));
+        assert!(exec.contains("signals_unavailable"));
     }
 }

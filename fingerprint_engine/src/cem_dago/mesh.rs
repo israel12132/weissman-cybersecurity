@@ -188,19 +188,27 @@ pub async fn execute_mesh(req: MeshRequest) -> MeshRunReport {
     let mut council_invoked = false;
     let mut council_degraded = false;
     let mut council_error = None;
+    let mut signals_unavailable = false;
 
     let _ = exec.blackboard.mark_latest().await;
 
     let mut wave_n = 0u32;
     while !remaining.is_empty() && wave_n < MAX_WAVES {
         wave_n += 1;
-        let present: HashSet<String> = exec
-            .blackboard
-            .present_signals()
-            .await
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
+        let present: HashSet<String> = match exec.blackboard.present_signals().await {
+            Ok(s) => s.into_iter().collect(),
+            Err(e) => {
+                tracing::warn!(
+                    target: "cem_dago",
+                    error = %e,
+                    "present_signals store_down"
+                );
+                signals_unavailable = true;
+                council_degraded = true;
+                council_error = Some("store_down".to_string());
+                break;
+            }
+        };
         let mut ready = next_ready_wave(&remaining, &present);
         if ready.is_empty() {
             let last_fail = exec
@@ -269,7 +277,7 @@ pub async fn execute_mesh(req: MeshRequest) -> MeshRunReport {
         flush_quarantine(&exec).await;
     }
 
-    if !remaining.is_empty() && !council_invoked {
+    if !remaining.is_empty() && !council_invoked && !signals_unavailable {
         let c = invoke_council(&exec, &already).await;
         council_invoked = c.invoked;
         council_degraded = c.degraded;
@@ -513,7 +521,17 @@ async fn refresh_live_graph(exec: &MeshExec, reload_sql: bool) {
             }
         }
     }
-    let signals = exec.blackboard.present_signals().await.unwrap_or_default();
+    let signals = match exec.blackboard.present_signals().await {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(
+                target: "cem_dago",
+                error = %e,
+                "present_signals store_down"
+            );
+            return;
+        }
+    };
     ingest_live_signals(&exec.risk_graph, &signals);
 }
 

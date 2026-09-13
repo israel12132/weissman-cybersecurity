@@ -62,6 +62,7 @@ export default function ComplianceFrameworks() {
   const [loadingFrameworks, setLoadingFrameworks] = useState(true);
   const [loadingControls, setLoadingControls] = useState(false);
   const [error, setError] = useState('');
+  const [controlsUnavailable, setControlsUnavailable] = useState(false);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [exporting, setExporting] = useState(false);
@@ -88,13 +89,15 @@ export default function ComplianceFrameworks() {
     if (!frameworkId) return;
     try {
       setLoadingControls(true);
-      setError('');
+      setControlsUnavailable(false);
       const data = await api.get(`/api/compliance/frameworks/${frameworkId}/controls`);
-      setControls(data.controls || []);
+      if (!Array.isArray(data.controls)) {
+        throw new Error(t('pages.complianceFrameworks.controls_load_failed'));
+      }
+      setControls(data.controls);
     } catch (err) {
       console.error('Failed to fetch controls:', err);
-      setControls([]);
-      setError(err?.message || t('pages.complianceFrameworks.controls_load_failed'));
+      setControlsUnavailable(true);
     } finally {
       setLoadingControls(false);
     }
@@ -687,7 +690,7 @@ export default function ComplianceFrameworks() {
           <>
             {loadingControls && controls.length === 0 ? (
               <SkeletonWidgetGrid count={5} />
-            ) : controls.length > 0 && (
+            ) : !controlsUnavailable && controls.length > 0 && (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                   <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
@@ -798,6 +801,13 @@ export default function ComplianceFrameworks() {
               {loadingControls ? (
                 <div className="p-6">
                   <SkeletonTable rows={5} cols={3} />
+                </div>
+              ) : controlsUnavailable ? (
+                <div data-testid="compliance-controls-unavailable">
+                  <EmptyState
+                    title={t('pages.complianceFrameworks.controls_unavailable_title')}
+                    description={t('pages.complianceFrameworks.controls_unavailable_body')}
+                  />
                 </div>
               ) : controls.length === 0 ? (
                 <EmptyState

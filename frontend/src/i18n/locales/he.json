@@ -2284,6 +2284,8 @@
       "no_frameworks_title": "אין מסגרות",
       "unavailable_title": "מסגרות ציות אינן זמינות",
       "unavailable_body": "לא ניתן לאשר את GET /api/compliance/frameworks. אפס מסגרות אינו tenant לא ממופה.",
+      "controls_unavailable_title": "בקרות ציות אינן זמינות",
+      "controls_unavailable_body": "לא ניתן לאשר את GET /api/compliance/frameworks/:id/controls. אפס בקרות אינו מסגרת ריקה.",
       "status_compliant": "תואם",
       "status_non_compliant": "לא תואם",
       "status_partial": "חלקי",
@@ -4461,6 +4463,11 @@
       "showing_count": "{{count}} מתוך {{total}} מנועים",
       "no_search_results": "אין מנועים התואמים לחיפוש."
     },
+    "cemDago": {
+      "unavailable_title": "רשת CEM-DAGO אינה זמינה",
+      "unavailable_body": "לא ניתן לאשר את GET /api/cem-dago/status. גלים ריקים אינם mesh שקט.",
+      "load_failed": "טעינת רשת CEM-DAGO נכשלה"
+    },
     "clientSaasIdpDiscovery": {
       "title": "גילוי SaaS / IdP",
       "subtitle": "אותות פסיביים ל-IdP ו-SaaS מדומייני הלקוח",
@@ -4476,6 +4483,8 @@
       "saas_heading": "אותות SaaS",
       "empty_idp": "לא זוהו מועמדי IdP.",
       "empty_saas": "לא זוהו אותות SaaS.",
+      "unavailable_title": "גילוי SaaS / IdP אינו זמין",
+      "unavailable_body": "לא ניתן לאשר את GET /api/clients/:id/discovery/saas-idp. דומיינים ריקים אינם tenant שקט.",
       "confidence": "ביטחון: {{pct}}",
       "copy_issuer": "העתק Issuer URL",
       "copy_host": "העתק Host",

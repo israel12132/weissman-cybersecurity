@@ -524,7 +524,14 @@ pub async fn run_self_defense_audit(
     .bind(tenant_id)
     .fetch_all(pool)
     .await
-    .unwrap_or_default();
+    .map_err(|e| {
+        tracing::warn!(
+            target: "strategy_engine",
+            error = %e,
+            "security_events store_down"
+        );
+        "store_down".to_string()
+    })?;
     let mut events = Vec::with_capacity(event_rows.len());
     for r in event_rows {
         let et: String = r.try_get::<String, _>("et").unwrap_or_default();
