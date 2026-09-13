@@ -15,4 +15,11 @@ describe('NexusSovereignSwarm live-only truth', () => {
     expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
     expect(src).toMatch(/!historyUnavailable/)
   })
+
+  it('does not paint a cyan-0 SIQ ring or fallback agentCount when swarm metrics are unconfirmed', () => {
+    expect(src).toMatch(/const hasScore = score != null && Number\.isFinite\(Number\(score\)\)/)
+    expect(src).not.toMatch(/const pct = Math\.min\(100, Math\.max\(0, score \?\? 0\)\)/)
+    expect(src).toMatch(/metrics\?\.agents_deployed != null \? metrics\.agents_deployed\.toLocaleString\(\) : '—'/)
+    expect(src).not.toMatch(/metrics\?\.agents_deployed\?\.toLocaleString\(\) \?\? agentCount\.toLocaleString\(\)/)
+  })
 })

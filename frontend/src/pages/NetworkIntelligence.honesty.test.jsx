@@ -22,4 +22,11 @@ describe('NetworkIntelligence live-only truth', () => {
     expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
     expect(src).toMatch(/!historyUnavailable/)
   })
+
+  it('does not coerce a missing hijack_resistance_score into a lime-0 gauge', () => {
+    expect(src).toMatch(/summary\.hijack_resistance_score != null && Number\.isFinite\(Number\(summary\.hijack_resistance_score\)\)/)
+    expect(src).toMatch(/<ScoreGauge score=\{score\} /)
+    expect(src).not.toMatch(/<ScoreGauge score=\{score \?\? 0\}/)
+    expect(src).not.toMatch(/Number\(summary\.hijack_resistance_score \?\? 0\)/)
+  })
 })

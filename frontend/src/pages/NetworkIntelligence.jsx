@@ -266,20 +266,22 @@ function scoreColor(score) {
 }
 
 function ScoreGauge({ score, label }) {
-  const c = scoreColor(score)
+  const hasScore = score != null && Number.isFinite(Number(score))
+  const n = hasScore ? Number(score) : 0
+  const c = hasScore ? scoreColor(n) : 'rgba(255,255,255,0.25)'
   const r = 52
   const circ = 2 * Math.PI * r
-  const dash = (score / 100) * circ
+  const dash = hasScore ? (n / 100) * circ : 0
   return (
     <div className="relative flex items-center justify-center w-[140px] h-[140px] shrink-0">
       <svg width="140" height="140" className="-rotate-90">
         <circle cx="70" cy="70" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" />
         <motion.circle cx="70" cy="70" r={r} fill="none" stroke={c} strokeWidth="10" strokeLinecap="round"
           initial={{ strokeDasharray: `0 ${circ}` }} animate={{ strokeDasharray: `${dash} ${circ}` }}
-          transition={{ duration: 0.9, ease: 'easeOut' }} style={{ filter: `drop-shadow(0 0 6px ${c}80)` }} />
+          transition={{ duration: 0.9, ease: 'easeOut' }} style={hasScore ? { filter: `drop-shadow(0 0 6px ${c}80)` } : undefined} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-4xl font-bold font-mono" style={{ color: c }}>{score}</span>
+        <span className="text-4xl font-bold font-mono" style={{ color: c }}>{hasScore ? n : '—'}</span>
         <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{label}</span>
       </div>
     </div>
@@ -445,7 +447,9 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
     }
   }, [clientId, target, params, postScan, showToast, t, tt])
 
-  const score = summary ? Number(summary.hijack_resistance_score ?? 0) : null
+  const score = summary && summary.hijack_resistance_score != null && Number.isFinite(Number(summary.hijack_resistance_score))
+    ? Number(summary.hijack_resistance_score)
+    : null
   const ev = summary?.evidence ?? {}
   const rpkiState = ev.rpki_invalid ? 'bad' : (ev.rpki_valid ? 'good' : 'warn')
 
@@ -548,7 +552,7 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
             {summary ? (
               <motion.div key="score" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-5">
                 <div className="flex items-center gap-6 flex-wrap">
-                  <ScoreGauge score={score ?? 0} label={tt('score_label', 'RESISTANCE')} />
+                  <ScoreGauge score={score} label={tt('score_label', 'RESISTANCE')} />
                   <div className="flex-1 min-w-[240px] space-y-3">
                     <p className="text-[11px] font-mono text-[var(--text-muted)] leading-relaxed">{summary.description}</p>
                     <div className="grid grid-cols-2 gap-2">

@@ -15,4 +15,10 @@ describe('CicdPipelineSecurityCommandCenter live-only truth', () => {
     expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
     expect(src).toMatch(/!historyUnavailable/)
   })
+
+  it('does not paint a lime-0 exposure ring when the posture score is unconfirmed', () => {
+    expect(src).toMatch(/const hasScore = score != null && Number\.isFinite\(Number\(score\)\)/)
+    expect(src).not.toMatch(/const pct = Math\.min\(100, Math\.max\(0, score \?\? 0\)\)/)
+    expect(src).toMatch(/metrics \? \(metrics\.platforms\?\.length \?\? 0\) : '—'/)
+  })
 })

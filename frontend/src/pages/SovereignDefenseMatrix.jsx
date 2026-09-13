@@ -582,7 +582,8 @@ export default function SovereignDefenseMatrix() {
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             title={t('pages.sovereignDefense.findings', { engine: engine?.label || engineId })}
-            emptyMessage={t('pages.sovereignDefense.no_findings')}
+            emptyTitle={t('pages.sovereignDefense.no_findings')}
+            emptyBody={t('pages.sovereignDefense.no_findings')}
             unavailable={historyUnavailable}
             unavailableTitle={t('pages.sovereignDefense.history_unavailable')}
             unavailableBody={t('pages.sovereignDefense.history_unavailable')}

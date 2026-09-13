@@ -34,5 +34,7 @@ describe('SovereignDefenseMatrix live-only truth', () => {
     expect(src).toMatch(/data-testid="sovereign-defense-history-unavailable"/)
     expect(src).toMatch(/history_unavailable/)
     expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
+    expect(src).toMatch(/emptyTitle=\{t\('pages\.sovereignDefense\.no_findings'\)\}/)
+    expect(src).not.toMatch(/emptyMessage=/)
   })
 })

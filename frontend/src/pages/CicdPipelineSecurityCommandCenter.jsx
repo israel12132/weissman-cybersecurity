@@ -299,17 +299,18 @@ function SupplyChainGraphCanvas({ graph, running }) {
 }
 
 function PostureGauge({ score, grade }) {
-  const pct = Math.min(100, Math.max(0, score ?? 0))
-  const color = pct >= 70 ? '#ef4444' : pct >= 40 ? '#f59e0b' : '#84cc16'
+  const hasScore = score != null && Number.isFinite(Number(score))
+  const pct = hasScore ? Math.min(100, Math.max(0, Number(score))) : 0
+  const color = !hasScore ? 'rgba(255,255,255,0.12)' : pct >= 70 ? '#ef4444' : pct >= 40 ? '#f59e0b' : '#84cc16'
   return (
     <div className="relative w-36 h-36 mx-auto">
       <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
         <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
         <circle cx="50" cy="50" r="42" fill="none" stroke={color} strokeWidth="8"
-          strokeDasharray={`${pct * 2.64} 264`} strokeLinecap="round" style={{ filter: `drop-shadow(0 0 8px ${color}80)` }} />
+          strokeDasharray={hasScore ? `${pct * 2.64} 264` : '0 264'} strokeLinecap="round" style={hasScore ? { filter: `drop-shadow(0 0 8px ${color}80)` } : undefined} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold text-white">{pct || '—'}</span>
+        <span className="text-3xl font-bold text-white">{hasScore ? pct : '—'}</span>
         {grade && <span className="text-lg font-mono text-lime-300/80">{grade}</span>}
         <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">Exposure</span>
       </div>
@@ -762,7 +763,7 @@ export default function CicdPipelineSecurityCommandCenter() {
                   <PostureGauge score={metrics?.score} grade={metrics?.grade} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <MetricTile label="Platforms" value={metrics?.platforms?.length ?? 0} accent="#22d3ee" />
+                  <MetricTile label="Platforms" value={metrics ? (metrics.platforms?.length ?? 0) : '—'} accent="#22d3ee" />
                   <MetricTile label="API Exposed" value={metrics?.api_exposed} accent="#ef4444" />
                   <MetricTile label="Config Leaks" value={metrics?.config_exposed} accent="#f59e0b" />
                   <MetricTile label="Policy Violations" value={metrics?.workflow_violations} accent="#a855f7" />

@@ -508,8 +508,9 @@ function SchemaGraphCanvas({ schemaGraph, running }) {
 }
 
 function ExposureGauge({ score }) {
-  const pct = Math.min(100, Math.max(0, score ?? 0))
-  const color = pct >= 70 ? '#ef4444' : pct >= 40 ? '#f59e0b' : '#22d3ee'
+  const hasScore = score != null && Number.isFinite(Number(score))
+  const pct = hasScore ? Math.min(100, Math.max(0, Number(score))) : 0
+  const color = !hasScore ? 'rgba(255,255,255,0.12)' : pct >= 70 ? '#ef4444' : pct >= 40 ? '#f59e0b' : '#22d3ee'
   return (
     <div className="relative w-36 h-36 mx-auto">
       <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
@@ -517,13 +518,13 @@ function ExposureGauge({ score }) {
         <circle
           cx="50" cy="50" r="42" fill="none"
           stroke={color} strokeWidth="8"
-          strokeDasharray={`${pct * 2.64} 264`}
+          strokeDasharray={hasScore ? `${pct * 2.64} 264` : '0 264'}
           strokeLinecap="round"
-          style={{ filter: `drop-shadow(0 0 8px ${color}80)` }}
+          style={hasScore ? { filter: `drop-shadow(0 0 8px ${color}80)` } : undefined}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold text-white">{pct || '—'}</span>
+        <span className="text-3xl font-bold text-white">{hasScore ? pct : '—'}</span>
         <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">Exposure</span>
       </div>
     </div>

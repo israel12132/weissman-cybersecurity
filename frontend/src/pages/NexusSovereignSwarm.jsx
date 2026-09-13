@@ -531,8 +531,9 @@ function SwarmHiveCanvas({ agentCount, running }) {
 }
 
 function SiqGauge({ score }) {
-  const pct = Math.min(100, Math.max(0, score ?? 0))
-  const color = pct >= 80 ? '#ef4444' : pct >= 60 ? '#f59e0b' : '#22d3ee'
+  const hasScore = score != null && Number.isFinite(Number(score))
+  const pct = hasScore ? Math.min(100, Math.max(0, Number(score))) : 0
+  const color = !hasScore ? 'rgba(255,255,255,0.12)' : pct >= 80 ? '#ef4444' : pct >= 60 ? '#f59e0b' : '#22d3ee'
   return (
     <div className="relative w-36 h-36 mx-auto">
       <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
@@ -540,13 +541,13 @@ function SiqGauge({ score }) {
         <circle
           cx="50" cy="50" r="42" fill="none"
           stroke={color} strokeWidth="8"
-          strokeDasharray={`${pct * 2.64} 264`}
+          strokeDasharray={hasScore ? `${pct * 2.64} 264` : '0 264'}
           strokeLinecap="round"
-          style={{ filter: `drop-shadow(0 0 8px ${color}80)` }}
+          style={hasScore ? { filter: `drop-shadow(0 0 8px ${color}80)` } : undefined}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold text-white">{pct || '—'}</span>
+        <span className="text-3xl font-bold text-white">{hasScore ? pct : '—'}</span>
         <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">SIQ</span>
       </div>
     </div>
@@ -1927,7 +1928,7 @@ export default function NexusSovereignSwarm() {
                   <SiqGauge score={metrics?.swarm_iq} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <MetricTile label="Agents" value={metrics?.agents_deployed?.toLocaleString() ?? agentCount.toLocaleString()} accent="#22d3ee" />
+                  <MetricTile label="Agents" value={metrics?.agents_deployed != null ? metrics.agents_deployed.toLocaleString() : '—'} accent="#22d3ee" />
                   <MetricTile label="Requests" value={metrics?.requests_sent?.toLocaleString()} accent="#38bdf8" />
                   <MetricTile label="Signals" value={metrics?.raw_signals} accent="#ef4444" />
                   <MetricTile label="Consensus" value={metrics?.consensus_findings} accent="#a855f7" />

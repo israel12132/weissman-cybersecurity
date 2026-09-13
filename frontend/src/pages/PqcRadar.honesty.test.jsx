@@ -22,4 +22,11 @@ describe('PqcRadar live-only truth', () => {
     expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
     expect(src).toMatch(/!historyUnavailable/)
   })
+
+  it('does not coerce a missing readiness_score into a lime-0 gauge', () => {
+    expect(src).toMatch(/summary\.readiness_score != null && Number\.isFinite\(Number\(summary\.readiness_score\)\)/)
+    expect(src).toMatch(/<ScoreGauge score=\{score\} /)
+    expect(src).not.toMatch(/<ScoreGauge score=\{score \?\? 0\}/)
+    expect(src).not.toMatch(/Number\(summary\.readiness_score \?\? 0\)/)
+  })
 })
