@@ -1740,6 +1740,19 @@ mod tests {
         &fn_src[persist..effect]
     }
 
+    fn persist_first_await_is_err(window: &str) {
+        let compact = compact_src(window);
+        let persist = compact
+            .find("persist_operator_audit(")
+            .expect("persist_operator_audit in window");
+        let after = &compact[persist..];
+        let await_at = after.find(".await").expect("await after persist");
+        assert!(
+            after[await_at..].starts_with(".await.is_err()"),
+            "persist_operator_audit must .await.is_err() before any other await"
+        );
+    }
+
     fn named_fn_src_until_cfg_test<'a>(src: &'a str, sig: &str) -> &'a str {
         let start = src.find(sig).unwrap_or_else(|| panic!("missing {sig}"));
         let rest = &src[start..];
@@ -5214,6 +5227,12 @@ mod tests {
         assert!(src.contains("audit_log::insert_audit"));
         assert!(src.contains("tx.commit().await.is_err()"));
         assert!(compact.contains("begin_tenant_tx(app_pool,tenant_id).await.map_err(|_|())?"));
+        assert!(
+            compact
+                .matches(".await.is_err(){returnErr(());}")
+                .count()
+                >= 2
+        );
         assert!(!compact.contains("let_=tx.commit().await;"));
         assert!(!compact.contains("let_=audit_log::insert_audit"));
         assert!(!compact.contains("ifletOk(muttx)="));
@@ -5233,7 +5252,7 @@ mod tests {
         assert!(!compact_src(src).contains("let_=audit_log::insert_audit"));
         assert!(!compact_src(src).contains("let_=persist_operator_audit"));
         let window = persist_window(src, "\"ok\": true");
-        assert!(compact_src(window).contains(".await.is_err()"));
+        persist_first_await_is_err(window);
         let v = backup_unavailable_json("store down", Some("/tmp/weissman.dump"));
         assert_eq!(v["ok"], false);
         assert_eq!(v["unavailable"], true);
@@ -5262,13 +5281,18 @@ mod tests {
             assert!(!compact_src(fn_src).contains("let_=audit_log::insert_audit"), "{sig}");
             assert!(!compact_src(fn_src).contains("let_=persist_operator_audit"), "{sig}");
             let window = persist_window(fn_src, "StatusCode::ACCEPTED");
-            assert!(compact_src(window).contains(".await.is_err()"), "{sig}");
+            persist_first_await_is_err(window);
             let enq = fn_src
                 .find("crate::async_jobs::enqueue")
                 .unwrap_or_else(|| panic!("{sig} enqueue"));
+            let after_enq = &fn_src[enq..];
             assert!(
-                fn_src[enq..].contains("scan_status_unavailable_json"),
+                after_enq.contains("scan_status_unavailable_json"),
                 "{sig} enqueue Err must be 503 not 202 empty"
+            );
+            assert!(
+                after_enq.contains("StatusCode::SERVICE_UNAVAILABLE"),
+                "{sig} enqueue Err must be SERVICE_UNAVAILABLE not ACCEPTED"
             );
             assert!(!fn_src.contains("StatusCode::INTERNAL_SERVER_ERROR"), "{sig}");
         }
@@ -5289,7 +5313,7 @@ mod tests {
         let empty = src.find("target required").expect("empty target");
         assert!(empty < persist);
         let window = persist_window(src, "run_auto_discovery");
-        assert!(compact_src(window).contains(".await.is_err()"));
+        persist_first_await_is_err(window);
         let v = discovery_domains_unavailable_json("store down");
         assert_eq!(v["ok"], false);
         assert_eq!(v["unavailable"], true);
@@ -5308,7 +5332,7 @@ mod tests {
         assert!(!compact_src(src).contains("let_=tx.commit().await;"));
         assert!(!compact_src(src).contains("let_=persist_operator_audit"));
         let window = persist_window(src, "saas_idp_discovery::discover");
-        assert!(compact_src(window).contains(".await.is_err()"));
+        persist_first_await_is_err(window);
         let hunt = src.find("saas_idp_discovery::discover").expect("hunt");
         let ok_true = src.find("\"ok\": true").expect("ok true");
         assert!(hunt < ok_true);
@@ -5491,8 +5515,18 @@ mod tests {
             .rfind("audit_log::insert_audit")
             .expect("insert before action");
         let after = &src[insert..];
-        assert!(!compact_src(after).contains("let_=audit_log::insert_audit"));
-        assert!(compact_src(after).contains("audit_log::insert_audit"));
+        let compact_hit = compact_src(after);
+        assert!(!compact_hit.contains("let_=audit_log::insert_audit"));
+        assert!(compact_hit.contains("audit_log::insert_audit"));
+        let ins = compact_hit
+            .find("audit_log::insert_audit")
+            .expect("insert compact");
+        let after_ins = &compact_hit[ins..];
+        let await_at = after_ins.find(".await").expect("await after insert");
+        assert!(
+            after_ins[await_at..].starts_with(".await.is_err()"),
+            "insert_audit must .await.is_err() not .ok()"
+        );
         assert!(after.contains("evidence_unavailable_json"));
         let unavail = after.find("evidence_unavailable_json").expect("503");
         let ok_true = after.find("\"ok\": true").expect("ok true");
@@ -5516,7 +5550,7 @@ mod tests {
         let skip = src.find("WEISSMAN_AUTOHEAL_SKIP_SANDBOX").expect("skip");
         assert!(persist < skip);
         let window = persist_window(src, "WEISSMAN_AUTOHEAL_SKIP_SANDBOX");
-        assert!(compact_src(window).contains(".await.is_err()"));
+        persist_first_await_is_err(window);
         assert!(!compact_src(src).contains("let_=persist_operator_audit"));
         let audit = &src[persist.saturating_sub(200)..skip];
         assert!(audit.contains("destructive_auto_heal_initiated"));
@@ -5536,7 +5570,7 @@ mod tests {
         assert!(src.contains("heal_batch_unavailable_json"));
         assert!(!compact_src(src).contains("let_=persist_operator_audit"));
         let window = persist_window(src, "StatusCode::ACCEPTED");
-        assert!(compact_src(window).contains(".await.is_err()"));
+        persist_first_await_is_err(window);
         assert!(window.contains("destructive_heal_batch"));
         assert!(!compact_src(window).contains("ifletOk(muttx)="));
         assert!(!compact_src(window).contains("let_=tx.commit().await;"));
@@ -5706,6 +5740,8 @@ mod tests {
         assert!(!compact_src(get).contains("unwrap_or_else"));
         assert!(!compact_src(get).contains("unwrap_or_default()"));
         assert!(compact_src(get).contains("map_err(|_|\"store_down\".to_string())"));
+        assert!(!compact_src(get).contains(".or(Ok(None))"));
+        assert!(!compact_src(get).contains("Err(_)=>Ok(None)"));
         let extend = named_fn_src(
             include_str!("exploit_synthesis_engine.rs"),
             "pub async fn extend_gadget_chains_with_ephemeral_and_hunt_async",
@@ -5892,6 +5928,12 @@ mod tests {
         assert!(src.contains("el.textContent = 'Unavailable'"));
         assert!(src.contains("setStatus(null)"));
         assert!(src.contains("d.scanning_active === null"));
+        assert!(compact_src(src).contains(
+            "d.unavailable||d.scanning_active===null){{setStatus(null);"
+        ));
+        assert!(!compact_src(src).contains(
+            "d.unavailable||d.scanning_active===null){{setStatus(false)"
+        ));
         assert!(src.contains(".catch(function() {{ setStatus(null); }})"));
         assert!(!src.contains(".catch(function() {{ setStatus(false)"));
     }
@@ -5904,8 +5946,10 @@ mod tests {
         );
         let compact = compact_src(src);
         assert!(src.contains("rate_limit_redis::ping_ok()"));
+        assert!(compact.contains(
+            "letredis_ok=ifredis_required||redis_enabled{redis_live}else{true}"
+        ));
         assert!(!compact.contains("letredis_ok=!redis_required||"));
-        assert!(src.contains("redis_required || redis_enabled"));
     }
 
     #[test]
@@ -5915,6 +5959,9 @@ mod tests {
             "pub async fn compute_platform_posture",
         );
         assert!(compact_src(src).contains("ping_ok().await"));
+        assert!(compact_src(src).contains(
+            "ifredis_configured{ifredis_live{(true,\"RedisPINGok\")}else{(false,\"REDIS_URLsetbutRedisPINGfailed\")}}"
+        ));
         assert!(src.contains("REDIS_URL set but Redis PING failed"));
     }
 
@@ -5926,11 +5973,18 @@ mod tests {
         );
         assert!(src.contains("scan_status_unavailable_json"));
         assert!(src.contains("job_ids.is_empty()"));
-        let unavail = src
+        let empty_at = src.find("job_ids.is_empty()").expect("empty jobs");
+        let after_empty = compact_src(&src[empty_at..]);
+        let unavail = after_empty
             .find("StatusCode::SERVICE_UNAVAILABLE")
-            .expect("503");
-        let accepted = src.find("StatusCode::ACCEPTED").expect("202");
-        assert!(unavail < accepted);
+            .expect("empty-jobs 503");
+        let accepted = after_empty
+            .find("StatusCode::ACCEPTED")
+            .expect("202 after empty check");
+        assert!(
+            unavail < accepted,
+            "empty job_ids must be 503 not 202"
+        );
     }
 
     #[test]
@@ -5945,10 +5999,13 @@ mod tests {
             .expect("run after cfg");
         assert!(cfg < run);
         let window = &src[cfg..run];
+        let compact = compact_src(window);
         assert!(window.contains("\"store_down\""));
         assert!(window.contains("\"failed\""));
-        assert!(!compact_src(window).contains("ifletOk(muttx)="));
-        assert!(!compact_src(window).contains("let_=sqlx"));
-        assert!(!compact_src(window).contains("let_=tx.commit().await;"));
+        assert!(compact.contains("Ok(c)=>c,Err(_)=>{"));
+        assert!(!compact.contains("ifletOk(c)="));
+        assert!(!compact.contains("ifletOk(muttx)="));
+        assert!(!compact.contains("let_=sqlx"));
+        assert!(!compact.contains("let_=tx.commit().await;"));
     }
 }
