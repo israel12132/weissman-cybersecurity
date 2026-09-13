@@ -169,7 +169,7 @@ export default function ZeroDayRadar() {
                 </p>
               )}
               {feedItems.length === 0 && !loadingFeed && !feedError && <p className="text-[var(--text-muted)] text-sm">{t(`${NS}.feed_empty`)}</p>}
-              {feedItems.map((item, i) => (
+              {!feedError && feedItems.map((item, i) => (
                 <div key={i} className="rounded-lg bg-[var(--bg-3)]/60 p-3 border border-[var(--border-default)]/60">
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-mono px-2 py-0.5 rounded ${item.severity === 'CRITICAL' ? 'bg-red-500/30 text-red-300' : item.severity === 'HIGH' ? 'bg-amber-500/30 text-amber-300' : 'bg-[var(--bg-4)] text-[var(--text-tertiary)]'}`}>
