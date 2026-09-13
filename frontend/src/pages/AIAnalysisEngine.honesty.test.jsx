@@ -20,7 +20,9 @@ describe('AIAnalysisEngine live-only truth', () => {
 
   it('does not paint leftover leftover-last-updated after a failed intel GET', () => {
     expect(src).toMatch(/\{lastUpdated && !error && \(/)
-    expect(src).toMatch(/error \? t\('pages\.aiAnalysisEngine\.evidence_soc'\) : evidenceNotice/)
+    expect(src).toMatch(/\{!error && \(\n      <div className="rounded-xl border border-violet-500\/20/)
+    expect(src).toMatch(/\{evidenceNotice\}/)
+    expect(src).not.toMatch(/error \? t\('pages\.aiAnalysisEngine\.evidence_soc'\)/)
     expect(src).toMatch(/if \(error\) return; exportPatternsCsv\(filtered\)/)
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
   })

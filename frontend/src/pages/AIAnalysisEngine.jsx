@@ -378,9 +378,11 @@ export default function AIAnalysisEngine() {
         />
       )}
     >
+      {!error && (
       <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 px-4 py-3 text-[11px] font-mono text-violet-200/80 mb-4 leading-relaxed">
-        {error ? t('pages.aiAnalysisEngine.evidence_soc') : evidenceNotice}
+        {evidenceNotice}
       </div>
+      )}
 
       {lastUpdated && !error && (
         <p className="text-[11px] font-mono text-[var(--text-muted)] mb-6">
