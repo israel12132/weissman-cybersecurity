@@ -7,12 +7,16 @@ use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
 use std::sync::Arc;
 
-pub async fn hydrate(pool: &PgPool, tenant_id: i64, engine_id: &str, target: &str) -> LiveSlice {
+pub async fn hydrate(
+    pool: &PgPool,
+    tenant_id: i64,
+    engine_id: &str,
+    target: &str,
+) -> Result<LiveSlice, String> {
     let host = host_of(target);
-    let mut tx = match crate::db::begin_tenant_tx(pool, tenant_id).await {
-        Ok(t) => t,
-        Err(_) => return LiveSlice::default(),
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let rows = sqlx::query(
         r#"SELECT kind, engine_id, target, body, evidence, verified
            FROM weissman_sovereign_memory
@@ -30,11 +34,11 @@ pub async fn hydrate(pool: &PgPool, tenant_id: i64, engine_id: &str, target: &st
     .bind(&host)
     .bind(engine_id.trim())
     .fetch_all(&mut *tx)
-    .await;
-    let _ = tx.commit().await;
-    let Ok(rows) = rows else {
-        return LiveSlice::default();
-    };
+    .await
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
     let mut paths = Vec::new();
     let mut hosts = Vec::new();
     let mut payloads = Vec::new();
@@ -78,7 +82,7 @@ pub async fn hydrate(pool: &PgPool, tenant_id: i64, engine_id: &str, target: &st
         payloads: unique(payloads),
         from_memory,
     };
-    slice
+    Ok(slice)
 }
 
 pub fn ingest_run(

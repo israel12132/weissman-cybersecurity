@@ -173,7 +173,17 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
     let mut ctx_live = ctx.clone();
     let slice = match (ctx.app_pool.as_ref(), ctx.tenant_id) {
         (Some(pool), Some(tid)) if tid > 0 => {
-            crate::sovereign_operator::memory::hydrate(pool.as_ref(), tid, engine_id, target).await
+            match crate::sovereign_operator::memory::hydrate(
+                pool.as_ref(),
+                tid,
+                engine_id,
+                target,
+            )
+            .await
+            {
+                Ok(s) => s,
+                Err(_) => return EngineResult::error("store_down"),
+            }
         }
         _ => crate::live_knowledge_bus::LiveSlice::default(),
     };

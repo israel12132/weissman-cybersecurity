@@ -758,9 +758,9 @@ async fn fetch_supreme_memory_context(
     client: &reqwest::Client,
     tenant_id: i64,
     target_brief: &str,
-) -> String {
+) -> Result<String, String> {
     let Some(pool) = pool else {
-        return String::new();
+        return Ok(String::new());
     };
     let k = cfg.supreme_memory_top_k.max(1) as i64;
 
@@ -782,9 +782,9 @@ async fn fetch_supreme_memory_context(
     // ── Fast path: pgvector ANN search ──────────────────────────────────────
     if let Some(qv) = &query_embed {
         let qtext = crate::embeddings::vec_to_pg_text(qv);
-        let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-            return String::new();
-        };
+        let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+            .await
+            .map_err(|_| "store_down".to_string())?;
         let rows = sqlx::query(
             r#"SELECT id, brief_excerpt, strategy_summary, orchestrator_instruction,
                       target_fingerprint,
@@ -853,10 +853,12 @@ async fn fetch_supreme_memory_context(
                 .execute(&mut *tx)
                 .await;
             }
-            let _ = tx.commit().await;
+            if tx.commit().await.is_err() {
+                return Err("store_down".to_string());
+            }
 
             if rows.is_empty() {
-                return String::new();
+                return Ok(String::new());
             }
             let mut scored: Vec<(f64, String, String, String, Value)> = Vec::new();
             let mut seen_fp = std::collections::HashSet::new();
@@ -884,12 +886,12 @@ async fn fetch_supreme_memory_context(
                     sim, fp, excerpt, summary, orch
                 ));
             }
-            return format!(
+            return Ok(format!(
                 "Semantic memory (pgvector ANN-ranked prior wins, time-aware + decay):\n{}",
                 lines.join("\n")
-            );
+            ));
         }
-        let _ = tx.commit().await;
+        let _ = tx.rollback().await;
     }
 
     // ── Fallback path: legacy in-app cosine over the latest 500 rows ────────
@@ -897,9 +899,9 @@ async fn fetch_supreme_memory_context(
     //   - No embeddings provider configured/reachable, OR
     //   - The vector index isn't populated yet (fresh migration), OR
     //   - The DB rejected the vector cast for any reason
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return String::new();
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let rows = sqlx::query(
         r#"SELECT brief_excerpt, strategy_summary, orchestrator_instruction, embedding,
                   COALESCE(embedding_checksum, '') AS embedding_checksum,
@@ -913,10 +915,10 @@ async fn fetch_supreme_memory_context(
             LIMIT 500"#,
     )
     .fetch_all(&mut *tx)
-    .await;
-    let _ = tx.commit().await;
-    let Ok(rows) = rows else {
-        return String::new();
+    .await
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
     };
     let rows: Vec<_> = rows
         .into_iter()
@@ -932,7 +934,7 @@ async fn fetch_supreme_memory_context(
         })
         .collect();
     if rows.is_empty() {
-        return String::new();
+        return Ok(String::new());
     }
 
     let _ = client; // unused on this path (we relied on the shared embeddings client above)
@@ -949,10 +951,10 @@ async fn fetch_supreme_memory_context(
                 "- prior_win: brief={excerpt} summary={summary} orchestrator={orch}"
             ));
         }
-        return format!(
+        return Ok(format!(
             "Semantic memory (recent OAST-validated wins; no embeddings provider):\n{}",
             lines.join("\n")
-        );
+        ));
     }
     let query_vec = query_embed.expect("query_embed is_none() checked and returns early above");
     let mut scored: Vec<(f32, String)> = Vec::new();
@@ -981,10 +983,10 @@ async fn fetch_supreme_memory_context(
         .take(k as usize)
         .map(|(_, s)| s)
         .collect();
-    format!(
+    Ok(format!(
         "Semantic memory (in-app cosine fallback):\n{}",
         lines.join("\n")
-    )
+    ))
 }
 
 /// Persist a validated Supreme Council outcome for [`fetch_supreme_memory_context`].
@@ -1388,8 +1390,9 @@ pub async fn run_supreme_council_debate(
     prior_failure_log: Option<&str>,
 ) -> Result<SupremeCouncilDebateResult, LlmError> {
     let client = cfg.http_client();
-    let memory_ctx =
-        fetch_supreme_memory_context(pool, cfg, &client, tenant_id, target_brief).await;
+    let memory_ctx = fetch_supreme_memory_context(pool, cfg, &client, tenant_id, target_brief)
+        .await
+        .map_err(|_| LlmError::Unreachable("store_down".into()))?;
     let (proposer, critic) = supreme_run_phase1(
         cfg,
         &client,

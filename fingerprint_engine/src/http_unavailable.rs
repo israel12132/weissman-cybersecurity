@@ -5237,4 +5237,96 @@ mod tests {
         );
         assert!(!compact_src(asm).contains("load_learned_paths(pool).await;"));
     }
+
+    #[test]
+    fn sovereign_memory_hydrate_store_down_is_not_healthy_empty_slice() {
+        let src = named_fn_src(
+            include_str!("sovereign_operator/memory.rs"),
+            "pub async fn hydrate",
+        );
+        assert!(src.contains("Result<LiveSlice, String>"));
+        assert!(src.contains("store_down"));
+        assert!(!src.contains("LiveSlice::default()"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        assert!(src.contains("tx.commit().await.is_err()"));
+        let dispatch = named_fn_src(include_str!("engine_dispatch.rs"), "pub async fn run_engine");
+        assert!(compact_src(dispatch).contains(
+            "Err(_)=>returnEngineResult::error(\"store_down\")"
+        ));
+        assert!(dispatch.contains("sovereign_operator::memory::hydrate"));
+    }
+
+    #[test]
+    fn supreme_council_memory_store_down_is_not_empty_prior_wins() {
+        let src = named_fn_src(
+            include_str!("council.rs"),
+            "async fn fetch_supreme_memory_context",
+        );
+        assert!(src.contains("Result<String, String>"));
+        assert!(src.contains("\"store_down\".to_string()"));
+        assert!(!compact_src(src).contains("returnString::new();"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        assert!(src.contains("tx.commit().await.is_err()"));
+        let debate = named_fn_src(
+            include_str!("council.rs"),
+            "pub async fn run_supreme_council_debate",
+        );
+        assert!(debate.contains("LlmError::Unreachable(\"store_down\""));
+        assert!(debate.contains("fetch_supreme_memory_context"));
+    }
+
+    #[test]
+    fn ephemeral_payload_store_down_is_not_confirmed_miss_then_hunt() {
+        let get = named_fn_src(
+            include_str!("exploit_synthesis_engine.rs"),
+            "async fn get_ephemeral_payload",
+        );
+        assert!(get.contains("Result<Option<String>, String>"));
+        assert!(get.contains("\"store_down\".to_string()"));
+        assert!(!get.contains(".ok().flatten()"));
+        let extend = named_fn_src(
+            include_str!("exploit_synthesis_engine.rs"),
+            "pub async fn extend_gadget_chains_with_ephemeral_and_hunt_async",
+        );
+        assert!(extend.contains("Result<HashMap<String, String>, String>"));
+        assert!(!compact_src(extend).contains("ifletSome(payload)=get_ephemeral"));
+        assert!(compact_src(extend).contains("Err(e)=>returnErr(e)"));
+        let run = named_fn_src(
+            include_str!("exploit_synthesis_engine.rs"),
+            "pub async fn run_exploit_synthesis_async",
+        );
+        assert!(run.contains("EngineResult::error(\"store_down\")"));
+        assert!(run.contains("extend_gadget_chains_with_ephemeral_and_hunt_async"));
+    }
+
+    #[test]
+    fn orchestrator_non_llm_config_store_down_is_not_default_catalog() {
+        let src = include_str!("orchestrator/mod.rs");
+        let engines = named_fn_src(src, "async fn active_engines_list");
+        assert!(engines.contains("Result<Vec<String>, sqlx::Error>"));
+        assert!(engines.contains("get_config_tx_strict"));
+        assert!(!engines.contains("get_config_tx("));
+        let ports = named_fn_src(src, "async fn asm_ports_from_config");
+        assert!(ports.contains("get_config_tx_strict"));
+        assert!(!ports.contains("get_config_tx("));
+        let recon = named_fn_src(src, "async fn recon_subdomain_prefixes_from_config");
+        assert!(recon.contains("get_config_tx_strict"));
+        assert!(!recon.contains("get_config_tx("));
+        let threat = named_fn_src(src, "async fn load_threat_intel_config");
+        assert!(threat.contains("get_config_tx_strict(tx, tenant_id, \"enable_zero_day_probing\")"));
+        assert!(threat.contains("Result<threat_intel_engine::ThreatIntelConfig, sqlx::Error>"));
+        let poe = named_fn_src(src, "async fn load_poe_config");
+        assert!(poe.contains("get_config_tx_strict(tx, tenant_id, \"enable_poe_synthesis\")"));
+        assert!(!compact_src(poe).contains("ifletOk(rows)=sqlx::query("));
+        assert!(compact_src(poe).contains("fetch_all(intel_pool.as_ref()).await?"));
+        let cycle = named_fn_src(src, "async fn run_cycle_for_tenant_inner");
+        assert!(cycle.contains("get_config_tx_strict(&mut tx, tenant_id, \"github_token\")"));
+        assert!(!cycle.contains("get_config_tx(&mut tx, tenant_id, \"github_token\")"));
+        let stealth = named_fn_src(src, "async fn load_stealth_config");
+        assert!(stealth.contains("get_config_tx("));
+        assert!(!stealth.contains("get_config_tx_strict"));
+        let semantic = named_fn_src(src, "async fn load_semantic_config");
+        assert!(semantic.contains("get_config_tx("));
+        assert!(!semantic.contains("get_config_tx_strict"));
+    }
 }
