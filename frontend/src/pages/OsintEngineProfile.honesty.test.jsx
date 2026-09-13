@@ -32,4 +32,9 @@ describe('OsintEngineProfile live-only truth', () => {
   it('does not paint leftover leftover-history findings after a failed history GET', () => {
     expect(src).toMatch(/!historyUnavailable && findings\.length > 0/)
   })
+
+  it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
+  })
 })

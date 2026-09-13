@@ -21,4 +21,9 @@ describe('PkiTlsCommandCenter live-only truth', () => {
     expect(src).toMatch(/detailFindings\.length > 0 && !historyUnavailable && <CategoryBreakdown/)
     expect(src).not.toMatch(/posture_score \?\? summary\.evidence\?\.posture_score \?\? 0/)
   })
+
+  it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
+  })
 })

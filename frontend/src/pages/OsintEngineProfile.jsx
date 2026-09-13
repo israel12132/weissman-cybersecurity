@@ -214,6 +214,11 @@ export default function OsintEngineProfile() {
 
   const { exportCsv, filteredFindings, searchQuery, setSearchQuery } = useFindingsWorkbench(findings, { csvPrefix: 'weissman-osint' })
 
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
+
   const visibleFindings = useMemo(() => {
     if (!searchQuery.trim()) return findings
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
@@ -346,9 +351,9 @@ export default function OsintEngineProfile() {
       actions={(
         <ShellScanActions
           onRefresh={loadHistory}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={historyLoading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >
