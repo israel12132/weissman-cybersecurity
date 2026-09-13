@@ -18,27 +18,38 @@
 
 **RPO:** up to 24h (backup interval). **Not** point-in-time.
 
-### Tier 2 — PITR (production required)
+### Tier 2 — Encrypted PITR (production required)
 
-1. Enable WAL archiving (superuser):
+All backups are **encrypted with `age` in asymmetric recipient mode**: the host holds only a
+public key and cannot decrypt its own backups. Full architecture, threat model, key ceremony and
+restore runbook: **[ENCRYPTED-DR-PITR.md](./ENCRYPTED-DR-PITR.md)**.
+
+1. Do the one-time key ceremony (offline) and set recipients in `.env`:
+
+   ```bash
+   age-keygen -o dr-identity.txt            # keep the identity OFF this host
+   WEISSMAN_ENV=production
+   WEISSMAN_BACKUP_AGE_RECIPIENTS="age1...ops age1...breakglass"
+   WEISSMAN_DR_OFFSITE_URL=s3://weissman-dr-independent/pitr
+   ```
+
+2. Enable ENCRYPTED WAL archiving (superuser) and take the first encrypted backup:
 
    ```bash
    export DATABASE_URL=postgresql://postgres:...@host/weissman
-   export WEISSMAN_PITR_ARCHIVE_DIR=/var/backups/weissman/wal
-   export WEISSMAN_PITR_BASE_DIR=/var/backups/weissman/base
-   ./scripts/backup_pitr_setup.sh init
-   ./scripts/backup_pitr_setup.sh base
+   ./scripts/backup_pitr_setup.sh init      # encrypted archive_command + recipients file
+   ./scripts/dr_orchestrator.sh cycle       # encrypted base + off-site replication
+   ./scripts/dr_orchestrator.sh drill       # PROVE it decrypts + restores
    ```
 
-2. Schedule base backups daily + WAL archive to **offsite encrypted storage** (S3/GCS with versioning).
-
-3. Verify quarterly:
+3. Schedule nightly (`scripts/backup_nightly.sh` = cycle + drill) and check posture any time:
 
    ```bash
-   ./scripts/backup_pitr_setup.sh verify
+   ./scripts/dr_orchestrator.sh status
    ```
 
-**RPO:** 15 minutes (WAL segment flush + archive lag monitoring).
+**RPO:** 15 minutes (encrypted WAL segment flush + archive lag monitoring). Backups are refused
+(fail-closed) rather than written in cleartext if encryption is unavailable.
 
 ### Tier 3 — Managed database (recommended)
 
@@ -46,15 +57,23 @@
 - Document provider retention (typically 7–35 days) in your runbook.
 - Disable Tier 2 self-managed WAL when using provider PITR.
 
-## Restore procedure (PITR)
+## Restore procedure (encrypted PITR)
 
-1. Provision fresh Postgres 16 instance.
-2. Restore latest base backup from `WEISSMAN_PITR_BASE_DIR/latest`.
-3. Create `recovery.signal` and set `restore_command` to copy WAL from archive dir.
-4. Start Postgres; replay to target timestamp (`recovery_target_time`).
-5. Promote: remove recovery config, restart.
-6. Point `DATABASE_URL` / `WEISSMAN_MIGRATE_URL` at new instance.
-7. Redeploy backend + worker; verify `./scripts/go_live_check.sh --live https://...`.
+On the **restore trust zone** (the only place the age identity/private key lives):
+
+```bash
+export WEISSMAN_BACKUP_AGE_IDENTITY_FILE=/secure/dr-identity.txt
+export WEISSMAN_DR_OFFSITE_URL=s3://weissman-dr-independent/pitr
+
+# Pull latest encrypted base + WAL, verify integrity, decrypt, prepare replay to a point in time:
+./scripts/dr_orchestrator.sh restore /recovery --target-time '2026-01-01 12:00:00+00'
+# Start Postgres 16 on /recovery/pgdata — it replays WAL (decrypting each segment) and promotes:
+pg_ctl -D /recovery/pgdata -o '-p 5432' -w start
+```
+
+Then point `DATABASE_URL` / `WEISSMAN_MIGRATE_URL` at the new instance, redeploy backend + worker,
+and verify `./scripts/go_live_check.sh --live https://...`. Full detail (including the on-demand
+WAL decryption during replay): [ENCRYPTED-DR-PITR.md](./ENCRYPTED-DR-PITR.md).
 
 ## Redis / job bus
 
@@ -71,13 +90,16 @@
 
 | Test | Frequency | Owner |
 |------|-----------|-------|
-| `backup_pitr_setup.sh verify` | Weekly | Platform ops |
-| Full restore to staging | Quarterly | Platform ops |
+| `dr_orchestrator.sh drill` (decrypt + restore) | Nightly (`backup_nightly.sh`) | Platform ops |
+| `dr_crypto_selftest.sh` (crypto/integrity/off-site) | Every CI run | CI |
+| `dr_orchestrator.sh status` (RPO/RTO posture) | Weekly review | Platform ops |
+| Full off-site `restore` to staging | Quarterly | Platform ops |
 | `go_live_check.sh --live` post-restore | Each restore drill | Release engineer |
 | Outage smoke (`deploy/verify-outage-recovery.sh`) | After any production incident | On-call |
 
 ## Related documents
 
+- [Encrypted DR & PITR — architecture, threat model, key ceremony, restore runbook](./ENCRYPTED-DR-PITR.md)
 - [Operations monitoring (EN)](../manuals/en/16-operations-monitoring.md)
 - [Production security (EN)](../manuals/en/05-production-security.md)
 - [SOAR verification worker](./SOAR-VERIFICATION-WORKER.md)

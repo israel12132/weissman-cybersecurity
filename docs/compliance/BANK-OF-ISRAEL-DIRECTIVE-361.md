@@ -40,8 +40,9 @@
 | דרישת חוזר 361 | בקרה בפלטפורמה | מסמך |
 |---|---|---|
 | RTO (Recovery Time Objective) | **≤ 4 שעות** לשחזור מלא | `docs/operations/DISASTER-RECOVERY.md` |
-| RPO (Recovery Point Objective) | **≤ 1 שעה** (PITR + WAL ב-S3) | `scripts/backup_pitr_setup.sh` |
-| תרגיל DR תקופתי | `scripts/backup_restore_verify.sh` — חובה כל 48 שעות | `scripts/backup_restore_verify.sh` |
+| RPO (Recovery Point Objective) | **≤ 1 שעה** (PITR + WAL מוצפן ב-age, שכפול Off-site) | `scripts/dr_orchestrator.sh`, `scripts/backup_pitr_setup.sh` |
+| הצפנת גיבויים | **age מצב Recipient א-סימטרי** — שרת הייצור אינו יכול לפענח את הגיבויים של עצמו | `scripts/lib/backup_crypto.sh`, `docs/operations/ENCRYPTED-DR-PITR.md` |
+| תרגיל DR תקופתי | תרגיל **פענוח+שחזור** — חובה כל 48 שעות | `scripts/dr_orchestrator.sh drill` |
 | Multi-AZ / HA | PostgreSQL HA (`deploy/k8s/postgres-ha.yaml`), Redis HA, HPA | `deploy/k8s/` |
 | Runbook אחזור מלא | הוראות שלב-אחר-שלב בעברית | `docs/operations/DISASTER-RECOVERY.md` |
 
