@@ -15,4 +15,11 @@ describe('AIModelRiskTab live-only truth', () => {
     expect(src).toMatch(/setEndpointsUnavailable\(true\)/)
     expect(src).not.toMatch(/if \(e\?\.status\) return/)
   })
+
+  it('does not paint leftover leftover-events after a failed llm-fuzz GET', () => {
+    expect(src).toMatch(/data=\{loadError \? \[\] : events\}/)
+    expect(src).toMatch(/data-testid="ai-model-risk-unavailable"/)
+    expect(src).toMatch(/setLoadError\(e\?\.message \|\| t\(`\$\{NS\}\.unavailable`\)\)/)
+    expect(src).not.toMatch(/setEvents\(\[\]\)/)
+  })
 })

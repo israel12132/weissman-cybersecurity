@@ -310,7 +310,7 @@ export default function AIModelRiskTab() {
         <DataTable
           id="ai-model-risk-events-table"
           columns={eventColumns}
-          data={events}
+          data={loadError ? [] : events}
           loading={loading}
           getRowId={(e) => e.id}
           animateRows={false}
