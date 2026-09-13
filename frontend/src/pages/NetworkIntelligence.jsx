@@ -389,6 +389,7 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(FLAGSHIP_ID, sorted)
 
   useEffect(() => {
@@ -584,12 +585,18 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
               <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-10 text-center">
                 <p className="text-[11px] font-mono text-[var(--text-disabled)]">
                   {scanning ? tt('scan_running', 'Probing DNS resolvers, DNSSEC, RPKI and BGP origins…')
+                    : historyUnavailable ? tt('history_unavailable', 'Engine history API unavailable — hijack-resistance is not confirmed.')
                     : !clientId ? t('pages.networkIntelligence.select_client_warning')
                       : tt('empty_ready', 'Ready — run to measure DNS/BGP hijack resistance.')}
                 </p>
               </motion.div>
             )}
           </AnimatePresence>
+          {historyUnavailable && (
+            <p data-testid="network-intelligence-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+              {tt('history_unavailable', 'Engine history API unavailable — hijack-resistance is not confirmed.')}
+            </p>
+          )}
           <WeissmanFindingsPanel
             findings={sorted}
             filteredFindings={filteredFindings}
@@ -605,7 +612,10 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
             jobId={pendingJobId || lastJobId}
             accent="#f97316"
             title={tt('findings', 'Findings')}
-            showEmptyReady={!scanning && sorted.length === 0}
+            unavailable={historyUnavailable}
+            unavailableTitle={tt('history_unavailable', 'Engine history API unavailable — hijack-resistance is not confirmed.')}
+            unavailableBody={tt('history_unavailable', 'Engine history API unavailable — hijack-resistance is not confirmed.')}
+            showEmptyReady={!scanning && !historyUnavailable && sorted.length === 0}
             emptyReadyTitle={tt('empty_ready', 'Ready — run to measure DNS/BGP hijack resistance.')}
             emptyReadyBody={tt('empty_no_findings', 'No exposures returned — hijack-resistance posture appears strong.')}
             renderFinding={(f, i) => <FindingCard key={i} f={f} />}

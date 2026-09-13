@@ -16,4 +16,11 @@ describe('GraphqlSecurityCommandCenter live-only truth', () => {
     expect(src).toMatch(/Array\.isArray\(d\?\.clients\)/)
     expect(src).not.toMatch(/\.then\(\(d\) => \{ if \(Array\.isArray\(d\)\) setClients\(d\) \}\)/)
   })
+
+  it('does not paint ready-to-scan when GET /api/engines/history fails', () => {
+    expect(src).toMatch(/data-testid="graphql-security-history-unavailable"/)
+    expect(src).toMatch(/history_unavailable/)
+    expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
+    expect(src).toMatch(/!historyUnavailable/)
+  })
 })

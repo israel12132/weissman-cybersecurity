@@ -15,4 +15,11 @@ describe('PqcRadar live-only truth', () => {
     expect(src).toMatch(/setClientsUnavailable\(true\)/)
     expect(src).not.toMatch(/\.catch\(\(\) => \{\}\)/)
   })
+
+  it('does not paint ready-to-scan when GET /api/engines/history fails', () => {
+    expect(src).toMatch(/data-testid="pqc-radar-history-unavailable"/)
+    expect(src).toMatch(/history_unavailable/)
+    expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
+    expect(src).toMatch(/!historyUnavailable/)
+  })
 })

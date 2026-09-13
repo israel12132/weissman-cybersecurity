@@ -565,6 +565,7 @@ export default function AttackSurfaceManagement() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, issues)
 
   useEffect(() => {
@@ -1120,7 +1121,10 @@ export default function AttackSurfaceManagement() {
             lastUpdated={lastUpdated}
             jobId={jobId || lastJobId}
             accent={ACCENT}
-            showEmptyReady={status !== 'running' && issues.length === 0}
+            unavailable={historyUnavailable}
+            unavailableTitle={t('pages.attackSurfaceManagement.history_unavailable')}
+            unavailableBody={t('pages.attackSurfaceManagement.history_unavailable')}
+            showEmptyReady={status !== 'running' && issues.length === 0 && !historyUnavailable}
             emptyReadyTitle={t('pages.attackSurfaceManagement.empty_ready_title')}
             emptyReadyBody={t('pages.attackSurfaceManagement.empty_ready_body')}
             renderFinding={(f, i) => <FindingCard key={i} f={f} />}
@@ -1128,7 +1132,12 @@ export default function AttackSurfaceManagement() {
         </motion.div>
       )}
 
-      {!report && status !== 'running' && (
+      {historyUnavailable && (
+        <p data-testid="attack-surface-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {t('pages.attackSurfaceManagement.history_unavailable')}
+        </p>
+      )}
+      {!report && status !== 'running' && !historyUnavailable && (
         <div className="rounded-2xl border border-white/[0.08] bg-[var(--table-surface)] px-6 py-16 text-center">
           <p className="text-4xl mb-3">🛰️</p>
           <p className="text-sm font-mono text-[var(--text-tertiary)]">{t('pages.attackSurfaceManagement.empty_ready_title')}</p>

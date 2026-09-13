@@ -15,4 +15,11 @@ describe('NetworkIntelligence live-only truth', () => {
     expect(src).toMatch(/setClientsUnavailable\(true\)/)
     expect(src).not.toMatch(/\.catch\(\(\) => \{\}\)/)
   })
+
+  it('does not paint appears-strong when GET /api/engines/history fails', () => {
+    expect(src).toMatch(/data-testid="network-intelligence-history-unavailable"/)
+    expect(src).toMatch(/history_unavailable/)
+    expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
+    expect(src).toMatch(/!historyUnavailable/)
+  })
 })

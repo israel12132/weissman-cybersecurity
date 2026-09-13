@@ -325,6 +325,7 @@ export default function PqcRadar() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, detailFindings)
 
   useEffect(() => {
@@ -578,6 +579,8 @@ export default function PqcRadar() {
                 <p className="text-[11px] font-mono text-[var(--text-disabled)]">
                   {scanning
                     ? tt('scan_running', 'Negotiating post-quantum key exchange with the target…')
+                    : historyUnavailable
+                      ? tt('history_unavailable', 'Engine history API unavailable — PQC readiness is not confirmed.')
                     : !selectedClientId
                       ? tt('empty_no_client', 'Select a client and run the PQC scanner to measure quantum readiness.')
                       : tt('empty_ready', 'Ready — run to test live PQC key-exchange negotiation, SSH, certificates, and HNDL exposure.')}
@@ -586,6 +589,11 @@ export default function PqcRadar() {
             )}
           </AnimatePresence>
 
+          {historyUnavailable && (
+            <p data-testid="pqc-radar-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+              {tt('history_unavailable', 'Engine history API unavailable — PQC readiness is not confirmed.')}
+            </p>
+          )}
           <WeissmanFindingsPanel
             findings={detailFindings}
             filteredFindings={sortedFindings}
@@ -600,7 +608,10 @@ export default function PqcRadar() {
             lastUpdated={lastUpdated}
             jobId={pendingJobId || lastJobId}
             accent="#10b981"
-            showEmptyReady={!scanning && detailFindings.length === 0 && !summary}
+            unavailable={historyUnavailable}
+            unavailableTitle={tt('history_unavailable', 'Engine history API unavailable — PQC readiness is not confirmed.')}
+            unavailableBody={tt('history_unavailable', 'Engine history API unavailable — PQC readiness is not confirmed.')}
+            showEmptyReady={!scanning && !historyUnavailable && detailFindings.length === 0 && !summary}
             emptyReadyTitle={tt('empty_ready', 'Ready — run to test live PQC key-exchange negotiation, SSH, certificates, and HNDL exposure.')}
             emptyReadyBody={tt('empty_no_client', 'Select a client and run the PQC scanner to measure quantum readiness.')}
             renderFinding={(f, i) => <FindingCard key={i} f={f} />}

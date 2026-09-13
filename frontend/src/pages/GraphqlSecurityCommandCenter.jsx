@@ -869,6 +869,7 @@ export default function GraphqlSecurityCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, realFindings)
 
   useEffect(() => {
@@ -1394,6 +1395,11 @@ export default function GraphqlSecurityCommandCenter() {
             </div>
 
             {/* Findings */}
+            {historyUnavailable && (
+              <p data-testid="graphql-security-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+                {t('pages.graphqlSecurityCommandCenter.history_unavailable')}
+              </p>
+            )}
             <WeissmanFindingsPanel
               findings={realFindings}
               filteredFindings={filteredFindings}
@@ -1408,7 +1414,10 @@ export default function GraphqlSecurityCommandCenter() {
               lastUpdated={lastUpdated}
               jobId={lastJobId}
               accent="#f472b6"
-              showEmptyReady={!running && realFindings.length === 0}
+              unavailable={historyUnavailable}
+              unavailableTitle={t('pages.graphqlSecurityCommandCenter.history_unavailable')}
+              unavailableBody={t('pages.graphqlSecurityCommandCenter.history_unavailable')}
+              showEmptyReady={!running && realFindings.length === 0 && !historyUnavailable}
               renderFinding={(f, i) => (
                 <div key={i} className="text-[11px] border-b border-[var(--border-subtle)] pb-2 last:border-0">
                   <div className="flex items-start gap-2">

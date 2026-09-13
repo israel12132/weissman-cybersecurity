@@ -2863,6 +2863,7 @@
       "run_scan": "▶ הפעל סריקת עמידות לחטיפה",
       "scan_running": "שואל authoritative NS, resolvers, DNSSEC, RPKI/IRR/BGP, RDAP, TLS ומישורי חטיפה…",
       "empty_ready": "מוכן — הפעל כדי למדוד עמידות לחטיפת DNS/BGP.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — עמידות לחטיפה אינה מאושרת.",
       "findings": "ממצאים",
       "roadmap": "מפת דרכים להקשחה",
       "po_dnssec": "DNSSEC",
@@ -3425,6 +3426,7 @@
       "exposure_rate": "שיעור חשיפה",
       "empty_no_client": "בחר לקוח והפעל את סורק PQC כדי לראות מלאי תעודות.",
       "empty_ready": "מוכן לסריקה — הפעל לבדיקת מוכנות TLS לקוונטום.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכנות PQC אינה מאושרת.",
       "status_final": "סופי",
       "status_draft": "טיוטה",
       "status_quantum_vulnerable": "פגיע לקוונטום",
@@ -3575,7 +3577,8 @@
       "empty_findings_title": "עדיין אין ממצאי שרשרת אספקה",
       "open_command_center": "פתח את מרכז בקרת CI/CD →",
       "ready_body": "בחר לקוח והרץ מנוע שרשרת אספקה.",
-      "ready_title": "מוכן לסריקה"
+      "ready_title": "מוכן לסריקה",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-לסריקה אינו שביל שרשרת-אספקה שקט."
     },
     "digitalTwinSimulator": {
       "title": "תאום דיגיטלי — בדיקות לייב",
@@ -4308,6 +4311,7 @@
       "recent_findings_heading": "ממצאי מובייל אחרונים",
       "open_findings": "פתח ממצאים ←",
       "findings_empty_title": "אין עדיין ממצאי מובייל",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — ממצאי מובייל ריקים אינם שביל שקט.",
       "evidence_notice": "בדיקות surface לאפליקציות mobile ב-POST /api/command-center/scan (מנועי mobile). pinning וממצאי deep-link דורשים binaries שסופקו או hosts mobile API נגישים."
     },
     "astFuzzingStudio": {
@@ -5074,7 +5078,8 @@
     },
     "graphqlSecurityCommandCenter": {
       "evidence_notice": "בדיקות introspection, batching ו-auth bypass ב-GraphQL דרך POST /api/command-center/scan (graphql_attack). תוצאות מקושרות ל-GET /api/findings — רק probing מורשה וחי.",
-      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר."
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-לסריקה אינו שביל GraphQL שקט."
     },
     "websocketSecurity": {
       "evidence_notice": "DAST WebSocket דרך POST /api/command-center/scan (websocket_attack). אימות handshake RFC6455, CSWSH דיפרנציאלי וממצאי fuzz מוזרמים ב-GET /api/telemetry/stream?job_id=… — בדיקות מורשות בלבד, ללא תוצאות WS מדומות.",
@@ -5273,6 +5278,7 @@
       "filter_all_categories": "כל הקטגוריות",
       "empty_ready_title": "בחר לקוח ומפה את משטח ההתקפה החיצוני שלו.",
       "empty_ready_body": "מגלה נכסים הפונים לאינטרנט ומדרג חשיפה מבדיקות אמת.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-למיפוי אינו שביל משטח-תקיפה שקט.",
       "empty_bottom_body": "מגלה נכסים הפונים לאינטרנט ומדרג חשיפה כפי ש-Wiz, Cortex Xpanse ו-Defender EASM עושים — מבדיקות אמת.",
       "header_correlated_attack_paths": "נתיבי התקפה מתואמים",
       "header_remediation_queue": "תור תיקון לפי עדיפות",
@@ -5330,6 +5336,7 @@
       "ripe_base": "כתובת בסיס RIPEstat",
       "run_scan": "▶ הרץ סריקת Posture",
       "run_to_populate": "הרץ סריקת posture כדי להעריך את תקינות רזולוציית ה-DNS וניתוב ה-BGP.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — עמידות חטיפה חזקה אינה מאושרת.",
       "select_client_warning": "בחר לקוח ודומיין יעד ב-scope כדי להריץ את סריקת ה-posture.",
       "subdomains": "Wordlist סטטי לתת-דומיינים (אופציונלי)",
       "target_domain": "דומיין יעד",

@@ -72,6 +72,7 @@ const LABELS = {
     standards: 'Standards',
     noFindings: 'No OAuth/OIDC weaknesses observed — strong identity posture.',
     runToPopulate: 'Configure the IdP target and run the assessment.',
+    historyUnavailable: 'Engine history API unavailable — ready-to-populate is not confirmed.',
     filterAll: 'all',
     related: 'Related identity engines',
     relatedJwt: 'JWT Attack Lab',
@@ -142,6 +143,7 @@ const LABELS = {
     standards: 'תקנים',
     noFindings: 'לא נצפו חולשות OAuth/OIDC — תנוחת זהות חזקה.',
     runToPopulate: 'הגדר יעד IdP והרץ הערכה.',
+    historyUnavailable: 'API היסטוריית המנוע אינו זמין — מוכן-למילוי אינו מאושר.',
     filterAll: 'הכל',
     related: 'מנועי זהות קשורים',
     relatedJwt: 'מעבדת JWT',
@@ -592,6 +594,7 @@ export default function IdentitySecurityCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, regular)
 
   useEffect(() => {
@@ -803,7 +806,12 @@ export default function IdentitySecurityCenter() {
       </div>
 
       {/* Results */}
-      {findings.length === 0 && status !== 'running' && (
+      {historyUnavailable && (
+        <p data-testid="identity-security-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {L.historyUnavailable}
+        </p>
+      )}
+      {findings.length === 0 && status !== 'running' && !historyUnavailable && (
         <div className="rounded-2xl bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] p-8 text-center mb-6">
           <p className="text-[11px] font-mono text-[var(--text-disabled)]">{status === 'completed' ? L.noFindings : L.runToPopulate}</p>
         </div>
@@ -867,7 +875,10 @@ export default function IdentitySecurityCenter() {
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
         title={L.findingsTitle}
-        showEmptyReady={status !== 'running' && regular.length === 0 && findings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={L.historyUnavailable}
+        unavailableBody={L.historyUnavailable}
+        showEmptyReady={status !== 'running' && regular.length === 0 && findings.length === 0 && !historyUnavailable}
         emptyReadyTitle={L.runToPopulate}
         emptyReadyBody={L.runToPopulate}
         emptyTitle={L.noFindings}

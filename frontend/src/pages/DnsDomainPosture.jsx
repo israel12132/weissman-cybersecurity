@@ -432,6 +432,7 @@ export default function DnsDomainPosture() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, issues)
 
   useEffect(() => {
@@ -686,6 +687,11 @@ export default function DnsDomainPosture() {
 
       <Scorecard summary={summary} t={t} />
 
+      {historyUnavailable && (
+        <p data-testid="dns-domain-posture-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {t('pages.dnsDomainPosture.history_unavailable')}
+        </p>
+      )}
       <WeissmanFindingsPanel
         findings={issues}
         filteredFindings={filteredFindings}
@@ -700,7 +706,10 @@ export default function DnsDomainPosture() {
         lastUpdated={lastUpdated}
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
-        showEmptyReady={status !== 'running' && issues.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={t('pages.dnsDomainPosture.history_unavailable')}
+        unavailableBody={t('pages.dnsDomainPosture.history_unavailable')}
+        showEmptyReady={status !== 'running' && issues.length === 0 && !historyUnavailable}
         emptyReadyTitle={t('pages.dnsDomainPosture.run_to_populate', 'Run a posture scan to assess DNS resolution & BGP routing integrity.')}
         emptyReadyBody={t('pages.dnsDomainPosture.no_findings', 'No exposures returned — hijack-resistance posture appears strong.')}
         renderFinding={(f, i) => <FindingCard key={i} f={f} />}

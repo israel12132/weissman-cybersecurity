@@ -103,6 +103,7 @@ export default function MobileSecurity() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(MOBILE_ENGINE, platformFindings);
 
   useEffect(() => {
@@ -407,6 +408,11 @@ export default function MobileSecurity() {
         </div>
 
         {/* Recent mobile findings (real list) */}
+        {historyUnavailable && (
+          <p data-testid="mobile-security-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+            {t('pages.mobileSecurity.history_unavailable')}
+          </p>
+        )}
         <WeissmanFindingsPanel
           findings={platformFindings}
           filteredFindings={filteredFindings}
@@ -422,7 +428,10 @@ export default function MobileSecurity() {
           jobId={pendingJobId || lastJobId}
           accent="#22d3ee"
           title={t('pages.mobileSecurity.recent_findings_heading')}
-          showEmptyReady={!loading && platformFindings.length === 0}
+          unavailable={historyUnavailable}
+          unavailableTitle={t('pages.mobileSecurity.history_unavailable')}
+          unavailableBody={t('pages.mobileSecurity.history_unavailable')}
+          showEmptyReady={!loading && !historyUnavailable && platformFindings.length === 0}
           emptyReadyTitle={t('pages.mobileSecurity.findings_empty_title')}
           renderFinding={(f) => (
             <div key={f.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2 flex items-start gap-3">

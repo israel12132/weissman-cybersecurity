@@ -15,4 +15,12 @@ describe('SupplyChainHub live-only truth', () => {
     expect(src).toMatch(/setClientsUnavailable\(true\)/)
     expect(src).not.toMatch(/\.catch\(\(\) => \{\}\)/)
   })
+
+  it('does not paint ready-to-scan when engine history GETs fail', () => {
+    expect(src).toMatch(/data-testid="supply-chain-hub-history-unavailable"/)
+    expect(src).toMatch(/history_unavailable/)
+    expect(src).toMatch(/classifyEngineHistory/)
+    expect(src).toMatch(/showEmptyReady=\{!historyUnavailable\}/)
+    expect(src).not.toMatch(/Array\.isArray\(d\?\.runs\) \? d\.runs : \[\]/)
+  })
 })

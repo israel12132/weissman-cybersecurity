@@ -2762,6 +2762,7 @@
       "run_scan": "▶ Run Hijack-Resistance Scan",
       "scan_running": "Querying authoritative NS, resolvers, DNSSEC, RPKI/IRR/BGP, RDAP, TLS & compound hijack planes…",
       "empty_ready": "Ready — run to measure DNS/BGP hijack resistance.",
+      "history_unavailable": "Engine history API unavailable — hijack-resistance is not confirmed.",
       "findings": "Findings",
       "roadmap": "Hardening Roadmap",
       "po_dnssec": "DNSSEC",
@@ -3324,6 +3325,7 @@
       "exposure_rate": "Exposure Rate",
       "empty_no_client": "Select a client and run the PQC scanner to see certificate inventory.",
       "empty_ready": "Ready to scan — run to check TLS certificate quantum readiness.",
+      "history_unavailable": "Engine history API unavailable — PQC readiness is not confirmed.",
       "status_final": "final",
       "status_draft": "draft",
       "status_quantum_vulnerable": "quantum-vulnerable",
@@ -3474,7 +3476,8 @@
       "empty_findings_title": "No supply chain findings yet",
       "open_command_center": "Open CI/CD Command Center →",
       "ready_body": "Select a client and run a supply-chain engine.",
-      "ready_title": "Ready to scan"
+      "ready_title": "Ready to scan",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet supply-chain trail."
     },
     "digitalTwinSimulator": {
       "title": "Digital Twin Live Probes",
@@ -4308,6 +4311,7 @@
       "recent_findings_heading": "Recent Mobile Findings",
       "open_findings": "Open Findings →",
       "findings_empty_title": "No mobile findings yet",
+      "history_unavailable": "Engine history API unavailable — empty mobile findings are not a quiet trail.",
       "evidence_notice": "Mobile app surface checks via POST /api/command-center/scan (mobile engines). Certificate pinning and deep-link findings require supplied app binaries or reachable mobile API hosts."
     },
     "astFuzzingStudio": {
@@ -5074,7 +5078,8 @@
     },
     "graphqlSecurityCommandCenter": {
       "evidence_notice": "GraphQL introspection, batching, and auth bypass checks via POST /api/command-center/scan (graphql_attack). Results correlate to GET /api/findings — live authorized probing only.",
-      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant."
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet GraphQL trail."
     },
     "websocketSecurity": {
       "evidence_notice": "WebSocket DAST via POST /api/command-center/scan (websocket_attack). RFC6455 handshake verification, CSWSH differential, and stateful fuzz findings stream on GET /api/telemetry/stream?job_id=… — live authorized probing only, no simulated WS results.",
@@ -5273,6 +5278,7 @@
       "filter_all_categories": "All categories",
       "empty_ready_title": "Select a client and map its external attack surface.",
       "empty_ready_body": "Discovers internet-facing assets and scores exposure from real probes.",
+      "history_unavailable": "Engine history API unavailable — ready-to-map is not a quiet attack-surface trail.",
       "empty_bottom_body": "Discovers internet-facing assets and scores exposure the way Wiz, Cortex Xpanse & Defender EASM do — from real probes.",
       "header_correlated_attack_paths": "Correlated attack paths",
       "header_remediation_queue": "Priority remediation queue",
@@ -5330,6 +5336,7 @@
       "ripe_base": "RIPEstat base URL",
       "run_scan": "▶ Run Posture Scan",
       "run_to_populate": "Run a posture scan to assess DNS resolution & BGP routing integrity.",
+      "history_unavailable": "Engine history API unavailable — strong hijack-resistance is not confirmed.",
       "select_client_warning": "Select an in-scope client and target domain to run the posture scan.",
       "subdomains": "Static subdomain wordlist (optional)",
       "target_domain": "Target domain",

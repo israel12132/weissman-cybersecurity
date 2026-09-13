@@ -11,6 +11,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import SupplyChainGraph from '../components/ui/SupplyChainGraph'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch } from '../utils/apiFetch'
+import { classifyEngineHistory } from '../hooks/useEngineHistory'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
 
@@ -175,6 +176,7 @@ export default function SupplyChainHub() {
   const [toast, setToast] = useState(null)
   const [findingsByEngine, setFindingsByEngine] = useState({})
   const [refreshLoading, setRefreshLoading] = useState(false)
+  const [historyUnavailable, setHistoryUnavailable] = useState(false)
   const [focusedEngineId, setFocusedEngineId] = useState(SUPPLY_ENGINE_IDS[0])
 
   useEffect(() => {
@@ -227,20 +229,24 @@ export default function SupplyChainHub() {
         SUPPLY_ENGINE_IDS.map((id) => apiFetch(`/api/engines/history/${id}?limit=1`)),
       )
       const updates = {}
-      let anyFailed = false
+      let anyUnavailable = false
       results.forEach((res, i) => {
         const id = SUPPLY_ENGINE_IDS[i]
-        if (res.status === 'fulfilled') {
-          const d = res.value
-          const runs = Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : []
-          const last = runs[0]
-          updates[id] = Array.isArray(last?.findings) ? last.findings : []
-        } else {
-          anyFailed = true
+        if (res.status !== 'fulfilled') {
+          anyUnavailable = true
+          return
         }
+        const classified = classifyEngineHistory(res.value)
+        if (classified.kind === 'unavailable') {
+          anyUnavailable = true
+          return
+        }
+        const last = classified.last
+        updates[id] = last ? classified.findings : []
       })
       setFindingsByEngine((prev) => ({ ...prev, ...updates }))
-      if (anyFailed) showToast('error', t('findings.load_error'))
+      setHistoryUnavailable(anyUnavailable)
+      if (anyUnavailable) showToast('error', t('findings.load_error'))
     } finally {
       setRefreshLoading(false)
     }
@@ -312,6 +318,11 @@ export default function SupplyChainHub() {
       </div>
 
       <div className="mt-8">
+        {historyUnavailable && (
+          <p data-testid="supply-chain-hub-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+            {t('pages.supplyChainHub.history_unavailable')}
+          </p>
+        )}
         <WeissmanFindingsPanel
           findings={aggregatedFindings}
           filteredFindings={filteredFindings}
@@ -325,7 +336,10 @@ export default function SupplyChainHub() {
           title={t('pages.supplyChainHub.aggregated_findings', 'Supply Chain Findings')}
           emptyTitle={t('pages.supplyChainHub.empty_findings_title', 'No supply chain findings yet')}
           emptyBody={t('pages.supplyChainHub.empty_findings_body', 'Run any engine above to populate live findings.')}
-          showEmptyReady
+          unavailable={historyUnavailable}
+          unavailableTitle={t('pages.supplyChainHub.history_unavailable')}
+          unavailableBody={t('pages.supplyChainHub.history_unavailable')}
+          showEmptyReady={!historyUnavailable}
           emptyReadyTitle={t('pages.supplyChainHub.ready_title', 'Ready to scan')}
           emptyReadyBody={t('pages.supplyChainHub.ready_body', 'Select a client and run a supply-chain engine.')}
           renderFinding={(f, i) => <FindingCard key={i} finding={f} t={t} />}
