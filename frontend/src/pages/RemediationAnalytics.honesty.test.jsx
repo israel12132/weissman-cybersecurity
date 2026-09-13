@@ -19,4 +19,15 @@ describe('RemediationAnalytics live-only truth', () => {
     expect(src).toMatch(/Array\.isArray\(d\?\.findings\) \? d\.findings : null/)
     expect(src).not.toMatch(/\.catch\(\(\) => null\)/)
   })
+
+  it('does not paint leftover leftover-heals after a failed findings GET', () => {
+    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/const exportPdf = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredHeals\.length\}/)
+    expect(src).toMatch(/disabled=\{\!\!error \|\| !filteredHeals\.length\}/)
+    expect(src).toMatch(/\{!error && <HealTrendSparkline/)
+    expect(src).toMatch(/bounded && !error && !loading && !statsLoading && healStats/)
+    expect(src).toMatch(/\{\/\* Recent heals feed — leftover rows stay in React state; mute paint on failed findings GET \*\/\}\n        \{\!error && \(/)
+    expect(src).not.toMatch(/setFindings\(\[\]\)/)
+  })
 })

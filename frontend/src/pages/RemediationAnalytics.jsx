@@ -159,14 +159,14 @@ export default function RemediationAnalytics() {
   )
 
   const handleRefresh = useCallback(() => load(), [load])
-  const exportCsv = useCallback(
-    () => exportRowsCsv(HEALS_CSV_HEADER, healsRows(filteredHeals), 'weissman-remediation-analytics'),
-    [filteredHeals],
-  )
-  const exportPdf = useCallback(
-    () => exportRowsPdf('Weissman Remediation Analytics', HEALS_CSV_HEADER, healsRows(filteredHeals), 'weissman-remediation-analytics'),
-    [filteredHeals],
-  )
+  const exportCsv = useCallback(() => {
+    if (error) return
+    exportRowsCsv(HEALS_CSV_HEADER, healsRows(filteredHeals), 'weissman-remediation-analytics')
+  }, [error, filteredHeals])
+  const exportPdf = useCallback(() => {
+    if (error) return
+    exportRowsPdf('Weissman Remediation Analytics', HEALS_CSV_HEADER, healsRows(filteredHeals), 'weissman-remediation-analytics')
+  }, [error, filteredHeals])
 
   return (
     <PageShell
@@ -181,13 +181,13 @@ export default function RemediationAnalytics() {
             onRefresh={handleRefresh}
             onExport={exportCsv}
             refreshLoading={loading}
-            exportDisabled={!filteredHeals.length}
+            exportDisabled={!!error || !filteredHeals.length}
           />
           <Button
             variant="unstyled"
             type="button"
             onClick={exportPdf}
-            disabled={!filteredHeals.length}
+            disabled={!!error || !filteredHeals.length}
             title={t('common.export_pdf')}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 text-[11px] font-mono text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
           >
@@ -214,7 +214,7 @@ export default function RemediationAnalytics() {
 
         <HealReadinessPanel />
 
-        <HealTrendSparkline clientIds={clientIds} days={30} />
+        {!error && <HealTrendSparkline clientIds={clientIds} days={30} />}
 
         {error && (
           <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm flex items-center gap-2">
@@ -223,7 +223,7 @@ export default function RemediationAnalytics() {
           </div>
         )}
 
-        {bounded && !loading && !statsLoading && healStats && (
+        {bounded && !error && !loading && !statsLoading && healStats && (
           <div className="text-[11px] text-amber-300/70 font-mono flex items-center gap-2">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
             {t('pages.remediationAnalytics.bounded')}
@@ -252,7 +252,8 @@ export default function RemediationAnalytics() {
           />
         )}
 
-        {/* Recent heals feed */}
+        {/* Recent heals feed — leftover rows stay in React state; mute paint on failed findings GET */}
+        {!error && (
         <section className="space-y-2">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
@@ -310,6 +311,7 @@ export default function RemediationAnalytics() {
             </div>
           )}
         </section>
+        )}
       </div>
     </PageShell>
   )
