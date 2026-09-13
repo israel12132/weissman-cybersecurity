@@ -61,12 +61,13 @@ export default function NgfwGate() {
   }, [findings, searchQuery, status])
 
   const exportCsv = useCallback(() => {
+    if (error) return
     downloadCsv(
       filtered.map((x) => [x.source, x.title, x.severity, status?.dataplane_live]),
       ['engine', 'title', 'severity', 'dataplane_live'],
       'weissman-gate',
     )
-  }, [filtered, status])
+  }, [error, filtered, status])
 
   const savePolicy = async () => {
     try {
@@ -106,7 +107,7 @@ export default function NgfwGate() {
       subtitle={t(`${NS}.subtitle`)}
       icon={<Shield />}
       actions={(
-        <ShellScanActions onRefresh={load} onExport={exportCsv} refreshLoading={loading} exportDisabled={!filtered.length} />
+        <ShellScanActions onRefresh={load} onExport={exportCsv} refreshLoading={loading} exportDisabled={!!error || !filtered.length} />
       )}
     >
       <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>

@@ -60,12 +60,13 @@ export default function ItdrCommandCenter() {
   }, [events, searchQuery])
 
   const exportCsv = useCallback(() => {
+    if (error) return
     downloadCsv(
       filtered.map((ev) => [ev.ts, ev.username, ev.ip, ev.country, ev.success, ev.mfa_prompted]),
       ['ts', 'user', 'ip', 'country', 'success', 'mfa'],
       'weissman-itdr-events',
     )
-  }, [filtered])
+  }, [error, filtered])
 
   const fails = events.filter((ev) => ev.success === false).length
   const armedProviders = useMemo(() => configuredItdrProviders(connectors), [connectors])
@@ -100,7 +101,7 @@ export default function ItdrCommandCenter() {
       subtitle={t(`${NS}.subtitle`)}
       icon={<Fingerprint />}
       actions={(
-        <ShellScanActions onRefresh={load} onExport={exportCsv} refreshLoading={loading} exportDisabled={!filtered.length} />
+        <ShellScanActions onRefresh={load} onExport={exportCsv} refreshLoading={loading} exportDisabled={!!error || !filtered.length} />
       )}
     >
       <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>

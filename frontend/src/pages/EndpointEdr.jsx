@@ -61,12 +61,13 @@ export default function EndpointEdr() {
   }, [agents, findings, searchQuery])
 
   const exportCsv = useCallback(() => {
+    if (error) return
     downloadCsv(
       filtered.map((r) => [r.kind, r.title, r.id]),
       ['kind', 'title', 'id'],
       'weissman-endpoint-edr',
     )
-  }, [filtered])
+  }, [error, filtered])
 
   const act = async (action) => {
     const clientId = selectedClientId || clients?.[0]?.id
@@ -97,7 +98,7 @@ export default function EndpointEdr() {
       subtitle={t(`${NS}.subtitle`)}
       icon={<Laptop />}
       actions={(
-        <ShellScanActions onRefresh={load} onExport={exportCsv} refreshLoading={loading} exportDisabled={!filtered.length} />
+        <ShellScanActions onRefresh={load} onExport={exportCsv} refreshLoading={loading} exportDisabled={!!error || !filtered.length} />
       )}
     >
       <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
