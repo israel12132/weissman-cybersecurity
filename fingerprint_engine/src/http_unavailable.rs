@@ -5249,6 +5249,10 @@ mod tests {
         assert!(!src.contains("LiveSlice::default()"));
         assert!(!compact_src(src).contains("let_=tx.commit().await;"));
         assert!(src.contains("tx.commit().await.is_err()"));
+        assert!(compact_src(src).contains(
+            "fetch_all(&mut*tx).await.map_err(|_|\"store_down\".to_string())?"
+        ));
+        assert!(!compact_src(src).contains("fetch_all(&mut*tx).await.unwrap_or"));
         let dispatch = named_fn_src(include_str!("engine_dispatch.rs"), "pub async fn run_engine");
         assert!(compact_src(dispatch).contains(
             "Err(_)=>returnEngineResult::error(\"store_down\")"
@@ -5262,10 +5266,23 @@ mod tests {
             include_str!("council.rs"),
             "async fn fetch_supreme_memory_context",
         );
+        let compact = compact_src(src);
         assert!(src.contains("Result<String, String>"));
         assert!(src.contains("\"store_down\".to_string()"));
-        assert!(!compact_src(src).contains("returnString::new();"));
-        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        assert!(!compact.contains("letOk(muttx)=crate::db::begin_tenant_tx"));
+        assert!(!compact.contains("ifletOk(muttx)="));
+        assert!(
+            compact
+                .matches(
+                    "begin_tenant_tx(pool,tenant_id).await.map_err(|_|\"store_down\".to_string())?"
+                )
+                .count()
+                >= 2
+        );
+        assert!(compact.contains(
+            "fetch_all(&mut*tx).await.map_err(|_|\"store_down\".to_string())?"
+        ));
+        assert!(!compact.contains("let_=tx.commit().await;"));
         assert!(src.contains("tx.commit().await.is_err()"));
         let debate = named_fn_src(
             include_str!("council.rs"),
@@ -5284,6 +5301,8 @@ mod tests {
         assert!(get.contains("Result<Option<String>, String>"));
         assert!(get.contains("\"store_down\".to_string()"));
         assert!(!get.contains(".ok().flatten()"));
+        assert!(!compact_src(get).contains("unwrap_or(None)"));
+        assert!(compact_src(get).contains("map_err(|_|\"store_down\".to_string())"));
         let extend = named_fn_src(
             include_str!("exploit_synthesis_engine.rs"),
             "pub async fn extend_gadget_chains_with_ephemeral_and_hunt_async",
@@ -5304,24 +5323,70 @@ mod tests {
         let src = include_str!("orchestrator/mod.rs");
         let engines = named_fn_src(src, "async fn active_engines_list");
         assert!(engines.contains("Result<Vec<String>, sqlx::Error>"));
-        assert!(engines.contains("get_config_tx_strict"));
+        assert!(compact_src(engines).contains(
+            "get_config_tx_strict(tx,tenant_id,\"active_engines\").await?"
+        ));
         assert!(!engines.contains("get_config_tx("));
         let ports = named_fn_src(src, "async fn asm_ports_from_config");
-        assert!(ports.contains("get_config_tx_strict"));
+        assert!(compact_src(ports).contains(
+            "get_config_tx_strict(tx,tenant_id,\"asm_ports\").await?"
+        ));
         assert!(!ports.contains("get_config_tx("));
         let recon = named_fn_src(src, "async fn recon_subdomain_prefixes_from_config");
-        assert!(recon.contains("get_config_tx_strict"));
+        assert!(compact_src(recon).contains(
+            "get_config_tx_strict(tx,tenant_id,\"recon_subdomain_prefixes\").await?"
+        ));
         assert!(!recon.contains("get_config_tx("));
         let threat = named_fn_src(src, "async fn load_threat_intel_config");
-        assert!(threat.contains("get_config_tx_strict(tx, tenant_id, \"enable_zero_day_probing\")"));
+        assert!(compact_src(threat).contains(
+            "get_config_tx_strict(tx,tenant_id,\"enable_zero_day_probing\").await?"
+        ));
+        assert!(compact_src(threat).contains(
+            "get_config_tx_strict(tx,tenant_id,\"custom_feed_urls\").await?"
+        ));
+        assert!(threat.contains("get_config_tx(tx, tenant_id, \"llm_base_url\")"));
         assert!(threat.contains("Result<threat_intel_engine::ThreatIntelConfig, sqlx::Error>"));
         let poe = named_fn_src(src, "async fn load_poe_config");
-        assert!(poe.contains("get_config_tx_strict(tx, tenant_id, \"enable_poe_synthesis\")"));
-        assert!(!compact_src(poe).contains("ifletOk(rows)=sqlx::query("));
-        assert!(compact_src(poe).contains("fetch_all(intel_pool.as_ref()).await?"));
+        let poe_c = compact_src(poe);
+        assert!(poe_c.contains(
+            "get_config_tx_strict(tx,tenant_id,\"enable_poe_synthesis\").await?"
+        ));
+        assert!(poe_c.contains(
+            "get_config_tx_strict(tx,tenant_id,\"poe_safety_rails_no_shells\").await?"
+        ));
+        assert!(poe_c.contains(
+            "get_config_tx_strict(tx,tenant_id,\"poe_max_poc_length\").await?"
+        ));
+        assert!(poe_c.contains(
+            "get_config_tx_strict(tx,tenant_id,\"poe_use_raw_tcp\").await?"
+        ));
+        assert!(poe_c.contains(
+            "get_config_tx_strict(tx,tenant_id,\"poe_entropy_leak_threshold\").await?"
+        ));
+        assert!(poe_c.contains(
+            "get_config_tx_strict(tx,tenant_id,\"poe_gadget_chains\").await?"
+        ));
+        assert!(!poe_c.contains("ifletOk(rows)=sqlx::query("));
+        assert!(poe_c.contains("fetch_all(intel_pool.as_ref()).await?"));
         let cycle = named_fn_src(src, "async fn run_cycle_for_tenant_inner");
-        assert!(cycle.contains("get_config_tx_strict(&mut tx, tenant_id, \"github_token\")"));
+        let cycle_c = compact_src(cycle);
+        assert!(cycle_c.contains("active_engines_list(&muttx,tenant_id).await?"));
+        assert!(cycle_c.contains("asm_ports_from_config(&muttx,tenant_id).await?"));
+        assert!(cycle_c.contains(
+            "recon_subdomain_prefixes_from_config(&muttx,tenant_id).await?"
+        ));
+        assert!(cycle_c.contains("load_threat_intel_config(&muttx,tenant_id).await?"));
+        assert!(cycle_c.contains(
+            "load_poe_config(&muttx,tenant_id,intel_pool.clone()).await?"
+        ));
+        assert!(cycle_c.contains(
+            "get_config_tx_strict(&muttx,tenant_id,\"github_token\").await?"
+        ));
         assert!(!cycle.contains("get_config_tx(&mut tx, tenant_id, \"github_token\")"));
+        let http = named_fn_src(src, "pub async fn load_poe_config_http");
+        assert!(compact_src(http).contains(
+            "load_poe_config(&muttx,tenant_id,intel_pool).await?"
+        ));
         let stealth = named_fn_src(src, "async fn load_stealth_config");
         assert!(stealth.contains("get_config_tx("));
         assert!(!stealth.contains("get_config_tx_strict"));
