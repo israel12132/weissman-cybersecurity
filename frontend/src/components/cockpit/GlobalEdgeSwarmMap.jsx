@@ -79,7 +79,7 @@ export default function GlobalEdgeSwarmMap() {
         </Button>
       </div>
 
-      {manifest && (
+      {manifest && !error && (
         <div className="text-[11px] font-mono text-white/40 border border-white/10 rounded-lg px-3 py-2 bg-black/30">
           {t(`${NS}.manifest`, {
             crate: manifest.crate ?? 'fuzz_core',
@@ -110,7 +110,7 @@ export default function GlobalEdgeSwarmMap() {
           geographyStrokeWidth={0.4}
           style={{ width: '100%', height: '100%', minHeight: 320 }}
         >
-          {nodes.map((n) => {
+          {!error && nodes.map((n) => {
             const lat = n.latitude != null ? n.latitude : fallbackCoord(n.region_code || '', n.pop_label || '')[0]
             const lng = n.longitude != null ? n.longitude : fallbackCoord(n.region_code || '', n.pop_label || '')[1]
             const jobs = n.active_jobs ?? 0
@@ -134,7 +134,7 @@ export default function GlobalEdgeSwarmMap() {
         </p>
       )}
 
-      {nodes.length > 0 && (
+      {!error && nodes.length > 0 && (
         <ul className="grid gap-2 sm:grid-cols-2 text-xs text-white/70">
           {nodes.map((n) => (
             <li key={n.id} className="border border-white/10 rounded-lg px-3 py-2 bg-black/30 font-mono">
