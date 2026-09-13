@@ -25,4 +25,10 @@ describe('IdentityContextManager live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
   })
+
+  it('mutes leftover high-risk banner after a failed identity GET', () => {
+    expect(src).toMatch(/\{!error && stats\.highRisk > 0 && \(/)
+    expect(src).toMatch(/setError\(t\('pages\.identityContextManager\.load_error'\)\)/)
+    expect(src).not.toMatch(/catch \([^)]*\) \{\s*setIdentities\(\[\]\)/)
+  })
 })
