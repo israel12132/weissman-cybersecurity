@@ -218,9 +218,10 @@ async function loadIntelPatterns() {
   let findingsTotal = 0
   let findingsOk = false
   const fd = await apiFetch('/api/findings?limit=2000').catch(() => null)
-  if (fd) {
+  const findingsList = Array.isArray(fd) ? fd : Array.isArray(fd?.findings) ? fd.findings : null
+  if (findingsList) {
     findingsOk = true
-    findings = Array.isArray(fd) ? fd : Array.isArray(fd?.findings) ? fd.findings : []
+    findings = findingsList
     findingsTotal = fd?.total ?? findings.length
     for (const f of findings) {
       if (!f.cluster_id) continue
@@ -398,6 +399,14 @@ export default function AIAnalysisEngine() {
           <SkeletonWidgetGrid count={4} />
           <SkeletonBar className="h-96 mt-6" />
         </>
+      ) : error ? (
+        <div data-testid="ai-analysis-unavailable">
+          <EmptyState
+            icon="alert"
+            title={t('pages.aiAnalysisEngine.unavailable_title')}
+            body={t('pages.aiAnalysisEngine.unavailable_body')}
+          />
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
@@ -471,7 +480,7 @@ export default function AIAnalysisEngine() {
                   </select>
                 </div>
 
-                {!loading && filtered.length === 0 && (
+                {!loading && !error && filtered.length === 0 && (
                   <EmptyState
                     icon="bot"
                     title={t('pages.aiAnalysisEngine.no_patterns_title')}

@@ -762,6 +762,7 @@ export default function GraphqlSecurityCommandCenter() {
   const { t } = useTranslation()
   const engine = ENGINES_BY_ID[ENGINE_ID]
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState('')
   const { postScan } = useCommandCenterScan(selectedClientId)
   const [target, setTarget] = useState('')
@@ -892,9 +893,13 @@ export default function GraphqlSecurityCommandCenter() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   useEffect(() => {
@@ -1071,6 +1076,11 @@ export default function GraphqlSecurityCommandCenter() {
                       <option key={c.id} value={c.id}>{c.name || c.id}</option>
                     ))}
                   </select>
+                  {clientsUnavailable && (
+                    <p data-testid="graphql-security-clients-unavailable" className="text-xs text-amber-300/80 font-mono">
+                      {t('pages.graphqlSecurityCommandCenter.clients_unavailable')}
+                    </p>
+                  )}
                 </label>
                 <Txt label={t('common.target', 'Target')} value={target} onChange={setTarget} placeholder="https://api.example.com" />
               </Section>

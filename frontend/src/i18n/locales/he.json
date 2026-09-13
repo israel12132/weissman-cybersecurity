@@ -3328,6 +3328,8 @@
       "evidence_findings": "אשכולות ריקים — מציג ממצאים בודדים מ-/api/findings עד שהאשכולות יתמלאו.",
       "no_patterns_title": "אין דפוסי תקיפה עדיין",
       "no_patterns_body": "הפעל סריקות ומנועי זיהוי כדי לאכלס זיהוי דפוסים.",
+      "unavailable_title": "מודיעין ניתוח AI אינו זמין",
+      "unavailable_body": "לא ניתן לאשר את GET /api/findings. אפס דפוסים אינו משטח איומים שקט.",
       "go_engines": "הפעל מנועים",
       "patterns_heading": "דפוסי תקיפה",
       "clusters_heading": "אשכולות ממצאים",
@@ -3391,6 +3393,7 @@
       "subtitle": "תקני NIST PQC",
       "client_label": "לקוח:",
       "select_client": "— בחר לקוח —",
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר.",
       "scanning": "⟳ סורק…",
       "run_scan": "▶ הפעל סריקת PQC",
       "select_client_first": "בחר לקוח תחילה",
@@ -3517,6 +3520,7 @@
       "subtitle": "{{count}} מנועים",
       "client_label": "לקוח:",
       "select_client": "— בחר לקוח —",
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר.",
       "select_client_warning": "בחר לקוח כדי לאפשר הפעלת מנועים.",
       "select_client_first": "בחר לקוח תחילה",
       "scan_failed": "הסריקה נכשלה",
@@ -4005,7 +4009,9 @@
       "delete_failed": "מחיקת הסוד נכשלה",
       "delete_success": "הסוד נמחק",
       "delete_title": "מחיקת סוד",
-      "load_failed": "טעינת הסודות נכשלה"
+      "load_failed": "טעינת הסודות נכשלה",
+      "unavailable_title": "כספת CEO אינה זמינה",
+      "unavailable_body": "לא ניתן לאשר את GET /api/ceo/vault/secrets. אפס סודות אינו כספת ריקה."
     },
     "identityContextManager": {
       "title": "מנהל הקשר זהות",
@@ -4367,6 +4373,7 @@
       "tagline": "מיפוי אוטומטי של נכסי חברה",
       "client": "לקוח:",
       "select_client": "— בחר לקוח —",
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר.",
       "config_heading": "תצורת גילוי",
       "target_label": "דומיין / URL יעד",
       "target_placeholder": "example.com או https://example.com",
@@ -4625,6 +4632,7 @@
       "client": "לקוח",
       "target": "יעד",
       "select_client": "בחר לקוח…",
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר.",
       "target_required": "הזן כתובת יעד",
       "queueing": "מקריס סופרפוזיציה…",
       "queued": "משימה {{jobId}} בתור — ממזג clusters חיים",
@@ -4688,6 +4696,7 @@
       "client": "לקוח",
       "target": "יעד",
       "select_client": "בחר לקוח",
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר.",
       "run": "הרץ מנוע פעיל",
       "running": "נכנס מנוע הגנה לתור…",
       "auto_run": "הרצה אוטומטית: דרישות מתקיימות",
@@ -5019,7 +5028,8 @@
       "evidence_notice": "ניתוח misconfiguration ב-IaC דרך POST /api/command-center/scan (iac_misconfig). Terraform, K8s, Dockerfile ו-manifests של CI נפרסים בשרת — פגיעות מדיניות הן ממצאים סטטיים אמיתיים, לא ציוני CIS מדומים."
     },
     "graphqlSecurityCommandCenter": {
-      "evidence_notice": "בדיקות introspection, batching ו-auth bypass ב-GraphQL דרך POST /api/command-center/scan (graphql_attack). תוצאות מקושרות ל-GET /api/findings — רק probing מורשה וחי."
+      "evidence_notice": "בדיקות introspection, batching ו-auth bypass ב-GraphQL דרך POST /api/command-center/scan (graphql_attack). תוצאות מקושרות ל-GET /api/findings — רק probing מורשה וחי.",
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר."
     },
     "websocketSecurity": {
       "evidence_notice": "DAST WebSocket דרך POST /api/command-center/scan (websocket_attack). אימות handshake RFC6455, CSWSH דיפרנציאלי וממצאי fuzz מוזרמים ב-GET /api/telemetry/stream?job_id=… — בדיקות מורשות בלבד, ללא תוצאות WS מדומות.",

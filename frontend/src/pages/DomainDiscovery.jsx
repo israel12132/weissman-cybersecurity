@@ -199,6 +199,7 @@ export default function DomainDiscovery() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [target, setTarget] = useState('')
   const [companyName, setCompanyName] = useState('')
@@ -216,10 +217,12 @@ export default function DomainDiscovery() {
   useEffect(() => {
     apiFetch('/api/clients')
       .then((d) => {
-        if (Array.isArray(d)) setClients(d)
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
       })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   // Set target from selected client
@@ -390,6 +393,11 @@ export default function DomainDiscovery() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            {clientsUnavailable && (
+              <p data-testid="domain-discovery-clients-unavailable" className="text-xs text-amber-300/80 font-mono">
+                {t('pages.domainDiscovery.clients_unavailable')}
+              </p>
+            )}
             <ShellScanActions
               onRefresh={handleRefreshDiscovery}
               onExport={() => exportDomainsCsv(filteredDomains)}

@@ -170,6 +170,7 @@ function EngineRunPanel({ engineId, clientId, showToast, onFindingsUpdate, isFoc
 export default function SupplyChainHub() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [toast, setToast] = useState(null)
   const [findingsByEngine, setFindingsByEngine] = useState({})
@@ -178,9 +179,13 @@ export default function SupplyChainHub() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   const showToast = useCallback((sev, msg) => {
@@ -268,6 +273,11 @@ export default function SupplyChainHub() {
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
+      {clientsUnavailable && (
+        <p data-testid="supply-chain-hub-clients-unavailable" className="text-xs text-amber-300/80 font-mono mb-6">
+          {t('pages.supplyChainHub.clients_unavailable')}
+        </p>
+      )}
 
       {toast && (
         <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#84cc16]/30 text-[#84cc16]'}`}>

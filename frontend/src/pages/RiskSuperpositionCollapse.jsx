@@ -202,6 +202,7 @@ export default function RiskSuperpositionCollapse() {
   const [params, setParams] = useState(DEFAULT_PARAMS)
   useSyncHubScanParams(ENGINE_ID, params)
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [clientId, setClientId] = useState('')
   const { postScan } = useCommandCenterScan(clientId)
   const [target, setTarget] = useState('')
@@ -298,9 +299,13 @@ export default function RiskSuperpositionCollapse() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   useEffect(() => {
@@ -492,6 +497,11 @@ export default function RiskSuperpositionCollapse() {
                 ))}
               </select>
             </Field>
+            {clientsUnavailable && (
+              <p data-testid="risk-superposition-clients-unavailable" className="text-xs text-amber-300/80 font-mono">
+                {t('pages.superpositionCollapse.clients_unavailable')}
+              </p>
+            )}
             <Field label={t('pages.superpositionCollapse.target')}>
               <input
                 type="url"

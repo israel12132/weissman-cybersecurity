@@ -91,6 +91,7 @@ export default function SovereignDefenseMatrix() {
   const hubTabParams = useMemo(() => params[tab] || {}, [params, tab])
   useSyncHubScanParams(ENGINES[tab], hubTabParams)
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [clientId, setClientId] = useState('')
   const { postScan } = useCommandCenterScan(clientId)
   const [target, setTarget] = useState('')
@@ -151,9 +152,13 @@ export default function SovereignDefenseMatrix() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
+      })
+      .catch(() => setClientsUnavailable(true))
     loadPoisonLib()
   }, [loadPoisonLib])
 
@@ -332,6 +337,11 @@ export default function SovereignDefenseMatrix() {
                 ))}
               </select>
             </label>
+            {clientsUnavailable && (
+              <p data-testid="sovereign-defense-clients-unavailable" className="text-xs text-amber-300/80 font-mono">
+                {t('pages.sovereignDefense.clients_unavailable')}
+              </p>
+            )}
 
             <label className="block text-[11px] font-mono text-[var(--text-tertiary)]">
               {t('pages.sovereignDefense.target')}

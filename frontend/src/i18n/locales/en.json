@@ -3231,6 +3231,8 @@
       "evidence_findings": "Cluster API empty — showing individual findings from GET /api/findings until clusters populate.",
       "no_patterns_title": "No attack patterns yet",
       "no_patterns_body": "Run scans and enable detection engines to populate pattern recognition.",
+      "unavailable_title": "AI analysis intel unavailable",
+      "unavailable_body": "GET /api/findings could not be confirmed. Zero patterns is not a quiet threat landscape.",
       "go_engines": "Launch engines",
       "patterns_heading": "Attack Patterns",
       "clusters_heading": "Finding Clusters",
@@ -3294,6 +3296,7 @@
       "subtitle": "NIST PQC Standards",
       "client_label": "Client:",
       "select_client": "— Select client —",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
       "scanning": "⟳ Scanning…",
       "run_scan": "▶ Run PQC Scan",
       "select_client_first": "Select a client first",
@@ -3420,6 +3423,7 @@
       "subtitle": "{{count}} engines",
       "client_label": "Client:",
       "select_client": "— Select client —",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
       "select_client_warning": "Select a client to enable engine runs.",
       "select_client_first": "Select a client first",
       "scan_failed": "Scan failed",
@@ -4005,7 +4009,9 @@
       "delete_failed": "Failed to delete secret",
       "delete_success": "Secret deleted",
       "delete_title": "Delete secret",
-      "load_failed": "Failed to load secrets"
+      "load_failed": "Failed to load secrets",
+      "unavailable_title": "CEO vault unavailable",
+      "unavailable_body": "GET /api/ceo/vault/secrets could not be confirmed. Zero secrets is not an empty vault."
     },
     "identityContextManager": {
       "title": "Identity Context Manager",
@@ -4367,6 +4373,7 @@
       "tagline": "Auto-Enumerate Company Assets",
       "client": "Client:",
       "select_client": "— Select client —",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
       "config_heading": "Discovery Configuration",
       "target_label": "Target Domain / URL",
       "target_placeholder": "example.com or https://example.com",
@@ -4625,6 +4632,7 @@
       "client": "Client",
       "target": "Target scope",
       "select_client": "Select client…",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
       "target_required": "Enter a target URL",
       "queueing": "Collapsing superposition…",
       "queued": "Job {{jobId}} queued — fusing live clusters",
@@ -4688,6 +4696,7 @@
       "client": "Client",
       "target": "Target",
       "select_client": "Select client",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
       "run": "Run active engine",
       "running": "Queueing defense engine…",
       "auto_run": "Auto-run: prerequisites met",
@@ -5019,7 +5028,8 @@
       "evidence_notice": "IaC misconfiguration analysis runs through POST /api/command-center/scan (iac_misconfig). Terraform, K8s, Dockerfile, and CI manifests are parsed server-side — policy hits are real static findings, not simulated CIS scores."
     },
     "graphqlSecurityCommandCenter": {
-      "evidence_notice": "GraphQL introspection, batching, and auth bypass checks via POST /api/command-center/scan (graphql_attack). Results correlate to GET /api/findings — live authorized probing only."
+      "evidence_notice": "GraphQL introspection, batching, and auth bypass checks via POST /api/command-center/scan (graphql_attack). Results correlate to GET /api/findings — live authorized probing only.",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant."
     },
     "websocketSecurity": {
       "evidence_notice": "WebSocket DAST via POST /api/command-center/scan (websocket_attack). RFC6455 handshake verification, CSWSH differential, and stateful fuzz findings stream on GET /api/telemetry/stream?job_id=… — live authorized probing only, no simulated WS results.",

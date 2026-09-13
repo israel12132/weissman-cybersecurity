@@ -14,5 +14,8 @@ describe('RiskSuperpositionCollapse live-only truth', () => {
     expect(src).toMatch(/clusters_unavailable/)
     expect(src).toMatch(/setClustersUnavailable\(true\)/)
     expect(src).toMatch(/clustersUnavailable \? '—'/)
+    expect(src).toMatch(/data-testid="risk-superposition-clients-unavailable"/)
+    expect(src).toMatch(/setClientsUnavailable\(true\)/)
+    expect(src).not.toMatch(/\.catch\(\(\) => \{\}\)/)
   })
 })

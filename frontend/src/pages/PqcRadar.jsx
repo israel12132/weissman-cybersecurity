@@ -287,6 +287,7 @@ export default function PqcRadar() {
   const tt = useCallback((key, def) => t(`pages.pqcRadar.${key}`, { defaultValue: def }), [t])
 
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const { postScan } = useCommandCenterScan(selectedClientId)
   const [target, setTarget] = useState('')
@@ -354,9 +355,13 @@ export default function PqcRadar() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   // Auto-fill target from the selected client's primary domain (unless the operator edited it).
@@ -431,6 +436,11 @@ export default function PqcRadar() {
               <option value="">{tt('select_client', '— Select client —')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+            {clientsUnavailable && (
+              <p data-testid="pqc-radar-clients-unavailable" className="text-xs text-amber-300/80 font-mono">
+                {tt('clients_unavailable', 'Clients API unavailable — a missing picker is not a missing tenant.')}
+              </p>
+            )}
           </label>
           <label className="space-y-1">
             <span className="block text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{tt('target_label', 'Target host')}</span>
