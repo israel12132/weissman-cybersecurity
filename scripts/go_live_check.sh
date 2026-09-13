@@ -245,6 +245,53 @@ else
   note "no restore-verify marker yet — run scripts/backup_restore_verify.sh nightly"
 fi
 
+section "Encrypted DR (envelope encryption + off-site)"
+# The crypto engine and the encrypted-PITR toolchain must be present.
+[[ -f scripts/lib/backup_crypto.sh ]] && ok "backup crypto engine (age envelope)" || bad "backup crypto engine missing (scripts/lib/backup_crypto.sh)"
+for s in pitr_archive_wal.sh pitr_restore_wal.sh dr_offsite_sync.sh dr_orchestrator.sh; do
+  [[ -x "scripts/$s" ]] && ok "DR script $s" || bad "DR script $s missing/not executable"
+done
+[[ -f docs/operations/ENCRYPTED-DR-PITR.md ]] && ok "encrypted-DR runbook" || bad "encrypted-DR runbook (docs/operations/ENCRYPTED-DR-PITR.md)"
+
+# Recipients configured? age installed? A production deployment MUST be able to encrypt backups.
+DR_RECIPS="$(sed -n 's/^[[:space:]]*WEISSMAN_BACKUP_AGE_RECIPIENTS=//p' .env 2>/dev/null | tail -1 | tr -d "\"'")"
+DR_RECIPS_FILE="$(sed -n 's/^[[:space:]]*WEISSMAN_BACKUP_AGE_RECIPIENTS_FILE=//p' .env 2>/dev/null | tail -1 | tr -d "\"'")"
+if [[ -n "$DR_RECIPS" || ( -n "$DR_RECIPS_FILE" && -f "$DR_RECIPS_FILE" ) ]]; then
+  ok "backup encryption recipients configured"
+else
+  bad "no backup encryption recipients (WEISSMAN_BACKUP_AGE_RECIPIENTS[_FILE]) — backups would be CLEARTEXT"
+fi
+command -v age >/dev/null 2>&1 && ok "age binary present" || bad "age not installed — cannot encrypt/decrypt backups"
+
+# The latest base must actually be encrypted (not a leftover cleartext base.tar.gz).
+if compgen -G "${PITR_BASE}/base_*/base.tar.gz.age" >/dev/null 2>&1; then
+  ok "latest base backup is encrypted (base.tar.gz.age)"
+elif compgen -G "${PITR_BASE}/base_*/base.tar.gz" >/dev/null 2>&1; then
+  bad "base backup is CLEARTEXT (base.tar.gz present, no .age) — enable encryption"
+else
+  note "no base backup yet to classify (run scripts/dr_orchestrator.sh cycle)"
+fi
+
+# Prefer an ENCRYPTED restore drill: proves the backup can be DECRYPTED, not just restored.
+ERV_MARKER="${PITR_BASE}/.last_encrypted_restore_verify_ok"
+if [[ -f "$ERV_MARKER" ]]; then
+  ERV_AGE=$(( $(date -u +%s) - $(cat "$ERV_MARKER" 2>/dev/null || echo 0) ))
+  if [[ "$ERV_AGE" -lt 172800 ]]; then
+    ok "encrypted restore proven within 48h ($((ERV_AGE/3600))h ago)"
+  else
+    bad "encrypted restore drill is stale ($((ERV_AGE/86400))d ago) — run scripts/dr_orchestrator.sh drill"
+  fi
+else
+  note "no ENCRYPTED restore-verify marker yet — run scripts/dr_orchestrator.sh drill nightly"
+fi
+
+# Off-site replication = the availability half of DR (survive losing the primary host/region).
+if grep -q '^[[:space:]]*WEISSMAN_DR_OFFSITE_URL=..*' .env 2>/dev/null; then
+  ok "off-site DR target configured (WEISSMAN_DR_OFFSITE_URL)"
+else
+  note "no off-site DR target (WEISSMAN_DR_OFFSITE_URL) — backups are local-only, no geo-redundancy"
+fi
+
 section "Enterprise readiness (SLA, region, compliance)"
 # SLA doc must mention 99.95%
 if grep -q '99.95' SLA_AND_STATUS.md; then

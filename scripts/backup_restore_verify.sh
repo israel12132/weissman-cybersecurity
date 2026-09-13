@@ -39,6 +39,13 @@ DB_NAME="${WEISSMAN_RESTORE_DB:-weissman}"
 CT_NAME="weissman-restore-verify-$$"
 WORK=""
 
+# Envelope decryption engine. A base backup taken by backup_pitr_setup.sh is encrypted
+# (base.tar.gz.age); this proves it can actually be DECRYPTED and recovered, not merely that a
+# ciphertext exists. Legacy plaintext base.tar.gz (CI, pre-encryption hosts) still restores —
+# wz_decrypt_file passes cleartext through untouched.
+# shellcheck source=lib/backup_crypto.sh
+source "${ROOT}/scripts/lib/backup_crypto.sh"
+
 log() { echo "[restore-verify] $*"; }
 fail() { echo "[restore-verify] FAIL: $*" >&2; exit 1; }
 
@@ -58,11 +65,14 @@ cleanup() {
     fi
     rm -rf "$WORK" 2>/dev/null || echo "[restore-verify] WARN: could not remove $WORK" >&2
   fi
+  # Wipe any age identity we materialised from an inline secret — the private key must not
+  # outlive the drill.
+  wz_backup_scratch_cleanup 2>/dev/null || true
 }
 trap cleanup EXIT
 
 emit_metrics() {
-  local rows="$1" now
+  local rows="$1" now enc="${ENCRYPTED_RESTORE:-0}"
   now="$(date -u +%s)"
   # node_exporter textfile collector (atomic write via temp+mv).
   if [[ -n "${WEISSMAN_METRICS_TEXTFILE_DIR:-}" && -d "${WEISSMAN_METRICS_TEXTFILE_DIR}" ]]; then
@@ -74,17 +84,24 @@ emit_metrics() {
       echo "# HELP weissman_backup_restore_verify_rows Migration rows observed in the restored cluster."
       echo "# TYPE weissman_backup_restore_verify_rows gauge"
       echo "weissman_backup_restore_verify_rows ${rows}"
+      echo "# HELP weissman_backup_restore_verify_encrypted 1 if the verified restore decrypted an encrypted backup."
+      echo "# TYPE weissman_backup_restore_verify_encrypted gauge"
+      echo "weissman_backup_restore_verify_encrypted ${enc}"
     } > "${out}.tmp" && mv "${out}.tmp" "${out}"
     log "wrote metric → ${out}"
   fi
   # Optional Pushgateway.
   if [[ -n "${WEISSMAN_PUSHGATEWAY_URL:-}" ]] && command -v curl >/dev/null 2>&1; then
-    printf 'weissman_backup_restore_verify_success_timestamp %s\nweissman_backup_restore_verify_rows %s\n' "$now" "$rows" \
+    printf 'weissman_backup_restore_verify_success_timestamp %s\nweissman_backup_restore_verify_rows %s\nweissman_backup_restore_verify_encrypted %s\n' "$now" "$rows" "$enc" \
       | curl -sf --data-binary @- "${WEISSMAN_PUSHGATEWAY_URL%/}/metrics/job/weissman_backup_restore_verify" \
       && log "pushed metric → Pushgateway" || log "WARN: Pushgateway push failed"
   fi
-  # Local success marker (read by go_live_check.sh).
+  # Local success markers (read by go_live_check.sh). The encrypted-specific marker lets the gate
+  # require that the drill actually decrypted a backup, not merely restored a cleartext one.
   echo "$now" > "${BASE_DIR}/.last_restore_verify_ok" 2>/dev/null || true
+  if [[ "$enc" == 1 ]]; then
+    echo "$now" > "${BASE_DIR}/.last_encrypted_restore_verify_ok" 2>/dev/null || true
+  fi
 }
 
 # --- Locate the latest base backup ---
@@ -96,17 +113,51 @@ else
   LATEST="$(find "$BASE_DIR" -maxdepth 1 -type d -name 'base_*' 2>/dev/null | sort | tail -1)"
 fi
 [[ -n "$LATEST" && -d "$LATEST" ]] || fail "no base backup found under $BASE_DIR (run backup_pitr_setup.sh base)"
-[[ -f "${LATEST}/base.tar.gz" ]] || fail "restore expects a compressed tar base backup (base.tar.gz) in $LATEST"
-log "restoring from: $LATEST"
+
+# Prefer the ENCRYPTED artifact; fall back to legacy cleartext so CI and pre-encryption hosts
+# still restore. Whichever exists is the one we prove recoverable.
+ENCRYPTED_RESTORE=0
+if [[ -f "${LATEST}/base.tar.gz.age" ]]; then
+  BASE_ART="${LATEST}/base.tar.gz.age"; ENCRYPTED_RESTORE=1
+elif [[ -f "${LATEST}/base.tar.gz" ]]; then
+  BASE_ART="${LATEST}/base.tar.gz"
+else
+  fail "no base backup payload in $LATEST (expected base.tar.gz.age or base.tar.gz)"
+fi
+WAL_ART=""
+if [[ -f "${LATEST}/pg_wal.tar.gz.age" ]]; then WAL_ART="${LATEST}/pg_wal.tar.gz.age"
+elif [[ -f "${LATEST}/pg_wal.tar.gz" ]]; then WAL_ART="${LATEST}/pg_wal.tar.gz"; fi
+
+# Keyless integrity gate FIRST: if the backup carries SHA256SUMS, a mismatch means the store was
+# altered/truncated — refuse to "restore" a tampered artifact and call it a passing drill.
+if ! wz_verify_manifest "$LATEST"; then
+  rc=$?
+  # rc 2 = no sidecars (legacy backup): allowed, just unproven. rc 1 = real mismatch: hard fail.
+  [[ "$rc" == 1 ]] && fail "backup integrity check FAILED for $LATEST — refusing to restore a tampered backup"
+fi
+
+if [[ "$ENCRYPTED_RESTORE" == 1 ]]; then
+  log "restoring from: $LATEST (ENCRYPTED — proving decrypt + recovery)"
+  # A decrypt drill is only meaningful with an identity; without one we cannot prove the DR copy
+  # is openable. Refuse to report success on an encrypted backup we could not actually decrypt.
+  wz_backup_identity_file >/dev/null 2>&1 || wz_backup_age_bin >/dev/null 2>&1 || \
+    fail "encrypted backup but no age binary to decrypt it"
+  wz_backup_identity_file >/dev/null 2>&1 || \
+    fail "encrypted backup but no identity configured — set WEISSMAN_BACKUP_AGE_IDENTITY_FILE on the restore host to prove recoverability"
+else
+  log "restoring from: $LATEST (cleartext)"
+fi
 
 # --- Extract into a throwaway data dir ---
 WORK="$(mktemp -d)"
 DATADIR="${WORK}/pgdata"
 mkdir -p "${DATADIR}/pg_wal"
-tar -xzf "${LATEST}/base.tar.gz" -C "$DATADIR"
+# Decrypt-and-extract in one stream — the plaintext tar never lands on disk, only the extracted
+# data dir does (which is thrown away). wz_decrypt_file passes cleartext through unchanged.
+wz_decrypt_file "$BASE_ART" | tar -xzf - -C "$DATADIR" || fail "decrypt/extract of base backup failed"
 # With `pg_basebackup -X stream` the required WAL ships as pg_wal.tar.gz — extract it so the
 # restored cluster can reach a consistent state on start (crash recovery, no archive needed).
-[[ -f "${LATEST}/pg_wal.tar.gz" ]] && tar -xzf "${LATEST}/pg_wal.tar.gz" -C "${DATADIR}/pg_wal"
+[[ -n "$WAL_ART" ]] && { wz_decrypt_file "$WAL_ART" | tar -xzf - -C "${DATADIR}/pg_wal" || fail "decrypt/extract of pg_wal failed"; }
 
 if [[ "${WEISSMAN_RESTORE_USE_LOCAL:-0}" == "1" ]]; then
   # Local-binaries path (no Docker).
@@ -152,4 +203,8 @@ fi
 
 log "OK — restored cluster healthy: ${ROWS} applied migrations in _sqlx_migrations"
 emit_metrics "$ROWS"
-log "restore verification PASSED"
+if [[ "${ENCRYPTED_RESTORE:-0}" == 1 ]]; then
+  log "restore verification PASSED (encrypted backup decrypted + recovered)"
+else
+  log "restore verification PASSED (cleartext backup)"
+fi

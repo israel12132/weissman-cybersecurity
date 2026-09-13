@@ -66,7 +66,7 @@ Summary of key controls:
 - **Cyber risk management:** 580 production engines mapped to MITRE ATT&CK (14/14 tactics)
 - **Tenant isolation:** PostgreSQL RLS on 80+ tables, enforced at DB level
 - **Incident response:** SEV-1 ≤ 15 minutes, 24/7 on-call (see `SLA_AND_STATUS.md`)
-- **DR / BCP:** RTO ≤ 4h, RPO ≤ 1h, PITR backups, restore-verify every 48h
+- **DR / BCP:** RTO ≤ 4h, RPO ≤ 1h, **age-encrypted** PITR backups (asymmetric — host cannot decrypt its own backups), off-site replication, decrypt-restore drill every 48h. See [ENCRYPTED-DR-PITR.md](docs/operations/ENCRYPTED-DR-PITR.md).
 - **Audit trail:** every write → `audit_logs`; every AI query → `nl_query_audit`
 - **RBAC + MFA:** 5-level RBAC, TOTP MFA enforceable per-tenant
 - **Supplier contract:** DPA + MSA with audit-rights clause

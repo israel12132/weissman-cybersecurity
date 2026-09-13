@@ -32,6 +32,18 @@ ARCHIVE_DIR="${WEISSMAN_PITR_ARCHIVE_DIR:-/var/backups/weissman/wal}"
 BASE_DIR="${WEISSMAN_PITR_BASE_DIR:-/var/backups/weissman/base}"
 RETENTION_DAYS="${WEISSMAN_PITR_RETENTION_DAYS:-14}"
 
+# Envelope encryption engine (age recipient mode). Sourcing it here means both the base backup
+# and the WAL archive_command share ONE definition of "are we encrypting, and to whom" — the two
+# cannot drift into one being encrypted and the other cleartext. See scripts/lib/backup_crypto.sh.
+# shellcheck source=lib/backup_crypto.sh
+source "${ROOT}/scripts/lib/backup_crypto.sh"
+
+# Recipients file consumed by the WAL archive_command inside Postgres' own (minimal) environment.
+# `init` materialises it from WEISSMAN_BACKUP_AGE_RECIPIENTS(_FILE) so the DB runtime needs no
+# Weissman env vars — only this file and the age binary.
+PITR_RECIPIENTS_FILE="${WEISSMAN_PITR_RECIPIENTS_FILE:-$(dirname "$ARCHIVE_DIR")/backup-recipients.txt}"
+WAL_ARCHIVE_WRAPPER="${ROOT}/scripts/pitr_archive_wal.sh"
+
 # Name of the running Postgres container, when there is one. `base` can take a backup through it
 # without any host-side connection at all, so DATABASE_URL is only genuinely required for the
 # commands that must issue SQL (`init`).
@@ -98,18 +110,62 @@ fi
 
 mkdir -p "$ARCHIVE_DIR" "$BASE_DIR"
 
+# Materialise the recipients file from the environment so the archive_command — which runs in
+# Postgres' own minimal environment, not the operator's shell — can encrypt without any Weissman
+# env vars. Written 0640; public keys are not secret, but we still keep them off world-read.
+write_recipients_file() {
+  wz_backup_encryption_configured || return 1
+  mkdir -p "$(dirname "$PITR_RECIPIENTS_FILE")"
+  {
+    echo "# Weissman DR/PITR age recipients (public keys). Managed by backup_pitr_setup.sh init."
+    echo "# The matching identities (private keys) MUST NOT live on this host — see ENCRYPTED-DR-PITR.md."
+    wz_backup_recipients_list
+  } > "${PITR_RECIPIENTS_FILE}.part.$$"
+  chmod 640 "${PITR_RECIPIENTS_FILE}.part.$$" 2>/dev/null || true
+  mv -f "${PITR_RECIPIENTS_FILE}.part.$$" "$PITR_RECIPIENTS_FILE"
+  echo "[pitr] recipients written → $PITR_RECIPIENTS_FILE ($(wz_backup_recipients_list | wc -l | tr -d ' ') key(s))"
+}
+
 init_archive() {
   echo "[pitr] Enabling WAL archiving (requires superuser)..."
+
+  local archive_cmd
+  if wz_backup_encryption_active; then
+    write_recipients_file
+    # Encrypted, atomic, idempotent WAL archiving via the wrapper. Postgres substitutes %p/%f;
+    # everything else is baked in so the DB runtime needs no env. The wrapper fails closed if
+    # encryption is unavailable, so WAL never ships in cleartext by accident.
+    archive_cmd="${WAL_ARCHIVE_WRAPPER} \"%p\" \"%f\" ${ARCHIVE_DIR} ${PITR_RECIPIENTS_FILE}"
+    echo "[pitr] archive_command = ENCRYPTED (age) via $(basename "$WAL_ARCHIVE_WRAPPER")"
+    echo "[pitr] NOTE: in a containerised Postgres, mount ${ROOT}/scripts, ${ARCHIVE_DIR} and"
+    echo "       ${PITR_RECIPIENTS_FILE} into the DB container and ensure 'age' is on its PATH."
+  elif wz_backup_encryption_required; then
+    wz_crypto_die "init refused: encryption REQUIRED but no recipients/age configured.
+       Set WEISSMAN_BACKUP_AGE_RECIPIENTS(_FILE) before enabling archiving so WAL is never cleartext."
+  else
+    # Legacy cleartext archiving (dev/CI, or encryption explicitly disabled). Same no-overwrite
+    # safety as the upstream Postgres example.
+    archive_cmd="test ! -f ${ARCHIVE_DIR}/%f && cp %p ${ARCHIVE_DIR}/%f"
+    wz_crypto_warn "archive_command is CLEARTEXT — set WEISSMAN_BACKUP_AGE_RECIPIENTS to encrypt WAL."
+  fi
+
+  # archive_command is stored verbatim; single quotes inside must be doubled for the SQL literal.
+  local sql_cmd="${archive_cmd//\'/\'\'}"
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<SQL
 ALTER SYSTEM SET wal_level = 'replica';
 ALTER SYSTEM SET archive_mode = 'on';
-ALTER SYSTEM SET archive_command = 'test ! -f ${ARCHIVE_DIR}/%f && cp %p ${ARCHIVE_DIR}/%f';
+ALTER SYSTEM SET archive_command = '${sql_cmd}';
 SELECT pg_reload_conf();
 SQL
   echo "[pitr] WAL archive_dir=$ARCHIVE_DIR — restart Postgres if wal_level change requires it."
 }
 
 base_backup() {
+  # Fail closed BEFORE pg_basebackup runs: in a required-encryption deployment we must never even
+  # produce a cleartext base.tar.gz on disk. In dev/CI (not required) this returns 1 and we
+  # continue in cleartext mode — hence `|| true` under `set -e`.
+  wz_backup_require_or_die || true
+
   local stamp
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
   local dest="${BASE_DIR}/base_${stamp}"
@@ -168,21 +224,101 @@ base_backup() {
   fi
 
   # Never let `latest` point at a backup that is missing its payload — the restore drill trusts
-  # this symlink, so a truncated run would otherwise become the thing we "verify".
+  # this symlink, so a truncated run would otherwise become the thing we "verify". This guard runs
+  # on the RAW pg_basebackup output, before encryption, so a failed backup is caught at the source.
   [[ -s "${dest}/base.tar.gz" ]] || { echo "[pitr] no base.tar.gz produced — discarding $dest" >&2; rm -rf "$dest"; return 1; }
+
+  # Encrypt the physical backup in place (base.tar.gz → base.tar.gz.age, pg_wal.tar.gz likewise),
+  # then write the keyless integrity + provenance sidecars. On any encryption failure the whole
+  # dest is discarded rather than left as a half-encrypted "backup".
+  encrypt_base_dir "$dest" || { echo "[pitr] encryption of base backup failed — discarding $dest" >&2; rm -rf "$dest"; return 1; }
+
   ln -sfn "$dest" "${BASE_DIR}/latest"
   echo "[pitr] base backup complete: $dest ($(du -sh "$dest" | cut -f1))"
+
+  # Emit a freshness metric mirroring the logical-backup gauge, so Grafana/alerts can see the
+  # last successful ENCRYPTED base backup independently of the restore drill.
+  local ts; ts="$(date -u +%s)"
+  if [[ -n "${WEISSMAN_METRICS_TEXTFILE_DIR:-}" && -d "${WEISSMAN_METRICS_TEXTFILE_DIR}" ]]; then
+    local enc=0; wz_backup_encryption_active && enc=1
+    local out="${WEISSMAN_METRICS_TEXTFILE_DIR}/pitr_base_backup.prom"
+    {
+      echo "# HELP weissman_pitr_base_backup_success_timestamp Unix time of last successful PITR base backup."
+      echo "# TYPE weissman_pitr_base_backup_success_timestamp gauge"
+      echo "weissman_pitr_base_backup_success_timestamp ${ts}"
+      echo "# HELP weissman_pitr_base_backup_encrypted 1 if the last base backup was encrypted."
+      echo "# TYPE weissman_pitr_base_backup_encrypted gauge"
+      echo "weissman_pitr_base_backup_encrypted ${enc}"
+    } > "${out}.tmp" && mv "${out}.tmp" "${out}"
+  fi
+}
+
+# Encrypt every physical artifact in a fresh base-backup dir (gzip tar → age), remove the
+# cleartext originals, and write SHA256SUMS + MANIFEST.json. When encryption is not active this
+# leaves the plaintext artifacts as-is but still records a manifest (encrypted:false) so every
+# backup — legacy or encrypted — carries a verifiable inventory.
+encrypt_base_dir() {
+  local dest="$1"
+  # The fail-closed gate already ran at the top of base_backup (before pg_basebackup), so by here
+  # either encryption is active or we are legitimately in cleartext dev/CI mode.
+  if wz_backup_encryption_active; then
+    local f
+    for f in base.tar.gz pg_wal.tar.gz; do
+      [[ -s "${dest}/${f}" ]] || continue
+      wz_encrypt_stream < "${dest}/${f}" > "${dest}/${f}.age.part.$$" || return 1
+      [[ -s "${dest}/${f}.age.part.$$" ]] || { rm -f "${dest}/${f}.age.part.$$"; return 1; }
+      mv -f "${dest}/${f}.age.part.$$" "${dest}/${f}.age"
+      # Prove it decrypts to the exact bytes we started from BEFORE deleting the only cleartext
+      # copy — an unopenable "backup" is the worst failure mode, so we never trust encryption we
+      # have not just round-tripped, when an identity is available to check with.
+      if wz_backup_identity_file >/dev/null 2>&1; then
+        if ! wz_decrypt_file "${dest}/${f}.age" | cmp -s - "${dest}/${f}"; then
+          echo "[pitr] round-trip verify FAILED for ${f}.age — keeping cleartext, refusing backup" >&2
+          rm -f "${dest}/${f}.age"
+          return 1
+        fi
+      fi
+      rm -f "${dest}/${f}"
+    done
+    [[ -s "${dest}/base.tar.gz.age" ]] || { echo "[pitr] no encrypted base produced" >&2; return 1; }
+  fi
+
+  local pgver="unknown"
+  if [[ -n "${DATABASE_URL:-}" ]]; then
+    pgver="$(psql "$DATABASE_URL" -tAc 'SHOW server_version' 2>/dev/null | tr -d '[:space:]' || echo unknown)"
+  fi
+  wz_write_manifest "$dest" "pg_version=${pgver}" "source=pg_basebackup" "kind=pitr-base"
+  return 0
 }
 
 verify() {
-  local wal_count base_count
+  local wal_count base_count wal_enc wal_plain
   wal_count="$(find "$ARCHIVE_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')"
+  wal_enc="$(find "$ARCHIVE_DIR" -type f -name '*.age' 2>/dev/null | wc -l | tr -d ' ')"
+  wal_plain="$(find "$ARCHIVE_DIR" -type f ! -name '*.age' 2>/dev/null | wc -l | tr -d ' ')"
   base_count="$(find "$BASE_DIR" -maxdepth 1 -type d -name 'base_*' 2>/dev/null | wc -l | tr -d ' ')"
-  echo "[pitr] archive_dir=$ARCHIVE_DIR wal_segments=$wal_count"
+  echo "[pitr] archive_dir=$ARCHIVE_DIR wal_segments=$wal_count (encrypted=$wal_enc plaintext=$wal_plain)"
   echo "[pitr] base_dir=$BASE_DIR base_backups=$base_count"
   if [[ -L "${BASE_DIR}/latest" ]]; then
-    echo "[pitr] latest_base=$(readlink "${BASE_DIR}/latest")"
+    local latest; latest="$(readlink -f "${BASE_DIR}/latest")"
+    echo "[pitr] latest_base=$latest"
+    # Report and integrity-check the latest base.
+    if [[ -d "$latest" ]]; then
+      if [[ -f "${latest}/base.tar.gz.age" ]]; then echo "[pitr] latest base is ENCRYPTED (base.tar.gz.age)"
+      elif [[ -f "${latest}/base.tar.gz" ]]; then echo "[pitr] latest base is CLEARTEXT (base.tar.gz)"; fi
+      wz_verify_manifest "$latest" || true
+    fi
   fi
+
+  # In an encryption-required deployment, ANY cleartext artifact is a finding, not a warning: it
+  # means the archive_command or a base backup leaked the database in the clear.
+  if wz_backup_encryption_required; then
+    local leak=0
+    if [[ "$wal_plain" -gt 0 ]]; then echo "FAIL: ${wal_plain} CLEARTEXT WAL segment(s) in $ARCHIVE_DIR — encryption is REQUIRED" >&2; leak=1; fi
+    if compgen -G "${BASE_DIR}"/base_*/base.tar.gz >/dev/null 2>&1; then echo "FAIL: cleartext base.tar.gz present while encryption REQUIRED" >&2; leak=1; fi
+    [[ "$leak" -eq 1 ]] && exit 2
+  fi
+
   if [[ "$wal_count" -eq 0 && "$base_count" -eq 0 ]]; then
     echo "WARN: no PITR artifacts yet — run: $0 init && $0 base" >&2
     exit 1
