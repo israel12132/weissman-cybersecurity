@@ -1222,6 +1222,94 @@ pub fn spawn_ueba_baseline_scheduler(pool: Arc<PgPool>, registry: Arc<AgentRegis
     });
 }
 
+/// Periodic IOC pipeline: pull every configured feed into the global store,
+/// then per active tenant refresh cohort baselines, retrohunt recent telemetry,
+/// and push a bounded endpoint-evaluable indicator set to online agents for the
+/// `ioc_endpoint_match` detection (agent-side execution). Interval defaults to
+/// 6h, overridable via `WEISSMAN_IOC_FEED_INTERVAL_HOURS` (clamped 1..=168).
+pub fn spawn_ioc_feed_scheduler(pool: Arc<PgPool>, registry: Arc<AgentRegistry>) {
+    tokio::spawn(async move {
+        let interval_hours = std::env::var("WEISSMAN_IOC_FEED_INTERVAL_HOURS")
+            .ok()
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .unwrap_or(6)
+            .clamp(1, 168);
+        // Small startup delay so feed fetches don't contend with boot.
+        tokio::time::sleep(std::time::Duration::from_secs(90)).await;
+        let mut tick =
+            tokio::time::interval(std::time::Duration::from_secs(interval_hours * 3600));
+        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tick.tick().await;
+
+            // 1. Global feed ingestion (shared across all tenants).
+            let report = crate::ioc::ingest::run_all_feeds(pool.as_ref()).await;
+            tracing::info!(
+                target: "ioc_feeds",
+                inserted = report.total_inserted,
+                updated = report.total_updated,
+                expired = report.expired,
+                "scheduled IOC feed cycle complete"
+            );
+
+            // 2. Build the bounded endpoint push payload once (global store).
+            let endpoint_params = crate::ioc::store::endpoint_match_payload(pool.as_ref(), 1500).await;
+            let has_indicators = ["sha256", "ipv4", "ipv6", "cidr"].iter().any(|k| {
+                endpoint_params
+                    .get(*k)
+                    .and_then(Value::as_array)
+                    .map(|a| !a.is_empty())
+                    .unwrap_or(false)
+            });
+
+            // 3. Per-tenant: cohort baselines + retrohunt + endpoint dispatch.
+            let Ok(tenants) = weissman_db::active_tenant_ids(pool.as_ref()).await else {
+                continue;
+            };
+            for tenant_id in tenants {
+                let _ =
+                    crate::ueba_models::peer_store::recompute_and_store(pool.as_ref(), tenant_id)
+                        .await;
+                let _ = crate::ioc::ingest::retrohunt_tenant(pool.as_ref(), tenant_id).await;
+
+                if !has_indicators {
+                    continue;
+                }
+                let clients = {
+                    let mut tx = match crate::db::begin_tenant_tx(pool.as_ref(), tenant_id).await {
+                        Ok(t) => t,
+                        Err(_) => continue,
+                    };
+                    let rows = sqlx::query_as::<_, (i64,)>(
+                        r#"SELECT DISTINCT client_id FROM endpoint_agents
+                            WHERE tenant_id = $1
+                              AND status = 'online'
+                              AND last_seen_at > now() - interval '3 minutes'"#,
+                    )
+                    .bind(tenant_id)
+                    .fetch_all(&mut *tx)
+                    .await
+                    .unwrap_or_default();
+                    let _ = tx.commit().await;
+                    rows
+                };
+                for (client_id,) in clients {
+                    let _ = enqueue_and_dispatch_fleet(
+                        pool.as_ref(),
+                        &registry,
+                        tenant_id,
+                        client_id,
+                        "ioc_endpoint_match",
+                        None,
+                        &endpoint_params,
+                    )
+                    .await;
+                }
+            }
+        }
+    });
+}
+
 /// Find any pending tasks for the given client and convert them into ServerToAgent::Task messages.
 pub async fn pending_tasks_for_client(
     pool: &PgPool,

@@ -168,6 +168,21 @@ pub async fn ingest_sample(
 
     let summary = analyze_sample_in_tx(&mut tx, tenant_id, sample_id, &p).await?;
     tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+    // Fuse fired anomalies into the agent entity's decayed, explainable risk
+    // score (a separate tenant tx — must run after the commit above).
+    for a in &summary.anomalies {
+        let weight = crate::ueba_models::risk::anomaly_weight(a.z_score.abs(), &a.severity);
+        let _ = crate::ueba_models::risk::record_risk_event(
+            pool,
+            tenant_id,
+            "agent",
+            &p.agent_id,
+            Some(p.client_id),
+            weight,
+            &format!("ueba:{}", a.metric),
+        )
+        .await;
+    }
     Ok(summary)
 }
 

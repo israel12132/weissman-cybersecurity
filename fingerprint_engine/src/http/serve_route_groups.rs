@@ -158,6 +158,21 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             post(api_itdr_auth_ingest).get(api_itdr_auth_events_list),
         )
         .route("/api/ueba/anomalies", get(api_ueba_anomalies))
+        // Extended UEBA: decayed entity risk + peer-group (cohort) outliers.
+        .route("/api/ueba/entity-risk", get(api_ueba_entity_risk))
+        .route("/api/ueba/peer-anomalies", get(api_ueba_peer_anomalies))
+        // IOC feed store: indicators, feed health, sightings, watchlist, ops.
+        .route("/api/ioc/indicators", get(api_ioc_indicators))
+        .route("/api/ioc/feeds", get(api_ioc_feeds))
+        .route("/api/ioc/sightings", get(api_ioc_sightings))
+        .route(
+            "/api/ioc/watchlist",
+            get(api_ioc_watchlist).post(api_ioc_watchlist_add),
+        )
+        .route("/api/ioc/watchlist/:id", delete(api_ioc_watchlist_delete))
+        .route("/api/ioc/match", post(api_ioc_match))
+        .route("/api/ioc/ingest/run", post(api_ioc_ingest_run))
+        .route("/api/ioc/retrohunt/run", post(api_ioc_retrohunt_run))
         .route("/api/baseline/summary", get(api_baseline_summary))
         .route("/api/baseline/drift", get(api_baseline_drift))
         .route("/api/baseline/anomalies", get(api_baseline_anomalies))

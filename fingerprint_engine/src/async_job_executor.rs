@@ -1847,6 +1847,36 @@ async fn execute_job_unscoped(
                 "oast_interaction_token": oast_interaction_token,
             }))
         }
+        "ioc_feed_sync" => {
+            // Global feed ingestion (abuse.ch / OTX / STIX / MISP / blocklists),
+            // then a retrohunt for the requesting tenant so newly-ingested
+            // indicators immediately surface historical endpoint compromise.
+            let report = crate::ioc::ingest::run_all_feeds(app_pool.as_ref()).await;
+            let retro = crate::ioc::ingest::retrohunt_tenant(app_pool.as_ref(), tid)
+                .await
+                .ok();
+            Ok(serde_json::json!({
+                "ok": true,
+                "kind": "ioc_feed_sync",
+                "feeds": serde_json::to_value(&report).unwrap_or_else(|_| serde_json::json!({})),
+                "retrohunt": retro.map(|r| serde_json::to_value(&r).unwrap_or_default()),
+            }))
+        }
+        "ioc_retrohunt" => {
+            // Refresh cohort baselines first, then replay telemetry against the
+            // live indicator set + tenant watchlist.
+            let baselines =
+                crate::ueba_models::peer_store::recompute_and_store(app_pool.as_ref(), tid)
+                    .await
+                    .unwrap_or(0);
+            let report = crate::ioc::ingest::retrohunt_tenant(app_pool.as_ref(), tid).await?;
+            Ok(serde_json::json!({
+                "ok": true,
+                "kind": "ioc_retrohunt",
+                "peer_baselines_updated": baselines,
+                "report": serde_json::to_value(&report).unwrap_or_else(|_| serde_json::json!({})),
+            }))
+        }
         "threat_intel_run" => {
             let mut tx = db::begin_tenant_tx(app_pool.as_ref(), tid)
                 .await
