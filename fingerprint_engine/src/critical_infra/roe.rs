@@ -7,7 +7,7 @@
 
 use crate::engine_probes::extract_host;
 use hmac::{Hmac, Mac};
-use serde_json::{json, Value};
+use serde_json::Value;
 use sha2::Sha256;
 use sqlx::{PgPool, Row};
 use std::fmt;
