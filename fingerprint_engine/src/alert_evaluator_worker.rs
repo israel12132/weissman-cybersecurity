@@ -169,7 +169,7 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
             };
 
             let delivered =
-                deliver_alert(app_pool, tenant_id, &rule_info, &finding_info, &channels).await;
+                deliver_alert(app_pool, tenant_id, &rule_info, &finding_info, &channels).await?;
 
             if delivered {
                 let _ = sqlx::query(
@@ -198,10 +198,20 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
 }
 
 async fn tick(app_pool: &PgPool, auth_pool: &PgPool) {
-    let tenants: Vec<i64> = sqlx::query_scalar("SELECT id FROM tenants WHERE active = true")
+    let tenants: Vec<i64> = match sqlx::query_scalar("SELECT id FROM tenants WHERE active = true")
         .fetch_all(auth_pool)
         .await
-        .unwrap_or_default();
+    {
+        Ok(ids) => ids,
+        Err(e) => {
+            tracing::warn!(
+                target: "alert_evaluator",
+                error = %e,
+                "tenant list store_down"
+            );
+            return;
+        }
+    };
     for tid in tenants {
         if let Err(e) = evaluate_tenant(app_pool, tid).await {
             tracing::warn!(target: "alert_evaluator", tenant_id = tid, error = %e, "eval failed");

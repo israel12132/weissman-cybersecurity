@@ -490,10 +490,20 @@ pub fn spawn_audit_checkpoint_worker(
                 continue;
             }
             let tenants: Vec<i64> =
-                sqlx::query_scalar("SELECT id FROM tenants WHERE active = true ORDER BY id")
+                match sqlx::query_scalar("SELECT id FROM tenants WHERE active = true ORDER BY id")
                     .fetch_all(auth_pool.as_ref())
                     .await
-                    .unwrap_or_default();
+                {
+                    Ok(ids) => ids,
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "audit_checkpoint",
+                            error = %e,
+                            "tenant list store_down"
+                        );
+                        continue;
+                    }
+                };
             for tid in tenants {
                 let mut tx = match crate::db::begin_tenant_tx(app_pool.as_ref(), tid).await {
                     Ok(t) => t,

@@ -2136,16 +2136,36 @@ async fn api_finding_brief(
     };
     let brief_json = serde_json::to_value(&brief).unwrap_or(Value::Null);
 
-    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-        let _ = sqlx::query(
-            "UPDATE vulnerabilities SET remediation_brief = $3 WHERE client_id = $1 AND finding_id = $2",
+    let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        Ok(tx) => tx,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if sqlx::query(
+        "UPDATE vulnerabilities SET remediation_brief = $3 WHERE client_id = $1 AND finding_id = $2",
+    )
+    .bind(id)
+    .bind(&finding_id)
+    .bind(&brief_json)
+    .execute(&mut *tx)
+    .await
+    .is_err()
+        || tx.commit().await.is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_unavailable_json(
+                "database unavailable",
+            )),
         )
-        .bind(id)
-        .bind(&finding_id)
-        .bind(&brief_json)
-        .execute(&mut *tx)
-        .await;
-        let _ = tx.commit().await;
+            .into_response();
     }
 
     (

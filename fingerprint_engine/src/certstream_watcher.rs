@@ -194,7 +194,7 @@ async fn load_scope(app_pool: &PgPool, auth_pool: &PgPool) -> Result<Vec<ScopeRo
     let tenants: Vec<i64> = sqlx::query_scalar("SELECT id FROM tenants WHERE active = true")
         .fetch_all(auth_pool)
         .await
-        .unwrap_or_default();
+        .map_err(|_| "store_down".to_string())?;
     let mut out = Vec::new();
     for tenant_id in tenants {
         let mut tx = crate::db::begin_tenant_tx(app_pool, tenant_id)

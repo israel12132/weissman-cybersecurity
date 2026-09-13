@@ -283,6 +283,9 @@ async fn run_engine_inner(engine_id: &str, target: &str, ctx: &EngineRunContext)
                     violation,
                 )
                 .await;
+                if violation == crate::critical_infra::roe::RoeViolation::StoreDown {
+                    return EngineResult::error("store_down");
+                }
                 return EngineResult::error(format!(
                     "RoE VIOLATION: {violation} — critical infrastructure engine '{canonical}' blocked for target '{target}'"
                 ));

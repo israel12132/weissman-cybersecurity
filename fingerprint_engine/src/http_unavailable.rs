@@ -1889,6 +1889,27 @@ mod tests {
         let lookup_src = &after[..serve_cache];
         assert!(lookup_src.contains("findings_unavailable_json"));
         assert!(!lookup_src.contains(".ok().flatten()"));
+        let persist = fn_src
+            .find("UPDATE vulnerabilities SET remediation_brief")
+            .expect("brief persist");
+        let persist_src = &fn_src[persist..];
+        assert!(
+            persist_src.contains("findings_unavailable_json"),
+            "brief persist store-down must be 503, not ok:true cached:false"
+        );
+        assert!(persist_src.contains("SERVICE_UNAVAILABLE"));
+        assert!(
+            !compact_src(persist_src).contains("let_=sqlx::query("),
+            "brief persist UPDATE execute must not be ignored"
+        );
+        assert!(
+            !compact_src(persist_src).contains("let_=tx.commit().await;"),
+            "brief persist commit must not be ignored"
+        );
+        assert!(
+            !compact_src(persist_src).contains("ifletOk(muttx)="),
+            "brief persist must not skip begin fail and still ok:true"
+        );
     }
 
     #[test]
@@ -4071,6 +4092,21 @@ mod tests {
             src.contains("RETURNING id"),
             "dedup still uses INSERT ... RETURNING so None after Ok is a real conflict skip"
         );
+        assert!(
+            compact_src(src).contains(
+                "deliver_alert(app_pool,tenant_id,&rule_info,&finding_info,&channels).await?"
+            ),
+            "delivery-config store-down must roll back the fire INSERT, not look delivered-false"
+        );
+        let tick = named_fn_src(
+            include_str!("alert_evaluator_worker.rs"),
+            "async fn tick",
+        );
+        assert!(
+            !compact_src(tick).contains("fetch_all(auth_pool).await.unwrap_or_default()"),
+            "alert evaluator tenant list store-down must not look like an idle tick"
+        );
+        assert!(tick.contains("tenant list store_down"));
     }
 
     #[test]
@@ -4106,6 +4142,10 @@ mod tests {
         let src = named_fn_src(include_str!("certstream_watcher.rs"), "async fn load_scope");
         assert!(src.contains("Result<Vec<ScopeRow>, String>"));
         assert!(!compact_src(src).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(
+            !compact_src(src).contains("fetch_all(auth_pool).await.unwrap_or_default()"),
+            "tenant list store-down must not look like an empty authorized apex set"
+        );
         assert!(src.contains("store_down"));
         let conn = named_fn_src(
             include_str!("certstream_watcher.rs"),
@@ -4150,6 +4190,11 @@ mod tests {
         );
         assert!(!compact_src(src).contains("Err(_)=>continue"));
         assert!(src.contains("sbom match store_down"));
+        assert!(
+            !compact_src(src).contains("fetch_all(auth_pool.as_ref()).await.unwrap_or_default()"),
+            "tenant list store-down must not look like a complete empty ingest"
+        );
+        assert!(src.contains("tenant list store_down"));
     }
 
     #[test]
@@ -4167,6 +4212,11 @@ mod tests {
         );
         assert!(!src.contains("if let Ok(mut tx) = crate::db::begin_tenant_tx"));
         assert!(src.contains("checkpoint begin store_down"));
+        assert!(
+            !compact_src(src).contains("fetch_all(auth_pool.as_ref()).await.unwrap_or_default()"),
+            "audit checkpoint tenant list store-down must not look like an idle tick"
+        );
+        assert!(src.contains("tenant list store_down"));
     }
 
     #[test]
@@ -4243,15 +4293,18 @@ mod tests {
         assert!(insert.contains("Result<(), String>"));
         assert!(!insert.contains("if let Ok(mut tx)"));
         assert!(!insert.contains("let _ = tx.commit()"));
+        assert!(!compact_src(insert).contains("let_=tx.commit().await;"));
         assert!(insert.contains("store_down"));
         let artifact = named_fn_src(heal, "async fn store_result_artifact");
         assert!(artifact.contains("Result<(), String>"));
         assert!(!artifact.contains("if let Ok(mut tx)"));
         assert!(!artifact.contains("let _ = tx.commit()"));
+        assert!(!compact_src(artifact).contains("let_=tx.commit().await;"));
         let finalize = named_fn_src(heal, "async fn finalize_spec");
         assert!(finalize.contains("Result<(), String>"));
         assert!(!finalize.contains("if let Ok(mut tx)"));
         assert!(!finalize.contains("let _ = tx.commit()"));
+        assert!(!compact_src(finalize).contains("let_=tx.commit().await;"));
         assert!(!heal.contains("let _ = insert_heal_request_row"));
         assert!(!heal.contains("let _ = store_result_artifact"));
         assert!(!heal.contains("let _ = finalize_spec"));
@@ -4263,6 +4316,7 @@ mod tests {
     fn playbook_execute_action_status_and_honeytoken_commit_fail_is_not_ok() {
         let src = named_fn_src(include_str!("soar_playbook.rs"), "async fn execute_action");
         assert!(!src.contains("let _ = tx.commit()"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
         assert!(!src.contains("honeytoken issued"));
         assert!(!src.contains("\"tenant tx\""));
         assert!(src.contains("honeytoken deployed at"));
@@ -4317,6 +4371,10 @@ mod tests {
         assert!(
             !compact_src(push).contains("let_=sqlx::query("),
             "heal_verification_steps INSERT execute must not be ignored"
+        );
+        assert!(
+            !compact_src(push).contains("let_=tx.commit().await;"),
+            "push_step commit must not be ignored after INSERT"
         );
         let collect = named_fn_src(src, "async fn collect_steps_only");
         assert!(collect.contains("Result<Vec<VerificationStep>, String>"));
@@ -4438,6 +4496,10 @@ mod tests {
         let src = include_str!("sovereign_operator/forge.rs");
         let draft = named_fn_src(src, "pub async fn forge_draft");
         assert!(!draft.contains("let _ = tx.commit()"));
+        assert!(
+            !compact_src(draft).contains("let_=tx.commit().await;"),
+            "forge_draft commit must not be ignored even if rustfmt line-breaks it"
+        );
         assert!(draft.contains("detail: \"store_down\".into()"));
         let prove = named_fn_src(src, "pub async fn forge_prove");
         assert!(prove.contains("detail: \"store_down\".into()"));
@@ -4466,6 +4528,12 @@ mod tests {
         assert!(
             !compact_src(github).contains("ifletOk(muttx)="),
             "github_queued persist must not skip begin fail and still ok:true"
+        );
+        assert!(
+            !compact_src(github).contains(
+                "let_=sqlx::query(\"UPDATEweissman_sovereign_forgeSETstatus='github_queued'"
+            ),
+            "github_queued UPDATE execute must not be ignored"
         );
     }
 
@@ -4509,18 +4577,42 @@ mod tests {
 
     #[test]
     fn auto_heal_winning_patch_persist_store_down_is_not_verified() {
-        let src = named_fn_src(include_str!("auto_heal_job.rs"), "pub async fn run_auto_heal_job");
+        let src = include_str!("auto_heal_job.rs");
+        let needle = "UPDATE auto_heal_job_specs SET patch_text = $3";
+        let start = src.find(needle).expect("winning patch persist");
+        let rest = &src[start..];
+        let end = rest
+            .find("// Sign a tamper-evident")
+            .unwrap_or(rest.len().min(1200));
+        let patch = &rest[..end];
         assert!(
-            !src.contains("if let Ok(mut tx) = db::begin_tenant_tx(app_pool.as_ref(), tenant_id).await"),
-            "winning patch persist must not skip begin fail"
+            patch.contains("SET patch_text = $3"),
+            "winning patch persist must be present"
         );
-        assert!(src.contains("SET patch_text = $3"));
         assert!(
-            compact_src(src).contains("execute(&mut*tx).await.map_err(|_|\"store_down\".to_string())?"),
+            compact_src(patch).contains("execute(&mut*tx).await.map_err(|_|\"store_down\".to_string())?"),
             "winning patch UPDATE execute fail must be store_down"
         );
         assert!(
-            !compact_src(src).contains("let_=tx.commit().await;"),
+            !compact_src(patch).contains("let_=sqlx::query("),
+            "winning patch UPDATE execute must not be ignored"
+        );
+        assert!(
+            !compact_src(patch).contains("let_=tx.commit().await;"),
+            "winning patch commit must not be ignored"
+        );
+        let job_start = src
+            .find("pub async fn run_auto_heal_job")
+            .expect("run_auto_heal_job");
+        let rest = &src[job_start..];
+        let tests = rest.find("\n#[cfg(test)]").unwrap_or(rest.len());
+        let job = &rest[..tests];
+        assert!(
+            !job.contains("if let Ok(mut tx) = db::begin_tenant_tx(app_pool.as_ref(), tenant_id).await"),
+            "winning patch persist must not skip begin fail"
+        );
+        assert!(
+            !compact_src(job).contains("let_=tx.commit().await;"),
             "already-completed / already-failed / concurrent-skip commit must not be ignored"
         );
     }
@@ -4645,11 +4737,95 @@ mod tests {
             !compact_src(src).contains("let_=tx.commit().await;ifinflight>0"),
             "dedup COUNT commit fail must not look like already-inflight skip"
         );
+        assert!(
+            !compact_src(src).contains("let_=tx.commit().await;"),
+            "maybe_enqueue commit must not be ignored even with a statement between commit and return"
+        );
         let spawn = named_fn_src(
             include_str!("superposition_followup.rs"),
             "pub fn spawn_after_persist",
         );
         assert!(!spawn.contains("\"skip\""));
         assert!(spawn.contains("store_down"));
+    }
+
+    #[test]
+    fn redteam_cron_tenant_list_store_down_is_not_idle_tick() {
+        let src = named_fn_src(
+            include_str!("redteam_background_worker.rs"),
+            "pub fn spawn_cron_worker",
+        );
+        assert!(
+            !compact_src(src).contains("fetch_all(auth_pool.as_ref()).await.unwrap_or_default()"),
+            "redteam cron tenant list store-down must not look like an idle tick"
+        );
+        assert!(src.contains("tenant list store_down"));
+    }
+
+    #[test]
+    fn alert_delivery_config_store_down_is_not_unconfigured() {
+        let src = include_str!("alert_delivery.rs");
+        let cfg = named_fn_src(src, "async fn config_value");
+        assert!(cfg.contains("Result<Option<String>, String>"));
+        assert!(!compact_src(cfg).contains(".await.ok()?"));
+        assert!(!compact_src(cfg).contains(".ok().flatten()"));
+        assert!(!compact_src(cfg).contains("let_=tx.commit().await;"));
+        assert!(cfg.contains("store_down"));
+        let load = named_fn_src(src, "async fn load_delivery_config");
+        assert!(load.contains("Result<DeliveryConfig, String>"));
+        assert!(
+            !compact_src(load).contains("from_str::<Vec<Value>>(&raw).ok()"),
+            "corrupt integrations JSON must not look like no channels configured"
+        );
+        assert!(compact_src(load).contains(
+            "from_str::<Vec<Value>>(&raw).map_err(|_|\"store_down\".to_string())?"
+        ));
+        let deliver = named_fn_src(src, "pub async fn deliver_alert");
+        assert!(deliver.contains("Result<bool, String>"));
+        assert!(compact_src(deliver).contains("load_delivery_config(pool,tenant_id).await?"));
+        let title = named_fn_src(src, "async fn heal_finding_title");
+        assert!(title.contains("Result<Option<String>, String>"));
+        assert!(!compact_src(title).contains(".ok().flatten()"));
+        assert!(!compact_src(title).contains("let_=tx.commit().await;"));
+        let slack = named_fn_src(src, "pub async fn post_heal_slack");
+        assert!(slack.contains("heal Slack delivery config store_down"));
+        assert!(slack.contains("heal finding title store_down"));
+    }
+
+    #[test]
+    fn roe_client_config_store_down_is_not_ot_disabled() {
+        let roe = include_str!("critical_infra/roe.rs");
+        assert!(
+            roe.contains("StoreDown"),
+            "RoE must distinguish store-down from industrial OT off"
+        );
+        assert!(roe.contains("database unavailable, cannot confirm RoE"));
+        let configs = named_fn_src(roe, "async fn load_client_configs");
+        assert!(configs.contains("Result<Value, RoeViolation>"));
+        assert!(!compact_src(configs).contains(".ok().flatten()"));
+        assert!(!compact_src(configs).contains("let_=tx.commit().await;"));
+        assert!(
+            !compact_src(configs).contains("from_str(&raw).unwrap_or_else"),
+            "corrupt client_configs must not look like industrial_ot_enabled false"
+        );
+        assert!(configs.contains("RoeViolation::StoreDown"));
+        let eng = named_fn_src(roe, "async fn load_active_engagement");
+        assert!(eng.contains("Result<Option<EngagementRow>, RoeViolation>"));
+        assert!(!compact_src(eng).contains(".ok().flatten()"));
+        assert!(!compact_src(eng).contains("let_=tx.commit().await;"));
+        let live = named_fn_src(roe, "async fn preflight_live");
+        assert!(compact_src(live).contains("load_client_configs(input.pool,tenant_id,client_id).await?"));
+        assert!(compact_src(live).contains(
+            "load_active_engagement(input.pool,tenant_id,client_id).await?"
+        ));
+        let inner = named_fn_src(
+            include_str!("engine_dispatch.rs"),
+            "async fn run_engine_inner",
+        );
+        assert!(
+            compact_src(inner).contains("RoeViolation::StoreDown"),
+            "dispatch must not wrap store-down as a RoE policy violation"
+        );
+        assert!(compact_src(inner).contains("EngineResult::error(\"store_down\")"));
     }
 }
