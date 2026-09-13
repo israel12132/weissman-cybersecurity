@@ -18,4 +18,12 @@ describe('ExecutiveOverview live-only truth', () => {
     expect(src).not.toMatch(/financial-risk\/\$\{encodeURIComponent\(cid\)\}`\)\.catch\(\(\) => null\)/)
     expect(src).not.toMatch(/attack-paths\/\$\{encodeURIComponent\(cid\)\}`\)\.catch\(\(\) => null\)/)
   })
+
+  it('does not paint 0-tactics / 0-EPSS-rows / 0-UEBA as empty-clean when those GETs fail', () => {
+    expect(src).toMatch(/global\.coverage \? t\(`\$\{NS\}\.coverage_sub`, \{ tactics: totals\.tactics_covered \?\? 0 \}\) : t\(`\$\{NS\}\.na`\)/)
+    expect(src).toMatch(/epss\?\.rows != null \? epss\.rows : '—'/)
+    expect(src).not.toMatch(/epss\?\.rows \?\? 0/)
+    expect(src).toMatch(/uebaList \? t\(`\$\{NS\}\.ueba_sub`, \{ total: uebaList\.length \}\) : t\(`\$\{NS\}\.na`\)/)
+    expect(src).not.toMatch(/uebaList \? uebaList\.length : 0/)
+  })
 })

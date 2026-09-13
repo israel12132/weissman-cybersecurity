@@ -241,7 +241,7 @@ export default function ExecutiveOverview() {
                 to="/attack-coverage"
                 label={t(`${NS}.coverage`)}
                 value={totals.techniques_covered ?? t(`${NS}.na`)}
-                sub={t(`${NS}.coverage_sub`, { tactics: totals.tactics_covered ?? 0 })}
+                sub={global.coverage ? t(`${NS}.coverage_sub`, { tactics: totals.tactics_covered ?? 0 }) : t(`${NS}.na`)}
                 accent="#f43f5e"
                 linkLabel={t(`${NS}.open_coverage`)}
               />
@@ -267,7 +267,7 @@ export default function ExecutiveOverview() {
                       {t(`${NS}.kev_fresh`, { time: kev?.last_refresh ? new Date(kev.last_refresh).toLocaleDateString() : '—' })}
                     </span>
                     <span style={{ color: freshnessColor(epss?.last_refresh) }}>
-                      {t(`${NS}.epss_fresh`, { rows: epss?.rows ?? 0 })}
+                      {t(`${NS}.epss_fresh`, { rows: epss?.rows != null ? epss.rows : '—' })}
                     </span>
                   </span>
                 }
@@ -280,7 +280,7 @@ export default function ExecutiveOverview() {
                 to="/ueba"
                 label={t(`${NS}.ueba`)}
                 value={uebaList ? (uebaCritHigh > 0 ? <span style={{ color: '#f43f5e' }}>{uebaCritHigh}</span> : uebaList.length) : t(`${NS}.na`)}
-                sub={t(`${NS}.ueba_sub`, { total: uebaList ? uebaList.length : 0 })}
+                sub={uebaList ? t(`${NS}.ueba_sub`, { total: uebaList.length }) : t(`${NS}.na`)}
                 accent="#a78bfa"
                 linkLabel={t(`${NS}.open_ueba`)}
               />

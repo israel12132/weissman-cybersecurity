@@ -2120,7 +2120,9 @@ export default function IacSecurityCenter() {
               </div>
               <div className="2xl:col-span-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5">
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">{t('iacSecurity.severity_breakdown', 'Severity Breakdown')}</p>
-                <SeverityBars bySeverity={summary?.by_severity} />
+                {!historyUnavailable && summary?.by_severity
+                  ? <SeverityBars bySeverity={summary.by_severity} />
+                  : <p className="text-[11px] font-mono text-[var(--text-muted)]">—</p>}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
                   <MetricTile label="Findings" value={summary?.findings_total} accent="#ef4444" />
                   <MetricTile label="Files" value={summary?.files_scanned} accent="#22d3ee" />

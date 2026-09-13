@@ -124,8 +124,10 @@ function postureFromFindings(findings) {
     return t.includes('posture') || String(f?.title || '').includes('Superposition posture')
   })
   const ev = grade?.evidence || {}
+  const raw = ev.posture_score ?? grade?.evidence?.posture_score
+  const hasScore = raw != null && Number.isFinite(Number(raw))
   return {
-    score: Number(ev.posture_score ?? grade?.evidence?.posture_score ?? 0),
+    score: hasScore ? Number(raw) : null,
     grade: String(ev.posture_grade || '—'),
     chains: Number(ev.collapse_chains ?? 0),
     clusters: Number(ev.cluster_count ?? 0),
@@ -370,7 +372,8 @@ export default function RiskSuperpositionCollapse() {
     [filteredFindings, collapseFindings],
   )
 
-  const gradeColor = posture.score <= 40 ? '#ef4444' : posture.score <= 70 ? '#f59e0b' : '#22c55e'
+  const hasPostureScore = posture.score != null && Number.isFinite(posture.score)
+  const gradeColor = !hasPostureScore ? 'rgba(255,255,255,0.35)' : posture.score <= 40 ? '#ef4444' : posture.score <= 70 ? '#f59e0b' : '#22c55e'
 
   useEffect(() => {
     if (!jobId || !runState.running) return undefined
@@ -652,10 +655,10 @@ export default function RiskSuperpositionCollapse() {
                   {t('pages.superpositionCollapse.posture_label')}
                 </p>
                 <div className="flex items-baseline gap-3 mt-1">
-                  <span className="text-5xl font-bold font-mono" style={{ color: historyUnavailable ? '#fbbf24' : gradeColor }}>
+                  <span className="text-5xl font-bold font-mono" style={{ color: (historyUnavailable || !hasPostureScore) ? '#fbbf24' : gradeColor }}>
                     {historyUnavailable ? '—' : posture.grade !== '—' ? posture.grade : '…'}
                   </span>
-                  <span className="text-2xl font-mono text-[var(--text-tertiary)]">{historyUnavailable ? '—' : `${posture.score}/100`}</span>
+                  <span className="text-2xl font-mono text-[var(--text-tertiary)]">{(historyUnavailable || !hasPostureScore) ? '—' : `${posture.score}/100`}</span>
                 </div>
                 <p className="text-xs text-[var(--text-muted)] mt-2 font-mono">
                   {t('pages.superpositionCollapse.posture_meta', {

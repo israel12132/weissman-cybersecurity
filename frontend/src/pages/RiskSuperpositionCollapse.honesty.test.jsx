@@ -26,4 +26,10 @@ describe('RiskSuperpositionCollapse live-only truth', () => {
     expect(src).toMatch(/classifyEngineHistory/)
     expect(src).not.toMatch(/hist = \{\}/)
   })
+
+  it('does not invent a 0/100 posture score when no superposition finding exists', () => {
+    expect(src).not.toMatch(/Number\(ev\.posture_score \?\? grade\?\.evidence\?\.posture_score \?\? 0\)/)
+    expect(src).toMatch(/const hasScore = raw != null && Number\.isFinite\(Number\(raw\)\)/)
+    expect(src).toMatch(/\(historyUnavailable \|\| !hasPostureScore\) \? '—' : `\$\{posture\.score\}\/100`/)
+  })
 })
