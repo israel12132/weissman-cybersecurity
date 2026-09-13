@@ -422,7 +422,7 @@ export default function ComplianceFrameworks() {
             <div className="mt-2 text-xs font-mono text-[var(--text-muted)]">
               {t('pages.complianceFrameworks.pack_scope', {
                 client: selectedClient?.name || selectedClient?.domain || `#${selectedClientId}`,
-                framework: selectedFramework?.name || t('pages.complianceFrameworks.pack_all_frameworks'),
+                framework: !error && selectedFramework?.name ? selectedFramework.name : t('pages.complianceFrameworks.pack_all_frameworks'),
               })}
             </div>
           )}

@@ -29,4 +29,11 @@ describe('ComplianceFrameworks live-only truth', () => {
     expect(src).toMatch(/selectedFramework && !error && !controlsUnavailable && stats\.nonCompliant > 0 && \(/)
     expect(src).toMatch(/isSelected && !controlsUnavailable && controls\.length > 0/)
   })
+
+  it('mutes leftover framework name in pack-scope after a failed frameworks GET', () => {
+    expect(src).toMatch(/framework: !error && selectedFramework\?\.name \? selectedFramework\.name : t\('pages\.complianceFrameworks\.pack_all_frameworks'\)/)
+    expect(src).toMatch(/setError\(err\?\.message \|\| t\('pages\.complianceFrameworks\.load_failed'\)\)/)
+    expect(src).not.toMatch(/catch \(err\) \{\s*console\.error\('Failed to fetch frameworks:', err\);\s*setSelectedFramework\(null\)/)
+    expect(src).not.toMatch(/catch \(err\) \{\s*console\.error\('Failed to fetch frameworks:', err\);\s*setFrameworks\(\[\]\)/)
+  })
 })
