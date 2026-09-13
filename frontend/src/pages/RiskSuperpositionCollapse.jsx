@@ -428,7 +428,7 @@ export default function RiskSuperpositionCollapse() {
       badgeColor="#a855f7"
       icon="◈"
       maxWidth="max-w-[1600px]"
-      syncAt={lastUpdated}
+      syncAt={historyUnavailable ? null : lastUpdated}
       evidence={t('pages.superpositionCollapse.evidence_notice')}
       breadcrumbs={[
         { label: t('nav.engines'), to: '/engine-matrix' },

@@ -38,4 +38,8 @@ describe('RiskSuperpositionCollapse live-only truth', () => {
     expect(src).toMatch(/historyUnavailable \? '—' : collapseFindings\.length/)
     expect(src).toMatch(/historyUnavailable\s*\n\s*\? '—'\s*\n\s*: t\('pages\.superpositionCollapse\.posture_meta'/)
   })
+
+  it('does not paint leftover leftover-last-updated after a failed history GET', () => {
+    expect(src).toMatch(/syncAt=\{historyUnavailable \? null : lastUpdated\}/)
+  })
 })

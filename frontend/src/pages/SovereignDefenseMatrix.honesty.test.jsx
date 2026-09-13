@@ -46,4 +46,8 @@ describe('SovereignDefenseMatrix live-only truth', () => {
     expect(src).toMatch(/setDashboardUnavailable\(true\)/)
     expect(src).toMatch(/const liveDashboard = dashboardUnavailable \? null : dashboard/)
   })
+
+  it('does not paint leftover leftover-last-updated after a failed history GET', () => {
+    expect(src).toMatch(/syncAt=\{historyUnavailable \? null : lastUpdated\}/)
+  })
 })

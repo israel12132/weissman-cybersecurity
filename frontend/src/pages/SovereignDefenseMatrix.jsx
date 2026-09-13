@@ -313,7 +313,7 @@ export default function SovereignDefenseMatrix() {
       badgeColor="#06b6d4"
       icon="⬡"
       maxWidth="max-w-[1680px]"
-      syncAt={lastUpdated}
+      syncAt={historyUnavailable ? null : lastUpdated}
       evidence={t('pages.sovereignDefense.evidence_notice')}
       breadcrumbs={[
         { label: t('nav.engines'), to: '/engine-matrix' },
