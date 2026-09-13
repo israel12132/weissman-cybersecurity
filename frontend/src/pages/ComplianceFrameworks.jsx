@@ -114,6 +114,7 @@ export default function ComplianceFrameworks() {
   }, [selectedFramework, fetchControls]);
 
   const generateReport = async (frameworkId) => {
+    if (error || controlsUnavailable) return
     try {
       setExporting(true);
       const r = await apiFetch(`/api/compliance/frameworks/${frameworkId}/report`, { raw: true });
@@ -785,7 +786,7 @@ export default function ComplianceFrameworks() {
               <Button variant="unstyled"
                 type="button"
                 onClick={() => generateReport(selectedFramework.id)}
-                disabled={exporting || controls.length === 0}
+                disabled={exporting || controlsUnavailable || !!error || controls.length === 0}
                 className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors disabled:opacity-40"
               >
                 <Download className="w-4 h-4" />
@@ -857,7 +858,7 @@ export default function ComplianceFrameworks() {
           </>
         )}
 
-        {selectedFramework && stats.nonCompliant > 0 && (
+        {selectedFramework && !error && !controlsUnavailable && stats.nonCompliant > 0 && (
           <div className="bg-red-500/10 backdrop-blur-md border border-red-500/30 rounded-xl p-6">
             <div className="flex items-center gap-2 mb-4">
               <AlertTriangle className="w-5 h-5 text-red-400" />

@@ -262,7 +262,7 @@ export default function RemediationHub() {
         </div>
 
         {/* Auto-heal analytics strip */}
-        {healStats && (
+        {healStats && !error && (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 px-4 py-2.5 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.04]">
               <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-300/80 flex items-center gap-1.5">

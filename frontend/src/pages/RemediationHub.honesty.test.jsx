@@ -20,5 +20,6 @@ describe('RemediationHub live-only truth', () => {
     expect(src).toMatch(/families_heading', \{ count: error \? '—' : workflows\.length \}/)
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/healStats && !error && \(/)
   })
 })

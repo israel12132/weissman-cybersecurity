@@ -24,5 +24,8 @@ describe('ComplianceFrameworks live-only truth', () => {
     expect(src).toMatch(/controlsUnavailable \? '—' : filteredControls\.length/)
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error \|\| controlsUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| controlsUnavailable \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/disabled=\{exporting \|\| controlsUnavailable \|\| !!error \|\| controls\.length === 0\}/)
+    expect(src).toMatch(/const generateReport = async \(frameworkId\) => \{\n    if \(error \|\| controlsUnavailable\) return/)
+    expect(src).toMatch(/selectedFramework && !error && !controlsUnavailable && stats\.nonCompliant > 0 && \(/)
   })
 })
