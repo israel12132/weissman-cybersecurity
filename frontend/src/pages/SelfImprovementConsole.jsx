@@ -198,15 +198,15 @@ export default function SelfImprovementConsole() {
           <Button
             variant="unstyled"
             onClick={toggle}
-            disabled={busy}
+            disabled={busy || !!error}
             className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-50 ${
-              enabled
+              enabled && !error
                 ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40'
                 : 'bg-white/5 text-white/60 border border-white/15'
             }`}
           >
             <Power className="w-4 h-4" />
-            {enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
+            {error ? 'Status unconfirmed' : enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
           </Button>
           <Button
             variant="unstyled"

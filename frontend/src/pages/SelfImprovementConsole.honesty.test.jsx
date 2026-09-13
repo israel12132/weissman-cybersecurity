@@ -22,4 +22,11 @@ describe('SelfImprovementConsole live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredItems\.length\}/)
     expect(src).toMatch(/disabled=\{\!\!error \|\| !filteredItems\.length\}/)
   })
+
+  it('mutes leftover leftover-engine Power control after a failed status GET', () => {
+    expect(src).toMatch(/disabled=\{busy \|\| !!error\}/)
+    expect(src).toMatch(/error \? 'Status unconfirmed' : enabled \? 'Enabled — click to disable'/)
+    expect(src).toMatch(/setError\(e\?\.message \|\| 'Failed to load'\)/)
+    expect(src).not.toMatch(/setError\(e\?\.message \|\| 'Failed to load'\)\s*setStatus\(null\)/)
+  })
 })
