@@ -14,4 +14,12 @@ describe('SsoDashboard live-only truth', () => {
     expect(src).toMatch(/data-testid="sso-idps-unavailable"/)
     expect(src).toMatch(/!idpsUnavailable && idps\.length === 0/)
   })
+
+  it('does not paint leftover leftover-IdP counts after a failed IdP GET', () => {
+    expect(src).toMatch(/idps\.length > 0 && !idpsUnavailable &&/)
+    expect(src).toMatch(/!loading && !idpsUnavailable && idps\.length > 0 && \(/)
+    expect(src).toMatch(/!idpsUnavailable && visibleIdps\.map/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(idpsUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{idpsUnavailable \|\| !filteredFindings\.length\}/)
+  })
 })
