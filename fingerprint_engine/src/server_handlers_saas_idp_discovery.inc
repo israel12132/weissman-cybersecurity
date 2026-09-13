@@ -59,24 +59,28 @@ async fn api_client_saas_idp_discovery(
             .into_response();
     };
 
-    let report = crate::saas_idp_discovery::discover(&domains).await;
-
-    // Audit log (best-effort).
-    if let Ok(mut tx2) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-        let ip = extract_client_ip(&headers, addr);
-        let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-        let _ = audit_log::insert_audit(
-            &mut tx2,
-            auth.tenant_id,
-            Some(auth.user_id),
-            &actor,
-            "saas_idp_discovery_ran",
-            &format!("client_id={} client_name={}", client_id, client_name),
-            &ip,
+    if persist_operator_audit(
+        state.app_pool.as_ref(),
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        auth.user_id,
+        "saas_idp_discovery_ran",
+        &format!("client_id={} client_name={}", client_id, client_name),
+        &extract_client_ip(&headers, addr),
+    )
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::saas_idp_unavailable_json(
+                "store_down",
+            )),
         )
-        .await;
-        let _ = tx2.commit().await;
+            .into_response();
     }
+
+    let report = crate::saas_idp_discovery::discover(&domains).await;
 
     (
         StatusCode::OK,

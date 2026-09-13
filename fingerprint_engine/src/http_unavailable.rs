@@ -556,6 +556,39 @@ pub fn scan_status_unavailable_json(detail: &str) -> Value {
     })
 }
 
+/// `POST /api/system/backup` when the dump exists but the audit trail did not persist.
+/// Never `ok: true`. Keep the path so the operator can find the file.
+pub fn backup_unavailable_json(detail: &str, path: Option<&str>) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "error": "store_down",
+        "path": path,
+        "detail": detail,
+    })
+}
+
+/// `POST /api/discovery/domains` when the discovery audit trail cannot be persisted
+pub fn discovery_domains_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "domains": Value::Null,
+        "total_discovered": Value::Null,
+        "detail": detail,
+    })
+}
+
+/// `GET /api/clients/:id/discovery/saas-idp` when the hunt audit trail cannot be persisted
+pub fn saas_idp_unavailable_json(detail: &str) -> Value {
+    json!({
+        "ok": false,
+        "unavailable": true,
+        "report": Value::Null,
+        "detail": detail,
+    })
+}
+
 /// `GET /api/discovery/knowledge/stats` when the intel corpus cannot be read
 pub fn discovery_knowledge_stats_unavailable_json(detail: &str) -> Value {
     json!({
@@ -5147,6 +5180,191 @@ mod tests {
         let stop_commit = stop.find("tx.commit().await.is_err()").expect("stop commit");
         let stop_toggle = stop.find("set_scanning_active(false)").expect("stop toggle");
         assert!(stop_commit < stop_toggle);
+    }
+
+    #[test]
+    fn persist_operator_audit_is_fail_closed() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest.inc"),
+            "async fn persist_operator_audit",
+        );
+        assert!(src.contains("Result<(), ()>"));
+        assert!(src.contains("tx.commit().await.is_err()"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(src).contains("let_=audit_log::insert_audit"));
+        assert!(!compact_src(src).contains("ifletOk(muttx)="));
+    }
+
+    #[test]
+    fn backup_audit_store_down_is_not_ok_true() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest.inc"),
+            "async fn api_system_backup",
+        );
+        assert!(src.contains("persist_operator_audit"));
+        assert!(src.contains("backup_unavailable_json"));
+        assert!(!compact_src(src).contains("ifletOk(muttx)="));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(src).contains("let_=audit_log::insert_audit"));
+        let persist = src.find("persist_operator_audit").expect("audit");
+        let ok_true = src.find("\"ok\": true").expect("ok true");
+        assert!(persist < ok_true);
+        let v = backup_unavailable_json("store down", Some("/tmp/weissman.dump"));
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert_eq!(v["path"], "/tmp/weissman.dump");
+        assert_ne!(v["ok"], json!(true));
+    }
+
+    #[test]
+    fn scan_enqueue_audit_store_down_is_not_202_empty_ok() {
+        let src = include_str!("server_handlers_rest.inc");
+        for sig in [
+            "async fn api_clients_scan_run_all",
+            "async fn api_scan_run_all",
+            "async fn api_scan(",
+            "async fn api_scan_all_engines",
+            "async fn api_scan_discovered_domains",
+        ] {
+            let fn_src = named_fn_src(src, sig);
+            assert!(fn_src.contains("persist_operator_audit"), "{sig}");
+            assert!(fn_src.contains("scan_status_unavailable_json"), "{sig}");
+            assert!(!compact_src(fn_src).contains("ifletOk(muttx)="), "{sig}");
+            assert!(!compact_src(fn_src).contains("let_=tx.commit().await;"), "{sig}");
+            assert!(!compact_src(fn_src).contains("let_=audit_log::insert_audit"), "{sig}");
+            let persist = fn_src.find("persist_operator_audit").expect(sig);
+            let accepted = fn_src.find("StatusCode::ACCEPTED").expect(sig);
+            assert!(persist < accepted, "{sig}");
+            assert!(!fn_src.contains("StatusCode::INTERNAL_SERVER_ERROR"), "{sig}");
+        }
+    }
+
+    #[test]
+    fn discovery_domains_audit_store_down_is_not_ok_true() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest.inc"),
+            "async fn api_discovery_domains",
+        );
+        assert!(src.contains("persist_operator_audit"));
+        assert!(src.contains("discovery_domains_unavailable_json"));
+        assert!(!compact_src(src).contains("ifletOk(muttx)="));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        let persist = src.find("persist_operator_audit").expect("audit");
+        let hunt = src.find("run_auto_discovery").expect("hunt");
+        let empty = src.find("target required").expect("empty target");
+        assert!(empty < persist);
+        assert!(persist < hunt);
+        let v = discovery_domains_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["unavailable"], true);
+        assert!(v["domains"].is_null());
+    }
+
+    #[test]
+    fn saas_idp_audit_store_down_is_not_ok_true() {
+        let src = named_fn_src(
+            include_str!("server_handlers_saas_idp_discovery.inc"),
+            "async fn api_client_saas_idp_discovery",
+        );
+        assert!(src.contains("persist_operator_audit"));
+        assert!(src.contains("saas_idp_unavailable_json"));
+        assert!(!compact_src(src).contains("ifletOk(muttx)="));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        let persist = src.find("persist_operator_audit").expect("audit");
+        let hunt = src.find("saas_idp_discovery::discover").expect("hunt");
+        let ok_true = src.find("\"ok\": true").expect("ok true");
+        assert!(persist < hunt);
+        assert!(hunt < ok_true);
+        let v = saas_idp_unavailable_json("store down");
+        assert_eq!(v["ok"], false);
+        assert!(v["report"].is_null());
+    }
+
+    #[test]
+    fn evidence_list_commit_store_down_is_not_empty_ok() {
+        let src = named_fn_src(
+            include_str!("server_handlers_evidence_vault.inc"),
+            "async fn api_client_evidence_list",
+        );
+        assert!(src.contains("evidence_unavailable_json"));
+        assert!(src.contains("tx.commit().await.is_err()"));
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        let commit = src.find("tx.commit().await.is_err()").expect("commit");
+        let ok_list = src.find("\"evidence\": evidence").expect("list");
+        assert!(commit < ok_list);
+    }
+
+    #[test]
+    fn evidence_download_miss_commit_store_down_is_not_404() {
+        let src = named_fn_src(
+            include_str!("server_handlers_evidence_vault.inc"),
+            "async fn api_evidence_download",
+        );
+        assert!(!compact_src(src).contains("let_=tx.commit().await;"));
+        let miss_at = src.find("\"error\": \"not found\"").expect("miss 404");
+        let miss = &src[..miss_at];
+        assert!(miss.contains("tx.commit().await.is_err()"));
+        assert!(miss.contains("evidence_download_unavailable_json"));
+        let commit = miss.rfind("tx.commit().await.is_err()").expect("miss commit");
+        let unavail = miss
+            .rfind("evidence_download_unavailable_json")
+            .expect("miss 503");
+        assert!(commit < miss_at);
+        assert!(unavail < miss_at);
+    }
+
+    #[test]
+    fn evidence_delete_miss_commit_store_down_is_not_404() {
+        let src = named_fn_src(
+            include_str!("server_handlers_evidence_vault.inc"),
+            "async fn api_evidence_delete",
+        );
+        let miss_at = src.find("\"detail\": \"not found\"").expect("miss 404");
+        let miss = &src[..miss_at];
+        assert!(miss.contains("tx.commit().await.is_err()"));
+        assert!(miss.contains("evidence_unavailable_json"));
+        assert!(!compact_src(miss).contains("let_=tx.commit().await;"));
+    }
+
+    #[test]
+    fn auto_heal_audit_store_down_is_not_remote_ok() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "async fn api_auto_heal",
+        );
+        let vulns = src.find("FROM vulnerabilities").expect("finding select");
+        let token = src.find("resolved_git_token").expect("git token");
+        let finding = &src[vulns..token];
+        assert!(finding.contains("tx.commit().await.is_err()"));
+        assert!(finding.contains("heal_requests_unavailable_json"));
+        assert!(!compact_src(finding).contains("let_=tx.commit().await;"));
+        let persist = src.find("persist_operator_audit").expect("audit");
+        let skip = src.find("WEISSMAN_AUTOHEAL_SKIP_SANDBOX").expect("skip");
+        assert!(persist < skip);
+        let audit = &src[persist.saturating_sub(200)..skip];
+        assert!(audit.contains("destructive_auto_heal_initiated"));
+        assert!(audit.contains("heal_requests_unavailable_json"));
+        assert!(!compact_src(audit).contains("ifletOk(muttx)="));
+        assert!(!compact_src(audit).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(audit).contains("let_=audit_log::insert_audit"));
+    }
+
+    #[test]
+    fn heal_batch_audit_store_down_is_not_202_ok() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "async fn api_heal_batch",
+        );
+        assert!(src.contains("persist_operator_audit"));
+        assert!(src.contains("heal_batch_unavailable_json"));
+        let persist = src.find("persist_operator_audit").expect("audit");
+        let accepted = src.find("StatusCode::ACCEPTED").expect("202");
+        assert!(persist < accepted);
+        let audit = &src[persist..accepted];
+        assert!(audit.contains("destructive_heal_batch"));
+        assert!(!compact_src(audit).contains("ifletOk(muttx)="));
+        assert!(!compact_src(audit).contains("let_=tx.commit().await;"));
+        assert!(!compact_src(audit).contains("let_=audit_log::insert_audit"));
     }
 
     #[test]

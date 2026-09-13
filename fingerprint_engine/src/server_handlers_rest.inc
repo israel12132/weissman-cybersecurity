@@ -11,6 +11,33 @@ async fn db_ping_ok(pool: &sqlx::PgPool) -> bool {
     )
 }
 
+/// Persist a Command Center operator audit row. Store-down (begin / insert / commit)
+/// is `Err(())` so callers return 503 instead of 2xx with a missing trail.
+async fn persist_operator_audit(
+    app_pool: &sqlx::PgPool,
+    auth_pool: &sqlx::PgPool,
+    tenant_id: i64,
+    user_id: i64,
+    action: &str,
+    details: &str,
+    ip: &str,
+) -> Result<(), ()> {
+    let mut tx = db::begin_tenant_tx(app_pool, tenant_id)
+        .await
+        .map_err(|_| ())?;
+    let u = audit_log::user_email_for_id(auth_pool, user_id).await;
+    if audit_log::insert_audit(&mut tx, tenant_id, Some(user_id), &u, action, details, ip)
+        .await
+        .is_err()
+    {
+        return Err(());
+    }
+    if tx.commit().await.is_err() {
+        return Err(());
+    }
+    Ok(())
+}
+
 /// Dependency-aware readiness. Returns 503 when a hard dependency (Postgres, plus Redis when
 /// distributed state is required) is unreachable, so a load balancer stops routing to a replica
 /// that can't serve. Kept SEPARATE from `/api/health` (liveness = process up) on purpose: making
@@ -641,12 +668,29 @@ async fn api_system_backup(
     let ip = extract_client_ip(&headers, addr);
     match crate::db_backup::backup_postgres_to_dir(&backups_dir) {
         Ok(p) => {
-            if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-                let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-                let _ = audit_log::insert_audit(&mut tx, auth.tenant_id, Some(auth.user_id), &u, "backup_triggered", &format!("path={}", p.display()), &ip).await;
-                let _ = tx.commit().await;
+            let path = p.to_string_lossy().into_owned();
+            if persist_operator_audit(
+                state.app_pool.as_ref(),
+                state.auth_pool.as_ref(),
+                auth.tenant_id,
+                auth.user_id,
+                "backup_triggered",
+                &format!("path={path}"),
+                &ip,
+            )
+            .await
+            .is_err()
+            {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::backup_unavailable_json(
+                        "store_down",
+                        Some(&path),
+                    )),
+                )
+                    .into_response();
             }
-            (StatusCode::OK, Json(json!({"ok": true, "path": p.to_string_lossy()}))).into_response()
+            (StatusCode::OK, Json(json!({"ok": true, "path": path}))).into_response()
         }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": e}))).into_response(),
     }
@@ -863,19 +907,25 @@ async fn api_clients_scan_run_all(
     }
 
     let ip = extract_client_ip(&headers, addr);
-    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-        let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-        let _ = audit_log::insert_audit(
-            &mut tx,
-            auth.tenant_id,
-            Some(auth.user_id),
-            &u,
-            "scan_run_all_initiated",
-            &format!("client_id={id} engines={baseline:?}", id = id, baseline = baseline_engines),
-            &ip,
+    if persist_operator_audit(
+        state.app_pool.as_ref(),
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        auth.user_id,
+        "scan_run_all_initiated",
+        &format!("client_id={id} engines={baseline:?}", id = id, baseline = baseline_engines),
+        &ip,
+    )
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::scan_status_unavailable_json(
+                "store_down",
+            )),
         )
-        .await;
-        let _ = tx.commit().await;
+            .into_response();
     }
 
     let mut queued: Vec<Value> = Vec::new();
@@ -916,6 +966,13 @@ async fn api_clients_scan_run_all(
                         error = %e,
                         "enqueue baseline scan job failed"
                     );
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::scan_status_unavailable_json(
+                            "store_down",
+                        )),
+                    )
+                        .into_response();
                 }
             }
         }
@@ -1912,10 +1969,25 @@ async fn api_scan_run_all(
         return payment_or_store_down(detail);
     }
     let ip = extract_client_ip(&headers, addr);
-    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-        let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-        let _ = audit_log::insert_audit(&mut tx, auth.tenant_id, Some(auth.user_id), &u, "scan_initiated", "full scan cycle run-all (single-tenant)", &ip).await;
-        let _ = tx.commit().await;
+    if persist_operator_audit(
+        state.app_pool.as_ref(),
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        auth.user_id,
+        "scan_initiated",
+        "full scan cycle run-all (single-tenant)",
+        &ip,
+    )
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::scan_status_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
     }
     match crate::async_jobs::enqueue(
         state.app_pool.as_ref(),
@@ -1939,8 +2011,10 @@ async fn api_scan_run_all(
         Err(e) => {
             tracing::error!(target: "async_jobs", error = %e, "enqueue tenant_full_scan failed");
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::scan_status_unavailable_json(
+                    "store_down",
+                )),
             )
                 .into_response()
         }
@@ -1971,10 +2045,25 @@ async fn api_scan(
     let engine = scan_body.get("engine").and_then(Value::as_str).unwrap_or("").to_string();
     let target = scan_body.get("target").and_then(Value::as_str).unwrap_or("").to_string();
     let ip = extract_client_ip(&headers, addr);
-    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-        let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-        let _ = audit_log::insert_audit(&mut tx, auth.tenant_id, Some(auth.user_id), &u, "scan_initiated", &format!("command_center engine={} target={}", engine, target.chars().take(200).collect::<String>()), &ip).await;
-        let _ = tx.commit().await;
+    if persist_operator_audit(
+        state.app_pool.as_ref(),
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        auth.user_id,
+        "scan_initiated",
+        &format!("command_center engine={} target={}", engine, target.chars().take(200).collect::<String>()),
+        &ip,
+    )
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::scan_status_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
     }
     let (job_kind, mut payload) =
         match crate::scan_routing::route_scan_job(&scan_body, auth.tenant_id, state.app_pool.as_ref())
@@ -2039,8 +2128,10 @@ async fn api_scan(
         Err(e) => {
             tracing::error!(target: "async_jobs", error = %e, job_kind = %job_kind, "enqueue scan job failed");
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"detail": scrub_internal_error(&e)})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::scan_status_unavailable_json(
+                    "store_down",
+                )),
             )
                 .into_response()
         }
@@ -2262,26 +2353,31 @@ async fn api_discovery_domains(
     body: axum::extract::Json<DomainDiscoveryRequest>,
 ) -> Response {
     let ip = extract_client_ip(&headers, addr);
-    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-        let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-        let _ = audit_log::insert_audit(
-            &mut tx,
-            auth.tenant_id,
-            Some(auth.user_id),
-            &u,
-            "discovery_initiated",
-            &format!("auto_domain_discovery target={}", body.target.chars().take(200).collect::<String>()),
-            &ip,
-        )
-        .await;
-        let _ = tx.commit().await;
-    }
-
     let target = body.target.trim().to_string();
     if target.is_empty() {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({"ok": false, "detail": "target required"})),
+        )
+            .into_response();
+    }
+    if persist_operator_audit(
+        state.app_pool.as_ref(),
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        auth.user_id,
+        "discovery_initiated",
+        &format!("auto_domain_discovery target={}", target.chars().take(200).collect::<String>()),
+        &ip,
+    )
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::discovery_domains_unavailable_json(
+                "store_down",
+            )),
         )
             .into_response();
     }
@@ -2338,19 +2434,25 @@ async fn api_scan_all_engines(
     }
 
     let ip = extract_client_ip(&headers, addr);
-    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-        let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-        let _ = audit_log::insert_audit(
-            &mut tx,
-            auth.tenant_id,
-            Some(auth.user_id),
-            &u,
-            "scan_all_engines_initiated",
-            &format!("client_id={} engines={:?}", body.client_id, body.engines),
-            &ip,
+    if persist_operator_audit(
+        state.app_pool.as_ref(),
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        auth.user_id,
+        "scan_all_engines_initiated",
+        &format!("client_id={} engines={:?}", body.client_id, body.engines),
+        &ip,
+    )
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::scan_status_unavailable_json(
+                "store_down",
+            )),
         )
-        .await;
-        let _ = tx.commit().await;
+            .into_response();
     }
 
     // Get enabled engines for client, or use provided list
@@ -2570,8 +2672,10 @@ async fn api_scan_all_engines(
         Err(e) => {
             tracing::error!(target: "async_jobs", error = %e, "enqueue scan_all_engines failed");
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::scan_status_unavailable_json(
+                    "store_down",
+                )),
             )
                 .into_response()
         }
@@ -2650,19 +2754,25 @@ async fn api_scan_discovered_domains(
     }
 
     let ip = extract_client_ip(&headers, addr);
-    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-        let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-        let _ = audit_log::insert_audit(
-            &mut tx,
-            auth.tenant_id,
-            Some(auth.user_id),
-            &u,
-            "scan_domains_initiated",
-            &format!("client_id={} domains_count={}", body.client_id, body.domains.len()),
-            &ip,
+    if persist_operator_audit(
+        state.app_pool.as_ref(),
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        auth.user_id,
+        "scan_domains_initiated",
+        &format!("client_id={} domains_count={}", body.client_id, body.domains.len()),
+        &ip,
+    )
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::scan_status_unavailable_json(
+                "store_down",
+            )),
         )
-        .await;
-        let _ = tx.commit().await;
+            .into_response();
     }
 
     let payload = json!({
@@ -2695,8 +2805,10 @@ async fn api_scan_discovered_domains(
         Err(e) => {
             tracing::error!(target: "async_jobs", error = %e, "enqueue scan_discovered_domains failed");
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::scan_status_unavailable_json(
+                    "store_down",
+                )),
             )
                 .into_response()
         }

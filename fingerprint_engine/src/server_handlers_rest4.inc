@@ -1792,7 +1792,15 @@ async fn api_auto_heal(
     let vuln_id: i64 = r.try_get("id").unwrap_or(0);
     let patch: String = r.try_get::<String, _>("generated_patch").unwrap_or_default();
     let poc_default: String = r.try_get::<String, _>("poc_exploit").unwrap_or_default();
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_requests_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
     // Token precedence: an explicit per-request git_token wins; otherwise fall back to the
     // tenant's saved GitHub integration (Integration Manager, encrypted) or the deployment env.
     let resolved_git_token = {
@@ -1857,22 +1865,28 @@ async fn api_auto_heal(
         )
             .into_response();
     }
-    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-        let details = format!(
+    if persist_operator_audit(
+        state.app_pool.as_ref(),
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        auth.user_id,
+        "destructive_auto_heal_initiated",
+        &format!(
             "auto_heal client_id={} finding_id={} repo={} branch={}",
             id, body.finding_id, repo, base
-        );
-        let _ = audit_log::insert_audit(
-            &mut tx,
-            auth.tenant_id,
-            Some(auth.user_id),
-            &actor,
-            "destructive_auto_heal_initiated",
-            &details,
-            &ip,
+        ),
+        &ip,
+    )
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_requests_unavailable_json(
+                "store_down",
+            )),
         )
-        .await;
-        let _ = tx.commit().await;
+            .into_response();
     }
 
     let skip = std::env::var("WEISSMAN_AUTOHEAL_SKIP_SANDBOX")
@@ -2692,19 +2706,25 @@ async fn api_heal_batch(
     }
 
     let ip = extract_client_ip(&headers, addr);
-    let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-        let _ = audit_log::insert_audit(
-            &mut tx,
-            auth.tenant_id,
-            Some(auth.user_id),
-            &actor,
-            "destructive_heal_batch",
-            &format!("client_id={} repo={} enqueued={} skipped={}", id, repo, enqueued, skipped),
-            &ip,
+    if persist_operator_audit(
+        state.app_pool.as_ref(),
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        auth.user_id,
+        "destructive_heal_batch",
+        &format!("client_id={} repo={} enqueued={} skipped={}", id, repo, enqueued, skipped),
+        &ip,
+    )
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::heal_batch_unavailable_json(
+                "store_down",
+            )),
         )
-        .await;
-        let _ = tx.commit().await;
+            .into_response();
     }
 
     (StatusCode::ACCEPTED, Json(json!({"ok": true, "enqueued": enqueued, "skipped": skipped, "results": results}))).into_response()

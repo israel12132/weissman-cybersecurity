@@ -117,7 +117,15 @@ async fn api_client_evidence_list(
                 .into_response();
         }
     };
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::evidence_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
 
     let evidence: Vec<Value> = rows
         .into_iter()
@@ -395,7 +403,15 @@ async fn api_evidence_download(
     };
 
     let Some(r) = row else {
-        let _ = tx.commit().await;
+        if tx.commit().await.is_err() {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_download_unavailable_json(
+                    "store_down",
+                )),
+            )
+                .into_response();
+        }
         return (StatusCode::NOT_FOUND, Json(json!({"error": "not found"}))).into_response();
     };
 
@@ -492,7 +508,15 @@ async fn api_evidence_delete(
         }
     };
     let Some(r) = row else {
-        let _ = tx.commit().await;
+        if tx.commit().await.is_err() {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::evidence_unavailable_json(
+                    "store_down",
+                )),
+            )
+                .into_response();
+        }
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "not found"}))).into_response();
     };
     let client_id = r.try_get::<i64, _>("client_id").unwrap_or(0);
