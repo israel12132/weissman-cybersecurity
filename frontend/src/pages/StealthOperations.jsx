@@ -151,15 +151,14 @@ export default function StealthOperations() {
   )
 
   const handleRefresh = useCallback(() => load(), [load])
-  const exportCsv = useCallback(
-    () => exportRowsCsv(STEALTH_CSV_HEADER, stealthHostRows(filteredHosts), 'weissman-stealth-operations'),
-    [filteredHosts],
-  )
-  const exportPdf = useCallback(
-    () =>
-      exportRowsPdf('Weissman Stealth Operations', STEALTH_CSV_HEADER, stealthHostRows(filteredHosts), 'weissman-stealth-operations'),
-    [filteredHosts],
-  )
+  const exportCsv = useCallback(() => {
+    if (error) return
+    exportRowsCsv(STEALTH_CSV_HEADER, stealthHostRows(filteredHosts), 'weissman-stealth-operations')
+  }, [error, filteredHosts])
+  const exportPdf = useCallback(() => {
+    if (error) return
+    exportRowsPdf('Weissman Stealth Operations', STEALTH_CSV_HEADER, stealthHostRows(filteredHosts), 'weissman-stealth-operations')
+  }, [error, filteredHosts])
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 text-text-secondary">
@@ -194,13 +193,13 @@ export default function StealthOperations() {
             onRefresh={handleRefresh}
             onExport={exportCsv}
             refreshLoading={loading}
-            exportDisabled={!filteredHosts.length}
+            exportDisabled={!!error || !filteredHosts.length}
           />
           <Button
             variant="unstyled"
             type="button"
             onClick={exportPdf}
-            disabled={!filteredHosts.length}
+            disabled={!!error || !filteredHosts.length}
             title={t('common.export_pdf')}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-white/15 text-text-secondary hover:bg-white/10 disabled:opacity-40 transition-colors"
           >
@@ -227,7 +226,7 @@ export default function StealthOperations() {
         </div>
       )}
 
-      {data && (
+      {data && !error && (
         <>
           {data.disabled && (
             <div className="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-3 text-sm text-amber-300 mb-4">
