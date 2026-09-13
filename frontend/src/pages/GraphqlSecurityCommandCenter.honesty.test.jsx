@@ -42,6 +42,8 @@ describe('GraphqlSecurityCommandCenter live-only truth', () => {
   it('does not dump leftover GraphQL posture JSON or executive PDF after a failed history GET', () => {
     expect(src).toMatch(/const exportPostureJson = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
     expect(src).toMatch(/const exportExecutivePdf = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/downloadBytes\(\n      new TextEncoder\(\)\.encode\(JSON\.stringify\(payload, null, 2\)\),/)
+    expect(src).toMatch(/downloadBytes\(buildSimpleTextPdf\(lines\), `graphql-executive-\$\{Date\.now\(\)\}\.pdf`, 'application\/pdf'\)/)
   })
 
 })
