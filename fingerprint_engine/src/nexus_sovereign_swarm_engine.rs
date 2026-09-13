@@ -3018,15 +3018,15 @@ async fn oracle_synthesis(
     Some(parsed)
 }
 
-async fn count_endpoint_agents(ctx: &EngineRunContext) -> u32 {
+async fn count_endpoint_agents(ctx: &EngineRunContext) -> Result<u32, String> {
     let (Some(pool), Some(client_id), Some(tenant_id)) =
         (ctx.app_pool.as_ref(), ctx.client_id, ctx.tenant_id)
     else {
-        return 0;
+        return Ok(0);
     };
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return 0;
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let count = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM endpoint_agents WHERE tenant_id = $1 AND client_id = $2 AND status = 'online'",
     )
@@ -3034,10 +3034,12 @@ async fn count_endpoint_agents(ctx: &EngineRunContext) -> u32 {
     .bind(client_id)
     .fetch_one(&mut *tx)
     .await
-    .map(|n| n.max(0) as u32)
-    .unwrap_or(0);
-    let _ = tx.commit().await;
-    count
+    .map_err(|_| "store_down".to_string())?
+    .max(0) as u32;
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
+    }
+    Ok(count)
 }
 
 fn signal_to_finding(s: &ProbeSignal) -> Value {
@@ -3174,7 +3176,10 @@ pub async fn run_nexus_sovereign_swarm_result(
         None
     };
     let mut endpoint_agents = if config.endpoint_bridge {
-        count_endpoint_agents(ctx).await
+        match count_endpoint_agents(ctx).await {
+            Ok(n) => n,
+            Err(_) => return EngineResult::error("store_down"),
+        }
     } else {
         0
     };

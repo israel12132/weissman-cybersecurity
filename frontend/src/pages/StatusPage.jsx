@@ -277,7 +277,8 @@ function extractFailedHealthProbes(audit) {
 function overallLevel(services, state) {
   if (state.loading) return 'unknown'
   if (services.some((s) => s.level === 'outage')) return 'outage'
-  if (state.health?.global_safe_mode) return 'degraded'
+  if (state.health && typeof state.health.global_safe_mode !== 'boolean') return 'unknown'
+  if (state.health?.global_safe_mode === true) return 'degraded'
   if (services.some((s) => s.level === 'degraded')) return 'degraded'
   if (services.every((s) => s.level === 'operational')) return 'operational'
   return 'degraded'

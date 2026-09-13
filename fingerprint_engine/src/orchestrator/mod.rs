@@ -245,6 +245,22 @@ async fn get_config_tx(
     .filter(|s: &String| !s.is_empty())
 }
 
+/// Read a string config; query failure is `Err`, missing/empty key is `Ok(None)`.
+async fn get_config_tx_strict(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    key: &str,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar::<_, String>(
+        "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
+    )
+    .bind(tenant_id)
+    .bind(key)
+    .fetch_optional(&mut **tx)
+    .await
+    .map(|opt| opt.filter(|s: &String| !s.is_empty()))
+}
+
 use weissman_core::models::engine::{
     is_production_engine_id, resolve_engine_id, DEFAULT_ORCHESTRATOR_ENGINES,
 };
@@ -654,15 +670,15 @@ async fn active_engines_list(
 async fn load_identity_contexts(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     client_id: i64,
-) -> Vec<identity_engine::AuthContext> {
+) -> Result<Vec<identity_engine::AuthContext>, sqlx::Error> {
     let rows = sqlx::query(
         "SELECT role_name, privilege_order, token_type, token_value FROM identity_contexts WHERE client_id = $1 ORDER BY privilege_order DESC",
     )
     .bind(client_id)
     .fetch_all(&mut **tx)
-    .await
-    .unwrap_or_default();
-    rows.into_iter()
+    .await?;
+    Ok(rows
+        .into_iter()
         .filter_map(|r| {
             Some(identity_engine::AuthContext {
                 role_name: r.try_get("role_name").ok()?,
@@ -671,7 +687,7 @@ async fn load_identity_contexts(
                 token_value: r.try_get("token_value").ok()?,
             })
         })
-        .collect()
+        .collect())
 }
 
 fn client_auto_harvest_enabled(client_configs_json: &str) -> bool {
@@ -1164,8 +1180,8 @@ async fn run_cycle_for_tenant_inner(
     let asm_ports = asm_ports_from_config(&mut tx, tenant_id).await;
     let recon_subdomains = recon_subdomain_prefixes_from_config(&mut tx, tenant_id).await;
     let mut stealth_config = load_stealth_config(&mut tx, tenant_id).await;
-    let global_safe_mode = get_config_tx(&mut tx, tenant_id, "global_safe_mode")
-        .await
+    let global_safe_mode = get_config_tx_strict(&mut tx, tenant_id, "global_safe_mode")
+        .await?
         .map(|s| s == "true" || s == "1")
         .unwrap_or(false);
     if global_safe_mode {
@@ -1196,8 +1212,7 @@ async fn run_cycle_for_tenant_inner(
         "SELECT id, name, domains, COALESCE(NULLIF(trim(ip_ranges),''),'[]') AS ip_ranges, COALESCE(client_configs,'') AS client_configs FROM clients",
     )
     .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
+    .await?;
     let clients: Vec<(i64, String, String, String, String)> = client_rows
         .into_iter()
         .filter_map(|r| {
@@ -1416,7 +1431,7 @@ async fn run_cycle_for_tenant_inner(
             "started",
             wr,
         );
-        let mut identity_contexts = load_identity_contexts(&mut tx, db_client_id).await;
+        let mut identity_contexts = load_identity_contexts(&mut tx, db_client_id).await?;
         let mut client_had_crash = false;
         let mut target_list: Vec<String> = client_targets.clone();
         let mut discovery_ctx = pipeline_context::DiscoveryContext::new();
@@ -1701,7 +1716,7 @@ async fn run_cycle_for_tenant_inner(
                             )
                             .await;
                         }
-                        identity_contexts = load_identity_contexts(&mut tx, db_client_id).await;
+                        identity_contexts = load_identity_contexts(&mut tx, db_client_id).await?;
                         if !harvested.is_empty() {
                             broadcast_engine_progress(
                                 telemetry_tx.as_ref(),
@@ -2318,8 +2333,7 @@ async fn run_cycle_for_tenant_inner(
     .bind(run_id)
     .bind(tenant_id)
     .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
+    .await?;
     let audit_rows: Vec<crypto_engine::AuditFindingRow> = audit_raw
         .into_iter()
         .filter_map(|r| {

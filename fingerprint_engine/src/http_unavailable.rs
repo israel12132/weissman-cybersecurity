@@ -1648,6 +1648,10 @@ mod tests {
         }
     }
 
+    fn compact_src(s: &str) -> String {
+        s.chars().filter(|c| !c.is_whitespace()).collect()
+    }
+
     #[test]
     fn client_lookup_store_down_is_never_not_found() {
         let v = client_lookup_unavailable_json("store down");
@@ -3203,12 +3207,22 @@ mod tests {
             .find("\npub async fn run_chronos(")
             .unwrap_or(rest.len());
         let fn_src = &rest[..next];
+        let compact = compact_src(fn_src);
         assert!(!fn_src.contains("format!(\"db: {e}\")"));
-        assert!(!fn_src.contains(".await\n        .unwrap_or_default()"));
+        assert!(!compact.contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
         assert!(!fn_src.contains("let _ = tx.commit()"));
         assert!(fn_src.contains("EngineResult::error(\"store_down\")"));
         assert!(fn_src.contains("tx.commit().await.is_err()"));
         assert!(fn_src.contains("empty_ok("));
+        let last_store = fn_src
+            .rfind("EngineResult::error(\"store_down\")")
+            .expect("store_down return");
+        let agent = fn_src
+            .find("run_agent_required_engine")
+            .expect("agent path");
+        let empty = fn_src.find("empty_ok(").expect("empty_ok");
+        assert!(last_store < agent, "store-down must not continue to agent");
+        assert!(last_store < empty, "empty_ok must follow store-down returns");
     }
 
     #[test]
@@ -3220,10 +3234,12 @@ mod tests {
         let rest = &src[start..];
         let next = rest.find("\nfn maturity_grade").unwrap_or(rest.len());
         let fn_src = &rest[..next];
+        let compact = compact_src(fn_src);
         assert!(fn_src.contains("Result<DefenseTelemetry, String>"));
         assert!(!fn_src.contains("return DefenseTelemetry::default()"));
         assert!(fn_src.contains("return Ok(DefenseTelemetry::default())"));
-        assert!(!fn_src.contains("unwrap_or(0)"));
+        assert!(!compact.contains("unwrap_or(0)"));
+        assert!(!compact.contains("unwrap_or_default()"));
         assert!(!fn_src.contains("let Ok(mut tx)"));
         assert!(fn_src.contains("map_err(|_| \"store_down\".to_string())"));
         assert!(fn_src.contains("tx.commit().await.is_err()"));
@@ -3250,10 +3266,11 @@ mod tests {
             .find("\npub async fn run_identity_attack_chain_result")
             .unwrap_or(rest.len());
         let fn_src = &rest[..next];
+        let compact = compact_src(fn_src);
         assert!(fn_src.contains("Result<Vec<Value>, String>"));
         assert!(fn_src.contains("return Ok(Vec::new())"));
         assert!(!fn_src.contains("let Ok(mut tx)"));
-        assert!(!fn_src.contains(".await\n        .unwrap_or_default()"));
+        assert!(!compact.contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
         assert!(fn_src.contains("map_err(|_| \"store_down\".to_string())"));
         assert!(fn_src.contains("tx.commit().await.is_err()"));
         let run_start = src
@@ -3266,5 +3283,116 @@ mod tests {
         let run_src = &run_rest[..run_next];
         assert!(run_src.contains("Err(_) => return EngineResult::error(\"store_down\")"));
         assert!(run_src.contains("empty_ok("));
+    }
+
+    #[test]
+    fn cognitive_poison_library_load_is_not_empty_ok_on_store_down() {
+        let src = include_str!("cognitive_starvation_engine.rs");
+        let start = src
+            .find("pub async fn run_cognitive_starvation_result")
+            .expect("cognitive");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn run_cognitive_starvation(")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        let compact = compact_src(fn_src);
+        assert!(!compact.contains("load_poison_library(pool.as_ref(),20).await.unwrap_or_default()"));
+        assert!(fn_src.contains("EngineResult::error(\"store_down\")"));
+        assert!(fn_src.contains("empty_ok("));
+        let store = fn_src
+            .find("EngineResult::error(\"store_down\")")
+            .expect("store_down");
+        let empty = fn_src.find("empty_ok(").expect("empty_ok");
+        assert!(store < empty);
+    }
+
+    #[test]
+    fn orchestrator_cycle_reads_are_not_empty_success_on_store_down() {
+        let src = include_str!("orchestrator/mod.rs");
+        let ident_start = src
+            .find("async fn load_identity_contexts")
+            .expect("identity");
+        let ident_rest = &src[ident_start..];
+        let ident_next = ident_rest
+            .find("\nfn client_auto_harvest_enabled")
+            .unwrap_or(ident_rest.len());
+        let ident = &ident_rest[..ident_next];
+        let ident_c = compact_src(ident);
+        assert!(ident.contains("Result<Vec<identity_engine::AuthContext>, sqlx::Error>"));
+        assert!(!ident_c.contains("fetch_all(&mut**tx).await.unwrap_or_default()"));
+        assert!(ident_c.contains("fetch_all(&mut**tx).await?"));
+        assert!(src.contains("get_config_tx_strict"));
+        let cycle_start = src
+            .find("async fn run_cycle_for_tenant_inner")
+            .expect("cycle");
+        let cycle = &src[cycle_start..];
+        assert!(cycle.contains("get_config_tx_strict(&mut tx, tenant_id, \"global_safe_mode\")"));
+        assert!(!cycle.contains("get_config_tx(&mut tx, tenant_id, \"global_safe_mode\")"));
+        let clients = cycle
+            .find("SELECT id, name, domains")
+            .expect("clients select");
+        let clients_slice = &cycle[clients..clients + 280];
+        assert!(clients_slice.contains(".await?"));
+        assert!(!clients_slice.contains("unwrap_or_default()"));
+        let audit = cycle
+            .find("FROM vulnerabilities WHERE run_id")
+            .expect("audit");
+        let audit_slice = &cycle[audit..audit + 350];
+        assert!(audit_slice.contains(".await?"));
+        assert!(!audit_slice.contains("unwrap_or_default()"));
+    }
+
+    #[test]
+    fn ueba_threat_intel_exists_is_not_false_on_store_down() {
+        let src = include_str!("ueba_onboarding.rs");
+        let start = src.find("pub async fn threat_intel_hit").expect("ti");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn fleet_consensus_hit")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        let compact = compact_src(fn_src);
+        assert!(fn_src.contains("Result<bool, String>"));
+        assert!(!compact.contains("fetch_one(&mut**tx).await.unwrap_or(false)"));
+        assert!(fn_src.contains("map_err(|_| \"store_down\".to_string())"));
+        let det = include_str!("ueba_detector.rs");
+        let call = det
+            .find("crate::ueba_onboarding::threat_intel_hit")
+            .expect("caller");
+        let call_src = &det[call..call + 280];
+        assert!(call_src.contains("map_err(|_| \"store_down\".to_string())?"));
+    }
+
+    #[test]
+    fn nexus_endpoint_agent_count_is_not_live_zero_on_store_down() {
+        let src = include_str!("nexus_sovereign_swarm_engine.rs");
+        let start = src.find("async fn count_endpoint_agents").expect("count");
+        let rest = &src[start..];
+        let next = rest.find("\nfn signal_to_finding").unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        let compact = compact_src(fn_src);
+        assert!(fn_src.contains("Result<u32, String>"));
+        assert!(fn_src.contains("return Ok(0)"));
+        assert!(!fn_src.contains("return 0;"));
+        assert!(!compact.contains("unwrap_or(0)"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        let run_hit = src
+            .find("match count_endpoint_agents(ctx).await")
+            .expect("caller");
+        let caller = &src[run_hit..run_hit + 220];
+        assert!(caller.contains("EngineResult::error(\"store_down\")"));
+    }
+
+    #[test]
+    fn store_down_engine_error_is_fail_fast_not_waf_skip() {
+        let src = include_str!("engine_resilience.rs");
+        let classify = named_fn_src(src, "pub fn classify_failure");
+        assert!(classify.contains("FailureClass::StoreDown"));
+        assert!(classify.contains("store_down"));
+        let iff = named_fn_src(src, "pub fn is_fail_fast");
+        assert!(iff.contains("StoreDown"));
+        let as_str = named_fn_src(src, "pub fn as_str");
+        assert!(as_str.contains("StoreDown => \"store_down\""));
     }
 }

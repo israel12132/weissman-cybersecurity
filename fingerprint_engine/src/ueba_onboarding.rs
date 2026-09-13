@@ -374,9 +374,9 @@ pub async fn threat_intel_hit(
     metric: &str,
     item: &str,
     binary_hash: Option<&str>,
-) -> bool {
+) -> Result<bool, String> {
     if metric == "open_ports" {
-        return false;
+        return Ok(false);
     }
     let n = norm_item(item);
     if n.len() >= 4 {
@@ -394,16 +394,16 @@ pub async fn threat_intel_hit(
         .bind(&n)
         .fetch_one(&mut **tx)
         .await
-        .unwrap_or(false);
+        .map_err(|_| "store_down".to_string())?;
         if hit {
-            return true;
+            return Ok(true);
         }
     }
     let Some(h) = binary_hash.map(str::trim).filter(|s| s.len() == 64) else {
-        return false;
+        return Ok(false);
     };
     if !h.chars().all(|c| c.is_ascii_hexdigit()) {
-        return false;
+        return Ok(false);
     }
     let h = h.to_ascii_lowercase();
     sqlx::query_scalar::<_, bool>(
@@ -417,7 +417,7 @@ pub async fn threat_intel_hit(
     .bind(&h)
     .fetch_one(&mut **tx)
     .await
-    .unwrap_or(false)
+    .map_err(|_| "store_down".to_string())
 }
 
 /// Another agent in this tenant, past onboarding grace, already learned the item.

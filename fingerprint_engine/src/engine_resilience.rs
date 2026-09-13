@@ -85,6 +85,9 @@ pub enum FailureClass {
     ConnReset,
     /// Rules of engagement / critical-infra contract refused the engine. Do not retry.
     Roe,
+    /// Postgres/store is down. Do not retry as a target-variant probe failure,
+    /// and never convert to an empty-ok WAF skip.
+    StoreDown,
     /// Anything else.
     Generic,
 }
@@ -97,6 +100,7 @@ impl FailureClass {
             FailureClass::Dns => "dns",
             FailureClass::ConnReset => "conn_reset",
             FailureClass::Roe => "roe",
+            FailureClass::StoreDown => "store_down",
             FailureClass::Generic => "generic",
         }
     }
@@ -116,7 +120,10 @@ pub struct EscalationHint {
 /// WAF/edge and RoE must not consume remaining target variants (or widen into a 180s×3 stall).
 #[must_use]
 pub fn is_fail_fast(class: FailureClass) -> bool {
-    matches!(class, FailureClass::Waf | FailureClass::Roe)
+    matches!(
+        class,
+        FailureClass::Waf | FailureClass::Roe | FailureClass::StoreDown
+    )
 }
 
 /// Classify a failed attempt from its status + message. Mirrors the heuristics in
@@ -132,6 +139,9 @@ pub fn classify_failure(status: &str, message: &str) -> FailureClass {
         || m.contains("weaponized_god_mode")
     {
         return FailureClass::Roe;
+    }
+    if m.trim() == "store_down" || m.contains("store_down") {
+        return FailureClass::StoreDown;
     }
     if m.contains("403")
         || m.contains("429")
@@ -180,7 +190,11 @@ fn escalate_for(class: FailureClass, current_timeout: &mut Duration) {
         }
         // Dns is already addressed by the scheme/`www` target variants; ConnReset/Generic
         // fall through to the next strategy unchanged.
-        FailureClass::Dns | FailureClass::ConnReset | FailureClass::Generic | FailureClass::Roe => {}
+        FailureClass::Dns
+        | FailureClass::ConnReset
+        | FailureClass::Generic
+        | FailureClass::Roe
+        | FailureClass::StoreDown => {}
     }
 }
 
@@ -510,6 +524,17 @@ mod tests {
             classify_failure("error", "something unexpected"),
             FailureClass::Generic
         );
+        assert_eq!(
+            classify_failure("error", "store_down"),
+            FailureClass::StoreDown
+        );
+        assert_eq!(
+            classify_failure(
+                "error",
+                "engine 'chronos' failed after 1 strategy attempt(s): store_down"
+            ),
+            FailureClass::StoreDown
+        );
     }
 
     #[test]
@@ -574,6 +599,7 @@ mod tests {
     fn waf_and_roe_are_fail_fast() {
         assert!(is_fail_fast(FailureClass::Waf));
         assert!(is_fail_fast(FailureClass::Roe));
+        assert!(is_fail_fast(FailureClass::StoreDown));
         assert!(!is_fail_fast(FailureClass::Timeout));
         assert!(!is_fail_fast(FailureClass::Dns));
         assert!(!is_fail_fast(FailureClass::Generic));
@@ -601,5 +627,29 @@ mod tests {
         assert_eq!(telem.attempts, 1);
         assert_eq!(telem.failure_class.as_deref(), Some("roe"));
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn store_down_fail_fast_stays_error_not_empty_ok() {
+        let calls = Arc::new(AtomicU32::new(0));
+        let c = calls.clone();
+        let (result, telem) = run_with_resilience(
+            "chronos",
+            "https://example.com",
+            Duration::from_secs(2),
+            move |_v, _hint| {
+                c.fetch_add(1, Ordering::SeqCst);
+                async move { EngineResult::error("store_down") }
+            },
+        )
+        .await;
+        assert_eq!(result.status, "error");
+        assert_ne!(result.status, "ok");
+        assert!(!result.success);
+        assert!(result.findings.is_empty());
+        assert_eq!(telem.attempts, 1);
+        assert_eq!(telem.failure_class.as_deref(), Some("store_down"));
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(result.message.contains("store_down"));
     }
 }

@@ -628,8 +628,15 @@ async fn check_new_categorical(
         for item in &new_items {
             let hash = crate::ueba_onboarding::item_binary_hash(item, binary_hashes);
             let sig = crate::ueba_onboarding::signature_denies(metric, item);
-            let ti =
-                crate::ueba_onboarding::threat_intel_hit(tx, tenant_id, metric, item, hash).await;
+            let ti = crate::ueba_onboarding::threat_intel_hit(
+                tx,
+                tenant_id,
+                metric,
+                item,
+                hash,
+            )
+            .await
+            .map_err(|_| "store_down".to_string())?;
             let wl = crate::ueba_onboarding::on_global_whitelist(metric, item);
             let sov = crate::ueba_onboarding::on_sovereign_binary_allowlist_tx(tx, hash).await;
             match crate::ueba_onboarding::decide_onboarding_item(metric, item, sig, ti, wl, sov) {
