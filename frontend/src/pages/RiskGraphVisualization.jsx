@@ -217,6 +217,11 @@ export default function RiskGraphVisualization() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (graphUnavailable) return
+    exportNodesCsv(graphData.nodes)
+  }, [graphUnavailable, graphData.nodes])
+
   const searchFilteredNodes = useMemo(() => {
     if (!searchQuery.trim()) return filteredNodes
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
@@ -398,7 +403,7 @@ export default function RiskGraphVisualization() {
   // (richer than the client-side node CSV), for interchange / offline analysis.
   // Wired to GET /api/clients/:id/risk-graph/export.
   const exportGraphJson = async () => {
-    if (clientId == null) return
+    if (graphUnavailable || clientId == null) return
     try {
       const data = await api.get(`/api/clients/${clientId}/risk-graph/export`)
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -422,7 +427,7 @@ export default function RiskGraphVisualization() {
           <Button variant="unstyled"
             type="button"
             onClick={exportGraphJson}
-            disabled={clientId == null || !graphData.nodes.length}
+            disabled={graphUnavailable || clientId == null || !graphData.nodes.length}
             className="flex items-center gap-2 px-3 py-2 rounded-lg border border-violet-500/40 bg-violet-500/10 text-violet-200 text-xs font-mono hover:bg-violet-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             title={t(`${NS}.export_json_hint`)}
           >
@@ -431,9 +436,9 @@ export default function RiskGraphVisualization() {
           </Button>
           <ShellScanActions
             onRefresh={reloadGraph}
-            onExport={() => exportNodesCsv(graphData.nodes)}
+            onExport={handleExportCsv}
             refreshLoading={loading}
-            exportDisabled={!filteredFindings.length}
+            exportDisabled={graphUnavailable || !filteredFindings.length}
           />
         </div>
       )}

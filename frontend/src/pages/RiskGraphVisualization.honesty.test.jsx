@@ -16,4 +16,13 @@ describe('RiskGraphVisualization live-only truth', () => {
     expect(src).toMatch(/setGraphUnavailable\(true\)/)
     expect(src).not.toMatch(/\.catch\(\(\) => null\)/)
   })
+
+  it('does not dump leftover leftover-graph CSV/JSON after a failed graph GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(graphUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{graphUnavailable \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/if \(graphUnavailable \|\| clientId == null\) return/)
+    expect(src).toMatch(/disabled=\{graphUnavailable \|\| clientId == null \|\| !graphData\.nodes\.length\}/)
+    expect(src).toMatch(/catch \(error\) \{\n      console\.error\('Failed to fetch graph data:', error\);\n      setGraphUnavailable\(true\);/)
+    expect(src).not.toMatch(/catch \(error\) \{\s*console\.error\('Failed to fetch graph data:', error\);\s*setGraphData/)
+  })
 })
