@@ -31,4 +31,9 @@ describe('NexusSovereignSwarm live-only truth', () => {
     expect(src).toMatch(/const handleExportReport = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
     expect(src).toMatch(/!historyUnavailable && \(metrics \|\| realFindings\.length > 0\)/)
   })
+
+  it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
+  })
 })

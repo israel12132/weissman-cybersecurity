@@ -1282,6 +1282,11 @@ export default function NexusSovereignSwarm() {
   } = useWeissmanEnginePage(ENGINE_ID, realFindings)
   const liveMetrics = historyUnavailable ? null : metrics
 
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
+
   useEffect(() => {
     refreshFromHistory().then((run) => {
       if (run?.findings?.length) {
@@ -1660,7 +1665,7 @@ export default function NexusSovereignSwarm() {
               </p>
             </div>
             <div className="flex gap-2 flex-wrap items-center">
-              <ShellScanActions onRefresh={handleRefresh} onExport={exportCsv} exportDisabled={!filteredFindings.length} />
+              <ShellScanActions onRefresh={handleRefresh} onExport={handleExportCsv} exportDisabled={historyUnavailable || !filteredFindings.length} />
               <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors">
                 Engine Detail →
               </Link>
