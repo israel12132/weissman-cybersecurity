@@ -678,7 +678,7 @@ async fn execute_job_unscoped(
                 intel_pool.clone(),
             )
             .await
-            .ok();
+            .map_err(|_| "store_down".to_string())?;
 
             channels.emit_telemetry(tid, &
                 json!({
@@ -694,44 +694,35 @@ async fn execute_job_unscoped(
                 let canonical = weissman_core::models::engine::resolve_engine_id(engine_id);
                 let (probe_status, findings_count, message, raw_status) =
                     if *engine_id == "poe_synthesis" {
-                        if let Some(cfg) = poe_cfg.as_ref() {
-                            let run = tokio::time::timeout(
-                                Duration::from_secs(180),
-                                crate::exploit_synthesis_engine::run_exploit_synthesis_async(
-                                    &target,
-                                    cfg,
-                                    None,
-                                    None,
-                                    Some(tid),
-                                    None,
-                                ),
-                            )
-                            .await;
-                            match run {
-                                Ok(result) => {
-                                    let st = result.status.clone();
-                                    let msg = result.message.clone();
-                                    let fc = result.findings.len();
-                                    if st == "ok" {
-                                        ("pass", fc, msg, st)
-                                    } else {
-                                        ("fail", fc, msg, st)
-                                    }
+                        let run = tokio::time::timeout(
+                            Duration::from_secs(180),
+                            crate::exploit_synthesis_engine::run_exploit_synthesis_async(
+                                &target,
+                                &poe_cfg,
+                                None,
+                                None,
+                                Some(tid),
+                                None,
+                            ),
+                        )
+                        .await;
+                        match run {
+                            Ok(result) => {
+                                let st = result.status.clone();
+                                let msg = result.message.clone();
+                                let fc = result.findings.len();
+                                if st == "ok" {
+                                    ("pass", fc, msg, st)
+                                } else {
+                                    ("fail", fc, msg, st)
                                 }
-                                Err(_) => (
-                                    "fail",
-                                    0,
-                                    "poe_synthesis timed out (180s)".to_string(),
-                                    "timeout".to_string(),
-                                ),
                             }
-                        } else {
-                            (
+                            Err(_) => (
                                 "fail",
                                 0,
-                                "poe_synthesis config unavailable".to_string(),
-                                "error".to_string(),
-                            )
+                                "poe_synthesis timed out (180s)".to_string(),
+                                "timeout".to_string(),
+                            ),
                         }
                     } else if !weissman_core::models::engine::is_production_engine_id(engine_id) {
                         (

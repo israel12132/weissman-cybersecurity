@@ -620,6 +620,7 @@
     "detail_scan_active": "{{count}} מחזורי טננט פעילים",
     "detail_scan_enabled": "סריקה מופעלת",
     "detail_scan_paused": "סריקה מושהית",
+    "detail_scan_unconfirmed": "מונה סריקות לא אושר — לא idle",
     "detail_engines_ok": "{{production}} production · {{catalog}} קטלוג",
     "detail_agents_online": "{{online}}/{{total}} מקוונים",
     "detail_http": "HTTP {{status}}"
@@ -960,7 +961,9 @@
   },
   "scanStatus": {
     "active": "סורק",
-    "active_hint": "סריקה אחת או יותר פועלות כעת (GET /api/scan/status)."
+    "active_hint": "סריקה אחת או יותר פועלות כעת (GET /api/scan/status).",
+    "unknown": "סטטוס סריקה לא ידוע",
+    "unknown_hint": "GET /api/scan/status לא זמין — idle אינו מאושר."
   },
   "errors": {
     "loading_failed": "טעינה נכשלה: {{detail}}",
@@ -1723,6 +1726,8 @@
       "postgres": "PostgreSQL",
       "connected": "מחובר",
       "unavailable": "לא זמין",
+      "counters_unavailable_title": "מונים תפעוליים לא זמינים",
+      "counters_unavailable_body": "GET /api/metrics/dashboard לא אישר מונים חיים. אפסים אינם צינור שקט.",
       "active_scans": "סריקות פעילות",
       "jobs_completed_24h": "משימות שהושלמו (24 שעות)",
       "jobs_failed_24h": "משימות שנכשלו (24 שעות)",

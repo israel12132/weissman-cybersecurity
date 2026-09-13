@@ -30,5 +30,16 @@ describe('ScanStatusIndicator', () => {
     const { container } = render(<ScanStatusIndicator />)
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/api/scan/status'))
     await waitFor(() => expect(container.querySelector('[role="status"]')).toBeTruthy())
+    expect(container.querySelector('[data-testid="scan-status-unavailable"]')).toBeNull()
+  })
+
+  it('does not paint idle when scan status is unavailable', async () => {
+    apiFetch.mockResolvedValue({
+      ok: false,
+      unavailable: true,
+      running_async_jobs: null,
+    })
+    const { container } = render(<ScanStatusIndicator />)
+    await waitFor(() => expect(container.querySelector('[data-testid="scan-status-unavailable"]')).toBeTruthy())
   })
 })

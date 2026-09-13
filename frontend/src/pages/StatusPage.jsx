@@ -179,9 +179,13 @@ function deriveServices(state, t) {
     checkedAt: ts,
   })
 
+  const scanJobsUnconfirmed =
+    !state.health || state.health.running_async_jobs == null
   const scanLevel = state.loading
     ? 'unknown'
     : !state.health
+    ? 'unknown'
+    : scanJobsUnconfirmed
     ? 'unknown'
     : state.health.scan_in_progress
     ? 'degraded'
@@ -192,13 +196,15 @@ function deriveServices(state, t) {
     id: 'scanning',
     icon: Activity,
     level: scanLevel,
-    detail: state.health
-      ? state.health.scan_in_progress
-        ? t('status.detail_scan_active', { count: state.health.active_tenant_cycles ?? 0 })
-        : state.health.scanning_enabled
-        ? t('status.detail_scan_enabled')
-        : t('status.detail_scan_paused')
-      : null,
+    detail: !state.health
+      ? null
+      : scanJobsUnconfirmed
+      ? t('status.detail_scan_unconfirmed')
+      : state.health.scan_in_progress
+      ? t('status.detail_scan_active', { count: state.health.active_tenant_cycles ?? 0 })
+      : state.health.scanning_enabled
+      ? t('status.detail_scan_enabled')
+      : t('status.detail_scan_paused'),
     checkedAt: ts,
   })
 

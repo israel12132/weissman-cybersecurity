@@ -16,4 +16,9 @@ describe('StatusPage live-only truth', () => {
     expect(src).not.toMatch(/if \(state\.health\?\.global_safe_mode\) return 'degraded'/)
     expect(src).toMatch(/state\.health\?\.global_safe_mode === true/)
   })
+
+  it('does not paint scanning operational when running_async_jobs is unconfirmed', () => {
+    expect(src).toMatch(/running_async_jobs == null/)
+    expect(src).toMatch(/detail_scan_unconfirmed/)
+  })
 })

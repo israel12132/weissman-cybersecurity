@@ -83,25 +83,33 @@ async fn api_quota(
 /// scan freshness — as booleans and ages, never counts that would leak tenant activity volume.
 async fn public_status(State(state): State<Arc<AppState>>) -> Response {
     let postgres_ok = db_ping_ok(state.app_pool.as_ref()).await;
-    let redis_ok = crate::http::rate_limit_redis::is_enabled();
+    let redis_ok = crate::http::rate_limit_redis::ping_ok().await;
 
     // Age of the most recent completed scan, across all tenants. `weissman_async_jobs` takes the
     // unrestricted branch of its policy when the tenant GUC is unset, so this is a fleet-wide
-    // read without needing a tenant scope.
-    let last_run_age_secs: Option<f64> = sqlx::query_scalar(
-        "SELECT EXTRACT(EPOCH FROM (now() - max(updated_at)))::float8 \
-           FROM weissman_async_jobs WHERE status = 'completed'",
-    )
-    .fetch_one(state.app_pool.as_ref())
-    .await
-    .ok()
-    .flatten();
+    // read without needing a tenant scope. Store-down is `unavailable`, not "never scanned / stale".
+    let (last_run_age_secs, scan_pipeline): (Option<f64>, &'static str) = if !postgres_ok {
+        (None, "down")
+    } else {
+        match sqlx::query_scalar::<_, Option<f64>>(
+            "SELECT EXTRACT(EPOCH FROM (now() - max(updated_at)))::float8 \
+               FROM weissman_async_jobs WHERE status = 'completed'",
+        )
+        .fetch_one(state.app_pool.as_ref())
+        .await
+        {
+            Ok(age) => {
+                let fresh = age.map(|a| a < 86_400.0).unwrap_or(false);
+                (age, if fresh { "ok" } else { "stale" })
+            }
+            Err(_) => (None, "unavailable"),
+        }
+    };
 
     // "Operational" means the pipeline is actually producing, not merely that the process is up —
     // the distinction this whole audit was about. A completed scan within 24h is the freshness
     // bar; beyond that the service is degraded regardless of how healthy the containers look.
-    let fresh = last_run_age_secs.map(|a| a < 86_400.0).unwrap_or(false);
-    let operational = postgres_ok && redis_ok && fresh;
+    let operational = postgres_ok && redis_ok && scan_pipeline == "ok";
 
     (
         StatusCode::OK,
@@ -110,7 +118,7 @@ async fn public_status(State(state): State<Arc<AppState>>) -> Response {
             "checks": {
                 "database": if postgres_ok { "ok" } else { "down" },
                 "redis": if redis_ok { "ok" } else { "down" },
-                "scan_pipeline": if fresh { "ok" } else { "stale" },
+                "scan_pipeline": scan_pipeline,
             },
             "last_completed_scan_age_seconds": last_run_age_secs.map(|a| a.round()),
             "scan_freshness_threshold_seconds": 86_400,
@@ -126,15 +134,20 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
     let scanning_enabled = crate::orchestrator::is_scanning_active();
     let mut scan_in_progress = crate::orchestrator::scan_in_progress();
     let active_tenant_cycles = crate::orchestrator::active_tenant_scan_count();
-    let mut running_async_jobs: i64 = 0;
+    let mut running_async_jobs: Option<i64> = None;
     let mut engines: Option<Vec<String>> = None;
     let mut global_safe_mode: Option<bool> = None;
     if postgres_ok {
-        running_async_jobs = weissman_db::job_queue::count_running_jobs(state.app_pool.as_ref())
-            .await
-            .unwrap_or(0);
-        if running_async_jobs > 0 {
-            scan_in_progress = true;
+        match weissman_db::job_queue::count_running_jobs(state.app_pool.as_ref()).await {
+            Ok(n) => {
+                running_async_jobs = Some(n);
+                if n > 0 {
+                    scan_in_progress = true;
+                }
+            }
+            Err(_) => {
+                running_async_jobs = None;
+            }
         }
         match sqlx::query_scalar::<_, i64>("SELECT id FROM tenants WHERE slug = 'default' AND active = true LIMIT 1")
             .fetch_optional(state.auth_pool.as_ref())

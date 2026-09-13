@@ -313,7 +313,8 @@ async fn build_system_modules(
         .await?;
     let pg_ok = true;
 
-    let redis_enabled = crate::http::rate_limit_redis::is_enabled();
+    let redis_configured = crate::http::rate_limit_redis::is_enabled();
+    let redis_up = crate::http::rate_limit_redis::ping_ok().await;
 
     let pending: i64 = sqlx::query_scalar(
         "SELECT count(*)::bigint FROM weissman_async_jobs WHERE tenant_id = $1 AND status = 'pending'",
@@ -364,16 +365,20 @@ async fn build_system_modules(
             "Redis",
             "security",
             "Distributed login lockout, rate limits, job bus, agent registry.",
-            if redis_enabled {
+            if redis_up {
                 "healthy"
-            } else if crate::security_startup::production_distributed_state_required() {
+            } else if redis_configured
+                || crate::security_startup::production_distributed_state_required()
+            {
                 "down"
             } else {
                 "degraded"
             },
-            redis_enabled,
-            if redis_enabled {
+            redis_up,
+            if redis_up {
                 "connected"
+            } else if redis_configured {
+                "unreachable"
             } else {
                 "in_memory_fallback"
             },

@@ -19,16 +19,9 @@ const SEVERITY_COLORS = {
   info: '#64748b',
 };
 
-const EMPTY_METRICS = {
-  postgres_ok: false,
-  active_scans: 0,
-  findings_by_severity: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
-  jobs: { completed_24h: 0, failed_24h: 0 },
-};
-
 export default function MetricsDashboard() {
   const { t, i18n } = useTranslation();
-  const [metrics, setMetrics] = useState(EMPTY_METRICS);
+  const [metrics, setMetrics] = useState(null);
   const [execKpis, setExecKpis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -44,9 +37,13 @@ export default function MetricsDashboard() {
         apiFetch('/api/dashboard/exec-kpis').catch(() => null),
       ]);
 
+      if (data == null || data.ok === false || data.unavailable || data.active_scans == null || data.findings_by_severity == null || data.jobs == null) {
+        throw new Error(data?.detail || t('pages.metricsDashboard.load_error'));
+      }
+
       setMetrics({
         postgres_ok: Boolean(data.postgres_ok),
-        active_scans: data.active_scans ?? 0,
+        active_scans: data.active_scans,
         findings_by_severity: {
           critical: data.findings_by_severity?.critical ?? 0,
           high: data.findings_by_severity?.high ?? 0,
@@ -55,12 +52,12 @@ export default function MetricsDashboard() {
           info: data.findings_by_severity?.info ?? 0,
         },
         jobs: {
-          completed_24h: data.jobs?.completed_24h ?? 0,
-          failed_24h: data.jobs?.failed_24h ?? 0,
+          completed_24h: data.jobs.completed_24h,
+          failed_24h: data.jobs.failed_24h,
         },
       });
 
-      if (kpis) {
+      if (kpis && kpis.ok !== false && !kpis.unavailable) {
         setExecKpis(kpis);
       }
 
@@ -84,7 +81,7 @@ export default function MetricsDashboard() {
   const severityLabel = (severity) => t(`pages.metricsDashboard.severity_${severity}`, {
     defaultValue: severity.charAt(0).toUpperCase() + severity.slice(1),
   });
-  const severityChartData = Object.entries(metrics.findings_by_severity).map(([severity, count]) => ({
+  const severityChartData = Object.entries(metrics?.findings_by_severity || {}).map(([severity, count]) => ({
     severity,
     count,
     label: severityLabel(severity),
@@ -95,15 +92,15 @@ export default function MetricsDashboard() {
   const mttrHours = execKpis?.mttr_hours
   const agentsOnline = execKpis?.agents?.online
   const agentsRegistered = execKpis?.agents?.registered
-  const jobsRunning = execKpis?.jobs?.running ?? metrics.active_scans
+  const jobsRunning = execKpis?.jobs?.running ?? metrics?.active_scans
 
-  const listFindings = useMemo(() => Object.entries(metrics.findings_by_severity).map(([severity, count]) => ({
+  const listFindings = useMemo(() => Object.entries(metrics?.findings_by_severity || {}).map(([severity, count]) => ({
     severity,
     title: severityLabel(severity),
     type: 'finding_count',
     description: String(count),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  })), [metrics.findings_by_severity, i18n.language])
+  })), [metrics?.findings_by_severity, i18n.language])
 
   const { exportCsv, filteredFindings } = useFindingsWorkbench(listFindings, {
     csvPrefix: 'weissman-metrics',
@@ -150,7 +147,7 @@ export default function MetricsDashboard() {
         )}
 
         {error && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300" role="alert" data-testid="metrics-dashboard-unavailable">
             {error}
           </div>
         )}
@@ -160,6 +157,12 @@ export default function MetricsDashboard() {
             <SkeletonWidgetGrid count={4} />
             <SkeletonBar className="h-64" />
           </>
+        ) : !metrics ? (
+          <EmptyState
+            icon="📊"
+            title={t('pages.metricsDashboard.counters_unavailable_title')}
+            body={t('pages.metricsDashboard.counters_unavailable_body')}
+          />
         ) : (
           <>
             {execKpis && (

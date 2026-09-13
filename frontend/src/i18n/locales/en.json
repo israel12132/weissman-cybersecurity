@@ -630,6 +630,7 @@
     "detail_scan_active": "{{count}} active tenant cycles",
     "detail_scan_enabled": "Scanning enabled",
     "detail_scan_paused": "Scanning paused",
+    "detail_scan_unconfirmed": "Scan job count unconfirmed — not idle",
     "detail_engines_ok": "{{production}} production · {{catalog}} catalog",
     "detail_agents_online": "{{online}}/{{total}} online",
     "detail_http": "HTTP {{status}}"
@@ -1030,7 +1031,9 @@
   },
   "scanStatus": {
     "active": "Scanning",
-    "active_hint": "One or more scans are running right now (GET /api/scan/status)."
+    "active_hint": "One or more scans are running right now (GET /api/scan/status).",
+    "unknown": "Scan status unknown",
+    "unknown_hint": "GET /api/scan/status is unavailable — idle is not confirmed."
   },
   "errors": {
     "loading_failed": "Failed to load: {{detail}}",
@@ -1723,6 +1726,8 @@
       "postgres": "PostgreSQL",
       "connected": "Connected",
       "unavailable": "Unavailable",
+      "counters_unavailable_title": "Operational counters unavailable",
+      "counters_unavailable_body": "GET /api/metrics/dashboard did not confirm live counts. Zeros are not a quiet pipeline.",
       "active_scans": "Active Scans",
       "jobs_completed_24h": "Jobs Completed (24h)",
       "jobs_failed_24h": "Jobs Failed (24h)",

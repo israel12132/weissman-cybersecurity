@@ -5359,4 +5359,51 @@ mod tests {
             "let_=sqlx::query(\"INSERTINTOsemantic_fuzz_log"
         ));
     }
+
+    #[test]
+    fn top_tier_health_poe_config_store_down_is_not_missing_config() {
+        let exec = include_str!("async_job_executor.rs");
+        let unscoped = named_fn_src(exec, "async fn execute_job_unscoped");
+        assert!(!compact_src(unscoped).contains(
+            "load_poe_config_http(app_pool.as_ref(),tid,intel_pool.clone(),).await.ok()"
+        ));
+        assert!(compact_src(unscoped).contains(
+            "load_poe_config_http(app_pool.as_ref(),tid,intel_pool.clone(),).await.map_err(|_|\"store_down\".to_string())?"
+        ));
+        assert!(!unscoped.contains("poe_synthesis config unavailable"));
+    }
+
+    #[test]
+    fn health_running_jobs_count_store_down_is_not_live_zero() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest.inc"),
+            "async fn api_health",
+        );
+        assert!(src.contains("Option<i64>"));
+        assert!(!compact_src(src).contains("count_running_jobs(state.app_pool.as_ref()).await.unwrap_or(0)"));
+        assert!(src.contains("running_async_jobs = None"));
+    }
+
+    #[test]
+    fn public_status_redis_is_ping_not_configured_ok() {
+        let src = named_fn_src(
+            include_str!("server_handlers_rest.inc"),
+            "async fn public_status",
+        );
+        assert!(src.contains("rate_limit_redis::ping_ok()"));
+        assert!(!src.contains("rate_limit_redis::is_enabled()"));
+        assert!(src.contains("\"unavailable\""));
+        assert!(!compact_src(src).contains("fetch_one(state.app_pool.as_ref()).await.ok().flatten()"));
+    }
+
+    #[test]
+    fn nerve_redis_module_is_ping_not_configured_healthy() {
+        let src = named_fn_src(
+            include_str!("supreme_nerve_center.rs"),
+            "async fn build_system_modules",
+        );
+        assert!(src.contains("rate_limit_redis::ping_ok()"));
+        assert!(src.contains("redis_up"));
+        assert!(!compact_src(src).contains("ifredis_enabled{\"healthy\"}"));
+    }
 }
