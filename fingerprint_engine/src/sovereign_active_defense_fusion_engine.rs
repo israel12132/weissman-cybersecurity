@@ -8,7 +8,6 @@ use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{empty_ok, extract_host, finding};
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::{json, Value};
-use sqlx::Row;
 
 const ENGINE_ID: &str = "sovereign_active_defense_fusion";
 const MITRE: &str = "T1599";
@@ -70,14 +69,14 @@ struct DefenseTelemetry {
     mtd_epoch_active: bool,
 }
 
-async fn load_defense_telemetry(ctx: &EngineRunContext) -> DefenseTelemetry {
+async fn load_defense_telemetry(ctx: &EngineRunContext) -> Result<DefenseTelemetry, String> {
     let (pool, tenant_id, client_id) = match (ctx.app_pool.as_ref(), ctx.tenant_id, ctx.client_id) {
         (Some(p), Some(t), Some(c)) => (p.as_ref(), t, c),
-        _ => return DefenseTelemetry::default(),
+        _ => return Ok(DefenseTelemetry::default()),
     };
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return DefenseTelemetry::default();
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
 
     let chronos_events_24h: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM chronos_events
@@ -86,7 +85,7 @@ async fn load_defense_telemetry(ctx: &EngineRunContext) -> DefenseTelemetry {
     .bind(client_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    .map_err(|_| "store_down".to_string())?;
 
     let chronos_freezes_24h: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM chronos_events
@@ -95,7 +94,7 @@ async fn load_defense_telemetry(ctx: &EngineRunContext) -> DefenseTelemetry {
     .bind(client_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    .map_err(|_| "store_down".to_string())?;
 
     let cognitive_sessions_24h: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM cognitive_starvation_sessions
@@ -104,7 +103,7 @@ async fn load_defense_telemetry(ctx: &EngineRunContext) -> DefenseTelemetry {
     .bind(client_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    .map_err(|_| "store_down".to_string())?;
 
     let deception_triggers_24h: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM deception_triggers
@@ -113,7 +112,7 @@ async fn load_defense_telemetry(ctx: &EngineRunContext) -> DefenseTelemetry {
     .bind(client_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    .map_err(|_| "store_down".to_string())?;
 
     let agents_online: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM endpoint_agents
@@ -122,18 +121,20 @@ async fn load_defense_telemetry(ctx: &EngineRunContext) -> DefenseTelemetry {
     .bind(client_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    .map_err(|_| "store_down".to_string())?;
 
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
+    }
 
-    DefenseTelemetry {
+    Ok(DefenseTelemetry {
         chronos_events_24h,
         chronos_freezes_24h,
         cognitive_sessions_24h,
         deception_triggers_24h,
         agents_online,
         mtd_epoch_active: false,
-    }
+    })
 }
 
 fn maturity_grade(score: u32) -> &'static str {
@@ -165,7 +166,7 @@ pub async fn run_sovereign_active_defense_fusion_result(
     let mut maturity = 0u32;
     let mut sources: Vec<&str> = Vec::new();
 
-    let (liquid_r, cognitive_r, mut telemetry) = tokio::join!(
+    let (liquid_r, cognitive_r, telemetry_r) = tokio::join!(
         async {
             if include_mtd {
                 crate::liquid_matrix_engine::run_liquid_matrix_result(target, ctx).await
@@ -185,10 +186,14 @@ pub async fn run_sovereign_active_defense_fusion_result(
             if include_telemetry {
                 load_defense_telemetry(ctx).await
             } else {
-                DefenseTelemetry::default()
+                Ok(DefenseTelemetry::default())
             }
         },
     );
+    let mut telemetry = match telemetry_r {
+        Ok(t) => t,
+        Err(_) => return EngineResult::error("store_down"),
+    };
 
     if ingest_source(&mut merged, &mut maturity, "liquid_matrix", &liquid_r) {
         sources.push("liquid_matrix");

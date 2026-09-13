@@ -3191,4 +3191,80 @@ mod tests {
             assert!(&slice[exists..exists + 350].contains("store_down"), "{needle}");
         }
     }
+
+    #[test]
+    fn chronos_live_reads_are_error_not_empty_ok_on_store_down() {
+        let src = include_str!("chronos_engine.rs");
+        let start = src
+            .find("pub async fn run_chronos_result")
+            .expect("run_chronos_result");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn run_chronos(")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(!fn_src.contains("format!(\"db: {e}\")"));
+        assert!(!fn_src.contains(".await\n        .unwrap_or_default()"));
+        assert!(!fn_src.contains("let _ = tx.commit()"));
+        assert!(fn_src.contains("EngineResult::error(\"store_down\")"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        assert!(fn_src.contains("empty_ok("));
+    }
+
+    #[test]
+    fn defense_fusion_telemetry_counts_are_not_live_zeros_on_store_down() {
+        let src = include_str!("sovereign_active_defense_fusion_engine.rs");
+        let start = src
+            .find("async fn load_defense_telemetry")
+            .expect("load_defense_telemetry");
+        let rest = &src[start..];
+        let next = rest.find("\nfn maturity_grade").unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("Result<DefenseTelemetry, String>"));
+        assert!(!fn_src.contains("return DefenseTelemetry::default()"));
+        assert!(fn_src.contains("return Ok(DefenseTelemetry::default())"));
+        assert!(!fn_src.contains("unwrap_or(0)"));
+        assert!(!fn_src.contains("let Ok(mut tx)"));
+        assert!(fn_src.contains("map_err(|_| \"store_down\".to_string())"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        let run_start = src
+            .find("pub async fn run_sovereign_active_defense_fusion_result")
+            .expect("run fusion");
+        let run_rest = &src[run_start..];
+        let run_next = run_rest
+            .find("\npub async fn run_sovereign_active_defense_fusion(")
+            .unwrap_or(run_rest.len());
+        let run_src = &run_rest[..run_next];
+        assert!(run_src.contains("Err(_) => return EngineResult::error(\"store_down\")"));
+        assert!(run_src.contains("Ok(DefenseTelemetry::default())"));
+    }
+
+    #[test]
+    fn identity_itdr_loader_is_not_empty_success_on_store_down() {
+        let src = include_str!("identity_attack_chain_engine.rs");
+        let start = src
+            .find("async fn itdr_findings_from_db")
+            .expect("itdr_findings_from_db");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn run_identity_attack_chain_result")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        assert!(fn_src.contains("Result<Vec<Value>, String>"));
+        assert!(fn_src.contains("return Ok(Vec::new())"));
+        assert!(!fn_src.contains("let Ok(mut tx)"));
+        assert!(!fn_src.contains(".await\n        .unwrap_or_default()"));
+        assert!(fn_src.contains("map_err(|_| \"store_down\".to_string())"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        let run_start = src
+            .find("pub async fn run_identity_attack_chain_result")
+            .expect("run identity");
+        let run_rest = &src[run_start..];
+        let run_next = run_rest
+            .find("\npub async fn run_identity_attack_chain(")
+            .unwrap_or(run_rest.len());
+        let run_src = &run_rest[..run_next];
+        assert!(run_src.contains("Err(_) => return EngineResult::error(\"store_down\")"));
+        assert!(run_src.contains("empty_ok("));
+    }
 }
