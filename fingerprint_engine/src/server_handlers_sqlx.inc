@@ -1317,9 +1317,24 @@ async fn api_findings(
             }
         })
         .collect();
-    let conf_map =
-        crate::fp_feedback::confidence_multipliers_batch(&state.app_pool, auth.tenant_id, &conf_pairs)
-            .await;
+    let conf_map = match crate::fp_feedback::confidence_multipliers_batch(
+        &state.app_pool,
+        auth.tenant_id,
+        &conf_pairs,
+    )
+    .await
+    {
+        Ok(m) => m,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
 
     let mut out = Vec::new();
     for r in rows {
@@ -2107,11 +2122,7 @@ async fn api_top_tier_health_probe_start(
     if let Err(detail) =
         crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
     let target_raw = body
         .target

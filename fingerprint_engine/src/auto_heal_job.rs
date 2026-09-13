@@ -563,7 +563,7 @@ pub async fn run_auto_heal_job(
 
     // Concurrency guard: never run the sandbox for a finding that another spec is already healing
     // (two workers picking up heals for the same finding would waste work and race on the branch).
-    let running_dupe: i64 = sqlx::query_scalar(
+    let running_dupe: i64 = match sqlx::query_scalar(
         "SELECT count(*)::bigint FROM auto_heal_job_specs WHERE tenant_id = $1 AND finding_id = $2 AND status = 'running' AND id <> $3",
     )
     .bind(tenant_id)
@@ -571,7 +571,10 @@ pub async fn run_auto_heal_job(
     .bind(spec_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(_) => return Err("store_down".into()),
+    };
     if running_dupe > 0 {
         // Clear the plaintext git PAT immediately, but do NOT write status = 'skipped': the
         // auto_heal_job_specs CHECK constraint only permits pending/running/completed/failed, so

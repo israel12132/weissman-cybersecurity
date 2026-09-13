@@ -52,6 +52,17 @@ fn billing_store_down(detail: &str) -> Response {
         .into_response()
 }
 
+fn payment_or_store_down(detail: String) -> Response {
+    if detail == "store_down" {
+        return billing_store_down("database unavailable");
+    }
+    (
+        StatusCode::PAYMENT_REQUIRED,
+        Json(json!({"ok": false, "detail": detail})),
+    )
+        .into_response()
+}
+
 fn paddle_webhook_error_response(err: crate::billing::PaddleWebhookError) -> Response {
     use crate::billing::PaddleWebhookError;
     match err {
@@ -77,6 +88,9 @@ fn paddle_webhook_error_response(err: crate::billing::PaddleWebhookError) -> Res
             .into_response(),
         PaddleWebhookError::Apply(msg) => {
             tracing::warn!(target: "paddle_webhook", error = %msg, "webhook apply failed");
+            if msg == "store_down" {
+                return billing_store_down("database unavailable");
+            }
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({ "ok": false, "detail": msg })),
@@ -355,17 +369,16 @@ async fn api_onboarding_register(
             append_set_cookie(response.headers_mut(), &refresh_cookie);
             response
         }
-        Err(e) => {
-            let status = if e.contains("already registered") {
-                StatusCode::CONFLICT
-            } else {
-                StatusCode::BAD_REQUEST
-            };
-            (
-                status,
-                Json(json!({ "ok": false, "detail": e })),
-            )
-                .into_response()
-        }
+        Err(e) if e == "store_down" => billing_store_down("database unavailable"),
+        Err(e) if e.contains("already registered") => (
+            StatusCode::CONFLICT,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
     }
 }

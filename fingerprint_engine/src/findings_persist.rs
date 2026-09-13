@@ -356,7 +356,9 @@ pub async fn persist_engine_findings(
     // is_suppressed() that opened its own tenant transaction each time (N+1). Matched hashes are
     // collected and their hit_count telemetry is bumped in one statement before commit.
     let active_suppressions =
-        fp_feedback::active_suppressions_for_engine(pool, tenant_id, engine).await;
+        fp_feedback::active_suppressions_for_engine(pool, tenant_id, engine)
+            .await
+            .map_err(|_| "store_down".to_string())?;
     let mut suppression_hits: Vec<String> = Vec::new();
 
     let mut inserted: u64 = 0;
@@ -526,7 +528,8 @@ pub async fn persist_engine_findings(
         // ── Confidence multiplier + effective risk (persist-time, not read-time only) ──
         let conf_mult =
             fp_feedback::confidence_multiplier_tx(&mut tx, tenant_id, engine, &signature_hash)
-                .await;
+                .await
+                .map_err(|_| "store_down".to_string())?;
         let base_risk = if cvss > 0.0 {
             cvss
         } else {

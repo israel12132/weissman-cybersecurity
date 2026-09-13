@@ -3467,4 +3467,108 @@ mod tests {
         assert!(fn_src.contains("tx.commit().await.is_err()"));
         assert!(src.contains("Err(_) => return EngineResult::error(\"store_down\")"));
     }
+
+    #[test]
+    fn billing_gates_store_down_is_503_not_quota_deny() {
+        let billing = include_str!("billing/mod.rs");
+        let impl_src = billing.split("#[cfg(test)]").next().expect("impl");
+        let compact = compact_src(impl_src);
+        assert!(impl_src.contains("map_err(|_| \"store_down\".into())"));
+        assert!(impl_src.contains("Result<Option<String>, String>"));
+        assert!(!compact.contains("ifletOk(Some(s))=sqlx::query_scalar"));
+        let handlers = include_str!("server_handlers_onboarding_billing.inc");
+        let pay = named_fn_src(handlers, "fn payment_or_store_down");
+        assert!(pay.contains("detail == \"store_down\""));
+        assert!(pay.contains("billing_store_down"));
+        assert!(pay.contains("PAYMENT_REQUIRED"));
+        let register = named_fn_src(handlers, "async fn api_onboarding_register");
+        assert!(register.contains("e == \"store_down\""));
+        assert!(register.contains("billing_store_down"));
+        let rest = include_str!("server_handlers_rest.inc");
+        assert!(rest.contains("payment_or_store_down(detail)"));
+        assert!(!rest.contains("StatusCode::PAYMENT_REQUIRED"));
+        let payload = named_fn_src(
+            include_str!("server_handlers_rest4.inc"),
+            "async fn api_payload_sync_run",
+        );
+        assert!(payload.contains("detail == \"store_down\""));
+        assert!(payload.contains("billing_store_down"));
+        let webhook = named_fn_src(handlers, "fn paddle_webhook_error_response");
+        assert!(webhook.contains("msg == \"store_down\""));
+    }
+
+    #[test]
+    fn fp_feedback_store_down_is_not_full_confidence_or_empty_cache() {
+        let src = include_str!("fp_feedback.rs");
+        let tx_fn = named_fn_src(src, "pub async fn confidence_multiplier_tx");
+        assert!(tx_fn.contains("Result<f64, String>"));
+        assert!(tx_fn.contains("store_down"));
+        assert!(!compact_src(tx_fn).contains(".ok().flatten()"));
+        let batch = named_fn_src(src, "pub async fn confidence_multipliers_batch");
+        assert!(batch.contains("Result<HashMap<(String, String), f64>, String>"));
+        assert!(!compact_src(batch).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(batch.contains("tx.commit().await.is_err()"));
+        let load = named_fn_src(src, "async fn load_suppression_rules_from_db");
+        assert!(load.contains("Result<Vec<SuppressionRule>, String>"));
+        assert!(!compact_src(load).contains("unwrap_or_default()"));
+        assert!(load.contains("Err(\"store_down\".into())"));
+        let persist = include_str!("findings_persist.rs");
+        assert!(persist.contains(
+            "fp_feedback::active_suppressions_for_engine(pool, tenant_id, engine)\n            .await\n            .map_err(|_| \"store_down\".to_string())?"
+        ));
+        assert!(persist.contains(
+            "fp_feedback::confidence_multiplier_tx(&mut tx, tenant_id, engine, &signature_hash)\n                .await\n                .map_err(|_| \"store_down\".to_string())?"
+        ));
+        let findings = named_fn_src(
+            include_str!("server_handlers_sqlx.inc"),
+            "async fn api_findings(",
+        );
+        assert!(findings.contains("confidence_multipliers_batch"));
+        assert!(findings.contains("findings_unavailable_json"));
+    }
+
+    #[test]
+    fn auto_heal_running_dupe_count_store_down_is_not_zero() {
+        let src = include_str!("auto_heal_job.rs");
+        let start = src
+            .find("SELECT count(*)::bigint FROM auto_heal_job_specs")
+            .expect("dupe count");
+        let slice = &src[start..start + 700];
+        assert!(slice.contains("Err(_) => return Err(\"store_down\".into())"));
+        assert!(!slice.contains("unwrap_or(0)"));
+    }
+
+    #[test]
+    fn soar_blast_and_idempotency_store_down_is_not_live_zero() {
+        let blast = include_str!("soar/blast_radius.rs");
+        let eval = named_fn_src(blast, "pub async fn evaluate");
+        assert!(!compact_src(eval).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(eval.contains("unavailable_blast"));
+        assert!(!eval.contains("apply_blast_decision") || eval.contains("unavailable_blast"));
+        let apply_idx = eval.find("apply_blast_decision").expect("apply after live rows");
+        let unavail = eval.find("unavailable_blast").expect("fail closed");
+        assert!(unavail < apply_idx);
+        let engine = include_str!("soar/engine.rs");
+        let find = named_fn_src(engine, "async fn find_existing_execution");
+        assert!(find.contains("Result<Option<ExistingExecution>, String>"));
+        assert!(!compact_src(find).contains(".ok().flatten()"));
+        assert!(engine.contains("detail: \"database unavailable\".into()"));
+        let integ = include_str!("soar/integrations.rs");
+        let load = named_fn_src(integ, "pub async fn load_integrations");
+        assert!(load.contains("Result<Vec<IntegrationRecord>, String>"));
+        assert!(load.contains("store_down"));
+        assert!(!compact_src(load).contains(".ok().flatten()"));
+    }
+
+    #[test]
+    fn pipeline_pause_store_down_does_not_scan_as_unpaused() {
+        let src = include_str!("orchestrator/mod.rs");
+        let fn_src = named_fn_src(src, "async fn pipeline_get_state");
+        assert!(fn_src.contains("Result<Option<(u8, bool, Option<u8>)>, sqlx::Error>"));
+        assert!(!fn_src.contains(".ok()??"));
+        assert!(fn_src.contains(".await?"));
+        assert!(src.contains(
+            "pipeline_get_state(&mut tx, tenant_id, run_id, &cid).await?"
+        ));
+    }
 }

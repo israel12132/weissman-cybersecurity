@@ -515,12 +515,13 @@ fn broadcast_pipeline_stage(
 }
 
 /// Read pipeline state for (run_id, client_id). Returns (current_stage, paused, skip_to_stage).
+/// Query errors abort the cycle; a missing row is `Ok(None)` (client not paused).
 async fn pipeline_get_state(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: i64,
     run_id: i64,
     client_id: &str,
-) -> Option<(u8, bool, Option<u8>)> {
+) -> Result<Option<(u8, bool, Option<u8>)>, sqlx::Error> {
     let row = sqlx::query(
         "SELECT current_stage, paused, skip_to_stage FROM pipeline_run_state WHERE tenant_id = $1 AND run_id = $2 AND client_id = $3",
     )
@@ -528,12 +529,18 @@ async fn pipeline_get_state(
     .bind(run_id)
     .bind(client_id)
     .fetch_optional(&mut **tx)
-    .await
-    .ok()??;
-    let current_stage: i32 = row.try_get("current_stage").ok()?;
-    let paused: bool = row.try_get("paused").ok()?;
-    let skip_to_stage: Option<i32> = row.try_get("skip_to_stage").ok()?;
-    Some((current_stage as u8, paused, skip_to_stage.map(|s| s as u8)))
+    .await?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    let current_stage: i32 = row.try_get("current_stage")?;
+    let paused: bool = row.try_get("paused")?;
+    let skip_to_stage: Option<i32> = row.try_get("skip_to_stage")?;
+    Ok(Some((
+        current_stage as u8,
+        paused,
+        skip_to_stage.map(|s| s as u8),
+    )))
 }
 
 /// Insert or update pipeline state. Sets current_stage; clears skip_to_stage.
@@ -1404,7 +1411,7 @@ async fn run_cycle_for_tenant_inner(
         );
         let cid = db_client_id.to_string();
         if let Some((_cur, paused, skip_to_stage)) =
-            pipeline_get_state(&mut tx, tenant_id, run_id, &cid).await
+            pipeline_get_state(&mut tx, tenant_id, run_id, &cid).await?
         {
             if paused {
                 eprintln!("[Weissman][Orchestrator] Client {} paused; skipping.", cid);

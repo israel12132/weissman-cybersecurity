@@ -846,11 +846,7 @@ async fn api_clients_scan_run_all(
     )
     .await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
 
     let ip = extract_client_ip(&headers, addr);
@@ -1030,11 +1026,7 @@ async fn api_clients_create(
     )
     .await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
     let domains = body.domains.as_deref().unwrap_or("[]");
     let tech_stack = body.tech_stack.as_deref().unwrap_or("[]");
@@ -1830,11 +1822,7 @@ async fn api_scan_run_all(
     if let Err(detail) =
         crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
     let ip = extract_client_ip(&headers, addr);
     if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
@@ -1887,11 +1875,7 @@ async fn api_scan(
     if let Err(detail) =
         crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
     let mut scan_body = body.0;
     if let Err(r) = crate::client_isolation::force_json_client_id(&auth, &mut scan_body) {
@@ -2375,11 +2359,7 @@ async fn api_scan_all_engines(
     )
     .await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
 
     // Get target from client if not provided
@@ -2579,11 +2559,7 @@ async fn api_scan_discovered_domains(
     )
     .await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
 
     let ip = extract_client_ip(&headers, addr);

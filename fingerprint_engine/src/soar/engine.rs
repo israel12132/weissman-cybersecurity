@@ -57,32 +57,43 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
     let vuln_sig = cmd.evidence.vulnerability_signature();
     let idem = idempotency_key(&cmd.action_kind, &cmd.target_id, &vuln_sig);
 
-    if let Some(existing) = find_existing_execution(pool, cmd.tenant_id, &idem).await {
-        if existing.status == ExecutionStatus::PendingHitl.as_str()
-            && !cmd
-                .params
-                .get("_hitl_approved")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-        {
+    match find_existing_execution(pool, cmd.tenant_id, &idem).await {
+        Err(_) => {
+            audit::log_execution(pool, &cmd, "failed", "database unavailable", None).await;
             return ActionOutcome {
-                status: "pending_hitl".into(),
-                detail: format!("awaiting HITL on execution {}", existing.id),
-                execution_id: Some(existing.id),
+                status: "failed".into(),
+                detail: "database unavailable".into(),
+                execution_id: None,
             };
         }
-        if existing.status == ExecutionStatus::Resolved.as_str()
-            || existing.status == ExecutionStatus::DuplicateSkipped.as_str()
-        {
-            return ActionOutcome {
-                status: "ok".into(),
-                detail: format!(
-                    "duplicate_skipped: prior execution {} ({})",
-                    existing.id, existing.status
-                ),
-                execution_id: Some(existing.id),
-            };
+        Ok(Some(existing)) => {
+            if existing.status == ExecutionStatus::PendingHitl.as_str()
+                && !cmd
+                    .params
+                    .get("_hitl_approved")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+            {
+                return ActionOutcome {
+                    status: "pending_hitl".into(),
+                    detail: format!("awaiting HITL on execution {}", existing.id),
+                    execution_id: Some(existing.id),
+                };
+            }
+            if existing.status == ExecutionStatus::Resolved.as_str()
+                || existing.status == ExecutionStatus::DuplicateSkipped.as_str()
+            {
+                return ActionOutcome {
+                    status: "ok".into(),
+                    detail: format!(
+                        "duplicate_skipped: prior execution {} ({})",
+                        existing.id, existing.status
+                    ),
+                    execution_id: Some(existing.id),
+                };
+            }
         }
+        Ok(None) => {}
     }
 
     let isolate = cmd.action_kind.eq_ignore_ascii_case("isolate_host");
@@ -213,7 +224,26 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
     )
     .await;
 
-    let integrations = load_integrations(pool, cmd.tenant_id).await;
+    let integrations = match load_integrations(pool, cmd.tenant_id).await {
+        Ok(i) => i,
+        Err(_) => {
+            let _ = update_status(
+                pool,
+                cmd.tenant_id,
+                execution_id,
+                ExecutionStatus::Failed,
+                "database unavailable",
+            )
+            .await;
+            audit::log_execution(pool, &cmd, "failed", "database unavailable", Some(execution_id))
+                .await;
+            return ActionOutcome {
+                status: "failed".into(),
+                detail: "database unavailable".into(),
+                execution_id: Some(execution_id),
+            };
+        }
+    };
     let prefer: Vec<&str> = match cmd.action_kind.to_ascii_lowercase().as_str() {
         "isolate_host" => vec![
             "aws_ec2",
@@ -332,10 +362,10 @@ async fn find_existing_execution(
     pool: &PgPool,
     tenant_id: i64,
     idem: &str,
-) -> Option<ExistingExecution> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return None;
-    };
+) -> Result<Option<ExistingExecution>, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".into())?;
     let row = sqlx::query(
         "SELECT id, status FROM soar_action_executions WHERE tenant_id = $1 AND idempotency_key = $2",
     )
@@ -343,13 +373,14 @@ async fn find_existing_execution(
     .bind(idem)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    row.map(|r| ExistingExecution {
+    .map_err(|_| "store_down".into())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
+    }
+    Ok(row.map(|r| ExistingExecution {
         id: r.try_get("id").unwrap_or_else(|_| Uuid::nil()),
         status: r.try_get("status").unwrap_or_default(),
-    })
+    }))
 }
 
 async fn insert_execution(

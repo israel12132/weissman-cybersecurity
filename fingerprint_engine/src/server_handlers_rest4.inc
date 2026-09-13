@@ -13,11 +13,7 @@ async fn api_deep_fuzz(
     if let Err(detail) =
         crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
     let target = body.target.as_deref().unwrap_or("").trim();
     if target.is_empty() {
@@ -99,11 +95,7 @@ async fn api_general_mission(
     if let Err(detail) =
         crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
     let mut map = serde_json::Map::new();
     map.insert("domain".into(), json!(domain));
@@ -173,11 +165,7 @@ async fn api_council_debate(
     if let Err(detail) =
         crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
     let mut map = serde_json::Map::new();
     map.insert("target_brief".into(), json!(brief));
@@ -266,11 +254,7 @@ async fn api_general_ascension(
     )
     .await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
     let payload = json!({});
     match crate::async_jobs::enqueue(
@@ -343,11 +327,7 @@ async fn api_timing_scan_run(
     if let Err(detail) =
         crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
     let target = body.target.as_deref().unwrap_or("").trim();
     if target.is_empty() {
@@ -414,11 +394,7 @@ async fn api_ai_redteam_run(
     if let Err(detail) =
         crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
     let target = body.target.as_deref().unwrap_or("").trim();
     if target.is_empty() {
@@ -495,11 +471,7 @@ async fn api_threat_intel_run(
     if let Err(detail) =
         crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
     match crate::async_jobs::enqueue(
         state.app_pool.as_ref(),
@@ -542,11 +514,7 @@ async fn api_pipeline_scan_run(
     if let Err(detail) =
         crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
     let repo = body.repo_url.trim();
     if repo.is_empty() {
@@ -821,11 +789,7 @@ async fn api_poe_scan_run(
     if let Err(detail) =
         crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
     let target = body.target_url.trim().to_string();
     let client_id: i64 = body.client_id.trim().parse().unwrap_or(0);
@@ -3295,6 +3259,9 @@ async fn api_payload_sync_run(
     if let Err(detail) =
         crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
+        if detail == "store_down" {
+            return billing_store_down("database unavailable");
+        }
         return (
             StatusCode::PAYMENT_REQUIRED,
             Json(json!({"started": false, "detail": detail})),
@@ -3445,11 +3412,7 @@ async fn api_council_hitl_approve(
     if let Err(detail) =
         crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
     match crate::council_hitl::approve_and_fire(
         state.app_pool.as_ref(),

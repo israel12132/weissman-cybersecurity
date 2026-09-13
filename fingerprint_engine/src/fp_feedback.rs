@@ -262,13 +262,13 @@ pub async fn confidence_multiplier(
     tenant_id: i64,
     engine: &str,
     signature_hash: &str,
-) -> f64 {
+) -> Result<f64, String> {
     if engine.is_empty() || signature_hash.is_empty() {
-        return 1.0;
+        return Ok(1.0);
     }
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return 1.0;
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".into())?;
     let row: Option<(i32, i32)> = sqlx::query_as(
         r#"SELECT tp_count, fp_count
              FROM engine_confidence_adjustments
@@ -279,15 +279,12 @@ pub async fn confidence_multiplier(
     .bind(signature_hash)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    let (tp, fp) = row.unwrap_or((0, 0));
-    if tp == 0 && fp == 0 {
-        return 1.0;
+    .map_err(|_| "store_down".into())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
     }
-    let m = (tp as f64 + 1.0) / (tp as f64 + fp as f64 + 1.0);
-    m.clamp(0.1, 1.0)
+    let (tp, fp) = row.unwrap_or((0, 0));
+    Ok(multiplier_from_counts(tp, fp))
 }
 
 /// Synchronous variant for callers already inside a tenant tx (avoids re-opening).
@@ -296,9 +293,9 @@ pub async fn confidence_multiplier_tx(
     tenant_id: i64,
     engine: &str,
     signature_hash: &str,
-) -> f64 {
+) -> Result<f64, String> {
     if engine.is_empty() || signature_hash.is_empty() {
-        return 1.0;
+        return Ok(1.0);
     }
     let row: Option<(i32, i32)> = sqlx::query_as(
         r#"SELECT tp_count, fp_count
@@ -310,14 +307,9 @@ pub async fn confidence_multiplier_tx(
     .bind(signature_hash)
     .fetch_optional(&mut **tx)
     .await
-    .ok()
-    .flatten();
+    .map_err(|_| "store_down".into())?;
     let (tp, fp) = row.unwrap_or((0, 0));
-    if tp == 0 && fp == 0 {
-        return 1.0;
-    }
-    let m = (tp as f64 + 1.0) / (tp as f64 + fp as f64 + 1.0);
-    m.clamp(0.1, 1.0)
+    Ok(multiplier_from_counts(tp, fp))
 }
 
 /// Batch-load confidence multipliers for many `(engine, signature_hash)` pairs in
@@ -328,16 +320,16 @@ pub async fn confidence_multipliers_batch(
     pool: &PgPool,
     tenant_id: i64,
     pairs: &[(String, String)],
-) -> HashMap<(String, String), f64> {
+) -> Result<HashMap<(String, String), f64>, String> {
     let mut out: HashMap<(String, String), f64> = HashMap::new();
     if pairs.is_empty() {
-        return out;
+        return Ok(out);
     }
     let engines: Vec<String> = pairs.iter().map(|(e, _)| e.clone()).collect();
     let sigs: Vec<String> = pairs.iter().map(|(_, s)| s.clone()).collect();
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return out;
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".into())?;
     let rows: Vec<(String, String, i32, i32)> = sqlx::query_as(
         r#"SELECT engine, signature_hash, tp_count, fp_count
              FROM engine_confidence_adjustments
@@ -350,12 +342,14 @@ pub async fn confidence_multipliers_batch(
     .bind(&sigs)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    .map_err(|_| "store_down".into())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
+    }
     for (engine, sig, tp, fp) in rows {
         out.insert((engine, sig), multiplier_from_counts(tp, fp));
     }
-    out
+    Ok(out)
 }
 
 /// Batch-load the set of **active** suppression signature-hashes for one `(tenant, engine)` in a
@@ -368,21 +362,21 @@ pub async fn active_suppressions_for_engine(
     pool: &PgPool,
     tenant_id: i64,
     engine: &str,
-) -> Vec<SuppressionRule> {
+) -> Result<Vec<SuppressionRule>, String> {
     if engine.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     let cache_key = (tenant_id, engine.to_ascii_lowercase());
     if let Some(hit) = SUPPRESSION_CACHE.get(&cache_key) {
         if hit.loaded_at.elapsed() < SUPPRESSION_CACHE_TTL {
-            return hit.rules.clone();
+            return Ok(hit.rules.clone());
         }
         // Expired but present: serve stale and let the jittered SWR worker
         // (or a single in-process refresh) reload from Postgres.
         let stale = hit.rules.clone();
         drop(hit);
         schedule_suppression_cache_swr_refresh(Arc::new(pool.clone()));
-        return stale;
+        return Ok(stale);
     }
     load_suppression_rules_from_db(pool, tenant_id, engine).await
 }
@@ -391,21 +385,21 @@ async fn load_suppression_rules_from_db(
     pool: &PgPool,
     tenant_id: i64,
     engine: &str,
-) -> Vec<SuppressionRule> {
+) -> Result<Vec<SuppressionRule>, String> {
     let cache_key = (tenant_id, engine.to_ascii_lowercase());
     let _write = SUPPRESSION_WRITE.lock().await;
     if let Some(hit) = SUPPRESSION_CACHE.get(&cache_key) {
         if hit.loaded_at.elapsed() < SUPPRESSION_CACHE_TTL {
-            return hit.rules.clone();
+            return Ok(hit.rules.clone());
         }
     }
     let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return SUPPRESSION_CACHE
-            .get(&cache_key)
-            .map(|h| h.rules.clone())
-            .unwrap_or_default();
+        if let Some(hit) = SUPPRESSION_CACHE.get(&cache_key) {
+            return Ok(hit.rules.clone());
+        }
+        return Err("store_down".into());
     };
-    let rows: Vec<(String, Option<String>)> = sqlx::query_as(
+    let rows: Vec<(String, Option<String>)> = match sqlx::query_as(
         r#"SELECT signature_hash, target_glob FROM finding_suppressions
             WHERE tenant_id = $1
               AND engine = $2
@@ -415,8 +409,21 @@ async fn load_suppression_rules_from_db(
     .bind(engine)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(_) => {
+            if let Some(hit) = SUPPRESSION_CACHE.get(&cache_key) {
+                return Ok(hit.rules.clone());
+            }
+            return Err("store_down".into());
+        }
+    };
+    if tx.commit().await.is_err() {
+        if let Some(hit) = SUPPRESSION_CACHE.get(&cache_key) {
+            return Ok(hit.rules.clone());
+        }
+        return Err("store_down".into());
+    }
     let rules: Vec<SuppressionRule> = rows
         .into_iter()
         .map(|(signature_hash, target_glob)| SuppressionRule {
@@ -431,7 +438,7 @@ async fn load_suppression_rules_from_db(
             rules: rules.clone(),
         },
     );
-    rules
+    Ok(rules)
 }
 
 /// One active `finding_suppressions` row. `target_glob == None` (or empty) suppresses the

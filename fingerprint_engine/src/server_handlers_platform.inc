@@ -479,7 +479,20 @@ async fn integration_live_test(
         .unwrap_or(id)
         .to_ascii_lowercase();
     let config_raw = item.get("config").cloned().unwrap_or(json!({}));
-    let integrations = crate::soar::integrations::load_integrations(pool, tenant_id).await;
+    let integrations = match crate::soar::integrations::load_integrations(pool, tenant_id).await {
+        Ok(i) => i,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "unavailable": true,
+                    "detail": "database unavailable"
+                })),
+            )
+                .into_response();
+        }
+    };
     let record = integrations
         .into_iter()
         .find(|i| i.id == id || i.provider_type == provider)
