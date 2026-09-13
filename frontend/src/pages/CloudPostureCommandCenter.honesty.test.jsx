@@ -15,4 +15,9 @@ describe('CloudPostureCommandCenter live-only truth', () => {
     expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
     expect(src).toMatch(/!historyUnavailable/)
   })
+
+  it('does not paint leftover scorecard or path cards when GET /api/engines/history fails', () => {
+    expect(src).toMatch(/<Scorecard summary=\{historyUnavailable \? null : summary\} \/>/)
+    expect(src).toMatch(/!historyUnavailable && attackPaths\.length > 0/)
+  })
 })

@@ -23,5 +23,6 @@ describe('CicdPipelineSecurityCommandCenter live-only truth', () => {
     expect(src).toMatch(/liveMetrics \? \(liveMetrics\.platforms\?\.length \?\? 0\) : '—'/)
     expect(src).toMatch(/liveMetrics \? attackPaths\.length : '—'/)
     expect(src).not.toMatch(/attackPaths\.length \|\| '—'/)
+    expect(src).toMatch(/!historyUnavailable && attackPaths\.length > 0/)
   })
 })

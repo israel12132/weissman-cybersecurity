@@ -15,4 +15,10 @@ describe('ServerlessSecurityCommandCenter live-only truth', () => {
     expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
     expect(src).toMatch(/!historyUnavailable/)
   })
+
+  it('does not paint leftover serverless posture when GET /api/engines/history fails', () => {
+    expect(src).toMatch(/const liveMetrics = historyUnavailable \? null : metrics/)
+    expect(src).toMatch(/\{liveMetrics && \(/)
+    expect(src).toMatch(/!historyUnavailable && attackPaths\.length > 0/)
+  })
 })

@@ -105,6 +105,7 @@ export default function SovereignDefenseMatrix() {
   const [target, setTarget] = useState('')
   const [findings, setFindings] = useState([])
   const [dashboard, setDashboard] = useState(null)
+  const [dashboardUnavailable, setDashboardUnavailable] = useState(false)
   const [chronosEvents, setChronosEvents] = useState([])
   const [cognitiveSessions, setCognitiveSessions] = useState([])
   const [poisonLib, setPoisonLib] = useState([])
@@ -148,6 +149,7 @@ export default function SovereignDefenseMatrix() {
   const loadDashboard = useCallback(async () => {
     if (!clientId) {
       setDashboard(null)
+      setDashboardUnavailable(false)
       return
     }
     const [dash, ce, cs] = await Promise.allSettled([
@@ -157,8 +159,9 @@ export default function SovereignDefenseMatrix() {
     ])
     if (dash.status === 'fulfilled' && dash.value && dash.value.ok !== false && !dash.value.unavailable) {
       setDashboard(dash.value)
+      setDashboardUnavailable(false)
     } else {
-      setDashboard(null)
+      setDashboardUnavailable(true)
     }
     if (ce.status === 'fulfilled') {
       const list = asJsonArray(ce.value)
@@ -296,8 +299,9 @@ export default function SovereignDefenseMatrix() {
     } catch { /* rotate failed — leave dashboard as-is */ }
   }
 
-  const liquid = dashboard?.liquid_matrix
-  const chronos = dashboard?.chronos
+  const liveDashboard = dashboardUnavailable ? null : dashboard
+  const liquid = liveDashboard?.liquid_matrix
+  const chronos = liveDashboard?.chronos
 
   return (
     <PageShell
@@ -355,7 +359,7 @@ export default function SovereignDefenseMatrix() {
         />
         <MetricCard
           label={t('pages.sovereignDefense.metric_cognitive')}
-          value={dashboard?.cognitive_starvation?.sessions_24h ?? '—'}
+          value={liveDashboard?.cognitive_starvation?.sessions_24h ?? '—'}
           sub={t('pages.sovereignDefense.sessions_24h')}
           color="text-amber-300"
         />

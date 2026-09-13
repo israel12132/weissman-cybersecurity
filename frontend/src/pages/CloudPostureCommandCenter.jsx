@@ -787,9 +787,9 @@ export default function CloudPostureCommandCenter() {
         </div>
       )}
 
-      <Scorecard summary={summary} />
+      <Scorecard summary={historyUnavailable ? null : summary} />
 
-      {attackPaths.length > 0 && (
+      {!historyUnavailable && attackPaths.length > 0 && (
         <div className="rounded-2xl bg-[var(--table-surface)] border border-fuchsia-500/20 p-4 mb-6">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-lg">☣</span>

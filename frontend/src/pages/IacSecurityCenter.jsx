@@ -1799,9 +1799,10 @@ export default function IacSecurityCenter() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canRun, params, selectedClientId, effectiveTarget, paramCount, appendLine])
 
-  const remediationQueue = useMemo(() => summary?.remediation_queue || [], [summary])
-  const policyCatalog = useMemo(() => (Array.isArray(summary?.policy_catalog) ? summary.policy_catalog : []), [summary])
-  const attackChains = useMemo(() => summary?.attack_chains || [], [summary])
+  const liveSummary = historyUnavailable ? null : summary
+  const remediationQueue = useMemo(() => liveSummary?.remediation_queue || [], [liveSummary])
+  const policyCatalog = useMemo(() => (Array.isArray(liveSummary?.policy_catalog) ? liveSummary.policy_catalog : []), [liveSummary])
+  const attackChains = useMemo(() => liveSummary?.attack_chains || [], [liveSummary])
   const policyFindings = useMemo(() => findings.filter((f) => f.category !== 'iac_attack_chain'), [findings])
   const shownFindings = useMemo(() => {
     let list = policyFindings
@@ -2093,10 +2094,10 @@ export default function IacSecurityCenter() {
                 {t('iacSecurity.last_scan', 'Last scan')}: {new Date(lastScanAt).toLocaleString()}
               </p>
             )}
-            <ExecutiveBanner summary={summary} />
-            {summary?.readiness && <ReadinessPanel readiness={summary.readiness} />}
-            {summary?.cis_scorecard && <CisScorecard scorecard={summary.cis_scorecard} />}
-            {summary?.risk_heatmap && <RiskHeatmap heatmap={summary.risk_heatmap} />}
+            <ExecutiveBanner summary={liveSummary} />
+            {liveSummary?.readiness && <ReadinessPanel readiness={liveSummary.readiness} />}
+            {liveSummary?.cis_scorecard && <CisScorecard scorecard={liveSummary.cis_scorecard} />}
+            {liveSummary?.risk_heatmap && <RiskHeatmap heatmap={liveSummary.risk_heatmap} />}
             {attackChains.length > 0 && (
               <div className="rounded-2xl border border-rose-500/40 bg-gradient-to-r from-rose-950/40 to-orange-950/20 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
                 <p className="text-sm font-semibold text-rose-200">{t('iacSecurity.toxic_alert', 'Toxic combination detected')} — {attackChains.length} {t('iacSecurity.attack_paths', 'attack paths')}</p>
@@ -2111,27 +2112,27 @@ export default function IacSecurityCenter() {
             <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
               <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5 text-center">
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">{t('iacSecurity.posture', 'Security Posture')}</p>
-                <ScoreGauge score={summary?.risk_score} grade={summary?.grade} blast={summary?.blast_radius_multiplier ?? 1} />
-                {summary && (
-                  <div className={`mt-3 inline-block text-[10px] font-mono px-2 py-1 rounded ${summary.gate?.passed ? 'text-emerald-300 bg-emerald-500/10' : 'text-rose-300 bg-rose-500/10'}`}>
-                    {t('iacSecurity.gate', 'Gate')}: {summary.gate?.passed ? 'PASS' : `FAIL (${summary.gate?.blocking_findings} ≥ ${summary.gate?.fail_severity})`}
+                <ScoreGauge score={liveSummary?.risk_score} grade={liveSummary?.grade} blast={liveSummary?.blast_radius_multiplier ?? 1} />
+                {liveSummary && (
+                  <div className={`mt-3 inline-block text-[10px] font-mono px-2 py-1 rounded ${liveSummary.gate?.passed ? 'text-emerald-300 bg-emerald-500/10' : 'text-rose-300 bg-rose-500/10'}`}>
+                    {t('iacSecurity.gate', 'Gate')}: {liveSummary.gate?.passed ? 'PASS' : `FAIL (${liveSummary.gate?.blocking_findings} ≥ ${liveSummary.gate?.fail_severity})`}
                   </div>
                 )}
               </div>
               <div className="2xl:col-span-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5">
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">{t('iacSecurity.severity_breakdown', 'Severity Breakdown')}</p>
-                {!historyUnavailable && summary?.by_severity
-                  ? <SeverityBars bySeverity={summary.by_severity} />
+                {!historyUnavailable && liveSummary?.by_severity
+                  ? <SeverityBars bySeverity={liveSummary.by_severity} />
                   : <p className="text-[11px] font-mono text-[var(--text-muted)]">—</p>}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
-                  <MetricTile label="Findings" value={summary?.findings_total} accent="#ef4444" />
-                  <MetricTile label="Files" value={summary?.files_scanned} accent="#22d3ee" />
-                  <MetricTile label="Policies hit" value={summary ? `${summary.policies_triggered}/${summary.policies_available}` : '—'} accent="#a855f7" />
-                  <MetricTile label="Attack paths" value={historyUnavailable ? '—' : (summary ? attackChains.length : '—')} accent="#f43f5e" />
-                  <MetricTile label="Readiness" value={summary?.readiness?.readiness_score != null ? `${summary.readiness.readiness_score}` : '—'} accent="#8b5cf6" />
-                  <MetricTile label="Drift" value={summary?.drift_findings ?? '—'} accent="#f97316" />
-                  <MetricTile label="Reconcile" value={summary?.plan_reconcile_findings ?? '—'} accent="#8b5cf6" />
-                  <MetricTile label="Supply" value={summary?.supply_chain_findings ?? '—'} accent="#f59e0b" />
+                  <MetricTile label="Findings" value={liveSummary?.findings_total} accent="#ef4444" />
+                  <MetricTile label="Files" value={liveSummary?.files_scanned} accent="#22d3ee" />
+                  <MetricTile label="Policies hit" value={liveSummary ? `${liveSummary.policies_triggered}/${liveSummary.policies_available}` : '—'} accent="#a855f7" />
+                  <MetricTile label="Attack paths" value={historyUnavailable ? '—' : (liveSummary ? attackChains.length : '—')} accent="#f43f5e" />
+                  <MetricTile label="Readiness" value={liveSummary?.readiness?.readiness_score != null ? `${liveSummary.readiness.readiness_score}` : '—'} accent="#8b5cf6" />
+                  <MetricTile label="Drift" value={liveSummary?.drift_findings ?? '—'} accent="#f97316" />
+                  <MetricTile label="Reconcile" value={liveSummary?.plan_reconcile_findings ?? '—'} accent="#8b5cf6" />
+                  <MetricTile label="Supply" value={liveSummary?.supply_chain_findings ?? '—'} accent="#f59e0b" />
                 </div>
               </div>
             </div>

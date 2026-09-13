@@ -13,6 +13,7 @@ describe('WeissmanFindingsPanel live-only truth', () => {
     expect(src).toMatch(/unavailable = false/)
     expect(src).toMatch(/unavailableTestId/)
     expect(src).toMatch(/weissmanFindings\.unavailable_title/)
-    expect(src).toMatch(/unavailable && displayTotal === 0/)
+    expect(src).toMatch(/unavailable \? \(/)
+    expect(src).not.toMatch(/unavailable && displayTotal > 0/)
   })
 })

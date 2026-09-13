@@ -43,5 +43,7 @@ describe('SovereignDefenseMatrix live-only truth', () => {
     expect(src).toMatch(/chronos\?\.events_24h != null \? `\$\{chronos\.events_24h\} events` : '—'/)
     expect(src).not.toMatch(/chronos\?\.events_24h \?\? 0/)
     expect(src).not.toMatch(/value=\{chronos\?\.agent_online \? 'ONLINE' : 'OFF'\}/)
+    expect(src).toMatch(/setDashboardUnavailable\(true\)/)
+    expect(src).toMatch(/const liveDashboard = dashboardUnavailable \? null : dashboard/)
   })
 })

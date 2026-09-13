@@ -112,11 +112,16 @@ export default function WeissmanFindingsPanel({
 
   return (
     <div className={`rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-4 ${className}`}>
-      {unavailable && displayTotal > 0 && (
-        <p data-testid={unavailableTestId} className="text-xs text-amber-300/80 font-mono">
-          {unavailableBody || t('weissmanFindings.unavailable_body')}
-        </p>
-      )}
+      {unavailable ? (
+        <div data-testid={unavailableTestId}>
+          <EmptyState
+            icon="alert"
+            title={unavailableTitle || t('weissmanFindings.unavailable_title')}
+            body={unavailableBody || t('weissmanFindings.unavailable_body')}
+          />
+        </div>
+      ) : (
+        <>
       {(counts || displayTotal > 0) && (
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -169,15 +174,7 @@ export default function WeissmanFindingsPanel({
         </div>
       </div>
 
-      {unavailable && displayTotal === 0 ? (
-        <div data-testid={unavailableTestId}>
-          <EmptyState
-            icon="alert"
-            title={unavailableTitle || t('weissmanFindings.unavailable_title')}
-            body={unavailableBody || t('weissmanFindings.unavailable_body')}
-          />
-        </div>
-      ) : displayTotal === 0 && !showEmptyReady ? (
+      {displayTotal === 0 && !showEmptyReady ? (
         <EmptyState
           icon="search"
           title={emptyTitle || t('weissmanFindings.empty_title')}
@@ -207,6 +204,8 @@ export default function WeissmanFindingsPanel({
             </Fragment>
           ))}
         </div>
+      )}
+        </>
       )}
     </div>
   )

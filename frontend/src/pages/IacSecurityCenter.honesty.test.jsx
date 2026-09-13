@@ -19,12 +19,13 @@ describe('IacSecurityCenter live-only truth', () => {
   })
 
   it('does not paint unmeasured attack-paths when a live summary has zero chains', () => {
-    expect(src).toMatch(/historyUnavailable \? '—' : \(summary \? attackChains\.length : '—'\)/)
+    expect(src).toMatch(/historyUnavailable \? '—' : \(liveSummary \? attackChains\.length : '—'\)/)
     expect(src).not.toMatch(/attackChains\.length \|\| '—'/)
   })
 
   it('does not paint five numeric 0 severity bars when summary is unconfirmed', () => {
-    expect(src).toMatch(/!historyUnavailable && summary\?\.by_severity/)
+    expect(src).toMatch(/!historyUnavailable && liveSummary\?\.by_severity/)
     expect(src).not.toMatch(/<SeverityBars bySeverity=\{summary\?\.by_severity\} \/>/)
+    expect(src).toMatch(/const liveSummary = historyUnavailable \? null : summary/)
   })
 })

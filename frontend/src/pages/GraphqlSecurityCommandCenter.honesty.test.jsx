@@ -30,5 +30,7 @@ describe('GraphqlSecurityCommandCenter live-only truth', () => {
     expect(src).not.toMatch(/score \?\? 0/)
     expect(src).toMatch(/const liveMetrics = historyUnavailable \? null : metrics/)
     expect(src).toMatch(/<ExposureGauge score=\{liveMetrics\?\.exposure_score\} \/>/)
+    expect(src).toMatch(/findings=\{historyUnavailable \? \[\] : realFindings\}/)
+    expect(src).toMatch(/!historyUnavailable && attackPaths\.length > 0/)
   })
 })

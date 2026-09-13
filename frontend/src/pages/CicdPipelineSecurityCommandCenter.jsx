@@ -806,7 +806,7 @@ export default function CicdPipelineSecurityCommandCenter() {
             </div>
 
             <AnimatePresence>
-              {attackPaths.length > 0 && (
+              {!historyUnavailable && attackPaths.length > 0 && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                   className="rounded-2xl border border-lime-500/20 bg-lime-950/10 p-4 space-y-3">
                   <p className="text-[10px] font-mono text-lime-300/70 uppercase tracking-widest">

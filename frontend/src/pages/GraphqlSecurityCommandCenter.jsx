@@ -1349,7 +1349,7 @@ export default function GraphqlSecurityCommandCenter() {
 
             <ComplianceScorecardPanel scorecard={liveMetrics?.compliance_scorecard} />
 
-            <OwaspBreakdownPanel posture={liveMetrics?.owasp_posture} findings={realFindings} />
+            <OwaspBreakdownPanel posture={liveMetrics?.owasp_posture} findings={historyUnavailable ? [] : realFindings} />
 
             <RemediationPanel items={liveMetrics?.remediation_priorities} />
 
@@ -1357,7 +1357,7 @@ export default function GraphqlSecurityCommandCenter() {
 
             {/* Attack paths */}
             <AnimatePresence>
-              {attackPaths.length > 0 && (
+              {!historyUnavailable && attackPaths.length > 0 && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
