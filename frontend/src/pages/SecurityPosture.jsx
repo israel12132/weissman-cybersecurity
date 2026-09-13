@@ -105,8 +105,8 @@ export default function SecurityPosture() {
     <PageShell
       title={t(`${NS}.title`)}
       subtitle={t(`${NS}.subtitle`)}
-      badge={data?.grade ? `${t(`${NS}.grade`)} ${String(data.grade).toUpperCase()}` : t(`${NS}.badge`)}
-      badgeColor={gradeColor(data?.grade)}
+      badge={error ? t(`${NS}.badge`) : (data?.grade ? `${t(`${NS}.grade`)} ${String(data.grade).toUpperCase()}` : t(`${NS}.badge`))}
+      badgeColor={gradeColor(error ? undefined : data?.grade)}
       icon={<ShieldCheck className="w-5 h-5" />}
       actions={<ShellScanActions onRefresh={load} refreshLoading={loading} exportDisabled />}
     >
