@@ -3698,6 +3698,7 @@
       "loading_findings": "טוען ממצאים…",
       "no_findings_module": "אין ממצאים קריטיים או גבוהים למודול זה עדיין.",
       "no_findings_suffix": "הפעל סורק מודול או PoE synthesis כדי לאכלס ראיות.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-לסריקה אינו שביל מעבדת-ניצול שקט.",
       "finding_fallback": "ממצא",
       "cvss": "CVSS:",
       "cvss_label": "CVSS",
@@ -5122,6 +5123,7 @@
       "last_run": "הושלם לאחרונה: {{time}}",
       "select_client_hint": "בחר לקוח בתחום — הערכת WebSocket של Weissman דורשת הרשאת לקוח מפורשת.",
       "empty_hint": "הרץ סריקה להערכת CSWSH, auth בהודעות חיות, Weissman Standard DAST ו-posture WebSocket.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-לסריקה אינו שביל WebSocket שקט.",
       "groups": {
         "handshake": "Handshake ו-transport",
         "cswsh": "CSWSH ו-Origin",

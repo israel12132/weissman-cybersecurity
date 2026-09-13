@@ -394,6 +394,7 @@ export default function WebSocketSecurityCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, detailFindings)
 
   useEffect(() => {
@@ -656,6 +657,11 @@ export default function WebSocketSecurityCommandCenter() {
 
       {detailFindings.length > 0 && <Scorecard summary={summary} t={t} />}
 
+      {historyUnavailable && (
+        <p data-testid="websocket-security-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {t('pages.websocketSecurity.history_unavailable')}
+        </p>
+      )}
       <WeissmanFindingsPanel
         findings={detailFindings}
         filteredFindings={filteredFindings}
@@ -670,7 +676,10 @@ export default function WebSocketSecurityCommandCenter() {
         lastUpdated={lastUpdated}
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
-        showEmptyReady={status !== 'running' && detailFindings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={t('pages.websocketSecurity.history_unavailable')}
+        unavailableBody={t('pages.websocketSecurity.history_unavailable')}
+        showEmptyReady={status !== 'running' && detailFindings.length === 0 && !historyUnavailable}
         emptyReadyTitle={t('pages.websocketSecurity.empty_hint', 'Run a scan to assess CSWSH, live message auth, real-time stack chains and WebSocket posture.')}
         emptyReadyBody={t('pages.websocketSecurity.empty_hint', 'Run a scan to assess CSWSH, live message auth, real-time stack chains and WebSocket posture.')}
         renderFinding={(f, i) => <FindingCard key={i} f={f} />}

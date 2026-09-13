@@ -3597,6 +3597,7 @@
       "loading_findings": "Loading findings…",
       "no_findings_module": "No critical or high findings for this module yet.",
       "no_findings_suffix": "Run the module scanner or PoE synthesis to populate evidence.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet exploit-lab trail.",
       "finding_fallback": "Finding",
       "cvss": "CVSS:",
       "cvss_label": "CVSS",
@@ -5122,6 +5123,7 @@
       "last_run": "Last completed: {{time}}",
       "select_client_hint": "Select an in-scope client — Weissman WebSocket assessment requires explicit client authorization.",
       "empty_hint": "Run a scan to assess CSWSH, live message auth, Weissman Standard DAST and WebSocket posture.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet WebSocket trail.",
       "groups": {
         "handshake": "Handshake & transport",
         "cswsh": "CSWSH & Origin",
