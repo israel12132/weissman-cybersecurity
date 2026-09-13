@@ -1748,8 +1748,8 @@ mod tests {
         let after = &compact[persist..];
         let await_at = after.find(".await").expect("await after persist");
         assert!(
-            after[await_at..].starts_with(".await.is_err()"),
-            "persist_operator_audit must .await.is_err() before any other await"
+            after[await_at..].starts_with(".await.is_err(){return(StatusCode::SERVICE_UNAVAILABLE"),
+            "persist_operator_audit .await.is_err() must return 503, not fall through or 202"
         );
     }
 
@@ -5524,8 +5524,8 @@ mod tests {
         let after_ins = &compact_hit[ins..];
         let await_at = after_ins.find(".await").expect("await after insert");
         assert!(
-            after_ins[await_at..].starts_with(".await.is_err()"),
-            "insert_audit must .await.is_err() not .ok()"
+            after_ins[await_at..].starts_with(".await.is_err(){return(StatusCode::SERVICE_UNAVAILABLE"),
+            "insert_audit must .await.is_err() return 503, not empty if"
         );
         assert!(after.contains("evidence_unavailable_json"));
         let unavail = after.find("evidence_unavailable_json").expect("503");
@@ -5739,7 +5739,9 @@ mod tests {
         assert!(!compact_src(get).contains("unwrap_or(None)"));
         assert!(!compact_src(get).contains("unwrap_or_else"));
         assert!(!compact_src(get).contains("unwrap_or_default()"));
-        assert!(compact_src(get).contains("map_err(|_|\"store_down\".to_string())"));
+        assert!(compact_src(get).contains(
+            "fetch_optional(pool).await.map_err(|_|\"store_down\".to_string())}"
+        ));
         assert!(!compact_src(get).contains(".or(Ok(None))"));
         assert!(!compact_src(get).contains("Err(_)=>Ok(None)"));
         let extend = named_fn_src(
@@ -5935,7 +5937,11 @@ mod tests {
             "d.unavailable||d.scanning_active===null){{setStatus(false)"
         ));
         assert!(src.contains(".catch(function() {{ setStatus(null); }})"));
-        assert!(!src.contains(".catch(function() {{ setStatus(false)"));
+        assert!(!compact_src(src).contains(
+            "d.unavailable){{setStatus(false)"
+        ));
+        assert!(src.contains("if (!r.ok || !d || d.ok === false || d.unavailable) {{ setStatus(null); return; }}"));
+        assert!(src.contains("fetch('/api/scan/status')"));
     }
 
     #[test]
@@ -5945,9 +5951,14 @@ mod tests {
             "async fn api_ready",
         );
         let compact = compact_src(src);
-        assert!(src.contains("rate_limit_redis::ping_ok()"));
+        assert!(compact.contains(
+            "letredis_live=crate::http::rate_limit_redis::ping_ok().await"
+        ));
         assert!(compact.contains(
             "letredis_ok=ifredis_required||redis_enabled{redis_live}else{true}"
+        ));
+        assert!(compact.contains(
+            "letready=postgres_ok&&(!redis_required||redis_live)"
         ));
         assert!(!compact.contains("letredis_ok=!redis_required||"));
     }
@@ -5958,9 +5969,8 @@ mod tests {
             include_str!("security_posture.rs"),
             "pub async fn compute_platform_posture",
         );
-        assert!(compact_src(src).contains("ping_ok().await"));
         assert!(compact_src(src).contains(
-            "ifredis_configured{ifredis_live{(true,\"RedisPINGok\")}else{(false,\"REDIS_URLsetbutRedisPINGfailed\")}}"
+            "letredis_live=crate::http::rate_limit_redis::ping_ok().await;let(redis_passed,redis_detail)=ifredis_configured{ifredis_live{(true,\"RedisPINGok\")}else{(false,\"REDIS_URLsetbutRedisPINGfailed\")}}"
         ));
         assert!(src.contains("REDIS_URL set but Redis PING failed"));
     }
@@ -6003,6 +6013,9 @@ mod tests {
         assert!(window.contains("\"store_down\""));
         assert!(window.contains("\"failed\""));
         assert!(compact.contains("Ok(c)=>c,Err(_)=>{"));
+        assert!(compact.contains(
+            "return;}};letresult=exploit_synthesis_engine::"
+        ));
         assert!(!compact.contains("ifletOk(c)="));
         assert!(!compact.contains("ifletOk(muttx)="));
         assert!(!compact.contains("let_=sqlx"));
