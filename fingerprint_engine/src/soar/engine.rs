@@ -104,6 +104,11 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
                     execution_id: Some(existing.id),
                 };
             }
+            if existing.status == ExecutionStatus::Failed.as_str()
+                && existing.detail == "store_down"
+            {
+                return resume_store_down_after_adapter(pool, &cmd, &existing, &idem).await;
+            }
         }
         Ok(None) => {}
     }
@@ -382,7 +387,6 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
                         "store_down",
                     )
                     .await;
-                    mark_completed(&idem, Duration::from_secs(86_400)).await;
                     audit::log_execution(pool, &cmd, "failed", "store_down", Some(execution_id))
                         .await;
                     return ActionOutcome {
@@ -405,7 +409,6 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
                         "store_down",
                     )
                     .await;
-                    mark_completed(&idem, Duration::from_secs(86_400)).await;
                     audit::log_execution(pool, &cmd, "failed", "store_down", Some(execution_id))
                         .await;
                     return ActionOutcome {
@@ -456,6 +459,69 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
 struct ExistingExecution {
     id: Uuid,
     status: String,
+    detail: String,
+    provider: String,
+    external_ref: Option<String>,
+}
+
+/// Adapter already ran; runbook/verify persist failed. Do not Redis-done skip as ok.
+async fn resume_store_down_after_adapter(
+    pool: &PgPool,
+    cmd: &ExecuteActionCommand,
+    existing: &ExistingExecution,
+    idem: &str,
+) -> ActionOutcome {
+    let outcome = super::types::AdapterOutcome {
+        provider: existing.provider.clone(),
+        external_ref: existing.external_ref.clone(),
+        detail: existing.detail.clone(),
+        payload: json!({}),
+        revert_steps: vec![],
+        verify_probe: None,
+    };
+    if let Some(probe) = probe_from_outcome(&outcome, cmd) {
+        if enqueue_verification(pool, cmd.tenant_id, existing.id, &probe)
+            .await
+            .is_err()
+        {
+            audit::log_execution(pool, cmd, "failed", "store_down", Some(existing.id)).await;
+            return ActionOutcome {
+                status: "failed".into(),
+                detail: "store_down".into(),
+                execution_id: Some(existing.id),
+            };
+        }
+    } else if update_status(
+        pool,
+        cmd.tenant_id,
+        existing.id,
+        ExecutionStatus::Resolved,
+        &existing.detail,
+    )
+    .await
+    .is_err()
+    {
+        audit::log_execution(pool, cmd, "failed", "store_down", Some(existing.id)).await;
+        return ActionOutcome {
+            status: "failed".into(),
+            detail: "store_down".into(),
+            execution_id: Some(existing.id),
+        };
+    }
+    mark_completed(idem, Duration::from_secs(86_400)).await;
+    audit::log_execution(
+        pool,
+        cmd,
+        "verifying",
+        "verification resumed after store_down",
+        Some(existing.id),
+    )
+    .await;
+    ActionOutcome {
+        status: "ok".into(),
+        detail: "verification resumed after store_down".into(),
+        execution_id: Some(existing.id),
+    }
 }
 
 async fn find_existing_execution(
@@ -467,7 +533,9 @@ async fn find_existing_execution(
         .await
         .map_err(|_| "store_down".to_string())?;
     let row = sqlx::query(
-        "SELECT id, status FROM soar_action_executions WHERE tenant_id = $1 AND idempotency_key = $2",
+        "SELECT id, status, COALESCE(result_detail, '') AS result_detail,
+                COALESCE(provider, '') AS provider, external_ref
+           FROM soar_action_executions WHERE tenant_id = $1 AND idempotency_key = $2",
     )
     .bind(tenant_id)
     .bind(idem)
@@ -480,6 +548,9 @@ async fn find_existing_execution(
     Ok(row.map(|r| ExistingExecution {
         id: r.try_get("id").unwrap_or_else(|_| Uuid::nil()),
         status: r.try_get("status").unwrap_or_default(),
+        detail: r.try_get("result_detail").unwrap_or_default(),
+        provider: r.try_get("provider").unwrap_or_default(),
+        external_ref: r.try_get::<Option<String>, _>("external_ref").unwrap_or(None),
     }))
 }
 

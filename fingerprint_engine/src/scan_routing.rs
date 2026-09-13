@@ -454,8 +454,9 @@ async fn load_client_credentials(
     let gcp: String = r.try_get("gcp").unwrap_or_default();
     let config_str: String = r
         .try_get("client_configs")
-        .unwrap_or_else(|_| "{}".to_string());
-    let config_val: Value = serde_json::from_str(&config_str).unwrap_or(json!({}));
+        .map_err(|_| "store_down".to_string())?;
+    let config_val: Value = serde_json::from_str(&config_str)
+        .map_err(|_| "store_down".to_string())?;
     let onboarding = config_val.get("onboarding").cloned().unwrap_or(json!({}));
     let azure_subscription_id = onboarding
         .get("azure_subscription_id")

@@ -3651,6 +3651,15 @@ mod tests {
             blast_slice.contains("status: if store_down"),
             "database unavailable blast must return failed, not skipped"
         );
+        assert!(
+            exec.contains("resume_store_down_after_adapter"),
+            "Failed store_down after adapter must resume verify, not Redis-done ok-skip"
+        );
+        assert_eq!(
+            exec.matches("mark_completed(").count(),
+            1,
+            "persist_runbook/enqueue_verification store-down must not mark Redis done"
+        );
         let lock = named_fn_src(
             include_str!("soar/idempotency.rs"),
             "pub async fn try_acquire_lock",
@@ -3800,6 +3809,10 @@ mod tests {
         assert!(cool.contains("Result<bool, String>"));
         assert!(!compact_src(cool).contains(".ok().flatten()"));
         assert!(cool.contains("store_down"));
+        assert!(
+            cool.contains("status IN ('success', 'partial')"),
+            "failed playbook runs must not cooldown-skip the next live event"
+        );
         let rec = named_fn_src(pb, "async fn record_run");
         assert!(rec.contains("Result<(), String>"));
         assert!(!rec.contains("let _ = tx.commit()"));
@@ -3807,6 +3820,11 @@ mod tests {
         let dispatch = named_fn_src(pb, "pub async fn dispatch_event");
         assert!(dispatch.contains("skipped_store_down"));
         assert!(dispatch.contains("record_run(pool, &pb, &event, &dedup, &actions, &status).await.is_err()"));
+        let act = named_fn_src(pb, "async fn execute_action");
+        assert!(
+            !act.contains("WEISSMAN_ALERT_WEBHOOK_URL"),
+            "empty playbook webhook url must not silently use the platform env webhook"
+        );
         let soar_meta = include_str!("soar/dispatch_record.rs");
         let merge = named_fn_src(soar_meta, "async fn merge_soar_metadata");
         assert!(
@@ -4171,6 +4189,17 @@ mod tests {
         assert!(unscoped.contains("hydrate_stored_job_payload"));
         assert!(compact_src(unscoped).contains(
             "hydrate_stored_job_payload(app_pool.as_ref(),tid,&mutjob_payload,).await?"
+        ));
+        let creds = named_fn_src(
+            include_str!("scan_routing.rs"),
+            "async fn load_client_credentials",
+        );
+        assert!(
+            !compact_src(creds).contains("from_str(&config_str).unwrap_or(json!({}))"),
+            "corrupt client_configs must not hydrate as empty onboarding"
+        );
+        assert!(compact_src(creds).contains(
+            "from_str(&config_str).map_err(|_|\"store_down\".to_string())?"
         ));
     }
 

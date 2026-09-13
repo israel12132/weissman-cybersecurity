@@ -335,6 +335,7 @@ async fn in_cooldown(
     let row: Option<(i64,)> = sqlx::query_as(
         r#"SELECT id FROM weissman_playbook_runs
             WHERE tenant_id = $1 AND playbook_id = $2 AND run_dedup_key = $3
+              AND status IN ('success', 'partial')
               AND triggered_at > now() - ($4 || ' seconds')::interval
             LIMIT 1"#,
     )
@@ -450,8 +451,8 @@ async fn execute_action(pool: &PgPool, ev: &PlaybookEvent, a: &PlaybookAction) -
                 .get("url")
                 .or_else(|| params.get("webhook_url"))
                 .and_then(Value::as_str)
-                .map(|s| s.to_string())
-                .or_else(|| std::env::var("WEISSMAN_ALERT_WEBHOOK_URL").ok())
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
                 .unwrap_or_default();
             if url.is_empty() {
                 return ("skipped".into(), "no webhook url configured".into());
