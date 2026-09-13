@@ -4162,4 +4162,24 @@ mod tests {
         assert!(src.contains("honeytoken deployed at"));
         assert!(src.contains("store_down"));
     }
+
+    #[test]
+    fn pool_metrics_self_heal_counts_store_down_is_not_idle_zero() {
+        let src = named_fn_src(
+            include_str!("observability.rs"),
+            "pub fn spawn_pool_metrics_loop",
+        );
+        let compact = compact_src(src);
+        assert!(
+            !compact.contains("fetch_one(app_pool.as_ref()).await.unwrap_or(0)"),
+            "pending/registered COUNTs must not unwrap_or(0) into HealthSnapshot"
+        );
+        assert!(
+            !src.contains(".unwrap_or(sh_registered)"),
+            "online COUNT store-down must not assume the whole fleet is live"
+        );
+        assert!(src.contains("counts_live"));
+        assert!(src.contains("postgres_up: pg_up && counts_live"));
+        assert!(src.contains("self-heal agent/backlog counts store_down"));
+    }
 }
