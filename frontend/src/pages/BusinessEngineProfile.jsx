@@ -296,20 +296,25 @@ export default function BusinessEngineProfile() {
     const lines = []
     lines.push(`${t('pages.businessEngineProfile.pdf_business_engine')}: ${reg?.label || engineId} (${engineId})`)
     lines.push(`${t('pages.businessEngineProfile.pdf_generated')}: ${new Date().toISOString()}`)
-    lines.push(`${t('pages.businessEngineProfile.pdf_jobs_tracked')}: ${jobs.length}`)
-    lines.push(`${t('pages.businessEngineProfile.pdf_findings_tracked')}: ${findings.length}`)
     lines.push('')
     lines.push(t('pages.businessEngineProfile.pdf_mission_heading'))
     lines.push(mission)
     lines.push('')
-    lines.push(t('pages.businessEngineProfile.recent_jobs'))
-    for (const j of jobs.slice(0, 12)) {
-      lines.push(`${j?.created_at || '-'} | ${j?.status || '-'} | findings=${j?.findings_count || 0} | source=${j?.source || '-'}`)
-    }
-    lines.push('')
-    lines.push(t('pages.businessEngineProfile.live_findings'))
-    for (const f of findings.slice(0, 20)) {
-      lines.push(`${f?.discovered_at || '-'} | ${f?.severity || '-'} | ${f?.title || '-'}`)
+    if (historyUnavailable) {
+      lines.push(t('pages.businessEngineProfile.history_unavailable'))
+    } else {
+      lines.push(`${t('pages.businessEngineProfile.pdf_jobs_tracked')}: ${jobs.length}`)
+      lines.push(`${t('pages.businessEngineProfile.pdf_findings_tracked')}: ${findings.length}`)
+      lines.push('')
+      lines.push(t('pages.businessEngineProfile.recent_jobs'))
+      for (const j of jobs.slice(0, 12)) {
+        lines.push(`${j?.created_at || '-'} | ${j?.status || '-'} | findings=${j?.findings_count || 0} | source=${j?.source || '-'}`)
+      }
+      lines.push('')
+      lines.push(t('pages.businessEngineProfile.live_findings'))
+      for (const f of findings.slice(0, 20)) {
+        lines.push(`${f?.discovered_at || '-'} | ${f?.severity || '-'} | ${f?.title || '-'}`)
+      }
     }
     if (liveJob?.id) {
       lines.push('')

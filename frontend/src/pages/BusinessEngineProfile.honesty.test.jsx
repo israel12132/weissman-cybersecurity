@@ -37,5 +37,6 @@ describe('BusinessEngineProfile live-only truth', () => {
     expect(src).toMatch(/!historyUnavailable &&[\s\S]{0,800}BarChart accessibilityLayer data=\{statusData\}/)
     expect(src).toMatch(/!historyUnavailable && visibleJobs\.map/)
     expect(src).toMatch(/!historyUnavailable && visibleFindings\.map/)
+    expect(src).toMatch(/if \(historyUnavailable\) \{[\s\S]{0,200}history_unavailable/)
   })
 })
