@@ -661,10 +661,12 @@ export default function RiskSuperpositionCollapse() {
                   <span className="text-2xl font-mono text-[var(--text-tertiary)]">{(historyUnavailable || !hasPostureScore) ? '—' : `${posture.score}/100`}</span>
                 </div>
                 <p className="text-xs text-[var(--text-muted)] mt-2 font-mono">
-                  {t('pages.superpositionCollapse.posture_meta', {
-                    chains: posture.chains,
-                    clusters: posture.clusters || clusters.length,
-                  })}
+                  {historyUnavailable
+                    ? '—'
+                    : t('pages.superpositionCollapse.posture_meta', {
+                      chains: posture.chains,
+                      clusters: posture.clusters || clusters.length,
+                    })}
                 </p>
               </div>
               <div className="flex gap-4 text-center">
@@ -673,7 +675,7 @@ export default function RiskSuperpositionCollapse() {
                   <p className="text-[10px] text-[var(--text-muted)] uppercase">{t('pages.superpositionCollapse.live_clusters')}</p>
                 </div>
                 <div className="px-4 py-2 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)]">
-                  <p className="text-2xl font-mono text-amber-300">{collapseFindings.length}</p>
+                  <p className="text-2xl font-mono text-amber-300">{historyUnavailable ? '—' : collapseFindings.length}</p>
                   <p className="text-[10px] text-[var(--text-muted)] uppercase">{t('pages.superpositionCollapse.collapses')}</p>
                 </div>
               </div>
@@ -710,7 +712,7 @@ export default function RiskSuperpositionCollapse() {
             )}
           </div>
 
-          {collapseFindings.length > 0 && (
+          {!historyUnavailable && collapseFindings.length > 0 && (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-violet-200">{t('pages.superpositionCollapse.collapse_chains')}</h3>
               <div className="grid gap-3 md:grid-cols-2">

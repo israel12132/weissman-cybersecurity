@@ -32,4 +32,10 @@ describe('RiskSuperpositionCollapse live-only truth', () => {
     expect(src).toMatch(/const hasScore = raw != null && Number\.isFinite\(Number\(raw\)\)/)
     expect(src).toMatch(/\(historyUnavailable \|\| !hasPostureScore\) \? '—' : `\$\{posture\.score\}\/100`/)
   })
+
+  it('does not paint leftover leftover-collapse cards after a failed history GET', () => {
+    expect(src).toMatch(/!historyUnavailable && collapseFindings\.length > 0/)
+    expect(src).toMatch(/historyUnavailable \? '—' : collapseFindings\.length/)
+    expect(src).toMatch(/historyUnavailable\s*\n\s*\? '—'\s*\n\s*: t\('pages\.superpositionCollapse\.posture_meta'/)
+  })
 })

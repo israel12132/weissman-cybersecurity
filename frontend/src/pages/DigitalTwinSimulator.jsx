@@ -675,7 +675,7 @@ export default function DigitalTwinSimulator() {
                 )}
               </>
             )}
-            <TwinProfilePanel profile={twinProfile} t={t} />
+            {!historyUnavailable && <TwinProfilePanel profile={twinProfile} t={t} />}
           </div>
         </div>
 

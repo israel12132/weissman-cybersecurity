@@ -22,4 +22,9 @@ describe('MobileSecurity live-only truth', () => {
     expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
     expect(src).toMatch(/!historyUnavailable/)
   })
+
+  it('does not paint leftover leftover-finding KPIs after a failed history GET', () => {
+    expect(src).toMatch(/historyUnavailable \? '—' : findings\.length/)
+    expect(src).toMatch(/!historyUnavailable && findings\.length > 0/)
+  })
 })

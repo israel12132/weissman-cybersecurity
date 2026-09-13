@@ -257,7 +257,7 @@ export default function MobileSecurity() {
             { key: 'stat_total_apps', value: apps.length, color: '#22d3ee', Icon: Smartphone },
             { key: 'stat_ios', value: apps.filter((a) => a.platform === 'ios').length, color: '#a78bfa', Icon: Shield },
             { key: 'stat_android', value: apps.filter((a) => a.platform === 'android').length, color: '#34d399', Icon: Shield },
-            { key: 'stat_findings', value: findings.length, color: '#fb923c', Icon: AlertTriangle },
+            { key: 'stat_findings', value: historyUnavailable ? '—' : findings.length, color: '#fb923c', Icon: AlertTriangle },
           ].map(({ key, value, color, Icon }) => (
             <div key={key} className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] backdrop-blur-md p-4">
               <div className="flex items-start justify-between">
@@ -277,7 +277,7 @@ export default function MobileSecurity() {
         )}
 
         {/* Severity distribution from the real findings list */}
-        {findings.length > 0 && (
+        {!historyUnavailable && findings.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
             {SEVERITY_KEYS.filter((k) => sevCounts[k] > 0).map((k) => (
               <span

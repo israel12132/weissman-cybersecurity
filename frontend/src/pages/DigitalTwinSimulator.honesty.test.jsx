@@ -29,4 +29,8 @@ describe('DigitalTwinSimulator live-only truth', () => {
     expect(src).not.toMatch(/summary\.score \?\? 0/)
     expect(src).not.toMatch(/Number\(value\) \|\| 0/)
   })
+
+  it('does not paint leftover leftover-twin-profile paths after a failed history GET', () => {
+    expect(src).toMatch(/!historyUnavailable && <TwinProfilePanel/)
+  })
 })
