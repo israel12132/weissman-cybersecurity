@@ -476,6 +476,7 @@ export default function TopTierEngineProfile() {
           )}
         </section>
 
+        {!historyUnavailable && (
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 h-[280px]">
             <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.job_status_chart')}</h2>
@@ -502,6 +503,7 @@ export default function TopTierEngineProfile() {
             </ResponsiveContainer>
           </article>
         </section>
+        )}
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
@@ -521,7 +523,7 @@ export default function TopTierEngineProfile() {
 
         <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
           <h2 className="text-sm font-semibold text-white">{t('pages.topTierEngineProfile.recent_jobs')}</h2>
-          {jobs.length > 0 && (
+          {!historyUnavailable && jobs.length > 0 && (
             <WeissmanListToolbar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}

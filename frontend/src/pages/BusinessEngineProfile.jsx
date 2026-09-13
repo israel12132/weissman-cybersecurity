@@ -437,6 +437,7 @@ export default function BusinessEngineProfile() {
           )}
         </section>
 
+        {!historyUnavailable && (
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 h-[280px]">
             <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.job_status_dist')}</h3>
@@ -463,7 +464,9 @@ export default function BusinessEngineProfile() {
             </ResponsiveContainer>
           </article>
         </section>
+        )}
 
+        {!historyUnavailable && (
         <WeissmanListToolbar
           className="mb-2"
           searchQuery={searchQuery}
@@ -472,19 +475,20 @@ export default function BusinessEngineProfile() {
           resultCount={filteredFindings.length}
           totalCount={listFindings.length}
         />
+        )}
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
             <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.recent_jobs')}</h3>
             <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
-              {visibleJobs.map((j) => (
+              {!historyUnavailable && visibleJobs.map((j) => (
                 <div key={`${j.job_id}-${j.created_at}`} className="text-xs rounded border border-[var(--border-default)] bg-[var(--table-surface)] p-2 text-[var(--text-secondary)] font-mono">
                   <div>{j.created_at || '-'} | {j.status || '-'} | findings={j.findings_count || 0}</div>
                   <div className="text-[var(--text-muted)]">kind={j.kind || '-'} source={j.source || '-'}</div>
                 </div>
               ))}
               {!historyUnavailable && !jobs.length && <div className="text-xs text-[var(--text-muted)]">{t('pages.businessEngineProfile.no_jobs')}</div>}
-              {jobs.length > 0 && !visibleJobs.length && searchQuery.trim() && (
+              {!historyUnavailable && jobs.length > 0 && !visibleJobs.length && searchQuery.trim() && (
                 <div className="text-xs text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
               )}
             </div>
@@ -492,14 +496,14 @@ export default function BusinessEngineProfile() {
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
             <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.live_findings')}</h3>
             <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
-              {visibleFindings.map((f) => (
+              {!historyUnavailable && visibleFindings.map((f) => (
                 <div key={`${f.id}-${f.discovered_at}`} className="text-xs rounded border border-[var(--border-default)] bg-[var(--table-surface)] p-2 text-[var(--text-secondary)]">
                   <div className="font-medium text-white">{f.title || t('pages.businessEngineProfile.finding_fallback')}</div>
                   <div className="font-mono text-[var(--text-muted)]">{f.discovered_at || '-'} | {f.severity || '-'} | {f.source || '-'}</div>
                 </div>
               ))}
               {!historyUnavailable && !findings.length && <div className="text-xs text-[var(--text-muted)]">{t('pages.businessEngineProfile.no_findings')}</div>}
-              {findings.length > 0 && !visibleFindings.length && searchQuery.trim() && (
+              {!historyUnavailable && findings.length > 0 && !visibleFindings.length && searchQuery.trim() && (
                 <div className="text-xs text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
               )}
             </div>

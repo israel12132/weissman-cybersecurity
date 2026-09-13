@@ -31,4 +31,11 @@ describe('BusinessEngineProfile live-only truth', () => {
     expect(src).toMatch(/!historyUnavailable && !jobs\.length/)
     expect(src).toMatch(/!historyUnavailable && !findings\.length/)
   })
+
+  it('does not paint leftover leftover-history charts or job rows after a failed history GET', () => {
+    expect(src).toMatch(/!historyUnavailable &&[\s\S]{0,2000}LineChart accessibilityLayer data=\{findingsData\}/)
+    expect(src).toMatch(/!historyUnavailable &&[\s\S]{0,800}BarChart accessibilityLayer data=\{statusData\}/)
+    expect(src).toMatch(/!historyUnavailable && visibleJobs\.map/)
+    expect(src).toMatch(/!historyUnavailable && visibleFindings\.map/)
+  })
 })
