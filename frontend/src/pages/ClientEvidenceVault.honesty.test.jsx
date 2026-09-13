@@ -20,4 +20,11 @@ describe('ClientEvidenceVault live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
   })
+
+  it('mutes leftover client name in the title after a failed client GET', () => {
+    expect(src).toMatch(/title=\{!error && client\?\.name\n        \? t\('pages\.clientEvidenceVault\.title_with_client', \{ name: client\.name \}\)\n        : t\('pages\.clientEvidenceVault\.title'\)\}/)
+    expect(src).toMatch(/setError\(e\?\.message \|\| t\('pages\.clientEvidenceVault\.network_error'\)\)/)
+    expect(src).toMatch(/if \(clientR\.error\) \{\n        setError\(t\('pages\.clientEvidenceVault\.load_client_failed', \{ status: clientR\.error\.status \}\)\)\n        setLoading\(false\)\n        return/)
+    expect(src).not.toMatch(/catch \(e\) \{\s*setClient\(null\)/)
+  })
 })

@@ -328,7 +328,7 @@ export default function ClientEvidenceVault() {
 
   return (
     <PageShell
-      title={client?.name
+      title={!error && client?.name
         ? t('pages.clientEvidenceVault.title_with_client', { name: client.name })
         : t('pages.clientEvidenceVault.title')}
       subtitle={t('pages.clientEvidenceVault.subtitle')}
