@@ -18,4 +18,10 @@ describe('DarkWebMonitor live-only truth', () => {
   it('does not paint leftover leftover-last-updated after a failed findings GET', () => {
     expect(src).toMatch(/\{lastRefresh && !error && \(/)
   })
+
+  it('does not paint leftover leftover-finding counts after a failed findings GET', () => {
+    expect(src).toMatch(/\{!error && \(\n                <span className="text-\[var\(--text-muted\)\] font-mono text-xs">\(\{filtered\.length\}\)<\/span>/)
+    expect(src).toMatch(/if \(error \|\| !filtered\.length\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| filtered\.length === 0\}/)
+  })
 })

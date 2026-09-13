@@ -117,7 +117,8 @@ export default function DarkWebMonitor() {
   const { exportCsv: exportWorkbenchCsv } = useFindingsWorkbench(filtered, { csvPrefix: 'dark-web-findings' })
 
   const exportCsv = () => {
-    if (filtered.length) exportWorkbenchCsv()
+    if (error || !filtered.length) return
+    exportWorkbenchCsv()
   }
 
   const columns = useMemo(
@@ -192,7 +193,7 @@ export default function DarkWebMonitor() {
             onRefresh={load}
             onExport={exportCsv}
             refreshLoading={loading}
-            exportDisabled={filtered.length === 0}
+            exportDisabled={!!error || filtered.length === 0}
           />
         </div>
       )}
@@ -308,7 +309,9 @@ export default function DarkWebMonitor() {
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Filter className="w-4 h-4 text-rose-400" />
               {t('pages.darkWebMonitor.findings_heading')}
-              <span className="text-[var(--text-muted)] font-mono text-xs">({filtered.length})</span>
+              {!error && (
+                <span className="text-[var(--text-muted)] font-mono text-xs">({filtered.length})</span>
+              )}
             </h3>
             <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200">
               {t('pages.darkWebMonitor.open_findings')}

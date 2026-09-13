@@ -297,7 +297,7 @@ export default function VulnIntelDashboard() {
         </div>
         )}
 
-        {filtersExpanded && (
+        {filtersExpanded && !error && (
           <div className="glass-panel rounded-2xl p-4 sm:p-5 space-y-4">
             <FilterPills
               label={t('findings.filter_severity')}

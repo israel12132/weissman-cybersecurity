@@ -372,14 +372,14 @@ export default function AIAnalysisEngine() {
       actions={(
         <ShellScanActions
           onRefresh={load}
-          onExport={() => exportPatternsCsv(filtered)}
+          onExport={() => { if (error) return; exportPatternsCsv(filtered) }}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >
       <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 px-4 py-3 text-[11px] font-mono text-violet-200/80 mb-4 leading-relaxed">
-        {evidenceNotice}
+        {error ? t('pages.aiAnalysisEngine.evidence_soc') : evidenceNotice}
       </div>
 
       {lastUpdated && !error && (

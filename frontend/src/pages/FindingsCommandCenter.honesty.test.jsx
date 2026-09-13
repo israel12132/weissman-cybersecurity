@@ -15,5 +15,6 @@ describe('FindingsCommandCenter live-only truth', () => {
     expect(src).toMatch(/if \(error\) return/)
     expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
     expect(src).toMatch(/!error && \(tableData\.length > 0 \|\| loading\)/)
+    expect(src).toMatch(/filtersExpanded && !error &&/)
   })
 })

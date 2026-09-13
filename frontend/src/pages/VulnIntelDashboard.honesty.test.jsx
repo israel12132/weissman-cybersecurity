@@ -20,5 +20,6 @@ describe('VulnIntelDashboard live-only truth', () => {
     expect(src).toMatch(/count=\{error \? null : filtered\.length\}/)
     expect(src).toMatch(/if \(error\) return/)
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filtered\.length\}/)
+    expect(src).toMatch(/filtersExpanded && !error &&/)
   })
 })
