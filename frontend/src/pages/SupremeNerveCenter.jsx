@@ -15,6 +15,7 @@ import {
 import { createColumnHelper } from '@tanstack/react-table'
 import CeoProtectedRoute from '../components/ceo/CeoProtectedRoute'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
+import EmptyState from '../components/ui/EmptyState'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import DataTable from '../components/ui/DataTable'
 import { apiFetch } from '../utils/apiFetch'
@@ -306,6 +307,16 @@ function SupremeNerveCenterInner() {
           </div>
         ) : null}
 
+        {!loading && !snap ? (
+          <div data-testid="supreme-nerve-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('supremeNerveCenter.unavailable_title')}
+              body={t('supremeNerveCenter.unavailable_body')}
+            />
+          </div>
+        ) : null}
+
         {stuckEngines.length > 0 ? (
           <div className="mb-4 flex items-start gap-3 rounded-lg border border-orange-500/40 bg-orange-950/20 px-4 py-3">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-orange-400" />
@@ -324,7 +335,7 @@ function SupremeNerveCenterInner() {
           </div>
         ) : null}
 
-        {section === 'overview' && (
+        {section === 'overview' && snap && (
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-6">
               <SummaryCard
@@ -334,24 +345,24 @@ function SupremeNerveCenterInner() {
               />
               <SummaryCard
                 label={t('supremeNerveCenter.metrics.running')}
-                value={summary.engines_running ?? 0}
+                value={summary.engines_running ?? '—'}
                 tone="#22d3ee"
                 icon={Activity}
               />
               <SummaryCard
                 label={t('supremeNerveCenter.metrics.stuck')}
-                value={summary.engines_stuck ?? 0}
+                value={summary.engines_stuck ?? '—'}
                 tone="#f97316"
                 icon={AlertTriangle}
               />
               <SummaryCard
                 label={t('supremeNerveCenter.metrics.liveJobs')}
-                value={summary.live_jobs ?? 0}
+                value={summary.live_jobs ?? '—'}
                 icon={ListTodo}
               />
               <SummaryCard
                 label={t('supremeNerveCenter.metrics.inFlight')}
-                value={summary.in_flight_runs ?? 0}
+                value={summary.in_flight_runs ?? '—'}
                 icon={Zap}
               />
               <SummaryCard
@@ -426,7 +437,7 @@ function SupremeNerveCenterInner() {
           </div>
         )}
 
-        {section === 'engines' && (
+        {section === 'engines' && snap && (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-3">
               <div className="relative min-w-[200px] flex-1">
@@ -474,7 +485,7 @@ function SupremeNerveCenterInner() {
           </div>
         )}
 
-        {section === 'modules' && (
+        {section === 'modules' && snap && (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {modules.map((m) => (
               <div
@@ -536,7 +547,7 @@ function SupremeNerveCenterInner() {
           </div>
         )}
 
-        {section === 'jobs' && (
+        {section === 'jobs' && snap && (
           <DataTable
             columns={jobColumns}
             data={jobs}
@@ -548,7 +559,7 @@ function SupremeNerveCenterInner() {
           />
         )}
 
-        {section === 'controls' && (
+        {section === 'controls' && snap && (
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
               <h2 className="mb-3 flex items-center gap-2 text-sm text-[var(--text-secondary)]">

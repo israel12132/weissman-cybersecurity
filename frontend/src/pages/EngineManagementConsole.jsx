@@ -7,6 +7,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
+import EmptyState from '../components/ui/EmptyState'
 import { api } from '../utils/apiFetch';
 import { ENGINES_BY_ID } from '../lib/enginesRegistry';
 import Button from '../components/ui/Button'
@@ -65,6 +66,7 @@ export default function EngineManagementConsole() {
   const [selectedEngine, setSelectedEngine] = useState(null);
   const [configModal, setConfigModal] = useState(false);
   const [accounting, setAccounting] = useState(null);
+  const [catalogUnavailable, setCatalogUnavailable] = useState(false);
 
   // Engine categories from enginesRegistry.js
   const categories = [
@@ -115,23 +117,18 @@ export default function EngineManagementConsole() {
     try {
       setLoading(true);
       const data = await api.get('/api/ceo/god-mode/snapshot');
-      const core = data?.engine_matrix?.core_engines || [];
+      const core = data?.engine_matrix?.core_engines;
+      if (!Array.isArray(core)) {
+        setCatalogUnavailable(true);
+        setEngines([]);
+        return;
+      }
+      setCatalogUnavailable(false);
       setEngines(core.map(mapSnapshotEngine));
     } catch (error) {
       console.error('Failed to fetch engines:', error);
-      try {
-        const health = await api.get('/api/health');
-        const activeSet = new Set(health.active_engines || []);
-        setEngines([...activeSet].map((id) => ({
-          id,
-          name: ENGINES_BY_ID[id]?.label || id,
-          enabled: true,
-          category: ENGINES_BY_ID[id]?.group || 'misc',
-          description: ENGINES_BY_ID[id]?.description,
-        })));
-      } catch (fallbackErr) {
-        console.error('Failed to fetch active engines:', fallbackErr);
-      }
+      setCatalogUnavailable(true);
+      setEngines([]);
     } finally {
       setLoading(false);
     }
@@ -300,6 +297,14 @@ export default function EngineManagementConsole() {
             <SkeletonWidgetGrid count={4} />
             <SkeletonTable rows={10} cols={4} />
           </>
+        ) : catalogUnavailable ? (
+          <div data-testid="engine-catalog-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t(`${NS}.unavailable_title`)}
+              body={t(`${NS}.unavailable_body`)}
+            />
+          </div>
         ) : (
         <>
         {/* Stats Header */}

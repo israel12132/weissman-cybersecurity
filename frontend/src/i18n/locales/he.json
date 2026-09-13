@@ -2952,6 +2952,8 @@
       "filtered": " (מסונן)",
       "loading": "טוען מנועים...",
       "empty": "לא נמצאו מנועים התואמים למסננים.",
+      "unavailable_title": "קטלוג המנועים אינו זמין",
+      "unavailable_body": "לא ניתן לאשר את רשימת המנועים החיה. ריק אינו קטלוג.",
       "no_description": "אין תיאור זמין",
       "engine_config": "תצורת מנוע",
       "timeout_label": "פסק זמן (שניות)",
@@ -2964,7 +2966,7 @@
       "concurrency_detail": "מקביליות: {{count}}",
       "last_run_detail": "הרצה אחרונה: {{time}}",
       "id_detail": "מזהה: {{id}}",
-      "evidence_notice": "רשימת מנועים והפעלת טננט מ-GET /api/ceo/god-mode/snapshot עם נפילה ל-GET /api/health. מתגים נשמרים דרך PUT /api/ceo/tenant/engines; תצורה דרך PUT /api/system/config.",
+      "evidence_notice": "רשימת מנועים והפעלת טננט מ-GET /api/ceo/god-mode/snapshot. כשל ב-snapshot נשאר לא-זמין — GET /api/health אינו קטלוג. מתגים נשמרים דרך PUT /api/ceo/tenant/engines; תצורה דרך PUT /api/system/config.",
       "export_csv": "ייצוא CSV"
     },
     "strategicEngineProgram": {
@@ -4079,6 +4081,7 @@
       "delete_confirm": "למחוק את הראיה \"{{name}}\"?",
       "upload_failed": "ההעלאה נכשלה",
       "delete_failed": "המחיקה נכשלה",
+      "download_failed": "ההורדה נכשלה — לא ניתן לאשר את המחסן",
       "load_client_failed": "טעינת הלקוח נכשלה (HTTP {{status}})",
       "load_failed": "טעינת הראיות נכשלה (HTTP {{status}}) {{detail}}",
       "unavailable": "API כספת הראיות אינו זמין — ריק אינו מאושר.",
@@ -6043,6 +6046,7 @@
       "health": "בריאות: {{mins}}ד׳ · DB {{mb}}MB{{scan}}",
       "health_scan": " · סריקה",
       "health_empty": "בריאות: —",
+      "health_unavailable": "בריאות: לא זמין",
       "safe_mode_on": "מצב בטוח פעיל",
       "safe_mode_off": "מצב בטוח כבוי",
       "safe_mode_unavailable": "מצב בטוח לא זמין",
@@ -6050,6 +6054,7 @@
       "board_report_loading": "PDF…",
       "engage": "הפעל",
       "engaging": "מפעיל…",
+      "engage_failed": "הפעלת הסריקה אינה זמינה — לא ניתן לאשר את המחסן",
       "board_failed": "דוח דירקטוריון נכשל",
       "board_network_error": "שגיאת רשת ביצירת דוח דירקטוריון",
       "client_fallback": "לקוח {{id}}"
@@ -7633,7 +7638,9 @@
     "frontendChunks": "chunks JS בפרונט (Performance API)",
     "noJobs": "אין משימות pending או running לטננט זה.",
     "controlParams": "פרמטרי בקרה ב-runtime",
-    "ceoTelemetry": "טלמטריית CEO (גולמי)"
+    "ceoTelemetry": "טלמטריית CEO (גולמי)",
+    "unavailable_title": "מרכז העצבים אינו זמין",
+    "unavailable_body": "לא ניתן לאשר תמונת מצב חיה. אפסים במנוחה אינם צי רץ."
   },
   "targetIntel": {
     "title": "מודיעין מטרה",

@@ -8,7 +8,6 @@ import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import DataTable from '../components/ui/DataTable'
 import EmptyState from '../components/ui/EmptyState'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
-import { apiUrl } from '../lib/apiBase'
 import { apiFetch } from '../utils/apiFetch'
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
@@ -175,8 +174,34 @@ export default function ClientEvidenceVault() {
     }
   }
 
-  function downloadEvidence(item) {
-    window.open(apiUrl(`/api/evidence/${item.id}/download`), '_blank', 'noopener,noreferrer')
+  async function downloadEvidence(item) {
+    try {
+      const res = await apiFetch(`/api/evidence/${item.id}/download`, { raw: true })
+      if (!(res instanceof Response)) return
+      const blob = await res.blob()
+      const dispo = res.headers.get('Content-Disposition')
+      let filename = item.filename || 'evidence.bin'
+      if (dispo) {
+        const m = dispo.match(/filename="([^"]+)"/)
+        if (m) filename = m[1]
+      }
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.rel = 'noopener'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      if (e?.response) {
+        const data = await e.response.json().catch(() => ({}))
+        toast.error(data?.detail || data?.error || t('pages.clientEvidenceVault.download_failed'))
+      } else {
+        toast.error(e?.message || t('pages.clientEvidenceVault.download_failed'))
+      }
+    }
   }
 
   const listFindings = useMemo(() => evidence.map((item) => ({

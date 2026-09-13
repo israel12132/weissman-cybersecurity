@@ -2855,6 +2855,8 @@
       "filtered": " (filtered)",
       "loading": "Loading engines...",
       "empty": "No engines found matching your filters.",
+      "unavailable_title": "Engine catalog unavailable",
+      "unavailable_body": "Live engine roster could not be confirmed. Empty is not a catalog.",
       "no_description": "No description available",
       "engine_config": "Engine Configuration",
       "timeout_label": "Timeout (seconds)",
@@ -2867,7 +2869,7 @@
       "concurrency_detail": "Concurrency: {{count}}",
       "last_run_detail": "Last run: {{time}}",
       "id_detail": "ID: {{id}}",
-      "evidence_notice": "Engine roster and tenant enablement from GET /api/ceo/god-mode/snapshot with fallback to GET /api/health. Toggles persist via PUT /api/ceo/tenant/engines; config via PUT /api/system/config.",
+      "evidence_notice": "Engine roster and tenant enablement from GET /api/ceo/god-mode/snapshot. Snapshot failure stays unavailable — GET /api/health is not a catalog. Toggles persist via PUT /api/ceo/tenant/engines; config via PUT /api/system/config.",
       "export_csv": "Export CSV"
     },
     "strategicEngineProgram": {
@@ -4079,6 +4081,7 @@
       "delete_confirm": "Delete evidence \"{{name}}\"?",
       "upload_failed": "Upload failed",
       "delete_failed": "Delete failed",
+      "download_failed": "Download failed — store could not be confirmed",
       "load_client_failed": "Failed to load client (HTTP {{status}})",
       "load_failed": "Failed to load evidence (HTTP {{status}}) {{detail}}",
       "unavailable": "Evidence vault API unavailable — empty is not confirmed.",
@@ -6043,6 +6046,7 @@
       "health": "Health: {{mins}}m · DB {{mb}}MB{{scan}}",
       "health_scan": " · SCAN",
       "health_empty": "Health: —",
+      "health_unavailable": "Health: unavailable",
       "safe_mode_on": "Safe mode ON",
       "safe_mode_off": "Safe mode OFF",
       "safe_mode_unavailable": "Safe mode unavailable",
@@ -6050,6 +6054,7 @@
       "board_report_loading": "PDF…",
       "engage": "ENGAGE",
       "engaging": "ENGAGING…",
+      "engage_failed": "Scan launch unavailable — store could not be confirmed",
       "board_failed": "Board report failed",
       "board_network_error": "Network error generating board report",
       "client_fallback": "Client {{id}}"
@@ -7633,7 +7638,9 @@
     "frontendChunks": "Frontend JS chunks (Performance API)",
     "noJobs": "No pending or running async jobs for this tenant.",
     "controlParams": "Runtime control parameters",
-    "ceoTelemetry": "CEO ops telemetry (raw)"
+    "ceoTelemetry": "CEO ops telemetry (raw)",
+    "unavailable_title": "Nerve center unavailable",
+    "unavailable_body": "Live snapshot could not be confirmed. Idle zeros are not a running fleet."
   },
   "targetIntel": {
     "title": "Target Intelligence",
