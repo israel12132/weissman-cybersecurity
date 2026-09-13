@@ -195,6 +195,16 @@ export default function ClientIntegrations() {
     }
   }
 
+  const handleExport = useCallback(() => {
+    if (error || unavailable) return
+    const blob = new Blob([JSON.stringify(form, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `client-${id}-integrations.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }, [error, unavailable, form, id])
+
   function togglePlatform(p) {
     patch({
       agent_platforms: form.agent_platforms.includes(p)
@@ -216,15 +226,9 @@ export default function ClientIntegrations() {
       actions={(
         <ShellScanActions
           onRefresh={load}
-          onExport={() => {
-            const blob = new Blob([JSON.stringify(form, null, 2)], { type: 'application/json' })
-            const a = document.createElement('a')
-            a.href = URL.createObjectURL(blob)
-            a.download = `client-${id}-integrations.json`
-            a.click()
-            URL.revokeObjectURL(a.href)
-          }}
+          onExport={handleExport}
           refreshLoading={loading}
+          exportDisabled={!!error || unavailable}
         />
       )}
     >

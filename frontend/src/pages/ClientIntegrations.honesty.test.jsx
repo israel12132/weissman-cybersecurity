@@ -14,4 +14,10 @@ describe('ClientIntegrations live-only truth', () => {
     expect(src).toMatch(/unavailable_title/)
     expect(src).toMatch(/disabled=\{saving \|\| unavailable\}/)
   })
+
+  it('does not dump leftover leftover-integrations JSON after a failed integrations GET', () => {
+    expect(src).toMatch(/const handleExport = useCallback\(\(\) => \{\n    if \(error \|\| unavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| unavailable\}/)
+    expect(src).toMatch(/if \(!hasLoadedRef\.current\) setUnavailable\(true\)/)
+  })
 })
