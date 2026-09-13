@@ -2040,7 +2040,7 @@ async fn run_cycle_for_tenant_inner(
                 }
             }
             if let Some(log) = semantic_log {
-                let _ = sqlx::query(
+                sqlx::query(
                     "INSERT INTO semantic_fuzz_log (tenant_id, client_id, run_id, log_text) VALUES ($1, $2, $3, $4)",
                 )
                 .bind(tenant_id)
@@ -2048,7 +2048,7 @@ async fn run_cycle_for_tenant_inner(
                 .bind(run_id)
                 .bind(log)
                 .execute(&mut *tx)
-                .await;
+                .await?;
             }
             for f in &result.findings {
                 if let Some(obj) = f.as_object() {

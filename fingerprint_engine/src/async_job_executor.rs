@@ -265,6 +265,33 @@ async fn persist_findings_best_effort(
     })
 }
 
+async fn persist_semantic_fuzz_log(
+    app_pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    log: &str,
+) -> Result<(), String> {
+    if log.is_empty() {
+        return Ok(());
+    }
+    let mut tx = db::begin_tenant_tx(app_pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
+    sqlx::query(
+        "INSERT INTO semantic_fuzz_log (tenant_id, client_id, run_id, log_text) VALUES ($1, $2, NULL, $3)",
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(log)
+    .execute(&mut *tx)
+    .await
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
+    Ok(())
+}
+
 async fn persist_findings_grouped_by_client_field(
     app_pool: &PgPool,
     tenant_id: i64,
@@ -1495,19 +1522,7 @@ async fn execute_job_unscoped(
                     &fuzzy.state_nodes,
                     &fuzzy.state_edges,
                 );
-                if !log.is_empty() {
-                    if let Ok(mut tx) = db::begin_tenant_tx(app_pool.as_ref(), tid).await {
-                        let _ = sqlx::query(
-                            "INSERT INTO semantic_fuzz_log (tenant_id, client_id, run_id, log_text) VALUES ($1, $2, NULL, $3)",
-                        )
-                        .bind(tid)
-                        .bind(cid)
-                        .bind(&log)
-                        .execute(&mut *tx)
-                        .await;
-                        let _ = tx.commit().await;
-                    }
-                }
+                persist_semantic_fuzz_log(app_pool.as_ref(), tid, cid, &log).await?;
             }
             let persisted = persist_findings_best_effort(
                 app_pool.as_ref(),

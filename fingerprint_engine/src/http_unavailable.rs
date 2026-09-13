@@ -5329,4 +5329,33 @@ mod tests {
         assert!(semantic.contains("get_config_tx("));
         assert!(!semantic.contains("get_config_tx_strict"));
     }
+
+    #[test]
+    fn semantic_fuzz_log_persist_store_down_is_not_empty_graph_ok() {
+        let exec = include_str!("async_job_executor.rs");
+        let persist = named_fn_src(exec, "async fn persist_semantic_fuzz_log");
+        assert!(persist.contains("Result<(), String>"));
+        assert!(persist.contains("\"store_down\".to_string()"));
+        assert!(!compact_src(persist).contains("let_=tx.commit().await;"));
+        assert!(persist.contains("tx.commit().await.is_err()"));
+        assert!(!persist.contains("if let Ok(mut tx)"));
+        let unscoped = named_fn_src(exec, "async fn execute_job_unscoped");
+        assert!(compact_src(unscoped).contains(
+            "persist_semantic_fuzz_log(app_pool.as_ref(),tid,cid,&log).await?"
+        ));
+        assert!(!unscoped.contains("INSERT INTO semantic_fuzz_log"));
+        assert!(!compact_src(unscoped).contains(
+            "ifletOk(muttx)=db::begin_tenant_tx(app_pool.as_ref(),tid).await"
+        ));
+        let cycle = named_fn_src(
+            include_str!("orchestrator/mod.rs"),
+            "async fn run_cycle_for_tenant_inner",
+        );
+        assert!(compact_src(cycle).contains(
+            "INSERT INTO semantic_fuzz_log (tenant_id, client_id, run_id, log_text) VALUES ($1, $2, $3, $4)\",).bind(tenant_id).bind(db_client_id).bind(run_id).bind(log).execute(&mut*tx).await?"
+        ));
+        assert!(!compact_src(cycle).contains(
+            "let_=sqlx::query(\"INSERT INTO semantic_fuzz_log"
+        ));
+    }
 }
