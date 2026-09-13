@@ -50,6 +50,7 @@ export default function TopTierEngineProfile() {
   const [history, setHistory] = useState(null)
   const [historyLoading, setHistoryLoading] = useState(true)
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [clientId, setClientId] = useState('')
   const [target, setTarget] = useState('')
   const [runState, setRunState] = useState({ running: false, msg: '' })
@@ -90,8 +91,16 @@ export default function TopTierEngineProfile() {
   useEffect(() => {
     let cancelled = false
     async function loadClients() {
-      const d = await apiFetch('/api/clients').catch(() => null)
-      if (!cancelled && Array.isArray(d)) setClients(d)
+      try {
+        const d = await apiFetch('/api/clients')
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (cancelled) return
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
+      } catch {
+        if (!cancelled) setClientsUnavailable(true)
+      }
     }
     loadClients()
     return () => {
@@ -362,6 +371,11 @@ export default function TopTierEngineProfile() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            {clientsUnavailable && (
+              <p data-testid="top-tier-engine-profile-clients-unavailable" className="text-xs text-amber-300/80 font-mono md:col-span-3">
+                {t('pages.topTierEngineProfile.clients_unavailable')}
+              </p>
+            )}
             <input
               value={target}
               onChange={(e) => setTarget(e.target.value)}

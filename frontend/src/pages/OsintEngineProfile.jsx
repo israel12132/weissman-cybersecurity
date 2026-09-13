@@ -74,6 +74,7 @@ export default function OsintEngineProfile() {
   const { t } = useTranslation()
   const { selectedClientId: cockpitClientId } = useClient()
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState('')
   const [target, setTarget] = useState('')
   const [running, setRunning] = useState(false)
@@ -111,8 +112,13 @@ export default function OsintEngineProfile() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      .catch((err) => { if (import.meta.env.DEV) console.warn('[OsintEngineProfile] clients load failed:', err) })
+      .then((d) => {
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   const loadHistory = useCallback(async () => {
@@ -422,6 +428,11 @@ export default function OsintEngineProfile() {
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
+              {clientsUnavailable && (
+                <p data-testid="osint-engine-profile-clients-unavailable" className="text-xs text-amber-300/80 font-mono mt-1">
+                  {t('pages.osintEngineProfile.clients_unavailable')}
+                </p>
+              )}
               <div className="text-[10px] text-[var(--text-muted)] font-mono mt-1">{t('pages.osintEngineProfile.active_client', { name: selectedClientName })}</div>
             </div>
             <div>

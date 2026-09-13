@@ -23,6 +23,7 @@ export default function TopTierEngineHub() {
   const [audit, setAudit] = useState(null)
   const [loading, setLoading] = useState(true)
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [clientId, setClientId] = useState('')
   const [target, setTarget] = useState('')
   const [probeJobId, setProbeJobId] = useState('')
@@ -52,9 +53,13 @@ export default function TopTierEngineHub() {
     async function loadClients() {
       try {
         const d = await apiFetch('/api/clients')
-        if (!cancelled && Array.isArray(d)) setClients(d)
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (cancelled) return
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
       } catch {
-        // clients load failed — leave list unchanged
+        if (!cancelled) setClientsUnavailable(true)
       }
     }
     loadClients()
@@ -236,6 +241,11 @@ export default function TopTierEngineHub() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            {clientsUnavailable && (
+              <p data-testid="top-tier-engine-hub-clients-unavailable" className="text-xs text-amber-300/80 font-mono md:col-span-4">
+                {t('pages.topTierEngineHub.clients_unavailable')}
+              </p>
+            )}
             <input
               value={target}
               onChange={(e) => setTarget(e.target.value)}

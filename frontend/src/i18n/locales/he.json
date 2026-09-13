@@ -3044,6 +3044,7 @@
       "ops_desc": "דף זה בנוי לפעילות עסקית: בקרות הרצה, ציר זמן ראיות, סטטוס משימה חי וייצוא להנהלה.",
       "run_heading": "הפעל מנוע זה",
       "select_client": "בחר לקוח (אופציונלי)",
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר.",
       "target_required_placeholder": "https://target.example",
       "target_optional_placeholder": "יעד אופציונלי",
       "queue_scan": "הוסף סריקה לתור",
@@ -3567,6 +3568,7 @@
       "subtitle": "בדיקות נתיב תקיפה HTTP/TLS חיות מול יעדים מורשים",
       "client_label": "לקוח:",
       "select_client": "— בחר לקוח —",
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר.",
       "run_all": "▶ הפעל את כל הבדיקות",
       "select_client_first": "בחר לקוח תחילה",
       "no_domain": "ללקוח אין יעד דומיין מאושר",
@@ -4364,6 +4366,7 @@
       "auto_poll_off": "בדיקה אוטומטית כבויה",
       "callbacks_for_token": "Callbacks לטוקן זה ({{count}})",
       "tenant_callbacks_heading": "Callbacks OAST אחרונים בטננט",
+      "callbacks_unavailable": "API הקולבים אינו זמין — callbacks ריקים אינם מאושרים.",
       "col_time": "זמן",
       "col_channel": "ערוץ",
       "col_source": "IP מקור",
@@ -4438,6 +4441,7 @@
       "reality_heading": "בדיקת מציאות חיבור",
       "reality_body": "הדף בודק כל מנוע Top-Tier מול קטלוג, רזולוציה קנונית ונתיב הרצה. מנועים ירוקים ניתנים להרצה מ-Command Center.",
       "client_optional": "לקוח (אופציונלי)",
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר.",
       "target_placeholder": "https://target.example",
       "running_probe": "מריץ probe...",
       "run_health_probe": "הרץ health probe",
@@ -4604,6 +4608,7 @@
       "run_heading": "הרץ OSINT בדיוק",
       "client_label": "לקוח",
       "select_client": "— בחר לקוח —",
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר.",
       "active_client": "פעיל: {{name}}",
       "no_client_selected": "לא נבחר לקוח",
       "target_label": "URL / דומיין יעד",
@@ -4763,6 +4768,7 @@
       "no": "לא",
       "run_live": "הרץ מנוע זה (חי)",
       "select_client": "בחר לקוח (אופציונלי)",
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר.",
       "target_required": "https://target.example",
       "target_optional": "יעד אופציונלי",
       "running": "מריץ...",
@@ -4922,7 +4928,8 @@
       "evidence_notice": "הגדרות ספק SSO/OIDC/SAML מ-GET/PUT /api/sso-config. metadata ו-redirect URIs הם הגדרות tenant חיות — login בדיקה פוגע ב-IdP endpoints שהוגדרו."
     },
     "engineDetail": {
-      "evidence_notice": "היסטוריית ריצות מ-GET /api/engines/history/:engineId. סריקות חיות ב-POST /api/command-center/scan עם פרמטרים לפי מנוע. התקדמות בזמן אמת: GET /api/telemetry/stream?job_id=… — ממצאים נשמרים רק ב-tenant שלך."
+      "evidence_notice": "היסטוריית ריצות מ-GET /api/engines/history/:engineId. סריקות חיות ב-POST /api/command-center/scan עם פרמטרים לפי מנוע. התקדמות בזמן אמת: GET /api/telemetry/stream?job_id=… — ממצאים נשמרים רק ב-tenant שלך.",
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר."
     },
     "clientDetail": {
       "evidence_notice": "רשומת לקוח, scope ונתוני engagement מ-GET /api/clients/:id ו-endpoints קשורים. חבילות סריקה ו-vault הוכחות הם רשומות DB חיות — ללא פרופילי דמו."
@@ -5875,7 +5882,8 @@
       "evidence_notice": "תבניות פרופיל סריקה מפעילות חבילות מנועים אמיתיות ב-POST /api/command-center/scan ו-POST /api/scan/all-engines. כרטיסי פרופיל הם presets של RoE — טלמטריה מ-GET /api/engines/telemetry.",
       "readiness_blocked": "מוכנות לקוח {{pct}}% — השלם אינטגרציות תחילה",
       "readiness_pct": "מוכנות {{pct}}%",
-      "engine_queued": "המנוע נכנס לתור (משימה: {{jobId}})"
+      "engine_queued": "המנוע נכנס לתור (משימה: {{jobId}})",
+      "clients_unavailable": "API הלקוחות אינו זמין — בורר חסר אינו tenant חסר."
     },
     "agentManagement": {
       "evidence_notice": "roster agents ו-heartbeat מ-GET /api/agents/status. tasking מרחוק משתמש בערוצי agent מאומתים — agents offline מציגים timestamps last-seen כנים."

@@ -50,6 +50,7 @@ export default function OobVerification() {
   const [probe, setProbe] = useState(null)
   const [error, setError] = useState('')
   const [callbacks, setCallbacks] = useState([])
+  const [callbacksUnavailable, setCallbacksUnavailable] = useState(false)
   const [autoPoll, setAutoPoll] = useState(true)
   const [recentHits, setRecentHits] = useState([])
 
@@ -89,16 +90,20 @@ export default function OobVerification() {
     if (!token) return
     setPolling(true)
     try {
-      const [data, cbData] = await Promise.all([
-        apiFetch(`/api/oast/verify/${token}`),
-        apiFetch('/api/oast/callbacks').catch(() => null),
-      ])
+      const data = await apiFetch(`/api/oast/verify/${token}`)
       setProbe((prev) => ({ ...(prev || {}), ...data }))
-
-      if (cbData) {
-        const all = Array.isArray(cbData.callbacks) ? cbData.callbacks : []
-        setRecentHits(all.slice(0, 20))
-        setCallbacks(all.filter((c) => c.interaction_token === token))
+      try {
+        const cbData = await apiFetch('/api/oast/callbacks')
+        const all = Array.isArray(cbData?.callbacks) ? cbData.callbacks : null
+        if (!all) {
+          setCallbacksUnavailable(true)
+        } else {
+          setCallbacksUnavailable(false)
+          setRecentHits(all.slice(0, 20))
+          setCallbacks(all.filter((c) => c.interaction_token === token))
+        }
+      } catch {
+        setCallbacksUnavailable(true)
       }
     } catch (e) {
       const body = e?.response ? await e.response.json().catch(() => ({})) : {}
@@ -343,6 +348,11 @@ export default function OobVerification() {
                   </div>
                 )}
 
+                {callbacksUnavailable && (
+                  <p data-testid="oob-callbacks-unavailable" className="text-xs text-amber-300/80 font-mono">
+                    {t('pages.oobVerification.callbacks_unavailable')}
+                  </p>
+                )}
                 {callbacks.length > 0 && (
                   <div>
                     <WeissmanListToolbar
@@ -385,7 +395,7 @@ export default function OobVerification() {
           </div>
         </div>
 
-        {recentHits.length > 0 && (
+        {(recentHits.length > 0 || callbacksUnavailable) && (
           <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5">
             <WeissmanListToolbar
               className="mb-4"
@@ -397,7 +407,11 @@ export default function OobVerification() {
             <h3 className="text-xs font-mono uppercase tracking-widest text-[var(--text-muted)] mb-4">
               {t('pages.oobVerification.tenant_callbacks_heading')}
             </h3>
-            {visibleRecentHits.length === 0 ? (
+            {callbacksUnavailable ? (
+              <p className="text-xs text-amber-300/80 font-mono">
+                {t('pages.oobVerification.callbacks_unavailable')}
+              </p>
+            ) : visibleRecentHits.length === 0 ? (
               <EmptyState
                 icon="search"
                 title={t('weissmanFindings.filtered_title')}

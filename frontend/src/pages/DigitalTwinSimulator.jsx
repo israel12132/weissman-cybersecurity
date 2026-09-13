@@ -271,6 +271,7 @@ export default function DigitalTwinSimulator() {
   const { t } = useTranslation()
   const { clientId: routeClientId } = useParams()
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(routeClientId ?? null)
   const { postScan } = useCommandCenterScan(selectedClientId)
   const [target, setTarget] = useState('')
@@ -348,8 +349,13 @@ export default function DigitalTwinSimulator() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      .catch(() => setClients([]))
+      .then((d) => {
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   useEffect(() => {
@@ -538,6 +544,11 @@ export default function DigitalTwinSimulator() {
               <option value="">{t('pages.digitalTwinSimulator.select_client')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+            {clientsUnavailable && (
+              <p data-testid="digital-twin-clients-unavailable" className="text-xs text-amber-300/80 font-mono">
+                {t('pages.digitalTwinSimulator.clients_unavailable')}
+              </p>
+            )}
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
             <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.digitalTwinSimulator.target_label')}</label>

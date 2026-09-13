@@ -2947,6 +2947,7 @@
       "ops_desc": "This page is built for business operations: run controls, evidence timeline, live job status, and executive export artifacts.",
       "run_heading": "Run This Engine",
       "select_client": "Select client (optional)",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
       "target_required_placeholder": "https://target.example",
       "target_optional_placeholder": "Optional target",
       "queue_scan": "Queue Scan",
@@ -3470,6 +3471,7 @@
       "subtitle": "Live HTTP/TLS attack-path probes against authorized targets",
       "client_label": "Client:",
       "select_client": "— Select client —",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
       "run_all": "▶ Run All Probes",
       "select_client_first": "Select a client first",
       "no_domain": "Client has no approved domain target",
@@ -4364,6 +4366,7 @@
       "auto_poll_off": "Auto-poll OFF",
       "callbacks_for_token": "Callbacks for this token ({{count}})",
       "tenant_callbacks_heading": "Recent tenant OAST callbacks",
+      "callbacks_unavailable": "Callback API unavailable — empty callbacks are not confirmed.",
       "col_time": "Time",
       "col_channel": "Channel",
       "col_source": "Source IP",
@@ -4438,6 +4441,7 @@
       "reality_heading": "Connectivity Reality Check",
       "reality_body": "This page audits each Top-Tier engine against catalog registration, canonical resolution, and runtime execution path. Green engines are runnable from the Command Center flow.",
       "client_optional": "Client (optional)",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
       "target_placeholder": "https://target.example",
       "running_probe": "Running probe...",
       "run_health_probe": "Run health probe",
@@ -4604,6 +4608,7 @@
       "run_heading": "Run OSINT precisely",
       "client_label": "Client",
       "select_client": "— Select client —",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
       "active_client": "Active: {{name}}",
       "no_client_selected": "No client selected",
       "target_label": "Target URL / Domain",
@@ -4763,6 +4768,7 @@
       "no": "no",
       "run_live": "Run This Engine (Live)",
       "select_client": "Select client (optional)",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant.",
       "target_required": "https://target.example",
       "target_optional": "Optional target",
       "running": "Running...",
@@ -4922,7 +4928,8 @@
       "evidence_notice": "SSO/OIDC/SAML provider configuration from GET/PUT /api/sso-config. Metadata and redirect URIs are live tenant settings — test logins hit your configured IdP endpoints."
     },
     "engineDetail": {
-      "evidence_notice": "Run history from GET /api/engines/history/:engineId. Live scans via POST /api/command-center/scan with engine-specific params. Progress streams on GET /api/telemetry/stream?job_id=… — findings persist to your tenant only."
+      "evidence_notice": "Run history from GET /api/engines/history/:engineId. Live scans via POST /api/command-center/scan with engine-specific params. Progress streams on GET /api/telemetry/stream?job_id=… — findings persist to your tenant only.",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant."
     },
     "clientDetail": {
       "evidence_notice": "Client record, scope, and engagement data from GET /api/clients/:id and related tenant endpoints. Scan bundles and evidence vault rows are live database records — never seeded demo profiles."
@@ -5875,7 +5882,8 @@
       "evidence_notice": "Scan profile templates launch real engine bundles via POST /api/command-center/scan and POST /api/scan/all-engines. Profile cards are RoE presets — telemetry from GET /api/engines/telemetry.",
       "readiness_blocked": "Client readiness {{pct}}% — complete integrations first",
       "readiness_pct": "Readiness {{pct}}%",
-      "engine_queued": "Engine queued (Job: {{jobId}})"
+      "engine_queued": "Engine queued (Job: {{jobId}})",
+      "clients_unavailable": "Clients API unavailable — a missing picker is not a missing tenant."
     },
     "agentManagement": {
       "evidence_notice": "Endpoint agent roster and heartbeat from GET /api/agents/status. Remote tasking uses authenticated agent channels — offline agents show honest last-seen timestamps."

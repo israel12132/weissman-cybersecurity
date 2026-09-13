@@ -75,6 +75,7 @@ export default function BusinessEngineProfile() {
   const [history, setHistory] = useState(null)
   const [profileLoading, setProfileLoading] = useState(false)
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [clientId, setClientId] = useState('')
   const [target, setTarget] = useState('')
   const [runState, setRunState] = useState({ running: false, msg: '' })
@@ -115,9 +116,13 @@ export default function BusinessEngineProfile() {
     async function loadClients() {
       try {
         const d = await apiFetch('/api/clients')
-        if (!cancelled && Array.isArray(d)) setClients(d)
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (cancelled) return
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
       } catch {
-        // clients load failed — leave list unchanged
+        if (!cancelled) setClientsUnavailable(true)
       }
     }
     loadClients()
@@ -355,6 +360,11 @@ export default function BusinessEngineProfile() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            {clientsUnavailable && (
+              <p data-testid="business-engine-profile-clients-unavailable" className="text-xs text-amber-300/80 font-mono md:col-span-3">
+                {t('pages.businessEngineProfile.clients_unavailable')}
+              </p>
+            )}
             <input
               value={target}
               onChange={(e) => setTarget(e.target.value)}

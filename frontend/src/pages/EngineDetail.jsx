@@ -412,6 +412,7 @@ export default function EngineDetail() {
   const esRef = useRef(null)
   const { selectedClientId: cockpitClientId } = useClient()
   const [clients, setClients]             = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [clientIntegrations, setClientIntegrations] = useState(null)
   const { extraParams, setParam: setExtraParam } = useEngineScanParams(engineId, clientIntegrations)
@@ -428,9 +429,13 @@ export default function EngineDetail() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   const reloadHistory = useCallback(async () => {
@@ -829,6 +834,11 @@ export default function EngineDetail() {
               <option value="">{t('engines.select_client')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+            {clientsUnavailable && (
+              <p data-testid="engine-detail-clients-unavailable" className="text-xs text-amber-300/80 font-mono mt-1">
+                {t('pages.engineDetail.clients_unavailable')}
+              </p>
+            )}
           </div>
 
           {/* Target */}
