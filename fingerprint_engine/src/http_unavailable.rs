@@ -1639,8 +1639,10 @@ mod tests {
         let rest = &src[start..];
         let after = &rest[sig.len()..];
         let end_async = after.find("\nasync fn ").unwrap_or(usize::MAX);
+        let end_pub_async = after.find("\npub async fn ").unwrap_or(usize::MAX);
         let end_fn = after.find("\nfn ").unwrap_or(usize::MAX);
-        let rel = end_async.min(end_fn);
+        let end_pub_fn = after.find("\npub fn ").unwrap_or(usize::MAX);
+        let rel = end_async.min(end_pub_async).min(end_fn).min(end_pub_fn);
         if rel == usize::MAX {
             rest
         } else {
@@ -3529,6 +3531,7 @@ mod tests {
         let pool_fn = named_fn_src(src, "pub async fn confidence_multiplier(");
         assert!(pool_fn.contains("Result<f64, String>"));
         assert!(pool_fn.contains("return Ok(1.0)"));
+        assert!(!pool_fn.contains("pub async fn confidence_multiplier_tx"));
         let tx_fn = named_fn_src(src, "pub async fn confidence_multiplier_tx");
         assert!(tx_fn.contains("Result<f64, String>"));
         assert!(tx_fn.contains("store_down"));
@@ -3609,10 +3612,13 @@ mod tests {
         assert!(lock.contains("Result<Option<SoarLockGuard>, String>"));
         assert!(lock.contains("store_down"));
         assert!(!compact_src(lock).contains(".ok().unwrap_or(false)"));
+        assert!(!lock.contains("pub async fn mark_completed"));
         let iso = named_fn_src(
             include_str!("soar/idempotency.rs"),
             "pub async fn try_acquire_isolate_lock",
         );
+        assert!(iso.contains("Result<SoarLockGuard, String>"));
+        assert!(!iso.contains("pub async fn try_acquire_lock"));
         assert!(!compact_src(iso).contains(".ok().unwrap_or(false)"));
         let integ = include_str!("soar/integrations.rs");
         let load = named_fn_src(integ, "pub async fn load_integrations");
@@ -3795,5 +3801,40 @@ mod tests {
         );
         assert!(agent.contains("tcp_probe_unreachable_batch"));
         assert!(!agent.contains("tcp_open"));
+    }
+
+    #[test]
+    fn worker_ingest_enqueue_leader_store_down_is_not_empty_ok() {
+        let worker = include_str!("soar/worker.rs");
+        let cycle = named_fn_src(worker, "async fn run_cycle");
+        assert!(!compact_src(cycle).contains("fetch_all(auth_pool).await.unwrap_or_default()"));
+        assert!(cycle.contains("map_err(|_| \"store_down\".to_string())?"));
+        assert!(cycle.contains("verify_heal_job(app_pool, tenant_id, &task.target).await?"));
+        let heal = named_fn_src(worker, "async fn verify_heal_job");
+        assert!(heal.contains("Result<bool, String>"));
+        assert!(!compact_src(heal).contains(".ok().flatten()"));
+        assert!(heal.contains("store_down"));
+        let leader = named_fn_src(worker, "async fn try_acquire_leader");
+        assert!(leader.contains("Result<bool, String>"));
+        assert!(!compact_src(leader).contains(".ok().unwrap_or(false)"));
+        assert!(worker.contains("leader election store_down"));
+
+        let ingest = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub async fn store_finding_for_task",
+        );
+        assert!(!ingest.contains("let _ = crate::ueba_detector::ingest_sample"));
+        assert!(ingest.contains("map_err(|e| sqlx::Error::Protocol(e))?"));
+
+        let exec = named_fn_src(
+            include_str!("soar/engine.rs"),
+            "pub async fn execute_armored_action",
+        );
+        assert!(!compact_src(exec).contains("let_=enqueue_verification"));
+        assert!(exec.contains("enqueue_verification(pool, cmd.tenant_id, execution_id, &probe)"));
+        assert!(exec.contains("status: \"failed\".into()"));
+
+        let merge = named_fn_src(include_str!("auto_heal_job.rs"), "async fn maybe_auto_merge_pr");
+        assert!(!compact_src(merge).contains(".ok().flatten().unwrap_or_default()"));
     }
 }

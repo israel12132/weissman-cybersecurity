@@ -363,7 +363,27 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
                         .await;
             }
             if let Some(probe) = probe_from_outcome(&outcome, &cmd) {
-                let _ = enqueue_verification(pool, cmd.tenant_id, execution_id, &probe).await;
+                if enqueue_verification(pool, cmd.tenant_id, execution_id, &probe)
+                    .await
+                    .is_err()
+                {
+                    let _ = update_status(
+                        pool,
+                        cmd.tenant_id,
+                        execution_id,
+                        ExecutionStatus::Failed,
+                        "store_down",
+                    )
+                    .await;
+                    mark_completed(&idem, Duration::from_secs(86_400)).await;
+                    audit::log_execution(pool, &cmd, "failed", "store_down", Some(execution_id))
+                        .await;
+                    return ActionOutcome {
+                        status: "failed".into(),
+                        detail: "store_down".into(),
+                        execution_id: Some(execution_id),
+                    };
+                }
             } else {
                 let _ = update_status(
                     pool,

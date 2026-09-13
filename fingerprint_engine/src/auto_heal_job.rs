@@ -347,12 +347,16 @@ async fn maybe_auto_merge_pr(
             .bind(client_id)
             .bind(finding_id)
             .fetch_optional(&mut *tx)
-            .await
-            .ok()
-            .flatten()
-            .unwrap_or_default();
-            let _ = tx.commit().await;
-            s
+            .await;
+            match s {
+                Ok(v) => {
+                    if tx.commit().await.is_err() {
+                        return;
+                    }
+                    v.unwrap_or_default()
+                }
+                Err(_) => return,
+            }
         }
         Err(_) => return,
     };

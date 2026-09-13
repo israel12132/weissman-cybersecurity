@@ -51,31 +51,36 @@ fn set_leader_gauge(is_leader: bool) {
     metrics::gauge!("weissman_soar_verify_leader").set(if is_leader { 1.0 } else { 0.0 });
 }
 
-async fn try_acquire_leader(replica: &str) -> bool {
+async fn try_acquire_leader(replica: &str) -> Result<bool, String> {
     let Some(url) = std::env::var("REDIS_URL")
         .ok()
         .filter(|s| !s.trim().is_empty())
     else {
         // Single-node: always leader.
-        return true;
+        return Ok(true);
     };
-    let Ok(client) = redis::Client::open(url) else {
-        return false;
-    };
-    let Ok(mut conn) = client.get_multiplexed_async_connection().await else {
-        return false;
-    };
-    let acquired: bool = conn.set_nx(LEADER_KEY, replica).await.ok().unwrap_or(false);
+    let client = redis::Client::open(url).map_err(|_| "store_down".to_string())?;
+    let mut conn = client
+        .get_multiplexed_async_connection()
+        .await
+        .map_err(|_| "store_down".to_string())?;
+    let acquired: bool = conn
+        .set_nx(LEADER_KEY, replica)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     if acquired {
         let _: Result<(), _> = conn.expire(LEADER_KEY, leader_ttl_secs()).await;
-        return true;
+        return Ok(true);
     }
-    let current: Option<String> = conn.get(LEADER_KEY).await.ok();
+    let current: Option<String> = conn
+        .get(LEADER_KEY)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     if current.as_deref() == Some(replica) {
         let _: Result<(), _> = conn.expire(LEADER_KEY, leader_ttl_secs()).await;
-        return true;
+        return Ok(true);
     }
-    false
+    Ok(false)
 }
 
 pub fn spawn_soar_verification_worker(app_pool: Arc<PgPool>, auth_pool: Arc<PgPool>) {
@@ -94,7 +99,14 @@ pub fn spawn_soar_verification_worker(app_pool: Arc<PgPool>, auth_pool: Arc<PgPo
         ticker.tick().await;
         loop {
             ticker.tick().await;
-            let is_leader = try_acquire_leader(&replica).await;
+            let is_leader = match try_acquire_leader(&replica).await {
+                Ok(v) => v,
+                Err(e) => {
+                    record_cycle_metric("error");
+                    tracing::warn!(target: "soar_worker", error = %e, "leader election store_down");
+                    continue;
+                }
+            };
             set_leader_gauge(is_leader);
             if !is_leader {
                 record_cycle_metric("follower_skip");
@@ -131,14 +143,14 @@ async fn run_cycle(app_pool: &PgPool, auth_pool: &PgPool) -> Result<u64, String>
     let tenants: Vec<i64> = sqlx::query_scalar("SELECT id FROM tenants WHERE active = true")
         .fetch_all(auth_pool)
         .await
-        .unwrap_or_default();
+        .map_err(|_| "store_down".to_string())?;
     let mut processed = 0u64;
     for tenant_id in tenants {
         let tasks = claim_due_tasks(app_pool, tenant_id, 8).await?;
         for task in tasks {
             processed += 1;
             let ok = match task.probe_type.as_str() {
-                "pr_exists" => verify_heal_job(app_pool, tenant_id, &task.target).await,
+                "pr_exists" => verify_heal_job(app_pool, tenant_id, &task.target).await?,
                 _ => {
                     // Decrypt any provider credentials encrypted at rest in the
                     // persisted execution payload before handing them to the probe.
@@ -181,21 +193,23 @@ async fn run_cycle(app_pool: &PgPool, auth_pool: &PgPool) -> Result<u64, String>
     Ok(processed)
 }
 
-async fn verify_heal_job(pool: &PgPool, tenant_id: i64, spec_id_str: &str) -> bool {
+async fn verify_heal_job(pool: &PgPool, tenant_id: i64, spec_id_str: &str) -> Result<bool, String> {
     let Ok(spec_id) = Uuid::parse_str(spec_id_str) else {
-        return false;
+        return Ok(false);
     };
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return false;
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let row = sqlx::query("SELECT status FROM auto_heal_job_specs WHERE id = $1")
         .bind(spec_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten();
-    let _ = tx.commit().await;
-    row.and_then(|r| r.try_get::<String, _>("status").ok())
+        .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
+    Ok(row
+        .and_then(|r| r.try_get::<String, _>("status").ok())
         .map(|s| s == "completed")
-        .unwrap_or(false)
+        .unwrap_or(false))
 }
