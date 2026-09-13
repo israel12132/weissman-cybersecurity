@@ -3390,9 +3390,81 @@ mod tests {
         let classify = named_fn_src(src, "pub fn classify_failure");
         assert!(classify.contains("FailureClass::StoreDown"));
         assert!(classify.contains("store_down"));
+        let store_idx = classify.find("store_down").expect("store_down token");
+        let waf_503 = classify.find("contains(\"503\")").expect("waf 503");
+        assert!(store_idx < waf_503, "StoreDown must be classified before WAF 503");
         let iff = named_fn_src(src, "pub fn is_fail_fast");
         assert!(iff.contains("StoreDown"));
         let as_str = named_fn_src(src, "pub fn as_str");
         assert!(as_str.contains("StoreDown => \"store_down\""));
+    }
+
+    #[test]
+    fn persist_kev_and_exposure_are_not_confirmed_false_on_store_down() {
+        let kev = include_str!("intel_kev.rs");
+        let start = kev
+            .find("pub async fn kev_listed_for_cves")
+            .expect("kev_listed_for_cves");
+        let rest = &kev[start..];
+        let next = rest
+            .find("\npub fn bootstrap_kev_catalog")
+            .unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        let compact = compact_src(fn_src);
+        assert!(fn_src.contains("Result<std::collections::HashMap<String, KevEntry>, String>"));
+        assert!(!compact.contains("fetch_all(pool).await.unwrap_or_default()"));
+        assert!(fn_src.contains("map_err(|_| \"store_down\".to_string())"));
+        let persist = include_str!("findings_persist.rs");
+        let exp_start = persist
+            .find("async fn resolve_internet_exposed")
+            .expect("exposed");
+        let exp_rest = &persist[exp_start..];
+        let exp_next = exp_rest.find("\nfn extract_array").unwrap_or(exp_rest.len());
+        let exp = &exp_rest[..exp_next];
+        let exp_c = compact_src(exp);
+        assert!(exp.contains("Result<bool, String>"));
+        assert!(!exp_c.contains("fetch_one(&mut*conn).await.unwrap_or(false)"));
+        assert!(persist.contains(
+            "intel_kev::kev_listed_for_cves(pool, &scan_cves)\n        .await\n        .map_err(|_| \"store_down\".to_string())?"
+        ));
+    }
+
+    #[test]
+    fn risk_superposition_raw_findings_are_not_empty_ok_on_store_down() {
+        let src = include_str!("risk_superposition_collapse_engine.rs");
+        let start = src
+            .find("pub async fn run_risk_superposition_collapse_result")
+            .expect("run");
+        let rest = &src[start..];
+        let next = rest
+            .find("\npub async fn run_risk_superposition_collapse(")
+            .unwrap_or(rest.len());
+        let run_src = &rest[..next];
+        assert!(!run_src.contains("unwrap_or_default()"));
+        assert!(!run_src.contains("cluster load failed:"));
+        assert!(run_src.contains("EngineResult::error(\"store_down\")"));
+        let raw = src.find("async fn load_raw_findings").expect("raw");
+        let raw_rest = &src[raw..];
+        let raw_next = raw_rest.find("\nfn cluster_as_finding").unwrap_or(raw_rest.len());
+        let raw_src = &raw_rest[..raw_next];
+        assert!(!raw_src.contains("let _ = tx.commit()"));
+        assert!(raw_src.contains("tx.commit().await.is_err()"));
+        assert!(!raw_src.contains("format!(\"tenant tx: {e}\")"));
+    }
+
+    #[test]
+    fn nexus_surface_extras_are_not_empty_ok_on_store_down() {
+        let src = include_str!("nexus_sovereign_swarm_engine.rs");
+        let start = src
+            .find("async fn load_db_surface_extras")
+            .expect("extras");
+        let rest = &src[start..];
+        let next = rest.find("\nfn assign_agents_cycle").unwrap_or(rest.len());
+        let fn_src = &rest[..next];
+        let compact = compact_src(fn_src);
+        assert!(fn_src.contains("Result<(Vec<String>, Vec<String>), String>"));
+        assert!(!compact.contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(fn_src.contains("tx.commit().await.is_err()"));
+        assert!(src.contains("Err(_) => return EngineResult::error(\"store_down\")"));
     }
 }

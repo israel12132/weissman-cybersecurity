@@ -1968,25 +1968,28 @@ fn refine_surface(
         .collect()
 }
 
-async fn load_db_surface_extras(ctx: &EngineRunContext) -> (Vec<String>, Vec<String>) {
+async fn load_db_surface_extras(
+    ctx: &EngineRunContext,
+) -> Result<(Vec<String>, Vec<String>), String> {
     let mut paths = Vec::new();
     let mut bases = Vec::new();
     let (Some(pool), Some(client_id), Some(tenant_id)) =
         (ctx.app_pool.as_ref(), ctx.client_id, ctx.tenant_id)
     else {
-        return (paths, bases);
+        return Ok((paths, bases));
     };
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return (paths, bases);
-    };
-    if let Ok(Some(domains_json)) = sqlx::query_scalar::<_, String>(
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
+    let domains_json = sqlx::query_scalar::<_, String>(
         "SELECT domains FROM clients WHERE id = $1 AND tenant_id = $2",
     )
     .bind(client_id)
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    {
+    .map_err(|_| "store_down".to_string())?;
+    if let Some(domains_json) = domains_json {
         if let Ok(v) = serde_json::from_str::<Value>(&domains_json) {
             if let Some(arr) = v.as_array() {
                 for d in arr {
@@ -2007,8 +2010,7 @@ async fn load_db_surface_extras(ctx: &EngineRunContext) -> (Vec<String>, Vec<Str
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    .map_err(|_| "store_down".to_string())?;
     if let Some(ip_json) = ip_rows.filter(|s| !s.is_empty()) {
         if let Ok(v) = serde_json::from_str::<Value>(&ip_json) {
             if let Some(arr) = v.as_array() {
@@ -2031,10 +2033,12 @@ async fn load_db_surface_extras(ctx: &EngineRunContext) -> (Vec<String>, Vec<Str
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    .map_err(|_| "store_down".to_string())?;
     paths.extend(title_paths);
-    let _ = tx.commit().await;
-    (paths, bases)
+    if tx.commit().await.is_err() {
+        return Err("store_down".into());
+    }
+    Ok((paths, bases))
 }
 
 /// Assign `count` agents over `surface`, cycling through `archetypes`, with a starting agent id.
@@ -3090,7 +3094,10 @@ pub async fn run_nexus_sovereign_swarm_result(
 
     let config = SwarmConfig::from_ctx(ctx);
     let base = normalize_base(target);
-    let (db_paths, db_bases) = load_db_surface_extras(ctx).await;
+    let (db_paths, db_bases) = match load_db_surface_extras(ctx).await {
+        Ok(v) => v,
+        Err(_) => return EngineResult::error("store_down"),
+    };
     let (surface, surface_lineage) = build_surface(ctx, &config, &base, &db_paths, &db_bases);
     let deploy_fp = deployment_fingerprint(&config, surface.len(), &base);
     if surface.is_empty() {

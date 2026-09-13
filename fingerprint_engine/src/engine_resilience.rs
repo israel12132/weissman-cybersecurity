@@ -535,6 +535,14 @@ mod tests {
             ),
             FailureClass::StoreDown
         );
+        assert_eq!(
+            classify_failure("error", "store_down HTTP 503"),
+            FailureClass::StoreDown
+        );
+        assert_eq!(
+            classify_failure("error", "HTTP 503 store_down"),
+            FailureClass::StoreDown
+        );
     }
 
     #[test]
