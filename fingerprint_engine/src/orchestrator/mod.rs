@@ -84,7 +84,7 @@ async fn persist_and_notify_findings(
         Ok(n) => n as usize,
         Err(e) => {
             eprintln!("[Weissman][Orchestrator] findings_persist failed ({engine}): {e}");
-            0
+            return 0;
         }
     };
     for f in findings {

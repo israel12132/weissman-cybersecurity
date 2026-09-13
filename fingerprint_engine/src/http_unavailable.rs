@@ -3495,11 +3495,40 @@ mod tests {
         assert!(payload.contains("billing_store_down"));
         let webhook = named_fn_src(handlers, "fn paddle_webhook_error_response");
         assert!(webhook.contains("msg == \"store_down\""));
+        assert!(webhook.contains("PaddleWebhookError::Sql"));
+        assert!(webhook.contains("billing_store_down"));
+        for inc in [
+            "server_handlers_phase3.inc",
+            "server_handlers_phase5.inc",
+            "server_handlers_phase6.inc",
+            "server_handlers_sqlx.inc",
+            "server_handlers_rest4.inc",
+        ] {
+            let src = match inc {
+                "server_handlers_phase3.inc" => include_str!("server_handlers_phase3.inc"),
+                "server_handlers_phase5.inc" => include_str!("server_handlers_phase5.inc"),
+                "server_handlers_phase6.inc" => include_str!("server_handlers_phase6.inc"),
+                "server_handlers_sqlx.inc" => include_str!("server_handlers_sqlx.inc"),
+                _ => include_str!("server_handlers_rest4.inc"),
+            };
+            assert!(src.contains("payment_or_store_down(detail)"), "{inc}");
+        }
+        assert!(impl_src.contains(
+            "bcrypt::hash(password, bcrypt::DEFAULT_COST).map_err(|e| e.to_string())"
+        ));
+        assert!(impl_src.contains("Subscription not provisioned for tenant"));
+        let paddle_wh = include_str!("billing/webhook.rs");
+        assert!(paddle_wh.contains("Result<Option<i64>, String>"));
+        assert!(!compact_src(paddle_wh).contains(".await.ok()?"));
+        assert!(paddle_wh.contains("map_err(|_| \"store_down\".to_string())"));
     }
 
     #[test]
     fn fp_feedback_store_down_is_not_full_confidence_or_empty_cache() {
         let src = include_str!("fp_feedback.rs");
+        let pool_fn = named_fn_src(src, "pub async fn confidence_multiplier(");
+        assert!(pool_fn.contains("Result<f64, String>"));
+        assert!(pool_fn.contains("return Ok(1.0)"));
         let tx_fn = named_fn_src(src, "pub async fn confidence_multiplier_tx");
         assert!(tx_fn.contains("Result<f64, String>"));
         assert!(tx_fn.contains("store_down"));
@@ -3512,6 +3541,9 @@ mod tests {
         assert!(load.contains("Result<Vec<SuppressionRule>, String>"));
         assert!(!compact_src(load).contains("unwrap_or_default()"));
         assert!(load.contains("Err(\"store_down\".to_string())"));
+        let insert_idx = load.find("SUPPRESSION_CACHE.insert").expect("cache insert");
+        let first_err = load.find("return Err(\"store_down\".to_string())").expect("err");
+        assert!(first_err < insert_idx, "must not cache rules before store-down return");
         let persist = include_str!("findings_persist.rs");
         assert!(persist.contains(
             "fp_feedback::active_suppressions_for_engine(pool, tenant_id, engine)\n            .await\n            .map_err(|_| \"store_down\".to_string())?"
@@ -3524,6 +3556,7 @@ mod tests {
             "async fn api_findings(",
         );
         assert!(findings.contains("confidence_multipliers_batch"));
+        assert!(findings.contains("match crate::fp_feedback::confidence_multipliers_batch"));
         assert!(findings.contains("findings_unavailable_json"));
     }
 
@@ -3564,7 +3597,23 @@ mod tests {
         let insert = named_fn_src(engine, "async fn insert_execution");
         assert!(!insert.contains("let _ = tx.commit()"));
         assert!(insert.contains("tx.commit().await.is_err()"));
-        assert!(insert.contains("store_down"));
+        assert!(insert.contains("duplicate_in_flight"));
+        let exec = named_fn_src(engine, "pub async fn execute_armored_action");
+        assert!(exec.contains("duplicate_skipped: in-flight execution"));
+        assert!(exec.contains("duplicate_in_flight"));
+        assert!(exec.contains("match load_integrations"));
+        let lock = named_fn_src(
+            include_str!("soar/idempotency.rs"),
+            "pub async fn try_acquire_lock",
+        );
+        assert!(lock.contains("Result<Option<SoarLockGuard>, String>"));
+        assert!(lock.contains("store_down"));
+        assert!(!compact_src(lock).contains(".ok().unwrap_or(false)"));
+        let iso = named_fn_src(
+            include_str!("soar/idempotency.rs"),
+            "pub async fn try_acquire_isolate_lock",
+        );
+        assert!(!compact_src(iso).contains(".ok().unwrap_or(false)"));
         let integ = include_str!("soar/integrations.rs");
         let load = named_fn_src(integ, "pub async fn load_integrations");
         assert!(load.contains("Result<Vec<IntegrationRecord>, String>"));
@@ -3582,6 +3631,13 @@ mod tests {
         assert!(src.contains(
             "pipeline_get_state(&mut tx, tenant_id, run_id, &cid).await?"
         ));
+        let persist_n = named_fn_src(src, "async fn persist_and_notify_findings");
+        assert!(persist_n.contains("return 0;"));
+        let failed = persist_n.find("findings_persist failed").expect("persist err");
+        let bcast = persist_n.find("broadcast_finding_created").expect("broadcast");
+        assert!(failed < bcast);
+        let err_arm = &persist_n[failed..bcast];
+        assert!(err_arm.contains("return 0"));
     }
 
     #[test]

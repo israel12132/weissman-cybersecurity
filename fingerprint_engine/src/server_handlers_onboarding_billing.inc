@@ -99,11 +99,7 @@ fn paddle_webhook_error_response(err: crate::billing::PaddleWebhookError) -> Res
         }
         PaddleWebhookError::Sql(e) => {
             tracing::warn!(target: "paddle_webhook", error = %e, "webhook db error");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "ok": false, "detail": "database error processing webhook" })),
-            )
-                .into_response()
+            billing_store_down("database unavailable")
         }
     }
 }

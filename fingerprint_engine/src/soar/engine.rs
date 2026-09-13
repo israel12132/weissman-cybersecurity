@@ -92,6 +92,19 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
                     execution_id: Some(existing.id),
                 };
             }
+            if existing.status == ExecutionStatus::Acquired.as_str()
+                || existing.status == ExecutionStatus::Executing.as_str()
+                || existing.status == ExecutionStatus::Verifying.as_str()
+            {
+                return ActionOutcome {
+                    status: "ok".into(),
+                    detail: format!(
+                        "duplicate_skipped: in-flight execution {} ({})",
+                        existing.id, existing.status
+                    ),
+                    execution_id: Some(existing.id),
+                };
+            }
         }
         Ok(None) => {}
     }
@@ -111,8 +124,8 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
         }
     } else {
         match idempotency::try_acquire_lock(&idem).await {
-            Some(g) => g,
-            None => {
+            Ok(Some(g)) => g,
+            Ok(None) => {
                 audit::log_execution(
                     pool,
                     &cmd,
@@ -124,6 +137,14 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
                 return ActionOutcome {
                     status: "ok".into(),
                     detail: "duplicate_skipped: action already in-flight or completed".into(),
+                    execution_id: None,
+                };
+            }
+            Err(_) => {
+                audit::log_execution(pool, &cmd, "failed", "database unavailable", None).await;
+                return ActionOutcome {
+                    status: "failed".into(),
+                    detail: "database unavailable".into(),
                     execution_id: None,
                 };
             }
@@ -166,10 +187,21 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
 
     let execution_id = match insert_execution(pool, &cmd, &idem, &blast).await {
         Ok(id) => id,
+        Err(e) if e == "duplicate_in_flight" => {
+            return ActionOutcome {
+                status: "ok".into(),
+                detail: "duplicate_skipped: concurrent execution".into(),
+                execution_id: None,
+            };
+        }
         Err(e) => {
             return ActionOutcome {
                 status: "failed".into(),
-                detail: format!("persist execution: {e}"),
+                detail: if e == "store_down" {
+                    "database unavailable".into()
+                } else {
+                    format!("persist execution: {e}")
+                },
                 execution_id: None,
             };
         }
@@ -416,8 +448,8 @@ async fn insert_execution(
     .await
     .map_err(|_| "store_down".to_string())?;
     if res.rows_affected() == 0 {
-        let existing: Option<Uuid> = sqlx::query_scalar(
-            "SELECT id FROM soar_action_executions WHERE tenant_id = $1 AND idempotency_key = $2",
+        let row = sqlx::query(
+            "SELECT id, status FROM soar_action_executions WHERE tenant_id = $1 AND idempotency_key = $2",
         )
         .bind(cmd.tenant_id)
         .bind(idem)
@@ -427,7 +459,21 @@ async fn insert_execution(
         if tx.commit().await.is_err() {
             return Err("store_down".to_string());
         }
-        return existing.ok_or_else(|| "conflict without row".into());
+        let Some(r) = row else {
+            return Err("conflict without row".into());
+        };
+        let existing: Uuid = r.try_get("id").unwrap_or_else(|_| Uuid::nil());
+        let status: String = r.try_get("status").unwrap_or_default();
+        if status == ExecutionStatus::Acquired.as_str()
+            || status == ExecutionStatus::Executing.as_str()
+            || status == ExecutionStatus::Verifying.as_str()
+            || status == ExecutionStatus::Resolved.as_str()
+            || status == ExecutionStatus::DuplicateSkipped.as_str()
+            || status == ExecutionStatus::PendingHitl.as_str()
+        {
+            return Err("duplicate_in_flight".to_string());
+        }
+        return Ok(existing);
     }
     if tx.commit().await.is_err() {
         return Err("store_down".to_string());
