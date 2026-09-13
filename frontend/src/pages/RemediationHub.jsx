@@ -205,6 +205,11 @@ export default function RemediationHub() {
 
   const { exportCsv } = useFindingsWorkbench(filteredFindings, { csvPrefix: 'weissman-remediation' })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
+
   return (
     <PageShell
       title={t('pages.remediationHub.title')}
@@ -215,9 +220,9 @@ export default function RemediationHub() {
       actions={(
         <ShellScanActions
           onRefresh={load}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >
@@ -326,7 +331,7 @@ export default function RemediationHub() {
           <div className="p-4 border-b border-white/10 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Zap className="w-4 h-4 text-cyan-400" />
-              {t('pages.remediationHub.families_heading', { count: workflows.length })}
+              {t('pages.remediationHub.families_heading', { count: error ? '—' : workflows.length })}
             </h3>
             <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200">{t('pages.remediationHub.open_findings')}</Link>
           </div>

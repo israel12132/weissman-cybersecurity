@@ -150,6 +150,11 @@ export default function OobVerification() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (callbacksUnavailable) return
+    exportCsv()
+  }, [callbacksUnavailable, exportCsv])
+
   const visibleCallbacks = useMemo(() => {
     if (!searchQuery.trim()) return callbacks
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
@@ -216,9 +221,9 @@ export default function OobVerification() {
           </Link>
           <ShellScanActions
             onRefresh={poll}
-            onExport={exportCsv}
+            onExport={handleExportCsv}
             refreshLoading={polling}
-            exportDisabled={!filteredFindings.length}
+            exportDisabled={callbacksUnavailable || !filteredFindings.length}
           />
         </div>
       )}
@@ -353,7 +358,7 @@ export default function OobVerification() {
                     {t('pages.oobVerification.callbacks_unavailable')}
                   </p>
                 )}
-                {callbacks.length > 0 && (
+                {callbacks.length > 0 && !callbacksUnavailable && (
                   <div>
                     <WeissmanListToolbar
                       className="mb-2"
@@ -397,6 +402,7 @@ export default function OobVerification() {
 
         {(recentHits.length > 0 || callbacksUnavailable) && (
           <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5">
+            {!callbacksUnavailable && (
             <WeissmanListToolbar
               className="mb-4"
               searchQuery={searchQuery}
@@ -404,6 +410,7 @@ export default function OobVerification() {
               resultCount={visibleRecentHits.length}
               totalCount={recentHits.length}
             />
+            )}
             <h3 className="text-xs font-mono uppercase tracking-widest text-[var(--text-muted)] mb-4">
               {t('pages.oobVerification.tenant_callbacks_heading')}
             </h3>

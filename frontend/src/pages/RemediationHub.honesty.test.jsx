@@ -15,4 +15,10 @@ describe('RemediationHub live-only truth', () => {
     expect(src).toMatch(/loading=\{loading \|\| !!error\}/)
     expect(src).toMatch(/ok\.length !== list\.length/)
   })
+
+  it('does not dump leftover leftover-families after a failed findings GET', () => {
+    expect(src).toMatch(/families_heading', \{ count: error \? '—' : workflows\.length \}/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+  })
 })

@@ -91,6 +91,11 @@ export default function IntegrationManager() {
     total,
   } = useFindingsWorkbench(integrationFindings, { csvPrefix: 'weissman-integrations' });
 
+  const handleExportCsv = useCallback(() => {
+    if (loadError) return
+    exportCsv()
+  }, [loadError, exportCsv])
+
   const testConnection = async (integrationId) => {
     try {
       setTestingConnection(integrationId);
@@ -180,9 +185,9 @@ export default function IntegrationManager() {
       actions={(
         <ShellScanActions
           onRefresh={fetchIntegrations}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={loadError || !filteredFindings.length}
         />
       )}
     >
@@ -198,7 +203,7 @@ export default function IntegrationManager() {
             </Button>
           </div>
         )}
-        {vaultEnabled && (
+        {vaultEnabled && !loadError && (
           <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
             Vault encryption active — integration secrets stored encrypted at rest (AES-256-GCM).
           </div>

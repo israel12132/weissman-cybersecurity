@@ -15,4 +15,10 @@ describe('IntegrationManager live-only truth', () => {
     expect(src).toMatch(/!loadError && \(/)
     expect(src).toMatch(/!Array\.isArray\(data\.integrations\)/)
   })
+
+  it('does not dump leftover leftover-integrations after a failed catalog GET', () => {
+    expect(src).toMatch(/vaultEnabled && !loadError && \(/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(loadError\) return/)
+    expect(src).toMatch(/exportDisabled=\{loadError \|\| !filteredFindings\.length\}/)
+  })
 })

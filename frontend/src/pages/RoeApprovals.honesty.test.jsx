@@ -16,4 +16,9 @@ describe('RoeApprovals live-only truth', () => {
     expect(src).toMatch(/error \? null : \(/)
     expect(src).not.toMatch(/setRequests\(\[\]\)/)
   })
+
+  it('does not dump leftover leftover-approvals CSV after a failed queue GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+  })
 })

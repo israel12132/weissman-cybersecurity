@@ -72,6 +72,11 @@ export default function RoeApprovals() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
+
   async function approve(req) {
     setActionId(req.id)
     try {
@@ -120,9 +125,9 @@ export default function RoeApprovals() {
       actions={(
         <ShellScanActions
           onRefresh={load}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >
