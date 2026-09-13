@@ -85,6 +85,7 @@ const LABELS = {
     standards: 'Standards',
     noFindings: 'No external AD/Kerberos weaknesses observed — strong perimeter posture.',
     runToPopulate: 'Configure the AD target/domain and run the assessment.',
+    historyUnavailable: 'Engine history API unavailable — run-to-populate is not a quiet empty trail.',
     filterAll: 'all',
     related: 'Related identity engines',
     relatedIdentity: 'Identity & SSO Command Center',
@@ -161,6 +162,7 @@ const LABELS = {
     standards: 'תקנים',
     noFindings: 'לא נצפו חולשות AD/Kerberos חיצוניות — תנוחת היקף חזקה.',
     runToPopulate: 'הגדר יעד/דומיין AD והרץ הערכה.',
+    historyUnavailable: 'API היסטוריית המנוע אינו זמין — מוכן-למילוי אינו מאושר.',
     filterAll: 'הכל',
     related: 'מנועי זהות קשורים',
     relatedIdentity: 'מרכז זהות ו-SSO',
@@ -672,6 +674,7 @@ export default function KerberosSecurityCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, regular)
 
   useEffect(() => {
@@ -900,7 +903,12 @@ export default function KerberosSecurityCommandCenter() {
         <Link to="/saml-security" className="text-amber-300/80 hover:text-amber-200">{L.relatedSaml}</Link>
       </div>
 
-      {findings.length === 0 && status !== 'running' && (
+      {historyUnavailable && (
+        <p data-testid="kerberos-security-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {L.historyUnavailable}
+        </p>
+      )}
+      {findings.length === 0 && status !== 'running' && !historyUnavailable && (
         <p className="text-sm font-mono text-[var(--text-muted)] text-center py-12">{L.runToPopulate}</p>
       )}
 
@@ -952,7 +960,10 @@ export default function KerberosSecurityCommandCenter() {
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
         title={L.findingsTitle}
-        showEmptyReady={status !== 'running' && regular.length === 0 && findings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={L.historyUnavailable}
+        unavailableBody={L.historyUnavailable}
+        showEmptyReady={status !== 'running' && regular.length === 0 && findings.length === 0 && !historyUnavailable}
         emptyReadyTitle={L.runToPopulate}
         emptyReadyBody={L.runToPopulate}
         emptyTitle={L.noFindings}

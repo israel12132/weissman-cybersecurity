@@ -58,6 +58,7 @@ const LABELS = {
     findingsTitle: 'Failed controls',
     noFindings: 'No failed privilege/credential controls on this host — strong posture.',
     runToPopulate: 'Select a client and run the live 500-check audit.',
+    historyUnavailable: 'Engine history API unavailable — run-to-populate is not a quiet empty trail.',
     related: 'Related identity engines',
     lastRun: 'Last completed',
     evaluated: 'evaluated',
@@ -91,6 +92,7 @@ const LABELS = {
     findingsTitle: 'בקרות שנכשלו',
     noFindings: 'לא נכשלו בקרות הרשאות/אישורים במארח זה — תנוחה חזקה.',
     runToPopulate: 'בחר לקוח והרץ את ביקורת 500 הבדיקות החיה.',
+    historyUnavailable: 'API היסטוריית המנוע אינו זמין — מוכן-למילוי אינו מאושר.',
     related: 'מנועי זהות קשורים',
     lastRun: 'הושלם לאחרונה',
     evaluated: 'הוערכו',
@@ -234,6 +236,7 @@ export default function PrivilegeEscalationCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, regular)
 
   useEffect(() => {
@@ -397,6 +400,11 @@ export default function PrivilegeEscalationCommandCenter() {
         </div>
       )}
 
+      {historyUnavailable && (
+        <p data-testid="privilege-escalation-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {L.historyUnavailable}
+        </p>
+      )}
       <WeissmanFindingsPanel
         title={L.findingsTitle}
         findings={regular}
@@ -412,7 +420,10 @@ export default function PrivilegeEscalationCommandCenter() {
         lastUpdated={lastUpdated}
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
-        showEmptyReady={status !== 'running' && regular.length === 0 && findings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={L.historyUnavailable}
+        unavailableBody={L.historyUnavailable}
+        showEmptyReady={status !== 'running' && regular.length === 0 && findings.length === 0 && !historyUnavailable}
         emptyReadyTitle={L.runToPopulate}
         emptyReadyBody={L.runToPopulate}
         emptyTitle={L.noFindings}

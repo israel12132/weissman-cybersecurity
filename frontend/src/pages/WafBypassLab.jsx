@@ -135,6 +135,7 @@ export default function WafBypassLab() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, detailFindings)
 
   useJobPoll(pendingJobId, {
@@ -264,6 +265,11 @@ export default function WafBypassLab() {
             <div className="flex-1 min-w-[200px] text-[11px] font-mono text-[var(--text-tertiary)] leading-relaxed">{t('pages.wafBypass.score_explainer')}</div>
           </motion.section>
 
+          {historyUnavailable && (
+            <p data-testid="waf-bypass-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+              {t('pages.wafBypass.history_unavailable')}
+            </p>
+          )}
           <WeissmanFindingsPanel
             findings={detailFindings}
             filteredFindings={filteredFindings}
@@ -278,7 +284,10 @@ export default function WafBypassLab() {
             lastUpdated={lastUpdated}
             jobId={pendingJobId || lastJobId}
             accent={ACCENT}
-            showEmptyReady={!scanning && detailFindings.length === 0}
+            unavailable={historyUnavailable}
+            unavailableTitle={t('pages.wafBypass.history_unavailable')}
+            unavailableBody={t('pages.wafBypass.history_unavailable')}
+            showEmptyReady={!scanning && detailFindings.length === 0 && !historyUnavailable}
             emptyReadyTitle={t('pages.wafBypass.empty_ready')}
             emptyReadyBody={t('pages.wafBypass.empty_ready')}
             renderFinding={(f, i) => <FindingCard key={i} f={f} />}

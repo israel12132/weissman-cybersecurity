@@ -3512,7 +3512,8 @@
       "score_hint": "גבוה יותר = קשה יותר להתחמק",
       "score_explainer": "ציון מורכב מחסימות edge, rate limits, טלמטריה בדף, CSP/cookies, ומשטחי debug חשופים. EDR מקומי (AMSI/ETW) דורש agent בנקודת הקצה.",
       "findings": "ממצאים",
-      "empty_ready": "הגדר בדיקות והפעל הערכה חיה."
+      "empty_ready": "הגדר בדיקות והפעל הערכה חיה.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-לסריקה אינו שביל משטח-זיהוי שקט."
     },
     "wafBypass": {
       "title": "מעבדת אפיון WAF Bypass",
@@ -3532,7 +3533,8 @@
       "score_hint": "גבוה יותר = חסימה חזקה יותר",
       "score_explainer": "ציון מורכב משיעור חסימה, זיהוי vendor, ומשטחי bypass שנצפו (encoding, headers, path, verb, JSON). כל ממצא מבדיקה חיה ולא מזויפת.",
       "findings": "ממצאים",
-      "empty_ready": "בחר לקוח, הגדר בדיקות, והפעל הערכת WAF חיה."
+      "empty_ready": "בחר לקוח, הגדר בדיקות, והפעל הערכת WAF חיה.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-לסריקה אינו שביל WAF שקט."
     },
     "supplyChainHub": {
       "title": "מרכז שרשרת אספקה",
@@ -5627,6 +5629,7 @@
       "no_client_notice": "בחרו לקוח וספקו ARN של תפקיד IAM חוצה-חשבונות לקריאה בלבד (מחבר בסגנון Wiz) כדי להריץ CSPM ללא סוכן.",
       "attack_paths_title": "מסלולי תקיפה של צירופים רעילים",
       "empty_ready": "הריצו סריקת CSPM כדי למפות את IAM, S3, EC2, RDS, Lambda, CloudTrail ו-SSM עם ניקוד ציות.",
+      "history_unavailable": "API היסטוריית המנוע אינו זמין — מוכן-לסריקה אינו שביל CSPM שקט.",
       "empty_no_findings": "אין ממצאי posture מעל הסף — אבטחת הענן נראית איתנה.",
       "toast_select_client": "בחרו קודם לקוח",
       "toast_role_required": "נדרש ARN של תפקיד AWS חוצה-חשבונות",

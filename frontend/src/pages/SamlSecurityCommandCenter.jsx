@@ -49,6 +49,7 @@ const LABELS = {
     toxicTitle: 'Toxic combination detected', roadmapTitle: 'Prioritized remediation roadmap',
     categoryScores: '8-domain posture breakdown', agentGapTitle: 'Agent-required deep coverage',
     runToPopulate: 'Configure the IdP/SSO target and run the assessment.',
+    historyUnavailable: 'Engine history API unavailable — run-to-populate is not a quiet empty trail.',
     related: 'Related identity engines', relatedIdentity: 'Identity & SSO Command Center',
     relatedKerberos: 'AD & Kerberos Security', relatedSpray: 'Password Spray Posture', relatedEngine: 'Engine detail (API)',
   },
@@ -81,6 +82,7 @@ const LABELS = {
     toxicTitle: 'שילוב רעיל זוהה', roadmapTitle: 'מפת דרכים לתיקון',
     categoryScores: 'פירוט 8 תחומי תנוחה', agentGapTitle: 'כיסוי עמוק הדורש סוכן',
     runToPopulate: 'הגדר יעד IdP/SSO והרץ הערכה.',
+    historyUnavailable: 'API היסטוריית המנוע אינו זמין — מוכן-למילוי אינו מאושר.',
     related: 'מנועי זהות קשורים', relatedIdentity: 'מרכז Identity & SSO',
     relatedKerberos: 'AD ו-Kerberos', relatedSpray: 'תנוחת Password Spray', relatedEngine: 'פרטי מנוע (API)',
   },
@@ -255,6 +257,7 @@ export default function SamlSecurityCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, regular)
 
   useEffect(() => {
@@ -386,7 +389,12 @@ export default function SamlSecurityCommandCenter() {
         <Link to="/password-spray" className="text-rose-300/80">{L.relatedSpray}</Link>
       </div>
 
-      {findings.length === 0 && status !== 'running' && (
+      {historyUnavailable && (
+        <p data-testid="saml-security-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {L.historyUnavailable}
+        </p>
+      )}
+      {findings.length === 0 && status !== 'running' && !historyUnavailable && (
         <p className="text-sm font-mono text-[var(--text-muted)] text-center py-12">{L.runToPopulate}</p>
       )}
 
@@ -464,7 +472,10 @@ export default function SamlSecurityCommandCenter() {
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
         title={L.findingsTitle}
-        showEmptyReady={status !== 'running' && regular.length === 0 && findings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={L.historyUnavailable}
+        unavailableBody={L.historyUnavailable}
+        showEmptyReady={status !== 'running' && regular.length === 0 && findings.length === 0 && !historyUnavailable}
         emptyReadyTitle={L.runToPopulate}
         emptyReadyBody={L.runToPopulate}
         renderFinding={(f, i) => (

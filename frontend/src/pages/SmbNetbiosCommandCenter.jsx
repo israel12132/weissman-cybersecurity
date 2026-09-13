@@ -77,6 +77,7 @@ const LABELS = {
     evidence: 'Evidence trail',
     noFindings: 'No SMB/NetBIOS weaknesses observed on the wire — strong file-sharing posture.',
     runToPopulate: 'Configure target host and run the live SMB protocol assessment.',
+    historyUnavailable: 'Engine history API unavailable — run-to-populate is not a quiet empty trail.',
     related: 'Related network engines',
     relatedNetwork: 'Network Intelligence',
     relatedTls: 'PKI / TLS Command Center',
@@ -154,6 +155,7 @@ const LABELS = {
     evidence: 'שרשרת ראיות',
     noFindings: 'לא נצפו חולשות SMB/NetBIOS — תנוחת שיתוף קבצים חזקה.',
     runToPopulate: 'הגדר יעד והרץ הערכת SMB חיה.',
+    historyUnavailable: 'API היסטוריית המנוע אינו זמין — מוכן-למילוי אינו מאושר.',
     related: 'מנועי רשת קשורים',
     relatedNetwork: 'Network Intelligence',
     relatedTls: 'מרכז PKI / TLS',
@@ -755,6 +757,7 @@ export default function SmbNetbiosCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, realFindings)
 
   useEffect(() => {
@@ -913,7 +916,12 @@ export default function SmbNetbiosCommandCenter() {
         {lastRun && <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-3">{L.lastRun}: {lastRun}</p>}
       </div>
 
-      {!clientId && <p className="text-xs font-mono text-[var(--text-muted)] mb-6">{L.runToPopulate}</p>}
+      {historyUnavailable && (
+        <p data-testid="smb-netbios-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {L.historyUnavailable}
+        </p>
+      )}
+      {!clientId && !historyUnavailable && <p className="text-xs font-mono text-[var(--text-muted)] mb-6">{L.runToPopulate}</p>}
 
       {(summary || findings.length > 0) && (
         <PostureCard summary={summary} graph={exposureGraph} pathCount={attackPaths.length} L={L} running={status === 'running'} />
@@ -930,7 +938,7 @@ export default function SmbNetbiosCommandCenter() {
         </div>
       )}
 
-      {findings.length === 0 && status !== 'running' && (
+      {findings.length === 0 && status !== 'running' && !historyUnavailable && (
         <p className="text-xs font-mono text-[var(--text-disabled)] text-center py-12">{status === 'completed' ? L.noFindings : L.runToPopulate}</p>
       )}
 
@@ -951,7 +959,10 @@ export default function SmbNetbiosCommandCenter() {
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
         title={L.findingsTitle}
-        showEmptyReady={status !== 'running' && realFindings.length === 0 && findings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={L.historyUnavailable}
+        unavailableBody={L.historyUnavailable}
+        showEmptyReady={status !== 'running' && realFindings.length === 0 && findings.length === 0 && !historyUnavailable}
         emptyReadyTitle={L.runToPopulate}
         emptyReadyBody={L.runToPopulate}
         emptyTitle={L.noFindings}

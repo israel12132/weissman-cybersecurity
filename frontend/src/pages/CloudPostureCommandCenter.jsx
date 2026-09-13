@@ -506,6 +506,7 @@ export default function CloudPostureCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, detailFindings)
 
   useEffect(() => {
@@ -801,6 +802,11 @@ export default function CloudPostureCommandCenter() {
         </div>
       )}
 
+      {historyUnavailable && (
+        <p data-testid="cloud-posture-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {t('pages.cloudPostureCommandCenter.history_unavailable')}
+        </p>
+      )}
       <WeissmanFindingsPanel
         findings={detailFindings}
         filteredFindings={filteredFindings}
@@ -815,7 +821,10 @@ export default function CloudPostureCommandCenter() {
         lastUpdated={lastUpdated}
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
-        showEmptyReady={status !== 'running' && detailFindings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={t('pages.cloudPostureCommandCenter.history_unavailable')}
+        unavailableBody={t('pages.cloudPostureCommandCenter.history_unavailable')}
+        showEmptyReady={status !== 'running' && detailFindings.length === 0 && !historyUnavailable}
         emptyReadyTitle={t('pages.cloudPostureCommandCenter.empty_ready')}
         emptyReadyBody={t('pages.cloudPostureCommandCenter.empty_ready')}
         emptyTitle={t('pages.cloudPostureCommandCenter.empty_no_findings')}

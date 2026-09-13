@@ -3411,7 +3411,8 @@
       "score_hint": "Higher = harder to evade",
       "score_explainer": "Composite score from live edge blocking, rate limits, defender telemetry in-page, CSP/cookie hardening, and exposed debug surfaces. Host EDR (AMSI/ETW) requires the endpoint agent.",
       "findings": "Findings",
-      "empty_ready": "Configure probes and run a live assessment."
+      "empty_ready": "Configure probes and run a live assessment.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet detection-surface trail."
     },
     "wafBypass": {
       "title": "WAF Bypass Characterization Lab",
@@ -3431,7 +3432,8 @@
       "score_hint": "Higher = stronger blocking",
       "score_explainer": "Composite score from block rate, vendor detection, and observed bypass surfaces (encoding, headers, path normalization, verb gaps, JSON inspection). Every finding is from a live harmless probe.",
       "findings": "Findings",
-      "empty_ready": "Select a client, configure probes, and run a live WAF assessment."
+      "empty_ready": "Select a client, configure probes, and run a live WAF assessment.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet WAF trail."
     },
     "supplyChainHub": {
       "title": "Supply Chain Hub",
@@ -5627,6 +5629,7 @@
       "no_client_notice": "Select a client and provide a read-only cross-account IAM role ARN (Wiz-style connector) to run agentless CSPM.",
       "attack_paths_title": "Toxic-combination attack paths",
       "empty_ready": "Run a CSPM scan to inventory IAM, S3, EC2, RDS, Lambda, CloudTrail & SSM with compliance scoring.",
+      "history_unavailable": "Engine history API unavailable — ready-to-scan is not a quiet CSPM trail.",
       "empty_no_findings": "No posture findings above threshold — cloud security appears strong.",
       "toast_select_client": "Select a client first",
       "toast_role_required": "AWS cross-account role ARN is required",

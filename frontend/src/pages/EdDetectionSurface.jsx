@@ -150,6 +150,7 @@ export default function EdDetectionSurface() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE, detailFindings)
 
   useEffect(() => {
@@ -267,6 +268,11 @@ export default function EdDetectionSurface() {
             <div className="flex-1 min-w-[200px] text-[11px] font-mono text-[var(--text-tertiary)] leading-relaxed">{t('pages.edDetection.score_explainer')}</div>
           </motion.section>
 
+          {historyUnavailable && (
+            <p data-testid="ed-detection-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+              {t('pages.edDetection.history_unavailable')}
+            </p>
+          )}
           <WeissmanFindingsPanel
             findings={detailFindings}
             filteredFindings={filteredFindings}
@@ -281,7 +287,10 @@ export default function EdDetectionSurface() {
             lastUpdated={lastUpdated}
             jobId={pendingJobId || lastJobId}
             accent={ACCENT}
-            showEmptyReady={!scanning && detailFindings.length === 0}
+            unavailable={historyUnavailable}
+            unavailableTitle={t('pages.edDetection.history_unavailable')}
+            unavailableBody={t('pages.edDetection.history_unavailable')}
+            showEmptyReady={!scanning && detailFindings.length === 0 && !historyUnavailable}
             emptyReadyTitle={t('pages.edDetection.empty_ready')}
             emptyReadyBody={t('pages.edDetection.empty_ready')}
             renderFinding={(f, i) => <FindingCard key={i} f={f} />}

@@ -84,6 +84,7 @@ const LABELS = {
     m365Title: 'Entra / M365 tenant',
     noFindings: 'No spray/stuffing weaknesses observed — strong identity hygiene.',
     runToPopulate: 'Configure target/domain and run the assessment.',
+    historyUnavailable: 'Engine history API unavailable — run-to-populate is not a quiet empty trail.',
     filterAll: 'all',
     related: 'Related identity engines',
     relatedIdentity: 'Identity & SSO Command Center',
@@ -174,6 +175,7 @@ const LABELS = {
     m365Title: 'דייר Entra / M365',
     noFindings: 'לא נצפו חולשות spray/stuffing — היגיינת זהויות חזקה.',
     runToPopulate: 'הגדר יעד/דומיין והרץ הערכה.',
+    historyUnavailable: 'API היסטוריית המנוע אינו זמין — מוכן-למילוי אינו מאושר.',
     filterAll: 'הכל',
     related: 'מנועי זהות קשורים',
     relatedIdentity: 'מרכז Identity & SSO',
@@ -538,6 +540,7 @@ export default function PasswordSprayCommandCenter() {
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, regular)
 
   useEffect(() => {
@@ -724,7 +727,12 @@ export default function PasswordSprayCommandCenter() {
         <Link to={`/engines/${ENGINE_ID}`} className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">{L.relatedEngine}</Link>
       </div>
 
-      {findings.length === 0 && status !== 'running' && (
+      {historyUnavailable && (
+        <p data-testid="password-spray-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+          {L.historyUnavailable}
+        </p>
+      )}
+      {findings.length === 0 && status !== 'running' && !historyUnavailable && (
         <p className="text-sm font-mono text-[var(--text-muted)] text-center py-12">{L.runToPopulate}</p>
       )}
 
@@ -863,7 +871,10 @@ export default function PasswordSprayCommandCenter() {
         jobId={pendingJobId || lastJobId}
         accent={ACCENT}
         title={L.findingsTitle}
-        showEmptyReady={status !== 'running' && regular.length === 0 && findings.length === 0}
+        unavailable={historyUnavailable}
+        unavailableTitle={L.historyUnavailable}
+        unavailableBody={L.historyUnavailable}
+        showEmptyReady={status !== 'running' && regular.length === 0 && findings.length === 0 && !historyUnavailable}
         emptyReadyTitle={L.runToPopulate}
         emptyReadyBody={L.runToPopulate}
         emptyTitle={L.noFindings}
