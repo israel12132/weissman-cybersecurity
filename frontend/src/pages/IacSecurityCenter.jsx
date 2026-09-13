@@ -2125,7 +2125,7 @@ export default function IacSecurityCenter() {
                   <MetricTile label="Findings" value={summary?.findings_total} accent="#ef4444" />
                   <MetricTile label="Files" value={summary?.files_scanned} accent="#22d3ee" />
                   <MetricTile label="Policies hit" value={summary ? `${summary.policies_triggered}/${summary.policies_available}` : '—'} accent="#a855f7" />
-                  <MetricTile label="Attack paths" value={attackChains.length || '—'} accent="#f43f5e" />
+                  <MetricTile label="Attack paths" value={historyUnavailable ? '—' : (summary ? attackChains.length : '—')} accent="#f43f5e" />
                   <MetricTile label="Readiness" value={summary?.readiness?.readiness_score != null ? `${summary.readiness.readiness_score}` : '—'} accent="#8b5cf6" />
                   <MetricTile label="Drift" value={summary?.drift_findings ?? '—'} accent="#f97316" />
                   <MetricTile label="Reconcile" value={summary?.plan_reconcile_findings ?? '—'} accent="#8b5cf6" />

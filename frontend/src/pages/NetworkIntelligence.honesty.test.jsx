@@ -28,5 +28,6 @@ describe('NetworkIntelligence live-only truth', () => {
     expect(src).toMatch(/<ScoreGauge score=\{score\} /)
     expect(src).not.toMatch(/<ScoreGauge score=\{score \?\? 0\}/)
     expect(src).not.toMatch(/Number\(summary\.hijack_resistance_score \?\? 0\)/)
+    expect(src).toMatch(/summary && !historyUnavailable \?/)
   })
 })

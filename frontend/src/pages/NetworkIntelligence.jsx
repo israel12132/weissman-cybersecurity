@@ -549,7 +549,7 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
         {/* Results column */}
         <div className="space-y-4 lg:col-span-2">
           <AnimatePresence mode="wait">
-            {summary ? (
+            {summary && !historyUnavailable ? (
               <motion.div key="score" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-5">
                 <div className="flex items-center gap-6 flex-wrap">
                   <ScoreGauge score={score} label={tt('score_label', 'RESISTANCE')} />

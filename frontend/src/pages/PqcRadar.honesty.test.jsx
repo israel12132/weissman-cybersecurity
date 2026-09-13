@@ -28,5 +28,6 @@ describe('PqcRadar live-only truth', () => {
     expect(src).toMatch(/<ScoreGauge score=\{score\} /)
     expect(src).not.toMatch(/<ScoreGauge score=\{score \?\? 0\}/)
     expect(src).not.toMatch(/Number\(summary\.readiness_score \?\? 0\)/)
+    expect(src).toMatch(/summary && !historyUnavailable \?/)
   })
 })

@@ -872,6 +872,7 @@ export default function GraphqlSecurityCommandCenter() {
     setLastJobId,
     historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, realFindings)
+  const liveMetrics = historyUnavailable ? null : metrics
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -1312,7 +1313,7 @@ export default function GraphqlSecurityCommandCenter() {
                   )}
                 </div>
                 <div className="h-72 md:h-80">
-                  <SchemaGraphCanvas schemaGraph={metrics?.schema_graph} running={running} />
+                  <SchemaGraphCanvas schemaGraph={liveMetrics?.schema_graph} running={running} />
                 </div>
               </div>
 
@@ -1321,38 +1322,38 @@ export default function GraphqlSecurityCommandCenter() {
                   <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">
                     {t('graphqlSec.exposure_score', 'API Exposure Score')}
                   </p>
-                  <ExposureGauge score={metrics?.exposure_score} />
+                  <ExposureGauge score={liveMetrics?.exposure_score} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <MetricTile label="Endpoints" value={metrics?.endpoints_found} accent="#22d3ee" />
-                  <MetricTile label="Introspectable" value={metrics?.introspectable_endpoints} accent="#f59e0b" />
-                  <MetricTile label="DoS Vectors" value={metrics?.dos_vectors} accent="#ef4444" />
-                  <MetricTile label="Attack Paths" value={metrics?.attack_paths} accent="#a855f7" />
-                  <MetricTile label="Components" value={metrics?.components_probed} accent="#34d399" />
-                  <MetricTile label="High / Crit" value={metrics ? `${metrics.highs ?? 0} / ${metrics.criticals ?? 0}` : null} accent="#fb7185" />
+                  <MetricTile label="Endpoints" value={liveMetrics?.endpoints_found} accent="#22d3ee" />
+                  <MetricTile label="Introspectable" value={liveMetrics?.introspectable_endpoints} accent="#f59e0b" />
+                  <MetricTile label="DoS Vectors" value={liveMetrics?.dos_vectors} accent="#ef4444" />
+                  <MetricTile label="Attack Paths" value={liveMetrics?.attack_paths} accent="#a855f7" />
+                  <MetricTile label="Components" value={liveMetrics?.components_probed} accent="#34d399" />
+                  <MetricTile label="High / Crit" value={liveMetrics ? `${liveMetrics.highs ?? 0} / ${liveMetrics.criticals ?? 0}` : null} accent="#fb7185" />
                 </div>
-                {metrics?.implementation && (
+                {liveMetrics?.implementation && (
                   <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-3 text-center">
                     <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-1">Implementation</p>
-                    <p className="text-sm font-bold text-pink-300">{metrics.implementation}</p>
+                    <p className="text-sm font-bold text-pink-300">{liveMetrics.implementation}</p>
                   </div>
                 )}
               </div>
             </div>
 
             <ExecutiveSummaryStrip
-              summary={metrics?.executive_summary}
-              onExportPdf={metrics?.executive_summary ? exportExecutivePdf : undefined}
-              onExportJson={metrics ? exportPostureJson : undefined}
+              summary={liveMetrics?.executive_summary}
+              onExportPdf={liveMetrics?.executive_summary ? exportExecutivePdf : undefined}
+              onExportJson={liveMetrics ? exportPostureJson : undefined}
             />
 
-            <ComplianceScorecardPanel scorecard={metrics?.compliance_scorecard} />
+            <ComplianceScorecardPanel scorecard={liveMetrics?.compliance_scorecard} />
 
-            <OwaspBreakdownPanel posture={metrics?.owasp_posture} findings={realFindings} />
+            <OwaspBreakdownPanel posture={liveMetrics?.owasp_posture} findings={realFindings} />
 
-            <RemediationPanel items={metrics?.remediation_priorities} />
+            <RemediationPanel items={liveMetrics?.remediation_priorities} />
 
-            <SchemaTypeExplorer schemaGraph={metrics?.schema_graph} />
+            <SchemaTypeExplorer schemaGraph={liveMetrics?.schema_graph} />
 
             {/* Attack paths */}
             <AnimatePresence>

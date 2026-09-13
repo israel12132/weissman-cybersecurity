@@ -37,4 +37,11 @@ describe('SovereignDefenseMatrix live-only truth', () => {
     expect(src).toMatch(/emptyTitle=\{t\('pages\.sovereignDefense\.no_findings'\)\}/)
     expect(src).not.toMatch(/emptyMessage=/)
   })
+
+  it('does not paint Chronos OFF or 0 events when the dashboard is unconfirmed', () => {
+    expect(src).toMatch(/chronos \? \(chronos\.agent_online \? 'ONLINE' : 'OFF'\) : '—'/)
+    expect(src).toMatch(/chronos\?\.events_24h != null \? `\$\{chronos\.events_24h\} events` : '—'/)
+    expect(src).not.toMatch(/chronos\?\.events_24h \?\? 0/)
+    expect(src).not.toMatch(/value=\{chronos\?\.agent_online \? 'ONLINE' : 'OFF'\}/)
+  })
 })

@@ -530,7 +530,7 @@ export default function PqcRadar() {
         {/* ── Results column ── */}
         <div className="space-y-6 lg:col-span-2">
           <AnimatePresence mode="wait">
-            {summary ? (
+            {summary && !historyUnavailable ? (
               <motion.div
                 key="score"
                 initial={{ opacity: 0, y: 8 }}

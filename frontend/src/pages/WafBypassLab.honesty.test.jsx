@@ -16,5 +16,6 @@ describe('WafBypassLab live-only truth', () => {
     expect(src).toMatch(/!historyUnavailable/)
     expect(src).not.toMatch(/scoreColor\(score \?\? 0\)/)
     expect(src).toMatch(/\(historyUnavailable \|\| score == null\) \? 'rgba\(255,255,255,0\.35\)' : scoreColor\(score\)/)
+    expect(src).toMatch(/\{\(historyUnavailable \|\| score == null\) \? '—' : score\}/)
   })
 })

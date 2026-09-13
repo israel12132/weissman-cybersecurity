@@ -462,6 +462,7 @@ export default function CicdPipelineSecurityCommandCenter() {
     setLastJobId,
     historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, realFindings)
+  const liveMetrics = historyUnavailable ? null : metrics
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -751,7 +752,7 @@ export default function CicdPipelineSecurityCommandCenter() {
                   )}
                 </div>
                 <div className="h-72 md:h-80">
-                  <SupplyChainGraphCanvas graph={metrics?.supply_chain_graph} running={running} />
+                  <SupplyChainGraphCanvas graph={liveMetrics?.supply_chain_graph} running={running} />
                 </div>
               </div>
 
@@ -760,37 +761,37 @@ export default function CicdPipelineSecurityCommandCenter() {
                   <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">
                     {t('cicdSec.posture_score', 'DevSecOps Exposure Score')}
                   </p>
-                  <PostureGauge score={metrics?.score} grade={metrics?.grade} />
+                  <PostureGauge score={liveMetrics?.score} grade={liveMetrics?.grade} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <MetricTile label="Platforms" value={metrics ? (metrics.platforms?.length ?? 0) : '—'} accent="#22d3ee" />
-                  <MetricTile label="API Exposed" value={metrics?.api_exposed} accent="#ef4444" />
-                  <MetricTile label="Config Leaks" value={metrics?.config_exposed} accent="#f59e0b" />
-                  <MetricTile label="Policy Violations" value={metrics?.workflow_violations} accent="#a855f7" />
-                  <MetricTile label="Build Logs" value={metrics?.build_logs_exposed} accent="#fb923c" />
-                  <MetricTile label="Artifacts" value={metrics?.artifact_exposed} accent="#f472b6" />
-                  <MetricTile label="SLSA Gaps" value={metrics?.slsa_gaps} accent="#94a3b8" />
-                  <MetricTile label="Secrets in Artifacts" value={metrics?.secrets_in_configs} accent="#ef4444" />
-                  <MetricTile label="Attack Paths" value={attackPaths.length || '—'} accent="#84cc16" />
+                  <MetricTile label="Platforms" value={liveMetrics ? (liveMetrics.platforms?.length ?? 0) : '—'} accent="#22d3ee" />
+                  <MetricTile label="API Exposed" value={liveMetrics?.api_exposed} accent="#ef4444" />
+                  <MetricTile label="Config Leaks" value={liveMetrics?.config_exposed} accent="#f59e0b" />
+                  <MetricTile label="Policy Violations" value={liveMetrics?.workflow_violations} accent="#a855f7" />
+                  <MetricTile label="Build Logs" value={liveMetrics?.build_logs_exposed} accent="#fb923c" />
+                  <MetricTile label="Artifacts" value={liveMetrics?.artifact_exposed} accent="#f472b6" />
+                  <MetricTile label="SLSA Gaps" value={liveMetrics?.slsa_gaps} accent="#94a3b8" />
+                  <MetricTile label="Secrets in Artifacts" value={liveMetrics?.secrets_in_configs} accent="#ef4444" />
+                  <MetricTile label="Attack Paths" value={liveMetrics ? attackPaths.length : '—'} accent="#84cc16" />
                 </div>
-                {metrics?.risk_dimensions && (
+                {liveMetrics?.risk_dimensions && (
                   <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-3 space-y-2.5">
                     <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">{t('cicdSec.risk_dimensions', '5-Dimension Risk Model')}</p>
-                    <RiskDimensionBar label="API Exposure" value={metrics.risk_dimensions.api_exposure} accent="#ef4444" />
-                    <RiskDimensionBar label="Pipeline Integrity" value={metrics.risk_dimensions.pipeline_integrity} accent="#f59e0b" />
-                    <RiskDimensionBar label="Secrets Leakage" value={metrics.risk_dimensions.secrets_leakage} accent="#f97316" />
-                    <RiskDimensionBar label="Runner Isolation" value={metrics.risk_dimensions.runner_isolation} accent="#a855f7" />
-                    <RiskDimensionBar label="Supply Chain" value={metrics.risk_dimensions.supply_chain} accent="#84cc16" />
+                    <RiskDimensionBar label="API Exposure" value={liveMetrics.risk_dimensions.api_exposure} accent="#ef4444" />
+                    <RiskDimensionBar label="Pipeline Integrity" value={liveMetrics.risk_dimensions.pipeline_integrity} accent="#f59e0b" />
+                    <RiskDimensionBar label="Secrets Leakage" value={liveMetrics.risk_dimensions.secrets_leakage} accent="#f97316" />
+                    <RiskDimensionBar label="Runner Isolation" value={liveMetrics.risk_dimensions.runner_isolation} accent="#a855f7" />
+                    <RiskDimensionBar label="Supply Chain" value={liveMetrics.risk_dimensions.supply_chain} accent="#84cc16" />
                   </div>
                 )}
-                <PolicyHitsPanel policyHits={metrics?.policy_hits} />
-                <CompliancePosturePanel compliancePosture={metrics?.compliance_posture} />
-                <RemediationPlaybookPanel playbook={metrics?.remediation_playbook} />
-                {metrics?.platforms?.length > 0 && (
+                <PolicyHitsPanel policyHits={liveMetrics?.policy_hits} />
+                <CompliancePosturePanel compliancePosture={liveMetrics?.compliance_posture} />
+                <RemediationPlaybookPanel playbook={liveMetrics?.remediation_playbook} />
+                {liveMetrics?.platforms?.length > 0 && (
                   <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-3">
                     <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-2">Detected Platforms</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {metrics.platforms.map((pid) => {
+                      {liveMetrics.platforms.map((pid) => {
                         const p = PLATFORMS.find((x) => x.id === pid)
                         return (
                           <span key={pid} className="text-[10px] font-mono px-2 py-0.5 rounded border border-lime-500/30 text-lime-200 bg-lime-500/10">

@@ -146,7 +146,10 @@ export default function SovereignDefenseMatrix() {
   }, [])
 
   const loadDashboard = useCallback(async () => {
-    if (!clientId) return
+    if (!clientId) {
+      setDashboard(null)
+      return
+    }
     const [dash, ce, cs] = await Promise.allSettled([
       apiFetch(`/api/sovereign-defense/${clientId}/dashboard`),
       apiFetch(`/api/sovereign-defense/${clientId}/chronos/events`),
@@ -154,6 +157,8 @@ export default function SovereignDefenseMatrix() {
     ])
     if (dash.status === 'fulfilled' && dash.value && dash.value.ok !== false && !dash.value.unavailable) {
       setDashboard(dash.value)
+    } else {
+      setDashboard(null)
     }
     if (ce.status === 'fulfilled') {
       const list = asJsonArray(ce.value)
@@ -339,7 +344,7 @@ export default function SovereignDefenseMatrix() {
         <MetricCard
           label={t('pages.sovereignDefense.metric_chronos')}
           value={chronos?.freezes_24h ?? '—'}
-          sub={`${chronos?.events_24h ?? 0} events`}
+          sub={chronos?.events_24h != null ? `${chronos.events_24h} events` : '—'}
           color="text-violet-300"
         />
         <MetricCard
@@ -356,9 +361,9 @@ export default function SovereignDefenseMatrix() {
         />
         <MetricCard
           label={t('pages.sovereignDefense.metric_agent')}
-          value={chronos?.agent_online ? 'ONLINE' : 'OFF'}
+          value={chronos ? (chronos.agent_online ? 'ONLINE' : 'OFF') : '—'}
           sub={t('pages.sovereignDefense.agent_status')}
-          color={chronos?.agent_online ? 'text-emerald-400' : 'text-red-400'}
+          color={chronos ? (chronos.agent_online ? 'text-emerald-400' : 'text-red-400') : 'text-[var(--text-muted)]'}
         />
       </div>
 

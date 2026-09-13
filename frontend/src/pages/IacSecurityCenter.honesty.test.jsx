@@ -17,4 +17,9 @@ describe('IacSecurityCenter live-only truth', () => {
     expect(src).not.toMatch(/Math\.min\(100, Math\.max\(0, score \?\? 0\)\)/)
     expect(src).not.toMatch(/no fabricated history/)
   })
+
+  it('does not paint unmeasured attack-paths when a live summary has zero chains', () => {
+    expect(src).toMatch(/historyUnavailable \? '—' : \(summary \? attackChains\.length : '—'\)/)
+    expect(src).not.toMatch(/attackChains\.length \|\| '—'/)
+  })
 })
