@@ -130,12 +130,11 @@ pub async fn compute_and_store(
     tenant_id: i64,
     client_id: i64,
 ) -> Result<ClientFinancialRisk, String> {
-    let path_ale = crate::attack_path::latest_snapshot(pool, tenant_id, client_id)
-        .await
-        .ok()
-        .flatten()
-        .map(|s| s.total_path_ale_usd)
-        .unwrap_or(0);
+    let path_ale = match crate::attack_path::latest_snapshot(pool, tenant_id, client_id).await {
+        Ok(Some(s)) => s.total_path_ale_usd,
+        Ok(None) => 0,
+        Err(_) => return Err("store_down".to_string()),
+    };
 
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await

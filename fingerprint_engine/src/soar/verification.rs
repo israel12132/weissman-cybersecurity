@@ -12,9 +12,9 @@ pub async fn enqueue_verification(
     execution_id: Uuid,
     probe: &VerifyProbeSpec,
 ) -> Result<i64, String> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Err("tenant tx".into());
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let id: i64 = sqlx::query_scalar(
         r#"INSERT INTO soar_verification_tasks
            (tenant_id, execution_id, probe_type, target, status)
@@ -38,7 +38,9 @@ pub async fn enqueue_verification(
     .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+    tx.commit()
+        .await
+        .map_err(|_| "store_down".to_string())?;
     Ok(id)
 }
 
@@ -62,10 +64,14 @@ pub struct PendingVerifyTask {
 /// **commits before returning**. Network probes (`verify_probe`, webhooks, TCP
 /// scans) run in the caller *after* this function, so a slow probe cannot hold
 /// row locks or stall the worker queue.
-pub async fn claim_due_tasks(pool: &PgPool, tenant_id: i64, limit: i64) -> Vec<PendingVerifyTask> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Vec::new();
-    };
+pub async fn claim_due_tasks(
+    pool: &PgPool,
+    tenant_id: i64,
+    limit: i64,
+) -> Result<Vec<PendingVerifyTask>, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let rows = sqlx::query(
         r#"SELECT t.id, t.tenant_id, t.execution_id, t.probe_type, t.target,
                   t.attempts, t.max_attempts,
@@ -84,17 +90,18 @@ pub async fn claim_due_tasks(pool: &PgPool, tenant_id: i64, limit: i64) -> Vec<P
     .bind(tenant_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    .map_err(|_| "store_down".to_string())?;
 
     let mut out = Vec::with_capacity(rows.len());
     for r in rows {
         let task_id: i64 = r.try_get("id").unwrap_or(0);
-        let _ = sqlx::query(
+        sqlx::query(
             "UPDATE soar_verification_tasks SET status = 'running', attempts = attempts + 1 WHERE id = $1",
         )
         .bind(task_id)
         .execute(&mut *tx)
-        .await;
+        .await
+        .map_err(|_| "store_down".to_string())?;
         let payload: serde_json::Value = r.try_get("execution_payload").unwrap_or(json!({}));
         let ports: Vec<u16> = payload
             .get("ports")
@@ -118,8 +125,10 @@ pub async fn claim_due_tasks(pool: &PgPool, tenant_id: i64, limit: i64) -> Vec<P
             ports,
         });
     }
-    let _ = tx.commit().await;
-    out
+    tx.commit()
+        .await
+        .map_err(|_| "store_down".to_string())?;
+    Ok(out)
 }
 
 pub async fn mark_verified(
@@ -127,9 +136,9 @@ pub async fn mark_verified(
     task: &PendingVerifyTask,
     detail: &str,
 ) -> Result<(), String> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, task.tenant_id).await else {
-        return Err("tenant tx".into());
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, task.tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     sqlx::query(
         r#"UPDATE soar_verification_tasks
            SET status = 'verified', last_result = $2, verified_at = now()
@@ -152,7 +161,9 @@ pub async fn mark_verified(
     .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
-    let _ = tx.commit().await;
+    tx.commit()
+        .await
+        .map_err(|_| "store_down".to_string())?;
     Ok(())
 }
 
@@ -161,9 +172,9 @@ pub async fn reschedule_or_fail(
     task: &PendingVerifyTask,
     detail: &str,
 ) -> Result<(), String> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, task.tenant_id).await else {
-        return Err("tenant tx".into());
-    };
+    let mut tx = crate::db::begin_tenant_tx(pool, task.tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     if task.attempts >= task.max_attempts {
         sqlx::query(
             r#"UPDATE soar_verification_tasks SET status = 'failed', last_result = $2 WHERE id = $1"#,
@@ -201,6 +212,8 @@ pub async fn reschedule_or_fail(
         .await
         .map_err(|e| e.to_string())?;
     }
-    let _ = tx.commit().await;
+    tx.commit()
+        .await
+        .map_err(|_| "store_down".to_string())?;
     Ok(())
 }

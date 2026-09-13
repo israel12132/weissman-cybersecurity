@@ -181,11 +181,11 @@ pub async fn run_findings_intel_backfill(
         )
         .fetch_all(&mut *tx)
         .await
-        .unwrap_or_default();
+        .map_err(|_| "store_down".to_string())?;
         let cves: Vec<String> = cve_rows.into_iter().map(|(c,)| c).collect();
         if !cves.is_empty() {
             // epss_intel/kev_intel have RLS DISABLED, so the mirror refresh stays on the bare pool.
-            crate::intel_epss::fetch_epss_for_cves(pool, &cves).await;
+            crate::intel_epss::fetch_epss_for_cves(pool, &cves).await?;
         }
 
         let epss_res = sqlx::query(

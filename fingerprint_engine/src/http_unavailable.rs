@@ -3650,4 +3650,87 @@ mod tests {
         assert!(!compact_src(recent).contains("fetch_optional(&mut*tx).await.ok().flatten()"));
         assert!(src.contains("Err(_) => return Err(\"store_down\".to_string())"));
     }
+
+    #[test]
+    fn ueba_epss_fair_verify_heal_store_down_is_not_live_miss() {
+        let ingest = named_fn_src(
+            include_str!("ueba_detector.rs"),
+            "pub async fn ingest_sample",
+        );
+        assert!(ingest.contains("SELECT enrolled_at FROM endpoint_agents"));
+        assert!(!compact_src(ingest).contains("fetch_optional(&mut*tx).await.ok().flatten()"));
+        assert!(ingest.contains("map_err(|_| \"store_down\".to_string())?"));
+        let det = include_str!("ueba_detector.rs");
+        let sov_call = det
+            .find("crate::ueba_onboarding::on_sovereign_binary_allowlist_tx")
+            .expect("sov caller");
+        let sov_call_src = &det[sov_call..sov_call + 280];
+        assert!(sov_call_src.contains("map_err(|_| \"store_down\".to_string())?"));
+
+        let ueba = include_str!("ueba_onboarding.rs");
+        let sov_start = ueba
+            .find("pub async fn on_sovereign_binary_allowlist_tx")
+            .expect("sov");
+        let sov_rest = &ueba[sov_start..];
+        let sov_next = sov_rest
+            .find("\npub fn item_binary_hash")
+            .unwrap_or(sov_rest.len());
+        let sov = &sov_rest[..sov_next];
+        assert!(sov.contains("Result<bool, String>"));
+        assert!(!compact_src(sov).contains(".ok().flatten()"));
+        assert!(sov.contains("map_err(|_| \"store_down\".to_string())?"));
+
+        let epss = include_str!("intel_epss.rs");
+        let epss_start = epss
+            .find("pub async fn fetch_epss_for_cves")
+            .expect("fetch_epss");
+        let epss_rest = &epss[epss_start..];
+        let epss_next = epss_rest.find("\nfn parse_score").unwrap_or(epss_rest.len());
+        let epss_fn = &epss_rest[..epss_next];
+        assert!(epss_fn.contains("Result<HashMap<String, EpssScore>, String>"));
+        assert!(!compact_src(epss_fn).contains("fetch_all(pool).await.unwrap_or_default()"));
+        assert!(epss_fn.contains("map_err(|_| \"store_down\".to_string())?"));
+        let persist = include_str!("findings_persist.rs");
+        assert!(persist.contains(
+            "intel_epss::fetch_epss_for_cves(pool, &scan_cves)\n        .await\n        .map_err(|_| \"store_down\".to_string())?"
+        ));
+
+        let fair = include_str!("financial_risk.rs");
+        let fair_start = fair
+            .find("pub async fn compute_and_store")
+            .expect("compute_and_store");
+        let fair_rest = &fair[fair_start..];
+        let fair_next = fair_rest
+            .find("\npub async fn latest_snapshot")
+            .unwrap_or(fair_rest.len());
+        let fair_fn = &fair_rest[..fair_next];
+        assert!(!compact_src(fair_fn).contains(".ok().flatten()"));
+        assert!(fair_fn.contains("Err(_) => return Err(\"store_down\".to_string())"));
+
+        let verify = include_str!("soar/verification.rs");
+        let claim_start = verify
+            .find("pub async fn claim_due_tasks")
+            .expect("claim_due_tasks");
+        let claim_rest = &verify[claim_start..];
+        let claim_next = claim_rest
+            .find("\npub async fn mark_verified")
+            .unwrap_or(claim_rest.len());
+        let claim = &claim_rest[..claim_next];
+        assert!(claim.contains("Result<Vec<PendingVerifyTask>, String>"));
+        assert!(!compact_src(claim).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(claim.contains("store_down"));
+        assert!(!claim.contains("return Vec::new()"));
+        let cycle = named_fn_src(include_str!("soar/worker.rs"), "async fn run_cycle");
+        assert!(cycle.contains("claim_due_tasks(app_pool, tenant_id, 8).await?"));
+        assert!(!compact_src(cycle).contains("let tasks=claim_due_tasks(app_pool,tenant_id,8).await;"));
+
+        let heal = include_str!("auto_heal_job.rs");
+        let ctx = named_fn_src(heal, "async fn load_finding_context");
+        assert!(ctx.contains("Result<Option<(String, String, String)>, String>"));
+        assert!(ctx.contains("store_down"));
+        assert!(!compact_src(ctx).contains(".ok().flatten()"));
+        assert!(heal.contains(
+            "load_finding_context(app_pool.as_ref(), tenant_id, client_id, &finding_id).await?"
+        ));
+    }
 }

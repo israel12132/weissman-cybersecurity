@@ -324,7 +324,9 @@ pub async fn persist_engine_findings(
         .map(extract_cve_from_finding)
         .filter(|c| !c.is_empty())
         .collect();
-    let epss_map = intel_epss::fetch_epss_for_cves(pool, &scan_cves).await;
+    let epss_map = intel_epss::fetch_epss_for_cves(pool, &scan_cves)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let kev_map = intel_kev::kev_listed_for_cves(pool, &scan_cves)
         .await
         .map_err(|_| "store_down".to_string())?;

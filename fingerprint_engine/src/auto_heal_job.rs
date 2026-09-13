@@ -283,33 +283,37 @@ async fn recent_open_pr(
     Ok(Some((url, num, branch)))
 }
 
-/// Load a finding's title/description/severity for patch regeneration (empty tuple if absent).
+/// Load a finding's title/description/severity for patch regeneration.
+/// Missing row is `Ok(None)`. Store-down is `Err` — never empty strings as a
+/// confirmed miss used for patch text.
 async fn load_finding_context(
     pool: &PgPool,
     tenant_id: i64,
     client_id: i64,
     finding_id: &str,
-) -> (String, String, String) {
-    if let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await {
-        let row = sqlx::query(
-            "SELECT title, COALESCE(description,'') AS description, severity FROM vulnerabilities WHERE client_id = $1 AND finding_id = $2 LIMIT 1",
-        )
-        .bind(client_id)
-        .bind(finding_id)
-        .fetch_optional(&mut *tx)
+) -> Result<Option<(String, String, String)>, String> {
+    let mut tx = db::begin_tenant_tx(pool, tenant_id)
         .await
-        .ok()
-        .flatten();
-        let _ = tx.commit().await;
-        if let Some(r) = row {
-            return (
-                r.try_get("title").unwrap_or_default(),
-                r.try_get("description").unwrap_or_default(),
-                r.try_get("severity").unwrap_or_default(),
-            );
-        }
+        .map_err(|_| "store_down".to_string())?;
+    let row = sqlx::query(
+        "SELECT title, COALESCE(description,'') AS description, severity FROM vulnerabilities WHERE client_id = $1 AND finding_id = $2 LIMIT 1",
+    )
+    .bind(client_id)
+    .bind(finding_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
     }
-    (String::new(), String::new(), String::new())
+    let Some(r) = row else {
+        return Ok(None);
+    };
+    Ok(Some((
+        r.try_get("title").unwrap_or_default(),
+        r.try_get("description").unwrap_or_default(),
+        r.try_get("severity").unwrap_or_default(),
+    )))
 }
 
 /// Policy-driven, best-effort auto-merge of a freshly opened GitHub heal PR. A no-op unless
@@ -672,9 +676,8 @@ pub async fn run_auto_heal_job(
         .unwrap_or(1);
 
     let mut vr: crate::verification_sandbox::VerificationResult = if tournament_size >= 2 {
-        let (t, d, s) =
-            load_finding_context(app_pool.as_ref(), tenant_id, client_id, &finding_id).await;
-        finding_ctx = Some((t.clone(), d.clone(), s.clone()));
+        finding_ctx = load_finding_context(app_pool.as_ref(), tenant_id, client_id, &finding_id).await?;
+        let (t, d, s) = finding_ctx.clone().unwrap_or_default();
         record_step(
             &step_sink,
             "tournament_start",
@@ -846,9 +849,8 @@ pub async fn run_auto_heal_job(
         .await;
 
         if finding_ctx.is_none() {
-            finding_ctx = Some(
-                load_finding_context(app_pool.as_ref(), tenant_id, client_id, &finding_id).await,
-            );
+            finding_ctx =
+                load_finding_context(app_pool.as_ref(), tenant_id, client_id, &finding_id).await?;
         }
         let cfg = match crate::council::CouncilConfig::load(app_pool.as_ref(), tenant_id).await {
             Ok(c) => c,

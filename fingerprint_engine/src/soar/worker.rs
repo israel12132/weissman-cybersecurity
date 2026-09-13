@@ -134,7 +134,7 @@ async fn run_cycle(app_pool: &PgPool, auth_pool: &PgPool) -> Result<u64, String>
         .unwrap_or_default();
     let mut processed = 0u64;
     for tenant_id in tenants {
-        let tasks = claim_due_tasks(app_pool, tenant_id, 8).await;
+        let tasks = claim_due_tasks(app_pool, tenant_id, 8).await?;
         for task in tasks {
             processed += 1;
             let ok = match task.probe_type.as_str() {

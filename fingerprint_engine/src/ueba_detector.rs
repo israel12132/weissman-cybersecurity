@@ -175,8 +175,7 @@ pub async fn ingest_sample(
         .bind(uuid)
         .fetch_optional(&mut *tx)
         .await
-        .ok()
-        .flatten()
+        .map_err(|_| "store_down".to_string())?
     } else {
         None
     };
@@ -638,7 +637,9 @@ async fn check_new_categorical(
             .await
             .map_err(|_| "store_down".to_string())?;
             let wl = crate::ueba_onboarding::on_global_whitelist(metric, item);
-            let sov = crate::ueba_onboarding::on_sovereign_binary_allowlist_tx(tx, hash).await;
+            let sov = crate::ueba_onboarding::on_sovereign_binary_allowlist_tx(tx, hash)
+                .await
+                .map_err(|_| "store_down".to_string())?;
             match crate::ueba_onboarding::decide_onboarding_item(metric, item, sig, ti, wl, sov) {
                 crate::ueba_onboarding::OnboardingDecision::Learn => {
                     learned.insert(item.clone());

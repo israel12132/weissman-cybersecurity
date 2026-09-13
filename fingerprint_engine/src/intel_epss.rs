@@ -80,13 +80,17 @@ fn normalize_cve(raw: &str) -> Option<String> {
 /// keyed by normalized CVE id. Missing CVEs are absent from the map.
 ///
 /// We always read from the cache first; only CVEs that are missing OR stale
-/// (>24h old) are re-fetched.
-pub async fn fetch_epss_for_cves(pool: &PgPool, cves: &[String]) -> HashMap<String, EpssScore> {
+/// (>24h old) are re-fetched. A cache `store_down` is `Err` — never a miss that
+/// would persist `epss_score = NULL` as "this CVE has no EPSS".
+pub async fn fetch_epss_for_cves(
+    pool: &PgPool,
+    cves: &[String],
+) -> Result<HashMap<String, EpssScore>, String> {
     let mut normalized: Vec<String> = cves.iter().filter_map(|c| normalize_cve(c)).collect();
     normalized.sort();
     normalized.dedup();
     if normalized.is_empty() {
-        return HashMap::new();
+        return Ok(HashMap::new());
     }
 
     let mut out: HashMap<String, EpssScore> = HashMap::new();
@@ -100,7 +104,7 @@ pub async fn fetch_epss_for_cves(pool: &PgPool, cves: &[String]) -> HashMap<Stri
     .bind(&normalized)
     .fetch_all(pool)
     .await
-    .unwrap_or_default();
+    .map_err(|_| "store_down".to_string())?;
 
     let now = chrono::Utc::now();
     let mut stale: Vec<String> = Vec::new();
@@ -150,7 +154,7 @@ pub async fn fetch_epss_for_cves(pool: &PgPool, cves: &[String]) -> HashMap<Stri
     }
 
     if stale.is_empty() {
-        return out;
+        return Ok(out);
     }
 
     // 2) Fetch missing/stale CVEs from FIRST.org in batches.
@@ -182,7 +186,7 @@ pub async fn fetch_epss_for_cves(pool: &PgPool, cves: &[String]) -> HashMap<Stri
         }
     }
 
-    out
+    Ok(out)
 }
 
 fn parse_score(r: &EpssApiRow) -> Option<EpssScore> {
@@ -310,7 +314,7 @@ async fn run_one_cycle(pool: &PgPool) -> Result<(), String> {
         return Ok(());
     }
     tracing::info!(target: "intel_epss", count = cves.len(), "refreshing EPSS");
-    fetch_epss_for_cves(pool, &cves).await;
+    fetch_epss_for_cves(pool, &cves).await?;
 
     // After refresh, materialise scores onto vulnerabilities (back-fill rows that
     // were persisted *before* the score was known).
@@ -336,10 +340,14 @@ pub async fn enrich_with_epss(
     pool: &PgPool,
     raw_data: &mut Value,
     cve: Option<&str>,
-) -> Option<EpssScore> {
-    let cve = cve.and_then(normalize_cve)?;
-    let map = fetch_epss_for_cves(pool, &[cve.clone()]).await;
-    let s = map.get(&cve).copied()?;
+) -> Result<Option<EpssScore>, String> {
+    let Some(cve) = cve.and_then(normalize_cve) else {
+        return Ok(None);
+    };
+    let map = fetch_epss_for_cves(pool, &[cve.clone()]).await?;
+    let Some(s) = map.get(&cve).copied() else {
+        return Ok(None);
+    };
     if let Value::Object(obj) = raw_data {
         obj.insert(
             "epss".to_string(),
@@ -350,7 +358,7 @@ pub async fn enrich_with_epss(
             }),
         );
     }
-    Some(s)
+    Ok(Some(s))
 }
 
 #[cfg(test)]

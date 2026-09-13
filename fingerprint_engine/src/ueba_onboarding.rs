@@ -302,15 +302,16 @@ fn db_signature_grants_learn(sha256_hex: &str, signature_hex: &str) -> bool {
 }
 
 /// Offline-first Learn grant: env, packaged file, USB drop, or a **signed** local DB row.
+/// Store-down is `Err` — never a confirmed miss that would RejectAndAlert or Learn.
 pub async fn on_sovereign_binary_allowlist_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     hash: Option<&str>,
-) -> bool {
+) -> Result<bool, String> {
     if on_sovereign_binary_allowlist(hash) {
-        return true;
+        return Ok(true);
     }
     let Some(n) = normalize_sha256(hash) else {
-        return false;
+        return Ok(false);
     };
     seed_sovereign_allowlist(tx).await;
     let sig: Option<String> = sqlx::query_scalar(
@@ -319,10 +320,10 @@ pub async fn on_sovereign_binary_allowlist_tx(
     .bind(&n)
     .fetch_optional(&mut **tx)
     .await
-    .ok()
-    .flatten();
-    sig.as_deref()
-        .is_some_and(|s| db_signature_grants_learn(&n, s))
+    .map_err(|_| "store_down".to_string())?;
+    Ok(sig
+        .as_deref()
+        .is_some_and(|s| db_signature_grants_learn(&n, s)))
 }
 
 /// Look up the agent-reported SHA-256 for a process name (`top_process_hashes`).
@@ -608,7 +609,9 @@ mod tests {
         let prev_key = std::env::var("WEISSMAN_UEBA_SOVEREIGN_SIGNING_KEY").ok();
         std::env::remove_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST");
         std::env::remove_var("WEISSMAN_UEBA_SOVEREIGN_SIGNING_KEY");
-        let hit = on_sovereign_binary_allowlist_tx(&mut tx, Some(hash)).await;
+        let hit = on_sovereign_binary_allowlist_tx(&mut tx, Some(hash))
+            .await
+            .expect("allowlist lookup");
         match prev_hash {
             Some(v) => std::env::set_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST", v),
             None => std::env::remove_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST"),
@@ -632,7 +635,9 @@ mod tests {
         .execute(&mut *tx)
         .await
         .expect("inject forged signature");
-        let forged_hit = on_sovereign_binary_allowlist_tx(&mut tx, Some(hash)).await;
+        let forged_hit = on_sovereign_binary_allowlist_tx(&mut tx, Some(hash))
+            .await
+            .expect("allowlist lookup");
         assert!(!forged_hit, "a forged Ed25519 blob must not grant Learn");
         let _ = sqlx::query("DELETE FROM ueba_sovereign_binary_allowlist WHERE sha256 = $1")
             .bind(hash)
@@ -684,7 +689,9 @@ mod tests {
         .expect("insert signed catalog hash");
         let prev = std::env::var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST").ok();
         std::env::remove_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST");
-        let hit = on_sovereign_binary_allowlist_tx(&mut tx, Some(hash)).await;
+        let hit = on_sovereign_binary_allowlist_tx(&mut tx, Some(hash))
+            .await
+            .expect("allowlist lookup");
         match prev {
             Some(v) => std::env::set_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST", v),
             None => std::env::remove_var("WEISSMAN_UEBA_BINARY_HASH_ALLOWLIST"),
