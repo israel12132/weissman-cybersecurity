@@ -15,4 +15,11 @@ describe('CeoIntegratedCommandDeck live-only truth', () => {
     expect(src).not.toMatch(/tenant_jobs_running \?\? 0/)
     expect(src).toMatch(/safeModeUnknown/)
   })
+
+  it('does not paint scanning idle when both god and telemetry flags are unconfirmed', () => {
+    expect(src).toMatch(/typeof scanFromGod === 'boolean'/)
+    expect(src).toMatch(/typeof scanFromTel === 'boolean'/)
+    expect(src).toMatch(/scanningKnown/)
+    expect(src).toMatch(/scanningKnown \? !!scanningActive : null/)
+  })
 })

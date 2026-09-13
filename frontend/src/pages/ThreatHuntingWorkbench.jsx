@@ -455,6 +455,14 @@ export default function ThreatHuntingWorkbench() {
           <SkeletonWidgetGrid count={4} className="mb-8" />
           <SkeletonCard lines={6} />
         </>
+      ) : campaignsError ? (
+        <div data-testid="threat-hunting-unavailable">
+          <EmptyState
+            icon="search-x"
+            title={t(`${NS}.unavailable_title`)}
+            body={t(`${NS}.unavailable_body`)}
+          />
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
@@ -488,13 +496,9 @@ export default function ThreatHuntingWorkbench() {
                 {campaigns.length === 0 ? (
                   <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-8 text-center">
                     <p className="text-sm text-[var(--text-muted)] font-mono">{t(`${NS}.no_campaigns`)}</p>
-                    {campaignsError ? (
-                      <p className="text-[11px] text-rose-400/70 font-mono mt-2">{campaignsError}</p>
-                    ) : (
-                      <p className="text-[11px] text-[var(--text-disabled)] font-mono mt-2">
-                        {t(`${NS}.no_campaigns_hint`)}
-                      </p>
-                    )}
+                    <p className="text-[11px] text-[var(--text-disabled)] font-mono mt-2">
+                      {t(`${NS}.no_campaigns_hint`)}
+                    </p>
                   </div>
                 ) : (
                   <div className="grid lg:grid-cols-[360px_1fr] gap-6">

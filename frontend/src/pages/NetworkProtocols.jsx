@@ -6,6 +6,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../utils/apiFetch';
 import EvidenceNotice from '../components/ui/EvidenceNotice';
+import EmptyState from '../components/ui/EmptyState'
 import Button from '../components/ui/Button'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 
@@ -26,6 +27,7 @@ function getStatusColor(status) {
 export default function NetworkProtocols() {
   const { t } = useTranslation();
   const [clients, setClients] = useState([]);
+  const [clientsUnavailable, setClientsUnavailable] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState('');
   const [protocols, setProtocols] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,9 +37,8 @@ export default function NetworkProtocols() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d); })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {});
+      .then((d) => { if (Array.isArray(d)) setClients(d); setClientsUnavailable(false); })
+      .catch(() => { setClientsUnavailable(true); });
   }, []);
 
   const loadProtocols = useCallback(async () => {
@@ -118,6 +119,11 @@ export default function NetworkProtocols() {
           <span className="text-[10px] font-mono text-[var(--text-disabled)]">
             {t('pages.networkProtocols.source_label', { source: dataSource === 'soc' ? '/api/soc/network-protocols' : dataSource })}
           </span>
+          {clientsUnavailable && (
+            <span className="text-[10px] font-mono text-amber-300/80" data-testid="network-protocols-clients-unavailable">
+              {t('pages.networkProtocols.clients_unavailable')}
+            </span>
+          )}
           <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200 ml-auto">{t('pages.networkProtocols.open_findings')}</Link>
         </div>
 
@@ -144,19 +150,25 @@ export default function NetworkProtocols() {
           </Button>
         </div>
 
-        {error && (
-          <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm">
-            {t('pages.networkProtocols.load_error', { error })}
+        {loading ? (
+          <div className="p-6 text-sm text-[var(--text-muted)]">{t('pages.networkProtocols.loading')}</div>
+        ) : error ? (
+          <div data-testid="network-protocols-unavailable">
+            <EmptyState
+              icon="network"
+              title={t('pages.networkProtocols.unavailable_title')}
+              body={t('pages.networkProtocols.unavailable_body')}
+            />
           </div>
-        )}
-
+        ) : (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.networkProtocols.protocols_scanned')}</span>
               <Network className="w-4 h-4 text-cyan-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{loading ? '…' : stats.scanned}</div>
+            <div className="text-2xl font-bold text-white">{stats.scanned}</div>
           </div>
 
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
@@ -164,7 +176,7 @@ export default function NetworkProtocols() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.networkProtocols.critical_issues')}</span>
               <AlertTriangle className="w-4 h-4 text-red-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{loading ? '…' : stats.critical}</div>
+            <div className="text-2xl font-bold text-white">{stats.critical}</div>
           </div>
 
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
@@ -172,7 +184,7 @@ export default function NetworkProtocols() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.networkProtocols.warnings')}</span>
               <Activity className="w-4 h-4 text-yellow-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{loading ? '…' : stats.warning}</div>
+            <div className="text-2xl font-bold text-white">{stats.warning}</div>
           </div>
 
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
@@ -180,7 +192,7 @@ export default function NetworkProtocols() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.networkProtocols.secure')}</span>
               <Shield className="w-4 h-4 text-green-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{loading ? '…' : stats.secure}</div>
+            <div className="text-2xl font-bold text-white">{stats.secure}</div>
           </div>
         </div>
 
@@ -192,9 +204,7 @@ export default function NetworkProtocols() {
             </h3>
           </div>
 
-          {loading ? (
-            <div className="p-6 text-sm text-[var(--text-muted)]">{t('pages.networkProtocols.loading')}</div>
-          ) : protocols.length === 0 ? (
+          {protocols.length === 0 ? (
             <div className="p-6 space-y-3 text-sm text-[var(--text-tertiary)]">
               <p>{t('pages.networkProtocols.empty_title')}</p>
               <p className="text-xs text-[var(--text-muted)]">
@@ -237,6 +247,8 @@ export default function NetworkProtocols() {
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
     </PageShell>
   );

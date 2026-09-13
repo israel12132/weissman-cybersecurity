@@ -190,6 +190,7 @@ export default function CeoIntegratedCommandDeck() {
   const rssMb = rssKb != null ? (Number(rssKb) / 1024).toFixed(1) : '—'
   const scanFromGod = god?.scanning_active
   const scanFromTel = tel?.scanning_active
+  const scanningKnown = typeof scanFromGod === 'boolean' || typeof scanFromTel === 'boolean'
   const scanningActive = scanFromGod ?? scanFromTel
 
   return (
@@ -287,11 +288,13 @@ export default function CeoIntegratedCommandDeck() {
           <MetricCard
             label={t('components.ceo.integratedCommandDeck.scanning')}
             value={
-              scanningActive
-                ? t('components.ceo.integratedCommandDeck.scanningActive')
-                : t('components.ceo.integratedCommandDeck.scanningIdle')
+              scanningKnown
+                ? scanningActive
+                  ? t('components.ceo.integratedCommandDeck.scanningActive')
+                  : t('components.ceo.integratedCommandDeck.scanningIdle')
+                : '—'
             }
-            accent={scanningActive ? 'border-orange-500/40' : 'border-white/10'}
+            accent={scanningActive === true ? 'border-orange-500/40' : 'border-white/10'}
           />
         </div>
 
@@ -398,7 +401,7 @@ export default function CeoIntegratedCommandDeck() {
 
       <GodModeEngineMatrix
         matrix={god?.engine_matrix}
-        scanningActive={!!scanningActive}
+        scanningActive={scanningKnown ? !!scanningActive : null}
         godErr={godErr}
         onTenantEngineToggle={toggleTenantEngine}
         engineToggleBusy={engineToggleBusy}
