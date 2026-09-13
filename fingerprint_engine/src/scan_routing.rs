@@ -380,7 +380,9 @@ async fn tenant_config_string(pool: &PgPool, tenant_id: i64, key: &str) -> Resul
             .fetch_optional(&mut *tx)
             .await
             .map_err(|e| format!("read system_configs.{key}: {e}"))?;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
     Ok(val.unwrap_or_default().trim().to_string())
 }
 
@@ -441,7 +443,9 @@ async fn load_client_credentials(
     .fetch_optional(&mut *tx)
     .await
     .map_err(|e| format!("read client credentials: {e}"))?;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
     let Some(r) = row else {
         return Ok(None);
     };
@@ -951,12 +955,15 @@ pub async fn hydrate_stored_job_payload(
         }
     }
     if let Some(cid) = client_id {
-        if let Ok(Some(creds)) = load_client_credentials(pool, tenant_id, cid).await {
-            hydrate_extras_from_client(&mut extras, &creds);
+        match load_client_credentials(pool, tenant_id, cid).await {
+            Ok(Some(creds)) => hydrate_extras_from_client(&mut extras, &creds),
+            Ok(None) => {}
+            Err(e) => return Err(e),
         }
     }
-    if let Ok(secrets) = load_tenant_scan_secrets(pool, tenant_id).await {
-        hydrate_extras_from_tenant(&mut extras, &secrets);
+    match load_tenant_scan_secrets(pool, tenant_id).await {
+        Ok(secrets) => hydrate_extras_from_tenant(&mut extras, &secrets),
+        Err(e) => return Err(e),
     }
     if let Some(obj) = payload.as_object_mut() {
         for (k, v) in extras {
@@ -987,12 +994,15 @@ pub async fn route_scan_job(
     let client_id = parse_client_id(&ctx);
 
     if let Some(cid) = client_id {
-        if let Ok(Some(creds)) = load_client_credentials(pool, tenant_id, cid).await {
-            hydrate_extras_from_client(&mut ctx.extras, &creds);
+        match load_client_credentials(pool, tenant_id, cid).await {
+            Ok(Some(creds)) => hydrate_extras_from_client(&mut ctx.extras, &creds),
+            Ok(None) => {}
+            Err(e) => return Err(RouteError::Internal { detail: e }),
         }
     }
-    if let Ok(secrets) = load_tenant_scan_secrets(pool, tenant_id).await {
-        hydrate_extras_from_tenant(&mut ctx.extras, &secrets);
+    match load_tenant_scan_secrets(pool, tenant_id).await {
+        Ok(secrets) => hydrate_extras_from_tenant(&mut ctx.extras, &secrets),
+        Err(e) => return Err(RouteError::Internal { detail: e }),
     }
 
     // ── BLOCKER #1: Strict scope validation ──────────────────────────────────

@@ -3475,7 +3475,7 @@ mod tests {
         let billing = include_str!("billing/mod.rs");
         let impl_src = billing.split("#[cfg(test)]").next().expect("impl");
         let compact = compact_src(impl_src);
-        assert!(impl_src.contains("map_err(|_| \"store_down\".into())"));
+        assert!(impl_src.contains("map_err(|_| \"store_down\".to_string())"));
         assert!(impl_src.contains("Result<Option<String>, String>"));
         assert!(!compact.contains("ifletOk(Some(s))=sqlx::query_scalar"));
         let handlers = include_str!("server_handlers_onboarding_billing.inc");
@@ -3570,7 +3570,7 @@ mod tests {
             .find("SELECT count(*)::bigint FROM auto_heal_job_specs")
             .expect("dupe count");
         let slice = &src[start..start + 700];
-        assert!(slice.contains("Err(_) => return Err(\"store_down\".into())"));
+        assert!(slice.contains("Err(_) => return Err(\"store_down\".to_string())"));
         assert!(!slice.contains("unwrap_or(0)"));
     }
 
@@ -3841,17 +3841,22 @@ mod tests {
         assert!(persist_rb.contains("Result<Uuid, String>"));
         assert!(!persist_rb.contains("let _ = tx.commit()"));
         assert!(persist_rb.contains("store_down"));
+        assert!(persist_rb.contains("serde_json::to_value(steps).map_err"));
+        assert!(
+            !persist_rb.contains("unwrap_or(json!([]))"),
+            "non-empty runbook steps must not serde-fail into empty json!([])"
+        );
 
         assert!(!compact_src(exec).contains("let_=persist_runbook"));
         let persist_idx = exec
             .find("persist_runbook(")
             .expect("execute_armored_action must persist a runbook");
-        let ok_idx = exec[persist_idx..]
-            .find("status: \"ok\".into()")
-            .expect("success arm should still exist after persist");
+        let enqueue_rel = exec[persist_idx..]
+            .find("enqueue_verification(")
+            .expect("enqueue follows persist");
         assert!(
-            exec[persist_idx..persist_idx + ok_idx].contains("store_down"),
-            "persist_runbook Err must become failed/store_down before returning ok"
+            exec[persist_idx..persist_idx + enqueue_rel].contains("store_down"),
+            "persist_runbook Err must become failed/store_down before enqueue"
         );
     }
 
@@ -4070,5 +4075,91 @@ mod tests {
         );
         assert!(!src.contains("if let Ok(mut tx) = crate::db::begin_tenant_tx"));
         assert!(src.contains("checkpoint begin store_down"));
+    }
+
+    #[test]
+    fn hydrate_stored_job_payload_store_down_is_not_stripped_ok() {
+        let hydrate = named_fn_src(
+            include_str!("scan_routing.rs"),
+            "pub async fn hydrate_stored_job_payload",
+        );
+        assert!(hydrate.contains("Result<(), String>"));
+        assert!(!hydrate.contains("if let Ok(Some(creds))"));
+        assert!(!hydrate.contains("if let Ok(secrets)"));
+        assert!(hydrate.contains("Err(e) => return Err(e)"));
+        let route = named_fn_src(include_str!("scan_routing.rs"), "pub async fn route_scan_job");
+        assert!(!route.contains("if let Ok(Some(creds))"));
+        assert!(!route.contains("if let Ok(secrets)"));
+        assert!(route.contains("RouteError::Internal { detail: e }"));
+        let exec = include_str!("async_job_executor.rs");
+        assert!(!exec.contains("continuing with stripped payload"));
+        let unscoped = named_fn_src(exec, "async fn execute_job_unscoped");
+        assert!(unscoped.contains("hydrate_stored_job_payload"));
+        assert!(compact_src(unscoped).contains(
+            "hydrate_stored_job_payload(app_pool.as_ref(),tid,&mutjob_payload,).await?"
+        ));
+    }
+
+    #[test]
+    fn cfg_string_tx_store_down_is_not_none_ok() {
+        let src = named_fn_src(include_str!("async_job_executor.rs"), "async fn cfg_string_tx");
+        assert!(src.contains("Result<Option<String>, String>"));
+        assert!(!src.contains(".ok().flatten()"));
+        assert!(src.contains("store_down"));
+    }
+
+    #[test]
+    fn restore_ec2_security_groups_role_select_store_down_is_not_missing_arn() {
+        let src = named_fn_src(
+            include_str!("soar/revert.rs"),
+            "async fn restore_ec2_security_groups",
+        );
+        assert!(src.contains("store_down"));
+        assert!(!src.contains(".ok().flatten()"));
+        assert!(src.contains("tx.commit().await.is_err()"));
+    }
+
+    #[test]
+    fn remediation_verify_prior_status_store_down_is_not_open() {
+        let src = named_fn_src(
+            include_str!("remediation_verify.rs"),
+            "pub async fn run_verification",
+        );
+        assert!(!src.contains(".ok().flatten().unwrap_or_else(|| \"OPEN\""));
+        assert!(src.contains("map_err(|_| \"store_down\".to_string())?"));
+        assert!(src.contains("unwrap_or_else(|| \"OPEN\".to_string())"));
+    }
+
+    #[test]
+    fn auto_heal_persist_helpers_store_down_is_not_ok_true() {
+        let heal = include_str!("auto_heal_job.rs");
+        let insert = named_fn_src(heal, "async fn insert_heal_request_row");
+        assert!(insert.contains("Result<(), String>"));
+        assert!(!insert.contains("if let Ok(mut tx)"));
+        assert!(!insert.contains("let _ = tx.commit()"));
+        assert!(insert.contains("store_down"));
+        let artifact = named_fn_src(heal, "async fn store_result_artifact");
+        assert!(artifact.contains("Result<(), String>"));
+        assert!(!artifact.contains("if let Ok(mut tx)"));
+        assert!(!artifact.contains("let _ = tx.commit()"));
+        let finalize = named_fn_src(heal, "async fn finalize_spec");
+        assert!(finalize.contains("Result<(), String>"));
+        assert!(!finalize.contains("if let Ok(mut tx)"));
+        assert!(!finalize.contains("let _ = tx.commit()"));
+        assert!(!heal.contains("let _ = insert_heal_request_row"));
+        assert!(!heal.contains("let _ = store_result_artifact"));
+        assert!(!heal.contains("let _ = finalize_spec"));
+        assert!(heal.contains("insert_heal_request_row("));
+        assert!(heal.contains(".await?"));
+    }
+
+    #[test]
+    fn playbook_execute_action_status_and_honeytoken_commit_fail_is_not_ok() {
+        let src = named_fn_src(include_str!("soar_playbook.rs"), "async fn execute_action");
+        assert!(!src.contains("let _ = tx.commit()"));
+        assert!(!src.contains("honeytoken issued"));
+        assert!(!src.contains("\"tenant tx\""));
+        assert!(src.contains("honeytoken deployed at"));
+        assert!(src.contains("store_down"));
     }
 }

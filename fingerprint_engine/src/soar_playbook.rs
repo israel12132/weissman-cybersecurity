@@ -412,7 +412,7 @@ async fn execute_action(pool: &PgPool, ev: &PlaybookEvent, a: &PlaybookAction) -
                 return ("skipped".into(), "no finding_id on event".into());
             };
             let Ok(mut tx) = crate::db::begin_tenant_tx(pool, ev.tenant_id).await else {
-                return ("failed".into(), "tenant tx".into());
+                return ("failed".into(), "store_down".into());
             };
             let res = sqlx::query(
                 "UPDATE vulnerabilities SET status = $1, updated_at = now() \
@@ -423,11 +423,18 @@ async fn execute_action(pool: &PgPool, ev: &PlaybookEvent, a: &PlaybookAction) -
             .bind(ev.tenant_id)
             .execute(&mut *tx)
             .await;
-            let _ = tx.commit().await;
             match res {
-                Ok(r) if r.rows_affected() > 0 => ("ok".into(), format!("status → {}", new_status)),
-                Ok(_) => ("failed".into(), "finding not updated".into()),
-                Err(e) => ("failed".into(), e.to_string()),
+                Ok(r) => {
+                    if tx.commit().await.is_err() {
+                        return ("failed".into(), "store_down".into());
+                    }
+                    if r.rows_affected() > 0 {
+                        ("ok".into(), format!("status → {}", new_status))
+                    } else {
+                        ("failed".into(), "finding not updated".into())
+                    }
+                }
+                Err(_) => ("failed".into(), "store_down".into()),
             }
         }
 
@@ -481,7 +488,7 @@ async fn execute_action(pool: &PgPool, ev: &PlaybookEvent, a: &PlaybookAction) -
                 .unwrap_or("");
             let (_value, location) = crate::deception_engine::generate_honeytoken(asset_type, tech);
             let Ok(mut tx) = crate::db::begin_tenant_tx(pool, ev.tenant_id).await else {
-                return ("failed".into(), "tenant tx".into());
+                return ("failed".into(), "store_down".into());
             };
             let meta = json!({
                 "location": location,
@@ -499,13 +506,17 @@ async fn execute_action(pool: &PgPool, ev: &PlaybookEvent, a: &PlaybookAction) -
             .bind(&meta)
             .execute(&mut *tx)
             .await;
-            let _ = tx.commit().await;
             match ins {
-                Ok(_) => (
-                    "ok".into(),
-                    format!("honeytoken deployed at {location} (touch → SEV-1)"),
-                ),
-                Err(_e) => ("ok".into(), format!("honeytoken issued at {location}")),
+                Ok(_) => {
+                    if tx.commit().await.is_err() {
+                        return ("failed".into(), "store_down".into());
+                    }
+                    (
+                        "ok".into(),
+                        format!("honeytoken deployed at {location} (touch → SEV-1)"),
+                    )
+                }
+                Err(_) => ("failed".into(), "store_down".into()),
             }
         }
 

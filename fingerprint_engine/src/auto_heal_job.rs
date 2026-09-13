@@ -26,9 +26,11 @@ async fn insert_heal_request_row(
     verdict: &str,
     attempts: i32,
     receipt: Option<&crate::heal_attestation::HealReceipt>,
-) {
-    if let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await {
-        let _ = sqlx::query(
+) -> Result<(), String> {
+    let mut tx = db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
+    sqlx::query(
             r#"INSERT INTO heal_requests (tenant_id, client_id, finding_id, vulnerability_id, branch_name, pr_url, pr_number, diff_summary, verification_status, verification_job_id, channel, verdict, attempts, verification_receipt, verification_digest)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)"#,
         )
@@ -48,16 +50,21 @@ async fn insert_heal_request_row(
         .bind(receipt.map(|r| r.receipt.as_str()))
         .bind(receipt.map(|r| r.digest.as_str()))
         .execute(&mut *tx)
-        .await;
-        let _ = tx.commit().await;
+        .await
+        .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
     }
+    Ok(())
 }
 
 /// Persist the verified, deliverable artifact (unified diff, changed-file list, or virtual-patch
 /// snippet) on the spec so non-repo channels and the UI can retrieve it. Never store secrets here.
-async fn store_result_artifact(pool: &PgPool, tenant_id: i64, spec_id: Uuid, artifact: &Value) {
-    if let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await {
-        let _ = sqlx::query(
+async fn store_result_artifact(pool: &PgPool, tenant_id: i64, spec_id: Uuid, artifact: &Value) -> Result<(), String> {
+    let mut tx = db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
+    sqlx::query(
             r#"UPDATE auto_heal_job_specs SET result_artifact = $3::jsonb, updated_at = now()
                WHERE id = $1 AND tenant_id = $2"#,
         )
@@ -65,9 +72,12 @@ async fn store_result_artifact(pool: &PgPool, tenant_id: i64, spec_id: Uuid, art
         .bind(tenant_id)
         .bind(artifact.to_string())
         .execute(&mut *tx)
-        .await;
-        let _ = tx.commit().await;
+        .await
+        .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
     }
+    Ok(())
 }
 
 /// Build an honest PR title + body from the real verification result. It states the verdict,
@@ -165,9 +175,11 @@ fn build_pr_text(
     (title, body)
 }
 
-async fn finalize_spec(pool: &PgPool, tenant_id: i64, spec_id: Uuid, status: &str) {
-    if let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await {
-        let res = sqlx::query(
+async fn finalize_spec(pool: &PgPool, tenant_id: i64, spec_id: Uuid, status: &str) -> Result<(), String> {
+    let mut tx = db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
+    sqlx::query(
             r#"UPDATE auto_heal_job_specs SET status = $3, git_token = '', updated_at = now()
                WHERE id = $1 AND tenant_id = $2"#,
         )
@@ -175,12 +187,12 @@ async fn finalize_spec(pool: &PgPool, tenant_id: i64, spec_id: Uuid, status: &st
         .bind(tenant_id)
         .bind(status)
         .execute(&mut *tx)
-        .await;
-        if let Err(e) = res {
-            tracing::error!(target: "auto_heal_job", error = %e, "finalize_spec update failed");
-        }
-        let _ = tx.commit().await;
+        .await
+        .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
     }
+    Ok(())
 }
 
 /// Tournament score for a candidate's verification result — higher tuple is better.
@@ -589,7 +601,7 @@ pub async fn run_auto_heal_job(
     .await
     {
         Ok(n) => n,
-        Err(_) => return Err("store_down".into()),
+        Err(_) => return Err("store_down".to_string()),
     };
     if running_dupe > 0 {
         // Clear the plaintext git PAT immediately, but do NOT write status = 'skipped': the
@@ -942,7 +954,7 @@ pub async fn run_auto_heal_job(
             attempt as i32,
             None,
         )
-        .await;
+        .await?;
         report_heal_outcome(
             app_pool.as_ref(),
             tenant_id,
@@ -956,7 +968,7 @@ pub async fn run_auto_heal_job(
             heal_started,
         )
         .await;
-        finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
+        finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await?;
         return Ok(json!({
             "ok": false,
             "error": msg,
@@ -998,7 +1010,7 @@ pub async fn run_auto_heal_job(
                 attempt as i32,
                 None,
             )
-            .await;
+            .await?;
             report_heal_outcome(
                 app_pool.as_ref(),
                 tenant_id,
@@ -1012,7 +1024,7 @@ pub async fn run_auto_heal_job(
                 heal_started,
             )
             .await;
-            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
+            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await?;
             return Ok(json!({
                 "ok": false,
                 "error": msg,
@@ -1081,7 +1093,7 @@ pub async fn run_auto_heal_job(
                 attempts_i32,
                 receipt.as_ref(),
             )
-            .await;
+            .await?;
             report_heal_outcome(
                 app_pool.as_ref(),
                 tenant_id,
@@ -1095,7 +1107,7 @@ pub async fn run_auto_heal_job(
                 heal_started,
             )
             .await;
-            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
+            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await?;
             return Ok(json!({
                 "ok": true,
                 "channel": channel.id(),
@@ -1146,7 +1158,7 @@ pub async fn run_auto_heal_job(
                     attempts_i32,
                     None,
                 )
-                .await;
+                .await?;
                 report_heal_outcome(
                     app_pool.as_ref(),
                     tenant_id,
@@ -1160,7 +1172,7 @@ pub async fn run_auto_heal_job(
                     heal_started,
                 )
                 .await;
-                finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
+                finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await?;
                 return Ok(json!({
                     "ok": false,
                     "error": e,
@@ -1188,7 +1200,7 @@ pub async fn run_auto_heal_job(
                     attempts_i32,
                     receipt.as_ref(),
                 )
-                .await;
+                .await?;
                 report_heal_outcome(
                     app_pool.as_ref(),
                     tenant_id,
@@ -1202,7 +1214,7 @@ pub async fn run_auto_heal_job(
                     heal_started,
                 )
                 .await;
-                finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
+                finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await?;
                 return Ok(json!({
                     "ok": true,
                     "channel": channel.id(),
@@ -1248,7 +1260,7 @@ pub async fn run_auto_heal_job(
                         attempts_i32,
                         receipt.as_ref(),
                     )
-                    .await;
+                    .await?;
                     report_heal_outcome(
                         app_pool.as_ref(),
                         tenant_id,
@@ -1277,7 +1289,7 @@ pub async fn run_auto_heal_job(
                         receipt.is_some(),
                     )
                     .await;
-                    finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
+                    finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await?;
                     Ok(json!({
                         "ok": true,
                         "channel": channel.id(),
@@ -1307,7 +1319,7 @@ pub async fn run_auto_heal_job(
                         attempts_i32,
                         None,
                     )
-                    .await;
+                    .await?;
                     report_heal_outcome(
                         app_pool.as_ref(),
                         tenant_id,
@@ -1321,7 +1333,7 @@ pub async fn run_auto_heal_job(
                         heal_started,
                     )
                     .await;
-                    finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
+                    finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await?;
                     Ok(json!({
                         "ok": false,
                         "error": e,
@@ -1343,7 +1355,7 @@ pub async fn run_auto_heal_job(
                 "changed_files": changed_paths,
                 "deleted_paths": vr.deleted_paths,
             });
-            store_result_artifact(app_pool.as_ref(), tenant_id, spec_id, &artifact).await;
+            store_result_artifact(app_pool.as_ref(), tenant_id, spec_id, &artifact).await?;
             let summary = format!(
                 "verified unified diff ready ({} files)",
                 vr.changed_files.len()
@@ -1365,7 +1377,7 @@ pub async fn run_auto_heal_job(
                 attempts_i32,
                 receipt.as_ref(),
             )
-            .await;
+            .await?;
             report_heal_outcome(
                 app_pool.as_ref(),
                 tenant_id,
@@ -1379,7 +1391,7 @@ pub async fn run_auto_heal_job(
                 heal_started,
             )
             .await;
-            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
+            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await?;
             Ok(json!({
                 "ok": true,
                 "channel": channel.id(),
@@ -1396,7 +1408,7 @@ pub async fn run_auto_heal_job(
                 "verdict": verdict_str,
                 "snippet": snippet,
             });
-            store_result_artifact(app_pool.as_ref(), tenant_id, spec_id, &artifact).await;
+            store_result_artifact(app_pool.as_ref(), tenant_id, spec_id, &artifact).await?;
             insert_heal_request_row(
                 app_pool.as_ref(),
                 tenant_id,
@@ -1414,7 +1426,7 @@ pub async fn run_auto_heal_job(
                 attempts_i32,
                 receipt.as_ref(),
             )
-            .await;
+            .await?;
             report_heal_outcome(
                 app_pool.as_ref(),
                 tenant_id,
@@ -1428,7 +1440,7 @@ pub async fn run_auto_heal_job(
                 heal_started,
             )
             .await;
-            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
+            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await?;
             Ok(json!({
                 "ok": true,
                 "channel": channel.id(),
@@ -1483,7 +1495,7 @@ pub async fn run_auto_heal_job(
                     attempts_i32,
                     None,
                 )
-                .await;
+                .await?;
                 report_heal_outcome(
                     app_pool.as_ref(),
                     tenant_id,
@@ -1497,7 +1509,7 @@ pub async fn run_auto_heal_job(
                     heal_started,
                 )
                 .await;
-                finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
+                finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await?;
                 return Ok(json!({
                     "ok": false,
                     "error": e,
@@ -1523,7 +1535,7 @@ pub async fn run_auto_heal_job(
                 attempts_i32,
                 receipt.as_ref(),
             )
-            .await;
+            .await?;
             report_heal_outcome(
                 app_pool.as_ref(),
                 tenant_id,
@@ -1537,7 +1549,7 @@ pub async fn run_auto_heal_job(
                 heal_started,
             )
             .await;
-            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
+            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await?;
             Ok(json!({
                 "ok": true,
                 "channel": channel.id(),
@@ -1592,7 +1604,7 @@ pub async fn run_auto_heal_job(
                     attempts_i32,
                     None,
                 )
-                .await;
+                .await?;
                 report_heal_outcome(
                     app_pool.as_ref(),
                     tenant_id,
@@ -1606,7 +1618,7 @@ pub async fn run_auto_heal_job(
                     heal_started,
                 )
                 .await;
-                finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
+                finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await?;
                 return Ok(json!({
                     "ok": false,
                     "error": e,
@@ -1632,7 +1644,7 @@ pub async fn run_auto_heal_job(
                 attempts_i32,
                 receipt.as_ref(),
             )
-            .await;
+            .await?;
             report_heal_outcome(
                 app_pool.as_ref(),
                 tenant_id,
@@ -1646,7 +1658,7 @@ pub async fn run_auto_heal_job(
                 heal_started,
             )
             .await;
-            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
+            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await?;
             Ok(json!({
                 "ok": true,
                 "channel": channel.id(),
@@ -1701,7 +1713,7 @@ pub async fn run_auto_heal_job(
                     attempts_i32,
                     None,
                 )
-                .await;
+                .await?;
                 report_heal_outcome(
                     app_pool.as_ref(),
                     tenant_id,
@@ -1715,7 +1727,7 @@ pub async fn run_auto_heal_job(
                     heal_started,
                 )
                 .await;
-                finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
+                finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await?;
                 return Ok(json!({
                     "ok": false,
                     "error": e,
@@ -1741,7 +1753,7 @@ pub async fn run_auto_heal_job(
                 attempts_i32,
                 receipt.as_ref(),
             )
-            .await;
+            .await?;
             report_heal_outcome(
                 app_pool.as_ref(),
                 tenant_id,
@@ -1755,7 +1767,7 @@ pub async fn run_auto_heal_job(
                 heal_started,
             )
             .await;
-            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
+            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await?;
             Ok(json!({
                 "ok": true,
                 "channel": channel.id(),

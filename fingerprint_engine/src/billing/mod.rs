@@ -199,7 +199,7 @@ pub async fn gate_scan_enqueue_n(
     enforce_scan_quota(pool, tenant_id, job_count).await?;
     record_scans_started(pool, tenant_id, job_count)
         .await
-        .map_err(|_| "store_down".into())
+        .map_err(|_| "store_down".to_string())
 }
 
 pub async fn record_scan_started(pool: &PgPool, tenant_id: i64) -> Result<(), sqlx::Error> {
@@ -895,7 +895,7 @@ mod tests {
         let src = include_str!("mod.rs");
         let impl_src = src.split("#[cfg(test)]").next().expect("impl");
         assert!(impl_src.contains(
-            "record_scans_started(pool, tenant_id, job_count)\n        .await\n        .map_err(|_| \"store_down\".into())"
+            "record_scans_started(pool, tenant_id, job_count)\n        .await\n        .map_err(|_| \"store_down\".to_string())"
         ));
         assert!(impl_src.contains("Result<Option<String>, String>"));
         assert!(impl_src.contains("Err(_) => return Err(\"store_down\".into())"));

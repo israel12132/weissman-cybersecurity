@@ -154,7 +154,7 @@ async fn cfg_string_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: i64,
     key: &str,
-) -> Option<String> {
+) -> Result<Option<String>, String> {
     sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
     )
@@ -162,9 +162,8 @@ async fn cfg_string_tx(
     .bind(key)
     .fetch_optional(&mut **tx)
     .await
-    .ok()
-    .flatten()
-    .filter(|s| !s.is_empty())
+    .map_err(|_| "store_down".to_string())
+    .map(|opt| opt.filter(|s| !s.is_empty()))
 }
 
 #[derive(Clone, Default)]
@@ -185,12 +184,12 @@ async fn load_tenant_runtime_config(
         .await
         .map_err(|e| format!("tenant tx: {e}"))?;
     let cfg = TenantRuntimeConfig {
-        github_token: cfg_string_tx(&mut tx, tenant_id, "github_token").await,
-        llm_base_url: cfg_string_tx(&mut tx, tenant_id, "llm_base_url").await,
-        llm_model: cfg_string_tx(&mut tx, tenant_id, "llm_model").await,
-        oast_listener_url: cfg_string_tx(&mut tx, tenant_id, "oast_listener_url").await,
-        oast_domain: cfg_string_tx(&mut tx, tenant_id, "oast_domain").await,
-        oast_api_key: cfg_string_tx(&mut tx, tenant_id, "oast_api_key").await,
+        github_token: cfg_string_tx(&mut tx, tenant_id, "github_token").await?,
+        llm_base_url: cfg_string_tx(&mut tx, tenant_id, "llm_base_url").await?,
+        llm_model: cfg_string_tx(&mut tx, tenant_id, "llm_model").await?,
+        oast_listener_url: cfg_string_tx(&mut tx, tenant_id, "oast_listener_url").await?,
+        oast_domain: cfg_string_tx(&mut tx, tenant_id, "oast_domain").await?,
+        oast_api_key: cfg_string_tx(&mut tx, tenant_id, "oast_api_key").await?,
     };
     tx.commit()
         .await
@@ -431,20 +430,12 @@ async fn execute_job_unscoped(
             });
             let runtime_cfg = load_tenant_runtime_config(app_pool.clone(), tid).await?;
             let mut job_payload = p.clone();
-            if let Err(e) = crate::scan_routing::hydrate_stored_job_payload(
+            crate::scan_routing::hydrate_stored_job_payload(
                 app_pool.as_ref(),
                 tid,
                 &mut job_payload,
             )
-            .await
-            {
-                tracing::warn!(
-                    target: "async_jobs",
-                    tenant_id = tid,
-                    error = %e,
-                    "hydrate_stored_job_payload failed; continuing with stripped payload"
-                );
-            }
+            .await?;
             let job_params = job_payload;
             let discovered_paths: Vec<String> = p
                 .get("discovered_paths")
@@ -1423,17 +1414,17 @@ async fn execute_job_unscoped(
                 .await
                 .map_err(|e| e.to_string())?;
             let llm_base_url = cfg_string_tx(&mut tx, tid, "llm_base_url")
-                .await
+                .await?
                 .unwrap_or_else(|| "http://127.0.0.1:8000/v1".to_string());
             let llm_temperature: f64 = cfg_string_tx(&mut tx, tid, "llm_temperature")
-                .await
+                .await?
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0.2);
             let llm_model = cfg_string_tx(&mut tx, tid, "llm_model")
-                .await
+                .await?
                 .unwrap_or_default();
             let mut max_depth: usize = cfg_string_tx(&mut tx, tid, "semantic_max_sequence_depth")
-                .await
+                .await?
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(4);
             let _ = tx.commit().await;
@@ -1700,13 +1691,13 @@ async fn execute_job_unscoped(
                 .await
                 .map_err(|e| e.to_string())?;
             let n = cfg_string_tx(&mut tx, tid, "timing_sample_size")
-                .await
+                .await?
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(100)
                 .max(50)
                 .min(500);
             let z: f64 = cfg_string_tx(&mut tx, tid, "z_score_sensitivity")
-                .await
+                .await?
                 .and_then(|s| s.parse::<f64>().ok())
                 .unwrap_or(3.0)
                 .clamp(2.0, 5.0);
@@ -1762,20 +1753,20 @@ async fn execute_job_unscoped(
                 .await
                 .map_err(|e| e.to_string())?;
             let llm_base_url = cfg_string_tx(&mut tx, tid, "llm_base_url")
-                .await
+                .await?
                 .unwrap_or_else(|| "http://127.0.0.1:8000/v1".to_string());
             let llm_temperature: f64 = cfg_string_tx(&mut tx, tid, "llm_temperature")
-                .await
+                .await?
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0.3);
             let llm_model = cfg_string_tx(&mut tx, tid, "llm_model")
-                .await
+                .await?
                 .unwrap_or_default();
             let ai_redteam_endpoint = cfg_string_tx(&mut tx, tid, "ai_redteam_endpoint")
-                .await
+                .await?
                 .unwrap_or_default();
             let adversarial_strategy = cfg_string_tx(&mut tx, tid, "adversarial_strategy")
-                .await
+                .await?
                 .unwrap_or_else(|| "data_leak".to_string());
             let _ = tx.commit().await;
             let cfg = crate::ai_redteam_engine::AiRedteamConfig {
@@ -1831,16 +1822,16 @@ async fn execute_job_unscoped(
                 .await
                 .map_err(|e| e.to_string())?;
             let mut config = crate::threat_intel_engine::ThreatIntelConfig::default();
-            if let Some(u) = cfg_string_tx(&mut tx, tid, "llm_base_url").await {
+            if let Some(u) = cfg_string_tx(&mut tx, tid, "llm_base_url").await? {
                 config.llm_base_url = u;
             }
-            if let Some(m) = cfg_string_tx(&mut tx, tid, "llm_model").await {
+            if let Some(m) = cfg_string_tx(&mut tx, tid, "llm_model").await? {
                 config.llm_model = m;
             }
-            if let Some(s) = cfg_string_tx(&mut tx, tid, "enable_zero_day_probing").await {
+            if let Some(s) = cfg_string_tx(&mut tx, tid, "enable_zero_day_probing").await? {
                 config.enable_zero_day_probing = s.to_lowercase() == "true" || s == "1";
             }
-            if let Some(s) = cfg_string_tx(&mut tx, tid, "threat_intel_custom_feed_urls").await {
+            if let Some(s) = cfg_string_tx(&mut tx, tid, "threat_intel_custom_feed_urls").await? {
                 if let Ok(arr) = serde_json::from_str::<Vec<String>>(&s) {
                     config.custom_feed_urls = arr;
                 }
@@ -1917,19 +1908,19 @@ async fn execute_job_unscoped(
                 .await
                 .map_err(|e| e.to_string())?;
             let llm_base_url = cfg_string_tx(&mut tx, tid, "llm_base_url")
-                .await
+                .await?
                 .unwrap_or_else(|| "http://127.0.0.1:8000/v1".to_string());
             let llm_model = cfg_string_tx(&mut tx, tid, "llm_model")
-                .await
+                .await?
                 .unwrap_or_default();
             let github_token = cfg_string_tx(&mut tx, tid, "github_token")
-                .await
+                .await?
                 .unwrap_or_default();
             let gitlab_api_url = cfg_string_tx(&mut tx, tid, "gitlab_api_url")
-                .await
+                .await?
                 .unwrap_or_default();
             let gitlab_token = cfg_string_tx(&mut tx, tid, "gitlab_token")
-                .await
+                .await?
                 .unwrap_or_default();
             let _ = tx.commit().await;
             let config = crate::pipeline_engine::PipelineConfig {

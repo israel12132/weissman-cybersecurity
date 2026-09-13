@@ -21,7 +21,11 @@ pub async fn persist_runbook(
         .await
         .map_err(|_| "store_down".to_string())?;
     let id = Uuid::new_v4();
-    let steps_json = serde_json::to_value(steps).unwrap_or(json!([]));
+    let steps_json = if steps.is_empty() {
+        json!([])
+    } else {
+        serde_json::to_value(steps).map_err(|_| "store_down".to_string())?
+    };
     sqlx::query(
         r#"INSERT INTO soar_revert_runbooks (id, tenant_id, execution_id, action_kind, steps)
            VALUES ($1, $2, $3, $4, $5)
@@ -398,18 +402,23 @@ async fn restore_ec2_security_groups(pool: &PgPool, tenant_id: i64, payload: &Va
     let external_id = config_str(payload, &["external_id", "aws_external_id"]).unwrap_or_default();
     if role_arn.is_empty() {
         if let Some(client_id) = payload.get("client_id").and_then(Value::as_i64) {
-            let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-                return "tenant tx failed".into();
+            let mut tx = match crate::db::begin_tenant_tx(pool, tenant_id).await {
+                Ok(t) => t,
+                Err(_) => return "store_down".into(),
             };
-            let row = sqlx::query(
+            let row = match sqlx::query(
                 "SELECT COALESCE(trim(aws_cross_account_role_arn),'') AS arn, COALESCE(trim(aws_external_id),'') AS ext FROM clients WHERE id = $1",
             )
             .bind(client_id)
             .fetch_optional(&mut *tx)
             .await
-            .ok()
-            .flatten();
-            let _ = tx.commit().await;
+            {
+                Ok(r) => r,
+                Err(_) => return "store_down".into(),
+            };
+            if tx.commit().await.is_err() {
+                return "store_down".into();
+            };
             if let Some(r) = row {
                 let arn: String = r.try_get("arn").unwrap_or_default();
                 let ext: String = r.try_get("ext").unwrap_or_default();
