@@ -39,4 +39,9 @@ describe('BusinessEngineProfile live-only truth', () => {
     expect(src).toMatch(/!historyUnavailable && visibleFindings\.map/)
     expect(src).toMatch(/if \(historyUnavailable\) \{[\s\S]{0,200}history_unavailable/)
   })
+
+  it('does not dump leftover leftover-history JSON after a failed history GET', () => {
+    expect(src).toMatch(/async function exportJson\(\) \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable\}/)
+  })
 })

@@ -37,4 +37,9 @@ describe('TopTierEngineProfile live-only truth', () => {
     expect(src).toMatch(/if \(historyUnavailable\) \{[\s\S]{0,200}history_unavailable/)
     expect(src).toMatch(/if \(auditUnavailable\) \{[\s\S]{0,200}audit_unavailable/)
   })
+
+  it('does not dump leftover leftover-history JSON after a failed history GET', () => {
+    expect(src).toMatch(/async function exportJson\(\) \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable\}/)
+  })
 })

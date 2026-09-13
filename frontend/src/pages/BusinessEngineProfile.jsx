@@ -283,6 +283,7 @@ export default function BusinessEngineProfile() {
   }
 
   async function exportJson() {
+    if (historyUnavailable) return
     try {
       const d = await apiFetch(`/api/engines/export/${encodeURIComponent(engineId)}?limit=140${activeJobId ? `&job_id=${encodeURIComponent(activeJobId)}` : ''}`)
       const bytes = new TextEncoder().encode(JSON.stringify(d, null, 2))
@@ -348,6 +349,7 @@ export default function BusinessEngineProfile() {
               onRefresh={reloadProfile}
               onExport={exportJson}
               refreshLoading={profileLoading}
+              exportDisabled={historyUnavailable}
             />
           </div>
         </div>
@@ -431,7 +433,9 @@ export default function BusinessEngineProfile() {
             />
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="unstyled" type="button" onClick={exportJson} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">{t('pages.businessEngineProfile.export_json')}</Button>
+            {!historyUnavailable && (
+              <Button variant="unstyled" type="button" onClick={exportJson} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">{t('pages.businessEngineProfile.export_json')}</Button>
+            )}
             <Button variant="unstyled" type="button" onClick={exportPdf} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-amber-500/40 text-amber-300 hover:bg-amber-500/10">{t('pages.businessEngineProfile.export_pdf')}</Button>
             <span className="text-xs font-mono text-[var(--text-tertiary)]">{runState.msg || t('pages.businessEngineProfile.ready')}</span>
           </div>

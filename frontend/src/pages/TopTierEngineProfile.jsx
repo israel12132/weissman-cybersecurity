@@ -265,6 +265,7 @@ export default function TopTierEngineProfile() {
   }
 
   async function exportJson() {
+    if (historyUnavailable) return
     let d
     try {
       d = await apiFetch(`/api/engines/top-tier/${encodeURIComponent(engineId)}/export?limit=120${activeJobId ? `&job_id=${encodeURIComponent(activeJobId)}` : ''}`)
@@ -351,6 +352,7 @@ export default function TopTierEngineProfile() {
               onRefresh={reloadAll}
               onExport={exportJson}
               refreshLoading={historyLoading}
+              exportDisabled={historyUnavailable}
             />
           </div>
         </div>
@@ -445,6 +447,7 @@ export default function TopTierEngineProfile() {
             />
           )}
           <div className="flex flex-wrap items-center gap-2">
+            {!historyUnavailable && (
             <Button variant="unstyled"
               type="button"
               onClick={exportJson}
@@ -452,6 +455,7 @@ export default function TopTierEngineProfile() {
             >
               {t('pages.topTierEngineProfile.export_json')}
             </Button>
+            )}
             <Button variant="unstyled"
               type="button"
               onClick={exportPdf}
