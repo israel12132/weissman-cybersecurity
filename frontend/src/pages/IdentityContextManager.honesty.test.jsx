@@ -31,4 +31,11 @@ describe('IdentityContextManager live-only truth', () => {
     expect(src).toMatch(/setError\(t\('pages\.identityContextManager\.load_error'\)\)/)
     expect(src).not.toMatch(/catch \([^)]*\) \{\s*setIdentities\(\[\]\)/)
   })
+
+  it('mutes leftover identity detail modal after a failed identity GET', () => {
+    expect(src).toMatch(/\{selectedIdentity && !error && \(/)
+    expect(src).toMatch(/setError\(t\('pages\.identityContextManager\.load_error'\)\)/)
+    expect(src).not.toMatch(/catch \([^)]*\) \{\s*setSelectedIdentity\(null\)/)
+    expect(src).not.toMatch(/catch \([^)]*\) \{\s*setIdentities\(\[\]\)/)
+  })
 })

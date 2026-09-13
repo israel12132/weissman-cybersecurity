@@ -369,7 +369,7 @@ export default function IdentityContextManager() {
 
       {/* Identity Detail Modal */}
       <AnimatePresence>
-        {selectedIdentity && (
+        {selectedIdentity && !error && (
           <IdentityDetailModal
             identity={selectedIdentity}
             onClose={() => setSelectedIdentity(null)}
