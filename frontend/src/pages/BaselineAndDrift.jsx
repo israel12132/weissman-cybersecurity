@@ -116,6 +116,11 @@ export default function BaselineAndDrift() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
+
   return (
     <PageShell
       title={t('pages.baselineAndDrift.title')}
@@ -126,9 +131,9 @@ export default function BaselineAndDrift() {
       actions={(
         <ShellScanActions
           onRefresh={fetchData}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >
@@ -265,7 +270,7 @@ export default function BaselineAndDrift() {
                   severityFilter === s ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'text-[var(--text-muted)]'
                 }`}
               >
-                {s === 'all' ? t('pages.baselineAndDrift.filter_all') : `${s} (${severityCounts[s] || 0})`}
+                {s === 'all' ? t('pages.baselineAndDrift.filter_all') : error ? s : `${s} (${severityCounts[s] || 0})`}
               </Button>
             ))}
           </div>
@@ -275,7 +280,7 @@ export default function BaselineAndDrift() {
           <div className="p-4 border-b border-[var(--border-default)]">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-red-400" />
-              {t('pages.baselineAndDrift.anomalies_heading', { count: filteredAnomalies.length })}
+              {t('pages.baselineAndDrift.anomalies_heading', { count: error ? '—' : filteredAnomalies.length })}
             </h3>
           </div>
 
