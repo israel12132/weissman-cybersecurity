@@ -106,6 +106,7 @@ export default function OobVerification() {
         setCallbacksUnavailable(true)
       }
     } catch (e) {
+      setCallbacksUnavailable(true)
       const body = e?.response ? await e.response.json().catch(() => ({})) : {}
       setError(body?.error || body?.detail || e.message || t('pages.oobVerification.poll_failed'))
     } finally {
