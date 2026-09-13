@@ -1299,6 +1299,32 @@ pub async fn run_ssti_result_ctx(target: &str, ctx: &EngineRunContext) -> Engine
         all_findings.extend(synthesize_attack_paths(target, &aggregate));
     }
 
+    // Close the attacker-memory learning loop. SSTI already replays prior-winner payloads
+    // (`cfg.memory_payloads`); a memory-sourced confirmation is tagged transform="memory".
+    // Credit the replayed winner when one re-confirmed, otherwise record the miss so future
+    // prioritization can explore instead of ranking on pure win-recency. Attribution mirrors
+    // the reference engines (first loaded id) — `memory_payloads` is a merged/trie-augmented
+    // list that is not index-aligned with `memory_path_ids`.
+    if !ctx.memory_payloads.is_empty() {
+        if let (Some(pool), Some(tid), Some(&id)) = (
+            ctx.app_pool.as_ref(),
+            ctx.tenant_id,
+            ctx.memory_path_ids.first(),
+        ) {
+            let replayed_win = all_findings.iter().any(|f| {
+                f.get("evidence")
+                    .and_then(|e| e.get("transform"))
+                    .and_then(Value::as_str)
+                    == Some("memory")
+            });
+            if replayed_win {
+                crate::pentest_memory::record_replay_hit(pool.as_ref(), tid, id).await;
+            } else {
+                crate::pentest_memory::record_loss(pool.as_ref(), tid, id).await;
+            }
+        }
+    }
+
     let non_summary = all_findings
         .iter()
         .filter(|f| f.get("category").and_then(Value::as_str) != Some("posture_summary"))

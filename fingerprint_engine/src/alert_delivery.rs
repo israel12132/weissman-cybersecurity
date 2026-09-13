@@ -505,7 +505,83 @@ async fn deliver_channel(
     }
 }
 
+/// Self-contained snapshot persisted to the notification outbox so a retry can rebuild the exact
+/// alert without re-reading the (possibly-mutated) finding row and without persisting any endpoint
+/// secret. Mirrors the shape of [`alert_payload`]'s `rule`/`finding` keys.
+fn outbox_envelope(rule: &AlertRuleInfo, finding: &AlertFindingInfo) -> Value {
+    json!({
+        "rule": { "id": rule.id, "name": rule.name },
+        "finding": finding_evidence(finding),
+    })
+}
+
+fn rule_from_envelope(env: &Value) -> AlertRuleInfo {
+    let r = env.get("rule");
+    AlertRuleInfo {
+        id: r.and_then(|v| v.get("id")).and_then(Value::as_i64).unwrap_or(0),
+        name: r
+            .and_then(|v| v.get("name"))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+    }
+}
+
+fn finding_from_envelope(env: &Value) -> AlertFindingInfo {
+    let f = env.get("finding").cloned().unwrap_or(Value::Null);
+    let s = |k: &str| f.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+    let flt = |k: &str| f.get(k).and_then(Value::as_f64).unwrap_or(0.0);
+    let boolean = |k: &str| f.get(k).and_then(Value::as_bool).unwrap_or(false);
+    AlertFindingInfo {
+        id: f.get("id").and_then(Value::as_i64).unwrap_or(0),
+        severity: s("severity"),
+        title: s("title"),
+        description: s("description"),
+        source: s("source"),
+        cve: s("cve"),
+        epss: flt("epss"),
+        kev: boolean("kev"),
+        cvss: flt("cvss"),
+        client_id: f.get("client_id").and_then(Value::as_i64).unwrap_or(0),
+        proof: s("proof"),
+        target: s("target"),
+        crown_jewel: boolean("crown_jewel"),
+        oast_confirmed: boolean("oast_confirmed"),
+        path_hops: f.get("path_hops").and_then(Value::as_u64).map(|n| n as u32),
+        path_jewel: s("path_jewel"),
+        deep_link: s("deep_link"),
+    }
+}
+
+/// Rebuild the rule + finding from a stored outbox envelope and (re)send them on `channel`, reusing
+/// the exact same live-config resolution, SSRF guard and signing as [`deliver_channel`]. Returns
+/// whether the send succeeded. Called only by the durable retry worker in
+/// [`crate::notification_outbox`].
+pub(crate) async fn redeliver_envelope(
+    pool: &PgPool,
+    tenant_id: i64,
+    channel: &str,
+    envelope: &Value,
+) -> bool {
+    let rule = rule_from_envelope(envelope);
+    let finding = finding_from_envelope(envelope);
+    let config = load_delivery_config(pool, tenant_id).await;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(15))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap_or_else(|_| Client::new());
+    deliver_channel(&client, &config, channel, &rule, &finding).await
+}
+
 /// Attempt delivery on configured channels. Returns true if at least one channel succeeds.
+///
+/// Delivery is now durable: each channel attempt is first persisted to `notification_outbox`
+/// (status `pending`) BEFORE it is tried, so a crash or a transient webhook/Slack/PagerDuty 5xx can
+/// no longer silently DROP a security alert. On success the row is marked `delivered`; on failure it
+/// is scheduled for exponential-backoff retry by [`crate::notification_outbox`], which dead-letters
+/// it (loudly) after the max attempts. The persisted per-channel rows ARE the per-channel delivery
+/// status — the old single boolean OR across channels no longer hides a partial failure.
 pub async fn deliver_alert(
     pool: &PgPool,
     tenant_id: i64,
@@ -524,10 +600,51 @@ pub async fn deliver_alert(
         .build()
         .unwrap_or_else(|_| Client::new());
 
+    // One snapshot; every per-channel row stores the same self-contained envelope so the retry
+    // worker can rebuild the alert independently.
+    let envelope = outbox_envelope(rule, finding);
+
     let mut any_ok = false;
     for channel in channels {
         let ch = channel.to_ascii_lowercase();
-        if deliver_channel(&client, &config, &ch, rule, finding).await {
+
+        // Persist FIRST (status=pending) so the durable row survives even if the attempt below (or
+        // the whole process) dies — the retry worker later picks it up. `None` means the outbox
+        // itself was unreachable; the immediate attempt result still stands.
+        let outbox_id = crate::notification_outbox::enqueue(pool, tenant_id, &ch, &envelope).await;
+
+        let ok = deliver_channel(&client, &config, &ch, rule, finding).await;
+
+        match outbox_id {
+            Some(id) if ok => crate::notification_outbox::mark_delivered(pool, tenant_id, id).await,
+            Some(id) => {
+                // Row was just enqueued (attempts_before = 0); schedule the first backoff retry.
+                crate::notification_outbox::mark_failed(
+                    pool,
+                    tenant_id,
+                    id,
+                    &ch,
+                    0,
+                    "initial delivery attempt failed",
+                )
+                .await;
+            }
+            None if !ok => {
+                // Outbox unreachable AND the live attempt failed — this is exactly the drop we are
+                // eliminating, so make it loud rather than a silent WARN.
+                tracing::error!(
+                    target: "alert_delivery",
+                    tenant_id,
+                    rule_id = rule.id,
+                    finding_id = finding.id,
+                    channel = %ch,
+                    "alert delivery failed and could not be persisted to the outbox for retry"
+                );
+            }
+            None => {}
+        }
+
+        if ok {
             any_ok = true;
             tracing::info!(
                 target: "alert_delivery",

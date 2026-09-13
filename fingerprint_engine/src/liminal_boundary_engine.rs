@@ -189,15 +189,12 @@ async fn get_timed(
     headers: &[(&str, &str)],
     timeout_ms: u64,
 ) -> Option<HttpProbe> {
-    match tokio::time::timeout(
+    tokio::time::timeout(
         Duration::from_millis(timeout_ms.clamp(500, 15_000)),
         http_get_with_headers(client, url, headers),
     )
     .await
-    {
-        Ok(v) => v,
-        Err(_) => None,
-    }
+    .unwrap_or_default()
 }
 
 fn with_category(mut f: Value, category: &str) -> Value {
