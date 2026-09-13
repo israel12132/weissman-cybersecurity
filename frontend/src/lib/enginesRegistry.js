@@ -289,6 +289,14 @@ export const ENGINES_REGISTRY = [
     requiresTarget: false,
   },
   {
+    id: 'admission_signature_enforcement',
+    label: 'Admission Signature Enforcement',
+    group: 'cloud',
+    mitre: 'T1610',
+    description: 'Admission-time cryptographic image-signature verification before pods run: cosign keyed + keyless (Fulcio cert-identity + Rekor transparency log) and DSSE/SLSA attestations, digest-bound and fail-closed across all workload container types. Live admission-webhook posture probes, a cryptographic control self-test, and a ready-to-apply ValidatingWebhookConfiguration + ClusterImagePolicy bundle.',
+    requiresTarget: true,
+  },
+  {
     id: 'iac_misconfig',
     label: 'IaC Security',
     group: 'cloud',

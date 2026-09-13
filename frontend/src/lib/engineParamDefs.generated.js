@@ -475,6 +475,63 @@ export const GENERATED_PARAM_DEFS = {
       ]
     }
   ],
+  "admission_signature_enforcement": [
+    {
+      "key": "aws_cross_account_role_arn",
+      "label": "AWS Cross-Account Role ARN",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "arn:aws:iam::123:role/WeissmanReadOnly"
+    },
+    {
+      "key": "aws_external_id",
+      "label": "AWS External ID",
+      "type": "password",
+      "defaultVal": "",
+      "placeholder": "external-id"
+    },
+    {
+      "key": "gcp_project",
+      "label": "GCP Project ID",
+      "type": "text",
+      "defaultVal": "",
+      "placeholder": "my-project"
+    },
+    {
+      "key": "azure_subscription_id",
+      "label": "Azure Subscription ID",
+      "type": "text",
+      "defaultVal": ""
+    },
+    {
+      "key": "azure_tenant_id",
+      "label": "Azure Tenant ID",
+      "type": "text",
+      "defaultVal": ""
+    },
+    {
+      "key": "intensity",
+      "label": "Scan Intensity",
+      "type": "select",
+      "defaultVal": "normal",
+      "options": [
+        "light",
+        "normal",
+        "aggressive"
+      ]
+    },
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    }
+  ],
   "serverless_attack": [
     {
       "key": "aws_cross_account_role_arn",

@@ -560,6 +560,12 @@ async fn dispatch_engine_match(
         "azure_attack" => crate::azure_attack_engine::run_azure_attack_result_ctx(target, ctx).await,
         "gcp_attack" => crate::gcp_attack_engine::run_gcp_attack_result(target).await,
         "k8s_container" => crate::k8s_container_engine::run_k8s_container_result(target, ctx).await,
+        "admission_signature_enforcement" => {
+            crate::admission_signature_enforcement::run_admission_signature_enforcement_result(
+                target, ctx,
+            )
+            .await
+        }
         "iac_misconfig" => crate::iac_misconfig_engine::run_iac_misconfig_result(target, ctx).await,
         "serverless_attack" => crate::serverless_attack_engine::run_serverless_attack_result_ctx(target, ctx).await,
         "scada_ics" => crate::scada_ics_engine::run_scada_ics_result(target).await,
