@@ -4962,10 +4962,16 @@ mod tests {
         assert!(!compact_src(log).contains("let_=sqlx::query("));
         assert!(!compact_src(log).contains("let_=tx.commit().await;"));
         assert!(log.contains("store_down"));
-        assert!(src.contains("cicd_store_down()"));
+        let down = named_fn_src(src, "fn cicd_store_down");
+        assert!(compact_src(down).contains("\"audit_persisted\":false"));
+        assert!(compact_src(down).contains("\"blocked\":blocked"));
+        assert!(down.contains("StatusCode::FORBIDDEN"));
+        assert!(down.contains("StatusCode::SERVICE_UNAVAILABLE"));
+        assert!(!down.contains("StatusCode::OK"));
+        assert!(src.contains("cicd_store_down(blocked, &findings)"));
         assert!(
             !src.contains("log_cicd_event(\n        pool.as_deref(),")
-                || src.contains("cicd_store_down()"),
+                || src.contains("cicd_store_down(blocked, &findings)"),
             "CI gate must not ok after persist fail"
         );
     }

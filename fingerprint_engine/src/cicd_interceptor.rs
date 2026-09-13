@@ -123,16 +123,25 @@ async fn log_cicd_event(
     Ok(())
 }
 
-fn cicd_store_down() -> Response {
-    (
-        StatusCode::SERVICE_UNAVAILABLE,
-        axum::Json(json!({
-            "ok": false,
-            "unavailable": true,
-            "detail": "store_down",
-        })),
-    )
-        .into_response()
+/// Persist failed after a completed scan. Never HTTP 200: CI that keys only on
+/// `blocked` / 403 still fail-closes on a critical finding; a clean scan with no
+/// durable `cicd_scan_events` row is 503 so HTTP-aware gates do not look idle-ok.
+fn cicd_store_down(blocked: bool, findings: &[CicdFinding]) -> Response {
+    let body = json!({
+        "ok": false,
+        "unavailable": true,
+        "detail": "store_down",
+        "blocked": blocked,
+        "findings": findings,
+        "audit_persisted": false,
+        "weissman_gate": "phase6_cicd_ast",
+    });
+    let status = if blocked {
+        StatusCode::FORBIDDEN
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+    (status, axum::Json(body)).into_response()
 }
 
 fn gate_response(blocked: bool, findings: &[CicdFinding]) -> Response {
@@ -277,7 +286,7 @@ pub async fn github_push_hook(
     .await
     .is_err()
     {
-        return cicd_store_down();
+        return cicd_store_down(blocked, &findings);
     }
     gate_response(blocked, &findings)
 }
@@ -393,7 +402,7 @@ pub async fn gitlab_push_hook(
     .await
     .is_err()
     {
-        return cicd_store_down();
+        return cicd_store_down(blocked, &findings);
     }
     gate_response(blocked, &findings)
 }
@@ -518,7 +527,7 @@ pub async fn bitbucket_push_hook(
     .await
     .is_err()
     {
-        return cicd_store_down();
+        return cicd_store_down(blocked, &findings);
     }
     gate_response(blocked, &findings)
 }
@@ -587,7 +596,7 @@ pub async fn generic_cicd_scan(
     .await
     .is_err()
     {
-        return cicd_store_down();
+        return cicd_store_down(blocked, &findings);
     }
     gate_response(blocked, &findings)
 }
@@ -687,6 +696,19 @@ mod tests {
         assert_eq!(gate_response(false, &findings).status(), StatusCode::OK);
         assert_eq!(
             gate_response(true, &findings).status(),
+            StatusCode::FORBIDDEN
+        );
+    }
+
+    #[test]
+    fn cicd_store_down_never_http_ok_and_preserves_block() {
+        let findings: Vec<CicdFinding> = Vec::new();
+        assert_eq!(
+            cicd_store_down(false, &findings).status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+        assert_eq!(
+            cicd_store_down(true, &findings).status(),
             StatusCode::FORBIDDEN
         );
     }
