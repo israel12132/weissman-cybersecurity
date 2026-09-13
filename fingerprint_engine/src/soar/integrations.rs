@@ -13,16 +13,16 @@ pub struct IntegrationRecord {
 pub async fn load_integrations(pool: &PgPool, tenant_id: i64) -> Result<Vec<IntegrationRecord>, String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|_| "store_down".into())?;
+        .map_err(|_| "store_down".to_string())?;
     let raw: Option<String> = sqlx::query_scalar(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'integrations_registry'",
     )
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .map_err(|_| "store_down".into())?;
+    .map_err(|_| "store_down".to_string())?;
     if tx.commit().await.is_err() {
-        return Err("store_down".into());
+        return Err("store_down".to_string());
     }
     let Some(s) = raw.filter(|x| !x.trim().is_empty()) else {
         return Ok(Vec::new());

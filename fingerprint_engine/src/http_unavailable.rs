@@ -3511,7 +3511,7 @@ mod tests {
         let load = named_fn_src(src, "async fn load_suppression_rules_from_db");
         assert!(load.contains("Result<Vec<SuppressionRule>, String>"));
         assert!(!compact_src(load).contains("unwrap_or_default()"));
-        assert!(load.contains("Err(\"store_down\".into())"));
+        assert!(load.contains("Err(\"store_down\".to_string())"));
         let persist = include_str!("findings_persist.rs");
         assert!(persist.contains(
             "fp_feedback::active_suppressions_for_engine(pool, tenant_id, engine)\n            .await\n            .map_err(|_| \"store_down\".to_string())?"

@@ -365,7 +365,7 @@ async fn find_existing_execution(
 ) -> Result<Option<ExistingExecution>, String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|_| "store_down".into())?;
+        .map_err(|_| "store_down".to_string())?;
     let row = sqlx::query(
         "SELECT id, status FROM soar_action_executions WHERE tenant_id = $1 AND idempotency_key = $2",
     )
@@ -373,9 +373,9 @@ async fn find_existing_execution(
     .bind(idem)
     .fetch_optional(&mut *tx)
     .await
-    .map_err(|_| "store_down".into())?;
+    .map_err(|_| "store_down".to_string())?;
     if tx.commit().await.is_err() {
-        return Err("store_down".into());
+        return Err("store_down".to_string());
     }
     Ok(row.map(|r| ExistingExecution {
         id: r.try_get("id").unwrap_or_else(|_| Uuid::nil()),

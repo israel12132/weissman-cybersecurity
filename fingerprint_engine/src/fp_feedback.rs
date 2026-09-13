@@ -268,7 +268,7 @@ pub async fn confidence_multiplier(
     }
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|_| "store_down".into())?;
+        .map_err(|_| "store_down".to_string())?;
     let row: Option<(i32, i32)> = sqlx::query_as(
         r#"SELECT tp_count, fp_count
              FROM engine_confidence_adjustments
@@ -279,9 +279,9 @@ pub async fn confidence_multiplier(
     .bind(signature_hash)
     .fetch_optional(&mut *tx)
     .await
-    .map_err(|_| "store_down".into())?;
+    .map_err(|_| "store_down".to_string())?;
     if tx.commit().await.is_err() {
-        return Err("store_down".into());
+        return Err("store_down".to_string());
     }
     let (tp, fp) = row.unwrap_or((0, 0));
     Ok(multiplier_from_counts(tp, fp))
@@ -307,7 +307,7 @@ pub async fn confidence_multiplier_tx(
     .bind(signature_hash)
     .fetch_optional(&mut **tx)
     .await
-    .map_err(|_| "store_down".into())?;
+    .map_err(|_| "store_down".to_string())?;
     let (tp, fp) = row.unwrap_or((0, 0));
     Ok(multiplier_from_counts(tp, fp))
 }
@@ -329,7 +329,7 @@ pub async fn confidence_multipliers_batch(
     let sigs: Vec<String> = pairs.iter().map(|(_, s)| s.clone()).collect();
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|_| "store_down".into())?;
+        .map_err(|_| "store_down".to_string())?;
     let rows: Vec<(String, String, i32, i32)> = sqlx::query_as(
         r#"SELECT engine, signature_hash, tp_count, fp_count
              FROM engine_confidence_adjustments
@@ -342,9 +342,9 @@ pub async fn confidence_multipliers_batch(
     .bind(&sigs)
     .fetch_all(&mut *tx)
     .await
-    .map_err(|_| "store_down".into())?;
+    .map_err(|_| "store_down".to_string())?;
     if tx.commit().await.is_err() {
-        return Err("store_down".into());
+        return Err("store_down".to_string());
     }
     for (engine, sig, tp, fp) in rows {
         out.insert((engine, sig), multiplier_from_counts(tp, fp));
@@ -397,7 +397,7 @@ async fn load_suppression_rules_from_db(
         if let Some(hit) = SUPPRESSION_CACHE.get(&cache_key) {
             return Ok(hit.rules.clone());
         }
-        return Err("store_down".into());
+        return Err("store_down".to_string());
     };
     let rows: Vec<(String, Option<String>)> = match sqlx::query_as(
         r#"SELECT signature_hash, target_glob FROM finding_suppressions
@@ -415,14 +415,14 @@ async fn load_suppression_rules_from_db(
             if let Some(hit) = SUPPRESSION_CACHE.get(&cache_key) {
                 return Ok(hit.rules.clone());
             }
-            return Err("store_down".into());
+            return Err("store_down".to_string());
         }
     };
     if tx.commit().await.is_err() {
         if let Some(hit) = SUPPRESSION_CACHE.get(&cache_key) {
             return Ok(hit.rules.clone());
         }
-        return Err("store_down".into());
+        return Err("store_down".to_string());
     }
     let rules: Vec<SuppressionRule> = rows
         .into_iter()
