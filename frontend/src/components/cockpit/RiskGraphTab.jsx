@@ -196,7 +196,7 @@ export default function RiskGraphTab() {
           <div className="flex items-center justify-center h-full text-white/50">
             {t('components.cockpitTabs.riskGraph.loading_graph')}
           </div>
-        ) : error && nodes.length === 0 ? (
+        ) : error ? (
           <div className="flex items-center justify-center h-full text-red-300/80 text-sm px-6 text-center">
             {t('components.cockpitTabs.riskGraph.unavailable')}
           </div>
