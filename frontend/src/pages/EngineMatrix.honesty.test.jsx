@@ -22,6 +22,11 @@ describe('EngineMatrix live-only truth', () => {
     expect(src).toMatch(/historyKnown && findingsDelta > 0/)
   })
 
+  it('does not paint leftover leftover-last-run after a failed history-summary GET', () => {
+    expect(src).toMatch(/\(\(historyKnown && lastRun\) \|\| lastRun === 'just now'\)/)
+    expect(src).toMatch(/historyKnown\s*\?\s*t\('engines\.never_run'\)\s*:\s*'—'/)
+  })
+
   it('does not paint zero enabled engines when client config cannot be confirmed', () => {
     expect(src).toMatch(/data-testid="engine-matrix-config-unavailable"/)
     expect(src).toMatch(/config_unavailable/)

@@ -277,7 +277,7 @@ function EngineMatrixCard({
 
       <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-white/[0.06]">
         <span className="text-[10px] font-mono text-[var(--text-disabled)]">
-          {lastRun
+          {((historyKnown && lastRun) || lastRun === 'just now')
             ? t('engines.last_run_label', { time: lastRun })
             : historyKnown
               ? t('engines.never_run')

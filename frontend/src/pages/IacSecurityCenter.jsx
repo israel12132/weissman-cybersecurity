@@ -2096,7 +2096,7 @@ export default function IacSecurityCenter() {
                 <SkeletonBar className="h-24 w-full" />
               </div>
             )}
-            {lastScanAt && (
+            {lastScanAt && !historyUnavailable && (
               <p className="text-[10px] font-mono text-[var(--text-muted)]">
                 {t('iacSecurity.last_scan', 'Last scan')}: {new Date(lastScanAt).toLocaleString()}
               </p>
