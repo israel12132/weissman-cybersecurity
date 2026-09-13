@@ -171,15 +171,14 @@ export default function SelfImprovementConsole() {
   )
 
   const handleRefresh = useCallback(() => load(), [load])
-  const exportCsv = useCallback(
-    () => exportRowsCsv(SELF_IMPROVE_CSV_HEADER, selfImproveRows(filteredItems), 'weissman-self-improvement'),
-    [filteredItems],
-  )
-  const exportPdf = useCallback(
-    () =>
-      exportRowsPdf('Weissman Self-Improvement Console', SELF_IMPROVE_CSV_HEADER, selfImproveRows(filteredItems), 'weissman-self-improvement'),
-    [filteredItems],
-  )
+  const exportCsv = useCallback(() => {
+    if (error) return
+    exportRowsCsv(SELF_IMPROVE_CSV_HEADER, selfImproveRows(filteredItems), 'weissman-self-improvement')
+  }, [error, filteredItems])
+  const exportPdf = useCallback(() => {
+    if (error) return
+    exportRowsPdf('Weissman Self-Improvement Console', SELF_IMPROVE_CSV_HEADER, selfImproveRows(filteredItems), 'weissman-self-improvement')
+  }, [error, filteredItems])
 
   return (
     <PageShell
@@ -222,13 +221,13 @@ export default function SelfImprovementConsole() {
             onRefresh={handleRefresh}
             onExport={exportCsv}
             refreshLoading={loading}
-            exportDisabled={!filteredItems.length}
+            exportDisabled={!!error || !filteredItems.length}
           />
           <Button
             variant="unstyled"
             type="button"
             onClick={exportPdf}
-            disabled={!filteredItems.length}
+            disabled={!!error || !filteredItems.length}
             title="Export PDF"
             className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-white/70 hover:bg-white/10 disabled:opacity-50"
           >

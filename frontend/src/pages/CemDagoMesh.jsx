@@ -160,6 +160,11 @@ export default function CemDagoMesh() {
     [t],
   )
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    evidenceCsv(evidenceRows)
+  }, [error, evidenceRows])
+
   return (
     <PageShell
       title={t(`${NS}.title`)}
@@ -194,9 +199,9 @@ export default function CemDagoMesh() {
           </Button>
           <ShellScanActions
             onRefresh={load}
-            onExport={() => evidenceCsv(evidenceRows)}
+            onExport={handleExportCsv}
             refreshLoading={loading}
-            exportDisabled={!evidenceRows.length}
+            exportDisabled={!!error || !evidenceRows.length}
           />
         </div>
       }

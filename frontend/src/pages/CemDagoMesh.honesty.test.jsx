@@ -15,4 +15,9 @@ describe('CemDagoMesh live-only truth', () => {
     expect(src).toMatch(/!Array\.isArray\(man\?\.manifests\) \|\| !Array\.isArray\(wv\?\.waves\)/)
     expect(src).not.toMatch(/setWaves\(Array\.isArray\(wv\?\.waves\) \? wv\.waves : \[\]\)/)
   })
+
+  it('does not dump leftover leftover-blackboard CSV after a failed mesh GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !evidenceRows\.length\}/)
+  })
 })

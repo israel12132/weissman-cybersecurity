@@ -15,4 +15,11 @@ describe('SelfImprovementConsole live-only truth', () => {
     expect(src).toMatch(/error \? \(/)
     expect(src).not.toMatch(/setItems\(Array\.isArray\(q\?\.items\) \? q\.items : \[\]\)/)
   })
+
+  it('does not dump leftover leftover-proposals CSV after a failed queue GET', () => {
+    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/const exportPdf = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredItems\.length\}/)
+    expect(src).toMatch(/disabled=\{\!\!error \|\| !filteredItems\.length\}/)
+  })
 })
