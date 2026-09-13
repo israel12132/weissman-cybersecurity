@@ -242,7 +242,7 @@ function SupremeNerveCenterInner() {
   )
 
   const handleExport = useCallback(async () => {
-    if (!snap) return
+    if (error || !snap) return
     const blob = new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -250,7 +250,7 @@ function SupremeNerveCenterInner() {
     a.download = `supreme-nerve-center-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-  }, [snap])
+  }, [error, snap])
 
   const sectionLabel = (id) => t(`supremeNerveCenter.sections.${id}`, id)
 
@@ -285,7 +285,7 @@ function SupremeNerveCenterInner() {
           ))}
         </nav>
         <div className="border-t border-[var(--border-default)] p-3 text-[10px] font-mono text-[var(--text-muted)]">
-          {lastRefresh ? lastRefresh.toLocaleTimeString() : '—'}
+          {lastRefresh && !error ? lastRefresh.toLocaleTimeString() : '—'}
           <br />
           {t('supremeNerveCenter.pollInterval', { sec: POLL_MS / 1000 })}
         </div>
@@ -298,7 +298,7 @@ function SupremeNerveCenterInner() {
           <div>
             <h1 className="text-xl font-semibold text-white">{sectionLabel(section)}</h1>
           </div>
-          <ShellScanActions onRefresh={load} onExport={handleExport} exportDisabled={!snap} />
+          <ShellScanActions onRefresh={load} onExport={handleExport} exportDisabled={!!error || !snap} />
         </header>
 
         {error ? (
@@ -317,7 +317,7 @@ function SupremeNerveCenterInner() {
           </div>
         ) : null}
 
-        {stuckEngines.length > 0 ? (
+        {stuckEngines.length > 0 && !error ? (
           <div className="mb-4 flex items-start gap-3 rounded-lg border border-orange-500/40 bg-orange-950/20 px-4 py-3">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-orange-400" />
             <div>
@@ -335,7 +335,7 @@ function SupremeNerveCenterInner() {
           </div>
         ) : null}
 
-        {section === 'overview' && snap && (
+        {section === 'overview' && !error && snap && (
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-6">
               <SummaryCard
@@ -437,7 +437,7 @@ function SupremeNerveCenterInner() {
           </div>
         )}
 
-        {section === 'engines' && snap && (
+        {section === 'engines' && !error && snap && (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-3">
               <div className="relative min-w-[200px] flex-1">
@@ -485,7 +485,7 @@ function SupremeNerveCenterInner() {
           </div>
         )}
 
-        {section === 'modules' && snap && (
+        {section === 'modules' && !error && snap && (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {modules.map((m) => (
               <div
@@ -547,7 +547,7 @@ function SupremeNerveCenterInner() {
           </div>
         )}
 
-        {section === 'jobs' && snap && (
+        {section === 'jobs' && !error && snap && (
           <DataTable
             columns={jobColumns}
             data={jobs}
@@ -559,7 +559,7 @@ function SupremeNerveCenterInner() {
           />
         )}
 
-        {section === 'controls' && snap && (
+        {section === 'controls' && !error && snap && (
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
               <h2 className="mb-3 flex items-center gap-2 text-sm text-[var(--text-secondary)]">

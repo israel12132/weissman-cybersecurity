@@ -12,7 +12,15 @@ describe('SupremeNerveCenter live-only truth', () => {
   it('does not paint running-now zeros without a confirmed snapshot', () => {
     expect(src).toMatch(/data-testid="supreme-nerve-unavailable"/)
     expect(src).toMatch(/unavailable_title/)
-    expect(src).toMatch(/section === 'overview' && snap &&/)
+    expect(src).toMatch(/section === 'overview' && !error && snap &&/)
     expect(src).not.toMatch(/value=\{summary\.engines_running \?\? 0\}/)
+  })
+
+  it('does not dump leftover leftover-nerve JSON after a failed nerve-center GET', () => {
+    expect(src).toMatch(/const handleExport = useCallback\(async \(\) => \{\n    if \(error \|\| !snap\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !snap\}/)
+    expect(src).toMatch(/stuckEngines\.length > 0 && !error/)
+    expect(src).toMatch(/lastRefresh && !error \? lastRefresh\.toLocaleTimeString/)
+    expect(src).not.toMatch(/setSnap\(null\)/)
   })
 })
