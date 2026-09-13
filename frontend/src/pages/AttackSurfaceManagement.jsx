@@ -816,6 +816,7 @@ export default function AttackSurfaceManagement() {
   }, [historyUnavailable, exportCsv])
 
   const handleExport = useCallback(() => {
+    if (historyUnavailable) return
     if (!report) return
     const blob = new Blob([JSON.stringify({ report, findings: issues }, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -826,7 +827,7 @@ export default function AttackSurfaceManagement() {
     URL.revokeObjectURL(url)
     showToast('info', t('pages.attackSurfaceManagement.toast_exported'))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [report, issues, target, showToast])
+  }, [historyUnavailable, report, issues, target, showToast])
 
   const statusBadge = {
     idle: { c: '#6b7280', t: t('pages.attackSurfaceManagement.status_idle') },

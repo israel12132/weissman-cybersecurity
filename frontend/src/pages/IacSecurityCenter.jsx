@@ -1818,6 +1818,7 @@ export default function IacSecurityCenter() {
   }, [livePolicyFindings, sevFilter, findingSearch])
 
   const exportFixBundle = useCallback(() => {
+    if (historyUnavailable) return
     const bundle = summary?.fix_bundle
     if (!bundle) return
     const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' })
@@ -1827,9 +1828,10 @@ export default function IacSecurityCenter() {
     a.download = `iac-fixes-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-  }, [summary])
+  }, [historyUnavailable, summary])
 
   const exportShellScript = useCallback(() => {
+    if (historyUnavailable) return
     const script = summary?.fix_bundle?.shell_script
     if (!script) return
     const blob = new Blob([script], { type: 'text/plain' })
@@ -1839,9 +1841,10 @@ export default function IacSecurityCenter() {
     a.download = `iac-fixes-${Date.now()}.sh`
     a.click()
     URL.revokeObjectURL(url)
-  }, [summary])
+  }, [historyUnavailable, summary])
 
   const exportGateEvidence = useCallback(() => {
+    if (historyUnavailable) return
     const ev = summary?.gate_evidence
     if (!ev) return
     const blob = new Blob([JSON.stringify(ev, null, 2)], { type: 'application/json' })
@@ -1851,9 +1854,10 @@ export default function IacSecurityCenter() {
     a.download = `iac-gate-evidence-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-  }, [summary])
+  }, [historyUnavailable, summary])
 
   const exportAuditPacket = useCallback(() => {
+    if (historyUnavailable) return
     const pkt = summary?.audit_packet
     if (!pkt) return
     const blob = new Blob([JSON.stringify(pkt, null, 2)], { type: 'application/json' })
@@ -1863,9 +1867,10 @@ export default function IacSecurityCenter() {
     a.download = `iac-audit-packet-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-  }, [summary])
+  }, [historyUnavailable, summary])
 
   const exportBundle = useCallback(() => {
+    if (historyUnavailable) return
     const bundle = {
       engine: ENGINE_ID,
       summary,
@@ -1881,7 +1886,7 @@ export default function IacSecurityCenter() {
     a.download = `iac-security-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-  }, [summary, policyFindings, attackChains])
+  }, [historyUnavailable, summary, policyFindings, attackChains])
 
   const loadLastScan = useCallback(async () => {
     try {

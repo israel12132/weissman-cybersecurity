@@ -36,4 +36,12 @@ describe('IacSecurityCenter live-only truth', () => {
     expect(src).toMatch(/historyUnavailable\s*\n\s*\? t\('iacSecurity\.history_unavailable'\)/)
     expect(src).not.toMatch(/WaiversPanel waivers=\{summary\?\.policy_waivers_applied\}/)
   })
+
+  it('does not dump leftover leftover-summary JSON after a failed history GET', () => {
+    expect(src).toMatch(/const exportBundle = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/const exportAuditPacket = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/const exportGateEvidence = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/const exportFixBundle = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/const exportShellScript = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+  })
 })
