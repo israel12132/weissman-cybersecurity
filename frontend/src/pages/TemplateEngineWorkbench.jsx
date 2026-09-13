@@ -221,10 +221,10 @@ function TemplateEngineWorkbenchBody() {
                 onChange={(e) => setSelectedId(e.target.value)}
                 className="rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-blue-500/40"
               >
-                {visibleTemplates.map((tpl) => (
+                {(!templatesUnavailable ? visibleTemplates : []).map((tpl) => (
                   <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
                 ))}
-                {visibleTemplates.length === 0 && templates.length > 0 && (
+                {!templatesUnavailable && visibleTemplates.length === 0 && templates.length > 0 && (
                   <option value="" disabled>{t('weissmanFindings.filtered_title')}</option>
                 )}
                 {templatesUnavailable && (

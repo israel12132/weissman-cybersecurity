@@ -22,4 +22,11 @@ describe('TemplateEngineWorkbench live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(templatesUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{templatesUnavailable \|\| !filteredFindings\.length\}/)
   })
+
+  it('mutes leftover catalog select options after a failed templates GET', () => {
+    expect(src).toMatch(/\(!templatesUnavailable \? visibleTemplates : \[\]\)\.map/)
+    expect(src).toMatch(/\{!templatesUnavailable && visibleTemplates\.length === 0 && templates\.length > 0 && \(/)
+    expect(src).toMatch(/\.catch\(\(\) => setTemplatesUnavailable\(true\)\)/)
+    expect(src).not.toMatch(/\.catch\(\(\) => setTemplates\(\[\]\)\)/)
+  })
 })
