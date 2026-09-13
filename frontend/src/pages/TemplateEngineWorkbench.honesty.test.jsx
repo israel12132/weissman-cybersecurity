@@ -16,4 +16,10 @@ describe('TemplateEngineWorkbench live-only truth', () => {
     expect(src).not.toMatch(/option value="http_baseline"/)
     expect(src).not.toMatch(/useState\('http_baseline'\)/)
   })
+
+  it('does not dump leftover leftover-templates after a failed catalog GET', () => {
+    expect(src).toMatch(/templates\.length > 0 && !templatesUnavailable && \(/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(templatesUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{templatesUnavailable \|\| !filteredFindings\.length\}/)
+  })
 })

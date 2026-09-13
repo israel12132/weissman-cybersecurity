@@ -16,4 +16,9 @@ describe('ContainmentRulesBuilder live-only truth', () => {
     expect(src).toMatch(/if \(clientsUnavailable\) \{\s*setUnavailable\(true\);/)
     expect(src).toMatch(/!unavailable && \(/)
   })
+
+  it('does not dump leftover leftover-rules CSV after a failed rules GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(unavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{unavailable \|\| !filteredFindings\.length\}/)
+  })
 })

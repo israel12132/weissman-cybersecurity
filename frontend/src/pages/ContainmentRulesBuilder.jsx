@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import useFocusTrap from '../hooks/useFocusTrap';
 import { useTranslation } from 'react-i18next';
 import { Shield, Plus, Trash2, Edit, Play, AlertTriangle, Check } from 'lucide-react';
@@ -126,6 +126,11 @@ export default function ContainmentRulesBuilder() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (unavailable) return
+    exportCsv()
+  }, [unavailable, exportCsv])
+
   const visibleRules = useMemo(() => {
     if (!searchQuery.trim()) return rules
     const ids = new Set(filteredFindings.map((f) => f.id))
@@ -143,9 +148,9 @@ export default function ContainmentRulesBuilder() {
       actions={(
         <ShellScanActions
           onRefresh={reloadRules}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={unavailable || !filteredFindings.length}
         />
       )}
     >

@@ -14,4 +14,9 @@ describe('ClientSaasIdpDiscovery live-only truth', () => {
     expect(src).toMatch(/unavailable_title/)
     expect(src).toMatch(/error \? \(/)
   })
+
+  it('does not dump leftover leftover-discovery CSV after a failed discovery GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+  })
 })

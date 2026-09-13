@@ -154,6 +154,11 @@ function TemplateEngineWorkbenchBody() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (templatesUnavailable) return
+    exportCsv()
+  }, [templatesUnavailable, exportCsv])
+
   const visibleTemplates = useMemo(() => {
     if (!searchQuery.trim()) return templates
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
@@ -172,9 +177,9 @@ function TemplateEngineWorkbenchBody() {
       <div className="flex justify-end mb-4">
         <ShellScanActions
           onRefresh={loadTemplates}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loadingYaml}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={templatesUnavailable || !filteredFindings.length}
         />
       </div>
       <div className="mb-6">
@@ -183,7 +188,7 @@ function TemplateEngineWorkbenchBody() {
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         <div className="space-y-4">
-          {templates.length > 0 && (
+          {templates.length > 0 && !templatesUnavailable && (
             <WeissmanListToolbar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}

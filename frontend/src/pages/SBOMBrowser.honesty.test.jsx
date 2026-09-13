@@ -15,4 +15,9 @@ describe('SBOMBrowser live-only truth', () => {
     expect(src).toMatch(/showUnavailable/)
     expect(src).toMatch(/!error && components\.length === 0/)
   })
+
+  it('does not dump leftover leftover-SBOM CSV after a failed components GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+  })
 })

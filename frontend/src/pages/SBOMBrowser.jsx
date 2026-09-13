@@ -118,6 +118,11 @@ export default function SBOMBrowser() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
+
   const visibleComponents = useMemo(() => {
     if (!searchQuery.trim()) return categoryFilteredComponents
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
@@ -165,9 +170,9 @@ export default function SBOMBrowser() {
       actions={clientId != null && (
         <ShellScanActions
           onRefresh={() => fetchSBOM(clientId)}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >

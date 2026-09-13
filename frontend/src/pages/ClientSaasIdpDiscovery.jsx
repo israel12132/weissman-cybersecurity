@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 import PageShell from './PageShell'
@@ -111,6 +111,11 @@ export default function ClientSaasIdpDiscovery() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
+
   const visibleIdps = useMemo(() => {
     if (!searchQuery.trim()) return idps
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
@@ -141,9 +146,9 @@ export default function ClientSaasIdpDiscovery() {
       actions={(
         <ShellScanActions
           onRefresh={runDiscovery}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loading || running}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >

@@ -14,4 +14,10 @@ describe('KillChainOrchestrator live-only truth', () => {
     expect(src).toMatch(/unavailable_title/)
     expect(src).toMatch(/error \? null : chains\.length === 0/)
   })
+
+  it('does not dump leftover leftover-chain CSV after a failed findings GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/\{!error && \(\n      <p className="text-xs text-\[var\(--text-muted\)\] font-mono mb-6">/)
+  })
 })
