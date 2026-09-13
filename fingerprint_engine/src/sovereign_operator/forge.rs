@@ -240,7 +240,19 @@ pub async fn forge_prove(
         .await
         {
             Ok(job_id) => {
-                let waited = wait_live_finding(pool, tenant_id, job_id, &engine_id, &target).await;
+                let waited = match wait_live_finding(pool, tenant_id, job_id, &engine_id, &target)
+                    .await
+                {
+                    Ok(v) => v,
+                    Err(_) => {
+                        return ToolOutcome {
+                            ok: false,
+                            name: "forge_prove".into(),
+                            detail: "store_down".into(),
+                            payload: json!({ "job_id": job_id.to_string() }),
+                        };
+                    }
+                };
                 let proved = waited
                     .get("proved")
                     .and_then(Value::as_bool)
@@ -751,49 +763,61 @@ async fn wait_live_finding(
     job_id: Uuid,
     engine_id: &str,
     target: &str,
-) -> Value {
+) -> Result<Value, String> {
     let mut last_status = "pending".to_string();
     let mut finding_logs = 0i64;
     let mut result_findings = 0usize;
+    let mut saw_snapshot = false;
     for _ in 0..24 {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        if let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await {
-            if let Ok(row) =
-                sqlx::query("SELECT status, result_json FROM weissman_async_jobs WHERE id = $1")
-                    .bind(job_id)
-                    .fetch_optional(&mut *tx)
-                    .await
-            {
-                if let Some(r) = row {
-                    last_status = r.try_get::<String, _>("status").unwrap_or(last_status);
-                    if let Ok(Some(rj)) = r.try_get::<Option<Value>, _>("result_json") {
-                        result_findings = rj
-                            .get("findings")
+        let mut tx = match crate::db::begin_tenant_tx(pool, tenant_id).await {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        let row = match sqlx::query(
+            "SELECT status, result_json FROM weissman_async_jobs WHERE id = $1",
+        )
+        .bind(job_id)
+        .fetch_optional(&mut *tx)
+        .await
+        {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        let n: i64 = match sqlx::query_scalar::<_, i64>(
+            r#"SELECT count(*)::bigint FROM weissman_sovereign_engine_logs
+               WHERE job_id = $1 AND phase = 'finding'"#,
+        )
+        .bind(job_id.to_string())
+        .fetch_one(&mut *tx)
+        .await
+        {
+            Ok(n) => n,
+            Err(_) => continue,
+        };
+        if tx.commit().await.is_err() {
+            continue;
+        }
+        saw_snapshot = true;
+        finding_logs = n;
+        result_findings = 0;
+        if let Some(r) = row {
+            last_status = r.try_get::<String, _>("status").unwrap_or(last_status);
+            if let Ok(Some(rj)) = r.try_get::<Option<Value>, _>("result_json") {
+                result_findings = rj
+                    .get("findings")
+                    .and_then(Value::as_array)
+                    .map(|a| a.len())
+                    .or_else(|| {
+                        rj.pointer("/result/findings")
                             .and_then(Value::as_array)
                             .map(|a| a.len())
-                            .or_else(|| {
-                                rj.pointer("/result/findings")
-                                    .and_then(Value::as_array)
-                                    .map(|a| a.len())
-                            })
-                            .unwrap_or(0);
-                    }
-                }
+                    })
+                    .unwrap_or(0);
             }
-            if let Ok(n) = sqlx::query_scalar::<_, i64>(
-                r#"SELECT count(*)::bigint FROM weissman_sovereign_engine_logs
-                   WHERE job_id = $1 AND phase = 'finding'"#,
-            )
-            .bind(job_id.to_string())
-            .fetch_one(&mut *tx)
-            .await
-            {
-                finding_logs = n;
-            }
-            let _ = tx.commit().await;
         }
         if finding_logs > 0 || result_findings > 0 {
-            return json!({
+            return Ok(json!({
                 "proved": true,
                 "status": "live_proof",
                 "job_status": last_status,
@@ -801,7 +825,7 @@ async fn wait_live_finding(
                 "result_findings": result_findings,
                 "engine": engine_id,
                 "target": target,
-            });
+            }));
         }
         if last_status == "failed"
             || last_status == "dead"
@@ -811,6 +835,9 @@ async fn wait_live_finding(
             break;
         }
     }
+    if !saw_snapshot {
+        return Err("store_down".to_string());
+    }
     let proved = finding_logs > 0 || result_findings > 0;
     let status = if proved {
         "live_proof"
@@ -819,7 +846,7 @@ async fn wait_live_finding(
     } else {
         "proof_pending"
     };
-    json!({
+    Ok(json!({
         "proved": proved,
         "status": status,
         "job_status": last_status,
@@ -827,7 +854,7 @@ async fn wait_live_finding(
         "result_findings": result_findings,
         "engine": engine_id,
         "target": target,
-    })
+    }))
 }
 
 fn uuid_arg(args: &Value, key: &str) -> Option<Uuid> {

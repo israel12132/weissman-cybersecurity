@@ -4068,6 +4068,21 @@ mod tests {
             live.contains("EngineResult::error(\"store_down\")"),
             "live engine dispatch must fail closed when pentest memory store is down"
         );
+        let stats = named_fn_src(
+            include_str!("pentest_memory.rs"),
+            "pub async fn memory_stats",
+        );
+        assert!(stats.contains("Result<MemoryStats, String>"));
+        assert!(
+            !compact_src(stats).contains("let_=tx.commit().await;"),
+            "memory_stats commit fail must not look like a complete zero rollup"
+        );
+        assert!(
+            !compact_src(stats).contains("returnOk(MemoryStats{winning_paths:0"),
+            "COUNT row missing must not look like zero winning paths"
+        );
+        assert!(stats.contains("store_down"));
+        assert!(stats.contains("tx.commit().await.is_err()"));
     }
 
     #[test]
@@ -4534,6 +4549,30 @@ mod tests {
                 "let_=sqlx::query(\"UPDATEweissman_sovereign_forgeSETstatus='github_queued'"
             ),
             "github_queued UPDATE execute must not be ignored"
+        );
+        let wait = named_fn_src(src, "async fn wait_live_finding");
+        assert!(
+            wait.contains("Result<Value, String>"),
+            "wait_live_finding must return Result so COUNT store-down is not rejected"
+        );
+        assert!(
+            !compact_src(wait).contains("ifletOk(n)="),
+            "finding-log COUNT store-down must not leave finding_logs at 0"
+        );
+        assert!(
+            !compact_src(wait).contains("ifletOk(muttx)="),
+            "begin fail must not skip the snapshot and still reject"
+        );
+        assert!(
+            !compact_src(wait).contains("let_=tx.commit().await;"),
+            "wait_live_finding commit must not be ignored"
+        );
+        assert!(wait.contains("store_down"));
+        assert!(
+            !compact_src(prove).contains(
+                "wait_live_finding(pool,tenant_id,job_id,&engine_id,&target).await;"
+            ),
+            "forge_prove must not ignore wait_live_finding store-down and persist rejected"
         );
     }
 
