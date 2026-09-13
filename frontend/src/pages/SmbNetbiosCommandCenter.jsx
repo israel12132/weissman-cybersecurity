@@ -735,11 +735,6 @@ export default function SmbNetbiosCommandCenter() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, target, buildBody, showToastMsg, L])
 
-  const handleExport = useCallback(() => {
-    const blob = new Blob([JSON.stringify({ engine: ENGINE_ID, target, findings, exported_at: new Date().toISOString() }, null, 2)], { type: 'application/json' })
-    downloadBytes(blob, `smb-netbios-${target.replace(/[^a-z0-9.-]/gi, '_')}.json`)
-  }, [target, findings])
-
   const summary = useMemo(() => findings.find(isSummary), [findings])
   const metrics = useMemo(() => findings.find(isMetrics), [findings])
   const attackPaths = useMemo(() => findings.filter((f) => f.category === 'attack_path'), [findings])
@@ -764,6 +759,12 @@ export default function SmbNetbiosCommandCenter() {
     setLastJobId,
     historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, realFindings)
+
+  const handleExport = useCallback(() => {
+    if (historyUnavailable) return
+    const blob = new Blob([JSON.stringify({ engine: ENGINE_ID, target, findings, exported_at: new Date().toISOString() }, null, 2)], { type: 'application/json' })
+    downloadBytes(blob, `smb-netbios-${target.replace(/[^a-z0-9.-]/gi, '_')}.json`)
+  }, [target, findings, historyUnavailable])
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -848,7 +849,7 @@ export default function SmbNetbiosCommandCenter() {
           <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
             {showParams ? L.hideParams : L.showParams}
           </Button>
-          {findings.length > 0 && (
+          {!historyUnavailable && findings.length > 0 && (
             <Button variant="unstyled" type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
               {L.export}
             </Button>

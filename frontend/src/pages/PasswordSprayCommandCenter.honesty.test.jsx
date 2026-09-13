@@ -20,5 +20,7 @@ describe('PasswordSprayCommandCenter live-only truth', () => {
     expect(src).toMatch(/posture && !historyUnavailable/)
     expect(src).toMatch(/!historyUnavailable && paths\.length > 0/)
     expect(src).not.toMatch(/Number\(scores\[k\] \?\? 0\)/)
+    expect(src).toMatch(/if \(historyUnavailable\) return/)
+    expect(src).toMatch(/!historyUnavailable && findings\.length > 0/)
   })
 })

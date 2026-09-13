@@ -21,5 +21,7 @@ describe('SmbNetbiosCommandCenter live-only truth', () => {
     expect(src).toMatch(/!historyUnavailable && attackPaths\.length > 0/)
     expect(src).not.toMatch(/posture_score \?\? ev\.posture_score \?\? 0/)
     expect(src).not.toMatch(/ransomware_readiness \?\? 0/)
+    expect(src).toMatch(/if \(historyUnavailable\) return/)
+    expect(src).toMatch(/!historyUnavailable && findings\.length > 0/)
   })
 })

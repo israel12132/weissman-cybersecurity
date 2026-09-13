@@ -21,5 +21,7 @@ describe('PrivilegeEscalationCommandCenter live-only truth', () => {
     expect(src).not.toMatch(/ev\.score \?\? 0/)
     expect(src).not.toMatch(/ds\.score \?\? 0/)
     expect(src).not.toMatch(/n \?\? 0/)
+    expect(src).toMatch(/if \(historyUnavailable\) return/)
+    expect(src).toMatch(/!historyUnavailable && findings\.length > 0/)
   })
 })

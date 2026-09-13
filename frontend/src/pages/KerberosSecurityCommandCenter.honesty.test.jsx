@@ -20,5 +20,7 @@ describe('KerberosSecurityCommandCenter live-only truth', () => {
     expect(src).toMatch(/posture && !historyUnavailable/)
     expect(src).toMatch(/!historyUnavailable && paths\.length > 0/)
     expect(src).toMatch(/const hasScore = score != null && Number\.isFinite\(Number\(score\)\)/)
+    expect(src).toMatch(/if \(historyUnavailable\) return/)
+    expect(src).toMatch(/!historyUnavailable && findings\.length > 0/)
   })
 })

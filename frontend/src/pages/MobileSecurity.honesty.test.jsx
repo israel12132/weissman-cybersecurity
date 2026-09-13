@@ -26,5 +26,7 @@ describe('MobileSecurity live-only truth', () => {
   it('does not paint leftover leftover-finding KPIs after a failed history GET', () => {
     expect(src).toMatch(/historyUnavailable \? '—' : findings\.length/)
     expect(src).toMatch(/!historyUnavailable && findings\.length > 0/)
+    expect(src).toMatch(/!historyUnavailable && app\.max_severity/)
+    expect(src).toMatch(/historyUnavailable \? '—' : t\('pages\.mobileSecurity\.findings_count_badge'/)
   })
 })

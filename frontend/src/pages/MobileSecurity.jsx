@@ -373,12 +373,12 @@ export default function MobileSecurity() {
                         <h4 className="text-sm font-semibold text-white truncate">
                           {app.name || app.package_id || '—'}
                         </h4>
-                        {app.max_severity && <SeverityBadge severity={app.max_severity} t={t} />}
+                        {!historyUnavailable && app.max_severity && <SeverityBadge severity={app.max_severity} t={t} />}
                       </div>
                       <div className="flex items-center gap-3 text-xs text-[var(--text-muted)] font-mono flex-wrap">
                         <span className="truncate">{t('pages.mobileSecurity.package_label')} {app.package_id || '—'}</span>
                         <span>•</span>
-                        <span>{t('pages.mobileSecurity.findings_count_badge', { count: app.findings_count ?? 0 })}</span>
+                        <span>{historyUnavailable ? '—' : t('pages.mobileSecurity.findings_count_badge', { count: app.findings_count ?? 0 })}</span>
                       </div>
                     </div>
 

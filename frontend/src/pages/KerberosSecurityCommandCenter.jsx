@@ -643,11 +643,6 @@ export default function KerberosSecurityCommandCenter() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, target, buildBody, showToastMsg, L])
 
-  const handleExport = useCallback(() => {
-    const payload = { engine: ENGINE_ID, exported_at: new Date().toISOString(), target, params, findings }
-    downloadBytes(new TextEncoder().encode(JSON.stringify(payload, null, 2)), `kerberos-posture-${Date.now()}.json`, 'application/json')
-  }, [target, params, findings])
-
   const { posture, paths, regular, categories, toxic, roadmap, agentGaps, categoryScores } = useMemo(() => {
     const postureF = findings.find((f) => f.category === 'posture_summary') || null
     const toxicF = findings.find((f) => f.category === 'toxic_combination') || null
@@ -679,6 +674,12 @@ export default function KerberosSecurityCommandCenter() {
     setLastJobId,
     historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, regular)
+
+  const handleExport = useCallback(() => {
+    if (historyUnavailable) return
+    const payload = { engine: ENGINE_ID, exported_at: new Date().toISOString(), target, params, findings }
+    downloadBytes(new TextEncoder().encode(JSON.stringify(payload, null, 2)), `kerberos-posture-${Date.now()}.json`, 'application/json')
+  }, [target, params, findings, historyUnavailable])
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -760,7 +761,7 @@ export default function KerberosSecurityCommandCenter() {
               {lastRun && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· {lastRun}</span>}
             </div>
             <div className="flex gap-2">
-              {findings.length > 0 && (
+              {!historyUnavailable && findings.length > 0 && (
                 <Button variant="unstyled" type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
                   {L.export}
                 </Button>

@@ -209,11 +209,6 @@ export default function PrivilegeEscalationCommandCenter() {
     }
   }, [clientId, target, buildBody, showToastMsg, L, postScan])
 
-  const handleExport = useCallback(() => {
-    const payload = { engine: ENGINE_ID, exported_at: new Date().toISOString(), target, params, findings }
-    downloadBytes(new TextEncoder().encode(JSON.stringify(payload, null, 2)), `pac500-${Date.now()}.json`, 'application/json')
-  }, [target, params, findings])
-
   const { posture, regular } = useMemo(() => {
     const postureF = findings.find((f) => f.category === 'posture_summary') || null
     const regularF = findings
@@ -238,6 +233,12 @@ export default function PrivilegeEscalationCommandCenter() {
     setLastJobId,
     historyUnavailable,
   } = useWeissmanEnginePage(ENGINE_ID, regular)
+
+  const handleExport = useCallback(() => {
+    if (historyUnavailable) return
+    const payload = { engine: ENGINE_ID, exported_at: new Date().toISOString(), target, params, findings }
+    downloadBytes(new TextEncoder().encode(JSON.stringify(payload, null, 2)), `pac500-${Date.now()}.json`, 'application/json')
+  }, [target, params, findings, historyUnavailable])
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -324,7 +325,7 @@ export default function PrivilegeEscalationCommandCenter() {
               <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}</span>
             </div>
             <div className="flex gap-2">
-              {findings.length > 0 && (
+              {!historyUnavailable && findings.length > 0 && (
                 <Button variant="unstyled" type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
                   {L.export}
                 </Button>
