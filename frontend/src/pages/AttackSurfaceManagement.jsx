@@ -810,6 +810,11 @@ export default function AttackSurfaceManagement() {
   const remediationQueue = report?.remediation_queue ?? []
   const subdomainInventory = report?.subdomain_inventory ?? []
 
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
+
   const handleExport = useCallback(() => {
     if (!report) return
     const blob = new Blob([JSON.stringify({ report, findings: issues }, null, 2)], { type: 'application/json' })
@@ -840,10 +845,10 @@ export default function AttackSurfaceManagement() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={status === 'running'}
-          exportDisabled={!assetFilteredFindings.length}
+          exportDisabled={historyUnavailable || !assetFilteredFindings.length}
         />
       )}
     >

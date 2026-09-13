@@ -432,9 +432,10 @@ export default function JwtAttackLab() {
   }, [displayFindings, searchQuery, severityFilter])
 
   const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
     if (!filteredDisplayFindings.length) return
     exportFindingsCsv(filteredDisplayFindings, 'weissman-jwt-findings')
-  }, [filteredDisplayFindings])
+  }, [filteredDisplayFindings, historyUnavailable])
 
   const shellActions = (
     <ShellScanActions
@@ -442,7 +443,7 @@ export default function JwtAttackLab() {
       onExport={handleExportCsv}
       refreshLoading={historyLoading}
       refreshDisabled={scanning}
-      exportDisabled={!filteredDisplayFindings.length}
+      exportDisabled={historyUnavailable || !filteredDisplayFindings.length}
     />
   )
 

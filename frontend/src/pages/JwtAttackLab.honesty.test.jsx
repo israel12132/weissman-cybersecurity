@@ -23,4 +23,9 @@ describe('JwtAttackLab live-only truth', () => {
     expect(src).toMatch(/!historyLoading && historyUnavailable &&/)
     expect(src).not.toMatch(/!scanResult && !historyLoading && historyUnavailable/)
   })
+
+  it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredDisplayFindings\.length\}/)
+  })
 })

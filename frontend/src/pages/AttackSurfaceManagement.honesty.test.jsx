@@ -19,4 +19,9 @@ describe('AttackSurfaceManagement live-only truth', () => {
   it('does not paint leftover leftover-hero after a failed history GET', () => {
     expect(src).toMatch(/report && !historyUnavailable &&/)
   })
+
+  it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !assetFilteredFindings\.length\}/)
+  })
 })
