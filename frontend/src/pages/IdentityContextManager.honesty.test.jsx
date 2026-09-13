@@ -18,4 +18,11 @@ describe('IdentityContextManager live-only truth', () => {
     expect(src).toMatch(/import \{ api \} from '\.\.\/utils\/apiFetch'/)
     expect(src).toMatch(/!Array\.isArray\(data\.identities\)/)
   })
+
+  it('does not paint leftover leftover-identity counts after a failed identity GET', () => {
+    expect(src).toMatch(/count: error \? '—' : identities\.length/)
+    expect(src).toMatch(/resultCount=\{error \? undefined : visibleIdentities\.length\}/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+  })
 })

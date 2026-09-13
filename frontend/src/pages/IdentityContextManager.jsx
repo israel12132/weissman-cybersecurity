@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Users, Shield, Key, AlertTriangle, Clock, X, ArrowRight } from 'lucide-react';
@@ -99,6 +99,11 @@ export default function IdentityContextManager() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
+
   const visibleIdentities = useMemo(() => {
     if (!searchQuery.trim()) return identities
     const ids = new Set(filteredFindings.map((f) => f.id))
@@ -116,9 +121,9 @@ export default function IdentityContextManager() {
       actions={(
         <ShellScanActions
           onRefresh={reloadIdentities}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >
@@ -236,13 +241,13 @@ export default function IdentityContextManager() {
           <div className="p-4 border-b border-[var(--border-default)] space-y-3">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Users className="w-4 h-4 text-cyan-400" />
-              {t('pages.identityContextManager.identities_heading', { count: identities.length })}
+              {t('pages.identityContextManager.identities_heading', { count: error ? '—' : identities.length })}
             </h3>
             <WeissmanListToolbar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
-              resultCount={visibleIdentities.length}
-              totalCount={identities.length}
+              resultCount={error ? undefined : visibleIdentities.length}
+              totalCount={error ? undefined : identities.length}
             />
           </div>
 

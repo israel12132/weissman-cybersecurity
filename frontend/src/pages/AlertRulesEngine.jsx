@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import useFocusTrap from '../hooks/useFocusTrap';
 import { useTranslation } from 'react-i18next';
 import { Bell, Plus, Trash2, Edit, Play, Pause, AlertTriangle } from 'lucide-react';
@@ -144,6 +144,11 @@ export default function AlertRulesEngine() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (unavailable) return
+    exportCsv()
+  }, [unavailable, exportCsv])
+
   const visibleRules = useMemo(() => {
     if (!searchQuery.trim()) return filteredRules
     const ids = new Set(filteredFindings.map((f) => f.id))
@@ -157,9 +162,9 @@ export default function AlertRulesEngine() {
       actions={(
         <ShellScanActions
           onRefresh={fetchRules}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={unavailable || !filteredFindings.length}
         />
       )}
     >
@@ -240,13 +245,13 @@ export default function AlertRulesEngine() {
           <div className="p-4 border-b border-[var(--border-default)] space-y-3">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Bell className="w-4 h-4 text-cyan-400" />
-              {t('pages.alertRulesEngine.rules_heading', { count: filteredRules.length })}
+              {t('pages.alertRulesEngine.rules_heading', { count: unavailable ? '—' : filteredRules.length })}
             </h3>
             <WeissmanListToolbar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
-              resultCount={visibleRules.length}
-              totalCount={filteredRules.length}
+              resultCount={unavailable ? undefined : visibleRules.length}
+              totalCount={unavailable ? undefined : filteredRules.length}
             />
           </div>
 

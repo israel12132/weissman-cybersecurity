@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import useFocusTrap from '../hooks/useFocusTrap';
 import { useTranslation } from 'react-i18next';
 import { Lock, Key, Shield, Eye, EyeOff, Plus, Trash2, Edit, Copy, Check } from 'lucide-react';
@@ -138,6 +138,11 @@ export default function CeoVault() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (loadError) return
+    exportCsv()
+  }, [loadError, exportCsv])
+
   const visibleSecrets = useMemo(() => {
     if (!searchQuery.trim()) return secrets
     const ids = new Set(filteredFindings.map((f) => f.id))
@@ -151,9 +156,9 @@ export default function CeoVault() {
       actions={(
         <ShellScanActions
           onRefresh={fetchSecrets}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={loadError || !filteredFindings.length}
         />
       )}
     >
@@ -242,8 +247,8 @@ export default function CeoVault() {
             <WeissmanListToolbar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
-              resultCount={visibleSecrets.length}
-              totalCount={secrets.length}
+              resultCount={loadError ? undefined : visibleSecrets.length}
+              totalCount={loadError ? undefined : secrets.length}
             />
           </div>
 

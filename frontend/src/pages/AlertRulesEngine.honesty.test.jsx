@@ -14,4 +14,11 @@ describe('AlertRulesEngine live-only truth', () => {
     expect(src).toMatch(/unavailable_title/)
     expect(src).toMatch(/unavailable \? \(/)
   })
+
+  it('does not paint leftover leftover-rule counts after a failed rules GET', () => {
+    expect(src).toMatch(/count: unavailable \? '—' : filteredRules\.length/)
+    expect(src).toMatch(/resultCount=\{unavailable \? undefined : visibleRules\.length\}/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(unavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{unavailable \|\| !filteredFindings\.length\}/)
+  })
 })

@@ -17,4 +17,10 @@ describe('CeoVault live-only truth', () => {
     expect(src).toMatch(/loadError \? null : secrets\.length === 0/)
     expect(src).not.toMatch(/setSecrets\(data\.secrets \|\| \[\]\)/)
   })
+
+  it('does not paint leftover leftover-secret counts after a failed vault GET', () => {
+    expect(src).toMatch(/resultCount=\{loadError \? undefined : visibleSecrets\.length\}/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(loadError\) return/)
+    expect(src).toMatch(/exportDisabled=\{loadError \|\| !filteredFindings\.length\}/)
+  })
 })
