@@ -141,7 +141,7 @@ export default function ClientSaasIdpDiscovery() {
 
   return (
     <PageShell
-      title={clientName ? `${t('pages.clientSaasIdpDiscovery.title')} — ${clientName}` : t('pages.clientSaasIdpDiscovery.title')}
+      title={!error && clientName ? `${t('pages.clientSaasIdpDiscovery.title')} — ${clientName}` : t('pages.clientSaasIdpDiscovery.title')}
       subtitle={t('pages.clientSaasIdpDiscovery.subtitle')}
       actions={(
         <ShellScanActions

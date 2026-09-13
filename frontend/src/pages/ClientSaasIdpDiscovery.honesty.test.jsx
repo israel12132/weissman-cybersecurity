@@ -19,4 +19,11 @@ describe('ClientSaasIdpDiscovery live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
   })
+
+  it('mutes leftover client name in the title after a failed discovery GET', () => {
+    expect(src).toMatch(/title=\{!error && clientName \? `\$\{t\('pages\.clientSaasIdpDiscovery\.title'\)\} — \$\{clientName\}` : t\('pages\.clientSaasIdpDiscovery\.title'\)\}/)
+    expect(src).toMatch(/setError\(e\?\.message \|\| t\('pages\.clientSaasIdpDiscovery\.network_error'\)\)/)
+    expect(src).not.toMatch(/catch \(e\) \{\s*setClientName\(''\)/)
+    expect(src).not.toMatch(/catch \(e\) \{\s*setReport\(null\)/)
+  })
 })
