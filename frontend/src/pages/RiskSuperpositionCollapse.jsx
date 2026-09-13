@@ -229,9 +229,9 @@ export default function RiskSuperpositionCollapse() {
   const readiness = useMemo(() => ({
     hasClient: Boolean(clientId),
     hasTarget: Boolean(target.trim()),
-    enoughClusters: clusters.length >= MIN_CLUSTERS_AUTO,
-    ready: Boolean(clientId) && Boolean(target.trim()) && clusters.length >= MIN_CLUSTERS_AUTO,
-  }), [clientId, target, clusters.length])
+    enoughClusters: !clustersUnavailable && clusters.length >= MIN_CLUSTERS_AUTO,
+    ready: !clustersUnavailable && Boolean(clientId) && Boolean(target.trim()) && clusters.length >= MIN_CLUSTERS_AUTO,
+  }), [clientId, target, clusters.length, clustersUnavailable])
 
   const scanPreview = useMemo(() => {
     if (!clientId || !target.trim()) return null
@@ -467,7 +467,7 @@ export default function RiskSuperpositionCollapse() {
               <ReadinessRow
                 ok={readiness.enoughClusters}
                 label={t('pages.superpositionCollapse.ready_clusters')}
-                detail={t('pages.superpositionCollapse.ready_clusters_detail', { count: clusters.length, min: MIN_CLUSTERS_AUTO })}
+                detail={t('pages.superpositionCollapse.ready_clusters_detail', { count: clustersUnavailable ? '—' : clusters.length, min: MIN_CLUSTERS_AUTO })}
               />
               {readiness.ready && (
                 <p className="text-[10px] text-emerald-400 pt-1">{t('pages.superpositionCollapse.ready_go')}</p>

@@ -42,4 +42,12 @@ describe('RiskSuperpositionCollapse live-only truth', () => {
   it('does not paint leftover leftover-last-updated after a failed history GET', () => {
     expect(src).toMatch(/syncAt=\{historyUnavailable \? null : lastUpdated\}/)
   })
+
+  it('mutes leftover leftover-cluster readiness after a failed clusters GET', () => {
+    expect(src).toMatch(/enoughClusters: !clustersUnavailable && clusters\.length >= MIN_CLUSTERS_AUTO/)
+    expect(src).toMatch(/ready: !clustersUnavailable && Boolean\(clientId\) && Boolean\(target\.trim\(\)\) && clusters\.length >= MIN_CLUSTERS_AUTO/)
+    expect(src).toMatch(/count: clustersUnavailable \? '—' : clusters\.length/)
+    expect(src).toMatch(/catch \{\s*setClustersUnavailable\(true\)/)
+    expect(src).not.toMatch(/catch \{\s*setClusters\(\[\]\)/)
+  })
 })
