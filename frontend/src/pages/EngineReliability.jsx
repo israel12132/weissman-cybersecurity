@@ -98,7 +98,10 @@ export default function EngineReliability() {
   const telemUnavailable = !!telemError || telem == null
 
   const rows = useMemo(() => {
-    const list = Object.values(byId).map((c) => ({ ...c, health: telemById[c.id] || null }))
+    const list = Object.values(byId).map((c) => ({
+      ...c,
+      health: telemUnavailable ? null : (telemById[c.id] || null),
+    }))
     const filtered = list.filter(
       (r) =>
         (kindFilter === 'all' || r.kind === kindFilter) &&
@@ -112,7 +115,7 @@ export default function EngineReliability() {
       return a.id.localeCompare(b.id)
     })
     return filtered
-  }, [byId, telemById, kindFilter, onlyRuns, onlyRemote])
+  }, [byId, telemById, kindFilter, onlyRuns, onlyRemote, telemUnavailable])
 
   const rowFindings = useMemo(() => rows.map((r) => {
     const h = r.health
@@ -153,10 +156,15 @@ export default function EngineReliability() {
     },
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (telemError) return
+    exportCsv()
+  }, [telemError, exportCsv])
+
   const recoveryRate =
-    telem && typeof telem.total_runs === 'number' && telem.total_runs > 0
-      ? Math.round((telem.recovered_runs / telem.total_runs) * 100)
-      : null
+    telemUnavailable || !telem || typeof telem.total_runs !== 'number' || telem.total_runs <= 0
+      ? null
+      : Math.round((telem.recovered_runs / telem.total_runs) * 100)
 
   const loading = capsLoading && total == null
 
@@ -167,9 +175,9 @@ export default function EngineReliability() {
       actions={(
         <ShellScanActions
           onRefresh={refreshAll}
-          onExport={exportCsv}
+          onExport={handleExportCsv}
           refreshLoading={loading || telemLoading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!telemError || !filteredFindings.length}
         />
       )}
     >
@@ -248,7 +256,7 @@ export default function EngineReliability() {
               />
             </div>
 
-            {(telem?.failed_runs ?? 0) > 0 && (
+            {!telemUnavailable && (telem?.failed_runs ?? 0) > 0 && (
               <div className="flex items-center gap-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
                 <AlertTriangle className="w-4 h-4" />
                 {t('pages.engineReliability.failed_note', { failed: telem.failed_runs,

@@ -19,4 +19,12 @@ describe('EngineReliability live-only truth', () => {
     expect(src).not.toMatch(/telem\.total_runs \?\? 0/)
     expect(src).not.toMatch(/telem\.engines_observed \?\? 0/)
   })
+
+  it('does not dump leftover leftover-telemetry after a failed telemetry GET', () => {
+    expect(src).toMatch(/health: telemUnavailable \? null : \(telemById\[c\.id\] \|\| null\)/)
+    expect(src).toMatch(/!telemUnavailable && \(telem\?\.failed_runs \?\? 0\) > 0 && \(/)
+    expect(src).toMatch(/telemUnavailable \|\| !telem \|\| typeof telem\.total_runs !== 'number'/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(telemError\) return/)
+    expect(src).toMatch(/exportDisabled=\{\!\!telemError \|\| !filteredFindings\.length\}/)
+  })
 })
