@@ -81,25 +81,26 @@ fn norm_level(s: &str) -> String {
 
 /// Whether the autonomous engine is enabled for this tenant (system config
 /// `self_improve_enabled` = "1"/"true"/"yes"). Defaults to disabled (opt-in).
-pub async fn is_enabled(pool: &PgPool, tenant_id: i64) -> bool {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return false;
-    };
+pub async fn is_enabled(pool: &PgPool, tenant_id: i64) -> Result<bool, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let val: Option<String> = sqlx::query_scalar(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'self_improve_enabled'",
     )
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    matches!(
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
+    Ok(matches!(
         val.as_deref()
             .map(|s| s.trim().to_ascii_lowercase())
             .as_deref(),
         Some("1") | Some("true") | Some("yes") | Some("on")
-    )
+    ))
 }
 
 /// Set the live enable toggle (system config `self_improve_enabled`). Takes effect on
@@ -656,8 +657,18 @@ pub fn spawn_self_improve_loop(app_pool: Arc<PgPool>, telemetry: Arc<Sender<Stri
                 }
             };
             for tenant_id in tenants {
-                if !is_enabled(app_pool.as_ref(), tenant_id).await {
-                    continue;
+                match is_enabled(app_pool.as_ref(), tenant_id).await {
+                    Ok(true) => {}
+                    Ok(false) => continue,
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "self_improve",
+                            tenant_id,
+                            error = %e,
+                            "enabled toggle store_down"
+                        );
+                        continue;
+                    }
                 }
                 if let Err(e) = run_cycle(app_pool.as_ref(), telemetry.as_ref(), tenant_id).await {
                     tracing::warn!(target: "self_improve", tenant_id, error = %e, "cycle failed");

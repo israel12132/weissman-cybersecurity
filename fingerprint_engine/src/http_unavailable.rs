@@ -3975,4 +3975,100 @@ mod tests {
             "dedup still uses INSERT ... RETURNING so None after Ok is a real conflict skip"
         );
     }
+
+    #[test]
+    fn pending_task_push_store_down_is_not_idle_zero() {
+        let src = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub async fn push_pending_tasks_to_online",
+        );
+        assert!(src.contains("Result<u32, String>"));
+        assert!(!src.contains("return 0"));
+        assert!(!compact_src(src).contains("if let Ok(pending)"));
+        assert!(src.contains("store_down"));
+        let pusher = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub fn spawn_pending_task_pusher",
+        );
+        assert!(!pusher.contains("let _ = push_pending_tasks_to_online"));
+    }
+
+    #[test]
+    fn ueba_baseline_scheduler_store_down_is_not_already_done() {
+        let src = named_fn_src(
+            include_str!("endpoint_agents.rs"),
+            "pub fn spawn_ueba_baseline_scheduler",
+        );
+        assert!(!compact_src(src).contains("fetch_one(&mut*tx).await.unwrap_or(true)"));
+        assert!(!src.contains("let Ok(tenants) = weissman_db::active_tenant_ids"));
+        assert!(src.contains("store_down"));
+    }
+
+    #[test]
+    fn certstream_load_scope_store_down_is_not_empty_apexes() {
+        let src = named_fn_src(include_str!("certstream_watcher.rs"), "async fn load_scope");
+        assert!(src.contains("Result<Vec<ScopeRow>, String>"));
+        assert!(!compact_src(src).contains("fetch_all(&mut*tx).await.unwrap_or_default()"));
+        assert!(src.contains("store_down"));
+        let conn = named_fn_src(
+            include_str!("certstream_watcher.rs"),
+            "async fn connect_and_read",
+        );
+        assert!(conn.contains("store_down"));
+    }
+
+    #[test]
+    fn self_improve_is_enabled_store_down_is_not_disabled() {
+        let src = named_fn_src(include_str!("self_improve.rs"), "pub async fn is_enabled");
+        assert!(src.contains("Result<bool, String>"));
+        assert!(!compact_src(src).contains(".ok().flatten()"));
+        assert!(!src.contains("return false"));
+        assert!(src.contains("store_down"));
+        let loop_src = named_fn_src(
+            include_str!("self_improve.rs"),
+            "pub fn spawn_self_improve_loop",
+        );
+        assert!(loop_src.contains("enabled toggle store_down"));
+    }
+
+    #[test]
+    fn dispatch_inflight_check_store_down_is_not_coalesced_skip() {
+        let src = named_fn_src(
+            include_str!("orchestrator/dispatch.rs"),
+            "pub async fn dispatch_all_tenant_scans",
+        );
+        assert!(!src.contains("in-flight scan check failed — skipping this tenant for now"));
+        assert!(src.contains("in-flight scan check store_down"));
+        assert!(
+            src.contains("return Err(e)"),
+            "inflight-check store-down must fail the dispatch, not skipped+=1"
+        );
+    }
+
+    #[test]
+    fn threat_ingest_sbom_store_down_is_not_empty_hits() {
+        let src = named_fn_src(
+            include_str!("threat_intel_ingestor.rs"),
+            "pub async fn run_ingest_cycle",
+        );
+        assert!(!compact_src(src).contains("Err(_)=>continue"));
+        assert!(src.contains("sbom match store_down"));
+    }
+
+    #[test]
+    fn cluster_ingest_empty_claim_commit_fail_is_store_down() {
+        let src = named_fn_src(include_str!("cluster_ingest.rs"), "async fn drain_once");
+        assert!(!compact_src(src).contains("let_=tx.commit().await;returnOk(0)"));
+        assert!(src.contains("store_down"));
+    }
+
+    #[test]
+    fn audit_checkpoint_begin_fail_is_store_down_not_skip_ok() {
+        let src = named_fn_src(
+            include_str!("audit_log.rs"),
+            "pub fn spawn_audit_checkpoint_worker",
+        );
+        assert!(!src.contains("if let Ok(mut tx) = crate::db::begin_tenant_tx"));
+        assert!(src.contains("checkpoint begin store_down"));
+    }
 }

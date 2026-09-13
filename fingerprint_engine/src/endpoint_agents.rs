@@ -771,7 +771,7 @@ pub async fn all_agent_uuids_for_tenant(
     .bind(limit)
     .fetch_all(&mut *tx)
     .await?;
-    let _ = tx.commit().await;
+    tx.commit().await?;
     Ok(rows)
 }
 
@@ -826,17 +826,19 @@ pub async fn push_pending_tasks_to_online(
     pool: &PgPool,
     registry: &Arc<AgentRegistry>,
     tenant_id: i64,
-) -> u32 {
-    let Ok(agents) = all_agent_uuids_for_tenant(pool, tenant_id, AGENT_STATUS_LIMIT).await else {
-        return 0;
-    };
+) -> Result<u32, String> {
+    let agents = all_agent_uuids_for_tenant(pool, tenant_id, AGENT_STATUS_LIMIT)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let mut pushed = 0u32;
     for (uuid, client_id) in agents {
         if !registry.is_agent_online(&uuid).await {
             continue;
         }
-        if let Ok(pending) = pending_tasks_for_client(pool, tenant_id, client_id).await {
-            for task in pending {
+        let pending = pending_tasks_for_client(pool, tenant_id, client_id)
+            .await
+            .map_err(|_| "store_down".to_string())?;
+        for task in pending {
                 // Capture the id before the frame is moved into send().
                 let task_uuid = match &task {
                     ServerToAgent::Task { task_id, .. } => task_id.parse::<Uuid>().ok(),
@@ -866,8 +868,7 @@ pub async fn push_pending_tasks_to_online(
                 }
             }
         }
-    }
-    pushed
+    Ok(pushed)
 }
 
 pub fn spawn_pending_task_pusher(pool: Arc<PgPool>, registry: Arc<AgentRegistry>) {
@@ -901,7 +902,12 @@ pub fn spawn_pending_task_pusher(pool: Arc<PgPool>, registry: Arc<AgentRegistry>
                         "stale dispatched-task reclaim failed"
                     );
                 }
-                let _ = push_pending_tasks_to_online(pool.as_ref(), &registry, tid).await;
+                if let Err(e) = push_pending_tasks_to_online(pool.as_ref(), &registry, tid).await {
+                    tracing::warn!(
+                        target: "agents", tenant_id = tid, error = %e,
+                        "pending task push store_down"
+                    );
+                }
             }
         }
     });
@@ -1176,13 +1182,26 @@ pub fn spawn_ueba_baseline_scheduler(pool: Arc<PgPool>, registry: Arc<AgentRegis
             // on the app pool, so an unscoped DISTINCT returns only the connection's own tenant —
             // and nothing once the tenant GUC is correctly unset. Enumerate tenants explicitly,
             // then let the per-tenant query below do the online filtering.
-            let Ok(tenants) = weissman_db::active_tenant_ids(pool.as_ref()).await else {
-                continue;
+            let tenants = match weissman_db::active_tenant_ids(pool.as_ref()).await {
+                Ok(t) => t,
+                Err(e) => {
+                    tracing::warn!(
+                        target: "agents", error = %e,
+                        "ueba baseline tenant enumeration store_down"
+                    );
+                    continue;
+                }
             };
             for tenant_id in tenants {
                 let mut tx = match crate::db::begin_tenant_tx(pool.as_ref(), tenant_id).await {
                     Ok(t) => t,
-                    Err(_) => continue,
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "agents", tenant_id, error = %e,
+                            "ueba baseline begin store_down"
+                        );
+                        continue;
+                    }
                 };
                 let clients = match sqlx::query_as::<_, (i64,)>(
                     r#"SELECT DISTINCT client_id FROM endpoint_agents
@@ -1195,17 +1214,35 @@ pub fn spawn_ueba_baseline_scheduler(pool: Arc<PgPool>, registry: Arc<AgentRegis
                 .await
                 {
                     Ok(rows) => rows,
-                    Err(_) => continue,
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "agents", tenant_id, error = %e,
+                            "ueba baseline online agents store_down"
+                        );
+                        continue;
+                    }
                 };
-                let _ = tx.commit().await;
+                if tx.commit().await.is_err() {
+                    tracing::warn!(
+                        target: "agents", tenant_id,
+                        "ueba baseline commit store_down"
+                    );
+                    continue;
+                }
                 for (client_id,) in clients {
                     let recent = {
                         let mut tx =
                             match crate::db::begin_tenant_tx(pool.as_ref(), tenant_id).await {
                                 Ok(t) => t,
-                                Err(_) => continue,
+                                Err(e) => {
+                                    tracing::warn!(
+                                        target: "agents", tenant_id, client_id, error = %e,
+                                        "ueba baseline recent-check begin store_down"
+                                    );
+                                    continue;
+                                }
                             };
-                        let ok = sqlx::query_scalar::<_, bool>(
+                        let ok = match sqlx::query_scalar::<_, bool>(
                             r#"SELECT EXISTS(
                                 SELECT 1 FROM endpoint_agent_tasks
                                  WHERE tenant_id = $1 AND client_id = $2
@@ -1218,9 +1255,25 @@ pub fn spawn_ueba_baseline_scheduler(pool: Arc<PgPool>, registry: Arc<AgentRegis
                         .bind(client_id)
                         .fetch_one(&mut *tx)
                         .await
-                        .unwrap_or(true);
-                        let _ = tx.commit().await;
-                        ok
+                        {
+                            Ok(v) => v,
+                            Err(e) => {
+                                tracing::warn!(
+                                    target: "agents", tenant_id, client_id, error = %e,
+                                    "ueba baseline EXISTS store_down"
+                                );
+                                false
+                            }
+                        };
+                        if tx.commit().await.is_err() {
+                            tracing::warn!(
+                                target: "agents", tenant_id, client_id,
+                                "ueba baseline recent-check commit store_down"
+                            );
+                            false
+                        } else {
+                            ok
+                        }
                     };
                     if recent {
                         continue;
@@ -1267,7 +1320,7 @@ pub async fn pending_tasks_for_client(
     .bind(PENDING_TASK_REPLAY_LIMIT)
     .fetch_all(&mut *tx)
     .await?;
-    let _ = tx.commit().await;
+    tx.commit().await?;
     Ok(rows
         .into_iter()
         .map(|(uuid, engine, target, params)| ServerToAgent::Task {
