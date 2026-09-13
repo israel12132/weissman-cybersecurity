@@ -19,7 +19,7 @@ describe('MobileSecurity live-only truth', () => {
   it('does not paint never-run findings when GET /api/engines/history fails', () => {
     expect(src).toMatch(/data-testid="mobile-security-history-unavailable"/)
     expect(src).toMatch(/history_unavailable/)
-    expect(src).toMatch(/unavailable=\{historyUnavailable\}/)
+    expect(src).toMatch(/unavailable=\{historyUnavailable \|\| appsUnavailable\}/)
     expect(src).toMatch(/!historyUnavailable/)
   })
 
@@ -31,7 +31,17 @@ describe('MobileSecurity live-only truth', () => {
   })
 
   it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
-    expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable \|\| appsUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| appsUnavailable \|\| !filteredFindings\.length\}/)
+  })
+
+  it('mutes leftover leftover-findings after a failed mobile apps GET', () => {
+    expect(src).toMatch(/!appsUnavailable && !historyUnavailable && findings\.length > 0/)
+    expect(src).toMatch(/unavailable=\{historyUnavailable \|\| appsUnavailable\}/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable \|\| appsUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| appsUnavailable \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/catch \{\s*setAppsUnavailable\(true\)/)
+    expect(src).not.toMatch(/catch \{\s*setFindings\(\[\]\)/)
+    expect(src).not.toMatch(/catch \{\s*setApps\(\[\]\)/)
   })
 })

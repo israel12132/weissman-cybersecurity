@@ -107,9 +107,9 @@ export default function MobileSecurity() {
   } = useWeissmanEnginePage(MOBILE_ENGINE, platformFindings);
 
   const handleExportCsv = useCallback(() => {
-    if (historyUnavailable) return
+    if (historyUnavailable || appsUnavailable) return
     exportCsv()
-  }, [historyUnavailable, exportCsv])
+  }, [historyUnavailable, appsUnavailable, exportCsv])
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -209,7 +209,7 @@ export default function MobileSecurity() {
       onExport={handleExportCsv}
       refreshLoading={historyLoading || loading}
       refreshDisabled={Boolean(pendingJobId)}
-      exportDisabled={historyUnavailable || !filteredFindings.length}
+      exportDisabled={historyUnavailable || appsUnavailable || !filteredFindings.length}
     />
   );
 
@@ -282,7 +282,7 @@ export default function MobileSecurity() {
         )}
 
         {/* Severity distribution from the real findings list */}
-        {!historyUnavailable && findings.length > 0 && (
+        {!appsUnavailable && !historyUnavailable && findings.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
             {SEVERITY_KEYS.filter((k) => sevCounts[k] > 0).map((k) => (
               <span
@@ -433,10 +433,10 @@ export default function MobileSecurity() {
           jobId={pendingJobId || lastJobId}
           accent="#22d3ee"
           title={t('pages.mobileSecurity.recent_findings_heading')}
-          unavailable={historyUnavailable}
+          unavailable={historyUnavailable || appsUnavailable}
           unavailableTitle={t('pages.mobileSecurity.history_unavailable')}
           unavailableBody={t('pages.mobileSecurity.history_unavailable')}
-          showEmptyReady={!loading && !historyUnavailable && platformFindings.length === 0}
+          showEmptyReady={!loading && !historyUnavailable && !appsUnavailable && platformFindings.length === 0}
           emptyReadyTitle={t('pages.mobileSecurity.findings_empty_title')}
           renderFinding={(f) => (
             <div key={f.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2 flex items-start gap-3">
