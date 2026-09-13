@@ -14,4 +14,11 @@ describe('ClientEngagements live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
   })
+
+  it('mutes leftover client name in the title after a failed client GET', () => {
+    expect(src).toMatch(/title=\{!error && client\?\.name\n        \? t\('pages\.clientEngagements\.title_with_client', \{ name: client\.name \}\)\n        : t\('pages\.clientEngagements\.title'\)\}/)
+    expect(src).toMatch(/setError\(e\?\.message \|\| t\('pages\.clientEngagements\.network_error'\)\)/)
+    expect(src).toMatch(/if \(clientR\.error\) \{\n        setError\(t\('pages\.clientEngagements\.load_client_failed', \{ status: clientR\.error\.status \}\)\)\n        setLoading\(false\)\n        return/)
+    expect(src).not.toMatch(/catch \(e\) \{\s*setClient\(null\)/)
+  })
 })

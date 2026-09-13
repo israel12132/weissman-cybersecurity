@@ -192,7 +192,7 @@ export default function ClientEngagements() {
 
   return (
     <PageShell
-      title={client?.name
+      title={!error && client?.name
         ? t('pages.clientEngagements.title_with_client', { name: client.name })
         : t('pages.clientEngagements.title')}
       subtitle={t('pages.clientEngagements.subtitle')}
