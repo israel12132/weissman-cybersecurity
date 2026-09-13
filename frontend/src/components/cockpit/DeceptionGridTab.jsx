@@ -152,7 +152,7 @@ export default function DeceptionGridTab() {
         <h2 className="text-lg font-semibold text-white">{t(`${NS}.title`)}</h2>
       </div>
 
-      {triggered.length > 0 && (
+      {!assetsUnavailable && triggered.length > 0 && (
         <div className="rounded-xl border border-red-500/50 bg-red-500/10 px-4 py-3 flex items-center gap-2 text-red-400">
           <AlertTriangle className="w-5 h-5 shrink-0" />
           <span className="font-medium">{t(`${NS}.triggeredAlert`, { count: triggered.length })}</span>
@@ -227,7 +227,7 @@ export default function DeceptionGridTab() {
         )}
       </div>
 
-      {injected.length > 0 && (
+      {!assetsUnavailable && injected.length > 0 && (
         <div className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-4">
           <h4 className="text-xs font-medium text-sky-300 mb-2 flex items-center gap-2">
             <MapPin className="w-4 h-4" /> {t(`${NS}.cloudInjectionMap`)}
