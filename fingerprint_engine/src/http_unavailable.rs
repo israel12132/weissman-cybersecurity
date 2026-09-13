@@ -5351,11 +5351,12 @@ mod tests {
             include_str!("orchestrator/mod.rs"),
             "async fn run_cycle_for_tenant_inner",
         );
+        assert!(cycle.contains("INSERT INTO semantic_fuzz_log"));
         assert!(compact_src(cycle).contains(
-            "INSERT INTO semantic_fuzz_log (tenant_id, client_id, run_id, log_text) VALUES ($1, $2, $3, $4)\",).bind(tenant_id).bind(db_client_id).bind(run_id).bind(log).execute(&mut*tx).await?"
+            "INSERTINTOsemantic_fuzz_log(tenant_id,client_id,run_id,log_text)VALUES($1,$2,$3,$4)\",).bind(tenant_id).bind(db_client_id).bind(run_id).bind(log).execute(&mut*tx).await?"
         ));
         assert!(!compact_src(cycle).contains(
-            "let_=sqlx::query(\"INSERT INTO semantic_fuzz_log"
+            "let_=sqlx::query(\"INSERTINTOsemantic_fuzz_log"
         ));
     }
 }
