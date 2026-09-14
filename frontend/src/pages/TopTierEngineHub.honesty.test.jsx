@@ -27,4 +27,13 @@ describe('TopTierEngineHub live-only truth', () => {
     expect(src).toMatch(/function exportAuditCsv\(\) \{\n    if \(auditUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{loading \|\| auditUnavailable \|\| !audit\?\.engines\?\.length\}/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed top-tier audit GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/engines\/top-tier\/audit'\)/)
+    expect(src).toMatch(/onExport=\{auditUnavailable \? undefined : exportAuditCsv\}/)
+    expect(src).toMatch(/onRefresh=\{reloadAudit\}/)
+    expect(src).toMatch(/setAuditUnavailable\(true\)/)
+    expect(src).toMatch(/method: 'POST'/)
+    expect(src).not.toMatch(/probe_failed[\s\S]{0,200}setAuditUnavailable/)
+  })
 })

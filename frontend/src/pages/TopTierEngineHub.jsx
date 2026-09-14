@@ -213,7 +213,7 @@ export default function TopTierEngineHub() {
           <div className="flex items-center gap-3">
             <ShellScanActions
               onRefresh={reloadAudit}
-              onExport={exportAuditCsv}
+              onExport={auditUnavailable ? undefined : exportAuditCsv}
               refreshLoading={loading}
               exportDisabled={loading || auditUnavailable || !audit?.engines?.length}
             />
