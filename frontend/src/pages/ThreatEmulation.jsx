@@ -228,6 +228,7 @@ export default function ThreatEmulation() {
   const [activeJobId, setActiveJobId] = useState(null)
   const [toast, setToast] = useState(null)
   const [error, setError] = useState('')
+  const [historyUnavailable, setHistoryUnavailable] = useState(false)
 
   const showToast = useCallback((sev, msg) => {
     const id = Date.now()
@@ -240,15 +241,25 @@ export default function ThreatEmulation() {
     setError('')
     try {
       const q = clientId ? `?client_id=${clientId}&limit=1000` : '?limit=1000'
+      const historyFetch = apiFetch('/api/engines/history/threat_emulation?limit=20')
+        .then((d) => {
+          if (d?.ok === false || d?.unavailable) {
+            setHistoryUnavailable(true)
+            throw new Error(d.detail || t('pages.threatEmulation.load_failed'))
+          }
+          setHistoryUnavailable(false)
+          return d
+        })
+        .catch((e) => {
+          setHistoryUnavailable(true)
+          throw e
+        })
       const [findingsData, histData] = await Promise.all([
         apiFetch(`/api/findings${q}`),
-        apiFetch('/api/engines/history/threat_emulation?limit=20'),
+        historyFetch,
       ])
       if (findingsData?.ok === false || findingsData?.unavailable) {
         throw new Error(findingsData.detail || t('pages.threatEmulation.load_failed'))
-      }
-      if (histData?.ok === false || histData?.unavailable) {
-        throw new Error(histData.detail || t('pages.threatEmulation.load_failed'))
       }
       setEmulationFindings(parseFindingsList(findingsData).filter(isThreatEmulationFinding))
       setHistory(Array.isArray(histData?.jobs) ? histData.jobs : [])
@@ -309,6 +320,15 @@ export default function ThreatEmulation() {
     csvPrefix: 'threat-emulation',
     haystackFn: (f) => `${f.title || ''} ${f.description || ''} ${groupIdForFinding(f) || ''} ${f.type || ''}`,
   })
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
+
+  const handleRefresh = useCallback(() => {
+    loadData(selectedClientId)
+  }, [loadData, selectedClientId])
 
   const runEmulation = useCallback(async () => {
     if (!selectedClientId) {
@@ -374,10 +394,10 @@ export default function ThreatEmulation() {
       subtitle={t('pages.threatEmulation.subtitle', { count: APT_GROUPS.length })}
       actions={(
         <ShellScanActions
-          onRefresh={() => loadData(selectedClientId)}
-          onExport={exportCsv}
+          onRefresh={handleRefresh}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -434,7 +454,12 @@ export default function ThreatEmulation() {
           {t('pages.threatEmulation.clients_unavailable')}
         </p>
       )}
-      {error && (
+      {historyUnavailable && (
+        <p className="text-sm text-amber-200/90 mb-4" data-testid="threat-emulation-history-unavailable" role="alert">
+          {t('pages.threatEmulation.history_unavailable')}
+        </p>
+      )}
+      {error && !historyUnavailable && (
         <p className="text-sm text-amber-200/90 mb-4" data-testid="threat-emulation-unavailable" role="alert">
           {t('pages.threatEmulation.unavailable')}
         </p>

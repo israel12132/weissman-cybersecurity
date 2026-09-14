@@ -2625,6 +2625,7 @@
       "refresh": "Refresh",
       "load_failed": "Failed to load emulation findings",
       "unavailable": "Emulation APIs unavailable — empty findings are not a clean surface.",
+      "history_unavailable": "Engine history API unavailable — empty job history is not a quiet APT trail.",
       "clients_unavailable": "Clients API unavailable — missing client is not confirmed.",
       "run_complete": "Emulation job {{status}} — findings refreshed",
       "engine_notice": "One POST /api/command-center/scan with engine threat_emulation executes all 7 backend APT scenarios against your authorized target. Cards show per-group results parsed from real findings — empty means that path returned no signal (honest absence, not a pass).",
