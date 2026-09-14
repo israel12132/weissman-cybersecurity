@@ -572,7 +572,7 @@ export default function CicdPipelineSecurityCommandCenter() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={handleExportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={running}
           exportDisabled={historyUnavailable || !filteredFindings.length}
