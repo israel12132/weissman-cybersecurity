@@ -155,7 +155,7 @@ export default function RateLimitAnalytics() {
       </div>
       <ShellScanActions
         onRefresh={fetchAnalytics}
-        onExport={handleExportCsv}
+        onExport={error ? undefined : handleExportCsv}
         refreshLoading={loading}
         exportDisabled={!!error || !filteredFindings.length}
       />
