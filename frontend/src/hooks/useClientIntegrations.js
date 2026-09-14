@@ -35,6 +35,13 @@ export function useClientIntegrations(clientId) {
     fetchClientIntegrations(clientId)
       .then((d) => {
         if (!cancelled) {
+          // lib/apiBase.apiFetch does not throw on HTTP !ok; fetchClientIntegrations
+          // resolves null. Treat that as leftover leftover-GET fail, not idle 0%.
+          if (d == null) {
+            setLocalIntegrations(null)
+            setLocalUnavailable(true)
+            return
+          }
           setLocalIntegrations(d)
           setLocalUnavailable(false)
         }

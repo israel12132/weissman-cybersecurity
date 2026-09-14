@@ -24,4 +24,9 @@ describe('EngineIntegrationsBar live-only truth', () => {
     expect(ctx).toMatch(/setClientIntegrations\(null\)\n        setIntegrationsUnavailable\(true\)/)
     expect(ctx).toMatch(/integrationsUnavailable,/)
   })
+
+  it('latches unavailable when hub leftover leftover-GET resolves null without throw', () => {
+    expect(hook).toMatch(/if \(d == null\) \{\n            setLocalIntegrations\(null\)\n            setLocalUnavailable\(true\)/)
+    expect(hook).not.toMatch(/\.then\(\(d\) => \{\n        if \(!cancelled\) \{\n          setLocalIntegrations\(d\)\n          setLocalUnavailable\(false\)/)
+  })
 })
