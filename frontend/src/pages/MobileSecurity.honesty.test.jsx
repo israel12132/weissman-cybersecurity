@@ -44,4 +44,15 @@ describe('MobileSecurity live-only truth', () => {
     expect(src).not.toMatch(/catch \{\s*setFindings\(\[\]\)/)
     expect(src).not.toMatch(/catch \{\s*setApps\(\[\]\)/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed mobile apps GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/mobile-security\/apps'\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable \|\| appsUnavailable\) return/)
+    expect(src).toMatch(/onExport=\{appsUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| appsUnavailable \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
+    expect(src).toMatch(/setScanError\(d\.detail \|\| d\.error \|\| t\('pages\.mobileSecurity\.scan_failed'\)\)/)
+    expect(src).not.toMatch(/scan_failed[\s\S]{0,120}setAppsUnavailable/)
+    expect(src).not.toMatch(/catch \{\s*setApps\(\[\]\)/)
+  })
 })

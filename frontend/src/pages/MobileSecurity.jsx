@@ -58,6 +58,7 @@ export default function MobileSecurity() {
   const [pendingJobId, setPendingJobId] = useState(null);
   const [appsUnavailable, setAppsUnavailable] = useState(false)
   const [clientsUnavailable, setClientsUnavailable] = useState(false)
+  const [scanError, setScanError] = useState(null)
 
   const fetchMobileApps = useCallback(async () => {
     setLoading(true);
@@ -206,7 +207,7 @@ export default function MobileSecurity() {
   const refreshAction = (
     <ShellScanActions
       onRefresh={handleRefresh}
-      onExport={handleExportCsv}
+      onExport={appsUnavailable ? undefined : handleExportCsv}
       refreshLoading={historyLoading || loading}
       refreshDisabled={Boolean(pendingJobId)}
       exportDisabled={historyUnavailable || appsUnavailable || !filteredFindings.length}
