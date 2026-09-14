@@ -358,7 +358,7 @@ export default function ComplianceFrameworks() {
       actions={(
         <ShellScanActions
           onRefresh={fetchFrameworks}
-          onExport={handleExportCsv}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loadingFrameworks}
           exportDisabled={!!error || controlsUnavailable || !filteredFindings.length}
         />
