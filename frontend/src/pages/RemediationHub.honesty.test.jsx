@@ -22,4 +22,11 @@ describe('RemediationHub live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/healStats && !error && \(/)
   })
+
+  it('mutes leftover leftover-fix drawer after a failed findings GET', () => {
+    expect(src).toMatch(/\{selectedFinding && !error && \(\n        <RemediationDetail finding=\{selectedFinding\}/)
+    expect(src).toMatch(/setError\(e\.message \|\| 'Failed to load findings'\)/)
+    expect(src).not.toMatch(/catch \(e\) \{\s*setSelectedFinding\(null\)/)
+    expect(src).not.toMatch(/catch \(e\) \{\s*setFindings\(\[\]\)/)
+  })
 })

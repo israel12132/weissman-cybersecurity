@@ -447,7 +447,7 @@ export default function RemediationHub() {
         </div>
       </div>
 
-      {selectedFinding && (
+      {selectedFinding && !error && (
         <RemediationDetail finding={selectedFinding} onClose={() => setSelectedFinding(null)} />
       )}
     </PageShell>
