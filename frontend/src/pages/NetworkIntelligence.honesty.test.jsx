@@ -35,4 +35,15 @@ describe('NetworkIntelligence live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
     expect(src).toMatch(/exportDisabled: historyUnavailable \|\| !filteredFindings\.length/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/useWeissmanEnginePage\(FLAGSHIP_ID, sorted\)/)
+    expect(src).toMatch(/onExport: historyUnavailable \? undefined : handleExportCsv/)
+    expect(src).toMatch(/onRefresh=\{shellHandlers\.onRefresh\}/)
+    expect(src).toMatch(/onExport=\{shellHandlers\.onExport\}/)
+    expect(src).toMatch(/data-testid="network-intelligence-history-unavailable"/)
+    expect(src).toMatch(/showToast\('error', d\.detail \|\| t\('pages\.networkIntelligence\.scan_failed'\)\); return \}/)
+    expect(src).toMatch(/showToast\('error', e\?\.message \?\? t\('pages\.networkIntelligence\.scan_failed'\)\)/)
+    expect(src).not.toMatch(/setHistoryUnavailable/)
+  })
 })
