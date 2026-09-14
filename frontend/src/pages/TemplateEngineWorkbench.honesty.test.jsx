@@ -30,6 +30,14 @@ describe('TemplateEngineWorkbench live-only truth', () => {
     expect(src).not.toMatch(/\.catch\(\(\) => setTemplates\(\[\]\)\)/)
   })
 
+  it('mutes leftover leftover-selected catalog id after a failed templates GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/template-engine\/templates'\)/)
+    expect(src).toMatch(/value=\{templatesUnavailable \? '' : selectedId\}/)
+    expect(src).toMatch(/\.catch\(\(\) => setTemplatesUnavailable\(true\)\)/)
+    expect(src).not.toMatch(/setSelectedId\(''\)/)
+    expect(src).not.toMatch(/value=\{error \? '' : selectedId\}/)
+  })
+
   it('mutes leftover leftover-yaml after a failed template-body GET without using shared run error', () => {
     expect(src).toMatch(/const \[yamlUnavailable, setYamlUnavailable\] = useState\(false\)/)
     expect(src).toMatch(/setYamlUnavailable\(false\)/)

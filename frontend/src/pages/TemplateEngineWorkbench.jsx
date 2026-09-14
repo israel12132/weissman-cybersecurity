@@ -225,7 +225,7 @@ function TemplateEngineWorkbenchBody() {
             />
             <div className="flex items-center gap-3 flex-wrap">
               <select
-                value={selectedId}
+                value={templatesUnavailable ? '' : selectedId}
                 onChange={(e) => setSelectedId(e.target.value)}
                 className="rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-blue-500/40"
               >
