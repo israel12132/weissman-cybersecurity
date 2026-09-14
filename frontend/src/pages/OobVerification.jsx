@@ -222,7 +222,7 @@ export default function OobVerification() {
           </Link>
           <ShellScanActions
             onRefresh={poll}
-            onExport={handleExportCsv}
+            onExport={callbacksUnavailable ? undefined : handleExportCsv}
             refreshLoading={polling}
             exportDisabled={callbacksUnavailable || !filteredFindings.length}
           />

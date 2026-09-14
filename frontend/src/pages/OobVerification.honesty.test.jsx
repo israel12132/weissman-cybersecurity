@@ -25,4 +25,15 @@ describe('OobVerification live-only truth', () => {
     expect(src).toMatch(/!callbacksUnavailable && \(\n                <div className="grid grid-cols-2 gap-3">/)
     expect(src).toMatch(/!callbacksUnavailable && probe\.first_hit_at && \(/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed callbacks GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/oast\/callbacks'\)/)
+    expect(src).toMatch(/onExport=\{callbacksUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{poll\}/)
+    expect(src).toMatch(/data-testid="oob-callbacks-unavailable"/)
+    expect(src).toMatch(/method: 'POST'/)
+    expect(src).toMatch(/setError\(body\?\.error \|\| body\?\.detail \|\| e\.message \|\| t\('pages\.oobVerification\.mint_failed'\)\)/)
+    expect(src).not.toMatch(/mint_failed[\s\S]{0,80}setCallbacksUnavailable/)
+    expect(src).not.toMatch(/setCallbacks\(\[\]\)\n      \} catch/)
+  })
 })
