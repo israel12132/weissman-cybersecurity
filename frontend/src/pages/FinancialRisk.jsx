@@ -225,7 +225,7 @@ export default function FinancialRisk() {
           </Button>
           <ShellScanActions
             onRefresh={() => load(false)}
-            onExport={handleExportCsv}
+            onExport={error ? undefined : handleExportCsv}
             refreshLoading={loading}
             exportDisabled={!!error || !contributors.length}
           />
