@@ -27,4 +27,13 @@ describe('EngineReliability live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(telemError\) return/)
     expect(src).toMatch(/exportDisabled=\{\!\!telemError \|\| !filteredFindings\.length\}/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed telemetry GET', () => {
+    expect(src).toMatch(/api\.get\('\/api\/engines\/telemetry'\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(telemError\) return/)
+    expect(src).toMatch(/onExport=\{\(telemError \|\| catalogUnavailable\) \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{\!\!telemError \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/setTelemError\(e\?\.message \|\| 'Failed to load telemetry'\)/)
+    expect(src).not.toMatch(/setTelem\(null\)/)
+  })
 })

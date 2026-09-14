@@ -175,7 +175,7 @@ export default function EngineReliability() {
       actions={(
         <ShellScanActions
           onRefresh={refreshAll}
-          onExport={handleExportCsv}
+          onExport={(telemError || catalogUnavailable) ? undefined : handleExportCsv}
           refreshLoading={loading || telemLoading}
           exportDisabled={!!telemError || !filteredFindings.length}
         />
