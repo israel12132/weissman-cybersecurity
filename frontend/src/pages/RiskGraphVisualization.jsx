@@ -438,7 +438,7 @@ export default function RiskGraphVisualization() {
           )}
           <ShellScanActions
             onRefresh={reloadGraph}
-            onExport={handleExportCsv}
+            onExport={graphUnavailable ? undefined : handleExportCsv}
             refreshLoading={loading}
             exportDisabled={graphUnavailable || !filteredFindings.length}
           />
