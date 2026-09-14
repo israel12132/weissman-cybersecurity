@@ -424,6 +424,7 @@ export default function RiskGraphVisualization() {
       icon={<GitBranch />}
       actions={(
         <div className="flex items-center gap-2">
+          {!graphUnavailable && (
           <Button variant="unstyled"
             type="button"
             onClick={exportGraphJson}
@@ -434,6 +435,7 @@ export default function RiskGraphVisualization() {
             <Download className="w-4 h-4" />
             {t(`${NS}.export_json`)}
           </Button>
+          )}
           <ShellScanActions
             onRefresh={reloadGraph}
             onExport={handleExportCsv}

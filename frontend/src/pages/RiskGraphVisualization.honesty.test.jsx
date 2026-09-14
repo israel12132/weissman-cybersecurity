@@ -25,4 +25,12 @@ describe('RiskGraphVisualization live-only truth', () => {
     expect(src).toMatch(/catch \(error\) \{\n      console\.error\('Failed to fetch graph data:', error\);\n      setGraphUnavailable\(true\);/)
     expect(src).not.toMatch(/catch \(error\) \{\s*console\.error\('Failed to fetch graph data:', error\);\s*setGraphData/)
   })
+
+  it('mutes leftover leftover-GET Export JSON after a failed graph GET', () => {
+    expect(src).toMatch(/withClientId\('\/api\/risk\/graph'/)
+    expect(src).toMatch(/\{!graphUnavailable && \(\s*<Button variant="unstyled"\s*type="button"\s*onClick=\{exportGraphJson\}/)
+    expect(src).toMatch(/if \(graphUnavailable \|\| clientId == null\) return/)
+    expect(src).toMatch(/\$\{NS\}\.export_json/)
+    expect(src).toMatch(/setGraphUnavailable\(true\)/)
+  })
 })
