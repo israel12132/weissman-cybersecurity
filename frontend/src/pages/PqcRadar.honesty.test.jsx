@@ -36,4 +36,13 @@ describe('PqcRadar live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !sortedFindings\.length\}/)
   })
 
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/useWeissmanEnginePage\(ENGINE_ID, detailFindings\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
+    expect(src).toMatch(/data-testid="pqc-radar-history-unavailable"/)
+    expect(src).toMatch(/if \(!ok\) \{ setScanning\(false\); showToast\('error', d\.detail \|\| tt\('scan_failed', 'Scan failed'\)\); return \}/)
+    expect(src).toMatch(/setScanning\(false\)\n      showToast\('error', e\?\.message \?\? tt\('scan_failed', 'Scan failed'\)\)/)
+    expect(src).not.toMatch(/setHistoryUnavailable/)
+  })
 })

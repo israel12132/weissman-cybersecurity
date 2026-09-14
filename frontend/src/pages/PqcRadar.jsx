@@ -426,7 +426,7 @@ export default function PqcRadar() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={handleExportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={scanning}
           exportDisabled={historyUnavailable || !sortedFindings.length}
