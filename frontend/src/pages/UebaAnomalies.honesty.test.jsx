@@ -14,4 +14,12 @@ describe('UebaAnomalies live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filtered\.length\}/)
     expect(src).not.toMatch(/setAnomalies\(\[\]\)/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed UEBA anomalies GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/ueba\/anomalies\?limit=500'\)/)
+    expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{load\}/)
+    expect(src).toMatch(/data-testid="ueba-anomalies-unavailable"/)
+    expect(src).not.toMatch(/setAnomalies\(\[\]\)/)
+  })
 })
