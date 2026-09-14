@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import useFocusTrap from '../hooks/useFocusTrap';
 import { useTranslation } from 'react-i18next';
 import { Settings, Cpu, Play, Pause, Filter, Search, Clock, CheckCircle, XCircle, Download } from 'lucide-react';
@@ -248,6 +248,11 @@ export default function EngineManagementConsole() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (catalogUnavailable) return
+    exportEnginesCsv(filteredEngines)
+  }, [catalogUnavailable, filteredEngines])
+
   return (
     <PageShell
       title={t(`${NS}.title`)}
@@ -255,9 +260,9 @@ export default function EngineManagementConsole() {
       actions={(
         <ShellScanActions
           onRefresh={fetchEngines}
-          onExport={() => exportEnginesCsv(filteredEngines)}
+          onExport={catalogUnavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={catalogUnavailable || !filteredFindings.length}
         />
       )}
     >

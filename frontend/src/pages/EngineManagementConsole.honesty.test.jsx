@@ -22,4 +22,15 @@ describe('EngineManagementConsole live-only truth', () => {
     expect(src).not.toMatch(/setCatalogUnavailable\(true\);\n      setConfigModal/)
     expect(src).not.toMatch(/setCatalogUnavailable\(true\);\n      setSelectedEngine/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed catalog GET', () => {
+    expect(src).toMatch(/api\.get\('\/api\/ceo\/god-mode\/snapshot'\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(catalogUnavailable\) return\n    exportEnginesCsv\(filteredEngines\)/)
+    expect(src).toMatch(/onExport=\{catalogUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{catalogUnavailable \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/onRefresh=\{fetchEngines\}/)
+    expect(src).toMatch(/api\.put\('\/api\/ceo\/tenant\/engines'/)
+    expect(src).not.toMatch(/Failed to toggle engine:[\s\S]{0,160}setCatalogUnavailable/)
+    expect(src).toMatch(/setCatalogUnavailable\(true\);\n      setEngines\(\[\]\)/)
+  })
 })
