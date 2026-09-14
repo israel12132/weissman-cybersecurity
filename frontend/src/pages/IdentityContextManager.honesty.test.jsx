@@ -38,4 +38,13 @@ describe('IdentityContextManager live-only truth', () => {
     expect(src).not.toMatch(/catch \([^)]*\) \{\s*setSelectedIdentity\(null\)/)
     expect(src).not.toMatch(/catch \([^)]*\) \{\s*setIdentities\(\[\]\)/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed identity GET', () => {
+    expect(src).toMatch(/api\.get\(withClientId\('\/api\/identity\/contexts', cid\)\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/setError\(t\('pages\.identityContextManager\.load_error'\)\)/)
+    expect(src).not.toMatch(/catch \([^)]*\) \{\s*setIdentities\(\[\]\)/)
+  })
 })

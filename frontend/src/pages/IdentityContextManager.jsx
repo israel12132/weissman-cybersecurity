@@ -121,7 +121,7 @@ export default function IdentityContextManager() {
       actions={(
         <ShellScanActions
           onRefresh={reloadIdentities}
-          onExport={handleExportCsv}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={!!error || !filteredFindings.length}
         />
