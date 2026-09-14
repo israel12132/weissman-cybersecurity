@@ -162,7 +162,7 @@ export default function AlertRulesEngine() {
       actions={(
         <ShellScanActions
           onRefresh={fetchRules}
-          onExport={handleExportCsv}
+          onExport={unavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={unavailable || !filteredFindings.length}
         />
