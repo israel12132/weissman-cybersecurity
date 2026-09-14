@@ -22,4 +22,15 @@ describe('SsoDashboard live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(idpsUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{idpsUnavailable \|\| !filteredFindings\.length\}/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed IdP GET', () => {
+    expect(src).toMatch(/api\.get\('\/api\/sso\/idps'\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(idpsUnavailable\) return/)
+    expect(src).toMatch(/onExport=\{idpsUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{idpsUnavailable \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/onRefresh=\{fetchIdps\}/)
+    expect(src).toMatch(/showToast\(t\('pages\.ssoDashboard\.save_failed', \{ message: e\.message \}\), false\)/)
+    expect(src).not.toMatch(/save_failed[\s\S]{0,80}setIdpsUnavailable/)
+    expect(src).not.toMatch(/setIdpsUnavailable\(true\)\n      showToast[\s\S]{0,80}setIdps\(/)
+  })
 })

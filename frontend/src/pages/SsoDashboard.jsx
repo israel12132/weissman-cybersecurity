@@ -425,7 +425,7 @@ export default function SsoDashboard() {
       actions={(
         <ShellScanActions
           onRefresh={fetchIdps}
-          onExport={handleExportCsv}
+          onExport={idpsUnavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={idpsUnavailable || !filteredFindings.length}
         />
