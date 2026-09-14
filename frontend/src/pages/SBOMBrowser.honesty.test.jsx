@@ -20,4 +20,14 @@ describe('SBOMBrowser live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed components GET', () => {
+    expect(src).toMatch(/api\.get\(withClientId\('\/api\/sbom\/components', cid\)\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/onRefresh=\{\(\) => fetchSBOM\(clientId\)\}/)
+    expect(src).toMatch(/setError\(t\('pages\.sbomBrowser\.export_failed'\)\)/)
+    expect(src).not.toMatch(/export_failed[\s\S]{0,80}setComponents/)
+  })
 })

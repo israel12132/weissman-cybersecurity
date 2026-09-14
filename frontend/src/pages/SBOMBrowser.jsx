@@ -170,7 +170,7 @@ export default function SBOMBrowser() {
       actions={clientId != null && (
         <ShellScanActions
           onRefresh={() => fetchSBOM(clientId)}
-          onExport={handleExportCsv}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={!!error || !filteredFindings.length}
         />
