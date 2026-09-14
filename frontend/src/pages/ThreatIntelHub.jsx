@@ -78,6 +78,7 @@ function useApiResource(path, autoRefreshMs) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [unavailable, setUnavailable] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
 
   const load = useCallback(
@@ -88,8 +89,10 @@ function useApiResource(path, autoRefreshMs) {
         const d = await apiFetch(path)
         setData(d)
         setUpdatedAt(Date.now())
+        setUnavailable(false)
       } catch (e) {
         setError(e?.message || 'Request failed')
+        setUnavailable(true)
       } finally {
         setLoading(false)
       }
@@ -104,7 +107,7 @@ function useApiResource(path, autoRefreshMs) {
   // Auto-refresh, skipping ticks while the tab is hidden.
   useVisiblePolling(() => load(true), autoRefreshMs || 0, { paused: !autoRefreshMs })
 
-  return { data, loading, error, reload: load, updatedAt }
+  return { data, loading, error, unavailable, reload: load, updatedAt }
 }
 
 // ── Presentational primitives ──────────────────────────────────────────────────
@@ -280,12 +283,14 @@ function LiveFeed({ feed, t, workbench }) {
 
   if (feed.error) {
     return (
-      <EmptyState
-        icon="alert"
-        title={t('pages.threatIntelHub.feed_error')}
-        body={feed.error}
-        cta={{ label: t('pages.threatIntelHub.retry'), onClick: () => feed.reload() }}
-      />
+      <div data-testid="threat-intel-feed-unavailable" role="alert">
+        <EmptyState
+          icon="alert"
+          title={t('pages.threatIntelHub.feed_error')}
+          body={feed.error}
+          cta={{ label: t('pages.threatIntelHub.retry'), onClick: () => feed.reload() }}
+        />
+      </div>
     )
   }
 
@@ -705,9 +710,9 @@ export default function ThreatIntelHub() {
       </Button>
       <ShellScanActions
         onRefresh={reloadAll}
-        onExport={feedWorkbench.exportCsv}
+        onExport={feed.unavailable ? undefined : feedWorkbench.exportCsv}
         refreshLoading={busy}
-        exportDisabled={tab !== 'feed' || !feedWorkbench.filteredFindings.length}
+        exportDisabled={tab !== 'feed' || !!feed.unavailable || !feedWorkbench.filteredFindings.length}
       />
     </div>
   )
