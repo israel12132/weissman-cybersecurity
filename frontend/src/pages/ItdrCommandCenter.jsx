@@ -101,7 +101,7 @@ export default function ItdrCommandCenter() {
       subtitle={t(`${NS}.subtitle`)}
       icon={<Fingerprint />}
       actions={(
-        <ShellScanActions onRefresh={load} onExport={exportCsv} refreshLoading={loading} exportDisabled={!!error || !filtered.length} />
+        <ShellScanActions onRefresh={load} onExport={error ? undefined : exportCsv} refreshLoading={loading} exportDisabled={!!error || !filtered.length} />
       )}
     >
       <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>

@@ -14,4 +14,13 @@ describe('ItdrCommandCenter live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filtered\.length\}/)
     expect(src).not.toMatch(/setEvents\(\[\]\)/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed ITDR GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/itdr\/connectors'\)/)
+    expect(src).toMatch(/apiFetch\('\/api\/itdr\/auth-events\?limit=500'\)/)
+    expect(src).toMatch(/onExport=\{error \? undefined : exportCsv\}/)
+    expect(src).toMatch(/setError\(err\.message \|\| t\(`\$\{NS\}\.load_failed`\)\)/)
+    expect(src).not.toMatch(/catch \(err\) \{\s*setError\(err\.message \|\| t\(`\$\{NS\}\.load_failed`\)\)\s*setEvents/)
+    expect(src).not.toMatch(/catch \(err\) \{\s*setError\(err\.message \|\| t\(`\$\{NS\}\.load_failed`\)\)\s*setConnectors/)
+  })
 })
