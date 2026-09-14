@@ -717,7 +717,7 @@ export default function WebCachePosture() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={handleExportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={status === 'running'}
           exportDisabled={historyUnavailable || !filteredFindings.length}
