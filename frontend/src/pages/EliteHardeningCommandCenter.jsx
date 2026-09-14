@@ -160,7 +160,7 @@ export default function EliteHardeningCommandCenter() {
       actions={
         <ShellScanActions
           onRefresh={load}
-          onExport={() => doExport('csv')}
+          onExport={error ? undefined : () => doExport('csv')}
           refreshLoading={loading}
           exportDisabled={!!error || !filtered.length}
         />

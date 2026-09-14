@@ -14,4 +14,13 @@ describe('EliteHardeningCommandCenter live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filtered\.length\}/)
     expect(src).not.toMatch(/setData\(null\)/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed elite-hardening GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/elite-hardening\/status'\)/)
+    expect(src).toMatch(/onExport=\{error \? undefined : \(\) => doExport\('csv'\)\}/)
+    expect(src).toMatch(/onRefresh=\{load\}/)
+    expect(src).toMatch(/setError\(e\.message \|\| t\(`\$\{NS\}\.load_failed`\)\)/)
+    expect(src).not.toMatch(/method: 'POST'/)
+    expect(src).not.toMatch(/method: 'PATCH'/)
+  })
 })
