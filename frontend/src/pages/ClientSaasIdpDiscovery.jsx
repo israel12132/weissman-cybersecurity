@@ -146,7 +146,7 @@ export default function ClientSaasIdpDiscovery() {
       actions={(
         <ShellScanActions
           onRefresh={runDiscovery}
-          onExport={handleExportCsv}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loading || running}
           exportDisabled={!!error || !filteredFindings.length}
         />
