@@ -27,4 +27,14 @@ describe('DnsDomainPosture live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
   })
 
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/useWeissmanEnginePage\(ENGINE, issues\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
+    expect(src).toMatch(/data-testid="dns-domain-posture-history-unavailable"/)
+    expect(src).toMatch(/showToast\('error', d\.detail \|\| t\('pages\.dnsDomainPosture\.scan_failed', 'Scan failed'\)\)/)
+    expect(src).toMatch(/showToast\('error', e\?\.message \?\? t\('pages\.dnsDomainPosture\.scan_failed', 'Scan failed'\)\)/)
+    expect(src).not.toMatch(/setHistoryUnavailable/)
+  })
+
 })
