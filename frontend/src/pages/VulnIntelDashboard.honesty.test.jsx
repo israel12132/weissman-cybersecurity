@@ -22,4 +22,12 @@ describe('VulnIntelDashboard live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filtered\.length\}/)
     expect(src).toMatch(/filtersExpanded && !error &&/)
   })
+
+  it('mutes leftover leftover-truncation footer after a failed findings GET', () => {
+    expect(src).toMatch(/\{!error && \(\n        <p className="text-\[10px\] font-mono text-\[var\(--text-disabled\)\] text-center">\n          \{t\('findings\.shown_of_total', \{ shown: filtered\.length, total \}\)/)
+    expect(src).toMatch(/finding=\{error \? null : selected\}/)
+    expect(src).toMatch(/setError\(e\.message \|\| 'Failed to load findings'\)/)
+    expect(src).not.toMatch(/catch \(e\) \{\s*setFindings\(\[\]\)/)
+    expect(src).not.toMatch(/catch \(e\) \{\s*setTotal\(null\)/)
+  })
 })

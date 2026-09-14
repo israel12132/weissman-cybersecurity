@@ -438,12 +438,14 @@ export default function VulnIntelDashboard() {
           </>
         )}
 
+        {!error && (
         <p className="text-[10px] font-mono text-[var(--text-disabled)] text-center">
           {t('findings.shown_of_total', { shown: filtered.length, total })}
         </p>
+        )}
       </div>
 
-      <FindingDrawer finding={selected} onClose={() => setSelected(null)} />
+      <FindingDrawer finding={error ? null : selected} onClose={() => setSelected(null)} />
     </PageShell>
   )
 }
