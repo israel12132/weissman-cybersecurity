@@ -23,6 +23,16 @@ describe('TemplateEngineWorkbench live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{templatesUnavailable \|\| !filteredFindings\.length\}/)
   })
 
+  it('mutes leftover leftover-GET Export CSV after a failed templates GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/template-engine\/templates'\)/)
+    expect(src).toMatch(/onExport=\{templatesUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{loadTemplates\}/)
+    expect(src).toMatch(/setError\(e\?\.message \|\| t\(`\$\{NS\}\.run_failed`\)\)/)
+    expect(src).toMatch(/method: 'POST'/)
+    expect(src).not.toMatch(/run_failed[\s\S]{0,80}setTemplatesUnavailable/)
+    expect(src).not.toMatch(/\.catch\(\(\) => setTemplatesUnavailable\(true\)\)[\s\S]{0,80}setTemplates\(/)
+  })
+
   it('mutes leftover catalog select options after a failed templates GET', () => {
     expect(src).toMatch(/\(!templatesUnavailable \? visibleTemplates : \[\]\)\.map/)
     expect(src).toMatch(/\{!templatesUnavailable && visibleTemplates\.length === 0 && templates\.length > 0 && \(/)

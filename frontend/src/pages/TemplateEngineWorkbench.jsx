@@ -185,7 +185,7 @@ function TemplateEngineWorkbenchBody() {
       <div className="flex justify-end mb-4">
         <ShellScanActions
           onRefresh={loadTemplates}
-          onExport={handleExportCsv}
+          onExport={templatesUnavailable ? undefined : handleExportCsv}
           refreshLoading={loadingYaml}
           exportDisabled={templatesUnavailable || !filteredFindings.length}
         />
