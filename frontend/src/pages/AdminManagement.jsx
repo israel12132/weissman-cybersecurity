@@ -47,7 +47,7 @@ export default function AdminManagement() {
   const [editIsSuperadmin, setEditIsSuperadmin] = useState(false)
   const [editAssignedClientId, setEditAssignedClientId] = useState('')
   const editModalRef = useRef(null)
-  useFocusTrap(editModalRef, !!editingUser)
+  useFocusTrap(editModalRef, !!editingUser && !usersUnavailable)
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
@@ -538,7 +538,7 @@ export default function AdminManagement() {
         </section>
 
         {/* Edit User Modal */}
-        {editingUser && (
+        {editingUser && !usersUnavailable && (
           // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- backdrop Escape-key handler; button semantics inappropriate for a modal overlay
           <div
             className="fixed inset-0 bg-[var(--scrim)] backdrop-blur-sm flex items-center justify-center z-50 p-4"

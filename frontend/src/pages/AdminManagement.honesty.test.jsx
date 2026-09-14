@@ -20,4 +20,11 @@ describe('AdminManagement live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(usersUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{usersUnavailable \|\| !filteredFindings\.length\}/)
   })
+
+  it('mutes leftover leftover-edit user modal after a failed users GET', () => {
+    expect(src).toMatch(/\{editingUser && !usersUnavailable && \(/)
+    expect(src).toMatch(/useFocusTrap\(editModalRef, !!editingUser && !usersUnavailable\)/)
+    expect(src).toMatch(/setUsersUnavailable\(true\)\n      setError\(err\.message \|\| t\('pages\.adminManagement\.load_failed'\)\)/)
+    expect(src).not.toMatch(/setUsersUnavailable\(true\)\n      setEditingUser/)
+  })
 })
