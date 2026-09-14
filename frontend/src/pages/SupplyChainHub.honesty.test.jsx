@@ -29,4 +29,15 @@ describe('SupplyChainHub live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
   })
 
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/apiFetch\(`\/api\/engines\/history\/\$\{id\}\?limit=1`\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
+    expect(src).toMatch(/data-testid="supply-chain-hub-history-unavailable"/)
+    expect(src).toMatch(/showToast\('error', d\.detail \|\| t\('pages\.supplyChainHub\.scan_failed'\)\)/)
+    expect(src).toMatch(/showToast\('error', e\?\.message \?\? t\('common\.error'\)\)/)
+    expect(src).toMatch(/setHistoryUnavailable\(anyUnavailable\)/)
+    expect(src).not.toMatch(/setHistoryUnavailable\(true\)/)
+  })
+
 })

@@ -267,7 +267,7 @@ export default function SupplyChainHub() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={handleExportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={refreshLoading}
           exportDisabled={historyUnavailable || !filteredFindings.length}
         />
