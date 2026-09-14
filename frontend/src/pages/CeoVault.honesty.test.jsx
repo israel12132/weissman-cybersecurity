@@ -23,4 +23,10 @@ describe('CeoVault live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(loadError\) return/)
     expect(src).toMatch(/exportDisabled=\{loadError \|\| !filteredFindings\.length\}/)
   })
+
+  it('mutes leftover leftover-edit secret modal after a failed vault GET', () => {
+    expect(src).toMatch(/\{\(createModal \|\| \(editModal && !loadError\)\) && \(/)
+    expect(src).toMatch(/setLoadError\(true\);\n      toast\.error\(t\('pages\.ceoVault\.load_failed'\)\)/)
+    expect(src).not.toMatch(/setLoadError\(true\);\n      setEditModal/)
+  })
 })

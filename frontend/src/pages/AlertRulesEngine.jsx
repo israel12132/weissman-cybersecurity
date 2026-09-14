@@ -438,7 +438,7 @@ export default function AlertRulesEngine() {
       </div>
 
       {/* Create/Edit Modal */}
-      {(createModal || editModal) && (
+      {(createModal || (editModal && !unavailable)) && (
         <RuleModal
           rule={editModal}
           template={createModal?.template ? createModal : null}

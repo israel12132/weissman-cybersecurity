@@ -21,4 +21,10 @@ describe('AlertRulesEngine live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(unavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{unavailable \|\| !filteredFindings\.length\}/)
   })
+
+  it('mutes leftover leftover-edit rule modal after a failed rules GET', () => {
+    expect(src).toMatch(/\{\(createModal \|\| \(editModal && !unavailable\)\) && \(/)
+    expect(src).toMatch(/setUnavailable\(true\);\n      toast\.error\(t\('pages\.alertRulesEngine\.load_failed'\)\)/)
+    expect(src).not.toMatch(/setUnavailable\(true\);\n      setEditModal/)
+  })
 })

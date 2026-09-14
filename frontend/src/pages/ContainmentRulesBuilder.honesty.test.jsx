@@ -21,4 +21,10 @@ describe('ContainmentRulesBuilder live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(unavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{unavailable \|\| !filteredFindings\.length\}/)
   })
+
+  it('mutes leftover leftover-edit containment modal after a failed rules GET', () => {
+    expect(src).toMatch(/\{\(createModal \|\| \(editModal && !unavailable\)\) && \(/)
+    expect(src).toMatch(/setUnavailable\(true\);\n    \} finally \{/)
+    expect(src).not.toMatch(/setUnavailable\(true\);\n      setEditModal/)
+  })
 })

@@ -347,7 +347,7 @@ export default function ContainmentRulesBuilder() {
         )}
       </div>
 
-      {(createModal || editModal) && (
+      {(createModal || (editModal && !unavailable)) && (
         <RuleModal
           rule={editModal}
           clientId={clientId}

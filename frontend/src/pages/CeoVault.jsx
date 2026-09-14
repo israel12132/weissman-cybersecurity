@@ -369,7 +369,7 @@ export default function CeoVault() {
       </div>
 
       {/* Create/Edit Modals */}
-      {(createModal || editModal) && (
+      {(createModal || (editModal && !loadError)) && (
         <SecretModal
           secret={editModal}
           onClose={() => {
