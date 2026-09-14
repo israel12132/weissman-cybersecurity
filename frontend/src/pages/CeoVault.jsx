@@ -156,7 +156,7 @@ export default function CeoVault() {
       actions={(
         <ShellScanActions
           onRefresh={fetchSecrets}
-          onExport={handleExportCsv}
+          onExport={loadError ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={loadError || !filteredFindings.length}
         />
