@@ -298,7 +298,11 @@ function SupremeNerveCenterInner() {
           <div>
             <h1 className="text-xl font-semibold text-white">{sectionLabel(section)}</h1>
           </div>
-          <ShellScanActions onRefresh={load} onExport={handleExport} exportDisabled={!!error || !snap} />
+          <ShellScanActions
+            onRefresh={load}
+            onExport={error ? undefined : handleExport}
+            exportDisabled={!!error || !snap}
+          />
         </header>
 
         {error ? (
