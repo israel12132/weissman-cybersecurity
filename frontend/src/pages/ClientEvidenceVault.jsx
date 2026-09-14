@@ -49,6 +49,7 @@ export default function ClientEvidenceVault() {
   const [evidence, setEvidence] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [evidenceUnavailable, setEvidenceUnavailable] = useState(false)
   const [uploading, setUploading] = useState(false)
 
   const [label, setLabel] = useState('')
@@ -80,6 +81,7 @@ export default function ClientEvidenceVault() {
 
       if (clientR.error) {
         setError(t('pages.clientEvidenceVault.load_client_failed', { status: clientR.error.status }))
+        setEvidenceUnavailable(true)
         setLoading(false)
         return
       }
@@ -88,6 +90,7 @@ export default function ClientEvidenceVault() {
       if (evidenceR.error) {
         const detail = evidenceR.error.response ? await evidenceR.error.response.text().catch(() => '') : ''
         setError(t('pages.clientEvidenceVault.load_failed', { status: evidenceR.error.status, detail }))
+        setEvidenceUnavailable(true)
         setEvidence([])
         setLoading(false)
         return
@@ -95,13 +98,16 @@ export default function ClientEvidenceVault() {
       const data = evidenceR.data
       if (data?.ok === false || data?.unavailable) {
         setError(data.detail || t('pages.clientEvidenceVault.unavailable'))
+        setEvidenceUnavailable(true)
         setEvidence([])
         setLoading(false)
         return
       }
+      setEvidenceUnavailable(false)
       setEvidence(Array.isArray(data.evidence) ? data.evidence : [])
     } catch (e) {
       setError(e?.message || t('pages.clientEvidenceVault.network_error'))
+      setEvidenceUnavailable(true)
     } finally {
       setLoading(false)
     }
@@ -335,7 +341,7 @@ export default function ClientEvidenceVault() {
       actions={(
         <ShellScanActions
           onRefresh={loadAll}
-          onExport={handleExportCsv}
+          onExport={evidenceUnavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={!!error || !filteredFindings.length}
         />

@@ -24,7 +24,18 @@ describe('ClientEvidenceVault live-only truth', () => {
   it('mutes leftover client name in the title after a failed client GET', () => {
     expect(src).toMatch(/title=\{!error && client\?\.name\n        \? t\('pages\.clientEvidenceVault\.title_with_client', \{ name: client\.name \}\)\n        : t\('pages\.clientEvidenceVault\.title'\)\}/)
     expect(src).toMatch(/setError\(e\?\.message \|\| t\('pages\.clientEvidenceVault\.network_error'\)\)/)
-    expect(src).toMatch(/if \(clientR\.error\) \{\n        setError\(t\('pages\.clientEvidenceVault\.load_client_failed', \{ status: clientR\.error\.status \}\)\)\n        setLoading\(false\)\n        return/)
+    expect(src).toMatch(/if \(clientR\.error\) \{\n        setError\(t\('pages\.clientEvidenceVault\.load_client_failed', \{ status: clientR\.error\.status \}\)\)\n        setEvidenceUnavailable\(true\)\n        setLoading\(false\)\n        return/)
     expect(src).not.toMatch(/catch \(e\) \{\s*setClient\(null\)/)
+  })
+
+  it('mutes leftover leftover-GET Export CSV after a failed evidence GET', () => {
+    expect(src).toMatch(/apiFetch\(`\/api\/clients\/\$\{clientId\}\/evidence`\)/)
+    expect(src).toMatch(/onExport=\{evidenceUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{loadAll\}/)
+    expect(src).toMatch(/data-testid="evidence-unavailable"/)
+    expect(src).toMatch(/setError\(e\?\.message \|\| t\('pages\.clientEvidenceVault\.upload_failed'\)\)/)
+    expect(src).toMatch(/setEvidenceUnavailable\(true\)/)
+    expect(src).not.toMatch(/onExport=\{handleExportCsv\}/)
+    expect(src).not.toMatch(/uploadEvidence[\s\S]{0,800}setEvidenceUnavailable/)
   })
 })
