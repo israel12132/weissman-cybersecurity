@@ -2425,6 +2425,7 @@
       "complete_missing": "יש דרישות חסרות — חזור/י לשלבים הקודמים",
       "ready_title": "הלקוח מוכן — כל דרישות המודולים מולאו",
       "gaps_title": "חסרות דרישות — {{pct}}% מוכנות",
+      "readiness_unavailable": "GET מוכנות אינו זמין — אחוז מממצא אחר אינו המוכנות של הלקוח הזה.",
       "fix_in_settings": "עדכן/י שדות חסרים בהגדרות הלקוח",
       "aws_external_id": "External ID של AWS",
       "configure_tenant": "הגדר tenant"

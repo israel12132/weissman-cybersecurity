@@ -2425,6 +2425,7 @@
       "complete_missing": "Missing requirements — go back to previous steps",
       "ready_title": "Client ready — all module requirements satisfied",
       "gaps_title": "Missing requirements — {{pct}}% ready",
+      "readiness_unavailable": "Readiness GET unavailable — leftover leftover-percent is not this client.",
       "fix_in_settings": "Update missing fields in client settings",
       "aws_external_id": "AWS External ID",
       "configure_tenant": "Configure tenant"

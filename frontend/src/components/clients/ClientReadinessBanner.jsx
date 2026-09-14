@@ -8,6 +8,7 @@ export default function ClientReadinessBanner({ clientId }) {
   const { t } = useTranslation()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [readinessUnavailable, setReadinessUnavailable] = useState(false)
 
   useEffect(() => {
     if (!clientId) return
@@ -16,14 +17,32 @@ export default function ClientReadinessBanner({ clientId }) {
       setLoading(true)
       try {
         const d = await apiFetch(`/api/clients/${clientId}/readiness`)
-        if (!cancelled) setData(d)
-      } catch { /* ignore */ }
+        if (!cancelled) {
+          setData(d)
+          setReadinessUnavailable(false)
+        }
+      } catch {
+        if (!cancelled) setReadinessUnavailable(true)
+      }
       if (!cancelled) setLoading(false)
     })()
     return () => { cancelled = true }
   }, [clientId])
 
-  if (loading || !data?.readiness) return null
+  if (loading) return null
+
+  if (readinessUnavailable) {
+    return (
+      <div
+        data-testid="client-readiness-unavailable"
+        className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300"
+      >
+        {t('pages.clientOnboarding.readiness_unavailable')}
+      </div>
+    )
+  }
+
+  if (!data?.readiness) return null
 
   const { readiness } = data
   const ready = readiness.ready
