@@ -27,6 +27,7 @@ export default function ShellScanActions({
         <RefreshCw className={`w-3.5 h-3.5 ${refreshLoading ? 'animate-spin' : ''}`} />
         {t('weissmanFindings.refresh')}
       </Button>
+      {typeof onExport === 'function' && (
       <Button variant="unstyled"
         type="button"
         onClick={onExport}
@@ -36,6 +37,7 @@ export default function ShellScanActions({
         <Download className="w-3.5 h-3.5" />
         {exportLabel || t('weissmanFindings.export_csv')}
       </Button>
+      )}
     </div>
   )
 }

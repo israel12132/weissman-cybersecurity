@@ -351,7 +351,7 @@ export default function OsintEngineProfile() {
       actions={(
         <ShellScanActions
           onRefresh={loadHistory}
-          onExport={handleExportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           exportDisabled={historyUnavailable || !filteredFindings.length}
         />
