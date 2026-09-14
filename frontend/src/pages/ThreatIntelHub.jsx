@@ -729,7 +729,7 @@ export default function ThreatIntelHub() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <StatTile
           label={t('pages.threatIntelHub.stat_live_cves')}
-          value={feedItems.length}
+          value={feed.unavailable ? '—' : feedItems.length}
           hint={t('pages.threatIntelHub.stat_live_cves_hint')}
           color="#22d3ee"
           icon={RadioTower}
@@ -737,7 +737,7 @@ export default function ThreatIntelHub() {
         />
         <StatTile
           label={t('pages.threatIntelHub.stat_crit_high_cves')}
-          value={feedSevereCount}
+          value={feed.unavailable ? '—' : feedSevereCount}
           hint={t('pages.threatIntelHub.stat_crit_high_hint')}
           color="#f43f5e"
           icon={ShieldAlert}

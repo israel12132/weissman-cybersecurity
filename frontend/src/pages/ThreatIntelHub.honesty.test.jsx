@@ -27,4 +27,13 @@ describe('ThreatIntelHub live-only truth', () => {
     expect(src).not.toMatch(/onExport=\{kpis\.error/)
     expect(src).not.toMatch(/method:\s*'POST'/)
   })
+
+  it('mutes leftover leftover-GET Live CVE KPI tiles after a failed threat-intel feed GET', () => {
+    expect(src).toMatch(/value=\{feed\.unavailable \? '—' : feedItems\.length\}/)
+    expect(src).toMatch(/value=\{feed\.unavailable \? '—' : feedSevereCount\}/)
+    expect(src).not.toMatch(/value=\{feedItems\.length\}/)
+    expect(src).not.toMatch(/value=\{feedSevereCount\}/)
+    expect(src).toMatch(/value=\{openFindings \?\? '—'\}/)
+    expect(src).not.toMatch(/value=\{kpis\.unavailable/)
+  })
 })
