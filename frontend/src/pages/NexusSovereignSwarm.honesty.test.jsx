@@ -36,4 +36,14 @@ describe('NexusSovereignSwarm live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/useWeissmanEnginePage\(ENGINE_ID, realFindings\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
+    expect(src).toMatch(/data-testid="nexus-sovereign-swarm-history-unavailable"/)
+    expect(src).toMatch(/appendLine\(`\[ERROR\] \$\{data\.detail \|\| 'Scan failed'\}`\)/)
+    expect(src).toMatch(/appendLine\(`\[ERROR\] \$\{e\.message\}`\)/)
+    expect(src).not.toMatch(/setHistoryUnavailable/)
+  })
 })
