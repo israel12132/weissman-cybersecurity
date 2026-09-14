@@ -38,4 +38,13 @@ describe('OastDashboard live-only truth', () => {
     expect(src).not.toMatch(/!toast && tok\.oob_confirmed/)
     expect(src).not.toMatch(/toast && tok\.oob_confirmed/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed callbacks GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/oast\/callbacks', \{ signal: ac\.signal \}\)/)
+    expect(src).toMatch(/onExport=\{oastHealth\?\.unavailable \? undefined : exportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{\(\) => reloadCallbacks\(\)\}/)
+    expect(src).toMatch(/data-testid="oast-callbacks-unavailable"/)
+    expect(src).toMatch(/showToast\('error', d\.detail \|\| t\('pages\.oastDashboard\.probe_failed'\)\)/)
+    expect(src).not.toMatch(/onExport=\{exportCsv\}/)
+  })
 })

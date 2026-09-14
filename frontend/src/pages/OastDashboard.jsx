@@ -274,7 +274,7 @@ export default function OastDashboard() {
       actions={(
         <ShellScanActions
           onRefresh={() => reloadCallbacks()}
-          onExport={exportCsv}
+          onExport={oastHealth?.unavailable ? undefined : exportCsv}
           refreshLoading={refreshLoading}
           exportDisabled={!filteredFindings.length}
         />
