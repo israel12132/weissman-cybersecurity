@@ -90,7 +90,7 @@ export default function ReportView() {
     <StandaloneLabShell
       title={t('components.reportView.title', { name: clientName })}
       maxWidth="max-w-4xl"
-      actions={(
+      actions={!error ? (
         <a
           href={apiUrl(`/api/clients/${clientId}/report/pdf`)}
           download
@@ -98,7 +98,7 @@ export default function ReportView() {
         >
           {t('components.reportView.download_pdf')}
         </a>
-      )}
+      ) : null}
     >
       {error && (
         <div
@@ -162,14 +162,13 @@ export default function ReportView() {
         </section>
       )}
 
+      {!error && (
       <section className="rounded-xl border border-cyan-500/40 bg-[var(--bg-1)]/60 p-6 backdrop-blur">
         <h2 className="text-lg font-semibold text-cyan-400 mb-2">{t('components.reportView.crypto_proof')}</h2>
         <p className="text-[var(--text-tertiary)] text-sm mb-4">
           {t('components.reportView.crypto_sealed_body')}
         </p>
-        {error ? (
-          <p className="text-[var(--text-muted)] text-sm">{t('components.reportView.unavailable')}</p>
-        ) : cryptoProof?.audit_root_hash ? (
+        {cryptoProof?.audit_root_hash ? (
           <div className="flex flex-wrap items-start gap-6">
             {cryptoProof.qr_data_url && (
               <img
@@ -203,6 +202,7 @@ export default function ReportView() {
           </p>
         )}
       </section>
+      )}
     </StandaloneLabShell>
   )
 }

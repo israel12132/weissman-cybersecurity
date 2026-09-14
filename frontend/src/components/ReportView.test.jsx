@@ -12,7 +12,12 @@ vi.mock('react-router', () => ({
 
 vi.mock('./ui/StandaloneLabShell', () => ({
   __esModule: true,
-  default: ({ children }) => <div>{children}</div>,
+  default: ({ children, actions }) => (
+    <div>
+      {actions}
+      {children}
+    </div>
+  ),
 }))
 
 vi.mock('../lib/apiBase', () => ({
@@ -36,6 +41,9 @@ describe('ReportView', () => {
     expect(await screen.findByTestId('report-unavailable')).toBeTruthy()
     expect(screen.queryByText('components.reportView.total_findings')).toBeNull()
     expect(screen.queryByText('components.reportView.no_sealed_run')).toBeNull()
+    expect(screen.queryByText('components.reportView.download_pdf')).toBeNull()
+    expect(screen.queryByText('components.reportView.crypto_proof')).toBeNull()
+    expect(screen.queryByText('components.reportView.crypto_sealed_body')).toBeNull()
   })
 
   it('renders live findings from the {ok, findings} envelope, not a raw array', async () => {
