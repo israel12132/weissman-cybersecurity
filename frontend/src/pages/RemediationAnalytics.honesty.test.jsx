@@ -30,4 +30,13 @@ describe('RemediationAnalytics live-only truth', () => {
     expect(src).toMatch(/\{\/\* Recent heals feed — leftover rows stay in React state; mute paint on failed findings GET \*\/\}\n        \{\!error && \(/)
     expect(src).not.toMatch(/setFindings\(\[\]\)/)
   })
+
+  it('mutes leftover leftover-GET Export CSV and PDF after a failed findings GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/findings\?limit=2000'\)/)
+    expect(src).toMatch(/onExport=\{error \? undefined : exportCsv\}/)
+    expect(src).toMatch(/\{!error && \(\s*<Button\s*variant="unstyled"\s*type="button"\s*onClick=\{exportPdf\}/)
+    expect(src).toMatch(/setError\(e\.message \|\| 'Failed to load findings'\)/)
+    expect(src).not.toMatch(/setFindings\(\[\]\)/)
+    expect(src).toMatch(/<div hidden=\{\!\!error\}>\n          <HealTrendSparkline/)
+  })
 })

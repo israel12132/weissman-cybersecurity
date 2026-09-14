@@ -179,10 +179,11 @@ export default function RemediationAnalytics() {
         <div className="flex items-center gap-2 flex-wrap">
           <ShellScanActions
             onRefresh={handleRefresh}
-            onExport={exportCsv}
+            onExport={error ? undefined : exportCsv}
             refreshLoading={loading}
             exportDisabled={!!error || !filteredHeals.length}
           />
+          {!error && (
           <Button
             variant="unstyled"
             type="button"
@@ -194,6 +195,7 @@ export default function RemediationAnalytics() {
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf')}
           </Button>
+          )}
         </div>
       }
     >
