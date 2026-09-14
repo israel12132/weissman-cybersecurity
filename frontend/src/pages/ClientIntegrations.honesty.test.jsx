@@ -30,4 +30,11 @@ describe('ClientIntegrations live-only truth', () => {
     expect(src).toMatch(/method: 'PATCH'/)
     expect(src).not.toMatch(/Save failed[\s\S]{0,80}setIntegrationsGetFailed/)
   })
+
+  it('mutes leftover leftover-GET readiness percent after a failed integrations GET', () => {
+    expect(src).toMatch(/\{integrationsGetFailed \? '—' : `\$\{readiness\.percent\}%`\}/)
+    expect(src).toMatch(/width: integrationsGetFailed \? '0%' : `\$\{readiness\.percent\}%`/)
+    expect(src).toMatch(/setIntegrationsGetFailed\(true\)/)
+    expect(src).not.toMatch(/Save failed[\s\S]{0,80}setIntegrationsGetFailed/)
+  })
 })
