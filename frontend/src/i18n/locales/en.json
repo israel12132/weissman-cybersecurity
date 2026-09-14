@@ -4577,6 +4577,7 @@
       "mint_failed": "Mint failed: {{message}}",
       "mint_success": "Token minted — callback: {{domain}}",
       "poll_failed": "Poll failed: {{message}}",
+      "verify_unavailable": "Verify GET unavailable — leftover leftover-callback hits are not confirmed.",
       "health_listener": "Listener",
       "health_configured": "configured",
       "health_missing": "WEISSMAN_OAST_LISTENER_URL / domain not set — fail-visible, no fake hits",

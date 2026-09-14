@@ -4577,6 +4577,7 @@
       "mint_failed": "ההנפקה נכשלה: {{message}}",
       "mint_success": "טוקן הונפק — callback: {{domain}}",
       "poll_failed": "הבדיקה נכשלה: {{message}}",
+      "verify_unavailable": "GET אימות אינו זמין — פגיעות callback קודמות אינן מאושרות.",
       "health_listener": "מאזין",
       "health_configured": "מוגדר",
       "health_missing": "WEISSMAN_OAST_LISTENER_URL / דומיין לא מוגדר — כשל גלוי, בלי פגיעות מזויפות",

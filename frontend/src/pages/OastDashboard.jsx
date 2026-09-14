@@ -256,8 +256,9 @@ export default function OastDashboard() {
   const handlePollToken = useCallback(async (token) => {
     try {
       const data = await apiFetch(`/api/oast/verify/${token}`)
-      setMintedTokens((prev) => prev.map((tok) => (tok.token === token ? { ...tok, ...data } : tok)))
+      setMintedTokens((prev) => prev.map((tok) => (tok.token === token ? { ...tok, ...data, pollUnavailable: false } : tok)))
     } catch (e) {
+      setMintedTokens((prev) => prev.map((tok) => (tok.token === token ? { ...tok, pollUnavailable: true } : tok)))
       showToast('error', t('pages.oastDashboard.poll_failed', { message: e.message }))
     }
   }, [showToast, t])
@@ -408,6 +409,11 @@ export default function OastDashboard() {
                     {tok.label && <p className="text-[10px] text-[var(--text-disabled)] italic">{tok.label}</p>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    {tok.pollUnavailable ? (
+                      <span data-testid="oast-verify-unavailable" className="text-[10px] font-mono px-2 py-0.5 rounded border border-rose-500/30 text-rose-300 bg-rose-900/10">
+                        {t('pages.oastDashboard.verify_unavailable')}
+                      </span>
+                    ) : (
                     <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
                       tok.oob_confirmed
                         ? 'border-green-500/30 text-green-400 bg-green-900/10'
@@ -417,6 +423,7 @@ export default function OastDashboard() {
                         ? t('pages.oastDashboard.hit_confirmed')
                         : t('pages.oastDashboard.hits_count', { count: tok.hit_count ?? 0 })}
                     </span>
+                    )}
                     <Button variant="unstyled"
                       type="button"
                       onClick={() => handlePollToken(tok.token)}
@@ -430,7 +437,7 @@ export default function OastDashboard() {
                   {t('pages.oastDashboard.callback_label')}{' '}
                   <code className="text-cyan-400/50">{tok.callback_domain ?? '—'}</code>
                 </p>
-                {tok.first_hit_at && (
+                {!tok.pollUnavailable && tok.first_hit_at && (
                   <p className="text-[10px] text-green-400/70">
                     {t('pages.oastDashboard.first_hit', { time: new Date(tok.first_hit_at).toLocaleString() })}
                   </p>
