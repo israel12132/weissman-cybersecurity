@@ -4000,7 +4000,8 @@
       "step_no_match": "No match",
       "duration_ms": "{{ms}} ms",
       "templates_unavailable": "Template catalog unavailable",
-      "templates_unavailable_body": "GET /api/template-engine/templates could not be confirmed. An empty picker is not a missing template — YAML can still be edited by hand."
+      "templates_unavailable_body": "GET /api/template-engine/templates could not be confirmed. An empty picker is not a missing template — YAML can still be edited by hand.",
+      "yaml_unavailable_body": "GET /api/template-engine/templates/:id could not be confirmed. YAML from another template is not this template."
     },
     "ceoVault": {
       "title": "CEO Vault",
@@ -4262,6 +4263,7 @@
       "templates_unavailable": "Template catalog unavailable",
       "templates_unavailable_body": "GET /api/template-engine/templates could not be confirmed. An empty picker is not a missing chain — YAML can still be edited by hand.",
       "load_failed": "Failed to load template",
+      "yaml_unavailable_body": "GET /api/template-engine/templates/:id could not be confirmed. YAML from another template is not this template.",
       "result": "Result",
       "result_empty_title": "No run yet",
       "result_empty": "Run the chain to see verification and step evidence.",

@@ -25,14 +25,15 @@ export default function FeedbackLoopVerification() {
   const [selectedId, setSelectedId] = useState('')
   const [targetUrl, setTargetUrl] = useState('')
   const [yaml, setYaml] = useState('')
+  const [yamlUnavailable, setYamlUnavailable] = useState(false)
   const [loadingYaml, setLoadingYaml] = useState(false)
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
 
   const canRun = useMemo(
-    () => !!targetUrl.trim() && !!yaml.trim(),
-    [targetUrl, yaml],
+    () => !!targetUrl.trim() && !!yaml.trim() && !yamlUnavailable,
+    [targetUrl, yaml, yamlUnavailable],
   )
 
   useEffect(() => {
@@ -75,9 +76,13 @@ export default function FeedbackLoopVerification() {
     setError('')
     apiFetch(`/api/template-engine/templates/${encodeURIComponent(selectedId)}`)
       .then((d) => {
+        setYamlUnavailable(false)
         setYaml(String(d?.yaml || ''))
       })
-      .catch((e) => setError(e?.message || t('pages.feedbackLoopVerification.load_failed')))
+      .catch((e) => {
+        setYamlUnavailable(true)
+        setError(e?.message || t('pages.feedbackLoopVerification.load_failed'))
+      })
       .finally(() => setLoadingYaml(false))
   }, [selectedId, templatesUnavailable, t])
 
@@ -238,11 +243,19 @@ export default function FeedbackLoopVerification() {
                 </span>
               )}
             </div>
-            {loadingYaml && !yaml ? (
+            {loadingYaml ? (
               <div className="space-y-2">
                 <SkeletonBar className="h-3 w-full" />
                 <SkeletonBar className="h-3 w-5/6" />
                 <SkeletonBar className="h-3 w-4/6" />
+              </div>
+            ) : yamlUnavailable ? (
+              <div data-testid="feedback-loop-yaml-unavailable">
+                <EmptyState
+                  icon="alert"
+                  title={t('pages.feedbackLoopVerification.load_failed')}
+                  body={t('pages.feedbackLoopVerification.yaml_unavailable_body')}
+                />
               </div>
             ) : (
               <textarea

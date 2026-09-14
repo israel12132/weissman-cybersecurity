@@ -4000,7 +4000,8 @@
       "step_no_match": "ללא התאמה",
       "duration_ms": "{{ms}} מ״ש",
       "templates_unavailable": "קטלוג התבניות אינו זמין",
-      "templates_unavailable_body": "לא ניתן לאשר את GET /api/template-engine/templates. בורר ריק אינו תבנית חסרה — עדיין אפשר לערוך YAML ידנית."
+      "templates_unavailable_body": "לא ניתן לאשר את GET /api/template-engine/templates. בורר ריק אינו תבנית חסרה — עדיין אפשר לערוך YAML ידנית.",
+      "yaml_unavailable_body": "לא ניתן לאשר את GET /api/template-engine/templates/:id. YAML מתבנית אחרת אינו התבנית הזו."
     },
     "ceoVault": {
       "title": "כספת CEO",
@@ -4262,6 +4263,7 @@
       "templates_unavailable": "קטלוג התבניות אינו זמין",
       "templates_unavailable_body": "לא ניתן לאשר את GET /api/template-engine/templates. בורר ריק אינו שרשרת חסרה — עדיין אפשר לערוך YAML ידנית.",
       "load_failed": "טעינת התבנית נכשלה",
+      "yaml_unavailable_body": "לא ניתן לאשר את GET /api/template-engine/templates/:id. YAML מתבנית אחרת אינו התבנית הזו.",
       "result": "תוצאה",
       "result_empty_title": "עדיין לא הורצה שרשרת",
       "result_empty": "הרץ את השרשרת כדי לראות אימות וראיות שלבים.",

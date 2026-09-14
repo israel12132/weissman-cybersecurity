@@ -51,12 +51,16 @@ function TemplateEngineWorkbenchBody() {
   const [selectedId, setSelectedId] = useState('')
   const [targetUrl, setTargetUrl] = useState('')
   const [yaml, setYaml] = useState('')
+  const [yamlUnavailable, setYamlUnavailable] = useState(false)
   const [runResult, setRunResult] = useState(null)
   const [loadingYaml, setLoadingYaml] = useState(false)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState('')
 
-  const canRun = useMemo(() => !!String(targetUrl || '').trim() && !!String(yaml || '').trim(), [targetUrl, yaml])
+  const canRun = useMemo(
+    () => !!String(targetUrl || '').trim() && !!String(yaml || '').trim() && !yamlUnavailable,
+    [targetUrl, yaml, yamlUnavailable],
+  )
 
   const stepCount = Array.isArray(runResult?.steps) ? runResult.steps.length : 0
   const matchedSteps = Array.isArray(runResult?.steps)
@@ -77,9 +81,13 @@ function TemplateEngineWorkbenchBody() {
     setError('')
     apiFetch(`/api/template-engine/templates/${encodeURIComponent(selectedId)}`)
       .then((d) => {
+        setYamlUnavailable(false)
         setYaml(String(d?.yaml || ''))
       })
-      .catch((e) => setError(e?.message || t(`${NS}.load_failed`)))
+      .catch((e) => {
+        setYamlUnavailable(true)
+        setError(e?.message || t(`${NS}.load_failed`))
+      })
       .finally(() => setLoadingYaml(false))
   }, [selectedId, t])
 
@@ -256,11 +264,19 @@ function TemplateEngineWorkbenchBody() {
                 {loadingYaml ? t(`${NS}.loading`) : t(`${NS}.editable`)}
               </span>
             </div>
-            {loadingYaml && !yaml ? (
+            {loadingYaml ? (
               <div className="space-y-2">
                 <SkeletonBar className="h-3 w-full" />
                 <SkeletonBar className="h-3 w-5/6" />
                 <SkeletonBar className="h-3 w-4/6" />
+              </div>
+            ) : yamlUnavailable ? (
+              <div data-testid="template-engine-yaml-unavailable">
+                <EmptyState
+                  icon="alert"
+                  title={t(`${NS}.load_failed`)}
+                  body={t(`${NS}.yaml_unavailable_body`)}
+                />
               </div>
             ) : (
               <textarea
