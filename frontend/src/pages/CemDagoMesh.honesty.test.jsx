@@ -20,4 +20,17 @@ describe('CemDagoMesh live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !evidenceRows\.length\}/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed mesh GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/cem-dago\/status'\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !evidenceRows\.length\}/)
+    expect(src).toMatch(/onRefresh=\{load\}/)
+    expect(src).toMatch(/\} catch \(e\) \{\n      setError\(e\.message \|\| t\(`\$\{NS\}\.load_failed`\)\)\n    \} finally \{/)
+    expect(src).not.toMatch(/\} catch \(e\) \{\n      setError[\s\S]{0,160}setStatus\(/)
+    expect(src).not.toMatch(/\} catch \(e\) \{\n      setError[\s\S]{0,160}setManifests\(/)
+    expect(src).not.toMatch(/\} catch \(e\) \{\n      setError[\s\S]{0,160}setWaves\(/)
+    expect(src).not.toMatch(/\} catch \(e\) \{\n      setError[\s\S]{0,160}setBlackboard\(/)
+  })
 })
