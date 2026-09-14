@@ -27,4 +27,13 @@ describe('SoarHitlQueue live-only truth', () => {
     expect(src).not.toMatch(/approval_failed[\s\S]{0,160}setUnavailable/)
     expect(src).not.toMatch(/deny_failed[\s\S]{0,160}setUnavailable/)
   })
+
+  it('mutes leftover leftover-GET pendingCount badge after a failed executions GET', () => {
+    expect(src).toMatch(/badge=\{!unavailable && typeof pendingCount === 'number' && pendingCount > 0 \? t\('pages\.soarHitlQueue\.pending_badge', \{ count: pendingCount \}\) : undefined\}/)
+    expect(src).toMatch(/setUnavailable\(true\)/)
+    expect(src).not.toMatch(/setPendingCount\(null\)/)
+    expect(src).not.toMatch(/setItems\(\[\]\)/)
+    expect(src).not.toMatch(/approval_failed[\s\S]{0,160}setUnavailable/)
+    expect(src).not.toMatch(/deny_failed[\s\S]{0,160}setUnavailable/)
+  })
 })

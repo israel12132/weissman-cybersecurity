@@ -285,7 +285,7 @@ export default function SoarHitlQueue() {
       title={t('pages.soarHitlQueue.title')}
       subtitle={t('pages.soarHitlQueue.subtitle')}
       icon={<ShieldAlert className="w-5 h-5 text-rose-400" strokeWidth={1.75} />}
-      badge={typeof pendingCount === 'number' && pendingCount > 0 ? t('pages.soarHitlQueue.pending_badge', { count: pendingCount }) : undefined}
+      badge={!unavailable && typeof pendingCount === 'number' && pendingCount > 0 ? t('pages.soarHitlQueue.pending_badge', { count: pendingCount }) : undefined}
       badgeColor="#fb7185"
       actions={headerActions}
       maxWidth="max-w-4xl"

@@ -4249,6 +4249,8 @@
       "export_csv": "ייצוא CSV"
     },
     "soarHitlQueue": {
+      "title": "תור HITL SOAR",
+      "pending_badge": "{{count}} ממתינים",
       "unavailable_title": "תור HITL אינו זמין",
       "unavailable_body": "לא ניתן לאשר את GET /api/soar/executions. תור ריק אינו dual-control פנוי."
     },

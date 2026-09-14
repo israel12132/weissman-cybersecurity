@@ -4249,6 +4249,8 @@
       "export_csv": "Export CSV"
     },
     "soarHitlQueue": {
+      "title": "SOAR HITL Queue",
+      "pending_badge": "{{count}} pending",
       "unavailable_title": "HITL queue unavailable",
       "unavailable_body": "GET /api/soar/executions could not be confirmed. An empty queue is not idle dual-control."
     },
