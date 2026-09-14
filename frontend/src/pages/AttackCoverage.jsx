@@ -102,7 +102,7 @@ export default function AttackCoverage() {
       actions={
         <ShellScanActions
           onRefresh={load}
-          onExport={handleExportCsv}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={!!error || !tactics.length}
         />

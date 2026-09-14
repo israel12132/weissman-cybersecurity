@@ -15,4 +15,13 @@ describe('AttackCoverage live-only truth', () => {
     expect(src).toMatch(/badge=\{error \? 'MITRE ATT&CK' : \(data\?\.framework \|\| 'MITRE ATT&CK'\)\}/)
     expect(src).not.toMatch(/setData\(null\)/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed coverage GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/attack-coverage'\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !tactics\.length\}/)
+    expect(src).toMatch(/setError\(e\.message \|\| t\(`\$\{NS\}\.load_failed`\)\)/)
+    expect(src).not.toMatch(/setData\(null\)/)
+  })
 })
