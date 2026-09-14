@@ -180,7 +180,10 @@ export default function SoarHitlQueue() {
       hasLoadedRef.current = true
     } catch (e) {
       showToast(t('pages.soarHitlQueue.load_failed', { message: e.message }), false)
-      if (!hasLoadedRef.current) setUnavailable(true)
+      // Leftover leftover-queue stays in state. Always setUnavailable so
+      // page-header Export CSV unmounts (`onExport={unavailable ? undefined}`).
+      // EmptyState dump stays first-load only (`unavailable && !hasLoadedRef.current`).
+      setUnavailable(true)
     } finally {
       setFetchLoading(false)
     }
@@ -255,6 +258,11 @@ export default function SoarHitlQueue() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (unavailable) return
+    exportQueueCsv(filteredItems)
+  }, [unavailable, filteredItems])
+
   const headerActions = (
     <div className="flex items-center gap-2 flex-wrap">
       <Link
@@ -265,9 +273,9 @@ export default function SoarHitlQueue() {
       </Link>
       <ShellScanActions
         onRefresh={fetchQueue}
-        onExport={() => exportQueueCsv(filteredItems)}
+        onExport={unavailable ? undefined : handleExportCsv}
         refreshLoading={fetchLoading}
-        exportDisabled={!filteredFindings.length}
+        exportDisabled={unavailable || !filteredFindings.length}
       />
     </div>
   )
@@ -338,7 +346,7 @@ export default function SoarHitlQueue() {
           <SkeletonWidgetGrid count={3} className="lg:grid-cols-1" />
         )}
 
-        {unavailable && !fetchLoading && (
+        {unavailable && !fetchLoading && !hasLoadedRef.current && (
           <div data-testid="soar-hitl-unavailable">
             <EmptyState
               icon="alert"
