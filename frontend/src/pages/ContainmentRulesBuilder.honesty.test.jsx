@@ -27,4 +27,14 @@ describe('ContainmentRulesBuilder live-only truth', () => {
     expect(src).toMatch(/setUnavailable\(true\);\n    \} finally \{/)
     expect(src).not.toMatch(/setUnavailable\(true\);\n      setEditModal/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed rules GET', () => {
+    expect(src).toMatch(/api\.get\(withClientId\('\/api\/containment\/rules', cid\)\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(unavailable\) return/)
+    expect(src).toMatch(/onExport=\{unavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{unavailable \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/onRefresh=\{reloadRules\}/)
+    expect(src).toMatch(/console\.error\('Failed to fetch containment rules:', error\);\n      setUnavailable\(true\);/)
+    expect(src).not.toMatch(/Failed to fetch containment rules:[\s\S]{0,80}setRules\(\[\]\)/)
+  })
 })

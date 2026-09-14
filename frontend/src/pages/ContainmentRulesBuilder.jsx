@@ -148,7 +148,7 @@ export default function ContainmentRulesBuilder() {
       actions={(
         <ShellScanActions
           onRefresh={reloadRules}
-          onExport={handleExportCsv}
+          onExport={unavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={unavailable || !filteredFindings.length}
         />
