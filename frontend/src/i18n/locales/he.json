@@ -2060,6 +2060,7 @@
       "generate_brief": "הפק תדריך",
       "brief_loading": "מפיק תדריך דו-לשוני…",
       "brief_error": "לא ניתן להפיק את התדריך: {{error}}",
+      "brief_unavailable": "GET תדריך אינו זמין — תדריך מממצא אחר אינו התדריך של הממצא הזה.",
       "brief_problem": "הבעיה",
       "brief_root_cause": "שורש הבעיה",
       "brief_impact": "השפעה",

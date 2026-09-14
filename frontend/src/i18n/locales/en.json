@@ -2060,6 +2060,7 @@
       "generate_brief": "Generate brief",
       "brief_loading": "Generating bilingual brief…",
       "brief_error": "Could not generate the brief: {{error}}",
+      "brief_unavailable": "Brief GET unavailable — leftover leftover-brief from another finding is not this finding.",
       "brief_problem": "The problem",
       "brief_root_cause": "Root cause",
       "brief_impact": "Impact",
