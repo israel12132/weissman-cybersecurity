@@ -53,4 +53,14 @@ describe('BusinessEngineProfile live-only truth', () => {
     expect(src).toMatch(/setHistoryUnavailable\(true\)/)
     expect(src).not.toMatch(/catch \{\s*setHistoryUnavailable\(true\)\s*setHistory\(/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/apiFetch\(`\/api\/engines\/history\/\$\{encodeURIComponent\(engineId\)\}\?limit=100`\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : exportJson\}/)
+    expect(src).toMatch(/onRefresh=\{reloadProfile\}/)
+    expect(src).toMatch(/data-testid="business-engine-profile-history-unavailable"/)
+    expect(src).toMatch(/setRunState\(\{ running: false, msg: t\('pages\.businessEngineProfile\.queue_failed', \{ status \}\) \}\)/)
+    expect(src).toMatch(/setHistoryUnavailable\(true\)/)
+    expect(src).not.toMatch(/onExport=\{exportJson\}/)
+  })
 })

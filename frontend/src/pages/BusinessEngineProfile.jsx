@@ -344,7 +344,7 @@ export default function BusinessEngineProfile() {
           <div className="ms-auto">
             <ShellScanActions
               onRefresh={reloadProfile}
-              onExport={exportJson}
+              onExport={historyUnavailable ? undefined : exportJson}
               refreshLoading={profileLoading}
               exportDisabled={historyUnavailable}
             />
