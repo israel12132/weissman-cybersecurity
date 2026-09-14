@@ -14,4 +14,12 @@ describe('FindingClusters live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filtered\.length\}/)
     expect(src).not.toMatch(/setRows\(\[\]\)/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed clusters GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/findings\/clusters\?limit=1000'\)/)
+    expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{load\}/)
+    expect(src).toMatch(/data-testid="finding-clusters-unavailable"/)
+    expect(src).not.toMatch(/setRows\(\[\]\)/)
+  })
 })
