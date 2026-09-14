@@ -238,7 +238,7 @@ export default function CloudControlTower() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={handleExportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={activeRunning}
           exportDisabled={historyUnavailable || !filteredFindings.length}
