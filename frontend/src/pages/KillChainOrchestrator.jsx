@@ -485,7 +485,7 @@ export default function KillChainOrchestrator() {
       actions={(
         <ShellScanActions
           onRefresh={loadKillChainData}
-          onExport={handleExportCsv}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={isLoading}
           exportDisabled={!!error || !filteredFindings.length}
         />

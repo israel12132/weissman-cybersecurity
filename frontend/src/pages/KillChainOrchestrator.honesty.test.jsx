@@ -20,4 +20,14 @@ describe('KillChainOrchestrator live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/\{!error && \(\n      <p className="text-xs text-\[var\(--text-muted\)\] font-mono mb-6">/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed kill-chain GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/soc\/kill-chains'\)/)
+    expect(src).toMatch(/apiFetch\('\/api\/findings\?limit=2000'\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/onRefresh=\{loadKillChainData\}/)
+    expect(src).not.toMatch(/setFindings\(\[\]\)/)
+  })
 })
