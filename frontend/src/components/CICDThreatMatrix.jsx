@@ -28,7 +28,7 @@ export default function CICDThreatMatrix() {
   // Dialog a11y for the Attacker's Playbook modal: focus trap + Escape-to-close.
   const modalRef = useRef(null)
   const modalTitleId = useId()
-  useFocusTrap(modalRef, !!modalFinding)
+  useFocusTrap(modalRef, !!modalFinding && !findingsError)
   useEffect(() => {
     if (!modalFinding) return undefined
     const onKey = (e) => { if (e.key === 'Escape') setModalFinding(null) }
@@ -178,7 +178,7 @@ export default function CICDThreatMatrix() {
           <p className="text-[var(--text-muted)] mt-4">{t(`${NS}.no_findings`)}</p>
         )}
 
-        {modalFinding && (
+        {modalFinding && !findingsError && (
           // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- modal backdrop click-to-dismiss; contains interactive children
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
