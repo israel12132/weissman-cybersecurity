@@ -226,7 +226,10 @@ export default function CouncilHitlQueue() {
       hasLoadedRef.current = true
     } catch (e) {
       showToast(t('pages.councilHitlQueue.load_failed', { message: e.message }), false)
-      if (!hasLoadedRef.current) setUnavailable(true)
+      // Leftover leftover-queue stays in state. Always setUnavailable so
+      // page-header Export CSV unmounts (`onExport={unavailable ? undefined}`).
+      // EmptyState dump stays first-load only (`unavailable && !hasLoadedRef.current`).
+      setUnavailable(true)
     } finally {
       setFetchLoading(false)
     }
@@ -294,12 +297,17 @@ export default function CouncilHitlQueue() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (unavailable) return
+    exportQueueCsv(filteredItems)
+  }, [unavailable, filteredItems])
+
   const headerActions = (
     <ShellScanActions
       onRefresh={fetchQueue}
-      onExport={() => exportQueueCsv(filteredItems)}
+      onExport={unavailable ? undefined : handleExportCsv}
       refreshLoading={fetchLoading}
-      exportDisabled={!filteredFindings.length}
+      exportDisabled={unavailable || !filteredFindings.length}
     />
   )
 
@@ -359,7 +367,7 @@ export default function CouncilHitlQueue() {
           <SkeletonWidgetGrid count={3} className="lg:grid-cols-1" />
         )}
 
-        {unavailable && !fetchLoading && (
+        {unavailable && !fetchLoading && !hasLoadedRef.current && (
           <div data-testid="council-hitl-unavailable">
             <EmptyState
               icon="alert"

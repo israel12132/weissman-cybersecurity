@@ -16,4 +16,18 @@ describe('CouncilHitlQueue live-only truth', () => {
     expect(src).toMatch(/!unavailable && !fetchLoading && filteredItems\.length === 0/)
     expect(src).not.toMatch(/data\.items \?\? \[\]/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed queue GET', () => {
+    expect(src).toMatch(/api\.get\(`\/api\/council\/hitl\/queue\$\{qs\}`\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(unavailable\) return\n    exportQueueCsv\(filteredItems\)/)
+    expect(src).toMatch(/onExport=\{unavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{unavailable \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/onRefresh=\{fetchQueue\}/)
+    expect(src).toMatch(/unavailable && !fetchLoading && !hasLoadedRef\.current/)
+    expect(src).toMatch(/setUnavailable\(true\)/)
+    expect(src).not.toMatch(/if \(!hasLoadedRef\.current\) setUnavailable\(true\)/)
+    expect(src).not.toMatch(/setItems\(\[\]\)/)
+    expect(src).not.toMatch(/approval_failed[\s\S]{0,160}setUnavailable/)
+    expect(src).not.toMatch(/rejection_failed[\s\S]{0,160}setUnavailable/)
+  })
 })
