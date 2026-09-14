@@ -846,7 +846,7 @@ export default function AttackSurfaceManagement() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={handleExportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={status === 'running'}
           exportDisabled={historyUnavailable || !assetFilteredFindings.length}

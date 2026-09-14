@@ -28,4 +28,14 @@ describe('AttackSurfaceManagement live-only truth', () => {
   it('does not dump leftover leftover-surface JSON after a failed history GET', () => {
     expect(src).toMatch(/const handleExport = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/useWeissmanEnginePage\(ENGINE, issues\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
+    expect(src).toMatch(/data-testid="attack-surface-history-unavailable"/)
+    expect(src).toMatch(/showToast\('error', d\.detail \|\| d\.error \|\| t\('pages\.attackSurfaceManagement\.toast_scan_failed', \{ status \}\)\)/)
+    expect(src).toMatch(/showToast\('error', e\?\.message \?\? t\('pages\.attackSurfaceManagement\.toast_network_error'\)\)/)
+    expect(src).not.toMatch(/setHistoryUnavailable/)
+  })
 })
