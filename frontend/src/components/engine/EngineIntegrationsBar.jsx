@@ -14,13 +14,15 @@ export default function EngineIntegrationsBar({
   compact = false,
 }) {
   const { t } = useTranslation()
-  const { integrations, integrationsLoading } = useClientIntegrations(clientId)
+  const { integrations, integrationsLoading, integrationsUnavailable } = useClientIntegrations(clientId)
   const readiness = computeEngineIntegrationReadiness(engineId, integrations)
 
   if (!engineId) return null
 
   const pct = readiness.percent
-  const barColor = pct >= 100 ? '#22d3ee' : pct >= 50 ? '#fbbf24' : '#f87171'
+  const barColor = integrationsUnavailable
+    ? 'var(--text-muted)'
+    : pct >= 100 ? '#22d3ee' : pct >= 50 ? '#fbbf24' : '#f87171'
 
   return (
     <div
@@ -35,7 +37,7 @@ export default function EngineIntegrationsBar({
             </div>
             <div className="flex items-baseline gap-2 mt-0.5">
               <span className="text-lg font-semibold tabular-nums" style={{ color: barColor }}>
-                {integrationsLoading ? '…' : `${pct}%`}
+                {integrationsUnavailable ? '—' : integrationsLoading ? '…' : `${pct}%`}
               </span>
               <span className="text-[10px] font-mono text-[var(--text-muted)] truncate max-w-[200px]">
                 {clientId
@@ -48,14 +50,14 @@ export default function EngineIntegrationsBar({
             <div className="hidden sm:block w-28 h-1.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-500"
-                style={{ width: `${pct}%`, backgroundColor: barColor }}
+                style={{ width: integrationsUnavailable ? '0%' : `${pct}%`, backgroundColor: barColor }}
               />
             </div>
           )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {readiness.chips.map((chip) => (
+          {!integrationsUnavailable && readiness.chips.map((chip) => (
             <span
               key={chip.key}
               title={chip.ok ? chip.label : `${chip.label} — not configured`}
@@ -88,7 +90,12 @@ export default function EngineIntegrationsBar({
           )}
         </div>
       </div>
-      {!readiness.ready && clientId && !integrationsLoading && readiness.chips.length > 0 && (
+      {integrationsUnavailable && (
+        <p data-testid="engine-integrations-unavailable" className="mt-2 text-[10px] font-mono text-rose-300/90 leading-snug">
+          {t('components.engineIntegrations.unavailable')}
+        </p>
+      )}
+      {!integrationsUnavailable && !readiness.ready && clientId && !integrationsLoading && readiness.chips.length > 0 && (
         <p className="mt-2 text-[10px] font-mono text-amber-400/80 leading-snug">
           {t('components.engineIntegrations.hint')}
         </p>

@@ -6227,7 +6227,8 @@
       "no_client": "Select a client to prefill credentials",
       "configure": "Configure →",
       "engine_detail": "Engine Detail →",
-      "hint": "Missing integrations are hydrated server-side when configured; complete client setup for full live coverage."
+      "hint": "Missing integrations are hydrated server-side when configured; complete client setup for full live coverage.",
+      "unavailable": "GET /api/clients/:id/integrations could not be confirmed. Unconfirmed 0% is not idle coverage."
     },
     "neuralEngineWeb": {
       "title": "Neural engine web",
