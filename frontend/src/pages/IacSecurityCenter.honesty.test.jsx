@@ -50,6 +50,16 @@ describe('IacSecurityCenter live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !shownFindings\.length\}/)
   })
 
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/engines\/history\/iac_misconfig\?limit=1'\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : exportFindingsCsv\}/)
+    expect(src).toMatch(/onRefresh=\{loadLastScan\}/)
+    expect(src).toMatch(/data-testid="iac-security-history-unavailable"/)
+    expect(src).toMatch(/if \(!ok\) \{ appendLine\(`\[ERROR\] \$\{data\.detail \|\| 'scan failed'\}`\); setRunning\(false\); return \}/)
+    expect(src).toMatch(/setHistoryUnavailable\(true\)/)
+    expect(src).not.toMatch(/onExport=\{exportFindingsCsv\}/)
+  })
+
   it('does not paint leftover leftover-last-scan after a failed history GET', () => {
     expect(src).toMatch(/\{lastScanAt && !historyUnavailable && \(/)
   })

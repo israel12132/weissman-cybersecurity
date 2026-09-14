@@ -1924,7 +1924,7 @@ export default function IacSecurityCenter() {
   const shellActions = (
     <ShellScanActions
       onRefresh={loadLastScan}
-      onExport={exportFindingsCsv}
+      onExport={historyUnavailable ? undefined : exportFindingsCsv}
       refreshLoading={running}
       exportDisabled={historyUnavailable || !shownFindings.length}
     />
