@@ -363,6 +363,11 @@ export default function AIAnalysisEngine() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportPatternsCsv(filtered)
+  }, [error, filtered])
+
   return (
     <PageShell
       title={t('pages.aiAnalysisEngine.title')}
@@ -372,7 +377,7 @@ export default function AIAnalysisEngine() {
       actions={(
         <ShellScanActions
           onRefresh={load}
-          onExport={() => { if (error) return; exportPatternsCsv(filtered) }}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={!!error || !filteredFindings.length}
         />
