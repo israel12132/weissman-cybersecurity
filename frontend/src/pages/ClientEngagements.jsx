@@ -28,6 +28,7 @@ export default function ClientEngagements() {
   const [engagements, setEngagements] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [engagementsUnavailable, setEngagementsUnavailable] = useState(false)
   const [creating, setCreating] = useState(false)
 
   const [name, setName] = useState('')
@@ -59,6 +60,7 @@ export default function ClientEngagements() {
 
       if (clientR.error) {
         setError(t('pages.clientEngagements.load_client_failed', { status: clientR.error.status }))
+        setEngagementsUnavailable(true)
         setLoading(false)
         return
       }
@@ -67,6 +69,7 @@ export default function ClientEngagements() {
       if (listR.error) {
         const detail = listR.error.response ? await listR.error.response.text().catch(() => '') : ''
         setError(t('pages.clientEngagements.load_failed', { status: listR.error.status, detail }))
+        setEngagementsUnavailable(true)
         setEngagements([])
         setLoading(false)
         return
@@ -74,13 +77,16 @@ export default function ClientEngagements() {
       const listData = listR.data
       if (listData?.ok === false || listData?.unavailable) {
         setError(listData.detail || t('pages.clientEngagements.unavailable'))
+        setEngagementsUnavailable(true)
         setEngagements([])
         setLoading(false)
         return
       }
+      setEngagementsUnavailable(false)
       setEngagements(Array.isArray(listData.engagements) ? listData.engagements : [])
     } catch (e) {
       setError(e?.message || t('pages.clientEngagements.network_error'))
+      setEngagementsUnavailable(true)
     } finally {
       setLoading(false)
     }
@@ -199,7 +205,7 @@ export default function ClientEngagements() {
       actions={(
         <ShellScanActions
           onRefresh={loadAll}
-          onExport={handleExportCsv}
+          onExport={engagementsUnavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={!!error || !filteredFindings.length}
         />
