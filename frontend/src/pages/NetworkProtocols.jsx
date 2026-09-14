@@ -95,7 +95,7 @@ export default function NetworkProtocols() {
       actions={(
         <ShellScanActions
           onRefresh={loadProtocols}
-          onExport={exportCsv}
+          onExport={error ? undefined : exportCsv}
           refreshLoading={loading}
           exportDisabled={!filteredProtocols.length}
         />
@@ -139,6 +139,7 @@ export default function NetworkProtocols() {
               className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg pl-10 pr-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
             />
           </div>
+          {!error && (
           <Button variant="unstyled"
             type="button"
             onClick={exportCsv}
@@ -148,6 +149,7 @@ export default function NetworkProtocols() {
             <Download className="h-3.5 w-3.5" />
             {t('pages.networkProtocols.export_csv')}
           </Button>
+          )}
         </div>
 
         {loading ? (
