@@ -81,14 +81,22 @@ export default function WhiteLabelBrand() {
       actions={(
         <ShellScanActions
           onRefresh={load}
-          onExport={exportCsv}
+          onExport={error ? undefined : exportCsv}
           refreshLoading={loading}
           exportDisabled={!!error || !rows.length}
         />
       )}
     >
       <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
-      {error && <p className="text-sm text-rose-300" role="alert">{error}</p>}
+      {error && (
+        <p
+          className="text-sm text-rose-300"
+          role="alert"
+          data-testid="white-label-brand-unavailable"
+        >
+          {error}
+        </p>
+      )}
       {!error && (
         <>
       <input
