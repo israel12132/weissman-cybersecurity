@@ -14,4 +14,13 @@ describe('NgfwGate live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filtered\.length\}/)
     expect(src).not.toMatch(/setFindings\(\[\]\)/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed vNGFW GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/vngfw\/status'\)/)
+    expect(src).toMatch(/apiFetch\('\/api\/findings\?limit=300'\)/)
+    expect(src).toMatch(/onExport=\{error \? undefined : exportCsv\}/)
+    expect(src).toMatch(/setError\(e\.message \|\| t\(`\$\{NS\}\.load_failed`\)\)/)
+    expect(src).not.toMatch(/catch \(e\) \{\s*setError\(e\.message \|\| t\(`\$\{NS\}\.load_failed`\)\)\s*setFindings/)
+    expect(src).not.toMatch(/catch \(e\) \{\s*setError\(e\.message \|\| t\(`\$\{NS\}\.load_failed`\)\)\s*setStatus/)
+  })
 })
