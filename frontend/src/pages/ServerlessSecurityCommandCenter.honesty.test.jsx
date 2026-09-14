@@ -27,4 +27,13 @@ describe('ServerlessSecurityCommandCenter live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
   })
 
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/useWeissmanEnginePage\(ENGINE_ID, realFindings\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
+    expect(src).toMatch(/data-testid="serverless-security-history-unavailable"/)
+    expect(src).toMatch(/if \(!ok\) \{ appendLine\(`\[ERROR\] \$\{data\.detail \|\| 'Scan failed'\}`\); setRunning\(false\); return \}/)
+    expect(src).toMatch(/appendLine\(`\[ERROR\] \$\{e\.message\}`\)\n      setRunning\(false\)/)
+    expect(src).not.toMatch(/setHistoryUnavailable/)
+  })
 })

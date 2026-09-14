@@ -370,7 +370,7 @@ export default function ServerlessSecurityCommandCenter() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={handleExportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={running}
           exportDisabled={historyUnavailable || !filteredFindings.length}
