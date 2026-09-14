@@ -16,4 +16,15 @@ describe('Clients live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed clients GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/clients'\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/onRefresh=\{loadClients\}/)
+    expect(src).toMatch(/role="alert"/)
+    expect(src).not.toMatch(/scan_failed[\s\S]{0,200}setError/)
+    expect(src).not.toMatch(/delete_failed[\s\S]{0,200}setError/)
+  })
 })

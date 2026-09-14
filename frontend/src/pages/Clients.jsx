@@ -220,7 +220,7 @@ export default function Clients() {
       actions={(
         <ShellScanActions
           onRefresh={loadClients}
-          onExport={handleExportCsv}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={!!error || !filteredFindings.length}
         />
