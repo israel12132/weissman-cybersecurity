@@ -497,7 +497,7 @@ export default function WebSocketSecurityCommandCenter() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={handleExportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={status === 'running'}
           exportDisabled={historyUnavailable || !filteredFindings.length}
