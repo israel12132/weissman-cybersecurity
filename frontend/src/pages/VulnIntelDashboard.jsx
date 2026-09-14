@@ -226,7 +226,7 @@ export default function VulnIntelDashboard() {
       actions={(
         <ShellScanActions
           onRefresh={() => load()}
-          onExport={exportCsv}
+          onExport={error ? undefined : exportCsv}
           refreshLoading={loading}
           exportDisabled={!!error || !filtered.length}
         />
