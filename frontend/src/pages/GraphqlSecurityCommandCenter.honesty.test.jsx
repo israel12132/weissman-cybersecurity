@@ -46,4 +46,14 @@ describe('GraphqlSecurityCommandCenter live-only truth', () => {
     expect(src).toMatch(/downloadBytes\(buildSimpleTextPdf\(lines\), `graphql-executive-\$\{Date\.now\(\)\}\.pdf`, 'application\/pdf'\)/)
   })
 
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/useWeissmanEnginePage\(ENGINE_ID, realFindings\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
+    expect(src).toMatch(/data-testid="graphql-security-history-unavailable"/)
+    expect(src).toMatch(/appendLine\(`\[ERROR\] \$\{data\.detail \|\| 'Scan failed'\}`\)/)
+    expect(src).toMatch(/appendLine\(`\[ERROR\] \$\{e\.message\}`\)/)
+    expect(src).not.toMatch(/setHistoryUnavailable/)
+  })
+
 })
