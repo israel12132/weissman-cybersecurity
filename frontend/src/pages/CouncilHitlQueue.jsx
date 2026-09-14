@@ -316,7 +316,7 @@ export default function CouncilHitlQueue() {
       title={t('pages.councilHitlQueue.title')}
       subtitle={t('pages.councilHitlQueue.subtitle')}
       icon={<ShieldCheck className="w-5 h-5 text-amber-400" strokeWidth={1.75} />}
-      badge={pending > 0 ? t('pages.councilHitlQueue.pending_badge', { count: pending }) : undefined}
+      badge={!unavailable && pending > 0 ? t('pages.councilHitlQueue.pending_badge', { count: pending }) : undefined}
       badgeColor="#fbbf24"
       actions={headerActions}
       maxWidth="max-w-4xl"

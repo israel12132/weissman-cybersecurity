@@ -30,4 +30,12 @@ describe('CouncilHitlQueue live-only truth', () => {
     expect(src).not.toMatch(/approval_failed[\s\S]{0,160}setUnavailable/)
     expect(src).not.toMatch(/rejection_failed[\s\S]{0,160}setUnavailable/)
   })
+
+  it('mutes leftover leftover-GET pending badge after a failed queue GET', () => {
+    expect(src).toMatch(/badge=\{!unavailable && pending > 0 \? t\('pages\.councilHitlQueue\.pending_badge', \{ count: pending \}\) : undefined\}/)
+    expect(src).toMatch(/setUnavailable\(true\)/)
+    expect(src).not.toMatch(/setItems\(\[\]\)/)
+    expect(src).not.toMatch(/approval_failed[\s\S]{0,160}setUnavailable/)
+    expect(src).not.toMatch(/rejection_failed[\s\S]{0,160}setUnavailable/)
+  })
 })
