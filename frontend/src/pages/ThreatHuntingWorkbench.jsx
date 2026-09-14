@@ -431,6 +431,12 @@ export default function ThreatHuntingWorkbench() {
     return iocs.filter((ioc) => ids.has(ioc.id))
   }, [iocs, filteredFindings, searchQuery])
 
+  const handleExportCsv = useCallback(() => {
+    if (campaignsError) return
+    if (activeTab === 'iocs') exportIocsCsv(visibleIocs)
+    else exportCsv()
+  }, [campaignsError, activeTab, visibleIocs, exportCsv])
+
   return (
     <PageShell
       title={t(`${NS}.title`)}
@@ -440,7 +446,7 @@ export default function ThreatHuntingWorkbench() {
       actions={(
         <ShellScanActions
           onRefresh={loadHuntData}
-          onExport={() => { if (activeTab === 'iocs') exportIocsCsv(visibleIocs); else exportCsv() }}
+          onExport={campaignsError ? undefined : handleExportCsv}
           refreshLoading={campaignsLoading}
           exportDisabled={!filteredFindings.length}
         />
