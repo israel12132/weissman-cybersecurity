@@ -94,6 +94,7 @@ export default function SelfImprovementConsole() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [queueUnavailable, setQueueUnavailable] = useState(false)
   const [note, setNote] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -108,10 +109,12 @@ export default function SelfImprovementConsole() {
       if (!Array.isArray(q?.items)) {
         throw new Error('Failed to load')
       }
+      setQueueUnavailable(false)
       setStatus(st)
       setItems(q.items)
     } catch (e) {
       setError(e?.message || 'Failed to load')
+      setQueueUnavailable(true)
     } finally {
       setLoading(false)
     }
@@ -172,13 +175,13 @@ export default function SelfImprovementConsole() {
 
   const handleRefresh = useCallback(() => load(), [load])
   const exportCsv = useCallback(() => {
-    if (error) return
+    if (queueUnavailable) return
     exportRowsCsv(SELF_IMPROVE_CSV_HEADER, selfImproveRows(filteredItems), 'weissman-self-improvement')
-  }, [error, filteredItems])
+  }, [queueUnavailable, filteredItems])
   const exportPdf = useCallback(() => {
-    if (error) return
+    if (queueUnavailable) return
     exportRowsPdf('Weissman Self-Improvement Console', SELF_IMPROVE_CSV_HEADER, selfImproveRows(filteredItems), 'weissman-self-improvement')
-  }, [error, filteredItems])
+  }, [queueUnavailable, filteredItems])
 
   return (
     <PageShell
@@ -219,20 +222,22 @@ export default function SelfImprovementConsole() {
           </Button>
           <ShellScanActions
             onRefresh={handleRefresh}
-            onExport={exportCsv}
+            onExport={queueUnavailable ? undefined : exportCsv}
             refreshLoading={loading}
-            exportDisabled={!!error || !filteredItems.length}
+            exportDisabled={queueUnavailable || !filteredItems.length}
           />
+          {!queueUnavailable && (
           <Button
             variant="unstyled"
             type="button"
             onClick={exportPdf}
-            disabled={!!error || !filteredItems.length}
+            disabled={!filteredItems.length}
             title="Export PDF"
             className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-white/70 hover:bg-white/10 disabled:opacity-50"
           >
             <FileText className="w-4 h-4" /> PDF
           </Button>
+          )}
         </div>
       }
     >

@@ -17,10 +17,24 @@ describe('SelfImprovementConsole live-only truth', () => {
   })
 
   it('does not dump leftover leftover-proposals CSV after a failed queue GET', () => {
-    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
-    expect(src).toMatch(/const exportPdf = useCallback\(\(\) => \{\n    if \(error\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredItems\.length\}/)
-    expect(src).toMatch(/disabled=\{\!\!error \|\| !filteredItems\.length\}/)
+    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n    if \(queueUnavailable\) return/)
+    expect(src).toMatch(/const exportPdf = useCallback\(\(\) => \{\n    if \(queueUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{queueUnavailable \|\| !filteredItems\.length\}/)
+    expect(src).toMatch(/\{\!queueUnavailable && \(/)
+    expect(src).not.toMatch(/setItems\(\[\]\)/)
+  })
+
+  it('mutes leftover leftover-GET Export CSV after a failed queue GET', () => {
+    expect(src).toMatch(/api\.get\(`\/api\/self-improve\/queue\$\{qs\}`\)/)
+    expect(src).toMatch(/onExport=\{queueUnavailable \? undefined : exportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
+    expect(src).toMatch(/setQueueUnavailable\(true\)/)
+    expect(src).toMatch(/setQueueUnavailable\(false\)/)
+    expect(src).toMatch(/setError\(e\?\.message \|\| 'Toggle failed'\)/)
+    expect(src).toMatch(/setError\(e\?\.message \|\| 'Run failed'\)/)
+    expect(src).not.toMatch(/Toggle failed[\s\S]{0,80}setQueueUnavailable/)
+    expect(src).not.toMatch(/Run failed[\s\S]{0,80}setQueueUnavailable/)
+    expect(src).not.toMatch(/setItems\(\[\]\)/)
   })
 
   it('mutes leftover leftover-engine Power control after a failed status GET', () => {
