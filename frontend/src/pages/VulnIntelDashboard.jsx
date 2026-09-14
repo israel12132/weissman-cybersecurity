@@ -247,6 +247,7 @@ export default function VulnIntelDashboard() {
           onRefresh={() => load()}
           refreshLabel={t('common.refresh')}
         >
+          {!error && (
           <Button variant="unstyled"
             type="button"
             onClick={exportCsv}
@@ -256,6 +257,7 @@ export default function VulnIntelDashboard() {
             <Download className="h-3.5 w-3.5" />
             {t('vuln_intel.export_csv')}
           </Button>
+          )}
           <Button variant="unstyled"
             type="button"
             onClick={() => setFiltersExpanded((v) => !v)}

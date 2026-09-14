@@ -30,4 +30,12 @@ describe('VulnIntelDashboard live-only truth', () => {
     expect(src).not.toMatch(/catch \(e\) \{\s*setFindings\(\[\]\)/)
     expect(src).not.toMatch(/catch \(e\) \{\s*setTotal\(null\)/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed findings GET', () => {
+    expect(src).toMatch(/apiFetch\(`\/api\/findings\?\$\{qs\}`/)
+    expect(src).toMatch(/\{!error && \(\s*<Button variant="unstyled"\s*type="button"\s*onClick=\{exportCsv\}/)
+    expect(src).toMatch(/if \(error\) return/)
+    expect(src).toMatch(/vuln_intel\.export_csv/)
+    expect(src).toMatch(/setError\(e\.message \|\| 'Failed to load findings'\)/)
+  })
 })
