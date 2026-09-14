@@ -25,4 +25,14 @@ describe('TransportSecurityCommandCenter live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/useWeissmanEnginePage\(ENGINE, detailFindings\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
+    expect(src).toMatch(/data-testid="transport-security-history-unavailable"/)
+    expect(src).toMatch(/if \(!ok\) \{ setStatus\('error'\); showToast\('error', d\.detail \|\| 'Scan failed'\); return \}/)
+    expect(src).toMatch(/setStatus\('error'\); showToast\('error', e\?\.message \?\? 'Scan failed'\)/)
+    expect(src).not.toMatch(/setHistoryUnavailable/)
+  })
 })
