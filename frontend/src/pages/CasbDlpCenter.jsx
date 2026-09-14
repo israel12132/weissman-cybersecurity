@@ -69,12 +69,13 @@ export default function CasbDlpCenter() {
   )
 
   const exportCsv = useCallback(() => {
+    if (error) return
     downloadCsv(
       filtered.map((f) => [f.source, f.title, f.severity, f.discovered_at]),
       ['engine', 'title', 'severity', 'discovered'],
       'weissman-casb-dlp',
     )
-  }, [filtered])
+  }, [error, filtered])
 
   const refreshGraph = async () => {
     setRefreshing(true)
@@ -98,7 +99,7 @@ export default function CasbDlpCenter() {
       subtitle={t(`${NS}.subtitle`)}
       icon={<Cloud />}
       actions={(
-        <ShellScanActions onRefresh={load} onExport={exportCsv} refreshLoading={loading} exportDisabled={!filtered.length} />
+        <ShellScanActions onRefresh={load} onExport={error ? undefined : exportCsv} refreshLoading={loading} exportDisabled={!!error || !filtered.length} />
       )}
     >
       <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
