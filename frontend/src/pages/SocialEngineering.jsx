@@ -42,6 +42,7 @@ export default function SocialEngineering() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [campaignsUnavailable, setCampaignsUnavailable] = useState(false);
   const [clients, setClients] = useState([]);
   const [clientsUnavailable, setClientsUnavailable] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -70,8 +71,10 @@ export default function SocialEngineering() {
       }
       setCampaigns(data.campaigns);
       setStats(data.stats || null);
+      setCampaignsUnavailable(false);
     } catch (err) {
       setError(err?.message || t('pages.socialEngineering.load_failed'));
+      setCampaignsUnavailable(true);
     } finally {
       setLoading(false);
     }
@@ -198,9 +201,9 @@ export default function SocialEngineering() {
   } = useFindingsWorkbench(campaignFindings, { csvPrefix: 'weissman-social-engineering' });
 
   const handleExportCsv = useCallback(() => {
-    if (error) return
+    if (campaignsUnavailable) return
     exportCsv()
-  }, [error, exportCsv])
+  }, [campaignsUnavailable, exportCsv])
 
   const severityDistribution = useMemo(() => {
     const dist = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
@@ -244,7 +247,7 @@ export default function SocialEngineering() {
       actions={(
         <ShellScanActions
           onRefresh={fetchSocialEngineering}
-          onExport={handleExportCsv}
+          onExport={campaignsUnavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={!!error || !filteredFindings.length}
         />
