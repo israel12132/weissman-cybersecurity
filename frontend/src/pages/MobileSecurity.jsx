@@ -207,7 +207,7 @@ export default function MobileSecurity() {
   const refreshAction = (
     <ShellScanActions
       onRefresh={handleRefresh}
-      onExport={appsUnavailable ? undefined : handleExportCsv}
+      onExport={historyUnavailable || appsUnavailable ? undefined : handleExportCsv}
       refreshLoading={historyLoading || loading}
       refreshDisabled={Boolean(pendingJobId)}
       exportDisabled={historyUnavailable || appsUnavailable || !filteredFindings.length}
