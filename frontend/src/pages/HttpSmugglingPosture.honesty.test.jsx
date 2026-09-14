@@ -28,4 +28,13 @@ describe('HttpSmugglingPosture live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
   })
 
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/useWeissmanEnginePage\(ENGINE, detailFindings\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
+    expect(src).toMatch(/data-testid="http-smuggling-history-unavailable"/)
+    expect(src).toMatch(/if \(!ok\) \{ setStatus\('error'\); showToast\('error', d\.detail \|\| t\('pages\.httpSmugglingPosture\.scan_failed', 'Scan failed'\)\); return \}/)
+    expect(src).toMatch(/setStatus\('error'\); showToast\('error', e\?\.message \?\? t\('pages\.httpSmugglingPosture\.scan_failed', 'Scan failed'\)\)/)
+    expect(src).not.toMatch(/setHistoryUnavailable/)
+  })
 })
