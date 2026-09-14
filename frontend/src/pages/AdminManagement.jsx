@@ -353,7 +353,7 @@ export default function AdminManagement() {
       actions={(
         <ShellScanActions
           onRefresh={loadUsers}
-          onExport={handleExportCsv}
+          onExport={usersUnavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={usersUnavailable || !filteredFindings.length}
         />

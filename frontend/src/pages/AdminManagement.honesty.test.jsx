@@ -36,4 +36,15 @@ describe('AdminManagement live-only truth', () => {
     expect(src).toMatch(/downloadCsv\(rows, \['Email', 'Role', 'Superadmin', 'Active'\], 'weissman-users'\)/)
     expect(src).not.toMatch(/onClick=\{\(\) => \{\s*const rows = users\.map/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed users GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/admin\/users'\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(usersUnavailable\) return/)
+    expect(src).toMatch(/onExport=\{usersUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{usersUnavailable \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/onRefresh=\{loadUsers\}/)
+    expect(src).toMatch(/setError\(d\.detail \|\| 'Failed to create user'\)/)
+    expect(src).not.toMatch(/Failed to create user[\s\S]{0,80}setUsersUnavailable/)
+    expect(src).not.toMatch(/setUsersUnavailable\(true\)\n      setUsers\(/)
+  })
 })
