@@ -191,7 +191,7 @@ export default function DarkWebMonitor() {
           </Button>
           <ShellScanActions
             onRefresh={load}
-            onExport={exportCsv}
+            onExport={error ? undefined : exportCsv}
             refreshLoading={loading}
             exportDisabled={!!error || filtered.length === 0}
           />

@@ -29,4 +29,12 @@ describe('DarkWebMonitor live-only truth', () => {
     expect(src).toMatch(/\{sources\.length > 1 && !error && \(/)
     expect(src).not.toMatch(/setFindings\(\[\]\)/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed findings GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/findings\?limit=2000'\)/)
+    expect(src).toMatch(/if \(error \|\| !filtered\.length\) return/)
+    expect(src).toMatch(/onExport=\{error \? undefined : exportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| filtered\.length === 0\}/)
+    expect(src).not.toMatch(/setFindings\(\[\]\)/)
+  })
 })
