@@ -210,6 +210,17 @@ export default function AdminManagement() {
     exportCsv()
   }, [usersUnavailable, exportCsv])
 
+  const handleExportUsersCsv = useCallback(() => {
+    if (usersUnavailable) return
+    const rows = users.map((u) => [
+      u.email,
+      u.role || 'viewer',
+      u.is_superadmin ? 'yes' : 'no',
+      u.is_active !== false ? 'yes' : 'no',
+    ])
+    downloadCsv(rows, ['Email', 'Role', 'Superadmin', 'Active'], 'weissman-users')
+  }, [usersUnavailable, users])
+
   const visibleUsers = useMemo(() => {
     if (!searchQuery.trim()) return users
     const emails = new Set(filteredFindings.map((f) => f.title))
@@ -639,22 +650,16 @@ export default function AdminManagement() {
             <span className="text-emerald-400">⚡</span> Quick Actions
           </h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {!usersUnavailable && (
             <Button variant="unstyled"
               id="adminmgmt-export-users-btn"
               type="button"
-              onClick={() => {
-                const rows = users.map((u) => [
-                  u.email,
-                  u.role || 'viewer',
-                  u.is_superadmin ? 'yes' : 'no',
-                  u.is_active !== false ? 'yes' : 'no',
-                ])
-                downloadCsv(rows, ['Email', 'Role', 'Superadmin', 'Active'], 'weissman-users')
-              }}
+              onClick={handleExportUsersCsv}
               className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
               📄 Export Users (CSV)
             </Button>
+            )}
             <Button variant="unstyled"
               id="adminmgmt-audit-log-btn"
               type="button"

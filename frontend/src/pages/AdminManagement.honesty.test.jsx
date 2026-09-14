@@ -27,4 +27,13 @@ describe('AdminManagement live-only truth', () => {
     expect(src).toMatch(/setUsersUnavailable\(true\)\n      setError\(err\.message \|\| t\('pages\.adminManagement\.load_failed'\)\)/)
     expect(src).not.toMatch(/setUsersUnavailable\(true\)\n      setEditingUser/)
   })
+
+  it('mutes leftover leftover-GET users CSV after a failed users GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/admin\/users'\)/)
+    expect(src).toMatch(/const handleExportUsersCsv = useCallback\(\(\) => \{\n    if \(usersUnavailable\) return/)
+    expect(src).toMatch(/onClick=\{handleExportUsersCsv\}/)
+    expect(src).toMatch(/\{!usersUnavailable && \(\s*<Button variant="unstyled"\s*id="adminmgmt-export-users-btn"/)
+    expect(src).toMatch(/downloadCsv\(rows, \['Email', 'Role', 'Superadmin', 'Active'\], 'weissman-users'\)/)
+    expect(src).not.toMatch(/onClick=\{\(\) => \{\s*const rows = users\.map/)
+  })
 })
