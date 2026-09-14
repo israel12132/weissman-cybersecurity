@@ -134,6 +134,11 @@ export default function FeedbackLoopVerification() {
     total,
   } = useFindingsWorkbench(stepFindings, { csvPrefix: 'weissman-feedback-loop' })
 
+  const handleExportCsv = useCallback(() => {
+    if (templatesUnavailable) return
+    exportCsv()
+  }, [templatesUnavailable, exportCsv])
+
   const handleRefresh = useCallback(() => {
     if (result) run()
   }, [result, run])
@@ -152,10 +157,10 @@ export default function FeedbackLoopVerification() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={templatesUnavailable ? undefined : handleExportCsv}
           refreshLoading={running}
           refreshDisabled={!result}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={templatesUnavailable || !filteredFindings.length}
         />
       )}
     >

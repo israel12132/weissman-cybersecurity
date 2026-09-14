@@ -32,4 +32,15 @@ describe('FeedbackLoopVerification live-only truth', () => {
     expect(src).not.toMatch(/setYaml\(''\)/)
     expect(src).not.toMatch(/yamlUnavailable \|\| error/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed templates GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/template-engine\/templates'\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(templatesUnavailable\) return/)
+    expect(src).toMatch(/onExport=\{templatesUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{templatesUnavailable \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
+    expect(src).toMatch(/setError\(e\?\.message \|\| t\('pages\.feedbackLoopVerification\.run_failed'\)\)/)
+    expect(src).not.toMatch(/run_failed[\s\S]{0,80}setTemplatesUnavailable/)
+    expect(src).not.toMatch(/\.catch\(\(\) => setTemplatesUnavailable\(true\)\)[\s\S]{0,80}setTemplates\(/)
+  })
 })
