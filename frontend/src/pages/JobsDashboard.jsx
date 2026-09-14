@@ -95,7 +95,9 @@ export default function JobsDashboard() {
       setLastUpdated(new Date())
       hasLoadedRef.current = true
     } catch (err) {
-      if (hasLoadedRef.current) return
+      // Leftover leftover-jobs stay in state. Still setError so page-header
+      // Export CSV unmounts (`onExport={error ? undefined}`). EmptyState dump
+      // stays first-load only (`error && !hasLoadedRef.current`).
       if (err?.response) {
         const text = await err.response.text().catch(() => 'Failed to load jobs')
         setError(t('pages.jobsDashboard.load_failed', { detail: text }))
