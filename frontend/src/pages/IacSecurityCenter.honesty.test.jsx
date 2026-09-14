@@ -53,4 +53,12 @@ describe('IacSecurityCenter live-only truth', () => {
   it('does not paint leftover leftover-last-scan after a failed history GET', () => {
     expect(src).toMatch(/\{lastScanAt && !historyUnavailable && \(/)
   })
+
+  it('does not paint leftover leftover-GET last-run telemetry after a failed history GET', () => {
+    expect(src).toMatch(/const liveTelemetryLines = historyUnavailable/)
+    expect(src).toMatch(/lines\.filter\(\(l\) => !String\(l\)\.includes\('\[IaC\] Loaded last run'\)\)/)
+    expect(src).toMatch(/liveTelemetryLines\.length \? liveTelemetryLines\.join\('\\n'\)/)
+    expect(src).not.toMatch(/appendLine\(`\[IaC\] Loaded last run/)
+    expect(src).toMatch(/setHistoryUnavailable\(true\)/)
+  })
 })

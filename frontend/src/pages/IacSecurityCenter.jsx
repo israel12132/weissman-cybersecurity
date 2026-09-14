@@ -1802,6 +1802,9 @@ export default function IacSecurityCenter() {
   const liveSummary = historyUnavailable ? null : summary
   const policyFindings = useMemo(() => findings.filter((f) => f.category !== 'iac_attack_chain'), [findings])
   const livePolicyFindings = historyUnavailable ? [] : policyFindings
+  const liveTelemetryLines = historyUnavailable
+    ? lines.filter((l) => !String(l).includes('[IaC] Loaded last run'))
+    : lines
   const remediationQueue = useMemo(() => liveSummary?.remediation_queue || [], [liveSummary])
   const policyCatalog = useMemo(() => (Array.isArray(liveSummary?.policy_catalog) ? liveSummary.policy_catalog : []), [liveSummary])
   const attackChains = useMemo(() => liveSummary?.attack_chains || [], [liveSummary])
@@ -1906,12 +1909,11 @@ export default function IacSecurityCenter() {
         setSummary(sum?.iac_summary || null)
         setFindings(viol)
         setLastScanAt(last.completed_at || last.updated_at || last.created_at || null)
-        appendLine(`[IaC] Loaded last run — ${viol.length} findings`)
       }
     } catch {
       setHistoryUnavailable(true)
     }
-  }, [appendLine])
+  }, [])
 
   const exportFindingsCsv = useCallback(() => {
     if (historyUnavailable) return
@@ -2230,7 +2232,7 @@ export default function IacSecurityCenter() {
             {/* Telemetry */}
             <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--scrim)] overflow-hidden">
               <div className="px-4 py-2 border-b border-[var(--border-subtle)] text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{t('iacSecurity.telemetry', 'Scan Telemetry')}</div>
-              <pre className="h-32 overflow-auto p-3 text-[10px] font-mono text-emerald-400/80 leading-relaxed">{lines.length ? lines.join('\n') : t('iacSecurity.awaiting', 'Awaiting scan…')}</pre>
+              <pre className="h-32 overflow-auto p-3 text-[10px] font-mono text-emerald-400/80 leading-relaxed">{liveTelemetryLines.length ? liveTelemetryLines.join('\n') : t('iacSecurity.awaiting', 'Awaiting scan…')}</pre>
             </div>
 
             {/* Findings */}
