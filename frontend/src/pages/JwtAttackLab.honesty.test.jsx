@@ -28,4 +28,15 @@ describe('JwtAttackLab live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredDisplayFindings\.length\}/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/engines\/history\/jwt_attack\?limit=1'\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{loadLastRun\}/)
+    expect(src).toMatch(/data-testid="jwt-attack-lab-history-unavailable"/)
+    expect(src).toMatch(/showToast\('error', d\.detail \|\| t\('pages\.jwtLab\.scan_failed'\)\)/)
+    expect(src).not.toMatch(/scan_failed[\s\S]{0,80}setHistoryUnavailable/)
+    expect(src).toMatch(/\} catch \{\n      setHistoryUnavailable\(true\)\n    \} finally \{/)
+    expect(src).not.toMatch(/setHistoryUnavailable\(true\)\n      setScanResult/)
+  })
 })

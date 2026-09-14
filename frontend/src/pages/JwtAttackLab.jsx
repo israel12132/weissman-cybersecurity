@@ -440,7 +440,7 @@ export default function JwtAttackLab() {
   const shellActions = (
     <ShellScanActions
       onRefresh={loadLastRun}
-      onExport={handleExportCsv}
+      onExport={historyUnavailable ? undefined : handleExportCsv}
       refreshLoading={historyLoading}
       refreshDisabled={scanning}
       exportDisabled={historyUnavailable || !filteredDisplayFindings.length}
