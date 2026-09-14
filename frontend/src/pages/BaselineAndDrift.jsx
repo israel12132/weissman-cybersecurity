@@ -131,7 +131,7 @@ export default function BaselineAndDrift() {
       actions={(
         <ShellScanActions
           onRefresh={fetchData}
-          onExport={handleExportCsv}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={!!error || !filteredFindings.length}
         />

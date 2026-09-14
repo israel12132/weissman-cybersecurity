@@ -16,4 +16,15 @@ describe('BaselineAndDrift live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
     expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed baseline GET', () => {
+    expect(src).toMatch(/api\.get\(`\/api\/baseline\/anomalies\?range=\$\{timeRange\}&limit=200`\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/onRefresh=\{fetchData\}/)
+    expect(src).not.toMatch(/Failed to fetch baseline data:[\s\S]{0,80}setAnomalies\(\[\]\)/)
+    expect(src).not.toMatch(/Failed to fetch baseline data:[\s\S]{0,80}setDriftData\(\[\]\)/)
+    expect(src).not.toMatch(/Failed to fetch baseline data:[\s\S]{0,80}setBaseline\(/)
+  })
 })
