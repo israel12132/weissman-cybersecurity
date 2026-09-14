@@ -23,4 +23,12 @@ describe('AuditLog live-only truth', () => {
     expect(src).toMatch(/!error && total > 0 && \(/)
     expect(src).not.toMatch(/setEntries\(\[\]\)/)
   })
+
+  it('mutes leftover leftover-GET Export Full JSON after a failed audit-logs GET', () => {
+    expect(src).toMatch(/apiFetch\(`\/api\/audit-logs\?\$\{qs\.toString\(\)\}`/)
+    expect(src).toMatch(/const exportFull = useCallback\(async \(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/\{!error && \(\s*<Button variant="unstyled"\s*type="button"\s*onClick=\{exportFull\}/)
+    expect(src).toMatch(/audit\.export_full/)
+    expect(src).toMatch(/setError\(e\.message \|\| t\('audit\.load_error'\)\)/)
+  })
 })

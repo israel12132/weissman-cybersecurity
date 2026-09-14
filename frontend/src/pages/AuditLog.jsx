@@ -159,6 +159,7 @@ export default function AuditLog() {
   // via GET /api/audit/export. The packet carries the SHA-256 chain-integrity
   // flag so an auditor can verify no entry was altered or removed.
   const exportFull = useCallback(async () => {
+    if (error) return
     setExportingFull(true)
     try {
       const d = await apiFetch('/api/audit/export?format=json&limit=50000')
@@ -180,7 +181,7 @@ export default function AuditLog() {
     } finally {
       setExportingFull(false)
     }
-  }, [t, toast])
+  }, [error, t, toast])
 
   // Tamper-evidence verifier — resolve a report's audit_root_hash against the
   // live ledger via GET /api/verify-audit/:hash. Proves a report artifact
@@ -341,6 +342,7 @@ export default function AuditLog() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {!error && (
             <Button variant="unstyled"
               type="button"
               onClick={exportFull}
@@ -351,6 +353,7 @@ export default function AuditLog() {
               <FileJson className={`w-4 h-4 ${exportingFull ? 'animate-pulse' : ''}`} />
               {exportingFull ? t('audit.export_full_running') : t('audit.export_full')}
             </Button>
+            )}
             <ShellScanActions
               onRefresh={load}
               onExport={handleExportCsv}
