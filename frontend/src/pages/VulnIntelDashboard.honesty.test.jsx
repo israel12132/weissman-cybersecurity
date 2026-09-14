@@ -32,7 +32,7 @@ describe('VulnIntelDashboard live-only truth', () => {
   })
 
   it('mutes leftover leftover-GET Export CSV after a failed findings GET', () => {
-    expect(src).toMatch(/apiFetch\(`\/api\/findings\?\$\{qs\}`/)
+    expect(src).toMatch(/apiFetch\(`\/api\/findings\?\$\{qs\.toString\(\)\}`/)
     expect(src).toMatch(/\{!error && \(\s*<Button variant="unstyled"\s*type="button"\s*onClick=\{exportCsv\}/)
     expect(src).toMatch(/if \(error\) return/)
     expect(src).toMatch(/vuln_intel\.export_csv/)
