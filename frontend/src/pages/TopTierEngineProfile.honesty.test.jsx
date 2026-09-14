@@ -49,5 +49,7 @@ describe('TopTierEngineProfile live-only truth', () => {
     expect(src).toMatch(/\{!historyUnavailable && \(\s*<Button variant="unstyled"\s*type="button"\s*onClick=\{exportPdf\}/)
     expect(src).toMatch(/pages\.topTierEngineProfile\.export_pdf/)
     expect(src).toMatch(/setHistoryUnavailable\(true\)/)
+    expect(src).not.toMatch(/catch \{\s*setHistoryUnavailable\(true\)\s*setHistory\(/)
+    expect(src).not.toMatch(/setHistoryUnavailable\(true\)\s*setHistory\(/)
   })
 })
