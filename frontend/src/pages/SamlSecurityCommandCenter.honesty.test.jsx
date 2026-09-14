@@ -27,4 +27,14 @@ describe('SamlSecurityCommandCenter live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
   })
 
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/useWeissmanEnginePage\(ENGINE_ID, regular\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
+    expect(src).toMatch(/data-testid="saml-security-history-unavailable"/)
+    expect(src).toMatch(/if \(!ok\) \{ setStatus\('error'\); showToastMsg\('error', d\.detail \|\| L\.scanFailed\); return \}/)
+    expect(src).toMatch(/showToastMsg\('error', e\?\.message \?\? L\.scanFailed\)/)
+    expect(src).not.toMatch(/setHistoryUnavailable/)
+  })
+
 })
