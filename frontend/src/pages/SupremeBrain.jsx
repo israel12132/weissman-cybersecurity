@@ -187,7 +187,7 @@ export default function SupremeBrain() {
           </Button>
           <ShellScanActions
             onRefresh={() => load(false)}
-            onExport={handleExportJson}
+            onExport={error ? undefined : handleExportJson}
             refreshLoading={loading}
             exportDisabled={!!error || !payload}
           />
