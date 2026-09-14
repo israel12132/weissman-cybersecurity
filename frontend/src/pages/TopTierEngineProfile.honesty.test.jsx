@@ -52,4 +52,14 @@ describe('TopTierEngineProfile live-only truth', () => {
     expect(src).not.toMatch(/catch \{\s*setHistoryUnavailable\(true\)\s*setHistory\(/)
     expect(src).not.toMatch(/setHistoryUnavailable\(true\)\s*setHistory\(/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/apiFetch\(`\/api\/engines\/top-tier\/\$\{encodeURIComponent\(engineId\)\}\/history\?limit=80`\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : exportJson\}/)
+    expect(src).toMatch(/onRefresh=\{reloadAll\}/)
+    expect(src).toMatch(/data-testid="top-tier-engine-profile-history-unavailable"/)
+    expect(src).toMatch(/setRunState\(\{ running: false, msg: d\.detail \|\| t\('pages\.topTierEngineProfile\.scan_failed', \{ status \}\) \}\)/)
+    expect(src).toMatch(/setHistoryUnavailable\(true\)/)
+    expect(src).not.toMatch(/onExport=\{exportJson\}/)
+  })
 })

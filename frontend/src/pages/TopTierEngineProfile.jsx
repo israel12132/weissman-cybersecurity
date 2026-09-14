@@ -347,7 +347,7 @@ export default function TopTierEngineProfile() {
           <div className="ms-auto">
             <ShellScanActions
               onRefresh={reloadAll}
-              onExport={exportJson}
+              onExport={historyUnavailable ? undefined : exportJson}
               refreshLoading={historyLoading}
               exportDisabled={historyUnavailable}
             />
