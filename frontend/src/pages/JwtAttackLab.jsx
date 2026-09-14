@@ -548,7 +548,7 @@ export default function JwtAttackLab() {
           )}
 
           {scanResult && !scanResult.pending && !historyUnavailable && (
-            <KpiStrip>
+            <KpiStrip
               counts={counts}
               total={sortedFindings.length}
               jobId={scanResult.job_id}
@@ -567,7 +567,7 @@ export default function JwtAttackLab() {
 
           {scanResult && !scanResult.pending && !historyUnavailable && (
             <>
-              <SupremeIntelligencePanels>
+              <SupremeIntelligencePanels
                 findings={scanResult.findings}
                 labels={supremeLabels}
                 categoryAxes={JWT_CATEGORY_AXES}
