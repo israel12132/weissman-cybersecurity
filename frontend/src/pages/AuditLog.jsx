@@ -356,7 +356,7 @@ export default function AuditLog() {
             )}
             <ShellScanActions
               onRefresh={load}
-              onExport={handleExportCsv}
+              onExport={error ? undefined : handleExportCsv}
               refreshLoading={loading}
               exportDisabled={!!error || filteredEntries.length === 0}
             />

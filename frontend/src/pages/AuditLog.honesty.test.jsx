@@ -31,4 +31,13 @@ describe('AuditLog live-only truth', () => {
     expect(src).toMatch(/audit\.export_full/)
     expect(src).toMatch(/setError\(e\.message \|\| t\('audit\.load_error'\)\)/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed audit-logs GET', () => {
+    expect(src).toMatch(/apiFetch\(`\/api\/audit-logs\?\$\{qs\.toString\(\)\}`/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| filteredEntries\.length === 0\}/)
+    expect(src).toMatch(/setError\(e\.message \|\| t\('audit\.load_error'\)\)/)
+    expect(src).not.toMatch(/setEntries\(\[\]\)/)
+  })
 })
