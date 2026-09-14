@@ -529,7 +529,7 @@ export default function DigitalTwinSimulator() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={handleExportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={isScanning}
           exportDisabled={historyUnavailable || !filteredFindings.length}

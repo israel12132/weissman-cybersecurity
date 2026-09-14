@@ -39,4 +39,14 @@ describe('DigitalTwinSimulator live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
   })
 
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/useWeissmanEnginePage\(ENGINE, detailFindings\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
+    expect(src).toMatch(/data-testid="digital-twin-history-unavailable"/)
+    expect(src).toMatch(/showToast\('error', d\.detail \|\| t\('pages\.digitalTwinSimulator\.simulation_failed'\)\)/)
+    expect(src).toMatch(/showToast\('error', e\?\.message \?\? t\('common\.error'\)\)/)
+    expect(src).not.toMatch(/setHistoryUnavailable/)
+  })
+
 })
