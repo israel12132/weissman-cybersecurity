@@ -34,4 +34,15 @@ describe('EngineMatrix live-only truth', () => {
     expect(src).toMatch(/data-testid="engine-matrix-integrations-unavailable"/)
     expect(src).not.toMatch(/apiFetch\(`\/api\/clients\/\$\{selectedClientId\}\/config`\)\.catch\(\(\) => null\)/)
   })
+
+  it('does not paint leftover leftover-GET enabled toggles after a failed config GET', () => {
+    expect(src).toMatch(/configKnown=\{!configUnavailable\}/)
+    expect(src).toMatch(/enabled=\{configKnown && enabledSet\.has\(engine\.id\)\}/)
+    expect(src).toMatch(/configKnown \? `\$\{enabledCount\}\/\$\{engines\.length\}` : '—'/)
+    expect(src).toMatch(/configUnavailable \|\| !selectedClientId \|\| totalRunnable === 0/)
+    expect(src).toMatch(/count: configUnavailable \? '—' : totalRunnable/)
+    expect(src).toMatch(/if \(configUnavailable\) return/)
+    expect(src).toMatch(/selectedClientId && !configUnavailable && enabledSet\.has\(e\.id\) \? 'yes' : \(configUnavailable \? '—' : 'no'\)/)
+    expect(src).toMatch(/loading=\{configLoading \|\| configUnavailable \|\| !selectedClientId\}/)
+  })
 })

@@ -303,6 +303,7 @@ function GroupSection({
   enabledSet,
   loading,
   historyKnown,
+  configKnown,
   onToggle,
   onRun,
   onEnableAll,
@@ -313,7 +314,7 @@ function GroupSection({
   t,
 }) {
   const enabledCount = engines.filter((e) => enabledSet.has(e.id)).length
-  const runnableCount = engines.filter((e) => enabledSet.has(e.id) && isProduction(e.id)).length
+  const runnableCount = engines.filter((e) => configKnown && enabledSet.has(e.id) && isProduction(e.id)).length
   const runningCount = engines.filter((e) => engineStates[e.id]?.status === 'running').length
 
   return (
@@ -331,7 +332,7 @@ function GroupSection({
             {GROUP_ICONS[groupDef.id] ?? '◆'} {groupDef.label}
           </h2>
           <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded-md bg-[var(--row-hover-bg)] border border-white/[0.06]">
-            {enabledCount}/{engines.length}
+            {configKnown ? `${enabledCount}/${engines.length}` : '—'}
             {runningCount > 0 && ` · ${runningCount} ${t('engines.status_running').toLowerCase()}`}
           </span>
         </div>
@@ -373,8 +374,8 @@ function GroupSection({
               <EngineMatrixCard
                 key={engine.id}
                 engine={engine}
-                enabled={enabledSet.has(engine.id)}
-                runnable={enabledSet.has(engine.id) && isProduction(engine.id)}
+                enabled={configKnown && enabledSet.has(engine.id)}
+                runnable={configKnown && enabledSet.has(engine.id) && isProduction(engine.id)}
                 status={state.status ?? (historyKnown ? 'idle' : null)}
                 lastRun={state.lastRun ?? null}
                 findingsDelta={state.findingsDelta ?? 0}
@@ -544,25 +545,28 @@ export default function EngineMatrix() {
   }, [selectedClientId, showToast, t])
 
   const handleToggle = useCallback(async (engineId, nextEnabled) => {
+    if (configUnavailable) return
     const current = Array.isArray(clientConfig?.enabled_engines) ? clientConfig.enabled_engines : []
     const next = nextEnabled
       ? [...current.filter((e) => e !== engineId), engineId]
       : current.filter((e) => e !== engineId)
     await patchEngines(next)
-  }, [clientConfig?.enabled_engines, patchEngines])
+  }, [configUnavailable, clientConfig?.enabled_engines, patchEngines])
 
   const handleEnableAll = useCallback(async (engineIds) => {
+    if (configUnavailable) return
     const current = Array.isArray(clientConfig?.enabled_engines) ? clientConfig.enabled_engines : []
     const s = new Set(current)
     engineIds.forEach((id) => s.add(id))
     await patchEngines([...s])
-  }, [clientConfig?.enabled_engines, patchEngines])
+  }, [configUnavailable, clientConfig?.enabled_engines, patchEngines])
 
   const handleDisableAll = useCallback(async (engineIds) => {
+    if (configUnavailable) return
     const current = Array.isArray(clientConfig?.enabled_engines) ? clientConfig.enabled_engines : []
     const disableSet = new Set(engineIds)
     await patchEngines(current.filter((e) => !disableSet.has(e)))
-  }, [clientConfig?.enabled_engines, patchEngines])
+  }, [configUnavailable, clientConfig?.enabled_engines, patchEngines])
 
   const handleRun = useCallback(async (engineId) => {
     if (selectedClientId == null) {
@@ -602,6 +606,7 @@ export default function EngineMatrix() {
   }, [selectedClientId, clients, clientIntegrations, launchScan, showToast, t, isProduction])
 
   const handleRunGroup = useCallback(async (engineIds) => {
+    if (configUnavailable) return
     if (selectedClientId == null) {
       showToast('error', t('engines.select_client_warning'))
       return
@@ -609,7 +614,7 @@ export default function EngineMatrix() {
     await Promise.allSettled(
       engineIds.filter((id) => enabledSet.has(id) && isProduction(id)).map((id) => handleRun(id)),
     )
-  }, [selectedClientId, enabledSet, handleRun, showToast, t, isProduction])
+  }, [configUnavailable, selectedClientId, enabledSet, handleRun, showToast, t, isProduction])
 
   const runnableEnabledSet = useMemo(
     () => new Set([...enabledSet].filter(isProduction)),
@@ -641,10 +646,10 @@ export default function EngineMatrix() {
       e.group || '',
       getEngineTier(e.id, isProduction),
       e.mitre || '',
-      selectedClientId && enabledSet.has(e.id) ? 'yes' : 'no',
+      selectedClientId && !configUnavailable && enabledSet.has(e.id) ? 'yes' : (configUnavailable ? '—' : 'no'),
     ])
     downloadCsv(rows, header, 'weissman-engine-matrix')
-  }, [filteredEngines, isProduction, selectedClientId, enabledSet])
+  }, [filteredEngines, isProduction, selectedClientId, enabledSet, configUnavailable])
 
   useEffect(() => {
     if (productionLoading) return undefined
@@ -680,6 +685,7 @@ export default function EngineMatrix() {
   }, [productionLoading, historyReloadKey])
 
   const handleRunAllEngines = useCallback(async () => {
+    if (configUnavailable) return
     if (selectedClientId == null) {
       showToast('error', t('engines.select_client_warning'))
       return
@@ -716,7 +722,7 @@ export default function EngineMatrix() {
       setRunAllLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedClientId, enabledSet, showToast, t])
+  }, [configUnavailable, selectedClientId, enabledSet, showToast, t])
 
   const totalEnabled = enabledSet.size
   const liveCount = productionCount || productionEngines.length
@@ -795,11 +801,11 @@ export default function EngineMatrix() {
               <Button variant="unstyled"
                 type="button"
                 onClick={handleRunAllEngines}
-                disabled={runAllLoading || configLoading || !selectedClientId || totalRunnable === 0}
-                title={totalRunnable === 0 && totalEnabled > 0 ? t('engines.catalog_only_run_disabled') : undefined}
+                disabled={runAllLoading || configLoading || configUnavailable || !selectedClientId || totalRunnable === 0}
+                title={totalRunnable === 0 && totalEnabled > 0 && !configUnavailable ? t('engines.catalog_only_run_disabled') : undefined}
                 className="px-4 py-2 rounded-xl text-[11px] font-mono font-semibold bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
-                {runAllLoading ? t('engines.running') : t('engines.run_all_engines', { count: totalRunnable })}
+                {runAllLoading ? t('engines.running') : t('engines.run_all_engines', { count: configUnavailable ? '—' : totalRunnable })}
               </Button>
               <ShellScanActions
                 onRefresh={handleMatrixRefresh}
@@ -942,8 +948,9 @@ export default function EngineMatrix() {
                   engines={engines}
                   engineStates={engineStates}
                   enabledSet={enabledSet}
-                  loading={configLoading || !selectedClientId}
+                  loading={configLoading || configUnavailable || !selectedClientId}
                   historyKnown={!historyUnavailable}
+                  configKnown={!configUnavailable}
                   onToggle={handleToggle}
                   onRun={handleRun}
                   onEnableAll={handleEnableAll}
