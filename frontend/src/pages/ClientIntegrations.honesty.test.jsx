@@ -16,8 +16,18 @@ describe('ClientIntegrations live-only truth', () => {
   })
 
   it('does not dump leftover leftover-integrations JSON after a failed integrations GET', () => {
-    expect(src).toMatch(/const handleExport = useCallback\(\(\) => \{\n    if \(error \|\| unavailable\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| unavailable\}/)
+    expect(src).toMatch(/const handleExport = useCallback\(\(\) => \{\n    if \(integrationsGetFailed \|\| error \|\| unavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{integrationsGetFailed \|\| \!\!error \|\| unavailable\}/)
     expect(src).toMatch(/if \(!hasLoadedRef\.current\) setUnavailable\(true\)/)
+  })
+
+  it('mutes leftover leftover-GET Export CSV after a failed integrations GET', () => {
+    expect(src).toMatch(/apiFetch\(`\/api\/clients\/\$\{id\}\/integrations`\)/)
+    expect(src).toMatch(/onExport=\{integrationsGetFailed \? undefined : handleExport\}/)
+    expect(src).toMatch(/onRefresh=\{load\}/)
+    expect(src).toMatch(/setIntegrationsGetFailed\(true\)/)
+    expect(src).toMatch(/if \(!hasLoadedRef\.current\) setUnavailable\(true\)/)
+    expect(src).toMatch(/method: 'PATCH'/)
+    expect(src).not.toMatch(/Save failed[\s\S]{0,80}setIntegrationsGetFailed/)
   })
 })

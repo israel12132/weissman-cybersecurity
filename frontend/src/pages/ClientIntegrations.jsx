@@ -58,6 +58,7 @@ export default function ClientIntegrations() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [unavailable, setUnavailable] = useState(false)
+  const [integrationsGetFailed, setIntegrationsGetFailed] = useState(false)
   const hasLoadedRef = useRef(false)
   const [saved, setSaved] = useState(false)
   const [awsExtIdMask, setAwsExtIdMask] = useState('')
@@ -115,8 +116,13 @@ export default function ClientIntegrations() {
       })
       hasLoadedRef.current = true
       setUnavailable(false)
+      setIntegrationsGetFailed(false)
     } catch (e) {
       setError(e.message || 'Failed to load')
+      // Leftover leftover-form stays. Always set integrationsGetFailed so
+      // page-header Export CSV unmounts. EmptyState dump stays first-load
+      // only (`unavailable` + hasLoadedRef). PATCH save still uses `error`.
+      setIntegrationsGetFailed(true)
       if (!hasLoadedRef.current) setUnavailable(true)
     } finally {
       setLoading(false)
@@ -196,14 +202,14 @@ export default function ClientIntegrations() {
   }
 
   const handleExport = useCallback(() => {
-    if (error || unavailable) return
+    if (integrationsGetFailed || error || unavailable) return
     const blob = new Blob([JSON.stringify(form, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = `client-${id}-integrations.json`
     a.click()
     URL.revokeObjectURL(a.href)
-  }, [error, unavailable, form, id])
+  }, [integrationsGetFailed, error, unavailable, form, id])
 
   function togglePlatform(p) {
     patch({
@@ -226,9 +232,9 @@ export default function ClientIntegrations() {
       actions={(
         <ShellScanActions
           onRefresh={load}
-          onExport={handleExport}
+          onExport={integrationsGetFailed ? undefined : handleExport}
           refreshLoading={loading}
-          exportDisabled={!!error || unavailable}
+          exportDisabled={integrationsGetFailed || !!error || unavailable}
         />
       )}
     >
