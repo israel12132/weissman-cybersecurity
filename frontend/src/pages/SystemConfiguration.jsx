@@ -548,6 +548,7 @@ function SecuritySettings({ config, onChange, configUnavailable = false }) {
 function MfaSelfServicePanel() {
   const { t } = useTranslation();
   const [status, setStatus] = React.useState(null);
+  const [statusUnavailable, setStatusUnavailable] = React.useState(false);
   const [setup, setSetup] = React.useState(null);
   const [code, setCode] = React.useState('');
   const [busy, setBusy] = React.useState(false);
@@ -559,8 +560,10 @@ function MfaSelfServicePanel() {
       if (d?.ok === false || d?.unavailable) {
         throw new Error(d.detail || t(`${NS}.mfa.errors.status_fetch_failed`));
       }
+      setStatusUnavailable(false);
       setStatus(d);
     } catch (e) {
+      setStatusUnavailable(true);
       setErr(e?.message || t(`${NS}.mfa.errors.status_fetch_failed`));
     }
   }, [t]);
@@ -624,6 +627,7 @@ function MfaSelfServicePanel() {
 
   return (
     <div className="mt-3 space-y-2 border-t border-[var(--border-default)] pt-3">
+      {!statusUnavailable && (
       <div className="text-[11px] font-mono text-[var(--text-tertiary)]">
         {t(`${NS}.mfa.account_label`)}{' '}
         {status.mfa_enabled ? (
@@ -635,8 +639,14 @@ function MfaSelfServicePanel() {
           <span className="text-cyan-400 ml-2">{t(`${NS}.mfa.provisioning_in_progress`)}</span>
         )}
       </div>
-      {err && <div className="text-[11px] text-rose-400">{err}</div>}
-      {!status.mfa_enabled && !setup && (
+      )}
+      {statusUnavailable && (
+        <p data-testid="mfa-status-unavailable" className="text-[11px] text-rose-400" role="alert">
+          {err || t(`${NS}.mfa.errors.status_fetch_failed`)}
+        </p>
+      )}
+      {err && !statusUnavailable && <div className="text-[11px] text-rose-400">{err}</div>}
+      {!statusUnavailable && !status.mfa_enabled && !setup && (
         <Button variant="unstyled"
           type="button"
           disabled={busy}
@@ -674,7 +684,7 @@ function MfaSelfServicePanel() {
           </div>
         </div>
       )}
-      {status.mfa_enabled && (
+      {!statusUnavailable && status.mfa_enabled && (
         <div className="flex items-center gap-2 mt-2">
           <input
             type="text"
