@@ -28,4 +28,14 @@ describe('EmailDnsPosture live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
   })
 
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/useWeissmanEnginePage\(ENGINE, issues\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
+    expect(src).toMatch(/data-testid="email-dns-history-unavailable"/)
+    expect(src).toMatch(/if \(!ok\) \{ setStatus\('error'\); showToast\('error', d\.detail \|\| t\('pages\.emailDnsPosture\.toast_scan_failed'\)\); return \}/)
+    expect(src).toMatch(/setStatus\('error'\); showToast\('error', e\?\.message \?\? t\('pages\.emailDnsPosture\.toast_scan_failed'\)\)/)
+    expect(src).not.toMatch(/setHistoryUnavailable/)
+  })
+
 })
