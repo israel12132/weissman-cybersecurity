@@ -12,7 +12,7 @@ const fetchFx = src.slice(
   src.indexOf('const fetchFindings = useCallback'),
   src.indexOf('const runScan'),
 )
-const run = src.slice(src.indexOf('const runScan'), src.indexOf('return ('))
+const run = src.slice(src.indexOf('const runScan'), src.indexOf('<StandaloneLabShell'))
 
 describe('CICDThreatMatrix live-only truth', () => {
   it('mutes leftover leftover-playbook modal after a failed GET /cicd-findings', () => {
