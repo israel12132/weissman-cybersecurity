@@ -24,4 +24,13 @@ describe('MetricsDashboard live-only truth', () => {
     expect(src).toMatch(/\) : error \|\| !metrics \? \(/)
     expect(src).not.toMatch(/setMetrics\(null\)/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed dashboard GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/metrics\/dashboard'\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/setError\(t\('pages\.metricsDashboard\.load_error'\)\)/)
+    expect(src).not.toMatch(/setMetrics\(null\)/)
+  })
 })

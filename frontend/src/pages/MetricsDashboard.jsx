@@ -130,7 +130,7 @@ export default function MetricsDashboard() {
           </label>
           <ShellScanActions
             onRefresh={() => fetchMetrics()}
-            onExport={handleExportCsv}
+            onExport={error ? undefined : handleExportCsv}
             refreshLoading={refreshing}
             exportDisabled={!!error || !filteredFindings.length}
           />
