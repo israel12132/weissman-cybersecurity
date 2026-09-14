@@ -17,4 +17,13 @@ describe('StealthOperations live-only truth', () => {
     expect(src).toMatch(/\{data && !error && \(/)
     expect(src).not.toMatch(/setData\(null\)/)
   })
+
+  it('mutes leftover leftover-GET Export CSV and PDF after a failed status GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/stealth\/status'\)/)
+    expect(src).toMatch(/onExport=\{error \? undefined : exportCsv\}/)
+    expect(src).toMatch(/\{!error && \(\s*<Button\s*variant="unstyled"\s*type="button"\s*onClick=\{exportPdf\}/)
+    expect(src).toMatch(/setError\(\(err && err\.message\) \|\| 'request failed'\)/)
+    expect(src).toMatch(/setSaveMsg\(\{ ok: false, text: \(err && err\.message\) \|\| 'save failed' \}\)/)
+    expect(src).not.toMatch(/setData\(null\)/)
+  })
 })

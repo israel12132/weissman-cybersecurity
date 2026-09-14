@@ -191,10 +191,11 @@ export default function StealthOperations() {
           </Button>
           <ShellScanActions
             onRefresh={handleRefresh}
-            onExport={exportCsv}
+            onExport={error ? undefined : exportCsv}
             refreshLoading={loading}
             exportDisabled={!!error || !filteredHosts.length}
           />
+          {!error && (
           <Button
             variant="unstyled"
             type="button"
@@ -206,6 +207,7 @@ export default function StealthOperations() {
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf')}
           </Button>
+          )}
         </div>
       </header>
 
