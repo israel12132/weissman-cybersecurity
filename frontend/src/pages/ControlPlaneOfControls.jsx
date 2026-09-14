@@ -69,12 +69,13 @@ export default function ControlPlaneOfControls() {
   }, [findings, searchQuery])
 
   const exportCsv = useCallback(() => {
+    if (error) return
     downloadCsv(
       filtered.map((f) => [f.source || f.type, f.title, f.severity, f.status, f.discovered_at]),
       ['engine', 'title', 'severity', 'status', 'discovered'],
       'weissman-control-plane',
     )
-  }, [filtered])
+  }, [error, filtered])
 
   const crit = findings.filter((f) => ['critical', 'high'].includes((f.severity || '').toLowerCase())).length
   const liveEngineCount = useMemo(
@@ -88,7 +89,7 @@ export default function ControlPlaneOfControls() {
       subtitle={t(`${NS}.subtitle`)}
       icon={<ShieldCheck />}
       actions={(
-        <ShellScanActions onRefresh={load} onExport={exportCsv} refreshLoading={loading} exportDisabled={!filtered.length} />
+        <ShellScanActions onRefresh={load} onExport={error ? undefined : exportCsv} refreshLoading={loading} exportDisabled={!!error || !filtered.length} />
       )}
     >
       <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
