@@ -576,7 +576,7 @@ export default function EngineManagementConsole() {
       </div>
 
       {/* Config Modal */}
-      {configModal && selectedEngine && (
+      {configModal && selectedEngine && !catalogUnavailable && (
         <EngineConfigModal
           engine={selectedEngine}
           onClose={() => setConfigModal(false)}

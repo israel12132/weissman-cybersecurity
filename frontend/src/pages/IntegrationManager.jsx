@@ -420,7 +420,7 @@ export default function IntegrationManager() {
       )}
 
       {/* Configure existing integration modal */}
-      {configureTarget && (
+      {configureTarget && !loadError && (
         <AddIntegrationModal
           integration={
             availableIntegrations.find(

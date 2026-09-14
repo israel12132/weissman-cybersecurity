@@ -15,4 +15,11 @@ describe('EngineManagementConsole live-only truth', () => {
     expect(src).toMatch(/unavailable_title/)
     expect(src).toMatch(/catalogUnavailable/)
   })
+
+  it('mutes leftover leftover-config modal after a failed catalog GET', () => {
+    expect(src).toMatch(/\{configModal && selectedEngine && !catalogUnavailable && \(/)
+    expect(src).toMatch(/setCatalogUnavailable\(true\);\n      setEngines\(\[\]\)/)
+    expect(src).not.toMatch(/setCatalogUnavailable\(true\);\n      setConfigModal/)
+    expect(src).not.toMatch(/setCatalogUnavailable\(true\);\n      setSelectedEngine/)
+  })
 })

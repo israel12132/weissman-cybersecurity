@@ -21,4 +21,10 @@ describe('IntegrationManager live-only truth', () => {
     expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(loadError\) return/)
     expect(src).toMatch(/exportDisabled=\{loadError \|\| !filteredFindings\.length\}/)
   })
+
+  it('mutes leftover leftover-configure modal after a failed integrations GET', () => {
+    expect(src).toMatch(/\{configureTarget && !loadError && \(/)
+    expect(src).toMatch(/setLoadError\(true\);/)
+    expect(src).not.toMatch(/setLoadError\(true\);\n      setConfigureTarget/)
+  })
 })
