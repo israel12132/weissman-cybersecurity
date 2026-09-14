@@ -220,7 +220,7 @@ export default function WafBypassLab() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={handleExportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={scanning}
           exportDisabled={historyUnavailable || !filteredFindings.length}

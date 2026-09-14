@@ -24,4 +24,13 @@ describe('WafBypassLab live-only truth', () => {
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !filteredFindings\.length\}/)
   })
 
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/useWeissmanEnginePage\(ENGINE, detailFindings\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
+    expect(src).toMatch(/data-testid="waf-bypass-history-unavailable"/)
+    expect(src).toMatch(/if \(!ok\) \{ setScanning\(false\); return \}/)
+    expect(src).toMatch(/\} catch \{\n      setScanning\(false\)\n    \}/)
+    expect(src).not.toMatch(/setHistoryUnavailable/)
+  })
 })
