@@ -37,11 +37,20 @@ describe('BusinessEngineProfile live-only truth', () => {
     expect(src).toMatch(/!historyUnavailable &&[\s\S]{0,800}BarChart accessibilityLayer data=\{statusData\}/)
     expect(src).toMatch(/!historyUnavailable && visibleJobs\.map/)
     expect(src).toMatch(/!historyUnavailable && visibleFindings\.map/)
-    expect(src).toMatch(/if \(historyUnavailable\) \{[\s\S]{0,200}history_unavailable/)
+    expect(src).toMatch(/data-testid="business-engine-profile-history-unavailable"/)
   })
 
   it('does not dump leftover leftover-history JSON after a failed history GET', () => {
     expect(src).toMatch(/async function exportJson\(\) \{\n    if \(historyUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{historyUnavailable\}/)
+  })
+
+  it('mutes leftover leftover-GET Export PDF after a failed history GET', () => {
+    expect(src).toMatch(/apiFetch\(`\/api\/engines\/history\/\$\{encodeURIComponent\(engineId\)\}\?limit=100`\)/)
+    expect(src).toMatch(/function exportPdf\(\) \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/\{!historyUnavailable && \(\s*<Button variant="unstyled" type="button" onClick=\{exportPdf\}/)
+    expect(src).toMatch(/pages\.businessEngineProfile\.export_pdf/)
+    expect(src).toMatch(/setHistoryUnavailable\(true\)/)
+    expect(src).not.toMatch(/catch \{\s*setHistoryUnavailable\(true\)\s*setHistory\(/)
   })
 })

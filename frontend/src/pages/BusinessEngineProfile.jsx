@@ -294,6 +294,7 @@ export default function BusinessEngineProfile() {
   }
 
   function exportPdf() {
+    if (historyUnavailable) return
     const lines = []
     lines.push(`${t('pages.businessEngineProfile.pdf_business_engine')}: ${reg?.label || engineId} (${engineId})`)
     lines.push(`${t('pages.businessEngineProfile.pdf_generated')}: ${new Date().toISOString()}`)
@@ -301,21 +302,17 @@ export default function BusinessEngineProfile() {
     lines.push(t('pages.businessEngineProfile.pdf_mission_heading'))
     lines.push(mission)
     lines.push('')
-    if (historyUnavailable) {
-      lines.push(t('pages.businessEngineProfile.history_unavailable'))
-    } else {
-      lines.push(`${t('pages.businessEngineProfile.pdf_jobs_tracked')}: ${jobs.length}`)
-      lines.push(`${t('pages.businessEngineProfile.pdf_findings_tracked')}: ${findings.length}`)
-      lines.push('')
-      lines.push(t('pages.businessEngineProfile.recent_jobs'))
-      for (const j of jobs.slice(0, 12)) {
-        lines.push(`${j?.created_at || '-'} | ${j?.status || '-'} | findings=${j?.findings_count || 0} | source=${j?.source || '-'}`)
-      }
-      lines.push('')
-      lines.push(t('pages.businessEngineProfile.live_findings'))
-      for (const f of findings.slice(0, 20)) {
-        lines.push(`${f?.discovered_at || '-'} | ${f?.severity || '-'} | ${f?.title || '-'}`)
-      }
+    lines.push(`${t('pages.businessEngineProfile.pdf_jobs_tracked')}: ${jobs.length}`)
+    lines.push(`${t('pages.businessEngineProfile.pdf_findings_tracked')}: ${findings.length}`)
+    lines.push('')
+    lines.push(t('pages.businessEngineProfile.recent_jobs'))
+    for (const j of jobs.slice(0, 12)) {
+      lines.push(`${j?.created_at || '-'} | ${j?.status || '-'} | findings=${j?.findings_count || 0} | source=${j?.source || '-'}`)
+    }
+    lines.push('')
+    lines.push(t('pages.businessEngineProfile.live_findings'))
+    for (const f of findings.slice(0, 20)) {
+      lines.push(`${f?.discovered_at || '-'} | ${f?.severity || '-'} | ${f?.title || '-'}`)
     }
     if (liveJob?.id) {
       lines.push('')
@@ -436,7 +433,9 @@ export default function BusinessEngineProfile() {
             {!historyUnavailable && (
               <Button variant="unstyled" type="button" onClick={exportJson} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">{t('pages.businessEngineProfile.export_json')}</Button>
             )}
-            <Button variant="unstyled" type="button" onClick={exportPdf} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-amber-500/40 text-amber-300 hover:bg-amber-500/10">{t('pages.businessEngineProfile.export_pdf')}</Button>
+            {!historyUnavailable && (
+              <Button variant="unstyled" type="button" onClick={exportPdf} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-amber-500/40 text-amber-300 hover:bg-amber-500/10">{t('pages.businessEngineProfile.export_pdf')}</Button>
+            )}
             <span className="text-xs font-mono text-[var(--text-tertiary)]">{runState.msg || t('pages.businessEngineProfile.ready')}</span>
           </div>
           {liveJob && (
