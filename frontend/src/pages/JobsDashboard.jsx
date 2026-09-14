@@ -293,8 +293,8 @@ export default function JobsDashboard() {
             })}
             {' · '}
             {total === 1
-              ? t('pages.jobsDashboard.jobs_tracked', { count: total })
-              : t('pages.jobsDashboard.jobs_tracked_plural', { count: total })}
+              ? t('pages.jobsDashboard.jobs_tracked', { count: error ? '—' : total })
+              : t('pages.jobsDashboard.jobs_tracked_plural', { count: error ? '—' : total })}
           </p>
         )}
 
@@ -332,7 +332,7 @@ export default function JobsDashboard() {
                   }`}
                 >
                   <div className={`text-2xl font-bold ${getStatusBadgeClass(status).split(' ')[0]}`}>
-                    {statusCounts[status]}
+                    {error ? '—' : statusCounts[status]}
                   </div>
                   <div className="text-[11px] text-[var(--text-tertiary)] capitalize mt-1">
                     {t(`pages.jobsDashboard.status_${status}`, { defaultValue: status })}

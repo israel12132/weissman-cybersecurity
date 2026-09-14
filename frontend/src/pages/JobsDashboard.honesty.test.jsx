@@ -25,4 +25,13 @@ describe('JobsDashboard live-only truth', () => {
     expect(src).not.toMatch(/if \(hasLoadedRef\.current\) return/)
     expect(src).not.toMatch(/setJobs\(\[\]\)/)
   })
+
+  it('mutes leftover leftover-GET status KPI tiles after a failed jobs GET', () => {
+    expect(src).toMatch(/\{error \? '—' : statusCounts\[status\]\}/)
+    expect(src).toMatch(/jobs_tracked', \{ count: error \? '—' : total \}/)
+    expect(src).toMatch(/jobs_tracked_plural', \{ count: error \? '—' : total \}/)
+    expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
+    expect(src).not.toMatch(/setJobs\(\[\]\)/)
+    expect(src).not.toMatch(/method:\s*'POST'/)
+  })
 })
