@@ -220,7 +220,7 @@ export default function RemediationHub() {
       actions={(
         <ShellScanActions
           onRefresh={load}
-          onExport={handleExportCsv}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={!!error || !filteredFindings.length}
         />

@@ -29,4 +29,13 @@ describe('RemediationHub live-only truth', () => {
     expect(src).not.toMatch(/catch \(e\) \{\s*setSelectedFinding\(null\)/)
     expect(src).not.toMatch(/catch \(e\) \{\s*setFindings\(\[\]\)/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed findings GET', () => {
+    expect(src).toMatch(/apiFetch\('\/api\/findings\?limit=2000'\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/setError\(e\.message \|\| 'Failed to load findings'\)/)
+    expect(src).not.toMatch(/catch \(e\) \{\s*setFindings\(\[\]\)/)
+  })
 })
