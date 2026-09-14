@@ -177,14 +177,14 @@ export default function FixFirstProgram() {
   )
 
   const handleRefresh = useCallback(() => load(clientId), [load, clientId])
-  const exportCsv = useCallback(
-    () => exportRowsCsv(PROGRAM_CSV_HEADER, programToCsvRows(filteredProgram), 'weissman-fix-first'),
-    [filteredProgram],
-  )
-  const exportPdf = useCallback(
-    () => exportRowsPdf('Weissman Fix-First Program', PROGRAM_CSV_HEADER, programToCsvRows(filteredProgram), 'weissman-fix-first'),
-    [filteredProgram],
-  )
+  const exportCsv = useCallback(() => {
+    if (error) return
+    exportRowsCsv(PROGRAM_CSV_HEADER, programToCsvRows(filteredProgram), 'weissman-fix-first')
+  }, [error, filteredProgram])
+  const exportPdf = useCallback(() => {
+    if (error) return
+    exportRowsPdf('Weissman Fix-First Program', PROGRAM_CSV_HEADER, programToCsvRows(filteredProgram), 'weissman-fix-first')
+  }, [error, filteredProgram])
 
   return (
     <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
@@ -206,21 +206,23 @@ export default function FixFirstProgram() {
           </span>
           <ShellScanActions
             onRefresh={handleRefresh}
-            onExport={exportCsv}
+            onExport={error ? undefined : exportCsv}
             refreshLoading={loading}
-            exportDisabled={!filteredProgram.length}
+            exportDisabled={!!error || !filteredProgram.length}
           />
+          {!error && (
           <Button
             variant="unstyled"
             type="button"
             onClick={exportPdf}
-            disabled={!filteredProgram.length}
+            disabled={!!error || !filteredProgram.length}
             title={t('common.export_pdf')}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf')}
           </Button>
+          )}
         </div>
       </div>
 
