@@ -374,6 +374,7 @@ export default function IncidentResponseCenter() {
   const [tab, setTab] = useState('timeline') // 'timeline' | 'playbook'
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [incidentsUnavailable, setIncidentsUnavailable] = useState(false)
   const [stepSaving, setStepSaving] = useState(false)
   const now = useNow(30_000)
 
@@ -388,10 +389,14 @@ export default function IncidentResponseCenter() {
       }
       const list = data.incidents.map((raw) => normalizeIncident(raw, t))
       setIncidents(list)
+      setIncidentsUnavailable(false)
       setSelectedId((prev) => prev ?? list[0]?.id ?? null)
     } catch (e) {
       // A background refresh must not blow away a working view with an error.
-      if (!silent) setError(e.message ?? t('pages.incidentResponseCenter.load_failed'))
+      if (!silent) {
+        setError(e.message ?? t('pages.incidentResponseCenter.load_failed'))
+        setIncidentsUnavailable(true)
+      }
     } finally {
       if (!silent) setLoading(false)
     }
@@ -502,6 +507,11 @@ export default function IncidentResponseCenter() {
     return incidents.filter((i) => ids.has(i.id))
   }, [incidents, filteredFindings, searchQuery])
 
+  const handleExportCsv = useCallback(() => {
+    if (incidentsUnavailable) return
+    exportIncidentsCsv(incidents)
+  }, [incidentsUnavailable, incidents])
+
   return (
     <PageShell
       title={t('pages.incidentResponseCenter.title')}
@@ -511,7 +521,7 @@ export default function IncidentResponseCenter() {
       actions={(
         <ShellScanActions
           onRefresh={loadIncidents}
-          onExport={() => { if (error) return; exportIncidentsCsv(incidents) }}
+          onExport={incidentsUnavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={!!error || !filteredFindings.length}
         />
