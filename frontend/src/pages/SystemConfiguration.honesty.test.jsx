@@ -22,4 +22,15 @@ describe('SystemConfiguration live-only truth', () => {
     expect(src).toMatch(/setErr\(e\?\.message \|\| t\(`\$\{NS\}\.mfa\.errors\.status_fetch_failed`\)\)/)
     expect(src).not.toMatch(/setStatusUnavailable\(true\)\n      setStatus\(null\)/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed config GET', () => {
+    expect(src).toMatch(/api\.get\('\/api\/system\/config'\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(configUnavailable\) return/)
+    expect(src).toMatch(/onExport=\{configUnavailable \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{configUnavailable \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/onRefresh=\{fetchConfig\}/)
+    expect(src).toMatch(/text: error\?\.message \|\| t\(`\$\{NS\}\.save_error`\)/)
+    expect(src).not.toMatch(/save_error[\s\S]{0,80}setConfigUnavailable/)
+    expect(src).not.toMatch(/Failed to fetch config:[\s\S]{0,80}setConfig\(/)
+  })
 })

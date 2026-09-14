@@ -183,7 +183,7 @@ export default function SystemConfiguration() {
       actions={(
         <ShellScanActions
           onRefresh={fetchConfig}
-          onExport={handleExportCsv}
+          onExport={configUnavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={configUnavailable || !filteredFindings.length}
         />
