@@ -185,7 +185,7 @@ export default function IntegrationManager() {
       actions={(
         <ShellScanActions
           onRefresh={fetchIntegrations}
-          onExport={handleExportCsv}
+          onExport={loadError ? undefined : handleExportCsv}
           refreshLoading={loading}
           exportDisabled={loadError || !filteredFindings.length}
         />

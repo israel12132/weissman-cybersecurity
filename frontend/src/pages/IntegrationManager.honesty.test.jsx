@@ -27,4 +27,15 @@ describe('IntegrationManager live-only truth', () => {
     expect(src).toMatch(/setLoadError\(true\);/)
     expect(src).not.toMatch(/setLoadError\(true\);\n      setConfigureTarget/)
   })
+
+  it('mutes leftover leftover-GET Export CSV after a failed integrations GET', () => {
+    expect(src).toMatch(/api\.get\('\/api\/integrations'\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(loadError\) return/)
+    expect(src).toMatch(/onExport=\{loadError \? undefined : handleExportCsv\}/)
+    expect(src).toMatch(/exportDisabled=\{loadError \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/onRefresh=\{fetchIntegrations\}/)
+    expect(src).toMatch(/toast\.error\(t\('pages\.integrationManager\.delete_failed'\)\)/)
+    expect(src).not.toMatch(/delete_failed[\s\S]{0,80}setLoadError/)
+    expect(src).not.toMatch(/Failed to fetch integrations:[\s\S]{0,80}setIntegrations\(\[\]\)/)
+  })
 })
