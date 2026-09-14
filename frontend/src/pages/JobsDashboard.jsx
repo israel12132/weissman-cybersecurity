@@ -153,6 +153,11 @@ export default function JobsDashboard() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportJobsCsv(filteredJobs, t)
+  }, [error, filteredJobs, t])
+
   function getStatusBadgeClass(status) {
     const statusLower = normalizeJobStatus(status)
     return STATUS_COLORS[statusLower] || 'text-[var(--text-tertiary)] bg-[var(--bg-1)]/20 border-[var(--border-strong)]/30'
@@ -267,7 +272,7 @@ export default function JobsDashboard() {
           </label>
           <ShellScanActions
             onRefresh={() => { setLoading(true); loadJobs() }}
-            onExport={() => exportJobsCsv(filteredJobs, t)}
+            onExport={error ? undefined : handleExportCsv}
             refreshLoading={loading}
             exportDisabled={!filteredFindings.length}
           />
