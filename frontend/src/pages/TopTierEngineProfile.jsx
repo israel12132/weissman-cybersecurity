@@ -284,6 +284,7 @@ export default function TopTierEngineProfile() {
   }
 
   function exportPdf() {
+    if (historyUnavailable) return
     const lines = []
     lines.push(`Top-Tier Engine Profile: ${profile.label} (${profile.id})`)
     lines.push(`Generated: ${new Date().toISOString()}`)
@@ -298,18 +299,14 @@ export default function TopTierEngineProfile() {
     lines.push('Mission')
     lines.push(profile.mission)
     lines.push('')
-    if (historyUnavailable) {
-      lines.push(t('pages.topTierEngineProfile.history_unavailable'))
-    } else {
-      lines.push('Latest jobs')
-      for (const j of jobs.slice(0, 12)) {
-        lines.push(`${j?.created_at || '-'} | ${j?.status || '-'} | findings=${j?.findings_count || 0} | ${j?.kind || '-'}`)
-      }
-      lines.push('')
-      lines.push('Findings snapshot')
-      for (const f of findings.slice(0, 20)) {
-        lines.push(`${f?.discovered_at || '-'} | ${f?.severity || '-'} | ${f?.title || '-'}`)
-      }
+    lines.push('Latest jobs')
+    for (const j of jobs.slice(0, 12)) {
+      lines.push(`${j?.created_at || '-'} | ${j?.status || '-'} | findings=${j?.findings_count || 0} | ${j?.kind || '-'}`)
+    }
+    lines.push('')
+    lines.push('Findings snapshot')
+    for (const f of findings.slice(0, 20)) {
+      lines.push(`${f?.discovered_at || '-'} | ${f?.severity || '-'} | ${f?.title || '-'}`)
     }
     if (liveJob?.id) {
       lines.push('')
@@ -456,6 +453,7 @@ export default function TopTierEngineProfile() {
               {t('pages.topTierEngineProfile.export_json')}
             </Button>
             )}
+            {!historyUnavailable && (
             <Button variant="unstyled"
               type="button"
               onClick={exportPdf}
@@ -463,6 +461,7 @@ export default function TopTierEngineProfile() {
             >
               {t('pages.topTierEngineProfile.export_pdf')}
             </Button>
+            )}
             {activeJobId && <span className="text-[11px] font-mono text-[var(--text-tertiary)]">{t('pages.topTierEngineProfile.job_id', { id: activeJobId })}</span>}
           </div>
           {runState.msg && <div className="text-[12px] font-mono text-[var(--text-tertiary)]">{runState.msg}</div>}
