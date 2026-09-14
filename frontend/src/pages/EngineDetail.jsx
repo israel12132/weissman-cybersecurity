@@ -623,6 +623,7 @@ export default function EngineDetail() {
   useEffect(() => () => { if (esRef.current) esRef.current.close() }, [])
 
   const handleExport = useCallback(() => {
+    if (historyUnavailable) return
     const payload = {
       engine: engineId,
       label: engine?.label,
@@ -638,9 +639,10 @@ export default function EngineDetail() {
   }, [engineId, engine?.label, jobId, lastRunStatus, findings, runHistory, historyUnavailable, showToast])
 
   const exportFindingsCsv = useCallback(() => {
+    if (historyUnavailable) return
     if (!findings.length) return
     exportStandardFindingsCsv(findings, `${engineId}-findings`)
-  }, [findings, engineId])
+  }, [historyUnavailable, findings, engineId])
 
   const {
     searchQuery,
@@ -739,9 +741,9 @@ export default function EngineDetail() {
           </div>
           <ShellScanActions
             onRefresh={reloadHistory}
-            onExport={exportFindingsCsv}
+            onExport={historyUnavailable ? undefined : exportFindingsCsv}
             refreshLoading={historyLoading}
-            exportDisabled={!findings.length}
+            exportDisabled={historyUnavailable || !findings.length}
           />
         </div>
       </header>
@@ -830,6 +832,7 @@ export default function EngineDetail() {
               >
                 {t('engines.detail_view_history')}
               </Button>
+              {!historyUnavailable && (
               <Button variant="unstyled"
                 type="button"
                 onClick={handleExport}
@@ -837,6 +840,7 @@ export default function EngineDetail() {
               >
                 ↓ {t('engines.detail_export')}
               </Button>
+              )}
             </div>
           </div>
 

@@ -37,4 +37,20 @@ describe('EngineDetail live-only truth', () => {
     expect(src).toMatch(/historyUnavailable\s*\n\s*\? \(jobId \? `Job \$\{jobId\}` : undefined\)/)
     expect(src).toMatch(/run_history: historyUnavailable \? null : runHistory/)
   })
+
+  it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
+    expect(src).toMatch(/const exportFindingsCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !findings\.length\}/)
+  })
+
+  it('mutes leftover leftover-GET Export CSV after a failed history GET', () => {
+    expect(src).toMatch(/apiFetch\(`\/api\/engines\/history\/\$\{encodeURIComponent\(engineId\)\}\?limit=20`\)/)
+    expect(src).toMatch(/onExport=\{historyUnavailable \? undefined : exportFindingsCsv\}/)
+    expect(src).toMatch(/onRefresh=\{reloadHistory\}/)
+    expect(src).toMatch(/data-testid="engine-detail-history-stat-unavailable"/)
+    expect(src).toMatch(/showToast\('error', d\.detail \|\| d\.error \|\| `Scan failed \(\$\{status\}\)`\)/)
+    expect(src).toMatch(/setHistoryUnavailable\(true\)/)
+    expect(src).toMatch(/\{!historyUnavailable && \(/)
+    expect(src).not.toMatch(/onExport=\{exportFindingsCsv\}/)
+  })
 })
