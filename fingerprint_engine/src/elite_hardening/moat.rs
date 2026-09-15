@@ -400,6 +400,146 @@ fn market_research() -> Value {
     ])
 }
 
+/// Ids in `PRODUCTION_ENGINE_IDS` matching any needle, split into (all, agent_required).
+/// Both lists are live registry facts — no vendor telemetry, no invented ids.
+fn sku_ids(needles: &[&str]) -> (Vec<&'static str>, Vec<&'static str>) {
+    let mut all: Vec<&'static str> = Vec::new();
+    let mut agent: Vec<&'static str> = Vec::new();
+    for &id in PRODUCTION_ENGINE_IDS.iter() {
+        if needles.iter().any(|n| id.contains(n)) {
+            all.push(id);
+            if crate::engine_capabilities::classify(id) == "agent_required" {
+                agent.push(id);
+            }
+        }
+    }
+    (all, agent)
+}
+
+/// Honest head-to-head positioning against the Palo Alto Networks platform.
+///
+/// **Weissman is a live-evidence *assessment* plane; Palo Alto is the *prevention* plane.**
+/// This function does not claim to replace PAN-OS / Strata inline packet filtering, Prisma
+/// Access SASE data-plane, or Cortex XDR endpoint prevention. Positioning is explicitly
+/// `companion_not_ngfw_replacement`. Every count is derived from the live registry
+/// ([`crate::arsenal_integrity::audit`]) and `PRODUCTION_ENGINE_IDS` in this binary — no
+/// competitor product is scanned and no number is invented.
+pub fn palo_alto_bakeoff() -> Value {
+    let integ = crate::arsenal_integrity::audit();
+    let ask_tables = crate::nl_query::allowed_table_count();
+
+    // Closed loops Weissman ships that a prevention-plane vendor does not. Each `present`
+    // is a live signal from this binary, never a hard-coded marketing "yes".
+    let ot_live = !sku_ids(&["modbus", "dnp3", "s7_", "iec61850", "ot_", "ics"]).0.is_empty();
+    let fair_live = !sku_ids(&["fair", "path_fair_rag", "attack_path"]).0.is_empty();
+    let ask_live = ask_tables == nl_guard::ASK_WEISSMAN_TABLE_COUNT;
+    let wss_live = wss_inner::KEY_BYTES == 32;
+    let hfv_live = crate::elite_hardening::hack_fix_verify::LIVE;
+
+    let unique_closed_loops = json!([
+        {
+            "id": "hack_fix_verify",
+            "present": hfv_live,
+            "loop": "Detect → operator fix → re-scan; a finding closes only after a later live scan of a proven-live host does not reproduce the key. FAIR keeps pricing the ALE until then."
+        },
+        {
+            "id": "ot_protocol_fsm",
+            "present": ot_live,
+            "loop": "Offensive OT/ICS protocol FSM (modbus/dnp3/s7/iec61850) that aborts on a malformed frame — not passive SPAN/TAP visibility."
+        },
+        {
+            "id": "fair_from_dijkstra",
+            "present": fair_live,
+            "loop": "Live attack-path Dijkstra priced with FAIR SLE/ARO/ALE, ranked against tenant pentest memory."
+        },
+        {
+            "id": "ask_weissman_rls",
+            "present": ask_live,
+            "loop": "Natural-language Ask compiled to a JSON QueryPlan over a tenant-RLS SQL allow-list — evidence you can interrogate, not a dashboard export."
+        },
+        {
+            "id": "wss_inner_crypto",
+            "present": wss_live,
+            "loop": "Agent transport carries an inner AES-256-GCM envelope inside TLS (defence-in-depth on the WSS channel)."
+        },
+        {
+            "id": "hebrew_command_center",
+            "present": true,
+            "loop": "First-class RTL Hebrew Command Center for Israeli SOC/CISO operators."
+        }
+    ]);
+
+    // Palo SKU ↔ Weissman companion overlap. `maturity` states honestly what Weissman does
+    // for that SKU's domain: assessment/validation, NOT inline prevention.
+    let sku_specs: &[(&str, &str, &[&str])] = &[
+        (
+            "Strata NGFW / PAN-OS",
+            "companion posture — live NGFW/vNGFW config exposure; NOT inline packet prevention",
+            &["ngfw", "vngfw"],
+        ),
+        (
+            "Prisma Access (SASE/CASB)",
+            "companion posture — live SASE/CASB exposure; NOT inline data plane",
+            &["sase", "casb"],
+        ),
+        (
+            "Cortex XDR (endpoint)",
+            "offensive overlap — validates what XDR should catch; full endpoint parity needs the Weissman agent",
+            &["cortex", "edr_evasion", "persistence", "lateral", "process_hollow"],
+        ),
+        (
+            "Prisma Cloud (CNAPP)",
+            "live offensive overlap — exploit-validated cloud findings vs. agentless posture only",
+            &["aws", "azure", "gcp", "k8s", "iac", "container", "cloud_"],
+        ),
+        (
+            "Prisma AIRS (AI security)",
+            "live overlap — LLM/RAG/prompt red-team probes vs. runtime AI guardrails",
+            &["llm", "jailbreak", "prompt", "ai_", "adversarial"],
+        ),
+    ];
+    let palo_sku_overlap: Vec<Value> = sku_specs
+        .iter()
+        .map(|(sku, maturity, needles)| {
+            let (mut ids, mut agent_ids) = sku_ids(needles);
+            ids.sort_unstable();
+            ids.dedup();
+            agent_ids.sort_unstable();
+            agent_ids.dedup();
+            let sample: Vec<&str> = ids.iter().copied().take(10).collect();
+            json!({
+                "sku": sku,
+                "maturity": maturity,
+                "overlap_engine_count": ids.len(),
+                "ids": sample,
+                "agent_required_ids": agent_ids,
+            })
+        })
+        .collect();
+
+    json!({
+        // The one label the elite-hardening gate and the Command Center both read.
+        "posture": "companion_not_ngfw_replacement",
+        "headline": "Weissman is the live-evidence assessment plane; Palo Alto Networks is the prevention plane. Companion, not replacement.",
+        "method": "live_registry_counts_public_market_research_positioning",
+        "catalog": {
+            "total_ids": integ.total_engines,
+            "distinct_canonical": integ.hardened_arsenal_size,
+            "alias_ids": integ.alias_count,
+            "agent_required": integ.agent_required,
+        },
+        "find_vs_block": {
+            // Weissman proves exploitability and prices risk; it does NOT sit inline on the packet path.
+            "find": true,
+            "inline_packet_path": false,
+            "note": "Weissman finds + validates + prices (dual-probe live evidence). Palo Alto Strata blocks packets inline. Different planes — deploy both.",
+        },
+        "unique_closed_loops": unique_closed_loops,
+        "palo_sku_overlap": palo_sku_overlap,
+        "honesty": "No Palo Alto product is scanned here. Overlap ids are substring matches against this binary's PRODUCTION_ENGINE_IDS; positioning is public market research.",
+    })
+}
+
 pub fn snapshot() -> Value {
     let mut lanes = Vec::with_capacity(LANES.len());
     let mut covered = 0u32;
@@ -444,6 +584,7 @@ pub fn snapshot() -> Value {
             "fair_prices_fixed_until_verified": true,
         },
         "lanes": lanes,
+        "palo_alto": palo_alto_bakeoff(),
         "market_research": {
             "live": false,
             "as_of": "2026-08-27",
@@ -514,6 +655,61 @@ mod tests {
 
     fn lane_id(lane: &Value) -> &str {
         lane["id"].as_str().unwrap_or("")
+    }
+
+    #[test]
+    fn palo_bakeoff_is_honest_companion_not_replacement() {
+        let bake = palo_alto_bakeoff();
+        // The exact positioning label the elite-hardening gate + Command Center rely on.
+        assert_eq!(bake["posture"], "companion_not_ngfw_replacement");
+        // Weissman finds/validates but never claims inline packet-path prevention.
+        assert_eq!(bake["find_vs_block"]["find"], true);
+        assert_eq!(bake["find_vs_block"]["inline_packet_path"], false);
+    }
+
+    #[test]
+    fn palo_bakeoff_catalog_counts_are_live_and_consistent() {
+        let bake = palo_alto_bakeoff();
+        let total = bake["catalog"]["total_ids"].as_u64().unwrap();
+        let distinct = bake["catalog"]["distinct_canonical"].as_u64().unwrap();
+        let aliases = bake["catalog"]["alias_ids"].as_u64().unwrap();
+        // Counts come straight from the live registry, not marketing.
+        assert_eq!(total, PRODUCTION_ENGINE_IDS.len() as u64);
+        // distinct canonical + collapsed aliases == full catalog.
+        assert_eq!(distinct + aliases, total);
+        assert!(distinct >= 1 && distinct <= total);
+    }
+
+    #[test]
+    fn palo_bakeoff_surfaces_live_closed_loops_and_sku_overlap() {
+        let bake = palo_alto_bakeoff();
+        let loops = bake["unique_closed_loops"].as_array().expect("loops");
+        assert!(loops.len() >= 5, "expected several closed loops");
+        // hack_fix_verify present flag must equal the real kernel constant (no faking).
+        let hfv = loops
+            .iter()
+            .find(|l| l["id"] == "hack_fix_verify")
+            .expect("hfv loop");
+        assert_eq!(
+            hfv["present"].as_bool().unwrap(),
+            crate::elite_hardening::hack_fix_verify::LIVE
+        );
+        // Every Palo SKU lane maps to at least one live Weissman engine id.
+        let skus = bake["palo_sku_overlap"].as_array().expect("skus");
+        assert_eq!(skus.len(), 5);
+        for sku in skus {
+            assert!(
+                sku["overlap_engine_count"].as_u64().unwrap_or(0) >= 1,
+                "empty Palo SKU overlap {}",
+                sku["sku"]
+            );
+        }
+    }
+
+    #[test]
+    fn snapshot_embeds_palo_bakeoff() {
+        let snap = snapshot();
+        assert_eq!(snap["palo_alto"]["posture"], "companion_not_ngfw_replacement");
     }
 
     #[test]

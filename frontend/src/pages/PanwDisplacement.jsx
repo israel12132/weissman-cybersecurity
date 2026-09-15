@@ -20,7 +20,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../utils/apiFetch'
 import { downloadCsv } from '../lib/exportFindingsCsv'
-import { launchEngineScan } from '../lib/launchEngineScan'
+import { useLaunchEngineScan } from '../hooks/useLaunchEngineScan'
 import { firstClientTarget, resolveClient } from '../lib/clientTarget'
 import Button from '../components/ui/Button'
 
@@ -172,6 +172,8 @@ function PrismaCloudHonestyCard({ honesty, t }) {
 export default function PanwDisplacement() {
   const { t } = useTranslation()
   const { clients, selectedClientId, setSelectedClientId } = useClient()
+  // Engine-aware launcher: merges hub params + client integrations for the selected client.
+  const launchScan = useLaunchEngineScan(selectedClientId)
 
   const [report, setReport] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -224,9 +226,8 @@ export default function PanwDisplacement() {
     setHunting(true)
     setHuntMsg('')
     try {
-      const r = await launchEngineScan({
+      const r = await launchScan({
         engineId: SCHISM_ENGINE,
-        clientId: selectedClientId,
         target,
       })
       if (r?.ok) {
@@ -239,7 +240,7 @@ export default function PanwDisplacement() {
     } finally {
       setHunting(false)
     }
-  }, [selectedClientId, target, t])
+  }, [selectedClientId, target, t, launchScan])
 
   const columns = useMemo(
     () => [

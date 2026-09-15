@@ -11,8 +11,8 @@ vi.mock('../utils/apiFetch', () => ({
   apiFetch: (...args) => apiFetch(...args),
 }))
 
-vi.mock('../lib/launchEngineScan', () => ({
-  launchEngineScan: vi.fn(async () => ({ ok: true, data: {} })),
+vi.mock('../hooks/useLaunchEngineScan', () => ({
+  useLaunchEngineScan: () => vi.fn(async () => ({ ok: true, data: {} })),
 }))
 
 vi.mock('./PageShell', () => ({

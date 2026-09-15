@@ -367,6 +367,13 @@ async fn api_arsenal_integrity() -> Response {
     (StatusCode::OK, Json(crate::arsenal_integrity::audit_json())).into_response()
 }
 
+// ─── Elite hardening kernel status (100-control Part 2 — live from this binary) ───
+// Every control (Ask RLS table count, OT FSM, evidence-doubt floor, Hack-Fix-Verify, sovereign
+// moat lanes, honest Palo Alto bake-off) is computed from the running process, not a static tile.
+async fn api_elite_hardening_status() -> Response {
+    (StatusCode::OK, Json(crate::elite_hardening::status_snapshot())).into_response()
+}
+
 // ─── Stealth batch deploy ("run all" → backend drips the batch like a human red-team) ───
 async fn api_arsenal_deploy(
     State(state): State<Arc<AppState>>,

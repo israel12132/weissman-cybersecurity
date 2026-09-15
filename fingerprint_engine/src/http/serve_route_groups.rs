@@ -102,6 +102,11 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/arsenal/catalog", get(api_arsenal_catalog))
         // Arsenal integrity/de-dup audit: distinct engines vs 100%-duplicate aliases (anti-fluff).
         .route("/api/arsenal/integrity", get(api_arsenal_integrity))
+        // Elite hardening kernel: 100-control Part 2 status computed live from this binary.
+        .route(
+            "/api/elite-hardening/status",
+            get(api_elite_hardening_status),
+        )
         // Stealth dispatch plan preview: how a batch of N engines drips out (concurrency/jitter/UA).
         .route("/api/arsenal/deploy-plan", get(api_arsenal_deploy_plan))
         // Stealth batch deploy: "run all" → backend drips the engines under concurrency/jitter/UA.

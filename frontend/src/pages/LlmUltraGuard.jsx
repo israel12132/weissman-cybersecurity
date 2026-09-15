@@ -199,6 +199,7 @@ export default function LlmUltraGuard() {
       subtitle={t('pages.llmUltraGuard.subtitle')}
       badge={t('pages.llmUltraGuard.badge')}
       engineId={engineId}
+      hideHubParams
       actions={(
         <ShellScanActions
           onRefresh={() => { refreshFromHistory(); loadLive() }}

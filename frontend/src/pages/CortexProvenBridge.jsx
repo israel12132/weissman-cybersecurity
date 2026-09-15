@@ -14,7 +14,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import Button from '../components/ui/Button'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../utils/apiFetch'
-import { launchEngineScan } from '../lib/launchEngineScan'
+import { useLaunchEngineScan } from '../hooks/useLaunchEngineScan'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 import { SEV_COLOR } from '../lib/severity'
 import { useClient } from '../context/ClientContext'
@@ -25,6 +25,8 @@ const ENGINE = 'cortex_proven_finding_bridge'
 export default function CortexProvenBridge() {
   const { t } = useTranslation()
   const { selectedClientId } = useClient()
+  // Engine-aware launcher: merges hub params + client integrations for the selected client.
+  const launchScan = useLaunchEngineScan(selectedClientId)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -132,9 +134,8 @@ export default function CortexProvenBridge() {
     setScanning(true)
     setScanMsg('')
     try {
-      const r = await launchEngineScan({
+      const r = await launchScan({
         engineId: ENGINE,
-        clientId: selectedClientId,
         target: '',
       })
       if (!r.ok) {
