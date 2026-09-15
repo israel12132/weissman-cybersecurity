@@ -4,7 +4,7 @@
 <strong style="font-size:1.5em">WEISSMAN CYBERSECURITY</strong><br/>
 <strong style="font-size:1.25em">ספר המוצר — מיפוי מלא של הפלטפורמה</strong><br/>
 <em>לוחות · מנועים · APIs · תשתית · surfaces — אפס פערים</em><br/><br/>
-גרסה: 2026-08-18 · **605 עמודים**
+גרסה: 2026-09-15 · **635 עמודים**
 </p>
 
 > **להצגה למנכ"ל / מכירות:** פתחו `docs/sales/viewer/index.html` בדפדפן — עיצוב CEO, חיפוש, הדפסה ל-PDF.
@@ -86,567 +86,597 @@
 |------|------|-----|
 | [043](#page-043) | OSINT | מנוע |
 | [044](#page-044) | Attack Surface Management | מנוע |
-| [045](#page-045) | Leak Hunter | מנוע |
-| [046](#page-046) | Discovery Engine | מנוע |
-| [047](#page-047) | Deep Recon | מנוע |
-| [048](#page-048) | BOLA / IDOR | מנוע |
-| [049](#page-049) | GraphQL & API Security | מנוע |
-| [050](#page-050) | JWT Attack | מנוע |
-| [051](#page-051) | OAuth / OIDC / SSO Security | מנוע |
-| [052](#page-052) | HTTP Request Smuggling | מנוע |
-| [053](#page-053) | Liminal Boundary | מנוע |
-| [054](#page-054) | Prototype Pollution | מנוע |
-| [055](#page-055) | SSRF Advanced | מנוע |
-| [056](#page-056) | XXE | מנוע |
-| [057](#page-057) | SSTI | מנוע |
-| [058](#page-058) | File Upload Security | מנוע |
-| [059](#page-059) | WebSocket Attack | מנוע |
-| [060](#page-060) | Web Cache Poisoning & Deception | מנוע |
-| [061](#page-061) | LLM Path Fuzz | מנוע |
-| [062](#page-062) | Semantic AI Fuzz | מנוע |
-| [063](#page-063) | AI Adversarial Red Team | מנוע |
-| [064](#page-064) | LLM Red Team | מנוע |
-| [065](#page-065) | Adversarial ML | מנוע |
-| [066](#page-066) | Autonomous Pentest | מנוע |
-| [067](#page-067) | Nexus Sovereign Swarm Intelligence | מנוע |
-| [068](#page-068) | AWS Attack | מנוע |
-| [069](#page-069) | Cloud Posture Management (CSPM) | מנוע |
-| [070](#page-070) | Azure Attack | מנוע |
-| [071](#page-071) | GCP Attack | מנוע |
-| [072](#page-072) | K8s Container | מנוע |
-| [073](#page-073) | IaC Security | מנוע |
-| [074](#page-074) | Serverless Attack | מנוע |
-| [075](#page-075) | SCADA / ICS | מנוע |
-| [076](#page-076) | IoT Firmware | מנוע |
-| [077](#page-077) | Wireless & RF IoT Posture | מנוע |
-| [078](#page-078) | Aviation ADS-B / ACARS Attack | מנוע |
-| [079](#page-079) | Maritime AIS / NMEA Attack | מנוע |
-| [080](#page-080) | EV Charging OCPP Attack | מנוע |
-| [081](#page-081) | Smart Grid DLMS / IEC-104 Attack | מנוע |
-| [082](#page-082) | Rail Signaling Attack | מנוע |
-| [083](#page-083) | Building Automation Attack | מנוע |
-| [084](#page-084) | Robotics / ROS2 Attack | מנוע |
-| [085](#page-085) | OT SIS / Triconex TriStation | מנוע |
-| [086](#page-086) | Detection Evasion Surface | מנוע |
-| [087](#page-087) | WAF Bypass | מנוע |
-| [088](#page-088) | Timing Side-Channel | מנוע |
-| [089](#page-089) | Anti-Forensics | מנוע |
-| [090](#page-090) | Stealth Engine | מנוע |
-| [091](#page-091) | PKI / TLS | מנוע |
-| [092](#page-092) | Email & Domain Trust Posture | מנוע |
-| [093](#page-093) | PQC Scanner | מנוע |
-| [094](#page-094) | Password Spray & Stuffing Posture | מנוע |
-| [095](#page-095) | Kerberoasting & AD External Posture | מנוע |
-| [096](#page-096) | SAML Attack & SSO Federation | מנוע |
-| [097](#page-097) | Crypto Engine | מנוע |
-| [098](#page-098) | DNS & Domain Posture | מנוע |
-| [099](#page-099) | IPv6 Attack | מנוע |
-| [100](#page-100) | Transport Security (TLS/mTLS/gRPC) | מנוע |
-| [101](#page-101) | SMB / NetBIOS | מנוע |
-| [102](#page-102) | Supply Chain | מנוע |
-| [103](#page-103) | CI/CD Pipeline Security | מנוע |
-| [104](#page-104) | Container Registry | מנוע |
-| [105](#page-105) | SBOM Analyzer | מנוע |
-| [106](#page-106) | Typosquatting Monitor | מנוע |
-| [107](#page-107) | Kill Chain | מנוע |
-| [108](#page-108) | OAST / OOB | מנוע |
-| [109](#page-109) | Deception Honeypot | מנוע |
-| [110](#page-110) | Digital Twin | מנוע |
-| [111](#page-111) | Zero-Day Prediction | מנוע |
-| [112](#page-112) | APT Threat Emulation | מנוע |
-| [113](#page-113) | PoE Synthesis | מנוע |
-| [114](#page-114) | RCE Chain | מנוע |
-| [115](#page-115) | Active Directory Attack | מנוע |
-| [116](#page-116) | C2 Framework Emulation | מנוע |
-| [117](#page-117) | Ransomware Emulation | מנוע |
-| [118](#page-118) | Lateral Movement | מנוע |
-| [119](#page-119) | Data Exfiltration | מנוע |
-| [120](#page-120) | Memory Corruption | מנוע |
-| [121](#page-121) | Browser Exploitation | מנוע |
-| [122](#page-122) | Deepfake / GenAI Attack | מנוע |
-| [123](#page-123) | Zero Trust Bypass | מנוע |
-| [124](#page-124) | Container Escape | מנוע |
-| [125](#page-125) | Wireless Attack | מנוע |
-| [126](#page-126) | Mobile Attack | מנוע |
-| [127](#page-127) | Cloud Ransomware | מנוע |
-| [128](#page-128) | Firmware Exploit | מנוע |
-| [129](#page-129) | DNS Rebinding | מנוע |
-| [130](#page-130) | Physical Security Emulation | מנוע |
-| [131](#page-131) | Vuln Chain Synthesis | מנוע |
-| [132](#page-132) | Advanced SQLi | מנוע |
-| [133](#page-133) | Log4Shell / Log4J | מנוע |
-| [134](#page-134) | Kernel Exploit | מנוע |
-| [135](#page-135) | Credential Stuffing | מנוע |
-| [136](#page-136) | Spear Phishing / BEC | מנוע |
-| [137](#page-137) | VLAN Bypass | מנוע |
-| [138](#page-138) | Malware Persistence | מנוע |
-| [139](#page-139) | Insider Threat Emulation | מנוע |
-| [140](#page-140) | Post-Exploitation | מנוע |
-| [141](#page-141) | Cloud Lateral Movement | מנוע |
-| [142](#page-142) | Process Injection | מנוע |
-| [143](#page-143) | Intelligent API Fuzzing | מנוע |
-| [144](#page-144) | SMB / NTLM Relay | מנוע |
-| [145](#page-145) | GraphQL Injection | מנוע |
-| [146](#page-146) | Container / K8s Escape | מנוע |
-| [147](#page-147) | Web Cache Poisoning | מנוע |
-| [148](#page-148) | XXE / XML Injection | מנוע |
-| [149](#page-149) | LDAP / AD Injection | מנוע |
-| [150](#page-150) | Side-Channel Attack | מנוע |
-| [151](#page-151) | SSRF Chain Pivot | מנוע |
-| [152](#page-152) | JWT / Token Attacks | מנוע |
-| [153](#page-153) | BGP Route Hijacking | מנוע |
-| [154](#page-154) | Deserialization RCE | מנוע |
-| [155](#page-155) | Active Directory Enum | מנוע |
-| [156](#page-156) | Ransomware Simulation | מנוע |
-| [157](#page-157) | WAF / IDS Bypass | מנוע |
-| [158](#page-158) | SIEM Log Evasion | מנוע |
-| [159](#page-159) | Mobile App Pentest | מנוע |
-| [160](#page-160) | CORS Misconfiguration | מנוע |
-| [161](#page-161) | Prototype Pollution | מנוע |
-| [162](#page-162) | IPSec / VPN Audit | מנוע |
-| [163](#page-163) | 5G / Cellular Security | מנוע |
-| [164](#page-164) | Firmware Emulation | מנוע |
-| [165](#page-165) | Cloud Storage Audit | מנוע |
-| [166](#page-166) | LLM Jailbreak / Prompt Extraction | מנוע |
-| [167](#page-167) | CI/CD Pipeline Attack | מנוע |
-| [168](#page-168) | WebAssembly Reverse Engineering | מנוע |
-| [169](#page-169) | Bluetooth / BLE Attack | מנוע |
-| [170](#page-170) | OAuth / OIDC Abuse | מנוע |
-| [171](#page-171) | Heap Exploitation | מנוע |
-| [172](#page-172) | Clickjacking / UI Redress | מנוע |
-| [173](#page-173) | Email Spoofing / DMARC Bypass | מנוע |
-| [174](#page-174) | Satellite / Space Security | מנוע |
-| [175](#page-175) | AI Training Data Poisoning | מנוע |
-| [176](#page-176) | Smart Contract / Blockchain Exploit | מנוע |
-| [177](#page-177) | Automotive / CAN Bus Attack | מנוע |
-| [178](#page-178) | Zero-Click Exploit Emulation | מנוע |
-| [179](#page-179) | Biometric Bypass | מנוע |
-| [180](#page-180) | Quantum Threat Emulation | מנוע |
-| [181](#page-181) | Secrets & Key Exposure | מנוע |
-| [182](#page-182) | Threat Hunting Automation | מנוע |
-| [183](#page-183) | Cloud Identity & IAM Attack | מנוע |
-| [184](#page-184) | Poisoned Pipeline Execution | מנוע |
-| [185](#page-185) | LLM Agent Hijacking | מנוע |
-| [186](#page-186) | API Gateway / Microservice Attack | מנוע |
-| [187](#page-187) | Anti-Deception Evasion | מנוע |
-| [188](#page-188) | Multi-Cloud Pivot | מנוע |
-| [189](#page-189) | RAG / Vector DB Poisoning | מנוע |
-| [190](#page-190) | Malicious Browser Extension | מנוע |
-| [191](#page-191) | Mobile OS Hardening Bypass | מנוע |
-| [192](#page-192) | Obfuscated / Domain-Fronted C2 | מנוע |
-| [193](#page-193) | Hardware Implant / Supply Chain | מנוע |
-| [194](#page-194) | Serverless Cold-Start Race | מנוע |
-| [195](#page-195) | Multimodal AI Attack | מנוע |
-| [196](#page-196) | AD Certificate Services Abuse | מנוע |
-| [197](#page-197) | Data Pipeline / ETL Attack | מנוע |
-| [198](#page-198) | Model Inversion / Exfiltration | מנוע |
-| [199](#page-199) | Cloud WAF / Shield Bypass | מנוע |
-| [200](#page-200) | Telecom / SS7 Attack | מנוע |
-| [201](#page-201) | Dark / Deep Web Intelligence | מנוע |
-| [202](#page-202) | Network TAP / SPAN Implant | מנוע |
-| [203](#page-203) | GitOps / IaC Drift Attack | מנוע |
-| [204](#page-204) | Compliance Gap Scanner | מנוע |
-| [205](#page-205) | DNS Zone Enumeration | מנוע |
-| [206](#page-206) | Social Media OSINT | מנוע |
-| [207](#page-207) | Shodan / Censys Mass Scan | מנוע |
-| [208](#page-208) | Certificate Transparency Mining | מנוע |
-| [209](#page-209) | Email Address Harvester | מנוע |
-| [210](#page-210) | GitHub / GitLab OSINT | מנוע |
-| [211](#page-211) | Geospatial Intelligence (GEOINT) | מנוע |
-| [212](#page-212) | Passive Network Topology Mapper | מנוע |
-| [213](#page-213) | Employee Profiling Engine | מנוע |
-| [214](#page-214) | Historical Asset Recon | מנוע |
-| [215](#page-215) | Advanced XSS Engine | מנוע |
-| [216](#page-216) | CSRF Token Bypass | מנוע |
-| [217](#page-217) | Path Traversal / LFI / RFI | מנוע |
-| [218](#page-218) | Business Logic Vulnerability | מנוע |
-| [219](#page-219) | Web Race Condition (TOCTOU) | מנוע |
-| [220](#page-220) | OAuth 2.0 / PKCE Attack | מנוע |
-| [221](#page-221) | Mass Assignment / HPP | מנוע |
-| [222](#page-222) | Web Cache Deception | מנוע |
-| [223](#page-223) | Shadow / Deprecated API Attack | מנוע |
-| [224](#page-224) | NoSQL Injection Engine | מנוע |
-| [225](#page-225) | Java Deserialization Gadget Chain | מנוע |
-| [226](#page-226) | Open Redirect Chain | מנוע |
-| [227](#page-227) | Host Header Injection | מנוע |
-| [228](#page-228) | CORS Misconfiguration Exploit | מנוע |
-| [229](#page-229) | GraphQL Batching / DoS | מנוע |
-| [230](#page-230) | AI Model Backdoor / Trojan | מנוע |
-| [231](#page-231) | LLM Context Window Overflow | מנוע |
-| [232](#page-232) | AI/ML Supply Chain Attack | מנוע |
-| [233](#page-233) | Adversarial Image Attack | מנוע |
-| [234](#page-234) | LLM Resource Exhaustion | מנוע |
-| [235](#page-235) | LLM Training Data Extraction | מנוע |
-| [236](#page-236) | AI Watermark / Fingerprint Removal | מנוע |
-| [237](#page-237) | Agentic AI Sandbox Escape | מנוע |
-| [238](#page-238) | System Prompt Extraction | מנוע |
-| [239](#page-239) | AI Bias / Fairness Exploitation | מנוע |
-| [240](#page-240) | Cloud Storage Bucket Takeover | מנוע |
-| [241](#page-241) | Cloud IMDS SSRF | מנוע |
-| [242](#page-242) | Lambda / Cloud Function Layer Inject | מנוע |
-| [243](#page-243) | Cloud Audit Log Tampering | מנוע |
-| [244](#page-244) | Cross-Account Role Pivot | מנוע |
-| [245](#page-245) | Kubernetes RBAC Exploit | מנוע |
-| [246](#page-246) | Azure AD / Entra ID Attack | מנוע |
-| [247](#page-247) | Terraform State Exfiltration | מנוע |
-| [248](#page-248) | Cloud Cost Amplification DoS | מנוע |
-| [249](#page-249) | Cloud Logging Blind Spot Exploit | מנוע |
-| [250](#page-250) | Container Image Poisoning | מנוע |
-| [251](#page-251) | Cloud Function Runtime Escape | מנוע |
-| [252](#page-252) | Modbus TCP Exploitation | מנוע |
-| [253](#page-253) | DNP3 Protocol Attack | מנוע |
-| [254](#page-254) | IEC 61850 GOOSE / SV Spoofing | מנוע |
-| [255](#page-255) | PLC Logic Bomb Injection | מנוע |
-| [256](#page-256) | BACnet Building Automation Attack | מנוע |
-| [257](#page-257) | Zigbee Protocol Attack | מנוע |
-| [258](#page-258) | LoRaWAN IoT Network Attack | מנוע |
-| [259](#page-259) | HMI / SCADA Interface Exploit | מנוע |
-| [260](#page-260) | CAN / CAN FD Bus Attack | מנוע |
-| [261](#page-261) | ICS Historian Database Attack | מנוע |
-| [262](#page-262) | LOLBins / LOLBAS Abuse | מנוע |
-| [263](#page-263) | Kernel / User Rootkit Implant | מנוע |
-| [264](#page-264) | Timestomping & Metadata Falsification | מנוע |
-| [265](#page-265) | Forensic Log Wiping | מנוע |
-| [266](#page-266) | DLL Hijacking / Side-Loading | מנוע |
-| [267](#page-267) | Process Hollowing / Ghosting | מנוע |
-| [268](#page-268) | Process Inventory (Agent) | מנוע |
-| [269](#page-269) | USB Device Enumeration (Agent) | מנוע |
-| [270](#page-270) | Fileless Malware Execution | מנוע |
-| [271](#page-271) | Direct Syscall / NTAPI Evasion | מנוע |
-| [272](#page-272) | AMSI / EDR Bypass | מנוע |
-| [273](#page-273) | Polymorphic / Metamorphic Payload | מנוע |
-| [274](#page-274) | GPU Hash Cracking Engine | מנוע |
-| [275](#page-275) | TLS / SSL Downgrade Attack | מנוע |
-| [276](#page-276) | TOTP / MFA Brute Force | מנוע |
-| [277](#page-277) | NTLM Relay / Pass-the-Hash | מנוע |
-| [278](#page-278) | Kerberos Golden / Silver Ticket | מנוע |
-| [279](#page-279) | HSM Side-Channel / Fault Attack | מנוע |
-| [280](#page-280) | PKI Certificate Forgery | מנוע |
-| [281](#page-281) | Weak Key Derivation Exploit | מנוע |
-| [282](#page-282) | ARP Spoofing / LAN MITM | מנוע |
-| [283](#page-283) | ICMP / DNS Covert Channel | מנוע |
-| [284](#page-284) | SNMP Community String Attack | מנוע |
-| [285](#page-285) | OSPF / BGP Route Manipulation | מנוע |
-| [286](#page-286) | RDP Exploitation Engine | מנוע |
-| [287](#page-287) | VoIP / SIP Protocol Attack | מנוע |
-| [288](#page-288) | DNS Tunneling C2 | מנוע |
-| [289](#page-289) | DHCP Starvation / Rogue Server | מנוע |
-| [290](#page-290) | NTP / UDP Amplification DDoS | מנוע |
-| [291](#page-291) | Wi-Fi / 802.11 Attack Suite | מנוע |
-| [292](#page-292) | npm / PyPI Typosquatting Attack | מנוע |
-| [293](#page-293) | Dependency Confusion Attack | מנוע |
-| [294](#page-294) | Open-Source Project Backdoor | מנוע |
-| [295](#page-295) | Build Artifact Tampering | מנוע |
-| [296](#page-296) | Package Signing Bypass | מנוע |
-| [297](#page-297) | Vendored Code / Git Submodule Attack | מנוע |
-| [298](#page-298) | Code Review / PR Bypass | מנוע |
-| [299](#page-299) | Software Update Mechanism Hijack | מנוע |
-| [300](#page-300) | Advanced Persistence (UEFI / Bootkit) | מנוע |
-| [301](#page-301) | APT Lateral Movement Playbook | מנוע |
-| [302](#page-302) | Nation-State TTP Emulation | מנוע |
-| [303](#page-303) | Zero-Day Exploit Chain | מנוע |
-| [304](#page-304) | APT-Grade C2 Infrastructure | מנוע |
-| [305](#page-305) | Long-Haul Slow Exfiltration | מנוע |
-| [306](#page-306) | Full End-to-End Breach Simulation | מנוע |
-| [307](#page-307) | Watering Hole Attack | מנוע |
-| [308](#page-308) | Supply Chain APT Implant | מנוע |
-| [309](#page-309) | Destructive Wiper Emulation | מנוע |
-| [310](#page-310) | Satellite Imagery OSINT | מנוע |
-| [311](#page-311) | Dark Web Intelligence | מנוע |
-| [312](#page-312) | Financial OSINT Engine | מנוע |
-| [313](#page-313) | Blockchain Transaction Tracer | מנוע |
-| [314](#page-314) | Document Metadata Harvester | מנוע |
-| [315](#page-315) | Patent & IP Intelligence | מנוע |
-| [316](#page-316) | Telecom Infrastructure OSINT | מנוע |
-| [317](#page-317) | IoT/ICS Shodan Deep Scan | מנוע |
-| [318](#page-318) | Job Posting Tech Stack OSINT | מנוע |
-| [319](#page-319) | GitHub Secret Scanner | מנוע |
-| [320](#page-320) | GraphQL Deep Attack Engine | מנוע |
-| [321](#page-321) | gRPC Reflection Attack | מנוע |
-| [322](#page-322) | HTTP/2 & HTTP/3 Attack Engine | מנוע |
-| [323](#page-323) | Swagger/OpenAPI Exploiter | מנוע |
-| [324](#page-324) | SOAP/XML Injection Engine | מנוע |
-| [325](#page-325) | OData Query Injection | מנוע |
-| [326](#page-326) | CSS Injection / Data Theft | מנוע |
-| [327](#page-327) | Advanced Template Injection | מנוע |
-| [328](#page-328) | HTTP Parameter Pollution Engine | מנוע |
-| [329](#page-329) | API Mass Assignment Scanner | מנוע |
-| [330](#page-330) | Advanced Web Cache Poisoning | מנוע |
-| [331](#page-331) | Clickjacking / UI Redress Engine | מנוע |
-| [332](#page-332) | Subdomain Takeover Scanner | מנוע |
-| [333](#page-333) | Remote File Inclusion Engine | מנוע |
-| [334](#page-334) | .NET Deserialization Exploiter | מנוע |
-| [335](#page-335) | NoSQL Deep Injection Engine | מנוע |
-| [336](#page-336) | JWT Advanced Attack Suite | מנוע |
-| [337](#page-337) | API Rate Limit Bypass | מנוע |
-| [338](#page-338) | Advanced IDOR / BOLA Engine | מנוע |
-| [339](#page-339) | Prompt Injection Chain Attack | מנוע |
-| [340](#page-340) | ML Model Inversion Attack | מנוע |
-| [341](#page-341) | AI Model Supply Chain Attack | מנוע |
-| [342](#page-342) | RAG System Poisoning | מנוע |
-| [343](#page-343) | Adversarial Example Generator | מנוע |
-| [344](#page-344) | Training Data Poisoning Engine | מנוע |
-| [345](#page-345) | Deepfake Synthesis Engine | מנוע |
-| [346](#page-346) | LLM Denial of Service | מנוע |
-| [347](#page-347) | GPT Plugin / Action Exploiter | מנוע |
-| [348](#page-348) | Autonomous AI Agent Sandbox Escape | מנוע |
-| [349](#page-349) | LLM Memory Extraction | מנוע |
-| [350](#page-350) | Neural Network Backdoor Detector | מנוע |
-| [351](#page-351) | Federated Learning Poisoning | מנוע |
-| [352](#page-352) | Advanced LLM Red Teaming | מנוע |
-| [353](#page-353) | ML Model Stealing Engine | מנוע |
-| [354](#page-354) | Cloud Metadata SSRF Attack | מנוע |
-| [355](#page-355) | S3 Bucket Misconfiguration Attack | מנוע |
-| [356](#page-356) | Lambda / Serverless Escape | מנוע |
-| [357](#page-357) | Cloud IAM Privilege Escalation | מנוע |
-| [358](#page-358) | Kubernetes RBAC Escape | מנוע |
-| [359](#page-359) | Azure DevOps Pipeline Attack | מנוע |
-| [360](#page-360) | GCP Privilege Escalation Engine | מנוע |
-| [361](#page-361) | Terraform State File Exploiter | מנוע |
-| [362](#page-362) | CloudFormation / ARM Template Injection | מנוע |
-| [363](#page-363) | Service Mesh Attack Engine | מנוע |
-| [364](#page-364) | Cloud Audit Log Evasion | מנוע |
-| [365](#page-365) | Container Registry Attack | מנוע |
-| [366](#page-366) | Cloud Worm Propagation Engine | מנוע |
-| [367](#page-367) | Serverless Function Injection | מנוע |
-| [368](#page-368) | Cloud Storage Exfiltration | מנוע |
-| [369](#page-369) | EKS/AKS/GKE Managed K8s Attack | מנוע |
-| [370](#page-370) | Cloud Network Attack Engine | מנוע |
-| [371](#page-371) | Cloud Secrets Manager Attack | מנוע |
-| [372](#page-372) | Cloud Persistence Engine | מנוע |
-| [373](#page-373) | Modbus Protocol Attack | מנוע |
-| [374](#page-374) | MQTT Broker Attack Engine | מנוע |
-| [375](#page-375) | CoAP Protocol Exploitation | מנוע |
-| [376](#page-376) | OPC-UA Industrial Attack | מנוע |
-| [377](#page-377) | PLC Ladder Logic Attack | מנוע |
-| [378](#page-378) | HMI/SCADA UI Attack Engine | מנוע |
-| [379](#page-379) | Satellite Communication Attack | מנוע |
-| [380](#page-380) | IoT Firmware Emulation Attack | מנוע |
-| [381](#page-381) | PROFINET Industrial Attack | מנוע |
-| [382](#page-382) | RFID/NFC Cloning Engine | מנוע |
-| [383](#page-383) | Industrial Protocol Fuzzer | מנוע |
-| [384](#page-384) | DLL Hijacking Attack Engine | מנוע |
-| [385](#page-385) | Sandbox Evasion Engine | מנוע |
-| [386](#page-386) | Kernel Rootkit Surface Probe | מנוע |
-| [387](#page-387) | Memory Forensics Evasion | מנוע |
-| [388](#page-388) | AV/EDR Bypass Engine | מנוע |
-| [389](#page-389) | DNS Tunneling C2 Channel | מנוע |
-| [390](#page-390) | Steganography C2 Engine | מנוע |
-| [391](#page-391) | HTTPS C2 Domain Fronting | מנוע |
-| [392](#page-392) | ICMP Covert Channel | מנוע |
-| [393](#page-393) | ROP Chain Construction Engine | מנוע |
-| [394](#page-394) | Timing-Based Evasion Engine | מנוע |
-| [395](#page-395) | Log Tampering & Destruction | מנוע |
-| [396](#page-396) | JIT Spray Attack Engine | מנוע |
-| [397](#page-397) | COM Object Hijacking | מנוע |
-| [398](#page-398) | Network Traffic Masking Engine | מנוע |
-| [399](#page-399) | Anti-Debug & Anti-Analysis Engine | מנוע |
-| [400](#page-400) | Parent PID Spoofing Engine | מנוע |
-| [401](#page-401) | Padding Oracle Attack | מנוע |
-| [402](#page-402) | Hash Length Extension Attack | מנוע |
-| [403](#page-403) | ECDSA Nonce Bias Attack | מנוע |
-| [404](#page-404) | RSA Timing Side-Channel | מנוע |
-| [405](#page-405) | MFA Bypass Engine | מנוע |
-| [406](#page-406) | Kerberos Attack Suite | מנוע |
-| [407](#page-407) | PKI Hierarchy Attack Engine | מנוע |
-| [408](#page-408) | Advanced Session Fixation | מנוע |
-| [409](#page-409) | Password Hash Cracking Engine | מנוע |
-| [410](#page-410) | OAuth 2.0 Advanced Attack Suite | מנוע |
-| [411](#page-411) | SAML Advanced Attack Engine | מנוע |
-| [412](#page-412) | Quantum Computing Key Attack Simulator | מנוע |
-| [413](#page-413) | Advanced Password Spray Engine | מנוע |
-| [414](#page-414) | ARP Spoofing / Cache Poisoning | מנוע |
-| [415](#page-415) | VLAN Hopping Attack Engine | מנוע |
-| [416](#page-416) | DHCP Starvation & Rogue Server | מנוע |
-| [417](#page-417) | DNS Cache Poisoning Engine | מנוע |
-| [418](#page-418) | SNMP Community Exploitation | מנוע |
-| [419](#page-419) | RDP Attack Engine | מנוע |
-| [420](#page-420) | LDAP Injection Engine | מנוע |
-| [421](#page-421) | SS7 Telecom Signaling Probe | מנוע |
-| [422](#page-422) | WiFi Attack Suite | מנוע |
-| [423](#page-423) | Bluetooth Attack Engine | מנוע |
-| [424](#page-424) | OSPF/BGP Route Hijacking | מנוע |
-| [425](#page-425) | MPLS/VPN Network Attack | מנוע |
-| [426](#page-426) | LTE/5G Network Attack Engine | מנוע |
-| [427](#page-427) | IPv6 Advanced Attack Engine | מנוע |
-| [428](#page-428) | Network Covert Channel Engine | מנוע |
-| [429](#page-429) | WPA3/WiFi 6E Attack Engine | מנוע |
-| [430](#page-430) | Tor Exit Node Attack Engine | מנוע |
-| [431](#page-431) | Protocol Downgrade Engine | מנוע |
-| [432](#page-432) | NPM Package Hijacking Engine | מנוע |
-| [433](#page-433) | PyPI Supply Chain Attack | מנוע |
-| [434](#page-434) | GitHub Actions Supply Chain | מנוע |
-| [435](#page-435) | Docker Image Poisoning Engine | מנוע |
-| [436](#page-436) | Maven/Gradle Supply Chain Attack | מנוע |
-| [437](#page-437) | Compiler-Level Backdoor Engine | מנוע |
-| [438](#page-438) | CDN Cache Poisoning Engine | מנוע |
-| [439](#page-439) | Software Signing Bypass Engine | מנוע |
-| [440](#page-440) | Build System Compromise Engine | מנוע |
-| [441](#page-441) | Software Update Hijacking Engine | מנוע |
-| [442](#page-442) | SBOM Forgery & Analysis Engine | מנוע |
-| [443](#page-443) | Third-Party API Supply Chain | מנוע |
-| [444](#page-444) | IaC Supply Chain Attack | מנוע |
-| [445](#page-445) | APT28 (Fancy Bear) TTPs | מנוע |
-| [446](#page-446) | APT29 (Cozy Bear) TTPs | מנוע |
-| [447](#page-447) | APT41 (Winnti/Double Dragon) TTPs | מנוע |
-| [448](#page-448) | Lazarus Group (DPRK) TTPs | מנוע |
-| [449](#page-449) | Volt Typhoon (VANGUARD PANDA) TTPs | מנוע |
-| [450](#page-450) | Scattered Spider Social TTPs | מנוע |
-| [451](#page-451) | Salt Typhoon Telecom TTPs | מנוע |
-| [452](#page-452) | FIN7 Financial Crime TTPs | מנוע |
-| [453](#page-453) | Conti Ransomware Group TTPs | מנוע |
-| [454](#page-454) | LockBit Ransomware TTPs | מנוע |
-| [455](#page-455) | Cl0p Ransomware TTPs | מנוע |
-| [456](#page-456) | BlackCat/ALPHV Ransomware TTPs | מנוע |
-| [457](#page-457) | Midnight Blizzard (APT29 Advanced) TTPs | מנוע |
-| [458](#page-458) | Earth Longzhi APT TTPs | מנוע |
-| [459](#page-459) | Equation Group (NSA-linked) TTPs | מנוע |
-| [460](#page-460) | Sandworm (Voodoo Bear) TTPs | מנוע |
-| [461](#page-461) | Carbon Spider (Evil Corp) TTPs | מנוע |
-| [462](#page-462) | Wizard Spider (TrickBot/Conti) TTPs | מנוע |
-| [463](#page-463) | UNC2452 (SolarWinds) TTPs | מנוע |
-| [464](#page-464) | UNC3944/Octo Tempest TTPs | מנוע |
-| [465](#page-465) | QUANTUM SOVEREIGN NEXUS - World's First AI-Quantum Hybrid Attack Engine | מנוע |
-| [466](#page-466) | UEFI/Bootkit Implant Detector | מנוע |
-| [467](#page-467) | Fileless Malware Engine | מנוע |
-| [468](#page-468) | Polymorphic Code Engine | מנוע |
-| [469](#page-469) | Botnet C2 Infrastructure Engine | מנוע |
-| [470](#page-470) | Keylogger Engine | מנוע |
-| [471](#page-471) | Spyware/Stalkerware Engine | מנוע |
-| [472](#page-472) | Network Worm Propagation Engine | מנוע |
-| [473](#page-473) | Remote Code Execution Exploit Engine | מנוע |
-| [474](#page-474) | Persistence Mechanism Engine | מנוע |
-| [475](#page-475) | Lateral Movement Engine | מנוע |
-| [476](#page-476) | Data Staging Engine | מנוע |
-| [477](#page-477) | Exploit Kit Simulation Engine | מנוע |
-| [478](#page-478) | Trojan Dropper Engine | מנוע |
-| [479](#page-479) | Office Macro Malware Engine | מנוע |
-| [480](#page-480) | Spear Phishing Campaign Engine | מנוע |
-| [481](#page-481) | Vishing Attack Engine | מנוע |
-| [482](#page-482) | SMS Phishing (Smishing) Engine | מנוע |
-| [483](#page-483) | QR Code Phishing (Quishing) Engine | מנוע |
-| [484](#page-484) | Deepfake Voice Social Engineering | מנוע |
-| [485](#page-485) | BEC (Business Email Compromise) | מנוע |
-| [486](#page-486) | Watering Hole Attack Engine | מנוע |
-| [487](#page-487) | Pretexting Scenario Engine | מנוע |
-| [488](#page-488) | Insider Threat Simulation Engine | מנוע |
-| [489](#page-489) | Brand Impersonation Engine | מנוע |
-| [490](#page-490) | Fake Update Social Engineering | מנוע |
-| [491](#page-491) | LinkedIn Social Engineering Engine | מנוע |
-| [492](#page-492) | Callback Phishing Engine | מנוע |
-| [493](#page-493) | Physical Social Engineering Engine | מנוע |
-| [494](#page-494) | Typosquatting Phishing Engine | מנוע |
-| [495](#page-495) | Android Malware Analysis Engine | מנוע |
-| [496](#page-496) | iOS Exploitation Engine | מנוע |
-| [497](#page-497) | Mobile MITM Attack Engine | מנוע |
-| [498](#page-498) | SSL Pinning Bypass Engine | מנוע |
-| [499](#page-499) | Android Intent Hijacking Engine | מנוע |
-| [500](#page-500) | iOS URL Scheme Attack Engine | מנוע |
-| [501](#page-501) | Mobile Overlay Attack Engine | מנוע |
-| [502](#page-502) | SIM Swap Attack Engine | מנוע |
-| [503](#page-503) | Mobile Banking Trojan Engine | מנוע |
-| [504](#page-504) | App Store Attack Engine | מנוע |
-| [505](#page-505) | MDM/EMM Bypass Engine | מנוע |
-| [506](#page-506) | Mobile Bluetooth Attack Engine | מנוע |
-| [507](#page-507) | NFC Relay Attack Engine | מנוע |
-| [508](#page-508) | Mobile Spyware Engine | מנוע |
-| [509](#page-509) | React Native / Flutter App Attack | מנוע |
-| [510](#page-510) | DNS Exfiltration Engine | מנוע |
-| [511](#page-511) | HTTP Covert Channel Exfiltration | מנוע |
-| [512](#page-512) | Cloud Storage Exfiltration Engine | מנוע |
-| [513](#page-513) | Encrypted Covert Exfiltration | מנוע |
-| [514](#page-514) | Acoustic Side-Channel Exfiltration | מנוע |
-| [515](#page-515) | Electromagnetic Emanation Exfiltration | מנוע |
-| [516](#page-516) | Optical Covert Channel Exfiltration | מנוע |
-| [517](#page-517) | CPU Cache Side-Channel Exfiltration | מנוע |
-| [518](#page-518) | Keyboard Acoustic Eavesdropping | מנוע |
-| [519](#page-519) | Screen Capture Exfiltration Engine | מנוע |
-| [520](#page-520) | Clipboard Hijacking Engine | מנוע |
-| [521](#page-521) | Database Exfiltration Engine | מנוע |
-| [522](#page-522) | Email-Based Exfiltration Engine | מנוע |
-| [523](#page-523) | Insider Threat Exfiltration Engine | מנוע |
-| [524](#page-524) | Storage Covert Channel Engine | מנוע |
-| [525](#page-525) | Threat Intelligence Fusion Engine | מנוע |
-| [526](#page-526) | Attack Surface Quantification | מנוע |
-| [527](#page-527) | External Exposure Supreme | מנוע |
-| [528](#page-528) | Fair Exposure Fusion (Board Risk) | מנוע |
-| [529](#page-529) | Risk Superposition Collapse | מנוע |
-| [530](#page-530) | CHRONOS Temporal Rollback | מנוע |
-| [531](#page-531) | COGNITIVE STARVATION | מנוע |
-| [532](#page-532) | LIQUID-MATRIX Moving Target Defense | מנוע |
-| [533](#page-533) | Sovereign Active Defense Fusion | מנוע |
-| [534](#page-534) | Adversarial Threat Emulation | מנוע |
-| [535](#page-535) | Dark Web Brand Monitor | מנוע |
-| [536](#page-536) | Passive DNS Forensics Engine | מנוע |
-| [537](#page-537) | Network Baseline Anomaly Engine | מנוע |
-| [538](#page-538) | Packet Injection Engine | מנוע |
-| [539](#page-539) | Advanced Network TAP/SPAN Engine | מנוע |
-| [540](#page-540) | Multicast Protocol Attack Engine | מנוע |
-| [541](#page-541) | NAT Traversal Attack Engine | מנוע |
-| [542](#page-542) | GraphQL Subscription DoS | מנוע |
-| [543](#page-543) | WebRTC Attack Engine | מנוע |
-| [544](#page-544) | Web3 / DApp Attack Engine | מנוע |
-| [545](#page-545) | API Gateway Security Bypass | מנוע |
-| [546](#page-546) | TPM Firmware Attack Engine | מנוע |
-| [547](#page-547) | Cold Boot / DRAM Remanence Attack | מנוע |
-| [548](#page-548) | Evil Maid Hardware Implant Engine | מנוע |
-| [549](#page-549) | Thunderbolt / PCIe DMA Attack | מנוע |
-| [550](#page-550) | Voltage / Clock Glitch Fault Injection | מנוע |
-| [551](#page-551) | BadUSB / HID Injection Engine | מנוע |
-| [552](#page-552) | Crypto Hardware Wallet Security Engine | מנוע |
-| [553](#page-553) | JTAG/SWD Debug Interface Exploiter | מנוע |
-| [554](#page-554) | Medical IoT Device Exploit Engine | מנוע |
-| [555](#page-555) | Implantable Medical Device Attack | מנוע |
-| [556](#page-556) | HL7 / DICOM Healthcare Protocol Attack | מנוע |
-| [557](#page-557) | AI Agentic Framework Exploitation | מנוע |
-| [558](#page-558) | LLM Function Calling Hijack Engine | מנוע |
-| [559](#page-559) | Multi-Agent AI Subversion Engine | מנוע |
-| [560](#page-560) | LLM Safety Guardrail Bypass Engine | מנוע |
-| [561](#page-561) | Model Context Protocol (MCP) Exploit | מנוע |
-| [562](#page-562) | AI Synthetic Identity Fraud Engine | מנוע |
-| [563](#page-563) | AI Model Provenance & Lineage Attack | מנוע |
-| [564](#page-564) | SDN Controller Exploitation Engine | מנוע |
-| [565](#page-565) | NFV MANO / VNF Exploitation | מנוע |
-| [566](#page-566) | 5G Network Slice Isolation Bypass | מנוע |
-| [567](#page-567) | Harvest-Now Decrypt-Later (HNDL) Engine | מנוע |
-| [568](#page-568) | Post-Quantum Cryptography Implementation Attack | מנוע |
-| [569](#page-569) | Lattice Cryptography Attack Engine | מנוע |
-| [570](#page-570) | Zero Trust Microsegmentation Bypass | מנוע |
-| [571](#page-571) | Continuous Authentication Evasion Engine | מנוע |
-| [572](#page-572) | SASE / SSE Security Bypass Engine | מנוע |
-| [573](#page-573) | WebAuthn / FIDO2 Bypass Engine | מנוע |
-| [574](#page-574) | AI Vulnerability → Cloud Escalation Chain | מנוע |
-| [575](#page-575) | Social Engineering → Supply Chain Compromise Chain | מנוע |
-| [576](#page-576) | OT Network → IT Network Lateral Pivot Chain | מנוע |
-| [577](#page-577) | Mobile App → Cloud Backend Escalation Chain | מנוע |
-| [578](#page-578) | Data De-anonymization Engine | מנוע |
-| [579](#page-579) | Behavioral Biometric Bypass Engine | מנוע |
-| [580](#page-580) | Location Pattern De-anonymization Engine | מנוע |
-| [581](#page-581) | Differential Privacy Implementation Attack | מנוע |
-| [582](#page-582) | Automated C2 Infrastructure Rotation Engine | מנוע |
-| [583](#page-583) | Security Detection Gap Exploitation Engine | מנוע |
-| [584](#page-584) | Attacker OPSEC & Counter-Intelligence Engine | מנוע |
-| [585](#page-585) | Novel TTP Attack Chain Synthesizer | מנוע |
-| [586](#page-586) | AR / VR Security Attack Engine | מנוע |
-| [587](#page-587) | Edge Computing Node Exploitation | מנוע |
-| [588](#page-588) | Blockchain Bridge / Cross-Chain Attack | מנוע |
-| [589](#page-589) | Unified API Attack Orchestration Engine | מנוע |
-| [590](#page-590) | Automated Threat Modeling Engine | מנוע |
-| [591](#page-591) | Dynamic Attack Graph Traversal Engine | מנוע |
-| [592](#page-592) | PROMETHEUS HYPERION NEXUS™ — Cross-Domain AI Adversarial Swarm | מנוע |
-| [593](#page-593) | HTTP Feedback Fuzz | מנוע |
-| [594](#page-594) | Microsecond Timing | מנוע |
-| [595](#page-595) | CAN Bus Surface | מנוע |
-| [596](#page-596) | Ollama Fuzz | מנוע |
-| [597](#page-597) | LoRa Attack | מנוע |
-| [598](#page-598) | SAP ERP Attack | מנוע |
-| [599](#page-599) | Mainframe z/OS Attack | מנוע |
-| [600](#page-600) | Malvertising SEO Poison | מנוע |
-| [601](#page-601) | Infostealer Emulation | מנוע |
-| [602](#page-602) | Printer MFP Attack | מנוע |
-| [603](#page-603) | RADIUS NAC Bypass | מנוע |
-| [604](#page-604) | Identity Attack Chain | מנוע |
-| [605](#page-605) | Pipeline-to-Runtime Risk | מנוע |
+| [045](#page-045) | First-Mover Surface Delta | מנוע |
+| [046](#page-046) | First-Mover Delta Fusion | מנוע |
+| [047](#page-047) | First-Seen OSV vs NVD | מנוע |
+| [048](#page-048) | Leak Hunter | מנוע |
+| [049](#page-049) | Discovery Engine | מנוע |
+| [050](#page-050) | Deep Recon | מנוע |
+| [051](#page-051) | BOLA / IDOR | מנוע |
+| [052](#page-052) | GraphQL & API Security | מנוע |
+| [053](#page-053) | JWT Attack | מנוע |
+| [054](#page-054) | OAuth / OIDC / SSO Security | מנוע |
+| [055](#page-055) | HTTP Request Smuggling | מנוע |
+| [056](#page-056) | Liminal Boundary | מנוע |
+| [057](#page-057) | Prototype Pollution | מנוע |
+| [058](#page-058) | SSRF Advanced | מנוע |
+| [059](#page-059) | XXE | מנוע |
+| [060](#page-060) | SSTI | מנוע |
+| [061](#page-061) | File Upload Security | מנוע |
+| [062](#page-062) | WebSocket Attack | מנוע |
+| [063](#page-063) | Web Cache Poisoning & Deception | מנוע |
+| [064](#page-064) | LLM Path Fuzz | מנוע |
+| [065](#page-065) | Semantic AI Fuzz | מנוע |
+| [066](#page-066) | AI Adversarial Red Team | מנוע |
+| [067](#page-067) | LLM Red Team | מנוע |
+| [068](#page-068) | Adversarial ML | מנוע |
+| [069](#page-069) | Autonomous Pentest | מנוע |
+| [070](#page-070) | Nexus Sovereign Swarm Intelligence | מנוע |
+| [071](#page-071) | AWS Attack | מנוע |
+| [072](#page-072) | Cloud Posture Management (CSPM) | מנוע |
+| [073](#page-073) | Azure Attack | מנוע |
+| [074](#page-074) | GCP Attack | מנוע |
+| [075](#page-075) | K8s Container | מנוע |
+| [076](#page-076) | Admission Signature Enforcement | מנוע |
+| [077](#page-077) | IaC Security | מנוע |
+| [078](#page-078) | Serverless Attack | מנוע |
+| [079](#page-079) | SCADA / ICS | מנוע |
+| [080](#page-080) | IoT Firmware | מנוע |
+| [081](#page-081) | Wireless & RF IoT Posture | מנוע |
+| [082](#page-082) | Aviation ADS-B / ACARS Attack | מנוע |
+| [083](#page-083) | Maritime AIS / NMEA Attack | מנוע |
+| [084](#page-084) | EV Charging OCPP Attack | מנוע |
+| [085](#page-085) | Smart Grid DLMS / IEC-104 Attack | מנוע |
+| [086](#page-086) | Rail Signaling Attack | מנוע |
+| [087](#page-087) | Building Automation Attack | מנוע |
+| [088](#page-088) | Robotics / ROS2 Attack | מנוע |
+| [089](#page-089) | OT SIS / Triconex TriStation | מנוע |
+| [090](#page-090) | Detection Evasion Surface | מנוע |
+| [091](#page-091) | WAF Bypass | מנוע |
+| [092](#page-092) | Timing Side-Channel | מנוע |
+| [093](#page-093) | Anti-Forensics | מנוע |
+| [094](#page-094) | Stealth Engine | מנוע |
+| [095](#page-095) | PKI / TLS | מנוע |
+| [096](#page-096) | Email & Domain Trust Posture | מנוע |
+| [097](#page-097) | PQC Scanner | מנוע |
+| [098](#page-098) | Password Spray & Stuffing Posture | מנוע |
+| [099](#page-099) | Kerberoasting & AD External Posture | מנוע |
+| [100](#page-100) | SAML Attack & SSO Federation | מנוע |
+| [101](#page-101) | Crypto Engine | מנוע |
+| [102](#page-102) | DNS & Domain Posture | מנוע |
+| [103](#page-103) | IPv6 Attack | מנוע |
+| [104](#page-104) | Transport Security (TLS/mTLS/gRPC) | מנוע |
+| [105](#page-105) | SMB / NetBIOS | מנוע |
+| [106](#page-106) | Supply Chain | מנוע |
+| [107](#page-107) | CI/CD Pipeline Security | מנוע |
+| [108](#page-108) | Container Registry | מנוע |
+| [109](#page-109) | SBOM Analyzer | מנוע |
+| [110](#page-110) | Typosquatting Monitor | מנוע |
+| [111](#page-111) | Kill Chain | מנוע |
+| [112](#page-112) | OAST / OOB | מנוע |
+| [113](#page-113) | Deception Honeypot | מנוע |
+| [114](#page-114) | Digital Twin | מנוע |
+| [115](#page-115) | Zero-Day Prediction | מנוע |
+| [116](#page-116) | APT Threat Emulation | מנוע |
+| [117](#page-117) | PoE Synthesis | מנוע |
+| [118](#page-118) | RCE Chain | מנוע |
+| [119](#page-119) | Active Directory Attack | מנוע |
+| [120](#page-120) | C2 Framework Emulation | מנוע |
+| [121](#page-121) | Ransomware Emulation | מנוע |
+| [122](#page-122) | Lateral Movement | מנוע |
+| [123](#page-123) | Data Exfiltration | מנוע |
+| [124](#page-124) | Memory Corruption | מנוע |
+| [125](#page-125) | Browser Exploitation | מנוע |
+| [126](#page-126) | Deepfake / GenAI Attack | מנוע |
+| [127](#page-127) | Zero Trust Bypass | מנוע |
+| [128](#page-128) | Container Escape | מנוע |
+| [129](#page-129) | Wireless Attack | מנוע |
+| [130](#page-130) | Mobile Attack | מנוע |
+| [131](#page-131) | Cloud Ransomware | מנוע |
+| [132](#page-132) | Firmware Exploit | מנוע |
+| [133](#page-133) | DNS Rebinding | מנוע |
+| [134](#page-134) | Physical Security Emulation | מנוע |
+| [135](#page-135) | Vuln Chain Synthesis | מנוע |
+| [136](#page-136) | Advanced SQLi | מנוע |
+| [137](#page-137) | Log4Shell / Log4J | מנוע |
+| [138](#page-138) | Kernel Exploit | מנוע |
+| [139](#page-139) | Credential Stuffing | מנוע |
+| [140](#page-140) | Spear Phishing / BEC | מנוע |
+| [141](#page-141) | VLAN Bypass | מנוע |
+| [142](#page-142) | Malware Persistence | מנוע |
+| [143](#page-143) | Insider Threat Emulation | מנוע |
+| [144](#page-144) | Post-Exploitation | מנוע |
+| [145](#page-145) | Cloud Lateral Movement | מנוע |
+| [146](#page-146) | Process Injection | מנוע |
+| [147](#page-147) | Intelligent API Fuzzing | מנוע |
+| [148](#page-148) | SMB / NTLM Relay | מנוע |
+| [149](#page-149) | GraphQL Injection | מנוע |
+| [150](#page-150) | Container / K8s Escape | מנוע |
+| [151](#page-151) | Web Cache Poisoning | מנוע |
+| [152](#page-152) | XXE / XML Injection | מנוע |
+| [153](#page-153) | LDAP / AD Injection | מנוע |
+| [154](#page-154) | Side-Channel Attack | מנוע |
+| [155](#page-155) | SSRF Chain Pivot | מנוע |
+| [156](#page-156) | JWT / Token Attacks | מנוע |
+| [157](#page-157) | BGP Route Hijacking | מנוע |
+| [158](#page-158) | Deserialization RCE | מנוע |
+| [159](#page-159) | Active Directory Enum | מנוע |
+| [160](#page-160) | Ransomware Simulation | מנוע |
+| [161](#page-161) | WAF / IDS Bypass | מנוע |
+| [162](#page-162) | SIEM Log Evasion | מנוע |
+| [163](#page-163) | Mobile App Pentest | מנוע |
+| [164](#page-164) | CORS Misconfiguration | מנוע |
+| [165](#page-165) | Prototype Pollution | מנוע |
+| [166](#page-166) | IPSec / VPN Audit | מנוע |
+| [167](#page-167) | 5G / Cellular Security | מנוע |
+| [168](#page-168) | Firmware Emulation | מנוע |
+| [169](#page-169) | Cloud Storage Audit | מנוע |
+| [170](#page-170) | LLM Jailbreak / Prompt Extraction | מנוע |
+| [171](#page-171) | CI/CD Pipeline Attack | מנוע |
+| [172](#page-172) | WebAssembly Reverse Engineering | מנוע |
+| [173](#page-173) | Bluetooth / BLE Attack | מנוע |
+| [174](#page-174) | OAuth / OIDC Abuse | מנוע |
+| [175](#page-175) | Heap Exploitation | מנוע |
+| [176](#page-176) | Clickjacking / UI Redress | מנוע |
+| [177](#page-177) | Email Spoofing / DMARC Bypass | מנוע |
+| [178](#page-178) | Satellite / Space Security | מנוע |
+| [179](#page-179) | AI Training Data Poisoning | מנוע |
+| [180](#page-180) | Smart Contract / Blockchain Exploit | מנוע |
+| [181](#page-181) | Automotive / CAN Bus Attack | מנוע |
+| [182](#page-182) | Zero-Click Exploit Emulation | מנוע |
+| [183](#page-183) | Biometric Bypass | מנוע |
+| [184](#page-184) | Quantum Threat Emulation | מנוע |
+| [185](#page-185) | Secrets & Key Exposure | מנוע |
+| [186](#page-186) | Threat Hunting Automation | מנוע |
+| [187](#page-187) | Cloud Identity & IAM Attack | מנוע |
+| [188](#page-188) | Poisoned Pipeline Execution | מנוע |
+| [189](#page-189) | LLM Agent Hijacking | מנוע |
+| [190](#page-190) | API Gateway / Microservice Attack | מנוע |
+| [191](#page-191) | Anti-Deception Evasion | מנוע |
+| [192](#page-192) | Multi-Cloud Pivot | מנוע |
+| [193](#page-193) | RAG / Vector DB Poisoning | מנוע |
+| [194](#page-194) | Malicious Browser Extension | מנוע |
+| [195](#page-195) | Mobile OS Hardening Bypass | מנוע |
+| [196](#page-196) | Obfuscated / Domain-Fronted C2 | מנוע |
+| [197](#page-197) | Hardware Implant / Supply Chain | מנוע |
+| [198](#page-198) | Serverless Cold-Start Race | מנוע |
+| [199](#page-199) | Multimodal AI Attack | מנוע |
+| [200](#page-200) | AD Certificate Services Abuse | מנוע |
+| [201](#page-201) | Data Pipeline / ETL Attack | מנוע |
+| [202](#page-202) | Model Inversion / Exfiltration | מנוע |
+| [203](#page-203) | Cloud WAF / Shield Bypass | מנוע |
+| [204](#page-204) | Telecom / SS7 Attack | מנוע |
+| [205](#page-205) | Dark / Deep Web Intelligence | מנוע |
+| [206](#page-206) | Network TAP / SPAN Implant | מנוע |
+| [207](#page-207) | GitOps / IaC Drift Attack | מנוע |
+| [208](#page-208) | Compliance Gap Scanner | מנוע |
+| [209](#page-209) | DNS Zone Enumeration | מנוע |
+| [210](#page-210) | Social Media OSINT | מנוע |
+| [211](#page-211) | Shodan / Censys Mass Scan | מנוע |
+| [212](#page-212) | Certificate Transparency Mining | מנוע |
+| [213](#page-213) | Email Address Harvester | מנוע |
+| [214](#page-214) | GitHub / GitLab OSINT | מנוע |
+| [215](#page-215) | Geospatial Intelligence (GEOINT) | מנוע |
+| [216](#page-216) | Passive Network Topology Mapper | מנוע |
+| [217](#page-217) | Employee Profiling Engine | מנוע |
+| [218](#page-218) | Historical Asset Recon | מנוע |
+| [219](#page-219) | Advanced XSS Engine | מנוע |
+| [220](#page-220) | CSRF Token Bypass | מנוע |
+| [221](#page-221) | Path Traversal / LFI / RFI | מנוע |
+| [222](#page-222) | Business Logic Vulnerability | מנוע |
+| [223](#page-223) | Web Race Condition (TOCTOU) | מנוע |
+| [224](#page-224) | OAuth 2.0 / PKCE Attack | מנוע |
+| [225](#page-225) | Mass Assignment / HPP | מנוע |
+| [226](#page-226) | Web Cache Deception | מנוע |
+| [227](#page-227) | Shadow / Deprecated API Attack | מנוע |
+| [228](#page-228) | NoSQL Injection Engine | מנוע |
+| [229](#page-229) | Java Deserialization Gadget Chain | מנוע |
+| [230](#page-230) | Open Redirect Chain | מנוע |
+| [231](#page-231) | Host Header Injection | מנוע |
+| [232](#page-232) | CORS Misconfiguration Exploit | מנוע |
+| [233](#page-233) | GraphQL Batching / DoS | מנוע |
+| [234](#page-234) | AI Model Backdoor / Trojan | מנוע |
+| [235](#page-235) | LLM Context Window Overflow | מנוע |
+| [236](#page-236) | AI/ML Supply Chain Attack | מנוע |
+| [237](#page-237) | Adversarial Image Attack | מנוע |
+| [238](#page-238) | LLM Resource Exhaustion | מנוע |
+| [239](#page-239) | LLM Training Data Extraction | מנוע |
+| [240](#page-240) | AI Watermark / Fingerprint Removal | מנוע |
+| [241](#page-241) | Agentic AI Sandbox Escape | מנוע |
+| [242](#page-242) | System Prompt Extraction | מנוע |
+| [243](#page-243) | AI Bias / Fairness Exploitation | מנוע |
+| [244](#page-244) | Cloud Storage Bucket Takeover | מנוע |
+| [245](#page-245) | Cloud IMDS SSRF | מנוע |
+| [246](#page-246) | Lambda / Cloud Function Layer Inject | מנוע |
+| [247](#page-247) | Cloud Audit Log Tampering | מנוע |
+| [248](#page-248) | Cross-Account Role Pivot | מנוע |
+| [249](#page-249) | Kubernetes RBAC Exploit | מנוע |
+| [250](#page-250) | Azure AD / Entra ID Attack | מנוע |
+| [251](#page-251) | Terraform State Exfiltration | מנוע |
+| [252](#page-252) | Cloud Cost Amplification DoS | מנוע |
+| [253](#page-253) | Cloud Logging Blind Spot Exploit | מנוע |
+| [254](#page-254) | Container Image Poisoning | מנוע |
+| [255](#page-255) | Cloud Function Runtime Escape | מנוע |
+| [256](#page-256) | Modbus TCP Exploitation | מנוע |
+| [257](#page-257) | DNP3 Protocol Attack | מנוע |
+| [258](#page-258) | IEC 61850 GOOSE / SV Spoofing | מנוע |
+| [259](#page-259) | OT Passive/Active Safety Interlock | מנוע |
+| [260](#page-260) | OT Crown-Jewel Path | מנוע |
+| [261](#page-261) | PLC Logic Bomb Injection | מנוע |
+| [262](#page-262) | BACnet Building Automation Attack | מנוע |
+| [263](#page-263) | Zigbee Protocol Attack | מנוע |
+| [264](#page-264) | LoRaWAN IoT Network Attack | מנוע |
+| [265](#page-265) | HMI / SCADA Interface Exploit | מנוע |
+| [266](#page-266) | CAN / CAN FD Bus Attack | מנוע |
+| [267](#page-267) | ICS Historian Database Attack | מנוע |
+| [268](#page-268) | LOLBins / LOLBAS Abuse | מנוע |
+| [269](#page-269) | Kernel / User Rootkit Implant | מנוע |
+| [270](#page-270) | Timestomping & Metadata Falsification | מנוע |
+| [271](#page-271) | Forensic Log Wiping | מנוע |
+| [272](#page-272) | DLL Hijacking / Side-Loading | מנוע |
+| [273](#page-273) | Process Hollowing / Ghosting | מנוע |
+| [274](#page-274) | Process Inventory (Agent) | מנוע |
+| [275](#page-275) | USB Device Enumeration (Agent) | מנוע |
+| [276](#page-276) | Fileless Malware Execution | מנוע |
+| [277](#page-277) | Direct Syscall / NTAPI Evasion | מנוע |
+| [278](#page-278) | AMSI / EDR Bypass | מנוע |
+| [279](#page-279) | Polymorphic / Metamorphic Payload | מנוע |
+| [280](#page-280) | GPU Hash Cracking Engine | מנוע |
+| [281](#page-281) | TLS / SSL Downgrade Attack | מנוע |
+| [282](#page-282) | TOTP / MFA Brute Force | מנוע |
+| [283](#page-283) | NTLM Relay / Pass-the-Hash | מנוע |
+| [284](#page-284) | Kerberos Golden / Silver Ticket | מנוע |
+| [285](#page-285) | HSM Side-Channel / Fault Attack | מנוע |
+| [286](#page-286) | PKI Certificate Forgery | מנוע |
+| [287](#page-287) | Weak Key Derivation Exploit | מנוע |
+| [288](#page-288) | ARP Spoofing / LAN MITM | מנוע |
+| [289](#page-289) | ICMP / DNS Covert Channel | מנוע |
+| [290](#page-290) | SNMP Community String Attack | מנוע |
+| [291](#page-291) | OSPF / BGP Route Manipulation | מנוע |
+| [292](#page-292) | RDP Exploitation Engine | מנוע |
+| [293](#page-293) | VoIP / SIP Protocol Attack | מנוע |
+| [294](#page-294) | DNS Tunneling C2 | מנוע |
+| [295](#page-295) | DHCP Starvation / Rogue Server | מנוע |
+| [296](#page-296) | NTP / UDP Amplification DDoS | מנוע |
+| [297](#page-297) | Wi-Fi / 802.11 Attack Suite | מנוע |
+| [298](#page-298) | npm / PyPI Typosquatting Attack | מנוע |
+| [299](#page-299) | Dependency Confusion Attack | מנוע |
+| [300](#page-300) | Open-Source Project Backdoor | מנוע |
+| [301](#page-301) | Build Artifact Tampering | מנוע |
+| [302](#page-302) | Package Signing Bypass | מנוע |
+| [303](#page-303) | Vendored Code / Git Submodule Attack | מנוע |
+| [304](#page-304) | Code Review / PR Bypass | מנוע |
+| [305](#page-305) | Software Update Mechanism Hijack | מנוע |
+| [306](#page-306) | Advanced Persistence (UEFI / Bootkit) | מנוע |
+| [307](#page-307) | APT Lateral Movement Playbook | מנוע |
+| [308](#page-308) | Nation-State TTP Emulation | מנוע |
+| [309](#page-309) | Zero-Day Exploit Chain | מנוע |
+| [310](#page-310) | APT-Grade C2 Infrastructure | מנוע |
+| [311](#page-311) | Long-Haul Slow Exfiltration | מנוע |
+| [312](#page-312) | Full End-to-End Breach Simulation | מנוע |
+| [313](#page-313) | Watering Hole Attack | מנוע |
+| [314](#page-314) | Supply Chain APT Implant | מנוע |
+| [315](#page-315) | Destructive Wiper Emulation | מנוע |
+| [316](#page-316) | Satellite Imagery OSINT | מנוע |
+| [317](#page-317) | Dark Web Intelligence | מנוע |
+| [318](#page-318) | Financial OSINT Engine | מנוע |
+| [319](#page-319) | Blockchain Transaction Tracer | מנוע |
+| [320](#page-320) | Document Metadata Harvester | מנוע |
+| [321](#page-321) | Patent & IP Intelligence | מנוע |
+| [322](#page-322) | Telecom Infrastructure OSINT | מנוע |
+| [323](#page-323) | IoT/ICS Shodan Deep Scan | מנוע |
+| [324](#page-324) | Job Posting Tech Stack OSINT | מנוע |
+| [325](#page-325) | GitHub Secret Scanner | מנוע |
+| [326](#page-326) | GraphQL Deep Attack Engine | מנוע |
+| [327](#page-327) | gRPC Reflection Attack | מנוע |
+| [328](#page-328) | HTTP/2 & HTTP/3 Attack Engine | מנוע |
+| [329](#page-329) | Swagger/OpenAPI Exploiter | מנוע |
+| [330](#page-330) | SOAP/XML Injection Engine | מנוע |
+| [331](#page-331) | OData Query Injection | מנוע |
+| [332](#page-332) | CSS Injection / Data Theft | מנוע |
+| [333](#page-333) | Advanced Template Injection | מנוע |
+| [334](#page-334) | HTTP Parameter Pollution Engine | מנוע |
+| [335](#page-335) | API Mass Assignment Scanner | מנוע |
+| [336](#page-336) | Advanced Web Cache Poisoning | מנוע |
+| [337](#page-337) | Clickjacking / UI Redress Engine | מנוע |
+| [338](#page-338) | Subdomain Takeover Scanner | מנוע |
+| [339](#page-339) | Remote File Inclusion Engine | מנוע |
+| [340](#page-340) | .NET Deserialization Exploiter | מנוע |
+| [341](#page-341) | NoSQL Deep Injection Engine | מנוע |
+| [342](#page-342) | JWT Advanced Attack Suite | מנוע |
+| [343](#page-343) | API Rate Limit Bypass | מנוע |
+| [344](#page-344) | Advanced IDOR / BOLA Engine | מנוע |
+| [345](#page-345) | Prompt Injection Chain Attack | מנוע |
+| [346](#page-346) | ML Model Inversion Attack | מנוע |
+| [347](#page-347) | AI Model Supply Chain Attack | מנוע |
+| [348](#page-348) | RAG System Poisoning | מנוע |
+| [349](#page-349) | Adversarial Example Generator | מנוע |
+| [350](#page-350) | Training Data Poisoning Engine | מנוע |
+| [351](#page-351) | Deepfake Synthesis Engine | מנוע |
+| [352](#page-352) | LLM Denial of Service | מנוע |
+| [353](#page-353) | GPT Plugin / Action Exploiter | מנוע |
+| [354](#page-354) | Autonomous AI Agent Sandbox Escape | מנוע |
+| [355](#page-355) | LLM Memory Extraction | מנוע |
+| [356](#page-356) | Neural Network Backdoor Detector | מנוע |
+| [357](#page-357) | Federated Learning Poisoning | מנוע |
+| [358](#page-358) | Advanced LLM Red Teaming | מנוע |
+| [359](#page-359) | ML Model Stealing Engine | מנוע |
+| [360](#page-360) | Cloud Metadata SSRF Attack | מנוע |
+| [361](#page-361) | S3 Bucket Misconfiguration Attack | מנוע |
+| [362](#page-362) | Lambda / Serverless Escape | מנוע |
+| [363](#page-363) | Cloud IAM Privilege Escalation | מנוע |
+| [364](#page-364) | Kubernetes RBAC Escape | מנוע |
+| [365](#page-365) | Azure DevOps Pipeline Attack | מנוע |
+| [366](#page-366) | GCP Privilege Escalation Engine | מנוע |
+| [367](#page-367) | Terraform State File Exploiter | מנוע |
+| [368](#page-368) | CloudFormation / ARM Template Injection | מנוע |
+| [369](#page-369) | Service Mesh Attack Engine | מנוע |
+| [370](#page-370) | Cloud Audit Log Evasion | מנוע |
+| [371](#page-371) | Container Registry Attack | מנוע |
+| [372](#page-372) | Cloud Worm Propagation Engine | מנוע |
+| [373](#page-373) | Serverless Function Injection | מנוע |
+| [374](#page-374) | Cloud Storage Exfiltration | מנוע |
+| [375](#page-375) | EKS/AKS/GKE Managed K8s Attack | מנוע |
+| [376](#page-376) | Cloud Network Attack Engine | מנוע |
+| [377](#page-377) | Cloud Secrets Manager Attack | מנוע |
+| [378](#page-378) | Cloud Persistence Engine | מנוע |
+| [379](#page-379) | Modbus Protocol Attack | מנוע |
+| [380](#page-380) | MQTT Broker Attack Engine | מנוע |
+| [381](#page-381) | CoAP Protocol Exploitation | מנוע |
+| [382](#page-382) | OPC-UA Industrial Attack | מנוע |
+| [383](#page-383) | PLC Ladder Logic Attack | מנוע |
+| [384](#page-384) | HMI/SCADA UI Attack Engine | מנוע |
+| [385](#page-385) | Satellite Communication Attack | מנוע |
+| [386](#page-386) | IoT Firmware Emulation Attack | מנוע |
+| [387](#page-387) | PROFINET Industrial Attack | מנוע |
+| [388](#page-388) | RFID/NFC Cloning Engine | מנוע |
+| [389](#page-389) | Industrial Protocol Fuzzer | מנוע |
+| [390](#page-390) | DLL Hijacking Attack Engine | מנוע |
+| [391](#page-391) | Sandbox Evasion Engine | מנוע |
+| [392](#page-392) | Kernel Rootkit Surface Probe | מנוע |
+| [393](#page-393) | Memory Forensics Evasion | מנוע |
+| [394](#page-394) | AV/EDR Bypass Engine | מנוע |
+| [395](#page-395) | DNS Tunneling C2 Channel | מנוע |
+| [396](#page-396) | Steganography C2 Engine | מנוע |
+| [397](#page-397) | HTTPS C2 Domain Fronting | מנוע |
+| [398](#page-398) | ICMP Covert Channel | מנוע |
+| [399](#page-399) | ROP Chain Construction Engine | מנוע |
+| [400](#page-400) | Timing-Based Evasion Engine | מנוע |
+| [401](#page-401) | Log Tampering & Destruction | מנוע |
+| [402](#page-402) | JIT Spray Attack Engine | מנוע |
+| [403](#page-403) | COM Object Hijacking | מנוע |
+| [404](#page-404) | Network Traffic Masking Engine | מנוע |
+| [405](#page-405) | Anti-Debug & Anti-Analysis Engine | מנוע |
+| [406](#page-406) | Parent PID Spoofing Engine | מנוע |
+| [407](#page-407) | Padding Oracle Attack | מנוע |
+| [408](#page-408) | Hash Length Extension Attack | מנוע |
+| [409](#page-409) | ECDSA Nonce Bias Attack | מנוע |
+| [410](#page-410) | RSA Timing Side-Channel | מנוע |
+| [411](#page-411) | MFA Bypass Engine | מנוע |
+| [412](#page-412) | Kerberos Attack Suite | מנוע |
+| [413](#page-413) | PKI Hierarchy Attack Engine | מנוע |
+| [414](#page-414) | Advanced Session Fixation | מנוע |
+| [415](#page-415) | Password Hash Cracking Engine | מנוע |
+| [416](#page-416) | OAuth 2.0 Advanced Attack Suite | מנוע |
+| [417](#page-417) | SAML Advanced Attack Engine | מנוע |
+| [418](#page-418) | Quantum Computing Key Attack Simulator | מנוע |
+| [419](#page-419) | Advanced Password Spray Engine | מנוע |
+| [420](#page-420) | ARP Spoofing / Cache Poisoning | מנוע |
+| [421](#page-421) | VLAN Hopping Attack Engine | מנוע |
+| [422](#page-422) | DHCP Starvation & Rogue Server | מנוע |
+| [423](#page-423) | DNS Cache Poisoning Engine | מנוע |
+| [424](#page-424) | SNMP Community Exploitation | מנוע |
+| [425](#page-425) | RDP Attack Engine | מנוע |
+| [426](#page-426) | LDAP Injection Engine | מנוע |
+| [427](#page-427) | SS7 Telecom Signaling Probe | מנוע |
+| [428](#page-428) | WiFi Attack Suite | מנוע |
+| [429](#page-429) | Bluetooth Attack Engine | מנוע |
+| [430](#page-430) | OSPF/BGP Route Hijacking | מנוע |
+| [431](#page-431) | MPLS/VPN Network Attack | מנוע |
+| [432](#page-432) | LTE/5G Network Attack Engine | מנוע |
+| [433](#page-433) | IPv6 Advanced Attack Engine | מנוע |
+| [434](#page-434) | Network Covert Channel Engine | מנוע |
+| [435](#page-435) | WPA3/WiFi 6E Attack Engine | מנוע |
+| [436](#page-436) | Tor Exit Node Attack Engine | מנוע |
+| [437](#page-437) | Protocol Downgrade Engine | מנוע |
+| [438](#page-438) | NPM Package Hijacking Engine | מנוע |
+| [439](#page-439) | PyPI Supply Chain Attack | מנוע |
+| [440](#page-440) | GitHub Actions Supply Chain | מנוע |
+| [441](#page-441) | Docker Image Poisoning Engine | מנוע |
+| [442](#page-442) | Maven/Gradle Supply Chain Attack | מנוע |
+| [443](#page-443) | Compiler-Level Backdoor Engine | מנוע |
+| [444](#page-444) | CDN Cache Poisoning Engine | מנוע |
+| [445](#page-445) | Software Signing Bypass Engine | מנוע |
+| [446](#page-446) | Build System Compromise Engine | מנוע |
+| [447](#page-447) | Software Update Hijacking Engine | מנוע |
+| [448](#page-448) | SBOM Forgery & Analysis Engine | מנוע |
+| [449](#page-449) | Third-Party API Supply Chain | מנוע |
+| [450](#page-450) | IaC Supply Chain Attack | מנוע |
+| [451](#page-451) | APT28 (Fancy Bear) TTPs | מנוע |
+| [452](#page-452) | APT29 (Cozy Bear) TTPs | מנוע |
+| [453](#page-453) | APT41 (Winnti/Double Dragon) TTPs | מנוע |
+| [454](#page-454) | Lazarus Group (DPRK) TTPs | מנוע |
+| [455](#page-455) | Volt Typhoon (VANGUARD PANDA) TTPs | מנוע |
+| [456](#page-456) | Scattered Spider Social TTPs | מנוע |
+| [457](#page-457) | Salt Typhoon Telecom TTPs | מנוע |
+| [458](#page-458) | FIN7 Financial Crime TTPs | מנוע |
+| [459](#page-459) | Conti Ransomware Group TTPs | מנוע |
+| [460](#page-460) | LockBit Ransomware TTPs | מנוע |
+| [461](#page-461) | Cl0p Ransomware TTPs | מנוע |
+| [462](#page-462) | BlackCat/ALPHV Ransomware TTPs | מנוע |
+| [463](#page-463) | Midnight Blizzard (APT29 Advanced) TTPs | מנוע |
+| [464](#page-464) | Earth Longzhi APT TTPs | מנוע |
+| [465](#page-465) | Equation Group (NSA-linked) TTPs | מנוע |
+| [466](#page-466) | Sandworm (Voodoo Bear) TTPs | מנוע |
+| [467](#page-467) | Carbon Spider (Evil Corp) TTPs | מנוע |
+| [468](#page-468) | Wizard Spider (TrickBot/Conti) TTPs | מנוע |
+| [469](#page-469) | UNC2452 (SolarWinds) TTPs | מנוע |
+| [470](#page-470) | UNC3944/Octo Tempest TTPs | מנוע |
+| [471](#page-471) | QUANTUM SOVEREIGN NEXUS - World's First AI-Quantum Hybrid Attack Engine | מנוע |
+| [472](#page-472) | UEFI/Bootkit Implant Detector | מנוע |
+| [473](#page-473) | Fileless Malware Engine | מנוע |
+| [474](#page-474) | Polymorphic Code Engine | מנוע |
+| [475](#page-475) | Botnet C2 Infrastructure Engine | מנוע |
+| [476](#page-476) | Keylogger Engine | מנוע |
+| [477](#page-477) | Spyware/Stalkerware Engine | מנוע |
+| [478](#page-478) | Network Worm Propagation Engine | מנוע |
+| [479](#page-479) | Remote Code Execution Exploit Engine | מנוע |
+| [480](#page-480) | Persistence Mechanism Engine | מנוע |
+| [481](#page-481) | Lateral Movement Engine | מנוע |
+| [482](#page-482) | Data Staging Engine | מנוע |
+| [483](#page-483) | Exploit Kit Simulation Engine | מנוע |
+| [484](#page-484) | Trojan Dropper Engine | מנוע |
+| [485](#page-485) | Office Macro Malware Engine | מנוע |
+| [486](#page-486) | Spear Phishing Campaign Engine | מנוע |
+| [487](#page-487) | Vishing Attack Engine | מנוע |
+| [488](#page-488) | SMS Phishing (Smishing) Engine | מנוע |
+| [489](#page-489) | QR Code Phishing (Quishing) Engine | מנוע |
+| [490](#page-490) | Deepfake Voice Social Engineering | מנוע |
+| [491](#page-491) | BEC (Business Email Compromise) | מנוע |
+| [492](#page-492) | Watering Hole Attack Engine | מנוע |
+| [493](#page-493) | Pretexting Scenario Engine | מנוע |
+| [494](#page-494) | Insider Threat Simulation Engine | מנוע |
+| [495](#page-495) | Brand Impersonation Engine | מנוע |
+| [496](#page-496) | Fake Update Social Engineering | מנוע |
+| [497](#page-497) | LinkedIn Social Engineering Engine | מנוע |
+| [498](#page-498) | Callback Phishing Engine | מנוע |
+| [499](#page-499) | Physical Social Engineering Engine | מנוע |
+| [500](#page-500) | Typosquatting Phishing Engine | מנוע |
+| [501](#page-501) | Android Malware Analysis Engine | מנוע |
+| [502](#page-502) | iOS Exploitation Engine | מנוע |
+| [503](#page-503) | Mobile MITM Attack Engine | מנוע |
+| [504](#page-504) | SSL Pinning Bypass Engine | מנוע |
+| [505](#page-505) | Android Intent Hijacking Engine | מנוע |
+| [506](#page-506) | iOS URL Scheme Attack Engine | מנוע |
+| [507](#page-507) | Mobile Overlay Attack Engine | מנוע |
+| [508](#page-508) | SIM Swap Attack Engine | מנוע |
+| [509](#page-509) | Mobile Banking Trojan Engine | מנוע |
+| [510](#page-510) | App Store Attack Engine | מנוע |
+| [511](#page-511) | MDM/EMM Bypass Engine | מנוע |
+| [512](#page-512) | Mobile Bluetooth Attack Engine | מנוע |
+| [513](#page-513) | NFC Relay Attack Engine | מנוע |
+| [514](#page-514) | Mobile Spyware Engine | מנוע |
+| [515](#page-515) | React Native / Flutter App Attack | מנוע |
+| [516](#page-516) | DNS Exfiltration Engine | מנוע |
+| [517](#page-517) | HTTP Covert Channel Exfiltration | מנוע |
+| [518](#page-518) | Cloud Storage Exfiltration Engine | מנוע |
+| [519](#page-519) | Encrypted Covert Exfiltration | מנוע |
+| [520](#page-520) | Acoustic Side-Channel Exfiltration | מנוע |
+| [521](#page-521) | Electromagnetic Emanation Exfiltration | מנוע |
+| [522](#page-522) | Optical Covert Channel Exfiltration | מנוע |
+| [523](#page-523) | CPU Cache Side-Channel Exfiltration | מנוע |
+| [524](#page-524) | Keyboard Acoustic Eavesdropping | מנוע |
+| [525](#page-525) | Screen Capture Exfiltration Engine | מנוע |
+| [526](#page-526) | Clipboard Hijacking Engine | מנוע |
+| [527](#page-527) | Database Exfiltration Engine | מנוע |
+| [528](#page-528) | Email-Based Exfiltration Engine | מנוע |
+| [529](#page-529) | Insider Threat Exfiltration Engine | מנוע |
+| [530](#page-530) | Storage Covert Channel Engine | מנוע |
+| [531](#page-531) | Threat Intelligence Fusion Engine | מנוע |
+| [532](#page-532) | Attack Surface Quantification | מנוע |
+| [533](#page-533) | External Exposure Supreme | מנוע |
+| [534](#page-534) | Fair Exposure Fusion (Board Risk) | מנוע |
+| [535](#page-535) | Risk Superposition Collapse | מנוע |
+| [536](#page-536) | CHRONOS Temporal Rollback | מנוע |
+| [537](#page-537) | COGNITIVE STARVATION | מנוע |
+| [538](#page-538) | LIQUID-MATRIX Moving Target Defense | מנוע |
+| [539](#page-539) | Sovereign Active Defense Fusion | מנוע |
+| [540](#page-540) | Adversarial Threat Emulation | מנוע |
+| [541](#page-541) | Dark Web Brand Monitor | מנוע |
+| [542](#page-542) | Passive DNS Forensics Engine | מנוע |
+| [543](#page-543) | Network Baseline Anomaly Engine | מנוע |
+| [544](#page-544) | Packet Injection Engine | מנוע |
+| [545](#page-545) | Advanced Network TAP/SPAN Engine | מנוע |
+| [546](#page-546) | Multicast Protocol Attack Engine | מנוע |
+| [547](#page-547) | NAT Traversal Attack Engine | מנוע |
+| [548](#page-548) | GraphQL Subscription DoS | מנוע |
+| [549](#page-549) | WebRTC Attack Engine | מנוע |
+| [550](#page-550) | Web3 / DApp Attack Engine | מנוע |
+| [551](#page-551) | API Gateway Security Bypass | מנוע |
+| [552](#page-552) | TPM Firmware Attack Engine | מנוע |
+| [553](#page-553) | Cold Boot / DRAM Remanence Attack | מנוע |
+| [554](#page-554) | Evil Maid Hardware Implant Engine | מנוע |
+| [555](#page-555) | Thunderbolt / PCIe DMA Attack | מנוע |
+| [556](#page-556) | Voltage / Clock Glitch Fault Injection | מנוע |
+| [557](#page-557) | BadUSB / HID Injection Engine | מנוע |
+| [558](#page-558) | Crypto Hardware Wallet Security Engine | מנוע |
+| [559](#page-559) | JTAG/SWD Debug Interface Exploiter | מנוע |
+| [560](#page-560) | Medical IoT Device Exploit Engine | מנוע |
+| [561](#page-561) | Implantable Medical Device Attack | מנוע |
+| [562](#page-562) | HL7 / DICOM Healthcare Protocol Attack | מנוע |
+| [563](#page-563) | AI Agentic Framework Exploitation | מנוע |
+| [564](#page-564) | LLM Function Calling Hijack Engine | מנוע |
+| [565](#page-565) | Multi-Agent AI Subversion Engine | מנוע |
+| [566](#page-566) | LLM Safety Guardrail Bypass Engine | מנוע |
+| [567](#page-567) | Model Context Protocol (MCP) Exploit | מנוע |
+| [568](#page-568) | AI Synthetic Identity Fraud Engine | מנוע |
+| [569](#page-569) | AI Model Provenance & Lineage Attack | מנוע |
+| [570](#page-570) | SDN Controller Exploitation Engine | מנוע |
+| [571](#page-571) | NFV MANO / VNF Exploitation | מנוע |
+| [572](#page-572) | 5G Network Slice Isolation Bypass | מנוע |
+| [573](#page-573) | Harvest-Now Decrypt-Later (HNDL) Engine | מנוע |
+| [574](#page-574) | Post-Quantum Cryptography Implementation Attack | מנוע |
+| [575](#page-575) | Lattice Cryptography Attack Engine | מנוע |
+| [576](#page-576) | Zero Trust Microsegmentation Bypass | מנוע |
+| [577](#page-577) | Continuous Authentication Evasion Engine | מנוע |
+| [578](#page-578) | SASE / SSE Security Bypass Engine | מנוע |
+| [579](#page-579) | WebAuthn / FIDO2 Bypass Engine | מנוע |
+| [580](#page-580) | AI Vulnerability → Cloud Escalation Chain | מנוע |
+| [581](#page-581) | Social Engineering → Supply Chain Compromise Chain | מנוע |
+| [582](#page-582) | OT Network → IT Network Lateral Pivot Chain | מנוע |
+| [583](#page-583) | Mobile App → Cloud Backend Escalation Chain | מנוע |
+| [584](#page-584) | Data De-anonymization Engine | מנוע |
+| [585](#page-585) | Behavioral Biometric Bypass Engine | מנוע |
+| [586](#page-586) | Location Pattern De-anonymization Engine | מנוע |
+| [587](#page-587) | Differential Privacy Implementation Attack | מנוע |
+| [588](#page-588) | Automated C2 Infrastructure Rotation Engine | מנוע |
+| [589](#page-589) | Security Detection Gap Exploitation Engine | מנוע |
+| [590](#page-590) | Attacker OPSEC & Counter-Intelligence Engine | מנוע |
+| [591](#page-591) | Novel TTP Attack Chain Synthesizer | מנוע |
+| [592](#page-592) | AR / VR Security Attack Engine | מנוע |
+| [593](#page-593) | Edge Computing Node Exploitation | מנוע |
+| [594](#page-594) | Blockchain Bridge / Cross-Chain Attack | מנוע |
+| [595](#page-595) | Unified API Attack Orchestration Engine | מנוע |
+| [596](#page-596) | Automated Threat Modeling Engine | מנוע |
+| [597](#page-597) | Dynamic Attack Graph Traversal Engine | מנוע |
+| [598](#page-598) | PROMETHEUS HYPERION NEXUS™ — Cross-Domain AI Adversarial Swarm | מנוע |
+| [599](#page-599) | HTTP Feedback Fuzz | מנוע |
+| [600](#page-600) | Microsecond Timing | מנוע |
+| [601](#page-601) | CAN Bus Surface | מנוע |
+| [602](#page-602) | Ollama Fuzz | מנוע |
+| [603](#page-603) | LoRa Attack | מנוע |
+| [604](#page-604) | SAP ERP Attack | מנוע |
+| [605](#page-605) | Mainframe z/OS Attack | מנוע |
+| [606](#page-606) | Malvertising SEO Poison | מנוע |
+| [607](#page-607) | Infostealer Emulation | מנוע |
+| [608](#page-608) | Printer MFP Attack | מנוע |
+| [609](#page-609) | RADIUS NAC Bypass | מנוע |
+| [610](#page-610) | Identity Attack Chain | מנוע |
+| [611](#page-611) | Pipeline-to-Runtime Risk | מנוע |
+| [612](#page-612) | Control Plane of Controls | מנוע |
+| [613](#page-613) | OT × Cloud × Identity Kill Path | מנוע |
+| [614](#page-614) | BEC → Account Takeover Chain | מנוע |
+| [615](#page-615) | AI CASB / SaaS Agents | מנוע |
+| [616](#page-616) | DNS Security Posture Fusion | מנוע |
+| [617](#page-617) | Toxic Combo Runtime Proof | מנוע |
+| [618](#page-618) | ITDR (Identity Threat Detection) | מנוע |
+| [619](#page-619) | CASB SaaS Posture | מנוע |
+| [620](#page-620) | DLP Content Scan | מנוע |
+| [621](#page-621) | CNAPP Continuous Graph | מנוע |
+| [622](#page-622) | Host Privilege Escalation | מנוע |
+| [623](#page-623) | Host Isolation / Quarantine | מנוע |
+| [624](#page-624) | eBPF Syscall Sensor | מנוע |
+| [625](#page-625) | IOC / YARA Hunt | מנוע |
+| [626](#page-626) | NGFW Policy Posture | מנוע |
+| [627](#page-627) | Malware Detonation Farm | מנוע |
+| [628](#page-628) | Weissman Gate (vNGFW) | מנוע |
+| [629](#page-629) | Cortex Proven Finding Bridge | מנוע |
+| [630](#page-630) | Honey-Routing Gateway | מנוע |
+| [631](#page-631) | Advanced C2 & Covert Exfil | מנוע |
+| [632](#page-632) | Stealthy Persistence & Evasion | מנוע |
+| [633](#page-633) | Web HTTP Intelligence | מנוע |
+| [634](#page-634) | Web Identity Surface | מנוע |
+| [635](#page-635) | API & Cloud Storage Intel | מנוע |
 
 
 ---
@@ -1363,7 +1393,58 @@ GET /dashboard |
 
 <a id="page-045"></a>
 
-## עמוד 045 — Leak Hunter
+## עמוד 045 — First-Mover Surface Delta
+
+> **מנוע:** `first_mover_surface_delta` · מודיעין ו-Recon · MITRE T1595
+
+| **מה** | Live DNS/HTTP/CT snapshot vs last run — emits only new, removed, or changed internet-facing hosts with takeover and A-record-flip evidence. Finds exposure hours before weekly scanners. |
+| **למה** | MITRE T1595 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/first_mover_surface_delta |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "first_mover_surface_delta" } |
+---
+
+<a id="page-046"></a>
+
+## עמוד 046 — First-Mover Delta Fusion
+
+> **מנוע:** `first_mover_delta_fusion` · מודיעין ו-Recon · MITRE T1595
+
+| **מה** | New host from live surface delta immediately gets subdomain takeover, leak hunter, BOLA, and JWT on that same FQDN — not a separate later hunt. |
+| **למה** | MITRE T1595 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/first_mover_delta_fusion |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "first_mover_delta_fusion" } |
+---
+
+<a id="page-047"></a>
+
+## עמוד 047 — First-Seen OSV vs NVD
+
+> **מנוע:** `first_seen_osv_nvd` · מודיעין ו-Recon · MITRE T1595.002
+
+| **מה** | Live SBOM queried against OSV; claims pre-NVD only when the OSV hit has no CVE alias or NIST NVD has no catalog row. Never fabricates first-seen. |
+| **למה** | MITRE T1595.002 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/first_seen_osv_nvd |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "first_seen_osv_nvd" } |
+---
+
+<a id="page-048"></a>
+
+## עמוד 048 — Leak Hunter
 
 > **מנוע:** `leak_hunter` · מודיעין ו-Recon · MITRE T1530
 
@@ -1378,9 +1459,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "leak_hunter" } |
 ---
 
-<a id="page-046"></a>
+<a id="page-049"></a>
 
-## עמוד 046 — Discovery Engine
+## עמוד 049 — Discovery Engine
 
 > **מנוע:** `discovery_engine` · מודיעין ו-Recon · MITRE T1046
 
@@ -1395,9 +1476,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "discovery_engine" } |
 ---
 
-<a id="page-047"></a>
+<a id="page-050"></a>
 
-## עמוד 047 — Deep Recon
+## עמוד 050 — Deep Recon
 
 > **מנוע:** `recon` · מודיעין ו-Recon · MITRE T1592
 
@@ -1412,9 +1493,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "recon" } |
 ---
 
-<a id="page-048"></a>
+<a id="page-051"></a>
 
-## עמוד 048 — BOLA / IDOR
+## עמוד 051 — BOLA / IDOR
 
 > **מנוע:** `bola_idor` · Web / API · MITRE T1548
 
@@ -1429,9 +1510,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "bola_idor" } |
 ---
 
-<a id="page-049"></a>
+<a id="page-052"></a>
 
-## עמוד 049 — GraphQL & API Security
+## עמוד 052 — GraphQL & API Security
 
 > **מנוע:** `graphql_attack` · Web / API · MITRE T1190
 
@@ -1446,9 +1527,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "graphql_attack" } |
 ---
 
-<a id="page-050"></a>
+<a id="page-053"></a>
 
-## עמוד 050 — JWT Attack
+## עמוד 053 — JWT Attack
 
 > **מנוע:** `jwt_attack` · Web / API · MITRE T1550.001
 
@@ -1463,9 +1544,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "jwt_attack" } |
 ---
 
-<a id="page-051"></a>
+<a id="page-054"></a>
 
-## עמוד 051 — OAuth / OIDC / SSO Security
+## עמוד 054 — OAuth / OIDC / SSO Security
 
 > **מנוע:** `oauth_oidc` · Web / API · MITRE T1550.001
 
@@ -1480,9 +1561,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "oauth_oidc" } |
 ---
 
-<a id="page-052"></a>
+<a id="page-055"></a>
 
-## עמוד 052 — HTTP Request Smuggling
+## עמוד 055 — HTTP Request Smuggling
 
 > **מנוע:** `http_smuggling` · Web / API · MITRE T1190
 
@@ -1497,9 +1578,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "http_smuggling" } |
 ---
 
-<a id="page-053"></a>
+<a id="page-056"></a>
 
-## עמוד 053 — Liminal Boundary
+## עמוד 056 — Liminal Boundary
 
 > **מנוע:** `liminal_boundary` · Web / API · MITRE T1190
 
@@ -1514,9 +1595,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "liminal_boundary" } |
 ---
 
-<a id="page-054"></a>
+<a id="page-057"></a>
 
-## עמוד 054 — Prototype Pollution
+## עמוד 057 — Prototype Pollution
 
 > **מנוע:** `prototype_pollution` · Web / API · MITRE T1059.007
 
@@ -1531,9 +1612,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "prototype_pollution" } |
 ---
 
-<a id="page-055"></a>
+<a id="page-058"></a>
 
-## עמוד 055 — SSRF Advanced
+## עמוד 058 — SSRF Advanced
 
 > **מנוע:** `ssrf_advanced` · Web / API · MITRE T1552.005
 
@@ -1548,9 +1629,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ssrf_advanced" } |
 ---
 
-<a id="page-056"></a>
+<a id="page-059"></a>
 
-## עמוד 056 — XXE
+## עמוד 059 — XXE
 
 > **מנוע:** `xxe` · Web / API · MITRE T1190
 
@@ -1565,9 +1646,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "xxe" } |
 ---
 
-<a id="page-057"></a>
+<a id="page-060"></a>
 
-## עמוד 057 — SSTI
+## עמוד 060 — SSTI
 
 > **מנוע:** `ssti` · Web / API · MITRE T1190
 
@@ -1582,9 +1663,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ssti" } |
 ---
 
-<a id="page-058"></a>
+<a id="page-061"></a>
 
-## עמוד 058 — File Upload Security
+## עמוד 061 — File Upload Security
 
 > **מנוע:** `file_upload` · Web / API · MITRE T1190
 
@@ -1599,9 +1680,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "file_upload" } |
 ---
 
-<a id="page-059"></a>
+<a id="page-062"></a>
 
-## עמוד 059 — WebSocket Attack
+## עמוד 062 — WebSocket Attack
 
 > **מנוע:** `websocket_attack` · Web / API · MITRE T1071.001
 
@@ -1616,9 +1697,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "websocket_attack" } |
 ---
 
-<a id="page-060"></a>
+<a id="page-063"></a>
 
-## עמוד 060 — Web Cache Poisoning & Deception
+## עמוד 063 — Web Cache Poisoning & Deception
 
 > **מנוע:** `cache_poisoning` · Web / API · MITRE T1557
 
@@ -1633,9 +1714,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cache_poisoning" } |
 ---
 
-<a id="page-061"></a>
+<a id="page-064"></a>
 
-## עמוד 061 — LLM Path Fuzz
+## עמוד 064 — LLM Path Fuzz
 
 > **מנוע:** `llm_path_fuzz` · AI / LLM · MITRE T1190
 
@@ -1650,9 +1731,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "llm_path_fuzz" } |
 ---
 
-<a id="page-062"></a>
+<a id="page-065"></a>
 
-## עמוד 062 — Semantic AI Fuzz
+## עמוד 065 — Semantic AI Fuzz
 
 > **מנוע:** `semantic_ai_fuzz` · AI / LLM · MITRE T1059
 
@@ -1667,9 +1748,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "semantic_ai_fuzz" } |
 ---
 
-<a id="page-063"></a>
+<a id="page-066"></a>
 
-## עמוד 063 — AI Adversarial Red Team
+## עמוד 066 — AI Adversarial Red Team
 
 > **מנוע:** `ai_adversarial_redteam` · AI / LLM · MITRE T1059
 
@@ -1684,9 +1765,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ai_adversarial_redteam" } |
 ---
 
-<a id="page-064"></a>
+<a id="page-067"></a>
 
-## עמוד 064 — LLM Red Team
+## עמוד 067 — LLM Red Team
 
 > **מנוע:** `llm_redteam` · AI / LLM · MITRE T1059
 
@@ -1701,9 +1782,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "llm_redteam" } |
 ---
 
-<a id="page-065"></a>
+<a id="page-068"></a>
 
-## עמוד 065 — Adversarial ML
+## עמוד 068 — Adversarial ML
 
 > **מנוע:** `adversarial_ml` · AI / LLM · MITRE T1685
 
@@ -1718,9 +1799,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "adversarial_ml" } |
 ---
 
-<a id="page-066"></a>
+<a id="page-069"></a>
 
-## עמוד 066 — Autonomous Pentest
+## עמוד 069 — Autonomous Pentest
 
 > **מנוע:** `autonomous_pentest` · AI / LLM · MITRE T1595
 
@@ -1735,9 +1816,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "autonomous_pentest" } |
 ---
 
-<a id="page-067"></a>
+<a id="page-070"></a>
 
-## עמוד 067 — Nexus Sovereign Swarm Intelligence
+## עמוד 070 — Nexus Sovereign Swarm Intelligence
 
 > **מנוע:** `nexus_sovereign_swarm` · AI / LLM · MITRE T1595
 
@@ -1752,9 +1833,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "nexus_sovereign_swarm" } |
 ---
 
-<a id="page-068"></a>
+<a id="page-071"></a>
 
-## עמוד 068 — AWS Attack
+## עמוד 071 — AWS Attack
 
 > **מנוע:** `aws_attack` · ענן ותשתית · MITRE T1580
 
@@ -1769,9 +1850,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "aws_attack" } |
 ---
 
-<a id="page-069"></a>
+<a id="page-072"></a>
 
-## עמוד 069 — Cloud Posture Management (CSPM)
+## עמוד 072 — Cloud Posture Management (CSPM)
 
 > **מנוע:** `cloud_posture` · ענן ותשתית · MITRE T1580
 
@@ -1786,9 +1867,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_posture" } |
 ---
 
-<a id="page-070"></a>
+<a id="page-073"></a>
 
-## עמוד 070 — Azure Attack
+## עמוד 073 — Azure Attack
 
 > **מנוע:** `azure_attack` · ענן ותשתית · MITRE T1580
 
@@ -1803,9 +1884,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "azure_attack" } |
 ---
 
-<a id="page-071"></a>
+<a id="page-074"></a>
 
-## עמוד 071 — GCP Attack
+## עמוד 074 — GCP Attack
 
 > **מנוע:** `gcp_attack` · ענן ותשתית · MITRE T1580
 
@@ -1820,9 +1901,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "gcp_attack" } |
 ---
 
-<a id="page-072"></a>
+<a id="page-075"></a>
 
-## עמוד 072 — K8s Container
+## עמוד 075 — K8s Container
 
 > **מנוע:** `k8s_container` · ענן ותשתית · MITRE T1610
 
@@ -1837,9 +1918,26 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "k8s_container" } |
 ---
 
-<a id="page-073"></a>
+<a id="page-076"></a>
 
-## עמוד 073 — IaC Security
+## עמוד 076 — Admission Signature Enforcement
+
+> **מנוע:** `admission_signature_enforcement` · ענן ותשתית · MITRE T1610
+
+| **מה** | Admission-time cryptographic image-signature verification before pods run: cosign keyed + keyless (Fulcio cert-identity + Rekor transparency log) and DSSE/SLSA attestations, digest-bound and fail-closed across all workload container types. Live admission-webhook posture probes, a cryptographic control self-test, and a ready-to-apply ValidatingWebhookConfiguration + ClusterImagePolicy bundle. |
+| **למה** | MITRE T1610 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/admission_signature_enforcement |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "admission_signature_enforcement" } |
+---
+
+<a id="page-077"></a>
+
+## עמוד 077 — IaC Security
 
 > **מנוע:** `iac_misconfig` · ענן ותשתית · MITRE T1059
 
@@ -1854,9 +1952,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "iac_misconfig" } |
 ---
 
-<a id="page-074"></a>
+<a id="page-078"></a>
 
-## עמוד 074 — Serverless Attack
+## עמוד 078 — Serverless Attack
 
 > **מנוע:** `serverless_attack` · ענן ותשתית · MITRE T1648
 
@@ -1871,9 +1969,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "serverless_attack" } |
 ---
 
-<a id="page-075"></a>
+<a id="page-079"></a>
 
-## עמוד 075 — SCADA / ICS
+## עמוד 079 — SCADA / ICS
 
 > **מנוע:** `scada_ics` · OT / ICS / IoT · MITRE T1692.001
 
@@ -1888,9 +1986,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "scada_ics" } |
 ---
 
-<a id="page-076"></a>
+<a id="page-080"></a>
 
-## עמוד 076 — IoT Firmware
+## עמוד 080 — IoT Firmware
 
 > **מנוע:** `iot_firmware` · OT / ICS / IoT · MITRE T1542
 
@@ -1905,9 +2003,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "iot_firmware" } |
 ---
 
-<a id="page-077"></a>
+<a id="page-081"></a>
 
-## עמוד 077 — Wireless & RF IoT Posture
+## עמוד 081 — Wireless & RF IoT Posture
 
 > **מנוע:** `ble_rf` · OT / ICS / IoT · MITRE T1011
 
@@ -1922,9 +2020,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ble_rf" } |
 ---
 
-<a id="page-078"></a>
+<a id="page-082"></a>
 
-## עמוד 078 — Aviation ADS-B / ACARS Attack
+## עמוד 082 — Aviation ADS-B / ACARS Attack
 
 > **מנוע:** `avionics_adsb_attack` · OT / ICS / IoT · MITRE T1692.001
 
@@ -1939,9 +2037,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "avionics_adsb_attack" } |
 ---
 
-<a id="page-079"></a>
+<a id="page-083"></a>
 
-## עמוד 079 — Maritime AIS / NMEA Attack
+## עמוד 083 — Maritime AIS / NMEA Attack
 
 > **מנוע:** `maritime_ais_attack` · OT / ICS / IoT · MITRE T1692.001
 
@@ -1956,9 +2054,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "maritime_ais_attack" } |
 ---
 
-<a id="page-080"></a>
+<a id="page-084"></a>
 
-## עמוד 080 — EV Charging OCPP Attack
+## עמוד 084 — EV Charging OCPP Attack
 
 > **מנוע:** `ev_charging_ocpp_attack` · OT / ICS / IoT · MITRE T0886
 
@@ -1973,9 +2071,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ev_charging_ocpp_attack" } |
 ---
 
-<a id="page-081"></a>
+<a id="page-085"></a>
 
-## עמוד 081 — Smart Grid DLMS / IEC-104 Attack
+## עמוד 085 — Smart Grid DLMS / IEC-104 Attack
 
 > **מנוע:** `smart_grid_dlms_attack` · OT / ICS / IoT · MITRE T1692.001
 
@@ -1990,9 +2088,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "smart_grid_dlms_attack" } |
 ---
 
-<a id="page-082"></a>
+<a id="page-086"></a>
 
-## עמוד 082 — Rail Signaling Attack
+## עמוד 086 — Rail Signaling Attack
 
 > **מנוע:** `rail_signaling_attack` · OT / ICS / IoT · MITRE T1692.001
 
@@ -2007,9 +2105,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "rail_signaling_attack" } |
 ---
 
-<a id="page-083"></a>
+<a id="page-087"></a>
 
-## עמוד 083 — Building Automation Attack
+## עמוד 087 — Building Automation Attack
 
 > **מנוע:** `building_automation_attack` · OT / ICS / IoT · MITRE T1692.001
 
@@ -2024,9 +2122,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "building_automation_attack" } |
 ---
 
-<a id="page-084"></a>
+<a id="page-088"></a>
 
-## עמוד 084 — Robotics / ROS2 Attack
+## עמוד 088 — Robotics / ROS2 Attack
 
 > **מנוע:** `robotics_ros2_attack` · OT / ICS / IoT · MITRE T1692.001
 
@@ -2041,9 +2139,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "robotics_ros2_attack" } |
 ---
 
-<a id="page-085"></a>
+<a id="page-089"></a>
 
-## עמוד 085 — OT SIS / Triconex TriStation
+## עמוד 089 — OT SIS / Triconex TriStation
 
 > **מנוע:** `ot_sis_triton_attack` · OT / ICS / IoT · MITRE T0853
 
@@ -2058,9 +2156,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ot_sis_triton_attack" } |
 ---
 
-<a id="page-086"></a>
+<a id="page-090"></a>
 
-## עמוד 086 — Detection Evasion Surface
+## עמוד 090 — Detection Evasion Surface
 
 > **מנוע:** `edr_evasion` · Stealth / Evasion · MITRE T1685
 
@@ -2075,9 +2173,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "edr_evasion" } |
 ---
 
-<a id="page-087"></a>
+<a id="page-091"></a>
 
-## עמוד 087 — WAF Bypass
+## עמוד 091 — WAF Bypass
 
 > **מנוע:** `waf_bypass` · Stealth / Evasion · MITRE T1027
 
@@ -2092,9 +2190,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "waf_bypass" } |
 ---
 
-<a id="page-088"></a>
+<a id="page-092"></a>
 
-## עמוד 088 — Timing Side-Channel
+## עמוד 092 — Timing Side-Channel
 
 > **מנוע:** `timing_sidechannel` · Stealth / Evasion · MITRE T1600
 
@@ -2109,9 +2207,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "timing_sidechannel" } |
 ---
 
-<a id="page-089"></a>
+<a id="page-093"></a>
 
-## עמוד 089 — Anti-Forensics
+## עמוד 093 — Anti-Forensics
 
 > **מנוע:** `antiforensics` · Stealth / Evasion · MITRE T1070
 
@@ -2126,9 +2224,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "antiforensics" } |
 ---
 
-<a id="page-090"></a>
+<a id="page-094"></a>
 
-## עמוד 090 — Stealth Engine
+## עמוד 094 — Stealth Engine
 
 > **מנוע:** `stealth_engine` · Stealth / Evasion · MITRE T1027
 
@@ -2143,9 +2241,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "stealth_engine" } |
 ---
 
-<a id="page-091"></a>
+<a id="page-095"></a>
 
-## עמוד 091 — PKI / TLS
+## עמוד 095 — PKI / TLS
 
 > **מנוע:** `pki_tls` · קריפטו וזהות · MITRE T1557.002
 
@@ -2160,9 +2258,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "pki_tls" } |
 ---
 
-<a id="page-092"></a>
+<a id="page-096"></a>
 
-## עמוד 092 — Email & Domain Trust Posture
+## עמוד 096 — Email & Domain Trust Posture
 
 > **מנוע:** `email_dns_posture` · קריפטו וזהות · MITRE T1566
 
@@ -2177,9 +2275,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "email_dns_posture" } |
 ---
 
-<a id="page-093"></a>
+<a id="page-097"></a>
 
-## עמוד 093 — PQC Scanner
+## עמוד 097 — PQC Scanner
 
 > **מנוע:** `pqc_scanner` · קריפטו וזהות · MITRE T1600
 
@@ -2194,9 +2292,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "pqc_scanner" } |
 ---
 
-<a id="page-094"></a>
+<a id="page-098"></a>
 
-## עמוד 094 — Password Spray & Stuffing Posture
+## עמוד 098 — Password Spray & Stuffing Posture
 
 > **מנוע:** `password_spray` · קריפטו וזהות · MITRE T1110.003
 
@@ -2211,9 +2309,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "password_spray" } |
 ---
 
-<a id="page-095"></a>
+<a id="page-099"></a>
 
-## עמוד 095 — Kerberoasting & AD External Posture
+## עמוד 099 — Kerberoasting & AD External Posture
 
 > **מנוע:** `kerberoasting` · קריפטו וזהות · MITRE T1558.003
 
@@ -2228,9 +2326,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "kerberoasting" } |
 ---
 
-<a id="page-096"></a>
+<a id="page-100"></a>
 
-## עמוד 096 — SAML Attack & SSO Federation
+## עמוד 100 — SAML Attack & SSO Federation
 
 > **מנוע:** `saml_attack` · קריפטו וזהות · MITRE T1550.004
 
@@ -2245,9 +2343,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "saml_attack" } |
 ---
 
-<a id="page-097"></a>
+<a id="page-101"></a>
 
-## עמוד 097 — Crypto Engine
+## עמוד 101 — Crypto Engine
 
 > **מנוע:** `crypto_engine` · קריפטו וזהות · MITRE T1600
 
@@ -2262,9 +2360,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "crypto_engine" } |
 ---
 
-<a id="page-098"></a>
+<a id="page-102"></a>
 
-## עמוד 098 — DNS & Domain Posture
+## עמוד 102 — DNS & Domain Posture
 
 > **מנוע:** `bgp_dns_hijacking` · רשת ופרוטוקולים · MITRE T1584.005
 
@@ -2279,9 +2377,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "bgp_dns_hijacking" } |
 ---
 
-<a id="page-099"></a>
+<a id="page-103"></a>
 
-## עמוד 099 — IPv6 Attack
+## עמוד 103 — IPv6 Attack
 
 > **מנוע:** `ipv6_attack` · רשת ופרוטוקולים · MITRE T1018
 
@@ -2296,9 +2394,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ipv6_attack" } |
 ---
 
-<a id="page-100"></a>
+<a id="page-104"></a>
 
-## עמוד 100 — Transport Security (TLS/mTLS/gRPC)
+## עמוד 104 — Transport Security (TLS/mTLS/gRPC)
 
 > **מנוע:** `mtls_grpc` · רשת ופרוטוקולים · MITRE T1557
 
@@ -2313,9 +2411,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "mtls_grpc" } |
 ---
 
-<a id="page-101"></a>
+<a id="page-105"></a>
 
-## עמוד 101 — SMB / NetBIOS
+## עמוד 105 — SMB / NetBIOS
 
 > **מנוע:** `smb_netbios` · רשת ופרוטוקולים · MITRE T1021.002
 
@@ -2330,9 +2428,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "smb_netbios" } |
 ---
 
-<a id="page-102"></a>
+<a id="page-106"></a>
 
-## עמוד 102 — Supply Chain
+## עמוד 106 — Supply Chain
 
 > **מנוע:** `supply_chain` · Supply Chain · MITRE T1195
 
@@ -2347,9 +2445,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "supply_chain" } |
 ---
 
-<a id="page-103"></a>
+<a id="page-107"></a>
 
-## עמוד 103 — CI/CD Pipeline Security
+## עמוד 107 — CI/CD Pipeline Security
 
 > **מנוע:** `cicd_pipeline` · Supply Chain · MITRE T1195.002
 
@@ -2364,9 +2462,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cicd_pipeline" } |
 ---
 
-<a id="page-104"></a>
+<a id="page-108"></a>
 
-## עמוד 104 — Container Registry
+## עמוד 108 — Container Registry
 
 > **מנוע:** `container_registry` · Supply Chain · MITRE T1525
 
@@ -2381,9 +2479,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "container_registry" } |
 ---
 
-<a id="page-105"></a>
+<a id="page-109"></a>
 
-## עמוד 105 — SBOM Analyzer
+## עמוד 109 — SBOM Analyzer
 
 > **מנוע:** `sbom_analyzer` · Supply Chain · MITRE T1195.001
 
@@ -2398,9 +2496,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "sbom_analyzer" } |
 ---
 
-<a id="page-106"></a>
+<a id="page-110"></a>
 
-## עמוד 106 — Typosquatting Monitor
+## עמוד 110 — Typosquatting Monitor
 
 > **מנוע:** `typosquatting_monitor` · Supply Chain · MITRE T1195.001
 
@@ -2415,9 +2513,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "typosquatting_monitor" } |
 ---
 
-<a id="page-107"></a>
+<a id="page-111"></a>
 
-## עמוד 107 — Kill Chain
+## עמוד 111 — Kill Chain
 
 > **מנוע:** `kill_chain` · APT / Top-Tier · MITRE T1210
 
@@ -2432,9 +2530,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "kill_chain" } |
 ---
 
-<a id="page-108"></a>
+<a id="page-112"></a>
 
-## עמוד 108 — OAST / OOB
+## עמוד 112 — OAST / OOB
 
 > **מנוע:** `oast_oob` · APT / Top-Tier · MITRE T1071
 
@@ -2449,9 +2547,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "oast_oob" } |
 ---
 
-<a id="page-109"></a>
+<a id="page-113"></a>
 
-## עמוד 109 — Deception Honeypot
+## עמוד 113 — Deception Honeypot
 
 > **מנוע:** `deception_honeypot` · APT / Top-Tier · MITRE T1219
 
@@ -2466,9 +2564,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "deception_honeypot" } |
 ---
 
-<a id="page-110"></a>
+<a id="page-114"></a>
 
-## עמוד 110 — Digital Twin
+## עמוד 114 — Digital Twin
 
 > **מנוע:** `digital_twin` · APT / Top-Tier · MITRE T1588
 
@@ -2483,9 +2581,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "digital_twin" } |
 ---
 
-<a id="page-111"></a>
+<a id="page-115"></a>
 
-## עמוד 111 — Zero-Day Prediction
+## עמוד 115 — Zero-Day Prediction
 
 > **מנוע:** `zero_day_prediction` · APT / Top-Tier · MITRE T1212
 
@@ -2500,9 +2598,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "zero_day_prediction" } |
 ---
 
-<a id="page-112"></a>
+<a id="page-116"></a>
 
-## עמוד 112 — APT Threat Emulation
+## עמוד 116 — APT Threat Emulation
 
 > **מנוע:** `threat_emulation` · APT / Top-Tier · MITRE T1583
 
@@ -2517,9 +2615,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "threat_emulation" } |
 ---
 
-<a id="page-113"></a>
+<a id="page-117"></a>
 
-## עמוד 113 — PoE Synthesis
+## עמוד 117 — PoE Synthesis
 
 > **מנוע:** `poe_synthesis` · APT / Top-Tier · MITRE T1588
 
@@ -2534,9 +2632,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "poe_synthesis" } |
 ---
 
-<a id="page-114"></a>
+<a id="page-118"></a>
 
-## עמוד 114 — RCE Chain
+## עמוד 118 — RCE Chain
 
 > **מנוע:** `rce_chain` · APT / Top-Tier · MITRE T1203
 
@@ -2551,9 +2649,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "rce_chain" } |
 ---
 
-<a id="page-115"></a>
+<a id="page-119"></a>
 
-## עמוד 115 — Active Directory Attack
+## עמוד 119 — Active Directory Attack
 
 > **מנוע:** `active_directory` · APT / Top-Tier · MITRE T1558
 
@@ -2568,9 +2666,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "active_directory" } |
 ---
 
-<a id="page-116"></a>
+<a id="page-120"></a>
 
-## עמוד 116 — C2 Framework Emulation
+## עמוד 120 — C2 Framework Emulation
 
 > **מנוע:** `c2_emulation` · APT / Top-Tier · MITRE T1071.001
 
@@ -2585,9 +2683,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "c2_emulation" } |
 ---
 
-<a id="page-117"></a>
+<a id="page-121"></a>
 
-## עמוד 117 — Ransomware Emulation
+## עמוד 121 — Ransomware Emulation
 
 > **מנוע:** `ransomware_emulation` · APT / Top-Tier · MITRE T1486
 
@@ -2602,9 +2700,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ransomware_emulation" } |
 ---
 
-<a id="page-118"></a>
+<a id="page-122"></a>
 
-## עמוד 118 — Lateral Movement
+## עמוד 122 — Lateral Movement
 
 > **מנוע:** `lateral_movement` · רשת ופרוטוקולים · MITRE T1021
 
@@ -2619,9 +2717,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "lateral_movement" } |
 ---
 
-<a id="page-119"></a>
+<a id="page-123"></a>
 
-## עמוד 119 — Data Exfiltration
+## עמוד 123 — Data Exfiltration
 
 > **מנוע:** `data_exfiltration` · Stealth / Evasion · MITRE T1048
 
@@ -2636,9 +2734,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "data_exfiltration" } |
 ---
 
-<a id="page-120"></a>
+<a id="page-124"></a>
 
-## עמוד 120 — Memory Corruption
+## עמוד 124 — Memory Corruption
 
 > **מנוע:** `memory_corruption` · APT / Top-Tier · MITRE T1203
 
@@ -2653,9 +2751,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "memory_corruption" } |
 ---
 
-<a id="page-121"></a>
+<a id="page-125"></a>
 
-## עמוד 121 — Browser Exploitation
+## עמוד 125 — Browser Exploitation
 
 > **מנוע:** `browser_exploitation` · APT / Top-Tier · MITRE T1189
 
@@ -2670,9 +2768,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "browser_exploitation" } |
 ---
 
-<a id="page-122"></a>
+<a id="page-126"></a>
 
-## עמוד 122 — Deepfake / GenAI Attack
+## עמוד 126 — Deepfake / GenAI Attack
 
 > **מנוע:** `deepfake_genai` · AI / LLM · MITRE T1566
 
@@ -2687,13 +2785,13 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "deepfake_genai" } |
 ---
 
-<a id="page-123"></a>
+<a id="page-127"></a>
 
-## עמוד 123 — Zero Trust Bypass
+## עמוד 127 — Zero Trust Bypass
 
 > **מנוע:** `zero_trust_bypass` · Stealth / Evasion · MITRE T1078
 
-| **מה** | Conditional access bypass, device-posture spoofing, MFA fatigue bombing, token exfiltration |
+| **מה** | Live ZTNA/IdP posture: authorization endpoint, session cookies vs device signals, and reachable apps — not an HSTS-only check |
 | **למה** | MITRE T1078 · probe Remote (network/API). |
 | **מתי** | Target/domain ב-scope. |
 | **איפה** | /command-center/engines/zero_trust_bypass |
@@ -2704,9 +2802,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "zero_trust_bypass" } |
 ---
 
-<a id="page-124"></a>
+<a id="page-128"></a>
 
-## עמוד 124 — Container Escape
+## עמוד 128 — Container Escape
 
 > **מנוע:** `container_escape` · ענן ותשתית · MITRE T1611
 
@@ -2721,9 +2819,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "container_escape" } |
 ---
 
-<a id="page-125"></a>
+<a id="page-129"></a>
 
-## עמוד 125 — Wireless Attack
+## עמוד 129 — Wireless Attack
 
 > **מנוע:** `wireless_attack` · רשת ופרוטוקולים · MITRE T1638
 
@@ -2738,9 +2836,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "wireless_attack" } |
 ---
 
-<a id="page-126"></a>
+<a id="page-130"></a>
 
-## עמוד 126 — Mobile Attack
+## עמוד 130 — Mobile Attack
 
 > **מנוע:** `mobile_attack` · מודיעין ו-Recon · MITRE T1421
 
@@ -2755,9 +2853,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "mobile_attack" } |
 ---
 
-<a id="page-127"></a>
+<a id="page-131"></a>
 
-## עמוד 127 — Cloud Ransomware
+## עמוד 131 — Cloud Ransomware
 
 > **מנוע:** `cloud_ransomware` · ענן ותשתית · MITRE T1486
 
@@ -2772,9 +2870,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_ransomware" } |
 ---
 
-<a id="page-128"></a>
+<a id="page-132"></a>
 
-## עמוד 128 — Firmware Exploit
+## עמוד 132 — Firmware Exploit
 
 > **מנוע:** `firmware_exploit` · OT / ICS / IoT · MITRE T1542.001
 
@@ -2789,9 +2887,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "firmware_exploit" } |
 ---
 
-<a id="page-129"></a>
+<a id="page-133"></a>
 
-## עמוד 129 — DNS Rebinding
+## עמוד 133 — DNS Rebinding
 
 > **מנוע:** `dns_rebinding` · רשת ופרוטוקולים · MITRE T1557
 
@@ -2806,9 +2904,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "dns_rebinding" } |
 ---
 
-<a id="page-130"></a>
+<a id="page-134"></a>
 
-## עמוד 130 — Physical Security Emulation
+## עמוד 134 — Physical Security Emulation
 
 > **מנוע:** `physical_security` · Stealth / Evasion · MITRE T1200
 
@@ -2823,9 +2921,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "physical_security" } |
 ---
 
-<a id="page-131"></a>
+<a id="page-135"></a>
 
-## עמוד 131 — Vuln Chain Synthesis
+## עמוד 135 — Vuln Chain Synthesis
 
 > **מנוע:** `vuln_chaining` · APT / Top-Tier · MITRE T1210
 
@@ -2840,13 +2938,13 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "vuln_chaining" } |
 ---
 
-<a id="page-132"></a>
+<a id="page-136"></a>
 
-## עמוד 132 — Advanced SQLi
+## עמוד 136 — Advanced SQLi
 
 > **מנוע:** `sqli_advanced` · Web / API · MITRE T1190
 
-| **מה** | Time-based blind, error-based, OOB DNS exfil, second-order SQLi, stored procedure abuse |
+| **מה** | Dedicated SQL injection probe: error-based leaks, time-based delay vs baseline, and OAST callbacks on a live HTTP target |
 | **למה** | MITRE T1190 · probe Remote (network/API). |
 | **מתי** | Target/domain ב-scope. |
 | **איפה** | /command-center/engines/sqli_advanced |
@@ -2857,9 +2955,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "sqli_advanced" } |
 ---
 
-<a id="page-133"></a>
+<a id="page-137"></a>
 
-## עמוד 133 — Log4Shell / Log4J
+## עמוד 137 — Log4Shell / Log4J
 
 > **מנוע:** `log4shell_scan` · APT / Top-Tier · MITRE T1190
 
@@ -2874,9 +2972,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "log4shell_scan" } |
 ---
 
-<a id="page-134"></a>
+<a id="page-138"></a>
 
-## עמוד 134 — Kernel Exploit
+## עמוד 138 — Kernel Exploit
 
 > **מנוע:** `kernel_exploit` · APT / Top-Tier · MITRE T1068
 
@@ -2891,9 +2989,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "kernel_exploit" } |
 ---
 
-<a id="page-135"></a>
+<a id="page-139"></a>
 
-## עמוד 135 — Credential Stuffing
+## עמוד 139 — Credential Stuffing
 
 > **מנוע:** `credential_stuffing` · Web / API · MITRE T1110.004
 
@@ -2908,9 +3006,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "credential_stuffing" } |
 ---
 
-<a id="page-136"></a>
+<a id="page-140"></a>
 
-## עמוד 136 — Spear Phishing / BEC
+## עמוד 140 — Spear Phishing / BEC
 
 > **מנוע:** `spear_phishing` · מודיעין ו-Recon · MITRE T1566.002
 
@@ -2925,9 +3023,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "spear_phishing" } |
 ---
 
-<a id="page-137"></a>
+<a id="page-141"></a>
 
-## עמוד 137 — VLAN Bypass
+## עמוד 141 — VLAN Bypass
 
 > **מנוע:** `vlan_bypass` · רשת ופרוטוקולים · MITRE T1599
 
@@ -2942,9 +3040,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "vlan_bypass" } |
 ---
 
-<a id="page-138"></a>
+<a id="page-142"></a>
 
-## עמוד 138 — Malware Persistence
+## עמוד 142 — Malware Persistence
 
 > **מנוע:** `malware_persistence` · Stealth / Evasion · MITRE T1542.003
 
@@ -2959,9 +3057,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "malware_persistence" } |
 ---
 
-<a id="page-139"></a>
+<a id="page-143"></a>
 
-## עמוד 139 — Insider Threat Emulation
+## עמוד 143 — Insider Threat Emulation
 
 > **מנוע:** `insider_threat` · Stealth / Evasion · MITRE T1078.002
 
@@ -2976,9 +3074,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "insider_threat" } |
 ---
 
-<a id="page-140"></a>
+<a id="page-144"></a>
 
-## עמוד 140 — Post-Exploitation
+## עמוד 144 — Post-Exploitation
 
 > **מנוע:** `post_exploitation` · APT / Top-Tier · MITRE T1003
 
@@ -2993,9 +3091,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "post_exploitation" } |
 ---
 
-<a id="page-141"></a>
+<a id="page-145"></a>
 
-## עמוד 141 — Cloud Lateral Movement
+## עמוד 145 — Cloud Lateral Movement
 
 > **מנוע:** `cloud_lateral` · ענן ותשתית · MITRE T1552.005
 
@@ -3010,9 +3108,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_lateral" } |
 ---
 
-<a id="page-142"></a>
+<a id="page-146"></a>
 
-## עמוד 142 — Process Injection
+## עמוד 146 — Process Injection
 
 > **מנוע:** `process_injection` · Stealth / Evasion · MITRE T1055
 
@@ -3027,13 +3125,13 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "process_injection" } |
 ---
 
-<a id="page-143"></a>
+<a id="page-147"></a>
 
-## עמוד 143 — Intelligent API Fuzzing
+## עמוד 147 — Intelligent API Fuzzing
 
 > **מנוע:** `api_fuzzing` · Web / API · MITRE T1190
 
-| **מה** | OpenAPI/Swagger-guided API fuzzing: mass assignment, business-logic bypass, rate-limit evasion, hidden endpoint discovery, parameter pollution |
+| **מה** | Dedicated API fuzz: OpenAPI/common REST paths with live status/body differentials — not the shared http_feedback_fuzz alias |
 | **למה** | MITRE T1190 · probe Remote (network/API). |
 | **מתי** | Target/domain ב-scope. |
 | **איפה** | /command-center/engines/api_fuzzing |
@@ -3044,9 +3142,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "api_fuzzing" } |
 ---
 
-<a id="page-144"></a>
+<a id="page-148"></a>
 
-## עמוד 144 — SMB / NTLM Relay
+## עמוד 148 — SMB / NTLM Relay
 
 > **מנוע:** `smb_relay` · רשת ופרוטוקולים · MITRE T1557.001
 
@@ -3061,9 +3159,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "smb_relay" } |
 ---
 
-<a id="page-145"></a>
+<a id="page-149"></a>
 
-## עמוד 145 — GraphQL Injection
+## עמוד 149 — GraphQL Injection
 
 > **מנוע:** `graphql_injection` · Web / API · MITRE T1190
 
@@ -3078,9 +3176,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "graphql_injection" } |
 ---
 
-<a id="page-146"></a>
+<a id="page-150"></a>
 
-## עמוד 146 — Container / K8s Escape
+## עמוד 150 — Container / K8s Escape
 
 > **מנוע:** `container_k8s_escape` · ענן ותשתית · MITRE T1611
 
@@ -3095,9 +3193,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "container_k8s_escape" } |
 ---
 
-<a id="page-147"></a>
+<a id="page-151"></a>
 
-## עמוד 147 — Web Cache Poisoning
+## עמוד 151 — Web Cache Poisoning
 
 > **מנוע:** `web_cache_poison` · Web / API · MITRE T1584
 
@@ -3112,9 +3210,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "web_cache_poison" } |
 ---
 
-<a id="page-148"></a>
+<a id="page-152"></a>
 
-## עמוד 148 — XXE / XML Injection
+## עמוד 152 — XXE / XML Injection
 
 > **מנוע:** `xxe_injection` · Web / API · MITRE T1190
 
@@ -3129,9 +3227,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "xxe_injection" } |
 ---
 
-<a id="page-149"></a>
+<a id="page-153"></a>
 
-## עמוד 149 — LDAP / AD Injection
+## עמוד 153 — LDAP / AD Injection
 
 > **מנוע:** `ldap_injection` · רשת ופרוטוקולים · MITRE T1078.002
 
@@ -3146,9 +3244,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ldap_injection" } |
 ---
 
-<a id="page-150"></a>
+<a id="page-154"></a>
 
-## עמוד 150 — Side-Channel Attack
+## עמוד 154 — Side-Channel Attack
 
 > **מנוע:** `side_channel` · קריפטו וזהות · MITRE T1600
 
@@ -3163,9 +3261,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "side_channel" } |
 ---
 
-<a id="page-151"></a>
+<a id="page-155"></a>
 
-## עמוד 151 — SSRF Chain Pivot
+## עמוד 155 — SSRF Chain Pivot
 
 > **מנוע:** `ssrf_chain` · Web / API · MITRE T1090.001
 
@@ -3180,9 +3278,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ssrf_chain" } |
 ---
 
-<a id="page-152"></a>
+<a id="page-156"></a>
 
-## עמוד 152 — JWT / Token Attacks
+## עמוד 156 — JWT / Token Attacks
 
 > **מנוע:** `jwt_attacks` · קריפטו וזהות · MITRE T1552.001
 
@@ -3197,9 +3295,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "jwt_attacks" } |
 ---
 
-<a id="page-153"></a>
+<a id="page-157"></a>
 
-## עמוד 153 — BGP Route Hijacking
+## עמוד 157 — BGP Route Hijacking
 
 > **מנוע:** `bgp_hijacking` · רשת ופרוטוקולים · MITRE T1584.005
 
@@ -3214,9 +3312,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "bgp_hijacking" } |
 ---
 
-<a id="page-154"></a>
+<a id="page-158"></a>
 
-## עמוד 154 — Deserialization RCE
+## עמוד 158 — Deserialization RCE
 
 > **מנוע:** `rce_deserialization` · Web / API · MITRE T1059
 
@@ -3231,9 +3329,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "rce_deserialization" } |
 ---
 
-<a id="page-155"></a>
+<a id="page-159"></a>
 
-## עמוד 155 — Active Directory Enum
+## עמוד 159 — Active Directory Enum
 
 > **מנוע:** `active_directory_enum` · מודיעין ו-Recon · MITRE T1087.002
 
@@ -3248,9 +3346,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "active_directory_enum" } |
 ---
 
-<a id="page-156"></a>
+<a id="page-160"></a>
 
-## עמוד 156 — Ransomware Simulation
+## עמוד 160 — Ransomware Simulation
 
 > **מנוע:** `ransomware_sim` · APT / Top-Tier · MITRE T1486
 
@@ -3265,9 +3363,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ransomware_sim" } |
 ---
 
-<a id="page-157"></a>
+<a id="page-161"></a>
 
-## עמוד 157 — WAF / IDS Bypass
+## עמוד 161 — WAF / IDS Bypass
 
 > **מנוע:** `waf_ids_bypass` · Stealth / Evasion · MITRE T1685
 
@@ -3282,9 +3380,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "waf_ids_bypass" } |
 ---
 
-<a id="page-158"></a>
+<a id="page-162"></a>
 
-## עמוד 158 — SIEM Log Evasion
+## עמוד 162 — SIEM Log Evasion
 
 > **מנוע:** `siem_evasion` · Stealth / Evasion · MITRE T1685
 
@@ -3299,9 +3397,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "siem_evasion" } |
 ---
 
-<a id="page-159"></a>
+<a id="page-163"></a>
 
-## עמוד 159 — Mobile App Pentest
+## עמוד 163 — Mobile App Pentest
 
 > **מנוע:** `mobile_pentest` · Web / API · MITRE T1421
 
@@ -3316,9 +3414,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "mobile_pentest" } |
 ---
 
-<a id="page-160"></a>
+<a id="page-164"></a>
 
-## עמוד 160 — CORS Misconfiguration
+## עמוד 164 — CORS Misconfiguration
 
 > **מנוע:** `cors_exploit` · Web / API · MITRE T1539
 
@@ -3333,9 +3431,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cors_exploit" } |
 ---
 
-<a id="page-161"></a>
+<a id="page-165"></a>
 
-## עמוד 161 — Prototype Pollution
+## עמוד 165 — Prototype Pollution
 
 > **מנוע:** `js_prototype_pollution` · Web / API · MITRE T1059.007
 
@@ -3350,9 +3448,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "js_prototype_pollution" } |
 ---
 
-<a id="page-162"></a>
+<a id="page-166"></a>
 
-## עמוד 162 — IPSec / VPN Audit
+## עמוד 166 — IPSec / VPN Audit
 
 > **מנוע:** `ipsec_vpn_audit` · רשת ופרוטוקולים · MITRE T1133
 
@@ -3367,9 +3465,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ipsec_vpn_audit" } |
 ---
 
-<a id="page-163"></a>
+<a id="page-167"></a>
 
-## עמוד 163 — 5G / Cellular Security
+## עמוד 167 — 5G / Cellular Security
 
 > **מנוע:** `5g_security` · רשת ופרוטוקולים · MITRE T1040
 
@@ -3384,9 +3482,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "5g_security" } |
 ---
 
-<a id="page-164"></a>
+<a id="page-168"></a>
 
-## עמוד 164 — Firmware Emulation
+## עמוד 168 — Firmware Emulation
 
 > **מנוע:** `firmware_emulation` · OT / ICS / IoT · MITRE T1542
 
@@ -3401,9 +3499,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "firmware_emulation" } |
 ---
 
-<a id="page-165"></a>
+<a id="page-169"></a>
 
-## עמוד 165 — Cloud Storage Audit
+## עמוד 169 — Cloud Storage Audit
 
 > **מנוע:** `cloud_storage_audit` · ענן ותשתית · MITRE T1530
 
@@ -3418,9 +3516,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_storage_audit" } |
 ---
 
-<a id="page-166"></a>
+<a id="page-170"></a>
 
-## עמוד 166 — LLM Jailbreak / Prompt Extraction
+## עמוד 170 — LLM Jailbreak / Prompt Extraction
 
 > **מנוע:** `llm_jailbreak` · AI / LLM · MITRE T1059
 
@@ -3435,9 +3533,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "llm_jailbreak" } |
 ---
 
-<a id="page-167"></a>
+<a id="page-171"></a>
 
-## עמוד 167 — CI/CD Pipeline Attack
+## עמוד 171 — CI/CD Pipeline Attack
 
 > **מנוע:** `devsecops_scan` · Supply Chain · MITRE T1195.002
 
@@ -3452,9 +3550,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "devsecops_scan" } |
 ---
 
-<a id="page-168"></a>
+<a id="page-172"></a>
 
-## עמוד 168 — WebAssembly Reverse Engineering
+## עמוד 172 — WebAssembly Reverse Engineering
 
 > **מנוע:** `wasm_reverse` · Stealth / Evasion · MITRE T1027.002
 
@@ -3469,9 +3567,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "wasm_reverse" } |
 ---
 
-<a id="page-169"></a>
+<a id="page-173"></a>
 
-## עמוד 169 — Bluetooth / BLE Attack
+## עמוד 173 — Bluetooth / BLE Attack
 
 > **מנוע:** `bluetooth_attack` · רשת ופרוטוקולים · MITRE T1011.001
 
@@ -3486,9 +3584,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "bluetooth_attack" } |
 ---
 
-<a id="page-170"></a>
+<a id="page-174"></a>
 
-## עמוד 170 — OAuth / OIDC Abuse
+## עמוד 174 — OAuth / OIDC Abuse
 
 > **מנוע:** `oauth_abuse` · קריפטו וזהות · MITRE T1550.001
 
@@ -3503,26 +3601,26 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "oauth_abuse" } |
 ---
 
-<a id="page-171"></a>
+<a id="page-175"></a>
 
-## עמוד 171 — Heap Exploitation
+## עמוד 175 — Heap Exploitation
 
 > **מנוע:** `heap_exploitation` · APT / Top-Tier · MITRE T1203
 
 | **מה** | Heap memory exploitation: use-after-free, tcache poisoning, double-free, heap grooming, ASLR/PIE bypass via heap leak chaining |
-| **למה** | MITRE T1203 · probe Remote (network/API). |
-| **מתי** | Global/config scan. |
+| **למה** | MITRE T1203 · probe Agent (endpoint). |
+| **מתי** | Agent מותקן ו-online. |
 | **איפה** | /command-center/engines/heap_exploitation |
-| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
-| **כמה** | 1 quota · Remote · יעד לא חובה |
-| **למי** | AppSec / SOC |
+| **איך** | Agents → install → Engine Detail → Run. |
+| **כמה** | 1 quota · Agent · יעד לא חובה |
+| **למי** | Endpoint / Red Team |
 | **מה יוצא** | findings + evidence |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "heap_exploitation" } |
 ---
 
-<a id="page-172"></a>
+<a id="page-176"></a>
 
-## עמוד 172 — Clickjacking / UI Redress
+## עמוד 176 — Clickjacking / UI Redress
 
 > **מנוע:** `clickjacking` · Web / API · MITRE T1185
 
@@ -3537,9 +3635,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "clickjacking" } |
 ---
 
-<a id="page-173"></a>
+<a id="page-177"></a>
 
-## עמוד 173 — Email Spoofing / DMARC Bypass
+## עמוד 177 — Email Spoofing / DMARC Bypass
 
 > **מנוע:** `email_spoofing` · מודיעין ו-Recon · MITRE T1566.001
 
@@ -3554,9 +3652,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "email_spoofing" } |
 ---
 
-<a id="page-174"></a>
+<a id="page-178"></a>
 
-## עמוד 174 — Satellite / Space Security
+## עמוד 178 — Satellite / Space Security
 
 > **מנוע:** `satellite_attack` · רשת ופרוטוקולים · MITRE T1498
 
@@ -3571,9 +3669,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "satellite_attack" } |
 ---
 
-<a id="page-175"></a>
+<a id="page-179"></a>
 
-## עמוד 175 — AI Training Data Poisoning
+## עמוד 179 — AI Training Data Poisoning
 
 > **מנוע:** `ai_poisoning` · AI / LLM · MITRE T1565
 
@@ -3588,9 +3686,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ai_poisoning" } |
 ---
 
-<a id="page-176"></a>
+<a id="page-180"></a>
 
-## עמוד 176 — Smart Contract / Blockchain Exploit
+## עמוד 180 — Smart Contract / Blockchain Exploit
 
 > **מנוע:** `smart_contract_audit` · Web / API · MITRE T1496
 
@@ -3605,9 +3703,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "smart_contract_audit" } |
 ---
 
-<a id="page-177"></a>
+<a id="page-181"></a>
 
-## עמוד 177 — Automotive / CAN Bus Attack
+## עמוד 181 — Automotive / CAN Bus Attack
 
 > **מנוע:** `automotive_can_bus` · OT / ICS / IoT · MITRE T1498
 
@@ -3622,9 +3720,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "automotive_can_bus" } |
 ---
 
-<a id="page-178"></a>
+<a id="page-182"></a>
 
-## עמוד 178 — Zero-Click Exploit Emulation
+## עמוד 182 — Zero-Click Exploit Emulation
 
 > **מנוע:** `zero_click_exploit` · APT / Top-Tier · MITRE T1203
 
@@ -3639,9 +3737,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "zero_click_exploit" } |
 ---
 
-<a id="page-179"></a>
+<a id="page-183"></a>
 
-## עמוד 179 — Biometric Bypass
+## עמוד 183 — Biometric Bypass
 
 > **מנוע:** `biometric_spoofing` · קריפטו וזהות · MITRE T1556
 
@@ -3656,9 +3754,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "biometric_spoofing" } |
 ---
 
-<a id="page-180"></a>
+<a id="page-184"></a>
 
-## עמוד 180 — Quantum Threat Emulation
+## עמוד 184 — Quantum Threat Emulation
 
 > **מנוע:** `quantum_attack` · קריפטו וזהות · MITRE T1600
 
@@ -3673,9 +3771,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "quantum_attack" } |
 ---
 
-<a id="page-181"></a>
+<a id="page-185"></a>
 
-## עמוד 181 — Secrets & Key Exposure
+## עמוד 185 — Secrets & Key Exposure
 
 > **מנוע:** `devsecops_secrets` · Supply Chain · MITRE T1552.001
 
@@ -3690,9 +3788,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "devsecops_secrets" } |
 ---
 
-<a id="page-182"></a>
+<a id="page-186"></a>
 
-## עמוד 182 — Threat Hunting Automation
+## עמוד 186 — Threat Hunting Automation
 
 > **מנוע:** `threat_hunting_apt` · APT / Top-Tier · MITRE T1078
 
@@ -3707,9 +3805,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "threat_hunting_apt" } |
 ---
 
-<a id="page-183"></a>
+<a id="page-187"></a>
 
-## עמוד 183 — Cloud Identity & IAM Attack
+## עמוד 187 — Cloud Identity & IAM Attack
 
 > **מנוע:** `cloud_identity_attack` · ענן ותשתית · MITRE T1078.004
 
@@ -3724,9 +3822,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_identity_attack" } |
 ---
 
-<a id="page-184"></a>
+<a id="page-188"></a>
 
-## עמוד 184 — Poisoned Pipeline Execution
+## עמוד 188 — Poisoned Pipeline Execution
 
 > **מנוע:** `ci_cd_poisoning` · Supply Chain · MITRE T1195.002
 
@@ -3741,9 +3839,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ci_cd_poisoning" } |
 ---
 
-<a id="page-185"></a>
+<a id="page-189"></a>
 
-## עמוד 185 — LLM Agent Hijacking
+## עמוד 189 — LLM Agent Hijacking
 
 > **מנוע:** `llm_agent_hijack` · AI / LLM · MITRE T1059
 
@@ -3758,9 +3856,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "llm_agent_hijack" } |
 ---
 
-<a id="page-186"></a>
+<a id="page-190"></a>
 
-## עמוד 186 — API Gateway / Microservice Attack
+## עמוד 190 — API Gateway / Microservice Attack
 
 > **מנוע:** `api_gateway_attack` · Web / API · MITRE T1190
 
@@ -3775,9 +3873,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "api_gateway_attack" } |
 ---
 
-<a id="page-187"></a>
+<a id="page-191"></a>
 
-## עמוד 187 — Anti-Deception Evasion
+## עמוד 191 — Anti-Deception Evasion
 
 > **מנוע:** `deception_evasion` · Stealth / Evasion · MITRE T1497
 
@@ -3792,9 +3890,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "deception_evasion" } |
 ---
 
-<a id="page-188"></a>
+<a id="page-192"></a>
 
-## עמוד 188 — Multi-Cloud Pivot
+## עמוד 192 — Multi-Cloud Pivot
 
 > **מנוע:** `multi_cloud_pivot` · ענן ותשתית · MITRE T1552.005
 
@@ -3809,9 +3907,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "multi_cloud_pivot" } |
 ---
 
-<a id="page-189"></a>
+<a id="page-193"></a>
 
-## עמוד 189 — RAG / Vector DB Poisoning
+## עמוד 193 — RAG / Vector DB Poisoning
 
 > **מנוע:** `rag_poisoning` · AI / LLM · MITRE T1565
 
@@ -3826,9 +3924,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "rag_poisoning" } |
 ---
 
-<a id="page-190"></a>
+<a id="page-194"></a>
 
-## עמוד 190 — Malicious Browser Extension
+## עמוד 194 — Malicious Browser Extension
 
 > **מנוע:** `browser_extension_attack` · Web / API · MITRE T1176
 
@@ -3843,9 +3941,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "browser_extension_attack" } |
 ---
 
-<a id="page-191"></a>
+<a id="page-195"></a>
 
-## עמוד 191 — Mobile OS Hardening Bypass
+## עמוד 195 — Mobile OS Hardening Bypass
 
 > **מנוע:** `graphene_os_bypass` · Stealth / Evasion · MITRE T1404
 
@@ -3860,9 +3958,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "graphene_os_bypass" } |
 ---
 
-<a id="page-192"></a>
+<a id="page-196"></a>
 
-## עמוד 192 — Obfuscated / Domain-Fronted C2
+## עמוד 196 — Obfuscated / Domain-Fronted C2
 
 > **מנוע:** `obfuscated_c2` · APT / Top-Tier · MITRE T1090.004
 
@@ -3877,9 +3975,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "obfuscated_c2" } |
 ---
 
-<a id="page-193"></a>
+<a id="page-197"></a>
 
-## עמוד 193 — Hardware Implant / Supply Chain
+## עמוד 197 — Hardware Implant / Supply Chain
 
 > **מנוע:** `hardware_implant` · OT / ICS / IoT · MITRE T1195.003
 
@@ -3894,9 +3992,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "hardware_implant" } |
 ---
 
-<a id="page-194"></a>
+<a id="page-198"></a>
 
-## עמוד 194 — Serverless Cold-Start Race
+## עמוד 198 — Serverless Cold-Start Race
 
 > **מנוע:** `serverless_cold_start` · ענן ותשתית · MITRE T1648
 
@@ -3911,9 +4009,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "serverless_cold_start" } |
 ---
 
-<a id="page-195"></a>
+<a id="page-199"></a>
 
-## עמוד 195 — Multimodal AI Attack
+## עמוד 199 — Multimodal AI Attack
 
 > **מנוע:** `multimodal_ai_attack` · AI / LLM · MITRE T1059
 
@@ -3928,9 +4026,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "multimodal_ai_attack" } |
 ---
 
-<a id="page-196"></a>
+<a id="page-200"></a>
 
-## עמוד 196 — AD Certificate Services Abuse
+## עמוד 200 — AD Certificate Services Abuse
 
 > **מנוע:** `active_directory_cs` · קריפטו וזהות · MITRE T1649
 
@@ -3945,9 +4043,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "active_directory_cs" } |
 ---
 
-<a id="page-197"></a>
+<a id="page-201"></a>
 
-## עמוד 197 — Data Pipeline / ETL Attack
+## עמוד 201 — Data Pipeline / ETL Attack
 
 > **מנוע:** `data_pipeline_attack` · Supply Chain · MITRE T1565.001
 
@@ -3962,9 +4060,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "data_pipeline_attack" } |
 ---
 
-<a id="page-198"></a>
+<a id="page-202"></a>
 
-## עמוד 198 — Model Inversion / Exfiltration
+## עמוד 202 — Model Inversion / Exfiltration
 
 > **מנוע:** `exfil_ai_inference` · AI / LLM · MITRE T1048
 
@@ -3979,9 +4077,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "exfil_ai_inference" } |
 ---
 
-<a id="page-199"></a>
+<a id="page-203"></a>
 
-## עמוד 199 — Cloud WAF / Shield Bypass
+## עמוד 203 — Cloud WAF / Shield Bypass
 
 > **מנוע:** `cloud_waf_bypass` · ענן ותשתית · MITRE T1685
 
@@ -3996,9 +4094,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_waf_bypass" } |
 ---
 
-<a id="page-200"></a>
+<a id="page-204"></a>
 
-## עמוד 200 — Telecom / SS7 Attack
+## עמוד 204 — Telecom / SS7 Attack
 
 > **מנוע:** `telco_ss7_attack` · רשת ופרוטוקולים · MITRE T1040
 
@@ -4013,9 +4111,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "telco_ss7_attack" } |
 ---
 
-<a id="page-201"></a>
+<a id="page-205"></a>
 
-## עמוד 201 — Dark / Deep Web Intelligence
+## עמוד 205 — Dark / Deep Web Intelligence
 
 > **מנוע:** `deepweb_intel` · מודיעין ו-Recon · MITRE T1597
 
@@ -4030,9 +4128,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "deepweb_intel" } |
 ---
 
-<a id="page-202"></a>
+<a id="page-206"></a>
 
-## עמוד 202 — Network TAP / SPAN Implant
+## עמוד 206 — Network TAP / SPAN Implant
 
 > **מנוע:** `network_tap_implant` · רשת ופרוטוקולים · MITRE T1557
 
@@ -4047,9 +4145,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "network_tap_implant" } |
 ---
 
-<a id="page-203"></a>
+<a id="page-207"></a>
 
-## עמוד 203 — GitOps / IaC Drift Attack
+## עמוד 207 — GitOps / IaC Drift Attack
 
 > **מנוע:** `gitops_attack` · Supply Chain · MITRE T1195
 
@@ -4064,9 +4162,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "gitops_attack" } |
 ---
 
-<a id="page-204"></a>
+<a id="page-208"></a>
 
-## עמוד 204 — Compliance Gap Scanner
+## עמוד 208 — Compliance Gap Scanner
 
 > **מנוע:** `compliance_gap_scan` · מודיעין ו-Recon · MITRE T1592
 
@@ -4081,9 +4179,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "compliance_gap_scan" } |
 ---
 
-<a id="page-205"></a>
+<a id="page-209"></a>
 
-## עמוד 205 — DNS Zone Enumeration
+## עמוד 209 — DNS Zone Enumeration
 
 > **מנוע:** `dns_enum` · מודיעין ו-Recon · MITRE T1590.002
 
@@ -4098,9 +4196,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "dns_enum" } |
 ---
 
-<a id="page-206"></a>
+<a id="page-210"></a>
 
-## עמוד 206 — Social Media OSINT
+## עמוד 210 — Social Media OSINT
 
 > **מנוע:** `social_media_recon` · מודיעין ו-Recon · MITRE T1593.001
 
@@ -4115,9 +4213,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "social_media_recon" } |
 ---
 
-<a id="page-207"></a>
+<a id="page-211"></a>
 
-## עמוד 207 — Shodan / Censys Mass Scan
+## עמוד 211 — Shodan / Censys Mass Scan
 
 > **מנוע:** `shodan_mass_scan` · מודיעין ו-Recon · MITRE T1595.001
 
@@ -4132,9 +4230,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "shodan_mass_scan" } |
 ---
 
-<a id="page-208"></a>
+<a id="page-212"></a>
 
-## עמוד 208 — Certificate Transparency Mining
+## עמוד 212 — Certificate Transparency Mining
 
 > **מנוע:** `cert_transparency` · מודיעין ו-Recon · MITRE T1596.003
 
@@ -4149,9 +4247,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cert_transparency" } |
 ---
 
-<a id="page-209"></a>
+<a id="page-213"></a>
 
-## עמוד 209 — Email Address Harvester
+## עמוד 213 — Email Address Harvester
 
 > **מנוע:** `email_harvest` · מודיעין ו-Recon · MITRE T1589.002
 
@@ -4166,9 +4264,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "email_harvest" } |
 ---
 
-<a id="page-210"></a>
+<a id="page-214"></a>
 
-## עמוד 210 — GitHub / GitLab OSINT
+## עמוד 214 — GitHub / GitLab OSINT
 
 > **מנוע:** `github_recon` · מודיעין ו-Recon · MITRE T1593.003
 
@@ -4183,9 +4281,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "github_recon" } |
 ---
 
-<a id="page-211"></a>
+<a id="page-215"></a>
 
-## עמוד 211 — Geospatial Intelligence (GEOINT)
+## עמוד 215 — Geospatial Intelligence (GEOINT)
 
 > **מנוע:** `geoint` · מודיעין ו-Recon · MITRE T1591
 
@@ -4200,9 +4298,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "geoint" } |
 ---
 
-<a id="page-212"></a>
+<a id="page-216"></a>
 
-## עמוד 212 — Passive Network Topology Mapper
+## עמוד 216 — Passive Network Topology Mapper
 
 > **מנוע:** `network_topology_map` · מודיעין ו-Recon · MITRE T1590.004
 
@@ -4217,9 +4315,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "network_topology_map" } |
 ---
 
-<a id="page-213"></a>
+<a id="page-217"></a>
 
-## עמוד 213 — Employee Profiling Engine
+## עמוד 217 — Employee Profiling Engine
 
 > **מנוע:** `employee_profiling` · מודיעין ו-Recon · MITRE T1589.003
 
@@ -4234,9 +4332,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "employee_profiling" } |
 ---
 
-<a id="page-214"></a>
+<a id="page-218"></a>
 
-## עמוד 214 — Historical Asset Recon
+## עמוד 218 — Historical Asset Recon
 
 > **מנוע:** `wayback_recon` · מודיעין ו-Recon · MITRE T1593
 
@@ -4251,13 +4349,13 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "wayback_recon" } |
 ---
 
-<a id="page-215"></a>
+<a id="page-219"></a>
 
-## עמוד 215 — Advanced XSS Engine
+## עמוד 219 — Advanced XSS Engine
 
 > **מנוע:** `xss_advanced` · Web / API · MITRE T1059.007
 
-| **מה** | Comprehensive XSS exploitation: DOM-based, stored, reflected, mutation-based, polyglot payload bypass, CSP bypass techniques, XSS-to-account-takeover chain |
+| **מה** | Dedicated reflected-XSS probe: unique canary in query/body, reports only when the live response reflects the payload |
 | **למה** | MITRE T1059.007 · probe Remote (network/API). |
 | **מתי** | Target/domain ב-scope. |
 | **איפה** | /command-center/engines/xss_advanced |
@@ -4268,13 +4366,13 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "xss_advanced" } |
 ---
 
-<a id="page-216"></a>
+<a id="page-220"></a>
 
-## עמוד 216 — CSRF Token Bypass
+## עמוד 220 — CSRF Token Bypass
 
 > **מנוע:** `csrf_exploit` · Web / API · MITRE T1185
 
-| **מה** | CSRF attack vectors: token prediction, SameSite bypass, subdomain-based origin confusion, flash-based CSRF, multipart CSRF, SPA-specific state forgery |
+| **מה** | Dedicated CSRF probe: missing/weak SameSite and token checks on state-changing forms discovered from the live origin |
 | **למה** | MITRE T1185 · probe Remote (network/API). |
 | **מתי** | Target/domain ב-scope. |
 | **איפה** | /command-center/engines/csrf_exploit |
@@ -4285,9 +4383,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "csrf_exploit" } |
 ---
 
-<a id="page-217"></a>
+<a id="page-221"></a>
 
-## עמוד 217 — Path Traversal / LFI / RFI
+## עמוד 221 — Path Traversal / LFI / RFI
 
 > **מנוע:** `path_traversal` · Web / API · MITRE T1083
 
@@ -4302,9 +4400,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "path_traversal" } |
 ---
 
-<a id="page-218"></a>
+<a id="page-222"></a>
 
-## עמוד 218 — Business Logic Vulnerability
+## עמוד 222 — Business Logic Vulnerability
 
 > **מנוע:** `business_logic_flaw` · Web / API · MITRE T1548
 
@@ -4319,13 +4417,13 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "business_logic_flaw" } |
 ---
 
-<a id="page-219"></a>
+<a id="page-223"></a>
 
-## עמוד 219 — Web Race Condition (TOCTOU)
+## עמוד 223 — Web Race Condition (TOCTOU)
 
 > **מנוע:** `race_condition_web` · Web / API · MITRE T1499.003
 
-| **מה** | HTTP-level race condition exploitation: single-packet attack, limit overrun, TOCTOU in payment flows, concurrent request state corruption, Turbo Intruder automation |
+| **מה** | Dedicated concurrent-request race probe: duplicate POSTs and reports only when live responses diverge (TOCTOU), not a generic HTTP fuzzer alias |
 | **למה** | MITRE T1499.003 · probe Remote (network/API). |
 | **מתי** | Target/domain ב-scope. |
 | **איפה** | /command-center/engines/race_condition_web |
@@ -4336,9 +4434,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "race_condition_web" } |
 ---
 
-<a id="page-220"></a>
+<a id="page-224"></a>
 
-## עמוד 220 — OAuth 2.0 / PKCE Attack
+## עמוד 224 — OAuth 2.0 / PKCE Attack
 
 > **מנוע:** `oauth_pkce_attack` · Web / API · MITRE T1550.001
 
@@ -4353,9 +4451,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "oauth_pkce_attack" } |
 ---
 
-<a id="page-221"></a>
+<a id="page-225"></a>
 
-## עמוד 221 — Mass Assignment / HPP
+## עמוד 225 — Mass Assignment / HPP
 
 > **מנוע:** `mass_assignment` · Web / API · MITRE T1190
 
@@ -4370,9 +4468,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "mass_assignment" } |
 ---
 
-<a id="page-222"></a>
+<a id="page-226"></a>
 
-## עמוד 222 — Web Cache Deception
+## עמוד 226 — Web Cache Deception
 
 > **מנוע:** `web_cache_deception` · Web / API · MITRE T1185
 
@@ -4387,9 +4485,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "web_cache_deception" } |
 ---
 
-<a id="page-223"></a>
+<a id="page-227"></a>
 
-## עמוד 223 — Shadow / Deprecated API Attack
+## עמוד 227 — Shadow / Deprecated API Attack
 
 > **מנוע:** `api_versioning_attack` · Web / API · MITRE T1190
 
@@ -4404,13 +4502,13 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "api_versioning_attack" } |
 ---
 
-<a id="page-224"></a>
+<a id="page-228"></a>
 
-## עמוד 224 — NoSQL Injection Engine
+## עמוד 228 — NoSQL Injection Engine
 
 > **מנוע:** `nosql_injection` · Web / API · MITRE T1190
 
-| **מה** | NoSQL injection exploitation: MongoDB operator injection ($where, $regex), CouchDB Mango query bypass, Redis command injection, Elasticsearch DSL injection, Cassandra CQL injection |
+| **מה** | Dedicated NoSQL operator injection probe ($gt/$ne JSON bodies) against live endpoints — findings only from error/auth bypass evidence |
 | **למה** | MITRE T1190 · probe Remote (network/API). |
 | **מתי** | Target/domain ב-scope. |
 | **איפה** | /command-center/engines/nosql_injection |
@@ -4421,9 +4519,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "nosql_injection" } |
 ---
 
-<a id="page-225"></a>
+<a id="page-229"></a>
 
-## עמוד 225 — Java Deserialization Gadget Chain
+## עמוד 229 — Java Deserialization Gadget Chain
 
 > **מנוע:** `deserialization_java` · Web / API · MITRE T1059
 
@@ -4438,13 +4536,13 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "deserialization_java" } |
 ---
 
-<a id="page-226"></a>
+<a id="page-230"></a>
 
-## עמוד 226 — Open Redirect Chain
+## עמוד 230 — Open Redirect Chain
 
 > **מנוע:** `open_redirect` · Web / API · MITRE T1190
 
-| **מה** | Open redirect exploitation chain: phishing pre-text, OAuth redirect_uri bypass, SSRF amplification via trusted redirect, browser history manipulation |
+| **מה** | Dedicated open-redirect probe: crafted next/url/redirect params, reports only when Location/meta-refresh leaves the origin |
 | **למה** | MITRE T1190 · probe Remote (network/API). |
 | **מתי** | Target/domain ב-scope. |
 | **איפה** | /command-center/engines/open_redirect |
@@ -4455,9 +4553,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "open_redirect" } |
 ---
 
-<a id="page-227"></a>
+<a id="page-231"></a>
 
-## עמוד 227 — Host Header Injection
+## עמוד 231 — Host Header Injection
 
 > **מנוע:** `host_header_injection` · Web / API · MITRE T1190
 
@@ -4472,9 +4570,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "host_header_injection" } |
 ---
 
-<a id="page-228"></a>
+<a id="page-232"></a>
 
-## עמוד 228 — CORS Misconfiguration Exploit
+## עמוד 232 — CORS Misconfiguration Exploit
 
 > **מנוע:** `cors_misconfiguration` · Web / API · MITRE T1185
 
@@ -4489,9 +4587,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cors_misconfiguration" } |
 ---
 
-<a id="page-229"></a>
+<a id="page-233"></a>
 
-## עמוד 229 — GraphQL Batching / DoS
+## עמוד 233 — GraphQL Batching / DoS
 
 > **מנוע:** `graphql_batching` · Web / API · MITRE T1499
 
@@ -4506,9 +4604,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "graphql_batching" } |
 ---
 
-<a id="page-230"></a>
+<a id="page-234"></a>
 
-## עמוד 230 — AI Model Backdoor / Trojan
+## עמוד 234 — AI Model Backdoor / Trojan
 
 > **מנוע:** `ai_model_backdoor` · AI / LLM · MITRE T1195.001
 
@@ -4523,9 +4621,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ai_model_backdoor" } |
 ---
 
-<a id="page-231"></a>
+<a id="page-235"></a>
 
-## עמוד 231 — LLM Context Window Overflow
+## עמוד 235 — LLM Context Window Overflow
 
 > **מנוע:** `llm_context_overflow` · AI / LLM · MITRE T1499
 
@@ -4540,9 +4638,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "llm_context_overflow" } |
 ---
 
-<a id="page-232"></a>
+<a id="page-236"></a>
 
-## עמוד 232 — AI/ML Supply Chain Attack
+## עמוד 236 — AI/ML Supply Chain Attack
 
 > **מנוע:** `ai_supply_chain` · AI / LLM · MITRE T1195
 
@@ -4557,9 +4655,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ai_supply_chain" } |
 ---
 
-<a id="page-233"></a>
+<a id="page-237"></a>
 
-## עמוד 233 — Adversarial Image Attack
+## עמוד 237 — Adversarial Image Attack
 
 > **מנוע:** `adversarial_image` · AI / LLM · MITRE T1036
 
@@ -4574,9 +4672,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "adversarial_image" } |
 ---
 
-<a id="page-234"></a>
+<a id="page-238"></a>
 
-## עמוד 234 — LLM Resource Exhaustion
+## עמוד 238 — LLM Resource Exhaustion
 
 > **מנוע:** `llm_dos` · AI / LLM · MITRE T1499.004
 
@@ -4591,9 +4689,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "llm_dos" } |
 ---
 
-<a id="page-235"></a>
+<a id="page-239"></a>
 
-## עמוד 235 — LLM Training Data Extraction
+## עמוד 239 — LLM Training Data Extraction
 
 > **מנוע:** `llm_privacy_leak` · AI / LLM · MITRE T1530
 
@@ -4608,9 +4706,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "llm_privacy_leak" } |
 ---
 
-<a id="page-236"></a>
+<a id="page-240"></a>
 
-## עמוד 236 — AI Watermark / Fingerprint Removal
+## עמוד 240 — AI Watermark / Fingerprint Removal
 
 > **מנוע:** `ai_watermark_bypass` · AI / LLM · MITRE T1036
 
@@ -4625,9 +4723,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ai_watermark_bypass" } |
 ---
 
-<a id="page-237"></a>
+<a id="page-241"></a>
 
-## עמוד 237 — Agentic AI Sandbox Escape
+## עמוד 241 — Agentic AI Sandbox Escape
 
 > **מנוע:** `agentic_ai_escape` · AI / LLM · MITRE T1611
 
@@ -4642,9 +4740,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "agentic_ai_escape" } |
 ---
 
-<a id="page-238"></a>
+<a id="page-242"></a>
 
-## עמוד 238 — System Prompt Extraction
+## עמוד 242 — System Prompt Extraction
 
 > **מנוע:** `llm_system_prompt_leak` · AI / LLM · MITRE T1530
 
@@ -4659,9 +4757,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "llm_system_prompt_leak" } |
 ---
 
-<a id="page-239"></a>
+<a id="page-243"></a>
 
-## עמוד 239 — AI Bias / Fairness Exploitation
+## עמוד 243 — AI Bias / Fairness Exploitation
 
 > **מנוע:** `ai_bias_exploit` · AI / LLM · MITRE T1565
 
@@ -4676,9 +4774,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ai_bias_exploit" } |
 ---
 
-<a id="page-240"></a>
+<a id="page-244"></a>
 
-## עמוד 240 — Cloud Storage Bucket Takeover
+## עמוד 244 — Cloud Storage Bucket Takeover
 
 > **מנוע:** `s3_bucket_enum` · ענן ותשתית · MITRE T1530
 
@@ -4693,9 +4791,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "s3_bucket_enum" } |
 ---
 
-<a id="page-241"></a>
+<a id="page-245"></a>
 
-## עמוד 241 — Cloud IMDS SSRF
+## עמוד 245 — Cloud IMDS SSRF
 
 > **מנוע:** `imds_ssrf` · ענן ותשתית · MITRE T1552.005
 
@@ -4710,9 +4808,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "imds_ssrf" } |
 ---
 
-<a id="page-242"></a>
+<a id="page-246"></a>
 
-## עמוד 242 — Lambda / Cloud Function Layer Inject
+## עמוד 246 — Lambda / Cloud Function Layer Inject
 
 > **מנוע:** `lambda_layer_inject` · ענן ותשתית · MITRE T1525
 
@@ -4727,9 +4825,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "lambda_layer_inject" } |
 ---
 
-<a id="page-243"></a>
+<a id="page-247"></a>
 
-## עמוד 243 — Cloud Audit Log Tampering
+## עמוד 247 — Cloud Audit Log Tampering
 
 > **מנוע:** `cloud_trail_disable` · ענן ותשתית · MITRE T1685.002
 
@@ -4744,9 +4842,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_trail_disable" } |
 ---
 
-<a id="page-244"></a>
+<a id="page-248"></a>
 
-## עמוד 244 — Cross-Account Role Pivot
+## עמוד 248 — Cross-Account Role Pivot
 
 > **מנוע:** `cross_account_pivot` · ענן ותשתית · MITRE T1199
 
@@ -4761,9 +4859,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cross_account_pivot" } |
 ---
 
-<a id="page-245"></a>
+<a id="page-249"></a>
 
-## עמוד 245 — Kubernetes RBAC Exploit
+## עמוד 249 — Kubernetes RBAC Exploit
 
 > **מנוע:** `gke_rbac_exploit` · ענן ותשתית · MITRE T1613
 
@@ -4778,9 +4876,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "gke_rbac_exploit" } |
 ---
 
-<a id="page-246"></a>
+<a id="page-250"></a>
 
-## עמוד 246 — Azure AD / Entra ID Attack
+## עמוד 250 — Azure AD / Entra ID Attack
 
 > **מנוע:** `azure_ad_attack` · ענן ותשתית · MITRE T1078.004
 
@@ -4795,9 +4893,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "azure_ad_attack" } |
 ---
 
-<a id="page-247"></a>
+<a id="page-251"></a>
 
-## עמוד 247 — Terraform State Exfiltration
+## עמוד 251 — Terraform State Exfiltration
 
 > **מנוע:** `terraform_state_steal` · ענן ותשתית · MITRE T1552
 
@@ -4812,9 +4910,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "terraform_state_steal" } |
 ---
 
-<a id="page-248"></a>
+<a id="page-252"></a>
 
-## עמוד 248 — Cloud Cost Amplification DoS
+## עמוד 252 — Cloud Cost Amplification DoS
 
 > **מנוע:** `cloud_cost_dos` · ענן ותשתית · MITRE T1499
 
@@ -4829,9 +4927,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_cost_dos" } |
 ---
 
-<a id="page-249"></a>
+<a id="page-253"></a>
 
-## עמוד 249 — Cloud Logging Blind Spot Exploit
+## עמוד 253 — Cloud Logging Blind Spot Exploit
 
 > **מנוע:** `cloud_logging_blind` · ענן ותשתית · MITRE T1685
 
@@ -4846,9 +4944,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_logging_blind" } |
 ---
 
-<a id="page-250"></a>
+<a id="page-254"></a>
 
-## עמוד 250 — Container Image Poisoning
+## עמוד 254 — Container Image Poisoning
 
 > **מנוע:** `ecr_image_poison` · ענן ותשתית · MITRE T1525
 
@@ -4863,9 +4961,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ecr_image_poison" } |
 ---
 
-<a id="page-251"></a>
+<a id="page-255"></a>
 
-## עמוד 251 — Cloud Function Runtime Escape
+## עמוד 255 — Cloud Function Runtime Escape
 
 > **מנוע:** `cloud_function_escape` · ענן ותשתית · MITRE T1611
 
@@ -4880,9 +4978,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_function_escape" } |
 ---
 
-<a id="page-252"></a>
+<a id="page-256"></a>
 
-## עמוד 252 — Modbus TCP Exploitation
+## עמוד 256 — Modbus TCP Exploitation
 
 > **מנוע:** `modbus_exploit` · OT / ICS / IoT · MITRE T0836
 
@@ -4897,9 +4995,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "modbus_exploit" } |
 ---
 
-<a id="page-253"></a>
+<a id="page-257"></a>
 
-## עמוד 253 — DNP3 Protocol Attack
+## עמוד 257 — DNP3 Protocol Attack
 
 > **מנוע:** `dnp3_attack` · OT / ICS / IoT · MITRE T1692.001
 
@@ -4914,9 +5012,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "dnp3_attack" } |
 ---
 
-<a id="page-254"></a>
+<a id="page-258"></a>
 
-## עמוד 254 — IEC 61850 GOOSE / SV Spoofing
+## עמוד 258 — IEC 61850 GOOSE / SV Spoofing
 
 > **מנוע:** `iec61850_attack` · OT / ICS / IoT · MITRE T1692.002
 
@@ -4931,9 +5029,43 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "iec61850_attack" } |
 ---
 
-<a id="page-255"></a>
+<a id="page-259"></a>
 
-## עמוד 255 — PLC Logic Bomb Injection
+## עמוד 259 — OT Passive/Active Safety Interlock
+
+> **מנוע:** `ot_passive_active_safety` · OT / ICS / IoT · MITRE T0843
+
+| **מה** | Safe-read fingerprint of Modbus, Siemens S7, DNP3, and IEC 61850 — writes, Direct Operate, CPU stop, and GOOSE inject are structurally impossible from this worker |
+| **למה** | MITRE T0843 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/ot_passive_active_safety |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "ot_passive_active_safety" } |
+---
+
+<a id="page-260"></a>
+
+## עמוד 260 — OT Crown-Jewel Path
+
+> **מנוע:** `ot_crown_jewel_path` · OT / ICS / IoT · MITRE T0836
+
+| **מה** | Live OT protocol confirmation fused with FAIR exposure and SOAR isolate recommendation on crown-jewel industrial paths |
+| **למה** | MITRE T0836 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/ot_crown_jewel_path |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "ot_crown_jewel_path" } |
+---
+
+<a id="page-261"></a>
+
+## עמוד 261 — PLC Logic Bomb Injection
 
 > **מנוע:** `plc_logic_bomb` · OT / ICS / IoT · MITRE T0873
 
@@ -4948,9 +5080,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "plc_logic_bomb" } |
 ---
 
-<a id="page-256"></a>
+<a id="page-262"></a>
 
-## עמוד 256 — BACnet Building Automation Attack
+## עמוד 262 — BACnet Building Automation Attack
 
 > **מנוע:** `bacnet_attack` · OT / ICS / IoT · MITRE T0830
 
@@ -4965,9 +5097,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "bacnet_attack" } |
 ---
 
-<a id="page-257"></a>
+<a id="page-263"></a>
 
-## עמוד 257 — Zigbee Protocol Attack
+## עמוד 263 — Zigbee Protocol Attack
 
 > **מנוע:** `zigbee_attack` · OT / ICS / IoT · MITRE T0860
 
@@ -4982,9 +5114,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "zigbee_attack" } |
 ---
 
-<a id="page-258"></a>
+<a id="page-264"></a>
 
-## עמוד 258 — LoRaWAN IoT Network Attack
+## עמוד 264 — LoRaWAN IoT Network Attack
 
 > **מנוע:** `lorawan_attack` · OT / ICS / IoT · MITRE T0860
 
@@ -4999,9 +5131,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "lorawan_attack" } |
 ---
 
-<a id="page-259"></a>
+<a id="page-265"></a>
 
-## עמוד 259 — HMI / SCADA Interface Exploit
+## עמוד 265 — HMI / SCADA Interface Exploit
 
 > **מנוע:** `hmi_exploit` · OT / ICS / IoT · MITRE T0817
 
@@ -5016,9 +5148,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "hmi_exploit" } |
 ---
 
-<a id="page-260"></a>
+<a id="page-266"></a>
 
-## עמוד 260 — CAN / CAN FD Bus Attack
+## עמוד 266 — CAN / CAN FD Bus Attack
 
 > **מנוע:** `can_fd_attack` · OT / ICS / IoT · MITRE T0838
 
@@ -5033,9 +5165,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "can_fd_attack" } |
 ---
 
-<a id="page-261"></a>
+<a id="page-267"></a>
 
-## עמוד 261 — ICS Historian Database Attack
+## עמוד 267 — ICS Historian Database Attack
 
 > **מנוע:** `ics_historian_attack` · OT / ICS / IoT · MITRE T0832
 
@@ -5050,9 +5182,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ics_historian_attack" } |
 ---
 
-<a id="page-262"></a>
+<a id="page-268"></a>
 
-## עמוד 262 — LOLBins / LOLBAS Abuse
+## עמוד 268 — LOLBins / LOLBAS Abuse
 
 > **מנוע:** `living_off_land` · Stealth / Evasion · MITRE T1218
 
@@ -5067,9 +5199,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "living_off_land" } |
 ---
 
-<a id="page-263"></a>
+<a id="page-269"></a>
 
-## עמוד 263 — Kernel / User Rootkit Implant
+## עמוד 269 — Kernel / User Rootkit Implant
 
 > **מנוע:** `rootkit_implant` · Stealth / Evasion · MITRE T1014
 
@@ -5084,9 +5216,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "rootkit_implant" } |
 ---
 
-<a id="page-264"></a>
+<a id="page-270"></a>
 
-## עמוד 264 — Timestomping & Metadata Falsification
+## עמוד 270 — Timestomping & Metadata Falsification
 
 > **מנוע:** `timestomping` · Stealth / Evasion · MITRE T1070.006
 
@@ -5101,9 +5233,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "timestomping" } |
 ---
 
-<a id="page-265"></a>
+<a id="page-271"></a>
 
-## עמוד 265 — Forensic Log Wiping
+## עמוד 271 — Forensic Log Wiping
 
 > **מנוע:** `log_wiping` · Stealth / Evasion · MITRE T1070
 
@@ -5118,9 +5250,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "log_wiping" } |
 ---
 
-<a id="page-266"></a>
+<a id="page-272"></a>
 
-## עמוד 266 — DLL Hijacking / Side-Loading
+## עמוד 272 — DLL Hijacking / Side-Loading
 
 > **מנוע:** `dll_hijacking` · Stealth / Evasion · MITRE T1574.001
 
@@ -5135,9 +5267,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "dll_hijacking" } |
 ---
 
-<a id="page-267"></a>
+<a id="page-273"></a>
 
-## עמוד 267 — Process Hollowing / Ghosting
+## עמוד 273 — Process Hollowing / Ghosting
 
 > **מנוע:** `process_hollowing` · Stealth / Evasion · MITRE T1055.012
 
@@ -5152,9 +5284,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "process_hollowing" } |
 ---
 
-<a id="page-268"></a>
+<a id="page-274"></a>
 
-## עמוד 268 — Process Inventory (Agent)
+## עמוד 274 — Process Inventory (Agent)
 
 > **מנוע:** `process_inventory` · Stealth / Evasion · MITRE T1057
 
@@ -5169,9 +5301,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "process_inventory" } |
 ---
 
-<a id="page-269"></a>
+<a id="page-275"></a>
 
-## עמוד 269 — USB Device Enumeration (Agent)
+## עמוד 275 — USB Device Enumeration (Agent)
 
 > **מנוע:** `usb_enumeration` · Stealth / Evasion · MITRE T1091
 
@@ -5186,9 +5318,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "usb_enumeration" } |
 ---
 
-<a id="page-270"></a>
+<a id="page-276"></a>
 
-## עמוד 270 — Fileless Malware Execution
+## עמוד 276 — Fileless Malware Execution
 
 > **מנוע:** `fileless_malware` · Stealth / Evasion · MITRE T1059.001
 
@@ -5203,9 +5335,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "fileless_malware" } |
 ---
 
-<a id="page-271"></a>
+<a id="page-277"></a>
 
-## עמוד 271 — Direct Syscall / NTAPI Evasion
+## עמוד 277 — Direct Syscall / NTAPI Evasion
 
 > **מנוע:** `syscall_evasion` · Stealth / Evasion · MITRE T1685
 
@@ -5220,9 +5352,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "syscall_evasion" } |
 ---
 
-<a id="page-272"></a>
+<a id="page-278"></a>
 
-## עמוד 272 — AMSI / EDR Bypass
+## עמוד 278 — AMSI / EDR Bypass
 
 > **מנוע:** `amsi_bypass` · Stealth / Evasion · MITRE T1685
 
@@ -5237,9 +5369,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "amsi_bypass" } |
 ---
 
-<a id="page-273"></a>
+<a id="page-279"></a>
 
-## עמוד 273 — Polymorphic / Metamorphic Payload
+## עמוד 279 — Polymorphic / Metamorphic Payload
 
 > **מנוע:** `polymorphic_payload` · Stealth / Evasion · MITRE T1027.002
 
@@ -5254,9 +5386,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "polymorphic_payload" } |
 ---
 
-<a id="page-274"></a>
+<a id="page-280"></a>
 
-## עמוד 274 — GPU Hash Cracking Engine
+## עמוד 280 — GPU Hash Cracking Engine
 
 > **מנוע:** `password_crack` · קריפטו וזהות · MITRE T1110.002
 
@@ -5271,9 +5403,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "password_crack" } |
 ---
 
-<a id="page-275"></a>
+<a id="page-281"></a>
 
-## עמוד 275 — TLS / SSL Downgrade Attack
+## עמוד 281 — TLS / SSL Downgrade Attack
 
 > **מנוע:** `tls_downgrade` · קריפטו וזהות · MITRE T1600.001
 
@@ -5288,9 +5420,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "tls_downgrade" } |
 ---
 
-<a id="page-276"></a>
+<a id="page-282"></a>
 
-## עמוד 276 — TOTP / MFA Brute Force
+## עמוד 282 — TOTP / MFA Brute Force
 
 > **מנוע:** `totp_bruteforce` · קריפטו וזהות · MITRE T1110
 
@@ -5305,9 +5437,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "totp_bruteforce" } |
 ---
 
-<a id="page-277"></a>
+<a id="page-283"></a>
 
-## עמוד 277 — NTLM Relay / Pass-the-Hash
+## עמוד 283 — NTLM Relay / Pass-the-Hash
 
 > **מנוע:** `ntlm_relay` · קריפטו וזהות · MITRE T1557.001
 
@@ -5322,9 +5454,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ntlm_relay" } |
 ---
 
-<a id="page-278"></a>
+<a id="page-284"></a>
 
-## עמוד 278 — Kerberos Golden / Silver Ticket
+## עמוד 284 — Kerberos Golden / Silver Ticket
 
 > **מנוע:** `golden_ticket` · קריפטו וזהות · MITRE T1558.001
 
@@ -5339,9 +5471,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "golden_ticket" } |
 ---
 
-<a id="page-279"></a>
+<a id="page-285"></a>
 
-## עמוד 279 — HSM Side-Channel / Fault Attack
+## עמוד 285 — HSM Side-Channel / Fault Attack
 
 > **מנוע:** `hsm_attack` · קריפטו וזהות · MITRE T1552.004
 
@@ -5356,9 +5488,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "hsm_attack" } |
 ---
 
-<a id="page-280"></a>
+<a id="page-286"></a>
 
-## עמוד 280 — PKI Certificate Forgery
+## עמוד 286 — PKI Certificate Forgery
 
 > **מנוע:** `pki_cert_forge` · קריפטו וזהות · MITRE T1553.004
 
@@ -5373,9 +5505,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "pki_cert_forge" } |
 ---
 
-<a id="page-281"></a>
+<a id="page-287"></a>
 
-## עמוד 281 — Weak Key Derivation Exploit
+## עמוד 287 — Weak Key Derivation Exploit
 
 > **מנוע:** `key_derivation_flaw` · קריפטו וזהות · MITRE T1600
 
@@ -5390,9 +5522,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "key_derivation_flaw" } |
 ---
 
-<a id="page-282"></a>
+<a id="page-288"></a>
 
-## עמוד 282 — ARP Spoofing / LAN MITM
+## עמוד 288 — ARP Spoofing / LAN MITM
 
 > **מנוע:** `arp_spoofing` · רשת ופרוטוקולים · MITRE T1557.002
 
@@ -5407,9 +5539,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "arp_spoofing" } |
 ---
 
-<a id="page-283"></a>
+<a id="page-289"></a>
 
-## עמוד 283 — ICMP / DNS Covert Channel
+## עמוד 289 — ICMP / DNS Covert Channel
 
 > **מנוע:** `icmp_covert_channel` · רשת ופרוטוקולים · MITRE T1095
 
@@ -5424,9 +5556,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "icmp_covert_channel" } |
 ---
 
-<a id="page-284"></a>
+<a id="page-290"></a>
 
-## עמוד 284 — SNMP Community String Attack
+## עמוד 290 — SNMP Community String Attack
 
 > **מנוע:** `snmp_attack` · רשת ופרוטוקולים · MITRE T1040
 
@@ -5441,9 +5573,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "snmp_attack" } |
 ---
 
-<a id="page-285"></a>
+<a id="page-291"></a>
 
-## עמוד 285 — OSPF / BGP Route Manipulation
+## עמוד 291 — OSPF / BGP Route Manipulation
 
 > **מנוע:** `ospf_bgp_manipulation` · רשת ופרוטוקולים · MITRE T1557
 
@@ -5458,9 +5590,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ospf_bgp_manipulation" } |
 ---
 
-<a id="page-286"></a>
+<a id="page-292"></a>
 
-## עמוד 286 — RDP Exploitation Engine
+## עמוד 292 — RDP Exploitation Engine
 
 > **מנוע:** `rdp_exploit` · רשת ופרוטוקולים · MITRE T1021.001
 
@@ -5475,9 +5607,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "rdp_exploit" } |
 ---
 
-<a id="page-287"></a>
+<a id="page-293"></a>
 
-## עמוד 287 — VoIP / SIP Protocol Attack
+## עמוד 293 — VoIP / SIP Protocol Attack
 
 > **מנוע:** `voip_sip_attack` · רשת ופרוטוקולים · MITRE T1040
 
@@ -5492,9 +5624,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "voip_sip_attack" } |
 ---
 
-<a id="page-288"></a>
+<a id="page-294"></a>
 
-## עמוד 288 — DNS Tunneling C2
+## עמוד 294 — DNS Tunneling C2
 
 > **מנוע:** `dns_tunneling` · רשת ופרוטוקולים · MITRE T1071.004
 
@@ -5509,9 +5641,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "dns_tunneling" } |
 ---
 
-<a id="page-289"></a>
+<a id="page-295"></a>
 
-## עמוד 289 — DHCP Starvation / Rogue Server
+## עמוד 295 — DHCP Starvation / Rogue Server
 
 > **מנוע:** `dhcp_starvation` · רשת ופרוטוקולים · MITRE T1557
 
@@ -5526,9 +5658,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "dhcp_starvation" } |
 ---
 
-<a id="page-290"></a>
+<a id="page-296"></a>
 
-## עמוד 290 — NTP / UDP Amplification DDoS
+## עמוד 296 — NTP / UDP Amplification DDoS
 
 > **מנוע:** `ntp_amplification` · רשת ופרוטוקולים · MITRE T1498.002
 
@@ -5543,9 +5675,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ntp_amplification" } |
 ---
 
-<a id="page-291"></a>
+<a id="page-297"></a>
 
-## עמוד 291 — Wi-Fi / 802.11 Attack Suite
+## עמוד 297 — Wi-Fi / 802.11 Attack Suite
 
 > **מנוע:** `wifi_attack` · רשת ופרוטוקולים · MITRE T1491
 
@@ -5560,9 +5692,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "wifi_attack" } |
 ---
 
-<a id="page-292"></a>
+<a id="page-298"></a>
 
-## עמוד 292 — npm / PyPI Typosquatting Attack
+## עמוד 298 — npm / PyPI Typosquatting Attack
 
 > **מנוע:** `npm_typosquatting` · Supply Chain · MITRE T1195.001
 
@@ -5577,9 +5709,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "npm_typosquatting" } |
 ---
 
-<a id="page-293"></a>
+<a id="page-299"></a>
 
-## עמוד 293 — Dependency Confusion Attack
+## עמוד 299 — Dependency Confusion Attack
 
 > **מנוע:** `dependency_confusion` · Supply Chain · MITRE T1195.001
 
@@ -5594,9 +5726,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "dependency_confusion" } |
 ---
 
-<a id="page-294"></a>
+<a id="page-300"></a>
 
-## עמוד 294 — Open-Source Project Backdoor
+## עמוד 300 — Open-Source Project Backdoor
 
 > **מנוע:** `open_source_backdoor` · Supply Chain · MITRE T1195.001
 
@@ -5611,9 +5743,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "open_source_backdoor" } |
 ---
 
-<a id="page-295"></a>
+<a id="page-301"></a>
 
-## עמוד 295 — Build Artifact Tampering
+## עמוד 301 — Build Artifact Tampering
 
 > **מנוע:** `build_artifact_tamper` · Supply Chain · MITRE T1195.002
 
@@ -5628,9 +5760,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "build_artifact_tamper" } |
 ---
 
-<a id="page-296"></a>
+<a id="page-302"></a>
 
-## עמוד 296 — Package Signing Bypass
+## עמוד 302 — Package Signing Bypass
 
 > **מנוע:** `package_signing_bypass` · Supply Chain · MITRE T1553
 
@@ -5645,9 +5777,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "package_signing_bypass" } |
 ---
 
-<a id="page-297"></a>
+<a id="page-303"></a>
 
-## עמוד 297 — Vendored Code / Git Submodule Attack
+## עמוד 303 — Vendored Code / Git Submodule Attack
 
 > **מנוע:** `vendored_code_attack` · Supply Chain · MITRE T1195
 
@@ -5662,9 +5794,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "vendored_code_attack" } |
 ---
 
-<a id="page-298"></a>
+<a id="page-304"></a>
 
-## עמוד 298 — Code Review / PR Bypass
+## עמוד 304 — Code Review / PR Bypass
 
 > **מנוע:** `code_review_bypass` · Supply Chain · MITRE T1195.002
 
@@ -5679,9 +5811,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "code_review_bypass" } |
 ---
 
-<a id="page-299"></a>
+<a id="page-305"></a>
 
-## עמוד 299 — Software Update Mechanism Hijack
+## עמוד 305 — Software Update Mechanism Hijack
 
 > **מנוע:** `update_mechanism_hijack` · Supply Chain · MITRE T1195.002
 
@@ -5696,9 +5828,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "update_mechanism_hijack" } |
 ---
 
-<a id="page-300"></a>
+<a id="page-306"></a>
 
-## עמוד 300 — Advanced Persistence (UEFI / Bootkit)
+## עמוד 306 — Advanced Persistence (UEFI / Bootkit)
 
 > **מנוע:** `advanced_persistence` · APT / Top-Tier · MITRE T1542
 
@@ -5713,9 +5845,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "advanced_persistence" } |
 ---
 
-<a id="page-301"></a>
+<a id="page-307"></a>
 
-## עמוד 301 — APT Lateral Movement Playbook
+## עמוד 307 — APT Lateral Movement Playbook
 
 > **מנוע:** `apt_lateral_movement` · APT / Top-Tier · MITRE T1021
 
@@ -5730,9 +5862,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "apt_lateral_movement" } |
 ---
 
-<a id="page-302"></a>
+<a id="page-308"></a>
 
-## עמוד 302 — Nation-State TTP Emulation
+## עמוד 308 — Nation-State TTP Emulation
 
 > **מנוע:** `nation_state_ttps` · APT / Top-Tier · MITRE T1588
 
@@ -5747,9 +5879,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "nation_state_ttps" } |
 ---
 
-<a id="page-303"></a>
+<a id="page-309"></a>
 
-## עמוד 303 — Zero-Day Exploit Chain
+## עמוד 309 — Zero-Day Exploit Chain
 
 > **מנוע:** `zero_day_chain` · APT / Top-Tier · MITRE T1203
 
@@ -5764,9 +5896,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "zero_day_chain" } |
 ---
 
-<a id="page-304"></a>
+<a id="page-310"></a>
 
-## עמוד 304 — APT-Grade C2 Infrastructure
+## עמוד 310 — APT-Grade C2 Infrastructure
 
 > **מנוע:** `apt_c2_infra` · APT / Top-Tier · MITRE T1583
 
@@ -5781,9 +5913,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "apt_c2_infra" } |
 ---
 
-<a id="page-305"></a>
+<a id="page-311"></a>
 
-## עמוד 305 — Long-Haul Slow Exfiltration
+## עמוד 311 — Long-Haul Slow Exfiltration
 
 > **מנוע:** `long_haul_exfil` · APT / Top-Tier · MITRE T1030
 
@@ -5798,9 +5930,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "long_haul_exfil" } |
 ---
 
-<a id="page-306"></a>
+<a id="page-312"></a>
 
-## עמוד 306 — Full End-to-End Breach Simulation
+## עמוד 312 — Full End-to-End Breach Simulation
 
 > **מנוע:** `full_breach_sim` · APT / Top-Tier · MITRE T1650
 
@@ -5815,9 +5947,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "full_breach_sim" } |
 ---
 
-<a id="page-307"></a>
+<a id="page-313"></a>
 
-## עמוד 307 — Watering Hole Attack
+## עמוד 313 — Watering Hole Attack
 
 > **מנוע:** `watering_hole` · APT / Top-Tier · MITRE T1189
 
@@ -5832,9 +5964,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "watering_hole" } |
 ---
 
-<a id="page-308"></a>
+<a id="page-314"></a>
 
-## עמוד 308 — Supply Chain APT Implant
+## עמוד 314 — Supply Chain APT Implant
 
 > **מנוע:** `supply_chain_apt` · APT / Top-Tier · MITRE T1195
 
@@ -5849,9 +5981,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "supply_chain_apt" } |
 ---
 
-<a id="page-309"></a>
+<a id="page-315"></a>
 
-## עמוד 309 — Destructive Wiper Emulation
+## עמוד 315 — Destructive Wiper Emulation
 
 > **מנוע:** `destructive_wiper` · APT / Top-Tier · MITRE T1485
 
@@ -5866,9 +5998,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "destructive_wiper" } |
 ---
 
-<a id="page-310"></a>
+<a id="page-316"></a>
 
-## עמוד 310 — Satellite Imagery OSINT
+## עמוד 316 — Satellite Imagery OSINT
 
 > **מנוע:** `satellite_recon` · מודיעין ו-Recon · MITRE T1591.001
 
@@ -5883,9 +6015,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "satellite_recon" } |
 ---
 
-<a id="page-311"></a>
+<a id="page-317"></a>
 
-## עמוד 311 — Dark Web Intelligence
+## עמוד 317 — Dark Web Intelligence
 
 > **מנוע:** `darkweb_intel` · מודיעין ו-Recon · MITRE T1597
 
@@ -5900,9 +6032,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "darkweb_intel" } |
 ---
 
-<a id="page-312"></a>
+<a id="page-318"></a>
 
-## עמוד 312 — Financial OSINT Engine
+## עמוד 318 — Financial OSINT Engine
 
 > **מנוע:** `financial_osint` · מודיעין ו-Recon · MITRE T1591.002
 
@@ -5917,9 +6049,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "financial_osint" } |
 ---
 
-<a id="page-313"></a>
+<a id="page-319"></a>
 
-## עמוד 313 — Blockchain Transaction Tracer
+## עמוד 319 — Blockchain Transaction Tracer
 
 > **מנוע:** `blockchain_trace` · מודיעין ו-Recon · MITRE T1583.006
 
@@ -5934,9 +6066,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "blockchain_trace" } |
 ---
 
-<a id="page-314"></a>
+<a id="page-320"></a>
 
-## עמוד 314 — Document Metadata Harvester
+## עמוד 320 — Document Metadata Harvester
 
 > **מנוע:** `metadata_harvest` · מודיעין ו-Recon · MITRE T1592.002
 
@@ -5951,9 +6083,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "metadata_harvest" } |
 ---
 
-<a id="page-315"></a>
+<a id="page-321"></a>
 
-## עמוד 315 — Patent & IP Intelligence
+## עמוד 321 — Patent & IP Intelligence
 
 > **מנוע:** `patent_recon` · מודיעין ו-Recon · MITRE T1591
 
@@ -5968,9 +6100,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "patent_recon" } |
 ---
 
-<a id="page-316"></a>
+<a id="page-322"></a>
 
-## עמוד 316 — Telecom Infrastructure OSINT
+## עמוד 322 — Telecom Infrastructure OSINT
 
 > **מנוע:** `telecom_osint` · מודיעין ו-Recon · MITRE T1590.002
 
@@ -5985,9 +6117,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "telecom_osint" } |
 ---
 
-<a id="page-317"></a>
+<a id="page-323"></a>
 
-## עמוד 317 — IoT/ICS Shodan Deep Scan
+## עמוד 323 — IoT/ICS Shodan Deep Scan
 
 > **מנוע:** `iot_shodan_scan` · מודיעין ו-Recon · MITRE T1595.001
 
@@ -6002,9 +6134,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "iot_shodan_scan" } |
 ---
 
-<a id="page-318"></a>
+<a id="page-324"></a>
 
-## עמוד 318 — Job Posting Tech Stack OSINT
+## עמוד 324 — Job Posting Tech Stack OSINT
 
 > **מנוע:** `job_posting_osint` · מודיעין ו-Recon · MITRE T1591.004
 
@@ -6019,9 +6151,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "job_posting_osint" } |
 ---
 
-<a id="page-319"></a>
+<a id="page-325"></a>
 
-## עמוד 319 — GitHub Secret Scanner
+## עמוד 325 — GitHub Secret Scanner
 
 > **מנוע:** `github_secret_scan` · מודיעין ו-Recon · MITRE T1552.001
 
@@ -6036,9 +6168,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "github_secret_scan" } |
 ---
 
-<a id="page-320"></a>
+<a id="page-326"></a>
 
-## עמוד 320 — GraphQL Deep Attack Engine
+## עמוד 326 — GraphQL Deep Attack Engine
 
 > **מנוע:** `graphql_deep_attack` · Web / API · MITRE T1190
 
@@ -6053,9 +6185,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "graphql_deep_attack" } |
 ---
 
-<a id="page-321"></a>
+<a id="page-327"></a>
 
-## עמוד 321 — gRPC Reflection Attack
+## עמוד 327 — gRPC Reflection Attack
 
 > **מנוע:** `grpc_reflection_attack` · Web / API · MITRE T1190
 
@@ -6070,9 +6202,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "grpc_reflection_attack" } |
 ---
 
-<a id="page-322"></a>
+<a id="page-328"></a>
 
-## עמוד 322 — HTTP/2 & HTTP/3 Attack Engine
+## עמוד 328 — HTTP/2 & HTTP/3 Attack Engine
 
 > **מנוע:** `http2_attack` · Web / API · MITRE T1190
 
@@ -6087,9 +6219,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "http2_attack" } |
 ---
 
-<a id="page-323"></a>
+<a id="page-329"></a>
 
-## עמוד 323 — Swagger/OpenAPI Exploiter
+## עמוד 329 — Swagger/OpenAPI Exploiter
 
 > **מנוע:** `swagger_abuse` · Web / API · MITRE T1190
 
@@ -6104,9 +6236,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "swagger_abuse" } |
 ---
 
-<a id="page-324"></a>
+<a id="page-330"></a>
 
-## עמוד 324 — SOAP/XML Injection Engine
+## עמוד 330 — SOAP/XML Injection Engine
 
 > **מנוע:** `soap_injection` · Web / API · MITRE T1190
 
@@ -6121,9 +6253,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "soap_injection" } |
 ---
 
-<a id="page-325"></a>
+<a id="page-331"></a>
 
-## עמוד 325 — OData Query Injection
+## עמוד 331 — OData Query Injection
 
 > **מנוע:** `odata_injection` · Web / API · MITRE T1190
 
@@ -6138,9 +6270,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "odata_injection" } |
 ---
 
-<a id="page-326"></a>
+<a id="page-332"></a>
 
-## עמוד 326 — CSS Injection / Data Theft
+## עמוד 332 — CSS Injection / Data Theft
 
 > **מנוע:** `css_injection` · Web / API · MITRE T1185
 
@@ -6155,9 +6287,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "css_injection" } |
 ---
 
-<a id="page-327"></a>
+<a id="page-333"></a>
 
-## עמוד 327 — Advanced Template Injection
+## עמוד 333 — Advanced Template Injection
 
 > **מנוע:** `template_injection_adv` · Web / API · MITRE T1059
 
@@ -6172,9 +6304,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "template_injection_adv" } |
 ---
 
-<a id="page-328"></a>
+<a id="page-334"></a>
 
-## עמוד 328 — HTTP Parameter Pollution Engine
+## עמוד 334 — HTTP Parameter Pollution Engine
 
 > **מנוע:** `http_parameter_pollution` · Web / API · MITRE T1190
 
@@ -6189,9 +6321,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "http_parameter_pollution" } |
 ---
 
-<a id="page-329"></a>
+<a id="page-335"></a>
 
-## עמוד 329 — API Mass Assignment Scanner
+## עמוד 335 — API Mass Assignment Scanner
 
 > **מנוע:** `api_mass_assignment` · Web / API · MITRE T1548
 
@@ -6206,9 +6338,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "api_mass_assignment" } |
 ---
 
-<a id="page-330"></a>
+<a id="page-336"></a>
 
-## עמוד 330 — Advanced Web Cache Poisoning
+## עמוד 336 — Advanced Web Cache Poisoning
 
 > **מנוע:** `web_cache_poison_adv` · Web / API · MITRE T1185
 
@@ -6223,9 +6355,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "web_cache_poison_adv" } |
 ---
 
-<a id="page-331"></a>
+<a id="page-337"></a>
 
-## עמוד 331 — Clickjacking / UI Redress Engine
+## עמוד 337 — Clickjacking / UI Redress Engine
 
 > **מנוע:** `clickjacking_engine` · Web / API · MITRE T1185
 
@@ -6240,9 +6372,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "clickjacking_engine" } |
 ---
 
-<a id="page-332"></a>
+<a id="page-338"></a>
 
-## עמוד 332 — Subdomain Takeover Scanner
+## עמוד 338 — Subdomain Takeover Scanner
 
 > **מנוע:** `subdomain_takeover` · Web / API · MITRE T1584.001
 
@@ -6257,9 +6389,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "subdomain_takeover" } |
 ---
 
-<a id="page-333"></a>
+<a id="page-339"></a>
 
-## עמוד 333 — Remote File Inclusion Engine
+## עמוד 339 — Remote File Inclusion Engine
 
 > **מנוע:** `file_inclusion_rfi` · Web / API · MITRE T1059
 
@@ -6274,9 +6406,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "file_inclusion_rfi" } |
 ---
 
-<a id="page-334"></a>
+<a id="page-340"></a>
 
-## עמוד 334 — .NET Deserialization Exploiter
+## עמוד 340 — .NET Deserialization Exploiter
 
 > **מנוע:** `deserialization_net` · Web / API · MITRE T1059
 
@@ -6291,9 +6423,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "deserialization_net" } |
 ---
 
-<a id="page-335"></a>
+<a id="page-341"></a>
 
-## עמוד 335 — NoSQL Deep Injection Engine
+## עמוד 341 — NoSQL Deep Injection Engine
 
 > **מנוע:** `nosql_deep_injection` · Web / API · MITRE T1190
 
@@ -6308,9 +6440,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "nosql_deep_injection" } |
 ---
 
-<a id="page-336"></a>
+<a id="page-342"></a>
 
-## עמוד 336 — JWT Advanced Attack Suite
+## עמוד 342 — JWT Advanced Attack Suite
 
 > **מנוע:** `jwt_advanced_attack` · Web / API · MITRE T1550.001
 
@@ -6325,9 +6457,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "jwt_advanced_attack" } |
 ---
 
-<a id="page-337"></a>
+<a id="page-343"></a>
 
-## עמוד 337 — API Rate Limit Bypass
+## עמוד 343 — API Rate Limit Bypass
 
 > **מנוע:** `api_rate_limit_bypass` · Web / API · MITRE T1499.003
 
@@ -6342,9 +6474,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "api_rate_limit_bypass" } |
 ---
 
-<a id="page-338"></a>
+<a id="page-344"></a>
 
-## עמוד 338 — Advanced IDOR / BOLA Engine
+## עמוד 344 — Advanced IDOR / BOLA Engine
 
 > **מנוע:** `idor_advanced` · Web / API · MITRE T1078
 
@@ -6359,9 +6491,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "idor_advanced" } |
 ---
 
-<a id="page-339"></a>
+<a id="page-345"></a>
 
-## עמוד 339 — Prompt Injection Chain Attack
+## עמוד 345 — Prompt Injection Chain Attack
 
 > **מנוע:** `prompt_injection_chain` · AI / LLM · MITRE T1059
 
@@ -6376,9 +6508,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "prompt_injection_chain" } |
 ---
 
-<a id="page-340"></a>
+<a id="page-346"></a>
 
-## עמוד 340 — ML Model Inversion Attack
+## עמוד 346 — ML Model Inversion Attack
 
 > **מנוע:** `model_inversion_attack` · AI / LLM · MITRE T1588.005
 
@@ -6393,9 +6525,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "model_inversion_attack" } |
 ---
 
-<a id="page-341"></a>
+<a id="page-347"></a>
 
-## עמוד 341 — AI Model Supply Chain Attack
+## עמוד 347 — AI Model Supply Chain Attack
 
 > **מנוע:** `ai_supply_chain_attack` · AI / LLM · MITRE T1195.001
 
@@ -6410,9 +6542,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ai_supply_chain_attack" } |
 ---
 
-<a id="page-342"></a>
+<a id="page-348"></a>
 
-## עמוד 342 — RAG System Poisoning
+## עמוד 348 — RAG System Poisoning
 
 > **מנוע:** `rag_poisoning_engine` · AI / LLM · MITRE T1565
 
@@ -6427,9 +6559,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "rag_poisoning_engine" } |
 ---
 
-<a id="page-343"></a>
+<a id="page-349"></a>
 
-## עמוד 343 — Adversarial Example Generator
+## עמוד 349 — Adversarial Example Generator
 
 > **מנוע:** `adversarial_examples` · AI / LLM · MITRE T1588
 
@@ -6444,9 +6576,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "adversarial_examples" } |
 ---
 
-<a id="page-344"></a>
+<a id="page-350"></a>
 
-## עמוד 344 — Training Data Poisoning Engine
+## עמוד 350 — Training Data Poisoning Engine
 
 > **מנוע:** `data_poisoning_engine` · AI / LLM · MITRE T1565.001
 
@@ -6461,9 +6593,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "data_poisoning_engine" } |
 ---
 
-<a id="page-345"></a>
+<a id="page-351"></a>
 
-## עמוד 345 — Deepfake Synthesis Engine
+## עמוד 351 — Deepfake Synthesis Engine
 
 > **מנוע:** `deepfake_synthesis` · AI / LLM · MITRE T1660
 
@@ -6478,9 +6610,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "deepfake_synthesis" } |
 ---
 
-<a id="page-346"></a>
+<a id="page-352"></a>
 
-## עמוד 346 — LLM Denial of Service
+## עמוד 352 — LLM Denial of Service
 
 > **מנוע:** `llm_dos_attack` · AI / LLM · MITRE T1499
 
@@ -6495,9 +6627,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "llm_dos_attack" } |
 ---
 
-<a id="page-347"></a>
+<a id="page-353"></a>
 
-## עמוד 347 — GPT Plugin / Action Exploiter
+## עמוד 353 — GPT Plugin / Action Exploiter
 
 > **מנוע:** `gpt_plugin_attack` · AI / LLM · MITRE T1059
 
@@ -6512,9 +6644,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "gpt_plugin_attack" } |
 ---
 
-<a id="page-348"></a>
+<a id="page-354"></a>
 
-## עמוד 348 — Autonomous AI Agent Sandbox Escape
+## עמוד 354 — Autonomous AI Agent Sandbox Escape
 
 > **מנוע:** `autonomous_ai_escape` · AI / LLM · MITRE T1059.004
 
@@ -6529,9 +6661,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "autonomous_ai_escape" } |
 ---
 
-<a id="page-349"></a>
+<a id="page-355"></a>
 
-## עמוד 349 — LLM Memory Extraction
+## עמוד 355 — LLM Memory Extraction
 
 > **מנוע:** `llm_memory_extraction` · AI / LLM · MITRE T1552
 
@@ -6546,9 +6678,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "llm_memory_extraction" } |
 ---
 
-<a id="page-350"></a>
+<a id="page-356"></a>
 
-## עמוד 350 — Neural Network Backdoor Detector
+## עמוד 356 — Neural Network Backdoor Detector
 
 > **מנוע:** `neural_backdoor_detect` · AI / LLM · MITRE T1588.005
 
@@ -6563,9 +6695,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "neural_backdoor_detect" } |
 ---
 
-<a id="page-351"></a>
+<a id="page-357"></a>
 
-## עמוד 351 — Federated Learning Poisoning
+## עמוד 357 — Federated Learning Poisoning
 
 > **מנוע:** `federated_learning_attack` · AI / LLM · MITRE T1565.001
 
@@ -6580,9 +6712,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "federated_learning_attack" } |
 ---
 
-<a id="page-352"></a>
+<a id="page-358"></a>
 
-## עמוד 352 — Advanced LLM Red Teaming
+## עמוד 358 — Advanced LLM Red Teaming
 
 > **מנוע:** `llm_red_team_advanced` · AI / LLM · MITRE T1059
 
@@ -6597,9 +6729,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "llm_red_team_advanced" } |
 ---
 
-<a id="page-353"></a>
+<a id="page-359"></a>
 
-## עמוד 353 — ML Model Stealing Engine
+## עמוד 359 — ML Model Stealing Engine
 
 > **מנוע:** `model_stealing_engine` · AI / LLM · MITRE T1588.005
 
@@ -6614,9 +6746,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "model_stealing_engine" } |
 ---
 
-<a id="page-354"></a>
+<a id="page-360"></a>
 
-## עמוד 354 — Cloud Metadata SSRF Attack
+## עמוד 360 — Cloud Metadata SSRF Attack
 
 > **מנוע:** `cloud_metadata_ssrf` · ענן ותשתית · MITRE T1552.005
 
@@ -6631,9 +6763,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_metadata_ssrf" } |
 ---
 
-<a id="page-355"></a>
+<a id="page-361"></a>
 
-## עמוד 355 — S3 Bucket Misconfiguration Attack
+## עמוד 361 — S3 Bucket Misconfiguration Attack
 
 > **מנוע:** `s3_bucket_attack` · ענן ותשתית · MITRE T1530
 
@@ -6648,9 +6780,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "s3_bucket_attack" } |
 ---
 
-<a id="page-356"></a>
+<a id="page-362"></a>
 
-## עמוד 356 — Lambda / Serverless Escape
+## עמוד 362 — Lambda / Serverless Escape
 
 > **מנוע:** `lambda_escape` · ענן ותשתית · MITRE T1610
 
@@ -6665,9 +6797,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "lambda_escape" } |
 ---
 
-<a id="page-357"></a>
+<a id="page-363"></a>
 
-## עמוד 357 — Cloud IAM Privilege Escalation
+## עמוד 363 — Cloud IAM Privilege Escalation
 
 > **מנוע:** `cloud_iam_escalation` · ענן ותשתית · MITRE T1078.004
 
@@ -6682,9 +6814,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_iam_escalation" } |
 ---
 
-<a id="page-358"></a>
+<a id="page-364"></a>
 
-## עמוד 358 — Kubernetes RBAC Escape
+## עמוד 364 — Kubernetes RBAC Escape
 
 > **מנוע:** `kubernetes_rbac_escape` · ענן ותשתית · MITRE T1610
 
@@ -6699,9 +6831,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "kubernetes_rbac_escape" } |
 ---
 
-<a id="page-359"></a>
+<a id="page-365"></a>
 
-## עמוד 359 — Azure DevOps Pipeline Attack
+## עמוד 365 — Azure DevOps Pipeline Attack
 
 > **מנוע:** `azure_devops_attack` · ענן ותשתית · MITRE T1195.002
 
@@ -6716,9 +6848,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "azure_devops_attack" } |
 ---
 
-<a id="page-360"></a>
+<a id="page-366"></a>
 
-## עמוד 360 — GCP Privilege Escalation Engine
+## עמוד 366 — GCP Privilege Escalation Engine
 
 > **מנוע:** `gcp_privilege_attack` · ענן ותשתית · MITRE T1078.004
 
@@ -6733,9 +6865,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "gcp_privilege_attack" } |
 ---
 
-<a id="page-361"></a>
+<a id="page-367"></a>
 
-## עמוד 361 — Terraform State File Exploiter
+## עמוד 367 — Terraform State File Exploiter
 
 > **מנוע:** `terraform_state_attack` · ענן ותשתית · MITRE T1552
 
@@ -6750,9 +6882,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "terraform_state_attack" } |
 ---
 
-<a id="page-362"></a>
+<a id="page-368"></a>
 
-## עמוד 362 — CloudFormation / ARM Template Injection
+## עמוד 368 — CloudFormation / ARM Template Injection
 
 > **מנוע:** `cloudformation_injection` · ענן ותשתית · MITRE T1195
 
@@ -6767,9 +6899,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloudformation_injection" } |
 ---
 
-<a id="page-363"></a>
+<a id="page-369"></a>
 
-## עמוד 363 — Service Mesh Attack Engine
+## עמוד 369 — Service Mesh Attack Engine
 
 > **מנוע:** `service_mesh_attack` · ענן ותשתית · MITRE T1557
 
@@ -6784,9 +6916,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "service_mesh_attack" } |
 ---
 
-<a id="page-364"></a>
+<a id="page-370"></a>
 
-## עמוד 364 — Cloud Audit Log Evasion
+## עמוד 370 — Cloud Audit Log Evasion
 
 > **מנוע:** `cloud_audit_evasion` · ענן ותשתית · MITRE T1685.002
 
@@ -6801,9 +6933,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_audit_evasion" } |
 ---
 
-<a id="page-365"></a>
+<a id="page-371"></a>
 
-## עמוד 365 — Container Registry Attack
+## עמוד 371 — Container Registry Attack
 
 > **מנוע:** `ecr_registry_attack` · ענן ותשתית · MITRE T1195.001
 
@@ -6818,9 +6950,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ecr_registry_attack" } |
 ---
 
-<a id="page-366"></a>
+<a id="page-372"></a>
 
-## עמוד 366 — Cloud Worm Propagation Engine
+## עמוד 372 — Cloud Worm Propagation Engine
 
 > **מנוע:** `cloud_worm_propagation` · ענן ותשתית · MITRE T1080
 
@@ -6835,9 +6967,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_worm_propagation" } |
 ---
 
-<a id="page-367"></a>
+<a id="page-373"></a>
 
-## עמוד 367 — Serverless Function Injection
+## עמוד 373 — Serverless Function Injection
 
 > **מנוע:** `serverless_injection` · ענן ותשתית · MITRE T1059
 
@@ -6852,9 +6984,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "serverless_injection" } |
 ---
 
-<a id="page-368"></a>
+<a id="page-374"></a>
 
-## עמוד 368 — Cloud Storage Exfiltration
+## עמוד 374 — Cloud Storage Exfiltration
 
 > **מנוע:** `cloud_data_exfil` · ענן ותשתית · MITRE T1567.002
 
@@ -6869,9 +7001,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_data_exfil" } |
 ---
 
-<a id="page-369"></a>
+<a id="page-375"></a>
 
-## עמוד 369 — EKS/AKS/GKE Managed K8s Attack
+## עמוד 375 — EKS/AKS/GKE Managed K8s Attack
 
 > **מנוע:** `eks_attack` · ענן ותשתית · MITRE T1610
 
@@ -6886,9 +7018,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "eks_attack" } |
 ---
 
-<a id="page-370"></a>
+<a id="page-376"></a>
 
-## עמוד 370 — Cloud Network Attack Engine
+## עמוד 376 — Cloud Network Attack Engine
 
 > **מנוע:** `cloud_network_attack` · ענן ותשתית · MITRE T1557
 
@@ -6903,9 +7035,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_network_attack" } |
 ---
 
-<a id="page-371"></a>
+<a id="page-377"></a>
 
-## עמוד 371 — Cloud Secrets Manager Attack
+## עמוד 377 — Cloud Secrets Manager Attack
 
 > **מנוע:** `secrets_manager_attack` · ענן ותשתית · MITRE T1555
 
@@ -6920,9 +7052,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "secrets_manager_attack" } |
 ---
 
-<a id="page-372"></a>
+<a id="page-378"></a>
 
-## עמוד 372 — Cloud Persistence Engine
+## עמוד 378 — Cloud Persistence Engine
 
 > **מנוע:** `cloud_privilege_persistence` · ענן ותשתית · MITRE T1098
 
@@ -6937,9 +7069,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_privilege_persistence" } |
 ---
 
-<a id="page-373"></a>
+<a id="page-379"></a>
 
-## עמוד 373 — Modbus Protocol Attack
+## עמוד 379 — Modbus Protocol Attack
 
 > **מנוע:** `modbus_attack` · OT / ICS / IoT · MITRE T0836
 
@@ -6954,9 +7086,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "modbus_attack" } |
 ---
 
-<a id="page-374"></a>
+<a id="page-380"></a>
 
-## עמוד 374 — MQTT Broker Attack Engine
+## עמוד 380 — MQTT Broker Attack Engine
 
 > **מנוע:** `mqtt_attack` · OT / ICS / IoT · MITRE T0836
 
@@ -6971,9 +7103,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "mqtt_attack" } |
 ---
 
-<a id="page-375"></a>
+<a id="page-381"></a>
 
-## עמוד 375 — CoAP Protocol Exploitation
+## עמוד 381 — CoAP Protocol Exploitation
 
 > **מנוע:** `coap_attack` · OT / ICS / IoT · MITRE T0836
 
@@ -6988,9 +7120,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "coap_attack" } |
 ---
 
-<a id="page-376"></a>
+<a id="page-382"></a>
 
-## עמוד 376 — OPC-UA Industrial Attack
+## עמוד 382 — OPC-UA Industrial Attack
 
 > **מנוע:** `opcua_attack` · OT / ICS / IoT · MITRE T0836
 
@@ -7005,9 +7137,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "opcua_attack" } |
 ---
 
-<a id="page-377"></a>
+<a id="page-383"></a>
 
-## עמוד 377 — PLC Ladder Logic Attack
+## עמוד 383 — PLC Ladder Logic Attack
 
 > **מנוע:** `plc_logic_attack` · OT / ICS / IoT · MITRE T0836
 
@@ -7022,9 +7154,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "plc_logic_attack" } |
 ---
 
-<a id="page-378"></a>
+<a id="page-384"></a>
 
-## עמוד 378 — HMI/SCADA UI Attack Engine
+## עמוד 384 — HMI/SCADA UI Attack Engine
 
 > **מנוע:** `hmi_attack` · OT / ICS / IoT · MITRE T0836
 
@@ -7039,9 +7171,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "hmi_attack" } |
 ---
 
-<a id="page-379"></a>
+<a id="page-385"></a>
 
-## עמוד 379 — Satellite Communication Attack
+## עמוד 385 — Satellite Communication Attack
 
 > **מנוע:** `satellite_comm_attack` · OT / ICS / IoT · MITRE T0836
 
@@ -7056,9 +7188,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "satellite_comm_attack" } |
 ---
 
-<a id="page-380"></a>
+<a id="page-386"></a>
 
-## עמוד 380 — IoT Firmware Emulation Attack
+## עמוד 386 — IoT Firmware Emulation Attack
 
 > **מנוע:** `firmware_emulation_attack` · OT / ICS / IoT · MITRE T1542
 
@@ -7073,9 +7205,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "firmware_emulation_attack" } |
 ---
 
-<a id="page-381"></a>
+<a id="page-387"></a>
 
-## עמוד 381 — PROFINET Industrial Attack
+## עמוד 387 — PROFINET Industrial Attack
 
 > **מנוע:** `profinet_attack` · OT / ICS / IoT · MITRE T0836
 
@@ -7090,9 +7222,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "profinet_attack" } |
 ---
 
-<a id="page-382"></a>
+<a id="page-388"></a>
 
-## עמוד 382 — RFID/NFC Cloning Engine
+## עמוד 388 — RFID/NFC Cloning Engine
 
 > **מנוע:** `rfid_nfc_attack` · OT / ICS / IoT · MITRE T1606
 
@@ -7107,9 +7239,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "rfid_nfc_attack" } |
 ---
 
-<a id="page-383"></a>
+<a id="page-389"></a>
 
-## עמוד 383 — Industrial Protocol Fuzzer
+## עמוד 389 — Industrial Protocol Fuzzer
 
 > **מנוע:** `industrial_protocol_fuzz` · OT / ICS / IoT · MITRE T0836
 
@@ -7124,9 +7256,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "industrial_protocol_fuzz" } |
 ---
 
-<a id="page-384"></a>
+<a id="page-390"></a>
 
-## עמוד 384 — DLL Hijacking Attack Engine
+## עמוד 390 — DLL Hijacking Attack Engine
 
 > **מנוע:** `dll_hijacking_engine` · Stealth / Evasion · MITRE T1574.001
 
@@ -7141,26 +7273,26 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "dll_hijacking_engine" } |
 ---
 
-<a id="page-385"></a>
+<a id="page-391"></a>
 
-## עמוד 385 — Sandbox Evasion Engine
+## עמוד 391 — Sandbox Evasion Engine
 
 > **מנוע:** `sandbox_evasion` · Stealth / Evasion · MITRE T1497
 
 | **מה** | Malware sandbox evasion techniques: VM detection via CPUID/RDTSC timing, user interaction requirement (mouse movement/keyboard), sleep acceleration bypass, environmental keying, hardware fingerprint validation, analysis tool detection |
-| **למה** | MITRE T1497 · probe Remote (network/API). |
-| **מתי** | Global/config scan. |
+| **למה** | MITRE T1497 · probe Agent (endpoint). |
+| **מתי** | Agent מותקן ו-online. |
 | **איפה** | /command-center/engines/sandbox_evasion |
-| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
-| **כמה** | 1 quota · Remote · יעד לא חובה |
-| **למי** | AppSec / SOC |
+| **איך** | Agents → install → Engine Detail → Run. |
+| **כמה** | 1 quota · Agent · יעד לא חובה |
+| **למי** | Endpoint / Red Team |
 | **מה יוצא** | findings + evidence |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "sandbox_evasion" } |
 ---
 
-<a id="page-386"></a>
+<a id="page-392"></a>
 
-## עמוד 386 — Kernel Rootkit Surface Probe
+## עמוד 392 — Kernel Rootkit Surface Probe
 
 > **מנוע:** `rootkit_surface_probe` · Stealth / Evasion · MITRE T1014
 
@@ -7175,9 +7307,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "rootkit_surface_probe" } |
 ---
 
-<a id="page-387"></a>
+<a id="page-393"></a>
 
-## עמוד 387 — Memory Forensics Evasion
+## עמוד 393 — Memory Forensics Evasion
 
 > **מנוע:** `memory_forensics_evasion` · Stealth / Evasion · MITRE T1055
 
@@ -7192,9 +7324,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "memory_forensics_evasion" } |
 ---
 
-<a id="page-388"></a>
+<a id="page-394"></a>
 
-## עמוד 388 — AV/EDR Bypass Engine
+## עמוד 394 — AV/EDR Bypass Engine
 
 > **מנוע:** `av_bypass_engine` · Stealth / Evasion · MITRE T1685
 
@@ -7209,9 +7341,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "av_bypass_engine" } |
 ---
 
-<a id="page-389"></a>
+<a id="page-395"></a>
 
-## עמוד 389 — DNS Tunneling C2 Channel
+## עמוד 395 — DNS Tunneling C2 Channel
 
 > **מנוע:** `dns_tunneling_c2` · Stealth / Evasion · MITRE T1071.004
 
@@ -7226,9 +7358,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "dns_tunneling_c2" } |
 ---
 
-<a id="page-390"></a>
+<a id="page-396"></a>
 
-## עמוד 390 — Steganography C2 Engine
+## עמוד 396 — Steganography C2 Engine
 
 > **מנוע:** `steganography_c2` · Stealth / Evasion · MITRE T1001.002
 
@@ -7243,9 +7375,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "steganography_c2" } |
 ---
 
-<a id="page-391"></a>
+<a id="page-397"></a>
 
-## עמוד 391 — HTTPS C2 Domain Fronting
+## עמוד 397 — HTTPS C2 Domain Fronting
 
 > **מנוע:** `https_c2_masquerade` · Stealth / Evasion · MITRE T1090.004
 
@@ -7260,9 +7392,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "https_c2_masquerade" } |
 ---
 
-<a id="page-392"></a>
+<a id="page-398"></a>
 
-## עמוד 392 — ICMP Covert Channel
+## עמוד 398 — ICMP Covert Channel
 
 > **מנוע:** `icmp_covert` · Stealth / Evasion · MITRE T1095
 
@@ -7277,26 +7409,26 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "icmp_covert" } |
 ---
 
-<a id="page-393"></a>
+<a id="page-399"></a>
 
-## עמוד 393 — ROP Chain Construction Engine
+## עמוד 399 — ROP Chain Construction Engine
 
 > **מנוע:** `rop_chain_engine` · Stealth / Evasion · MITRE T1203
 
 | **מה** | Return-Oriented Programming exploitation: gadget discovery in target binaries, ASLR bypass techniques, ROP chain automation, ret2libc/ret2plt construction, JOP (Jump-Oriented Programming), COP (Call-Oriented Programming), SROP |
-| **למה** | MITRE T1203 · probe Remote (network/API). |
-| **מתי** | Global/config scan. |
+| **למה** | MITRE T1203 · probe Agent (endpoint). |
+| **מתי** | Agent מותקן ו-online. |
 | **איפה** | /command-center/engines/rop_chain_engine |
-| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
-| **כמה** | 1 quota · Remote · יעד לא חובה |
-| **למי** | AppSec / SOC |
+| **איך** | Agents → install → Engine Detail → Run. |
+| **כמה** | 1 quota · Agent · יעד לא חובה |
+| **למי** | Endpoint / Red Team |
 | **מה יוצא** | findings + evidence |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "rop_chain_engine" } |
 ---
 
-<a id="page-394"></a>
+<a id="page-400"></a>
 
-## עמוד 394 — Timing-Based Evasion Engine
+## עמוד 400 — Timing-Based Evasion Engine
 
 > **מנוע:** `timing_evasion_engine` · Stealth / Evasion · MITRE T1497.003
 
@@ -7311,9 +7443,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "timing_evasion_engine" } |
 ---
 
-<a id="page-395"></a>
+<a id="page-401"></a>
 
-## עמוד 395 — Log Tampering & Destruction
+## עמוד 401 — Log Tampering & Destruction
 
 > **מנוע:** `log_tampering_engine` · Stealth / Evasion · MITRE T1685.005
 
@@ -7328,43 +7460,43 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "log_tampering_engine" } |
 ---
 
-<a id="page-396"></a>
+<a id="page-402"></a>
 
-## עמוד 396 — JIT Spray Attack Engine
+## עמוד 402 — JIT Spray Attack Engine
 
 > **מנוע:** `jit_spray` · Stealth / Evasion · MITRE T1203
 
 | **מה** | JIT spraying for browser/interpreter exploitation: ActionScript/JavaScript JIT spray, SpiderMonkey/V8 JIT exploitation, DEP/ASLR bypass via JIT, CFI bypass techniques, JIT compiler exploitation patterns |
-| **למה** | MITRE T1203 · probe Remote (network/API). |
-| **מתי** | Target/domain ב-scope. |
+| **למה** | MITRE T1203 · probe Agent (endpoint). |
+| **מתי** | Agent מותקן ו-online. |
 | **איפה** | /command-center/engines/jit_spray |
-| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
-| **כמה** | 1 quota · Remote · יעד חובה |
-| **למי** | AppSec / SOC |
+| **איך** | Agents → install → Engine Detail → Run. |
+| **כמה** | 1 quota · Agent · יעד חובה |
+| **למי** | Endpoint / Red Team |
 | **מה יוצא** | findings + evidence |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "jit_spray" } |
 ---
 
-<a id="page-397"></a>
+<a id="page-403"></a>
 
-## עמוד 397 — COM Object Hijacking
+## עמוד 403 — COM Object Hijacking
 
 > **מנוע:** `com_hijacking` · Stealth / Evasion · MITRE T1546.015
 
 | **מה** | COM object hijacking for persistence and evasion: HKCU registry COM server registration, InprocServer32 DLL hijacking, ScriptletURL-based COM execution, WScript.Shell COM abuse, scheduled task COM manipulation, DCOM lateral movement |
-| **למה** | MITRE T1546.015 · probe Remote (network/API). |
-| **מתי** | Global/config scan. |
+| **למה** | MITRE T1546.015 · probe Agent (endpoint). |
+| **מתי** | Agent מותקן ו-online. |
 | **איפה** | /command-center/engines/com_hijacking |
-| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
-| **כמה** | 1 quota · Remote · יעד לא חובה |
-| **למי** | AppSec / SOC |
+| **איך** | Agents → install → Engine Detail → Run. |
+| **כמה** | 1 quota · Agent · יעד לא חובה |
+| **למי** | Endpoint / Red Team |
 | **מה יוצא** | findings + evidence |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "com_hijacking" } |
 ---
 
-<a id="page-398"></a>
+<a id="page-404"></a>
 
-## עמוד 398 — Network Traffic Masking Engine
+## עמוד 404 — Network Traffic Masking Engine
 
 > **מנוע:** `network_traffic_masking` · Stealth / Evasion · MITRE T1001
 
@@ -7379,9 +7511,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "network_traffic_masking" } |
 ---
 
-<a id="page-399"></a>
+<a id="page-405"></a>
 
-## עמוד 399 — Anti-Debug & Anti-Analysis Engine
+## עמוד 405 — Anti-Debug & Anti-Analysis Engine
 
 > **מנוע:** `anti_debug_evasion` · Stealth / Evasion · MITRE T1497.001
 
@@ -7396,26 +7528,26 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "anti_debug_evasion" } |
 ---
 
-<a id="page-400"></a>
+<a id="page-406"></a>
 
-## עמוד 400 — Parent PID Spoofing Engine
+## עמוד 406 — Parent PID Spoofing Engine
 
 > **מנוע:** `parent_pid_spoof` · Stealth / Evasion · MITRE T1134.004
 
 | **מה** | Process parent PID spoofing for detection evasion: STARTUPINFOEX-based PPID manipulation, process creation via WMI to mask parent, token impersonation with PPID spoof, EDR detection bypass via legitimate parent choice |
-| **למה** | MITRE T1134.004 · probe Remote (network/API). |
-| **מתי** | Global/config scan. |
+| **למה** | MITRE T1134.004 · probe Agent (endpoint). |
+| **מתי** | Agent מותקן ו-online. |
 | **איפה** | /command-center/engines/parent_pid_spoof |
-| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
-| **כמה** | 1 quota · Remote · יעד לא חובה |
-| **למי** | AppSec / SOC |
+| **איך** | Agents → install → Engine Detail → Run. |
+| **כמה** | 1 quota · Agent · יעד לא חובה |
+| **למי** | Endpoint / Red Team |
 | **מה יוצא** | findings + evidence |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "parent_pid_spoof" } |
 ---
 
-<a id="page-401"></a>
+<a id="page-407"></a>
 
-## עמוד 401 — Padding Oracle Attack
+## עמוד 407 — Padding Oracle Attack
 
 > **מנוע:** `padding_oracle_attack` · קריפטו וזהות · MITRE T1600
 
@@ -7430,9 +7562,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "padding_oracle_attack" } |
 ---
 
-<a id="page-402"></a>
+<a id="page-408"></a>
 
-## עמוד 402 — Hash Length Extension Attack
+## עמוד 408 — Hash Length Extension Attack
 
 > **מנוע:** `hash_extension_attack` · קריפטו וזהות · MITRE T1600
 
@@ -7447,9 +7579,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "hash_extension_attack" } |
 ---
 
-<a id="page-403"></a>
+<a id="page-409"></a>
 
-## עמוד 403 — ECDSA Nonce Bias Attack
+## עמוד 409 — ECDSA Nonce Bias Attack
 
 > **מנוע:** `ecdsa_nonce_bias` · קריפטו וזהות · MITRE T1600
 
@@ -7464,9 +7596,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ecdsa_nonce_bias" } |
 ---
 
-<a id="page-404"></a>
+<a id="page-410"></a>
 
-## עמוד 404 — RSA Timing Side-Channel
+## עמוד 410 — RSA Timing Side-Channel
 
 > **מנוע:** `rsa_timing_attack` · קריפטו וזהות · MITRE T1600
 
@@ -7481,9 +7613,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "rsa_timing_attack" } |
 ---
 
-<a id="page-405"></a>
+<a id="page-411"></a>
 
-## עמוד 405 — MFA Bypass Engine
+## עמוד 411 — MFA Bypass Engine
 
 > **מנוע:** `mfa_bypass_engine` · קריפטו וזהות · MITRE T1621
 
@@ -7498,9 +7630,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "mfa_bypass_engine" } |
 ---
 
-<a id="page-406"></a>
+<a id="page-412"></a>
 
-## עמוד 406 — Kerberos Attack Suite
+## עמוד 412 — Kerberos Attack Suite
 
 > **מנוע:** `kerberos_attack_suite` · קריפטו וזהות · MITRE T1558
 
@@ -7515,9 +7647,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "kerberos_attack_suite" } |
 ---
 
-<a id="page-407"></a>
+<a id="page-413"></a>
 
-## עמוד 407 — PKI Hierarchy Attack Engine
+## עמוד 413 — PKI Hierarchy Attack Engine
 
 > **מנוע:** `pki_hierarchy_attack` · קריפטו וזהות · MITRE T1588.004
 
@@ -7532,9 +7664,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "pki_hierarchy_attack" } |
 ---
 
-<a id="page-408"></a>
+<a id="page-414"></a>
 
-## עמוד 408 — Advanced Session Fixation
+## עמוד 414 — Advanced Session Fixation
 
 > **מנוע:** `session_fixation_adv` · קריפטו וזהות · MITRE T1563
 
@@ -7549,9 +7681,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "session_fixation_adv" } |
 ---
 
-<a id="page-409"></a>
+<a id="page-415"></a>
 
-## עמוד 409 — Password Hash Cracking Engine
+## עמוד 415 — Password Hash Cracking Engine
 
 > **מנוע:** `password_hash_crack` · קריפטו וזהות · MITRE T1110.002
 
@@ -7566,9 +7698,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "password_hash_crack" } |
 ---
 
-<a id="page-410"></a>
+<a id="page-416"></a>
 
-## עמוד 410 — OAuth 2.0 Advanced Attack Suite
+## עמוד 416 — OAuth 2.0 Advanced Attack Suite
 
 > **מנוע:** `oauth_advanced_attack` · קריפטו וזהות · MITRE T1550.001
 
@@ -7583,9 +7715,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "oauth_advanced_attack" } |
 ---
 
-<a id="page-411"></a>
+<a id="page-417"></a>
 
-## עמוד 411 — SAML Advanced Attack Engine
+## עמוד 417 — SAML Advanced Attack Engine
 
 > **מנוע:** `saml_advanced_attack` · קריפטו וזהות · MITRE T1606.002
 
@@ -7600,9 +7732,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "saml_advanced_attack" } |
 ---
 
-<a id="page-412"></a>
+<a id="page-418"></a>
 
-## עמוד 412 — Quantum Computing Key Attack Simulator
+## עמוד 418 — Quantum Computing Key Attack Simulator
 
 > **מנוע:** `quantum_key_attack` · קריפטו וזהות · MITRE T1600
 
@@ -7617,9 +7749,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "quantum_key_attack" } |
 ---
 
-<a id="page-413"></a>
+<a id="page-419"></a>
 
-## עמוד 413 — Advanced Password Spray Engine
+## עמוד 419 — Advanced Password Spray Engine
 
 > **מנוע:** `password_spray_advanced` · קריפטו וזהות · MITRE T1110.003
 
@@ -7634,9 +7766,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "password_spray_advanced" } |
 ---
 
-<a id="page-414"></a>
+<a id="page-420"></a>
 
-## עמוד 414 — ARP Spoofing / Cache Poisoning
+## עמוד 420 — ARP Spoofing / Cache Poisoning
 
 > **מנוע:** `arp_spoofing_engine` · רשת ופרוטוקולים · MITRE T1557.002
 
@@ -7651,9 +7783,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "arp_spoofing_engine" } |
 ---
 
-<a id="page-415"></a>
+<a id="page-421"></a>
 
-## עמוד 415 — VLAN Hopping Attack Engine
+## עמוד 421 — VLAN Hopping Attack Engine
 
 > **מנוע:** `vlan_hopping_attack` · רשת ופרוטוקולים · MITRE T1016
 
@@ -7668,9 +7800,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "vlan_hopping_attack" } |
 ---
 
-<a id="page-416"></a>
+<a id="page-422"></a>
 
-## עמוד 416 — DHCP Starvation & Rogue Server
+## עמוד 422 — DHCP Starvation & Rogue Server
 
 > **מנוע:** `dhcp_attack_engine` · רשת ופרוטוקולים · MITRE T1557
 
@@ -7685,9 +7817,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "dhcp_attack_engine" } |
 ---
 
-<a id="page-417"></a>
+<a id="page-423"></a>
 
-## עמוד 417 — DNS Cache Poisoning Engine
+## עמוד 423 — DNS Cache Poisoning Engine
 
 > **מנוע:** `dns_cache_poisoning` · רשת ופרוטוקולים · MITRE T1584.002
 
@@ -7702,9 +7834,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "dns_cache_poisoning" } |
 ---
 
-<a id="page-418"></a>
+<a id="page-424"></a>
 
-## עמוד 418 — SNMP Community Exploitation
+## עמוד 424 — SNMP Community Exploitation
 
 > **מנוע:** `snmp_exploitation` · רשת ופרוטוקולים · MITRE T1602.001
 
@@ -7719,9 +7851,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "snmp_exploitation" } |
 ---
 
-<a id="page-419"></a>
+<a id="page-425"></a>
 
-## עמוד 419 — RDP Attack Engine
+## עמוד 425 — RDP Attack Engine
 
 > **מנוע:** `rdp_attack_engine` · רשת ופרוטוקולים · MITRE T1021.001
 
@@ -7736,9 +7868,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "rdp_attack_engine" } |
 ---
 
-<a id="page-420"></a>
+<a id="page-426"></a>
 
-## עמוד 420 — LDAP Injection Engine
+## עמוד 426 — LDAP Injection Engine
 
 > **מנוע:** `ldap_injection_engine` · רשת ופרוטוקולים · MITRE T1190
 
@@ -7753,9 +7885,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ldap_injection_engine" } |
 ---
 
-<a id="page-421"></a>
+<a id="page-427"></a>
 
-## עמוד 421 — SS7 Telecom Signaling Probe
+## עמוד 427 — SS7 Telecom Signaling Probe
 
 > **מנוע:** `ss7_signaling_probe` · רשת ופרוטוקולים · MITRE T1557
 
@@ -7770,9 +7902,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ss7_signaling_probe" } |
 ---
 
-<a id="page-422"></a>
+<a id="page-428"></a>
 
-## עמוד 422 — WiFi Attack Suite
+## עמוד 428 — WiFi Attack Suite
 
 > **מנוע:** `wifi_attack_engine` · רשת ופרוטוקולים · MITRE T1557.003
 
@@ -7787,9 +7919,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "wifi_attack_engine" } |
 ---
 
-<a id="page-423"></a>
+<a id="page-429"></a>
 
-## עמוד 423 — Bluetooth Attack Engine
+## עמוד 429 — Bluetooth Attack Engine
 
 > **מנוע:** `bluetooth_attack_engine` · רשת ופרוטוקולים · MITRE T1011.001
 
@@ -7804,9 +7936,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "bluetooth_attack_engine" } |
 ---
 
-<a id="page-424"></a>
+<a id="page-430"></a>
 
-## עמוד 424 — OSPF/BGP Route Hijacking
+## עמוד 430 — OSPF/BGP Route Hijacking
 
 > **מנוע:** `ospf_bgp_hijack` · רשת ופרוטוקולים · MITRE T1557
 
@@ -7821,9 +7953,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ospf_bgp_hijack" } |
 ---
 
-<a id="page-425"></a>
+<a id="page-431"></a>
 
-## עמוד 425 — MPLS/VPN Network Attack
+## עמוד 431 — MPLS/VPN Network Attack
 
 > **מנוע:** `mpls_vpn_attack` · רשת ופרוטוקולים · MITRE T1599
 
@@ -7838,9 +7970,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "mpls_vpn_attack" } |
 ---
 
-<a id="page-426"></a>
+<a id="page-432"></a>
 
-## עמוד 426 — LTE/5G Network Attack Engine
+## עמוד 432 — LTE/5G Network Attack Engine
 
 > **מנוע:** `lte_5g_attack` · רשת ופרוטוקולים · MITRE T1557
 
@@ -7855,9 +7987,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "lte_5g_attack" } |
 ---
 
-<a id="page-427"></a>
+<a id="page-433"></a>
 
-## עמוד 427 — IPv6 Advanced Attack Engine
+## עמוד 433 — IPv6 Advanced Attack Engine
 
 > **מנוע:** `ipv6_advanced_attack` · רשת ופרוטוקולים · MITRE T1590.004
 
@@ -7872,9 +8004,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ipv6_advanced_attack" } |
 ---
 
-<a id="page-428"></a>
+<a id="page-434"></a>
 
-## עמוד 428 — Network Covert Channel Engine
+## עמוד 434 — Network Covert Channel Engine
 
 > **מנוע:** `network_covert_channel` · רשת ופרוטוקולים · MITRE T1095
 
@@ -7889,9 +8021,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "network_covert_channel" } |
 ---
 
-<a id="page-429"></a>
+<a id="page-435"></a>
 
-## עמוד 429 — WPA3/WiFi 6E Attack Engine
+## עמוד 435 — WPA3/WiFi 6E Attack Engine
 
 > **מנוע:** `wpa3_attack_engine` · רשת ופרוטוקולים · MITRE T1557.003
 
@@ -7906,9 +8038,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "wpa3_attack_engine" } |
 ---
 
-<a id="page-430"></a>
+<a id="page-436"></a>
 
-## עמוד 430 — Tor Exit Node Attack Engine
+## עמוד 436 — Tor Exit Node Attack Engine
 
 > **מנוע:** `tor_exit_attack` · רשת ופרוטוקולים · MITRE T1090.003
 
@@ -7923,9 +8055,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "tor_exit_attack" } |
 ---
 
-<a id="page-431"></a>
+<a id="page-437"></a>
 
-## עמוד 431 — Protocol Downgrade Engine
+## עמוד 437 — Protocol Downgrade Engine
 
 > **מנוע:** `protocol_downgrade` · רשת ופרוטוקולים · MITRE T1600.001
 
@@ -7940,9 +8072,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "protocol_downgrade" } |
 ---
 
-<a id="page-432"></a>
+<a id="page-438"></a>
 
-## עמוד 432 — NPM Package Hijacking Engine
+## עמוד 438 — NPM Package Hijacking Engine
 
 > **מנוע:** `npm_package_attack` · Supply Chain · MITRE T1195.001
 
@@ -7957,9 +8089,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "npm_package_attack" } |
 ---
 
-<a id="page-433"></a>
+<a id="page-439"></a>
 
-## עמוד 433 — PyPI Supply Chain Attack
+## עמוד 439 — PyPI Supply Chain Attack
 
 > **מנוע:** `pypi_supply_chain` · Supply Chain · MITRE T1195.001
 
@@ -7974,9 +8106,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "pypi_supply_chain" } |
 ---
 
-<a id="page-434"></a>
+<a id="page-440"></a>
 
-## עמוד 434 — GitHub Actions Supply Chain
+## עמוד 440 — GitHub Actions Supply Chain
 
 > **מנוע:** `github_actions_attack` · Supply Chain · MITRE T1195.002
 
@@ -7991,9 +8123,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "github_actions_attack" } |
 ---
 
-<a id="page-435"></a>
+<a id="page-441"></a>
 
-## עמוד 435 — Docker Image Poisoning Engine
+## עמוד 441 — Docker Image Poisoning Engine
 
 > **מנוע:** `docker_image_poison` · Supply Chain · MITRE T1195.001
 
@@ -8008,9 +8140,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "docker_image_poison" } |
 ---
 
-<a id="page-436"></a>
+<a id="page-442"></a>
 
-## עמוד 436 — Maven/Gradle Supply Chain Attack
+## עמוד 442 — Maven/Gradle Supply Chain Attack
 
 > **מנוע:** `maven_supply_chain` · Supply Chain · MITRE T1195.001
 
@@ -8025,9 +8157,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "maven_supply_chain" } |
 ---
 
-<a id="page-437"></a>
+<a id="page-443"></a>
 
-## עמוד 437 — Compiler-Level Backdoor Engine
+## עמוד 443 — Compiler-Level Backdoor Engine
 
 > **מנוע:** `compiler_backdoor` · Supply Chain · MITRE T1195.003
 
@@ -8042,9 +8174,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "compiler_backdoor" } |
 ---
 
-<a id="page-438"></a>
+<a id="page-444"></a>
 
-## עמוד 438 — CDN Cache Poisoning Engine
+## עמוד 444 — CDN Cache Poisoning Engine
 
 > **מנוע:** `cdn_poisoning_engine` · Supply Chain · MITRE T1584
 
@@ -8059,9 +8191,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cdn_poisoning_engine" } |
 ---
 
-<a id="page-439"></a>
+<a id="page-445"></a>
 
-## עמוד 439 — Software Signing Bypass Engine
+## עמוד 445 — Software Signing Bypass Engine
 
 > **מנוע:** `software_signing_attack` · Supply Chain · MITRE T1553.002
 
@@ -8076,9 +8208,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "software_signing_attack" } |
 ---
 
-<a id="page-440"></a>
+<a id="page-446"></a>
 
-## עמוד 440 — Build System Compromise Engine
+## עמוד 446 — Build System Compromise Engine
 
 > **מנוע:** `build_system_compromise` · Supply Chain · MITRE T1195.002
 
@@ -8093,9 +8225,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "build_system_compromise" } |
 ---
 
-<a id="page-441"></a>
+<a id="page-447"></a>
 
-## עמוד 441 — Software Update Hijacking Engine
+## עמוד 447 — Software Update Hijacking Engine
 
 > **מנוע:** `update_hijacking` · Supply Chain · MITRE T1195.002
 
@@ -8110,9 +8242,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "update_hijacking" } |
 ---
 
-<a id="page-442"></a>
+<a id="page-448"></a>
 
-## עמוד 442 — SBOM Forgery & Analysis Engine
+## עמוד 448 — SBOM Forgery & Analysis Engine
 
 > **מנוע:** `sbom_forgery_engine` · Supply Chain · MITRE T1195
 
@@ -8127,9 +8259,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "sbom_forgery_engine" } |
 ---
 
-<a id="page-443"></a>
+<a id="page-449"></a>
 
-## עמוד 443 — Third-Party API Supply Chain
+## עמוד 449 — Third-Party API Supply Chain
 
 > **מנוע:** `third_party_api_attack` · Supply Chain · MITRE T1199
 
@@ -8144,9 +8276,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "third_party_api_attack" } |
 ---
 
-<a id="page-444"></a>
+<a id="page-450"></a>
 
-## עמוד 444 — IaC Supply Chain Attack
+## עמוד 450 — IaC Supply Chain Attack
 
 > **מנוע:** `iac_supply_chain` · Supply Chain · MITRE T1195
 
@@ -8161,9 +8293,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "iac_supply_chain" } |
 ---
 
-<a id="page-445"></a>
+<a id="page-451"></a>
 
-## עמוד 445 — APT28 (Fancy Bear) TTPs
+## עמוד 451 — APT28 (Fancy Bear) TTPs
 
 > **מנוע:** `apt28_techniques` · APT / Top-Tier · MITRE T1566.001
 
@@ -8178,9 +8310,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "apt28_techniques" } |
 ---
 
-<a id="page-446"></a>
+<a id="page-452"></a>
 
-## עמוד 446 — APT29 (Cozy Bear) TTPs
+## עמוד 452 — APT29 (Cozy Bear) TTPs
 
 > **מנוע:** `apt29_techniques` · APT / Top-Tier · MITRE T1566.002
 
@@ -8195,9 +8327,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "apt29_techniques" } |
 ---
 
-<a id="page-447"></a>
+<a id="page-453"></a>
 
-## עמוד 447 — APT41 (Winnti/Double Dragon) TTPs
+## עמוד 453 — APT41 (Winnti/Double Dragon) TTPs
 
 > **מנוע:** `apt41_techniques` · APT / Top-Tier · MITRE T1195
 
@@ -8212,9 +8344,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "apt41_techniques" } |
 ---
 
-<a id="page-448"></a>
+<a id="page-454"></a>
 
-## עמוד 448 — Lazarus Group (DPRK) TTPs
+## עמוד 454 — Lazarus Group (DPRK) TTPs
 
 > **מנוע:** `lazarus_group_ttps` · APT / Top-Tier · MITRE T1566.001
 
@@ -8229,9 +8361,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "lazarus_group_ttps" } |
 ---
 
-<a id="page-449"></a>
+<a id="page-455"></a>
 
-## עמוד 449 — Volt Typhoon (VANGUARD PANDA) TTPs
+## עמוד 455 — Volt Typhoon (VANGUARD PANDA) TTPs
 
 > **מנוע:** `volt_typhoon_ttps` · APT / Top-Tier · MITRE T1078
 
@@ -8246,9 +8378,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "volt_typhoon_ttps" } |
 ---
 
-<a id="page-450"></a>
+<a id="page-456"></a>
 
-## עמוד 450 — Scattered Spider Social TTPs
+## עמוד 456 — Scattered Spider Social TTPs
 
 > **מנוע:** `scattered_spider_ttps` · APT / Top-Tier · MITRE T1621
 
@@ -8263,9 +8395,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "scattered_spider_ttps" } |
 ---
 
-<a id="page-451"></a>
+<a id="page-457"></a>
 
-## עמוד 451 — Salt Typhoon Telecom TTPs
+## עמוד 457 — Salt Typhoon Telecom TTPs
 
 > **מנוע:** `salt_typhoon_ttps` · APT / Top-Tier · MITRE T1557
 
@@ -8280,9 +8412,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "salt_typhoon_ttps" } |
 ---
 
-<a id="page-452"></a>
+<a id="page-458"></a>
 
-## עמוד 452 — FIN7 Financial Crime TTPs
+## עמוד 458 — FIN7 Financial Crime TTPs
 
 > **מנוע:** `fin7_techniques` · APT / Top-Tier · MITRE T1566.001
 
@@ -8297,9 +8429,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "fin7_techniques" } |
 ---
 
-<a id="page-453"></a>
+<a id="page-459"></a>
 
-## עמוד 453 — Conti Ransomware Group TTPs
+## עמוד 459 — Conti Ransomware Group TTPs
 
 > **מנוע:** `conti_ransomware_ttps` · APT / Top-Tier · MITRE T1486
 
@@ -8314,9 +8446,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "conti_ransomware_ttps" } |
 ---
 
-<a id="page-454"></a>
+<a id="page-460"></a>
 
-## עמוד 454 — LockBit Ransomware TTPs
+## עמוד 460 — LockBit Ransomware TTPs
 
 > **מנוע:** `lockbit_techniques` · APT / Top-Tier · MITRE T1486
 
@@ -8331,9 +8463,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "lockbit_techniques" } |
 ---
 
-<a id="page-455"></a>
+<a id="page-461"></a>
 
-## עמוד 455 — Cl0p Ransomware TTPs
+## עמוד 461 — Cl0p Ransomware TTPs
 
 > **מנוע:** `cl0p_techniques` · APT / Top-Tier · MITRE T1486
 
@@ -8348,9 +8480,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cl0p_techniques" } |
 ---
 
-<a id="page-456"></a>
+<a id="page-462"></a>
 
-## עמוד 456 — BlackCat/ALPHV Ransomware TTPs
+## עמוד 462 — BlackCat/ALPHV Ransomware TTPs
 
 > **מנוע:** `blackcat_alphv_ttps` · APT / Top-Tier · MITRE T1486
 
@@ -8365,9 +8497,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "blackcat_alphv_ttps" } |
 ---
 
-<a id="page-457"></a>
+<a id="page-463"></a>
 
-## עמוד 457 — Midnight Blizzard (APT29 Advanced) TTPs
+## עמוד 463 — Midnight Blizzard (APT29 Advanced) TTPs
 
 > **מנוע:** `midnight_blizzard_ttps` · APT / Top-Tier · MITRE T1566.002
 
@@ -8382,9 +8514,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "midnight_blizzard_ttps" } |
 ---
 
-<a id="page-458"></a>
+<a id="page-464"></a>
 
-## עמוד 458 — Earth Longzhi APT TTPs
+## עמוד 464 — Earth Longzhi APT TTPs
 
 > **מנוע:** `earth_longzhi_ttps` · APT / Top-Tier · MITRE T1195
 
@@ -8399,9 +8531,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "earth_longzhi_ttps" } |
 ---
 
-<a id="page-459"></a>
+<a id="page-465"></a>
 
-## עמוד 459 — Equation Group (NSA-linked) TTPs
+## עמוד 465 — Equation Group (NSA-linked) TTPs
 
 > **מנוע:** `equation_group_ttps` · APT / Top-Tier · MITRE T1542
 
@@ -8416,9 +8548,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "equation_group_ttps" } |
 ---
 
-<a id="page-460"></a>
+<a id="page-466"></a>
 
-## עמוד 460 — Sandworm (Voodoo Bear) TTPs
+## עמוד 466 — Sandworm (Voodoo Bear) TTPs
 
 > **מנוע:** `sandworm_techniques` · APT / Top-Tier · MITRE T1485
 
@@ -8433,9 +8565,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "sandworm_techniques" } |
 ---
 
-<a id="page-461"></a>
+<a id="page-467"></a>
 
-## עמוד 461 — Carbon Spider (Evil Corp) TTPs
+## עמוד 467 — Carbon Spider (Evil Corp) TTPs
 
 > **מנוע:** `carbon_spider_ttps` · APT / Top-Tier · MITRE T1566.001
 
@@ -8450,9 +8582,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "carbon_spider_ttps" } |
 ---
 
-<a id="page-462"></a>
+<a id="page-468"></a>
 
-## עמוד 462 — Wizard Spider (TrickBot/Conti) TTPs
+## עמוד 468 — Wizard Spider (TrickBot/Conti) TTPs
 
 > **מנוע:** `wizard_spider_ttps` · APT / Top-Tier · MITRE T1566.001
 
@@ -8467,9 +8599,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "wizard_spider_ttps" } |
 ---
 
-<a id="page-463"></a>
+<a id="page-469"></a>
 
-## עמוד 463 — UNC2452 (SolarWinds) TTPs
+## עמוד 469 — UNC2452 (SolarWinds) TTPs
 
 > **מנוע:** `unc2452_ttps` · APT / Top-Tier · MITRE T1195.002
 
@@ -8484,9 +8616,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "unc2452_ttps" } |
 ---
 
-<a id="page-464"></a>
+<a id="page-470"></a>
 
-## עמוד 464 — UNC3944/Octo Tempest TTPs
+## עמוד 470 — UNC3944/Octo Tempest TTPs
 
 > **מנוע:** `unc3944_ttps` · APT / Top-Tier · MITRE T1621
 
@@ -8501,9 +8633,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "unc3944_ttps" } |
 ---
 
-<a id="page-465"></a>
+<a id="page-471"></a>
 
-## עמוד 465 — QUANTUM SOVEREIGN NEXUS - World's First AI-Quantum Hybrid Attack Engine
+## עמוד 471 — QUANTUM SOVEREIGN NEXUS - World's First AI-Quantum Hybrid Attack Engine
 
 > **מנוע:** `quantum_sovereign_nexus` · APT / Top-Tier · MITRE T1591
 
@@ -8518,9 +8650,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "quantum_sovereign_nexus" } |
 ---
 
-<a id="page-466"></a>
+<a id="page-472"></a>
 
-## עמוד 466 — UEFI/Bootkit Implant Detector
+## עמוד 472 — UEFI/Bootkit Implant Detector
 
 > **מנוע:** `bootkit_uefi` · Malware ו-Ransomware · MITRE T1542.001
 
@@ -8535,9 +8667,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "bootkit_uefi" } |
 ---
 
-<a id="page-467"></a>
+<a id="page-473"></a>
 
-## עמוד 467 — Fileless Malware Engine
+## עמוד 473 — Fileless Malware Engine
 
 > **מנוע:** `fileless_malware_engine` · Malware ו-Ransomware · MITRE T1055
 
@@ -8552,9 +8684,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "fileless_malware_engine" } |
 ---
 
-<a id="page-468"></a>
+<a id="page-474"></a>
 
-## עמוד 468 — Polymorphic Code Engine
+## עמוד 474 — Polymorphic Code Engine
 
 > **מנוע:** `polymorphic_engine` · Malware ו-Ransomware · MITRE T1027.001
 
@@ -8569,9 +8701,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "polymorphic_engine" } |
 ---
 
-<a id="page-469"></a>
+<a id="page-475"></a>
 
-## עמוד 469 — Botnet C2 Infrastructure Engine
+## עמוד 475 — Botnet C2 Infrastructure Engine
 
 > **מנוע:** `botnet_c2_engine` · Malware ו-Ransomware · MITRE T1102
 
@@ -8586,9 +8718,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "botnet_c2_engine" } |
 ---
 
-<a id="page-470"></a>
+<a id="page-476"></a>
 
-## עמוד 470 — Keylogger Engine
+## עמוד 476 — Keylogger Engine
 
 > **מנוע:** `keylogger_engine` · Malware ו-Ransomware · MITRE T1056.001
 
@@ -8603,9 +8735,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "keylogger_engine" } |
 ---
 
-<a id="page-471"></a>
+<a id="page-477"></a>
 
-## עמוד 471 — Spyware/Stalkerware Engine
+## עמוד 477 — Spyware/Stalkerware Engine
 
 > **מנוע:** `spyware_stalkerware` · Malware ו-Ransomware · MITRE T1429
 
@@ -8620,9 +8752,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "spyware_stalkerware" } |
 ---
 
-<a id="page-472"></a>
+<a id="page-478"></a>
 
-## עמוד 472 — Network Worm Propagation Engine
+## עמוד 478 — Network Worm Propagation Engine
 
 > **מנוע:** `worm_propagation` · Malware ו-Ransomware · MITRE T1210
 
@@ -8637,9 +8769,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "worm_propagation" } |
 ---
 
-<a id="page-473"></a>
+<a id="page-479"></a>
 
-## עמוד 473 — Remote Code Execution Exploit Engine
+## עמוד 479 — Remote Code Execution Exploit Engine
 
 > **מנוע:** `rce_exploit_engine` · Malware ו-Ransomware · MITRE T1190
 
@@ -8654,9 +8786,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "rce_exploit_engine" } |
 ---
 
-<a id="page-474"></a>
+<a id="page-480"></a>
 
-## עמוד 474 — Persistence Mechanism Engine
+## עמוד 480 — Persistence Mechanism Engine
 
 > **מנוע:** `persistence_mechanism` · Malware ו-Ransomware · MITRE T1547
 
@@ -8671,9 +8803,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "persistence_mechanism" } |
 ---
 
-<a id="page-475"></a>
+<a id="page-481"></a>
 
-## עמוד 475 — Lateral Movement Engine
+## עמוד 481 — Lateral Movement Engine
 
 > **מנוע:** `lateral_movement_engine` · Malware ו-Ransomware · MITRE T1021
 
@@ -8688,9 +8820,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "lateral_movement_engine" } |
 ---
 
-<a id="page-476"></a>
+<a id="page-482"></a>
 
-## עמוד 476 — Data Staging Engine
+## עמוד 482 — Data Staging Engine
 
 > **מנוע:** `data_staging_engine` · Malware ו-Ransomware · MITRE T1074
 
@@ -8705,9 +8837,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "data_staging_engine" } |
 ---
 
-<a id="page-477"></a>
+<a id="page-483"></a>
 
-## עמוד 477 — Exploit Kit Simulation Engine
+## עמוד 483 — Exploit Kit Simulation Engine
 
 > **מנוע:** `exploit_kit_engine` · Malware ו-Ransomware · MITRE T1203
 
@@ -8722,9 +8854,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "exploit_kit_engine" } |
 ---
 
-<a id="page-478"></a>
+<a id="page-484"></a>
 
-## עמוד 478 — Trojan Dropper Engine
+## עמוד 484 — Trojan Dropper Engine
 
 > **מנוע:** `trojan_dropper` · Malware ו-Ransomware · MITRE T1027.006
 
@@ -8739,9 +8871,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "trojan_dropper" } |
 ---
 
-<a id="page-479"></a>
+<a id="page-485"></a>
 
-## עמוד 479 — Office Macro Malware Engine
+## עמוד 485 — Office Macro Malware Engine
 
 > **מנוע:** `macro_malware` · Malware ו-Ransomware · MITRE T1566.001
 
@@ -8756,9 +8888,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "macro_malware" } |
 ---
 
-<a id="page-480"></a>
+<a id="page-486"></a>
 
-## עמוד 480 — Spear Phishing Campaign Engine
+## עמוד 486 — Spear Phishing Campaign Engine
 
 > **מנוע:** `spear_phishing_engine` · הנדסה חברתית · MITRE T1566.001
 
@@ -8773,9 +8905,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "spear_phishing_engine" } |
 ---
 
-<a id="page-481"></a>
+<a id="page-487"></a>
 
-## עמוד 481 — Vishing Attack Engine
+## עמוד 487 — Vishing Attack Engine
 
 > **מנוע:** `vishing_engine` · הנדסה חברתית · MITRE T1566.003
 
@@ -8790,9 +8922,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "vishing_engine" } |
 ---
 
-<a id="page-482"></a>
+<a id="page-488"></a>
 
-## עמוד 482 — SMS Phishing (Smishing) Engine
+## עמוד 488 — SMS Phishing (Smishing) Engine
 
 > **מנוע:** `smishing_engine` · הנדסה חברתית · MITRE T1566.003
 
@@ -8807,9 +8939,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "smishing_engine" } |
 ---
 
-<a id="page-483"></a>
+<a id="page-489"></a>
 
-## עמוד 483 — QR Code Phishing (Quishing) Engine
+## עמוד 489 — QR Code Phishing (Quishing) Engine
 
 > **מנוע:** `qr_phishing` · הנדסה חברתית · MITRE T1566.001
 
@@ -8824,9 +8956,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "qr_phishing" } |
 ---
 
-<a id="page-484"></a>
+<a id="page-490"></a>
 
-## עמוד 484 — Deepfake Voice Social Engineering
+## עמוד 490 — Deepfake Voice Social Engineering
 
 > **מנוע:** `deepfake_voice_engine` · הנדסה חברתית · MITRE T1534
 
@@ -8841,9 +8973,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "deepfake_voice_engine" } |
 ---
 
-<a id="page-485"></a>
+<a id="page-491"></a>
 
-## עמוד 485 — BEC (Business Email Compromise)
+## עמוד 491 — BEC (Business Email Compromise)
 
 > **מנוע:** `business_email_compromise` · הנדסה חברתית · MITRE T1534
 
@@ -8858,9 +8990,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "business_email_compromise" } |
 ---
 
-<a id="page-486"></a>
+<a id="page-492"></a>
 
-## עמוד 486 — Watering Hole Attack Engine
+## עמוד 492 — Watering Hole Attack Engine
 
 > **מנוע:** `watering_hole_attack` · הנדסה חברתית · MITRE T1189
 
@@ -8875,9 +9007,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "watering_hole_attack" } |
 ---
 
-<a id="page-487"></a>
+<a id="page-493"></a>
 
-## עמוד 487 — Pretexting Scenario Engine
+## עמוד 493 — Pretexting Scenario Engine
 
 > **מנוע:** `pretexting_engine` · הנדסה חברתית · MITRE T1534
 
@@ -8892,9 +9024,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "pretexting_engine" } |
 ---
 
-<a id="page-488"></a>
+<a id="page-494"></a>
 
-## עמוד 488 — Insider Threat Simulation Engine
+## עמוד 494 — Insider Threat Simulation Engine
 
 > **מנוע:** `insider_threat_engine` · הנדסה חברתית · MITRE T1078.001
 
@@ -8909,9 +9041,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "insider_threat_engine" } |
 ---
 
-<a id="page-489"></a>
+<a id="page-495"></a>
 
-## עמוד 489 — Brand Impersonation Engine
+## עמוד 495 — Brand Impersonation Engine
 
 > **מנוע:** `brand_impersonation` · הנדסה חברתית · MITRE T1583.001
 
@@ -8926,9 +9058,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "brand_impersonation" } |
 ---
 
-<a id="page-490"></a>
+<a id="page-496"></a>
 
-## עמוד 490 — Fake Update Social Engineering
+## עמוד 496 — Fake Update Social Engineering
 
 > **מנוע:** `fake_update_engine` · הנדסה חברתית · MITRE T1189
 
@@ -8943,9 +9075,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "fake_update_engine" } |
 ---
 
-<a id="page-491"></a>
+<a id="page-497"></a>
 
-## עמוד 491 — LinkedIn Social Engineering Engine
+## עמוד 497 — LinkedIn Social Engineering Engine
 
 > **מנוע:** `linkedin_phishing` · הנדסה חברתית · MITRE T1593.001
 
@@ -8960,9 +9092,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "linkedin_phishing" } |
 ---
 
-<a id="page-492"></a>
+<a id="page-498"></a>
 
-## עמוד 492 — Callback Phishing Engine
+## עמוד 498 — Callback Phishing Engine
 
 > **מנוע:** `callback_phishing` · הנדסה חברתית · MITRE T1566.003
 
@@ -8977,9 +9109,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "callback_phishing" } |
 ---
 
-<a id="page-493"></a>
+<a id="page-499"></a>
 
-## עמוד 493 — Physical Social Engineering Engine
+## עמוד 499 — Physical Social Engineering Engine
 
 > **מנוע:** `physical_social_eng` · הנדסה חברתית · MITRE T1534
 
@@ -8994,9 +9126,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "physical_social_eng" } |
 ---
 
-<a id="page-494"></a>
+<a id="page-500"></a>
 
-## עמוד 494 — Typosquatting Phishing Engine
+## עמוד 500 — Typosquatting Phishing Engine
 
 > **מנוע:** `typosquatting_phishing` · הנדסה חברתית · MITRE T1583.001
 
@@ -9011,9 +9143,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "typosquatting_phishing" } |
 ---
 
-<a id="page-495"></a>
+<a id="page-501"></a>
 
-## עמוד 495 — Android Malware Analysis Engine
+## עמוד 501 — Android Malware Analysis Engine
 
 > **מנוע:** `android_malware_engine` · מובייל · MITRE T1407
 
@@ -9028,9 +9160,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "android_malware_engine" } |
 ---
 
-<a id="page-496"></a>
+<a id="page-502"></a>
 
-## עמוד 496 — iOS Exploitation Engine
+## עמוד 502 — iOS Exploitation Engine
 
 > **מנוע:** `ios_exploit_engine` · מובייל · MITRE T1404
 
@@ -9045,9 +9177,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ios_exploit_engine" } |
 ---
 
-<a id="page-497"></a>
+<a id="page-503"></a>
 
-## עמוד 497 — Mobile MITM Attack Engine
+## עמוד 503 — Mobile MITM Attack Engine
 
 > **מנוע:** `mobile_mitm` · מובייל · MITRE T1557
 
@@ -9062,9 +9194,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "mobile_mitm" } |
 ---
 
-<a id="page-498"></a>
+<a id="page-504"></a>
 
-## עמוד 498 — SSL Pinning Bypass Engine
+## עמוד 504 — SSL Pinning Bypass Engine
 
 > **מנוע:** `ssl_pinning_bypass` · מובייל · MITRE T1521.001
 
@@ -9079,9 +9211,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ssl_pinning_bypass" } |
 ---
 
-<a id="page-499"></a>
+<a id="page-505"></a>
 
-## עמוד 499 — Android Intent Hijacking Engine
+## עמוד 505 — Android Intent Hijacking Engine
 
 > **מנוע:** `android_intent_attack` · מובייל · MITRE T1417
 
@@ -9096,9 +9228,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "android_intent_attack" } |
 ---
 
-<a id="page-500"></a>
+<a id="page-506"></a>
 
-## עמוד 500 — iOS URL Scheme Attack Engine
+## עמוד 506 — iOS URL Scheme Attack Engine
 
 > **מנוע:** `ios_url_scheme_attack` · מובייל · MITRE T1417
 
@@ -9113,9 +9245,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ios_url_scheme_attack" } |
 ---
 
-<a id="page-501"></a>
+<a id="page-507"></a>
 
-## עמוד 501 — Mobile Overlay Attack Engine
+## עמוד 507 — Mobile Overlay Attack Engine
 
 > **מנוע:** `mobile_overlay_attack` · מובייל · MITRE T1417
 
@@ -9130,9 +9262,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "mobile_overlay_attack" } |
 ---
 
-<a id="page-502"></a>
+<a id="page-508"></a>
 
-## עמוד 502 — SIM Swap Attack Engine
+## עמוד 508 — SIM Swap Attack Engine
 
 > **מנוע:** `sim_swap_engine` · מובייל · MITRE T1621
 
@@ -9147,9 +9279,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "sim_swap_engine" } |
 ---
 
-<a id="page-503"></a>
+<a id="page-509"></a>
 
-## עמוד 503 — Mobile Banking Trojan Engine
+## עמוד 509 — Mobile Banking Trojan Engine
 
 > **מנוע:** `mobile_banking_trojan` · מובייל · MITRE T1417
 
@@ -9164,9 +9296,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "mobile_banking_trojan" } |
 ---
 
-<a id="page-504"></a>
+<a id="page-510"></a>
 
-## עמוד 504 — App Store Attack Engine
+## עמוד 510 — App Store Attack Engine
 
 > **מנוע:** `app_store_attack` · מובייל · MITRE T1661
 
@@ -9181,9 +9313,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "app_store_attack" } |
 ---
 
-<a id="page-505"></a>
+<a id="page-511"></a>
 
-## עמוד 505 — MDM/EMM Bypass Engine
+## עמוד 511 — MDM/EMM Bypass Engine
 
 > **מנוע:** `mdm_bypass_engine` · מובייל · MITRE T1407
 
@@ -9198,9 +9330,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "mdm_bypass_engine" } |
 ---
 
-<a id="page-506"></a>
+<a id="page-512"></a>
 
-## עמוד 506 — Mobile Bluetooth Attack Engine
+## עמוד 512 — Mobile Bluetooth Attack Engine
 
 > **מנוע:** `bluetooth_mobile_attack` · מובייל · MITRE T1011.001
 
@@ -9215,9 +9347,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "bluetooth_mobile_attack" } |
 ---
 
-<a id="page-507"></a>
+<a id="page-513"></a>
 
-## עמוד 507 — NFC Relay Attack Engine
+## עמוד 513 — NFC Relay Attack Engine
 
 > **מנוע:** `nfc_relay_attack` · מובייל · MITRE T1606
 
@@ -9232,9 +9364,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "nfc_relay_attack" } |
 ---
 
-<a id="page-508"></a>
+<a id="page-514"></a>
 
-## עמוד 508 — Mobile Spyware Engine
+## עמוד 514 — Mobile Spyware Engine
 
 > **מנוע:** `mobile_spyware_engine` · מובייל · MITRE T1429
 
@@ -9249,9 +9381,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "mobile_spyware_engine" } |
 ---
 
-<a id="page-509"></a>
+<a id="page-515"></a>
 
-## עמוד 509 — React Native / Flutter App Attack
+## עמוד 515 — React Native / Flutter App Attack
 
 > **מנוע:** `react_native_attack` · מובייל · MITRE T1417
 
@@ -9266,9 +9398,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "react_native_attack" } |
 ---
 
-<a id="page-510"></a>
+<a id="page-516"></a>
 
-## עמוד 510 — DNS Exfiltration Engine
+## עמוד 516 — DNS Exfiltration Engine
 
 > **מנוע:** `dns_exfil_engine` · דליפת מידע · MITRE T1048.003
 
@@ -9283,9 +9415,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "dns_exfil_engine" } |
 ---
 
-<a id="page-511"></a>
+<a id="page-517"></a>
 
-## עמוד 511 — HTTP Covert Channel Exfiltration
+## עמוד 517 — HTTP Covert Channel Exfiltration
 
 > **מנוע:** `http_covert_exfil` · דליפת מידע · MITRE T1048.003
 
@@ -9300,9 +9432,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "http_covert_exfil" } |
 ---
 
-<a id="page-512"></a>
+<a id="page-518"></a>
 
-## עמוד 512 — Cloud Storage Exfiltration Engine
+## עמוד 518 — Cloud Storage Exfiltration Engine
 
 > **מנוע:** `cloud_exfil_engine` · דליפת מידע · MITRE T1567.002
 
@@ -9317,9 +9449,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cloud_exfil_engine" } |
 ---
 
-<a id="page-513"></a>
+<a id="page-519"></a>
 
-## עמוד 513 — Encrypted Covert Exfiltration
+## עמוד 519 — Encrypted Covert Exfiltration
 
 > **מנוע:** `encrypted_exfil` · דליפת מידע · MITRE T1048.002
 
@@ -9334,9 +9466,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "encrypted_exfil" } |
 ---
 
-<a id="page-514"></a>
+<a id="page-520"></a>
 
-## עמוד 514 — Acoustic Side-Channel Exfiltration
+## עמוד 520 — Acoustic Side-Channel Exfiltration
 
 > **מנוע:** `acoustic_exfil` · דליפת מידע · MITRE T1048
 
@@ -9351,9 +9483,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "acoustic_exfil" } |
 ---
 
-<a id="page-515"></a>
+<a id="page-521"></a>
 
-## עמוד 515 — Electromagnetic Emanation Exfiltration
+## עמוד 521 — Electromagnetic Emanation Exfiltration
 
 > **מנוע:** `em_exfil_engine` · דליפת מידע · MITRE T1048
 
@@ -9368,9 +9500,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "em_exfil_engine" } |
 ---
 
-<a id="page-516"></a>
+<a id="page-522"></a>
 
-## עמוד 516 — Optical Covert Channel Exfiltration
+## עמוד 522 — Optical Covert Channel Exfiltration
 
 > **מנוע:** `optical_exfil` · דליפת מידע · MITRE T1048
 
@@ -9385,9 +9517,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "optical_exfil" } |
 ---
 
-<a id="page-517"></a>
+<a id="page-523"></a>
 
-## עמוד 517 — CPU Cache Side-Channel Exfiltration
+## עמוד 523 — CPU Cache Side-Channel Exfiltration
 
 > **מנוע:** `cache_timing_exfil` · דליפת מידע · MITRE T1048
 
@@ -9402,9 +9534,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cache_timing_exfil" } |
 ---
 
-<a id="page-518"></a>
+<a id="page-524"></a>
 
-## עמוד 518 — Keyboard Acoustic Eavesdropping
+## עמוד 524 — Keyboard Acoustic Eavesdropping
 
 > **מנוע:** `keyboard_acoustic` · דליפת מידע · MITRE T1056.001
 
@@ -9419,9 +9551,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "keyboard_acoustic" } |
 ---
 
-<a id="page-519"></a>
+<a id="page-525"></a>
 
-## עמוד 519 — Screen Capture Exfiltration Engine
+## עמוד 525 — Screen Capture Exfiltration Engine
 
 > **מנוע:** `screen_capture_exfil` · דליפת מידע · MITRE T1113
 
@@ -9436,9 +9568,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "screen_capture_exfil" } |
 ---
 
-<a id="page-520"></a>
+<a id="page-526"></a>
 
-## עמוד 520 — Clipboard Hijacking Engine
+## עמוד 526 — Clipboard Hijacking Engine
 
 > **מנוע:** `clipboard_hijack` · דליפת מידע · MITRE T1115
 
@@ -9453,9 +9585,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "clipboard_hijack" } |
 ---
 
-<a id="page-521"></a>
+<a id="page-527"></a>
 
-## עמוד 521 — Database Exfiltration Engine
+## עמוד 527 — Database Exfiltration Engine
 
 > **מנוע:** `database_exfil` · דליפת מידע · MITRE T1048
 
@@ -9470,9 +9602,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "database_exfil" } |
 ---
 
-<a id="page-522"></a>
+<a id="page-528"></a>
 
-## עמוד 522 — Email-Based Exfiltration Engine
+## עמוד 528 — Email-Based Exfiltration Engine
 
 > **מנוע:** `email_exfil` · דליפת מידע · MITRE T1048.003
 
@@ -9487,9 +9619,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "email_exfil" } |
 ---
 
-<a id="page-523"></a>
+<a id="page-529"></a>
 
-## עמוד 523 — Insider Threat Exfiltration Engine
+## עמוד 529 — Insider Threat Exfiltration Engine
 
 > **מנוע:** `insider_exfil` · דליפת מידע · MITRE T1048
 
@@ -9504,9 +9636,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "insider_exfil" } |
 ---
 
-<a id="page-524"></a>
+<a id="page-530"></a>
 
-## עמוד 524 — Storage Covert Channel Engine
+## עמוד 530 — Storage Covert Channel Engine
 
 > **מנוע:** `storage_covert_channel` · דליפת מידע · MITRE T1048
 
@@ -9521,9 +9653,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "storage_covert_channel" } |
 ---
 
-<a id="page-525"></a>
+<a id="page-531"></a>
 
-## עמוד 525 — Threat Intelligence Fusion Engine
+## עמוד 531 — Threat Intelligence Fusion Engine
 
 > **מנוע:** `threat_intel_fusion` · מודיעין ו-Recon · MITRE T1597
 
@@ -9538,9 +9670,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "threat_intel_fusion" } |
 ---
 
-<a id="page-526"></a>
+<a id="page-532"></a>
 
-## עמוד 526 — Attack Surface Quantification
+## עמוד 532 — Attack Surface Quantification
 
 > **מנוע:** `attack_surface_quantify` · מודיעין ו-Recon · MITRE T1595
 
@@ -9555,9 +9687,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "attack_surface_quantify" } |
 ---
 
-<a id="page-527"></a>
+<a id="page-533"></a>
 
-## עמוד 527 — External Exposure Supreme
+## עמוד 533 — External Exposure Supreme
 
 > **מנוע:** `external_exposure_supreme` · מודיעין ו-Recon · MITRE T1595
 
@@ -9572,9 +9704,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "external_exposure_supreme" } |
 ---
 
-<a id="page-528"></a>
+<a id="page-534"></a>
 
-## עמוד 528 — Fair Exposure Fusion (Board Risk)
+## עמוד 534 — Fair Exposure Fusion (Board Risk)
 
 > **מנוע:** `fair_exposure_fusion` · מודיעין ו-Recon · MITRE T1595
 
@@ -9589,9 +9721,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "fair_exposure_fusion" } |
 ---
 
-<a id="page-529"></a>
+<a id="page-535"></a>
 
-## עמוד 529 — Risk Superposition Collapse
+## עמוד 535 — Risk Superposition Collapse
 
 > **מנוע:** `risk_superposition_collapse` · מודיעין ו-Recon · MITRE T1595
 
@@ -9606,13 +9738,13 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "risk_superposition_collapse" } |
 ---
 
-<a id="page-530"></a>
+<a id="page-536"></a>
 
-## עמוד 530 — CHRONOS Temporal Rollback
+## עמוד 536 — CHRONOS Temporal Rollback
 
 > **מנוע:** `chronos` · defense · MITRE T1055
 
-| **מה** | 5ms process-delta ring buffer on endpoint agent + eBPF syscall ingest; autonomous SIGSTOP on web-server→shell spawn with live rollback evidence |
+| **מה** | 5ms process-delta ring buffer on the endpoint agent (sysinfo polling). Autonomous SIGSTOP on web-server→shell spawn with live rollback evidence. Linux eBPF syscall ingest is a separate engine (ebpf_sensor) when CAP_BPF/bpftrace are present |
 | **למה** | MITRE T1055 · probe Remote (network/API). |
 | **מתי** | Target/domain ב-scope. |
 | **איפה** | /command-center/engines/chronos |
@@ -9623,9 +9755,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "chronos" } |
 ---
 
-<a id="page-531"></a>
+<a id="page-537"></a>
 
-## עמוד 531 — COGNITIVE STARVATION
+## עמוד 537 — COGNITIVE STARVATION
 
 > **מנוע:** `cognitive_starvation` · defense · MITRE T1566
 
@@ -9640,9 +9772,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cognitive_starvation" } |
 ---
 
-<a id="page-532"></a>
+<a id="page-538"></a>
 
-## עמוד 532 — LIQUID-MATRIX Moving Target Defense
+## עמוד 538 — LIQUID-MATRIX Moving Target Defense
 
 > **מנוע:** `liquid_matrix` · defense · MITRE T1599
 
@@ -9657,9 +9789,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "liquid_matrix" } |
 ---
 
-<a id="page-533"></a>
+<a id="page-539"></a>
 
-## עמוד 533 — Sovereign Active Defense Fusion
+## עמוד 539 — Sovereign Active Defense Fusion
 
 > **מנוע:** `sovereign_active_defense_fusion` · defense · MITRE T1599
 
@@ -9674,9 +9806,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "sovereign_active_defense_fusion" } |
 ---
 
-<a id="page-534"></a>
+<a id="page-540"></a>
 
-## עמוד 534 — Adversarial Threat Emulation
+## עמוד 540 — Adversarial Threat Emulation
 
 > **מנוע:** `adversarial_threat_emulation` · מודיעין ו-Recon · MITRE T1591
 
@@ -9691,9 +9823,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "adversarial_threat_emulation" } |
 ---
 
-<a id="page-535"></a>
+<a id="page-541"></a>
 
-## עמוד 535 — Dark Web Brand Monitor
+## עמוד 541 — Dark Web Brand Monitor
 
 > **מנוע:** `dark_web_monitor` · מודיעין ו-Recon · MITRE T1597
 
@@ -9708,9 +9840,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "dark_web_monitor" } |
 ---
 
-<a id="page-536"></a>
+<a id="page-542"></a>
 
-## עמוד 536 — Passive DNS Forensics Engine
+## עמוד 542 — Passive DNS Forensics Engine
 
 > **מנוע:** `passive_dns_forensics` · מודיעין ו-Recon · MITRE T1590.002
 
@@ -9725,9 +9857,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "passive_dns_forensics" } |
 ---
 
-<a id="page-537"></a>
+<a id="page-543"></a>
 
-## עמוד 537 — Network Baseline Anomaly Engine
+## עמוד 543 — Network Baseline Anomaly Engine
 
 > **מנוע:** `network_baseline_anomaly` · רשת ופרוטוקולים · MITRE T1040
 
@@ -9742,9 +9874,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "network_baseline_anomaly" } |
 ---
 
-<a id="page-538"></a>
+<a id="page-544"></a>
 
-## עמוד 538 — Packet Injection Engine
+## עמוד 544 — Packet Injection Engine
 
 > **מנוע:** `packet_injection_engine` · רשת ופרוטוקולים · MITRE T1557
 
@@ -9759,9 +9891,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "packet_injection_engine" } |
 ---
 
-<a id="page-539"></a>
+<a id="page-545"></a>
 
-## עמוד 539 — Advanced Network TAP/SPAN Engine
+## עמוד 545 — Advanced Network TAP/SPAN Engine
 
 > **מנוע:** `network_tap_advanced` · רשת ופרוטוקולים · MITRE T1557
 
@@ -9776,9 +9908,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "network_tap_advanced" } |
 ---
 
-<a id="page-540"></a>
+<a id="page-546"></a>
 
-## עמוד 540 — Multicast Protocol Attack Engine
+## עמוד 546 — Multicast Protocol Attack Engine
 
 > **מנוע:** `multicast_attack` · רשת ופרוטוקולים · MITRE T1557
 
@@ -9793,9 +9925,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "multicast_attack" } |
 ---
 
-<a id="page-541"></a>
+<a id="page-547"></a>
 
-## עמוד 541 — NAT Traversal Attack Engine
+## עמוד 547 — NAT Traversal Attack Engine
 
 > **מנוע:** `nat_traversal_attack` · רשת ופרוטוקולים · MITRE T1090
 
@@ -9810,9 +9942,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "nat_traversal_attack" } |
 ---
 
-<a id="page-542"></a>
+<a id="page-548"></a>
 
-## עמוד 542 — GraphQL Subscription DoS
+## עמוד 548 — GraphQL Subscription DoS
 
 > **מנוע:** `graphql_subscription_attack` · Web / API · MITRE T1499
 
@@ -9827,9 +9959,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "graphql_subscription_attack" } |
 ---
 
-<a id="page-543"></a>
+<a id="page-549"></a>
 
-## עמוד 543 — WebRTC Attack Engine
+## עמוד 549 — WebRTC Attack Engine
 
 > **מנוע:** `webrtc_attack` · Web / API · MITRE T1557
 
@@ -9844,9 +9976,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "webrtc_attack" } |
 ---
 
-<a id="page-544"></a>
+<a id="page-550"></a>
 
-## עמוד 544 — Web3 / DApp Attack Engine
+## עמוד 550 — Web3 / DApp Attack Engine
 
 > **מנוע:** `web3_dapp_attack` · Web / API · MITRE T1190
 
@@ -9861,9 +9993,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "web3_dapp_attack" } |
 ---
 
-<a id="page-545"></a>
+<a id="page-551"></a>
 
-## עמוד 545 — API Gateway Security Bypass
+## עמוד 551 — API Gateway Security Bypass
 
 > **מנוע:** `api_gateway_bypass` · Web / API · MITRE T1190
 
@@ -9878,9 +10010,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "api_gateway_bypass" } |
 ---
 
-<a id="page-546"></a>
+<a id="page-552"></a>
 
-## עמוד 546 — TPM Firmware Attack Engine
+## עמוד 552 — TPM Firmware Attack Engine
 
 > **מנוע:** `tpm_firmware_attack` · קריפטו וזהות · MITRE T1600
 
@@ -9895,9 +10027,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "tpm_firmware_attack" } |
 ---
 
-<a id="page-547"></a>
+<a id="page-553"></a>
 
-## עמוד 547 — Cold Boot / DRAM Remanence Attack
+## עמוד 553 — Cold Boot / DRAM Remanence Attack
 
 > **מנוע:** `cold_boot_attack` · קריפטו וזהות · MITRE T1552.004
 
@@ -9912,9 +10044,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "cold_boot_attack" } |
 ---
 
-<a id="page-548"></a>
+<a id="page-554"></a>
 
-## עמוד 548 — Evil Maid Hardware Implant Engine
+## עמוד 554 — Evil Maid Hardware Implant Engine
 
 > **מנוע:** `evil_maid_engine` · Stealth / Evasion · MITRE T1200
 
@@ -9929,9 +10061,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "evil_maid_engine" } |
 ---
 
-<a id="page-549"></a>
+<a id="page-555"></a>
 
-## עמוד 549 — Thunderbolt / PCIe DMA Attack
+## עמוד 555 — Thunderbolt / PCIe DMA Attack
 
 > **מנוע:** `thunderbolt_dma_attack` · Stealth / Evasion · MITRE T1200
 
@@ -9946,9 +10078,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "thunderbolt_dma_attack" } |
 ---
 
-<a id="page-550"></a>
+<a id="page-556"></a>
 
-## עמוד 550 — Voltage / Clock Glitch Fault Injection
+## עמוד 556 — Voltage / Clock Glitch Fault Injection
 
 > **מנוע:** `voltage_glitch_attack` · קריפטו וזהות · MITRE T1600
 
@@ -9963,9 +10095,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "voltage_glitch_attack" } |
 ---
 
-<a id="page-551"></a>
+<a id="page-557"></a>
 
-## עמוד 551 — BadUSB / HID Injection Engine
+## עמוד 557 — BadUSB / HID Injection Engine
 
 > **מנוע:** `badusb_hid_attack` · Stealth / Evasion · MITRE T1091
 
@@ -9980,9 +10112,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "badusb_hid_attack" } |
 ---
 
-<a id="page-552"></a>
+<a id="page-558"></a>
 
-## עמוד 552 — Crypto Hardware Wallet Security Engine
+## עמוד 558 — Crypto Hardware Wallet Security Engine
 
 > **מנוע:** `hardware_wallet_attack` · קריפטו וזהות · MITRE T1552.004
 
@@ -9997,9 +10129,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "hardware_wallet_attack" } |
 ---
 
-<a id="page-553"></a>
+<a id="page-559"></a>
 
-## עמוד 553 — JTAG/SWD Debug Interface Exploiter
+## עמוד 559 — JTAG/SWD Debug Interface Exploiter
 
 > **מנוע:** `jtag_swd_exploitation` · OT / ICS / IoT · MITRE T1542
 
@@ -10014,9 +10146,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "jtag_swd_exploitation" } |
 ---
 
-<a id="page-554"></a>
+<a id="page-560"></a>
 
-## עמוד 554 — Medical IoT Device Exploit Engine
+## עמוד 560 — Medical IoT Device Exploit Engine
 
 > **מנוע:** `medical_device_exploit` · OT / ICS / IoT · MITRE T0826
 
@@ -10031,9 +10163,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "medical_device_exploit" } |
 ---
 
-<a id="page-555"></a>
+<a id="page-561"></a>
 
-## עמוד 555 — Implantable Medical Device Attack
+## עמוד 561 — Implantable Medical Device Attack
 
 > **מנוע:** `implantable_device_hack` · OT / ICS / IoT · MITRE T0826
 
@@ -10048,9 +10180,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "implantable_device_hack" } |
 ---
 
-<a id="page-556"></a>
+<a id="page-562"></a>
 
-## עמוד 556 — HL7 / DICOM Healthcare Protocol Attack
+## עמוד 562 — HL7 / DICOM Healthcare Protocol Attack
 
 > **מנוע:** `hospital_hl7_attack` · OT / ICS / IoT · MITRE T0826
 
@@ -10065,9 +10197,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "hospital_hl7_attack" } |
 ---
 
-<a id="page-557"></a>
+<a id="page-563"></a>
 
-## עמוד 557 — AI Agentic Framework Exploitation
+## עמוד 563 — AI Agentic Framework Exploitation
 
 > **מנוע:** `agentic_framework_attack` · AI / LLM · MITRE T1059.006
 
@@ -10082,9 +10214,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "agentic_framework_attack" } |
 ---
 
-<a id="page-558"></a>
+<a id="page-564"></a>
 
-## עמוד 558 — LLM Function Calling Hijack Engine
+## עמוד 564 — LLM Function Calling Hijack Engine
 
 > **מנוע:** `llm_function_call_hijack` · AI / LLM · MITRE T1059
 
@@ -10099,9 +10231,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "llm_function_call_hijack" } |
 ---
 
-<a id="page-559"></a>
+<a id="page-565"></a>
 
-## עמוד 559 — Multi-Agent AI Subversion Engine
+## עמוד 565 — Multi-Agent AI Subversion Engine
 
 > **מנוע:** `multi_agent_subversion` · AI / LLM · MITRE T1059
 
@@ -10116,9 +10248,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "multi_agent_subversion" } |
 ---
 
-<a id="page-560"></a>
+<a id="page-566"></a>
 
-## עמוד 560 — LLM Safety Guardrail Bypass Engine
+## עמוד 566 — LLM Safety Guardrail Bypass Engine
 
 > **מנוע:** `llm_guardrail_bypass` · AI / LLM · MITRE T1059
 
@@ -10133,9 +10265,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "llm_guardrail_bypass" } |
 ---
 
-<a id="page-561"></a>
+<a id="page-567"></a>
 
-## עמוד 561 — Model Context Protocol (MCP) Exploit
+## עמוד 567 — Model Context Protocol (MCP) Exploit
 
 > **מנוע:** `mcp_server_exploit` · AI / LLM · MITRE T1059.004
 
@@ -10150,9 +10282,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "mcp_server_exploit" } |
 ---
 
-<a id="page-562"></a>
+<a id="page-568"></a>
 
-## עמוד 562 — AI Synthetic Identity Fraud Engine
+## עמוד 568 — AI Synthetic Identity Fraud Engine
 
 > **מנוע:** `synthetic_identity_fraud` · AI / LLM · MITRE T1534
 
@@ -10167,9 +10299,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "synthetic_identity_fraud" } |
 ---
 
-<a id="page-563"></a>
+<a id="page-569"></a>
 
-## עמוד 563 — AI Model Provenance & Lineage Attack
+## עמוד 569 — AI Model Provenance & Lineage Attack
 
 > **מנוע:** `ai_model_provenance_attack` · Supply Chain · MITRE T1195.001
 
@@ -10184,9 +10316,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ai_model_provenance_attack" } |
 ---
 
-<a id="page-564"></a>
+<a id="page-570"></a>
 
-## עמוד 564 — SDN Controller Exploitation Engine
+## עמוד 570 — SDN Controller Exploitation Engine
 
 > **מנוע:** `sdn_controller_exploit` · רשת ופרוטוקולים · MITRE T1498
 
@@ -10201,9 +10333,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "sdn_controller_exploit" } |
 ---
 
-<a id="page-565"></a>
+<a id="page-571"></a>
 
-## עמוד 565 — NFV MANO / VNF Exploitation
+## עמוד 571 — NFV MANO / VNF Exploitation
 
 > **מנוע:** `nfv_mano_attack` · רשת ופרוטוקולים · MITRE T1610
 
@@ -10218,9 +10350,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "nfv_mano_attack" } |
 ---
 
-<a id="page-566"></a>
+<a id="page-572"></a>
 
-## עמוד 566 — 5G Network Slice Isolation Bypass
+## עמוד 572 — 5G Network Slice Isolation Bypass
 
 > **מנוע:** `network_slice_isolation_bypass` · רשת ופרוטוקולים · MITRE T1190
 
@@ -10235,9 +10367,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "network_slice_isolation_bypass" } |
 ---
 
-<a id="page-567"></a>
+<a id="page-573"></a>
 
-## עמוד 567 — Harvest-Now Decrypt-Later (HNDL) Engine
+## עמוד 573 — Harvest-Now Decrypt-Later (HNDL) Engine
 
 > **מנוע:** `harvest_now_decrypt_later` · קריפטו וזהות · MITRE T1040
 
@@ -10252,9 +10384,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "harvest_now_decrypt_later" } |
 ---
 
-<a id="page-568"></a>
+<a id="page-574"></a>
 
-## עמוד 568 — Post-Quantum Cryptography Implementation Attack
+## עמוד 574 — Post-Quantum Cryptography Implementation Attack
 
 > **מנוע:** `pqc_implementation_attack` · קריפטו וזהות · MITRE T1600
 
@@ -10269,9 +10401,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "pqc_implementation_attack" } |
 ---
 
-<a id="page-569"></a>
+<a id="page-575"></a>
 
-## עמוד 569 — Lattice Cryptography Attack Engine
+## עמוד 575 — Lattice Cryptography Attack Engine
 
 > **מנוע:** `lattice_crypto_attack` · קריפטו וזהות · MITRE T1600
 
@@ -10286,9 +10418,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "lattice_crypto_attack" } |
 ---
 
-<a id="page-570"></a>
+<a id="page-576"></a>
 
-## עמוד 570 — Zero Trust Microsegmentation Bypass
+## עמוד 576 — Zero Trust Microsegmentation Bypass
 
 > **מנוע:** `microsegmentation_bypass` · Stealth / Evasion · MITRE T1599
 
@@ -10303,9 +10435,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "microsegmentation_bypass" } |
 ---
 
-<a id="page-571"></a>
+<a id="page-577"></a>
 
-## עמוד 571 — Continuous Authentication Evasion Engine
+## עמוד 577 — Continuous Authentication Evasion Engine
 
 > **מנוע:** `continuous_auth_evasion` · Stealth / Evasion · MITRE T1078
 
@@ -10320,13 +10452,13 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "continuous_auth_evasion" } |
 ---
 
-<a id="page-572"></a>
+<a id="page-578"></a>
 
-## עמוד 572 — SASE / SSE Security Bypass Engine
+## עמוד 578 — SASE / SSE Security Bypass Engine
 
 > **מנוע:** `sase_security_bypass` · רשת ופרוטוקולים · MITRE T1685
 
-| **מה** | SASE (Secure Access Service Edge) and SSE bypass: Zscaler/Netskope/Palo Alto Prisma tunnel bypass via split DNS, CASB policy evasion via cloud storage direct IP access, SWG (Secure Web Gateway) category bypass, DLP bypass via file encoding/chunking, ZTNA connection broker impersonation, SASE agent MITM via trusted root injection |
+| **מה** | Live probe of ZTNA/SASE/SWG control planes (product headers, IdP portals, device-posture endpoints). Findings only from HTTP/TLS/DNS I/O — not an ASM alias |
 | **למה** | MITRE T1685 · probe Remote (network/API). |
 | **מתי** | Target/domain ב-scope. |
 | **איפה** | /command-center/engines/sase_security_bypass |
@@ -10337,9 +10469,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "sase_security_bypass" } |
 ---
 
-<a id="page-573"></a>
+<a id="page-579"></a>
 
-## עמוד 573 — WebAuthn / FIDO2 Bypass Engine
+## עמוד 579 — WebAuthn / FIDO2 Bypass Engine
 
 > **מנוע:** `webauthn_fido2_bypass` · קריפטו וזהות · MITRE T1621
 
@@ -10354,9 +10486,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "webauthn_fido2_bypass" } |
 ---
 
-<a id="page-574"></a>
+<a id="page-580"></a>
 
-## עמוד 574 — AI Vulnerability → Cloud Escalation Chain
+## עמוד 580 — AI Vulnerability → Cloud Escalation Chain
 
 > **מנוע:** `ai_cloud_escalation_chain` · APT / Top-Tier · MITRE T1210
 
@@ -10371,9 +10503,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ai_cloud_escalation_chain" } |
 ---
 
-<a id="page-575"></a>
+<a id="page-581"></a>
 
-## עמוד 575 — Social Engineering → Supply Chain Compromise Chain
+## עמוד 581 — Social Engineering → Supply Chain Compromise Chain
 
 > **מנוע:** `social_supply_chain_attack` · APT / Top-Tier · MITRE T1195
 
@@ -10388,9 +10520,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "social_supply_chain_attack" } |
 ---
 
-<a id="page-576"></a>
+<a id="page-582"></a>
 
-## עמוד 576 — OT Network → IT Network Lateral Pivot Chain
+## עמוד 582 — OT Network → IT Network Lateral Pivot Chain
 
 > **מנוע:** `ot_it_lateral_chain` · APT / Top-Tier · MITRE T1021
 
@@ -10405,9 +10537,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ot_it_lateral_chain" } |
 ---
 
-<a id="page-577"></a>
+<a id="page-583"></a>
 
-## עמוד 577 — Mobile App → Cloud Backend Escalation Chain
+## עמוד 583 — Mobile App → Cloud Backend Escalation Chain
 
 > **מנוע:** `mobile_backend_chain` · APT / Top-Tier · MITRE T1190
 
@@ -10422,9 +10554,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "mobile_backend_chain" } |
 ---
 
-<a id="page-578"></a>
+<a id="page-584"></a>
 
-## עמוד 578 — Data De-anonymization Engine
+## עמוד 584 — Data De-anonymization Engine
 
 > **מנוע:** `data_deanonymization` · מודיעין ו-Recon · MITRE T1592
 
@@ -10439,9 +10571,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "data_deanonymization" } |
 ---
 
-<a id="page-579"></a>
+<a id="page-585"></a>
 
-## עמוד 579 — Behavioral Biometric Bypass Engine
+## עמוד 585 — Behavioral Biometric Bypass Engine
 
 > **מנוע:** `behavioral_biometric_attack` · Stealth / Evasion · MITRE T1556
 
@@ -10456,9 +10588,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "behavioral_biometric_attack" } |
 ---
 
-<a id="page-580"></a>
+<a id="page-586"></a>
 
-## עמוד 580 — Location Pattern De-anonymization Engine
+## עמוד 586 — Location Pattern De-anonymization Engine
 
 > **מנוע:** `location_pattern_analysis` · מודיעין ו-Recon · MITRE T1591
 
@@ -10473,9 +10605,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "location_pattern_analysis" } |
 ---
 
-<a id="page-581"></a>
+<a id="page-587"></a>
 
-## עמוד 581 — Differential Privacy Implementation Attack
+## עמוד 587 — Differential Privacy Implementation Attack
 
 > **מנוע:** `differential_privacy_exploit` · מודיעין ו-Recon · MITRE T1600
 
@@ -10490,9 +10622,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "differential_privacy_exploit" } |
 ---
 
-<a id="page-582"></a>
+<a id="page-588"></a>
 
-## עמוד 582 — Automated C2 Infrastructure Rotation Engine
+## עמוד 588 — Automated C2 Infrastructure Rotation Engine
 
 > **מנוע:** `c2_rotation_engine` · APT / Top-Tier · MITRE T1583.001
 
@@ -10507,9 +10639,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "c2_rotation_engine" } |
 ---
 
-<a id="page-583"></a>
+<a id="page-589"></a>
 
-## עמוד 583 — Security Detection Gap Exploitation Engine
+## עמוד 589 — Security Detection Gap Exploitation Engine
 
 > **מנוע:** `detection_gap_exploiter` · Stealth / Evasion · MITRE T1685
 
@@ -10524,9 +10656,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "detection_gap_exploiter" } |
 ---
 
-<a id="page-584"></a>
+<a id="page-590"></a>
 
-## עמוד 584 — Attacker OPSEC & Counter-Intelligence Engine
+## עמוד 590 — Attacker OPSEC & Counter-Intelligence Engine
 
 > **מנוע:** `opsec_intelligence_engine` · Stealth / Evasion · MITRE T1592
 
@@ -10541,9 +10673,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "opsec_intelligence_engine" } |
 ---
 
-<a id="page-585"></a>
+<a id="page-591"></a>
 
-## עמוד 585 — Novel TTP Attack Chain Synthesizer
+## עמוד 591 — Novel TTP Attack Chain Synthesizer
 
 > **מנוע:** `tactic_chain_synthesizer` · APT / Top-Tier · MITRE T1650
 
@@ -10558,9 +10690,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "tactic_chain_synthesizer" } |
 ---
 
-<a id="page-586"></a>
+<a id="page-592"></a>
 
-## עמוד 586 — AR / VR Security Attack Engine
+## עמוד 592 — AR / VR Security Attack Engine
 
 > **מנוע:** `ar_vr_attack_engine` · Web / API · MITRE T1185
 
@@ -10575,9 +10707,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ar_vr_attack_engine" } |
 ---
 
-<a id="page-587"></a>
+<a id="page-593"></a>
 
-## עמוד 587 — Edge Computing Node Exploitation
+## עמוד 593 — Edge Computing Node Exploitation
 
 > **מנוע:** `edge_computing_exploit` · ענן ותשתית · MITRE T1610
 
@@ -10592,9 +10724,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "edge_computing_exploit" } |
 ---
 
-<a id="page-588"></a>
+<a id="page-594"></a>
 
-## עמוד 588 — Blockchain Bridge / Cross-Chain Attack
+## עמוד 594 — Blockchain Bridge / Cross-Chain Attack
 
 > **מנוע:** `blockchain_bridge_exploit` · Web / API · MITRE T1496
 
@@ -10609,9 +10741,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "blockchain_bridge_exploit" } |
 ---
 
-<a id="page-589"></a>
+<a id="page-595"></a>
 
-## עמוד 589 — Unified API Attack Orchestration Engine
+## עמוד 595 — Unified API Attack Orchestration Engine
 
 > **מנוע:** `api_all_vectors_engine` · Web / API · MITRE T1190
 
@@ -10626,9 +10758,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "api_all_vectors_engine" } |
 ---
 
-<a id="page-590"></a>
+<a id="page-596"></a>
 
-## עמוד 590 — Automated Threat Modeling Engine
+## עמוד 596 — Automated Threat Modeling Engine
 
 > **מנוע:** `threat_model_automation` · מודיעין ו-Recon · MITRE T1595
 
@@ -10643,9 +10775,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "threat_model_automation" } |
 ---
 
-<a id="page-591"></a>
+<a id="page-597"></a>
 
-## עמוד 591 — Dynamic Attack Graph Traversal Engine
+## עמוד 597 — Dynamic Attack Graph Traversal Engine
 
 > **מנוע:** `attack_graph_traversal` · מודיעין ו-Recon · MITRE T1595
 
@@ -10660,9 +10792,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "attack_graph_traversal" } |
 ---
 
-<a id="page-592"></a>
+<a id="page-598"></a>
 
-## עמוד 592 — PROMETHEUS HYPERION NEXUS™ — Cross-Domain AI Adversarial Swarm
+## עמוד 598 — PROMETHEUS HYPERION NEXUS™ — Cross-Domain AI Adversarial Swarm
 
 > **מנוע:** `prometheus_hyperion_nexus` · APT / Top-Tier · MITRE T1650
 
@@ -10677,9 +10809,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "prometheus_hyperion_nexus" } |
 ---
 
-<a id="page-593"></a>
+<a id="page-599"></a>
 
-## עמוד 593 — HTTP Feedback Fuzz
+## עמוד 599 — HTTP Feedback Fuzz
 
 > **מנוע:** `http_feedback_fuzz` · Web / API · MITRE T1190
 
@@ -10694,9 +10826,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "http_feedback_fuzz" } |
 ---
 
-<a id="page-594"></a>
+<a id="page-600"></a>
 
-## עמוד 594 — Microsecond Timing
+## עמוד 600 — Microsecond Timing
 
 > **מנוע:** `microsecond_timing` · Web / API · MITRE T1190
 
@@ -10711,9 +10843,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "microsecond_timing" } |
 ---
 
-<a id="page-595"></a>
+<a id="page-601"></a>
 
-## עמוד 595 — CAN Bus Surface
+## עמוד 601 — CAN Bus Surface
 
 > **מנוע:** `can_bus_surface` · OT / ICS / IoT · MITRE T1595
 
@@ -10728,9 +10860,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "can_bus_surface" } |
 ---
 
-<a id="page-596"></a>
+<a id="page-602"></a>
 
-## עמוד 596 — Ollama Fuzz
+## עמוד 602 — Ollama Fuzz
 
 > **מנוע:** `ollama_fuzz` · AI / LLM · MITRE T1190
 
@@ -10745,9 +10877,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "ollama_fuzz" } |
 ---
 
-<a id="page-597"></a>
+<a id="page-603"></a>
 
-## עמוד 597 — LoRa Attack
+## עמוד 603 — LoRa Attack
 
 > **מנוע:** `lora_attack` · OT / ICS / IoT · MITRE T1595
 
@@ -10762,9 +10894,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "lora_attack" } |
 ---
 
-<a id="page-598"></a>
+<a id="page-604"></a>
 
-## עמוד 598 — SAP ERP Attack
+## עמוד 604 — SAP ERP Attack
 
 > **מנוע:** `sap_erp_attack` · APT / Top-Tier · MITRE T1190
 
@@ -10779,9 +10911,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "sap_erp_attack" } |
 ---
 
-<a id="page-599"></a>
+<a id="page-605"></a>
 
-## עמוד 599 — Mainframe z/OS Attack
+## עמוד 605 — Mainframe z/OS Attack
 
 > **מנוע:** `mainframe_zos_attack` · APT / Top-Tier · MITRE T1190
 
@@ -10796,9 +10928,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "mainframe_zos_attack" } |
 ---
 
-<a id="page-600"></a>
+<a id="page-606"></a>
 
-## עמוד 600 — Malvertising SEO Poison
+## עמוד 606 — Malvertising SEO Poison
 
 > **מנוע:** `malvertising_seo_poison` · הנדסה חברתית · MITRE T1566
 
@@ -10813,9 +10945,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "malvertising_seo_poison" } |
 ---
 
-<a id="page-601"></a>
+<a id="page-607"></a>
 
-## עמוד 601 — Infostealer Emulation
+## עמוד 607 — Infostealer Emulation
 
 > **מנוע:** `infostealer_emulation` · Malware ו-Ransomware · MITRE T1005
 
@@ -10830,9 +10962,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "infostealer_emulation" } |
 ---
 
-<a id="page-602"></a>
+<a id="page-608"></a>
 
-## עמוד 602 — Printer MFP Attack
+## עמוד 608 — Printer MFP Attack
 
 > **מנוע:** `printer_mfp_attack` · רשת ופרוטוקולים · MITRE T1595
 
@@ -10847,9 +10979,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "printer_mfp_attack" } |
 ---
 
-<a id="page-603"></a>
+<a id="page-609"></a>
 
-## עמוד 603 — RADIUS NAC Bypass
+## עמוד 609 — RADIUS NAC Bypass
 
 > **מנוע:** `radius_nac_bypass` · רשת ופרוטוקולים · MITRE T1557
 
@@ -10864,9 +10996,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "radius_nac_bypass" } |
 ---
 
-<a id="page-604"></a>
+<a id="page-610"></a>
 
-## עמוד 604 — Identity Attack Chain
+## עמוד 610 — Identity Attack Chain
 
 > **מנוע:** `identity_attack_chain` · קריפטו וזהות · MITRE T1078
 
@@ -10881,9 +11013,9 @@ GET /dashboard |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "identity_attack_chain" } |
 ---
 
-<a id="page-605"></a>
+<a id="page-611"></a>
 
-## עמוד 605 — Pipeline-to-Runtime Risk
+## עמוד 611 — Pipeline-to-Runtime Risk
 
 > **מנוע:** `pipeline_to_runtime_risk` · Supply Chain · MITRE T1195
 
@@ -10896,6 +11028,414 @@ GET /dashboard |
 | **למי** | AppSec / SOC |
 | **מה יוצא** | findings + evidence |
 | **API / חיבורים** | POST /api/command-center/scan { engine: "pipeline_to_runtime_risk" } |
+---
+
+<a id="page-612"></a>
+
+## עמוד 612 — Control Plane of Controls
+
+> **מנוע:** `control_plane_of_controls` · defense · MITRE T1518.001
+
+| **מה** | Fusion: prove installed EDR/WAF/email-DNS/cloud controls and name the gaps from live child probes |
+| **למה** | MITRE T1518.001 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/control_plane_of_controls |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "control_plane_of_controls" } |
+---
+
+<a id="page-613"></a>
+
+## עמוד 613 — OT × Cloud × Identity Kill Path
+
+> **מנוע:** `ot_cloud_identity_killpath` · OT / ICS / IoT · MITRE T0883
+
+| **מה** | Fusion: Modbus/SCADA + OT↔IT lateral + Azure/AWS + identity attack chain in one scan |
+| **למה** | MITRE T0883 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/ot_cloud_identity_killpath |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "ot_cloud_identity_killpath" } |
+---
+
+<a id="page-614"></a>
+
+## עמוד 614 — BEC → Account Takeover Chain
+
+> **מנוע:** `bec_ato_chain` · מודיעין ו-Recon · MITRE T1566.002
+
+| **מה** | Fusion: email DNS posture + BEC + OAuth/OIDC + ITDR auth telemetry |
+| **למה** | MITRE T1566.002 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/bec_ato_chain |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "bec_ato_chain" } |
+---
+
+<a id="page-615"></a>
+
+## עמוד 615 — AI CASB / SaaS Agents
+
+> **מנוע:** `ai_casb_saas` · AI / LLM · MITRE T1528
+
+| **מה** | Fusion: LLM agent hijack + OAuth grants + discovered SaaS — CASB for AI agents |
+| **למה** | MITRE T1528 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/ai_casb_saas |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "ai_casb_saas" } |
+---
+
+<a id="page-616"></a>
+
+## עמוד 616 — DNS Security Posture Fusion
+
+> **מנוע:** `dns_security_posture_fusion` · רשת ופרוטוקולים · MITRE T1071.004
+
+| **מה** | Fusion: DNS exfil + email DNS posture + ASM — product bridge to DNS Security |
+| **למה** | MITRE T1071.004 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/dns_security_posture_fusion |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "dns_security_posture_fusion" } |
+---
+
+<a id="page-617"></a>
+
+## עמוד 617 — Toxic Combo Runtime Proof
+
+> **מנוע:** `toxic_combo_runtime_proof` · ענן ותשתית · MITRE T1078.004
+
+| **מה** | Fusion: CNAPP + IMDS + S3 + IAM + K8s with a safe live exposure attempt |
+| **למה** | MITRE T1078.004 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/toxic_combo_runtime_proof |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "toxic_combo_runtime_proof" } |
+---
+
+<a id="page-618"></a>
+
+## עמוד 618 — ITDR (Identity Threat Detection)
+
+> **מנוע:** `itdr` · קריפטו וזהות · MITRE T1078
+
+| **מה** | Identity threat detection from Entra/Okta/Google connectors and ingested auth events |
+| **למה** | MITRE T1078 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/itdr |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "itdr" } |
+---
+
+<a id="page-619"></a>
+
+## עמוד 619 — CASB SaaS Posture
+
+> **מנוע:** `casb_saas_posture` · ענן ותשתית · MITRE T1530
+
+| **מה** | SaaS discovery and OAuth grant posture via live HTTP/API (M365/Google when credentials exist) |
+| **למה** | MITRE T1530 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/casb_saas_posture |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "casb_saas_posture" } |
+---
+
+<a id="page-620"></a>
+
+## עמוד 620 — DLP Content Scan
+
+> **מנוע:** `dlp_content_scan` · מודיעין ו-Recon · MITRE T1530
+
+| **מה** | Content DLP assessment over reachable files/mail APIs — no fabricated leaks |
+| **למה** | MITRE T1530 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/dlp_content_scan |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "dlp_content_scan" } |
+---
+
+<a id="page-621"></a>
+
+## עמוד 621 — CNAPP Continuous Graph
+
+> **מנוע:** `cnapp_continuous` · ענן ותשתית · MITRE T1580
+
+| **מה** | Continuous multi-cloud inventory + drift + toxic combos (AWS/Azure/GCP APIs when configured) |
+| **למה** | MITRE T1580 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/cnapp_continuous |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "cnapp_continuous" } |
+---
+
+<a id="page-622"></a>
+
+## עמוד 622 — Host Privilege Escalation
+
+> **מנוע:** `host_privilege_escalation` · APT / Top-Tier · MITRE T1068
+
+| **מה** | Agent-resident PrivEsc inventory: extra UID 0, sudoers.d, scheduled tasks — not an edr_evasion alias |
+| **למה** | MITRE T1068 · probe Agent (endpoint). |
+| **מתי** | Agent מותקן ו-online. |
+| **איפה** | /command-center/engines/host_privilege_escalation |
+| **איך** | Agents → install → Engine Detail → Run. |
+| **כמה** | 1 quota · Agent · יעד לא חובה |
+| **למי** | Endpoint / Red Team |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "host_privilege_escalation" } |
+---
+
+<a id="page-623"></a>
+
+## עמוד 623 — Host Isolation / Quarantine
+
+> **מנוע:** `host_isolation` · defense · MITRE T1489
+
+| **מה** | Agent applies nftables or Windows firewall isolation/quarantine on command and reports apply/fail honestly |
+| **למה** | MITRE T1489 · probe Agent (endpoint). |
+| **מתי** | Agent מותקן ו-online. |
+| **איפה** | /command-center/engines/host_isolation |
+| **איך** | Agents → install → Engine Detail → Run. |
+| **כמה** | 1 quota · Agent · יעד לא חובה |
+| **למי** | Endpoint / Red Team |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "host_isolation" } |
+---
+
+<a id="page-624"></a>
+
+## עמוד 624 — eBPF Syscall Sensor
+
+> **מנוע:** `ebpf_sensor` · defense · MITRE T1059
+
+| **מה** | Linux agent eBPF/bpftrace execve ingest when BTF and CAP_BPF exist — never fake syscall telemetry |
+| **למה** | MITRE T1059 · probe Agent (endpoint). |
+| **מתי** | Agent מותקן ו-online. |
+| **איפה** | /command-center/engines/ebpf_sensor |
+| **איך** | Agents → install → Engine Detail → Run. |
+| **כמה** | 1 quota · Agent · יעד לא חובה |
+| **למי** | Endpoint / Red Team |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "ebpf_sensor" } |
+---
+
+<a id="page-625"></a>
+
+## עמוד 625 — IOC / YARA Hunt
+
+> **מנוע:** `ioc_yara_hunt` · APT / Top-Tier · MITRE T1083
+
+| **מה** | Agent filesystem hunt for SHA-256 and strings supplied by the platform — idle if no IOCs |
+| **למה** | MITRE T1083 · probe Agent (endpoint). |
+| **מתי** | Agent מותקן ו-online. |
+| **איפה** | /command-center/engines/ioc_yara_hunt |
+| **איך** | Agents → install → Engine Detail → Run. |
+| **כמה** | 1 quota · Agent · יעד לא חובה |
+| **למי** | Endpoint / Red Team |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "ioc_yara_hunt" } |
+---
+
+<a id="page-626"></a>
+
+## עמוד 626 — NGFW Policy Posture
+
+> **מנוע:** `ngfw_posture` · רשת ופרוטוקולים · MITRE T1595
+
+| **מה** | Read PAN-OS/Forti/NSG control planes via API/HTTP and prove reachable management surfaces |
+| **למה** | MITRE T1595 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/ngfw_posture |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "ngfw_posture" } |
+---
+
+<a id="page-627"></a>
+
+## עמוד 627 — Malware Detonation Farm
+
+> **מנוע:** `malware_detonation` · APT / Top-Tier · MITRE T1204.002
+
+| **מה** | Submit executables/URLs to WEISSMAN_DETONATION_URL — distinct from heal verification_sandbox |
+| **למה** | MITRE T1204.002 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/malware_detonation |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "malware_detonation" } |
+---
+
+<a id="page-628"></a>
+
+## עמוד 628 — Weissman Gate (vNGFW)
+
+> **מנוע:** `weissman_vngfw` · רשת ופרוטוקולים · MITRE T1686
+
+| **מה** | Software NGFW control plane. Errors if WEISSMAN_VNGFW_ADMIN dataplane is down — never pretends the firewall is live |
+| **למה** | MITRE T1686 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/weissman_vngfw |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "weissman_vngfw" } |
+---
+
+<a id="page-629"></a>
+
+## עמוד 629 — Cortex Proven Finding Bridge
+
+> **מנוע:** `cortex_proven_finding_bridge` · defense · MITRE T1685
+
+| **מה** | Maps live scan jobs to persisted findings, then compares proven evidence against Cortex XSIAM get_alerts. Emits coverage-gap findings only when XDR actually missed a proof-backed row — never a fake alert |
+| **למה** | MITRE T1685 · probe Remote (network/API). |
+| **מתי** | Global/config scan. |
+| **איפה** | /command-center/engines/cortex_proven_finding_bridge |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד לא חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "cortex_proven_finding_bridge" } |
+---
+
+<a id="page-630"></a>
+
+## עמוד 630 — Honey-Routing Gateway
+
+> **מנוע:** `honey_routing_gateway` · defense · MITRE T1599
+
+| **מה** | Live decoy-path fusion: HMAC TLS hello, Dijkstra honey routes, FAIR ARO — no simulated attacker traffic |
+| **למה** | MITRE T1599 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/honey_routing_gateway |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "honey_routing_gateway" } |
+---
+
+<a id="page-631"></a>
+
+## עמוד 631 — Advanced C2 & Covert Exfil
+
+> **מנוע:** `advanced_c2_covert_exfil` · APT / Top-Tier · MITRE T1071
+
+| **מה** | Assessment-only covert-channel surface: DNS entropy, beacon cadence, HTTP/3 and WebSocket masquerade — never implants C2 |
+| **למה** | MITRE T1071 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/advanced_c2_covert_exfil |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "advanced_c2_covert_exfil" } |
+---
+
+<a id="page-632"></a>
+
+## עמוד 632 — Stealthy Persistence & Evasion
+
+> **מנוע:** `stealthy_persistence_evasion` · APT / Top-Tier · MITRE T1547
+
+| **מה** | Intelligence-grade persistence and defense-evasion assessment across host, kernel, and control-plane checks |
+| **למה** | MITRE T1547 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/stealthy_persistence_evasion |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "stealthy_persistence_evasion" } |
+---
+
+<a id="page-633"></a>
+
+## עמוד 633 — Web HTTP Intelligence
+
+> **מנוע:** `web_http_intel` · Web / API · MITRE T1190
+
+| **מה** | Live HTTP/DNS/TLS intelligence: header values, cookie flags, CORS, auth-gated 401/403 are existence not public exposure |
+| **למה** | MITRE T1190 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/web_http_intel |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "web_http_intel" } |
+---
+
+<a id="page-634"></a>
+
+## עמוד 634 — Web Identity Surface
+
+> **מנוע:** `web_identity_surface` · קריפטו וזהות · MITRE T1550.001
+
+| **מה** | OIDC/OAuth/SAML well-known surfaces, WWW-Authenticate, login forms, IdP fingerprints — never treats 401 as public data |
+| **למה** | MITRE T1550.001 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/web_identity_surface |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "web_identity_surface" } |
+---
+
+<a id="page-635"></a>
+
+## עמוד 635 — API & Cloud Storage Intel
+
+> **מנוע:** `api_cloud_intel` · ענן ותשתית · MITRE T1530
+
+| **מה** | GraphQL/OpenAPI and object-storage probes: 401/403 and empty listings are never labelled public |
+| **למה** | MITRE T1530 · probe Remote (network/API). |
+| **מתי** | Target/domain ב-scope. |
+| **איפה** | /command-center/engines/api_cloud_intel |
+| **איך** | Engine Matrix / Hub → Run → Jobs → Findings. |
+| **כמה** | 1 quota · Remote · יעד חובה |
+| **למי** | AppSec / SOC |
+| **מה יוצא** | findings + evidence |
+| **API / חיבורים** | POST /api/command-center/scan { engine: "api_cloud_intel" } |
 
 ---
 
@@ -10903,12 +11443,12 @@ GET /dashboard |
 
 | מדד | כמות |
 |-----|------|
-| עמודים | 605 |
+| עמודים | 635 |
 | לוחות UI | 2 |
-| מנועים | 563 |
+| מנועים | 593 |
 | HTTP API routes | 8 |
 | Surfaces (install, WS, legal) | 10 |
-| Agent-required engines | 48 |
+| Agent-required engines | 58 |
 
 *מחולל: `node scripts/generate_platform_encyclopedia.mjs`*
 
