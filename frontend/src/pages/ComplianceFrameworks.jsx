@@ -56,6 +56,7 @@ export default function ComplianceFrameworks() {
   const [mappingsOpen, setMappingsOpen] = useState(false);
   const [mappingsLoading, setMappingsLoading] = useState(false);
   const [mappingsSearch, setMappingsSearch] = useState('');
+  const [mappingsUnavailable, setMappingsUnavailable] = useState(false);
   const [frameworks, setFrameworks] = useState([]);
   const [selectedFramework, setSelectedFramework] = useState(null);
   const [controls, setControls] = useState([]);
@@ -203,7 +204,7 @@ export default function ComplianceFrameworks() {
       return;
     }
     setMappingsOpen(true);
-    if (mappings != null) return; // already loaded
+    if (mappings != null && !mappingsUnavailable) return; // already loaded
     setMappingsLoading(true);
     try {
       const fw = selectedFramework?.id ? `?framework=${encodeURIComponent(selectedFramework.id)}` : '';
@@ -215,12 +216,14 @@ export default function ComplianceFrameworks() {
         list = Array.isArray(dAll.mappings) ? dAll.mappings : [];
       }
       setMappings(list);
+      setMappingsUnavailable(false);
     } catch {
       setMappings([]);
+      setMappingsUnavailable(true);
     } finally {
       setMappingsLoading(false);
     }
-  }, [mappingsOpen, mappings, selectedFramework]);
+  }, [mappingsOpen, mappings, mappingsUnavailable, selectedFramework]);
 
   const filteredMappings = useMemo(() => {
     if (!Array.isArray(mappings)) return [];
@@ -598,7 +601,7 @@ export default function ComplianceFrameworks() {
             <span className="text-sm font-semibold text-white flex items-center gap-2">
               <FileText className="w-4 h-4 text-cyan-400" />
               {t('pages.complianceFrameworks.mappings_title')}
-              {Array.isArray(mappings) && (
+              {Array.isArray(mappings) && !mappingsUnavailable && (
                 <span className="text-[10px] font-mono text-[var(--text-muted)]">({mappings.length})</span>
               )}
             </span>
@@ -610,6 +613,13 @@ export default function ComplianceFrameworks() {
             <div className="mt-3">
               {mappingsLoading ? (
                 <SkeletonTable rows={4} cols={4} />
+              ) : mappingsUnavailable ? (
+                <div data-testid="compliance-mappings-unavailable">
+                  <EmptyState
+                    title={t('pages.complianceFrameworks.mappings_unavailable_title')}
+                    description={t('pages.complianceFrameworks.mappings_unavailable_body')}
+                  />
+                </div>
               ) : !Array.isArray(mappings) || mappings.length === 0 ? (
                 <div className="text-[12px] font-mono text-[var(--text-muted)] py-3">
                   {t('pages.complianceFrameworks.mappings_empty')}

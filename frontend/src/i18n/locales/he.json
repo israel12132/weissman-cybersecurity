@@ -2281,6 +2281,8 @@
       "mappings_hide": "הסתר",
       "mappings_search": "סינון לפי בקרה, מנוע או ראיה…",
       "mappings_empty": "לא הוגדרו מיפויי בקרות.",
+      "mappings_unavailable_title": "מיפויי בקרות אינם זמינים",
+      "mappings_unavailable_body": "לא ניתן לאשר את GET /api/compliance/control-mappings. רשימה ריקה אינה \"לא הוגדרו מיפויים.\"",
       "map_framework": "מסגרת",
       "map_control": "בקרה",
       "map_engine": "מנוע",

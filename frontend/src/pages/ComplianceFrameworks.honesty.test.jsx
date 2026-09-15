@@ -43,4 +43,18 @@ describe('ComplianceFrameworks live-only truth', () => {
     expect(src).not.toMatch(/catch \(err\) \{\s*console\.error\('Failed to fetch frameworks:', err\);\s*setSelectedFramework\(null\)/)
     expect(src).not.toMatch(/catch \(err\) \{\s*console\.error\('Failed to fetch frameworks:', err\);\s*setFrameworks\(\[\]\)/)
   })
+
+  it('does not paint idle empty mappings after leftover leftover-GET control-mappings fails', () => {
+    expect(src).toMatch(/apiFetch\(`\/api\/compliance\/control-mappings\$\{fw\}`\)/)
+    expect(src).toMatch(/setMappings\(\[\]\)/)
+    expect(src).toMatch(/setMappingsUnavailable\(true\)/)
+    expect(src).toMatch(/if \(mappings != null && !mappingsUnavailable\) return/)
+    expect(src).toMatch(/data-testid="compliance-mappings-unavailable"/)
+    expect(src).toMatch(/mappings_unavailable_title/)
+    expect(src).toMatch(/Array\.isArray\(mappings\) && !mappingsUnavailable/)
+    expect(src).not.toMatch(/export_failed[\s\S]{0,200}setMappingsUnavailable/)
+    expect(src).not.toMatch(/pack_failed[\s\S]{0,200}setMappingsUnavailable/)
+    expect(src).not.toMatch(/export_failed[\s\S]{0,200}setMappings\(\[\]\)/)
+    expect(src).not.toMatch(/pack_failed[\s\S]{0,200}setMappings\(\[\]\)/)
+  })
 })

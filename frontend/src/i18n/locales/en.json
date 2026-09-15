@@ -2281,6 +2281,8 @@
       "mappings_hide": "Hide",
       "mappings_search": "Filter by control, engine, or evidence…",
       "mappings_empty": "No control mappings are defined.",
+      "mappings_unavailable_title": "Control mappings unavailable",
+      "mappings_unavailable_body": "GET /api/compliance/control-mappings could not be confirmed. An empty list is not \"no mappings defined.\"",
       "map_framework": "Framework",
       "map_control": "Control",
       "map_engine": "Engine",
