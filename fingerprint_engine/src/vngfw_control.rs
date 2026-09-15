@@ -144,7 +144,11 @@ pub async fn dataplane_status() -> Value {
             }
         }
     }
-    let live = admin_http.get("ok").and_then(Value::as_bool).unwrap_or(false) || nft_table;
+    let live = admin_http
+        .get("ok")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+        || nft_table;
     json!({
         "ok": true,
         "dataplane_live": live,
@@ -220,8 +224,12 @@ pub fn policy_to_nft(policy: &Value) -> String {
             if !(1..=65535).contains(&dport) {
                 continue;
             }
-            let saddr = sanitize_cidr(r.get("saddr").and_then(Value::as_str).unwrap_or("0.0.0.0/0"))
-                .unwrap_or_else(|| "0.0.0.0/0".into());
+            let saddr = sanitize_cidr(
+                r.get("saddr")
+                    .and_then(Value::as_str)
+                    .unwrap_or("0.0.0.0/0"),
+            )
+            .unwrap_or_else(|| "0.0.0.0/0".into());
             out.push_str(&format!(
                 "    ip saddr {saddr} {proto} dport {dport} {action}\n"
             ));
@@ -274,7 +282,9 @@ pub async fn apply_nft(policy: &Value) -> Result<String, String> {
             .await
             .map_err(|e| format!("nft spawn: {e}"))?;
         if !st.success() {
-            return Err("nft -f weissman_gate.nft failed (need CAP_NET_ADMIN / nft installed)".into());
+            return Err(
+                "nft -f weissman_gate.nft failed (need CAP_NET_ADMIN / nft installed)".into(),
+            );
         }
         Ok("nft table inet weissman_gate loaded".into())
     }

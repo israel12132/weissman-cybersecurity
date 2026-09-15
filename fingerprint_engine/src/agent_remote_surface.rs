@@ -7,13 +7,13 @@
 
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
-    DEFAULT_PROBE_CONCURRENCY, dns_a, dns_txt, empty_ok, extract_host, finding_with_probe_depth,
-    fingerprint_stack, header_value, http_client, http_get, join_url, normalize_url,
-    probe_matched_token, probe_paths_concurrent, status_indicates_presence, tcp_banner, tcp_open,
-    tcp_scan, udp_probe_response,
+    dns_a, dns_txt, empty_ok, extract_host, finding_with_probe_depth, fingerprint_stack,
+    header_value, http_client, http_get, join_url, normalize_url, probe_matched_token,
+    probe_paths_concurrent, status_indicates_presence, tcp_banner, tcp_open, tcp_scan,
+    udp_probe_response, DEFAULT_PROBE_CONCURRENCY,
 };
 use crate::engine_result::EngineResult;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 const REMOTE_DEPTH: &str = "agent_hybrid_remote_surface";
 
@@ -1944,10 +1944,9 @@ mod tests {
         let r = collect("dll_hijacking_engine", "tgt.example", vec![]);
         assert_eq!(r.status, "ok");
         assert!(r.findings.is_empty());
-        assert!(
-            r.message
-                .contains("dll_hijacking_engine: no live signal observed on tgt.example")
-        );
+        assert!(r
+            .message
+            .contains("dll_hijacking_engine: no live signal observed on tgt.example"));
     }
 
     #[test]

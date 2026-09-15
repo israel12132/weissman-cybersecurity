@@ -43,11 +43,12 @@ impl RedisRateLimiter {
         // Bound the acquire with tokio::timeout, and bound every subsequent command with the
         // connection's own response timeout — together these turn a hung Redis into an error
         // (→ fail-closed) instead of an unbounded await on the per-request hot path.
-        let mut conn = tokio::time::timeout(timeout, self.client.get_multiplexed_async_connection())
-            .await
-            .map_err(|_| {
-                redis::RedisError::from((redis::ErrorKind::IoError, "redis connect timeout"))
-            })??;
+        let mut conn =
+            tokio::time::timeout(timeout, self.client.get_multiplexed_async_connection())
+                .await
+                .map_err(|_| {
+                    redis::RedisError::from((redis::ErrorKind::IoError, "redis connect timeout"))
+                })??;
         conn.set_response_timeout(timeout);
         Ok(conn)
     }

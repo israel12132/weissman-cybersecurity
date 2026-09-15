@@ -2704,7 +2704,13 @@ mod tests {
         assert!(can_transition("blocked", "running"));
         assert!(!can_transition("completed", "running"));
         assert!(!can_transition("draft", "paused"));
-        assert!(!CAMPAIGN_STATUSES.is_empty());
+        // Every status exercised by the transitions above must be a canonical campaign status.
+        for status in ["draft", "running", "paused", "completed", "blocked"] {
+            assert!(
+                CAMPAIGN_STATUSES.contains(&status),
+                "transition status {status} missing from CAMPAIGN_STATUSES"
+            );
+        }
     }
 
     #[test]

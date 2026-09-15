@@ -52,8 +52,20 @@ pub async fn persist_event(
     .bind(report.latency_us as i64)
     .bind(&report.fingerprint)
     .bind(report.simhash as i64)
-    .bind(&report.techniques.iter().map(|s| s.to_string()).collect::<Vec<_>>())
-    .bind(&report.cwes.iter().map(|s| s.to_string()).collect::<Vec<_>>())
+    .bind(
+        &report
+            .techniques
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>(),
+    )
+    .bind(
+        &report
+            .cwes
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>(),
+    )
     .bind(report.flags as i32)
     .bind(&report.excerpt)
     .bind(report.to_json())
@@ -113,7 +125,9 @@ pub async fn list_recent_events(
             score: r.try_get::<f32, _>("score").unwrap_or(0.0),
             latency_us: r.try_get("latency_us").unwrap_or(0),
             fingerprint: r.try_get("fingerprint").unwrap_or_default(),
-            techniques: r.try_get::<Vec<String>, _>("techniques").unwrap_or_default(),
+            techniques: r
+                .try_get::<Vec<String>, _>("techniques")
+                .unwrap_or_default(),
             excerpt: r.try_get("prompt_excerpt").unwrap_or_default(),
             created_at: r
                 .try_get::<chrono::DateTime<chrono::Utc>, _>("created_at")
@@ -131,9 +145,12 @@ pub async fn rag_integrity_snapshot(
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| e.to_string())?;
-    let _ = sqlx::query(&format!("SET LOCAL hnsw.ef_search = {}", tuning::HNSW_EF_SEARCH))
-        .execute(&mut *tx)
-        .await;
+    let _ = sqlx::query(&format!(
+        "SET LOCAL hnsw.ef_search = {}",
+        tuning::HNSW_EF_SEARCH
+    ))
+    .execute(&mut *tx)
+    .await;
     let count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM supreme_council_memory WHERE embedding_vec IS NOT NULL",
     )

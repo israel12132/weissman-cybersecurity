@@ -127,7 +127,7 @@ mod engine_dispatch_agent;
 
 pub(crate) use engine_dispatch_agent::merge_agent_hybrid;
 pub use engine_dispatch_agent::{
-    AGENT_REQUIRED_ENGINES, is_agent_required_engine, run_agent_required_engine,
+    is_agent_required_engine, run_agent_required_engine, AGENT_REQUIRED_ENGINES,
 };
 
 /// Apply owner/tuner aggression knobs from free-form `job_params` onto stealth.

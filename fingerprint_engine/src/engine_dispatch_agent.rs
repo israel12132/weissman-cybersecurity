@@ -134,10 +134,7 @@ async fn dispatch_to_agent(
     {
         Ok(pair) => pair,
         Err(e) => {
-            return EngineResult::error(format!(
-                "agent task enqueue failed for {}: {}",
-                engine, e
-            ));
+            return EngineResult::error(format!("agent task enqueue failed for {}: {}", engine, e));
         }
     };
     EngineResult::waiting_for_agent(format!(

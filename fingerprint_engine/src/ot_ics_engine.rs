@@ -741,7 +741,8 @@ async fn probe_host_passive_sequential(host: String) -> Vec<OtFingerprint> {
     if let Some(h) = crate::ot_ics_hardening::probes::probe_dnp3_safe(&host, &policy).await {
         out.push(OtFingerprint::from(&h));
     }
-    if let Some(h) = crate::ot_ics_hardening::probes::probe_iec61850_mms_safe(&host, &policy).await {
+    if let Some(h) = crate::ot_ics_hardening::probes::probe_iec61850_mms_safe(&host, &policy).await
+    {
         if out.iter().all(|e| e.protocol != "s7_iso_tcp") || h.confidence >= 0.85 {
             out.push(OtFingerprint::from(&h));
         }

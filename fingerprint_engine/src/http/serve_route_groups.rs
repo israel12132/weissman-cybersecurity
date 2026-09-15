@@ -1,8 +1,9 @@
 //! API route mounting — split from serve.rs for maintainability.
 use super::*;
 use axum::{
-    Router, middleware,
+    middleware,
     routing::{delete, get, patch, post, put},
+    Router,
 };
 use std::sync::Arc;
 
@@ -697,15 +698,30 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/campaigns/:id/remediate",
             post(api_campaigns_remediate),
         )
-        .route("/api/discovery-lab/runs", get(api_discovery_lab_runs_list).post(api_discovery_lab_run_create))
-        .route("/api/discovery-lab/runs/:id", get(api_discovery_lab_run_get))
-        .route("/api/discovery-lab/candidates", get(api_discovery_lab_candidates_list))
-        .route("/api/discovery-lab/candidates/:id", get(api_discovery_lab_candidate_get).patch(api_discovery_lab_candidate_action))
+        .route(
+            "/api/discovery-lab/runs",
+            get(api_discovery_lab_runs_list).post(api_discovery_lab_run_create),
+        )
+        .route(
+            "/api/discovery-lab/runs/:id",
+            get(api_discovery_lab_run_get),
+        )
+        .route(
+            "/api/discovery-lab/candidates",
+            get(api_discovery_lab_candidates_list),
+        )
+        .route(
+            "/api/discovery-lab/candidates/:id",
+            get(api_discovery_lab_candidate_get).patch(api_discovery_lab_candidate_action),
+        )
         .route(
             "/api/discovery-lab/candidates/:id/disclosure",
             post(api_discovery_lab_disclosure_create),
         )
-        .route("/api/discovery-lab/disclosures", get(api_discovery_lab_disclosures_list))
+        .route(
+            "/api/discovery-lab/disclosures",
+            get(api_discovery_lab_disclosures_list),
+        )
         .route(
             "/api/discovery-lab/disclosures/:id",
             get(api_discovery_lab_disclosure_get).patch(api_discovery_lab_disclosure_update),
@@ -734,10 +750,22 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/honey-routing/:client_id/sessions/:session_id/isolate-approve",
             post(api_honey_routing_isolate_approve),
         )
-        .route("/api/llm-ultra-guard/inspect", post(api_llm_ultra_guard_inspect))
-        .route("/api/llm-ultra-guard/status", get(api_llm_ultra_guard_status))
-        .route("/api/llm-ultra-guard/events", get(api_llm_ultra_guard_events))
-        .route("/api/llm-ultra-guard/rag-integrity", get(api_llm_ultra_guard_rag))
+        .route(
+            "/api/llm-ultra-guard/inspect",
+            post(api_llm_ultra_guard_inspect),
+        )
+        .route(
+            "/api/llm-ultra-guard/status",
+            get(api_llm_ultra_guard_status),
+        )
+        .route(
+            "/api/llm-ultra-guard/events",
+            get(api_llm_ultra_guard_events),
+        )
+        .route(
+            "/api/llm-ultra-guard/rag-integrity",
+            get(api_llm_ultra_guard_rag),
+        )
         .route(
             "/api/stealthy-persistence-evasion/catalog",
             get(api_stealthy_persistence_catalog),

@@ -270,7 +270,11 @@ pub async fn pull_provider(
                         .pointer("/ipAddress")
                         .and_then(Value::as_str)
                         .unwrap_or("");
-                    let ts = chrono_ts(item.get("id").and_then(|v| v.get("time")).and_then(Value::as_str));
+                    let ts = chrono_ts(
+                        item.get("id")
+                            .and_then(|v| v.get("time"))
+                            .and_then(Value::as_str),
+                    );
                     if !user.is_empty() && !ip.is_empty() {
                         events.push(AuthEvent::new(ts, user, ip, "", true, false));
                     }

@@ -77,7 +77,12 @@ fn ingest(merged: &mut Vec<Value>, result: EngineResult, source: &str) {
     }
 }
 
-fn canary_findings(engine_id: &str, mitre: &str, target: &str, canaries: &[Canary]) -> (Vec<Value>, u32, u32, u64) {
+fn canary_findings(
+    engine_id: &str,
+    mitre: &str,
+    target: &str,
+    canaries: &[Canary],
+) -> (Vec<Value>, u32, u32, u64) {
     let mut findings = Vec::new();
     let mut blocked = 0u32;
     let mut missed = 0u32;
@@ -137,7 +142,10 @@ fn canary_findings(engine_id: &str, mitre: &str, target: &str, canaries: &[Canar
     (findings, blocked, missed, us_sum)
 }
 
-pub async fn run_prompt_injection_brake_result(target: &str, ctx: &EngineRunContext) -> EngineResult {
+pub async fn run_prompt_injection_brake_result(
+    target: &str,
+    ctx: &EngineRunContext,
+) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
@@ -174,19 +182,12 @@ pub async fn run_prompt_injection_brake_result(target: &str, ctx: &EngineRunCont
                 gctx.clone(),
             )
             .await;
-            let _ = persist_event(
-                pool.as_ref(),
-                &gctx,
-                ENGINE_PROMPT_INJECTION,
-                &report,
-            )
-            .await;
+            let _ = persist_event(pool.as_ref(), &gctx, ENGINE_PROMPT_INJECTION, &report).await;
         }
     }
 
     if probe_remote {
-        let remote =
-            crate::advanced_ai_engines::run_prompt_injection_chain_result(target).await;
+        let remote = crate::advanced_ai_engines::run_prompt_injection_chain_result(target).await;
         ingest(&mut findings, remote, "prompt_injection_chain");
     }
 
@@ -211,7 +212,12 @@ pub async fn run_jailbreak_cognitive_engine_result(
     let probe_remote = pbool(&ctx.job_params, "probe_remote_llm", true);
     let target_owned = target.to_string();
     let (mut findings, _, _, _) = match tokio::task::spawn_blocking(move || {
-        canary_findings(ENGINE_JAILBREAK, MITRE_JAILBREAK, &target_owned, CANARIES_JAILBREAK)
+        canary_findings(
+            ENGINE_JAILBREAK,
+            MITRE_JAILBREAK,
+            &target_owned,
+            CANARIES_JAILBREAK,
+        )
     })
     .await
     {
@@ -310,7 +316,9 @@ pub async fn run_rag_poisoning_guard_result(target: &str, ctx: &EngineRunContext
     } else {
         EngineResult::ok(
             findings,
-            format!("{ENGINE_RAG_GUARD}: pgvector verification + live RAG poisoning probe on {host}"),
+            format!(
+                "{ENGINE_RAG_GUARD}: pgvector verification + live RAG poisoning probe on {host}"
+            ),
         )
     }
 }
@@ -319,9 +327,7 @@ pub async fn run_prompt_injection_brake(target: &str) {
     print_result(run_prompt_injection_brake_result(target, &EngineRunContext::default()).await);
 }
 pub async fn run_jailbreak_cognitive_engine(target: &str) {
-    print_result(
-        run_jailbreak_cognitive_engine_result(target, &EngineRunContext::default()).await,
-    );
+    print_result(run_jailbreak_cognitive_engine_result(target, &EngineRunContext::default()).await);
 }
 pub async fn run_rag_poisoning_guard(target: &str) {
     print_result(run_rag_poisoning_guard_result(target, &EngineRunContext::default()).await);

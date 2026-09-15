@@ -8,13 +8,13 @@
 //! cockpit can render without rerunning the search.
 
 use crate::supreme_weights::{
-    self, EdgeWeightInputs, MAX_PATH_DEPTH, evidence_confidence, is_cross_region, is_identity_edge,
-    is_smb_or_port_edge, path_score_0_100,
+    self, evidence_confidence, is_cross_region, is_identity_edge, is_smb_or_port_edge,
+    path_score_0_100, EdgeWeightInputs, MAX_PATH_DEPTH,
 };
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};

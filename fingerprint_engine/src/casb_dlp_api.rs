@@ -167,7 +167,11 @@ pub async fn graph_dlp_findings(target: &str, token: &str) -> Vec<Value> {
     match resp {
         Ok(r) if r.status().is_success() => {
             if let Ok(body) = r.json::<Value>().await {
-                let msgs = body.get("value").and_then(Value::as_array).cloned().unwrap_or_default();
+                let msgs = body
+                    .get("value")
+                    .and_then(Value::as_array)
+                    .cloned()
+                    .unwrap_or_default();
                 let hay: String = msgs
                     .iter()
                     .filter_map(|m| m.get("bodyPreview").and_then(Value::as_str))
@@ -177,7 +181,10 @@ pub async fn graph_dlp_findings(target: &str, token: &str) -> Vec<Value> {
                 if hits.is_empty() {
                     out.push(finding(
                         "dlp_content_scan",
-                        &format!("Graph mailbox sample scanned ({} messages, no DLP pattern)", msgs.len()),
+                        &format!(
+                            "Graph mailbox sample scanned ({} messages, no DLP pattern)",
+                            msgs.len()
+                        ),
                         "info",
                         "T1114",
                         "GET /me/messages bodyPreview did not match PAN/SSN/secret regexes.",
@@ -324,7 +331,10 @@ pub async fn google_dlp_findings(target: &str, token: &str) -> Vec<Value> {
                 if hits.is_empty() {
                     out.push(finding(
                         "dlp_content_scan",
-                        &format!("Gmail snippets scanned ({} messages, no DLP pattern)", ids.len()),
+                        &format!(
+                            "Gmail snippets scanned ({} messages, no DLP pattern)",
+                            ids.len()
+                        ),
                         "info",
                         "T1114",
                         "Gmail API snippets did not match PAN/SSN/secret regexes.",

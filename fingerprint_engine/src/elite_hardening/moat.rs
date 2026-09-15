@@ -430,8 +430,12 @@ pub fn palo_alto_bakeoff() -> Value {
 
     // Closed loops Weissman ships that a prevention-plane vendor does not. Each `present`
     // is a live signal from this binary, never a hard-coded marketing "yes".
-    let ot_live = !sku_ids(&["modbus", "dnp3", "s7_", "iec61850", "ot_", "ics"]).0.is_empty();
-    let fair_live = !sku_ids(&["fair", "path_fair_rag", "attack_path"]).0.is_empty();
+    let ot_live = !sku_ids(&["modbus", "dnp3", "s7_", "iec61850", "ot_", "ics"])
+        .0
+        .is_empty();
+    let fair_live = !sku_ids(&["fair", "path_fair_rag", "attack_path"])
+        .0
+        .is_empty();
     let ask_live = ask_tables == nl_guard::ASK_WEISSMAN_TABLE_COUNT;
     let wss_live = wss_inner::KEY_BYTES == 32;
     let hfv_live = crate::elite_hardening::hack_fix_verify::LIVE;
@@ -709,7 +713,10 @@ mod tests {
     #[test]
     fn snapshot_embeds_palo_bakeoff() {
         let snap = snapshot();
-        assert_eq!(snap["palo_alto"]["posture"], "companion_not_ngfw_replacement");
+        assert_eq!(
+            snap["palo_alto"]["posture"],
+            "companion_not_ngfw_replacement"
+        );
     }
 
     #[test]

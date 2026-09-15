@@ -442,7 +442,10 @@ mod tests {
     #[test]
     fn regular_intervals_have_lomb_peak() {
         let times: Vec<f64> = (0..16).map(|i| i as f64 * 0.5).collect();
-        let values: Vec<f64> = times.iter().map(|t| (2.0 * std::f64::consts::PI * t).sin()).collect();
+        let values: Vec<f64> = times
+            .iter()
+            .map(|t| (2.0 * std::f64::consts::PI * t).sin())
+            .collect();
         let ls = lomb_scargle_peak(&times, &values);
         assert!(ls.is_some());
     }

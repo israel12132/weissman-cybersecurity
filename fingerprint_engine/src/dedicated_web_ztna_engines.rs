@@ -116,7 +116,10 @@ pub async fn run_sqli_advanced_result(t: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("sqli_advanced", t)
     } else {
-        EngineResult::ok(findings.clone(), format!("sqli_advanced: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("sqli_advanced: {}", findings.len()),
+        )
     }
 }
 
@@ -187,9 +190,7 @@ pub async fn run_csrf_exploit_result(t: &str) -> EngineResult {
     };
     let mut findings = Vec::new();
     let set_cookie = header_value(&p.headers, "set-cookie").unwrap_or("");
-    if !set_cookie.is_empty()
-        && !set_cookie.to_ascii_lowercase().contains("samesite")
-    {
+    if !set_cookie.is_empty() && !set_cookie.to_ascii_lowercase().contains("samesite") {
         findings.push(finding(
             "csrf_exploit",
             "Session cookie lacks SameSite",
@@ -223,7 +224,10 @@ pub async fn run_csrf_exploit_result(t: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("csrf_exploit", t)
     } else {
-        EngineResult::ok(findings.clone(), format!("csrf_exploit: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("csrf_exploit: {}", findings.len()),
+        )
     }
 }
 
@@ -261,8 +265,7 @@ pub async fn run_nosql_injection_result(t: &str) -> EngineResult {
     let qurl = format!("{url}{}", if url.contains('?') { "&" } else { "?" });
     let qurl = format!("{qurl}user[$gt]=");
     if let Some(p) = http_get(&client, &qurl).await {
-        if sql_error_haystack(&p.body, &p.headers)
-            || p.body.to_ascii_lowercase().contains("mongo")
+        if sql_error_haystack(&p.body, &p.headers) || p.body.to_ascii_lowercase().contains("mongo")
         {
             findings.push(finding(
                 "nosql_injection",
@@ -292,7 +295,15 @@ pub async fn run_open_redirect_result(t: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(t);
     let evil = "https://weissman-redirect-check.invalid/landing";
-    let params = ["url", "next", "redirect", "return", "returnUrl", "continue", "dest"];
+    let params = [
+        "url",
+        "next",
+        "redirect",
+        "return",
+        "returnUrl",
+        "continue",
+        "dest",
+    ];
     for param in params {
         let url = if base.contains('?') {
             format!("{base}&{param}={}", urlencoding_lite(evil))
@@ -392,14 +403,17 @@ pub async fn run_api_fuzzing_result(t: &str) -> EngineResult {
     ];
     let hits = crate::engine_probes::probe_paths_concurrent(&client, &base, &paths, 6).await;
     for p in hits {
-        if p.status == 200 && (p.body.contains("\"openapi\"") || p.body.contains("\"swagger\""))
-        {
+        if p.status == 200 && (p.body.contains("\"openapi\"") || p.body.contains("\"swagger\"")) {
             findings.push(finding(
                 "api_fuzzing",
                 "OpenAPI/Swagger document publicly reachable",
                 "medium",
                 "T1190",
-                &format!("{} returned API schema ({} bytes).", p.final_url, p.body.len()),
+                &format!(
+                    "{} returned API schema ({} bytes).",
+                    p.final_url,
+                    p.body.len()
+                ),
                 t,
             ));
         } else if p.status == 200 && p.final_url.contains("graphql") {
@@ -463,10 +477,11 @@ pub async fn run_zero_trust_bypass_result(t: &str) -> EngineResult {
 
     let cf_access = header_value(&p.headers, "cf-access-authenticated-user-email")
         .or_else(|| header_value(&p.headers, "cf-ray"));
-    let has_cf_login = p.body.contains("Cloudflare Access") || p.final_url.contains("cloudflareaccess.com");
+    let has_cf_login =
+        p.body.contains("Cloudflare Access") || p.final_url.contains("cloudflareaccess.com");
     let has_okta = p.body.contains("okta-signin") || host.contains("okta.com");
-    let has_zscaler = has_header(&p.headers, "x-zscaler")
-        || p.body.to_ascii_lowercase().contains("zscaler");
+    let has_zscaler =
+        has_header(&p.headers, "x-zscaler") || p.body.to_ascii_lowercase().contains("zscaler");
     let has_prisma = p.body.to_ascii_lowercase().contains("globalprotect")
         || p.body.to_ascii_lowercase().contains("prisma access");
     let www_auth = header_value(&p.headers, "www-authenticate");
@@ -603,12 +618,18 @@ pub async fn run_sase_security_bypass_result(t: &str) -> EngineResult {
     }
 
     let ips = resolve_ips(&host);
-    if let Some(ip) = ips.iter().find(|i| !i.starts_with('[') && *i != "127.0.0.1") {
+    if let Some(ip) = ips
+        .iter()
+        .find(|i| !i.starts_with('[') && *i != "127.0.0.1")
+    {
         let ip_url = url.replacen(&host, ip, 1);
         if let Some(direct) = http_get_with_headers(
             &client,
             &ip_url,
-            &[("Host", host.as_str()), ("user-agent", "Weissman-SASE-Probe/1")],
+            &[
+                ("Host", host.as_str()),
+                ("user-agent", "Weissman-SASE-Probe/1"),
+            ],
         )
         .await
         {
@@ -628,7 +649,10 @@ pub async fn run_sase_security_bypass_result(t: &str) -> EngineResult {
         }
     }
 
-    for path in ["/global-protect/login.esp", "/dana-na/auth/url_default/welcome.cgi"] {
+    for path in [
+        "/global-protect/login.esp",
+        "/dana-na/auth/url_default/welcome.cgi",
+    ] {
         let u = join_url(&url, path);
         if let Some(p) = http_get(&client, &u).await {
             if p.status == 200 {

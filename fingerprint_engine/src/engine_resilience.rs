@@ -180,7 +180,8 @@ fn escalate_for(class: FailureClass, current_timeout: &mut Duration) {
         }
         // Dns is already addressed by the scheme/`www` target variants; ConnReset/Generic
         // fall through to the next strategy unchanged.
-        FailureClass::Dns | FailureClass::ConnReset | FailureClass::Generic | FailureClass::Roe => {}
+        FailureClass::Dns | FailureClass::ConnReset | FailureClass::Generic | FailureClass::Roe => {
+        }
     }
 }
 

@@ -14,7 +14,7 @@
 //! We map common alias keys defensively so any engine that emits `cvss`/`risk`/`description`
 //! still produces a useful row.
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use std::sync::LazyLock;
@@ -22,7 +22,7 @@ use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::db;
 use crate::findings_correlator::{self, ClusterAttrs};
-use crate::findings_gate::{self, Sealed, VulnerabilitiesWriter, gate_finding};
+use crate::findings_gate::{self, gate_finding, Sealed, VulnerabilitiesWriter};
 use crate::fp_feedback;
 use crate::intel_epss;
 use crate::intel_kev;

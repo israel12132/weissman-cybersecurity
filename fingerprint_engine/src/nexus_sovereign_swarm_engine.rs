@@ -2216,10 +2216,7 @@ async fn run_scout_probe(
         hsts_headers_blob.push_str(&format!("{}: {}\n", k.as_str(), v.to_str().unwrap_or("")));
     }
     let hsts_obs = crate::live_truth::observe_hsts(status, &hsts_headers_blob, "", &task.url);
-    let hsts = matches!(
-        hsts_obs,
-        crate::live_truth::HstsObservation::Present { .. }
-    );
+    let hsts = matches!(hsts_obs, crate::live_truth::HstsObservation::Present { .. });
     let hsts_json = match hsts_obs {
         crate::live_truth::HstsObservation::Present { .. } => json!(true),
         crate::live_truth::HstsObservation::Missing => json!(false),
