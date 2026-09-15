@@ -20,6 +20,7 @@ import {
   useEngineRequirements,
 } from '../../hooks/useEngineRequirements'
 import Button from '../ui/Button'
+import EmptyState from '../ui/EmptyState'
 
 const STEPS = ['legal', 'basic', 'scope', 'modules', 'integrations', 'review']
 const AGENT_PLATFORMS = ['linux', 'windows', 'macos']
@@ -50,6 +51,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
   const [step, setStep] = useState(0)
   const [form, setForm] = useState(defaultOnboardingForm)
   const [localError, setLocalError] = useState('')
+  const catalogUnavailable = !catalog && !!loadError
 
   const label = (def) => (isHe ? def?.label_he : def?.label_en) || def?.id || ''
   const hint = (def) => (isHe ? def?.hint_he : def?.hint_en) || ''
@@ -180,18 +182,26 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
           <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-400/80">
             {t('pages.clientOnboarding.readiness')}
           </div>
-          <div className="text-lg font-semibold text-white">{readiness.percent}%</div>
+          <div className="text-lg font-semibold text-white">{catalogUnavailable ? '—' : `${readiness.percent}%`}</div>
         </div>
         <div className="flex-1 min-w-[120px] max-w-xs h-2 rounded-full bg-white/10 overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-cyan-600 to-emerald-500 transition-all duration-300"
-            style={{ width: `${readiness.percent}%` }}
+            style={{ width: catalogUnavailable ? '0%' : `${readiness.percent}%` }}
           />
         </div>
         <div className="text-xs text-white/45">
-          {readiness.satisfied}/{readiness.total} {t('pages.clientOnboarding.requirements_met')}
+          {catalogUnavailable ? '—' : `${readiness.satisfied}/${readiness.total} ${t('pages.clientOnboarding.requirements_met')}`}
         </div>
       </div>
+      {catalogUnavailable && (
+        <div data-testid="client-onboarding-catalog-unavailable">
+          <EmptyState
+            title={t('pages.clientOnboarding.catalog_unavailable_title')}
+            description={t('pages.clientOnboarding.catalog_unavailable_body')}
+          />
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {STEPS.map((s, i) => {

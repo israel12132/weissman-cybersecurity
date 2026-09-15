@@ -2389,6 +2389,8 @@
       "evidence_notice": "Requirements derived from 546 production engines + tenant config (LLM/OAST). No simulation — only fields used by live probes.",
       "loading_catalog": "Loading engine requirements catalog…",
       "readiness": "Onboarding readiness",
+      "catalog_unavailable_title": "Engine requirements catalog unavailable",
+      "catalog_unavailable_body": "GET /api/engines/requirements and GET /api/onboarding/tenant-status could not be confirmed. 0% is not an unready client.",
       "requirements_met": "requirements",
       "step_legal": "Legal & emergency",
       "step_basic": "Client details",

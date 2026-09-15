@@ -2389,6 +2389,8 @@
       "evidence_notice": "דרישות נגזרות מ-546 מנועי production + tenant config (LLM/OAST). אין סימולציה — רק שדות שמשמשים probes אמיתיים.",
       "loading_catalog": "טוען קטלוג דרישות מנועים…",
       "readiness": "מוכנות קליטה",
+      "catalog_unavailable_title": "קטלוג דרישות המנועים אינו זמין",
+      "catalog_unavailable_body": "לא ניתן לאשר את GET /api/engines/requirements ו-GET /api/onboarding/tenant-status. 0% אינו לקוח לא מוכן.",
       "requirements_met": "דרישות",
       "step_legal": "משפטי וחירום",
       "step_basic": "פרטי לקוח",
