@@ -749,6 +749,30 @@
         "scope_ips"
       ]
     },
+    "ot_passive_active_safety": {
+      "id": "ot_passive_active_safety",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "OT Passive/Active Safety Interlock",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "ot_crown_jewel_path": {
+      "id": "ot_crown_jewel_path",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "OT Crown-Jewel Path",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
     "avionics_adsb_attack": {
       "id": "avionics_adsb_attack",
       "group": "ot",
@@ -838,30 +862,6 @@
       "group": "ot",
       "kind": "real_probe",
       "label": "OT SIS / Triconex TriStation",
-      "requirements": [
-        "contact_email",
-        "industrial_ot",
-        "scope_domains",
-        "scope_ips"
-      ]
-    },
-    "ot_passive_active_safety": {
-      "id": "ot_passive_active_safety",
-      "group": "ot",
-      "kind": "real_probe",
-      "label": "OT Passive/Active Safety Interlock",
-      "requirements": [
-        "contact_email",
-        "industrial_ot",
-        "scope_domains",
-        "scope_ips"
-      ]
-    },
-    "ot_crown_jewel_path": {
-      "id": "ot_crown_jewel_path",
-      "group": "ot",
-      "kind": "real_probe",
-      "label": "OT Crown-Jewel Path",
       "requirements": [
         "contact_email",
         "industrial_ot",

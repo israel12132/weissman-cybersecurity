@@ -20,8 +20,9 @@ const toggleThemeSpy = vi.fn()
 vi.mock('../context/ThemeContext', () => ({
   useTheme: () => ({ toggleTheme: toggleThemeSpy, isLight: false }),
 }))
-vi.mock('../lib/apiBase', () => ({
-  apiFetch: vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ results: [] }) })),
+const apiFetch = vi.fn()
+vi.mock('../utils/apiFetch', () => ({
+  apiFetch: (...args) => apiFetch(...args),
 }))
 // Deterministic nav registry so assertions don't depend on the real appNav.
 vi.mock('../lib/appNav', () => ({
@@ -46,6 +47,8 @@ function open() {
 
 beforeEach(() => {
   navigateSpy.mockClear(); logoutSpy.mockClear(); toggleThemeSpy.mockClear()
+  apiFetch.mockReset()
+  apiFetch.mockResolvedValue({ results: [] })
   mockPathname = '/findings'
   try { localStorage.clear() } catch { /* ignore */ }
 })
@@ -121,11 +124,39 @@ describe('GlobalSearch command palette', () => {
     expect(within(options[0]).getByText('components.globalSearch.recent')).toBeTruthy()
   })
 
-  it('Escape closes the palette', () => {
+  it('Escape closes the palette without searching a leftover query', async () => {
+    vi.useFakeTimers()
+    try {
+      render(<GlobalSearch />)
+      open()
+      expect(screen.getByRole('dialog')).toBeTruthy()
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'zzzz' } })
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(screen.queryByRole('dialog')).toBeNull()
+      await vi.advanceTimersByTimeAsync(400)
+      expect(apiFetch).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not treat a search API failure as a confirmed miss', async () => {
+    apiFetch.mockResolvedValue({ ok: false, unavailable: true, results: [], detail: 'store down' })
     render(<GlobalSearch />)
     open()
-    expect(screen.getByRole('dialog')).toBeTruthy()
-    fireEvent.keyDown(document, { key: 'Escape' })
-    expect(screen.queryByRole('dialog')).toBeNull()
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'zzzz' } })
+    expect(await screen.findByTestId('global-search-unavailable')).toBeTruthy()
+    expect(screen.getByText('components.globalSearch.search_failed')).toBeTruthy()
+    expect(screen.queryByText(/noResults/)).toBeNull()
+  })
+
+  it('still shows search_failed when local nav matches the query', async () => {
+    apiFetch.mockResolvedValue({ ok: false, unavailable: true, results: [], detail: 'store down' })
+    render(<GlobalSearch />)
+    open()
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'engine' } })
+    expect(await screen.findByTestId('global-search-unavailable')).toBeTruthy()
+    expect(screen.getByText('components.globalSearch.search_failed')).toBeTruthy()
+    expect(screen.getByText('Engines')).toBeTruthy()
   })
 })

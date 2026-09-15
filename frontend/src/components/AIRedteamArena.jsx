@@ -34,6 +34,9 @@ export default function AIRedteamArena() {
     if (!clientId) return
     apiFetch('/api/clients')
       .then((list) => {
+        if (list?.ok === false || list?.unavailable) {
+          throw new Error(list.detail || t(`${NS}.unavailable`))
+        }
         const c = Array.isArray(list) ? list.find((x) => String(x.id) === String(clientId)) : null
         setClient(c || null)
         if (c?.domains) {
@@ -44,7 +47,10 @@ export default function AIRedteamArena() {
           } catch (_) { /* best-effort; non-fatal */ }
         }
       })
-      .catch(() => setClient(null))
+      .catch((e) => {
+        setClient(null)
+        setError(e?.message || t(`${NS}.unavailable`))
+      })
   }, [clientId])
 
   useEffect(() => {
@@ -156,7 +162,11 @@ export default function AIRedteamArena() {
             </span>
           )}
         </div>
-        {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+        {error && (
+          <p className="text-red-400 text-sm mb-4" data-testid="ai-redteam-unavailable" role="alert">
+            {error}
+          </p>
+        )}
 
         <div className="mb-6 flex justify-center">
           <div

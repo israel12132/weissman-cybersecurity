@@ -35,7 +35,7 @@ pub async fn patch_tenant_active_engine(
 
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "store_down".to_string())?;
 
     let cur: Option<String> = sqlx::query_scalar(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'active_engines'",
@@ -43,7 +43,7 @@ pub async fn patch_tenant_active_engine(
     .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
 
     let mut set: HashSet<String> = HashSet::new();
     if let Some(raw) = cur {
@@ -71,7 +71,7 @@ pub async fn patch_tenant_active_engine(
         .map(|s| (*s).to_string())
         .collect();
 
-    let json = serde_json::to_string(&ordered).map_err(|e| e.to_string())?;
+    let json = serde_json::to_string(&ordered).map_err(|_| "store_down".to_string())?;
 
     sqlx::query(
         r#"INSERT INTO system_configs (tenant_id, key, value, description)
@@ -82,9 +82,9 @@ pub async fn patch_tenant_active_engine(
     .bind(&json)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
 
-    tx.commit().await.map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|_| "store_down".to_string())?;
     Ok(ordered)
 }
 

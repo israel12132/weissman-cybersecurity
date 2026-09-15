@@ -383,7 +383,7 @@ fn normalize_value(kind: &str, raw: &str) -> Option<String> {
 }
 
 /// Load stored values for a kind, confirmed hits first. No row cap — the corpus is unbounded.
-pub async fn load(pool: &PgPool, kind: &str) -> Vec<String> {
+pub async fn load(pool: &PgPool, kind: &str) -> Result<Vec<String>, String> {
     let rows = sqlx::query(
         r#"SELECT value FROM intel.discovery_knowledge
            WHERE kind = $1
@@ -391,31 +391,26 @@ pub async fn load(pool: &PgPool, kind: &str) -> Vec<String> {
     )
     .bind(kind)
     .fetch_all(pool)
-    .await;
-    match rows {
-        Ok(rows) => rows
-            .into_iter()
-            .filter_map(|r| r.try_get::<String, _>("value").ok())
-            .collect(),
-        Err(e) => {
-            tracing::debug!(target: "discovery_knowledge", error = %e, kind, "load skipped");
-            vec![]
-        }
-    }
+    .await
+    .map_err(|_| "store_down".to_string())?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|r| r.try_get::<String, _>("value").ok())
+        .collect())
 }
 
-pub async fn load_paths(pool: &PgPool) -> Vec<String> {
+pub async fn load_paths(pool: &PgPool) -> Result<Vec<String>, String> {
     load(pool, KIND_PATH).await
 }
 
-pub async fn load_subdomain_prefixes(pool: &PgPool) -> Vec<String> {
+pub async fn load_subdomain_prefixes(pool: &PgPool) -> Result<Vec<String>, String> {
     load(pool, KIND_SUB).await
 }
 
 /// Learned + confirmed values only (excludes unconfirmed public seed rows).
 /// Use this when feeding HTTP engines so the 40k+ combinator seed is not dumped
 /// into every fuzzer as `discovered_paths`.
-pub async fn load_learned(pool: &PgPool, kind: &str) -> Vec<String> {
+pub async fn load_learned(pool: &PgPool, kind: &str) -> Result<Vec<String>, String> {
     let rows = sqlx::query(
         r#"SELECT value FROM intel.discovery_knowledge
            WHERE kind = $1 AND (source <> 'seed' OR confirmed)
@@ -423,24 +418,19 @@ pub async fn load_learned(pool: &PgPool, kind: &str) -> Vec<String> {
     )
     .bind(kind)
     .fetch_all(pool)
-    .await;
-    match rows {
-        Ok(rows) => rows
-            .into_iter()
-            .filter_map(|r| r.try_get::<String, _>("value").ok())
-            .collect(),
-        Err(e) => {
-            tracing::debug!(target: "discovery_knowledge", error = %e, kind, "load_learned skipped");
-            vec![]
-        }
-    }
+    .await
+    .map_err(|_| "store_down".to_string())?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|r| r.try_get::<String, _>("value").ok())
+        .collect())
 }
 
-pub async fn load_learned_paths(pool: &PgPool) -> Vec<String> {
+pub async fn load_learned_paths(pool: &PgPool) -> Result<Vec<String>, String> {
     load_learned(pool, KIND_PATH).await
 }
 
-pub async fn stats(pool: &PgPool) -> CorpusStats {
+pub async fn stats(pool: &PgPool) -> Result<CorpusStats, sqlx::Error> {
     let row = sqlx::query(
         r#"SELECT
                COUNT(*) FILTER (WHERE kind = 'path')::bigint AS path_count,
@@ -451,17 +441,14 @@ pub async fn stats(pool: &PgPool) -> CorpusStats {
            FROM intel.discovery_knowledge"#,
     )
     .fetch_one(pool)
-    .await;
-    match row {
-        Ok(r) => CorpusStats {
-            path_count: r.try_get("path_count").unwrap_or(0),
-            subdomain_count: r.try_get("subdomain_count").unwrap_or(0),
-            llm_count: r.try_get("llm_count").unwrap_or(0),
-            confirmed_count: r.try_get("confirmed_count").unwrap_or(0),
-            seed_count: r.try_get("seed_count").unwrap_or(0),
-        },
-        Err(_) => CorpusStats::default(),
-    }
+    .await?;
+    Ok(CorpusStats {
+        path_count: row.try_get("path_count")?,
+        subdomain_count: row.try_get("subdomain_count")?,
+        llm_count: row.try_get("llm_count")?,
+        confirmed_count: row.try_get("confirmed_count")?,
+        seed_count: row.try_get("seed_count")?,
+    })
 }
 
 /// Idempotent seed insert. Skips when the public seed is already loaded.
@@ -475,12 +462,22 @@ pub async fn seed_public_knowledge(pool: &PgPool) {
         SEED_DONE.store(true, Ordering::SeqCst);
         return;
     }
-    let existing: i64 = sqlx::query_scalar(
+    let existing: i64 = match sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM intel.discovery_knowledge WHERE source = 'seed'",
     )
     .fetch_one(pool)
     .await
-    .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::warn!(
+                target: "discovery_knowledge",
+                error = %e,
+                "seed count store_down"
+            );
+            return;
+        }
+    };
     if existing > 1_000 {
         SEED_DONE.store(true, Ordering::SeqCst);
         redis_flag_mark(REDIS_SEEDED).await;
@@ -489,16 +486,24 @@ pub async fn seed_public_knowledge(pool: &PgPool) {
     if redis_set_nx(REDIS_SEED_LOCK, 600).await == Some(false) {
         return;
     }
-    seed_kind_chunks(pool, KIND_PATH, all_http_paths()).await;
-    seed_kind_chunks(pool, KIND_SUB, all_subdomain_prefixes()).await;
+    if seed_kind_chunks(pool, KIND_PATH, all_http_paths())
+        .await
+        .is_err()
+        || seed_kind_chunks(pool, KIND_SUB, all_subdomain_prefixes())
+            .await
+            .is_err()
+    {
+        tracing::warn!(target: "discovery_knowledge", "seed chunk store_down");
+        return;
+    }
     SEED_DONE.store(true, Ordering::SeqCst);
     redis_flag_mark(REDIS_SEEDED).await;
 }
 
-async fn seed_kind_chunks(pool: &PgPool, kind: &str, values: &[String]) {
+async fn seed_kind_chunks(pool: &PgPool, kind: &str, values: &[String]) -> Result<(), sqlx::Error> {
     for chunk in values.chunks(400) {
         let vals: Vec<String> = chunk.to_vec();
-        if let Err(e) = sqlx::query(
+        sqlx::query(
             r#"INSERT INTO intel.discovery_knowledge (kind, value, tech_hint, source)
                SELECT $1, x, '', 'seed' FROM UNNEST($2::text[]) AS x
                ON CONFLICT (kind, value_key, tech_hint) DO NOTHING"#,
@@ -506,11 +511,9 @@ async fn seed_kind_chunks(pool: &PgPool, kind: &str, values: &[String]) {
         .bind(kind)
         .bind(&vals)
         .execute(pool)
-        .await
-        {
-            tracing::debug!(target: "discovery_knowledge", error = %e, kind, "seed chunk skipped");
-        }
+        .await?;
     }
+    Ok(())
 }
 
 /// Merge seed ∪ stored ∪ extra without dropping anything.

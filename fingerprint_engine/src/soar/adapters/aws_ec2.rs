@@ -124,7 +124,7 @@ impl IsolateHostAdapter for AwsEc2IsolateAdapter {
         let port_count = ports_use.len() as u32;
         let mut unreachable = 0u32;
         for port in &ports_use {
-            if tcp_probe_unreachable(&probe_host, *port).await {
+            if tcp_probe_unreachable(&probe_host, *port).await? {
                 unreachable += 1;
             }
         }
@@ -247,17 +247,23 @@ async fn resolve_public_ip_hint(_instance_id: &str) -> Option<String> {
     None
 }
 
-async fn tcp_probe_unreachable(host: &str, port: u16) -> bool {
+async fn tcp_probe_unreachable(host: &str, port: u16) -> Result<bool, super::AdapterError> {
     let addr = format!("{host}:{port}");
-    let Ok(stream) = tokio::time::timeout(
+    match tokio::time::timeout(
         std::time::Duration::from_secs(3),
         tokio::net::TcpStream::connect(&addr),
     )
     .await
-    else {
-        return true;
-    };
-    stream.is_err()
+    {
+        Err(_elapsed) => Err(super::AdapterError::Provider(
+            "isolate probe timeout — not confirmed".into(),
+        )),
+        Ok(Ok(_stream)) => Ok(false),
+        Ok(Err(e)) if e.kind() == std::io::ErrorKind::ConnectionRefused => Ok(true),
+        Ok(Err(_)) => Err(super::AdapterError::Provider(
+            "isolate probe error — not confirmed".into(),
+        )),
+    }
 }
 
 pub async fn tcp_probe_unreachable_batch(
@@ -272,7 +278,7 @@ pub async fn tcp_probe_unreachable_batch(
     let port_count = ports_use.len() as u32;
     let mut unreachable = 0u32;
     for port in &ports_use {
-        if tcp_probe_unreachable(host, *port).await {
+        if tcp_probe_unreachable(host, *port).await? {
             unreachable += 1;
         }
     }

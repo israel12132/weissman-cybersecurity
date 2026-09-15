@@ -120,8 +120,12 @@ pub fn sse_war_room_stream(
             first_tick = false;
             let rows = match fetch_events_since(pool.as_ref(), tenant_id, since_id, session_filter.as_deref()).await {
                 Ok(r) => r,
-                Err(e) => {
-                    let err = json!({ "type": "error", "message": e.to_string() });
+                Err(_) => {
+                    let err = json!({
+                        "type": "error",
+                        "unavailable": true,
+                        "message": "database unavailable",
+                    });
                     yield Ok(axum::response::sse::Event::default().event("error").data(err.to_string()));
                     continue;
                 }

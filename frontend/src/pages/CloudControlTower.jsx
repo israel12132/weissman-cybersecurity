@@ -148,6 +148,7 @@ export default function CloudControlTower() {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('aws')
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   // Registers this client with the engine hub (side effect); this view has no scan button.
   useCommandCenterScan(selectedClientId)
@@ -157,9 +158,15 @@ export default function CloudControlTower() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        if (!Array.isArray(d)) {
+          setClientsUnavailable(true)
+          return
+        }
+        setClientsUnavailable(false)
+        setClients(d)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   const showToast = useCallback((sev, msg) => {
@@ -199,10 +206,16 @@ export default function CloudControlTower() {
     haystackFn: (f) => `${f.title || ''} ${f.type || ''} ${f.description || ''} ${f.engine || ''} ${f.category || ''}`,
   })
 
-  const { loadLastRun, historyLoading, lastUpdated, lastJobId } = useEngineHistory(activeTabDef.engine)
+  const { loadLastRun, historyLoading, lastUpdated, lastJobId, historyUnavailable } = useEngineHistory(activeTabDef.engine)
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
 
   const handleRefresh = useCallback(async () => {
     const run = await loadLastRun()
+    if (run?.unavailable) return
     if (run) {
       handleFindingsUpdate(activeTabDef.engine, run.findings ?? [])
     }
@@ -225,10 +238,10 @@ export default function CloudControlTower() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={historyLoading}
           refreshDisabled={activeRunning}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -243,6 +256,11 @@ export default function CloudControlTower() {
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
+      {clientsUnavailable && (
+        <p data-testid="cloud-control-tower-clients-unavailable" className="text-xs text-amber-300/80 font-mono mb-6">
+          {t('pages.cloudControlTower.clients_unavailable')}
+        </p>
+      )}
 
       {toast && (
         <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-blue-500/30 text-blue-200'}`}>
@@ -315,6 +333,11 @@ export default function CloudControlTower() {
         />
       )}
 
+      {historyUnavailable && (
+        <p data-testid="cloud-control-tower-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3 mt-6">
+          {t('pages.cloudControlTower.history_unavailable')}
+        </p>
+      )}
       <WeissmanFindingsPanel
         className="mt-6"
         findings={allFindings}
@@ -330,7 +353,10 @@ export default function CloudControlTower() {
         lastUpdated={lastUpdated}
         jobId={lastJobId}
         accent={activeTabDef.color}
-        showEmptyReady={!activeRunning && !allFindings.length}
+        unavailable={historyUnavailable}
+        unavailableTitle={t('pages.cloudControlTower.history_unavailable')}
+        unavailableBody={t('pages.cloudControlTower.history_unavailable')}
+        showEmptyReady={!historyUnavailable && !activeRunning && !allFindings.length}
         emptyReadyTitle={t('pages.cloudControlTower.run_to_populate')}
         emptyReadyBody={t('pages.cloudControlTower.run_to_populate')}
         emptyTitle={t('pages.cloudControlTower.no_findings_clean')}

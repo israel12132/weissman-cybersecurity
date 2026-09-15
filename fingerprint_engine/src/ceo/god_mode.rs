@@ -34,17 +34,15 @@ async fn get_config_tx_str(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: i64,
     key: &str,
-) -> Option<String> {
-    sqlx::query_scalar::<_, String>(
+) -> Result<Option<String>, sqlx::Error> {
+    let raw = sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
     )
     .bind(tenant_id)
     .bind(key)
     .fetch_optional(&mut **tx)
-    .await
-    .ok()
-    .flatten()
-    .filter(|s| !s.trim().is_empty())
+    .await?;
+    Ok(raw.filter(|s| !s.trim().is_empty()))
 }
 
 fn tenant_active_engine_set(json: &str) -> HashSet<String> {
@@ -122,17 +120,16 @@ fn client_industrial_ot_enabled(client_configs_json: &str) -> bool {
 }
 
 /// `scan_interval_secs` row for slug `default` (orchestrator tick), via SECURITY DEFINER RPC.
-pub async fn default_scan_interval_secs_get(app_pool: &PgPool) -> u64 {
+pub async fn default_scan_interval_secs_get(app_pool: &PgPool) -> Result<u64, sqlx::Error> {
     let cell: Option<String> = sqlx::query_scalar::<_, Option<String>>(
         "SELECT public.weissman_default_tenant_scan_interval_get()",
     )
     .fetch_one(app_pool)
-    .await
-    .ok()
-    .flatten();
-    cell.and_then(|x| x.parse().ok())
+    .await?;
+    Ok(cell
+        .and_then(|x| x.parse().ok())
         .unwrap_or(60)
-        .clamp(10, 86_400)
+        .clamp(10, 86_400))
 }
 
 pub async fn default_scan_interval_secs_set(app_pool: &PgPool, secs: u64) -> Result<(), String> {
@@ -143,7 +140,7 @@ pub async fn default_scan_interval_secs_set(app_pool: &PgPool, secs: u64) -> Res
         .bind(secs.to_string())
         .execute(app_pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "store_down".to_string())?;
     Ok(())
 }
 
@@ -154,17 +151,17 @@ pub async fn build_god_mode_snapshot_json(
     view_tenant_id: i64,
     policy_tenant_id: i64,
 ) -> Result<Value, sqlx::Error> {
-    let scan_interval_secs = default_scan_interval_secs_get(pool).await;
+    let scan_interval_secs = default_scan_interval_secs_get(pool).await?;
 
     let active_raw = {
         let mut tx = crate::db::begin_tenant_tx(pool, policy_tenant_id).await?;
         let raw = get_config_tx_str(&mut tx, policy_tenant_id, "active_engines")
-            .await
+            .await?
             .unwrap_or_else(|| {
                 r#"["osint","asm","supply_chain","bola_idor","llm_path_fuzz","semantic_ai_fuzz"]"#
                     .to_string()
             });
-        let _ = tx.commit().await;
+        tx.commit().await?;
         raw
     };
     let tenant_engine_set = tenant_active_engine_set(&active_raw);
@@ -172,7 +169,7 @@ pub async fn build_god_mode_snapshot_json(
     let mut tx = crate::db::begin_tenant_tx(pool, view_tenant_id).await?;
 
     let zero_day_tenant = get_config_tx_str(&mut tx, view_tenant_id, "enable_zero_day_probing")
-        .await
+        .await?
         .map(|s| s.to_lowercase() == "true" || s == "1")
         .unwrap_or(false);
 
@@ -216,8 +213,8 @@ pub async fn build_god_mode_snapshot_json(
         }
     }
 
-    let disc_raw = get_config_tx_str(&mut tx, view_tenant_id, DISCOVERY_KEY).await;
-    let _ = tx.commit().await;
+    let disc_raw = get_config_tx_str(&mut tx, view_tenant_id, DISCOVERY_KEY).await?;
+    tx.commit().await?;
 
     let discovery = disc_raw.and_then(|s| serde_json::from_str::<Value>(&s).ok());
 

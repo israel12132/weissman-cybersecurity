@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { RefreshCw, TrendingDown, TrendingUp, Minus } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
+import { useVisiblePolling } from '../../hooks/useVisiblePolling'
 import { EngineRealitySummary } from '../EngineRealityBadge'
 import Button from '../ui/Button'
 
@@ -132,36 +133,51 @@ export default function ExecKpiStrip() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
   const cancelRef = useRef(false)
+  const abortRef = useRef(null)
+  const inflightRef = useRef(false)
 
-  const refresh = async () => {
+  const refresh = async ({ silent = false } = {}) => {
+    if (silent && inflightRef.current) return
+    if (!silent) abortRef.current?.abort()
+    else if (inflightRef.current) return
+    const ac = new AbortController()
+    abortRef.current = ac
+    inflightRef.current = true
     try {
-      const d = await apiFetch('/api/dashboard/exec-kpis')
+      const d = await apiFetch('/api/dashboard/exec-kpis', { signal: ac.signal })
+      if (ac.signal.aborted) return
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || t('components.cockpitTabs.execKpiStrip.fetch_failed'))
+      }
       if (!cancelRef.current) {
         setKpis(d)
         setErr(null)
       }
     } catch (e) {
+      if (e?.name === 'AbortError' || ac.signal.aborted) return
       if (!cancelRef.current) {
         setErr(e?.message || t('components.cockpitTabs.execKpiStrip.fetch_failed'))
+        setKpis(null)
       }
     } finally {
-      if (!cancelRef.current) setLoading(false)
+      if (abortRef.current === ac) inflightRef.current = false
+      if (!cancelRef.current && abortRef.current === ac && !ac.signal.aborted) setLoading(false)
     }
   }
 
   useEffect(() => {
     cancelRef.current = false
     refresh()
-    const timer = setInterval(refresh, REFRESH_MS)
-    const onFocus = () => refresh()
+    const onFocus = () => refresh({ silent: true })
     window.addEventListener('focus', onFocus)
     return () => {
       cancelRef.current = true
-      clearInterval(timer)
+      abortRef.current?.abort()
       window.removeEventListener('focus', onFocus)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  useVisiblePolling(() => refresh({ silent: true }), REFRESH_MS)
 
   if (loading && !kpis) {
     return (
@@ -178,7 +194,11 @@ export default function ExecKpiStrip() {
 
   if (err && !kpis) {
     return (
-      <div className="px-4 py-2.5 border-b border-rose-500/25 bg-rose-950/25 text-[11px] font-mono text-rose-200">
+      <div
+        className="px-4 py-2.5 border-b border-rose-500/25 bg-rose-950/25 text-[11px] font-mono text-rose-200"
+        data-testid="exec-kpi-unavailable"
+        role="alert"
+      >
         {t('components.cockpitTabs.execKpiStrip.load_error', { err })}
       </div>
     )
@@ -186,8 +206,10 @@ export default function ExecKpiStrip() {
 
   const sev = kpis?.severity || {}
   const delta = kpis?.severity_delta_24h || {}
-  const score = kpis?.security_score ?? 0
-  const scoreColor = score >= 80 ? '#22c55e' : score >= 60 ? '#fbbf24' : score >= 40 ? '#f97316' : '#ef4444'
+  const score = kpis?.security_score
+  const scoreColor = score == null
+    ? '#94a3b8'
+    : score >= 80 ? '#22c55e' : score >= 60 ? '#fbbf24' : score >= 40 ? '#f97316' : '#ef4444'
   const agents = kpis?.agents || {}
   const jobs = kpis?.jobs || {}
   const assets = kpis?.assets || {}

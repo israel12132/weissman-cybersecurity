@@ -59,6 +59,7 @@ pub async fn topology_bundle(
         }
     }
 
+    let open_findings_truncated = findings.len() >= 500;
     Ok(json!({
         "ok": true,
         "client_id": client_id,
@@ -69,6 +70,8 @@ pub async fn topology_bundle(
         },
         "attack_paths": attack_paths,
         "strips_chain": strips_chain.as_ref().map(AttackChain::to_json),
+        "open_findings": findings,
+        "open_findings_truncated": open_findings_truncated,
     }))
 }
 
@@ -179,7 +182,7 @@ async fn load_open_findings(
     // dedicated table columns (not inside raw_data), so without this the STRIPS planner would never
     // see a finding's KEV status or EPSS/KEV-adjusted effective_risk when grounding its facts.
     let rows = sqlx::query(
-        r#"SELECT raw_data, severity, effective_risk, kev_listed FROM vulnerabilities
+        r#"SELECT raw_data, severity, effective_risk, kev_listed, risk_node_id FROM vulnerabilities
             WHERE tenant_id = $1 AND client_id = $2
               AND COALESCE(status, 'OPEN') NOT IN ('FIXED', 'FALSE_POSITIVE')
             ORDER BY id DESC LIMIT 500"#,
@@ -204,6 +207,9 @@ async fn load_open_findings(
                 }
                 if let Ok(kev) = r.try_get::<bool, _>("kev_listed") {
                     obj.insert("kev_listed".into(), json!(kev));
+                }
+                if let Ok(Some(nid)) = r.try_get::<Option<i64>, _>("risk_node_id") {
+                    obj.entry("risk_node_id").or_insert(json!(nid));
                 }
             }
             Some(v)

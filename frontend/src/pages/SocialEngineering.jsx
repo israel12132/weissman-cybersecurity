@@ -14,6 +14,7 @@ import { apiFetch } from '../utils/apiFetch';
 import { clientPrimaryTargetUrl } from '../lib/clientTarget';
 import { useJobPoll } from '../lib/useJobPoll';
 import Button from '../components/ui/Button'
+import EmptyState from '../components/ui/EmptyState'
 
 const TEMPLATES = [
   'Password Reset',
@@ -41,7 +42,9 @@ export default function SocialEngineering() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [campaignsUnavailable, setCampaignsUnavailable] = useState(false);
   const [clients, setClients] = useState([]);
+  const [clientsUnavailable, setClientsUnavailable] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const createModalRef = useRef(null);
   useFocusTrap(createModalRef, createOpen);
@@ -63,10 +66,15 @@ export default function SocialEngineering() {
       setLoading(true);
       setError('');
       const data = await apiFetch('/api/soc/social-engineering');
-      setCampaigns(data.campaigns || []);
+      if (!Array.isArray(data.campaigns)) {
+        throw new Error(t('pages.socialEngineering.load_failed'));
+      }
+      setCampaigns(data.campaigns);
       setStats(data.stats || null);
+      setCampaignsUnavailable(false);
     } catch (err) {
       setError(err?.message || t('pages.socialEngineering.load_failed'));
+      setCampaignsUnavailable(true);
     } finally {
       setLoading(false);
     }
@@ -76,16 +84,20 @@ export default function SocialEngineering() {
     fetchSocialEngineering();
     apiFetch('/api/clients')
       .then((data) => {
-        const list = Array.isArray(data) ? data : data?.clients || [];
-        setClients(list);
+        const list = Array.isArray(data) ? data : Array.isArray(data?.clients) ? data.clients : null
+        if (!list) {
+          setClientsUnavailable(true)
+          return
+        }
+        setClientsUnavailable(false)
+        setClients(list)
         if (list.length > 0) {
           const id = String(list[0].id);
           setCreateClientId(id);
           setScanClientId(id);
         }
       })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {});
+      .catch(() => setClientsUnavailable(true));
   }, [fetchSocialEngineering]);
 
   useJobPoll(scanJobId, {
@@ -188,6 +200,11 @@ export default function SocialEngineering() {
     total,
   } = useFindingsWorkbench(campaignFindings, { csvPrefix: 'weissman-social-engineering' });
 
+  const handleExportCsv = useCallback(() => {
+    if (campaignsUnavailable) return
+    exportCsv()
+  }, [campaignsUnavailable, exportCsv])
+
   const severityDistribution = useMemo(() => {
     const dist = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
     for (const c of campaigns) {
@@ -230,9 +247,9 @@ export default function SocialEngineering() {
       actions={(
         <ShellScanActions
           onRefresh={fetchSocialEngineering}
-          onExport={exportCsv}
+          onExport={campaignsUnavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >
@@ -247,6 +264,15 @@ export default function SocialEngineering() {
           </div>
         )}
 
+        {error ? (
+          <div data-testid="social-engineering-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.socialEngineering.unavailable_title')}
+              body={t('pages.socialEngineering.unavailable_body')}
+            />
+          </div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
@@ -274,11 +300,18 @@ export default function SocialEngineering() {
               <span className="text-sm text-[var(--text-tertiary)]">{t('pages.socialEngineering.assessments_loaded')}</span>
               <Shield className="w-4 h-4 text-emerald-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{loading ? '…' : campaigns.length}</div>
+            <div className="text-2xl font-bold text-white">{loading || error ? '—' : campaigns.length}</div>
           </div>
         </div>
+        )}
 
-        {campaigns.length > 0 && (
+        {clientsUnavailable && (
+          <p data-testid="social-engineering-clients-unavailable" className="text-xs text-amber-300/80 font-mono">
+            {t('pages.socialEngineering.clients_unavailable')}
+          </p>
+        )}
+
+        {!error && campaigns.length > 0 && (
           <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
             <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase mb-2">{t('pages.socialEngineering.severity_distribution')}</div>
             <div className="flex h-2 rounded-full overflow-hidden">
@@ -335,6 +368,7 @@ export default function SocialEngineering() {
           </Link>
         </div>
 
+        {!error && (
         <WeissmanFindingsPanel
           findings={campaignFindings}
           filteredFindings={filteredFindings}
@@ -387,6 +421,7 @@ export default function SocialEngineering() {
             );
           }}
         />
+        )}
 
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-1">{t('pages.socialEngineering.templates_heading')}</h3>

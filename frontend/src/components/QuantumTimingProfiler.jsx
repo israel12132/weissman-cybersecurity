@@ -50,6 +50,9 @@ export default function QuantumTimingProfiler() {
     if (!clientId) return
     apiFetch('/api/clients')
       .then((list) => {
+        if (list?.ok === false || list?.unavailable) {
+          throw new Error(list.detail || t(`${NS}.unavailable`))
+        }
         const c = Array.isArray(list) ? list.find((x) => String(x.id) === String(clientId)) : null
         setClient(c || null)
         if (c?.domains) {
@@ -60,7 +63,10 @@ export default function QuantumTimingProfiler() {
           } catch { /* best-effort; non-fatal */ }
         }
       })
-      .catch(() => setClient(null))
+      .catch((e) => {
+        setClient(null)
+        setError(e?.message || t(`${NS}.unavailable`))
+      })
   }, [clientId])
 
   useEffect(() => {
@@ -134,9 +140,7 @@ export default function QuantumTimingProfiler() {
     }
   }, [])
 
-  const chartPoints = chartData.length
-    ? chartData
-    : [{ index: 0, baseline_us: 0, payload_us: 0 }]
+  const chartPoints = chartData
 
   return (
     <StandaloneLabShell title={t(`${NS}.title`)} subtitle={t(`${NS}.subtitle`)}>
@@ -169,7 +173,9 @@ export default function QuantumTimingProfiler() {
               </p>
             )}
             {error && (
-              <p className="mt-2 text-red-400 text-sm">{error}</p>
+              <p className="mt-2 text-red-400 text-sm" data-testid="timing-profiler-unavailable" role="alert">
+                {error}
+              </p>
             )}
           </div>
 
@@ -226,6 +232,7 @@ export default function QuantumTimingProfiler() {
             </div>
           </div>
           <div className="h-[360px]">
+            {chartPoints.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 accessibilityLayer
@@ -277,6 +284,11 @@ export default function QuantumTimingProfiler() {
                 />
               </LineChart>
             </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">
+                {error ? t(`${NS}.unavailable`) : t(`${NS}.no_samples`)}
+              </div>
+            )}
           </div>
           <p className="text-[var(--text-muted)] text-xs mt-2">
             {t(`${NS}.footer`)}

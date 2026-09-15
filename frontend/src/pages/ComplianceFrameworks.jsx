@@ -56,12 +56,14 @@ export default function ComplianceFrameworks() {
   const [mappingsOpen, setMappingsOpen] = useState(false);
   const [mappingsLoading, setMappingsLoading] = useState(false);
   const [mappingsSearch, setMappingsSearch] = useState('');
+  const [mappingsUnavailable, setMappingsUnavailable] = useState(false);
   const [frameworks, setFrameworks] = useState([]);
   const [selectedFramework, setSelectedFramework] = useState(null);
   const [controls, setControls] = useState([]);
   const [loadingFrameworks, setLoadingFrameworks] = useState(true);
   const [loadingControls, setLoadingControls] = useState(false);
   const [error, setError] = useState('');
+  const [controlsUnavailable, setControlsUnavailable] = useState(false);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [exporting, setExporting] = useState(false);
@@ -79,7 +81,6 @@ export default function ComplianceFrameworks() {
     } catch (err) {
       console.error('Failed to fetch frameworks:', err);
       setError(err?.message || t('pages.complianceFrameworks.load_failed'));
-      setFrameworks([]);
     } finally {
       setLoadingFrameworks(false);
     }
@@ -89,13 +90,15 @@ export default function ComplianceFrameworks() {
     if (!frameworkId) return;
     try {
       setLoadingControls(true);
-      setError('');
+      setControlsUnavailable(false);
       const data = await api.get(`/api/compliance/frameworks/${frameworkId}/controls`);
-      setControls(data.controls || []);
+      if (!Array.isArray(data.controls)) {
+        throw new Error(t('pages.complianceFrameworks.controls_load_failed'));
+      }
+      setControls(data.controls);
     } catch (err) {
       console.error('Failed to fetch controls:', err);
-      setControls([]);
-      setError(err?.message || t('pages.complianceFrameworks.controls_load_failed'));
+      setControlsUnavailable(true);
     } finally {
       setLoadingControls(false);
     }
@@ -112,6 +115,7 @@ export default function ComplianceFrameworks() {
   }, [selectedFramework, fetchControls]);
 
   const generateReport = async (frameworkId) => {
+    if (error || controlsUnavailable) return
     try {
       setExporting(true);
       const r = await apiFetch(`/api/compliance/frameworks/${frameworkId}/report`, { raw: true });
@@ -200,7 +204,7 @@ export default function ComplianceFrameworks() {
       return;
     }
     setMappingsOpen(true);
-    if (mappings != null) return; // already loaded
+    if (mappings != null && !mappingsUnavailable) return; // already loaded
     setMappingsLoading(true);
     try {
       const fw = selectedFramework?.id ? `?framework=${encodeURIComponent(selectedFramework.id)}` : '';
@@ -212,12 +216,14 @@ export default function ComplianceFrameworks() {
         list = Array.isArray(dAll.mappings) ? dAll.mappings : [];
       }
       setMappings(list);
+      setMappingsUnavailable(false);
     } catch {
       setMappings([]);
+      setMappingsUnavailable(true);
     } finally {
       setMappingsLoading(false);
     }
-  }, [mappingsOpen, mappings, selectedFramework]);
+  }, [mappingsOpen, mappings, mappingsUnavailable, selectedFramework]);
 
   const filteredMappings = useMemo(() => {
     if (!Array.isArray(mappings)) return [];
@@ -342,6 +348,11 @@ export default function ComplianceFrameworks() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error || controlsUnavailable) return
+    exportCsv()
+  }, [error, controlsUnavailable, exportCsv])
+
   return (
     <PageShell
       title={t('pages.complianceFrameworks.title')}
@@ -350,9 +361,9 @@ export default function ComplianceFrameworks() {
       actions={(
         <ShellScanActions
           onRefresh={fetchFrameworks}
-          onExport={exportCsv}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loadingFrameworks}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || controlsUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -414,7 +425,7 @@ export default function ComplianceFrameworks() {
             <div className="mt-2 text-xs font-mono text-[var(--text-muted)]">
               {t('pages.complianceFrameworks.pack_scope', {
                 client: selectedClient?.name || selectedClient?.domain || `#${selectedClientId}`,
-                framework: selectedFramework?.name || t('pages.complianceFrameworks.pack_all_frameworks'),
+                framework: !error && selectedFramework?.name ? selectedFramework.name : t('pages.complianceFrameworks.pack_all_frameworks'),
               })}
             </div>
           )}
@@ -590,7 +601,7 @@ export default function ComplianceFrameworks() {
             <span className="text-sm font-semibold text-white flex items-center gap-2">
               <FileText className="w-4 h-4 text-cyan-400" />
               {t('pages.complianceFrameworks.mappings_title')}
-              {Array.isArray(mappings) && (
+              {Array.isArray(mappings) && !mappingsUnavailable && (
                 <span className="text-[10px] font-mono text-[var(--text-muted)]">({mappings.length})</span>
               )}
             </span>
@@ -602,6 +613,13 @@ export default function ComplianceFrameworks() {
             <div className="mt-3">
               {mappingsLoading ? (
                 <SkeletonTable rows={4} cols={4} />
+              ) : mappingsUnavailable ? (
+                <div data-testid="compliance-mappings-unavailable">
+                  <EmptyState
+                    title={t('pages.complianceFrameworks.mappings_unavailable_title')}
+                    description={t('pages.complianceFrameworks.mappings_unavailable_body')}
+                  />
+                </div>
               ) : !Array.isArray(mappings) || mappings.length === 0 ? (
                 <div className="text-[12px] font-mono text-[var(--text-muted)] py-3">
                   {t('pages.complianceFrameworks.mappings_empty')}
@@ -641,6 +659,13 @@ export default function ComplianceFrameworks() {
         <div className="flex items-center gap-3 overflow-x-auto pb-2">
           {loadingFrameworks && frameworks.length === 0 ? (
             <div className="text-sm text-[var(--text-muted)] px-4 py-3">{t('pages.complianceFrameworks.loading')}</div>
+          ) : error ? (
+            <div data-testid="compliance-frameworks-unavailable">
+              <EmptyState
+                title={t('pages.complianceFrameworks.unavailable_title')}
+                description={t('pages.complianceFrameworks.unavailable_body')}
+              />
+            </div>
           ) : frameworks.length === 0 ? (
             <EmptyState
               title={t('pages.complianceFrameworks.no_frameworks_title')}
@@ -649,7 +674,7 @@ export default function ComplianceFrameworks() {
           ) : (
             frameworks.map((fw) => {
               const isSelected = selectedFramework?.id === fw.id;
-              const scoreLabel = isSelected && controls.length > 0
+              const scoreLabel = isSelected && !controlsUnavailable && controls.length > 0
                 ? t('pages.complianceFrameworks.framework_score', { score: stats.score })
                 : fw.scope;
 
@@ -677,11 +702,11 @@ export default function ComplianceFrameworks() {
           )}
         </div>
 
-        {selectedFramework && (
+        {selectedFramework && !error && (
           <>
             {loadingControls && controls.length === 0 ? (
               <SkeletonWidgetGrid count={5} />
-            ) : controls.length > 0 && (
+            ) : !controlsUnavailable && controls.length > 0 && (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                   <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
@@ -771,7 +796,7 @@ export default function ComplianceFrameworks() {
               <Button variant="unstyled"
                 type="button"
                 onClick={() => generateReport(selectedFramework.id)}
-                disabled={exporting || controls.length === 0}
+                disabled={exporting || controlsUnavailable || !!error || controls.length === 0}
                 className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors disabled:opacity-40"
               >
                 <Download className="w-4 h-4" />
@@ -785,13 +810,20 @@ export default function ComplianceFrameworks() {
                   <FileText className="w-4 h-4 text-cyan-400" />
                   {t('pages.complianceFrameworks.controls_heading')} — {selectedFramework.name}
                   {' '}
-                  ({filteredControls.length})
+                  ({controlsUnavailable ? '—' : filteredControls.length})
                 </h3>
               </div>
 
               {loadingControls ? (
                 <div className="p-6">
                   <SkeletonTable rows={5} cols={3} />
+                </div>
+              ) : controlsUnavailable ? (
+                <div data-testid="compliance-controls-unavailable">
+                  <EmptyState
+                    title={t('pages.complianceFrameworks.controls_unavailable_title')}
+                    description={t('pages.complianceFrameworks.controls_unavailable_body')}
+                  />
                 </div>
               ) : controls.length === 0 ? (
                 <EmptyState
@@ -836,7 +868,7 @@ export default function ComplianceFrameworks() {
           </>
         )}
 
-        {selectedFramework && stats.nonCompliant > 0 && (
+        {selectedFramework && !error && !controlsUnavailable && stats.nonCompliant > 0 && (
           <div className="bg-red-500/10 backdrop-blur-md border border-red-500/30 rounded-xl p-6">
             <div className="flex items-center gap-2 mb-4">
               <AlertTriangle className="w-5 h-5 text-red-400" />

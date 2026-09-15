@@ -13,6 +13,7 @@ import CopyButton from '../components/ui/CopyButton'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../utils/apiFetch'
 import { apiUrl } from '../lib/apiBase'
+import { invalidateAgentFleetCache } from '../hooks/useAgentFleetStatus'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import Button from '../components/ui/Button'
 import { useApiQuery } from '../hooks/useApiQuery'
@@ -91,21 +92,22 @@ export default function AgentManagement() {
   const refresh = useCallback(async () => {
     try {
       const d = await apiFetch('/api/agents/status')
+      if (d?.ok === false || d?.unavailable) {
+        const err = new Error(d?.detail || t('agents.status_unavailable_title'))
+        err.unavailable = true
+        throw err
+      }
       setAgents(Array.isArray(d.agents) ? d.agents : [])
       setErr(null)
+      invalidateAgentFleetCache()
     } catch (e) {
-      if (e?.status === 404) {
-        setAgents([])
-        setErr(null)
-        return
-      }
       if (e?.status != null) {
         const b = e?.response ? await e.response.json().catch(() => ({})) : {}
         setErr(b.detail || t('agents.load_failed', { status: e.status }))
       } else {
         setErr(e.message || String(e))
       }
-      setAgents([])
+      // Keep the last successful roster. A 404/5xx is not "zero agents enrolled".
     } finally {
       setLoading(false)
     }
@@ -311,7 +313,7 @@ export default function AgentManagement() {
       <div className="space-y-6">
         {loading && agents.length === 0 ? (
           <SkeletonWidgetGrid count={4} />
-        ) : (
+        ) : err && agents.length === 0 ? null : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Kpi label={t('agents.kpi_registered')} value={metrics.total} color="#22d3ee" />
             <Kpi label={t('agents.kpi_online')} value={metrics.online} color="#34d399" />
@@ -406,6 +408,15 @@ export default function AgentManagement() {
             <h2 className="text-xs font-mono uppercase tracking-widest text-[var(--text-tertiary)] mb-3">{t('agents.registered_heading')}</h2>
             {loading && agents.length === 0 ? (
               <SkeletonTable rows={4} cols={6} />
+            ) : err && agents.length === 0 ? (
+              <div data-testid="agent-fleet-unavailable" data-live="false">
+                <EmptyState
+                  icon="alert"
+                  title={t('agents.status_unavailable_title')}
+                  body={t('agents.status_unavailable_body')}
+                  cta={{ label: t('agents.refresh'), onClick: refresh }}
+                />
+              </div>
             ) : agents.length === 0 ? (
               <EmptyState
                 icon="shield"

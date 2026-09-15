@@ -5,10 +5,31 @@ use serde_json::Value;
 use sqlx::PgPool;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::OnceCell;
 use uuid::Uuid;
 use weissman_job_bus::JobBus;
 
 use crate::job_orchestration::attach_signed_envelope;
+
+/// Process-wide enabled bus. First successful Redis+secret connect is reused so
+/// CNAPP `buffer_unordered(8)` does not open a TCP connection per client.
+static ENABLED_JOB_BUS: OnceCell<JobBus> = OnceCell::const_new();
+
+async fn load_job_bus(pool: &PgPool) -> JobBus {
+    if let Some(bus) = ENABLED_JOB_BUS.get() {
+        return bus.clone();
+    }
+    let bus = JobBus::from_env(pool.clone()).await;
+    if bus.is_enabled() {
+        let _ = ENABLED_JOB_BUS.set(bus.clone());
+    }
+    bus
+}
+
+/// Open (or reuse) the job bus before a fan-out so the first 8 tasks do not stampede Redis.
+pub async fn warm_job_bus(pool: &PgPool) {
+    let _ = load_job_bus(pool).await;
+}
 
 /// Enqueue `weissman_async_jobs` row; `trace_id` taken from request extensions when set.
 pub async fn enqueue(
@@ -18,7 +39,7 @@ pub async fn enqueue(
     payload: Value,
     trace_id: Option<String>,
 ) -> Result<Uuid, sqlx::Error> {
-    let bus = JobBus::from_env(pool.clone()).await;
+    let bus = load_job_bus(pool).await;
     let bus_enabled = bus.is_enabled();
 
     // Zero-trust path: the worker rejects (permanently dead-letters) any job it
@@ -165,7 +186,7 @@ pub async fn finalize_held_job(
     payload: Value,
     trace_id: Option<&str>,
 ) -> Result<(), sqlx::Error> {
-    let bus = JobBus::from_env(pool.clone()).await;
+    let bus = load_job_bus(pool).await;
     if !bus.is_enabled() {
         // Caller inserted a held row even without a bus — clear the hold so it is claimable.
         let sealed = crate::job_envelope::seal_job_payload_sqlx(payload, tenant_id)?;
@@ -252,4 +273,36 @@ pub fn spawn_stale_lock_reclaim_loop(pool: Arc<PgPool>) {
         })
         .await;
     });
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn enabled_job_bus_is_reused_not_opened_per_enqueue() {
+        let src = include_str!("async_jobs.rs");
+        assert!(src.contains("ENABLED_JOB_BUS"));
+        assert!(src.contains("OnceCell"));
+        assert!(src.contains("warm_job_bus"));
+        assert!(
+            !src.contains("JobBus::from_env(pool.clone()).await;\n    let bus_enabled"),
+            "enqueue must not open Redis per job"
+        );
+    }
+
+    #[test]
+    fn cnapp_refresh_fans_out_and_fails_partial_enqueue() {
+        let src = include_str!("server_handlers_supreme.inc");
+        assert!(src.contains("buffer_unordered(8)"));
+        assert!(src.contains("warm_job_bus"));
+        assert!(src.contains("jobs_failed"));
+        assert!(src.contains("failed > 0"));
+    }
+
+    #[test]
+    fn onboarding_facts_do_not_default_ai_entitlement_true() {
+        let src = include_str!("server_handlers_sqlx.inc");
+        assert!(src.contains("let mut ai_heavy_entitled = false"));
+        assert!(!src.contains("let mut ai_heavy_entitled = true"));
+        assert!(src.contains("key = ANY($2)"));
+    }
 }

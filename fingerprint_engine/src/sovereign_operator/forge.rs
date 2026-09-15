@@ -108,32 +108,44 @@ pub async fn forge_draft(
     .bind(&compile_log)
     .fetch_one(&mut *tx)
     .await;
-    let _ = tx.commit().await;
     match inserted {
-        Ok(fid) => ToolOutcome {
-            ok: true,
-            name: "forge".into(),
-            detail: format!(
-                "local worktree {} status={status} compile_ok={compile_ok} — GitHub blocked until live_proof",
-                dir.display()
-            ),
-            payload: json!({
-                "forge_id": fid,
-                "engine_id": engine_id,
-                "status": status,
-                "compile_ok": compile_ok,
-                "compile_log": compile_log.chars().take(4000).collect::<String>(),
-                "worktree": dir.to_string_lossy(),
-                "worktree_purged": true,
-                "in_production_catalog": is_production_engine_id(&engine_id),
-            }),
-        },
-        Err(e) => ToolOutcome {
-            ok: false,
-            name: "forge".into(),
-            detail: e.to_string(),
-            payload: json!({ "compile_log": compile_log }),
-        },
+        Ok(fid) => {
+            if tx.commit().await.is_err() {
+                return ToolOutcome {
+                    ok: false,
+                    name: "forge".into(),
+                    detail: "store_down".into(),
+                    payload: json!({}),
+                };
+            }
+            ToolOutcome {
+                ok: true,
+                name: "forge".into(),
+                detail: format!(
+                    "local worktree {} status={status} compile_ok={compile_ok} — GitHub blocked until live_proof",
+                    dir.display()
+                ),
+                payload: json!({
+                    "forge_id": fid,
+                    "engine_id": engine_id,
+                    "status": status,
+                    "compile_ok": compile_ok,
+                    "compile_log": compile_log.chars().take(4000).collect::<String>(),
+                    "worktree": dir.to_string_lossy(),
+                    "worktree_purged": true,
+                    "in_production_catalog": is_production_engine_id(&engine_id),
+                }),
+            }
+        }
+        Err(e) => {
+            let _ = tx.rollback().await;
+            ToolOutcome {
+                ok: false,
+                name: "forge".into(),
+                detail: e.to_string(),
+                payload: json!({ "compile_log": compile_log }),
+            }
+        }
     }
 }
 
@@ -168,7 +180,14 @@ pub async fn forge_prove(
     .bind(forge_id)
     .fetch_optional(&mut *tx)
     .await;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return ToolOutcome {
+            ok: false,
+            name: "forge_prove".into(),
+            detail: "store_down".into(),
+            payload: json!({}),
+        };
+    }
     let row = match row {
         Ok(Some(r)) => r,
         Ok(None) => {
@@ -221,7 +240,19 @@ pub async fn forge_prove(
         .await
         {
             Ok(job_id) => {
-                let waited = wait_live_finding(pool, tenant_id, job_id, &engine_id, &target).await;
+                let waited = match wait_live_finding(pool, tenant_id, job_id, &engine_id, &target)
+                    .await
+                {
+                    Ok(v) => v,
+                    Err(_) => {
+                        return ToolOutcome {
+                            ok: false,
+                            name: "forge_prove".into(),
+                            detail: "store_down".into(),
+                            payload: json!({ "job_id": job_id.to_string() }),
+                        };
+                    }
+                };
                 let proved = waited
                     .get("proved")
                     .and_then(Value::as_bool)
@@ -280,14 +311,23 @@ pub async fn forge_prove(
                     };
                 }
             };
-            let _ = sqlx::query(
+            if sqlx::query(
                 "UPDATE weissman_sovereign_forge SET status='rejected', live_finding=$2, updated_at=now() WHERE id=$1",
             )
             .bind(forge_id)
             .bind(&proof)
             .execute(&mut *tx)
-            .await;
-            let _ = tx.commit().await;
+            .await
+            .is_err()
+                || tx.commit().await.is_err()
+            {
+                return ToolOutcome {
+                    ok: false,
+                    name: "forge_prove".into(),
+                    detail: "store_down".into(),
+                    payload: proof,
+                };
+            }
             return ToolOutcome {
                 ok: false,
                 name: "forge_prove".into(),
@@ -309,15 +349,24 @@ pub async fn forge_prove(
             };
         }
     };
-    let _ = sqlx::query(
+    if sqlx::query(
         "UPDATE weissman_sovereign_forge SET status=$2, live_finding=$3, updated_at=now() WHERE id=$1",
     )
     .bind(forge_id)
     .bind(&status)
     .bind(&proof)
     .execute(&mut *tx)
-    .await;
-    let _ = tx.commit().await;
+    .await
+    .is_err()
+        || tx.commit().await.is_err()
+    {
+        return ToolOutcome {
+            ok: false,
+            name: "forge_prove".into(),
+            detail: "store_down".into(),
+            payload: proof,
+        };
+    }
     let pending = status == "proof_pending";
     ToolOutcome {
         ok: proved || pending,
@@ -354,23 +403,14 @@ pub async fn forge_github(pool: &PgPool, tenant_id: i64, args: &Value) -> ToolOu
             };
         }
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         "SELECT engine_id, title, status, rust_source, live_finding FROM weissman_sovereign_forge WHERE id = $1",
     )
     .bind(forge_id)
     .fetch_optional(&mut *tx)
-    .await;
-    let _ = tx.commit().await;
-    let row = match row {
-        Ok(Some(r)) => r,
-        Ok(None) => {
-            return ToolOutcome {
-                ok: false,
-                name: "forge_github".into(),
-                detail: "forge draft not found".into(),
-                payload: json!({}),
-            };
-        }
+    .await
+    {
+        Ok(r) => r,
         Err(e) => {
             return ToolOutcome {
                 ok: false,
@@ -379,6 +419,22 @@ pub async fn forge_github(pool: &PgPool, tenant_id: i64, args: &Value) -> ToolOu
                 payload: json!({}),
             };
         }
+    };
+    if tx.commit().await.is_err() {
+        return ToolOutcome {
+            ok: false,
+            name: "forge_github".into(),
+            detail: "store_down".into(),
+            payload: json!({}),
+        };
+    }
+    let Some(row) = row else {
+        return ToolOutcome {
+            ok: false,
+            name: "forge_github".into(),
+            detail: "forge draft not found".into(),
+            payload: json!({}),
+        };
     };
     let status: String = row.try_get("status").unwrap_or_default();
     if !github_allowed(&status) {
@@ -413,15 +469,41 @@ pub async fn forge_github(pool: &PgPool, tenant_id: i64, args: &Value) -> ToolOu
     let cycle_id = Uuid::new_v4();
     match crate::self_improve::insert_proposals(pool, tenant_id, cycle_id, &[proposal]).await {
         Ok(n) => {
-            if let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await {
-                let _ = sqlx::query(
-                    "UPDATE weissman_sovereign_forge SET status='github_queued', proposal_cycle_id=$2, updated_at=now() WHERE id=$1",
-                )
-                .bind(forge_id)
-                .bind(cycle_id)
-                .execute(&mut *tx)
-                .await;
-                let _ = tx.commit().await;
+            let mut tx = match crate::db::begin_tenant_tx(pool, tenant_id).await {
+                Ok(t) => t,
+                Err(_) => {
+                    return ToolOutcome {
+                        ok: false,
+                        name: "forge_github".into(),
+                        detail: "store_down".into(),
+                        payload: json!({
+                            "forge_id": forge_id,
+                            "cycle_id": cycle_id,
+                            "inserted": n,
+                        }),
+                    };
+                }
+            };
+            if sqlx::query(
+                "UPDATE weissman_sovereign_forge SET status='github_queued', proposal_cycle_id=$2, updated_at=now() WHERE id=$1",
+            )
+            .bind(forge_id)
+            .bind(cycle_id)
+            .execute(&mut *tx)
+            .await
+            .is_err()
+                || tx.commit().await.is_err()
+            {
+                return ToolOutcome {
+                    ok: false,
+                    name: "forge_github".into(),
+                    detail: "store_down".into(),
+                    payload: json!({
+                        "forge_id": forge_id,
+                        "cycle_id": cycle_id,
+                        "inserted": n,
+                    }),
+                };
             }
             ToolOutcome {
                 ok: true,
@@ -681,49 +763,61 @@ async fn wait_live_finding(
     job_id: Uuid,
     engine_id: &str,
     target: &str,
-) -> Value {
+) -> Result<Value, String> {
     let mut last_status = "pending".to_string();
     let mut finding_logs = 0i64;
     let mut result_findings = 0usize;
+    let mut saw_snapshot = false;
     for _ in 0..24 {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        if let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await {
-            if let Ok(row) =
-                sqlx::query("SELECT status, result_json FROM weissman_async_jobs WHERE id = $1")
-                    .bind(job_id)
-                    .fetch_optional(&mut *tx)
-                    .await
-            {
-                if let Some(r) = row {
-                    last_status = r.try_get::<String, _>("status").unwrap_or(last_status);
-                    if let Ok(Some(rj)) = r.try_get::<Option<Value>, _>("result_json") {
-                        result_findings = rj
-                            .get("findings")
+        let mut tx = match crate::db::begin_tenant_tx(pool, tenant_id).await {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        let row = match sqlx::query(
+            "SELECT status, result_json FROM weissman_async_jobs WHERE id = $1",
+        )
+        .bind(job_id)
+        .fetch_optional(&mut *tx)
+        .await
+        {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        let n: i64 = match sqlx::query_scalar::<_, i64>(
+            r#"SELECT count(*)::bigint FROM weissman_sovereign_engine_logs
+               WHERE job_id = $1 AND phase = 'finding'"#,
+        )
+        .bind(job_id.to_string())
+        .fetch_one(&mut *tx)
+        .await
+        {
+            Ok(n) => n,
+            Err(_) => continue,
+        };
+        if tx.commit().await.is_err() {
+            continue;
+        }
+        saw_snapshot = true;
+        finding_logs = n;
+        result_findings = 0;
+        if let Some(r) = row {
+            last_status = r.try_get::<String, _>("status").unwrap_or(last_status);
+            if let Ok(Some(rj)) = r.try_get::<Option<Value>, _>("result_json") {
+                result_findings = rj
+                    .get("findings")
+                    .and_then(Value::as_array)
+                    .map(|a| a.len())
+                    .or_else(|| {
+                        rj.pointer("/result/findings")
                             .and_then(Value::as_array)
                             .map(|a| a.len())
-                            .or_else(|| {
-                                rj.pointer("/result/findings")
-                                    .and_then(Value::as_array)
-                                    .map(|a| a.len())
-                            })
-                            .unwrap_or(0);
-                    }
-                }
+                    })
+                    .unwrap_or(0);
             }
-            if let Ok(n) = sqlx::query_scalar::<_, i64>(
-                r#"SELECT count(*)::bigint FROM weissman_sovereign_engine_logs
-                   WHERE job_id = $1 AND phase = 'finding'"#,
-            )
-            .bind(job_id.to_string())
-            .fetch_one(&mut *tx)
-            .await
-            {
-                finding_logs = n;
-            }
-            let _ = tx.commit().await;
         }
         if finding_logs > 0 || result_findings > 0 {
-            return json!({
+            return Ok(json!({
                 "proved": true,
                 "status": "live_proof",
                 "job_status": last_status,
@@ -731,7 +825,7 @@ async fn wait_live_finding(
                 "result_findings": result_findings,
                 "engine": engine_id,
                 "target": target,
-            });
+            }));
         }
         if last_status == "failed"
             || last_status == "dead"
@@ -741,6 +835,9 @@ async fn wait_live_finding(
             break;
         }
     }
+    if !saw_snapshot {
+        return Err("store_down".to_string());
+    }
     let proved = finding_logs > 0 || result_findings > 0;
     let status = if proved {
         "live_proof"
@@ -749,7 +846,7 @@ async fn wait_live_finding(
     } else {
         "proof_pending"
     };
-    json!({
+    Ok(json!({
         "proved": proved,
         "status": status,
         "job_status": last_status,
@@ -757,7 +854,7 @@ async fn wait_live_finding(
         "result_findings": result_findings,
         "engine": engine_id,
         "target": target,
-    })
+    }))
 }
 
 fn uuid_arg(args: &Value, key: &str) -> Option<Uuid> {

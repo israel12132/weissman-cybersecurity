@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import {
@@ -17,6 +17,7 @@ import { apiFetch } from '../utils/apiFetch'
 import ClientReadinessBanner from '../components/clients/ClientReadinessBanner'
 import { useEngineRequirements, computeLocalReadiness } from '../hooks/useEngineRequirements'
 import Button from '../components/ui/Button'
+import EmptyState from '../components/ui/EmptyState'
 
 const AGENT_PLATFORMS = ['linux', 'windows', 'macos']
 const inputCls =
@@ -56,6 +57,9 @@ export default function ClientIntegrations() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [unavailable, setUnavailable] = useState(false)
+  const [integrationsGetFailed, setIntegrationsGetFailed] = useState(false)
+  const hasLoadedRef = useRef(false)
   const [saved, setSaved] = useState(false)
   const [awsExtIdMask, setAwsExtIdMask] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -110,8 +114,16 @@ export default function ClientIntegrations() {
         llm_endpoints: llm,
         engagement_modules: Array.isArray(d.engagement_modules) ? d.engagement_modules : [],
       })
+      hasLoadedRef.current = true
+      setUnavailable(false)
+      setIntegrationsGetFailed(false)
     } catch (e) {
       setError(e.message || 'Failed to load')
+      // Leftover leftover-form stays. Always set integrationsGetFailed so
+      // page-header Export CSV unmounts. EmptyState dump stays first-load
+      // only (`unavailable` + hasLoadedRef). PATCH save still uses `error`.
+      setIntegrationsGetFailed(true)
+      if (!hasLoadedRef.current) setUnavailable(true)
     } finally {
       setLoading(false)
     }
@@ -189,6 +201,16 @@ export default function ClientIntegrations() {
     }
   }
 
+  const handleExport = useCallback(() => {
+    if (integrationsGetFailed || error || unavailable) return
+    const blob = new Blob([JSON.stringify(form, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `client-${id}-integrations.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }, [integrationsGetFailed, error, unavailable, form, id])
+
   function togglePlatform(p) {
     patch({
       agent_platforms: form.agent_platforms.includes(p)
@@ -210,15 +232,9 @@ export default function ClientIntegrations() {
       actions={(
         <ShellScanActions
           onRefresh={load}
-          onExport={() => {
-            const blob = new Blob([JSON.stringify(form, null, 2)], { type: 'application/json' })
-            const a = document.createElement('a')
-            a.href = URL.createObjectURL(blob)
-            a.download = `client-${id}-integrations.json`
-            a.click()
-            URL.revokeObjectURL(a.href)
-          }}
+          onExport={integrationsGetFailed ? undefined : handleExport}
           refreshLoading={loading}
+          exportDisabled={integrationsGetFailed || !!error || unavailable}
         />
       )}
     >
@@ -247,7 +263,15 @@ export default function ClientIntegrations() {
         </div>
       )}
 
-      {loading ? (
+      {unavailable ? (
+        <div data-testid="client-integrations-unavailable">
+          <EmptyState
+            icon="alert"
+            title={t('pages.clientIntegrations.unavailable_title')}
+            body={t('pages.clientIntegrations.unavailable_body')}
+          />
+        </div>
+      ) : loading ? (
         <p className="text-[var(--text-tertiary)] text-sm animate-pulse">{t('common.loading')}</p>
       ) : (
         <div className="grid gap-6 lg:grid-cols-3">
@@ -341,7 +365,7 @@ export default function ClientIntegrations() {
               </Button>
             </Section>
 
-            <Button variant="unstyled" type="button" disabled={saving} onClick={save}
+            <Button variant="unstyled" type="button" disabled={saving || unavailable} onClick={save}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium text-sm">
               <Save className="w-4 h-4" />
               {saving ? t('common.saving') : t('common.save')}
@@ -351,9 +375,9 @@ export default function ClientIntegrations() {
           <aside className="space-y-4">
             <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
               <h3 className="text-xs font-mono uppercase text-[var(--text-muted)] mb-3">{t('pages.clientOnboarding.readiness')}</h3>
-              <div className="text-2xl font-bold text-white mb-1">{readiness.percent}%</div>
+              <div className="text-2xl font-bold text-white mb-1">{integrationsGetFailed ? '—' : `${readiness.percent}%`}</div>
               <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)] mb-4 overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all" style={{ width: `${readiness.percent}%` }} />
+                <div className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all" style={{ width: integrationsGetFailed ? '0%' : `${readiness.percent}%` }} />
               </div>
               <ul className="space-y-2 text-xs">
                 {readiness.items.filter((i) => i.hard).map((item) => (
@@ -369,7 +393,7 @@ export default function ClientIntegrations() {
                 <div className="font-mono uppercase text-[var(--text-muted)]">{t('pages.clientOnboarding.tenant_status')}</div>
                 <div className="flex justify-between"><span>LLM</span><span className={tenantStatus.llm_configured ? 'text-emerald-400' : 'text-amber-400'}>{tenantStatus.llm_configured ? '✓' : '—'}</span></div>
                 <div className="flex justify-between"><span>OAST</span><span className={tenantStatus.oast_configured ? 'text-emerald-400' : 'text-amber-400'}>{tenantStatus.oast_configured ? '✓' : '—'}</span></div>
-                <div className="flex justify-between"><span>AI entitlement</span><span className={tenantStatus.ai_heavy_entitled !== false ? 'text-emerald-400' : 'text-amber-400'}>{tenantStatus.ai_heavy_entitled !== false ? '✓' : '—'}</span></div>
+                <div className="flex justify-between"><span>AI entitlement</span><span className={tenantStatus.ai_heavy_entitled === true ? 'text-emerald-400' : 'text-amber-400'}>{tenantStatus.ai_heavy_entitled === true ? '✓' : '—'}</span></div>
                 <Link to="/system-core" className="block text-cyan-400 mt-2">{t('pages.clientIntegrations.tenant_settings')}</Link>
               </div>
             )}

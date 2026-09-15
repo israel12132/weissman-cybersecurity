@@ -11,6 +11,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import SupplyChainGraph from '../components/ui/SupplyChainGraph'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch } from '../utils/apiFetch'
+import { classifyEngineHistory } from '../hooks/useEngineHistory'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
 
@@ -170,17 +171,23 @@ function EngineRunPanel({ engineId, clientId, showToast, onFindingsUpdate, isFoc
 export default function SupplyChainHub() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [toast, setToast] = useState(null)
   const [findingsByEngine, setFindingsByEngine] = useState({})
   const [refreshLoading, setRefreshLoading] = useState(false)
+  const [historyUnavailable, setHistoryUnavailable] = useState(false)
   const [focusedEngineId, setFocusedEngineId] = useState(SUPPLY_ENGINE_IDS[0])
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   const showToast = useCallback((sev, msg) => {
@@ -215,6 +222,11 @@ export default function SupplyChainHub() {
     haystackFn: (f) => `${f.title || ''} ${f.type || ''} ${f.target || ''} ${f.engine || ''} ${f.description || ''}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
+
   const handleRefresh = useCallback(async () => {
     setRefreshLoading(true)
     try {
@@ -222,20 +234,24 @@ export default function SupplyChainHub() {
         SUPPLY_ENGINE_IDS.map((id) => apiFetch(`/api/engines/history/${id}?limit=1`)),
       )
       const updates = {}
-      let anyFailed = false
+      let anyUnavailable = false
       results.forEach((res, i) => {
         const id = SUPPLY_ENGINE_IDS[i]
-        if (res.status === 'fulfilled') {
-          const d = res.value
-          const runs = Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : []
-          const last = runs[0]
-          updates[id] = Array.isArray(last?.findings) ? last.findings : []
-        } else {
-          anyFailed = true
+        if (res.status !== 'fulfilled') {
+          anyUnavailable = true
+          return
         }
+        const classified = classifyEngineHistory(res.value)
+        if (classified.kind === 'unavailable') {
+          anyUnavailable = true
+          return
+        }
+        const last = classified.last
+        updates[id] = last ? classified.findings : []
       })
       setFindingsByEngine((prev) => ({ ...prev, ...updates }))
-      if (anyFailed) showToast('error', t('findings.load_error'))
+      setHistoryUnavailable(anyUnavailable)
+      if (anyUnavailable) showToast('error', t('findings.load_error'))
     } finally {
       setRefreshLoading(false)
     }
@@ -251,9 +267,9 @@ export default function SupplyChainHub() {
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
-          onExport={exportCsv}
+          onExport={historyUnavailable ? undefined : handleExportCsv}
           refreshLoading={refreshLoading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={historyUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -268,6 +284,11 @@ export default function SupplyChainHub() {
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
+      {clientsUnavailable && (
+        <p data-testid="supply-chain-hub-clients-unavailable" className="text-xs text-amber-300/80 font-mono mb-6">
+          {t('pages.supplyChainHub.clients_unavailable')}
+        </p>
+      )}
 
       {toast && (
         <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#84cc16]/30 text-[#84cc16]'}`}>
@@ -302,6 +323,11 @@ export default function SupplyChainHub() {
       </div>
 
       <div className="mt-8">
+        {historyUnavailable && (
+          <p data-testid="supply-chain-hub-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+            {t('pages.supplyChainHub.history_unavailable')}
+          </p>
+        )}
         <WeissmanFindingsPanel
           findings={aggregatedFindings}
           filteredFindings={filteredFindings}
@@ -315,7 +341,10 @@ export default function SupplyChainHub() {
           title={t('pages.supplyChainHub.aggregated_findings', 'Supply Chain Findings')}
           emptyTitle={t('pages.supplyChainHub.empty_findings_title', 'No supply chain findings yet')}
           emptyBody={t('pages.supplyChainHub.empty_findings_body', 'Run any engine above to populate live findings.')}
-          showEmptyReady
+          unavailable={historyUnavailable}
+          unavailableTitle={t('pages.supplyChainHub.history_unavailable')}
+          unavailableBody={t('pages.supplyChainHub.history_unavailable')}
+          showEmptyReady={!historyUnavailable}
           emptyReadyTitle={t('pages.supplyChainHub.ready_title', 'Ready to scan')}
           emptyReadyBody={t('pages.supplyChainHub.ready_body', 'Select a client and run a supply-chain engine.')}
           renderFinding={(f, i) => <FindingCard key={i} finding={f} t={t} />}

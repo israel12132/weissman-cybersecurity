@@ -76,7 +76,6 @@ export default function DarkWebMonitor() {
       setLastRefresh(new Date())
     } catch (e) {
       setError(e.message || t('pages.darkWebMonitor.load_error', { error: '' }))
-      setFindings([])
     } finally {
       setLoading(false)
     }
@@ -122,7 +121,8 @@ export default function DarkWebMonitor() {
   const { exportCsv: exportWorkbenchCsv } = useFindingsWorkbench(filtered, { csvPrefix: 'dark-web-findings' })
 
   const exportCsv = () => {
-    if (filtered.length) exportWorkbenchCsv()
+    if (error || !filtered.length) return
+    exportWorkbenchCsv()
   }
 
   const xlsxPath = useMemo(() => {
@@ -207,11 +207,11 @@ export default function DarkWebMonitor() {
           </Button>
           <ShellScanActions
             onRefresh={load}
-            onExport={exportCsv}
-            onExportXlsx={exportXlsx}
+            onExport={error ? undefined : exportCsv}
+            onExportXlsx={error ? undefined : exportXlsx}
             refreshLoading={loading}
-            exportDisabled={filtered.length === 0}
-            exportXlsxDisabled={filtered.length === 0}
+            exportDisabled={!!error || filtered.length === 0}
+            exportXlsxDisabled={!!error || filtered.length === 0}
           />
         </div>
       )}
@@ -222,7 +222,7 @@ export default function DarkWebMonitor() {
           <p className="text-xs text-rose-100/70 leading-relaxed">{t('pages.darkWebMonitor.evidence_notice')}</p>
         </div>
 
-        {lastRefresh && (
+        {lastRefresh && !error && (
           <p className="text-[10px] font-mono text-[var(--text-disabled)]">
             {t('pages.darkWebMonitor.last_updated', { time: lastRefresh.toLocaleTimeString() })}
           </p>
@@ -230,6 +230,14 @@ export default function DarkWebMonitor() {
 
         {loading && findings.length === 0 ? (
           <SkeletonWidgetGrid count={5} />
+        ) : error ? (
+          <div data-testid="dark-web-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.darkWebMonitor.unavailable_title')}
+              body={t('pages.darkWebMonitor.unavailable_body')}
+            />
+          </div>
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -300,7 +308,7 @@ export default function DarkWebMonitor() {
               </Button>
             ))}
           </div>
-          {sources.length > 1 && (
+          {sources.length > 1 && !error && (
             <select
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
@@ -319,7 +327,9 @@ export default function DarkWebMonitor() {
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Filter className="w-4 h-4 text-rose-400" />
               {t('pages.darkWebMonitor.findings_heading')}
-              <span className="text-[var(--text-muted)] font-mono text-xs">({filtered.length})</span>
+              {!error && (
+                <span className="text-[var(--text-muted)] font-mono text-xs">({filtered.length})</span>
+              )}
             </h3>
             <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200">
               {t('pages.darkWebMonitor.open_findings')}
@@ -328,6 +338,14 @@ export default function DarkWebMonitor() {
 
           {loading && findings.length === 0 ? (
             <div className="p-6"><SkeletonTable rows={6} cols={5} /></div>
+          ) : error ? (
+            <div className="p-8">
+              <EmptyState
+                icon="alert"
+                title={t('pages.darkWebMonitor.unavailable_title')}
+                body={t('pages.darkWebMonitor.unavailable_body')}
+              />
+            </div>
           ) : findings.length === 0 ? (
             <div className="p-8">
               <EmptyState

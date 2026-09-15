@@ -61,7 +61,7 @@ pub async fn enqueue_sovereign_from_buffer_row(
 ) -> Result<Uuid, String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "store_down".to_string())?;
     let row = sqlx::query(
         r#"SELECT target_fingerprint, failure_context
            FROM sovereign_learning_buffer
@@ -70,13 +70,13 @@ pub async fn enqueue_sovereign_from_buffer_row(
     .bind(buffer_id)
     .fetch_optional(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|_| "store_down".to_string())?;
     let Some(r) = row else {
         return Err("buffer row not found".into());
     };
-    let fp: String = r.try_get("target_fingerprint").map_err(|e| e.to_string())?;
-    let ctx: Value = r.try_get("failure_context").map_err(|e| e.to_string())?;
-    let _ = tx.commit().await.map_err(|e| e.to_string())?;
+    let fp: String = r.try_get("target_fingerprint").map_err(|_| "store_down".to_string())?;
+    let ctx: Value = r.try_get("failure_context").map_err(|_| "store_down".to_string())?;
+    tx.commit().await.map_err(|_| "store_down".to_string())?;
     let payload = json!({
         "target_seed": fp.trim(),
         "failure_context": ctx,
@@ -89,5 +89,5 @@ pub async fn enqueue_sovereign_from_buffer_row(
         trace.map(|s| s.to_string()),
     )
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|_| "store_down".to_string())
 }

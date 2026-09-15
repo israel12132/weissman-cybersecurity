@@ -44,12 +44,22 @@ pub fn spawn_cron_worker(
             {
                 continue;
             }
-            let tenants: Vec<i64> = sqlx::query_scalar::<_, i64>(
+            let tenants: Vec<i64> = match sqlx::query_scalar::<_, i64>(
                 "SELECT id FROM tenants WHERE active = true ORDER BY id",
             )
             .fetch_all(auth_pool.as_ref())
             .await
-            .unwrap_or_default();
+            {
+                Ok(ids) => ids,
+                Err(e) => {
+                    tracing::warn!(
+                        target: "redteam_cron",
+                        error = %e,
+                        "tenant list store_down"
+                    );
+                    continue;
+                }
+            };
             for tid in tenants {
                 if let Err(e) = dispatch_redteam_jobs(&app_pool, tid).await {
                     eprintln!("[Weissman][RedteamCron] tenant {}: {}", tid, e);

@@ -45,8 +45,10 @@ fn non_empty(s: Option<String>) -> Option<String> {
     s.filter(|x| !x.trim().is_empty())
 }
 
-async fn config_value(pool: &PgPool, tenant_id: i64, key: &str) -> Option<String> {
-    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await.ok()?;
+async fn config_value(pool: &PgPool, tenant_id: i64, key: &str) -> Result<Option<String>, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let val = sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
     )
@@ -54,43 +56,45 @@ async fn config_value(pool: &PgPool, tenant_id: i64, key: &str) -> Option<String
     .bind(key)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    non_empty(val)
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
+    Ok(non_empty(val))
 }
 
-async fn load_delivery_config(pool: &PgPool, tenant_id: i64) -> DeliveryConfig {
+async fn load_delivery_config(pool: &PgPool, tenant_id: i64) -> Result<DeliveryConfig, String> {
     let alert_webhook_url = config_value(pool, tenant_id, "alert_webhook_url")
-        .await
+        .await?
         .or_else(|| non_empty(std::env::var("WEISSMAN_ALERT_WEBHOOK_URL").ok()));
     let slack_webhook_url = config_value(pool, tenant_id, "slack_webhook_url")
-        .await
+        .await?
         .or_else(|| non_empty(std::env::var("SLACK_WEBHOOK_URL").ok()));
     let teams_webhook_url = config_value(pool, tenant_id, "teams_webhook_url")
-        .await
+        .await?
         .or_else(|| non_empty(std::env::var("TEAMS_WEBHOOK_URL").ok()))
         .or_else(|| non_empty(std::env::var("WEISSMAN_TEAMS_WEBHOOK_URL").ok()));
     let pagerduty_routing_key = config_value(pool, tenant_id, "pagerduty_routing_key")
-        .await
+        .await?
         .or_else(|| non_empty(std::env::var("PAGERDUTY_ROUTING_KEY").ok()));
     let alert_email_to = config_value(pool, tenant_id, "alert_email_to")
-        .await
+        .await?
         .or_else(|| non_empty(std::env::var("WEISSMAN_SMTP_TO").ok()));
 
-    let integrations = config_value(pool, tenant_id, "integrations_registry")
-        .await
-        .and_then(|raw| serde_json::from_str::<Vec<Value>>(&raw).ok())
-        .unwrap_or_default();
+    let integrations = match config_value(pool, tenant_id, "integrations_registry").await? {
+        None => Vec::new(),
+        Some(raw) => serde_json::from_str::<Vec<Value>>(&raw)
+            .map_err(|_| "store_down".to_string())?,
+    };
 
-    DeliveryConfig {
+    Ok(DeliveryConfig {
         alert_webhook_url,
         slack_webhook_url,
         teams_webhook_url,
         pagerduty_routing_key,
         alert_email_to,
         integrations,
-    }
+    })
 }
 
 fn integration_config<'a>(integrations: &'a [Value], id: &str) -> Option<&'a Value> {
@@ -506,18 +510,19 @@ async fn deliver_channel(
 }
 
 /// Attempt delivery on configured channels. Returns true if at least one channel succeeds.
+/// `Err` is store-down on delivery config — never look like "no channels configured".
 pub async fn deliver_alert(
     pool: &PgPool,
     tenant_id: i64,
     rule: &AlertRuleInfo,
     finding: &AlertFindingInfo,
     channels: &[String],
-) -> bool {
+) -> Result<bool, String> {
     if channels.is_empty() {
-        return false;
+        return Ok(false);
     }
 
-    let config = load_delivery_config(pool, tenant_id).await;
+    let config = load_delivery_config(pool, tenant_id).await?;
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::none())
@@ -539,7 +544,7 @@ pub async fn deliver_alert(
             );
         }
     }
-    any_ok
+    Ok(any_ok)
 }
 
 /// Fire tenant alert channels when SOAR playbook dispatch fails after finding persist.
@@ -550,7 +555,17 @@ pub async fn notify_soar_dispatch_failure(
     summary: &str,
     results: &[crate::soar_playbook::PlaybookRunResult],
 ) {
-    let config = load_delivery_config(pool, tenant_id).await;
+    let config = match load_delivery_config(pool, tenant_id).await {
+        Ok(c) => c,
+        Err(_) => {
+            tracing::warn!(
+                target: "alert_delivery",
+                tenant_id,
+                "SOAR dispatch failure delivery config store_down"
+            );
+            return;
+        }
+    };
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::none())
@@ -602,7 +617,10 @@ pub async fn notify_soar_dispatch_failure(
 
 /// Fire tenant alert channels when a new multi-stage correlation incident is persisted.
 pub async fn notify_correlation_incident(pool: &PgPool, tenant_id: i64, payload: &Value) {
-    let config = load_delivery_config(pool, tenant_id).await;
+    let Ok(config) = load_delivery_config(pool, tenant_id).await else {
+        tracing::warn!(target: "alert_delivery", tenant_id, "delivery config store_down; skipping correlation notify");
+        return;
+    };
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::none())
@@ -663,7 +681,17 @@ pub async fn notify_heal_completed(
     pr_url: Option<&str>,
     ok: bool,
 ) {
-    let config = load_delivery_config(pool, tenant_id).await;
+    let config = match load_delivery_config(pool, tenant_id).await {
+        Ok(c) => c,
+        Err(_) => {
+            tracing::warn!(
+                target: "alert_delivery",
+                tenant_id,
+                "heal completion delivery config store_down"
+            );
+            return;
+        }
+    };
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::none())
@@ -733,7 +761,17 @@ pub async fn notify_regression(
     engine: &str,
     target: &str,
 ) {
-    let config = load_delivery_config(pool, tenant_id).await;
+    let config = match load_delivery_config(pool, tenant_id).await {
+        Ok(c) => c,
+        Err(_) => {
+            tracing::warn!(
+                target: "alert_delivery",
+                tenant_id,
+                "regression delivery config store_down"
+            );
+            return;
+        }
+    };
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::none())
@@ -811,8 +849,10 @@ async fn heal_finding_title(
     tenant_id: i64,
     client_id: i64,
     finding_id: &str,
-) -> Option<String> {
-    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await.ok()?;
+) -> Result<Option<String>, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let title = sqlx::query_scalar::<_, String>(
         "SELECT title FROM vulnerabilities WHERE client_id = $1 AND finding_id = $2 LIMIT 1",
     )
@@ -820,10 +860,11 @@ async fn heal_finding_title(
     .bind(finding_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    non_empty(title)
+    .map_err(|_| "store_down".to_string())?;
+    if tx.commit().await.is_err() {
+        return Err("store_down".to_string());
+    }
+    Ok(non_empty(title))
 }
 
 /// Plain (non-interactive) Block Kit summary for a terminal heal outcome.
@@ -897,17 +938,37 @@ pub async fn post_heal_slack(
     if !heal_slack_notify_enabled() {
         return;
     }
-    let config = load_delivery_config(pool, tenant_id).await;
+    let config = match load_delivery_config(pool, tenant_id).await {
+        Ok(c) => c,
+        Err(_) => {
+            tracing::warn!(
+                target: "alert_delivery",
+                tenant_id,
+                "heal Slack delivery config store_down"
+            );
+            return;
+        }
+    };
     let Some(dest) = resolve_slack_post(&config) else {
         return;
     };
 
     let title_owned;
     let title = if title.trim().is_empty() {
-        title_owned = heal_finding_title(pool, tenant_id, client_id, finding_id)
-            .await
-            .unwrap_or_else(|| finding_id.to_string());
-        title_owned.as_str()
+        match heal_finding_title(pool, tenant_id, client_id, finding_id).await {
+            Ok(t) => {
+                title_owned = t.unwrap_or_else(|| finding_id.to_string());
+                title_owned.as_str()
+            }
+            Err(_) => {
+                tracing::warn!(
+                    target: "alert_delivery",
+                    tenant_id,
+                    "heal finding title store_down"
+                );
+                return;
+            }
+        }
     } else {
         title
     };

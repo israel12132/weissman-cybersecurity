@@ -198,7 +198,7 @@ pub async fn push_finding_to_cortex(
         }
     })?;
     let gate = push_eligibility(&row).map_err(|e| (409, e))?;
-    let integrations = load_integrations(pool, tenant_id).await;
+    let integrations = load_integrations(pool, tenant_id).await.map_err(|e| (503, e))?;
     let Some(integration) = pick_cortex(&integrations) else {
         return Err((
             409,

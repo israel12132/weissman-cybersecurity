@@ -22,6 +22,7 @@ import { apiFetch } from '../utils/apiFetch'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
 import { filterGraphNodes } from './attackPathsGraph'
+import CrownJewelBoard from '../components/attack/CrownJewelBoard'
 
 const NS = 'pages.attackPaths'
 const columnHelper = createColumnHelper()
@@ -125,6 +126,7 @@ export default function AttackPaths() {
   const [jewelBusy, setJewelBusy] = useState(null)
   const [graphNodes, setGraphNodes] = useState([])
   const [nodeQuery, setNodeQuery] = useState('')
+  const [jewelInventory, setJewelInventory] = useState(null)
 
   const load = useCallback(
     async (recompute = false) => {
@@ -208,6 +210,7 @@ export default function AttackPaths() {
     setSnapshot(null)
     setWhatIfSnapshot(null)
     setGraphNodes([])
+    setJewelInventory(null)
     if (selectedClientId != null) load(false)
   }, [selectedClientId, load])
 
@@ -328,6 +331,38 @@ export default function AttackPaths() {
       <div className="space-y-6">
         <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
 
+        {selectedClientId != null && (
+          <CrownJewelBoard clientId={selectedClientId} onInventory={setJewelInventory} />
+        )}
+
+        {selectedClientId != null
+          && jewelInventory
+          && !jewelInventory.loading
+          && jewelInventory.total > 0
+          && jewelInventory.jewels === 0 && (
+          <div
+            role="status"
+            data-testid="no-jewels-banner"
+            className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100"
+          >
+            {t(`${NS}.no_jewels_banner`)}
+          </div>
+        )}
+
+        {selectedClientId != null
+          && jewelInventory
+          && !jewelInventory.loading
+          && jewelInventory.jewels > 0
+          && jewelInventory.exposed === 0 && (
+          <div
+            role="status"
+            data-testid="no-seeds-banner"
+            className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100"
+          >
+            {t(`${NS}.no_seeds_banner`)}
+          </div>
+        )}
+
         {selectedClientId == null && (
           <EmptyState icon="building" title={t(`${NS}.pick_client_title`)} body={t(`${NS}.pick_client_body`)} />
         )}
@@ -419,7 +454,7 @@ export default function AttackPaths() {
           <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <ExecutiveWidget label={t(`${NS}.kpi_entries`)} value={display?.entry_count ?? 0} hint={t(`${NS}.kpi_entries_hint`)} accent="#22d3ee" />
-              <ExecutiveWidget label={t(`${NS}.kpi_jewels`)} value={display?.jewel_count ?? 0} hint={t(`${NS}.kpi_jewels_hint`)} accent="#a78bfa" />
+              <ExecutiveWidget label={t(`${NS}.kpi_jewels`)} value={jewelInventory?.jewels ?? display?.jewel_count ?? 0} hint={t(`${NS}.kpi_jewels_hint`)} accent="#a78bfa" />
               <ExecutiveWidget label={t(`${NS}.kpi_paths`)} value={paths.length} hint={t(`${NS}.kpi_paths_hint`)} accent="#f97316" />
               <ExecutiveWidget label={t(`${NS}.kpi_top_score`)} value={topScore} hint={t(`${NS}.kpi_top_score_hint`)} accent={riskColor(topRisk)} />
             </div>

@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../../utils/apiFetch'
+import { useVisiblePolling } from '../../hooks/useVisiblePolling'
 
 const NS = 'components.cockpitWidgets.severityTrendChart'
+const EMPTY_SERIES = []
 
 function buildArea(values, width, height, padding) {
   if (!values || values.length === 0) {
@@ -32,30 +34,48 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
   const { t } = useTranslation()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [unavailable, setUnavailable] = useState(false)
+  const abortRef = useRef(null)
+  const inflightRef = useRef(false)
+
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (silent && inflightRef.current) return
+    if (!silent) abortRef.current?.abort()
+    else if (inflightRef.current) return
+    const ac = new AbortController()
+    abortRef.current = ac
+    inflightRef.current = true
+    try {
+      const d = await apiFetch('/api/dashboard/exec-kpis', { signal: ac.signal })
+      if (ac.signal.aborted) return
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || 'unavailable')
+      }
+      setData(d)
+      setUnavailable(false)
+    } catch (e) {
+      if (e?.name === 'AbortError' || ac.signal.aborted) return
+      setData(null)
+      setUnavailable(true)
+    } finally {
+      if (abortRef.current === ac) inflightRef.current = false
+      if (abortRef.current === ac && !ac.signal.aborted) setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        const d = await apiFetch('/api/dashboard/exec-kpis')
-        if (!cancelled) setData(d)
-      } catch (_) { /* best-effort; non-fatal */ }
-      finally { if (!cancelled) setLoading(false) }
-    }
     load()
-    const timer = setInterval(load, 30_000)
-    return () => { cancelled = true; clearInterval(timer) }
-  }, [])
+    return () => abortRef.current?.abort()
+  }, [load])
+  useVisiblePolling(() => load({ silent: true }), 30_000)
 
   const w = 720
   const h = height
   const padding = 16
   const trend = data?.trend || {}
-  const labels = trend.labels || []
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const discovered = trend.discovered || []
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const resolved = trend.resolved || []
+  const labels = Array.isArray(trend.labels) ? trend.labels : EMPTY_SERIES
+  const discovered = Array.isArray(trend.discovered) ? trend.discovered : EMPTY_SERIES
+  const resolved = Array.isArray(trend.resolved) ? trend.resolved : EMPTY_SERIES
 
   const dArea = useMemo(() => buildArea(discovered, w, h, padding), [discovered, h])
   const rArea = useMemo(() => buildArea(resolved, w, h, padding), [resolved, h])
@@ -69,6 +89,18 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
       <section className={`rounded-2xl border border-white/10 bg-black/35 backdrop-blur-md p-3 ${className}`}>
         <div className="h-44 rounded bg-white/[0.025] animate-pulse" />
       </section>
+    )
+  }
+
+  if (unavailable && !data) {
+    return (
+      <p
+        className={`text-sm text-amber-200/90 ${className}`}
+        data-testid="severity-trend-unavailable"
+        role="alert"
+      >
+        {t(`${NS}.unavailable`)}
+      </p>
     )
   }
 
@@ -95,6 +127,12 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
           </span>
         </div>
       </header>
+
+      {unavailable && (
+        <p className="px-3 pt-2 text-[10px] font-mono text-amber-200/90" data-testid="severity-trend-unavailable" role="alert">
+          {t(`${NS}.unavailable`)}
+        </p>
+      )}
 
       <div className="p-2">
         <svg

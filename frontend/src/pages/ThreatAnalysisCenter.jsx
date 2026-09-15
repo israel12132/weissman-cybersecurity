@@ -144,6 +144,11 @@ export default function ThreatAnalysisCenter() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.target || ''} ${(f.stages || []).map((s) => s.category).join(' ')} ${f.mitre || ''}`,
   });
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return;
+    exportCsv();
+  }, [error, exportCsv]);
+
   const handleRefresh = useCallback(() => {
     fetchReport(clientId);
   }, [fetchReport, clientId]);
@@ -156,10 +161,10 @@ export default function ThreatAnalysisCenter() {
         <div className="flex items-center gap-2 flex-wrap">
           <ShellScanActions
             onRefresh={handleRefresh}
-            onExport={exportCsv}
+            onExport={error ? undefined : handleExportCsv}
             refreshLoading={loading}
             refreshDisabled={clientId == null}
-            exportDisabled={!filteredFindings.length}
+            exportDisabled={!!error || !filteredFindings.length}
           />
           <Button variant="unstyled"
             type="button"

@@ -22,6 +22,14 @@ const ENGINES = {
 
 const TABS = ['chronos', 'liquid', 'cognitive']
 
+function asJsonArray(v) {
+  if (Array.isArray(v)) return v
+  if (Array.isArray(v?.items)) return v.items
+  if (Array.isArray(v?.events)) return v.events
+  if (Array.isArray(v?.sessions)) return v.sessions
+  return null
+}
+
 const DEFAULT_PARAMS = {
   chronos: {
     sample_interval_ms: '5',
@@ -91,14 +99,19 @@ export default function SovereignDefenseMatrix() {
   const hubTabParams = useMemo(() => params[tab] || {}, [params, tab])
   useSyncHubScanParams(ENGINES[tab], hubTabParams)
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [clientId, setClientId] = useState('')
   const { postScan } = useCommandCenterScan(clientId)
   const [target, setTarget] = useState('')
   const [findings, setFindings] = useState([])
   const [dashboard, setDashboard] = useState(null)
+  const [dashboardUnavailable, setDashboardUnavailable] = useState(false)
   const [chronosEvents, setChronosEvents] = useState([])
   const [cognitiveSessions, setCognitiveSessions] = useState([])
   const [poisonLib, setPoisonLib] = useState([])
+  const [poisonLibUnavailable, setPoisonLibUnavailable] = useState(false)
+  const [chronosUnavailable, setChronosUnavailable] = useState(false)
+  const [cognitiveUnavailable, setCognitiveUnavailable] = useState(false)
   const [runState, setRunState] = useState({ running: false, msg: '' })
   const [jobId, setJobId] = useState('')
   const [lastUpdated, setLastUpdated] = useState(null)
@@ -120,6 +133,7 @@ export default function SovereignDefenseMatrix() {
     filteredFindings,
     refreshFromHistory,
     historyLoading,
+    historyUnavailable,
   } = useWeissmanEnginePage(engineId, findings, {
     csvPrefix: 'weissman-sovereign-defense',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.severity}`,
@@ -133,27 +147,74 @@ export default function SovereignDefenseMatrix() {
   }, [])
 
   const loadDashboard = useCallback(async () => {
-    if (!clientId) return
+    if (!clientId) {
+      setDashboard(null)
+      setDashboardUnavailable(false)
+      return
+    }
     const [dash, ce, cs] = await Promise.allSettled([
       apiFetch(`/api/sovereign-defense/${clientId}/dashboard`),
       apiFetch(`/api/sovereign-defense/${clientId}/chronos/events`),
       apiFetch(`/api/sovereign-defense/${clientId}/cognitive/sessions`),
     ])
-    if (dash.status === 'fulfilled' && dash.value) setDashboard(dash.value)
-    if (ce.status === 'fulfilled' && ce.value) setChronosEvents(ce.value)
-    if (cs.status === 'fulfilled' && cs.value) setCognitiveSessions(cs.value)
+    if (dash.status === 'fulfilled' && dash.value && dash.value.ok !== false && !dash.value.unavailable) {
+      setDashboard(dash.value)
+      setDashboardUnavailable(false)
+    } else {
+      setDashboardUnavailable(true)
+    }
+    if (ce.status === 'fulfilled') {
+      const list = asJsonArray(ce.value)
+      if (list && ce.value?.ok !== false && !ce.value?.unavailable) {
+        setChronosUnavailable(false)
+        setChronosEvents(list)
+      } else {
+        setChronosUnavailable(true)
+      }
+    } else {
+      setChronosUnavailable(true)
+    }
+    if (cs.status === 'fulfilled') {
+      const list = asJsonArray(cs.value)
+      if (list && cs.value?.ok !== false && !cs.value?.unavailable) {
+        setCognitiveUnavailable(false)
+        setCognitiveSessions(list)
+      } else {
+        setCognitiveUnavailable(true)
+      }
+    } else {
+      setCognitiveUnavailable(true)
+    }
   }, [clientId])
 
   const loadPoisonLib = useCallback(async () => {
-    const lib = await apiFetch('/api/sovereign-defense/poison-library').catch(() => null)
-    if (lib) setPoisonLib(lib)
+    try {
+      const lib = await apiFetch('/api/sovereign-defense/poison-library')
+      if (lib?.ok === false || lib?.unavailable) {
+        setPoisonLibUnavailable(true)
+        return
+      }
+      const list = Array.isArray(lib) ? lib : Array.isArray(lib?.items) ? lib.items : null
+      if (!list) {
+        setPoisonLibUnavailable(true)
+        return
+      }
+      setPoisonLibUnavailable(false)
+      setPoisonLib(list)
+    } catch {
+      setPoisonLibUnavailable(true)
+    }
   }, [])
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
+      })
+      .catch(() => setClientsUnavailable(true))
     loadPoisonLib()
   }, [loadPoisonLib])
 
@@ -238,8 +299,9 @@ export default function SovereignDefenseMatrix() {
     } catch { /* rotate failed — leave dashboard as-is */ }
   }
 
-  const liquid = dashboard?.liquid_matrix
-  const chronos = dashboard?.chronos
+  const liveDashboard = dashboardUnavailable ? null : dashboard
+  const liquid = liveDashboard?.liquid_matrix
+  const chronos = liveDashboard?.chronos
 
   return (
     <PageShell
@@ -251,7 +313,7 @@ export default function SovereignDefenseMatrix() {
       badgeColor="#06b6d4"
       icon="⬡"
       maxWidth="max-w-[1680px]"
-      syncAt={lastUpdated}
+      syncAt={historyUnavailable ? null : lastUpdated}
       evidence={t('pages.sovereignDefense.evidence_notice')}
       breadcrumbs={[
         { label: t('nav.engines'), to: '/engine-matrix' },
@@ -286,7 +348,7 @@ export default function SovereignDefenseMatrix() {
         <MetricCard
           label={t('pages.sovereignDefense.metric_chronos')}
           value={chronos?.freezes_24h ?? '—'}
-          sub={`${chronos?.events_24h ?? 0} events`}
+          sub={chronos?.events_24h != null ? `${chronos.events_24h} events` : '—'}
           color="text-violet-300"
         />
         <MetricCard
@@ -297,15 +359,15 @@ export default function SovereignDefenseMatrix() {
         />
         <MetricCard
           label={t('pages.sovereignDefense.metric_cognitive')}
-          value={dashboard?.cognitive_starvation?.sessions_24h ?? '—'}
+          value={liveDashboard?.cognitive_starvation?.sessions_24h ?? '—'}
           sub={t('pages.sovereignDefense.sessions_24h')}
           color="text-amber-300"
         />
         <MetricCard
           label={t('pages.sovereignDefense.metric_agent')}
-          value={chronos?.agent_online ? 'ONLINE' : 'OFF'}
+          value={chronos ? (chronos.agent_online ? 'ONLINE' : 'OFF') : '—'}
           sub={t('pages.sovereignDefense.agent_status')}
-          color={chronos?.agent_online ? 'text-emerald-400' : 'text-red-400'}
+          color={chronos ? (chronos.agent_online ? 'text-emerald-400' : 'text-red-400') : 'text-[var(--text-muted)]'}
         />
       </div>
 
@@ -332,6 +394,11 @@ export default function SovereignDefenseMatrix() {
                 ))}
               </select>
             </label>
+            {clientsUnavailable && (
+              <p data-testid="sovereign-defense-clients-unavailable" className="text-xs text-amber-300/80 font-mono">
+                {t('pages.sovereignDefense.clients_unavailable')}
+              </p>
+            )}
 
             <label className="block text-[11px] font-mono text-[var(--text-tertiary)]">
               {t('pages.sovereignDefense.target')}
@@ -467,10 +534,14 @@ export default function SovereignDefenseMatrix() {
         </div>
 
         <div className="xl:col-span-8 space-y-6">
-          {tab === 'chronos' && chronosEvents.length > 0 && (
+          {tab === 'chronos' && (chronosUnavailable || chronosEvents.length > 0) && (
             <div className="rounded-2xl border border-violet-500/20 bg-[var(--table-surface)] p-4 max-h-56 overflow-auto">
               <h3 className="text-sm font-semibold text-violet-200 mb-2">{t('pages.sovereignDefense.chronos_feed')}</h3>
-              {chronosEvents.slice(0, 15).map((e) => (
+              {chronosUnavailable ? (
+                <p data-testid="sovereign-defense-chronos-unavailable" className="text-xs text-amber-300/80 font-mono">
+                  {t('pages.sovereignDefense.chronos_unavailable')}
+                </p>
+              ) : chronosEvents.slice(0, 15).map((e) => (
                 <div key={e.id} className="text-[11px] font-mono py-1 border-b border-[var(--border-subtle)] flex justify-between">
                   <span className="text-[var(--text-secondary)]">{e.event_type} · {e.process_name || '—'}</span>
                   <span className="text-violet-300">{e.action_taken || ''}</span>
@@ -483,7 +554,11 @@ export default function SovereignDefenseMatrix() {
             <div className="grid md:grid-cols-2 gap-3">
               <div className="rounded-2xl border border-amber-500/20 bg-[var(--table-surface)] p-4 max-h-64 overflow-auto">
                 <h3 className="text-sm font-semibold text-amber-200 mb-2">{t('pages.sovereignDefense.poison_lib')}</h3>
-                {poisonLib.map((p) => (
+                {poisonLibUnavailable ? (
+                  <p data-testid="sovereign-defense-poison-unavailable" className="text-xs text-amber-300/80 font-mono">
+                    {t('pages.sovereignDefense.poison_unavailable')}
+                  </p>
+                ) : poisonLib.map((p) => (
                   <div key={p.id} className="text-[10px] font-mono py-2 border-b border-[var(--border-subtle)]">
                     <span className="text-amber-300">{p.variant}</span>
                     <span className="text-[var(--text-disabled)] ml-2">{p.id}</span>
@@ -492,7 +567,11 @@ export default function SovereignDefenseMatrix() {
               </div>
               <div className="rounded-2xl border border-amber-500/20 bg-[var(--table-surface)] p-4 max-h-64 overflow-auto">
                 <h3 className="text-sm font-semibold text-amber-200 mb-2">{t('pages.sovereignDefense.cognitive_feed')}</h3>
-                {cognitiveSessions.slice(0, 12).map((s) => (
+                {cognitiveUnavailable ? (
+                  <p data-testid="sovereign-defense-cognitive-unavailable" className="text-xs text-amber-300/80 font-mono">
+                    {t('pages.sovereignDefense.cognitive_unavailable')}
+                  </p>
+                ) : cognitiveSessions.slice(0, 12).map((s) => (
                   <div key={s.id} className="text-[10px] font-mono py-1 border-b border-[var(--border-subtle)] flex justify-between">
                     <span>{Math.round((s.bot_score || 0) * 100)}% · {s.poison_variant}</span>
                     <span className="text-[var(--text-muted)]">{s.response_status}</span>
@@ -502,12 +581,21 @@ export default function SovereignDefenseMatrix() {
             </div>
           )}
 
+          {historyUnavailable && (
+            <p data-testid="sovereign-defense-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+              {t('pages.sovereignDefense.history_unavailable')}
+            </p>
+          )}
           <WeissmanFindingsPanel
             findings={filteredFindings}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             title={t('pages.sovereignDefense.findings', { engine: engine?.label || engineId })}
-            emptyMessage={t('pages.sovereignDefense.no_findings')}
+            emptyTitle={t('pages.sovereignDefense.no_findings')}
+            emptyBody={t('pages.sovereignDefense.no_findings')}
+            unavailable={historyUnavailable}
+            unavailableTitle={t('pages.sovereignDefense.history_unavailable')}
+            unavailableBody={t('pages.sovereignDefense.history_unavailable')}
           />
         </div>
       </div>

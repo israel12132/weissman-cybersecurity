@@ -124,6 +124,8 @@ export default function CeoGenesisPanel() {
           <p className="text-xs text-[var(--text-muted)] font-mono">{t('components.ceo.genesisPanel.loadingStrategy')}</p>
         )}
         {strategyErr && <p className="text-xs text-red-400 font-mono">{strategyErr}</p>}
+        {!strategyErr && (
+        <>
         <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] font-mono cursor-pointer">
           <input type="checkbox" checked={protocolOn} onChange={(e) => setProtocolOn(e.target.checked)} />
           {t('components.ceo.genesisPanel.protocolEnabled')}
@@ -175,6 +177,8 @@ export default function CeoGenesisPanel() {
         >
           {saving ? t('components.ceo.genesisPanel.saving') : t('components.ceo.genesisPanel.applyStrategy')}
         </Button>
+        </>
+        )}
       </form>
 
       <form onSubmit={applyHpc} className="rounded-lg border border-amber-500/20 bg-amber-950/10 p-4 space-y-4">
@@ -194,6 +198,8 @@ export default function CeoGenesisPanel() {
           <p className="text-xs text-[var(--text-muted)] font-mono">{t('components.ceo.genesisPanel.loadingPolicy')}</p>
         )}
         {hpcErr && <p className="text-xs text-red-400 font-mono">{hpcErr}</p>}
+        {!hpcErr && (
+        <>
         <div>
           <label className="block text-[10px] uppercase text-[var(--text-muted)] mb-1 font-mono">
             {t('components.ceo.genesisPanel.researchCoreShare', { pct: researchPct })}
@@ -245,7 +251,7 @@ export default function CeoGenesisPanel() {
         >
           {hpcSaving ? t('components.ceo.genesisPanel.saving') : t('components.ceo.genesisPanel.applyHpcPolicy')}
         </Button>
-        {eff && (
+        {eff && !hpcErr && (
           <div className="text-[10px] font-mono text-[var(--text-tertiary)] space-y-1 border-t border-white/10 pt-3 mt-2">
             <div>
               {t('components.ceo.genesisPanel.workerPoolEnv')}{' '}
@@ -264,6 +270,8 @@ export default function CeoGenesisPanel() {
               </div>
             )}
           </div>
+        )}
+        </>
         )}
       </form>
     </div>

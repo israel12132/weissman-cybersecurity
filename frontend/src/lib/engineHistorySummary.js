@@ -20,10 +20,10 @@ export async function fetchEngineHistorySummary({ force = false } = {}) {
         // Do NOT cache an empty/failed response: caching `{}` pinned "no run
         // history" for every engine card for the tab's lifetime, indistinguishable
         // from a platform that has genuinely never run a scan. Return last-known
-        // (or {}) for this call only and leave the cache untouched to allow retry.
-        return cachedSummary || {}
+        // (or null) for this call only and leave the cache untouched to allow retry.
+        return cachedSummary ?? null
       })
-      .catch(() => cachedSummary || {})
+      .catch(() => cachedSummary ?? null)
       .finally(() => {
         fetchPromise = null
       })

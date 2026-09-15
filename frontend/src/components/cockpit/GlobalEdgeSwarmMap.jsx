@@ -4,6 +4,7 @@ import { Radio, RefreshCw } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 import GeoWorldMap, { GeoMarker } from '../ui/GeoWorldMap'
+import { useVisiblePolling } from '../../hooks/useVisiblePolling'
 
 const NS = 'components.cockpitWidgets.globalEdgeSwarmMap'
 
@@ -30,35 +31,29 @@ export default function GlobalEdgeSwarmMap() {
     setLoading(true)
     setError(null)
     try {
-      // Each endpoint is independently tolerant so one failing with an HTTP
-      // error still lets the other populate (preserves the original per-response
-      // `.ok` checks). A tolerated HTTP failure resolves to null; network
-      // failures (no `.status`) are re-thrown so they still surface the error
-      // banner via the outer catch, exactly as before.
-      const tolerateHttpError = (e) => {
-        if (e?.status != null) return null
-        throw e
-      }
       const [nodesData, manifestData] = await Promise.all([
-        apiFetch('/api/edge-swarm/nodes').catch(tolerateHttpError),
-        apiFetch('/api/edge-fuzz/manifest').catch(tolerateHttpError),
+        apiFetch('/api/edge-swarm/nodes'),
+        apiFetch('/api/edge-fuzz/manifest').catch((e) => {
+          if (e?.status != null) return null
+          throw e
+        }),
       ])
-      const nd = nodesData != null ? nodesData : { nodes: [] }
-      setNodes(Array.isArray(nd.nodes) ? nd.nodes : [])
+      if (nodesData?.ok === false || nodesData?.unavailable) {
+        throw new Error(nodesData.detail || t(`${NS}.unavailable`))
+      }
+      setNodes(Array.isArray(nodesData?.nodes) ? nodesData.nodes : [])
       setManifest(manifestData != null ? manifestData : null)
     } catch (e) {
-      setError(t(`${NS}.loadFailed`))
-      setNodes([])
+      setError(e?.message || t(`${NS}.unavailable`))
     } finally {
       setLoading(false)
     }
-  }, [t])
+  }, [])
 
   useEffect(() => {
     load()
-    const timer = setInterval(load, 45000)
-    return () => clearInterval(timer)
   }, [load])
+  useVisiblePolling(load, 45000)
 
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6 min-h-[420px]">
@@ -84,7 +79,7 @@ export default function GlobalEdgeSwarmMap() {
         </Button>
       </div>
 
-      {manifest && (
+      {manifest && !error && (
         <div className="text-[11px] font-mono text-white/40 border border-white/10 rounded-lg px-3 py-2 bg-black/30">
           {t(`${NS}.manifest`, {
             crate: manifest.crate ?? 'fuzz_core',
@@ -94,7 +89,15 @@ export default function GlobalEdgeSwarmMap() {
         </div>
       )}
 
-      {error && <div className="text-sm text-red-400">{error}</div>}
+      {error && (
+        <div
+          className="text-sm text-red-400"
+          data-testid="edge-swarm-unavailable"
+          role="alert"
+        >
+          {error}
+        </div>
+      )}
 
       <div className="flex-1 rounded-2xl border border-white/10 bg-[var(--bg-0)]/90 overflow-hidden min-h-[320px]">
         <GeoWorldMap
@@ -107,7 +110,7 @@ export default function GlobalEdgeSwarmMap() {
           geographyStrokeWidth={0.4}
           style={{ width: '100%', height: '100%', minHeight: 320 }}
         >
-          {nodes.map((n) => {
+          {!error && nodes.map((n) => {
             const lat = n.latitude != null ? n.latitude : fallbackCoord(n.region_code || '', n.pop_label || '')[0]
             const lng = n.longitude != null ? n.longitude : fallbackCoord(n.region_code || '', n.pop_label || '')[1]
             const jobs = n.active_jobs ?? 0
@@ -123,7 +126,7 @@ export default function GlobalEdgeSwarmMap() {
         </GeoWorldMap>
       </div>
 
-      {nodes.length === 0 && !loading && (
+      {nodes.length === 0 && !loading && !error && (
         <p className="text-sm text-white/45">
           {t(`${NS}.noNodes`)}{' '}
           <code className="text-cyan-300/90">region_code</code>, <code className="text-cyan-300/90">pop_label</code>, {t(`${NS}.noNodesSuffix`)}{' '}
@@ -131,7 +134,7 @@ export default function GlobalEdgeSwarmMap() {
         </p>
       )}
 
-      {nodes.length > 0 && (
+      {!error && nodes.length > 0 && (
         <ul className="grid gap-2 sm:grid-cols-2 text-xs text-white/70">
           {nodes.map((n) => (
             <li key={n.id} className="border border-white/10 rounded-lg px-3 py-2 bg-black/30 font-mono">

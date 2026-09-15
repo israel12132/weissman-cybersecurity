@@ -2,14 +2,16 @@
  * Module 4: Semantic Logic Engine — State Machine visualizer + LLM Reasoning terminal.
  * Fetches state machine from OpenAPI and last reasoning log from backend.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, MarkerType } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { apiFetch } from '../utils/apiFetch'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import StandaloneLabShell from './ui/StandaloneLabShell'
 import Button from './ui/Button'
+import { emptyGraphCopy, reasoningFromPayload } from './semanticLogicHelpers'
 
 const CENTER_X = 400
 const CENTER_Y = 280
@@ -67,17 +69,42 @@ export default function SemanticLogicEngine() {
   const [error, setError] = useState('')
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const abortRef = useRef(null)
+  const inflightRef = useRef(false)
 
-  const load = useCallback(() => {
-    if (!clientId) return
-    setLoading(true)
+  const load = useCallback((opts = {}) => {
+    if (!clientId) {
+      abortRef.current?.abort()
+      setLoading(false)
+      setError('')
+      setReasoning('')
+      setStateMachine({ nodes: [], edges: [], target: '', message: '' })
+      setNodes([])
+      setEdges([])
+      return
+    }
+    const silent = opts.silent === true
+    if (silent && inflightRef.current) return
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
+    inflightRef.current = true
+    if (!silent) setLoading(true)
     Promise.all([
-      apiFetch(`/api/clients/${clientId}/semantic-state-machine`),
-      apiFetch(`/api/clients/${clientId}/semantic-logic/reasoning`),
+      apiFetch(`/api/clients/${clientId}/semantic-state-machine`, { signal: ac.signal }),
+      apiFetch(`/api/clients/${clientId}/semantic-logic/reasoning`, { signal: ac.signal }),
     ])
       .then(([sm, log]) => {
+        if (ac.signal.aborted) return
+        if (sm?.ok === false || sm?.unavailable) {
+          throw new Error(sm.detail || 'semantic state machine unavailable')
+        }
+        if (log?.ok === false || log?.unavailable) {
+          throw new Error(log.detail || 'semantic reasoning unavailable')
+        }
+        setError('')
         setStateMachine(sm)
-        setReasoning(log?.log ?? '')
+        setReasoning(reasoningFromPayload(log))
         const { nodes: n, edges: e } = layoutStateMachine(sm.nodes || [], sm.edges || [])
         // Preserve any position the operator dragged an existing node to; only new
         // nodes get the freshly-computed ring layout. Otherwise the 15s poll resets
@@ -88,17 +115,27 @@ export default function SemanticLogicEngine() {
         })
         setEdges(e)
       })
-      .catch(e => setError(e?.message || t(`${NS}.load_failed`)))
-      .finally(() => setLoading(false))
-  }, [clientId, setNodes, setEdges, t])
+      .catch((e) => {
+        if (e?.name === 'AbortError' || ac.signal.aborted) return
+        setError(e?.message || 'unavailable')
+        setReasoning('')
+        setStateMachine({ nodes: [], edges: [], target: '', message: '' })
+        setNodes([])
+        setEdges([])
+      })
+      .finally(() => {
+        if (abortRef.current === ac) inflightRef.current = false
+        if (!ac.signal.aborted) setLoading(false)
+      })
+  }, [clientId, setNodes, setEdges])
 
   useEffect(() => {
-    load()
-    const t = setInterval(load, 15000)
-    return () => clearInterval(t)
+    load({ silent: false })
+    return () => abortRef.current?.abort()
   }, [load])
+  useVisiblePolling(() => load({ silent: true }), 15000, { paused: !clientId })
 
-  if (loading && !stateMachine.nodes?.length) {
+  if (loading && !stateMachine.nodes?.length && !stateMachine.logs?.length && !error) {
     return (
       <div className="min-h-screen bg-[var(--bg-0)] text-[var(--text-secondary)] flex items-center justify-center">
         <p className="text-cyan-400">{t(`${NS}.loading`)}</p>
@@ -111,15 +148,15 @@ export default function SemanticLogicEngine() {
       title={t(`${NS}.title`)}
       subtitle={stateMachine.target ? t(`${NS}.target_label`, { target: stateMachine.target }) : undefined}
       actions={(
-        <Button variant="unstyled" type="button" onClick={load} className="text-sm text-[var(--text-tertiary)] hover:text-cyan-400">
+        <Button variant="unstyled" type="button" onClick={() => load({ silent: false })} className="text-sm text-[var(--text-tertiary)] hover:text-cyan-400">
           {t(`${NS}.refresh`)}
         </Button>
       )}
       contentClassName="p-0"
     >
       {error && (
-        <div className="mx-6 mt-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm">
-          {error}
+        <div className="mx-6 mt-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm" data-testid="semantic-logic-unavailable" role="alert">
+          {t(`${NS}.unavailable`)}
         </div>
       )}
       <div className="flex-1 flex gap-4 p-4" style={{ minHeight: 'calc(100vh - 120px)' }}>
@@ -143,7 +180,7 @@ export default function SemanticLogicEngine() {
               </ReactFlow>
             ) : (
               <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-sm">
-                {stateMachine.message || t(`${NS}.no_openapi`)}
+                {error ? t(`${NS}.unavailable`) : emptyGraphCopy(stateMachine, t, NS)}
               </div>
             )}
           </div>
@@ -151,7 +188,7 @@ export default function SemanticLogicEngine() {
         <div className="w-[420px] flex flex-col rounded-xl border border-[var(--border-strong)]/80 bg-[var(--bg-1)]/40 overflow-hidden">
           <div className="px-4 py-2 border-b border-[var(--border-strong)] text-sm font-medium text-[var(--text-secondary)]">{t(`${NS}.reasoning_title`)}</div>
           <pre className="flex-1 p-4 overflow-auto text-xs text-[var(--text-tertiary)] font-mono whitespace-pre-wrap bg-[var(--bg-0)]/80 min-h-[200px]">
-            {reasoning || t(`${NS}.no_reasoning`)}
+            {error && !reasoning ? t(`${NS}.unavailable`) : (reasoning || t(`${NS}.no_reasoning`))}
           </pre>
         </div>
       </div>

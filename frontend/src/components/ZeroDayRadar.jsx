@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../utils/apiFetch'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import EvidenceNotice from './ui/EvidenceNotice'
 import ForensicEngineRealityBadge from '../forensic/ForensicEngineRealityBadge'
 import Button from './ui/Button'
@@ -26,25 +27,31 @@ export default function ZeroDayRadar() {
   const [exposure, setExposure] = useState(null)
   const [running, setRunning] = useState(false)
   const [loadingFeed, setLoadingFeed] = useState(false)
+  const [feedError, setFeedError] = useState('')
   const wsRef = useRef(null)
   const feedEndRef = useRef(null)
   const synthEndRef = useRef(null)
 
   const loadFeed = useCallback(() => {
     setLoadingFeed(true)
+    setFeedError('')
     apiFetch('/api/threat-intel/feed')
       .then((data) => {
+        if (data?.ok === false || data?.unavailable) {
+          throw new Error(data.detail || t(`${NS}.feed_unavailable`))
+        }
         setFeedItems(data?.items ?? [])
       })
-      .catch(() => setFeedItems([]))
+      .catch((e) => {
+        setFeedError(e?.message || t(`${NS}.feed_unavailable`))
+      })
       .finally(() => setLoadingFeed(false))
   }, [])
 
   useEffect(() => {
     loadFeed()
-    const tInterval = setInterval(loadFeed, 60000)
-    return () => clearInterval(tInterval)
   }, [loadFeed])
+  useVisiblePolling(loadFeed, 60000)
 
   useEffect(() => {
     if (feedEndRef.current) feedEndRef.current.scrollIntoView({ behavior: 'smooth' })
@@ -77,14 +84,14 @@ export default function ZeroDayRadar() {
               const line = e.probe
                 ? `Probe: ${e.item?.external_id ?? e.item?.title} → path=${e.probe?.path ?? '—'}`
                 : `Synthesizing AI Probe... (${e.item?.external_id ?? e.item?.title})`
-              setSynthesisLog((prev) => [...prev, line])
+              setSynthesisLog((prev) => [...prev, line].slice(-100))
             }
             if (e.type === 'scan_progress') {
               setScanProgress({ current: e.current ?? 0, total: e.total ?? 0 })
             }
             if (e.type === 'exposure' && e.finding) {
               setExposure(e.finding)
-              setSynthesisLog((prev) => [...prev, `ZERO-DAY EXPOSURE: ${e.finding?.title ?? e.finding?.cve_id}`])
+              setSynthesisLog((prev) => [...prev, `ZERO-DAY EXPOSURE: ${e.finding?.title ?? e.finding?.cve_id}`].slice(-100))
             }
           } catch (_) { /* best-effort; non-fatal */ }
         }
@@ -92,7 +99,7 @@ export default function ZeroDayRadar() {
         ws.onerror = () => setRunning(false)
       })
       .catch((err) => {
-        setSynthesisLog((prev) => [...prev, `Error: ${err?.message ?? 'Failed to start'}`])
+        setSynthesisLog((prev) => [...prev, `Error: ${err?.message ?? 'Failed to start'}`].slice(-100))
         setRunning(false)
       })
   }, [])
@@ -156,8 +163,13 @@ export default function ZeroDayRadar() {
               {t(`${NS}.feed_title`)}
             </div>
             <div className="h-96 overflow-y-auto p-4 space-y-3" id="feed-scroll">
-              {feedItems.length === 0 && !loadingFeed && <p className="text-[var(--text-muted)] text-sm">{t(`${NS}.feed_empty`)}</p>}
-              {feedItems.map((item, i) => (
+              {feedError && !loadingFeed && (
+                <p className="text-amber-200/90 text-sm" data-testid="zero-day-feed-unavailable" data-live="false" role="alert">
+                  {t(`${NS}.feed_unavailable`)}
+                </p>
+              )}
+              {feedItems.length === 0 && !loadingFeed && !feedError && <p className="text-[var(--text-muted)] text-sm">{t(`${NS}.feed_empty`)}</p>}
+              {!feedError && feedItems.map((item, i) => (
                 <div key={i} className="rounded-lg bg-[var(--bg-3)]/60 p-3 border border-[var(--border-default)]/60">
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-mono px-2 py-0.5 rounded ${item.severity === 'CRITICAL' ? 'bg-red-500/30 text-red-300' : item.severity === 'HIGH' ? 'bg-amber-500/30 text-amber-300' : 'bg-[var(--bg-4)] text-[var(--text-tertiary)]'}`}>

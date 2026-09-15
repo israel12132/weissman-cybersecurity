@@ -16,10 +16,12 @@ export default function AIModelRiskTab() {
   const [summary, setSummary] = useState({ vectors: [] })
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState(null)
   const [running, setRunning] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
   const [endpoints, setEndpoints] = useState([{ url: '', model: '', authorization: '' }])
+  const [endpointsUnavailable, setEndpointsUnavailable] = useState(false)
 
   const vectorLabel = (key) => t(`${NS}.vectors.${key}`, key)
 
@@ -62,46 +64,48 @@ export default function AIModelRiskTab() {
 
   const loadEndpoints = useCallback(async () => {
     if (!selectedClientId) return
-    let d
+    setEndpointsUnavailable(false)
     try {
-      d = await apiFetch(`/api/clients/${selectedClientId}/integrations`)
-    } catch (e) {
-      if (e?.status) return
-      throw e
+      const d = await apiFetch(`/api/clients/${selectedClientId}/integrations`)
+      if (d?.ok === false || d?.unavailable || !d || typeof d !== 'object' || Array.isArray(d)) {
+        setEndpointsUnavailable(true)
+        return
+      }
+      const eps = Array.isArray(d.llm_secops_endpoints) && d.llm_secops_endpoints.length
+        ? d.llm_secops_endpoints.map((e) => ({
+            url: e.url || '',
+            model: e.model || '',
+            authorization: e.authorization?.configured ? '••••••••' : '',
+          }))
+        : [{ url: '', model: '', authorization: '' }]
+      setEndpointsUnavailable(false)
+      setEndpoints(eps)
+    } catch {
+      setEndpointsUnavailable(true)
     }
-    const eps = Array.isArray(d.llm_secops_endpoints) && d.llm_secops_endpoints.length
-      ? d.llm_secops_endpoints.map((e) => ({
-          url: e.url || '',
-          model: e.model || '',
-          authorization: e.authorization?.configured ? '••••••••' : '',
-        }))
-      : [{ url: '', model: '', authorization: '' }]
-    setEndpoints(eps)
   }, [selectedClientId])
 
   const load = useCallback(async () => {
     if (!selectedClientId) return
     setLoading(true)
     setMsg(null)
+    setLoadError(null)
     try {
       await loadEndpoints()
       const [sRes, eRes] = await Promise.all([
-        apiFetch(`/api/clients/${selectedClientId}/llm-fuzz/summary`).catch(() => null),
-        apiFetch(`/api/clients/${selectedClientId}/llm-fuzz/events`).catch(() => null),
+        apiFetch(`/api/clients/${selectedClientId}/llm-fuzz/summary`),
+        apiFetch(`/api/clients/${selectedClientId}/llm-fuzz/events`),
       ])
-      if (sRes) {
-        setSummary({ vectors: sRes.vectors ?? [] })
-      } else {
-        setSummary({ vectors: [] })
+      if (sRes?.ok === false || sRes?.unavailable) {
+        throw new Error(sRes.detail || t(`${NS}.unavailable`))
       }
-      if (eRes) {
-        setEvents(eRes.events ?? [])
-      } else {
-        setEvents([])
+      if (eRes?.ok === false || eRes?.unavailable) {
+        throw new Error(eRes.detail || t(`${NS}.unavailable`))
       }
-    } catch (_) {
-      setSummary({ vectors: [] })
-      setEvents([])
+      setSummary({ vectors: sRes.vectors ?? [] })
+      setEvents(eRes.events ?? [])
+    } catch (e) {
+      setLoadError(e?.message || t(`${NS}.unavailable`))
     } finally {
       setLoading(false)
     }
@@ -175,7 +179,13 @@ export default function AIModelRiskTab() {
         <p className="text-sm text-white/60 mb-4">{t(`${NS}.descriptionSecure`)}</p>
 
         <div className="space-y-3 mb-4">
-          {endpoints.map((ep, i) => (
+          {endpointsUnavailable ? (
+            <p data-testid="ai-model-risk-endpoints-unavailable" className="text-xs text-amber-300/80 font-mono">
+              {t(`${NS}.endpoints_unavailable`)}
+            </p>
+          ) : (
+            <>
+              {endpoints.map((ep, i) => (
             <div key={i} className="grid md:grid-cols-12 gap-2 p-3 rounded-xl border border-white/10 bg-black/40">
               <input
                 className="md:col-span-5 px-3 py-2 rounded-lg bg-black/50 border border-white/10 text-sm text-white font-mono"
@@ -210,21 +220,23 @@ export default function AIModelRiskTab() {
                 }}
               />
             </div>
-          ))}
-          <div className="flex flex-wrap gap-2">
-            <Button variant="unstyled" type="button" className="text-xs text-violet-300" onClick={() => setEndpoints([...endpoints, { url: '', model: '', authorization: '' }])}>
-              + {t(`${NS}.addEndpoint`)}
-            </Button>
-            <Link to={`/clients/${selectedClientId}/integrations`} className="text-xs text-cyan-400">
-              {t(`${NS}.fullIntegrations`)}
-            </Link>
-          </div>
+              ))}
+              <div className="flex flex-wrap gap-2">
+                <Button variant="unstyled" type="button" className="text-xs text-violet-300" onClick={() => setEndpoints([...endpoints, { url: '', model: '', authorization: '' }])}>
+                  + {t(`${NS}.addEndpoint`)}
+                </Button>
+              </div>
+            </>
+          )}
+          <Link to={`/clients/${selectedClientId}/integrations`} className="text-xs text-cyan-400">
+            {t(`${NS}.fullIntegrations`)}
+          </Link>
         </div>
 
         <div className="flex flex-wrap gap-3">
           <Button variant="unstyled"
             type="button"
-            disabled={saving}
+            disabled={saving || endpointsUnavailable}
             onClick={saveEndpoints}
             className="px-4 py-2 rounded-xl text-sm font-semibold border border-violet-500/40 bg-violet-600/20 text-violet-100 hover:bg-violet-600/30 disabled:opacity-40"
           >
@@ -247,11 +259,21 @@ export default function AIModelRiskTab() {
       <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6">
         <h3 className="text-xs font-mono uppercase tracking-wider text-violet-400 mb-4">{t(`${NS}.attackVectorsTitle`)}</h3>
         {loading && <p className="text-white/50 text-sm">{t(`${NS}.loading`)}</p>}
-        {!loading && (!summary.vectors || summary.vectors.length === 0) && (
+        {!loading && loadError && (
+          <p
+            className="text-amber-200/90 text-sm"
+            data-testid="ai-model-risk-unavailable"
+            data-live="false"
+            role="alert"
+          >
+            {t(`${NS}.unavailable`)}
+          </p>
+        )}
+        {!loading && !loadError && (!summary.vectors || summary.vectors.length === 0) && (
           <p className="text-white/50 text-sm">{t(`${NS}.noTelemetry`)}</p>
         )}
         <div className="space-y-4">
-          {(summary.vectors || []).map((v) => {
+          {!loading && !loadError && (summary.vectors || []).map((v) => {
             const label = vectorLabel(v.attack_vector)
             const leak = Math.min(100, (v.avg_leakage || 0) * 100)
             const hall = Math.min(100, (v.avg_hallucination_under_duress || 0) * 100)
@@ -288,11 +310,11 @@ export default function AIModelRiskTab() {
         <DataTable
           id="ai-model-risk-events-table"
           columns={eventColumns}
-          data={events}
+          data={loadError ? [] : events}
           loading={loading}
           getRowId={(e) => e.id}
           animateRows={false}
-          emptyState={<span className="text-white/40">{t(`${NS}.noEvents`)}</span>}
+          emptyState={<span className="text-white/40">{loadError ? t(`${NS}.unavailable`) : t(`${NS}.noEvents`)}</span>}
         />
       </div>
     </div>

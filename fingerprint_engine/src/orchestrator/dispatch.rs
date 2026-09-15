@@ -65,15 +65,13 @@ pub async fn dispatch_all_tenant_scans(
             }
             Ok(false) => {}
             Err(e) => {
-                // Fail closed: if we cannot tell whether one is in flight, do not pile another on.
                 tracing::warn!(
                     target: "orchestrator_dispatch",
                     tenant_id,
                     error = %e,
-                    "in-flight scan check failed — skipping this tenant for now"
+                    "in-flight scan check store_down"
                 );
-                skipped += 1;
-                continue;
+                return Err(e);
             }
         }
         match enqueue_tenant_full_scan(app_pool, tenant_id, None, trigger, None).await {

@@ -44,24 +44,41 @@ async fn api_llm_fuzz_run(
     if let Err(detail) =
         crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
-    let exists: bool = sqlx::query_scalar(
+    let exists: bool = match sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1 AND tenant_id = $2)",
     )
     .bind(client_id)
     .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(false);
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "unavailable": true,
+                    "detail": scrub_internal_error(&e),
+                })),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::scan_status_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
     if !exists {
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "client not found"}))).into_response();
     }
@@ -87,8 +104,10 @@ async fn api_llm_fuzz_run(
         Err(e) => {
             tracing::error!(target: "async_jobs", error = %e, "enqueue llm_fuzz_run failed");
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::scan_status_unavailable_json(
+                    "store_down",
+                )),
             )
                 .into_response()
         }
@@ -101,17 +120,42 @@ async fn api_llm_fuzz_events(
     Path(client_id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"events": []}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::llm_fuzz_events_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, endpoint_url, attack_vector, request_preview, response_excerpt, leakage_score, hallucination_score, blocked, created_at
            FROM llm_fuzz_events WHERE client_id = $1 ORDER BY id DESC LIMIT 300"#,
     )
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::llm_fuzz_events_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::llm_fuzz_events_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
     let events: Vec<Value> = rows
         .into_iter()
         .map(|r| {
@@ -137,9 +181,15 @@ async fn api_llm_fuzz_summary(
     Path(client_id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"vectors": []}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::llm_fuzz_summary_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT attack_vector,
                   COALESCE(AVG(leakage_score), 0)::double precision AS avg_leakage,
                   COALESCE(AVG(hallucination_score), 0)::double precision AS avg_hallucination,
@@ -150,8 +200,27 @@ async fn api_llm_fuzz_summary(
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::llm_fuzz_summary_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::llm_fuzz_summary_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
     let vectors: Vec<Value> = rows
         .into_iter()
         .map(|r| {
@@ -185,9 +254,15 @@ async fn api_decrypt_sealed_poc(
             .into_response();
     };
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::sealed_poc_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT finding_id, poc_sealed, poc_ciphertext_b64, poc_nonce_b64, poc_commitment_sha256, poc_zkp_hmac
            FROM vulnerabilities WHERE id = $1 AND client_id = $2 AND tenant_id = $3"#,
     )
@@ -196,8 +271,19 @@ async fn api_decrypt_sealed_poc(
     .bind(auth.tenant_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(r) => r,
+        Err(_) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::sealed_poc_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     let Some(r) = row else {
         let _ = tx.rollback().await;
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "finding not found"}))).into_response();
@@ -249,7 +335,15 @@ async fn api_decrypt_sealed_poc(
         )
             .into_response();
     }
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::sealed_poc_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     (
         StatusCode::OK,
         Json(json!({

@@ -25,6 +25,15 @@ use crate::audit_log;
 use crate::db;
 use crate::http::AppState;
 
+fn auth_store_down() -> (StatusCode, Json<serde_json::Value>) {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(crate::http_unavailable::auth_degraded_unavailable_json(
+            "database unavailable",
+        )),
+    )
+}
+
 #[derive(Deserialize)]
 pub struct SamlBeginQuery {
     pub tenant_slug: String,
@@ -150,12 +159,7 @@ pub async fn saml_begin(
     .bind(name)
     .fetch_optional(auth)
     .await
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": format!("{}", e)})),
-        )
-    })?;
+    .map_err(|_| auth_store_down())?;
     let Some(r) = row else {
         return Err((
             StatusCode::NOT_FOUND,
@@ -352,22 +356,17 @@ pub async fn saml_acs(
     .bind(r.tenant_id)
     .fetch_optional(auth)
     .await
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": format!("{}", e)})),
-        )
-    })?;
+    .map_err(|_| auth_store_down())?;
     let Some((cert_pem, _sso)) = row else {
         return Err((
             StatusCode::NOT_FOUND,
             Json(json!({"ok": false, "detail": "SAML IdP not found"})),
         ));
     };
-    let xml = decode_saml_xml(&form.saml_response).map_err(|e| {
+    let xml = decode_saml_xml(&form.saml_response).map_err(|_| {
         (
             StatusCode::BAD_REQUEST,
-            Json(json!({"ok": false, "detail": format!("decode: {}", e)})),
+            Json(json!({"ok": false, "detail": "SAML response decode failed"})),
         )
     })?;
     let insecure = !weissman_core::tls_policy::is_production_environment()
@@ -393,41 +392,41 @@ pub async fn saml_acs(
                 Json(json!({"ok": false, "detail": "saml_idp_cert_pem missing for IdP"})),
             ));
         }
-        let xml_file = NamedTempFile::new().map_err(|e| {
+        let xml_file = NamedTempFile::new().map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": format!("temp: {}", e)})),
+                Json(json!({"ok": false, "detail": "temporary file unavailable"})),
             )
         })?;
         tokio::fs::write(xml_file.path(), xml.as_bytes())
             .await
-            .map_err(|e| {
+            .map_err(|_| {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"ok": false, "detail": format!("{}", e)})),
+                    Json(json!({"ok": false, "detail": "temporary file unavailable"})),
                 )
             })?;
-        let pem_file = NamedTempFile::new().map_err(|e| {
+        let pem_file = NamedTempFile::new().map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": format!("temp: {}", e)})),
+                Json(json!({"ok": false, "detail": "temporary file unavailable"})),
             )
         })?;
         tokio::fs::write(pem_file.path(), cert_pem.as_bytes())
             .await
-            .map_err(|e| {
+            .map_err(|_| {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"ok": false, "detail": format!("{}", e)})),
+                    Json(json!({"ok": false, "detail": "temporary file unavailable"})),
                 )
             })?;
         verify_xmlsec(&xmlsec_bin, xml_file.path(), pem_file.path())
             .await
-            .map_err(|e| {
+            .map_err(|_| {
                 (
                     StatusCode::UNAUTHORIZED,
                     Json(
-                        json!({"ok": false, "detail": format!("SAML xmlsec verify failed: {}", e)}),
+                        json!({"ok": false, "detail": "SAML xmlsec verify failed"}),
                     ),
                 )
             })?;
@@ -440,12 +439,7 @@ pub async fn saml_acs(
     })?;
     weissman_db::auth_access::record_auth_access(auth, r.tenant_id, "saml_acs")
         .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": format!("auth audit: {}", e)})),
-            )
-        })?;
+        .map_err(|_| auth_store_down())?;
     let claim_groups = crate::scim::groups_from_saml_xml(&xml);
     let user_id = crate::scim::resolve_sso_user(
         auth,
@@ -456,29 +450,26 @@ pub async fn saml_acs(
     )
     .await?;
     let ip = crate::http::extract_client_ip(&headers, addr);
-    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, r.tenant_id).await {
-        let _ = audit_log::insert_audit(
-            &mut tx,
-            r.tenant_id,
-            Some(user_id),
-            email.as_str(),
-            "login",
-            "SAML session created",
-            &ip,
-        )
-        .await;
-        let _ = tx.commit().await;
-    }
+    let mut tx = db::begin_tenant_tx(&state.app_pool, r.tenant_id)
+        .await
+        .map_err(|_| auth_store_down())?;
+    audit_log::insert_audit(
+        &mut tx,
+        r.tenant_id,
+        Some(user_id),
+        email.as_str(),
+        "login",
+        "SAML session created",
+        &ip,
+    )
+    .await
+    .map_err(|_| auth_store_down())?;
+    tx.commit().await.map_err(|_| auth_store_down())?;
     let binding = crate::auth_jwt::StreamBinding::from_http(&headers, addr);
     let (_access_jwt, access_line, refresh_line) =
         crate::auth_refresh::build_session_cookie_headers(auth, user_id, r.tenant_id, &binding)
             .await
-            .map_err(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"ok": false, "detail": format!("session: {}", e)})),
-                )
-            })?;
+            .map_err(|_| auth_store_down())?;
     let mut res = Redirect::to("/command-center/").into_response();
     if let Ok(v) = HeaderValue::from_str(&access_line) {
         res.headers_mut().append(SET_COOKIE, v);

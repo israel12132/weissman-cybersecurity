@@ -50,6 +50,7 @@ export default function OobVerification() {
   const [probe, setProbe] = useState(null)
   const [error, setError] = useState('')
   const [callbacks, setCallbacks] = useState([])
+  const [callbacksUnavailable, setCallbacksUnavailable] = useState(false)
   const [autoPoll, setAutoPoll] = useState(true)
   const [recentHits, setRecentHits] = useState([])
 
@@ -89,18 +90,23 @@ export default function OobVerification() {
     if (!token) return
     setPolling(true)
     try {
-      const [data, cbData] = await Promise.all([
-        apiFetch(`/api/oast/verify/${token}`),
-        apiFetch('/api/oast/callbacks').catch(() => null),
-      ])
+      const data = await apiFetch(`/api/oast/verify/${token}`)
       setProbe((prev) => ({ ...(prev || {}), ...data }))
-
-      if (cbData) {
-        const all = Array.isArray(cbData.callbacks) ? cbData.callbacks : []
-        setRecentHits(all.slice(0, 20))
-        setCallbacks(all.filter((c) => c.interaction_token === token))
+      try {
+        const cbData = await apiFetch('/api/oast/callbacks')
+        const all = Array.isArray(cbData?.callbacks) ? cbData.callbacks : null
+        if (!all) {
+          setCallbacksUnavailable(true)
+        } else {
+          setCallbacksUnavailable(false)
+          setRecentHits(all.slice(0, 20))
+          setCallbacks(all.filter((c) => c.interaction_token === token))
+        }
+      } catch {
+        setCallbacksUnavailable(true)
       }
     } catch (e) {
+      setCallbacksUnavailable(true)
       const body = e?.response ? await e.response.json().catch(() => ({})) : {}
       setError(body?.error || body?.detail || e.message || t('pages.oobVerification.poll_failed'))
     } finally {
@@ -144,6 +150,11 @@ export default function OobVerification() {
     csvPrefix: 'weissman-oob-callbacks',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
+
+  const handleExportCsv = useCallback(() => {
+    if (callbacksUnavailable) return
+    exportCsv()
+  }, [callbacksUnavailable, exportCsv])
 
   const visibleCallbacks = useMemo(() => {
     if (!searchQuery.trim()) return callbacks
@@ -211,9 +222,9 @@ export default function OobVerification() {
           </Link>
           <ShellScanActions
             onRefresh={poll}
-            onExport={exportCsv}
+            onExport={callbacksUnavailable ? undefined : handleExportCsv}
             refreshLoading={polling}
-            exportDisabled={!filteredFindings.length}
+            exportDisabled={callbacksUnavailable || !filteredFindings.length}
           />
         </div>
       )}
@@ -304,7 +315,8 @@ export default function OobVerification() {
                 compact
               />
             ) : (
-              <div className="space-y-4">
+                <div className="space-y-4">
+                {!callbacksUnavailable && (
                 <div className="grid grid-cols-2 gap-3">
                   <StatBox
                     label={t('pages.oobVerification.status')}
@@ -317,6 +329,7 @@ export default function OobVerification() {
                     confirmed={probe.hit_count > 0}
                   />
                 </div>
+                )}
 
                 <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-4 space-y-3">
                   <FieldRow label={t('pages.oobVerification.token_label')} value={probe.token} copy />
@@ -324,7 +337,7 @@ export default function OobVerification() {
                   {probe.callback_url && (
                     <FieldRow label={t('pages.oobVerification.callback_url')} value={probe.callback_url} copy />
                   )}
-                  {probe.first_hit_at && (
+                  {!callbacksUnavailable && probe.first_hit_at && (
                     <div className="text-[10px] text-green-400/70">
                       {t('pages.oobVerification.first_hit', { time: new Date(probe.first_hit_at).toLocaleString() })}
                     </div>
@@ -343,7 +356,12 @@ export default function OobVerification() {
                   </div>
                 )}
 
-                {callbacks.length > 0 && (
+                {callbacksUnavailable && (
+                  <p data-testid="oob-callbacks-unavailable" className="text-xs text-amber-300/80 font-mono">
+                    {t('pages.oobVerification.callbacks_unavailable')}
+                  </p>
+                )}
+                {callbacks.length > 0 && !callbacksUnavailable && (
                   <div>
                     <WeissmanListToolbar
                       className="mb-2"
@@ -385,8 +403,9 @@ export default function OobVerification() {
           </div>
         </div>
 
-        {recentHits.length > 0 && (
+        {(recentHits.length > 0 || callbacksUnavailable) && (
           <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5">
+            {!callbacksUnavailable && (
             <WeissmanListToolbar
               className="mb-4"
               searchQuery={searchQuery}
@@ -394,10 +413,15 @@ export default function OobVerification() {
               resultCount={visibleRecentHits.length}
               totalCount={recentHits.length}
             />
+            )}
             <h3 className="text-xs font-mono uppercase tracking-widest text-[var(--text-muted)] mb-4">
               {t('pages.oobVerification.tenant_callbacks_heading')}
             </h3>
-            {visibleRecentHits.length === 0 ? (
+            {callbacksUnavailable ? (
+              <p className="text-xs text-amber-300/80 font-mono">
+                {t('pages.oobVerification.callbacks_unavailable')}
+              </p>
+            ) : visibleRecentHits.length === 0 ? (
               <EmptyState
                 icon="search"
                 title={t('weissmanFindings.filtered_title')}

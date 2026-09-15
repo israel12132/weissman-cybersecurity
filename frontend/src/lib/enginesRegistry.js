@@ -1,5 +1,5 @@
 /**
- * Master registry of all 592 production attack engines.
+ * Master registry of all 593 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 592 production engines in registry order */
+/** All 593 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -321,6 +321,22 @@ export const ENGINES_REGISTRY = [
     group: 'ot',
     mitre: 'T1692.001',
     description: 'Modbus, DNP3, IEC 61850 protocol fuzzing and unauthorized command detection',
+    requiresTarget: true,
+  },
+  {
+    id: 'ot_passive_active_safety',
+    label: 'OT Passive/Active Safety Interlock',
+    group: 'ot',
+    mitre: 'T0836',
+    description: 'Fail-closed OT probe interlock: writes, Direct Operate, CPU stop, GOOSE inject, and file-transfer are structurally impossible; live Modbus/S7/DNP3/IEC confirmation only',
+    requiresTarget: true,
+  },
+  {
+    id: 'ot_crown_jewel_path',
+    label: 'OT Crown-Jewel Path',
+    group: 'ot',
+    mitre: 'T0843',
+    description: 'OT protocol confirmation fused with live FAIR crown-jewel value and SOAR isolate recommendation — no process-write, evidence only',
     requiresTarget: true,
   },
   {
@@ -1785,22 +1801,6 @@ export const ENGINES_REGISTRY = [
     group: 'ot',
     mitre: 'T1692.002',
     description: 'IEC 61850 protocol exploitation: GOOSE message injection and spoofing, sampled value (SV) replay, MMS service enumeration, logical node manipulation, substation protection relay bypass',
-    requiresTarget: true,
-  },
-  {
-    id: 'ot_passive_active_safety',
-    label: 'OT Passive/Active Safety Interlock',
-    group: 'ot',
-    mitre: 'T0843',
-    description: 'Safe-read fingerprint of Modbus, Siemens S7, DNP3, and IEC 61850 — writes, Direct Operate, CPU stop, and GOOSE inject are structurally impossible from this worker',
-    requiresTarget: true,
-  },
-  {
-    id: 'ot_crown_jewel_path',
-    label: 'OT Crown-Jewel Path',
-    group: 'ot',
-    mitre: 'T0836',
-    description: 'Live OT protocol confirmation fused with FAIR exposure and SOAR isolate recommendation on crown-jewel industrial paths',
     requiresTarget: true,
   },
   {

@@ -11,6 +11,7 @@ import { useWarRoom } from '../../context/WarRoomContext'
 import { Layers, Pause, Play, Radio, GitBranch } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
+import EmptyState from '../ui/EmptyState'
 
 const NS = 'components.cockpitTabs.livePipelineMonitor'
 
@@ -85,6 +86,8 @@ export default function LivePipelineMonitor() {
   const [states, setStates] = useState([])
   const [apiStageLabels, setApiStageLabels] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState(null)
+  const [dagUnavailable, setDagUnavailable] = useState(false)
   const [patching, setPatching] = useState(false)
   const [dagNodes, setDagNodes, onDagNodesChange] = useNodesState([])
   const [dagEdges, setDagEdges, onDagEdgesChange] = useEdgesState([])
@@ -94,11 +97,15 @@ export default function LivePipelineMonitor() {
 
   const fetchState = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const url = selectedClientId
         ? `/api/pipeline/state?client_id=${encodeURIComponent(selectedClientId)}`
         : '/api/pipeline/state'
       const d = await apiFetch(url)
+      if (d?.ok === false || d?.unavailable) {
+        throw new Error(d.detail || t(`${NS}.unavailable`))
+      }
       setRunId(d.run_id ?? null)
       setStates(d.states ?? [])
       if (Array.isArray(d.stage_labels) && d.stage_labels.length) {
@@ -106,9 +113,8 @@ export default function LivePipelineMonitor() {
       } else {
         setApiStageLabels(null)
       }
-    } catch (_) {
-      setStates([])
-      setRunId(null)
+    } catch (e) {
+      setLoadError(e?.message || t(`${NS}.unavailable`))
     } finally {
       setLoading(false)
     }
@@ -117,8 +123,15 @@ export default function LivePipelineMonitor() {
   const fetchDag = useCallback(async () => {
     try {
       const d = await apiFetch('/api/dag')
+      if (d?.ok === false || d?.unavailable || !d || typeof d !== 'object' || !Array.isArray(d.nodes)) {
+        setDagUnavailable(true)
+        setDag(null)
+        return
+      }
+      setDagUnavailable(false)
       setDag(d)
-    } catch (_) {
+    } catch {
+      setDagUnavailable(true)
       setDag(null)
     }
   }, [])
@@ -181,7 +194,7 @@ export default function LivePipelineMonitor() {
         <div className="flex items-center gap-2">
           <Layers className="w-5 h-5 text-[#22d3ee]" />
           <span className="font-semibold text-white">{t(`${NS}.title`)}</span>
-          {runId != null && (
+          {runId != null && !loadError && (
             <span className="text-xs text-white/50 font-mono">{t(`${NS}.runPrefix`, { id: runId })}</span>
           )}
           <div className="flex rounded-lg border border-white/10 overflow-hidden">
@@ -212,6 +225,16 @@ export default function LivePipelineMonitor() {
       </div>
       <div className="p-4 space-y-4">
         {viewMode === 'dag' && (
+          dagUnavailable ? (
+            <div data-testid="live-pipeline-dag-unavailable">
+              <EmptyState
+                compact
+                icon="alert"
+                title={t(`${NS}.dag_unavailable`)}
+                body={t(`${NS}.dag_unavailable_body`)}
+              />
+            </div>
+          ) : (
           <div className="rounded-xl border border-white/10 bg-black/30 overflow-hidden" style={{ height: 340 }}>
             <ReactFlow
               nodes={dagNodes}
@@ -231,8 +254,18 @@ export default function LivePipelineMonitor() {
               .react-flow__node.dag-node-pending { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); }
             `}</style>
           </div>
+          )
         )}
-        {loading && !states.length ? (
+        {loadError ? (
+          <p
+            className="text-sm text-amber-200/90"
+            data-testid="pipeline-monitor-unavailable"
+            data-live="false"
+            role="alert"
+          >
+            {t(`${NS}.unavailable`)}
+          </p>
+        ) : loading && !states.length ? (
           <p className="text-sm text-white/50">{t(`${NS}.loading`)}</p>
         ) : !runId ? (
           <p className="text-sm text-white/50">{t(`${NS}.noActiveRun`)}</p>

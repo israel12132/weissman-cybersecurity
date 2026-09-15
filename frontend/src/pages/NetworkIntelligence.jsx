@@ -266,20 +266,22 @@ function scoreColor(score) {
 }
 
 function ScoreGauge({ score, label }) {
-  const c = scoreColor(score)
+  const hasScore = score != null && Number.isFinite(Number(score))
+  const n = hasScore ? Number(score) : 0
+  const c = hasScore ? scoreColor(n) : 'rgba(255,255,255,0.25)'
   const r = 52
   const circ = 2 * Math.PI * r
-  const dash = (score / 100) * circ
+  const dash = hasScore ? (n / 100) * circ : 0
   return (
     <div className="relative flex items-center justify-center w-[140px] h-[140px] shrink-0">
       <svg width="140" height="140" className="-rotate-90">
         <circle cx="70" cy="70" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" />
         <motion.circle cx="70" cy="70" r={r} fill="none" stroke={c} strokeWidth="10" strokeLinecap="round"
           initial={{ strokeDasharray: `0 ${circ}` }} animate={{ strokeDasharray: `${dash} ${circ}` }}
-          transition={{ duration: 0.9, ease: 'easeOut' }} style={{ filter: `drop-shadow(0 0 6px ${c}80)` }} />
+          transition={{ duration: 0.9, ease: 'easeOut' }} style={hasScore ? { filter: `drop-shadow(0 0 6px ${c}80)` } : undefined} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-4xl font-bold font-mono" style={{ color: c }}>{score}</span>
+        <span className="text-4xl font-bold font-mono" style={{ color: c }}>{hasScore ? n : '—'}</span>
         <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{label}</span>
       </div>
     </div>
@@ -389,7 +391,13 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
     lastJobId,
     setLastUpdated,
     setLastJobId,
+    historyUnavailable,
   } = useWeissmanEnginePage(FLAGSHIP_ID, sorted)
+
+  const handleExportCsv = useCallback(() => {
+    if (historyUnavailable) return
+    exportCsv()
+  }, [historyUnavailable, exportCsv])
 
   useEffect(() => {
     refreshFromHistory().then((run) => {
@@ -407,12 +415,12 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
   useEffect(() => {
     onShellReady?.({
       onRefresh: handleRefresh,
-      onExport: exportCsv,
+      onExport: historyUnavailable ? undefined : handleExportCsv,
       refreshLoading: historyLoading,
       refreshDisabled: scanning,
-      exportDisabled: !filteredFindings.length,
+      exportDisabled: historyUnavailable || !filteredFindings.length,
     })
-  }, [onShellReady, handleRefresh, exportCsv, historyLoading, scanning, filteredFindings.length])
+  }, [onShellReady, handleRefresh, handleExportCsv, historyLoading, scanning, filteredFindings.length, historyUnavailable])
 
   useJobPoll(pendingJobId, {
     enabled: Boolean(pendingJobId),
@@ -444,7 +452,9 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
     }
   }, [clientId, target, params, postScan, showToast, t, tt])
 
-  const score = summary ? Number(summary.hijack_resistance_score ?? 0) : null
+  const score = summary && summary.hijack_resistance_score != null && Number.isFinite(Number(summary.hijack_resistance_score))
+    ? Number(summary.hijack_resistance_score)
+    : null
   const ev = summary?.evidence ?? {}
   const rpkiState = ev.rpki_invalid ? 'bad' : (ev.rpki_valid ? 'good' : 'warn')
 
@@ -544,10 +554,10 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
         {/* Results column */}
         <div className="space-y-4 lg:col-span-2">
           <AnimatePresence mode="wait">
-            {summary ? (
+            {summary && !historyUnavailable ? (
               <motion.div key="score" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-5">
                 <div className="flex items-center gap-6 flex-wrap">
-                  <ScoreGauge score={score ?? 0} label={tt('score_label', 'RESISTANCE')} />
+                  <ScoreGauge score={score} label={tt('score_label', 'RESISTANCE')} />
                   <div className="flex-1 min-w-[240px] space-y-3">
                     <p className="text-[11px] font-mono text-[var(--text-muted)] leading-relaxed">{summary.description}</p>
                     <div className="grid grid-cols-2 gap-2">
@@ -584,12 +594,18 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
               <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-10 text-center">
                 <p className="text-[11px] font-mono text-[var(--text-disabled)]">
                   {scanning ? tt('scan_running', 'Probing DNS resolvers, DNSSEC, RPKI and BGP origins…')
+                    : historyUnavailable ? tt('history_unavailable', 'Engine history API unavailable — hijack-resistance is not confirmed.')
                     : !clientId ? t('pages.networkIntelligence.select_client_warning')
                       : tt('empty_ready', 'Ready — run to measure DNS/BGP hijack resistance.')}
                 </p>
               </motion.div>
             )}
           </AnimatePresence>
+          {historyUnavailable && (
+            <p data-testid="network-intelligence-history-unavailable" className="text-xs text-amber-300/80 font-mono mb-3">
+              {tt('history_unavailable', 'Engine history API unavailable — hijack-resistance is not confirmed.')}
+            </p>
+          )}
           <WeissmanFindingsPanel
             findings={sorted}
             filteredFindings={filteredFindings}
@@ -605,7 +621,10 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
             jobId={pendingJobId || lastJobId}
             accent="#f97316"
             title={tt('findings', 'Findings')}
-            showEmptyReady={!scanning && sorted.length === 0}
+            unavailable={historyUnavailable}
+            unavailableTitle={tt('history_unavailable', 'Engine history API unavailable — hijack-resistance is not confirmed.')}
+            unavailableBody={tt('history_unavailable', 'Engine history API unavailable — hijack-resistance is not confirmed.')}
+            showEmptyReady={!scanning && !historyUnavailable && sorted.length === 0}
             emptyReadyTitle={tt('empty_ready', 'Ready — run to measure DNS/BGP hijack resistance.')}
             emptyReadyBody={tt('empty_no_findings', 'No exposures returned — hijack-resistance posture appears strong.')}
             renderFinding={(f, i) => <FindingCard key={i} f={f} />}
@@ -693,6 +712,7 @@ export default function NetworkIntelligence() {
   const { t } = useTranslation()
   const tt = useCallback((key, def) => t(`pages.networkIntelligence.${key}`, { defaultValue: def }), [t])
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [focusedEngineId, setFocusedEngineId] = useState(FLAGSHIP_ID)
   const [target, setTarget] = useState('')
@@ -702,9 +722,15 @@ export default function NetworkIntelligence() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
+      .then((d) => {
+        if (!Array.isArray(d)) {
+          setClientsUnavailable(true)
+          return
+        }
+        setClientsUnavailable(false)
+        setClients(d)
+      })
+      .catch(() => setClientsUnavailable(true))
   }, [])
 
   useClientTargetPrefill(selectedClientId, clients, setTarget, { respectTouched: true, targetTouched })
@@ -749,6 +775,11 @@ export default function NetworkIntelligence() {
             className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#f97316]/40 min-w-[260px]" />
         </label>
       </div>
+      {clientsUnavailable && (
+        <p data-testid="network-intelligence-clients-unavailable" className="text-xs text-amber-300/80 font-mono mb-6">
+          {t('pages.networkIntelligence.clients_unavailable')}
+        </p>
+      )}
 
       {toast && (
         <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#f97316]/30 text-[#f97316]'}`}>

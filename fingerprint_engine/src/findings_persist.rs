@@ -207,9 +207,9 @@ async fn resolve_internet_exposed(
     client_id: i64,
     target_url: &str,
     f: &Value,
-) -> bool {
+) -> Result<bool, String> {
     if let Some(b) = finding_internet_exposed(f) {
-        return b;
+        return Ok(b);
     }
     let host = target_url
         .trim_start_matches("https://")
@@ -222,7 +222,7 @@ async fn resolve_internet_exposed(
         .unwrap_or("")
         .trim();
     if host.is_empty() {
-        return false;
+        return Ok(false);
     }
     // Run on the caller's already tenant-scoped batch transaction connection instead of acquiring a
     // SEPARATE pooled connection + `begin_tenant_tx` (BEGIN + SET LOCAL ROLE + set_config + commit)
@@ -238,7 +238,7 @@ async fn resolve_internet_exposed(
     .bind(format!("%{host}%"))
     .fetch_one(&mut *conn)
     .await
-    .unwrap_or(false)
+    .map_err(|_| "store_down".to_string())
 }
 
 fn extract_array(f: &Value, keys: &[&str]) -> Value {
@@ -324,8 +324,12 @@ pub async fn persist_engine_findings(
         .map(extract_cve_from_finding)
         .filter(|c| !c.is_empty())
         .collect();
-    let epss_map = intel_epss::fetch_epss_for_cves(pool, &scan_cves).await;
-    let kev_map = intel_kev::kev_listed_for_cves(pool, &scan_cves).await;
+    let epss_map = intel_epss::fetch_epss_for_cves(pool, &scan_cves)
+        .await
+        .map_err(|_| "store_down".to_string())?;
+    let kev_map = intel_kev::kev_listed_for_cves(pool, &scan_cves)
+        .await
+        .map_err(|_| "store_down".to_string())?;
 
     let mut tx = db::begin_tenant_tx(pool, tenant_id)
         .await
@@ -354,7 +358,9 @@ pub async fn persist_engine_findings(
     // is_suppressed() that opened its own tenant transaction each time (N+1). Matched hashes are
     // collected and their hit_count telemetry is bumped in one statement before commit.
     let active_suppressions =
-        fp_feedback::active_suppressions_for_engine(pool, tenant_id, engine).await;
+        fp_feedback::active_suppressions_for_engine(pool, tenant_id, engine)
+            .await
+            .map_err(|_| "store_down".to_string())?;
     let mut suppression_hits: Vec<String> = Vec::new();
 
     let mut inserted: u64 = 0;
@@ -541,7 +547,8 @@ pub async fn persist_engine_findings(
         // ── Confidence multiplier + effective risk (persist-time, not read-time only) ──
         let conf_mult =
             fp_feedback::confidence_multiplier_tx(&mut tx, tenant_id, engine, &signature_hash)
-                .await;
+                .await
+                .map_err(|_| "store_down".to_string())?;
         let base_risk = if cvss > 0.0 {
             cvss
         } else {
@@ -863,7 +870,9 @@ pub async fn persist_engine_findings(
 
         // Reuse the batch tenant transaction's connection (already RLS-scoped to this tenant)
         // instead of acquiring a separate pooled connection + tenant tx per finding.
-        let internet_exposed = resolve_internet_exposed(&mut *tx, client_id, &target_url, &f).await;
+        let internet_exposed = resolve_internet_exposed(&mut *tx, client_id, &target_url, &f)
+            .await
+            .map_err(|_| "store_down".to_string())?;
 
         // ── SOAR playbook dispatch (fire-and-forget) ────────────────────────
         // Built outside the tx so a slow webhook doesn't extend the DB lock.

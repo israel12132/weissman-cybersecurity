@@ -407,6 +407,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/clients/:id/surface-diff",
             get(api_client_surface_diff),
         )
+        .route(
+            "/api/clients/:id/first-seen-hits",
+            get(api_client_first_seen_hits),
+        )
         .route("/api/first-mover/nerve", get(api_first_mover_nerve))
         .route(
             "/api/clients/:id/semantic-state-machine",
@@ -664,6 +668,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/integrations/:id/test", post(api_integrations_test))
         .route("/api/integrations/:id", delete(api_integrations_delete))
         .route("/api/ot-ics/devices", get(api_ot_ics_devices))
+        .route("/api/ot-ics/safety", get(api_ot_ics_safety))
         .route("/api/mobile-security/apps", get(api_mobile_security_apps))
         .route("/api/soc/incidents", get(api_soc_incidents))
         .route(
@@ -769,6 +774,58 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/sovereign/phantom-trap",
             post(api_sovereign_phantom_trap),
         )
+        .route(
+            "/api/sovereign/operator/chat",
+            post(api_sovereign_operator_chat),
+        )
+        .route(
+            "/api/sovereign/operator/session",
+            get(api_sovereign_operator_session_get),
+        )
+        .route(
+            "/api/sovereign/operator/knowledge",
+            get(api_sovereign_operator_knowledge_get),
+        )
+        .route(
+            "/api/sovereign/operator/logs",
+            get(api_sovereign_operator_logs_get),
+        )
+        .route(
+            "/api/sovereign/operator/windows",
+            get(api_sovereign_operator_windows_get),
+        )
+        .route(
+            "/api/sovereign/operator/tools",
+            post(api_sovereign_operator_tools_post),
+        )
+        .route(
+            "/api/sovereign/operator/tune",
+            post(api_sovereign_operator_tune_post),
+        )
+        .route(
+            "/api/sovereign/operator/race",
+            post(api_sovereign_operator_race_post),
+        )
+        .route(
+            "/api/sovereign/operator/stream-ticket",
+            post(api_sovereign_operator_stream_ticket),
+        )
+        .route(
+            "/api/sovereign/operator/stream",
+            get(api_sovereign_operator_stream),
+        )
+        .route(
+            "/api/sovereign/operator/memory",
+            get(api_sovereign_operator_memory_get),
+        )
+        .route(
+            "/api/sovereign/operator/forge",
+            get(api_sovereign_operator_forge_get),
+        )
+        .route(
+            "/api/sovereign/operator/scripts",
+            get(api_sovereign_operator_scripts_get),
+        )
         .route("/api/deception/triggered", post(api_deception_triggered))
         .route("/api/deception/aws-events", post(api_deception_aws_events))
         .route(
@@ -852,6 +909,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route(
             "/api/clients/:id/ot-ics/fingerprints",
             get(api_client_ot_ics_fingerprints),
+        )
+        .route(
+            "/api/clients/:id/ot-ics/safety",
+            get(api_client_ot_ics_safety),
         )
         .route(
             "/api/ceo/council/sessions/:job_id/stream",

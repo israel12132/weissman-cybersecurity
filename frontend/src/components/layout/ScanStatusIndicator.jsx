@@ -11,22 +11,29 @@ const POLL_MS = 15000
  *
  * Polls GET /api/scan/status (`scan_in_progress`, `running_async_jobs`, `scanning_active`)
  * and shows a pulsing pill while a worker job or operator scan is actually running.
+ * Store-down / 503 is unknown — never painted as idle.
  */
 export default function ScanStatusIndicator() {
   const { t } = useTranslation()
-  const [active, setActive] = useState(false)
+  const [mode, setMode] = useState(null)
 
   const poll = useCallback(async () => {
     try {
       const d = await apiFetch('/api/scan/status')
+      if (d == null || d.ok === false || d.unavailable || d.running_async_jobs == null) {
+        setMode('unknown')
+        return
+      }
       const jobs = Number(d.running_async_jobs) || 0
-      setActive(
+      setMode(
         d.scan_in_progress === true
           || d.scanning_active === true
-          || jobs > 0,
+          || jobs > 0
+          ? 'active'
+          : 'idle',
       )
     } catch {
-      setActive(false)
+      setMode('unknown')
     }
   }, [])
 
@@ -36,7 +43,22 @@ export default function ScanStatusIndicator() {
 
   useVisiblePolling(poll, POLL_MS)
 
-  if (!active) return null
+  if (mode == null || mode === 'idle') return null
+
+  if (mode === 'unknown') {
+    return (
+      <span
+        className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[10px] font-mono uppercase tracking-wider"
+        role="status"
+        aria-live="polite"
+        data-testid="scan-status-unavailable"
+        title={t('scanStatus.unknown_hint')}
+      >
+        <Radar className="w-3 h-3" aria-hidden />
+        {t('scanStatus.unknown')}
+      </span>
+    )
+  }
 
   return (
     <span

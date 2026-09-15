@@ -22,7 +22,9 @@ export default function TopTierEngineHub() {
   const { t } = useTranslation()
   const [audit, setAudit] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [auditUnavailable, setAuditUnavailable] = useState(false)
   const [clients, setClients] = useState([])
+  const [clientsUnavailable, setClientsUnavailable] = useState(false)
   const [clientId, setClientId] = useState('')
   const [target, setTarget] = useState('')
   const [probeJobId, setProbeJobId] = useState('')
@@ -35,9 +37,14 @@ export default function TopTierEngineHub() {
     setLoading(true)
     try {
       const d = await apiFetch('/api/engines/top-tier/audit')
+      if (d?.ok === false || d?.unavailable || !d || typeof d !== 'object' || !Array.isArray(d.engines)) {
+        setAuditUnavailable(true)
+        return
+      }
+      setAuditUnavailable(false)
       setAudit(d)
     } catch {
-      // audit load failed — keep prior state
+      setAuditUnavailable(true)
     } finally {
       setLoading(false)
     }
@@ -52,9 +59,13 @@ export default function TopTierEngineHub() {
     async function loadClients() {
       try {
         const d = await apiFetch('/api/clients')
-        if (!cancelled && Array.isArray(d)) setClients(d)
+        const list = Array.isArray(d) ? d : Array.isArray(d?.clients) ? d.clients : null
+        if (cancelled) return
+        if (!list) { setClientsUnavailable(true); return }
+        setClientsUnavailable(false)
+        setClients(list)
       } catch {
-        // clients load failed — leave list unchanged
+        if (!cancelled) setClientsUnavailable(true)
       }
     }
     loadClients()
@@ -166,6 +177,7 @@ export default function TopTierEngineHub() {
   }, [engineSearch, auditById])
 
   function exportAuditCsv() {
+    if (auditUnavailable) return
     const rows = Array.isArray(audit?.engines) ? audit.engines : []
     const header = ['engine_id', 'label', 'execution_path', 'canonical_engine', 'is_production_runnable', 'known_in_catalog']
     const csvRows = rows.map((r) => {
@@ -201,14 +213,16 @@ export default function TopTierEngineHub() {
           <div className="flex items-center gap-3">
             <ShellScanActions
               onRefresh={reloadAudit}
-              onExport={exportAuditCsv}
+              onExport={auditUnavailable ? undefined : exportAuditCsv}
               refreshLoading={loading}
-              exportDisabled={loading || !audit?.engines?.length}
+              exportDisabled={loading || auditUnavailable || !audit?.engines?.length}
             />
             <div className="text-[11px] font-mono text-[var(--text-tertiary)]">
             {loading
               ? t('pages.topTierEngineHub.auditing')
-              : t('pages.topTierEngineHub.connected', {
+              : auditUnavailable
+                ? t('pages.topTierEngineHub.audit_unavailable')
+                : t('pages.topTierEngineHub.connected', {
                   connected: audit?.connected_count ?? 0,
                   total: audit?.top_tier_count ?? TOP_TIER_ENGINE_IDS.length,
                 })}
@@ -236,6 +250,11 @@ export default function TopTierEngineHub() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            {clientsUnavailable && (
+              <p data-testid="top-tier-engine-hub-clients-unavailable" className="text-xs text-amber-300/80 font-mono md:col-span-4">
+                {t('pages.topTierEngineHub.clients_unavailable')}
+              </p>
+            )}
             <input
               value={target}
               onChange={(e) => setTarget(e.target.value)}
@@ -275,6 +294,11 @@ export default function TopTierEngineHub() {
           <SkeletonWidgetGrid count={6} />
         ) : (
         <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {auditUnavailable && (
+            <p data-testid="top-tier-engine-hub-audit-unavailable" className="col-span-full text-xs text-amber-300/80 font-mono">
+              {t('pages.topTierEngineHub.audit_unavailable')}
+            </p>
+          )}
           {filteredEngineIds.length === 0 ? (
             <div className="col-span-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-6 text-sm text-[var(--text-tertiary)] text-center">
               {t('pages.topTierEngineHub.no_search_results')}
@@ -282,7 +306,7 @@ export default function TopTierEngineHub() {
           ) : filteredEngineIds.map((id, idx) => {
             const engine = ENGINES_BY_ID[id]
             const row = auditById[id]
-            const path = row?.execution_path || 'unknown'
+            const path = auditUnavailable ? '—' : (row?.execution_path || 'unknown')
             const probe = probeByEngine[id] || null
             return (
               <article key={id} className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
@@ -292,7 +316,7 @@ export default function TopTierEngineHub() {
                     <h3 className="text-base font-semibold text-white">{engine?.label || id}</h3>
                     <div className="text-[11px] font-mono text-[var(--text-muted)]">{id}</div>
                   </div>
-                  <span className={`px-2 py-1 rounded border text-[10px] font-mono uppercase tracking-wider ${badgeClass(path)}`}>
+                  <span className={`px-2 py-1 rounded border text-[10px] font-mono uppercase tracking-wider ${auditUnavailable ? 'text-[var(--text-muted)] border-[var(--border-default)]' : badgeClass(path)}`}>
                     {path}
                   </span>
                 </div>
@@ -302,11 +326,11 @@ export default function TopTierEngineHub() {
                 <div className="grid grid-cols-2 gap-2 text-[11px] font-mono text-[var(--text-tertiary)]">
                   <div className="rounded border border-[var(--border-default)] bg-[var(--table-surface)] p-2">
                     <div className="text-[var(--text-muted)]">{t('pages.topTierEngineHub.canonical_label')}</div>
-                    <div>{row?.canonical_engine || '-'}</div>
+                    <div>{auditUnavailable ? '—' : (row?.canonical_engine || '-')}</div>
                   </div>
                   <div className="rounded border border-[var(--border-default)] bg-[var(--table-surface)] p-2">
                     <div className="text-[var(--text-muted)]">{t('pages.topTierEngineHub.production_label')}</div>
-                    <div>{row?.is_production_runnable ? t('common.yes') : t('common.no')}</div>
+                    <div>{auditUnavailable ? '—' : (row?.is_production_runnable ? t('common.yes') : t('common.no'))}</div>
                   </div>
                 </div>
 

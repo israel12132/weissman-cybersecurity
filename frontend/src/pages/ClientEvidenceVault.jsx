@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 import { createColumnHelper } from '@tanstack/react-table'
@@ -8,7 +8,6 @@ import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import DataTable from '../components/ui/DataTable'
 import EmptyState from '../components/ui/EmptyState'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
-import { apiUrl } from '../lib/apiBase'
 import { apiFetch } from '../utils/apiFetch'
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
@@ -50,6 +49,7 @@ export default function ClientEvidenceVault() {
   const [evidence, setEvidence] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [evidenceUnavailable, setEvidenceUnavailable] = useState(false)
   const [uploading, setUploading] = useState(false)
 
   const [label, setLabel] = useState('')
@@ -81,6 +81,7 @@ export default function ClientEvidenceVault() {
 
       if (clientR.error) {
         setError(t('pages.clientEvidenceVault.load_client_failed', { status: clientR.error.status }))
+        setEvidenceUnavailable(true)
         setLoading(false)
         return
       }
@@ -89,13 +90,24 @@ export default function ClientEvidenceVault() {
       if (evidenceR.error) {
         const detail = evidenceR.error.response ? await evidenceR.error.response.text().catch(() => '') : ''
         setError(t('pages.clientEvidenceVault.load_failed', { status: evidenceR.error.status, detail }))
+        setEvidenceUnavailable(true)
+        setEvidence([])
         setLoading(false)
         return
       }
       const data = evidenceR.data
+      if (data?.ok === false || data?.unavailable) {
+        setError(data.detail || t('pages.clientEvidenceVault.unavailable'))
+        setEvidenceUnavailable(true)
+        setEvidence([])
+        setLoading(false)
+        return
+      }
+      setEvidenceUnavailable(false)
       setEvidence(Array.isArray(data.evidence) ? data.evidence : [])
     } catch (e) {
       setError(e?.message || t('pages.clientEvidenceVault.network_error'))
+      setEvidenceUnavailable(true)
     } finally {
       setLoading(false)
     }
@@ -168,8 +180,34 @@ export default function ClientEvidenceVault() {
     }
   }
 
-  function downloadEvidence(item) {
-    window.open(apiUrl(`/api/evidence/${item.id}/download`), '_blank', 'noopener,noreferrer')
+  async function downloadEvidence(item) {
+    try {
+      const res = await apiFetch(`/api/evidence/${item.id}/download`, { raw: true })
+      if (!(res instanceof Response)) return
+      const blob = await res.blob()
+      const dispo = res.headers.get('Content-Disposition')
+      let filename = item.filename || 'evidence.bin'
+      if (dispo) {
+        const m = dispo.match(/filename="([^"]+)"/)
+        if (m) filename = m[1]
+      }
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.rel = 'noopener'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      if (e?.response) {
+        const data = await e.response.json().catch(() => ({}))
+        toast.error(data?.detail || data?.error || t('pages.clientEvidenceVault.download_failed'))
+      } else {
+        toast.error(e?.message || t('pages.clientEvidenceVault.download_failed'))
+      }
+    }
   }
 
   const listFindings = useMemo(() => evidence.map((item) => ({
@@ -190,6 +228,11 @@ export default function ClientEvidenceVault() {
     csvPrefix: 'weissman-client-evidence',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
+
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
 
   const visibleEvidence = useMemo(() => {
     if (!searchQuery.trim()) return evidence
@@ -291,16 +334,16 @@ export default function ClientEvidenceVault() {
 
   return (
     <PageShell
-      title={client?.name
+      title={!error && client?.name
         ? t('pages.clientEvidenceVault.title_with_client', { name: client.name })
         : t('pages.clientEvidenceVault.title')}
       subtitle={t('pages.clientEvidenceVault.subtitle')}
       actions={(
         <ShellScanActions
           onRefresh={loadAll}
-          onExport={exportCsv}
+          onExport={evidenceUnavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >
@@ -313,7 +356,11 @@ export default function ClientEvidenceVault() {
         </div>
 
         {error && (
-          <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-300">
+          <div
+            className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-300"
+            data-testid="evidence-unavailable"
+            role="alert"
+          >
             {error}
           </div>
         )}
@@ -394,10 +441,16 @@ export default function ClientEvidenceVault() {
         <div className="p-6 bg-[var(--bg-3)]/40 border border-[var(--border-default)] rounded-xl">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white">{t('pages.clientEvidenceVault.items_heading')}</h2>
-            <span className="text-xs text-[var(--text-muted)]">{t('pages.clientEvidenceVault.total', { count: evidence.length })}</span>
+            {!error && (
+              <span className="text-xs text-[var(--text-muted)]">{t('pages.clientEvidenceVault.total', { count: evidence.length })}</span>
+            )}
           </div>
 
-          {evidence.length === 0 ? (
+          {error ? (
+            <div className="mt-4 text-sm text-red-300/80" data-testid="evidence-empty-suppressed">
+              {t('pages.clientEvidenceVault.unavailable')}
+            </div>
+          ) : evidence.length === 0 ? (
             <div className="mt-4 text-sm text-[var(--text-tertiary)]">{t('pages.clientEvidenceVault.empty')}</div>
           ) : (
             <>

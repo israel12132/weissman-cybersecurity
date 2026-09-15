@@ -113,6 +113,8 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "iac_misconfig",
     "serverless_attack",
     "scada_ics",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
     // Critical infrastructure (RoE-gated; `high_risk_engines` compile feature)
     "avionics_adsb_attack",
     "maritime_ais_attack",
@@ -122,8 +124,6 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "building_automation_attack",
     "robotics_ros2_attack",
     "ot_sis_triton_attack",
-    "ot_passive_active_safety",
-    "ot_crown_jewel_path",
     "iot_firmware",
     "ble_rf",
     "edr_evasion",
@@ -756,6 +756,8 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "serverless_attack",
     // OT / ICS / IoT
     "scada_ics",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
     "avionics_adsb_attack",
     "maritime_ais_attack",
     "ev_charging_ocpp_attack",
@@ -764,8 +766,6 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "building_automation_attack",
     "robotics_ros2_attack",
     "ot_sis_triton_attack",
-    "ot_passive_active_safety",
-    "ot_crown_jewel_path",
     "iot_firmware",
     "ble_rf",
     // Stealth / Evasion
@@ -1641,6 +1641,14 @@ mod production_registry_tests {
         assert!(
             PRODUCTION_ENGINE_IDS.contains(&"ot_crown_jewel_path"),
             "OT crown-jewel path must be in the production catalog"
+        );
+        assert!(
+            FULL_ENGINE_REGISTRY_ORDER.contains(&"ot_passive_active_safety"),
+            "OT safety interlock must be in the full engine registry order"
+        );
+        assert!(
+            FULL_ENGINE_REGISTRY_ORDER.contains(&"ot_crown_jewel_path"),
+            "OT crown-jewel path must be in the full engine registry order"
         );
     }
 

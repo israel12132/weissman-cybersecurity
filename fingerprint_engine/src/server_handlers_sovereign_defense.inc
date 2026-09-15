@@ -5,7 +5,6 @@ struct SovereignConfigBody {
     rotation_step_secs: Option<i32>,
     port_pool_min: Option<i32>,
     port_pool_max: Option<i32>,
-    #[allow(dead_code)] // accepted in JSON body; not yet consumed
     active: Option<bool>,
 }
 
@@ -22,9 +21,13 @@ async fn api_sovereign_defense_dashboard(
     .await
     {
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": e })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(
+                crate::http_unavailable::sovereign_defense_dashboard_unavailable_json(
+                    "database unavailable",
+                ),
+            ),
         )
             .into_response(),
     }
@@ -39,30 +42,64 @@ async fn api_sovereign_defense_rotate(
     let step = body.rotation_step_secs.unwrap_or(3).clamp(1, 60);
     if let (Some(min), Some(max)) = (body.port_pool_min, body.port_pool_max) {
         // `liquid_matrix_routing_tokens` is tenant-scoped; on a bare pool RLS silently matches no
-        // rows and the operator's port pool is dropped while the endpoint reports success.
-        if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
-            match sqlx::query(
-                r#"UPDATE liquid_matrix_routing_tokens
-                      SET rotation_step_secs = $3, port_pool_min = $4, port_pool_max = $5, updated_at = now()
-                    WHERE tenant_id = $1 AND client_id = $2"#,
+        // rows. Never report ok:true when the operator's port pool was not applied.
+        let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::sovereign_rotate_unavailable_json(
+                    "database unavailable",
+                )),
             )
-            .bind(auth.tenant_id)
-            .bind(client_id)
-            .bind(step)
-            .bind(min)
-            .bind(max)
-            .execute(&mut *tx)
-            .await
-            {
-                Ok(r) if r.rows_affected() == 0 => {
-                    tracing::warn!(target: "sovereign_defense", tenant_id = auth.tenant_id, client_id, "liquid-matrix port pool update matched no existing token");
-                }
-                Ok(_) => {}
-                Err(e) => {
-                    tracing::error!(target: "sovereign_defense", tenant_id = auth.tenant_id, error = %e, "liquid-matrix port pool update failed");
+                .into_response();
+        };
+        match sqlx::query(
+            r#"UPDATE liquid_matrix_routing_tokens
+                  SET rotation_step_secs = $3, port_pool_min = $4, port_pool_max = $5,
+                      active = COALESCE($6, active), updated_at = now()
+                WHERE tenant_id = $1 AND client_id = $2"#,
+        )
+        .bind(auth.tenant_id)
+        .bind(client_id)
+        .bind(step)
+        .bind(min)
+        .bind(max)
+        .bind(body.active)
+        .execute(&mut *tx)
+        .await
+        {
+            Ok(r) if r.rows_affected() == 0 => {
+                let _ = tx.rollback().await;
+                return (
+                    StatusCode::CONFLICT,
+                    Json(json!({
+                        "ok": false,
+                        "detail": "liquid-matrix port pool matched no existing token",
+                    })),
+                )
+                    .into_response();
+            }
+            Ok(_) => {
+                if tx.commit().await.is_err() {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::sovereign_rotate_unavailable_json(
+                            "database unavailable",
+                        )),
+                    )
+                        .into_response();
                 }
             }
-            let _ = tx.commit().await;
+            Err(e) => {
+                let _ = tx.rollback().await;
+                tracing::error!(target: "sovereign_defense", tenant_id = auth.tenant_id, error = %e, "liquid-matrix port pool update failed");
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::sovereign_rotate_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
         }
     }
     match crate::sovereign_defense_store::rotate_liquid_matrix(
@@ -86,9 +123,11 @@ async fn api_sovereign_defense_rotate(
             })),
         )
             .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "error": e })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::sovereign_rotate_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }
@@ -100,9 +139,15 @@ async fn api_sovereign_defense_chronos_events(
     Path(client_id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = crate::db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!([]))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::chronos_events_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, event_type, pid, parent_pid, process_name, syscall_hint, action_taken, delta_json, created_at
              FROM chronos_events
             WHERE client_id = $1
@@ -111,8 +156,27 @@ async fn api_sovereign_defense_chronos_events(
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::chronos_events_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::chronos_events_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
     let out: Vec<Value> = rows
         .into_iter()
         .map(|r| {
@@ -141,9 +205,11 @@ async fn api_sovereign_defense_poison_library(
     }
     match crate::sovereign_defense_store::load_poison_library(&state.app_pool, 50).await {
         Ok(v) => (StatusCode::OK, Json(Value::Array(v))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": e })),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::poison_library_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response(),
     }
@@ -155,9 +221,15 @@ async fn api_sovereign_defense_cognitive_sessions(
     Path(client_id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = crate::db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!([]))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::cognitive_sessions_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, target_url, bot_score, bot_signals, poison_variant, poison_payload_id, response_status, created_at
              FROM cognitive_starvation_sessions
             WHERE client_id = $1
@@ -166,8 +238,27 @@ async fn api_sovereign_defense_cognitive_sessions(
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::cognitive_sessions_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::cognitive_sessions_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
     let out: Vec<Value> = rows
         .into_iter()
         .map(|r| {

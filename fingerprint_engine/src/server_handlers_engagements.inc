@@ -58,9 +58,15 @@ async fn api_client_engagements_list(
     Path(client_id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"engagements": []}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::engagements_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, client_id, name, status, start_at, end_at, roe_mode, created_by_user_id, created_at, updated_at
            FROM engagements
            WHERE client_id = $1
@@ -70,8 +76,27 @@ async fn api_client_engagements_list(
     .bind(client_id)
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::engagements_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::engagements_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
 
     let engagements: Vec<Value> = rows
         .into_iter()
@@ -141,14 +166,24 @@ async fn api_client_engagements_create(
     };
 
     // Ensure client exists and capture scope snapshot at creation time.
-    let client_row = sqlx::query(
+    let client_row = match sqlx::query(
         "SELECT id, name, domains, ip_ranges, tech_stack, auto_detect_tech_stack FROM clients WHERE id = $1",
     )
     .bind(client_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::engagements_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let Some(client_row) = client_row else {
         let _ = tx.rollback().await;
         return (
@@ -167,7 +202,7 @@ async fn api_client_engagements_create(
 
     let notes = body.notes.clone().unwrap_or_default();
 
-    let created: Option<(i64,)> = sqlx::query_as(
+    let created: Option<(i64,)> = match sqlx::query_as(
         r#"INSERT INTO engagements (tenant_id, client_id, name, status, start_at, end_at, roe_mode, notes, scope_snapshot, created_by_user_id)
            VALUES ($1, $2, $3, 'active', $4, $5, $6, $7, $8, $9)
            RETURNING id"#,
@@ -183,8 +218,18 @@ async fn api_client_engagements_create(
     .bind(auth.user_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::engagements_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
 
     let Some((engagement_id,)) = created else {
         let _ = tx.rollback().await;
@@ -203,7 +248,15 @@ async fn api_client_engagements_create(
         &ip,
     )
     .await;
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::engagements_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     (
         StatusCode::CREATED,
@@ -218,18 +271,42 @@ async fn api_engagement_get(
     Path(engagement_id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(Value::Null)).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::engagements_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT id, client_id, name, status, start_at, end_at, roe_mode, notes, scope_snapshot, created_by_user_id, created_at, updated_at
            FROM engagements WHERE id = $1"#,
     )
     .bind(engagement_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::engagements_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::engagements_unavailable_json(
+                "store_down",
+            )),
+        )
+            .into_response();
+    }
     let Some(r) = row else {
         return (StatusCode::NOT_FOUND, Json(Value::Null)).into_response();
     };
@@ -267,17 +344,33 @@ async fn api_engagement_patch(
     body: axum::extract::Json<EngagementPatchBody>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::engagements_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     // Load row (for client_id + old values).
-    let row = sqlx::query(
+    let row = match sqlx::query(
         "SELECT id, client_id, roe_mode, status FROM engagements WHERE id = $1",
     )
     .bind(engagement_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::engagements_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
     let Some(r) = row else {
         let _ = tx.rollback().await;
         return (
@@ -357,15 +450,19 @@ async fn api_engagement_patch(
 
     separated.push("updated_at = now()");
     qb.push(" WHERE id = ").push_bind(engagement_id);
-    let updated = qb.build().execute(&mut *tx).await.is_ok();
-    if !updated {
-        let _ = tx.rollback().await;
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false}))).into_response();
+    if qb.build().execute(&mut *tx).await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::engagements_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     }
 
     let ip = extract_client_ip(&headers, addr);
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-    let _ = audit_log::insert_audit(
+    if audit_log::insert_audit(
         &mut tx,
         auth.tenant_id,
         Some(auth.user_id),
@@ -374,7 +471,25 @@ async fn api_engagement_patch(
         &format!("client_id={} engagement_id={} keys={} old_status={} old_roe={}", client_id, engagement_id, changed_keys.join(","), old_status, old_roe),
         &ip,
     )
-    .await;
-    let _ = tx.commit().await;
+    .await
+    .is_err()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::engagements_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::engagements_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     (StatusCode::OK, Json(json!({"ok": true}))).into_response()
 }

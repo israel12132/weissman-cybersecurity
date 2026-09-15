@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import { downloadCsv } from '../lib/exportFindingsCsv'
@@ -201,6 +201,8 @@ export default function CouncilHitlQueue() {
   const { t } = useTranslation()
   const [items, setItems] = useState([])
   const [fetchLoading, setFetchLoading] = useState(true)
+  const [unavailable, setUnavailable] = useState(false)
+  const hasLoadedRef = useRef(false)
   const [actionLoading, setActionLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('PENDING_APPROVAL')
   const [search, setSearch] = useState('')
@@ -216,9 +218,18 @@ export default function CouncilHitlQueue() {
     setFetchLoading(true)
     try {
       const data = await api.get(`/api/council/hitl/queue${qs}`)
-      setItems(data.items ?? [])
+      if (!Array.isArray(data.items)) {
+        throw new Error(t('pages.councilHitlQueue.load_failed', { message: 'invalid payload' }))
+      }
+      setItems(data.items)
+      setUnavailable(false)
+      hasLoadedRef.current = true
     } catch (e) {
       showToast(t('pages.councilHitlQueue.load_failed', { message: e.message }), false)
+      // Leftover leftover-queue stays in state. Always setUnavailable so
+      // page-header Export CSV unmounts (`onExport={unavailable ? undefined}`).
+      // EmptyState dump stays first-load only (`unavailable && !hasLoadedRef.current`).
+      setUnavailable(true)
     } finally {
       setFetchLoading(false)
     }
@@ -286,12 +297,17 @@ export default function CouncilHitlQueue() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (unavailable) return
+    exportQueueCsv(filteredItems)
+  }, [unavailable, filteredItems])
+
   const headerActions = (
     <ShellScanActions
       onRefresh={fetchQueue}
-      onExport={() => exportQueueCsv(filteredItems)}
+      onExport={unavailable ? undefined : handleExportCsv}
       refreshLoading={fetchLoading}
-      exportDisabled={!filteredFindings.length}
+      exportDisabled={unavailable || !filteredFindings.length}
     />
   )
 
@@ -300,7 +316,7 @@ export default function CouncilHitlQueue() {
       title={t('pages.councilHitlQueue.title')}
       subtitle={t('pages.councilHitlQueue.subtitle')}
       icon={<ShieldCheck className="w-5 h-5 text-amber-400" strokeWidth={1.75} />}
-      badge={pending > 0 ? t('pages.councilHitlQueue.pending_badge', { count: pending }) : undefined}
+      badge={!unavailable && pending > 0 ? t('pages.councilHitlQueue.pending_badge', { count: pending }) : undefined}
       badgeColor="#fbbf24"
       actions={headerActions}
       maxWidth="max-w-4xl"
@@ -351,7 +367,17 @@ export default function CouncilHitlQueue() {
           <SkeletonWidgetGrid count={3} className="lg:grid-cols-1" />
         )}
 
-        {!fetchLoading && filteredItems.length === 0 && (
+        {unavailable && !fetchLoading && !hasLoadedRef.current && (
+          <div data-testid="council-hitl-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.councilHitlQueue.unavailable_title')}
+              body={t('pages.councilHitlQueue.unavailable_body')}
+            />
+          </div>
+        )}
+
+        {!unavailable && !fetchLoading && filteredItems.length === 0 && (
           <EmptyState
             icon="shield"
             title={t('pages.councilHitlQueue.empty_title')}

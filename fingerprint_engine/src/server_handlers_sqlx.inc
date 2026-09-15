@@ -8,23 +8,12 @@ async fn api_metrics_dashboard(
         .await
         .is_ok();
 
-    let empty_sev = json!({
-        "critical": 0,
-        "high": 0,
-        "medium": 0,
-        "low": 0,
-        "info": 0,
-    });
-
     if !postgres_ok {
         return (
-            StatusCode::OK,
-            Json(json!({
-                "postgres_ok": false,
-                "active_scans": 0,
-                "findings_by_severity": empty_sev,
-                "jobs": { "completed_24h": 0, "failed_24h": 0 },
-            })),
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::metrics_dashboard_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     }
@@ -32,12 +21,9 @@ async fn api_metrics_dashboard(
     let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({
-                "postgres_ok": false,
-                "active_scans": 0,
-                "findings_by_severity": empty_sev,
-                "jobs": { "completed_24h": 0, "failed_24h": 0 },
-            })),
+            Json(crate::http_unavailable::metrics_dashboard_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
@@ -60,12 +46,9 @@ async fn api_metrics_dashboard(
             tracing::error!(target: "metrics", tenant_id = auth.tenant_id, error = %e, "severity aggregate failed");
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({
-                    "postgres_ok": false,
-                    "active_scans": 0,
-                    "findings_by_severity": empty_sev,
-                    "jobs": { "completed_24h": 0, "failed_24h": 0 },
-                })),
+                Json(crate::http_unavailable::metrics_dashboard_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
             )
                 .into_response();
         }
@@ -78,16 +61,27 @@ async fn api_metrics_dashboard(
             .unwrap_or(0)
     };
 
-    let active_scans: i64 = sqlx::query_scalar(
+    let active_scans: i64 = match sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM weissman_async_jobs
           WHERE tenant_id = $1 AND status = 'running'",
     )
     .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::metrics_dashboard_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
 
-    let jobs_completed_24h: i64 = sqlx::query_scalar(
+    let jobs_completed_24h: i64 = match sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM weissman_async_jobs
           WHERE tenant_id = $1 AND status = 'completed'
             AND updated_at > now() - interval '24 hours'",
@@ -95,9 +89,20 @@ async fn api_metrics_dashboard(
     .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::metrics_dashboard_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
 
-    let jobs_failed_24h: i64 = sqlx::query_scalar(
+    let jobs_failed_24h: i64 = match sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM weissman_async_jobs
           WHERE tenant_id = $1 AND status IN ('failed','dead')
             AND updated_at > now() - interval '24 hours'",
@@ -105,9 +110,28 @@ async fn api_metrics_dashboard(
     .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::metrics_dashboard_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
 
-    let _ = tx.commit().await;
+    if let Err(e) = tx.commit().await {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::metrics_dashboard_unavailable_json(
+                scrub_internal_error(&e),
+            )),
+        )
+            .into_response();
+    }
 
     let orchestrator_cycles = crate::orchestrator::active_tenant_scan_count() as i64;
     let active_scans = active_scans.max(orchestrator_cycles);
@@ -134,17 +158,17 @@ async fn api_metrics_dashboard(
 }
 
 /// Live FAIR-style score from RLS-visible vulnerabilities (portal-safe).
+/// Query failure is store-down — never a perfect 100 from an empty default.
 async fn live_security_score_from_vulns(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-) -> i64 {
+) -> Result<i64, sqlx::Error> {
     let rows = sqlx::query(
         r#"SELECT lower(trim(severity)) AS sev, COUNT(*)::bigint AS n
            FROM vulnerabilities
            GROUP BY 1"#,
     )
     .fetch_all(&mut **tx)
-    .await
-    .unwrap_or_default();
+    .await?;
     let mut crit = 0i64;
     let mut high = 0i64;
     let mut med = 0i64;
@@ -158,40 +182,117 @@ async fn live_security_score_from_vulns(
             _ => {}
         }
     }
-    (100i64 - crit * 25 - high * 15 - med * 5).max(0)
+    Ok((100i64 - crit * 25 - high * 15 - med * 5).max(0))
 }
 
 async fn api_dashboard_stats(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"total_vulnerabilities":0,"active_scans":0,"security_score":0,"assets_monitored":0,"threats_mitigated":0}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::dashboard_stats_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let vuln_count: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
-        .fetch_one(&mut *tx).await.unwrap_or(0);
-    let client_count: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients")
-        .fetch_one(&mut *tx).await.unwrap_or(0);
+    let vuln_count: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM vulnerabilities")
+        .fetch_one(&mut *tx)
+        .await
+    {
+        Ok(n) => n,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::dashboard_stats_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    let client_count: i64 = match sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients")
+        .fetch_one(&mut *tx)
+        .await
+    {
+        Ok(n) => n,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::dashboard_stats_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     // Portal sessions must not read tenant-wide report_runs (no client_id column).
     let score: i64 = if auth.assigned_client_id.is_some() {
-        live_security_score_from_vulns(&mut tx).await
+        match live_security_score_from_vulns(&mut tx).await {
+            Ok(s) => s,
+            Err(e) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::dashboard_stats_unavailable_json(
+                        scrub_internal_error(&e),
+                    )),
+                )
+                    .into_response();
+            }
+        }
     } else {
-        sqlx::query_scalar::<_, String>("SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1")
-            .fetch_optional(&mut *tx).await.ok().flatten()
-            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-            .and_then(|j| {
-                let by = j.get("by_severity")?.as_object()?;
-                let crit = by.get("critical").and_then(Value::as_i64).unwrap_or(0);
-                let high = by.get("high").and_then(Value::as_i64).unwrap_or(0);
-                let med = by.get("medium").and_then(Value::as_i64).unwrap_or(0);
-                Some((100i64 - crit * 25 - high * 15 - med * 5).max(0))
-            }).unwrap_or(0)
+        match sqlx::query_scalar::<_, String>("SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1")
+            .fetch_optional(&mut *tx)
+            .await
+        {
+            Ok(opt) => opt
+                .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                .and_then(|j| {
+                    let by = j.get("by_severity")?.as_object()?;
+                    let crit = by.get("critical").and_then(Value::as_i64).unwrap_or(0);
+                    let high = by.get("high").and_then(Value::as_i64).unwrap_or(0);
+                    let med = by.get("medium").and_then(Value::as_i64).unwrap_or(0);
+                    Some((100i64 - crit * 25 - high * 15 - med * 5).max(0))
+                })
+                .unwrap_or(0),
+            Err(e) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::dashboard_stats_unavailable_json(
+                        scrub_internal_error(&e),
+                    )),
+                )
+                    .into_response();
+            }
+        }
     };
     let summary_json: Option<Value> = if auth.assigned_client_id.is_some() {
         None
     } else {
-        sqlx::query_scalar::<_, String>("SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1")
-            .fetch_optional(&mut *tx).await.ok().flatten()
-            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+        match sqlx::query_scalar::<_, String>("SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1")
+            .fetch_optional(&mut *tx)
+            .await
+        {
+            Ok(opt) => opt.and_then(|s| serde_json::from_str::<Value>(&s).ok()),
+            Err(e) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::dashboard_stats_unavailable_json(
+                        scrub_internal_error(&e),
+                    )),
+                )
+                    .into_response();
+            }
+        }
     };
-    let _ = tx.commit().await;
+    if let Err(e) = tx.commit().await {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::dashboard_stats_unavailable_json(
+                scrub_internal_error(&e),
+            )),
+        )
+            .into_response();
+    }
     let active = crate::orchestrator::is_scanning_active();
     let attack_surface_targets = summary_json.as_ref().and_then(|j| j.get("attack_surface_targets")).and_then(Value::as_u64).unwrap_or(0) as i64;
     let attack_surface_paths = summary_json.as_ref().and_then(|j| j.get("attack_surface_paths")).and_then(Value::as_u64).unwrap_or(0) as i64;
@@ -204,6 +305,25 @@ async fn api_dashboard_stats(State(state): State<Arc<AppState>>, Extension(auth)
         "attack_surface_targets": attack_surface_targets,
         "attack_surface_paths": attack_surface_paths,
     }))).into_response()
+}
+
+fn exec_kpis_query_unavailable(e: &sqlx::Error) -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(crate::http_unavailable::exec_kpis_unavailable_json(
+            scrub_internal_error(e),
+        )),
+    )
+        .into_response()
+}
+
+macro_rules! exec_kpi_ok {
+    ($query:expr) => {
+        match $query {
+            Ok(v) => v,
+            Err(e) => return exec_kpis_query_unavailable(&e),
+        }
+    };
 }
 
 /// `GET /api/dashboard/exec-kpis` — Single aggregated payload for the executive dashboard.
@@ -246,13 +366,15 @@ async fn api_dashboard_exec_kpis(
     let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({ "ok": false, "detail": "Database unavailable" })),
+            Json(crate::http_unavailable::exec_kpis_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
 
     // ── Severity counts (current + 24h-ago snapshot for trend deltas) ──────────────
-    let now_sev: Vec<(String, i64)> = sqlx::query_as::<_, (String, i64)>(
+    let now_sev: Vec<(String, i64)> = match sqlx::query_as::<_, (String, i64)>(
         "SELECT COALESCE(lower(severity),'info') AS s, COUNT(*)::bigint
            FROM vulnerabilities
           WHERE COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
@@ -260,18 +382,30 @@ async fn api_dashboard_exec_kpis(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::exec_kpis_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
 
-    let prev_sev: Vec<(String, i64)> = sqlx::query_as::<_, (String, i64)>(
-        "SELECT COALESCE(lower(severity),'info') AS s, COUNT(*)::bigint
-           FROM vulnerabilities
-          WHERE discovered_at < now() - interval '24 hours'
-            AND COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
-          GROUP BY s",
-    )
-    .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
+    let prev_sev: Vec<(String, i64)> = exec_kpi_ok!(
+        sqlx::query_as::<_, (String, i64)>(
+            "SELECT COALESCE(lower(severity),'info') AS s, COUNT(*)::bigint
+               FROM vulnerabilities
+              WHERE discovered_at < now() - interval '24 hours'
+                AND COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
+              GROUP BY s",
+        )
+        .fetch_all(&mut *tx)
+        .await
+    );
 
     let to_map = |rows: Vec<(String, i64)>| {
         let mut m: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
@@ -287,110 +421,120 @@ async fn api_dashboard_exec_kpis(
     };
 
     // ── Status workflow breakdown ──────────────────────────────────────────────────
-    let status_rows: Vec<(String, i64)> = sqlx::query_as::<_, (String, i64)>(
-        "SELECT COALESCE(upper(status),'OPEN'), COUNT(*)::bigint
-           FROM vulnerabilities GROUP BY 1",
-    )
-    .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
+    let status_rows: Vec<(String, i64)> = exec_kpi_ok!(
+        sqlx::query_as::<_, (String, i64)>(
+            "SELECT COALESCE(upper(status),'OPEN'), COUNT(*)::bigint
+               FROM vulnerabilities GROUP BY 1",
+        )
+        .fetch_all(&mut *tx)
+        .await
+    );
     let status_map = to_map(status_rows);
 
     // ── Asset / client counts ──────────────────────────────────────────────────────
-    let total_clients: i64 =
+    let total_clients: i64 = exec_kpi_ok!(
         sqlx::query_scalar("SELECT COUNT(*)::bigint FROM clients")
             .fetch_one(&mut *tx)
             .await
-            .unwrap_or(0);
-    let clients_with_findings: i64 = sqlx::query_scalar(
-        "SELECT COUNT(DISTINCT client_id)::bigint FROM vulnerabilities
-          WHERE COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')",
-    )
-    .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
+    );
+    let clients_with_findings: i64 = exec_kpi_ok!(
+        sqlx::query_scalar(
+            "SELECT COUNT(DISTINCT client_id)::bigint FROM vulnerabilities
+              WHERE COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')",
+        )
+        .fetch_one(&mut *tx)
+        .await
+    );
 
     // ── Endpoint agent state (registered / online / stale) ─────────────────────────
-    // Tolerate the endpoint_agents table being absent on very old schemas.
-    let agents_registered: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM endpoint_agents WHERE tenant_id = $1",
-    )
-    .bind(auth.tenant_id)
-    .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
-    let agents_online: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM endpoint_agents
-          WHERE tenant_id = $1 AND last_seen_at > now() - interval '90 seconds'",
-    )
-    .bind(auth.tenant_id)
-    .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
+    // endpoint_agents is a required table. Missing-relation (42P01) is schema drift /
+    // store-down — never mix live findings with a painted-empty fleet.
+    let agents_registered: i64 = exec_kpi_ok!(
+        sqlx::query_scalar(
+            "SELECT COUNT(*)::bigint FROM endpoint_agents WHERE tenant_id = $1",
+        )
+        .bind(auth.tenant_id)
+        .fetch_one(&mut *tx)
+        .await
+    );
+    let agents_online: i64 = exec_kpi_ok!(
+        sqlx::query_scalar(
+            "SELECT COUNT(*)::bigint FROM endpoint_agents
+              WHERE tenant_id = $1 AND last_seen_at > now() - interval '90 seconds'",
+        )
+        .bind(auth.tenant_id)
+        .fetch_one(&mut *tx)
+        .await
+    );
 
     // ── Job pipeline (pending / running / 24h completed / 24h failed) ──────────────
     // weissman_async_jobs is intentionally RLS-free (cross-tenant worker dequeue), so begin_tenant_tx
     // does NOT scope it — every query below must carry an explicit `tenant_id = $1` filter or it would
     // aggregate every tenant's jobs (mirrors the correct api_metrics_dashboard sibling above).
-    let jobs_pending: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE status = 'pending' AND tenant_id = $1",
-    )
-    .bind(auth.tenant_id)
-    .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
-    let jobs_running: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE status = 'running' AND tenant_id = $1",
-    )
-    .bind(auth.tenant_id)
-    .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
-    let jobs_completed_24h: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM weissman_async_jobs
-          WHERE status = 'completed' AND updated_at > now() - interval '24 hours' AND tenant_id = $1",
-    )
-    .bind(auth.tenant_id)
-    .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
-    let jobs_failed_24h: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM weissman_async_jobs
-          WHERE status IN ('failed','dead') AND updated_at > now() - interval '24 hours' AND tenant_id = $1",
-    )
-    .bind(auth.tenant_id)
-    .fetch_one(&mut *tx)
-    .await
-    .unwrap_or(0);
+    let jobs_pending: i64 = exec_kpi_ok!(
+        sqlx::query_scalar(
+            "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE status = 'pending' AND tenant_id = $1",
+        )
+        .bind(auth.tenant_id)
+        .fetch_one(&mut *tx)
+        .await
+    );
+    let jobs_running: i64 = exec_kpi_ok!(
+        sqlx::query_scalar(
+            "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE status = 'running' AND tenant_id = $1",
+        )
+        .bind(auth.tenant_id)
+        .fetch_one(&mut *tx)
+        .await
+    );
+    let jobs_completed_24h: i64 = exec_kpi_ok!(
+        sqlx::query_scalar(
+            "SELECT COUNT(*)::bigint FROM weissman_async_jobs
+              WHERE status = 'completed' AND updated_at > now() - interval '24 hours' AND tenant_id = $1",
+        )
+        .bind(auth.tenant_id)
+        .fetch_one(&mut *tx)
+        .await
+    );
+    let jobs_failed_24h: i64 = exec_kpi_ok!(
+        sqlx::query_scalar(
+            "SELECT COUNT(*)::bigint FROM weissman_async_jobs
+              WHERE status IN ('failed','dead') AND updated_at > now() - interval '24 hours' AND tenant_id = $1",
+        )
+        .bind(auth.tenant_id)
+        .fetch_one(&mut *tx)
+        .await
+    );
 
     // ── Average scan duration over the last 24h ────────────────────────────────────
-    let avg_scan_secs: f64 = sqlx::query_scalar::<_, Option<f64>>(
-        "SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at)))::float8
-           FROM weissman_async_jobs
-          WHERE status = 'completed' AND updated_at > now() - interval '24 hours' AND tenant_id = $1",
+    // NULL AVG (no completed jobs) is a confirmed 0.0. Query failure is store-down.
+    let avg_scan_secs: f64 = exec_kpi_ok!(
+        sqlx::query_scalar::<_, Option<f64>>(
+            "SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at)))::float8
+               FROM weissman_async_jobs
+              WHERE status = 'completed' AND updated_at > now() - interval '24 hours' AND tenant_id = $1",
+        )
+        .bind(auth.tenant_id)
+        .fetch_one(&mut *tx)
+        .await
     )
-    .bind(auth.tenant_id)
-    .fetch_one(&mut *tx)
-    .await
-    .ok()
-    .flatten()
     .unwrap_or(0.0);
 
     // ── MTTR (open → fixed, last 30 days) ──────────────────────────────────────────
-    let mttr_hours: f64 = sqlx::query_scalar::<_, Option<f64>>(
-        "SELECT AVG(EXTRACT(EPOCH FROM (updated_at - discovered_at)) / 3600.0)::float8
-           FROM vulnerabilities
-          WHERE upper(status) = 'FIXED'
-            AND updated_at > now() - interval '30 days'",
+    let mttr_hours: f64 = exec_kpi_ok!(
+        sqlx::query_scalar::<_, Option<f64>>(
+            "SELECT AVG(EXTRACT(EPOCH FROM (updated_at - discovered_at)) / 3600.0)::float8
+               FROM vulnerabilities
+              WHERE upper(status) = 'FIXED'
+                AND updated_at > now() - interval '30 days'",
+        )
+        .fetch_one(&mut *tx)
+        .await
     )
-    .fetch_one(&mut *tx)
-    .await
-    .ok()
-    .flatten()
     .unwrap_or(0.0);
 
     // ── 24-hour bucket trend (discovered vs resolved) ──────────────────────────────
-    let trend_disc: Vec<(i32, i64)> = sqlx::query_as::<_, (i32, i64)>(
+    let trend_disc: Vec<(i32, i64)> = match sqlx::query_as::<_, (i32, i64)>(
         "SELECT EXTRACT(HOUR FROM discovered_at)::int AS h, COUNT(*)::bigint
            FROM vulnerabilities
           WHERE discovered_at > now() - interval '24 hours'
@@ -398,8 +542,19 @@ async fn api_dashboard_exec_kpis(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
-    let trend_res: Vec<(i32, i64)> = sqlx::query_as::<_, (i32, i64)>(
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::exec_kpis_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
+    let trend_res: Vec<(i32, i64)> = match sqlx::query_as::<_, (i32, i64)>(
         "SELECT EXTRACT(HOUR FROM updated_at)::int AS h, COUNT(*)::bigint
            FROM vulnerabilities
           WHERE upper(status) IN ('FIXED','FALSE_POSITIVE')
@@ -408,7 +563,18 @@ async fn api_dashboard_exec_kpis(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::exec_kpis_unavailable_json(
+                    scrub_internal_error(&e),
+                )),
+            )
+                .into_response();
+        }
+    };
     let bucket_disc = to_map_i(trend_disc);
     let bucket_res = to_map_i(trend_res);
     let now_hour = chrono::Timelike::hour(&chrono::Utc::now()) as i32;
@@ -423,21 +589,22 @@ async fn api_dashboard_exec_kpis(
     }
 
     // ── Top-N rankings ─────────────────────────────────────────────────────────────
-    let engines_top: Vec<(String, i64, i64)> = sqlx::query_as::<_, (String, i64, i64)>(
-        "SELECT source AS engine,
-                COUNT(*)::bigint                              AS hits,
-                COUNT(*) FILTER (WHERE lower(severity)='critical')::bigint AS crit
-           FROM vulnerabilities
-          WHERE COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
-          GROUP BY source
-          ORDER BY hits DESC
-          LIMIT 8",
-    )
-    .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
+    let engines_top: Vec<(String, i64, i64)> = exec_kpi_ok!(
+        sqlx::query_as::<_, (String, i64, i64)>(
+            "SELECT source AS engine,
+                    COUNT(*)::bigint                              AS hits,
+                    COUNT(*) FILTER (WHERE lower(severity)='critical')::bigint AS crit
+               FROM vulnerabilities
+              WHERE COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
+              GROUP BY source
+              ORDER BY hits DESC
+              LIMIT 8",
+        )
+        .fetch_all(&mut *tx)
+        .await
+    );
 
-    let clients_top: Vec<(i64, String, i64, i64)> =
+    let clients_top: Vec<(i64, String, i64, i64)> = exec_kpi_ok!(
         sqlx::query_as::<_, (i64, String, i64, i64)>(
             "SELECT c.id, c.name,
                     COUNT(v.id) FILTER (WHERE lower(v.severity)='critical')::bigint AS open_crit,
@@ -452,41 +619,45 @@ async fn api_dashboard_exec_kpis(
         )
         .fetch_all(&mut *tx)
         .await
-        .unwrap_or_default();
+    );
 
     // CVE roll-up — pull from raw_data.cve / raw_data.raw.cve.
-    let cve_rows: Vec<(String, String, i64)> = sqlx::query_as::<_, (String, String, i64)>(
-        "SELECT COALESCE(NULLIF(raw_data->>'cve',''),
-                          NULLIF(raw_data->'raw'->>'cve','')) AS cve,
-                MIN(severity)        AS severity,
-                COUNT(*)::bigint     AS hits
-           FROM vulnerabilities
-          WHERE (raw_data->>'cve' IS NOT NULL OR raw_data->'raw'->>'cve' IS NOT NULL)
-            AND COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
-          GROUP BY 1
-          HAVING COALESCE(NULLIF(raw_data->>'cve',''),
-                          NULLIF(raw_data->'raw'->>'cve','')) IS NOT NULL
-          ORDER BY hits DESC
-          LIMIT 8",
-    )
-    .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
+    let cve_rows: Vec<(String, String, i64)> = exec_kpi_ok!(
+        sqlx::query_as::<_, (String, String, i64)>(
+            "SELECT COALESCE(NULLIF(raw_data->>'cve',''),
+                              NULLIF(raw_data->'raw'->>'cve','')) AS cve,
+                    MIN(severity)        AS severity,
+                    COUNT(*)::bigint     AS hits
+               FROM vulnerabilities
+              WHERE (raw_data->>'cve' IS NOT NULL OR raw_data->'raw'->>'cve' IS NOT NULL)
+                AND COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
+              GROUP BY 1
+              HAVING COALESCE(NULLIF(raw_data->>'cve',''),
+                              NULLIF(raw_data->'raw'->>'cve','')) IS NOT NULL
+              ORDER BY hits DESC
+              LIMIT 8",
+        )
+        .fetch_all(&mut *tx)
+        .await
+    );
 
     // MITRE roll-up — `raw_data.mitre_attack` is the ATT&CK technique id (e.g. T1190).
-    let mitre_rows: Vec<(String, i64)> = sqlx::query_as::<_, (String, i64)>(
-        "SELECT raw_data->>'mitre_attack' AS technique, COUNT(*)::bigint
-           FROM vulnerabilities
-          WHERE COALESCE(raw_data->>'mitre_attack','') <> ''
-            AND COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
-          GROUP BY technique
-          ORDER BY count DESC
-          LIMIT 12",
-    )
-    .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
-    let _ = tx.commit().await;
+    let mitre_rows: Vec<(String, i64)> = exec_kpi_ok!(
+        sqlx::query_as::<_, (String, i64)>(
+            "SELECT raw_data->>'mitre_attack' AS technique, COUNT(*)::bigint
+               FROM vulnerabilities
+              WHERE COALESCE(raw_data->>'mitre_attack','') <> ''
+                AND COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
+              GROUP BY technique
+              ORDER BY count DESC
+              LIMIT 12",
+        )
+        .fetch_all(&mut *tx)
+        .await
+    );
+    if let Err(e) = tx.commit().await {
+        return exec_kpis_query_unavailable(&e);
+    }
 
     // ── Security score (weighted, clamped 0..100) ──────────────────────────────────
     let score = {
@@ -656,7 +827,13 @@ async fn api_findings_clusters(
     let client_filter: Option<i64> = q.get("client_id").and_then(|s| s.parse().ok());
 
     let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false, "detail": "DB unavailable"}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_clusters_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
 
     let rows = sqlx::query(
@@ -685,9 +862,23 @@ async fn api_findings_clusters(
     .bind(only_open)
     .bind(only_kev)
     .bind(client_filter)
-    .fetch_all(&mut *tx).await.unwrap_or_default();
+    .fetch_all(&mut *tx)
+    .await;
+    let rows = match rows {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "findings", tenant_id = auth.tenant_id, error = %e, "findings clusters query failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_clusters_unavailable_json(
+                    "findings clusters query failed",
+                )),
+            )
+                .into_response();
+        }
+    };
 
-    let total: i64 = sqlx::query_scalar(
+    let total: i64 = match sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM weissman_finding_clusters
             WHERE ($1::text IS NULL OR lower(max_severity) = $1)
               AND ($2::bool IS NULL OR ($2 AND status = 'OPEN') OR NOT $2)
@@ -698,8 +889,30 @@ async fn api_findings_clusters(
     .bind(only_open)
     .bind(only_kev)
     .bind(client_filter)
-    .fetch_one(&mut *tx).await.unwrap_or(0);
-    let _ = tx.commit().await;
+    .fetch_one(&mut *tx)
+    .await
+    {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::error!(target: "findings", tenant_id = auth.tenant_id, error = %e, "findings clusters count failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_clusters_unavailable_json(
+                    "findings clusters count failed",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_clusters_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     let clusters: Vec<Value> = rows.into_iter().map(|r| {
         let max_severity: String = r.try_get("max_severity").unwrap_or_else(|_| "info".to_string());
@@ -753,17 +966,45 @@ async fn api_intel_suppressions(
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::intel_suppressions_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query(
+    let rows = match sqlx::query(
         r#"SELECT id, engine, signature_hash, target_glob, reason,
                   fp_count_at_create, created_by_user_id, created_at,
                   expires_at, hit_count, last_hit_at
              FROM finding_suppressions
             ORDER BY created_at DESC LIMIT 200"#,
     )
-    .fetch_all(&mut *tx).await.unwrap_or_default();
-    let _ = tx.commit().await;
+    .fetch_all(&mut *tx)
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "intel", tenant_id = auth.tenant_id, error = %e, "intel suppressions query failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::intel_suppressions_unavailable_json(
+                    "intel suppressions query failed",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::intel_suppressions_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let list: Vec<Value> = rows.into_iter().map(|r| json!({
         "id":             r.try_get::<i64, _>("id").unwrap_or(0),
         "engine":         r.try_get::<String, _>("engine").unwrap_or_default(),
@@ -787,39 +1028,128 @@ async fn api_intel_suppression_delete(
     Path(id): Path<i64>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::intel_suppressions_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
     let res = sqlx::query("DELETE FROM finding_suppressions WHERE id = $1 AND tenant_id = $2")
         .bind(id).bind(auth.tenant_id)
         .execute(&mut *tx).await;
-    let _ = tx.commit().await;
     match res {
         Ok(r) if r.rows_affected() > 0 => {
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::intel_suppressions_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
             crate::fp_feedback::invalidate_suppression_cache_tenant(auth.tenant_id);
             (StatusCode::OK, Json(json!({"ok": true, "deleted": id}))).into_response()
         }
-        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false}))).into_response(),
+        Ok(_) => {
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::intel_suppressions_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+            (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "suppression not found"}))).into_response()
+        }
+        Err(e) => {
+            tracing::error!(target: "intel", tenant_id = auth.tenant_id, error = %e, "intel suppression delete failed");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::intel_suppressions_unavailable_json(
+                    "intel suppression delete failed",
+                )),
+            )
+                .into_response()
+        }
     }
 }
 
 /// `GET /api/intel/status` — health view of the intel mirrors. Always public to the
 /// authed UI so the cockpit can show "Last KEV refresh: 4 minutes ago".
 async fn api_intel_status(State(state): State<Arc<AppState>>) -> Response {
-    let kev_total: Option<i64> = sqlx::query_scalar("SELECT COUNT(*)::bigint FROM kev_intel")
-        .fetch_optional(state.app_pool.as_ref()).await.ok().flatten();
-    let kev_last: Option<chrono::DateTime<Utc>> = sqlx::query_scalar(
-        "SELECT MAX(refreshed_at) FROM kev_intel",
-    ).fetch_optional(state.app_pool.as_ref()).await.ok().flatten();
-    let epss_total: Option<i64> = sqlx::query_scalar("SELECT COUNT(*)::bigint FROM epss_intel")
-        .fetch_optional(state.app_pool.as_ref()).await.ok().flatten();
-    let epss_last: Option<chrono::DateTime<Utc>> = sqlx::query_scalar(
-        "SELECT MAX(refreshed_at) FROM epss_intel",
-    ).fetch_optional(state.app_pool.as_ref()).await.ok().flatten();
+    let pool = state.app_pool.as_ref();
+    let kev = match sqlx::query("SELECT COUNT(*)::bigint AS n, MAX(refreshed_at) AS last FROM kev_intel")
+        .fetch_one(pool)
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "intel", error = %e, "kev_intel stats failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::intel_status_unavailable_json(
+                    "kev intel unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let kev_total: i64 = match kev.try_get::<i64, _>("n") {
+        Ok(n) => n,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::intel_status_unavailable_json(
+                    "kev intel unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let kev_last: Option<chrono::DateTime<Utc>> = kev
+        .try_get::<Option<chrono::DateTime<Utc>>, _>("last")
+        .ok()
+        .flatten();
+    let epss = match sqlx::query("SELECT COUNT(*)::bigint AS n, MAX(refreshed_at) AS last FROM epss_intel")
+        .fetch_one(pool)
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "intel", error = %e, "epss_intel stats failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::intel_status_unavailable_json(
+                    "epss intel unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let epss_total: i64 = match epss.try_get::<i64, _>("n") {
+        Ok(n) => n,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::intel_status_unavailable_json(
+                    "epss intel unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
+    let epss_last: Option<chrono::DateTime<Utc>> = epss
+        .try_get::<Option<chrono::DateTime<Utc>>, _>("last")
+        .ok()
+        .flatten();
     (StatusCode::OK, Json(json!({
         "ok": true,
-        "kev":  { "rows": kev_total.unwrap_or(0),  "last_refresh": kev_last.map(|d| d.to_rfc3339())  },
-        "epss": { "rows": epss_total.unwrap_or(0), "last_refresh": epss_last.map(|d| d.to_rfc3339()) },
+        "kev":  { "rows": kev_total,  "last_refresh": kev_last.map(|d| d.to_rfc3339())  },
+        "epss": { "rows": epss_total, "last_refresh": epss_last.map(|d| d.to_rfc3339()) },
     }))).into_response()
 }
 
@@ -884,7 +1214,9 @@ async fn api_findings(
     let Ok(mut tx) = db::begin_tenant_tx(state.read_pool(), auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"ok": false, "detail": "Database unavailable", "findings": []})),
+            Json(crate::http_unavailable::findings_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
@@ -925,14 +1257,16 @@ async fn api_findings(
         Err(e) => {
             tracing::error!(target: "findings", tenant_id = auth.tenant_id, error = %e, "findings query failed");
             return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": "findings query failed"})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_unavailable_json(
+                    "findings query failed",
+                )),
             )
                 .into_response();
         }
     };
 
-    let total: i64 = sqlx::query_scalar::<_, i64>(
+    let total: i64 = match sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*)::bigint FROM vulnerabilities \
          WHERE ($1::text[] IS NULL OR lower(severity) = ANY($1)) \
            AND ($2::bigint IS NULL OR client_id = $2) \
@@ -943,8 +1277,28 @@ async fn api_findings(
     .bind(source_filter.as_deref())
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
-    let _ = tx.commit().await;
+    {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::error!(target: "findings", tenant_id = auth.tenant_id, error = %e, "findings count failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_unavailable_json(
+                    "findings count failed",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::findings_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     // Batch-load FP/TP confidence multipliers in ONE query (fixes the N+1 where
     // every row opened its own tenant transaction + query).
@@ -963,9 +1317,24 @@ async fn api_findings(
             }
         })
         .collect();
-    let conf_map =
-        crate::fp_feedback::confidence_multipliers_batch(&state.app_pool, auth.tenant_id, &conf_pairs)
-            .await;
+    let conf_map = match crate::fp_feedback::confidence_multipliers_batch(
+        &state.app_pool,
+        auth.tenant_id,
+        &conf_pairs,
+    )
+    .await
+    {
+        Ok(m) => m,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::findings_unavailable_json(
+                    "database unavailable",
+                )),
+            )
+                .into_response();
+        }
+    };
 
     let mut out = Vec::new();
     for r in rows {
@@ -1318,8 +1687,14 @@ async fn api_onboarding_tenant_status(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
-    let facts = tenant_onboarding_facts(state.app_pool.as_ref(), auth.tenant_id).await;
-    (StatusCode::OK, Json(facts)).into_response()
+    match tenant_onboarding_facts(state.app_pool.as_ref(), auth.tenant_id).await {
+        Ok(facts) => (StatusCode::OK, Json(facts)).into_response(),
+        Err(detail) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::onboarding_tenant_status_unavailable_json(detail)),
+        )
+            .into_response(),
+    }
 }
 
 /// Client readiness vs selected engagement modules (live field checks, no fake scores).
@@ -1342,12 +1717,14 @@ async fn api_clients_readiness(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"ok": false, "detail": "Database unavailable"})),
+            Json(crate::http_unavailable::client_readiness_unavailable_json(
+                "database unavailable",
+            )),
         )
             .into_response();
     };
 
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT id, name, domains, ip_ranges, contact_email,
             COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
             COALESCE(aws_external_id,'') AS aws_external_id,
@@ -1359,10 +1736,21 @@ async fn api_clients_readiness(
     .bind(DEFAULT_CLIENT_CONFIGS_JSON)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "readiness", tenant_id = auth.tenant_id, error = %e, "client readiness query failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_readiness_unavailable_json(
+                    "client readiness query failed",
+                )),
+            )
+                .into_response();
+        }
+    };
 
-    let agents_online: i64 = sqlx::query_scalar(
+    let agents_online: i64 = match sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM endpoint_agents
            WHERE tenant_id = $1 AND client_id = $2
              AND last_seen_at > now() - interval '15 minutes'"#,
@@ -1371,9 +1759,29 @@ async fn api_clients_readiness(
     .bind(id)
     .fetch_one(&mut *tx)
     .await
-    .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::error!(target: "readiness", tenant_id = auth.tenant_id, error = %e, "client readiness agent count failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_readiness_unavailable_json(
+                    "client readiness agent count failed",
+                )),
+            )
+                .into_response();
+        }
+    };
 
-    let _ = tx.commit().await;
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::client_readiness_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
 
     let Some(r) = row else {
         return (
@@ -1433,7 +1841,16 @@ async fn api_clients_readiness(
         modules
     };
 
-    let tenant = tenant_onboarding_facts(state.app_pool.as_ref(), auth.tenant_id).await;
+    let tenant = match tenant_onboarding_facts(state.app_pool.as_ref(), auth.tenant_id).await {
+        Ok(v) => v,
+        Err(detail) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::client_readiness_unavailable_json(detail)),
+            )
+                .into_response();
+        }
+    };
     let report = crate::engine_requirements::readiness_report(&client_snapshot, &tenant, &module_ids);
 
     (
@@ -1447,7 +1864,7 @@ async fn api_clients_readiness(
         .into_response()
 }
 
-async fn tenant_onboarding_facts(pool: &PgPool, tenant_id: i64) -> Value {
+async fn tenant_onboarding_facts(pool: &PgPool, tenant_id: i64) -> Result<Value, &'static str> {
     let llm_env = std::env::var("WEISSMAN_LLM_BASE_URL")
         .ok()
         .filter(|s| !s.trim().is_empty());
@@ -1457,7 +1874,7 @@ async fn tenant_onboarding_facts(pool: &PgPool, tenant_id: i64) -> Value {
 
     let mut llm_configured = llm_env.is_some();
     let mut oast_configured = oast_env.is_some();
-    let mut ai_heavy_entitled = true;
+    let mut ai_heavy_entitled = false;
     let mut oast_listener_url = oast_env.clone().unwrap_or_default();
     let mut oast_domain = std::env::var("WEISSMAN_OAST_DOMAIN")
         .or_else(|_| std::env::var("WEISSMAN_OAST_BASE_DOMAIN"))
@@ -1467,60 +1884,68 @@ async fn tenant_onboarding_facts(pool: &PgPool, tenant_id: i64) -> Value {
         .filter(|s| !s.trim().is_empty())
         .is_some();
 
-    if let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await {
-        async fn cfg_val(
-            tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-            tenant_id: i64,
-            key: &str,
-        ) -> Option<String> {
-            sqlx::query_scalar::<_, String>(
-                "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
-            )
-            .bind(tenant_id)
-            .bind(key)
-            .fetch_optional(&mut **tx)
-            .await
-            .ok()
-            .flatten()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-        }
+    let mut tx = db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "database unavailable")?;
 
-        let llm_db = cfg_val(&mut tx, tenant_id, "llm_base_url").await;
-        if llm_db.is_some() {
-            llm_configured = true;
+    let cfg_keys: Vec<&str> = vec![
+        "llm_base_url",
+        "oast_listener_url",
+        "oast_domain",
+        "oast_api_key",
+        "ai_heavy_entitled",
+    ];
+    let cfg_rows = sqlx::query(
+        "SELECT key, value FROM system_configs WHERE tenant_id = $1 AND key = ANY($2)",
+    )
+    .bind(tenant_id)
+    .bind(&cfg_keys)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|_| "database unavailable")?;
+    let mut cfg: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for r in cfg_rows {
+        let key: String = r.try_get::<String, _>("key").unwrap_or_default();
+        let value: String = r.try_get::<String, _>("value").unwrap_or_default();
+        let value = value.trim().to_string();
+        if key.is_empty() || value.is_empty() {
+            continue;
         }
-
-        if let Some(u) = cfg_val(&mut tx, tenant_id, "oast_listener_url").await {
-            oast_configured = true;
-            oast_listener_url = u;
-        }
-        if let Some(d) = cfg_val(&mut tx, tenant_id, "oast_domain").await {
-            oast_configured = true;
-            oast_domain = d;
-        }
-        let oast_db_key = cfg_val(&mut tx, tenant_id, "oast_api_key").await;
-        if oast_db_key.is_some() {
-            oast_api_key_configured = true;
-        }
-
-        if let Some(raw) = cfg_val(&mut tx, tenant_id, "ai_heavy_entitled").await {
-            ai_heavy_entitled = !matches!(
-                raw.trim().to_ascii_lowercase().as_str(),
-                "false" | "0" | "no"
-            );
-        }
-        let _ = tx.commit().await;
+        cfg.insert(key, value);
     }
 
-    json!({
+    if cfg.contains_key("llm_base_url") {
+        llm_configured = true;
+    }
+    if let Some(u) = cfg.get("oast_listener_url") {
+        oast_configured = true;
+        oast_listener_url = u.clone();
+    }
+    if let Some(d) = cfg.get("oast_domain") {
+        oast_configured = true;
+        oast_domain = d.clone();
+    }
+    if cfg.contains_key("oast_api_key") {
+        oast_api_key_configured = true;
+    }
+    if let Some(raw) = cfg.get("ai_heavy_entitled") {
+        ai_heavy_entitled = !matches!(
+            raw.trim().to_ascii_lowercase().as_str(),
+            "false" | "0" | "no"
+        );
+    }
+    if tx.commit().await.is_err() {
+        return Err("database unavailable");
+    }
+
+    Ok(json!({
         "llm_configured": llm_configured,
         "oast_configured": oast_configured,
         "ai_heavy_entitled": ai_heavy_entitled,
         "oast_listener_url": oast_listener_url,
         "oast_domain": oast_domain,
         "oast_api_key_configured": oast_api_key_configured,
-    })
+    }))
 }
 
 /// Full tunable-parameter schema for Nexus Sovereign Swarm (NSSI) — GUI contract.
@@ -1657,10 +2082,10 @@ async fn resolve_probe_target_from_client(
     pool: &PgPool,
     tenant_id: i64,
     client_id: i64,
-) -> Option<String> {
-    let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await else {
-        return None;
-    };
+) -> Result<Option<String>, &'static str> {
+    let mut tx = db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|_| "database unavailable")?;
     let domains: Option<String> = sqlx::query_scalar(
         "SELECT domains FROM clients WHERE tenant_id = $1 AND id = $2",
     )
@@ -1668,16 +2093,21 @@ async fn resolve_probe_target_from_client(
     .bind(client_id)
     .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-    let raw = domains?;
-    let parsed = serde_json::from_str::<Vec<String>>(&raw).ok()?;
-    let first = parsed.into_iter().find(|s| !s.trim().is_empty())?;
+    .map_err(|_| "database unavailable")?;
+    if tx.commit().await.is_err() {
+        return Err("database unavailable");
+    }
+    let Some(raw) = domains else {
+        return Ok(None);
+    };
+    let parsed = serde_json::from_str::<Vec<String>>(&raw).unwrap_or_default();
+    let Some(first) = parsed.into_iter().find(|s| !s.trim().is_empty()) else {
+        return Ok(None);
+    };
     if first.starts_with("http://") || first.starts_with("https://") {
-        Some(first)
+        Ok(Some(first))
     } else {
-        Some(format!("https://{}", first))
+        Ok(Some(format!("https://{}", first)))
     }
 }
 
@@ -1692,11 +2122,7 @@ async fn api_top_tier_health_probe_start(
     if let Err(detail) =
         crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
+        return payment_or_store_down(detail);
     }
     let target_raw = body
         .target
@@ -1708,11 +2134,18 @@ async fn api_top_tier_health_probe_start(
         t
     } else if let Some(cid) = body.client_id {
         match resolve_probe_target_from_client(state.app_pool.as_ref(), auth.tenant_id, cid).await {
-            Some(t) => t,
-            None => {
+            Ok(Some(t)) => t,
+            Ok(None) => {
                 return (
                     StatusCode::BAD_REQUEST,
                     Json(json!({"detail": "target required (or provide client_id with at least one domain)"})),
+                )
+                    .into_response();
+            }
+            Err(detail) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(json!({"ok": false, "unavailable": true, "detail": detail})),
                 )
                     .into_response();
             }
@@ -1758,6 +2191,20 @@ async fn api_top_tier_health_probe_start(
     }
 }
 
+fn history_findings_count(status: &str, result_json: &Value) -> Value {
+    let st = status.trim().to_ascii_lowercase();
+    if matches!(st.as_str(), "pending" | "running" | "queued" | "held") {
+        return Value::Null;
+    }
+    if let Some(arr) = result_json.get("findings").and_then(Value::as_array) {
+        return json!(arr.len());
+    }
+    if let Some(n) = result_json.get("findings_count").and_then(Value::as_u64) {
+        return json!(n);
+    }
+    Value::Null
+}
+
 async fn collect_top_tier_history_json(
     state: &Arc<AppState>,
     tenant_id: i64,
@@ -1796,11 +2243,10 @@ async fn collect_top_tier_history_json(
             .ok()
             .flatten()
             .unwrap_or_else(|| json!({}));
-        let findings_count = result_json
-            .get("findings")
-            .and_then(Value::as_array)
-            .map(|a| a.len())
-            .unwrap_or(0);
+        let findings_count = history_findings_count(
+            r.try_get::<String, _>("status").ok().as_deref().unwrap_or(""),
+            &result_json,
+        );
         jobs.push(json!({
             "job_id": r.try_get::<uuid::Uuid,_>("id").map(|v| v.to_string()).unwrap_or_default(),
             "kind": r.try_get::<String,_>("kind").unwrap_or_default(),
@@ -1884,7 +2330,7 @@ async fn collect_top_tier_history_json(
     .await
     .map_err(|e| format!("findings query: {}", e))?;
 
-    let _ = tx.commit().await;
+    tx.commit().await.map_err(|e| format!("commit: {}", e))?;
 
     let findings: Vec<Value> = finding_rows
         .into_iter()
@@ -1957,11 +2403,10 @@ async fn collect_engine_history_json(
             .ok()
             .flatten()
             .unwrap_or_else(|| json!({}));
-        let findings_count = result_json
-            .get("findings")
-            .and_then(Value::as_array)
-            .map(|a| a.len())
-            .unwrap_or(0);
+        let findings_count = history_findings_count(
+            r.try_get::<String, _>("status").ok().as_deref().unwrap_or(""),
+            &result_json,
+        );
         let target = payload
             .get("target")
             .and_then(Value::as_str)
@@ -2053,7 +2498,7 @@ async fn collect_engine_history_json(
     .await
     .map_err(|e| format!("findings query: {}", e))?;
 
-    let _ = tx.commit().await;
+    tx.commit().await.map_err(|e| format!("commit: {}", e))?;
 
     let findings: Vec<Value> = finding_rows
         .into_iter()
@@ -2086,8 +2531,8 @@ async fn api_engine_history_summary(
     match collect_engine_history_summary_json(&state, auth.tenant_id).await {
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
         Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": e})),
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "unavailable": true, "detail": e})),
         )
             .into_response(),
     }
@@ -2131,7 +2576,7 @@ async fn collect_engine_history_summary_json(
     .await
     .map_err(|e| format!("history summary query: {}", e))?;
 
-    let _ = tx.commit().await;
+    tx.commit().await.map_err(|e| format!("commit: {}", e))?;
 
     let mut engines = serde_json::Map::new();
     for r in rows {
@@ -2146,16 +2591,10 @@ async fn collect_engine_history_summary_json(
             .ok()
             .flatten()
             .unwrap_or_else(|| json!({}));
-        let mut findings_count = result_json
-            .get("findings")
-            .and_then(Value::as_array)
-            .map(|a| a.len())
-            .unwrap_or(0);
-        if findings_count == 0 {
-            if let Some(n) = result_json.get("findings_count").and_then(Value::as_u64) {
-                findings_count = n as usize;
-            }
-        }
+        let findings_count = history_findings_count(
+            r.try_get::<String, _>("status").ok().as_deref().unwrap_or(""),
+            &result_json,
+        );
         engines.insert(
             engine_id,
             json!({
@@ -2193,8 +2632,8 @@ async fn api_engine_history(
     match collect_engine_history_json(&state, auth.tenant_id, engine_id.as_str(), limit).await {
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
         Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"detail": e})),
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "unavailable": true, "detail": e})),
         )
             .into_response(),
     }
@@ -2219,8 +2658,8 @@ async fn api_engine_export(
         Ok(v) => v,
         Err(e) => {
             return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"detail": e})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false, "unavailable": true, "detail": e})),
             )
                 .into_response();
         }
@@ -2271,8 +2710,8 @@ async fn api_top_tier_engine_history(
     match collect_top_tier_history_json(&state, auth.tenant_id, engine_id.as_str(), limit).await {
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
         Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"detail": e})),
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "unavailable": true, "detail": e})),
         )
             .into_response(),
     }
@@ -2297,8 +2736,8 @@ async fn api_top_tier_engine_export(
         Ok(v) => v,
         Err(e) => {
             return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"detail": e})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false, "unavailable": true, "detail": e})),
             )
                 .into_response();
         }
@@ -2334,11 +2773,39 @@ async fn api_top_tier_engine_export(
 
 async fn api_reports(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(Value::Array(vec![]))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::reports_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
     };
-    let rows = sqlx::query("SELECT id, created_at, pdf_path FROM report_runs ORDER BY created_at DESC LIMIT 100")
-        .fetch_all(&mut *tx).await.unwrap_or_default();
-    let _ = tx.commit().await;
+    let rows = match sqlx::query("SELECT id, created_at, pdf_path FROM report_runs ORDER BY created_at DESC LIMIT 100")
+        .fetch_all(&mut *tx)
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "reports", tenant_id = auth.tenant_id, error = %e, "report_runs query failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::reports_unavailable_json(
+                    "report runs query failed",
+                )),
+            )
+                .into_response();
+        }
+    };
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(crate::http_unavailable::reports_unavailable_json(
+                "database unavailable",
+            )),
+        )
+            .into_response();
+    }
     let out: Vec<Value> = rows.into_iter().map(|r| json!({
         "id": r.try_get::<i64,_>("id").unwrap_or(0),
         "created_at": r.try_get::<chrono::DateTime<Utc>,_>("created_at").ok().map(|d| d.to_rfc3339()),
@@ -2353,10 +2820,16 @@ async fn api_reports(State(state): State<Arc<AppState>>, Extension(auth): Extens
 /// presence/absence of the expensive verify is a user-enumeration oracle — the
 /// exact timing side-channel this platform's own engine is built to detect.
 /// Computed once on first use.
-fn login_timing_equalizer_hash() -> &'static str {
+fn login_timing_equalizer_hash() -> Option<&'static str> {
     use std::sync::OnceLock;
     static H: OnceLock<String> = OnceLock::new();
-    H.get_or_init(|| bcrypt::hash("weissman-login-timing-equalizer", 12).unwrap_or_default())
+    if let Some(existing) = H.get() {
+        return Some(existing.as_str());
+    }
+    let hashed = bcrypt::hash("weissman-login-timing-equalizer", 12)
+        .ok()
+        .filter(|s| !s.is_empty())?;
+    Some(H.get_or_init(|| hashed).as_str())
 }
 
 /// Resolve which tenant a login belongs to.
@@ -2369,28 +2842,27 @@ async fn resolve_login_tenant_id(
     app_pool: &PgPool,
     slug: &str,
     email: &str,
-) -> Option<i64> {
-    let lookup_by_slug = |pool: &PgPool, slug: &str| {
-        let slug = slug.to_string();
-        let pool = pool.clone();
-        async move {
-            sqlx::query_scalar::<_, i64>(
-                "SELECT id FROM tenants WHERE slug = $1 AND active = true LIMIT 1",
-            )
-            .bind(slug)
-            .fetch_optional(&pool)
-            .await
-            .ok()
-            .flatten()
-        }
-    };
-    if !slug.is_empty() {
-        if let Some(id) = lookup_by_slug(auth_pool, slug).await {
-            return Some(id);
-        }
-        return lookup_by_slug(app_pool, slug).await;
+) -> Result<Option<i64>, &'static str> {
+    async fn lookup_by_slug(pool: &PgPool, slug: &str) -> Result<Option<i64>, &'static str> {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT id FROM tenants WHERE slug = $1 AND active = true LIMIT 1",
+        )
+        .bind(slug)
+        .fetch_optional(pool)
+        .await
+        .map_err(|_| "database unavailable")
     }
-    let rows = sqlx::query(
+    if !slug.is_empty() {
+        return match lookup_by_slug(auth_pool, slug).await {
+            Ok(Some(id)) => Ok(Some(id)),
+            Ok(None) => lookup_by_slug(app_pool, slug).await,
+            Err(_) => match lookup_by_slug(app_pool, slug).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+        };
+    }
+    let auth_rows = sqlx::query(
         r#"SELECT u.tenant_id, t.slug
            FROM auth.v_user_lookup u
            JOIN tenants t ON t.id = u.tenant_id AND t.active = true
@@ -2401,35 +2873,35 @@ async fn resolve_login_tenant_id(
     .bind(email)
     .fetch_all(auth_pool)
     .await;
-    let rows = match rows {
+    let app_lookup = sqlx::query(
+        r#"SELECT u.tenant_id, t.slug
+           FROM users u
+           JOIN tenants t ON t.id = u.tenant_id AND t.active = true
+           WHERE lower(trim(u.email)) = lower(trim($1)) AND u.is_active = true
+           ORDER BY CASE WHEN t.slug = 'default' THEN 0 ELSE 1 END, u.tenant_id
+           LIMIT 8"#,
+    )
+    .bind(email)
+    .fetch_all(app_pool);
+    let rows = match auth_rows {
         Ok(r) if !r.is_empty() => r,
-        _ => sqlx::query(
-            r#"SELECT u.tenant_id, t.slug
-               FROM users u
-               JOIN tenants t ON t.id = u.tenant_id AND t.active = true
-               WHERE lower(trim(u.email)) = lower(trim($1)) AND u.is_active = true
-               ORDER BY CASE WHEN t.slug = 'default' THEN 0 ELSE 1 END, u.tenant_id
-               LIMIT 8"#,
-        )
-        .bind(email)
-        .fetch_all(app_pool)
-        .await
-        .unwrap_or_default(),
+        Ok(_) => app_lookup.await.map_err(|_| "database unavailable")?,
+        Err(_) => app_lookup.await.map_err(|_| "database unavailable")?,
     };
     if rows.is_empty() {
-        return None;
+        return Ok(None);
     }
     if rows.len() == 1 {
-        return rows[0].try_get::<i64, _>("tenant_id").ok();
+        return Ok(rows[0].try_get::<i64, _>("tenant_id").ok());
     }
-    rows.iter().find_map(|r| {
+    Ok(rows.iter().find_map(|r| {
         let slug = r.try_get::<String, _>("slug").ok()?;
         if slug == "default" {
             r.try_get::<i64, _>("tenant_id").ok()
         } else {
             None
         }
-    })
+    }))
 }
 
 async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): ConnectInfo<SocketAddr>, headers: HeaderMap, body: axum::extract::Json<LoginBody>) -> Response {
@@ -2437,21 +2909,39 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
     let email = body.email.trim();
     let password = body.password.as_str();
     let slug = body.tenant_slug.trim();
-    let Some(tenant_key) = resolve_login_tenant_id(
+    let tenant_key = match resolve_login_tenant_id(
         state.auth_pool.as_ref(),
         state.app_pool.as_ref(),
         slug,
         email,
     )
     .await
-    else {
-        // Same generic 401 as a bad password — do not leak whether the email exists.
-        let _ = bcrypt::verify(password, login_timing_equalizer_hash());
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"ok": false, "detail": "Invalid email or password"})),
-        )
-            .into_response();
+    {
+        Ok(Some(id)) => id,
+        Ok(None) => {
+            let Some(eq) = login_timing_equalizer_hash() else {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "Authentication service temporarily unavailable",
+                    )),
+                )
+                    .into_response();
+            };
+            let _ = bcrypt::verify(password, eq);
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({"ok": false, "detail": "Invalid email or password"})),
+            )
+                .into_response();
+        }
+        Err(detail) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::auth_degraded_unavailable_json(detail)),
+            )
+                .into_response();
+        }
     };
     if let Some(retry_after) = match crate::http::check_lockout_status(tenant_key, email).await {
         crate::http::LockoutStatus::Locked(secs) => Some(secs),
@@ -2495,15 +2985,13 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, tenant_key).await else {
                 return (
                     StatusCode::SERVICE_UNAVAILABLE,
-                    Json(json!({
-                        "ok": false,
-                        "detail": "Authentication service temporarily unavailable",
-                        "code": "auth_degraded"
-                    })),
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "Authentication service temporarily unavailable",
+                    )),
                 )
                     .into_response();
             };
-            let fallback = sqlx::query(
+            let fallback = match sqlx::query(
                 r#"SELECT u.id, COALESCE(u.password_hash,'') AS password_hash, u.tenant_id,
                           COALESCE(NULLIF(trim(u.role), ''), 'viewer') AS role,
                           COALESCE(u.is_superadmin, false) AS is_superadmin,
@@ -2516,9 +3004,27 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             .bind(email)
             .fetch_optional(&mut *tx)
             .await
-            .ok()
-            .flatten();
-            let _ = tx.commit().await;
+            {
+                Ok(v) => v,
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                            "Authentication service temporarily unavailable",
+                        )),
+                    )
+                        .into_response();
+                }
+            };
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "Authentication service temporarily unavailable",
+                    )),
+                )
+                    .into_response();
+            }
             (fallback, true)
         }
     };
@@ -2537,7 +3043,16 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
         None => {
             // Constant-time: burn one bcrypt verify so a non-existent email costs
             // the same as a real one (no user-enumeration by response timing).
-            let _ = bcrypt::verify(password, login_timing_equalizer_hash());
+            let Some(eq) = login_timing_equalizer_hash() else {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "Authentication service temporarily unavailable",
+                    )),
+                )
+                    .into_response();
+            };
+            let _ = bcrypt::verify(password, eq);
             crate::audit_log::record_login_failure_audit(
                 state.app_pool.as_ref(),
                 tenant_key,
@@ -2553,7 +3068,16 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
     if hash.is_empty() {
         // Constant-time equalizer (see above): an account with no stored hash must
         // not be distinguishable from a real one by timing either.
-        let _ = bcrypt::verify(password, login_timing_equalizer_hash());
+        let Some(eq) = login_timing_equalizer_hash() else {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                    "Authentication service temporarily unavailable",
+                )),
+            )
+                .into_response();
+        };
+        let _ = bcrypt::verify(password, eq);
         crate::audit_log::record_login_failure_audit(
             state.app_pool.as_ref(),
             tenant_key,
@@ -2588,11 +3112,9 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
                 );
                 return (
                     StatusCode::SERVICE_UNAVAILABLE,
-                    Json(json!({
-                        "ok": false,
-                        "detail": "Authentication service temporarily unavailable; cannot verify MFA status",
-                        "code": "auth_degraded"
-                    })),
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "Authentication service temporarily unavailable; cannot verify MFA status",
+                    )),
                 )
                     .into_response();
             }
@@ -2602,18 +3124,44 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             // /api/auth/mfa/verify (no shortcut even if mfa_required=false).
             let tenant_requires_mfa = match db::begin_tenant_tx(&state.app_pool, tenant_id).await {
                 Ok(mut tx) => {
-                    let v: Option<String> = sqlx::query_scalar(
+                    let v = match sqlx::query_scalar::<_, String>(
                         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'mfa_required'",
                     )
                     .bind(tenant_id)
                     .fetch_optional(&mut *tx)
                     .await
-                    .ok()
-                    .flatten();
-                    let _ = tx.commit().await;
+                    {
+                        Ok(v) => v,
+                        Err(_) => {
+                            return (
+                                StatusCode::SERVICE_UNAVAILABLE,
+                                Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                                    "Authentication service temporarily unavailable; cannot verify MFA policy",
+                                )),
+                            )
+                                .into_response();
+                        }
+                    };
+                    if tx.commit().await.is_err() {
+                        return (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                                "Authentication service temporarily unavailable; cannot verify MFA policy",
+                            )),
+                        )
+                            .into_response();
+                    }
                     matches!(v.as_deref().map(str::trim), Some("true") | Some("1") | Some("yes"))
                 }
-                Err(_) => false,
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                            "Authentication service temporarily unavailable; cannot verify MFA policy",
+                        )),
+                    )
+                        .into_response();
+                }
             };
             if crate::client_isolation::is_client_role(&role) && assigned_client_id.is_none() {
                 tracing::error!(
@@ -2672,9 +3220,47 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
                 )
                     .into_response();
             }
-            let mut tx = match db::begin_tenant_tx(&state.app_pool, tenant_id).await { Ok(t) => t, Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response() };
-            let _ = audit_log::insert_audit(&mut tx, tenant_id, Some(user_id), email, "login", "session created", &ip).await;
-            let _ = tx.commit().await;
+            let mut tx = match db::begin_tenant_tx(&state.app_pool, tenant_id).await {
+                Ok(t) => t,
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                            "database unavailable",
+                        )),
+                    )
+                        .into_response();
+                }
+            };
+            if audit_log::insert_audit(
+                &mut tx,
+                tenant_id,
+                Some(user_id),
+                email,
+                "login",
+                "session created",
+                &ip,
+            )
+            .await
+            .is_err()
+            {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
+            if tx.commit().await.is_err() {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(crate::http_unavailable::auth_degraded_unavailable_json(
+                        "database unavailable",
+                    )),
+                )
+                    .into_response();
+            }
             let binding = crate::auth_jwt::StreamBinding::from_http(&headers, addr);
             let (access_jwt, access_cookie, refresh_cookie) = match crate::auth_refresh::build_session_cookie_headers(state.auth_pool.as_ref(), user_id, tenant_id, &binding).await {
                 Ok(p) => p,

@@ -218,9 +218,10 @@ async function loadIntelPatterns() {
   let findingsTotal = 0
   let findingsOk = false
   const fd = await apiFetch('/api/findings?limit=2000').catch(() => null)
-  if (fd) {
+  const findingsList = Array.isArray(fd) ? fd : Array.isArray(fd?.findings) ? fd.findings : null
+  if (findingsList) {
     findingsOk = true
-    findings = Array.isArray(fd) ? fd : Array.isArray(fd?.findings) ? fd.findings : []
+    findings = findingsList
     findingsTotal = fd?.total ?? findings.length
     for (const f of findings) {
       if (!f.cluster_id) continue
@@ -362,6 +363,11 @@ export default function AIAnalysisEngine() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportPatternsCsv(filtered)
+  }, [error, filtered])
+
   return (
     <PageShell
       title={t('pages.aiAnalysisEngine.title')}
@@ -371,17 +377,19 @@ export default function AIAnalysisEngine() {
       actions={(
         <ShellScanActions
           onRefresh={load}
-          onExport={() => exportPatternsCsv(filtered)}
+          onExport={error ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >
+      {!error && (
       <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 px-4 py-3 text-[11px] font-mono text-violet-200/80 mb-4 leading-relaxed">
         {evidenceNotice}
       </div>
+      )}
 
-      {lastUpdated && (
+      {lastUpdated && !error && (
         <p className="text-[11px] font-mono text-[var(--text-muted)] mb-6">
           {t('pages.aiAnalysisEngine.last_updated', { time: lastUpdated.toLocaleTimeString(i18n.language) })}
         </p>
@@ -398,6 +406,14 @@ export default function AIAnalysisEngine() {
           <SkeletonWidgetGrid count={4} />
           <SkeletonBar className="h-96 mt-6" />
         </>
+      ) : error ? (
+        <div data-testid="ai-analysis-unavailable">
+          <EmptyState
+            icon="alert"
+            title={t('pages.aiAnalysisEngine.unavailable_title')}
+            body={t('pages.aiAnalysisEngine.unavailable_body')}
+          />
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
@@ -471,7 +487,7 @@ export default function AIAnalysisEngine() {
                   </select>
                 </div>
 
-                {!loading && filtered.length === 0 && (
+                {!loading && !error && filtered.length === 0 && (
                   <EmptyState
                     icon="bot"
                     title={t('pages.aiAnalysisEngine.no_patterns_title')}

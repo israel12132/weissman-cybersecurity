@@ -190,12 +190,17 @@ export default function Billing() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource || ''}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
+
   const headerActions = (
     <ShellScanActions
       onRefresh={loadUsage}
-      onExport={exportCsv}
+      onExport={error ? undefined : handleExportCsv}
       refreshLoading={loading}
-      exportDisabled={!filteredFindings.length}
+      exportDisabled={!!error || !filteredFindings.length}
     />
   )
 

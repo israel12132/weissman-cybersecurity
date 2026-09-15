@@ -177,10 +177,10 @@ async fn defer_empty_schedule(app_pool: &PgPool, tenant_id: i64, schedule_id: i6
 /// Claim due schedules with `FOR UPDATE SKIP LOCKED` and advance `next_run_at`
 /// in the **same transaction**. A peer replica skips locked rows instead of
 /// double-enqueueing the same cron occurrence.
-async fn claim_due_schedule_ids(app_pool: &PgPool, tenant_id: i64) -> Vec<i64> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(app_pool, tenant_id).await else {
-        return Vec::new();
-    };
+async fn claim_due_schedule_ids(app_pool: &PgPool, tenant_id: i64) -> Result<Vec<i64>, String> {
+    let mut tx = crate::db::begin_tenant_tx(app_pool, tenant_id)
+        .await
+        .map_err(|_| "store_down".to_string())?;
     let rows = sqlx::query(
         r#"SELECT id, schedule_type FROM weissman_scan_schedules
            WHERE enabled = true
@@ -192,7 +192,7 @@ async fn claim_due_schedule_ids(app_pool: &PgPool, tenant_id: i64) -> Vec<i64> {
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    .map_err(|_| "store_down".to_string())?;
     if rows.is_empty() {
         let _ = sqlx::query(
             r#"UPDATE weissman_scan_schedules
@@ -201,8 +201,10 @@ async fn claim_due_schedule_ids(app_pool: &PgPool, tenant_id: i64) -> Vec<i64> {
         )
         .execute(&mut *tx)
         .await;
-        let _ = tx.commit().await;
-        return Vec::new();
+        if tx.commit().await.is_err() {
+            return Err("store_down".to_string());
+        }
+        return Ok(Vec::new());
     }
     let mut due = Vec::with_capacity(rows.len());
     for row in rows {
@@ -229,19 +231,41 @@ async fn claim_due_schedule_ids(app_pool: &PgPool, tenant_id: i64) -> Vec<i64> {
         }
     }
     if tx.commit().await.is_err() {
-        return Vec::new();
+        return Err("store_down".to_string());
     }
-    due
+    Ok(due)
 }
 
 async fn tick(app_pool: &PgPool, auth_pool: &PgPool) {
-    let tenants: Vec<i64> = sqlx::query_scalar("SELECT id FROM tenants WHERE active = true")
+    let tenants: Vec<i64> = match sqlx::query_scalar("SELECT id FROM tenants WHERE active = true")
         .fetch_all(auth_pool)
         .await
-        .unwrap_or_default();
+    {
+        Ok(ids) => ids,
+        Err(e) => {
+            tracing::warn!(
+                target: "scan_schedule_worker",
+                error = %e,
+                "tenant list store_down"
+            );
+            return;
+        }
+    };
 
     for tenant_id in tenants {
-        for schedule_id in claim_due_schedule_ids(app_pool, tenant_id).await {
+        let due = match claim_due_schedule_ids(app_pool, tenant_id).await {
+            Ok(ids) => ids,
+            Err(e) => {
+                tracing::warn!(
+                    target: "scan_schedule_worker",
+                    tenant_id,
+                    error = %e,
+                    "claim due schedules store_down"
+                );
+                continue;
+            }
+        };
+        for schedule_id in due {
             if let Err(e) = run_due_schedule(app_pool, auth_pool, tenant_id, schedule_id).await {
                 tracing::warn!(
                     target: "scan_schedule_worker",

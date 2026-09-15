@@ -114,7 +114,7 @@ pub async fn refresh_kev_catalog(pool: &PgPool) -> Result<usize, String> {
             .known_ransomware_use
             .trim()
             .eq_ignore_ascii_case("Known");
-        sqlx::query(
+        let _ = sqlx::query(
             r#"INSERT INTO kev_intel (
                    cve, vendor_project, product, vulnerability_name,
                    date_added, short_description, required_action,
@@ -151,7 +151,7 @@ pub async fn refresh_kev_catalog(pool: &PgPool) -> Result<usize, String> {
 
     // Materialise kev flags onto vulnerabilities (back-fill rows persisted before
     // the feed had this CVE).
-    let _ = sqlx::query(
+    sqlx::query(
         r#"UPDATE vulnerabilities v
               SET kev_listed           = TRUE,
                   kev_known_ransomware = k.known_ransomware_use,
@@ -164,7 +164,8 @@ pub async fn refresh_kev_catalog(pool: &PgPool) -> Result<usize, String> {
                 OR v.kev_due_date IS DISTINCT FROM k.due_date)"#,
     )
     .execute(pool)
-    .await;
+    .await
+    .map_err(|e| e.to_string())?;
 
     Ok(count)
 }
@@ -210,7 +211,7 @@ pub async fn is_kev_listed(pool: &PgPool, cve: &str) -> Option<KevEntry> {
 pub async fn kev_listed_for_cves(
     pool: &PgPool,
     cves: &[String],
-) -> std::collections::HashMap<String, KevEntry> {
+) -> Result<std::collections::HashMap<String, KevEntry>, String> {
     use sqlx::Row;
     let mut normalized: Vec<String> = cves
         .iter()
@@ -221,7 +222,7 @@ pub async fn kev_listed_for_cves(
     normalized.dedup();
     let mut out: std::collections::HashMap<String, KevEntry> = std::collections::HashMap::new();
     if normalized.is_empty() {
-        return out;
+        return Ok(out);
     }
     let rows = sqlx::query(
         r#"SELECT cve, vendor_project, product, vulnerability_name, date_added,
@@ -233,7 +234,7 @@ pub async fn kev_listed_for_cves(
     .bind(&normalized)
     .fetch_all(pool)
     .await
-    .unwrap_or_default();
+    .map_err(|_| "store_down".to_string())?;
     for row in rows {
         let cve: String = row.try_get("cve").unwrap_or_default();
         if cve.is_empty() {
@@ -255,7 +256,7 @@ pub async fn kev_listed_for_cves(
             },
         );
     }
-    out
+    Ok(out)
 }
 
 /// One immediate KEV catalog refresh at boot (before the periodic loop).

@@ -110,20 +110,19 @@ export default function CompliancePosturePanel() {
   }, [frameworks, searchQuery])
 
   const handleRefresh = useCallback(() => load(clientId), [load, clientId])
-  const exportCsv = useCallback(
-    () => exportRowsCsv(COMPLIANCE_CSV_HEADER, complianceCsvRows(filteredFrameworks), 'weissman-compliance-posture'),
-    [filteredFrameworks],
-  )
-  const exportPdf = useCallback(
-    () =>
-      exportRowsPdf(
-        'Weissman Compliance Posture',
-        COMPLIANCE_CSV_HEADER,
-        complianceCsvRows(filteredFrameworks),
-        'weissman-compliance-posture',
-      ),
-    [filteredFrameworks],
-  )
+  const exportCsv = useCallback(() => {
+    if (error) return
+    exportRowsCsv(COMPLIANCE_CSV_HEADER, complianceCsvRows(filteredFrameworks), 'weissman-compliance-posture')
+  }, [error, filteredFrameworks])
+  const exportPdf = useCallback(() => {
+    if (error) return
+    exportRowsPdf(
+      'Weissman Compliance Posture',
+      COMPLIANCE_CSV_HEADER,
+      complianceCsvRows(filteredFrameworks),
+      'weissman-compliance-posture',
+    )
+  }, [error, filteredFrameworks])
 
   return (
     <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
@@ -152,21 +151,23 @@ export default function CompliancePosturePanel() {
           </div>
           <ShellScanActions
             onRefresh={handleRefresh}
-            onExport={exportCsv}
+            onExport={error ? undefined : exportCsv}
             refreshLoading={loading}
-            exportDisabled={filteredFrameworks.length === 0}
+            exportDisabled={!!error || filteredFrameworks.length === 0}
           />
+          {!error && (
           <Button
             variant="unstyled"
             type="button"
             onClick={exportPdf}
-            disabled={filteredFrameworks.length === 0}
+            disabled={!!error || filteredFrameworks.length === 0}
             title={t('common.export_pdf')}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf')}
           </Button>
+          )}
         </div>
       </div>
 

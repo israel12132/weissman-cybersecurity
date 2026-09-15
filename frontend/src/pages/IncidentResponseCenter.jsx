@@ -374,6 +374,7 @@ export default function IncidentResponseCenter() {
   const [tab, setTab] = useState('timeline') // 'timeline' | 'playbook'
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [incidentsUnavailable, setIncidentsUnavailable] = useState(false)
   const [stepSaving, setStepSaving] = useState(false)
   const now = useNow(30_000)
 
@@ -383,12 +384,19 @@ export default function IncidentResponseCenter() {
     setError(null)
     try {
       const data = await apiFetch('/api/soc/incidents')
-      const list = (data?.incidents ?? []).map((raw) => normalizeIncident(raw, t))
+      if (!Array.isArray(data?.incidents)) {
+        throw new Error(t('pages.incidentResponseCenter.load_failed'))
+      }
+      const list = data.incidents.map((raw) => normalizeIncident(raw, t))
       setIncidents(list)
+      setIncidentsUnavailable(false)
       setSelectedId((prev) => prev ?? list[0]?.id ?? null)
     } catch (e) {
       // A background refresh must not blow away a working view with an error.
-      if (!silent) setError(e.message ?? t('pages.incidentResponseCenter.load_failed'))
+      if (!silent) {
+        setError(e.message ?? t('pages.incidentResponseCenter.load_failed'))
+        setIncidentsUnavailable(true)
+      }
     } finally {
       if (!silent) setLoading(false)
     }
@@ -499,18 +507,23 @@ export default function IncidentResponseCenter() {
     return incidents.filter((i) => ids.has(i.id))
   }, [incidents, filteredFindings, searchQuery])
 
+  const handleExportCsv = useCallback(() => {
+    if (incidentsUnavailable) return
+    exportIncidentsCsv(incidents)
+  }, [incidentsUnavailable, incidents])
+
   return (
     <PageShell
       title={t('pages.incidentResponseCenter.title')}
-      subtitle={t('pages.incidentResponseCenter.subtitle', { count: incidents.length })}
+      subtitle={t('pages.incidentResponseCenter.subtitle', { count: error ? '—' : incidents.length })}
       badge={t(`${NS}.badge`)}
       badgeColor="#ef4444"
       actions={(
         <ShellScanActions
           onRefresh={loadIncidents}
-          onExport={() => exportIncidentsCsv(incidents)}
+          onExport={incidentsUnavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={!!error || !filteredFindings.length}
         />
       )}
     >
@@ -526,6 +539,14 @@ export default function IncidentResponseCenter() {
             <SkeletonCard lines={8} />
           </div>
         </>
+      ) : error ? (
+        <div data-testid="incident-response-unavailable" className="mb-8">
+          <EmptyState
+            icon="alert"
+            title={t(`${NS}.unavailable_title`)}
+            body={t(`${NS}.unavailable_body`)}
+          />
+        </div>
       ) : (
         <>
       {/* ── Metrics ──────────────────────────────────────────────────────── */}

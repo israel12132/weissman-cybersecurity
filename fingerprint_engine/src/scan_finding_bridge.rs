@@ -431,7 +431,7 @@ pub async fn snapshot(
     let rows = load_rows(pool, tenant_id, client_id, limit)
         .await
         .map_err(|e| (500, e))?;
-    let integrations = load_integrations(pool, tenant_id).await;
+    let integrations = load_integrations(pool, tenant_id).await.map_err(|e| (503, e))?;
     let cortex = pick_cortex(&integrations);
     let cortex_configured = cortex.is_some();
     let cortex_mode = cortex
@@ -528,7 +528,7 @@ pub async fn flush(
     let rows = load_rows(pool, tenant_id, client_id, MAX_LIST)
         .await
         .map_err(|e| (500, e))?;
-    let integrations = load_integrations(pool, tenant_id).await;
+    let integrations = load_integrations(pool, tenant_id).await.map_err(|e| (503, e))?;
     if pick_cortex(&integrations).is_none() {
         return Err((
             409,
@@ -605,7 +605,9 @@ pub async fn maybe_auto_push(pool: &PgPool, tenant_id: i64, finding_pk: i64, sev
     if sev != "critical" && sev != "high" {
         return;
     }
-    let integrations = load_integrations(pool, tenant_id).await;
+    let Ok(integrations) = load_integrations(pool, tenant_id).await else {
+        return;
+    };
     let Some(integ) = pick_cortex(&integrations) else {
         return;
     };
@@ -719,7 +721,10 @@ pub async fn run_cortex_proven_finding_bridge_result(
         );
     }
 
-    let integrations = load_integrations(pool, tenant_id).await;
+    let integrations = match load_integrations(pool, tenant_id).await {
+        Ok(v) => v,
+        Err(_) => return EngineResult::error("store_down"),
+    };
     let cortex = pick_cortex(&integrations);
     let mut findings = Vec::new();
     let mut compared = 0usize;

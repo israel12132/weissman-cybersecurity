@@ -607,33 +607,47 @@ pub fn spawn_pool_metrics_loop(
             // Self-healing: fold the health signals into a diagnosis + recommended recovery,
             // recorded as `weissman_self_heal_diagnosis_total` for dashboards/alerts. Builds a
             // coherent single snapshot from the in-memory pool stats + the two small agent/backlog
-            // COUNTs (indexed, cheap at the 10s cadence).
+            // COUNTs (indexed, cheap at the 10s cadence). COUNT Err is store-down, not idle-zero
+            // (pending=0 / empty fleet) — Prometheus gauges above already leave stale values.
             let sh_async = sqlx::query_scalar::<_, i64>(
                 "SELECT count(*)::bigint FROM weissman_async_jobs WHERE status = 'pending'",
             )
             .fetch_one(app_pool.as_ref())
-            .await
-            .unwrap_or(0);
+            .await;
             let sh_registered =
                 sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM endpoint_agents")
                     .fetch_one(app_pool.as_ref())
-                    .await
-                    .unwrap_or(0);
+                    .await;
             let sh_online = sqlx::query_scalar::<_, i64>(
                 "SELECT COUNT(*)::bigint FROM endpoint_agents WHERE last_seen_at > now() - interval '90 seconds'",
             )
             .fetch_one(app_pool.as_ref())
-            .await
-            .unwrap_or(sh_registered);
+            .await;
+            let counts_live = sh_async.is_ok() && sh_registered.is_ok() && sh_online.is_ok();
+            if !counts_live {
+                tracing::warn!(
+                    target: "observability",
+                    "self-heal agent/backlog counts store_down"
+                );
+            }
             let snapshot = crate::self_healing::HealthSnapshot {
-                postgres_up: pg_up,
+                postgres_up: pg_up && counts_live,
                 redis_required,
                 redis_up,
                 db_pool_size: app_pool.size(),
                 db_pool_idle: u32::try_from(app_pool.num_idle()).unwrap_or(u32::MAX),
-                agents_registered: u32::try_from(sh_registered).unwrap_or(0),
-                agents_online: u32::try_from(sh_online).unwrap_or(0),
-                async_jobs_pending: u64::try_from(sh_async).unwrap_or(0),
+                agents_registered: sh_registered
+                    .ok()
+                    .and_then(|n| u32::try_from(n).ok())
+                    .unwrap_or(0),
+                agents_online: sh_online
+                    .ok()
+                    .and_then(|n| u32::try_from(n).ok())
+                    .unwrap_or(0),
+                async_jobs_pending: sh_async
+                    .ok()
+                    .and_then(|n| u64::try_from(n).ok())
+                    .unwrap_or(0),
             };
             let diagnoses = crate::self_healing::diagnose(&snapshot, &self_heal_thresholds);
             crate::self_healing::record_diagnoses(&diagnoses);

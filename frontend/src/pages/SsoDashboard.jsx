@@ -465,6 +465,7 @@ function ScimKillSwitchPanel({ showToast }) {
 export default function SsoDashboard() {
   const { t } = useTranslation()
   const [idps, setIdps] = useState([])
+  const [idpsUnavailable, setIdpsUnavailable] = useState(false)
   const [loading, setLoading] = useState(false)
   const [selectedProv, setSelectedProv] = useState(null)
   const [editingIdp, setEditingIdp] = useState(null)
@@ -481,8 +482,13 @@ export default function SsoDashboard() {
     setLoading(true)
     try {
       const data = await api.get('/api/sso/idps')
-      setIdps(data.idps ?? [])
+      if (data == null || data.ok === false || data.unavailable) {
+        throw new Error(data?.detail || t('pages.ssoDashboard.load_failed', { message: 'unavailable' }))
+      }
+      setIdps(Array.isArray(data.idps) ? data.idps : [])
+      setIdpsUnavailable(false)
     } catch (e) {
+      setIdpsUnavailable(true)
       showToast(t('pages.ssoDashboard.load_failed', { message: e.message }), false)
     } finally {
       setLoading(false)
@@ -576,6 +582,11 @@ export default function SsoDashboard() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (idpsUnavailable) return
+    exportCsv()
+  }, [idpsUnavailable, exportCsv])
+
   const visibleIdps = useMemo(() => {
     if (!searchQuery.trim()) return idps
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
@@ -591,9 +602,9 @@ export default function SsoDashboard() {
       actions={(
         <ShellScanActions
           onRefresh={fetchIdps}
-          onExport={exportCsv}
+          onExport={idpsUnavailable ? undefined : handleExportCsv}
           refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
+          exportDisabled={idpsUnavailable || !filteredFindings.length}
         />
       )}
     >
@@ -646,7 +657,7 @@ export default function SsoDashboard() {
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-mono text-[var(--text-muted)] uppercase tracking-widest">
               {t('pages.ssoDashboard.configured_connections')}
-              {idps.length > 0 && <span className="ml-2 text-[var(--text-disabled)]">{t('pages.ssoDashboard.connection_count', { count: idps.length })}</span>}
+              {idps.length > 0 && !idpsUnavailable && <span className="ml-2 text-[var(--text-disabled)]">{t('pages.ssoDashboard.connection_count', { count: idps.length })}</span>}
             </h3>
             <Button variant="unstyled"
               type="button"
@@ -661,7 +672,7 @@ export default function SsoDashboard() {
             <p className="text-[11px] text-[var(--text-disabled)] font-mono animate-pulse">{t('pages.ssoDashboard.loading')}</p>
           )}
 
-          {!loading && idps.length > 0 && (
+          {!loading && !idpsUnavailable && idps.length > 0 && (
             <WeissmanListToolbar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
@@ -671,7 +682,17 @@ export default function SsoDashboard() {
           )}
 
           <AnimatePresence>
-            {!loading && idps.length === 0 && (
+            {!loading && idpsUnavailable && (
+              <motion.div
+                data-testid="sso-idps-unavailable"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="rounded-2xl border border-dashed border-amber-500/40 p-10 text-center"
+              >
+                <p className="text-amber-300/90 text-[12px]">{t('pages.ssoDashboard.idps_unavailable')}</p>
+              </motion.div>
+            )}
+            {!loading && !idpsUnavailable && idps.length === 0 && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -681,7 +702,7 @@ export default function SsoDashboard() {
                 <p className="text-[var(--text-disabled)] text-[11px] mt-1">{t('pages.ssoDashboard.no_idps_hint')}</p>
               </motion.div>
             )}
-            {!loading && idps.length > 0 && visibleIdps.length === 0 && (
+            {!loading && !idpsUnavailable && idps.length > 0 && visibleIdps.length === 0 && (
               <EmptyState
                 icon="search"
                 title={t('weissmanFindings.filtered_title')}
@@ -689,7 +710,7 @@ export default function SsoDashboard() {
                 compact
               />
             )}
-            {visibleIdps.map(idp => (
+            {!idpsUnavailable && visibleIdps.map(idp => (
               <IdpRow
                 key={idp.id}
                 idp={idp}

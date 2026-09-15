@@ -94,6 +94,7 @@ export default function SelfImprovementConsole() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [queueUnavailable, setQueueUnavailable] = useState(false)
   const [note, setNote] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -105,10 +106,15 @@ export default function SelfImprovementConsole() {
         api.get('/api/self-improve/status'),
         api.get(`/api/self-improve/queue${qs}`),
       ])
+      if (!Array.isArray(q?.items)) {
+        throw new Error('Failed to load')
+      }
+      setQueueUnavailable(false)
       setStatus(st)
-      setItems(Array.isArray(q?.items) ? q.items : [])
+      setItems(q.items)
     } catch (e) {
       setError(e?.message || 'Failed to load')
+      setQueueUnavailable(true)
     } finally {
       setLoading(false)
     }
@@ -168,15 +174,14 @@ export default function SelfImprovementConsole() {
   )
 
   const handleRefresh = useCallback(() => load(), [load])
-  const exportCsv = useCallback(
-    () => exportRowsCsv(SELF_IMPROVE_CSV_HEADER, selfImproveRows(filteredItems), 'weissman-self-improvement'),
-    [filteredItems],
-  )
-  const exportPdf = useCallback(
-    () =>
-      exportRowsPdf('Weissman Self-Improvement Console', SELF_IMPROVE_CSV_HEADER, selfImproveRows(filteredItems), 'weissman-self-improvement'),
-    [filteredItems],
-  )
+  const exportCsv = useCallback(() => {
+    if (queueUnavailable) return
+    exportRowsCsv(SELF_IMPROVE_CSV_HEADER, selfImproveRows(filteredItems), 'weissman-self-improvement')
+  }, [queueUnavailable, filteredItems])
+  const exportPdf = useCallback(() => {
+    if (queueUnavailable) return
+    exportRowsPdf('Weissman Self-Improvement Console', SELF_IMPROVE_CSV_HEADER, selfImproveRows(filteredItems), 'weissman-self-improvement')
+  }, [queueUnavailable, filteredItems])
 
   return (
     <PageShell
@@ -196,15 +201,15 @@ export default function SelfImprovementConsole() {
           <Button
             variant="unstyled"
             onClick={toggle}
-            disabled={busy}
+            disabled={busy || !!error}
             className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-50 ${
-              enabled
+              enabled && !error
                 ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40'
                 : 'bg-white/5 text-white/60 border border-white/15'
             }`}
           >
             <Power className="w-4 h-4" />
-            {enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
+            {error ? 'Status unconfirmed' : enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
           </Button>
           <Button
             variant="unstyled"
@@ -217,10 +222,11 @@ export default function SelfImprovementConsole() {
           </Button>
           <ShellScanActions
             onRefresh={handleRefresh}
-            onExport={exportCsv}
+            onExport={queueUnavailable ? undefined : exportCsv}
             refreshLoading={loading}
-            exportDisabled={!filteredItems.length}
+            exportDisabled={queueUnavailable || !filteredItems.length}
           />
+          {!queueUnavailable && (
           <Button
             variant="unstyled"
             type="button"
@@ -231,6 +237,7 @@ export default function SelfImprovementConsole() {
           >
             <FileText className="w-4 h-4" /> PDF
           </Button>
+          )}
         </div>
       }
     >
@@ -249,6 +256,14 @@ export default function SelfImprovementConsole() {
 
       {loading ? (
         <SkeletonWidgetGrid />
+      ) : error ? (
+        <div data-testid="self-improvement-unavailable">
+          <EmptyState
+            icon="alert"
+            title="Self-improvement queue unavailable"
+            description="GET /api/self-improve/status could not be confirmed. Zero proposals is not a quiet engine."
+          />
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">

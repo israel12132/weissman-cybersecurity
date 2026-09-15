@@ -201,6 +201,7 @@ export default function VulnIntelDashboard() {
   const kevCount = useMemo(() => findings.filter(isKevListed).length, [findings])
 
   const exportCsv = useCallback(() => {
+    if (error) return
     const header = ['severity', 'cve', 'title', 'source', 'status', 'discovered_at', 'id']
     const rows = filtered.map((f) => [
       f.severity || '',
@@ -212,7 +213,7 @@ export default function VulnIntelDashboard() {
       f.id || f.raw_id || f.finding_id || '',
     ])
     downloadCsv(rows, header, 'vuln-intel-findings')
-  }, [filtered])
+  }, [error, filtered])
 
   const selectedRowId = selected?.raw_id ?? selected?.id
 
@@ -225,9 +226,9 @@ export default function VulnIntelDashboard() {
       actions={(
         <ShellScanActions
           onRefresh={() => load()}
-          onExport={exportCsv}
+          onExport={error ? undefined : exportCsv}
           refreshLoading={loading}
-          exportDisabled={!filtered.length}
+          exportDisabled={!!error || !filtered.length}
         />
       )}
     >
@@ -239,22 +240,24 @@ export default function VulnIntelDashboard() {
           subtitle={t('vuln_intel.subtitle')}
           badge={t('vuln_intel.live_badge')}
           badgeColor="#f97316"
-          count={filtered.length}
+          count={error ? null : filtered.length}
           countLabel={t('findings.title')}
-          lastUpdated={lastUpdated}
+          lastUpdated={error ? null : lastUpdated}
           loading={loading}
           onRefresh={() => load()}
           refreshLabel={t('common.refresh')}
         >
+          {!error && (
           <Button variant="unstyled"
             type="button"
             onClick={exportCsv}
-            disabled={filtered.length === 0}
+            disabled={!!error || filtered.length === 0}
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-40 transition-all"
           >
             <Download className="h-3.5 w-3.5" />
             {t('vuln_intel.export_csv')}
           </Button>
+          )}
           <Button variant="unstyled"
             type="button"
             onClick={() => setFiltersExpanded((v) => !v)}
@@ -264,37 +267,39 @@ export default function VulnIntelDashboard() {
           </Button>
         </PremiumPageHeader>
 
+        {!error && (
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <ExecutiveWidget
             label={t('vuln_intel.critical')}
-            value={loading ? '—' : summary.by.critical.toLocaleString()}
+            value={loading || error ? '—' : summary.by.critical.toLocaleString()}
             accent="#ef4444"
           />
           <ExecutiveWidget
             label={t('vuln_intel.high')}
-            value={loading ? '—' : summary.by.high.toLocaleString()}
+            value={loading || error ? '—' : summary.by.high.toLocaleString()}
             accent="#f97316"
           />
           <ExecutiveWidget
             label={t('vuln_intel.medium')}
-            value={loading ? '—' : summary.by.medium.toLocaleString()}
+            value={loading || error ? '—' : summary.by.medium.toLocaleString()}
             accent="#f59e0b"
           />
           <ExecutiveWidget
             label={t('vuln_intel.low')}
-            value={loading ? '—' : summary.by.low.toLocaleString()}
+            value={loading || error ? '—' : summary.by.low.toLocaleString()}
             accent="#22d3ee"
           />
           <ExecutiveWidget
             label={t('vuln_intel.distinct_cves')}
-            value={loading ? '—' : summary.cves.toLocaleString()}
+            value={loading || error ? '—' : summary.cves.toLocaleString()}
             hint={t('vuln_intel.distinct_cves_hint')}
             accent="#a78bfa"
             className="col-span-2 lg:col-span-1"
           />
         </div>
+        )}
 
-        {filtersExpanded && (
+        {filtersExpanded && !error && (
           <div className="glass-panel rounded-2xl p-4 sm:p-5 space-y-4">
             <FilterPills
               label={t('findings.filter_severity')}
@@ -390,12 +395,14 @@ export default function VulnIntelDashboard() {
         )}
 
         {error ? (
+          <div data-testid="vuln-intel-unavailable">
           <EmptyState
             icon="alert"
             title={t('vuln_intel.failed_title')}
             body={error}
             cta={{ label: t('common.retry'), onClick: load }}
           />
+          </div>
         ) : !loading && findings.length === 0 ? (
           <EmptyState
             icon="shield"
@@ -433,12 +440,14 @@ export default function VulnIntelDashboard() {
           </>
         )}
 
+        {!error && (
         <p className="text-[10px] font-mono text-[var(--text-disabled)] text-center">
           {t('findings.shown_of_total', { shown: filtered.length, total })}
         </p>
+        )}
       </div>
 
-      <FindingDrawer finding={selected} onClose={() => setSelected(null)} />
+      <FindingDrawer finding={error ? null : selected} onClose={() => setSelected(null)} />
     </PageShell>
   )
 }

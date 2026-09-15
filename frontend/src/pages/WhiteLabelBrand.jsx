@@ -69,8 +69,9 @@ export default function WhiteLabelBrand() {
   }, [brand, raw, searchQuery])
 
   const exportCsv = useCallback(() => {
+    if (error) return
     downloadCsv(rows.map(([k, v]) => [k, String(v ?? '')]), ['key', 'value'], 'weissman-tenant-brand')
-  }, [rows])
+  }, [error, rows])
 
   return (
     <PageShell
@@ -80,14 +81,24 @@ export default function WhiteLabelBrand() {
       actions={(
         <ShellScanActions
           onRefresh={load}
-          onExport={exportCsv}
+          onExport={error ? undefined : exportCsv}
           refreshLoading={loading}
-          exportDisabled={!rows.length}
+          exportDisabled={!!error || !rows.length}
         />
       )}
     >
       <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
-      {error && <p className="text-sm text-rose-300" role="alert">{error}</p>}
+      {error && (
+        <p
+          className="text-sm text-rose-300"
+          role="alert"
+          data-testid="white-label-brand-unavailable"
+        >
+          {error}
+        </p>
+      )}
+      {!error && (
+        <>
       <input
         type="search"
         value={searchQuery}
@@ -109,6 +120,8 @@ export default function WhiteLabelBrand() {
           {saving ? t(`${NS}.saving`) : t(`${NS}.save`)}
         </Button>
       </div>
+        </>
+      )}
     </PageShell>
   )
 }

@@ -147,9 +147,11 @@ pub async fn run_cognitive_starvation_result(target: &str, ctx: &EngineRunContex
         }
     };
 
-    let poison_lib = sovereign_defense_store::load_poison_library(pool.as_ref(), 20)
-        .await
-        .unwrap_or_default();
+    let poison_lib = match sovereign_defense_store::load_poison_library(pool.as_ref(), 20).await
+    {
+        Ok(lib) => lib,
+        Err(_) => return EngineResult::error("store_down"),
+    };
     let variant_set: HashSet<String> = cfg.poison_variants.iter().cloned().collect();
     let active_poison: Vec<Value> = poison_lib
         .into_iter()

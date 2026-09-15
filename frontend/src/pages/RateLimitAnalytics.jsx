@@ -124,6 +124,11 @@ export default function RateLimitAnalytics() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
   })
 
+  const handleExportCsv = useCallback(() => {
+    if (error) return
+    exportCsv()
+  }, [error, exportCsv])
+
   const visibleEndpoints = useMemo(() => {
     if (!searchQuery.trim()) return endpoints
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
@@ -150,9 +155,9 @@ export default function RateLimitAnalytics() {
       </div>
       <ShellScanActions
         onRefresh={fetchAnalytics}
-        onExport={exportCsv}
+        onExport={error ? undefined : handleExportCsv}
         refreshLoading={loading}
-        exportDisabled={!filteredFindings.length}
+        exportDisabled={!!error || !filteredFindings.length}
       />
     </div>
   );
@@ -174,6 +179,16 @@ export default function RateLimitAnalytics() {
           </div>
         )}
 
+        {error ? (
+          <div data-testid="rate-limit-analytics-unavailable">
+            <EmptyState
+              icon="alert"
+              title={t('pages.rateLimitAnalytics.unavailable_title')}
+              body={t('pages.rateLimitAnalytics.unavailable_body')}
+            />
+          </div>
+        ) : (
+        <>
         {/* Current usage — real caps from server config; skeleton until first load */}
         {!data ? (
           <SkeletonWidgetGrid count={3} />
@@ -319,6 +334,8 @@ export default function RateLimitAnalytics() {
             <EmptyState compact icon="search" title={t('pages.rateLimitAnalytics.endpoints_empty_title')} />
           )}
         </div>
+        </>
+        )}
       </div>
     </PageShell>
   );
