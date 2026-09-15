@@ -15,12 +15,11 @@ const CHAIN_PREDICT = {
   '/threat-emulation': ['/kill-chain', '/agents'],
   '/findings': ['/remediation', '/incident-response', '/board-pack'],
   '/reports': ['/board-pack'],
-  '/dark-web': ['/board-pack'],
   '/clients': ['/domain-discovery', '/jobs'],
   '/template-engine': ['/ast-fuzzing', '/file-upload-lab'],
   '/ast-fuzzing': ['/template-engine', '/feedback-loop'],
   '/intel-map': ['/threat-intel', '/risk-graph', '/dark-web', '/adversary-mirror'],
-  '/dark-web': ['/adversary-mirror', '/threat-intel'],
+  '/dark-web': ['/adversary-mirror', '/threat-intel', '/board-pack'],
   '/adversary-mirror': ['/dark-web', '/attack-paths', '/remediation'],
 }
 
