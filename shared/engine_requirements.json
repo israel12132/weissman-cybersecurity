@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-09-13T01:12:27.217Z",
-  "production_engine_count": 593,
+  "generated_at": "2026-09-15T23:01:12.968Z",
+  "production_engine_count": 594,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -238,7 +238,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 434
+      "engine_count": 435
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -1845,6 +1845,16 @@
       "group": "web",
       "kind": "real_probe",
       "label": "Credential Stuffing",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "credential_ransomware_fusion": {
+      "id": "credential_ransomware_fusion",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Credential → Ransomware Fusion",
       "requirements": [
         "contact_email",
         "scope_domains"

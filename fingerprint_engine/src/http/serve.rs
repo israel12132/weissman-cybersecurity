@@ -240,6 +240,7 @@ enum RouteGate {
 /// intentionally spans several paths.)
 static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
     (Method::GET, "/api/health", RouteGate::Always),
+    (Method::GET, "/api/public/platform-pulse", RouteGate::Always),
     (Method::POST, "/api/logout", RouteGate::Always),
     (Method::POST, "/api/auth/refresh", RouteGate::Always),
     (Method::POST, "/api/onboarding/register", RouteGate::Always),

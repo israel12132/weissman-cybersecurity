@@ -380,7 +380,9 @@ pub async fn load_live_signals(
     s.nvd_api_key = crate::nvd_cve::nvd_api_key_present();
 
     // Integrations open their own tenant tx — run before ours.
-    let integrations = crate::soar::integrations::load_integrations(pool, tenant_id).await;
+    let integrations = crate::soar::integrations::load_integrations(pool, tenant_id)
+        .await
+        .unwrap_or_default();
     let mut providers: Vec<String> = integrations
         .into_iter()
         .map(|i| i.provider_type)

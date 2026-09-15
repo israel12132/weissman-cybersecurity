@@ -322,7 +322,18 @@
     "sample_q2": "20 החולשות המובילות לפי ציון EPSS",
     "sample_q3": "רשימת נכסים מסומנים כ-crown jewel עם ערך עסקי מעל 100000",
     "sample_q4": "כל חריגות UEBA עם z-score מעל 5 ביום האחרון",
-    "sample_q5": "ממצאים פתוחים על צמתים חשופים לאינטרנט"
+    "sample_q5": "ממצאים פתוחים על צמתים חשופים לאינטרנט",
+    "safeguards_aria": "אמצעי הגנה של Ask Weissman",
+    "live_guards_aria": "מגני שאילתה חיים",
+    "guard_tenant": "מוגבל-דייר",
+    "guard_role": "תפקיד קריאה-בלבד",
+    "guard_timeout": "פסק-זמן שאילתה",
+    "guard_limit": "תקרת שורות",
+    "guard_plan": "תוכנית חתומה",
+    "guard_oracle": "ללא דליפת oracle",
+    "guard_mask": "PII ממוסך",
+    "guard_depth": "עומק חסום",
+    "guard_vector": "ללא וקטורים גולמיים"
   },
   "playbooks": {
     "title": "מדריכי SOAR",
@@ -2188,7 +2199,13 @@
       "play_gap": "לא בחשיפה",
       "download_failed": "הורדת Excel נכשלה.",
       "unavailable_title": "ממצאי רשת אפלה אינם זמינים",
-      "unavailable_body": "לא ניתן לאשר את GET /api/findings. אפס פגיעות אינו משטח נקי."
+      "unavailable_body": "לא ניתן לאשר את GET /api/findings. אפס פגיעות אינו משטח נקי.",
+      "war_current": "חשיפה נוכחית",
+      "war_previous": "קודם",
+      "play_pending": "ממתין",
+      "play_closed_source": "חיפוש מחתרתי במקורות סגורים",
+      "play_credential_leak": "סריקת דליפת אישורים",
+      "play_ioc": "קורלציית IOC"
     },
     "healReadiness": {
       "title": "מוכנות ריפוי אוטומטי",

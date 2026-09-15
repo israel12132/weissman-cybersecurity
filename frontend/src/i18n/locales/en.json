@@ -332,7 +332,18 @@
     "sample_q2": "top 20 vulnerabilities by EPSS score",
     "sample_q3": "list assets flagged as crown jewels with business value over 100000",
     "sample_q4": "all UEBA anomalies with z-score above 5 in the last day",
-    "sample_q5": "open findings on internet-exposed nodes"
+    "sample_q5": "open findings on internet-exposed nodes",
+    "safeguards_aria": "Ask Weissman safeguards",
+    "live_guards_aria": "Live query guards",
+    "guard_tenant": "Tenant-scoped",
+    "guard_role": "Read-only role",
+    "guard_timeout": "Statement timeout",
+    "guard_limit": "Row cap",
+    "guard_plan": "Sealed plan",
+    "guard_oracle": "No oracle leak",
+    "guard_mask": "PII masked",
+    "guard_depth": "Bounded depth",
+    "guard_vector": "No raw vectors"
   },
   "playbooks": {
     "title": "SOAR Playbooks",
@@ -2188,7 +2199,13 @@
       "play_gap": "Not in exposure",
       "download_failed": "Excel download failed.",
       "unavailable_title": "Dark-web findings unavailable",
-      "unavailable_body": "GET /api/findings could not be confirmed. Zero hits are not a clean surface."
+      "unavailable_body": "GET /api/findings could not be confirmed. Zero hits are not a clean surface.",
+      "war_current": "Current exposure",
+      "war_previous": "Previous",
+      "play_pending": "pending",
+      "play_closed_source": "Closed-source underground search",
+      "play_credential_leak": "Credential leak sweep",
+      "play_ioc": "IOC correlation"
     },
     "healReadiness": {
       "title": "Auto-heal readiness",

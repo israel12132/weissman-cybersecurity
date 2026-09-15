@@ -12,10 +12,10 @@ This is a Rust-first monorepo (Cargo workspace) with a React/Vite frontend and l
 ### Canonical platform metrics (code-synced — run audits to verify)
 | Metric | Value | Verify |
 |--------|-------|--------|
-| Production engines | **593** | `node scripts/verify_engine_wiring.mjs` |
+| Production engines | **594** | `node scripts/verify_engine_wiring.mjs` |
 | Command Center routes | **155** (target ≥112) | `node scripts/weissman-ui-audit.mjs` |
 | UI pages (audit) | **142/142** — all pages meet the Weissman UI standard (exit 0) | `node scripts/weissman-ui-audit.mjs` |
-| Real probes | **331** | `node scripts/engine_reality_audit.mjs` |
+| Real probes | **332** | `node scripts/engine_reality_audit.mjs` |
 | Agent-required engines | **58** | same |
 
 ### Required Services

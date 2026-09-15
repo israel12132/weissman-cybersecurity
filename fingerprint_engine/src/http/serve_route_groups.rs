@@ -1006,4 +1006,60 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/compliance/evidence-pack/:client_id",
             get(api_compliance_evidence_pack),
         )
+        // ── CEM-DAGO mesh (server_handlers_cem_dago.inc) ──
+        .route("/api/cem-dago/status", get(api_cem_dago_status))
+        .route("/api/cem-dago/manifests", get(api_cem_dago_manifests))
+        .route("/api/cem-dago/waves", get(api_cem_dago_waves))
+        .route("/api/cem-dago/blackboard", get(api_cem_dago_blackboard))
+        // ── Elite hardening + market readiness (server_handlers_elite_hardening.inc) ──
+        .route("/api/elite-hardening/status", get(api_elite_hardening_status))
+        .route("/api/market-readiness", get(api_market_readiness))
+        // ── Previously-orphaned routes for already-compiled handlers ──
+        .route(
+            "/api/discovery-knowledge/stats",
+            get(api_discovery_knowledge_stats),
+        )
+        .route("/api/scan-finding-spine", get(api_scan_finding_spine))
+        .route(
+            "/api/supreme-brain/:client_id",
+            get(api_supreme_brain_for_client),
+        )
+        // ── SCIM provisioning — admin/* prefix (ScimProvisioning.jsx) ──
+        .route("/api/admin/scim/audit", get(crate::scim::api_scim_events))
+        .route(
+            "/api/admin/scim/tokens",
+            get(crate::scim::api_scim_tokens_list).post(crate::scim::api_scim_token_mint),
+        )
+        .route(
+            "/api/admin/scim/tokens/:id",
+            delete(crate::scim::api_scim_token_revoke),
+        )
+        // ── SCIM provisioning — sso/* prefix (SsoDashboard.jsx) ──
+        .route("/api/sso/scim/status", get(crate::scim::api_scim_status))
+        .route("/api/sso/scim/events", get(crate::scim::api_scim_events))
+        .route(
+            "/api/sso/scim/group-maps",
+            get(crate::scim::api_scim_group_maps_get).put(crate::scim::api_scim_group_maps_put),
+        )
+        .route(
+            "/api/sso/scim/tokens",
+            get(crate::scim::api_scim_tokens_list).post(crate::scim::api_scim_token_mint),
+        )
+        .route(
+            "/api/sso/scim/tokens/:id",
+            delete(crate::scim::api_scim_token_revoke),
+        )
+        // ── Public platform pulse (unauthenticated; gated in serve.rs PUBLIC_ROUTES) ──
+        .route(
+            "/api/public/platform-pulse",
+            get(crate::public_site::api_platform_pulse),
+        )
+        // ── Competitive intelligence (competitive_delta.rs, panw_displacement.rs) ──
+        .route(
+            "/api/competitive-delta",
+            get(crate::competitive_delta::api_competitive_delta),
+        )
+        .route("/api/competitive/panw-displacement", get(api_panw_displacement))
+        // ── Board evidence pack (board_pack module) ──
+        .route("/api/board-pack", get(api_board_pack))
 }

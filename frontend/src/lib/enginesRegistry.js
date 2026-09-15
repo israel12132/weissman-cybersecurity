@@ -1,5 +1,5 @@
 /**
- * Master registry of all 593 production attack engines.
+ * Master registry of all 594 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 593 production engines in registry order */
+/** All 594 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -832,6 +832,14 @@ export const ENGINES_REGISTRY = [
     group: 'web',
     mitre: 'T1110.004',
     description: 'Large-scale breach corpus replay, distributed credential stuffing, legacy-protocol MFA bypass (Basic Auth, IMAP, ActiveSync)',
+    requiresTarget: true,
+  },
+  {
+    id: 'credential_ransomware_fusion',
+    label: 'Credential → Ransomware Fusion',
+    group: 'web',
+    mitre: 'T1078',
+    description: 'Fuses breach-corpus credential exposure (HIBP/IntelX) with ransomware-path reachability to rank credential-to-encryption blast-radius chains',
     requiresTarget: true,
   },
   {
@@ -4920,3 +4928,6 @@ export function getEnginesByGroup(groupId) {
 
 /** Quick-lookup map: engineId → engine */
 export const ENGINES_BY_ID = Object.fromEntries(ENGINES_REGISTRY.map((e) => [e.id, e]))
+
+/** Engine IDs that require a deployed Weissman agent (host-resident), derived from the registry. */
+export const AGENT_REQUIRED_ENGINE_IDS = ENGINES_REGISTRY.filter((e) => e.requiresAgent).map((e) => e.id).sort()

@@ -363,7 +363,12 @@ pub mod certstream_watcher;
 pub mod discovery_ai;
 pub mod discovery_knowledge;
 pub mod discovery_pace;
+pub mod board_pack;
 pub mod elite_hardening;
+// Previously-orphaned handler modules (wired into the router; see serve_route_groups).
+pub mod competitive_delta;
+pub mod panw_displacement;
+pub mod public_site;
 pub mod finding_identity;
 pub mod job_envelope;
 pub mod live_knowledge_bus;

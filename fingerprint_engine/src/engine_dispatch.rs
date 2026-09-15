@@ -801,6 +801,7 @@ async fn dispatch_engine_match(
         "rsa_timing_attack" => crate::advanced_crypto_engines::run_rsa_timing_attack_result(target).await,
         "mfa_bypass_engine" => crate::advanced_crypto_engines::run_mfa_bypass_engine_result(target).await,
         "credential_stuffing" => crate::advanced_crypto_engines::run_credential_stuffing_result(target).await,
+        "credential_ransomware_fusion" => crate::credential_ransomware_fusion::run_credential_ransomware_fusion_result(target).await,
         "kerberos_attack_suite" => crate::advanced_crypto_engines::run_kerberos_attack_suite_result(target).await,
         "pki_hierarchy_attack" => crate::advanced_crypto_engines::run_pki_hierarchy_attack_result(target).await,
         "session_fixation_adv" => crate::advanced_crypto_engines::run_session_fixation_adv_result(target).await,

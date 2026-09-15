@@ -56,6 +56,141 @@ function parseFindings(data) {
     )
 }
 
+// ─── Underground war room (adversary exposure delta) ─────────────────────────
+// Closed-source underground exposure: normalize the live delta payload, map
+// per-source health to an honest chip state, and never invent a source that the
+// backend did not report.
+
+export const ADVERSARY_PLAYBOOK = [
+  {
+    id: 'closed_source_search',
+    mitre: 'T1597',
+    label: 'pages.darkWebMonitor.play_closed_source',
+    engines: ['leak_hunter', 'darkweb_intel'],
+  },
+  {
+    id: 'credential_leak',
+    mitre: 'T1589',
+    label: 'pages.darkWebMonitor.play_credential_leak',
+    engines: ['leak_hunter'],
+  },
+  {
+    id: 'ioc_correlation',
+    mitre: 'T1596',
+    label: 'pages.darkWebMonitor.play_ioc',
+    engines: ['threat_intel_fusion', 'dark_web_monitor'],
+  },
+]
+
+export function parseUndergroundPayload(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return {
+      unavailable: true,
+      message: '',
+      current_count: 0,
+      previous_count: 0,
+      added: [],
+      removed: [],
+      hits: [],
+      sources: [],
+      health: [],
+    }
+  }
+  return {
+    unavailable: payload.unavailable === true,
+    message: typeof payload.message === 'string' ? payload.message : '',
+    current_count: Number(payload.current_count) || 0,
+    previous_count: Number(payload.previous_count) || 0,
+    added: Array.isArray(payload.added) ? payload.added : [],
+    removed: Array.isArray(payload.removed) ? payload.removed : [],
+    hits: Array.isArray(payload.hits) ? payload.hits : [],
+    sources: Array.isArray(payload.sources) ? payload.sources : [],
+    health: Array.isArray(payload.health) ? payload.health : [],
+  }
+}
+
+// hit = source reachable with matches; quiet = reachable, no matches;
+// failed = source unreachable/errored; unknown = backend never reported it.
+export function sourceChipState(id, parsed) {
+  const entry = (parsed?.health || []).find((s) => s && s.id === id)
+  if (!entry) return 'unknown'
+  if (entry.ok === false) return 'failed'
+  return (Number(entry.hit_count) || 0) > 0 ? 'hit' : 'quiet'
+}
+
+export function UndergroundWarRoom({
+  exposure,
+  loading = false,
+  hunting = false,
+  onHunt,
+  huntDisabled = false,
+  playbookCoverage = {},
+}) {
+  const { t } = useTranslation()
+  const parsed = parseUndergroundPayload(exposure)
+  const sources = parsed.health.length ? parsed.health.map((h) => h.id) : parsed.sources
+  const chipLabel = (state) =>
+    ({
+      hit: t('pages.darkWebMonitor.source_hit'),
+      quiet: t('pages.darkWebMonitor.source_quiet'),
+      failed: t('pages.darkWebMonitor.source_failed'),
+      unknown: t('pages.darkWebMonitor.source_unknown'),
+    }[state] || state)
+  return (
+    <section className="rounded-2xl border border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-950/30 via-black/40 to-cyan-950/20 p-4 mb-5">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-fuchsia-100">{t('pages.darkWebMonitor.war_title')}</h3>
+          {parsed.message && (
+            <p className="text-[12px] text-[var(--text-tertiary)] font-mono mt-1 max-w-2xl">{parsed.message}</p>
+          )}
+        </div>
+        <Button
+          type="button"
+          onClick={onHunt}
+          disabled={huntDisabled || hunting || loading}
+          className="px-4 py-2 rounded-lg text-sm font-mono font-semibold bg-fuchsia-500/20 border border-fuchsia-400/40 text-fuchsia-100 hover:bg-fuchsia-500/30 disabled:opacity-40"
+        >
+          {hunting ? t('pages.darkWebMonitor.hunting') : t('pages.darkWebMonitor.hunt')}
+        </Button>
+      </div>
+      <div className="flex flex-wrap gap-4 mb-3">
+        <div className="rounded-lg border border-white/[0.07] bg-black/30 px-3 py-2">
+          <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
+            {t('pages.darkWebMonitor.war_current')}
+          </p>
+          <span className="text-xl font-bold tabular-nums text-cyan-300">{parsed.current_count}</span>
+        </div>
+        <div className="rounded-lg border border-white/[0.07] bg-black/30 px-3 py-2">
+          <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
+            {t('pages.darkWebMonitor.war_previous')}
+          </p>
+          <span className="text-xl font-bold tabular-nums text-white/70">{parsed.previous_count}</span>
+        </div>
+      </div>
+      <ul className="flex flex-wrap gap-2 mb-3">
+        {sources.map((id) => (
+          <li key={id} className="text-[10px] font-mono px-2 py-1 rounded-lg border border-white/[0.08] bg-black/30">
+            {String(id).toUpperCase()} <span>{chipLabel(sourceChipState(id, parsed))}</span>
+          </li>
+        ))}
+      </ul>
+      <ul className="space-y-1">
+        {ADVERSARY_PLAYBOOK.map((row) => (
+          <li key={row.id} className="text-[11px] font-mono text-[var(--text-tertiary)]">
+            <span>{t(row.label)}</span> · {row.mitre} ·{' '}
+            <span>
+              {playbookCoverage[row.mitre]
+                ? t('pages.darkWebMonitor.play_proven')
+                : t('pages.darkWebMonitor.play_pending')}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 export default function DarkWebMonitor() {
   const { t } = useTranslation()
   const [findings, setFindings] = useState([])
