@@ -8,6 +8,10 @@ import { findingVerifyId, liveVerdictFromFinding } from './FindingLiveVerify'
 export function canPushFindingToCortex(finding) {
   const verdict = String(liveVerdictFromFinding(finding) || '').toUpperCase()
   if (verdict === 'NOISE' || verdict === 'FALSE_POSITIVE') return false
+  // Operator workflow status overrides live proof: a finding triaged as a false positive
+  // (or rejected/suppressed) must never be pushed to Cortex even with a CONFIRMED verdict.
+  const status = String(finding?.status || finding?.raw?.status || '').toUpperCase()
+  if (['FALSE_POSITIVE', 'REJECTED', 'SUPPRESSED', 'NOISE'].includes(status)) return false
   if (verdict === 'CONFIRMED' || verdict === 'LIKELY_VALID') return true
   const raw = finding?.raw && typeof finding.raw === 'object' ? finding.raw : finding || {}
   return hasLiveProof(raw)

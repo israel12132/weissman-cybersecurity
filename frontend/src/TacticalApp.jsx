@@ -70,6 +70,7 @@ import {
   SelfImprovementConsole,
   RoeApprovals,
   SsoDashboard,
+  ScimProvisioning,
   NexusSovereignSwarm,
   RiskSuperpositionCollapse,
   SovereignDefenseMatrix,
@@ -84,6 +85,7 @@ import {
   IncidentResponseCenter,
   VulnIntelDashboard,
   FinancialRisk,
+  DominionBoardPack,
   BoardPack,
   AttackPaths,
   SupremeBrain,
@@ -278,6 +280,7 @@ export default function TacticalApp() {
           <Route path="self-improve" element={<SelfImprovementConsole />} />
           <Route path="roe-approvals" element={<RoeApprovals />} />
           <Route path="sso-config" element={<RequireStaff><SsoDashboard /></RequireStaff>} />
+          <Route path="scim-provisioning" element={<RequireRole min="admin"><ScimProvisioning /></RequireRole>} />
           <Route path="digital-twin" element={<DigitalTwinSimulator />} />
           <Route path="digital-twin/:clientId" element={<DigitalTwinSimulator />} />
           <Route path="nexus-swarm" element={<NexusSovereignSwarm />} />
@@ -294,6 +297,7 @@ export default function TacticalApp() {
           <Route path="incident-response" element={<IncidentResponseCenter />} />
           <Route path="vuln-intel" element={<VulnIntelDashboard />} />
           <Route path="financial-risk" element={<FinancialRisk />} />
+          <Route path="dominion" element={<DominionBoardPack />} />
           <Route path="board-pack" element={<BoardPack />} />
           <Route path="attack-paths" element={<AttackPaths />} />
           <Route path="supreme-brain" element={<SupremeBrain />} />

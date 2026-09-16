@@ -145,6 +145,12 @@ export default function AskWeissman() {
           rows: result.rows || [],
           row_count: result.row_count || 0,
           elapsed_ms: result.elapsed_ms,
+          // Live per-query hermetic guarantees surfaced from the API (RLS/role/timeout/limit/seal).
+          plan_sealed: result.plan_sealed ?? false,
+          exec_role: result.exec_role || null,
+          tenant_bound: result.tenant_bound ?? null,
+          row_cap: result.row_cap ?? null,
+          statement_timeout_ms: result.statement_timeout_ms ?? null,
           t: Date.now(),
         }
         if (idx >= 0) next[idx] = turn
@@ -227,6 +233,16 @@ export default function AskWeissman() {
       </header>
 
       <EvidenceNotice className="mb-3 shrink-0">{t('pages.askWeissman.evidence_notice')}</EvidenceNotice>
+      <ul
+        aria-label={t('ask_weissman.safeguards_aria')}
+        className="mb-3 shrink-0 flex flex-wrap gap-1.5 text-[10px] font-mono text-[var(--text-tertiary)]"
+      >
+        {['guard_tenant', 'guard_role', 'guard_timeout', 'guard_limit', 'guard_plan', 'guard_oracle', 'guard_mask', 'guard_depth', 'guard_vector'].map((g) => (
+          <li key={g} className="px-2 py-0.5 rounded border border-[var(--border-strong)] bg-[var(--bg-2)]">
+            {t(`ask_weissman.${g}`)}
+          </li>
+        ))}
+      </ul>
       <p className="mb-3 text-[11px] text-cyan-200/70 font-mono shrink-0">
         {t('ask_weissman.aggregate_hint')}
       </p>
@@ -312,6 +328,16 @@ export default function AskWeissman() {
                       })}
                     </span>
                   )}
+                  {turn.plan_sealed && !turn.error && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-violet-500/40 bg-violet-500/15 text-violet-200">
+                      {t('ask_weissman.guard_plan')}
+                    </span>
+                  )}
+                  {!turn.error && (turn.exec_role || turn.statement_timeout_ms != null || turn.row_cap != null) && (
+                    <span className="text-[10px] font-mono text-[var(--text-tertiary)]">
+                      {turn.exec_role || 'weissman_ro'} · {turn.statement_timeout_ms ?? 15000}ms · LIMIT {turn.row_cap ?? 200}
+                    </span>
+                  )}
                 </div>
 
                 {turn.error ? (
@@ -393,6 +419,7 @@ export default function AskWeissman() {
           onChange={(e) => setQuestion(e.target.value)}
           placeholder={t('ask_weissman.placeholder')}
           aria-label={t('ask_weissman.placeholder')}
+          maxLength={2000}
           className="flex-1 bg-[var(--bg-2)] border border-[var(--border-strong)] rounded-lg px-3 py-2 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-cyan-500/40"
           // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focus the primary question input on this dedicated Q&A page
           autoFocus

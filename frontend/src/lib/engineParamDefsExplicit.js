@@ -35,6 +35,7 @@ export const EXPLICIT_PARAM_DEFS = {
                    { key:'subdomain_wordlist',label:'Custom Subdomain Wordlist',   type:'textarea', placeholder:'api, admin, staging, vpn', defaultVal:'' }],
   recon:           [{ key:'depth',        label:'Recon Depth',                     type:'select',   options:['1','2','3','4','5'], defaultVal:'3' }],
   leak_hunter:     [{ key:'github_token', label:'GitHub Token (optional)',         type:'password', placeholder:'ghp_...', defaultVal:'' }],
+  adversary_exposure_delta: [{ key:'max_findings', label:'Max Findings', type:'number', placeholder:'50', defaultVal:'50', min:1, max:50 }],
   discovery_engine:[{ key:'depth',        label:'Spider Depth',                    type:'select',   options:['1','2','3','4','5'], defaultVal:'3' },
                    { key:'ports',        label:'Port Hints',                       type:'text',     placeholder:'80,443,8080', defaultVal:'80,443' }],
   bola_idor:       [{ key:'auth_header',  label:'Auth Header',                     type:'text',     placeholder:'Bearer eyJ...', defaultVal:'' },
