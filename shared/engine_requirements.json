@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-09-13T01:12:27.217Z",
-  "production_engine_count": 593,
+  "generated_at": "2026-09-16T01:19:17.522Z",
+  "production_engine_count": 595,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -238,7 +238,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 434
+      "engine_count": 436
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -387,6 +387,16 @@
       "group": "recon",
       "kind": "real_probe",
       "label": "Leak Hunter",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "adversary_underground_delta": {
+      "id": "adversary_underground_delta",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Adversary Underground Delta",
       "requirements": [
         "contact_email",
         "scope_domains"
@@ -6685,6 +6695,16 @@
       "group": "cloud",
       "kind": "real_probe",
       "label": "API & Cloud Storage Intel",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "credential_ransomware_fusion": {
+      "id": "credential_ransomware_fusion",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Credential-to-Ransomware Fusion",
       "requirements": [
         "contact_email",
         "scope_domains"

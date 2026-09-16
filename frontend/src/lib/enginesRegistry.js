@@ -66,6 +66,14 @@ export const ENGINES_REGISTRY = [
     requiresTarget: true,
   },
   {
+    id: 'adversary_underground_delta',
+    label: 'Adversary Underground Delta',
+    group: 'recon',
+    mitre: 'T1597',
+    description: 'First-mover for criminal indexes: HIBP domain breaches, ransomware.live exact-domain leak-site victims, ThreatFox, URLhaus, urlscan malicious verdicts — snapshot vs last run, emit only new hits, then auto-chain leak_hunter. Public legal OSINT; no Tor markets.',
+    requiresTarget: true,
+  },
+  {
     id: 'discovery_engine',
     label: 'Discovery Engine',
     group: 'recon',
@@ -4899,6 +4907,14 @@ export const ENGINES_REGISTRY = [
     group: 'cloud',
     mitre: 'T1530',
     description: 'GraphQL/OpenAPI and object-storage probes: 401/403 and empty listings are never labelled public',
+    requiresTarget: true,
+  },
+  {
+    id: 'credential_ransomware_fusion',
+    label: 'Credential-to-Ransomware Fusion',
+    group: 'recon',
+    mitre: 'T1555',
+    description: 'Legal clearnet fusion: CISA KEV ransomware-use × live HTTP Server product match, Have I Been Pwned public/Pro domain counts (no passwords), URLhaus host IOCs. Not Tor, not leak-site victim lists.',
     requiresTarget: true,
   },
 ]

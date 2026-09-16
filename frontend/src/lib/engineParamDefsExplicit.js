@@ -820,5 +820,9 @@ export const EXPLICIT_PARAM_DEFS = {
     { key: 'protocol_strict', label: 'OT Protocol Strict', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
     { key: 'timeout_ms', label: 'OT I/O Timeout (ms)', type: 'number', defaultVal: '900', min: 200, max: 8000 },
   ],
+  adversary_underground_delta: [
+    { key: 'chain_leak_hunter', label: 'Enqueue leak_hunter on new high/critical hits', type: 'select', options: ['true', 'false'], defaultVal: 'true' },
+    { key: 'intensity', label: 'Scan Intensity', type: 'select', options: ['light', 'normal', 'aggressive'], defaultVal: 'normal' },
+  ],
 }
 
