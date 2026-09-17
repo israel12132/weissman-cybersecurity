@@ -21,7 +21,7 @@ Run Weissman on Kubernetes for horizontal scaling, rolling upgrades, and cloud-n
 ## Architecture on K8s
 
 ```
-Ingress (weissmancyber.com)
+Ingress (weissmancybersecurity.io)
   └─ weissman-gateway Service :80
        ├─ /command-center/* → static SPA (nginx sidecar or gateway image)
        ├─ /api/*            → weissman-backend :8000

@@ -229,9 +229,9 @@ frontend build, and engine/API smoke checks (see `.github/workflows/ci.yml`).
 
 ## License & support
 
-- **License:** proprietary — contact <sales@weissman.io>.
-- **Security disclosure:** <security@weissman.io>
-  (see <https://weissman.io/.well-known/security.txt>).
+- **License:** proprietary — contact <weissmancybersecurity@gmail.com>.
+- **Security disclosure:** <weissmancybersecurity@gmail.com>
+  (see <https://weissmancybersecurity.io/.well-known/security.txt>).
 - **Public status:** <https://your-instance/command-center/status> (no auth).
 - **API docs:** <https://your-instance/api/docs/> (Swagger UI, JWT-required for
   protected endpoints).

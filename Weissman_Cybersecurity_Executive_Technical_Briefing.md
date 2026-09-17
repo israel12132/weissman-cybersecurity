@@ -417,7 +417,7 @@ A React 18 / Vite single-page application of **~69 pages** with lazy-loaded rout
 Multiple first-class deployment paths, all from the same artifacts:
 
 - **Docker Compose** — an nginx gateway (serving the SPA, the marketing site, and proxying `/api` + `/ws`), the backend, the worker, PostgreSQL (pgvector), and Redis; with an optional monitoring profile (Prometheus + Grafana + Alertmanager).
-- **Kubernetes** (`deploy/k8s/`) — backend (2 replicas with health probes), worker, nginx gateway (2 replicas), Redis, services, ingress (`weissmancyber.com`), and a configmap; PostgreSQL is assumed managed/external.
+- **Kubernetes** (`deploy/k8s/`) — backend (2 replicas with health probes), worker, nginx gateway (2 replicas), Redis, services, ingress (`weissmancybersecurity.io`), and a configmap; PostgreSQL is assumed managed/external.
 - **systemd** (`deploy/systemd/`) — a `weissman.target` wanting the server and worker units, with an install helper; the UI is built into the binary's static directory (no Node.js in production).
 - **Nix / NixOS** (`flake.nix`, `nix/nixos-modules/`) — reproducible builds (Crane + Fenix) with a dedicated `release-nix` profile and modules for the bot, a vLLM service, and HPC tuning.
 

@@ -28,7 +28,7 @@ SEV-2; agent-fleet / slow-scan warnings → SEV-3.
 | Primary on-call | _TODO_ | _TODO_ (PagerDuty `PAGERDUTY_ROUTING_KEY`) | → Secondary after 15 min |
 | Secondary on-call | _TODO_ | _TODO_ | → Eng lead after 30 min |
 | Engineering lead | _TODO_ | _TODO_ | → CTO |
-| Security lead (breach) | _TODO_ | security@weissman.io | → Legal/DPO |
+| Security lead (breach) | _TODO_ | weissmancybersecurity@gmail.com | → Legal/DPO |
 | Status page owner | _TODO_ | `/command-center/status` | — |
 
 Alerting routes to Slack `#security-alerts` and PagerDuty; the always-firing `Watchdog`

@@ -21,7 +21,7 @@
 ## ארכיטקטורה ב-K8s
 
 ```
-Ingress (weissmancyber.com)
+Ingress (weissmancybersecurity.io)
   └─ weissman-gateway :80
        ├─ /command-center/* → SPA
        ├─ /api/*            → weissman-backend :8000

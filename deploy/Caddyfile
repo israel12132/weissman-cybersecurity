@@ -1,31 +1,45 @@
 # Weissman production — Caddy 2 (automatic HTTPS via Let's Encrypt).
 #
+# Caddy terminates TLS in front of the Weissman gateway (nginx) that
+# ./start_weissman_live.sh starts. The gateway itself speaks plain HTTP and is
+# bound to loopback only — there is no TLS anywhere inside the stack — so a
+# public HTTPS terminator like this one is REQUIRED for a real deployment.
+#
 # Prerequisites:
-#   - DNS A/AAAA for your hostname points to this VPS.
-#   - Rust app listening on 127.0.0.1:8000 (weissman-server or fingerprint_engine serve).
-#   - Ports 80 and 443 open to the world.
+#   - DNS A (and optionally AAAA) for weissmancybersecurity.io AND
+#     www.weissmancybersecurity.io point to this VPS's public IP.
+#   - Ports 80 and 443 are open to the world and owned by Caddy
+#     (80 is also used for the ACME HTTP-01 certificate challenge).
+#   - The stack is up with the gateway on a loopback port that is NOT 80,
+#     so it never clashes with Caddy. Launch it like:
+#
+#       WEISSMAN_GATEWAY_PORT=8081 ./start_weissman_live.sh \
+#         --url https://weissmancybersecurity.io \
+#         --email admin@weissmancybersecurity.io
+#
+#     (WEISSMAN_GATEWAY_PORT moves the gateway from 127.0.0.1:80 to
+#      127.0.0.1:8081; this file proxies to that port.)
+#
+# Bare-metal / systemd alternative: if instead you run weissman-server directly
+# on 127.0.0.1:8000 (no Docker gateway), point reverse_proxy at 127.0.0.1:8000.
 #
 # Install (Debian/Ubuntu):  sudo apt install -y caddy
 # Deploy:                   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
 # Validate:                 sudo caddy validate --config /etc/caddy/Caddyfile
 # Reload:                   sudo systemctl reload caddy
-#
-# Set the site label below to your real FQDN (e.g. weissmancyber.com).
 # -----------------------------------------------------------------------------
 
-weissmancyber.com {
+# Canonicalize www -> apex so there is a single origin matching
+# WEISSMAN_PUBLIC_BASE_URL (https://weissmancybersecurity.io).
+www.weissmancybersecurity.io {
+	redir https://weissmancybersecurity.io{uri} permanent
+}
+
+weissmancybersecurity.io {
 	encode zstd gzip
 
 	# Streaming (SSE) and WebSockets: avoid buffering delays.
-	reverse_proxy 127.0.0.1:8000 {
+	reverse_proxy 127.0.0.1:8081 {
 		flush_interval -1
 	}
 }
-
-# Optional: serve both apex and www (uncomment and fix names).
-# weissmancyber.com, www.weissmancyber.com {
-# 	encode zstd gzip
-# 	reverse_proxy 127.0.0.1:8000 {
-# 		flush_interval -1
-# 	}
-# }

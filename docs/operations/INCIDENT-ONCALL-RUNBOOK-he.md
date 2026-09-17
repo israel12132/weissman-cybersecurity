@@ -27,8 +27,8 @@ Enterprise SLA: ראו `SLA_AND_STATUS.md` + Order Form.
 
 | תפקיד | אימייל | טלפון |
 |--------|--------|-------|
-| On-call primary | oncall@weissman.io | __________ |
-| Security lead | security@weissman.io | __________ |
+| On-call primary | weissmancybersecurity@gmail.com | __________ |
+| Security lead | weissmancybersecurity@gmail.com | __________ |
 | CEO escalation | __________ | __________ |
 
 PagerDuty / Opsgenie webhook: `WEISSMAN_ONCALL_WEBHOOK_URL` (אופציונלי ב-`.env`).
@@ -69,7 +69,7 @@ docker compose exec redis redis-cli ping
 
 1. **אל** תמחק logs.
 2. Rotate: `WEISSMAN_JWT_SECRET`, admin passwords, `PADDLE_WEBHOOK_SECRET`, agent tokens.
-3. `security@weissman.io` + legal.
+3. `weissmancybersecurity@gmail.com` + legal.
 4. Notify customers per DPA breach clause if PII affected.
 
 ---

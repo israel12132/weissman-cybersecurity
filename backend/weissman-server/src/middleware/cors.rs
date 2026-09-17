@@ -1,7 +1,7 @@
 //! Browser CORS for the Command Center origin. Applied only by `weissman-server` (single HTTP entrypoint).
 //!
-//! Set `WEISSMAN_CORS_ORIGINS` to a comma-separated list (e.g. `https://app.example.com,https://weissmancyber.com`).
-//! When unset, falls back to the origin of `WEISSMAN_PUBLIC_BASE_URL`, then `https://weissmancyber.com`.
+//! Set `WEISSMAN_CORS_ORIGINS` to a comma-separated list (e.g. `https://app.example.com,https://weissmancybersecurity.io`).
+//! When unset, falls back to the origin of `WEISSMAN_PUBLIC_BASE_URL`, then `https://weissmancybersecurity.io`.
 
 use axum::http::header::{ACCEPT, AUTHORIZATION, CONTENT_DISPOSITION, CONTENT_TYPE};
 use axum::http::{HeaderName, HeaderValue, Method};
@@ -19,7 +19,7 @@ fn configured_origins() -> Vec<HeaderValue> {
                 .map(|u| u.origin().ascii_serialization())
         });
     let Some(raw) = raw else {
-        return vec![HeaderValue::from_static("https://weissmancyber.com")];
+        return vec![HeaderValue::from_static("https://weissmancybersecurity.io")];
     };
     raw.split(',')
         .map(str::trim)
@@ -89,7 +89,7 @@ mod tests {
         std::env::remove_var(base);
 
         // Neither set -> hardcoded production default.
-        assert_eq!(origins_as_strings(), vec!["https://weissmancyber.com"]);
+        assert_eq!(origins_as_strings(), vec!["https://weissmancybersecurity.io"]);
 
         // Falls back to the origin of the public base URL when CORS list is unset.
         std::env::set_var(base, "https://app.example.com/dashboard?x=1");

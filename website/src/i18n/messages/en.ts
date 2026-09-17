@@ -448,7 +448,7 @@ export const en = {
       points: [
         '{probes} distinct live-probe implementations',
         '{techniques} mapped techniques',
-        'Responsible disclosure at security@weissman.io',
+        'Responsible disclosure at weissmancybersecurity@gmail.com',
       ],
     },
     infra: {

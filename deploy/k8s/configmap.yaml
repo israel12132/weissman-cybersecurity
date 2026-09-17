@@ -7,7 +7,7 @@ data:
   PORT: "8000"
   WEISSMAN_ENV: "production"
   WEISSMAN_COOKIE_SECURE: "1"
-  WEISSMAN_PUBLIC_BASE_URL: "https://weissmancyber.com"
+  WEISSMAN_PUBLIC_BASE_URL: "https://weissmancybersecurity.io"
   WEISSMAN_MIGRATIONS_DIR: "/srv/migrations"
   WEISSMAN_BILLING_STRICT: "1"
   WEISSMAN_WORKER_LIGHT_CONCURRENCY: "8"

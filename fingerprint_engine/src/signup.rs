@@ -157,7 +157,7 @@ pub async fn api_signup(
             Json(json!({
                 "ok": false,
                 "code": "self_serve_disabled",
-                "detail": "Self-serve signup is not enabled on this deployment. Contact sales@weissman.io to request an account."
+                "detail": "Self-serve signup is not enabled on this deployment. Contact weissmancybersecurity@gmail.com to request an account."
             })),
         )
             .into_response();
@@ -523,7 +523,7 @@ fn spawn_signup_welcome_email(email: String, workspace: String, slug: String) {
               1. Add a client (target) under Clients → New.\n\
               2. Approve scan scope (domains, IP ranges).\n\
               3. Hit \"Run\" on any of the 545 production engines.\n\n\
-             Reply to this email or write to support@weissman.io if you need help.\n\n\
+             Reply to this email or write to weissmancybersecurity@gmail.com if you need help.\n\n\
              — The Weissman team",
             workspace_display_name(&workspace),
             workspace,

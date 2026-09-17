@@ -20,7 +20,7 @@ pub const ENGINE_ID: &str = "credential_ransomware_fusion";
 const KEV_URL: &str =
     "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json";
 const HIBP_BREACHES_URL: &str = "https://haveibeenpwned.com/api/v3/breaches";
-const UA: &str = "Weissman-CredentialFusion/1.0 (security-assessment; +https://weissman.io)";
+const UA: &str = "Weissman-CredentialFusion/1.0 (security-assessment; +https://weissmancybersecurity.io)";
 
 pub async fn run_credential_ransomware_fusion(target: &str) {
     print_result(run_credential_ransomware_fusion_result(target).await);

@@ -22,7 +22,7 @@
 | **2** | `./scripts/go_live_check.sh --live https://staging...` | QA | ☐ |
 | **3** | Paddle sandbox: `pri_*` + webhook URL | Finance | ☐ |
 | **3** | SMTP (Mailpit staging → SendGrid prod) | DevOps | ☐ |
-| **3** | DNS + TLS + `@weissman.io` mailboxes | DevOps | ☐ |
+| **3** | DNS + TLS + `@weissmancybersecurity.io` mailboxes | DevOps | ☐ |
 | **4** | Demo script: Clients → Scan → Findings → PDF | Sales | ☐ |
 | **4** | `docs/sales/viewer/index.html` — dry run CEO | Sales | ☐ |
 | **5** | Paddle **live** + billing smoke | Finance | ☐ |

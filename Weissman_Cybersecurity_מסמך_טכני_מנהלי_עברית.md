@@ -417,7 +417,7 @@ do   [ ...actions ]
 מספר נתיבי-פריסה מהשורה הראשונה, כולם מאותם ארטיפקטים:
 
 - **Docker Compose** — שער nginx (המגיש את ה-SPA, את אתר-השיווק, ומתווך `/api` + `/ws`), ה-backend, העובד, PostgreSQL (pgvector), ו-Redis; עם פרופיל-ניטור אופציונלי (Prometheus + Grafana + Alertmanager).
-- **Kubernetes** (`deploy/k8s/`) — backend (2 רפליקות עם health probes), עובד, שער nginx (2 רפליקות), Redis, services, ingress (`weissmancyber.com`), ו-configmap; PostgreSQL מונח כמנוהל/חיצוני.
+- **Kubernetes** (`deploy/k8s/`) — backend (2 רפליקות עם health probes), עובד, שער nginx (2 רפליקות), Redis, services, ingress (`weissmancybersecurity.io`), ו-configmap; PostgreSQL מונח כמנוהל/חיצוני.
 - **systemd** (`deploy/systemd/`) — `weissman.target` הרוצה את יחידות השרת והעובד, עם עוזר-התקנה; הממשק בנוי לתוך התיקייה-הסטטית של הבינארי (אין Node.js בפרודקשן).
 - **Nix / NixOS** (`flake.nix`, `nix/nixos-modules/`) — בנייה רפרודוקטיבית (Crane + Fenix) עם פרופיל ייעודי `release-nix` ומודולים ל-bot, שירות vLLM וכוונון HPC.
 

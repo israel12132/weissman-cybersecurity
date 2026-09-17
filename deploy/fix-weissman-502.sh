@@ -54,7 +54,7 @@ sed -i -E "s|proxy_pass[[:space:]]+http://127\.0\.0\.1:[0-9]+/?;|proxy_pass http
 
 if grep -qE 'server_name[[:space:]]+[^;]*weissmancyber\.com' "$NGINX_SITE" 2>/dev/null; then
   if ! grep -qE 'www\.weissmancyber\.com' "$NGINX_SITE" 2>/dev/null; then
-    echo "WARN: $NGINX_SITE has weissmancyber.com but not www.weissmancyber.com — browsers using www.* get the wrong vhost → 502. Add www to server_name or copy deploy/nginx-weissman.conf." >&2
+    echo "WARN: $NGINX_SITE has weissmancybersecurity.io but not www.weissmancybersecurity.io — browsers using www.* get the wrong vhost → 502. Add www to server_name or copy deploy/nginx-weissman.conf." >&2
   fi
 fi
 

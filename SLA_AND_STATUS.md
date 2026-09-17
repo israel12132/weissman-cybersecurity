@@ -66,9 +66,9 @@ Weissman supports the following deployment regions:
 
 ## 7) Support and escalation
 
-- **Primary channel:** `support@weissman.io` (ticketed; SLA clock starts on first business confirmation).
+- **Primary channel:** `weissmancybersecurity@gmail.com` (ticketed; SLA clock starts on first business confirmation).
 - **Emergency (SEV-1/SEV-2):** dedicated on-call phone / PagerDuty — provided in the Order Form.
-- Security incidents: `security@weissman.io` (encrypted PGP key available on request).
+- Security incidents: `weissmancybersecurity@gmail.com` (encrypted PGP key available on request).
 - Dedicated Customer Success Manager (CSM) assigned for Enterprise accounts (≥ 12-month term).
 
 ## 8) Maintenance windows

@@ -71,7 +71,7 @@ struct KevApiRow {
 fn http_client() -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(HTTP_TIMEOUT_SECS))
-        .user_agent("Weissman-Intel/1.0 (security; +https://weissman.io)")
+        .user_agent("Weissman-Intel/1.0 (security; +https://weissmancybersecurity.io)")
         .build()
         .unwrap_or_else(|_| reqwest::Client::new())
 }

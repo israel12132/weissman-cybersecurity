@@ -57,8 +57,8 @@ if [[ -f "$NGINX_SITE" ]]; then
       echo "OK: Nginx upstream port matches $PORT"
     fi
   fi
-  if grep -q weissmancyber.com "$NGINX_SITE" && ! grep -q www.weissmancyber.com "$NGINX_SITE"; then
-    echo "WARN: Hostname www.weissmancyber.com may not match server_name → wrong vhost / 502. Add www to server_name."
+  if grep -q weissmancybersecurity.io "$NGINX_SITE" && ! grep -q www.weissmancybersecurity.io "$NGINX_SITE"; then
+    echo "WARN: Hostname www.weissmancybersecurity.io may not match server_name → wrong vhost / 502. Add www to server_name."
   fi
 else
   echo "== No file $NGINX_SITE (set NGINX_SITE= if your site lives elsewhere)"

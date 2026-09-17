@@ -24,7 +24,7 @@ use tracing::{error, info, warn};
 #[derive(Parser, Debug, Clone)]
 #[command(name = "weissman-agent", version, about = "Weissman Endpoint Agent")]
 struct Cli {
-    /// Full URL of the Weissman server (e.g. https://api.weissman.io).
+    /// Full URL of the Weissman server (e.g. https://api.weissmancybersecurity.io).
     #[arg(long, env = "WEISSMAN_SERVER_URL")]
     server_url: String,
 

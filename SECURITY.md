@@ -6,9 +6,9 @@ vulnerability in this repository or a Weissman-operated deployment.
 
 ## Reporting a vulnerability
 
-- **Email:** <security@weissman.io> (primary channel).
+- **Email:** <weissmancybersecurity@gmail.com> (primary channel).
 - **Machine-readable contacts:** [`/.well-known/security.txt`](deploy/public/.well-known/security.txt) (RFC 9116).
-- **Full policy & acknowledgements:** <https://weissman.io/security-policy.html>.
+- **Full policy & acknowledgements:** <https://weissmancybersecurity.io/security-policy.html>.
 
 Please include: affected component (server / worker / agent / engine / frontend), version
 or commit, a minimal reproduction, and the impact you observed. Do **not** open a public

@@ -48,4 +48,4 @@ Disallow: /ws/
 Disallow: /hooks/
 Disallow: /install/
 
-Sitemap: https://weissman.io/sitemap.xml
+Sitemap: https://weissmancybersecurity.io/sitemap.xml

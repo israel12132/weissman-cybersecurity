@@ -34,7 +34,7 @@
 | MSA חתום | עורך דין |
 | Paddle **live** `pri_*` | Dashboard |
 | Production VPS + TLS | `./scripts/go_live_check.sh --live URL` |
-| `@weissman.io` mailboxes | DNS |
+| `@weissmancybersecurity.io` mailboxes | DNS |
 | ביטוח סייבר | סוכן |
 | **Alert delivery** (PagerDuty/Slack/heartbeat) | `monitoring/secrets/README.md` — **חובה לפני go-live** |
 | SOC 2 Type II audit | רק אם נדרש בחוזה (12 חודשים) |

@@ -234,9 +234,9 @@ kubectl scale deployment weissman-worker --replicas=<n> -n weissman
 
 | Role | Contact |
 |---|---|
-| Customer Success | csm@weissman.io |
-| Technical Support | support@weissman.io |
-| Security Incidents | security@weissman.io |
+| Customer Success | weissmancybersecurity@gmail.com |
+| Technical Support | weissmancybersecurity@gmail.com |
+| Security Incidents | weissmancybersecurity@gmail.com |
 | Emergency (SEV-1) | On-call phone in Order Form |
 
 ---

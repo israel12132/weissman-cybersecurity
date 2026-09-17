@@ -26,7 +26,7 @@ describe('locale routing', () => {
   it('does not localize Command Center, API, or mailto', () => {
     expect(localizeHref('/command-center/login', 'he')).toBe('/command-center/login')
     expect(localizeHref('/api/docs/', 'he')).toBe('/api/docs/')
-    expect(localizeHref('mailto:sales@weissman.io', 'he')).toBe('mailto:sales@weissman.io')
+    expect(localizeHref('mailto:weissmancybersecurity@gmail.com', 'he')).toBe('mailto:weissmancybersecurity@gmail.com')
     expect(localizeHref('/status', 'he')).toBe('/status')
   })
 

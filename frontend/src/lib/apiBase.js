@@ -2,7 +2,7 @@
  * API origin.
  *
  * Precedence:
- *   1. `import.meta.env.VITE_API_BASE_URL` — set at build time (e.g. https://api.weissman.io).
+ *   1. `import.meta.env.VITE_API_BASE_URL` — set at build time (e.g. https://api.weissmancybersecurity.io).
  *   2. `window.__WEISSMAN_API_BASE__` — read at runtime if a self-hosted deploy injects it
  *      (e.g. a container entrypoint that rewrites the served HTML). Not set by default —
  *      the repo ships no such injection, so leave it unset unless you add one.

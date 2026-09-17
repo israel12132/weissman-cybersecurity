@@ -21,10 +21,10 @@ metadata:
 spec:
   tls:
     - hosts:
-        - weissmancyber.com
+        - weissmancybersecurity.io
       secretName: weissman-tls
   rules:
-    - host: weissmancyber.com
+    - host: weissmancybersecurity.io
       http:
         paths:
           - path: /

@@ -448,7 +448,7 @@ export const he = {
       points: [
         '{probes} מימושי בדיקה חיה נפרדים',
         '{techniques} טכניקות ממופות',
-        'דיווח אחראי ב-security@weissman.io',
+        'דיווח אחראי ב-weissmancybersecurity@gmail.com',
       ],
     },
     infra: {

@@ -5305,7 +5305,7 @@
         },
         "sp_entity_id": {
           "label": "SP Entity ID",
-          "placeholder": "https://app.weissman.io (ריק לברירת מחדל)"
+          "placeholder": "https://app.weissmancybersecurity.io (ריק לברירת מחדל)"
         },
         "email_claim": {
           "label": "Email Claim",

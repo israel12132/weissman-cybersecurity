@@ -1,5 +1,5 @@
 /** Shared page table for HTML shells, sitemap, and robots. */
-export const ORIGIN = 'https://weissman.io'
+export const ORIGIN = 'https://weissmancybersecurity.io'
 
 export const pages = [
   {

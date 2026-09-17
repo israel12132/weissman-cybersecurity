@@ -267,7 +267,7 @@ async fn api_onboarding_register(
             Json(json!({
                 "ok": false,
                 "code": "self_serve_disabled",
-                "detail": "Self-serve signup is not enabled on this deployment. Set WEISSMAN_SELF_SERVE_SIGNUP=true or contact sales@weissman.io.",
+                "detail": "Self-serve signup is not enabled on this deployment. Set WEISSMAN_SELF_SERVE_SIGNUP=true or contact weissmancybersecurity@gmail.com.",
                 "available_paths": [
                     "POST /api/admin/users          (admin invites users)",
                     "POST /api/clients              (create client + scope)",
