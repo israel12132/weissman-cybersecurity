@@ -942,6 +942,9 @@ async fn dispatch_engine_match(
         "cognitive_starvation" => {
             crate::cognitive_starvation_engine::run_cognitive_starvation_result(target, ctx).await
         }
+        "adversary_exposure_delta" => {
+            crate::adversary_exposure_delta::run_adversary_exposure_delta_result(target, ctx).await
+        }
         "sovereign_active_defense_fusion" => {
             crate::sovereign_active_defense_fusion_engine::run_sovereign_active_defense_fusion_result(
                 target, ctx,
