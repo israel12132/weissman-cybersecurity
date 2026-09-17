@@ -12,7 +12,7 @@ describe('SecurityPosture live-only truth', () => {
   it('does not paint leftover leftover-grade chrome after a failed posture GET', () => {
     expect(src).toMatch(/badge=\{error \? t\(`\$\{NS\}\.badge`\) : \(data\?\.grade \?/)
     expect(src).toMatch(/badgeColor=\{gradeColor\(error \? undefined : data\?\.grade\)\}/)
-    expect(src).toMatch(/\{\!loading && !error && data && \(/)
+    expect(src).toMatch(/\{!loading && !error && data && \(/)
     expect(src).not.toMatch(/setData\(null\)/)
   })
 })

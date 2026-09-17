@@ -18,8 +18,8 @@ describe('MetricsDashboard live-only truth', () => {
   })
 
   it('does not paint leftover leftover-metrics after a failed dashboard GET', () => {
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/\{lastUpdated && !error && \(/)
     expect(src).toMatch(/\) : error \|\| !metrics \? \(/)
     expect(src).not.toMatch(/setMetrics\(null\)/)
@@ -27,9 +27,9 @@ describe('MetricsDashboard live-only truth', () => {
 
   it('mutes leftover leftover-GET Export CSV after a failed dashboard GET', () => {
     expect(src).toMatch(/apiFetch\('\/api\/metrics\/dashboard'\)/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
     expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/setError\(t\('pages\.metricsDashboard\.load_error'\)\)/)
     expect(src).not.toMatch(/setMetrics\(null\)/)
   })

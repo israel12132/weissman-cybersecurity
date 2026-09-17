@@ -39,13 +39,13 @@ describe('TopTierEngineProfile live-only truth', () => {
   })
 
   it('does not dump leftover leftover-history JSON after a failed history GET', () => {
-    expect(src).toMatch(/async function exportJson\(\) \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/async function exportJson\(\) \{\n {4}if \(historyUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{historyUnavailable\}/)
   })
 
   it('mutes leftover leftover-GET Export PDF after a failed history GET', () => {
     expect(src).toMatch(/apiFetch\(`\/api\/engines\/top-tier\/\$\{encodeURIComponent\(engineId\)\}\/history\?limit=80`\)/)
-    expect(src).toMatch(/function exportPdf\(\) \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/function exportPdf\(\) \{\n {4}if \(historyUnavailable\) return/)
     expect(src).toMatch(/\{!historyUnavailable && \(\s*<Button variant="unstyled"\s*type="button"\s*onClick=\{exportPdf\}/)
     expect(src).toMatch(/pages\.topTierEngineProfile\.export_pdf/)
     expect(src).toMatch(/setHistoryUnavailable\(true\)/)

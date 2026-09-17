@@ -24,7 +24,7 @@ describe('TopTierEngineHub live-only truth', () => {
   })
 
   it('does not dump leftover leftover-audit CSV after a failed top-tier audit GET', () => {
-    expect(src).toMatch(/function exportAuditCsv\(\) \{\n    if \(auditUnavailable\) return/)
+    expect(src).toMatch(/function exportAuditCsv\(\) \{\n {4}if \(auditUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{loading \|\| auditUnavailable \|\| !audit\?\.engines\?\.length\}/)
   })
 

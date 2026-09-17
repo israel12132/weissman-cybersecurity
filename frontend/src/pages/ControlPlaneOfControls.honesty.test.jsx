@@ -11,10 +11,10 @@ const src = readFileSync(
 describe('ControlPlaneOfControls live-only truth', () => {
   it('mutes leftover leftover-GET Export CSV after a failed findings GET', () => {
     expect(src).toMatch(/apiFetch\('\/api\/findings\?limit=500'/)
-    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
     expect(src).toMatch(/onExport=\{error \? undefined : exportCsv\}/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filtered\.length\}/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filtered\.length\}/)
     expect(src).toMatch(/setError\(e\.message \|\| 'load failed'\)/)
-    expect(src).toMatch(/setFindings\(\[\]\)\n      setError\(e\.message \|\| 'load failed'\)/)
+    expect(src).toMatch(/setFindings\(\[\]\)\n {6}setError\(e\.message \|\| 'load failed'\)/)
   })
 })

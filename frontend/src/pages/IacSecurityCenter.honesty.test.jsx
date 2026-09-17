@@ -38,15 +38,15 @@ describe('IacSecurityCenter live-only truth', () => {
   })
 
   it('does not dump leftover leftover-summary JSON after a failed history GET', () => {
-    expect(src).toMatch(/const exportBundle = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
-    expect(src).toMatch(/const exportAuditPacket = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
-    expect(src).toMatch(/const exportGateEvidence = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
-    expect(src).toMatch(/const exportFixBundle = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
-    expect(src).toMatch(/const exportShellScript = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/const exportBundle = useCallback\(\(\) => \{\n {4}if \(historyUnavailable\) return/)
+    expect(src).toMatch(/const exportAuditPacket = useCallback\(\(\) => \{\n {4}if \(historyUnavailable\) return/)
+    expect(src).toMatch(/const exportGateEvidence = useCallback\(\(\) => \{\n {4}if \(historyUnavailable\) return/)
+    expect(src).toMatch(/const exportFixBundle = useCallback\(\(\) => \{\n {4}if \(historyUnavailable\) return/)
+    expect(src).toMatch(/const exportShellScript = useCallback\(\(\) => \{\n {4}if \(historyUnavailable\) return/)
   })
 
   it('does not dump leftover leftover-policy CSV after a failed history GET', () => {
-    expect(src).toMatch(/const exportFindingsCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/const exportFindingsCsv = useCallback\(\(\) => \{\n {4}if \(historyUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !shownFindings\.length\}/)
   })
 

@@ -32,7 +32,7 @@ describe('PqcRadar live-only truth', () => {
   })
 
   it('does not dump leftover leftover-findings CSV after a failed history GET', () => {
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(historyUnavailable\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(historyUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{historyUnavailable \|\| !sortedFindings\.length\}/)
   })
 
@@ -42,7 +42,7 @@ describe('PqcRadar live-only truth', () => {
     expect(src).toMatch(/onRefresh=\{handleRefresh\}/)
     expect(src).toMatch(/data-testid="pqc-radar-history-unavailable"/)
     expect(src).toMatch(/if \(!ok\) \{ setScanning\(false\); showToast\('error', d\.detail \|\| tt\('scan_failed', 'Scan failed'\)\); return \}/)
-    expect(src).toMatch(/setScanning\(false\)\n      showToast\('error', e\?\.message \?\? tt\('scan_failed', 'Scan failed'\)\)/)
+    expect(src).toMatch(/setScanning\(false\)\n {6}showToast\('error', e\?\.message \?\? tt\('scan_failed', 'Scan failed'\)\)/)
     expect(src).not.toMatch(/setHistoryUnavailable/)
   })
 })

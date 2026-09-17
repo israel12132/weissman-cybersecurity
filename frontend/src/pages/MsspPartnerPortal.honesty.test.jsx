@@ -11,21 +11,21 @@ const src = readFileSync(
 describe('MsspPartnerPortal live-only truth', () => {
   it('does not paint a clean fleet when portfolio GET fails', () => {
     expect(src).toMatch(/apiFetch\('\/api\/portfolio\/posture'\)/)
-    expect(src).toMatch(/error \? \(\n        <EmptyState title=\{t\(`\$\{NS\}\.load_failed`\)\} body=\{error\} \/>/)
+    expect(src).toMatch(/error \? \(\n {8}<EmptyState title=\{t\(`\$\{NS\}\.load_failed`\)\} body=\{error\} \/>/)
     expect(src).toMatch(/empty_title/)
   })
 
   it('does not dump leftover leftover-portfolio CSV after a failed posture GET', () => {
-    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filtered\.length\}/)
+    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filtered\.length\}/)
   })
 
   it('mutes leftover leftover-GET Export CSV after a failed posture GET', () => {
     expect(src).toMatch(/apiFetch\('\/api\/portfolio\/posture'\)/)
-    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
     expect(src).toMatch(/onExport=\{error \? undefined : exportCsv\}/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filtered\.length\}/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filtered\.length\}/)
     expect(src).toMatch(/onRefresh=\{load\}/)
-    expect(src).toMatch(/\} catch \(e\) \{\n      setError\(e\.message \|\| t\(`\$\{NS\}\.load_failed`\)\)\n      setData\(null\)/)
+    expect(src).toMatch(/\} catch \(e\) \{\n {6}setError\(e\.message \|\| t\(`\$\{NS\}\.load_failed`\)\)\n {6}setData\(null\)/)
   })
 })

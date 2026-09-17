@@ -10,10 +10,10 @@ const src = readFileSync(
 
 describe('StealthOperations live-only truth', () => {
   it('does not paint leftover leftover-stealth KPIs after a failed status GET', () => {
-    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
-    expect(src).toMatch(/const exportPdf = useCallback\(\(\) => \{\n    if \(error\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredHosts\.length\}/)
-    expect(src).toMatch(/disabled=\{\!\!error \|\| !filteredHosts\.length\}/)
+    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
+    expect(src).toMatch(/const exportPdf = useCallback\(\(\) => \{\n {4}if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filteredHosts\.length\}/)
+    expect(src).toMatch(/disabled=\{!!error \|\| !filteredHosts\.length\}/)
     expect(src).toMatch(/\{data && !error && \(/)
     expect(src).not.toMatch(/setData\(null\)/)
   })

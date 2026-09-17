@@ -16,8 +16,8 @@ describe('ClientIntegrations live-only truth', () => {
   })
 
   it('does not dump leftover leftover-integrations JSON after a failed integrations GET', () => {
-    expect(src).toMatch(/const handleExport = useCallback\(\(\) => \{\n    if \(integrationsGetFailed \|\| error \|\| unavailable\) return/)
-    expect(src).toMatch(/exportDisabled=\{integrationsGetFailed \|\| \!\!error \|\| unavailable\}/)
+    expect(src).toMatch(/const handleExport = useCallback\(\(\) => \{\n {4}if \(integrationsGetFailed \|\| error \|\| unavailable\) return/)
+    expect(src).toMatch(/exportDisabled=\{integrationsGetFailed \|\| !!error \|\| unavailable\}/)
     expect(src).toMatch(/if \(!hasLoadedRef\.current\) setUnavailable\(true\)/)
   })
 

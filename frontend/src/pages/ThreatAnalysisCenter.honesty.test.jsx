@@ -11,9 +11,9 @@ const src = readFileSync(
 describe('ThreatAnalysisCenter live-only truth', () => {
   it('mutes leftover leftover-GET Export CSV after a failed threat-analysis GET', () => {
     expect(src).toMatch(/api\.get\(`\/api\/threat-analysis\/\$\{cid\}`\)/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
     expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/setError\(e\?\.message \|\| 'Failed to load threat analysis'\)/)
     expect(src).toMatch(/setReport\(null\)/)
     expect(src).toMatch(/setPersistedNote\(e\?\.message \|\| 'Persist failed/)

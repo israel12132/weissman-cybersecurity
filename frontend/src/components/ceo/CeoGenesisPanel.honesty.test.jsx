@@ -13,7 +13,7 @@ describe('CeoGenesisPanel live-only truth', () => {
     expect(src).toMatch(/\{eff && !hpcErr && \(/)
     expect(src).toMatch(/\{!hpcErr && \(/)
     expect(src).toMatch(/\{!strategyErr && \(/)
-    expect(src).toMatch(/catch \(err\) \{\n      setHpcErr\(err\.message \|\| t\('components\.ceo\.genesisPanel\.loadFailed'\)\)\n    \}/)
+    expect(src).toMatch(/catch \(err\) \{\n {6}setHpcErr\(err\.message \|\| t\('components\.ceo\.genesisPanel\.loadFailed'\)\)\n {4}\}/)
     expect(src).not.toMatch(/catch \(err\) \{\s*setHpcErr\([^)]+\)\s*setHpcView\(null\)/)
     expect(src).not.toMatch(/catch \(err\) \{\s*setHpcErr\([^)]+\)\s*setResearchPct\(/)
   })

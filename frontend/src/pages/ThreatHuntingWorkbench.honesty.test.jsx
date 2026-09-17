@@ -17,7 +17,7 @@ describe('ThreatHuntingWorkbench live-only truth', () => {
 
   it('mutes leftover leftover-GET Export CSV after a failed hunts GET', () => {
     expect(src).toMatch(/apiFetch\('\/api\/soc\/hunts'\)/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(campaignsError\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(campaignsError\) return/)
     expect(src).toMatch(/onExport=\{campaignsError \? undefined : handleExportCsv\}/)
     expect(src).toMatch(/exportDisabled=\{!filteredFindings\.length\}/)
     expect(src).toMatch(/setCampaignsError\(e\?\.status \? t\(`\$\{NS\}\.load_error`, \{ status: e\.status \}\) : \(e\.message \|\| String\(e\)\)\)/)

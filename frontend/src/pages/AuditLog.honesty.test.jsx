@@ -18,15 +18,15 @@ describe('AuditLog live-only truth', () => {
   it('does not paint leftover leftover-audit rows after a failed audit-logs GET', () => {
     expect(src).toMatch(/data=\{error \? \[\] : filteredEntries\}/)
     expect(src).toMatch(/shown: error \? '—' : filteredEntries\.length/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| filteredEntries\.length === 0\}/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| filteredEntries\.length === 0\}/)
     expect(src).toMatch(/!error && total > 0 && \(/)
     expect(src).not.toMatch(/setEntries\(\[\]\)/)
   })
 
   it('mutes leftover leftover-GET Export Full JSON after a failed audit-logs GET', () => {
     expect(src).toMatch(/apiFetch\(`\/api\/audit-logs\?\$\{qs\.toString\(\)\}`/)
-    expect(src).toMatch(/const exportFull = useCallback\(async \(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/const exportFull = useCallback\(async \(\) => \{\n {4}if \(error\) return/)
     expect(src).toMatch(/\{!error && \(\s*<Button variant="unstyled"\s*type="button"\s*onClick=\{exportFull\}/)
     expect(src).toMatch(/audit\.export_full/)
     expect(src).toMatch(/setError\(e\.message \|\| t\('audit\.load_error'\)\)/)
@@ -34,9 +34,9 @@ describe('AuditLog live-only truth', () => {
 
   it('mutes leftover leftover-GET Export CSV after a failed audit-logs GET', () => {
     expect(src).toMatch(/apiFetch\(`\/api\/audit-logs\?\$\{qs\.toString\(\)\}`/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
     expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| filteredEntries\.length === 0\}/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| filteredEntries\.length === 0\}/)
     expect(src).toMatch(/setError\(e\.message \|\| t\('audit\.load_error'\)\)/)
     expect(src).not.toMatch(/setEntries\(\[\]\)/)
   })

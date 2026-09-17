@@ -27,7 +27,7 @@ describe('FeedbackLoopVerification live-only truth', () => {
     expect(src).toMatch(/setYamlUnavailable\(true\)/)
     expect(src).toMatch(/data-testid="feedback-loop-yaml-unavailable"/)
     expect(src).toMatch(/!!targetUrl\.trim\(\) && !!yaml\.trim\(\) && !yamlUnavailable/)
-    expect(src).toMatch(/\.catch\(\(e\) => \{\n        setYamlUnavailable\(true\)\n        setError\(e\?\.message \|\| t\('pages\.feedbackLoopVerification\.load_failed'\)\)/)
+    expect(src).toMatch(/\.catch\(\(e\) => \{\n {8}setYamlUnavailable\(true\)\n {8}setError\(e\?\.message \|\| t\('pages\.feedbackLoopVerification\.load_failed'\)\)/)
     expect(src).toMatch(/setError\(e\?\.message \|\| t\('pages\.feedbackLoopVerification\.run_failed'\)\)/)
     expect(src).not.toMatch(/setYaml\(''\)/)
     expect(src).not.toMatch(/yamlUnavailable \|\| error/)
@@ -35,7 +35,7 @@ describe('FeedbackLoopVerification live-only truth', () => {
 
   it('mutes leftover leftover-GET Export CSV after a failed templates GET', () => {
     expect(src).toMatch(/apiFetch\('\/api\/template-engine\/templates'\)/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(templatesUnavailable\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(templatesUnavailable\) return/)
     expect(src).toMatch(/onExport=\{templatesUnavailable \? undefined : handleExportCsv\}/)
     expect(src).toMatch(/exportDisabled=\{templatesUnavailable \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/onRefresh=\{handleRefresh\}/)

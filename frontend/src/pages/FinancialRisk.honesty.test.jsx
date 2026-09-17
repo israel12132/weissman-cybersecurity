@@ -10,18 +10,18 @@ const src = readFileSync(
 
 describe('FinancialRisk live-only truth', () => {
   it('does not dump leftover leftover-contributors CSV after a failed FAIR GET', () => {
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !contributors\.length\}/)
-    expect(src).toMatch(/\} catch \(e\) \{\n        setError/)
-    expect(src).not.toMatch(/\} catch \(e\) \{\n        setSnapshot\(null\)/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !contributors\.length\}/)
+    expect(src).toMatch(/\} catch \(e\) \{\n {8}setError/)
+    expect(src).not.toMatch(/\} catch \(e\) \{\n {8}setSnapshot\(null\)/)
   })
 
   it('mutes leftover leftover-GET Export CSV after a failed FAIR GET', () => {
     expect(src).toMatch(/apiFetch\(`\/api\/financial-risk\/\$\{encodeURIComponent\(selectedClientId\)\}\$\{qs\}`\)/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
     expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !contributors\.length\}/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !contributors\.length\}/)
     expect(src).toMatch(/setError\(e\.message \|\| t\(`\$\{NS\}\.load_failed`\)\)/)
-    expect(src).not.toMatch(/\} catch \(e\) \{\n        setSnapshot\(null\)/)
+    expect(src).not.toMatch(/\} catch \(e\) \{\n {8}setSnapshot\(null\)/)
   })
 })

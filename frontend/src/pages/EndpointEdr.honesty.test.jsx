@@ -10,8 +10,8 @@ const src = readFileSync(
 
 describe('EndpointEdr live-only truth', () => {
   it('does not dump leftover leftover-agents CSV after a failed EDR GET', () => {
-    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filtered\.length\}/)
+    expect(src).toMatch(/const exportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filtered\.length\}/)
     expect(src).not.toMatch(/setAgents\(\[\]\)/)
   })
 

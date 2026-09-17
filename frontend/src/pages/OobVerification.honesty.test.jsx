@@ -19,10 +19,10 @@ describe('OobVerification live-only truth', () => {
   it('does not dump leftover leftover-callbacks after a failed callbacks GET', () => {
     expect(src).toMatch(/callbacks\.length > 0 && !callbacksUnavailable && \(/)
     expect(src).toMatch(/!callbacksUnavailable && \(\s*<WeissmanListToolbar/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(callbacksUnavailable\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(callbacksUnavailable\) return/)
     expect(src).toMatch(/exportDisabled=\{callbacksUnavailable \|\| !filteredFindings\.length\}/)
-    expect(src).toMatch(/setCallbacksUnavailable\(true\)\n      const body = e\?\.response/)
-    expect(src).toMatch(/!callbacksUnavailable && \(\n                <div className="grid grid-cols-2 gap-3">/)
+    expect(src).toMatch(/setCallbacksUnavailable\(true\)\n {6}const body = e\?\.response/)
+    expect(src).toMatch(/!callbacksUnavailable && \(\n {16}<div className="grid grid-cols-2 gap-3">/)
     expect(src).toMatch(/!callbacksUnavailable && probe\.first_hit_at && \(/)
   })
 
@@ -34,6 +34,6 @@ describe('OobVerification live-only truth', () => {
     expect(src).toMatch(/method: 'POST'/)
     expect(src).toMatch(/setError\(body\?\.error \|\| body\?\.detail \|\| e\.message \|\| t\('pages\.oobVerification\.mint_failed'\)\)/)
     expect(src).not.toMatch(/mint_failed[\s\S]{0,80}setCallbacksUnavailable/)
-    expect(src).not.toMatch(/setCallbacks\(\[\]\)\n      \} catch/)
+    expect(src).not.toMatch(/setCallbacks\(\[\]\)\n {6}\} catch/)
   })
 })

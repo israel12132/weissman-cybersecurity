@@ -26,8 +26,9 @@ pub const WORKER_ROLE: &str = "weissman_worker";
 /// Global billing / quota aggregation role — metrics SELECT only.
 pub const ANALYTICS_ROLE: &str = "weissman_analytics";
 
-/// Tables `weissman_ro` may `SELECT`. Keep in lock-step with
-/// `20260827115800_hermetic_db_roles.sql`.
+/// Tables `weissman_ro` may `SELECT`. Keep in lock-step with the migrations that
+/// `GRANT SELECT ... TO weissman_ro`: `20260827115800_hermetic_db_roles.sql` (the 13
+/// core tables) and `20260827160000_ot_ics_hardening_safety.sql` (the 4 ot_ics_* tables).
 pub const RO_SELECT_TABLES: &[&str] = &[
     "vulnerabilities",
     "weissman_finding_clusters",
@@ -42,6 +43,10 @@ pub const RO_SELECT_TABLES: &[&str] = &[
     "kev_intel",
     "audit_logs",
     "report_runs",
+    "ot_ics_fingerprints",
+    "ot_ics_safety_events",
+    "ot_ics_protocol_baselines",
+    "ot_ics_asset_ranges",
 ];
 
 /// Ask Weissman hard statement timeout (milliseconds).
@@ -309,8 +314,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ro_select_list_is_exactly_thirteen() {
-        assert_eq!(RO_SELECT_TABLES.len(), 13);
+    fn ro_select_list_is_exactly_seventeen() {
+        // 13 core read tables + the 4 ot_ics_* telemetry tables the
+        // 20260827160000_ot_ics_hardening_safety migration GRANTs to weissman_ro.
+        assert_eq!(RO_SELECT_TABLES.len(), 17);
         let mut seen = std::collections::HashSet::new();
         for t in RO_SELECT_TABLES {
             assert!(seen.insert(*t), "duplicate {t}");

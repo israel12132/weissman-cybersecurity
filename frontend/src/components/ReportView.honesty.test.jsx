@@ -13,7 +13,7 @@ describe('ReportView live-only truth', () => {
     expect(src).toMatch(/apiFetch\('\/api\/clients'/)
     expect(src).toMatch(/apiFetch\('\/api\/findings'/)
     expect(src).toMatch(/apiFetch\(`\/api\/clients\/\$\{clientId\}\/report\/crypto-proof`/)
-    expect(src).toMatch(/actions=\{\!error \? \(/)
+    expect(src).toMatch(/actions=\{!error \? \(/)
     expect(src).toMatch(/api\/clients\/\$\{clientId\}\/report\/pdf/)
     expect(src).toMatch(/!error && \(\s*<section className="rounded-xl border border-cyan-500\/40/)
     expect(src).toMatch(/components\.reportView\.crypto_sealed_body/)

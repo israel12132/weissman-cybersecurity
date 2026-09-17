@@ -20,19 +20,19 @@ describe('CeoVault live-only truth', () => {
 
   it('does not paint leftover leftover-secret counts after a failed vault GET', () => {
     expect(src).toMatch(/resultCount=\{loadError \? undefined : visibleSecrets\.length\}/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(loadError\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(loadError\) return/)
     expect(src).toMatch(/exportDisabled=\{loadError \|\| !filteredFindings\.length\}/)
   })
 
   it('mutes leftover leftover-edit secret modal after a failed vault GET', () => {
     expect(src).toMatch(/\{\(createModal \|\| \(editModal && !loadError\)\) && \(/)
-    expect(src).toMatch(/setLoadError\(true\);\n      toast\.error\(t\('pages\.ceoVault\.load_failed'\)\)/)
-    expect(src).not.toMatch(/setLoadError\(true\);\n      setEditModal/)
+    expect(src).toMatch(/setLoadError\(true\);\n {6}toast\.error\(t\('pages\.ceoVault\.load_failed'\)\)/)
+    expect(src).not.toMatch(/setLoadError\(true\);\n {6}setEditModal/)
   })
 
   it('mutes leftover leftover-GET Export CSV after a failed vault GET', () => {
     expect(src).toMatch(/api\.get\('\/api\/ceo\/vault\/secrets'\)/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(loadError\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(loadError\) return/)
     expect(src).toMatch(/onExport=\{loadError \? undefined : handleExportCsv\}/)
     expect(src).toMatch(/exportDisabled=\{loadError \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/onRefresh=\{fetchSecrets\}/)

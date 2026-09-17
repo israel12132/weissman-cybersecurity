@@ -20,9 +20,9 @@ describe('DarkWebMonitor live-only truth', () => {
   })
 
   it('does not paint leftover leftover-finding counts after a failed findings GET', () => {
-    expect(src).toMatch(/\{!error && \(\n                <span className="text-\[var\(--text-muted\)\] font-mono text-xs">\(\{filtered\.length\}\)<\/span>/)
+    expect(src).toMatch(/\{!error && \(\n {16}<span className="text-\[var\(--text-muted\)\] font-mono text-xs">\(\{filtered\.length\}\)<\/span>/)
     expect(src).toMatch(/if \(error \|\| !filtered\.length\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| filtered\.length === 0\}/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| filtered\.length === 0\}/)
   })
 
   it('does not paint leftover leftover-source options after a failed findings GET', () => {
@@ -34,7 +34,7 @@ describe('DarkWebMonitor live-only truth', () => {
     expect(src).toMatch(/apiFetch\('\/api\/findings\?limit=5000'\)/)
     expect(src).toMatch(/if \(error \|\| !filtered\.length\) return/)
     expect(src).toMatch(/onExport=\{error \? undefined : exportCsv\}/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| filtered\.length === 0\}/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| filtered\.length === 0\}/)
     expect(src).not.toMatch(/setFindings\(\[\]\)/)
   })
 })

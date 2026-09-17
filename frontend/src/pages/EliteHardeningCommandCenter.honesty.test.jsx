@@ -10,8 +10,8 @@ const src = readFileSync(
 
 describe('EliteHardeningCommandCenter live-only truth', () => {
   it('does not dump leftover leftover-controls CSV after a failed elite GET', () => {
-    expect(src).toMatch(/const doExport = \(kind\) => \{\n    if \(error\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filtered\.length\}/)
+    expect(src).toMatch(/const doExport = \(kind\) => \{\n {4}if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filtered\.length\}/)
     expect(src).not.toMatch(/setData\(null\)/)
   })
 

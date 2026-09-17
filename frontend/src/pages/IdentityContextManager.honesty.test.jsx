@@ -22,8 +22,8 @@ describe('IdentityContextManager live-only truth', () => {
   it('does not paint leftover leftover-identity counts after a failed identity GET', () => {
     expect(src).toMatch(/count: error \? '—' : identities\.length/)
     expect(src).toMatch(/resultCount=\{error \? undefined : visibleIdentities\.length\}/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filteredFindings\.length\}/)
   })
 
   it('mutes leftover high-risk banner after a failed identity GET', () => {
@@ -41,9 +41,9 @@ describe('IdentityContextManager live-only truth', () => {
 
   it('mutes leftover leftover-GET Export CSV after a failed identity GET', () => {
     expect(src).toMatch(/api\.get\(withClientId\('\/api\/identity\/contexts', cid\)\)/)
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
     expect(src).toMatch(/onExport=\{error \? undefined : handleExportCsv\}/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filteredFindings\.length\}/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filteredFindings\.length\}/)
     expect(src).toMatch(/setError\(t\('pages\.identityContextManager\.load_error'\)\)/)
     expect(src).not.toMatch(/catch \([^)]*\) \{\s*setIdentities\(\[\]\)/)
   })

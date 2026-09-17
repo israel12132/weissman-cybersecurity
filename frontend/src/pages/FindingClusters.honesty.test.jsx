@@ -10,8 +10,8 @@ const src = readFileSync(
 
 describe('FindingClusters live-only truth', () => {
   it('does not dump leftover leftover-clusters CSV after a failed clusters GET', () => {
-    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n    if \(error\) return/)
-    expect(src).toMatch(/exportDisabled=\{\!\!error \|\| !filtered\.length\}/)
+    expect(src).toMatch(/const handleExportCsv = useCallback\(\(\) => \{\n {4}if \(error\) return/)
+    expect(src).toMatch(/exportDisabled=\{!!error \|\| !filtered\.length\}/)
     expect(src).not.toMatch(/setRows\(\[\]\)/)
   })
 
