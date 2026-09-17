@@ -18,6 +18,7 @@ pub mod privilege_headers;
 pub mod rate_limit_metrics;
 pub mod rate_limit_redis;
 mod serve;
+pub mod store_result;
 pub mod sse_bridge;
 pub mod sse_context;
 pub mod tenant_scan_limit;

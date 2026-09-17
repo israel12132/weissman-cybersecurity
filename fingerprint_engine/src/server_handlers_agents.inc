@@ -831,6 +831,24 @@ async fn ws_agent(
                                             task_id,
                                         )
                                         .await;
+                                        // Sigma detection-as-code: evaluate this host event
+                                        // against the embedded high-signal MITRE ruleset and
+                                        // persist a finding per rule hit via the same agent
+                                        // findings path. The evaluator was built and unit-tested
+                                        // but wired to no live stream until here.
+                                        for sigma_finding in
+                                            crate::sigma_rules::detect_agent_finding(&engine, &finding)
+                                        {
+                                            let _ = crate::endpoint_agents::store_finding_for_task(
+                                                app_pool.as_ref(),
+                                                tenant_id,
+                                                cid,
+                                                crate::sigma_rules::SIGMA_ENGINE,
+                                                &sigma_finding,
+                                                task_id,
+                                            )
+                                            .await;
+                                        }
                                     }
                                 }
                                 "task_done" | "task_error" => {

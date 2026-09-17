@@ -1,8 +1,8 @@
 # Weissman Cybersecurity
 
 > An autonomous offensive-security + active-defence platform for SOC teams and
-> security service providers. One backend, **594 production engine IDs** (330 real
-> live probes + 204 aliases + 58 agent-required), an endpoint
+> security service providers. One backend, **594 production engine IDs** (328
+> network-active live probes + 2 advisory-only + 204 aliases + 58 agent-required), an endpoint
 > agent with on-host UEBA, a customer-facing command center, SOAR playbooks,
 > attack-path inference, and an NL→SQL "Ask Weissman" console.
 
@@ -20,7 +20,7 @@ opt-in env flag. Billing integration (Paddle) is wired and gated by
 | **Worker** (`weissman-worker`) | Async job consumer with `SKIP LOCKED`, heartbeats, per-kind timeouts. Hot-query backed by the partial index `ix_async_jobs_pending(created_at, kind) WHERE status='pending'` |
 | **Endpoint agent** (`weissman-agent`) | ~5 MB single binary, stripped release build (Linux / macOS / Windows); exact per-platform sizes are emitted into the SHA256 manifest by `scripts/package_agent_binaries.sh`. 15 on-host detections + **UEBA baseline sampler** — 7-day learning window, z-score > 3 fires `medium`, > 6 fires `high` |
 | **Command center** (React/Vite) | Cockpit with live KPI strip + SSE telemetry, findings drawer with EPSS/KEV badges, **PlaybookBuilder** (visual SOAR editor), **AskWeissman** (NL→SQL chat), audit log viewer, agent management |
-| **Engines** | **592 production engine IDs** — CI-verified breakdown (`scripts/engine_reality_audit.mjs`): **332 real live probes** (324 distinct implementations), **204 aliases** that resolve to a real probe, **58 agent-required** host-level techniques; web / cloud / OT-ICS / AI-LLM / supply-chain / network / mobile / OSINT / fuzzers / endpoint agent. Every one wired to a real HTTP / TCP / DNS / TLS / agent probe and verified end-to-end in CI by `scripts/verify_engine_wiring.mjs` (0 gaps, 0 no_path) — **no fabricated or randomised findings**: every persisted finding derives from a live probe, with agent-required and advisory results clearly labelled `info` / `advisory`. Breadth is proven from source too: **live probes across all 15 attack domains**, **239 distinct MITRE ATT&CK techniques** (200 primary + 39 code-grounded secondary), 0 unmapped, 0 stale — see [`docs/ENGINE_COVERAGE_AND_ACCURACY.md`](docs/ENGINE_COVERAGE_AND_ACCURACY.md) and [`docs/MITRE_ATTACK_COVERAGE.md`](docs/MITRE_ATTACK_COVERAGE.md) |
+| **Engines** | **592 production engine IDs** — CI-verified breakdown (`scripts/engine_reality_audit.mjs`): **329 real live probes** (321 distinct implementations) — network-active, each proven by static call-graph reachability to reach real HTTP / TCP / UDP / DNS / TLS I/O — plus **2 advisory-only** (no live network I/O: they analyse ingested telemetry / correlate existing findings), **204 aliases** that resolve to a real probe, **58 agent-required** host-level techniques; web / cloud / OT-ICS / AI-LLM / supply-chain / network / mobile / OSINT / fuzzers / endpoint agent. Every one wired to a real HTTP / TCP / DNS / TLS / agent probe and verified end-to-end in CI by `scripts/verify_engine_wiring.mjs` (0 gaps, 0 no_path) — **no fabricated or randomised findings**: every persisted finding derives from a live probe, with agent-required and advisory results clearly labelled `info` / `advisory`. Breadth is proven from source too: **live probes across all 15 attack domains**, **239 distinct MITRE ATT&CK techniques** (200 primary + 39 code-grounded secondary), 0 unmapped, 0 stale — see [`docs/ENGINE_COVERAGE_AND_ACCURACY.md`](docs/ENGINE_COVERAGE_AND_ACCURACY.md) and [`docs/MITRE_ATTACK_COVERAGE.md`](docs/MITRE_ATTACK_COVERAGE.md) |
 | **Threat intel** | Live mirrors of **CISA KEV** (6h refresh) and **FIRST.org EPSS** (12h, on-demand). Every CVE-tagged finding is enriched at persist-time with `epss_score`, `epss_percentile`, `kev_listed`, `kev_known_ransomware`, `kev_due_date` |
 | **Detection intelligence** | Finding-cluster dedup (sha256 of `target‖signature‖cwe`); FP/TP feedback loop with auto-suppression at 3 FPs; confidence multiplier on `risk_score`; reweighted ordering: `KEV → EPSS → CVSS × confidence` |
 | **Attack-path inference** | Dijkstra over `risk_graph_nodes` from `internet_exposed → crown_jewel`; CVSS+EPSS+KEV-weighted edges; top-K + choke-point analysis; snapshots persisted in `attack_path_snapshots` |
@@ -154,7 +154,7 @@ with the raw 3.1 JSON at <code>/api/openapi.json</code>.
                                            ▼
                                   ┌────────────────────────────────┐
                                   │ PostgreSQL 16 + pgvector       │
-                                  │  • 174 migrations              │
+                                  │  • 175 migrations              │
                                   │  • RLS per-tenant on every     │
                                   │    multi-tenant table          │
                                   │  • _sqlx_migrations w/ no-tx   │

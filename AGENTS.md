@@ -15,7 +15,8 @@ This is a Rust-first monorepo (Cargo workspace) with a React/Vite frontend and l
 | Production engines | **594** | `node scripts/verify_engine_wiring.mjs` |
 | Command Center routes | **155** (target ≥112) | `node scripts/weissman-ui-audit.mjs` |
 | UI pages (audit) | **142/142** — all pages meet the Weissman UI standard (exit 0) | `node scripts/weissman-ui-audit.mjs` |
-| Real probes | **332** | `node scripts/engine_reality_audit.mjs` |
+| Real probes | **329** (network-active; each reaches real HTTP/TCP/UDP/DNS/TLS I/O) | `node scripts/engine_reality_audit.mjs` |
+| Advisory-only engines (no live network I/O) | **3** | same |
 | Agent-required engines | **58** | same |
 
 ### Required Services

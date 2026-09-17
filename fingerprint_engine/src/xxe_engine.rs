@@ -134,6 +134,7 @@ pub async fn run_xxe_result_ctx(target: &str, ctx: &EngineRunContext) -> EngineR
         return result;
     }
     if !ctx.memory_payloads.is_empty() {
+        let mut replayed_win = false;
         let client = http_client().await;
         let base = normalize_url(target);
         for path in XML_PATHS {
@@ -160,10 +161,20 @@ pub async fn run_xxe_result_ctx(target: &str, ctx: &EngineRunContext) -> EngineR
                             if let (Some(pool), Some(tid)) = (ctx.app_pool.as_ref(), ctx.tenant_id)
                             {
                                 pentest_memory::record_replay_hit(pool.as_ref(), tid, *id).await;
+                                replayed_win = true;
                             }
                         }
                     }
                 }
+            }
+        }
+        // No replayed prior-winner re-confirmed this run: record the miss (mirrors the hit
+        // attribution — first loaded id) so future prioritization can explore vs. exploit.
+        if !replayed_win {
+            if let (Some(pool), Some(tid), Some(&id)) =
+                (ctx.app_pool.as_ref(), ctx.tenant_id, ctx.memory_path_ids.first())
+            {
+                pentest_memory::record_loss(pool.as_ref(), tid, id).await;
             }
         }
     }
