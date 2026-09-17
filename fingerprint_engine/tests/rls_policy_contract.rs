@@ -282,6 +282,59 @@ fn every_new_table_forces_rls_unless_allowlisted() {
     );
 }
 
+/// The `RLS_FORCE_ALLOWLIST` entry `"intel"` is a *schema* token, not a table name:
+/// [`sql_idents_after`] collapses `CREATE TABLE intel.discovery_knowledge` to the bare leading
+/// token `"intel"` (it stops at the `.`). That one entry therefore exempts the ENTIRE `intel`
+/// schema from the FORCE-ROW-LEVEL-SECURITY contract above — which is only safe while that schema
+/// holds exactly the one global, tenant-less recon dictionary. Pin that invariant here so a new
+/// `intel.<table>` (especially a tenant-scoped one) can never ship unforced behind the schema-wide
+/// allowlist entry without tripping CI.
+#[test]
+fn intel_schema_holds_only_the_global_recon_table() {
+    use std::collections::BTreeSet;
+    let mut intel_tables: BTreeSet<String> = BTreeSet::new();
+    for dir in [
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations"),
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/weissman-db/migrations"),
+    ] {
+        for entry in std::fs::read_dir(&dir).expect("migrations dir") {
+            let path = entry.expect("entry").path();
+            if path.extension().and_then(|e| e.to_str()) != Some("sql") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap_or_default().to_ascii_lowercase();
+            let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+            let needle = "create table ";
+            let mut from = 0;
+            while let Some(rel) = collapsed[from..].find(needle) {
+                let after = from + rel + needle.len();
+                from = after;
+                let mut rest = collapsed[after..].trim_start();
+                if let Some(stripped) = rest.strip_prefix("if not exists ") {
+                    rest = stripped.trim_start();
+                }
+                if let Some(tbl) = rest.strip_prefix("intel.") {
+                    let name: String = tbl
+                        .chars()
+                        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                        .collect();
+                    if !name.is_empty() {
+                        intel_tables.insert(name);
+                    }
+                }
+            }
+        }
+    }
+    let expected: BTreeSet<String> = ["discovery_knowledge".to_string()].into_iter().collect();
+    assert_eq!(
+        intel_tables, expected,
+        "the `intel` schema now holds table(s) beyond the global recon dictionary: {intel_tables:?}. \
+         The RLS_FORCE_ALLOWLIST \"intel\" entry exempts the WHOLE schema from FORCE RLS, so a new \
+         tenant-scoped intel.* table would ship unforced. Give it FORCE RLS + a tenant policy, or \
+         narrow the allowlist to the specific global table."
+    );
+}
+
 #[test]
 fn hardening_migrations_20260827_identical_in_both_dirs() {
     let names = [
